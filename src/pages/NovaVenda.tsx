@@ -53,13 +53,16 @@ export default function NovaVenda() {
       atualizarQuantidade(itemExistente.produtoId, itemExistente.quantidade + 1);
     } else {
       // Adiciona novo item
+      const preco = produto.preco || produto.precoBase || 0;
       const novoItem: ItemVenda = {
         produtoId: produto.id,
         produtoNome: produto.nome,
         quantidade: 1,
-        precoUnitario: produto.preco,
+        preco: preco,
+        precoUnitario: preco,
         desconto: 0,
-        total: produto.preco,
+        subtotal: preco,
+        total: preco,
       };
       setItens([...itens, novoItem]);
     }
@@ -83,8 +86,9 @@ export default function NovaVenda() {
 
     setItens(itens.map(item => {
       if (item.produtoId === produtoId) {
-        const novoTotal = (item.precoUnitario * quantidade) - (item.desconto || 0);
-        return { ...item, quantidade, total: Math.max(0, novoTotal) };
+        const precoUnit = item.precoUnitario || item.preco;
+        const novoTotal = (precoUnit * quantidade) - (item.desconto || 0);
+        return { ...item, quantidade, subtotal: Math.max(0, novoTotal), total: Math.max(0, novoTotal) };
       }
       return item;
     }));
@@ -93,8 +97,9 @@ export default function NovaVenda() {
   const atualizarDesconto = (produtoId: string, desconto: number) => {
     setItens(itens.map(item => {
       if (item.produtoId === produtoId) {
-        const novoTotal = (item.precoUnitario * item.quantidade) - desconto;
-        return { ...item, desconto, total: Math.max(0, novoTotal) };
+        const precoUnit = item.precoUnitario || item.preco;
+        const novoTotal = (precoUnit * item.quantidade) - desconto;
+        return { ...item, desconto, subtotal: Math.max(0, novoTotal), total: Math.max(0, novoTotal) };
       }
       return item;
     }));
@@ -104,7 +109,7 @@ export default function NovaVenda() {
     setItens(itens.filter(item => item.produtoId !== produtoId));
   };
 
-  const subtotal = itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0);
+  const subtotal = itens.reduce((sum, item) => sum + ((item.precoUnitario || item.preco) * item.quantidade), 0);
   const descontoItens = itens.reduce((sum, item) => sum + (item.desconto || 0), 0);
   const descontoGeralValue = parseFloat(descontoGeral) || 0;
   const total = subtotal - descontoItens - descontoGeralValue;
@@ -125,7 +130,7 @@ export default function NovaVenda() {
     // Verificar estoque
     for (const item of itens) {
       const produto = produtos.find(p => p.id === item.produtoId);
-      if (produto && item.quantidade > produto.estoque) {
+      if (produto && produto.estoque !== undefined && item.quantidade > produto.estoque) {
         alert(`Estoque insuficiente para ${produto.nome}. Disponível: ${produto.estoque}`);
         return;
       }
@@ -268,7 +273,7 @@ export default function NovaVenda() {
                           </div>
                           <div>
                             <label className="block text-xs text-gray-600 mb-1">Preço Unit.</label>
-                            <p className="font-medium text-gray-900">{formatCurrency(item.precoUnitario)}</p>
+                            <p className="font-medium text-gray-900">{formatCurrency(item.precoUnitario || item.preco)}</p>
                           </div>
                           <div>
                             <label className="block text-xs text-gray-600 mb-1">Desconto</label>
@@ -276,7 +281,7 @@ export default function NovaVenda() {
                               type="number"
                               step="0.01"
                               min="0"
-                              max={item.precoUnitario * item.quantidade}
+                              max={(item.precoUnitario || item.preco) * item.quantidade}
                               value={item.desconto || 0}
                               onChange={(e) => atualizarDesconto(item.produtoId, parseFloat(e.target.value) || 0)}
                               className="w-full px-2 py-1 border border-gray-300 rounded"
@@ -284,7 +289,7 @@ export default function NovaVenda() {
                           </div>
                           <div>
                             <label className="block text-xs text-gray-600 mb-1">Total</label>
-                            <p className="font-bold text-gray-900">{formatCurrency(item.total)}</p>
+                            <p className="font-bold text-gray-900">{formatCurrency(item.total || item.subtotal)}</p>
                           </div>
                         </div>
                       </div>

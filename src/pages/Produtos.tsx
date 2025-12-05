@@ -17,12 +17,13 @@ export default function Produtos() {
   const [formData, setFormData] = useState({
     codigo: '',
     nome: '',
+    tipo: 'Outros' as 'TQS' | 'MPY' | 'ADT' | 'Plataforma' | 'UDD' | 'Dispersor' | 'Moinho' | 'Outros',
     descricao: '',
     categoria: '',
     preco: '',
     custo: '',
     estoque: '',
-    unidade: 'UN',
+    unidade: 'UN' as 'UN' | 'KG' | 'M' | 'L' | 'CX' | 'PC',
     ativo: true,
   });
 
@@ -60,12 +61,13 @@ export default function Produtos() {
       setFormData({
         codigo: produto.codigo,
         nome: produto.nome,
+        tipo: produto.tipo,
         descricao: produto.descricao || '',
         categoria: produto.categoria || '',
-        preco: produto.preco.toString(),
-        custo: produto.custo?.toString() || '',
-        estoque: produto.estoque.toString(),
-        unidade: produto.unidade,
+        preco: (produto.preco || produto.precoBase || 0).toString(),
+        custo: (produto.custo || produto.custoPadrao || 0).toString(),
+        estoque: (produto.estoque || 0).toString(),
+        unidade: produto.unidade || 'UN',
         ativo: produto.ativo,
       });
     } else {
@@ -101,6 +103,7 @@ export default function Produtos() {
           custoPadrao: formData.custo ? parseFloat(formData.custo) : undefined,
           custo: formData.custo ? parseFloat(formData.custo) : undefined,
           estoque: parseInt(formData.estoque),
+          unidade: formData.unidade as 'UN' | 'KG' | 'M' | 'L' | 'CX' | 'PC',
         });
       } else {
         // Verificar se código já existe
@@ -111,11 +114,14 @@ export default function Produtos() {
         }
         await produtoService.create({
           ...formData,
+          tipo: formData.tipo || 'Outros',
           precoBase: parseFloat(formData.preco),
           preco: parseFloat(formData.preco),
           custoPadrao: formData.custo ? parseFloat(formData.custo) : undefined,
           custo: formData.custo ? parseFloat(formData.custo) : undefined,
           estoque: parseInt(formData.estoque),
+          unidade: formData.unidade as 'UN' | 'KG' | 'M' | 'L' | 'CX' | 'PC',
+          ativo: true,
         });
       }
       await loadProdutos();
@@ -138,9 +144,9 @@ export default function Produtos() {
     }
   };
 
-  const valorTotalEstoque = produtos.reduce((sum, p) => sum + (p.preco * p.estoque), 0);
+  const valorTotalEstoque = produtos.reduce((sum, p) => sum + ((p.preco || p.precoBase || 0) * (p.estoque || 0)), 0);
   const produtosAtivos = produtos.filter(p => p.ativo).length;
-  const produtosBaixoEstoque = produtos.filter(p => p.estoque < 10).length;
+  const produtosBaixoEstoque = produtos.filter(p => (p.estoque || 0) < 10).length;
 
   return (
     <div>
@@ -281,12 +287,12 @@ export default function Produtos() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Preço:</span>
-                  <span className="text-lg font-bold text-gray-900">{formatCurrency(produto.preco)}</span>
+                  <span className="text-lg font-bold text-gray-900">{formatCurrency(produto.preco || produto.precoBase || 0)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Estoque:</span>
-                  <span className={`font-semibold ${produto.estoque < 10 ? 'text-red-600' : 'text-gray-900'}`}>
-                    {produto.estoque} {produto.unidade}
+                  <span className={`font-semibold ${(produto.estoque || 0) < 10 ? 'text-red-600' : 'text-gray-900'}`}>
+                    {produto.estoque || 0} {produto.unidade || 'UN'}
                   </span>
                 </div>
                 {produto.custo && (
@@ -298,7 +304,7 @@ export default function Produtos() {
                 <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                   <span className="text-sm text-gray-600">Valor Total:</span>
                   <span className="font-bold text-primary-600">
-                    {formatCurrency(produto.preco * produto.estoque)}
+                    {formatCurrency((produto.preco || produto.precoBase || 0) * (produto.estoque || 0))}
                   </span>
                 </div>
                 {!produto.ativo && (

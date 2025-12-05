@@ -139,6 +139,7 @@ export interface Projeto {
 
 export interface FaseProjeto {
   id: string;
+  projetoId?: string; // ID do projeto pai
   numero: number; // 1, 2, 3, 4
   nome: string;
   descricao?: string;
@@ -436,8 +437,10 @@ export interface ItemVenda {
   produtoNome?: string;
   quantidade: number;
   preco: number;
+  precoUnitario?: number; // Alias para preco
   desconto?: number;
   subtotal: number;
+  total?: number; // Alias para subtotal
 }
 
 export interface Venda {
@@ -464,28 +467,28 @@ export interface DashboardStats {
   totalClientes: number;
   totalOportunidades: number;
   valorTotalOportunidades: number;
-  propostasAbertas: number;
-  taxaConversao: number;
+  propostasAbertas?: number;
+  taxaConversao?: number;
   
   // Projetos
-  projetosAtivos: number;
-  projetosAtrasados: number;
-  documentosPendentes: number;
+  projetosAtivos?: number;
+  projetosAtrasados?: number;
+  documentosPendentes?: number;
   
   // Financeiro
-  parcelasVencidas: number;
-  valorVencido: number;
-  previsaoCaixa: number;
+  parcelasVencidas?: number;
+  valorVencido?: number;
+  previsaoCaixa?: number;
   
   // Produção
-  ordensFabricacaoAtivas: number;
-  horasPrevistasVsReais: number;
-  produtividadeMedia: number;
+  ordensFabricacaoAtivas?: number;
+  horasPrevistasVsReais?: number;
+  produtividadeMedia?: number;
   
   // Pós-venda
-  chamadosAbertos: number;
-  chamadosCriticos: number;
-  slaCumprido: number;
+  chamadosAbertos?: number;
+  chamadosCriticos?: number;
+  slaCumprido?: number;
   
   // Campos adicionais usados no Dashboard
   receitaTotal?: number;

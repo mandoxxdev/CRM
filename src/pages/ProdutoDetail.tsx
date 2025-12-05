@@ -66,10 +66,13 @@ export default function ProdutoDetail() {
     );
   }
 
-  const margemLucro = produto.custo 
-    ? ((produto.preco - produto.custo) / produto.preco) * 100 
+  const preco = produto.preco || produto.precoBase || 0;
+  const custo = produto.custo || produto.custoPadrao || 0;
+  const estoque = produto.estoque || 0;
+  const margemLucro = custo > 0 && preco > 0
+    ? ((preco - custo) / preco) * 100 
     : 0;
-  const valorTotalEstoque = produto.preco * produto.estoque;
+  const valorTotalEstoque = preco * estoque;
 
   return (
     <div>
@@ -106,18 +109,18 @@ export default function ProdutoDetail() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-600">Preço de Venda</label>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(produto.preco)}</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(preco)}</p>
               </div>
               {produto.custo && (
                 <div>
                   <label className="text-sm font-medium text-gray-600">Custo</label>
-                  <p className="text-xl font-semibold text-gray-900 mt-1">{formatCurrency(produto.custo)}</p>
+                  <p className="text-xl font-semibold text-gray-900 mt-1">{formatCurrency(custo)}</p>
                 </div>
               )}
               <div>
                 <label className="text-sm font-medium text-gray-600">Estoque</label>
-                <p className={`text-xl font-semibold mt-1 ${produto.estoque < 10 ? 'text-red-600' : 'text-gray-900'}`}>
-                  {produto.estoque} {produto.unidade}
+                <p className={`text-xl font-semibold mt-1 ${estoque < 10 ? 'text-red-600' : 'text-gray-900'}`}>
+                  {estoque} {produto.unidade || 'UN'}
                 </p>
               </div>
               <div>
@@ -133,7 +136,7 @@ export default function ProdutoDetail() {
                   <div>
                     <label className="text-sm font-medium text-gray-600">Lucro Unitário</label>
                     <p className="text-xl font-semibold text-green-600 mt-1">
-                      {formatCurrency(produto.preco - produto.custo)}
+                      {formatCurrency(preco - custo)}
                     </p>
                   </div>
                 </>
@@ -207,13 +210,13 @@ export default function ProdutoDetail() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Estoque:</span>
                 <span className={`font-medium ${
-                  produto.estoque === 0 
+                  estoque === 0 
                     ? 'text-red-600' 
-                    : produto.estoque < 10 
+                    : estoque < 10 
                     ? 'text-yellow-600' 
                     : 'text-green-600'
                 }`}>
-                  {produto.estoque < 10 ? 'Estoque Baixo' : produto.estoque === 0 ? 'Sem Estoque' : 'Normal'}
+                  {estoque < 10 ? 'Estoque Baixo' : estoque === 0 ? 'Sem Estoque' : 'Normal'}
                 </span>
               </div>
             </div>

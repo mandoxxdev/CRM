@@ -106,7 +106,7 @@ export const atividadeService = {
     return await db.atividades.where('clienteId').equals(clienteId).toArray();
   },
   getPendentes: async (): Promise<Atividade[]> => {
-    return await db.atividades.where('concluida').equals(false).toArray();
+    return await db.atividades.filter(a => !a.concluida).toArray();
   },
   create: async (atividade: Omit<Atividade, 'id' | 'dataCriacao'>): Promise<string> => {
     const newAtividade: Atividade = {
@@ -133,7 +133,7 @@ export const produtoService = {
     return await db.produtos.orderBy('dataCriacao').reverse().toArray();
   },
   getAtivos: async (): Promise<ProdutoType[]> => {
-    return await db.produtos.where('ativo').equals(true).toArray();
+    return await db.produtos.filter(p => p.ativo).toArray();
   },
   getById: async (id: string): Promise<ProdutoType | undefined> => {
     return await db.produtos.get(id);

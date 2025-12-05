@@ -21,6 +21,20 @@ export default function Dashboard() {
     totalVendas: 0,
     receitaTotal: 0,
     ticketMedio: 0,
+    propostasAbertas: 0,
+    taxaConversao: 0,
+    projetosAtivos: 0,
+    projetosAtrasados: 0,
+    documentosPendentes: 0,
+    parcelasVencidas: 0,
+    valorVencido: 0,
+    previsaoCaixa: 0,
+    ordensFabricacaoAtivas: 0,
+    horasPrevistasVsReais: 0,
+    produtividadeMedia: 0,
+    chamadosAbertos: 0,
+    chamadosCriticos: 0,
+    slaCumprido: 0,
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [vendasPorEtapa, setVendasPorEtapa] = useState<any[]>([]);
@@ -113,7 +127,7 @@ export default function Dashboard() {
     },
     {
       title: 'Receita Total',
-      value: formatCurrency(stats.receitaTotal),
+      value: formatCurrency(stats.receitaTotal || 0),
       icon: DollarSign,
       color: 'bg-gradient-to-br from-yellow-500 to-yellow-600',
       link: '/vendas',
@@ -134,7 +148,7 @@ export default function Dashboard() {
     },
     {
       title: 'Ticket Médio',
-      value: formatCurrency(stats.ticketMedio),
+      value: formatCurrency(stats.ticketMedio || 0),
       icon: BarChart3,
       color: 'bg-gradient-to-br from-pink-500 to-pink-600',
       link: '/vendas',
