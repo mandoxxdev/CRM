@@ -187,10 +187,22 @@ export const vendaService = {
     await db.vendas.add(newVenda);
     return newVenda.id;
   },
+  getByClienteId: async (clienteId: string): Promise<Venda[]> => {
+    return await db.vendas.where('clienteId').equals(clienteId).toArray();
+  },
+  update: async (id: string, updates: Partial<Venda>): Promise<void> => {
+    await db.vendas.update(id, {
+      ...updates,
+      dataAtualizacao: new Date().toISOString(),
+    });
+  },
+  delete: async (id: string): Promise<void> => {
+    await db.vendas.delete(id);
+  },
   getEstatisticas: async () => {
     const vendas = await db.vendas.toArray();
     const vendasPagas = vendas.filter(v => v.status === 'paga');
-    const receitaTotal = vendasPagas.reduce((sum, v) => sum + v.total, 0);
+    const receitaTotal = vendasPagas.reduce((sum, v) => sum + (v.total || 0), 0);
     const ticketMedio = vendasPagas.length > 0 ? receitaTotal / vendasPagas.length : 0;
     return {
       totalVendas: vendas.length,
