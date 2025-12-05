@@ -49,7 +49,11 @@ export const projetoService = {
     
     // Salvar fases
     for (const fase of fases) {
-      await db.fasesProjeto.add({ ...fase, projetoId: newProjeto.id });
+      await db.fasesProjeto.add({ 
+        ...fase, 
+        id: generateId(),
+        projetoId: newProjeto.id 
+      });
     }
     
     return newProjeto.id;

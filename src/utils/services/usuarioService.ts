@@ -31,9 +31,6 @@ export const usuarioService = {
       dataAtualizacao: now,
     };
     
-    // Remover senha do objeto antes de salvar
-    const { senha, ...usuarioSemSenha } = newUsuario as any;
-    
     await db.usuarios.add(newUsuario);
     return newUsuario.id;
   },

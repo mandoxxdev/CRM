@@ -176,7 +176,7 @@ export default function VendaDetail() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {venda.itens.map((item, index) => (
+                {venda.itens.map((item: any, index: number) => (
                   <tr key={index}>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{item.produtoNome}</div>

@@ -3,25 +3,8 @@ import type {
   Cliente, Contato, Lead, Oportunidade, Proposta, Contrato,
   Projeto, FaseProjeto, DocumentoTecnico, Equipamento,
   OrdemFabricacao, EstruturaAnaliticaEquipamento, RegistroHora,
-  ParcelaFinanceira, Chamado, SLA, Atividade, Produto, Usuario, Reuniao
+  ParcelaFinanceira, Chamado, SLA, Atividade, Produto, Usuario, Reuniao, Venda
 } from '../types';
-
-// Tipo temporário para compatibilidade
-interface Venda {
-  id: string;
-  numero: string;
-  clienteId: string;
-  itens: any[];
-  subtotal: number;
-  desconto?: number;
-  total: number;
-  formaPagamento: string;
-  status: string;
-  observacoes?: string;
-  dataVenda: string;
-  dataCriacao: string;
-  dataAtualizacao: string;
-}
 
 export class CRMDatabase extends Dexie {
   // Base

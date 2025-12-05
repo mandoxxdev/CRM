@@ -126,7 +126,7 @@ export const atividadeService = {
 };
 
 // Serviços de produtos e vendas (manter compatibilidade)
-import type { Produto as ProdutoType, Venda } from '../types';
+import type { Produto as ProdutoType } from '../types';
 
 export const produtoService = {
   getAll: async (): Promise<ProdutoType[]> => {
@@ -137,6 +137,9 @@ export const produtoService = {
   },
   getById: async (id: string): Promise<ProdutoType | undefined> => {
     return await db.produtos.get(id);
+  },
+  getByCodigo: async (codigo: string): Promise<ProdutoType | undefined> => {
+    return await db.produtos.where('codigo').equals(codigo).first();
   },
   create: async (produto: Omit<ProdutoType, 'id' | 'dataCriacao' | 'dataAtualizacao'>): Promise<string> => {
     const now = new Date().toISOString();

@@ -2,6 +2,7 @@
 export interface Cliente {
   id: string;
   nome: string;
+  empresa?: string; // Nome fantasia ou empresa
   razaoSocial?: string;
   cnpj?: string;
   segmento?: 'Tintas' | 'Resinas' | 'Agro' | 'Cosméticos' | 'Farmacêutico' | 'Alimentício' | 'Outros';
@@ -399,7 +400,11 @@ export interface Produto {
   descricao?: string;
   categoria?: string;
   precoBase: number;
+  preco?: number; // Alias para precoBase
   custoPadrao?: number;
+  custo?: number; // Alias para custoPadrao
+  estoque?: number;
+  unidade?: 'UN' | 'KG' | 'M' | 'L' | 'CX' | 'PC';
   estruturaAnaliticaId?: string; // EAE padrão
   especificacoes?: Record<string, any>;
   ativo: boolean;
@@ -423,6 +428,34 @@ export interface Permissao {
   modulo: string;
   acao: 'ler' | 'criar' | 'editar' | 'excluir' | 'aprovar';
   perfil: string[];
+}
+
+// ============ VENDAS ============
+export interface ItemVenda {
+  produtoId: string;
+  produtoNome?: string;
+  quantidade: number;
+  preco: number;
+  desconto?: number;
+  subtotal: number;
+}
+
+export interface Venda {
+  id: string;
+  numero: string;
+  clienteId: string;
+  clienteNome?: string;
+  itens: ItemVenda[];
+  subtotal: number;
+  desconto?: number;
+  total: number;
+  moeda?: 'BRL' | 'USD' | 'EUR';
+  formaPagamento?: 'dinheiro' | 'cartao' | 'pix' | 'boleto' | 'transferencia';
+  status: 'pendente' | 'paga' | 'cancelada';
+  dataVenda: string;
+  observacoes?: string;
+  dataCriacao: string;
+  dataAtualizacao: string;
 }
 
 // ============ DASHBOARDS ============
@@ -453,4 +486,11 @@ export interface DashboardStats {
   chamadosAbertos: number;
   chamadosCriticos: number;
   slaCumprido: number;
+  
+  // Campos adicionais usados no Dashboard
+  receitaTotal?: number;
+  totalVendas?: number;
+  totalProdutos?: number;
+  ticketMedio?: number;
+  atividadesPendentes?: number;
 }

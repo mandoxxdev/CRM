@@ -141,7 +141,7 @@ export const producaoService = {
   // ============ ESTATÍSTICAS ============
   getEstatisticas: async () => {
     const ofs = await db.ordensFabricacao.toArray();
-    const registros = await db.registrosHora.toArray();
+    await db.registrosHora.toArray(); // Para estatísticas futuras
     
     const horasPrevistasTotal = ofs.reduce((sum, of) => sum + of.horasPrevistas, 0);
     const horasReaisTotal = ofs.reduce((sum, of) => sum + of.horasReais, 0);

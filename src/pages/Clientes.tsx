@@ -157,7 +157,7 @@ export default function Clientes() {
       cnpjFormatado = valor.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
     } else if (valor.length > 0) {
       // Formatação parcial enquanto digita
-      cnpjFormatado = valor.replace(/^(\d{2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})$/, (match, p1, p2, p3, p4, p5) => {
+      cnpjFormatado = valor.replace(/^(\d{2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})$/, (_match, p1, p2, p3, p4, p5) => {
         let resultado = p1;
         if (p2) resultado += '.' + p2;
         if (p3) resultado += '.' + p3;

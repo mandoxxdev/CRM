@@ -33,7 +33,7 @@ export default function ProdutoDetail() {
     try {
       const vendas = await vendaService.getAll();
       const vendasComProduto = vendas.filter(venda =>
-        venda.itens.some(item => item.produtoId === id)
+        venda.itens.some((item: any) => item.produtoId === id)
       );
       setHistoricoVendas(vendasComProduto.slice(0, 10));
     } catch (error) {

@@ -102,6 +102,7 @@ export default function Oportunidades() {
       const novaOportunidade: Oportunidade = {
         id: generateId(),
         clienteId: formData.clienteId,
+        moeda: 'BRL',
         titulo: formData.titulo,
         valor: parseFloat(formData.valor),
         probabilidade: parseInt(formData.probabilidade),

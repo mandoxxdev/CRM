@@ -96,7 +96,9 @@ export default function Produtos() {
       if (editingProduto) {
         await produtoService.update(editingProduto.id, {
           ...formData,
+          precoBase: parseFloat(formData.preco),
           preco: parseFloat(formData.preco),
+          custoPadrao: formData.custo ? parseFloat(formData.custo) : undefined,
           custo: formData.custo ? parseFloat(formData.custo) : undefined,
           estoque: parseInt(formData.estoque),
         });
@@ -109,7 +111,9 @@ export default function Produtos() {
         }
         await produtoService.create({
           ...formData,
+          precoBase: parseFloat(formData.preco),
           preco: parseFloat(formData.preco),
+          custoPadrao: formData.custo ? parseFloat(formData.custo) : undefined,
           custo: formData.custo ? parseFloat(formData.custo) : undefined,
           estoque: parseInt(formData.estoque),
         });

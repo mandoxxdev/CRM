@@ -82,8 +82,8 @@ export default function Dashboard() {
       // Produtos mais vendidos
       const produtosVendidos: Record<string, number> = {};
       vendas.forEach(venda => {
-        venda.itens.forEach(item => {
-          produtosVendidos[item.produtoNome] = (produtosVendidos[item.produtoNome] || 0) + item.quantidade;
+        venda.itens.forEach((item: any) => {
+          produtosVendidos[item.produtoNome || item.produtoId] = (produtosVendidos[item.produtoNome || item.produtoId] || 0) + item.quantidade;
         });
       });
       const topProdutos = Object.entries(produtosVendidos)

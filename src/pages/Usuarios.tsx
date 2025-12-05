@@ -225,7 +225,7 @@ export default function Usuarios() {
                   <User className="text-primary-600" size={20} />
                   <h3 className="text-lg font-semibold text-gray-900">{usuario.nome}</h3>
                   {usuario.perfil === 'Diretoria' && (
-                    <Shield className="text-yellow-600" size={18} title="Administrador" />
+                    <Shield className="text-yellow-600" size={18} />
                   )}
                 </div>
                 <p className="text-sm text-gray-600 mt-1">{usuario.email}</p>
