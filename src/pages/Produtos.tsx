@@ -75,6 +75,7 @@ export default function Produtos() {
       setFormData({
         codigo: '',
         nome: '',
+        tipo: 'Outros',
         descricao: '',
         categoria: '',
         preco: '',
@@ -98,6 +99,7 @@ export default function Produtos() {
       if (editingProduto) {
         await produtoService.update(editingProduto.id, {
           ...formData,
+          tipo: formData.tipo,
           precoBase: parseFloat(formData.preco),
           preco: parseFloat(formData.preco),
           custoPadrao: formData.custo ? parseFloat(formData.custo) : undefined,
@@ -360,7 +362,7 @@ export default function Produtos() {
                     <select
                       required
                       value={formData.unidade}
-                      onChange={(e) => setFormData({ ...formData, unidade: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, unidade: e.target.value as 'UN' | 'KG' | 'M' | 'L' | 'CX' | 'PC' })}
                       className="input"
                     >
                       <option value="UN">UN - Unidade</option>
