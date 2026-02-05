@@ -1,0 +1,20 @@
+# Configuração do Nixpacks para Coolify
+# Este arquivo instrui o Coolify como fazer o build do projeto
+
+[phases.setup]
+nixPkgs = ["nodejs-22_x"]
+
+[phases.install]
+cmds = [
+  "npm install",
+  "cd client && npm install",
+  "cd ../server && npm install"
+]
+
+[phases.build]
+cmds = [
+  "cd client && npm run build"
+]
+
+[start]
+cmd = "cd server && node index.js"
