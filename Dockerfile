@@ -19,8 +19,8 @@ RUN rm -f package-lock.json server/package-lock.json client/package-lock.json &&
 # Copiar resto do código
 COPY . .
 
-# Build do cliente
-RUN cd client && npm run build && cd ..
+# Build do cliente (desabilitar CI para não tratar warnings como erros)
+RUN cd client && CI=false npm run build && cd ..
 
 # Expor porta
 EXPOSE 3000
