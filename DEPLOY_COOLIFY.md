@@ -152,16 +152,16 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ### 2. Build Command
 
-Configure o comando de build:
+**IMPORTANTE:** O projeto já tem um `Dockerfile` customizado que resolve o problema de `package-lock.json`.
 
+**Se o Coolify usar Dockerfile (recomendado):**
+- Não precisa configurar Build Command
+- O Dockerfile já está configurado para usar `npm install` em vez de `npm ci`
+
+**Se precisar configurar Build Command manualmente:**
 ```bash
-npm install && cd client && npm install && npm run build && cd ../server && npm install
+rm -f package-lock.json server/package-lock.json client/package-lock.json && npm install --legacy-peer-deps && cd client && npm install --legacy-peer-deps && npm run build && cd ../server && npm install --legacy-peer-deps
 ```
-
-**IMPORTANTE:** Se receber erro sobre `package-lock.json` desatualizado:
-1. Execute `.\atualizar-lockfiles.bat` localmente
-2. Faça commit e push dos lock files atualizados
-3. Tente deploy novamente
 
 ### 3. Start Command
 

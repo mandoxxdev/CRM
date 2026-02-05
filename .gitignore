@@ -3,6 +3,11 @@ node_modules/
 client/node_modules/
 server/node_modules/
 
+# Lock files (remover para evitar erro npm ci no Coolify)
+package-lock.json
+server/package-lock.json
+client/package-lock.json
+
 # Production builds
 client/build/
 dist/

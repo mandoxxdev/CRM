@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id            String   @id @default(uuid())
+  nome          String
+  email         String   @unique
+  senhaHash     String
+  perfil        String
+  ativo         Boolean  @default(true)
+  dataCriacao   DateTime @default(now())
+  dataAtualizacao DateTime @updatedAt
+
+  vendas        Venda[]
+  clientes      Cliente[]
+  oportunidades Oportunidade[]
+  atividades    Atividade[]
+
+  @@map("usuarios")
+}
+
+model Cliente {
+  id            String   @id @default(uuid())
+  nome          String
+  empresa       String?
+  razaoSocial   String?
+  cnpj          String?  @unique
+  segmento      String?
+  email         String
+  telefone      String
+  endereco      String?
+  cidade        String?
+  estado        String?
+  pais          String   @default("Brasil")
+  cep           String?
+  observacoes   String?
+  usuarioId     String?
+  dataCriacao   DateTime @default(now())
+  dataAtualizacao DateTime @updatedAt
+
+  usuario       Usuario? @relation(fields: [usuarioId], references: [id])
+  contatos      Contato[]
+  vendas        Venda[]
+  oportunidades Oportunidade[]
+  atividades    Atividade[]
+
+  @@map("clientes")
+}
+
+model Contato {
+  id            String   @id @default(uuid())
+  clienteId     String
+  nome          String
+  cargo         String?
+  departamento  String?
+  email         String
+  telefone      String
+  whatsapp      String?
+  observacoes   String?
+  dataCriacao   DateTime @default(now())
+
+  cliente       Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@map("contatos")
+}
+
+model Produto {
+  id            String   @id @default(uuid())
+  codigo        String   @unique
+  nome          String
+  tipo          String
+  descricao     String?
+  categoria     String?
+  precoBase     Float
+  preco         Float?
+  custoPadrao   Float?
+  custo         Float?
+  estoque       Int      @default(0)
+  unidade       String?
+  ativo         Boolean  @default(true)
+  dataCriacao   DateTime @default(now())
+  dataAtualizacao DateTime @updatedAt
+
+  itensVenda    ItemVenda[]
+
+  @@map("produtos")
+}
+
+model Venda {
+  id            String   @id @default(uuid())
+  numero        String   @unique
+  clienteId     String
+  usuarioId     String
+  subtotal      Float
+  desconto      Float?   @default(0)
+  total         Float
+  moeda         String   @default("BRL")
+  formaPagamento String?
+  status        String   @default("pendente")
+  observacoes   String?
+  dataVenda     DateTime @default(now())
+  dataCriacao   DateTime @default(now())
+  dataAtualizacao DateTime @updatedAt
+
+  cliente       Cliente  @relation(fields: [clienteId], references: [id])
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id])
+  itens         ItemVenda[]
+
+  @@map("vendas")
+}
+
+model ItemVenda {
+  id            String   @id @default(uuid())
+  vendaId       String
+  produtoId     String
+  produtoNome   String?
+  quantidade    Int
+  preco         Float
+  precoUnitario Float?
+  desconto      Float?   @default(0)
+  subtotal      Float
+  total         Float?
+
+  venda         Venda    @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  produto       Produto  @relation(fields: [produtoId], references: [id])
+
+  @@map("itens_venda")
+}
+
+model Oportunidade {
+  id                  String   @id @default(uuid())
+  clienteId           String
+  usuarioId           String?
+  titulo              String
+  valor               Float
+  moeda               String   @default("BRL")
+  probabilidade       Int
+  etapa               String
+  dataFechamentoEsperada DateTime?
+  descricao           String?
+  responsavelComercial String?
+  pais                String?
+  dataCriacao         DateTime @default(now())
+  dataAtualizacao     DateTime @updatedAt
+
+  cliente             Cliente  @relation(fields: [clienteId], references: [id])
+  usuario             Usuario? @relation(fields: [usuarioId], references: [id])
+  atividades          Atividade[]
+
+  @@map("oportunidades")
+}
+
+model Atividade {
+  id            String   @id @default(uuid())
+  clienteId     String?
+  oportunidadeId String?
+  usuarioId     String?
+  tipo          String
+  titulo        String
+  descricao     String?
+  data          DateTime
+  hora          String?
+  concluida     Boolean  @default(false)
+  responsavel   String?
+  dataCriacao   DateTime @default(now())
+
+  cliente       Cliente? @relation(fields: [clienteId], references: [id])
+  oportunidade  Oportunidade? @relation(fields: [oportunidadeId], references: [id])
+  usuario       Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@map("atividades")
+}
+

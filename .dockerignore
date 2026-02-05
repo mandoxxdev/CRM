@@ -1,0 +1,14 @@
+node_modules
+client/node_modules
+server/node_modules
+client/build
+.git
+.gitignore
+*.md
+*.bat
+*.ps1
+*.sh
+.env
+.env.local
+.DS_Store
+Thumbs.db

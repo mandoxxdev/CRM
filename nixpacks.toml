@@ -1,14 +1,16 @@
 # Configuração do Nixpacks para Coolify
 # Este arquivo instrui o Coolify como fazer o build do projeto
+# IMPORTANTE: Lock files foram removidos do repositório para evitar erro npm ci
 
 [phases.setup]
 nixPkgs = ["nodejs-22_x"]
 
 [phases.install]
+# Usar npm install (não npm ci) pois não há lock files
 cmds = [
-  "npm install",
-  "cd client && npm install",
-  "cd ../server && npm install"
+  "npm install --legacy-peer-deps",
+  "cd client && npm install --legacy-peer-deps",
+  "cd ../server && npm install --legacy-peer-deps"
 ]
 
 [phases.build]
