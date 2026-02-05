@@ -1,0 +1,344 @@
+.modal-grafico-overlay {
+  /* ABORDAGEM ULTRA AGRESSIVA: Sempre na viewport visível, SEM scroll necessário */
+  position: fixed !important;
+  /* Sempre cobrir toda a viewport visível */
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  /* Display flex para centralizar conteúdo */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  /* Estilos visuais */
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 10000 !important;
+  padding: 2rem;
+  overflow: hidden !important;
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Não permitir scroll */
+  overscroll-behavior: none !important;
+  touch-action: none !important;
+  -webkit-overflow-scrolling: none;
+  scroll-behavior: auto;
+  /* Garantir centralização perfeita */
+  margin: 0 !important;
+  box-sizing: border-box;
+  /* Sem transformações - usar flexbox puro */
+  transform: none !important;
+  /* Garantir que sempre fique na viewport visível */
+  inset: 0 !important;
+}
+
+[data-theme="dark"] .modal-grafico-overlay {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* Prevenir scroll em qualquer elemento dentro do overlay */
+.modal-grafico-overlay * {
+  overscroll-behavior: none !important;
+  touch-action: none !important;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-grafico-container {
+  /* ABORDAGEM DEFINITIVA: Container centralizado dentro do overlay */
+  background: linear-gradient(135deg, var(--gmp-surface) 0%, var(--gmp-bg) 100%);
+  border-radius: 24px;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 102, 204, 0.1);
+  width: 90%;
+  max-width: 1200px;
+  height: 85vh;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+  animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid var(--gmp-border);
+  /* Centralização via flexbox do pai (overlay) */
+  margin: 0 !important;
+  position: relative !important;
+  /* Garantir que não cause scroll */
+  overscroll-behavior: none !important;
+  touch-action: none !important;
+  -webkit-overflow-scrolling: none;
+  scroll-behavior: auto;
+  box-sizing: border-box;
+  color: var(--gmp-text);
+  /* Sem transformações - já está centralizado pelo overlay */
+  transform: none !important;
+  /* Otimizações para máxima fluidez */
+  will-change: opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  /* Não usar posicionamento absoluto */
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  /* Não encolher */
+  flex-shrink: 0;
+  /* Garantir que fique visível */
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translate3d(0, 10px, 0) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.modal-grafico-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1rem 1.5rem;
+  border-bottom: 2px solid var(--gmp-border);
+  background: linear-gradient(135deg, var(--gmp-surface) 0%, var(--gmp-bg) 100%);
+  box-shadow: 0 2px 8px var(--gmp-shadow);
+  flex-shrink: 0;
+  min-height: 90px;
+  max-height: 110px;
+  box-sizing: border-box;
+}
+
+.modal-grafico-title h2 {
+  margin: 0 0 0.4rem 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.modal-grafico-title p {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  color: var(--gmp-text-light);
+  line-height: 1.5;
+}
+
+.modal-grafico-count {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
+}
+
+.modal-grafico-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.modal-action-btn,
+.modal-close-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: none;
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 1.25rem;
+}
+
+.modal-action-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0066cc 0%, #0052a3 100%);
+  color: #ffffff;
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(0, 102, 204, 0.3);
+}
+
+.modal-close-btn {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #dc2626;
+}
+
+.modal-close-btn:hover {
+  background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+  color: #b91c1c;
+  transform: translateY(-3px) scale(1.08);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.4);
+}
+
+.modal-grafico-content {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  overflow: hidden !important;
+  background: var(--gmp-surface);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  /* Garantir que o conteúdo não cause scroll */
+  contain: layout style paint;
+  overscroll-behavior: none;
+  touch-action: none;
+  box-sizing: border-box;
+}
+
+.modal-chart-wrapper {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  background: var(--gmp-surface);
+  border-radius: 16px;
+  padding: 0.75rem;
+  box-shadow: 0 4px 20px var(--gmp-shadow);
+  position: relative;
+  overflow: hidden !important;
+  display: block !important;
+  visibility: visible !important;
+  overscroll-behavior: none;
+  box-sizing: border-box;
+}
+
+.modal-chart-wrapper > div {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 300px !important;
+  max-height: 100% !important;
+}
+
+.modal-chart-wrapper svg {
+  display: block !important;
+  visibility: visible !important;
+  max-width: 100%;
+  height: auto;
+}
+
+.modal-chart-wrapper .recharts-wrapper {
+  display: block !important;
+  visibility: visible !important;
+}
+
+.modal-no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--gmp-text-light);
+  font-size: 1.1rem;
+}
+
+.modal-tooltip {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 4px 12px var(--gmp-shadow);
+}
+
+.modal-tooltip .tooltip-label {
+  font-weight: 600;
+  color: var(--gmp-text);
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.modal-tooltip .tooltip-value {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Remover scrollbar completamente */
+.modal-grafico-overlay * {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.modal-grafico-overlay *::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+  width: 0;
+  height: 0;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .modal-grafico-overlay {
+    padding: 1rem;
+    align-items: center;
+  }
+
+  .modal-grafico-container {
+    width: 95%;
+    height: 85vh;
+    max-height: 85vh;
+    border-radius: 16px;
+    margin: auto;
+  }
+
+  .modal-grafico-header {
+    padding: 1.5rem;
+    flex-direction: column;
+    gap: 1rem;
+    flex-shrink: 0;
+  }
+
+  .modal-grafico-title h2 {
+    font-size: 1.5rem;
+  }
+
+  .modal-grafico-content {
+    padding: 1rem;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .modal-chart-wrapper {
+    height: 100%;
+    padding: 0.5rem;
+    min-height: 0;
+  }
+
+  .modal-chart-wrapper > div {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+}
+

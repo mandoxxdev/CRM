@@ -1,0 +1,41 @@
+.animated-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  /* Otimizações para máxima fluidez - SEM LIMITAÇÃO DE FPS */
+  will-change: transform, contents;
+  transform: translate3d(0, 0, 0); /* Force GPU acceleration com 3D */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+  -webkit-transform: translate3d(0, 0, 0);
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  object-fit: cover;
+  display: block;
+  /* Aceleração por hardware máxima */
+  contain: layout style paint;
+}
+
+[data-theme="dark"] .animated-background {
+  opacity: 1;
+}
+
+/* Efeito de blur sutil no fundo */
+.animated-background::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backdrop-filter: blur(0.5px);
+  pointer-events: none;
+}
+

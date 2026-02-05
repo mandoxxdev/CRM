@@ -1,0 +1,571 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  overflow-x: hidden;
+  overflow-y: hidden;
+  max-width: 100vw;
+  width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  position: relative;
+}
+
+#root {
+  overflow-x: hidden;
+  overflow-y: hidden;
+  max-width: 100vw;
+  width: 100%;
+  height: 100vh;
+  max-height: 100vh;
+  position: relative;
+}
+
+/* Prevenir overflow horizontal em todos os elementos */
+* {
+  box-sizing: border-box;
+}
+
+/* Garantir que imagens não ultrapassem a largura */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+:root {
+  /* Cores GMP INDUSTRIAIS - Azul Corporativo */
+  --gmp-primary: #0066cc;
+  --gmp-primary-dark: #0052a3;
+  --gmp-primary-light: #0080ff;
+  --gmp-secondary: #003d7a;
+  --gmp-accent: #00a8e8;
+  --gmp-success: #00c853;
+  --gmp-warning: #ff9800;
+  --gmp-error: #f44336;
+  
+  /* Cores neutras modernas */
+  --gmp-bg: #f8fafc;
+  --gmp-surface: rgba(255, 255, 255, 0.95);
+  --gmp-text: #1e293b;
+  --gmp-text-light: #64748b;
+  --gmp-border: #e2e8f0;
+  --gmp-shadow: rgba(0, 102, 204, 0.1);
+  
+  /* Espaçamentos */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  
+  /* Bordas */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  
+  /* Sombras modernas */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--gmp-bg);
+  color: var(--gmp-text);
+  line-height: 1.6;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+  text-rendering: optimizeLegibility;
+}
+
+code {
+  font-family: 'Fira Code', source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* ========== ESTILOS GLOBAIS PARA BOTÕES DE AÇÃO ========== */
+/* Garantir que todos os botões de excluir tenham lixeira vermelha visível */
+.btn-icon.btn-danger,
+.btn-action.btn-danger,
+button.btn-danger,
+a.btn-danger {
+  color: #e74c3c !important;
+  background: transparent !important;
+}
+
+.btn-icon.btn-danger svg,
+.btn-action.btn-danger svg,
+button.btn-danger svg,
+a.btn-danger svg {
+  color: #e74c3c !important;
+  fill: #e74c3c !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-shrink: 0 !important;
+  margin: 0 auto !important;
+}
+
+.btn-icon.btn-danger:hover,
+.btn-action.btn-danger:hover,
+button.btn-danger:hover,
+a.btn-danger:hover {
+  background: rgba(231, 76, 60, 0.15) !important;
+  color: #c0392b !important;
+  border-color: #e74c3c !important;
+}
+
+.btn-icon.btn-danger:hover svg,
+.btn-action.btn-danger:hover svg,
+button.btn-danger:hover svg,
+a.btn-danger:hover svg {
+  color: #c0392b !important;
+  fill: #c0392b !important;
+}
+
+/* Dark mode */
+[data-theme="dark"] .btn-icon.btn-danger,
+[data-theme="dark"] .btn-action.btn-danger,
+[data-theme="dark"] button.btn-danger,
+[data-theme="dark"] a.btn-danger {
+  color: #ef4444 !important;
+}
+
+[data-theme="dark"] .btn-icon.btn-danger svg,
+[data-theme="dark"] .btn-action.btn-danger svg,
+[data-theme="dark"] button.btn-danger svg,
+[data-theme="dark"] a.btn-danger svg {
+  color: #ef4444 !important;
+  fill: #ef4444 !important;
+}
+
+[data-theme="dark"] .btn-icon.btn-danger:hover,
+[data-theme="dark"] .btn-action.btn-danger:hover,
+[data-theme="dark"] button.btn-danger:hover,
+[data-theme="dark"] a.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  color: #f87171 !important;
+}
+
+[data-theme="dark"] .btn-icon.btn-danger:hover svg,
+[data-theme="dark"] .btn-action.btn-danger:hover svg,
+[data-theme="dark"] button.btn-danger:hover svg,
+[data-theme="dark"] a.btn-danger:hover svg {
+  color: #f87171 !important;
+  fill: #f87171 !important;
+}
+
+/* Scrollbar moderna */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--gmp-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gmp-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gmp-text-light);
+}
+
+/* ========== BOTÃO PREMIUM GLOBAL (Baseado no botão Nova Solicitação) ========== */
+.btn-premium {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffa726 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4),
+              0 4px 10px rgba(247, 147, 30, 0.3);
+  z-index: 1;
+  text-decoration: none;
+}
+
+.btn-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+  z-index: 2;
+}
+
+.btn-premium:hover::before {
+  left: 100%;
+}
+
+.btn-premium:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 35px rgba(255, 107, 53, 0.5),
+              0 6px 15px rgba(247, 147, 30, 0.4);
+}
+
+.btn-premium:active {
+  transform: translateY(-1px) scale(0.98);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4),
+              0 3px 8px rgba(247, 147, 30, 0.3);
+}
+
+.btn-premium-icon {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  z-index: 3;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-premium:hover .btn-premium-icon {
+  background: rgba(255, 255, 255, 0.35);
+  transform: rotate(90deg) scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-premium-text {
+  position: relative;
+  z-index: 3;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  font-weight: 700;
+}
+
+.btn-premium-shine {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.btn-premium:hover .btn-premium-shine {
+  opacity: 1;
+  animation: shineRotate 1.5s ease-in-out infinite;
+}
+
+@keyframes shineRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Efeito de pulso sutil */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4),
+                0 4px 10px rgba(247, 147, 30, 0.3);
+  }
+  50% {
+    box-shadow: 0 8px 30px rgba(255, 107, 53, 0.6),
+                0 4px 15px rgba(247, 147, 30, 0.5);
+  }
+}
+
+.btn-premium {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+/* Dark mode support */
+[data-theme="dark"] .btn-premium {
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffa726 100%);
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.5),
+              0 4px 10px rgba(247, 147, 30, 0.4);
+}
+
+[data-theme="dark"] .btn-premium:hover {
+  box-shadow: 0 12px 35px rgba(255, 107, 53, 0.6),
+              0 6px 15px rgba(247, 147, 30, 0.5);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .btn-premium {
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+  
+  .btn-premium-text {
+    display: none;
+  }
+  
+  .btn-premium-icon {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ========== ANIMAÇÕES DE ENTRADA GLOBAIS ========== */
+/* Aplicar em todas as páginas do sistema */
+
+/* Animação de entrada para containers principais */
+.page-container,
+.propostas,
+.clientes,
+.produtos,
+.projetos,
+.atividades,
+.financeiro,
+.compras,
+.usuarios,
+.custos-viagens {
+  animation: pageFadeIn 0.6s ease-out;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animação de entrada para headers de página */
+.page-header {
+  animation: headerFadeIn 0.8s ease-out;
+}
+
+@keyframes headerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animação de entrada para filtros */
+.filters,
+.calendario-filtros {
+  animation: filtersFadeIn 0.6s ease-out 0.2s both;
+}
+
+@keyframes filtersFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animação de entrada para cards e tabelas */
+.table-container,
+.data-table,
+.projetos-grid,
+.atividades-list,
+.resumo-cards {
+  animation: contentFadeIn 0.8s ease-out 0.3s both;
+}
+
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animação escalonada para cards individuais */
+.atividade-card,
+.projeto-card,
+.maquina-kpi-card {
+  animation: cardSlideIn 0.6s ease-out both;
+}
+
+/* Delay progressivo para múltiplos cards */
+.atividade-card:nth-child(1) { animation-delay: 0.1s; }
+.atividade-card:nth-child(2) { animation-delay: 0.15s; }
+.atividade-card:nth-child(3) { animation-delay: 0.2s; }
+.atividade-card:nth-child(4) { animation-delay: 0.25s; }
+.atividade-card:nth-child(5) { animation-delay: 0.3s; }
+.atividade-card:nth-child(n+6) { animation-delay: 0.35s; }
+
+.projeto-card:nth-child(1) { animation-delay: 0.1s; }
+.projeto-card:nth-child(2) { animation-delay: 0.15s; }
+.projeto-card:nth-child(3) { animation-delay: 0.2s; }
+.projeto-card:nth-child(4) { animation-delay: 0.25s; }
+.projeto-card:nth-child(5) { animation-delay: 0.3s; }
+.projeto-card:nth-child(n+6) { animation-delay: 0.35s; }
+
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Animação para estatísticas e cards de resumo */
+.lembretes-stats,
+.stat-card {
+  animation: statCardFadeIn 0.6s ease-out 0.4s both;
+}
+
+@keyframes statCardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Animação para botões de ação */
+.header-actions,
+.calendario-actions {
+  animation: actionsFadeIn 0.6s ease-out 0.5s both;
+}
+
+@keyframes actionsFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Animação suave para elementos de formulário */
+.form-group,
+.filter-group {
+  animation: formElementFadeIn 0.4s ease-out both;
+}
+
+@keyframes formElementFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Reduzir animações em dispositivos com preferência por movimento reduzido */
+@media (prefers-reduced-motion: reduce) {
+  .page-container,
+  .page-header,
+  .filters,
+  .table-container,
+  .atividade-card,
+  .projeto-card,
+  .stat-card,
+  .header-actions {
+    animation: none;
+  }
+}
+
+/* ========== RESPONSIVIDADE GLOBAL MOBILE ========== */
+@media (max-width: 768px) {
+  /* Ajustes de fonte para mobile */
+  body {
+    font-size: 14px;
+  }
+
+  /* Inputs maiores para facilitar toque */
+  input, select, textarea, button {
+    min-height: 44px; /* Tamanho mínimo recomendado para touch */
+  }
+
+  /* Evitar zoom automático no iOS */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="password"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* Botões maiores para touch */
+  button, .btn-primary, .btn-secondary {
+    min-height: 44px;
+    padding: 12px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 375px) {
+  body {
+    font-size: 12px;
+  }
+
+  /* Garantir que nada ultrapasse a largura da tela */
+  * {
+    max-width: 100%;
+  }
+
+  /* Ajustes de padding global para telas muito pequenas */
+  .container,
+  .content,
+  .wrapper {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+

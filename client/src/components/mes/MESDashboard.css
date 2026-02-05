@@ -1,0 +1,389 @@
+.mes-dashboard {
+  padding: 30px;
+  background: #f5f7fa;
+  min-height: 100vh;
+}
+
+.mes-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.mes-dashboard-header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin: 0 0 8px 0;
+}
+
+.mes-dashboard-header p {
+  color: #7f8c8d;
+  margin: 0;
+  font-size: 14px;
+}
+
+.mes-dashboard-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.mes-refresh-select {
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.mes-refresh-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.mes-refresh-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* KPIs Grid */
+.mes-kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.mes-kpi-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid #e8ecef;
+}
+
+.mes-kpi-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.mes-kpi-card.primary {
+  border: 2px solid #667eea;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+}
+
+.mes-kpi-icon {
+  width: 70px;
+  height: 70px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.mes-kpi-content {
+  flex: 1;
+}
+
+.mes-kpi-content h3 {
+  font-size: 36px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: #1e3a5f;
+}
+
+.mes-kpi-content p {
+  font-size: 14px;
+  color: #7f8c8d;
+  margin: 0 0 8px 0;
+}
+
+.mes-kpi-trend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #66bb6a;
+  font-weight: 600;
+}
+
+.mes-kpi-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mes-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e8ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.mes-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.mes-kpi-progress span {
+  font-size: 12px;
+  color: #7f8c8d;
+  white-space: nowrap;
+}
+
+/* Charts Grid */
+.mes-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.mes-chart-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.mes-chart-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e3a5f;
+  margin: 0 0 20px 0;
+}
+
+/* Alerts Grid */
+.mes-alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.mes-alert-card,
+.mes-status-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.mes-alert-card h3,
+.mes-status-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e3a5f;
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mes-alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mes-alert-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.mes-alert-item.alta {
+  background: #ffebee;
+  border-left-color: #ef5350;
+}
+
+.mes-alert-item.media {
+  background: #fff3e0;
+  border-left-color: #ffa726;
+}
+
+.mes-alert-item.baixa {
+  background: #e8f5e9;
+  border-left-color: #66bb6a;
+}
+
+.mes-alert-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mes-alert-content strong {
+  color: #1e3a5f;
+  font-size: 14px;
+}
+
+.mes-alert-content span {
+  color: #7f8c8d;
+  font-size: 12px;
+}
+
+.mes-alert-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.mes-alert-badge.alta {
+  background: #ef5350;
+  color: white;
+}
+
+.mes-alert-badge.media {
+  background: #ffa726;
+  color: white;
+}
+
+.mes-alert-badge.baixa {
+  background: #66bb6a;
+  color: white;
+}
+
+.mes-no-alerts {
+  text-align: center;
+  padding: 40px 20px;
+  color: #66bb6a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.mes-no-alerts svg {
+  font-size: 48px;
+}
+
+.mes-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.mes-status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.mes-status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mes-status-indicator.active {
+  background: #66bb6a;
+  box-shadow: 0 0 8px rgba(102, 187, 106, 0.5);
+}
+
+.mes-status-indicator.warning {
+  background: #ffa726;
+  box-shadow: 0 0 8px rgba(255, 167, 38, 0.5);
+}
+
+.mes-status-indicator.inactive {
+  background: #bdbdbd;
+}
+
+.mes-status-item strong {
+  display: block;
+  color: #1e3a5f;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.mes-status-item span {
+  display: block;
+  color: #7f8c8d;
+  font-size: 12px;
+}
+
+.mes-no-status {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  color: #7f8c8d;
+}
+
+.mes-no-status p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.mes-dashboard-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 20px;
+}
+
+.mes-dashboard-loading .loading-spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid #e8ecef;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .mes-dashboard {
+    padding: 20px;
+  }
+
+  .mes-kpis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mes-charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mes-alerts-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,237 @@
+.compras {
+  padding: var(--spacing-xl);
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  animation: fadeIn 0.3s ease;
+}
+
+.module-tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid var(--gmp-border);
+  padding-bottom: 0;
+}
+
+.module-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--gmp-text-light);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  bottom: -2px;
+}
+
+.module-tab:hover {
+  color: var(--gmp-primary);
+  background: rgba(0, 102, 204, 0.05);
+}
+
+.module-tab.active {
+  color: var(--gmp-primary);
+  border-bottom-color: var(--gmp-primary);
+  font-weight: 600;
+}
+
+[data-theme="dark"] .module-tab.active {
+  background: rgba(0, 168, 232, 0.1);
+}
+
+.module-tab svg {
+  font-size: 1.2rem;
+}
+
+.module-content {
+  background: var(--gmp-surface);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--gmp-border);
+}
+
+[data-theme="dark"] .module-content {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.data-table thead {
+  background: var(--gmp-bg);
+  border-bottom: 2px solid var(--gmp-border);
+}
+
+.data-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--gmp-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-table td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--gmp-border);
+  color: var(--gmp-text);
+}
+
+.data-table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.data-table tbody tr:hover {
+  background: var(--gmp-bg);
+}
+
+.cell-primary {
+  font-weight: 600;
+  color: var(--gmp-text);
+}
+
+.cell-secondary {
+  font-size: 0.875rem;
+  color: var(--gmp-text-light);
+  margin-top: 0.25rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.375rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--gmp-bg);
+  border: 1px solid var(--gmp-border);
+  color: var(--gmp-text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.btn-icon:hover {
+  background: var(--gmp-primary);
+  color: white;
+  border-color: var(--gmp-primary);
+  transform: translateY(-2px);
+}
+
+.btn-icon.btn-danger {
+  background: transparent !important;
+  color: #e74c3c !important;
+  border: 1px solid transparent;
+}
+
+.btn-icon.btn-danger svg {
+  color: #e74c3c !important;
+  fill: #e74c3c !important;
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+.btn-icon.btn-danger:hover {
+  background: rgba(231, 76, 60, 0.15) !important;
+  color: #c0392b !important;
+  border-color: rgba(231, 76, 60, 0.3);
+}
+
+.btn-icon.btn-danger:hover svg {
+  color: #c0392b !important;
+  fill: #c0392b !important;
+}
+
+[data-theme="dark"] .btn-icon.btn-danger {
+  color: #ef4444 !important;
+}
+
+[data-theme="dark"] .btn-icon.btn-danger svg {
+  color: #ef4444 !important;
+  fill: #ef4444 !important;
+}
+
+[data-theme="dark"] .btn-icon.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  color: #f87171 !important;
+}
+
+[data-theme="dark"] .btn-icon.btn-danger:hover svg {
+  color: #f87171 !important;
+  fill: #f87171 !important;
+}
+
+.no-data {
+  text-align: center;
+  padding: 3rem;
+  color: var(--gmp-text-light);
+  font-size: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .compras {
+    padding: 1rem;
+  }
+
+  .module-tabs {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .module-tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .module-content {
+    padding: 1rem;
+  }
+
+  .data-table {
+    font-size: 0.875rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.75rem 0.5rem;
+  }
+}
+
+

@@ -1,0 +1,238 @@
+.config-template-container {
+  padding: 30px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.config-template-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--gmp-border-color);
+}
+
+.config-template-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gmp-text-primary);
+  font-size: 24px;
+}
+
+.btn-close {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--gmp-bg-secondary);
+  color: var(--gmp-text-primary);
+  border: 1px solid var(--gmp-border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-close:hover {
+  background: var(--gmp-bg-hover);
+}
+
+.config-template-content {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.config-section {
+  background: var(--gmp-bg-secondary);
+  padding: 25px;
+  border-radius: 12px;
+  border: 1px solid var(--gmp-border-color);
+}
+
+.config-section h2 {
+  color: var(--gmp-text-primary);
+  font-size: 18px;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--gmp-primary);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--gmp-text-primary);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="color"],
+.form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--gmp-border-color);
+  border-radius: 8px;
+  background: var(--gmp-bg-primary);
+  color: var(--gmp-text-primary);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 5px;
+  color: var(--gmp-text-secondary);
+  font-size: 12px;
+}
+
+.colors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.color-input-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.color-input-group input[type="color"] {
+  width: 60px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--gmp-border-color);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.color-text-input {
+  flex: 1;
+}
+
+.logo-preview {
+  margin-bottom: 15px;
+  padding: 15px;
+  background: var(--gmp-bg-primary);
+  border: 1px solid var(--gmp-border-color);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.logo-preview img {
+  max-width: 200px;
+  max-height: 100px;
+  object-fit: contain;
+}
+
+.upload-logo-container {
+  margin-bottom: 15px;
+}
+
+.btn-upload-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--gmp-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.btn-upload-logo:hover {
+  background: var(--gmp-primary-hover);
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.form-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.form-checkbox label {
+  margin: 0;
+  cursor: pointer;
+  color: var(--gmp-text-primary);
+}
+
+.config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px solid var(--gmp-border-color);
+}
+
+.btn-save {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 30px;
+  background: var(--gmp-success);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.btn-save:hover:not(:disabled) {
+  background: var(--gmp-success-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.config-template-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+  color: var(--gmp-text-primary);
+  font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  .config-template-container {
+    padding: 15px;
+  }
+
+  .colors-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .config-template-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+}

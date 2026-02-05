@@ -1,0 +1,147 @@
+/* Mural de Logos dos Clientes - Design Premium e Limpo */
+.maquinas-logos-section {
+  margin-bottom: var(--spacing-xl);
+}
+
+.logos-mural {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  padding: 32px;
+  margin-top: var(--spacing-md);
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(0, 102, 204, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.logo-item {
+  background: #ffffff;
+  border: 1px solid rgba(0, 102, 204, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.logo-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(0, 102, 204, 0.03) 0%, rgba(255, 107, 53, 0.03) 100%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.logo-item:hover::before {
+  opacity: 1;
+}
+
+.logo-item:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 102, 204, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 102, 204, 0.12),
+              0 0 0 1px rgba(0, 102, 204, 0.1);
+  background: #ffffff;
+}
+
+.logo-item img {
+  max-width: 100%;
+  max-height: 50px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: grayscale(15%) brightness(0.98) contrast(1.02);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+  z-index: 1;
+}
+
+.logo-item:hover img {
+  filter: grayscale(0%) brightness(1.05) contrast(1.05);
+  transform: scale(1.08);
+}
+
+.logo-placeholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0066cc 0%, #ff6b35 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.logo-item:hover .logo-placeholder {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3);
+}
+
+.logos-loading,
+.logos-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  min-height: 200px;
+  color: var(--gmp-text-light);
+}
+
+.logos-loading-more {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-lg);
+}
+
+.loading-spinner-small {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--gmp-border);
+  border-top-color: #ff9800;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive para mural de logos */
+@media (max-width: 768px) {
+  .logos-mural {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 12px;
+    padding: 24px 16px;
+  }
+  
+  .logo-item {
+    min-height: 90px;
+    padding: 16px;
+  }
+  
+  .logo-item img {
+    max-height: 45px;
+  }
+  
+  .logo-placeholder {
+    width: 45px;
+    height: 45px;
+    font-size: 18px;
+  }
+}

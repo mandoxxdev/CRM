@@ -1,0 +1,226 @@
+/* ========== MELHORIAS DE LAYOUT MODERNO ========== */
+
+/* Cards com elevação moderna */
+.modern-card {
+  background: var(--gmp-surface);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--gmp-border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .modern-card {
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.modern-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--gmp-primary), var(--gmp-accent));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.modern-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 
+    0 4px 6px rgba(0, 0, 0, 0.1),
+    0 12px 24px rgba(0, 102, 204, 0.15);
+  border-color: var(--gmp-primary);
+}
+
+.modern-card:hover::before {
+  opacity: 1;
+}
+
+[data-theme="dark"] .modern-card:hover {
+  box-shadow: 
+    0 4px 6px rgba(0, 0, 0, 0.3),
+    0 12px 24px rgba(0, 168, 232, 0.2);
+}
+
+/* Tipografia melhorada */
+.modern-title {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  color: var(--gmp-text);
+  margin: 0 0 8px 0;
+}
+
+.modern-subtitle {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--gmp-text-light);
+  letter-spacing: 0.2px;
+  margin: 0;
+}
+
+/* Botões modernos */
+.modern-button {
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-button-primary {
+  background: linear-gradient(135deg, var(--gmp-primary), var(--gmp-primary-dark));
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+.modern-button-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 102, 204, 0.4);
+}
+
+.modern-button-primary:active {
+  transform: translateY(0);
+}
+
+.modern-button-secondary {
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  border: 2px solid var(--gmp-border);
+}
+
+.modern-button-secondary:hover {
+  background: var(--gmp-bg);
+  border-color: var(--gmp-primary);
+  transform: translateY(-2px);
+}
+
+/* Inputs modernos */
+.modern-input {
+  padding: 14px 18px;
+  border: 2px solid var(--gmp-border);
+  border-radius: 12px;
+  font-size: 15px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  transition: all 0.3s;
+  width: 100%;
+  font-family: inherit;
+}
+
+.modern-input:focus {
+  outline: none;
+  border-color: var(--gmp-primary);
+  box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .modern-input:focus {
+  box-shadow: 0 0 0 4px rgba(0, 168, 232, 0.2);
+}
+
+/* Badges modernos */
+.modern-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: all 0.2s;
+}
+
+.modern-badge-primary {
+  background: linear-gradient(135deg, rgba(0, 102, 204, 0.1), rgba(0, 102, 204, 0.15));
+  color: var(--gmp-primary);
+  border: 1px solid rgba(0, 102, 204, 0.2);
+}
+
+.modern-badge-success {
+  background: linear-gradient(135deg, rgba(0, 200, 83, 0.1), rgba(0, 200, 83, 0.15));
+  color: var(--gmp-success);
+  border: 1px solid rgba(0, 200, 83, 0.2);
+}
+
+.modern-badge-warning {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.1), rgba(255, 152, 0, 0.15));
+  color: var(--gmp-warning);
+  border: 1px solid rgba(255, 152, 0, 0.2);
+}
+
+/* Grid moderno */
+.modern-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+/* Espaçamentos generosos */
+.modern-section {
+  padding: 40px;
+  margin-bottom: 32px;
+}
+
+.modern-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Animações de entrada */
+.modern-fade-in {
+  animation: modernFadeIn 0.6s ease-out;
+}
+
+@keyframes modernFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Efeito de shimmer para loading */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--gmp-bg) 0%,
+    var(--gmp-border) 50%,
+    var(--gmp-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+

@@ -1,0 +1,202 @@
+.mes-layout {
+  display: flex;
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+.mes-sidebar {
+  width: 280px;
+  background: linear-gradient(180deg, #1e3a5f 0%, #2d4a6e 100%);
+  color: white;
+  transition: width 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.mes-sidebar.closed {
+  width: 70px;
+}
+
+.mes-sidebar-header {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 70px;
+}
+
+.mes-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+}
+
+.mes-logo svg {
+  font-size: 28px;
+  color: #4fc3f7;
+}
+
+.mes-sidebar.closed .mes-logo span {
+  display: none;
+}
+
+.mes-sidebar-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.mes-sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.mes-nav {
+  flex: 1;
+  padding: 10px 0;
+  overflow-y: auto;
+}
+
+.mes-nav-item {
+  margin-bottom: 4px;
+}
+
+.mes-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.mes-nav-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.mes-nav-link.active {
+  background: rgba(79, 195, 247, 0.2);
+  color: #4fc3f7;
+  border-left: 3px solid #4fc3f7;
+}
+
+.mes-nav-module-selector {
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.3) 0%, rgba(255, 107, 53, 0.15) 100%) !important;
+  border: 1px solid rgba(255, 107, 53, 0.4) !important;
+  font-weight: 600 !important;
+  margin-bottom: 1rem !important;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.2) !important;
+  border-radius: 8px;
+  margin: 0 10px 1rem 10px;
+}
+
+.mes-nav-module-selector:hover {
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.4) 0%, rgba(255, 107, 53, 0.25) 100%) !important;
+  border-color: rgba(255, 107, 53, 0.6) !important;
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3) !important;
+  transform: translateX(4px);
+}
+
+.mes-nav-link svg {
+  font-size: 20px;
+  min-width: 20px;
+}
+
+.mes-sidebar.closed .mes-nav-link span {
+  display: none;
+}
+
+.mes-nav-arrow {
+  margin-left: auto;
+  font-size: 10px;
+}
+
+.mes-submenu {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 0;
+}
+
+.mes-submenu-item {
+  padding: 10px 20px 10px 52px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.mes-submenu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+.mes-submenu-item.active {
+  background: rgba(79, 195, 247, 0.15);
+  color: #4fc3f7;
+  border-left: 3px solid #4fc3f7;
+}
+
+.mes-sidebar.closed .mes-submenu {
+  display: none;
+}
+
+.mes-main {
+  flex: 1;
+  margin-left: 280px;
+  transition: margin-left 0.3s ease;
+  min-height: 100vh;
+}
+
+.mes-sidebar.closed ~ .mes-main {
+  margin-left: 70px;
+}
+
+/* Scrollbar personalizado */
+.mes-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mes-sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mes-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.mes-sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .mes-sidebar {
+    transform: translateX(-100%);
+  }
+
+  .mes-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .mes-main {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,717 @@
+.calendario-atividades-container {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-top: 20px;
+}
+
+.calendario-filtros {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.calendario-filtro-tipo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calendario-filtro-tipo label {
+  font-weight: 500;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.calendario-filtro-tipo select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.calendario-filtro-tipo select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.calendario-legenda {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 5px;
+}
+
+.legenda-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #2c3e50;
+}
+
+.legenda-cor {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.calendario-wrapper {
+  background: white;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+/* Estilos customizados para react-big-calendar */
+.rbc-calendar {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.rbc-header {
+  padding: 10px 5px;
+  font-weight: 600;
+  color: #2c3e50;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.rbc-today {
+  background-color: #e8f4f8;
+}
+
+.rbc-off-range-bg {
+  background: #f8f9fa;
+}
+
+.rbc-event {
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.rbc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.rbc-event-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rbc-toolbar {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rbc-toolbar button {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background: white;
+  color: #2c3e50;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rbc-toolbar button:hover {
+  background: #f8f9fa;
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.rbc-toolbar button:active,
+.rbc-toolbar button.rbc-active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.rbc-toolbar-label {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+  padding: 0 10px;
+}
+
+.rbc-time-view {
+  border-left: 1px solid #ddd;
+}
+
+.rbc-time-header-content {
+  border-left: 1px solid #ddd;
+}
+
+.rbc-time-content {
+  border-top: 2px solid #ddd;
+}
+
+.rbc-day-slot .rbc-time-slot {
+  border-top: 1px solid #f0f0f0;
+}
+
+.rbc-time-slot {
+  min-height: 60px;
+}
+
+.rbc-agenda-view table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rbc-agenda-view table thead {
+  background: #f8f9fa;
+}
+
+.rbc-agenda-view table thead th {
+  padding: 10px;
+  text-align: left;
+  font-weight: 600;
+  color: #2c3e50;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.rbc-agenda-view table tbody tr {
+  border-bottom: 1px solid #e9ecef;
+}
+
+.rbc-agenda-view table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.rbc-agenda-view table tbody td {
+  padding: 12px;
+}
+
+.rbc-agenda-date-cell,
+.rbc-agenda-time-cell {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.rbc-agenda-event-cell {
+  color: #555;
+}
+
+/* Botão Nova Atividade */
+.calendario-actions {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-nova-atividade {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffa726 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+}
+
+.btn-nova-atividade:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+}
+
+/* Evento Customizado */
+.custom-calendar-event {
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.event-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-cliente {
+  font-size: 10px;
+  opacity: 0.9;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-priority {
+  font-size: 9px;
+  margin-top: 2px;
+  font-weight: 700;
+}
+
+/* Modal de Atividade */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-atividade {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-atividade-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modal-atividade-header h2 {
+  margin: 0;
+  font-size: 24px;
+  color: #2c3e50;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: #f8f9fa;
+  color: #dc3545;
+}
+
+.modal-atividade-form {
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #ff6b35;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+}
+
+.modal-atividade-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-top: 1px solid #e9ecef;
+  gap: 10px;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.btn-cancel,
+.btn-save,
+.btn-delete {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-cancel {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+.btn-cancel:hover {
+  background: #e9ecef;
+}
+
+.btn-save {
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: white;
+}
+
+.btn-save:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+.btn-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-delete {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .calendario-atividades-container {
+    padding: 15px;
+  }
+
+  .calendario-filtros {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calendario-filtro-tipo {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calendario-legenda {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .rbc-toolbar {
+    flex-direction: column;
+  }
+
+  .rbc-toolbar-label {
+    order: -1;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .calendario-wrapper {
+    overflow-x: auto;
+  }
+
+  .modal-atividade {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-atividade-footer {
+    flex-direction: column;
+  }
+
+  .footer-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .btn-cancel,
+  .btn-save {
+    flex: 1;
+  }
+}
+
+/* Dark Mode Styles */
+[data-theme="dark"] .calendario-atividades-container {
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .calendario-filtro-tipo label {
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .calendario-filtro-tipo select {
+  background: var(--gmp-bg);
+  border-color: var(--gmp-border);
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .calendario-filtro-tipo select:focus {
+  border-color: var(--gmp-primary);
+}
+
+[data-theme="dark"] .calendario-legenda {
+  background: var(--gmp-bg);
+  border: 1px solid var(--gmp-border);
+}
+
+[data-theme="dark"] .legenda-item {
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .calendario-wrapper {
+  background: var(--gmp-surface);
+}
+
+[data-theme="dark"] .rbc-header {
+  color: var(--gmp-text);
+  border-bottom-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .rbc-today {
+  background-color: rgba(0, 102, 204, 0.15);
+}
+
+[data-theme="dark"] .rbc-off-range-bg {
+  background: var(--gmp-bg);
+}
+
+[data-theme="dark"] .rbc-toolbar button {
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .rbc-toolbar button:hover {
+  background: var(--gmp-bg);
+  border-color: var(--gmp-primary);
+  color: var(--gmp-primary);
+}
+
+[data-theme="dark"] .rbc-toolbar button:active,
+[data-theme="dark"] .rbc-toolbar button.rbc-active {
+  background: var(--gmp-primary);
+  color: white;
+  border-color: var(--gmp-primary);
+}
+
+[data-theme="dark"] .rbc-toolbar-label {
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .rbc-time-view {
+  border-left-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .rbc-time-header-content {
+  border-left-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .rbc-time-content {
+  border-top-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .rbc-day-slot .rbc-time-slot {
+  border-top-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .rbc-agenda-view table thead {
+  background: var(--gmp-bg);
+}
+
+[data-theme="dark"] .rbc-agenda-view table thead th {
+  color: var(--gmp-text);
+  border-bottom-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .rbc-agenda-view table tbody tr {
+  border-bottom-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .rbc-agenda-view table tbody tr:hover {
+  background: var(--gmp-bg);
+}
+
+[data-theme="dark"] .rbc-agenda-date-cell,
+[data-theme="dark"] .rbc-agenda-time-cell {
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .rbc-agenda-event-cell {
+  color: var(--gmp-text-light);
+}
+
+/* Modal Dark Mode */
+[data-theme="dark"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .modal-atividade {
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .modal-atividade-header {
+  border-bottom-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .modal-atividade-header h2 {
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .modal-close {
+  color: var(--gmp-text-light);
+}
+
+[data-theme="dark"] .modal-close:hover {
+  background: var(--gmp-bg);
+  color: var(--gmp-error);
+}
+
+[data-theme="dark"] .form-group label {
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .form-group select,
+[data-theme="dark"] .form-group textarea {
+  background: var(--gmp-bg);
+  border-color: var(--gmp-border);
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .form-group input:focus,
+[data-theme="dark"] .form-group select:focus,
+[data-theme="dark"] .form-group textarea:focus {
+  border-color: var(--gmp-primary);
+  box-shadow: 0 0 0 3px rgba(51, 133, 214, 0.2);
+}
+
+[data-theme="dark"] .form-group input::placeholder,
+[data-theme="dark"] .form-group textarea::placeholder {
+  color: var(--gmp-text-light);
+}
+
+[data-theme="dark"] .modal-atividade-footer {
+  border-top-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .btn-cancel {
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+  border: 1px solid var(--gmp-border);
+}
+
+[data-theme="dark"] .btn-cancel:hover {
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .btn-delete {
+  background: var(--gmp-error);
+  color: white;
+}
+
+[data-theme="dark"] .btn-delete:hover {
+  background: #e53935;
+}
+
+[data-theme="dark"] .event-title {
+  color: white;
+}
+
+[data-theme="dark"] .event-cliente {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+[data-theme="dark"] .event-priority {
+  color: white;
+}
+
+

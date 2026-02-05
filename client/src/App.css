@@ -1,0 +1,81 @@
+/* CSS Variables for Theming */
+:root {
+  --gmp-primary: #0066cc;
+  --gmp-primary-dark: #0052a3;
+  --gmp-primary-light: #3385d6;
+  --gmp-secondary: #1e293b;
+  --gmp-accent: #00c853;
+  --gmp-bg: #f8fafc;
+  --gmp-surface: #ffffff;
+  --gmp-text: #1e293b;
+  --gmp-text-light: #64748b;
+  --gmp-border: #e2e8f0;
+  --gmp-success: #00c853;
+  --gmp-warning: #ff9800;
+  --gmp-error: #f44336;
+  --gmp-shadow: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+  --gmp-primary: #3385d6;
+  --gmp-primary-dark: #0066cc;
+  --gmp-primary-light: #66a3e0;
+  --gmp-secondary: #0f172a;
+  --gmp-accent: #00c853;
+  --gmp-bg: #0f172a;
+  --gmp-surface: #1e293b;
+  --gmp-text: #f1f5f9;
+  --gmp-text-light: #94a3b8;
+  --gmp-border: #334155;
+  --gmp-success: #00c853;
+  --gmp-warning: #ff9800;
+  --gmp-error: #f44336;
+  --gmp-shadow: rgba(0, 0, 0, 0.3);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  transform: translateZ(0); /* Force GPU acceleration */
+  will-change: background-color, color;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}/* Toast Container Customization */
+.Toastify__toast-container {
+  z-index: 9999;
+}[data-theme="dark"] .Toastify__toast {
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  border: 1px solid var(--gmp-border);
+}[data-theme="dark"] .Toastify__toast--success {
+  background: rgba(0, 200, 83, 0.15);
+  border-color: var(--gmp-success);
+  color: var(--gmp-success);
+}[data-theme="dark"] .Toastify__toast--error {
+  background: rgba(244, 67, 54, 0.15);
+  border-color: var(--gmp-error);
+  color: var(--gmp-error);
+}[data-theme="dark"] .Toastify__toast--info {
+  background: rgba(0, 102, 204, 0.15);
+  border-color: var(--gmp-primary);
+  color: var(--gmp-primary);
+}[data-theme="dark"] .Toastify__toast--warning {
+  background: rgba(255, 152, 0, 0.15);
+  border-color: var(--gmp-warning);
+  color: var(--gmp-warning);
+}

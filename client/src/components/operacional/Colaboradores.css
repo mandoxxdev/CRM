@@ -1,0 +1,377 @@
+.colaboradores-painel {
+  padding: 20px;
+}
+
+.colaboradores-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card.stat-trabalhando {
+  border-left: 4px solid #4caf50;
+}
+
+.stat-card.stat-disponivel {
+  border-left: 4px solid #2196f3;
+}
+
+.stat-card.stat-parado {
+  border-left: 4px solid #ff9800;
+}
+
+.stat-card.stat-ausente {
+  border-left: 4px solid #9e9e9e;
+}
+
+.stat-card.stat-total {
+  border-left: 4px solid #673ab7;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+}
+
+.stat-trabalhando .stat-icon {
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+}
+
+.stat-disponivel .stat-icon {
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+}
+
+.stat-parado .stat-icon {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+}
+
+.stat-ausente .stat-icon {
+  background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
+}
+
+.stat-total .stat-icon {
+  background: linear-gradient(135deg, #673ab7 0%, #512da8 100%);
+}
+
+.stat-content h3 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+
+.stat-content p {
+  margin: 4px 0 0 0;
+  font-size: 14px;
+  color: #7f8c8d;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.view-toggle {
+  display: flex;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.view-toggle button {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #7f8c8d;
+  transition: all 0.2s;
+}
+
+.view-toggle button:hover {
+  background: #e0e0e0;
+  color: #1e3a5f;
+}
+
+.view-toggle button.active {
+  background: #2196f3;
+  color: white;
+}
+
+.colaboradores-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.colaborador-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 2px solid transparent;
+}
+
+.colaborador-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+.colaborador-card.status-trabalhando {
+  border-color: #4caf50;
+}
+
+.colaborador-card.status-disponivel {
+  border-color: #2196f3;
+}
+
+.colaborador-card.status-parado {
+  border-color: #ff9800;
+}
+
+.colaborador-card.status-ausente {
+  border-color: #9e9e9e;
+  opacity: 0.7;
+}
+
+.colaborador-card-header {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.colaborador-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.colaborador-info-header {
+  flex: 1;
+}
+
+.colaborador-info-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+  color: #1e3a5f;
+}
+
+.colaborador-matricula {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.status-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  box-shadow: 0 0 0 3px white;
+}
+
+.colaborador-card-body {
+  padding: 20px;
+  min-height: 120px;
+}
+
+.atividade-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.atividade-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 3px solid #2196f3;
+}
+
+.atividade-item.tempo {
+  border-left-color: #4caf50;
+  background: #e8f5e9;
+}
+
+.atividade-icon {
+  font-size: 20px;
+  color: #2196f3;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.atividade-item.tempo .atividade-icon {
+  color: #4caf50;
+}
+
+.atividade-item div {
+  flex: 1;
+}
+
+.atividade-item strong {
+  display: block;
+  font-size: 14px;
+  color: #1e3a5f;
+  margin-bottom: 4px;
+}
+
+.atividade-item span {
+  display: block;
+  font-size: 13px;
+  color: #7f8c8d;
+}
+
+.sem-atividade {
+  text-align: center;
+  padding: 20px;
+  color: #7f8c8d;
+}
+
+.sem-atividade p {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.disponivel-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.colaborador-card-footer {
+  padding: 16px 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.colaborador-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.colaborador-cargo {
+  font-size: 13px;
+  color: #1e3a5f;
+  font-weight: 500;
+}
+
+.colaborador-setor {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.colaborador-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.colaborador-actions .btn-icon,
+.colaborador-actions .action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 16px;
+}
+
+.colaborador-actions .btn-icon.available {
+  background: #e8f5e9;
+  color: #4caf50;
+}
+
+.colaborador-actions .btn-icon.unavailable {
+  background: #ffebee;
+  color: #f44336;
+}
+
+.colaborador-actions .action-btn.edit {
+  background: #e3f2fd;
+  color: #2196f3;
+}
+
+.colaborador-actions .action-btn.delete {
+  background: #ffebee;
+  color: #f44336;
+}
+
+.colaborador-actions .btn-icon:hover,
+.colaborador-actions .action-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .colaboradores-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .colaboradores-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .view-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+}

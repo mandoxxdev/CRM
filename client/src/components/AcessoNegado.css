@@ -1,0 +1,237 @@
+/* Esconder sidebar quando acesso negado estiver ativo */
+body.acesso-negado-active .sidebar {
+  display: none !important;
+}
+
+body.acesso-negado-active .main-content {
+  margin-left: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.acesso-negado-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 70px);
+  padding: 2rem;
+  background: var(--gmp-bg);
+  box-sizing: border-box;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-left: 0;
+}
+
+.acesso-negado-alert {
+  background: var(--gmp-surface);
+  border: 2px solid #e74c3c;
+  border-radius: 16px;
+  max-width: 600px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(231, 76, 60, 0.2);
+  animation: slideDown 0.3s ease-out;
+  box-sizing: border-box;
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+.acesso-negado-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  border-radius: 14px 14px 0 0;
+  color: white;
+}
+
+.acesso-negado-icon {
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+}
+
+.acesso-negado-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+}
+
+.acesso-negado-content {
+  padding: 2rem;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.acesso-negado-mensagem-principal {
+  font-size: 1.1rem;
+  color: var(--gmp-text);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.acesso-negado-mensagem-principal strong {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+.acesso-negado-aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: rgba(231, 76, 60, 0.1);
+  border-left: 4px solid #e74c3c;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.aviso-icon {
+  font-size: 1.5rem;
+  color: #e74c3c;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.acesso-negado-aviso p {
+  margin: 0;
+  color: var(--gmp-text);
+  line-height: 1.6;
+}
+
+.acesso-negado-aviso strong {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+.acesso-negado-detalhes {
+  color: var(--gmp-text-light);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.acesso-negado-actions {
+  padding: 1.5rem 2rem 2rem;
+  display: flex;
+  justify-content: center;
+}
+
+.btn-voltar {
+  padding: 12px 32px;
+  background: linear-gradient(135deg, var(--gmp-primary) 0%, var(--gmp-primary-dark) 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+.btn-voltar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 102, 204, 0.4);
+}
+
+.btn-voltar:active {
+  transform: translateY(0);
+}
+
+/* Dark mode */
+[data-theme="dark"] .acesso-negado-alert {
+  background: var(--gmp-surface);
+  border-color: #ef4444;
+}
+
+[data-theme="dark"] .acesso-negado-mensagem-principal {
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .acesso-negado-mensagem-principal strong {
+  color: #ef4444;
+}
+
+[data-theme="dark"] .acesso-negado-aviso {
+  background: rgba(239, 68, 68, 0.15);
+  border-left-color: #ef4444;
+}
+
+[data-theme="dark"] .aviso-icon {
+  color: #ef4444;
+}
+
+[data-theme="dark"] .acesso-negado-aviso strong {
+  color: #ef4444;
+}
+
+[data-theme="dark"] .acesso-negado-detalhes {
+  color: var(--gmp-text-light);
+}
+
+/* Animação */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .acesso-negado-container {
+    padding: 1rem;
+    min-height: calc(100vh - 60px);
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+
+  .acesso-negado-alert {
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .acesso-negado-header {
+    padding: 1.25rem;
+  }
+
+  .acesso-negado-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .acesso-negado-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
+  }
+
+  .acesso-negado-content {
+    padding: 1.5rem;
+  }
+
+  .acesso-negado-mensagem-principal {
+    font-size: 1rem;
+  }
+
+  .acesso-negado-actions {
+    padding: 1rem 1.5rem 1.5rem;
+  }
+
+  .btn-voltar {
+    width: 100%;
+    padding: 14px 24px;
+  }
+}
+
