@@ -150,15 +150,30 @@ JWT_SECRET=sua-chave-secreta-super-segura-aqui
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### 2. Build Command
+### 2. Forçar Uso do Dockerfile (IMPORTANTE!)
 
-**IMPORTANTE:** O projeto já tem um `Dockerfile` customizado que resolve o problema de `package-lock.json`.
+**O projeto usa Dockerfile customizado, não Nixpacks!**
 
-**Se o Coolify usar Dockerfile (recomendado):**
-- Não precisa configurar Build Command
-- O Dockerfile já está configurado para usar `npm install` em vez de `npm ci`
+O Coolify pode tentar usar Nixpacks automaticamente. Para forçar o uso do Dockerfile:
 
-**Se precisar configurar Build Command manualmente:**
+1. No projeto do Coolify, vá em **Settings** ou **Configuration**
+2. Procure por:
+   - **Build Pack** ou **Build Method**
+   - **Dockerfile** ou **Custom Dockerfile**
+   - **Builder** ou **Build System**
+3. **Se encontrar a opção:**
+   - Selecione **Dockerfile** ou **Custom Dockerfile**
+   - Ou desative **Nixpacks** / **Auto-detect**
+4. **Se NÃO encontrar:**
+   - O arquivo `nixpacks.toml` foi removido do repositório
+   - O Coolify deve detectar automaticamente o `Dockerfile` e usá-lo
+   - Se ainda usar Nixpacks, adicione uma variável de ambiente: `DOCKERFILE_PATH=Dockerfile`
+
+**Build Command (se necessário):**
+- **Não precisa configurar** se estiver usando Dockerfile
+- O Dockerfile já está configurado corretamente
+
+**Se precisar configurar Build Command manualmente (apenas se não usar Dockerfile):**
 ```bash
 rm -f package-lock.json server/package-lock.json client/package-lock.json && npm install --legacy-peer-deps && cd client && npm install --legacy-peer-deps && npm run build && cd ../server && npm install --legacy-peer-deps
 ```
