@@ -10,8 +10,8 @@ nixPkgs = ["nodejs"]
 # Usar npm install (não npm ci) pois não há lock files
 cmds = [
   "npm install --legacy-peer-deps",
-  "cd client && npm install --legacy-peer-deps",
-  "cd ../server && npm install --legacy-peer-deps"
+  "cd client && npm install --legacy-peer-deps && cd ..",
+  "cd server && npm install --legacy-peer-deps && cd .."
 ]
 
 [phases.build]
