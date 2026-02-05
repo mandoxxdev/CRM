@@ -10,7 +10,7 @@ const multer = require('multer');
 const puppeteer = require('puppeteer');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'gmp-industriais-secret-key-2024';
 
 // Rate Limiting simples (em memória)
@@ -16103,7 +16103,7 @@ app.use('/api', (err, req, res, next) => {
 // ========== INICIAR SERVIDOR ==========
 // Servir arquivos estáticos do React em produção
 if (process.env.NODE_ENV === 'production') {
-  const clientBuildPath = path.join(__dirname, '../public');
+  const clientBuildPath = path.join(__dirname, '../client/build');
   
   // Verificar se a pasta build existe
   if (fs.existsSync(clientBuildPath)) {
