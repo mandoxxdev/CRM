@@ -155,8 +155,13 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Configure o comando de build:
 
 ```bash
-cd client && npm install && npm run build && cd .. && cd server && npm install
+npm install && cd client && npm install && npm run build && cd ../server && npm install
 ```
+
+**IMPORTANTE:** Se receber erro sobre `package-lock.json` desatualizado:
+1. Execute `.\atualizar-lockfiles.bat` localmente
+2. Faça commit e push dos lock files atualizados
+3. Tente deploy novamente
 
 ### 3. Start Command
 
