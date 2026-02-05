@@ -241,6 +241,29 @@ Se não encontrar "Source Providers", procure por:
 - Verifique se a porta está correta
 - Verifique se as variáveis de ambiente estão configuradas
 
+### Erro: "Cannot find module 'ajv/dist/compile/codegen'" ou "undefined variable 'nodejs-22_x'"
+
+**Causa:** O Coolify está usando Node.js 22, mas o projeto precisa de Node.js 20.
+
+**Solução CRÍTICA - Remover Variável de Ambiente:**
+
+1. No Coolify, vá para seu projeto
+2. Procure por **Settings** → **Environment Variables** ou **Variables**
+3. Procure por uma variável chamada `NIXPACKS_NODE_VERSION`
+4. **Se encontrar:**
+   - **DELETE essa variável** (ou altere o valor para `20`)
+   - Isso é ESSENCIAL! O Coolify está forçando Node.js 22 através dessa variável
+5. Salve as alterações
+6. Tente fazer deploy novamente
+
+**Onde encontrar Environment Variables:**
+- No projeto: **Settings** → **Environment Variables**
+- Ou: **Configuration** → **Variables**
+- Ou: **Deploy** → **Environment Variables**
+- Ou: Menu lateral → **Variables**
+
+**Importante:** O arquivo `nixpacks.toml` já está configurado para usar Node.js 20, mas a variável de ambiente sobrescreve essa configuração!
+
 ### Não encontro "Source Providers" no Coolify
 
 **Solução Rápida:**
