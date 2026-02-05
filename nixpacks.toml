@@ -3,7 +3,8 @@
 # IMPORTANTE: Lock files foram removidos do repositório para evitar erro npm ci
 
 [phases.setup]
-nixPkgs = ["nodejs-22_x"]
+# Usar nodejs-20_x (versão estável e disponível)
+nixPkgs = ["nodejs-20_x"]
 
 [phases.install]
 # Usar npm install (não npm ci) pois não há lock files

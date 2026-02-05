@@ -1,7 +1,7 @@
 # Dockerfile customizado para Coolify
 # Força uso de npm install em vez de npm ci
 
-FROM node:22-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
