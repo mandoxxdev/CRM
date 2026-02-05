@@ -29,6 +29,9 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
+# Garantir permissões para criar banco de dados
+RUN mkdir -p /app/server && chmod -R 777 /app/server || true
+
 # Comando para iniciar
 WORKDIR /app/server
 CMD ["node", "index.js"]
