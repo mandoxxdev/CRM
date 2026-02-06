@@ -260,6 +260,11 @@ const ProdutoForm = () => {
         }));
       }
       
+      // Debug: verificar mudança de família
+      if (name === 'familia_produto') {
+        console.log('Família alterada para:', newValue);
+      }
+      
       // Se mudou o nome ou a família do produto e não está editando, regenerar o código
       if ((name === 'nome' || name === 'familia_produto') && !isEdit && !id) {
         // Usar setTimeout para garantir que o estado foi atualizado
@@ -539,31 +544,6 @@ const ProdutoForm = () => {
                   ))}
                 </select>
               </div>
-
-              {/* Campo Modelo - Aparece apenas para equipamentos (não Hélices e Acessórios) */}
-              {formData.familia_produto && 
-               formData.familia_produto !== 'Hélices e Acessórios' && 
-               formData.familia_produto !== '' && (
-                <div className="form-group">
-                  <label>Modelo do Equipamento</label>
-                  <div className="input-with-icon">
-                    <input
-                      type="text"
-                      name="modelo"
-                      value={formData.modelo}
-                      onChange={handleChange}
-                      placeholder="Ex: ULTRAMIX, Bimix, etc."
-                      maxLength={100}
-                    />
-                    {formData.modelo && (
-                      <FiCheckCircle className="field-check-icon" />
-                    )}
-                  </div>
-                  <small className="form-hint">
-                    Digite o modelo específico do equipamento (ex: ULTRAMIX, Bimix) para facilitar buscas futuras
-                  </small>
-                </div>
-              )}
 
               <div className="form-group">
                 <label>Unidade</label>
@@ -859,6 +839,43 @@ const ProdutoForm = () => {
               </select>
             </div>
           </div>
+
+          {/* Campo Modelo - Aparece apenas para equipamentos (não Hélices e Acessórios) */}
+          {tipoProduto === 'equipamentos' && 
+           formData.familia_produto && 
+           formData.familia_produto !== 'Hélices e Acessórios' && 
+           formData.familia_produto.trim() !== '' && (
+            <div className="form-group full-width" style={{ marginTop: '20px', marginBottom: '20px', padding: '20px', backgroundColor: 'var(--gmp-surface-secondary)', borderRadius: 'var(--border-radius)', border: '2px solid var(--gmp-border)' }}>
+              <label style={{ fontSize: '16px', fontWeight: '600', marginBottom: '10px', display: 'block', color: 'var(--gmp-text-primary)' }}>
+                Modelo do Equipamento
+              </label>
+              <div className="input-with-icon" style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  name="modelo"
+                  value={formData.modelo || ''}
+                  onChange={handleChange}
+                  placeholder="Ex: ULTRAMIX, Bimix, etc."
+                  maxLength={100}
+                  style={{ 
+                    width: '100%', 
+                    padding: '12px 40px 12px 12px', 
+                    fontSize: '14px',
+                    border: '2px solid var(--gmp-border)',
+                    borderRadius: 'var(--border-radius)',
+                    backgroundColor: 'var(--gmp-surface)',
+                    color: 'var(--gmp-text-primary)'
+                  }}
+                />
+                {formData.modelo && (
+                  <FiCheckCircle className="field-check-icon" style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', color: '#10b981', fontSize: '20px' }} />
+                )}
+              </div>
+              <small className="form-hint" style={{ display: 'block', marginTop: '8px', color: 'var(--gmp-text-secondary)', fontSize: '13px' }}>
+                Digite o modelo específico do equipamento (ex: ULTRAMIX, Bimix) para facilitar buscas futuras
+              </small>
+            </div>
+          )}
 
           <div className="form-group full-width">
             <label>Foto do Produto</label>
