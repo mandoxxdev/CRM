@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiSend, FiMessageCircle, FiUser, FiImage, FiX, FiPaperclip, FiSparkles, FiHelpCircle } from 'react-icons/fi';
+import { FiSend, FiMessageCircle, FiUser, FiImage, FiX, FiPaperclip, FiStar, FiHelpCircle } from 'react-icons/fi';
 import { buscarResposta, gerarRespostaContextual, sugerirPerguntas } from '../utils/assistenteIA';
 import api from '../services/api';
 import './ChatIA.css';
@@ -309,9 +309,9 @@ Pergunte-me qualquer coisa ou envie uma imagem para análise! 😊`,
 
       {suggestions.length > 0 && messages.length > 1 && (
         <div className="chat-ia-suggestions">
-          <div className="chat-ia-suggestions-label">
-            <FiSparkles /> Sugestões:
-          </div>
+            <div className="chat-ia-suggestions-label">
+              <FiStar /> Sugestões:
+            </div>
           <div className="chat-ia-suggestions-list">
             {suggestions.map((suggestion, index) => (
               <button

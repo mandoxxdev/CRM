@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiX, FiSend, FiMessageCircle, FiUser, FiSparkles, FiHelpCircle } from 'react-icons/fi';
+import { FiX, FiSend, FiMessageCircle, FiUser, FiStar, FiHelpCircle } from 'react-icons/fi';
 import { buscarResposta, gerarRespostaContextual, sugerirPerguntas } from '../utils/assistenteIA';
 import './HelpSearch.css';
 
@@ -196,7 +196,7 @@ Pergunte-me qualquer coisa sobre o sistema. 😊`,
         {suggestions.length > 0 && messages.length > 1 && (
           <div className="help-search-suggestions">
             <div className="help-search-suggestions-label">
-              <FiSparkles /> Sugestões:
+              <FiStar /> Sugestões:
             </div>
             <div className="help-search-suggestions-list">
               {suggestions.map((suggestion, index) => (
