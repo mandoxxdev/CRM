@@ -5,7 +5,7 @@ import api from '../services/api';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
-  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle, FiMessageCircle
+  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -16,8 +16,6 @@ import HelpGuide from './HelpGuide';
 import HelpSearch from './HelpSearch';
 import ModuleSplash from './ModuleSplash';
 import PreferenciasMenu from './PreferenciasMenu';
-import ChatIA from './ChatIA';
-import Chat from './Chat';
 import './Layout.css';
 
 const Layout = () => {
@@ -45,8 +43,6 @@ const Layout = () => {
   const [reportBuilderOpen, setReportBuilderOpen] = useState(false);
   const [workflowEngineOpen, setWorkflowEngineOpen] = useState(false);
   const [helpSearchOpen, setHelpSearchOpen] = useState(false);
-  const [chatIAOpen, setChatIAOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
   const [animatedBackgroundEnabled, setAnimatedBackgroundEnabled] = useState(
     localStorage.getItem('animatedBackground') !== 'false'
   );
@@ -261,23 +257,6 @@ const Layout = () => {
               </Link>
             );
           })}
-          {/* Aba de IA */}
-          <button
-            className={`nav-item nav-item-button ${chatIAOpen ? 'active' : ''}`}
-            onClick={() => setChatIAOpen(!chatIAOpen)}
-            title="Assistente IA"
-          >
-            <FiMessageCircle />
-            {sidebarOpen && <span>Assistente IA</span>}
-          </button>
-          <button
-            className={`nav-item nav-item-button ${chatOpen ? 'active' : ''}`}
-            onClick={() => setChatOpen(!chatOpen)}
-            title="Chat Interno"
-          >
-            <FiMessageCircle />
-            {sidebarOpen && <span>Chat</span>}
-          </button>
         </nav>
         <div className="sidebar-footer">
           <div className="user-info">
@@ -331,8 +310,6 @@ const Layout = () => {
       <WorkflowEngine isOpen={workflowEngineOpen} onClose={() => setWorkflowEngineOpen(false)} />
       <HelpGuide />
       <HelpSearch isOpen={helpSearchOpen} onClose={() => setHelpSearchOpen(false)} />
-      <ChatIA isOpen={chatIAOpen} onClose={() => setChatIAOpen(false)} />
-      <Chat isOpen={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 };
