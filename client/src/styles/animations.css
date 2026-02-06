@@ -1,6 +1,9 @@
-/* ========== MICROINTERAÇÕES E ANIMAÇÕES ========== */
+/* ============================================
+   ANIMAÇÕES PREMIUM - GMP INDUSTRIAIS
+   Sistema de animações e microinterações
+   ============================================ */
 
-/* Fade In */
+/* ========== ANIMAÇÕES BÁSICAS ========== */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -10,10 +13,18 @@
   }
 }
 
-/* Slide In */
-@keyframes slideIn {
+@keyframes fadeOut {
   from {
-    transform: translateY(-10px);
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
     opacity: 0;
   }
   to {
@@ -22,10 +33,20 @@
   }
 }
 
-/* Slide In Right */
+@keyframes slideInDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 @keyframes slideInRight {
   from {
-    transform: translateX(20px);
+    transform: translateX(100%);
     opacity: 0;
   }
   to {
@@ -34,10 +55,9 @@
   }
 }
 
-/* Slide In Left */
 @keyframes slideInLeft {
   from {
-    transform: translateX(-20px);
+    transform: translateX(-100%);
     opacity: 0;
   }
   to {
@@ -46,7 +66,6 @@
   }
 }
 
-/* Scale In */
 @keyframes scaleIn {
   from {
     transform: scale(0.9);
@@ -58,7 +77,17 @@
   }
 }
 
-/* Bounce */
+@keyframes scaleOut {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+
 @keyframes bounce {
   0%, 100% {
     transform: translateY(0);
@@ -68,40 +97,17 @@
   }
 }
 
-/* Pulse */
 @keyframes pulse {
   0%, 100% {
     opacity: 1;
+    transform: scale(1);
   }
   50% {
-    opacity: 0.5;
+    opacity: 0.8;
+    transform: scale(1.05);
   }
 }
 
-/* Shake */
-@keyframes shake {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-5px);
-  }
-  75% {
-    transform: translateX(5px);
-  }
-}
-
-/* Rotate */
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Spin */
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -111,108 +117,28 @@
   }
 }
 
-/* Glow */
-@keyframes glow {
-  0%, 100% {
-    box-shadow: 0 0 5px rgba(0, 102, 204, 0.5);
+/* ========== SHIMMER EFFECT ========== */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
   }
-  50% {
-    box-shadow: 0 0 20px rgba(0, 102, 204, 0.8);
+  100% {
+    background-position: 1000px 0;
   }
 }
 
-/* ========== CLASSES UTILITÁRIAS ========== */
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
-}
-
-.animate-slide-in {
-  animation: slideIn 0.3s ease-out;
-}
-
-.animate-slide-in-right {
-  animation: slideInRight 0.3s ease-out;
-}
-
-.animate-slide-in-left {
-  animation: slideInLeft 0.3s ease-out;
-}
-
-.animate-scale-in {
-  animation: scaleIn 0.3s ease-out;
-}
-
-.animate-bounce {
-  animation: bounce 0.6s ease-in-out;
-}
-
-.animate-pulse {
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.animate-shake {
-  animation: shake 0.5s ease-in-out;
-}
-
-.animate-glow {
-  animation: glow 2s ease-in-out infinite;
-}
-
-/* ========== TRANSITIONS SUAVES ========== */
-
-.transition-smooth {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.transition-fast {
-  transition: all 0.15s ease-out;
-}
-
-.transition-slow {
-  transition: all 0.5s ease-out;
-}
-
-/* ========== HOVER EFFECTS ========== */
-
-.hover-lift {
-  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
-}
-
-.hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-}
-
-.hover-scale {
-  transition: transform 0.2s ease-out;
-}
-
-.hover-scale:hover {
-  transform: scale(1.05);
-}
-
-.hover-glow {
-  transition: box-shadow 0.3s ease-out;
-}
-
-.hover-glow:hover {
-  box-shadow: 0 0 20px rgba(0, 102, 204, 0.4);
-}
-
-/* ========== LOADING STATES ========== */
-
-.skeleton {
+.shimmer {
   background: linear-gradient(
     90deg,
-    var(--gmp-bg) 0%,
-    var(--gmp-border) 50%,
-    var(--gmp-bg) 100%
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
   );
-  background-size: 200% 100%;
-  animation: skeleton-loading 1.5s ease-in-out infinite;
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
 }
 
+/* ========== SKELETON LOADING ========== */
 @keyframes skeleton-loading {
   0% {
     background-position: 200% 0;
@@ -222,55 +148,189 @@
   }
 }
 
-/* ========== BUTTON ANIMATIONS ========== */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--gmp-gray-200) 25%,
+    var(--gmp-gray-100) 50%,
+    var(--gmp-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: var(--radius-md);
+}
 
-.btn-ripple {
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--gmp-gray-700) 25%,
+    var(--gmp-gray-600) 50%,
+    var(--gmp-gray-700) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* ========== SPINNER PREMIUM ========== */
+.spinner-premium {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--gmp-gray-200);
+  border-top-color: var(--gmp-primary-500);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.spinner-sm {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+.spinner-lg {
+  width: 60px;
+  height: 60px;
+  border-width: 6px;
+}
+
+/* ========== PROGRESS BAR ========== */
+@keyframes progress {
+  from {
+    width: 0%;
+  }
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--gmp-gray-200);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gmp-primary-500) 0%, var(--gmp-primary-400) 100%);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-slow);
   position: relative;
   overflow: hidden;
+  animation: progress 1s ease-out;
 }
 
-.btn-ripple::after {
+.progress-bar-fill::after {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  transform: translate(-50%, -50%);
-  transition: width 0.6s, height 0.6s;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
 }
 
-.btn-ripple:active::after {
-  width: 300px;
-  height: 300px;
+/* ========== CLASSES UTILITÁRIAS ========== */
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
 }
 
-/* ========== CARD ANIMATIONS ========== */
-
-.card-enter {
-  animation: scaleIn 0.3s ease-out;
+.animate-fade-out {
+  animation: fadeOut 0.4s ease-out;
 }
 
-.card-exit {
-  animation: fadeIn 0.2s ease-out reverse;
+.animate-slide-in-up {
+  animation: slideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ========== STAGGER ANIMATIONS ========== */
+.animate-slide-in-down {
+  animation: slideInDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.animate-bounce {
+  animation: bounce 1s infinite;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ========== HOVER EFFECTS ========== */
+.hover-lift {
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--elevation-5);
+}
+
+.hover-glow {
+  transition: box-shadow var(--transition-base);
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 20px rgba(0, 102, 204, 0.4);
+}
+
+.hover-scale {
+  transition: transform var(--transition-base);
+}
+
+.hover-scale:hover {
+  transform: scale(1.05);
+}
+
+.hover-rotate {
+  transition: transform var(--transition-base);
+}
+
+.hover-rotate:hover {
+  transform: rotate(5deg);
+}
+
+/* ========== TRANSITIONS ========== */
+.transition-fast {
+  transition: all var(--transition-fast);
+}
+
+.transition-base {
+  transition: all var(--transition-base);
+}
+
+.transition-slow {
+  transition: all var(--transition-slow);
+}
+
+.transition-bounce {
+  transition: all var(--transition-bounce);
+}
+
+/* ========== STAGGER ANIMATION ========== */
 .stagger-item {
   opacity: 0;
-  animation: slideIn 0.4s ease-out forwards;
+  animation: fadeIn 0.5s ease-out forwards;
 }
 
-.stagger-item:nth-child(1) { animation-delay: 0.05s; }
-.stagger-item:nth-child(2) { animation-delay: 0.1s; }
-.stagger-item:nth-child(3) { animation-delay: 0.15s; }
-.stagger-item:nth-child(4) { animation-delay: 0.2s; }
-.stagger-item:nth-child(5) { animation-delay: 0.25s; }
-.stagger-item:nth-child(6) { animation-delay: 0.3s; }
-.stagger-item:nth-child(7) { animation-delay: 0.35s; }
-.stagger-item:nth-child(8) { animation-delay: 0.4s; }
-
-
+.stagger-item:nth-child(1) { animation-delay: 0.1s; }
+.stagger-item:nth-child(2) { animation-delay: 0.2s; }
+.stagger-item:nth-child(3) { animation-delay: 0.3s; }
+.stagger-item:nth-child(4) { animation-delay: 0.4s; }
+.stagger-item:nth-child(5) { animation-delay: 0.5s; }
+.stagger-item:nth-child(6) { animation-delay: 0.6s; }

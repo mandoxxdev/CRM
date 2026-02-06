@@ -1,0 +1,179 @@
+/* ============================================
+   DESIGN TOKENS - GMP INDUSTRIAIS
+   Sistema de design centralizado
+   ============================================ */
+
+:root {
+  /* ========== CORES PRIMÁRIAS ========== */
+  --gmp-primary-50: #e6f2ff;
+  --gmp-primary-100: #b3d9ff;
+  --gmp-primary-200: #80bfff;
+  --gmp-primary-300: #4da6ff;
+  --gmp-primary-400: #1a8cff;
+  --gmp-primary-500: #0066cc;  /* Principal */
+  --gmp-primary-600: #0052a3;
+  --gmp-primary-700: #003d7a;
+  --gmp-primary-800: #002952;
+  --gmp-primary-900: #001429;
+
+  /* Compatibilidade com código existente */
+  --gmp-primary: var(--gmp-primary-500);
+  --gmp-primary-dark: var(--gmp-primary-600);
+  --gmp-primary-light: var(--gmp-primary-400);
+  --gmp-secondary: var(--gmp-primary-700);
+  --gmp-accent: #00a8e8;
+
+  /* ========== CORES SEMÂNTICAS ========== */
+  --gmp-success-50: #ecfdf5;
+  --gmp-success-100: #d1fae5;
+  --gmp-success-500: #10b981;
+  --gmp-success-600: #059669;
+  --gmp-success-700: #047857;
+  
+  --gmp-success: var(--gmp-success-500);
+  --gmp-success-light: #34d399;
+  --gmp-success-dark: var(--gmp-success-600);
+  
+  --gmp-warning-50: #fffbeb;
+  --gmp-warning-100: #fef3c7;
+  --gmp-warning-500: #f59e0b;
+  --gmp-warning-600: #d97706;
+  --gmp-warning-700: #b45309;
+  
+  --gmp-warning: var(--gmp-warning-500);
+  --gmp-warning-light: #fbbf24;
+  --gmp-warning-dark: var(--gmp-warning-600);
+  
+  --gmp-error-50: #fef2f2;
+  --gmp-error-100: #fee2e2;
+  --gmp-error-500: #ef4444;
+  --gmp-error-600: #dc2626;
+  --gmp-error-700: #b91c1c;
+  
+  --gmp-error: var(--gmp-error-500);
+  --gmp-error-light: #f87171;
+  --gmp-error-dark: var(--gmp-error-600);
+  
+  --gmp-info-50: #eff6ff;
+  --gmp-info-100: #dbeafe;
+  --gmp-info-500: #3b82f6;
+  --gmp-info-600: #2563eb;
+  --gmp-info-700: #1d4ed8;
+  
+  --gmp-info: var(--gmp-info-500);
+  --gmp-info-light: #60a5fa;
+  --gmp-info-dark: var(--gmp-info-600);
+
+  /* ========== CORES NEUTRAS ========== */
+  --gmp-gray-50: #f9fafb;
+  --gmp-gray-100: #f3f4f6;
+  --gmp-gray-200: #e5e7eb;
+  --gmp-gray-300: #d1d5db;
+  --gmp-gray-400: #9ca3af;
+  --gmp-gray-500: #6b7280;
+  --gmp-gray-600: #4b5563;
+  --gmp-gray-700: #374151;
+  --gmp-gray-800: #1f2937;
+  --gmp-gray-900: #111827;
+
+  /* Compatibilidade */
+  --gmp-bg: var(--gmp-gray-50);
+  --gmp-surface: #ffffff;
+  --gmp-text: var(--gmp-gray-900);
+  --gmp-text-light: var(--gmp-gray-600);
+  --gmp-border: var(--gmp-gray-200);
+  --gmp-shadow: rgba(0, 102, 204, 0.1);
+
+  /* ========== ELEVAÇÕES (SOMBRAS) ========== */
+  --elevation-0: none;
+  --elevation-1: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --elevation-2: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --elevation-3: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --elevation-4: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --elevation-5: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --elevation-6: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  /* Sombras coloridas */
+  --shadow-primary: 0 10px 25px -5px rgba(0, 102, 204, 0.3);
+  --shadow-success: 0 10px 25px -5px rgba(16, 185, 129, 0.3);
+  --shadow-error: 0 10px 25px -5px rgba(239, 68, 68, 0.3);
+  --shadow-warning: 0 10px 25px -5px rgba(245, 158, 11, 0.3);
+
+  /* Compatibilidade */
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-3);
+  --shadow-lg: var(--elevation-4);
+  --shadow-xl: var(--elevation-5);
+
+  /* ========== BORDAS ========== */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Compatibilidade */
+  --border-radius: var(--radius-md);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  /* ========== ESPAÇAMENTOS ========== */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* Compatibilidade */
+  --spacing-xs: var(--space-1);
+  --spacing-sm: var(--space-2);
+  --spacing-md: var(--space-4);
+  --spacing-lg: var(--space-6);
+  --spacing-xl: var(--space-8);
+
+  /* ========== TRANSIÇÕES ========== */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 500ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* ========== Z-INDEX ========== */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+
+  /* ========== BREAKPOINTS ========== */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+}
+
+/* ========== DARK MODE ========== */
+[data-theme="dark"] {
+  --gmp-bg: #0f172a;
+  --gmp-surface: #1e293b;
+  --gmp-text: #f1f5f9;
+  --gmp-text-light: #94a3b8;
+  --gmp-border: #334155;
+  --gmp-shadow: rgba(0, 0, 0, 0.3);
+
+  --gmp-primary: #3385d6;
+  --gmp-primary-dark: #0066cc;
+  --gmp-primary-light: #66a3e0;
+  --gmp-secondary: #0f172a;
+}
