@@ -19,6 +19,7 @@ const ProdutoForm = () => {
     nome: '',
     descricao: '',
     familia_produto: '',
+    modelo: '', // Campo para modelo do equipamento (ex: ULTRAMIX, Bimix)
     unidade: 'UN',
     preco_base: 0,
     icms: 0,
@@ -226,6 +227,7 @@ const ProdutoForm = () => {
       setFormData({
         ...data,
         familia_produto: data.familia || '', // Mapear do backend para frontend
+        modelo: data.modelo || '', // Campo modelo do equipamento
         preco_base: data.preco_base || 0,
         icms: data.icms || 0,
         ipi: data.ipi || 0
@@ -537,6 +539,31 @@ const ProdutoForm = () => {
                   ))}
                 </select>
               </div>
+
+              {/* Campo Modelo - Aparece apenas para equipamentos (não Hélices e Acessórios) */}
+              {formData.familia_produto && 
+               formData.familia_produto !== 'Hélices e Acessórios' && 
+               formData.familia_produto !== '' && (
+                <div className="form-group">
+                  <label>Modelo do Equipamento</label>
+                  <div className="input-with-icon">
+                    <input
+                      type="text"
+                      name="modelo"
+                      value={formData.modelo}
+                      onChange={handleChange}
+                      placeholder="Ex: ULTRAMIX, Bimix, etc."
+                      maxLength={100}
+                    />
+                    {formData.modelo && (
+                      <FiCheckCircle className="field-check-icon" />
+                    )}
+                  </div>
+                  <small className="form-hint">
+                    Digite o modelo específico do equipamento (ex: ULTRAMIX, Bimix) para facilitar buscas futuras
+                  </small>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Unidade</label>

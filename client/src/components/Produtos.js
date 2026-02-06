@@ -104,7 +104,7 @@ const Produtos = () => {
           <FiSearch />
           <input
             type="text"
-            placeholder="Buscar por código, nome ou descrição..."
+            placeholder="Buscar por código, nome, modelo ou descrição..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -128,6 +128,7 @@ const Produtos = () => {
               <th>Código</th>
               <th>Nome</th>
               <th>Família</th>
+              <th>Modelo</th>
               <th>Preço Base</th>
               <th>ICMS</th>
               <th>IPI</th>
@@ -138,7 +139,7 @@ const Produtos = () => {
           <tbody>
             {produtos.length === 0 ? (
               <tr>
-                <td colSpan="8" className="no-data">
+                <td colSpan="9" className="no-data">
                   Nenhum produto encontrado
                 </td>
               </tr>
@@ -148,6 +149,7 @@ const Produtos = () => {
                   <td><strong>{produto.codigo}</strong></td>
                   <td>{produto.nome}</td>
                   <td>{produto.familia || '-'}</td>
+                  <td>{produto.modelo || '-'}</td>
                   <td>{formatCurrency(produto.preco_base)}</td>
                   <td>{produto.icms}%</td>
                   <td>{produto.ipi}%</td>

@@ -840,6 +840,14 @@ function initializeDatabase() {
       console.error('Erro ao adicionar coluna familia:', err);
     }
   });
+  
+  // Adicionar coluna modelo se não existir (migration)
+  db.run(`ALTER TABLE produtos ADD COLUMN modelo TEXT`, (err) => {
+    // Ignorar erro se a coluna já existir
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('Erro ao adicionar coluna modelo:', err);
+    }
+  });
 
   // Criar usuário admin padrão
   db.get('SELECT * FROM usuarios WHERE email = ?', ['admin@gmp.com.br'], (err, row) => {
@@ -9434,9 +9442,9 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
   }
 
   if (search) {
-    query += ' AND (nome LIKE ? OR codigo LIKE ? OR descricao LIKE ?)';
+    query += ' AND (nome LIKE ? OR codigo LIKE ? OR descricao LIKE ? OR modelo LIKE ?)';
     const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
+    params.push(searchTerm, searchTerm, searchTerm, searchTerm);
   }
 
   query += ' ORDER BY nome';
@@ -9730,16 +9738,16 @@ app.get('/api/produtos/codigo/:codigo', authenticateToken, (req, res) => {
 });
 
 app.post('/api/produtos', authenticateToken, (req, res) => {
-  const { codigo, nome, descricao, familia, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo } = req.body;
+  const { codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo } = req.body;
 
   if (!codigo || !nome) {
     return res.status(400).json({ error: 'Código e nome são obrigatórios' });
   }
 
   db.run(
-    `INSERT INTO produtos (codigo, nome, descricao, familia, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [codigo, nome, descricao || '', familia || '', preco_base || 0, icms || 0, ipi || 0, ncm || '', especificacoes_tecnicas || '', imagem || null, ativo !== undefined ? ativo : 1],
+    `INSERT INTO produtos (codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [codigo, nome, descricao || '', familia || '', modelo || null, preco_base || 0, icms || 0, ipi || 0, ncm || '', especificacoes_tecnicas || '', imagem || null, ativo !== undefined ? ativo : 1],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint')) {
@@ -9754,13 +9762,13 @@ app.post('/api/produtos', authenticateToken, (req, res) => {
 
 app.put('/api/produtos/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  const { codigo, nome, descricao, familia, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo } = req.body;
+  const { codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo } = req.body;
 
   db.run(
-    `UPDATE produtos SET codigo = ?, nome = ?, descricao = ?, familia = ?, preco_base = ?,
+    `UPDATE produtos SET codigo = ?, nome = ?, descricao = ?, familia = ?, modelo = ?, preco_base = ?,
       icms = ?, ipi = ?, ncm = ?, especificacoes_tecnicas = ?, imagem = ?, ativo = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [codigo, nome, descricao, familia, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem || null, ativo, id],
+    [codigo, nome, descricao, familia, modelo || null, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem || null, ativo, id],
     (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
