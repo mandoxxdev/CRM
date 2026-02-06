@@ -135,6 +135,35 @@ if (!fs.existsSync(uploadsLogosDir)) {
   fs.mkdirSync(uploadsLogosDir, { recursive: true });
 }
 
+// Diretório para uploads de chat (arquivos e imagens)
+const uploadsChatDir = path.join(__dirname, 'uploads', 'chat');
+if (!fs.existsSync(uploadsChatDir)) {
+  fs.mkdirSync(uploadsChatDir, { recursive: true });
+}
+
+// Configurar multer para uploads de chat
+const storageChat = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsChatDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, `chat-${uniqueSuffix}${ext}`);
+  }
+});
+
+const uploadChat = multer({
+  storage: storageChat,
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB máximo
+  },
+  fileFilter: (req, file, cb) => {
+    // Permitir todos os tipos de arquivo
+    cb(null, true);
+  }
+});
+
 // Configurar diretório de uploads de imagens de cabeçalho
 const uploadsHeaderDir = path.join(__dirname, 'uploads', 'headers');
 if (!fs.existsSync(uploadsHeaderDir)) {
@@ -11803,6 +11832,432 @@ app.get('/api/notificacoes', authenticateToken, (req, res) => {
   });
 });
 
+// ========== ROTAS DE CHAT ==========
+// Listar conversas do usuário
+app.get('/api/chat/conversas', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  
+  db.all(`
+    SELECT DISTINCT
+      c.id,
+      c.tipo,
+      c.nome,
+      c.descricao,
+      c.projeto_id,
+      c.cliente_id,
+      c.proposta_id,
+      c.avatar_url,
+      c.created_at,
+      c.updated_at,
+      u1.nome as criado_por_nome,
+      u1.email as criado_por_email,
+      -- Última mensagem
+      (SELECT m.mensagem FROM mensagens m 
+       WHERE m.conversa_id = c.id AND m.excluida = 0 
+       ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem_texto,
+      (SELECT m.created_at FROM mensagens m 
+       WHERE m.conversa_id = c.id AND m.excluida = 0 
+       ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem_data,
+      (SELECT u2.nome FROM mensagens m 
+       JOIN usuarios u2 ON m.usuario_id = u2.id
+       WHERE m.conversa_id = c.id AND m.excluida = 0 
+       ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem_usuario,
+      -- Contagem de mensagens não lidas
+      (SELECT COUNT(*) FROM mensagens m
+       WHERE m.conversa_id = c.id 
+       AND m.excluida = 0
+       AND m.usuario_id != ?
+       AND NOT EXISTS (
+         SELECT 1 FROM mensagens_lidas ml 
+         WHERE ml.mensagem_id = m.id AND ml.usuario_id = ?
+       )) as nao_lidas
+    FROM conversas c
+    JOIN conversas_participantes cp ON c.id = cp.conversa_id
+    LEFT JOIN usuarios u1 ON c.criado_por = u1.id
+    WHERE cp.usuario_id = ? AND (cp.saiu_em IS NULL OR cp.saiu_em = '')
+    ORDER BY c.updated_at DESC
+  `, [userId, userId, userId], (err, conversas) => {
+    if (err) {
+      console.error('Erro ao buscar conversas:', err);
+      return res.status(500).json({ error: 'Erro ao buscar conversas' });
+    }
+    
+    // Para conversas privadas, buscar o outro participante
+    Promise.all(conversas.map(conv => {
+      if (conv.tipo === 'privada') {
+        return new Promise((resolve) => {
+          db.get(`
+            SELECT u.id, u.nome, u.email
+            FROM conversas_participantes cp
+            JOIN usuarios u ON cp.usuario_id = u.id
+            WHERE cp.conversa_id = ? AND cp.usuario_id != ?
+          `, [conv.id, userId], (err, outroUsuario) => {
+            if (!err && outroUsuario) {
+              conv.outro_usuario = outroUsuario;
+              conv.nome = outroUsuario.nome; // Nome do outro usuário para conversas privadas
+            }
+            resolve(conv);
+          });
+        });
+      }
+      return Promise.resolve(conv);
+    })).then(conversasCompletas => {
+      res.json(conversasCompletas);
+    });
+  });
+});
+
+// Criar conversa privada
+app.post('/api/chat/conversas/privada', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const { outro_usuario_id } = req.body;
+  
+  if (!outro_usuario_id || outro_usuario_id === userId) {
+    return res.status(400).json({ error: 'Usuário inválido' });
+  }
+  
+  // Verificar se já existe conversa privada entre esses dois usuários
+  db.get(`
+    SELECT c.id
+    FROM conversas c
+    JOIN conversas_participantes cp1 ON c.id = cp1.conversa_id
+    JOIN conversas_participantes cp2 ON c.id = cp2.conversa_id
+    WHERE c.tipo = 'privada'
+    AND cp1.usuario_id = ? AND cp2.usuario_id = ?
+    AND (cp1.saiu_em IS NULL OR cp1.saiu_em = '')
+    AND (cp2.saiu_em IS NULL OR cp2.saiu_em = '')
+  `, [userId, outro_usuario_id], (err, existente) => {
+    if (err) {
+      return res.status(500).json({ error: 'Erro ao verificar conversa existente' });
+    }
+    
+    if (existente) {
+      return res.json({ id: existente.id, existente: true });
+    }
+    
+    // Criar nova conversa privada
+    db.run(`
+      INSERT INTO conversas (tipo, criado_por)
+      VALUES ('privada', ?)
+    `, [userId], function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao criar conversa' });
+      }
+      
+      const conversaId = this.lastID;
+      
+      // Adicionar participantes
+      db.run(`INSERT INTO conversas_participantes (conversa_id, usuario_id) VALUES (?, ?)`, [conversaId, userId], () => {});
+      db.run(`INSERT INTO conversas_participantes (conversa_id, usuario_id) VALUES (?, ?)`, [conversaId, outro_usuario_id], (err) => {
+        if (err) {
+          return res.status(500).json({ error: 'Erro ao adicionar participante' });
+        }
+        res.json({ id: conversaId, existente: false });
+      });
+    });
+  });
+});
+
+// Criar grupo
+app.post('/api/chat/conversas/grupo', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const { nome, descricao, projeto_id, cliente_id, proposta_id, participantes } = req.body;
+  
+  if (!nome || !participantes || participantes.length === 0) {
+    return res.status(400).json({ error: 'Nome e participantes são obrigatórios' });
+  }
+  
+  db.run(`
+    INSERT INTO conversas (tipo, nome, descricao, projeto_id, cliente_id, proposta_id, criado_por)
+    VALUES ('grupo', ?, ?, ?, ?, ?, ?)
+  `, [nome, descricao || null, projeto_id || null, cliente_id || null, proposta_id || null, userId], function(err) {
+    if (err) {
+      return res.status(500).json({ error: 'Erro ao criar grupo' });
+    }
+    
+    const conversaId = this.lastID;
+    
+    // Adicionar criador como participante
+    const participantesIds = [userId, ...participantes];
+    
+    let adicionados = 0;
+    participantesIds.forEach(participanteId => {
+      db.run(`INSERT INTO conversas_participantes (conversa_id, usuario_id) VALUES (?, ?)`, 
+        [conversaId, participanteId], (err) => {
+          if (!err) adicionados++;
+          if (adicionados === participantesIds.length) {
+            res.json({ id: conversaId });
+          }
+        });
+    });
+  });
+});
+
+// Buscar mensagens de uma conversa
+app.get('/api/chat/conversas/:id/mensagens', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const conversaId = req.params.id;
+  const { limit = 50, offset = 0 } = req.query;
+  
+  // Verificar se o usuário é participante
+  db.get(`SELECT 1 FROM conversas_participantes WHERE conversa_id = ? AND usuario_id = ? AND (saiu_em IS NULL OR saiu_em = '')`, 
+    [conversaId, userId], (err, participante) => {
+    if (err || !participante) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    
+    db.all(`
+      SELECT 
+        m.id,
+        m.conversa_id,
+        m.usuario_id,
+        m.mensagem,
+        m.tipo,
+        m.arquivo_url,
+        m.arquivo_nome,
+        m.arquivo_tamanho,
+        m.arquivo_tipo,
+        m.editada,
+        m.editada_em,
+        m.excluida,
+        m.resposta_para,
+        m.created_at,
+        u.nome as usuario_nome,
+        u.email as usuario_email,
+        -- Verificar se foi lida pelo usuário atual
+        EXISTS(SELECT 1 FROM mensagens_lidas WHERE mensagem_id = m.id AND usuario_id = ?) as lida
+      FROM mensagens m
+      JOIN usuarios u ON m.usuario_id = u.id
+      WHERE m.conversa_id = ? AND m.excluida = 0
+      ORDER BY m.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, conversaId, parseInt(limit), parseInt(offset)], (err, mensagens) => {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao buscar mensagens' });
+      }
+      
+      // Buscar mensagens respondidas
+      const mensagensComResposta = mensagens.map(msg => {
+        if (msg.resposta_para) {
+          return new Promise((resolve) => {
+            db.get(`
+              SELECT m.id, m.mensagem, u.nome as usuario_nome
+              FROM mensagens m
+              JOIN usuarios u ON m.usuario_id = u.id
+              WHERE m.id = ?
+            `, [msg.resposta_para], (err, resposta) => {
+              if (!err && resposta) {
+                msg.resposta = resposta;
+              }
+              resolve(msg);
+            });
+          });
+        }
+        return Promise.resolve(msg);
+      });
+      
+      Promise.all(mensagensComResposta).then(msgs => {
+        res.json(msgs.reverse()); // Reverter para ordem cronológica
+      });
+    });
+  });
+});
+
+// Enviar mensagem
+app.post('/api/chat/conversas/:id/mensagens', authenticateToken, uploadChat.single('arquivo'), (req, res) => {
+  const userId = req.user.id;
+  const conversaId = req.params.id;
+  const { mensagem, tipo = 'texto', resposta_para } = req.body;
+  
+  // Verificar se o usuário é participante
+  db.get(`SELECT 1 FROM conversas_participantes WHERE conversa_id = ? AND usuario_id = ? AND (saiu_em IS NULL OR saiu_em = '')`, 
+    [conversaId, userId], (err, participante) => {
+    if (err || !participante) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    
+    let arquivoUrl = null;
+    let arquivoNome = null;
+    let arquivoTamanho = null;
+    let arquivoTipo = null;
+    let tipoMensagem = tipo;
+    
+    if (req.file) {
+      arquivoUrl = `/api/uploads/chat/${req.file.filename}`;
+      arquivoNome = req.file.originalname;
+      arquivoTamanho = req.file.size;
+      arquivoTipo = req.file.mimetype;
+      
+      // Determinar tipo baseado no MIME type
+      if (req.file.mimetype.startsWith('image/')) {
+        tipoMensagem = 'imagem';
+      } else {
+        tipoMensagem = 'arquivo';
+      }
+    }
+    
+    db.run(`
+      INSERT INTO mensagens (conversa_id, usuario_id, mensagem, tipo, arquivo_url, arquivo_nome, arquivo_tamanho, arquivo_tipo, resposta_para)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [conversaId, userId, mensagem || '', tipoMensagem, arquivoUrl, arquivoNome, arquivoTamanho, arquivoTipo, resposta_para || null], function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao enviar mensagem' });
+      }
+      
+      const mensagemId = this.lastID;
+      
+      // Marcar como lida pelo remetente
+      db.run(`INSERT OR IGNORE INTO mensagens_lidas (mensagem_id, usuario_id) VALUES (?, ?)`, [mensagemId, userId]);
+      
+      // Atualizar updated_at da conversa
+      db.run(`UPDATE conversas SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [conversaId]);
+      
+      // Buscar mensagem completa para retornar
+      db.get(`
+        SELECT 
+          m.*,
+          u.nome as usuario_nome,
+          u.email as usuario_email
+        FROM mensagens m
+        JOIN usuarios u ON m.usuario_id = u.id
+        WHERE m.id = ?
+      `, [mensagemId], (err, mensagemCompleta) => {
+        if (!err) {
+          // Notificar outros participantes (será implementado com WebSocket ou polling)
+          res.json(mensagemCompleta);
+        } else {
+          res.json({ id: mensagemId });
+        }
+      });
+    });
+  });
+});
+
+// Marcar mensagens como lidas
+app.post('/api/chat/conversas/:id/marcar-lidas', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const conversaId = req.params.id;
+  
+  db.run(`
+    INSERT INTO mensagens_lidas (mensagem_id, usuario_id)
+    SELECT m.id, ?
+    FROM mensagens m
+    WHERE m.conversa_id = ? 
+    AND m.usuario_id != ?
+    AND m.excluida = 0
+    AND NOT EXISTS (
+      SELECT 1 FROM mensagens_lidas ml 
+      WHERE ml.mensagem_id = m.id AND ml.usuario_id = ?
+    )
+  `, [userId, conversaId, userId, userId], (err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Erro ao marcar como lidas' });
+    }
+    res.json({ success: true });
+  });
+});
+
+// Adicionar participante ao grupo
+app.post('/api/chat/conversas/:id/participantes', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const conversaId = req.params.id;
+  const { usuario_id } = req.body;
+  
+  // Verificar se é grupo e se o usuário é participante
+  db.get(`
+    SELECT c.tipo, cp.usuario_id
+    FROM conversas c
+    LEFT JOIN conversas_participantes cp ON c.id = cp.conversa_id AND cp.usuario_id = ?
+    WHERE c.id = ?
+  `, [userId, conversaId], (err, result) => {
+    if (err || !result || result.tipo !== 'grupo' || !result.usuario_id) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    
+    db.run(`INSERT OR IGNORE INTO conversas_participantes (conversa_id, usuario_id) VALUES (?, ?)`, 
+      [conversaId, usuario_id], (err) => {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao adicionar participante' });
+      }
+      res.json({ success: true });
+    });
+  });
+});
+
+// Remover participante do grupo (ou sair)
+app.delete('/api/chat/conversas/:id/participantes/:usuario_id', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const conversaId = req.params.id;
+  const usuarioIdRemover = parseInt(req.params.usuario_id);
+  
+  // Só pode remover se for o próprio usuário ou se for admin/criador do grupo
+  if (usuarioIdRemover !== userId) {
+    db.get(`SELECT criado_por FROM conversas WHERE id = ?`, [conversaId], (err, conv) => {
+      if (err || !conv || conv.criado_por !== userId) {
+        return res.status(403).json({ error: 'Acesso negado' });
+      }
+    });
+  }
+  
+  db.run(`UPDATE conversas_participantes SET saiu_em = CURRENT_TIMESTAMP WHERE conversa_id = ? AND usuario_id = ?`, 
+    [conversaId, usuarioIdRemover], (err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Erro ao remover participante' });
+    }
+    res.json({ success: true });
+  });
+});
+
+// Listar participantes de uma conversa
+app.get('/api/chat/conversas/:id/participantes', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const conversaId = req.params.id;
+  
+  // Verificar se é participante
+  db.get(`SELECT 1 FROM conversas_participantes WHERE conversa_id = ? AND usuario_id = ? AND (saiu_em IS NULL OR saiu_em = '')`, 
+    [conversaId, userId], (err, participante) => {
+    if (err || !participante) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    
+    db.all(`
+      SELECT 
+        u.id,
+        u.nome,
+        u.email,
+        u.cargo,
+        cp.adicionado_em
+      FROM conversas_participantes cp
+      JOIN usuarios u ON cp.usuario_id = u.id
+      WHERE cp.conversa_id = ? AND (cp.saiu_em IS NULL OR cp.saiu_em = '')
+      ORDER BY cp.adicionado_em
+    `, [conversaId], (err, participantes) => {
+      if (err) {
+        return res.status(500).json({ error: 'Erro ao buscar participantes' });
+      }
+      res.json(participantes);
+    });
+  });
+});
+
+// Buscar usuários para adicionar ao grupo
+app.get('/api/chat/usuarios', authenticateToken, (req, res) => {
+  const { search = '' } = req.query;
+  
+  db.all(`
+    SELECT id, nome, email, cargo
+    FROM usuarios
+    WHERE ativo = 1 AND (nome LIKE ? OR email LIKE ?)
+    ORDER BY nome
+    LIMIT 20
+  `, [`%${search}%`, `%${search}%`], (err, usuarios) => {
+    if (err) {
+      return res.status(500).json({ error: 'Erro ao buscar usuários' });
+    }
+    res.json(usuarios);
+  });
+});
+
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE COTAÇÕES ==========
 // Servir arquivos estáticos de uploads
 app.use('/api/uploads/cotacoes', express.static(uploadsDir));
@@ -11828,6 +12283,10 @@ app.use('/api/uploads/footers', (req, res, next) => {
   res.setHeader('Expires', '0');
   next();
 }, express.static(uploadsFooterDir));
+
+// ========== ROTAS DE UPLOAD E DOWNLOAD DE CHAT ==========
+// Servir arquivos estáticos de chat
+app.use('/api/uploads/chat', express.static(uploadsChatDir));
 
 // Servir logo.png do public (logo padrão)
 const publicLogoPath = path.join(__dirname, '..', 'client', 'public', 'logo.png');
@@ -13072,6 +13531,85 @@ db.run(`CREATE TABLE IF NOT EXISTS logs_auditoria (
   user_agent TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+)`);
+
+// ========== TABELAS DE CHAT ==========
+// Tabela de Conversas (1-1 ou Grupos)
+db.run(`CREATE TABLE IF NOT EXISTS conversas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tipo TEXT NOT NULL DEFAULT 'privada', -- 'privada' ou 'grupo'
+  nome TEXT, -- Nome do grupo (null para conversas privadas)
+  descricao TEXT, -- Descrição do grupo
+  projeto_id INTEGER, -- Se vinculado a um projeto
+  cliente_id INTEGER, -- Se vinculado a um cliente
+  proposta_id INTEGER, -- Se vinculado a uma proposta
+  criado_por INTEGER NOT NULL,
+  avatar_url TEXT, -- URL do avatar do grupo
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (criado_por) REFERENCES usuarios(id),
+  FOREIGN KEY (projeto_id) REFERENCES projetos(id),
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+  FOREIGN KEY (proposta_id) REFERENCES propostas(id)
+)`);
+
+// Tabela de Participantes de Conversas
+db.run(`CREATE TABLE IF NOT EXISTS conversas_participantes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversa_id INTEGER NOT NULL,
+  usuario_id INTEGER NOT NULL,
+  ultima_visualizacao DATETIME, -- Última vez que o usuário visualizou a conversa
+  notificacoes_habilitadas INTEGER DEFAULT 1, -- Se recebe notificações
+  saiu_em DATETIME, -- Se saiu do grupo
+  adicionado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  UNIQUE(conversa_id, usuario_id)
+)`);
+
+// Tabela de Mensagens
+db.run(`CREATE TABLE IF NOT EXISTS mensagens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversa_id INTEGER NOT NULL,
+  usuario_id INTEGER NOT NULL,
+  mensagem TEXT NOT NULL,
+  tipo TEXT DEFAULT 'texto', -- 'texto', 'arquivo', 'imagem', 'sistema'
+  arquivo_url TEXT, -- URL do arquivo se tipo for 'arquivo' ou 'imagem'
+  arquivo_nome TEXT, -- Nome original do arquivo
+  arquivo_tamanho INTEGER, -- Tamanho em bytes
+  arquivo_tipo TEXT, -- MIME type
+  editada INTEGER DEFAULT 0, -- Se foi editada
+  editada_em DATETIME, -- Quando foi editada
+  excluida INTEGER DEFAULT 0, -- Se foi excluída
+  excluida_em DATETIME, -- Quando foi excluída
+  resposta_para INTEGER, -- ID da mensagem respondida (reply)
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (conversa_id) REFERENCES conversas(id) ON DELETE CASCADE,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  FOREIGN KEY (resposta_para) REFERENCES mensagens(id)
+)`);
+
+// Tabela de Leitura de Mensagens (quem leu cada mensagem)
+db.run(`CREATE TABLE IF NOT EXISTS mensagens_lidas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mensagem_id INTEGER NOT NULL,
+  usuario_id INTEGER NOT NULL,
+  lida_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (mensagem_id) REFERENCES mensagens(id) ON DELETE CASCADE,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  UNIQUE(mensagem_id, usuario_id)
+)`);
+
+// Tabela de Notificações Push (para Service Worker)
+db.run(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuario_id INTEGER NOT NULL,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  UNIQUE(usuario_id, endpoint)
 )`);
 
 // ========== TABELAS MÓDULO OPERACIONAL ==========

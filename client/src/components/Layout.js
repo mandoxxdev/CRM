@@ -17,6 +17,7 @@ import HelpSearch from './HelpSearch';
 import ModuleSplash from './ModuleSplash';
 import PreferenciasMenu from './PreferenciasMenu';
 import ChatIA from './ChatIA';
+import Chat from './Chat';
 import './Layout.css';
 
 const Layout = () => {
@@ -45,6 +46,7 @@ const Layout = () => {
   const [workflowEngineOpen, setWorkflowEngineOpen] = useState(false);
   const [helpSearchOpen, setHelpSearchOpen] = useState(false);
   const [chatIAOpen, setChatIAOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [animatedBackgroundEnabled, setAnimatedBackgroundEnabled] = useState(
     localStorage.getItem('animatedBackground') !== 'false'
   );
@@ -268,6 +270,14 @@ const Layout = () => {
             <FiMessageCircle />
             {sidebarOpen && <span>Assistente IA</span>}
           </button>
+          <button
+            className={`nav-item nav-item-button ${chatOpen ? 'active' : ''}`}
+            onClick={() => setChatOpen(!chatOpen)}
+            title="Chat Interno"
+          >
+            <FiMessageCircle />
+            {sidebarOpen && <span>Chat</span>}
+          </button>
         </nav>
         <div className="sidebar-footer">
           <div className="user-info">
@@ -322,6 +332,7 @@ const Layout = () => {
       <HelpGuide />
       <HelpSearch isOpen={helpSearchOpen} onClose={() => setHelpSearchOpen(false)} />
       <ChatIA isOpen={chatIAOpen} onClose={() => setChatIAOpen(false)} />
+      <Chat isOpen={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 };
