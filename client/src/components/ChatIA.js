@@ -242,6 +242,7 @@ Pergunte-me qualquer coisa ou envie uma imagem para análise! 😊`,
           >
             <div className="chat-ia-message-avatar">
               {message.type === 'user' ? <FiUser /> : <FiHelpCircle />}
+            </div>
             <div className="chat-ia-message-content">
               {message.images && message.images.length > 0 && (
                 <div className="chat-ia-message-images">

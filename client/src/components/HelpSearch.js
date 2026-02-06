@@ -161,6 +161,7 @@ Pergunte-me qualquer coisa sobre o sistema. 😊`,
             >
               <div className="help-search-message-avatar">
                 {message.type === 'user' ? <FiUser /> : <FiHelpCircle />}
+              </div>
               <div className="help-search-message-content">
                 <div className="help-search-message-text">
                   {formatarTexto(message.text)}
