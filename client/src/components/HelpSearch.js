@@ -1,222 +1,241 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiSearch, FiX, FiHelpCircle, FiBook, FiVideo, FiFileText } from 'react-icons/fi';
+import { FiX, FiSend, FiBot, FiUser, FiMessageCircle, FiSparkles } from 'react-icons/fi';
+import { buscarResposta, gerarRespostaContextual, sugerirPerguntas } from '../utils/assistenteIA';
 import './HelpSearch.css';
 
 const HelpSearch = ({ isOpen, onClose }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [messages, setMessages] = useState([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
   const inputRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  const helpArticles = [
-    {
-      id: 1,
-      title: 'Como criar um novo cliente',
-      category: 'clientes',
-      content: 'Para criar um novo cliente, vá em Clientes > Novo Cliente e preencha os dados necessários.',
-      tags: ['cliente', 'cadastro', 'novo']
-    },
-    {
-      id: 2,
-      title: 'Como criar uma proposta comercial',
-      category: 'propostas',
-      content: 'Acesse Propostas > Nova Proposta, selecione o cliente e adicione os produtos desejados.',
-      tags: ['proposta', 'comercial', 'vendas']
-    },
-    {
-      id: 3,
-      title: 'Como gerenciar oportunidades',
-      category: 'oportunidades',
-      content: 'Na página de Oportunidades, você pode criar novas oportunidades e acompanhar o pipeline de vendas.',
-      tags: ['oportunidade', 'vendas', 'pipeline']
-    },
-    {
-      id: 4,
-      title: 'Como criar atividades e lembretes',
-      category: 'atividades',
-      content: 'Em Atividades, clique em Nova Atividade para criar tarefas e lembretes relacionados a clientes ou projetos.',
-      tags: ['atividade', 'lembrete', 'tarefa']
-    },
-    {
-      id: 5,
-      title: 'Como usar o Dashboard',
-      category: 'dashboard',
-      content: 'O Dashboard Executivo mostra métricas importantes do seu negócio. Use os filtros para visualizar dados específicos.',
-      tags: ['dashboard', 'métricas', 'kpi']
-    },
-    {
-      id: 6,
-      title: 'Como exportar relatórios',
-      category: 'relatorios',
-      content: 'Na página de Relatórios, você pode exportar dados em PDF ou Excel usando os botões de exportação.',
-      tags: ['relatório', 'exportar', 'pdf', 'excel']
-    },
-    {
-      id: 7,
-      title: 'Como usar a busca global',
-      category: 'geral',
-      content: 'Pressione Ctrl+K para abrir a busca global e encontrar rapidamente clientes, propostas, projetos e mais.',
-      tags: ['busca', 'pesquisa', 'atalho']
-    },
-    {
-      id: 8,
-      title: 'Como configurar notificações',
-      category: 'configuracoes',
-      content: 'Acesse Configurações > Sistema para ajustar preferências de notificações e outras opções.',
-      tags: ['configuração', 'notificação', 'preferências']
-    },
-    {
-      id: 9,
-      title: 'Como gerenciar usuários e permissões',
-      category: 'usuarios',
-      content: 'Administradores podem gerenciar usuários e permissões nas páginas Usuários e Permissões.',
-      tags: ['usuário', 'permissão', 'admin']
-    },
-    {
-      id: 10,
-      title: 'Como usar filtros avançados',
-      category: 'geral',
-      content: 'A maioria das páginas possui filtros que permitem buscar e filtrar dados de forma específica.',
-      tags: ['filtro', 'busca', 'pesquisa']
-    }
-  ];
-
-  const categories = [
-    { id: 'all', name: 'Todos', icon: FiBook },
-    { id: 'clientes', name: 'Clientes', icon: FiFileText },
-    { id: 'propostas', name: 'Propostas', icon: FiFileText },
-    { id: 'oportunidades', name: 'Oportunidades', icon: FiFileText },
-    { id: 'atividades', name: 'Atividades', icon: FiFileText },
-    { id: 'dashboard', name: 'Dashboard', icon: FiFileText },
-    { id: 'relatorios', name: 'Relatórios', icon: FiFileText }
-  ];
-
+  // Mensagem inicial quando abre
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
+    if (isOpen) {
+      const mensagemInicial = {
+        id: Date.now(),
+        type: 'bot',
+        text: `Olá! 👋 Sou sua assistente de ajuda do CRM GMP. 
+
+Posso ajudar você com:
+• Como criar e gerenciar clientes
+• Como trabalhar com propostas comerciais
+• Como cadastrar produtos e equipamentos
+• Como usar o Dashboard e relatórios
+• Como criar atividades e lembretes
+• E muito mais!
+
+Pergunte-me qualquer coisa sobre o sistema. 😊`,
+        timestamp: new Date()
+      };
+      setMessages([mensagemInicial]);
+      setSuggestions([
+        'Como criar um novo cliente?',
+        'Como fazer uma proposta comercial?',
+        'Como cadastrar um produto?',
+        'Como usar a busca global?'
+      ]);
+      
+      // Focar no input após um pequeno delay
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    } else {
+      // Limpar mensagens ao fechar
+      setMessages([]);
+      setInputValue('');
+      setSuggestions([]);
     }
   }, [isOpen]);
 
+  // Scroll automático para última mensagem
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setResults([]);
-      return;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  const handleSend = async () => {
+    if (!inputValue.trim() || isTyping) return;
+
+    const userMessage = {
+      id: Date.now(),
+      type: 'user',
+      text: inputValue.trim(),
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputValue('');
+    setIsTyping(true);
+
+    // Simular delay de processamento (efeito de "digitando")
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Buscar resposta da IA
+    const resposta = gerarRespostaContextual(userMessage.text);
+    
+    // Gerar sugestões relacionadas
+    const novasSugestoes = sugerirPerguntas(userMessage.text);
+
+    const botMessage = {
+      id: Date.now() + 1,
+      type: 'bot',
+      text: resposta.resposta,
+      categoria: resposta.categoria,
+      timestamp: new Date()
+    };
+
+    setIsTyping(false);
+    setMessages(prev => [...prev, botMessage]);
+    
+    if (novasSugestoes.length > 0) {
+      setSuggestions(novasSugestoes);
     }
+  };
 
-    const query = searchQuery.toLowerCase();
-    const filtered = helpArticles.filter(article => {
-      const matchesCategory = selectedCategory === 'all' || article.category === selectedCategory;
-      const matchesSearch = 
-        article.title.toLowerCase().includes(query) ||
-        article.content.toLowerCase().includes(query) ||
-        article.tags.some(tag => tag.toLowerCase().includes(query));
-      
-      return matchesCategory && matchesSearch;
-    });
-
-    setResults(filtered);
-  }, [searchQuery, selectedCategory]);
+  const handleSuggestionClick = (suggestion) => {
+    setInputValue(suggestion);
+    inputRef.current?.focus();
+  };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    } else if (e.key === 'Escape') {
       onClose();
     }
+  };
+
+  const formatarTexto = (texto) => {
+    // Formatar texto com quebras de linha e listas
+    return texto.split('\n').map((linha, index) => {
+      // Detectar listas numeradas
+      if (/^\d+\./.test(linha.trim())) {
+        return (
+          <div key={index} style={{ marginLeft: '20px', marginTop: '4px' }}>
+            {linha}
+          </div>
+        );
+      }
+      // Detectar listas com bullet
+      if (/^[-•]/.test(linha.trim())) {
+        return (
+          <div key={index} style={{ marginLeft: '20px', marginTop: '4px' }}>
+            {linha}
+          </div>
+        );
+      }
+      // Linhas normais
+      if (linha.trim()) {
+        return <div key={index} style={{ marginTop: index > 0 ? '8px' : '0' }}>{linha}</div>;
+      }
+      return <br key={index} />;
+    });
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="help-search-overlay" onClick={onClose}>
-      <div className="help-search-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="help-search-modal help-search-chat" onClick={(e) => e.stopPropagation()}>
         <div className="help-search-header">
           <div className="help-search-title">
-            <FiHelpCircle />
-            <h2>Central de Ajuda</h2>
+            <div className="help-search-ai-badge">
+              <FiBot />
+              <span>Assistente IA</span>
+            </div>
+            <h2>Central de Ajuda Inteligente</h2>
           </div>
           <button className="help-search-close" onClick={onClose}>
             <FiX />
           </button>
         </div>
 
-        <div className="help-search-input-wrapper">
-          <FiSearch className="help-search-icon" />
-          <input
-            ref={inputRef}
-            type="text"
-            className="help-search-input"
-            placeholder="Pesquise por tópicos de ajuda..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-          {searchQuery && (
-            <button
-              className="help-search-clear"
-              onClick={() => setSearchQuery('')}
+        <div className="help-search-chat-messages">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`help-search-message help-search-message-${message.type}`}
             >
-              <FiX />
-            </button>
-          )}
-        </div>
-
-        <div className="help-search-categories">
-          {categories.map(category => {
-            const Icon = category.icon;
-            return (
-              <button
-                key={category.id}
-                className={`help-search-category ${
-                  selectedCategory === category.id ? 'active' : ''
-                }`}
-                onClick={() => setSelectedCategory(category.id)}
-              >
-                <Icon />
-                <span>{category.name}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="help-search-results">
-          {searchQuery ? (
-            results.length > 0 ? (
-              <>
-                <div className="help-search-results-header">
-                  <p>{results.length} resultado(s) encontrado(s)</p>
-                </div>
-                {results.map(article => (
-                  <div key={article.id} className="help-search-result-item">
-                    <div className="help-search-result-header">
-                      <h3>{article.title}</h3>
-                      <span className="help-search-result-category">
-                        {categories.find(c => c.id === article.category)?.name || article.category}
-                      </span>
-                    </div>
-                    <p className="help-search-result-content">{article.content}</p>
-                    <div className="help-search-result-tags">
-                      {article.tags.map((tag, index) => (
-                        <span key={index} className="help-search-tag">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </>
-            ) : (
-              <div className="help-search-empty">
-                <FiSearch />
-                <p>Nenhum resultado encontrado</p>
-                <span>Tente usar palavras-chave diferentes</span>
+              <div className="help-search-message-avatar">
+                {message.type === 'user' ? <FiUser /> : <FiBot />}
               </div>
-            )
-          ) : (
-            <div className="help-search-empty">
-              <FiHelpCircle />
-              <p>Digite para pesquisar</p>
-              <span>Ou escolha uma categoria acima</span>
+              <div className="help-search-message-content">
+                <div className="help-search-message-text">
+                  {formatarTexto(message.text)}
+                </div>
+                {message.categoria && (
+                  <div className="help-search-message-category">
+                    {message.categoria}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          
+          {isTyping && (
+            <div className="help-search-message help-search-message-bot">
+              <div className="help-search-message-avatar">
+                <FiBot />
+              </div>
+              <div className="help-search-message-content">
+                <div className="help-search-typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
             </div>
           )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        {suggestions.length > 0 && messages.length > 1 && (
+          <div className="help-search-suggestions">
+            <div className="help-search-suggestions-label">
+              <FiSparkles /> Sugestões:
+            </div>
+            <div className="help-search-suggestions-list">
+              {suggestions.map((suggestion, index) => (
+                <button
+                  key={index}
+                  className="help-search-suggestion-item"
+                  onClick={() => handleSuggestionClick(suggestion)}
+                >
+                  <FiMessageCircle />
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="help-search-input-container">
+          <div className="help-search-input-wrapper">
+            <input
+              ref={inputRef}
+              type="text"
+              className="help-search-input"
+              placeholder="Pergunte-me qualquer coisa sobre o sistema..."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isTyping}
+            />
+            <button
+              className="help-search-send-button"
+              onClick={handleSend}
+              disabled={!inputValue.trim() || isTyping}
+            >
+              <FiSend />
+            </button>
+          </div>
+          <div className="help-search-footer-hint">
+            Pressione <kbd>Enter</kbd> para enviar • <kbd>Esc</kbd> para fechar
+          </div>
         </div>
       </div>
     </div>
@@ -224,5 +243,3 @@ const HelpSearch = ({ isOpen, onClose }) => {
 };
 
 export default HelpSearch;
-
-

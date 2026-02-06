@@ -10,6 +10,39 @@
   display: flex;
   gap: 15px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.propostas .search-box {
+  flex: 1;
+  min-width: 300px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.propostas .search-box svg {
+  position: absolute;
+  left: 15px;
+  color: var(--gmp-text-light);
+  z-index: 1;
+}
+
+.propostas .search-box input {
+  width: 100%;
+  padding: 12px 12px 12px 45px;
+  border: 2px solid var(--gmp-border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.propostas .search-box input:focus {
+  outline: none;
+  border-color: var(--gmp-primary);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 
 .propostas .filter-group {

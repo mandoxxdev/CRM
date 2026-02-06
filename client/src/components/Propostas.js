@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { FiPlus, FiFilter, FiDownload, FiEdit, FiTrash2, FiCheckCircle, FiFileText, FiX, FiEye, FiSettings } from 'react-icons/fi';
+import { FiPlus, FiFilter, FiDownload, FiEdit, FiTrash2, FiCheckCircle, FiFileText, FiX, FiEye, FiSettings, FiSearch } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
@@ -15,6 +15,7 @@ const Propostas = () => {
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroUsuario, setFiltroUsuario] = useState('');
+  const [search, setSearch] = useState('');
   const [mostrarModalAssinatura, setMostrarModalAssinatura] = useState(false);
   const [propostaAssinatura, setPropostaAssinatura] = useState(null);
   const [assinaturas, setAssinaturas] = useState([]);
@@ -46,47 +47,50 @@ const Propostas = () => {
     }
   };
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        console.log('🔄 Carregando propostas...', { filtroUsuario });
-        // Carregar propostas e usuários, mas não falhar se usuários der erro
-        const propostasRes = await api.get('/propostas', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} });
-        console.log('📊 Propostas recebidas:', propostasRes.data?.length || 0);
-        console.log('📄 Dados das propostas:', propostasRes.data);
-        console.log('📄 Tipo de dados:', typeof propostasRes.data);
-        console.log('📄 É array?', Array.isArray(propostasRes.data));
-        
-        const propostasData = propostasRes.data || [];
-        console.log('📄 Propostas após processamento:', propostasData);
-        console.log('📄 Tamanho do array:', propostasData.length);
-        
-        setPropostas(propostasData);
-        
-        // Verificar aprovações para propostas com desconto > 5%
-        const aprovacoesPromises = propostasData
-          .filter(p => p.margem_desconto > 5)
-          .map(async (proposta) => {
-            const temAprovacao = await verificarAprovacao(proposta.id, proposta.margem_desconto);
-            return { propostaId: proposta.id, temAprovacao };
-          });
-        
-        const aprovacoesResults = await Promise.all(aprovacoesPromises);
-        const aprovacoesMapTemp = {};
-        aprovacoesResults.forEach(({ propostaId, temAprovacao }) => {
-          aprovacoesMapTemp[propostaId] = temAprovacao;
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      console.log('🔄 Carregando propostas...', { filtroUsuario, search });
+      // Carregar propostas e usuários, mas não falhar se usuários der erro
+      const params = {};
+      if (filtroUsuario) params.responsavel_id = filtroUsuario;
+      if (search) params.search = search;
+      
+      const propostasRes = await api.get('/propostas', { params });
+      console.log('📊 Propostas recebidas:', propostasRes.data?.length || 0);
+      console.log('📄 Dados das propostas:', propostasRes.data);
+      console.log('📄 Tipo de dados:', typeof propostasRes.data);
+      console.log('📄 É array?', Array.isArray(propostasRes.data));
+      
+      const propostasData = propostasRes.data || [];
+      console.log('📄 Propostas após processamento:', propostasData);
+      console.log('📄 Tamanho do array:', propostasData.length);
+      
+      setPropostas(propostasData);
+      
+      // Verificar aprovações para propostas com desconto > 5%
+      const aprovacoesPromises = propostasData
+        .filter(p => p.margem_desconto > 5)
+        .map(async (proposta) => {
+          const temAprovacao = await verificarAprovacao(proposta.id, proposta.margem_desconto);
+          return { propostaId: proposta.id, temAprovacao };
         });
-        setAprovacoesMap(aprovacoesMapTemp);
-        
-        // Tentar carregar usuários, mas não bloquear se der erro
-        try {
-          const usuariosRes = await api.get('/usuarios');
-          setUsuarios((usuariosRes.data || []).filter(u => u.ativo !== 0 && u.ativo !== false));
-        } catch (error) {
-          console.warn('⚠️ Erro ao carregar usuários (não crítico):', error);
-          setUsuarios([]);
-        }
+      
+      const aprovacoesResults = await Promise.all(aprovacoesPromises);
+      const aprovacoesMapTemp = {};
+      aprovacoesResults.forEach(({ propostaId, temAprovacao }) => {
+        aprovacoesMapTemp[propostaId] = temAprovacao;
+      });
+      setAprovacoesMap(aprovacoesMapTemp);
+      
+      // Tentar carregar usuários, mas não bloquear se der erro
+      try {
+        const usuariosRes = await api.get('/usuarios');
+        setUsuarios((usuariosRes.data || []).filter(u => u.ativo !== 0 && u.ativo !== false));
+      } catch (error) {
+        console.warn('⚠️ Erro ao carregar usuários (não crítico):', error);
+        setUsuarios([]);
+      }
       } catch (error) {
         console.error('❌ Erro ao carregar dados:', error);
         console.error('❌ Detalhes do erro:', error.response?.data);
@@ -94,9 +98,16 @@ const Propostas = () => {
       } finally {
         setLoading(false);
       }
-    };
-    loadData();
-  }, [filtroUsuario]);
+  };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      loadData();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroUsuario, search]);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -152,8 +163,7 @@ const Propostas = () => {
       setMostrarModalAssinatura(false);
       setPropostaAssinatura(null);
       // Recarregar propostas
-      const propostasRes = await api.get('/propostas', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} });
-      setPropostas(propostasRes.data || []);
+      loadData();
     } catch (error) {
       console.error('Erro ao assinar proposta:', error);
       toast.error('Erro ao assinar proposta. Tente novamente.');
@@ -165,8 +175,7 @@ const Propostas = () => {
       try {
         await api.delete(`/propostas/${id}`);
         // Recarregar a lista
-        const propostasRes = await api.get('/propostas', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} });
-        setPropostas(propostasRes.data || []);
+        loadData();
         toast.success('Proposta excluída com sucesso!');
       } catch (error) {
         console.error('Erro ao excluir proposta:', error);
@@ -232,6 +241,15 @@ const Propostas = () => {
       </div>
 
       <div className="filters">
+        <div className="search-box">
+          <FiSearch />
+          <input
+            type="text"
+            placeholder="Buscar por número, título, cliente..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         <div className="filter-group">
           <FiFilter />
           <select

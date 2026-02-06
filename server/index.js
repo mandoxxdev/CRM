@@ -2246,7 +2246,7 @@ app.delete('/api/projetos/:id', authenticateToken, (req, res) => {
 
 // ========== ROTAS DE PROPOSTAS ==========
 app.get('/api/propostas', authenticateToken, (req, res) => {
-  const { cliente_id, status, created_by, responsavel_id } = req.query;
+  const { cliente_id, status, created_by, responsavel_id, search } = req.query;
   let query = `SELECT pr.*, c.razao_social as cliente_nome, 
                u1.nome as created_by_nome, u2.nome as responsavel_nome
                FROM propostas pr
@@ -2274,6 +2274,12 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
   if (responsavel_id && responsavel_id !== '') {
     query += ' AND (pr.responsavel_id = ? OR pr.created_by = ?)';
     params.push(responsavel_id, responsavel_id);
+  }
+
+  if (search) {
+    query += ' AND (pr.numero_proposta LIKE ? OR pr.titulo LIKE ? OR c.razao_social LIKE ? OR c.nome_fantasia LIKE ?)';
+    const searchTerm = `%${search}%`;
+    params.push(searchTerm, searchTerm, searchTerm, searchTerm);
   }
 
   query += ' ORDER BY pr.created_at DESC';
@@ -12773,11 +12779,11 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
   const searchTerm = `%${query}%`;
   const results = [];
 
-  // Buscar clientes
+  // Buscar clientes (case-insensitive)
   db.all(
     `SELECT id, razao_social as title, cidade || ', ' || estado as subtitle, 'cliente' as type 
      FROM clientes 
-     WHERE razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?
+     WHERE LOWER(razao_social) LIKE LOWER(?) OR LOWER(nome_fantasia) LIKE LOWER(?) OR LOWER(cnpj) LIKE LOWER(?)
      LIMIT 5`,
     [searchTerm, searchTerm, searchTerm],
     (err, rows) => {
@@ -12785,11 +12791,11 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
         results.push(...rows);
       }
 
-      // Buscar projetos
+      // Buscar projetos (case-insensitive)
       db.all(
         `SELECT id, nome as title, status as subtitle, 'projeto' as type 
          FROM projetos 
-         WHERE nome LIKE ? OR descricao LIKE ?
+         WHERE LOWER(nome) LIKE LOWER(?) OR LOWER(descricao) LIKE LOWER(?)
          LIMIT 5`,
         [searchTerm, searchTerm],
         (err, rows) => {
@@ -12797,45 +12803,78 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
             results.push(...rows);
           }
 
-          // Buscar propostas
+          // Buscar propostas (case-insensitive) - CORRIGIDO: usar numero_proposta e incluir titulo
           db.all(
-            `SELECT p.id, 'Proposta #' || p.numero as title, c.razao_social as subtitle, 'proposta' as type 
+            `SELECT p.id, 
+                    COALESCE(p.titulo, 'Proposta #' || p.numero_proposta) as title, 
+                    COALESCE(c.razao_social, c.nome_fantasia, 'Cliente não encontrado') as subtitle, 
+                    'proposta' as type 
              FROM propostas p
              LEFT JOIN clientes c ON p.cliente_id = c.id
-             WHERE p.numero LIKE ? OR c.razao_social LIKE ?
+             WHERE LOWER(p.numero_proposta) LIKE LOWER(?) 
+                OR LOWER(p.titulo) LIKE LOWER(?) 
+                OR LOWER(c.razao_social) LIKE LOWER(?) 
+                OR LOWER(c.nome_fantasia) LIKE LOWER(?)
              LIMIT 5`,
-            [searchTerm, searchTerm],
+            [searchTerm, searchTerm, searchTerm, searchTerm],
             (err, rows) => {
               if (!err && rows) {
                 results.push(...rows);
               }
 
-              // Buscar oportunidades
+              // Buscar oportunidades (case-insensitive)
               db.all(
-                `SELECT o.id, o.titulo as title, c.razao_social as subtitle, 'oportunidade' as type 
+                `SELECT o.id, o.titulo as title, COALESCE(c.razao_social, c.nome_fantasia, 'Cliente não encontrado') as subtitle, 'oportunidade' as type 
                  FROM oportunidades o
                  LEFT JOIN clientes c ON o.cliente_id = c.id
-                 WHERE o.titulo LIKE ? OR c.razao_social LIKE ?
+                 WHERE LOWER(o.titulo) LIKE LOWER(?) OR LOWER(c.razao_social) LIKE LOWER(?) OR LOWER(c.nome_fantasia) LIKE LOWER(?)
                  LIMIT 5`,
-                [searchTerm, searchTerm],
+                [searchTerm, searchTerm, searchTerm],
                 (err, rows) => {
                   if (!err && rows) {
                     results.push(...rows);
                   }
 
-                  // Buscar produtos
+                  // Buscar atividades (case-insensitive)
                   db.all(
-                    `SELECT id, nome as title, categoria as subtitle, 'produto' as type 
-                     FROM produtos 
-                     WHERE nome LIKE ? OR categoria LIKE ?
+                    `SELECT a.id, 
+                            a.titulo as title, 
+                            COALESCE(c.razao_social, c.nome_fantasia, 'Sem cliente') || ' • ' || COALESCE(a.tipo, 'atividade') as subtitle, 
+                            'atividade' as type 
+                     FROM atividades a
+                     LEFT JOIN clientes c ON a.cliente_id = c.id
+                     WHERE LOWER(a.titulo) LIKE LOWER(?) 
+                        OR LOWER(a.descricao) LIKE LOWER(?)
+                        OR LOWER(a.tipo) LIKE LOWER(?)
                      LIMIT 5`,
-                    [searchTerm, searchTerm],
+                    [searchTerm, searchTerm, searchTerm],
                     (err, rows) => {
                       if (!err && rows) {
                         results.push(...rows);
                       }
 
-                      res.json(results.slice(0, 20)); // Limitar a 20 resultados
+                      // Buscar produtos (case-insensitive) - CORRIGIDO: usar familia e incluir codigo e modelo
+                      db.all(
+                        `SELECT id, 
+                                nome as title, 
+                                COALESCE(familia, 'Geral') as subtitle, 
+                                'produto' as type 
+                         FROM produtos 
+                         WHERE LOWER(nome) LIKE LOWER(?) 
+                            OR LOWER(codigo) LIKE LOWER(?) 
+                            OR LOWER(familia) LIKE LOWER(?)
+                            OR LOWER(COALESCE(modelo, '')) LIKE LOWER(?)
+                            OR LOWER(descricao) LIKE LOWER(?)
+                         LIMIT 5`,
+                        [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm],
+                        (err, rows) => {
+                          if (!err && rows) {
+                            results.push(...rows);
+                          }
+
+                          res.json(results.slice(0, 20)); // Limitar a 20 resultados
+                        }
+                      );
                     }
                   );
                 }
