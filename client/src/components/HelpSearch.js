@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiX, FiSend, FiBot, FiUser, FiMessageCircle, FiSparkles } from 'react-icons/fi';
+import { FiX, FiSend, FiMessageCircle, FiUser, FiSparkles, FiHelpCircle } from 'react-icons/fi';
 import { buscarResposta, gerarRespostaContextual, sugerirPerguntas } from '../utils/assistenteIA';
 import './HelpSearch.css';
 
@@ -143,7 +143,7 @@ Pergunte-me qualquer coisa sobre o sistema. 😊`,
         <div className="help-search-header">
           <div className="help-search-title">
             <div className="help-search-ai-badge">
-              <FiBot />
+              <FiHelpCircle />
               <span>Assistente IA</span>
             </div>
             <h2>Central de Ajuda Inteligente</h2>
@@ -160,8 +160,7 @@ Pergunte-me qualquer coisa sobre o sistema. 😊`,
               className={`help-search-message help-search-message-${message.type}`}
             >
               <div className="help-search-message-avatar">
-                {message.type === 'user' ? <FiUser /> : <FiBot />}
-              </div>
+                {message.type === 'user' ? <FiUser /> : <FiHelpCircle />}
               <div className="help-search-message-content">
                 <div className="help-search-message-text">
                   {formatarTexto(message.text)}
@@ -178,7 +177,7 @@ Pergunte-me qualquer coisa sobre o sistema. 😊`,
           {isTyping && (
             <div className="help-search-message help-search-message-bot">
               <div className="help-search-message-avatar">
-                <FiBot />
+                <FiHelpCircle />
               </div>
               <div className="help-search-message-content">
                 <div className="help-search-typing-indicator">

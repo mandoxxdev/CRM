@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiSend, FiBot, FiUser, FiImage, FiX, FiPaperclip, FiSparkles } from 'react-icons/fi';
+import { FiSend, FiMessageCircle, FiUser, FiImage, FiX, FiPaperclip, FiSparkles, FiHelpCircle } from 'react-icons/fi';
 import { buscarResposta, gerarRespostaContextual, sugerirPerguntas } from '../utils/assistenteIA';
 import api from '../services/api';
 import './ChatIA.css';
@@ -223,10 +223,10 @@ Pergunte-me qualquer coisa ou envie uma imagem para análise! 😊`,
     <div className="chat-ia-container">
       <div className="chat-ia-header">
         <div className="chat-ia-header-title">
-          <div className="chat-ia-badge">
-            <FiBot />
-            <span>Assistente IA</span>
-          </div>
+            <div className="chat-ia-badge">
+              <FiHelpCircle />
+              <span>Assistente IA</span>
+            </div>
           <h3>Chat IA</h3>
         </div>
         <button className="chat-ia-close" onClick={onClose}>
@@ -241,8 +241,7 @@ Pergunte-me qualquer coisa ou envie uma imagem para análise! 😊`,
             className={`chat-ia-message chat-ia-message-${message.type}`}
           >
             <div className="chat-ia-message-avatar">
-              {message.type === 'user' ? <FiUser /> : <FiBot />}
-            </div>
+              {message.type === 'user' ? <FiUser /> : <FiHelpCircle />}
             <div className="chat-ia-message-content">
               {message.images && message.images.length > 0 && (
                 <div className="chat-ia-message-images">
@@ -279,7 +278,7 @@ Pergunte-me qualquer coisa ou envie uma imagem para análise! 😊`,
         {isTyping && (
           <div className="chat-ia-message chat-ia-message-bot">
             <div className="chat-ia-message-avatar">
-              <FiBot />
+              <FiHelpCircle />
             </div>
             <div className="chat-ia-message-content">
               <div className="chat-ia-typing-indicator">
