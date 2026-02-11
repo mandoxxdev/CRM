@@ -9862,68 +9862,96 @@ app.post('/api/produtos', authenticateToken, (req, res) => {
   if (!codigo || !nome) {
     return res.status(400).json({ error: 'Código e nome são obrigatórios' });
   }
-  var classificacao_area = (body.classificacao_area && String(body.classificacao_area).trim()) ? toUpper(String(body.classificacao_area).trim()) : null;
-  db.run(
-    `INSERT INTO produtos (codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      codigo,
-      toUpper(nome),
-      toUpper(body.descricao) || '',
-      toUpper(body.familia) || '',
-      body.modelo ? toUpper(body.modelo) : null,
-      parseFloat(body.preco_base) || 0,
-      parseFloat(body.icms) || 0,
-      parseFloat(body.ipi) || 0,
-      body.ncm || '',
-      body.especificacoes_tecnicas || '',
-      body.imagem || null,
-      body.ativo !== undefined ? body.ativo : 1,
-      classificacao_area
-    ],
-    function(err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint')) {
-          return res.status(400).json({ error: 'Código do produto já cadastrado' });
+  var classificacao_area = (body.classificacao_area != null && String(body.classificacao_area).trim() !== '') ? toUpper(String(body.classificacao_area).trim()) : null;
+  var insertValues = [
+    codigo,
+    toUpper(nome),
+    toUpper(body.descricao) || '',
+    toUpper(body.familia) || '',
+    body.modelo ? toUpper(body.modelo) : null,
+    parseFloat(body.preco_base) || 0,
+    parseFloat(body.icms) || 0,
+    parseFloat(body.ipi) || 0,
+    body.ncm || '',
+    body.especificacoes_tecnicas || '',
+    body.imagem || null,
+    body.ativo !== undefined ? body.ativo : 1,
+    classificacao_area
+  ];
+  function doInsert() {
+    db.run(
+      `INSERT INTO produtos (codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      insertValues,
+      function(err) {
+        if (err) {
+          if (err.message.indexOf('classificacao_area') !== -1) {
+            db.run('ALTER TABLE produtos ADD COLUMN classificacao_area TEXT', function(alterErr) {
+              if (!alterErr || alterErr.message.indexOf('duplicate') !== -1) {
+                doInsert();
+              } else {
+                return res.status(500).json({ error: alterErr.message });
+              }
+            });
+            return;
+          }
+          if (err.message.includes('UNIQUE constraint')) {
+            return res.status(400).json({ error: 'Código do produto já cadastrado' });
+          }
+          return res.status(500).json({ error: err.message });
         }
-        return res.status(500).json({ error: err.message });
+        res.json({ id: this.lastID, codigo: codigo, nome: toUpper(nome), classificacao_area: classificacao_area, message: 'Produto criado' });
       }
-      res.json({ id: this.lastID, ...body, classificacao_area: classificacao_area });
-    }
-  );
+    );
+  }
+  doInsert();
 });
 
 app.put('/api/produtos/:id', authenticateToken, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
-  var classificacao_area = (body.classificacao_area && String(body.classificacao_area).trim()) ? toUpper(String(body.classificacao_area).trim()) : null;
-  db.run(
-    `UPDATE produtos SET codigo = ?, nome = ?, descricao = ?, familia = ?, modelo = ?, preco_base = ?,
-      icms = ?, ipi = ?, ncm = ?, especificacoes_tecnicas = ?, imagem = ?, ativo = ?, classificacao_area = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [
-      body.codigo,
-      toUpper(body.nome),
-      toUpper(body.descricao) || '',
-      toUpper(body.familia) || '',
-      body.modelo ? toUpper(body.modelo) : null,
-      parseFloat(body.preco_base) || 0,
-      parseFloat(body.icms) || 0,
-      parseFloat(body.ipi) || 0,
-      body.ncm || '',
-      body.especificacoes_tecnicas || '',
-      body.imagem || null,
-      body.ativo,
-      classificacao_area,
-      id
-    ],
-    (err) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
+  var classificacao_area = (body.classificacao_area != null && String(body.classificacao_area).trim() !== '') ? toUpper(String(body.classificacao_area).trim()) : null;
+  var updateParams = [
+    body.codigo,
+    toUpper(body.nome),
+    toUpper(body.descricao) || '',
+    toUpper(body.familia) || '',
+    body.modelo ? toUpper(body.modelo) : null,
+    parseFloat(body.preco_base) || 0,
+    parseFloat(body.icms) || 0,
+    parseFloat(body.ipi) || 0,
+    body.ncm || '',
+    body.especificacoes_tecnicas || '',
+    body.imagem || null,
+    body.ativo,
+    classificacao_area,
+    id
+  ];
+  function doUpdate() {
+    db.run(
+      `UPDATE produtos SET codigo = ?, nome = ?, descricao = ?, familia = ?, modelo = ?, preco_base = ?,
+        icms = ?, ipi = ?, ncm = ?, especificacoes_tecnicas = ?, imagem = ?, ativo = ?, classificacao_area = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      updateParams,
+      function(err) {
+        if (err) {
+          if (err.message.indexOf('classificacao_area') !== -1) {
+            db.run('ALTER TABLE produtos ADD COLUMN classificacao_area TEXT', function(alterErr) {
+              if (!alterErr || alterErr.message.indexOf('duplicate') !== -1) {
+                doUpdate();
+              } else {
+                return res.status(500).json({ error: alterErr.message });
+              }
+            });
+            return;
+          }
+          return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: 'Produto atualizado com sucesso', classificacao_area: classificacao_area });
       }
-      res.json({ message: 'Produto atualizado com sucesso' });
-    }
-  );
+    );
+  }
+  doUpdate();
 });
 
 app.delete('/api/produtos/:id', authenticateToken, (req, res) => {

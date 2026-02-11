@@ -442,12 +442,13 @@ const ProdutoForm = () => {
       // Converter especificacoes_tecnicas para JSON string
       // Mapear familia_produto para familia (nome usado no backend)
       const { familia_produto, ...restFormData } = formData;
+      const classificacao = (especificacoesTecnicas.classificacao_area || formData.classificacao_area || '').trim();
       const dataToSend = {
         ...restFormData,
-        familia: familia_produto, // Mapear para o nome usado no backend
+        familia: familia_produto,
         especificacoes_tecnicas: JSON.stringify(especificacoesTecnicas),
         imagem: imagemProduto || null,
-        classificacao_area: especificacoesTecnicas.classificacao_area || ''
+        classificacao_area: classificacao
       };
 
       if (isEdit) {
