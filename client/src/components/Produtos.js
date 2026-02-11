@@ -129,6 +129,7 @@ const Produtos = () => {
               <th>Nome</th>
               <th>Família</th>
               <th>Modelo</th>
+              <th>Class. Área</th>
               <th>Preço Base</th>
               <th>ICMS</th>
               <th>IPI</th>
@@ -139,7 +140,7 @@ const Produtos = () => {
           <tbody>
             {produtos.length === 0 ? (
               <tr>
-                <td colSpan="9" className="no-data">
+                <td colSpan="10" className="no-data">
                   Nenhum produto encontrado
                 </td>
               </tr>
@@ -150,6 +151,7 @@ const Produtos = () => {
                   <td>{produto.nome}</td>
                   <td>{produto.familia || '-'}</td>
                   <td>{produto.modelo || '-'}</td>
+                  <td>{produto.classificacao_area || '-'}</td>
                   <td>{formatCurrency(produto.preco_base)}</td>
                   <td>{produto.icms}%</td>
                   <td>{produto.ipi}%</td>

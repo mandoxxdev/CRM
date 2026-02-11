@@ -878,6 +878,13 @@ function initializeDatabase() {
     }
   });
 
+  // Adicionar coluna classificacao_area se não existir (migration)
+  db.run(`ALTER TABLE produtos ADD COLUMN classificacao_area TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('Erro ao adicionar coluna classificacao_area:', err);
+    }
+  });
+
   // Criar usuário admin padrão
   db.get('SELECT * FROM usuarios WHERE email = ?', ['admin@gmp.com.br'], (err, row) => {
     if (!row) {
@@ -1529,6 +1536,17 @@ function registrarTentativaAcessoNegado(req, modulo) {
   });
 }
 
+// Normaliza campos de texto para MAIÚSCULAS antes de salvar (evita mistura de maiúsculas/minúsculas)
+function normalizarMaiusculas(obj, keys) {
+  if (!obj || typeof obj !== 'object') return;
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (obj.hasOwnProperty(k) && typeof obj[k] === 'string') {
+      obj[k] = obj[k].toUpperCase();
+    }
+  }
+}
+
 // ========== ROTAS DE AUTENTICAÇÃO ==========
 app.post('/api/auth/login', (req, res) => {
   const { email, senha } = req.body;
@@ -1898,6 +1916,7 @@ app.get('/api/usuarios/:id/grupos', authenticateToken, (req, res) => {
 });
 
 app.post('/api/usuarios', authenticateToken, (req, res) => {
+  normalizarMaiusculas(req.body, ['nome', 'cargo']);
   const { nome, email, senha, cargo, role, ativo, pode_aprovar_descontos } = req.body;
 
   if (!nome || !email || !senha) {
@@ -1927,6 +1946,7 @@ app.post('/api/usuarios', authenticateToken, (req, res) => {
 
 app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['nome', 'cargo']);
   const { nome, email, cargo, role, ativo, senha, pode_aprovar_descontos } = req.body;
 
   if (senha && senha.length < 6) {
@@ -2083,6 +2103,7 @@ app.get('/api/clientes/:id', authenticateToken, (req, res) => {
 });
 
 app.post('/api/clientes', authenticateToken, (req, res) => {
+  normalizarMaiusculas(req.body, ['razao_social', 'nome_fantasia', 'segmento', 'endereco', 'cidade', 'estado', 'contato_principal', 'observacoes']);
   const {
     razao_social, nome_fantasia, cnpj, segmento, telefone, email,
     endereco, cidade, estado, cep, contato_principal, observacoes, status
@@ -2109,6 +2130,7 @@ app.post('/api/clientes', authenticateToken, (req, res) => {
 
 app.put('/api/clientes/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['razao_social', 'nome_fantasia', 'segmento', 'endereco', 'cidade', 'estado', 'contato_principal', 'observacoes']);
   const {
     razao_social, nome_fantasia, cnpj, segmento, telefone, email,
     endereco, cidade, estado, cep, contato_principal, observacoes, status, logo_url
@@ -2229,6 +2251,7 @@ app.get('/api/projetos/:id', authenticateToken, (req, res) => {
 });
 
 app.post('/api/projetos', authenticateToken, (req, res) => {
+  normalizarMaiusculas(req.body, ['nome', 'descricao']);
   const { cliente_id, nome, descricao, status, responsavel_id } = req.body;
 
   if (!nome) {
@@ -2249,6 +2272,7 @@ app.post('/api/projetos', authenticateToken, (req, res) => {
 
 app.put('/api/projetos/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['nome', 'descricao']);
   const { cliente_id, nome, descricao, status, responsavel_id } = req.body;
 
   db.run(
@@ -4098,6 +4122,12 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
 
 app.post('/api/propostas', authenticateToken, (req, res) => {
   try {
+    normalizarMaiusculas(req.body, ['titulo', 'descricao', 'condicoes_pagamento', 'prazo_entrega', 'garantia', 'observacoes', 'origem_busca', 'motivo_nao_venda', 'familia_produto', 'lembrete_mensagem', 'cliente_contato']);
+    if (req.body.itens && Array.isArray(req.body.itens)) {
+      for (var i = 0; i < req.body.itens.length; i++) {
+        normalizarMaiusculas(req.body.itens[i], ['descricao', 'unidade', 'codigo_produto', 'familia_produto']);
+      }
+    }
     const {
       cliente_id, projeto_id, numero_proposta, titulo, descricao, valor_total,
       validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, status: statusOriginal,
@@ -4331,6 +4361,12 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
 
 app.put('/api/propostas/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['titulo', 'descricao', 'condicoes_pagamento', 'prazo_entrega', 'garantia', 'observacoes', 'origem_busca', 'motivo_nao_venda', 'familia_produto', 'lembrete_mensagem', 'cliente_contato']);
+  if (req.body.itens && Array.isArray(req.body.itens)) {
+    for (var i = 0; i < req.body.itens.length; i++) {
+      normalizarMaiusculas(req.body.itens[i], ['descricao', 'unidade', 'codigo_produto', 'familia_produto']);
+    }
+  }
   const {
     cliente_id, projeto_id, numero_proposta, titulo, descricao, valor_total,
     validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, status,
@@ -9773,16 +9809,17 @@ app.get('/api/produtos/codigo/:codigo', authenticateToken, (req, res) => {
 });
 
 app.post('/api/produtos', authenticateToken, (req, res) => {
-  const { codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo } = req.body;
+  normalizarMaiusculas(req.body, ['nome', 'descricao', 'familia', 'modelo', 'ncm', 'especificacoes_tecnicas', 'classificacao_area']);
+  const { codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area } = req.body;
 
   if (!codigo || !nome) {
     return res.status(400).json({ error: 'Código e nome são obrigatórios' });
   }
 
   db.run(
-    `INSERT INTO produtos (codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [codigo, nome, descricao || '', familia || '', modelo || null, preco_base || 0, icms || 0, ipi || 0, ncm || '', especificacoes_tecnicas || '', imagem || null, ativo !== undefined ? ativo : 1],
+    `INSERT INTO produtos (codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [codigo, nome, descricao || '', familia || '', modelo || null, preco_base || 0, icms || 0, ipi || 0, ncm || '', especificacoes_tecnicas || '', imagem || null, ativo !== undefined ? ativo : 1, classificacao_area || null],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint')) {
@@ -9797,13 +9834,14 @@ app.post('/api/produtos', authenticateToken, (req, res) => {
 
 app.put('/api/produtos/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  const { codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo } = req.body;
+  normalizarMaiusculas(req.body, ['nome', 'descricao', 'familia', 'modelo', 'ncm', 'especificacoes_tecnicas', 'classificacao_area']);
+  const { codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area } = req.body;
 
   db.run(
     `UPDATE produtos SET codigo = ?, nome = ?, descricao = ?, familia = ?, modelo = ?, preco_base = ?,
-      icms = ?, ipi = ?, ncm = ?, especificacoes_tecnicas = ?, imagem = ?, ativo = ?, updated_at = CURRENT_TIMESTAMP
+      icms = ?, ipi = ?, ncm = ?, especificacoes_tecnicas = ?, imagem = ?, ativo = ?, classificacao_area = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [codigo, nome, descricao, familia, modelo || null, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem || null, ativo, id],
+    [codigo, nome, descricao, familia, modelo || null, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem || null, ativo, classificacao_area || null, id],
     (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -9859,6 +9897,7 @@ app.get('/api/oportunidades', authenticateToken, (req, res) => {
 });
 
 app.post('/api/oportunidades', authenticateToken, (req, res) => {
+  normalizarMaiusculas(req.body, ['titulo', 'descricao', 'etapa']);
   const { cliente_id, projeto_id, titulo, descricao, valor_estimado, probabilidade, etapa, status, responsavel_id } = req.body;
 
   if (!titulo) {
@@ -9879,6 +9918,7 @@ app.post('/api/oportunidades', authenticateToken, (req, res) => {
 
 app.put('/api/oportunidades/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['titulo', 'descricao', 'etapa']);
   const { cliente_id, projeto_id, titulo, descricao, valor_estimado, probabilidade, etapa, status, responsavel_id } = req.body;
 
   db.run(
@@ -10034,6 +10074,7 @@ app.get('/api/atividades', authenticateToken, (req, res) => {
 });
 
 app.post('/api/atividades', authenticateToken, (req, res) => {
+  normalizarMaiusculas(req.body, ['titulo', 'descricao', 'tipo', 'prioridade']);
   const { cliente_id, projeto_id, titulo, descricao, tipo, data_agendada, prioridade, status, responsavel_id } = req.body;
 
   if (!titulo) {
@@ -10060,6 +10101,7 @@ app.post('/api/atividades', authenticateToken, (req, res) => {
 
 app.put('/api/atividades/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['titulo', 'descricao', 'tipo', 'prioridade']);
   const { cliente_id, projeto_id, titulo, descricao, tipo, data_agendada, prioridade, status, responsavel_id } = req.body;
 
   // Converter strings vazias para null nos campos opcionais INTEGER
@@ -10709,6 +10751,7 @@ app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateT
 
 // Criar novo custo de viagem
 app.post('/api/custos-viagens', authenticateToken, (req, res) => {
+  normalizarMaiusculas(req.body, ['origem', 'origem_cidade', 'origem_estado', 'destino', 'destino_cidade', 'destino_estado', 'tipo_viagem', 'descricao', 'motivo_autorizacao']);
   const {
     cliente_id,
     proposta_id,
@@ -10868,6 +10911,7 @@ app.post('/api/custos-viagens', authenticateToken, (req, res) => {
 app.put('/api/custos-viagens/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
+  normalizarMaiusculas(req.body, ['origem', 'origem_cidade', 'origem_estado', 'destino', 'destino_cidade', 'destino_estado', 'tipo_viagem', 'descricao']);
   const {
     cliente_id,
     proposta_id,
@@ -14583,6 +14627,7 @@ app.get('/api/operacional/colaboradores/:id', authenticateToken, checkModulePerm
 });
 
 app.post('/api/operacional/colaboradores', authenticateToken, checkModulePermission('operacional'), (req, res) => {
+  normalizarMaiusculas(req.body, ['nome', 'cargo', 'setor', 'observacoes']);
   const { nome, cpf, matricula, cargo, setor, telefone, email, data_admissao, salario_base, tipo_contrato, status, disponivel, observacoes } = req.body;
   
   if (!nome) {
@@ -14605,6 +14650,7 @@ app.post('/api/operacional/colaboradores', authenticateToken, checkModulePermiss
 
 app.put('/api/operacional/colaboradores/:id', authenticateToken, checkModulePermission('operacional'), (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['nome', 'cargo', 'setor', 'observacoes']);
   const { nome, cpf, matricula, cargo, setor, telefone, email, data_admissao, salario_base, tipo_contrato, status, disponivel, observacoes } = req.body;
   
   db.run(`UPDATE colaboradores SET nome = ?, cpf = ?, matricula = ?, cargo = ?, setor = ?, telefone = ?, email = ?, data_admissao = ?, salario_base = ?, tipo_contrato = ?, status = ?, disponivel = ?, observacoes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -14938,6 +14984,7 @@ app.post('/api/operacional/ordens-servico', authenticateToken, (req, res, next) 
     }
   );
 }, (req, res) => {
+  normalizarMaiusculas(req.body, ['tipo_os', 'prioridade', 'descricao', 'observacoes']);
   const { numero_os, projeto_id, cliente_id, tipo_os, prioridade, status, data_abertura, data_prevista, descricao, observacoes, responsavel_id, valor_total } = req.body;
   
   if (!numero_os || !tipo_os || !data_abertura) {
@@ -14997,6 +15044,7 @@ app.post('/api/operacional/ordens-servico', authenticateToken, (req, res, next) 
 
 app.put('/api/operacional/ordens-servico/:id', authenticateToken, checkModulePermission('operacional'), (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['tipo_os', 'prioridade', 'descricao', 'observacoes']);
   const { numero_os, projeto_id, cliente_id, tipo_os, prioridade, status, data_abertura, data_prevista, data_inicio, data_conclusao, descricao, observacoes, responsavel_id, valor_total, custo_real } = req.body;
   
   const { proposta_id } = req.body;
@@ -16533,6 +16581,7 @@ app.get('/api/operacional/equipamentos', authenticateToken, checkModulePermissio
 });
 
 app.post('/api/operacional/equipamentos', authenticateToken, checkModulePermission('operacional'), (req, res) => {
+  normalizarMaiusculas(req.body, ['nome', 'tipo', 'fabricante', 'modelo', 'observacoes']);
   const { codigo, nome, tipo, fabricante, modelo, numero_serie, data_aquisicao, status, capacidade, observacoes } = req.body;
   
   if (!nome) {
@@ -16555,6 +16604,7 @@ app.post('/api/operacional/equipamentos', authenticateToken, checkModulePermissi
 
 app.put('/api/operacional/equipamentos/:id', authenticateToken, checkModulePermission('operacional'), (req, res) => {
   const { id } = req.params;
+  normalizarMaiusculas(req.body, ['nome', 'tipo', 'fabricante', 'modelo', 'observacoes']);
   const { codigo, nome, tipo, fabricante, modelo, numero_serie, data_aquisicao, status, capacidade, observacoes } = req.body;
   
   db.run(`UPDATE equipamentos SET codigo = ?, nome = ?, tipo = ?, fabricante = ?, modelo = ?, numero_serie = ?, data_aquisicao = ?, status = ?, capacidade = ?, observacoes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,

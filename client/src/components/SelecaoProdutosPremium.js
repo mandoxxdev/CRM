@@ -265,6 +265,11 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                             : produto.descricao}
                         </div>
                       )}
+                      {produto.classificacao_area && (
+                        <div className="produto-classificacao-area-badge" data-base={produto.classificacao_area.toUpperCase().includes('ÁGUA') ? 'agua' : 'solvente'}>
+                          {produto.classificacao_area}
+                        </div>
+                      )}
                       <div className="produto-meta">
                         {produto.familia && (
                           <span className="produto-familia">{produto.familia}</span>

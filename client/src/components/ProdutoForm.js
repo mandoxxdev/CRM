@@ -221,6 +221,10 @@ const ProdutoForm = () => {
       if (data.familia === 'Hélices e Acessórios' && !especificacoes.furacao) {
         especificacoes.furacao = 'Padrão: 20mm central';
       }
+      // Usar classificação de área da coluna se existir (para exibir na listagem e no formulário)
+      if (data.classificacao_area) {
+        especificacoes.classificacao_area = data.classificacao_area;
+      }
       
       setEspecificacoesTecnicas(especificacoes);
       // Mapear familia para familia_produto (nome usado no frontend)
@@ -442,7 +446,8 @@ const ProdutoForm = () => {
         ...restFormData,
         familia: familia_produto, // Mapear para o nome usado no backend
         especificacoes_tecnicas: JSON.stringify(especificacoesTecnicas),
-        imagem: imagemProduto || null
+        imagem: imagemProduto || null,
+        classificacao_area: especificacoesTecnicas.classificacao_area || ''
       };
 
       if (isEdit) {
