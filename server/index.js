@@ -1024,6 +1024,15 @@ function executeMigrations(callback) {
       console.error('Erro ao adicionar coluna ativo em grupos_permissoes:', err);
     }
   });
+
+  // Garantir coluna classificacao_area na tabela produtos (para classificação Base Água / Base Solvente)
+  db.run(`ALTER TABLE produtos ADD COLUMN classificacao_area TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column') && !err.message.includes('already exists')) {
+      console.error('Erro ao adicionar coluna classificacao_area em produtos:', err);
+    } else if (!err) {
+      console.log('✅ Coluna classificacao_area adicionada à tabela produtos');
+    }
+  });
   
   // Adicionar colunas faltantes na tabela custos_viagens
   const colunasCustosViagens = [
@@ -1549,6 +1558,13 @@ function normalizarMaiusculas(obj, keys) {
       obj[k] = String(v).toUpperCase();
     }
   }
+}
+
+// Garante valor em MAIÚSCULAS para gravar no banco (usa no array do INSERT/UPDATE)
+function toUpper(val) {
+  if (val === undefined || val === null) return val;
+  if (typeof val === 'string') return val.toUpperCase();
+  return String(val).toUpperCase();
 }
 
 // ========== ROTAS DE AUTENTICAÇÃO ==========
@@ -2107,22 +2123,30 @@ app.get('/api/clientes/:id', authenticateToken, (req, res) => {
 });
 
 app.post('/api/clientes', authenticateToken, (req, res) => {
-  normalizarMaiusculas(req.body, ['razao_social', 'nome_fantasia', 'segmento', 'endereco', 'cidade', 'estado', 'contato_principal', 'observacoes']);
-  const {
-    razao_social, nome_fantasia, cnpj, segmento, telefone, email,
-    endereco, cidade, estado, cep, contato_principal, observacoes, status
-  } = req.body;
-
+  var body = req.body || {};
+  var razao_social = body.razao_social;
   if (!razao_social) {
     return res.status(400).json({ error: 'Razão social é obrigatória' });
   }
-
   db.run(
     `INSERT INTO clientes (razao_social, nome_fantasia, cnpj, segmento, telefone, email,
       endereco, cidade, estado, cep, contato_principal, observacoes, status)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [razao_social, nome_fantasia, cnpj, segmento, telefone, email,
-      endereco, cidade, estado, cep, contato_principal, observacoes, status || 'ativo'],
+    [
+      toUpper(razao_social),
+      toUpper(body.nome_fantasia),
+      body.cnpj,
+      toUpper(body.segmento),
+      body.telefone,
+      body.email,
+      toUpper(body.endereco),
+      toUpper(body.cidade),
+      toUpper(body.estado),
+      body.cep,
+      toUpper(body.contato_principal),
+      toUpper(body.observacoes),
+      body.status || 'ativo'
+    ],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -2133,20 +2157,30 @@ app.post('/api/clientes', authenticateToken, (req, res) => {
 });
 
 app.put('/api/clientes/:id', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  normalizarMaiusculas(req.body, ['razao_social', 'nome_fantasia', 'segmento', 'endereco', 'cidade', 'estado', 'contato_principal', 'observacoes']);
-  const {
-    razao_social, nome_fantasia, cnpj, segmento, telefone, email,
-    endereco, cidade, estado, cep, contato_principal, observacoes, status, logo_url
-  } = req.body;
-
+  var id = req.params.id;
+  var body = req.body || {};
   db.run(
     `UPDATE clientes SET razao_social = ?, nome_fantasia = ?, cnpj = ?, segmento = ?,
       telefone = ?, email = ?, endereco = ?, cidade = ?, estado = ?, cep = ?,
       contato_principal = ?, observacoes = ?, status = ?, logo_url = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [razao_social, nome_fantasia, cnpj, segmento, telefone, email,
-      endereco, cidade, estado, cep, contato_principal, observacoes, status, logo_url || null, id],
+    [
+      toUpper(body.razao_social),
+      toUpper(body.nome_fantasia),
+      body.cnpj,
+      toUpper(body.segmento),
+      body.telefone,
+      body.email,
+      toUpper(body.endereco),
+      toUpper(body.cidade),
+      toUpper(body.estado),
+      body.cep,
+      toUpper(body.contato_principal),
+      toUpper(body.observacoes),
+      body.status,
+      body.logo_url || null,
+      id
+    ],
     (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -9822,17 +9856,31 @@ app.get('/api/produtos/codigo/:codigo', authenticateToken, (req, res) => {
 });
 
 app.post('/api/produtos', authenticateToken, (req, res) => {
-  normalizarMaiusculas(req.body, ['nome', 'descricao', 'familia', 'modelo', 'ncm', 'especificacoes_tecnicas', 'classificacao_area']);
-  const { codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area } = req.body;
-
+  var body = req.body || {};
+  var codigo = body.codigo;
+  var nome = body.nome;
   if (!codigo || !nome) {
     return res.status(400).json({ error: 'Código e nome são obrigatórios' });
   }
-
+  var classificacao_area = (body.classificacao_area && String(body.classificacao_area).trim()) ? toUpper(String(body.classificacao_area).trim()) : null;
   db.run(
     `INSERT INTO produtos (codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [codigo, nome, descricao || '', familia || '', modelo || null, preco_base || 0, icms || 0, ipi || 0, ncm || '', especificacoes_tecnicas || '', imagem || null, ativo !== undefined ? ativo : 1, classificacao_area || null],
+    [
+      codigo,
+      toUpper(nome),
+      toUpper(body.descricao) || '',
+      toUpper(body.familia) || '',
+      body.modelo ? toUpper(body.modelo) : null,
+      parseFloat(body.preco_base) || 0,
+      parseFloat(body.icms) || 0,
+      parseFloat(body.ipi) || 0,
+      body.ncm || '',
+      body.especificacoes_tecnicas || '',
+      body.imagem || null,
+      body.ativo !== undefined ? body.ativo : 1,
+      classificacao_area
+    ],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint')) {
@@ -9840,21 +9888,35 @@ app.post('/api/produtos', authenticateToken, (req, res) => {
         }
         return res.status(500).json({ error: err.message });
       }
-      res.json({ id: this.lastID, ...req.body });
+      res.json({ id: this.lastID, ...body, classificacao_area: classificacao_area });
     }
   );
 });
 
 app.put('/api/produtos/:id', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  normalizarMaiusculas(req.body, ['nome', 'descricao', 'familia', 'modelo', 'ncm', 'especificacoes_tecnicas', 'classificacao_area']);
-  const { codigo, nome, descricao, familia, modelo, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem, ativo, classificacao_area } = req.body;
-
+  var id = req.params.id;
+  var body = req.body || {};
+  var classificacao_area = (body.classificacao_area && String(body.classificacao_area).trim()) ? toUpper(String(body.classificacao_area).trim()) : null;
   db.run(
     `UPDATE produtos SET codigo = ?, nome = ?, descricao = ?, familia = ?, modelo = ?, preco_base = ?,
       icms = ?, ipi = ?, ncm = ?, especificacoes_tecnicas = ?, imagem = ?, ativo = ?, classificacao_area = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [codigo, nome, descricao, familia, modelo || null, preco_base, icms, ipi, ncm, especificacoes_tecnicas, imagem || null, ativo, classificacao_area || null, id],
+    [
+      body.codigo,
+      toUpper(body.nome),
+      toUpper(body.descricao) || '',
+      toUpper(body.familia) || '',
+      body.modelo ? toUpper(body.modelo) : null,
+      parseFloat(body.preco_base) || 0,
+      parseFloat(body.icms) || 0,
+      parseFloat(body.ipi) || 0,
+      body.ncm || '',
+      body.especificacoes_tecnicas || '',
+      body.imagem || null,
+      body.ativo,
+      classificacao_area,
+      id
+    ],
     (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
