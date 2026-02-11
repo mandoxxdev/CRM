@@ -9541,9 +9541,10 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
-  const { ativo, search } = req.query;
-  let query = 'SELECT * FROM produtos WHERE 1=1';
-  const params = [];
+  var ativo = req.query.ativo;
+  var search = req.query.search;
+  var query = 'SELECT * FROM produtos WHERE 1=1';
+  var params = [];
 
   if (ativo !== undefined) {
     query += ' AND ativo = ?';
@@ -9552,23 +9553,29 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
 
   if (search) {
     query += ' AND (nome LIKE ? OR codigo LIKE ? OR descricao LIKE ? OR modelo LIKE ?)';
-    const searchTerm = `%${search}%`;
+    var searchTerm = '%' + search + '%';
     params.push(searchTerm, searchTerm, searchTerm, searchTerm);
   }
 
   query += ' ORDER BY nome';
 
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    var list = rows || [];
-    for (var i = 0; i < list.length; i++) {
-      if (!Object.prototype.hasOwnProperty.call(list[i], 'classificacao_area')) {
-        list[i].classificacao_area = null;
+  function runSelect() {
+    db.all(query, params, function(err, rows) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
       }
-    }
-    res.json(list);
+      var list = rows || [];
+      for (var i = 0; i < list.length; i++) {
+        if (!Object.prototype.hasOwnProperty.call(list[i], 'classificacao_area')) {
+          list[i].classificacao_area = null;
+        }
+      }
+      res.json(list);
+    });
+  }
+
+  db.run('ALTER TABLE produtos ADD COLUMN classificacao_area TEXT', function(alterErr) {
+    runSelect();
   });
 });
 
@@ -9826,18 +9833,23 @@ app.get('/api/ncm/:codigo', authenticateToken, (req, res) => {
 });
 
 app.get('/api/produtos/:id', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  db.get('SELECT * FROM produtos WHERE id = ?', [id], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    if (!row) {
-      return res.status(404).json({ error: 'Produto não encontrado' });
-    }
-    if (!Object.prototype.hasOwnProperty.call(row, 'classificacao_area')) {
-      row.classificacao_area = null;
-    }
-    res.json(row);
+  var id = req.params.id;
+  function fetchRow() {
+    db.get('SELECT * FROM produtos WHERE id = ?', [id], function(err, row) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      if (!row) {
+        return res.status(404).json({ error: 'Produto não encontrado' });
+      }
+      if (!Object.prototype.hasOwnProperty.call(row, 'classificacao_area')) {
+        row.classificacao_area = null;
+      }
+      res.json(row);
+    });
+  }
+  db.run('ALTER TABLE produtos ADD COLUMN classificacao_area TEXT', function(alterErr) {
+    fetchRow();
   });
 });
 
@@ -9910,48 +9922,68 @@ app.post('/api/produtos', authenticateToken, (req, res) => {
 app.put('/api/produtos/:id', authenticateToken, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
-  var classificacao_area = (body.classificacao_area != null && String(body.classificacao_area).trim() !== '') ? toUpper(String(body.classificacao_area).trim()) : null;
-  var updateParams = [
-    body.codigo,
-    toUpper(body.nome),
-    toUpper(body.descricao) || '',
-    toUpper(body.familia) || '',
-    body.modelo ? toUpper(body.modelo) : null,
-    parseFloat(body.preco_base) || 0,
-    parseFloat(body.icms) || 0,
-    parseFloat(body.ipi) || 0,
-    body.ncm || '',
-    body.especificacoes_tecnicas || '',
-    body.imagem || null,
-    body.ativo,
-    classificacao_area,
-    id
-  ];
-  function doUpdate() {
-    db.run(
-      `UPDATE produtos SET codigo = ?, nome = ?, descricao = ?, familia = ?, modelo = ?, preco_base = ?,
-        icms = ?, ipi = ?, ncm = ?, especificacoes_tecnicas = ?, imagem = ?, ativo = ?, classificacao_area = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      updateParams,
-      function(err) {
-        if (err) {
-          if (err.message.indexOf('classificacao_area') !== -1) {
-            db.run('ALTER TABLE produtos ADD COLUMN classificacao_area TEXT', function(alterErr) {
-              if (!alterErr || alterErr.message.indexOf('duplicate') !== -1) {
-                doUpdate();
-              } else {
-                return res.status(500).json({ error: alterErr.message });
-              }
-            });
-            return;
+  db.get('SELECT * FROM produtos WHERE id = ?', [id], function(err, row) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (!row) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+    var codigo = body.codigo !== undefined ? body.codigo : row.codigo;
+    var nome = body.nome !== undefined ? body.nome : row.nome;
+    var descricao = body.descricao !== undefined ? body.descricao : row.descricao;
+    var familia = body.familia !== undefined ? body.familia : row.familia;
+    var modelo = body.modelo !== undefined ? body.modelo : row.modelo;
+    var especificacoes_tecnicas = body.especificacoes_tecnicas !== undefined ? body.especificacoes_tecnicas : row.especificacoes_tecnicas;
+    var imagem = body.imagem !== undefined ? body.imagem : row.imagem;
+    var ativo = body.ativo !== undefined ? body.ativo : row.ativo;
+    var classificacao_area = (body.classificacao_area != null && String(body.classificacao_area).trim() !== '') ? toUpper(String(body.classificacao_area).trim()) : (row.classificacao_area || null);
+    var preco_base = body.preco_base !== undefined ? parseFloat(body.preco_base) : row.preco_base;
+    var icms = body.icms !== undefined ? parseFloat(body.icms) : row.icms;
+    var ipi = body.ipi !== undefined ? parseFloat(body.ipi) : row.ipi;
+    var ncm = body.ncm !== undefined ? body.ncm : row.ncm;
+
+    function doUpdate() {
+      db.run(
+        `UPDATE produtos SET codigo = ?, nome = ?, descricao = ?, familia = ?, modelo = ?, preco_base = ?,
+          icms = ?, ipi = ?, ncm = ?, especificacoes_tecnicas = ?, imagem = ?, ativo = ?, classificacao_area = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          codigo,
+          toUpper(nome),
+          toUpper(descricao) || '',
+          toUpper(familia) || '',
+          modelo ? toUpper(modelo) : null,
+          preco_base || 0,
+          icms || 0,
+          ipi || 0,
+          ncm || '',
+          especificacoes_tecnicas || '',
+          imagem || null,
+          ativo,
+          classificacao_area,
+          id
+        ],
+        function(updateErr) {
+          if (updateErr) {
+            if (updateErr.message.indexOf('classificacao_area') !== -1) {
+              db.run('ALTER TABLE produtos ADD COLUMN classificacao_area TEXT', function(alterErr) {
+                if (!alterErr || alterErr.message.indexOf('duplicate') !== -1) {
+                  doUpdate();
+                } else {
+                  return res.status(500).json({ error: alterErr.message });
+                }
+              });
+              return;
+            }
+            return res.status(500).json({ error: updateErr.message });
           }
-          return res.status(500).json({ error: err.message });
+          res.json({ message: 'Produto atualizado com sucesso', nome: toUpper(nome), classificacao_area: classificacao_area });
         }
-        res.json({ message: 'Produto atualizado com sucesso', classificacao_area: classificacao_area });
-      }
-    );
-  }
-  doUpdate();
+      );
+    }
+    doUpdate();
+  });
 });
 
 app.delete('/api/produtos/:id', authenticateToken, (req, res) => {
