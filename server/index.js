@@ -870,19 +870,18 @@ function initializeDatabase() {
     }
   });
   
-  // Adicionar coluna modelo se não existir (migration)
+  // Adicionar coluna modelo e depois classificacao_area (migrations em sequência)
   db.run(`ALTER TABLE produtos ADD COLUMN modelo TEXT`, (err) => {
-    // Ignorar erro se a coluna já existir
     if (err && !err.message.includes('duplicate column')) {
       console.error('Erro ao adicionar coluna modelo:', err);
     }
-  });
-
-  // Adicionar coluna classificacao_area se não existir (migration)
-  db.run(`ALTER TABLE produtos ADD COLUMN classificacao_area TEXT`, (err) => {
-    if (err && !err.message.includes('duplicate column')) {
-      console.error('Erro ao adicionar coluna classificacao_area:', err);
-    }
+    db.run(`ALTER TABLE produtos ADD COLUMN classificacao_area TEXT`, (err2) => {
+      if (err2 && !err2.message.includes('duplicate column')) {
+        console.error('Erro ao adicionar coluna classificacao_area:', err2);
+      } else {
+        console.log('✅ Coluna classificacao_area verificada');
+      }
+    });
   });
 
   // Criar usuário admin padrão
@@ -1541,8 +1540,13 @@ function normalizarMaiusculas(obj, keys) {
   if (!obj || typeof obj !== 'object') return;
   for (var i = 0; i < keys.length; i++) {
     var k = keys[i];
-    if (obj.hasOwnProperty(k) && typeof obj[k] === 'string') {
-      obj[k] = obj[k].toUpperCase();
+    if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+    var v = obj[k];
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'string') {
+      obj[k] = v.toUpperCase();
+    } else if (typeof v !== 'object') {
+      obj[k] = String(v).toUpperCase();
     }
   }
 }
@@ -9524,7 +9528,13 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(rows || []);
+    var list = rows || [];
+    for (var i = 0; i < list.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(list[i], 'classificacao_area')) {
+        list[i].classificacao_area = null;
+      }
+    }
+    res.json(list);
   });
 });
 
@@ -9789,6 +9799,9 @@ app.get('/api/produtos/:id', authenticateToken, (req, res) => {
     }
     if (!row) {
       return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+    if (!Object.prototype.hasOwnProperty.call(row, 'classificacao_area')) {
+      row.classificacao_area = null;
     }
     res.json(row);
   });
