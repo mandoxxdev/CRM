@@ -1413,17 +1413,17 @@ function dbAllWithRetry(sql, params = [], callback, maxRetries = 3) {
 
 // Authentication Middleware
 function authenticateToken(req, res, next) {
-  // Tentar obter token do header Authorization primeiro
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.split(' ')[1];
-  
-  // Se não tiver no header, tentar obter da query string (útil para links diretos)
+  if (!token && req.headers['x-auth-token']) {
+    token = req.headers['x-auth-token'];
+  }
   if (!token && req.query && req.query.token) {
     token = req.query.token;
   }
 
   if (!token) {
-    return res.status(401).json({ error: 'Token não fornecido' });
+    return res.status(401).json({ error: 'Token não fornecido', code: 'NO_TOKEN' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
@@ -9566,8 +9566,17 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
       }
       var list = rows || [];
       for (var i = 0; i < list.length; i++) {
-        if (!Object.prototype.hasOwnProperty.call(list[i], 'classificacao_area')) {
-          list[i].classificacao_area = null;
+        var r = list[i];
+        if (!Object.prototype.hasOwnProperty.call(r, 'classificacao_area') || r.classificacao_area == null || r.classificacao_area === '') {
+          try {
+            var spec = r.especificacoes_tecnicas ? JSON.parse(r.especificacoes_tecnicas) : {};
+            r.classificacao_area = spec.classificacao_area || null;
+          } catch (e) {
+            r.classificacao_area = null;
+          }
+        }
+        if (r.nome && typeof r.nome === 'string' && r.nome !== r.nome.toUpperCase()) {
+          r.nome = r.nome.toUpperCase();
         }
       }
       res.json(list);
@@ -9842,8 +9851,16 @@ app.get('/api/produtos/:id', authenticateToken, (req, res) => {
       if (!row) {
         return res.status(404).json({ error: 'Produto não encontrado' });
       }
-      if (!Object.prototype.hasOwnProperty.call(row, 'classificacao_area')) {
-        row.classificacao_area = null;
+      if (!Object.prototype.hasOwnProperty.call(row, 'classificacao_area') || row.classificacao_area == null || row.classificacao_area === '') {
+        try {
+          var spec = row.especificacoes_tecnicas ? JSON.parse(row.especificacoes_tecnicas) : {};
+          row.classificacao_area = spec.classificacao_area || null;
+        } catch (e) {
+          row.classificacao_area = null;
+        }
+      }
+      if (row.nome && typeof row.nome === 'string' && row.nome !== row.nome.toUpperCase()) {
+        row.nome = row.nome.toUpperCase();
       }
       res.json(row);
     });

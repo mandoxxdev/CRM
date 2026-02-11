@@ -100,6 +100,14 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     }).format(value || 0);
   };
 
+  const getClassificacaoArea = (produto) => {
+    if (produto.classificacao_area) return produto.classificacao_area;
+    try {
+      const spec = produto.especificacoes_tecnicas ? (typeof produto.especificacoes_tecnicas === 'string' ? JSON.parse(produto.especificacoes_tecnicas) : produto.especificacoes_tecnicas) : {};
+      return spec.classificacao_area || '';
+    } catch (e) { return ''; }
+  };
+
   const limparFiltros = () => {
     setSearchTerm('');
     setFilterFamilia('');
@@ -265,9 +273,9 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                             : produto.descricao}
                         </div>
                       )}
-                      {produto.classificacao_area && (
-                        <div className="produto-classificacao-area-badge" data-base={produto.classificacao_area.toUpperCase().includes('ÁGUA') ? 'agua' : 'solvente'}>
-                          {produto.classificacao_area}
+                      {getClassificacaoArea(produto) && (
+                        <div className="produto-classificacao-area-badge" data-base={getClassificacaoArea(produto).toUpperCase().includes('ÁGUA') ? 'agua' : 'solvente'}>
+                          {getClassificacaoArea(produto)}
                         </div>
                       )}
                       <div className="produto-meta">

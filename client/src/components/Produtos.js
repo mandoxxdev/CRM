@@ -145,13 +145,20 @@ const Produtos = () => {
                 </td>
               </tr>
             ) : (
-              produtos.map(produto => (
+              produtos.map(produto => {
+                const classificacao = produto.classificacao_area || (() => {
+                  try {
+                    const spec = produto.especificacoes_tecnicas ? (typeof produto.especificacoes_tecnicas === 'string' ? JSON.parse(produto.especificacoes_tecnicas) : produto.especificacoes_tecnicas) : {};
+                    return spec.classificacao_area || null;
+                  } catch (e) { return null; }
+                })();
+                return (
                 <tr key={produto.id}>
                   <td><strong>{produto.codigo}</strong></td>
                   <td>{produto.nome}</td>
                   <td>{produto.familia || '-'}</td>
                   <td>{produto.modelo || '-'}</td>
-                  <td>{produto.classificacao_area || '-'}</td>
+                  <td>{classificacao || '-'}</td>
                   <td>{formatCurrency(produto.preco_base)}</td>
                   <td>{produto.icms}%</td>
                   <td>{produto.ipi}%</td>
@@ -182,7 +189,8 @@ const Produtos = () => {
                     </div>
                   </td>
                 </tr>
-              ))
+              );
+              })
             )}
           </tbody>
         </table>

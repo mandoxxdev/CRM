@@ -38,9 +38,10 @@ const api = axios.create({
 
 // Interceptor para adicionar token em todas as requisições
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  let token = localStorage.getItem('token') || sessionStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    config.headers['X-Auth-Token'] = token;
   }
   return config;
 });
@@ -113,6 +114,7 @@ api.interceptors.response.use(
       // Token inválido ou expirado
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      sessionStorage.removeItem('token');
       window.location.href = '/login';
     }
     return Promise.reject(error);
