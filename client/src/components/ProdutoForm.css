@@ -324,108 +324,115 @@
   }
 }
 
-/* Cards de Seleção Técnica - Botões de opção */
+/* Cards de Seleção Técnica - Estilo grande e gradiente (referência Design/Code/Launch) */
 .tecnicas-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
-  margin-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+  margin-top: 14px;
 }
 
 .tecnica-card {
-  border: 2px solid var(--gmp-border, #ddd);
-  border-radius: 8px;
-  padding: 14px 16px;
+  border: none;
+  border-radius: 16px;
+  padding: 28px 24px;
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease;
   position: relative;
-  background: var(--gmp-surface, #fff);
+  background: linear-gradient(135deg, #f5f6f8 0%, #e8eaee 100%);
   text-align: center;
-  min-height: 56px;
+  min-height: 110px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 
 .tecnica-card:hover {
-  border-color: #ff6b35;
-  background: rgba(255, 107, 53, 0.06);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(255, 107, 53, 0.2);
+  background: linear-gradient(135deg, #fff5f2 0%, #ffe8e0 100%);
 }
 
 .tecnica-card.selecionado {
-  border-color: #ff6b35;
-  background: #ff6b35;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff8a65 100%);
   color: #fff;
-  box-shadow: 0 1px 4px rgba(255, 107, 53, 0.3);
+  box-shadow: 0 10px 30px rgba(255, 107, 53, 0.4);
+  transform: translateY(-2px);
 }
 
 .tecnica-card-check {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 22px;
-  height: 22px;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.95);
   color: #ff6b35;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: bold;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
 }
 
 .tecnica-card.selecionado .tecnica-card-check {
   background: rgba(255, 255, 255, 0.95);
   color: #ff6b35;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
 }
 
 .tecnica-card-content {
   width: 100%;
   position: relative;
   z-index: 1;
-  padding-right: 28px;
+  padding-right: 40px;
 }
 
 .tecnica-card-content strong {
   color: var(--gmp-text, #2c3e50);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   display: block;
-  line-height: 1.35;
+  line-height: 1.4;
   transition: color 0.2s ease;
+  letter-spacing: 0.01em;
 }
 
 .tecnica-card.selecionado .tecnica-card-content strong {
   color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 /* Botão OUTRO - opção de descrição personalizada */
 .tecnica-card.tecnica-card-outro {
-  border-style: dashed;
-  background: var(--gmp-surface-secondary, #f8f9fa);
+  border: 2px dashed rgba(0, 0, 0, 0.12);
+  background: linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%);
 }
 .tecnica-card.tecnica-card-outro:hover {
-  border-color: #ff6b35;
-  background: rgba(255, 107, 53, 0.06);
+  background: linear-gradient(135deg, #fff5f2 0%, #ffe8e0 100%);
+  border-color: rgba(255, 107, 53, 0.4);
 }
 .tecnica-card.tecnica-card-outro.selecionado {
   border-style: solid;
-  background: #ff6b35;
+  border-color: transparent;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff8a65 100%);
 }
 
-/* Classificação de Área - Cores Específicas */
+/* Classificação de Área - Gradientes no mesmo estilo */
 .tecnica-card.classificacao-agua {
-  border-color: #64b5f6;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
 }
 .tecnica-card.classificacao-agua:hover {
-  border-color: #2196f3;
-  background: rgba(33, 150, 243, 0.08);
+  background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
+  box-shadow: 0 12px 28px rgba(33, 150, 243, 0.25);
 }
 .tecnica-card.classificacao-agua.selecionado {
-  border-color: #2196f3;
-  background: #2196f3;
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 50%, #42a5f5 100%);
+  box-shadow: 0 10px 30px rgba(33, 150, 243, 0.4);
 }
 .tecnica-card.classificacao-agua.selecionado .tecnica-card-content strong {
   color: #ffffff;
@@ -435,15 +442,15 @@
 }
 
 .tecnica-card.classificacao-solvente {
-  border-color: #ef5350;
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
 }
 .tecnica-card.classificacao-solvente:hover {
-  border-color: #f44336;
-  background: rgba(244, 67, 54, 0.08);
+  background: linear-gradient(135deg, #ffcdd2 0%, #ef9a9a 100%);
+  box-shadow: 0 12px 28px rgba(244, 67, 54, 0.25);
 }
 .tecnica-card.classificacao-solvente.selecionado {
-  border-color: #f44336;
-  background: #f44336;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 50%, #e57373 100%);
+  box-shadow: 0 10px 30px rgba(244, 67, 54, 0.4);
 }
 .tecnica-card.classificacao-solvente.selecionado .tecnica-card-content strong {
   color: #ffffff;
@@ -452,14 +459,14 @@
   color: #f44336;
 }
 
-/* CCM Não */
+/* CCM Não - gradiente vermelho */
 .tecnica-card.ccm-nao:hover {
-  border-color: #f44336;
-  background: rgba(244, 67, 54, 0.08);
+  background: linear-gradient(135deg, #ffcdd2 0%, #ef9a9a 100%);
+  box-shadow: 0 12px 28px rgba(244, 67, 54, 0.25);
 }
 .tecnica-card.ccm-nao.selecionado {
-  border-color: #d32f2f;
-  background: #d32f2f;
+  background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 50%, #e53935 100%);
+  box-shadow: 0 10px 30px rgba(211, 47, 47, 0.45);
 }
 .tecnica-card.ccm-nao.selecionado .tecnica-card-content strong {
   color: #ffffff;
@@ -635,13 +642,18 @@
     gap: 12px;
   }
 
+  .tecnicas-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
+  }
+
   .tecnica-card {
-    padding: 12px 14px;
-    min-height: 52px;
+    padding: 22px 18px;
+    min-height: 95px;
   }
 
   .tecnica-card-content strong {
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .total-potencia-card {
@@ -695,13 +707,18 @@
     grid-template-columns: 1fr;
   }
 
+  .tecnicas-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
   .tecnica-card {
-    padding: 10px 12px;
-    min-height: 48px;
+    padding: 20px 16px;
+    min-height: 88px;
   }
 
   .tecnica-card-content strong {
-    font-size: 12px;
+    font-size: 14px;
   }
 }
 
@@ -874,12 +891,12 @@
   }
 
   .tecnica-card {
-    padding: 10px 12px;
-    min-height: 48px;
+    padding: 18px 14px;
+    min-height: 82px;
   }
 
   .tecnica-card-content strong {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .total-potencia-card {
