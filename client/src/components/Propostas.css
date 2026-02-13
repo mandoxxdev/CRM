@@ -181,6 +181,7 @@
   border-bottom: 1px solid var(--gmp-border);
   color: var(--gmp-text);
   background: var(--gmp-surface);
+  vertical-align: top;
 }
 
 .propostas .data-table tbody tr {
@@ -522,17 +523,18 @@
 /* Célula de título com ícone de descritivo */
 .proposta-titulo-cell {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  max-width: 280px;
+  max-width: 420px;
+  min-width: 200px;
 }
 
 .proposta-titulo-texto {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
 }
 
 .proposta-titulo-info {
