@@ -427,6 +427,19 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
+/* Botão OUTRO - opção de descrição personalizada */
+.tecnica-card.tecnica-card-outro {
+  border-style: dashed;
+  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+}
+.tecnica-card.tecnica-card-outro:hover {
+  border-color: #ff6b35;
+  background: linear-gradient(135deg, #fff5f2 0%, #ffe8e0 100%);
+}
+.tecnica-card.tecnica-card-outro.selecionado {
+  border-style: solid;
+}
+
 /* Classificação de Área - Cores Específicas - Estilo Premium */
 .tecnica-card.classificacao-agua {
   background: linear-gradient(135deg, #ffffff 0%, #e3f2fd 100%);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { FiPlus, FiFilter, FiDownload, FiEdit, FiTrash2, FiCheckCircle, FiFileText, FiX, FiEye, FiSettings, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiFilter, FiDownload, FiEdit, FiTrash2, FiCheckCircle, FiFileText, FiX, FiEye, FiSettings, FiSearch, FiInfo } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
@@ -21,6 +21,54 @@ const Propostas = () => {
   const [assinaturas, setAssinaturas] = useState([]);
   const [carregandoAssinaturas, setCarregandoAssinaturas] = useState(false);
   const [aprovacoesMap, setAprovacoesMap] = useState({}); // Mapa de proposta_id -> temAprovacao
+  const [itensPopoverId, setItensPopoverId] = useState(null);
+  const [itensCache, setItensCache] = useState({});
+  const [loadingItensId, setLoadingItensId] = useState(null);
+  const [popoverAnchor, setPopoverAnchor] = useState(null); // { left, top } para posicionar o popover
+
+  // Monta o descritivo de um item (material, espessura, etc.) a partir de especificacoes_tecnicas
+  const getDescritivoItem = (item) => {
+    let spec = {};
+    try {
+      const raw = item.especificacoes_tecnicas;
+      if (raw) spec = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (_) {}
+    const parts = [];
+    if (spec.material_contato) parts.push(`Material: ${spec.material_contato}`);
+    if (spec.espessura) parts.push(`Espessura: ${spec.espessura}`);
+    if (spec.acabamento) parts.push(`Acabamento: ${spec.acabamento}`);
+    if (spec.diametro) parts.push(`Diâmetro: ${spec.diametro}`);
+    if (spec.funcao) parts.push(`Função: ${spec.funcao}`);
+    if (spec.tratamento_termico) parts.push(`Trat. Térmico: ${spec.tratamento_termico}`);
+    if (spec.velocidade_trabalho) parts.push(`Velocidade: ${spec.velocidade_trabalho}`);
+    return parts.length ? parts.join(' • ') : null;
+  };
+
+  const carregarItensProposta = async (propostaId, event) => {
+    const rect = event?.target?.getBoundingClientRect?.();
+    if (rect) setPopoverAnchor({ left: rect.left, top: rect.bottom + 4 });
+    if (itensCache[propostaId]) {
+      setItensPopoverId(prev => prev === propostaId ? null : propostaId);
+      return;
+    }
+    setLoadingItensId(propostaId);
+    try {
+      const res = await api.get(`/propostas/${propostaId}`);
+      setItensCache(prev => ({ ...prev, [propostaId]: res.data.itens || [] }));
+      setItensPopoverId(propostaId);
+    } catch (e) {
+      console.error('Erro ao carregar itens da proposta:', e);
+      toast.error('Não foi possível carregar os itens da proposta.');
+      setItensPopoverId(null);
+    } finally {
+      setLoadingItensId(null);
+    }
+  };
+
+  const fecharPopoverItens = () => {
+    setItensPopoverId(null);
+    setPopoverAnchor(null);
+  };
 
   // Função para verificar se uma proposta tem aprovação
   const verificarAprovacao = async (propostaId, margemDesconto) => {
@@ -298,7 +346,28 @@ const Propostas = () => {
                   return (
                     <tr key={proposta.id}>
                       <td><strong>{proposta.numero_proposta || 'N/A'}</strong></td>
-                      <td>{proposta.titulo || 'Sem título'}</td>
+                      <td className="proposta-titulo-cell">
+                        <span className="proposta-titulo-texto">{proposta.titulo || 'Sem título'}</span>
+                        <button
+                          type="button"
+                          className="proposta-titulo-info"
+                          title="Ver descritivo dos itens orçados"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (loadingItensId === proposta.id) return;
+                            if (itensPopoverId === proposta.id) fecharPopoverItens();
+                            else carregarItensProposta(proposta.id, e);
+                          }}
+                          disabled={!!loadingItensId && loadingItensId !== proposta.id}
+                        >
+                          {loadingItensId === proposta.id ? (
+                            <span className="proposta-titulo-info-spinner" />
+                          ) : (
+                            <FiInfo size={14} />
+                          )}
+                        </button>
+                      </td>
                       <td>{proposta.cliente_nome || 'Cliente não encontrado'}</td>
                       <td>{formatCurrency(proposta.valor_total || 0)}</td>
                       <td>
@@ -415,6 +484,53 @@ const Propostas = () => {
           </tbody>
         </table>
       </div>
+      )}
+
+      {/* Popover descritivo dos itens orçados */}
+      {itensPopoverId != null && (
+        <>
+          <div className="proposta-itens-popover-backdrop" onClick={fecharPopoverItens} aria-hidden="true" />
+          <div
+            className="proposta-itens-popover"
+            role="dialog"
+            aria-label="Descritivo dos itens orçados"
+            style={
+              popoverAnchor
+                ? { left: popoverAnchor.left, top: popoverAnchor.top, position: 'fixed' }
+                : undefined
+            }
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="proposta-itens-popover-header">
+              <span>Itens orçados</span>
+              <button type="button" className="proposta-itens-popover-fechar" onClick={fecharPopoverItens} aria-label="Fechar">
+                <FiX />
+              </button>
+            </div>
+            <div className="proposta-itens-popover-body">
+              {loadingItensId === itensPopoverId ? (
+                <div className="proposta-itens-popover-loading">Carregando...</div>
+              ) : Array.isArray(itensCache[itensPopoverId]) && itensCache[itensPopoverId].length === 0 ? (
+                <div className="proposta-itens-popover-empty">Nenhum item nesta proposta.</div>
+              ) : (
+                <ul className="proposta-itens-popover-lista">
+                  {(itensCache[itensPopoverId] || []).map((item, idx) => {
+                    const descritivo = getDescritivoItem(item);
+                    const nome = item.descricao || item.produto_nome || `Item ${idx + 1}`;
+                    return (
+                      <li key={item.id || idx} className="proposta-itens-popover-item">
+                        <div className="proposta-itens-popover-item-nome">{nome}</div>
+                        {descritivo && (
+                          <div className="proposta-itens-popover-item-descritivo">{descritivo}</div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Modal de Assinatura Digital */}

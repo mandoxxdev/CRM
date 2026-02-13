@@ -67,6 +67,24 @@ const Produtos = () => {
     }).format(value || 0);
   };
 
+  // Monta o descritivo técnico (material, espessura, etc.) a partir de especificacoes_tecnicas
+  const getDescritivoTecnico = (produto) => {
+    let spec = {};
+    try {
+      const raw = produto.especificacoes_tecnicas;
+      if (raw) spec = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (_) {}
+    const parts = [];
+    if (spec.material_contato) parts.push(`Material: ${spec.material_contato}`);
+    if (spec.espessura) parts.push(`Espessura: ${spec.espessura}`);
+    if (spec.acabamento) parts.push(`Acabamento: ${spec.acabamento}`);
+    if (spec.diametro) parts.push(`Diâmetro: ${spec.diametro}`);
+    if (spec.funcao) parts.push(`Função: ${spec.funcao}`);
+    if (spec.tratamento_termico) parts.push(`Trat. Térmico: ${spec.tratamento_termico}`);
+    if (spec.velocidade_trabalho) parts.push(`Velocidade: ${spec.velocidade_trabalho}`);
+    return parts.length ? parts.join(' • ') : null;
+  };
+
   if (loading) {
     return (
       <div className="loading">
@@ -152,10 +170,18 @@ const Produtos = () => {
                     return spec.classificacao_area || null;
                   } catch (e) { return null; }
                 })();
+                const descritivoTecnico = getDescritivoTecnico(produto);
                 return (
                 <tr key={produto.id}>
                   <td><strong>{produto.codigo}</strong></td>
-                  <td>{produto.nome}</td>
+                  <td className="produto-nome-cell">
+                    <div className="produto-nome-texto">{produto.nome}</div>
+                    {descritivoTecnico && (
+                      <div className="produto-nome-descritivo" title={descritivoTecnico}>
+                        {descritivoTecnico}
+                      </div>
+                    )}
+                  </td>
                   <td>{produto.familia || '-'}</td>
                   <td>{produto.modelo || '-'}</td>
                   <td>{classificacao || '-'}</td>

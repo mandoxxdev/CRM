@@ -91,6 +91,15 @@ const ProdutoForm = () => {
   const [loadingNCM, setLoadingNCM] = useState(false);
   const [imagemProduto, setImagemProduto] = useState(null);
   const [uploadingImagem, setUploadingImagem] = useState(false);
+  const [outroAtivo, setOutroAtivo] = useState({
+    material_contato: false,
+    espessura: false,
+    acabamento: false,
+    funcao: false,
+    tratamento_termico: false,
+    velocidade_trabalho: false
+  });
+  const setOutro = (field, active) => setOutroAtivo(prev => ({ ...prev, [field]: active }));
 
   // Famílias disponíveis baseadas no tipo de produto
   const todasFamilias = [
@@ -227,6 +236,21 @@ const ProdutoForm = () => {
       }
       
       setEspecificacoesTecnicas(especificacoes);
+      const opcoesMaterial = ['Aço Inox 304 - AISI 304', 'Aço Inox 410 - AISI 410', 'Aço Inox 316 - AISI 316', 'Aço Carbono - SAE 1020'];
+      const opcoesEsp = ['1/8', '3/16'];
+      const opcoesAcab = ['Polido', 'Escovado'];
+      const opcoesFunc = ['Alto nível de Cisalhamento', 'Homogenização'];
+      const opcoesTrat = ['Aplicado', 'Não Aplicado'];
+      const opcoesVel = ['Informado', 'Não informado'];
+      setOutroAtivo(prev => ({
+        ...prev,
+        material_contato: !!(especificacoes.material_contato && !opcoesMaterial.includes(especificacoes.material_contato)),
+        espessura: !!(especificacoes.espessura && !opcoesEsp.includes(especificacoes.espessura)),
+        acabamento: !!(especificacoes.acabamento && !opcoesAcab.includes(especificacoes.acabamento)),
+        funcao: !!(especificacoes.funcao && !opcoesFunc.includes(especificacoes.funcao)),
+        tratamento_termico: !!(especificacoes.tratamento_termico && !opcoesTrat.includes(especificacoes.tratamento_termico)),
+        velocidade_trabalho: !!(especificacoes.velocidade_trabalho && !opcoesVel.includes(especificacoes.velocidade_trabalho))
+      }));
       // Mapear familia para familia_produto (nome usado no frontend)
       setFormData({
         ...data,
@@ -1080,10 +1104,10 @@ const ProdutoForm = () => {
               {opcoesMaterialContato.map(opcao => (
                 <div
                   key={opcao}
-                  className={`tecnica-card ${especificacoesTecnicas.material_contato === opcao ? 'selecionado' : ''}`}
-                  onClick={() => handleEspecificacaoChange('material_contato', opcao)}
+                  className={`tecnica-card ${especificacoesTecnicas.material_contato === opcao && !outroAtivo.material_contato ? 'selecionado' : ''}`}
+                  onClick={() => { handleEspecificacaoChange('material_contato', opcao); setOutro('material_contato', false); }}
                 >
-                  {especificacoesTecnicas.material_contato === opcao && (
+                  {especificacoesTecnicas.material_contato === opcao && !outroAtivo.material_contato && (
                     <div className="tecnica-card-check">
                       <FiCheck />
                     </div>
@@ -1093,7 +1117,31 @@ const ProdutoForm = () => {
                   </div>
                 </div>
               ))}
+              <div
+                className={`tecnica-card tecnica-card-outro ${outroAtivo.material_contato ? 'selecionado' : ''}`}
+                onClick={() => { setOutro('material_contato', true); handleEspecificacaoChange('material_contato', especificacoesTecnicas.material_contato || ''); }}
+              >
+                {outroAtivo.material_contato && (
+                  <div className="tecnica-card-check">
+                    <FiCheck />
+                  </div>
+                )}
+                <div className="tecnica-card-content">
+                  <strong>OUTRO</strong>
+                </div>
+              </div>
             </div>
+            {outroAtivo.material_contato && (
+              <div style={{ marginTop: '12px' }}>
+                <input
+                  type="text"
+                  value={especificacoesTecnicas.material_contato || ''}
+                  onChange={(e) => handleEspecificacaoChange('material_contato', e.target.value)}
+                  placeholder="Descreva o material de contato"
+                  style={{ width: '100%', padding: 'var(--spacing-md)', border: '2px solid var(--gmp-border)', borderRadius: 'var(--border-radius)', background: 'var(--gmp-surface)', color: 'var(--gmp-text)' }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Campos específicos para Discos e Acessórios */}
@@ -1143,14 +1191,14 @@ const ProdutoForm = () => {
               {/* Espessura */}
               <div className="form-group" style={{ marginBottom: '30px' }}>
                 <label style={{ marginBottom: '15px', display: 'block' }}>Espessura *</label>
-                <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
                   {['1/8', '3/16'].map(opcao => (
                     <div
                       key={opcao}
-                      className={`tecnica-card ${especificacoesTecnicas.espessura === opcao ? 'selecionado' : ''}`}
-                      onClick={() => handleEspecificacaoChange('espessura', opcao)}
+                      className={`tecnica-card ${especificacoesTecnicas.espessura === opcao && !outroAtivo.espessura ? 'selecionado' : ''}`}
+                      onClick={() => { handleEspecificacaoChange('espessura', opcao); setOutro('espessura', false); }}
                     >
-                      {especificacoesTecnicas.espessura === opcao && (
+                      {especificacoesTecnicas.espessura === opcao && !outroAtivo.espessura && (
                         <div className="tecnica-card-check">
                           <FiCheck />
                         </div>
@@ -1160,20 +1208,38 @@ const ProdutoForm = () => {
                       </div>
                     </div>
                   ))}
+                  <div
+                    className={`tecnica-card tecnica-card-outro ${outroAtivo.espessura ? 'selecionado' : ''}`}
+                    onClick={() => { setOutro('espessura', true); handleEspecificacaoChange('espessura', especificacoesTecnicas.espessura || ''); }}
+                  >
+                    {outroAtivo.espessura && <div className="tecnica-card-check"><FiCheck /></div>}
+                    <div className="tecnica-card-content"><strong>OUTRO</strong></div>
+                  </div>
                 </div>
+                {outroAtivo.espessura && (
+                  <div style={{ marginTop: '12px' }}>
+                    <input
+                      type="text"
+                      value={especificacoesTecnicas.espessura || ''}
+                      onChange={(e) => handleEspecificacaoChange('espessura', e.target.value)}
+                      placeholder="Descreva a espessura"
+                      style={{ width: '100%', padding: 'var(--spacing-md)', border: '2px solid var(--gmp-border)', borderRadius: 'var(--border-radius)', background: 'var(--gmp-surface)', color: 'var(--gmp-text)' }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Acabamento */}
               <div className="form-group" style={{ marginBottom: '30px' }}>
                 <label style={{ marginBottom: '15px', display: 'block' }}>Acabamento *</label>
-                <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
                   {['Polido', 'Escovado'].map(opcao => (
                     <div
                       key={opcao}
-                      className={`tecnica-card ${especificacoesTecnicas.acabamento === opcao ? 'selecionado' : ''}`}
-                      onClick={() => handleEspecificacaoChange('acabamento', opcao)}
+                      className={`tecnica-card ${especificacoesTecnicas.acabamento === opcao && !outroAtivo.acabamento ? 'selecionado' : ''}`}
+                      onClick={() => { handleEspecificacaoChange('acabamento', opcao); setOutro('acabamento', false); }}
                     >
-                      {especificacoesTecnicas.acabamento === opcao && (
+                      {especificacoesTecnicas.acabamento === opcao && !outroAtivo.acabamento && (
                         <div className="tecnica-card-check">
                           <FiCheck />
                         </div>
@@ -1183,21 +1249,39 @@ const ProdutoForm = () => {
                       </div>
                     </div>
                   ))}
+                  <div
+                    className={`tecnica-card tecnica-card-outro ${outroAtivo.acabamento ? 'selecionado' : ''}`}
+                    onClick={() => { setOutro('acabamento', true); handleEspecificacaoChange('acabamento', especificacoesTecnicas.acabamento || ''); }}
+                  >
+                    {outroAtivo.acabamento && <div className="tecnica-card-check"><FiCheck /></div>}
+                    <div className="tecnica-card-content"><strong>OUTRO</strong></div>
+                  </div>
                 </div>
+                {outroAtivo.acabamento && (
+                  <div style={{ marginTop: '12px' }}>
+                    <input
+                      type="text"
+                      value={especificacoesTecnicas.acabamento || ''}
+                      onChange={(e) => handleEspecificacaoChange('acabamento', e.target.value)}
+                      placeholder="Descreva o acabamento"
+                      style={{ width: '100%', padding: 'var(--spacing-md)', border: '2px solid var(--gmp-border)', borderRadius: 'var(--border-radius)', background: 'var(--gmp-surface)', color: 'var(--gmp-text)' }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Função - Apenas para Hélices e Acessórios */}
               {formData.familia_produto === 'Hélices e Acessórios' && (
                 <div className="form-group" style={{ marginBottom: '30px' }}>
                   <label style={{ marginBottom: '15px', display: 'block' }}>Função *</label>
-                  <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                  <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
                     {['Alto nível de Cisalhamento', 'Homogenização'].map(opcao => (
                       <div
                         key={opcao}
-                        className={`tecnica-card ${especificacoesTecnicas.funcao === opcao ? 'selecionado' : ''}`}
-                        onClick={() => handleEspecificacaoChange('funcao', opcao)}
+                        className={`tecnica-card ${especificacoesTecnicas.funcao === opcao && !outroAtivo.funcao ? 'selecionado' : ''}`}
+                        onClick={() => { handleEspecificacaoChange('funcao', opcao); setOutro('funcao', false); }}
                       >
-                        {especificacoesTecnicas.funcao === opcao && (
+                        {especificacoesTecnicas.funcao === opcao && !outroAtivo.funcao && (
                           <div className="tecnica-card-check">
                             <FiCheck />
                           </div>
@@ -1207,7 +1291,25 @@ const ProdutoForm = () => {
                         </div>
                       </div>
                     ))}
+                    <div
+                      className={`tecnica-card tecnica-card-outro ${outroAtivo.funcao ? 'selecionado' : ''}`}
+                      onClick={() => { setOutro('funcao', true); handleEspecificacaoChange('funcao', especificacoesTecnicas.funcao || ''); }}
+                    >
+                      {outroAtivo.funcao && <div className="tecnica-card-check"><FiCheck /></div>}
+                      <div className="tecnica-card-content"><strong>OUTRO</strong></div>
+                    </div>
                   </div>
+                  {outroAtivo.funcao && (
+                    <div style={{ marginTop: '12px' }}>
+                      <input
+                        type="text"
+                        value={especificacoesTecnicas.funcao || ''}
+                        onChange={(e) => handleEspecificacaoChange('funcao', e.target.value)}
+                        placeholder="Descreva a função"
+                        style={{ width: '100%', padding: 'var(--spacing-md)', border: '2px solid var(--gmp-border)', borderRadius: 'var(--border-radius)', background: 'var(--gmp-surface)', color: 'var(--gmp-text)' }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1215,20 +1317,20 @@ const ProdutoForm = () => {
               {formData.familia_produto === 'Hélices e Acessórios' && (
                 <div className="form-group" style={{ marginBottom: '30px' }}>
                   <label style={{ marginBottom: '15px', display: 'block' }}>Tratamento Térmico *</label>
-                  <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                  <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
                     {['Aplicado', 'Não Aplicado'].map(opcao => (
                       <div
                         key={opcao}
-                        className={`tecnica-card ${especificacoesTecnicas.tratamento_termico === opcao ? 'selecionado' : ''}`}
+                        className={`tecnica-card ${especificacoesTecnicas.tratamento_termico === opcao && !outroAtivo.tratamento_termico ? 'selecionado' : ''}`}
                         onClick={() => {
+                          setOutro('tratamento_termico', false);
                           handleEspecificacaoChange('tratamento_termico', opcao);
-                          // Limpar campo específico se mudar para "Não Aplicado"
                           if (opcao === 'Não Aplicado') {
                             handleEspecificacaoChange('tratamento_termico_especifico', '');
                           }
                         }}
                       >
-                        {especificacoesTecnicas.tratamento_termico === opcao && (
+                        {especificacoesTecnicas.tratamento_termico === opcao && !outroAtivo.tratamento_termico && (
                           <div className="tecnica-card-check">
                             <FiCheck />
                           </div>
@@ -1238,9 +1340,27 @@ const ProdutoForm = () => {
                         </div>
                       </div>
                     ))}
+                    <div
+                      className={`tecnica-card tecnica-card-outro ${outroAtivo.tratamento_termico ? 'selecionado' : ''}`}
+                      onClick={() => { setOutro('tratamento_termico', true); handleEspecificacaoChange('tratamento_termico', especificacoesTecnicas.tratamento_termico || ''); handleEspecificacaoChange('tratamento_termico_especifico', ''); }}
+                    >
+                      {outroAtivo.tratamento_termico && <div className="tecnica-card-check"><FiCheck /></div>}
+                      <div className="tecnica-card-content"><strong>OUTRO</strong></div>
+                    </div>
                   </div>
-                  {/* Campo para especificar o tratamento se for "Aplicado" */}
-                  {especificacoesTecnicas.tratamento_termico === 'Aplicado' && (
+                  {outroAtivo.tratamento_termico && (
+                    <div style={{ marginTop: '12px' }}>
+                      <input
+                        type="text"
+                        value={especificacoesTecnicas.tratamento_termico || ''}
+                        onChange={(e) => handleEspecificacaoChange('tratamento_termico', e.target.value)}
+                        placeholder="Descreva o tratamento térmico"
+                        style={{ width: '100%', padding: 'var(--spacing-md)', border: '2px solid var(--gmp-border)', borderRadius: 'var(--border-radius)', background: 'var(--gmp-surface)', color: 'var(--gmp-text)' }}
+                      />
+                    </div>
+                  )}
+                  {/* Campo para especificar o tratamento se for "Aplicado" (não OUTRO) */}
+                  {especificacoesTecnicas.tratamento_termico === 'Aplicado' && !outroAtivo.tratamento_termico && (
                     <div style={{ marginTop: '15px' }}>
                       <label style={{ marginBottom: '8px', display: 'block', fontSize: '14px', color: 'var(--gmp-text-light)' }}>
                         Qual tratamento foi aplicado? *
@@ -1268,20 +1388,20 @@ const ProdutoForm = () => {
               {formData.familia_produto === 'Hélices e Acessórios' && (
                 <div className="form-group" style={{ marginBottom: '30px' }}>
                   <label style={{ marginBottom: '15px', display: 'block' }}>Velocidade de Trabalho *</label>
-                  <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                  <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
                     {['Informado', 'Não informado'].map(opcao => (
                       <div
                         key={opcao}
-                        className={`tecnica-card ${especificacoesTecnicas.velocidade_trabalho === opcao ? 'selecionado' : ''}`}
+                        className={`tecnica-card ${especificacoesTecnicas.velocidade_trabalho === opcao && !outroAtivo.velocidade_trabalho ? 'selecionado' : ''}`}
                         onClick={() => {
+                          setOutro('velocidade_trabalho', false);
                           handleEspecificacaoChange('velocidade_trabalho', opcao);
-                          // Limpar campo específico se mudar para "Não informado"
                           if (opcao === 'Não informado') {
                             handleEspecificacaoChange('velocidade_trabalho_especifica', '');
                           }
                         }}
                       >
-                        {especificacoesTecnicas.velocidade_trabalho === opcao && (
+                        {especificacoesTecnicas.velocidade_trabalho === opcao && !outroAtivo.velocidade_trabalho && (
                           <div className="tecnica-card-check">
                             <FiCheck />
                           </div>
@@ -1291,9 +1411,27 @@ const ProdutoForm = () => {
                         </div>
                       </div>
                     ))}
+                    <div
+                      className={`tecnica-card tecnica-card-outro ${outroAtivo.velocidade_trabalho ? 'selecionado' : ''}`}
+                      onClick={() => { setOutro('velocidade_trabalho', true); handleEspecificacaoChange('velocidade_trabalho', especificacoesTecnicas.velocidade_trabalho || ''); handleEspecificacaoChange('velocidade_trabalho_especifica', ''); }}
+                    >
+                      {outroAtivo.velocidade_trabalho && <div className="tecnica-card-check"><FiCheck /></div>}
+                      <div className="tecnica-card-content"><strong>OUTRO</strong></div>
+                    </div>
                   </div>
-                  {/* Campo para especificar a velocidade se for "Informado" */}
-                  {especificacoesTecnicas.velocidade_trabalho === 'Informado' && (
+                  {outroAtivo.velocidade_trabalho && (
+                    <div style={{ marginTop: '12px' }}>
+                      <input
+                        type="text"
+                        value={especificacoesTecnicas.velocidade_trabalho || ''}
+                        onChange={(e) => handleEspecificacaoChange('velocidade_trabalho', e.target.value)}
+                        placeholder="Descreva a velocidade de trabalho"
+                        style={{ width: '100%', padding: 'var(--spacing-md)', border: '2px solid var(--gmp-border)', borderRadius: 'var(--border-radius)', background: 'var(--gmp-surface)', color: 'var(--gmp-text)' }}
+                      />
+                    </div>
+                  )}
+                  {/* Campo para especificar a velocidade se for "Informado" (não OUTRO) */}
+                  {especificacoesTecnicas.velocidade_trabalho === 'Informado' && !outroAtivo.velocidade_trabalho && (
                     <div style={{ marginTop: '15px' }}>
                       <label style={{ marginBottom: '8px', display: 'block', fontSize: '14px', color: 'var(--gmp-text-light)' }}>
                         Qual a velocidade de trabalho? *
@@ -1317,42 +1455,6 @@ const ProdutoForm = () => {
                 </div>
               )}
 
-              {/* Furação - Apenas para Hélices e Acessórios */}
-              {formData.familia_produto === 'Hélices e Acessórios' && (
-                <div className="form-group" style={{ marginBottom: '30px' }}>
-                  <label style={{ marginBottom: '15px', display: 'block' }}>Furação *</label>
-                  <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: '1fr' }}>
-                    <div
-                      className={`tecnica-card ${especificacoesTecnicas.furacao === 'Padrão: 20mm central' ? 'selecionado' : ''}`}
-                      onClick={() => handleEspecificacaoChange('furacao', 'Padrão: 20mm central')}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      {especificacoesTecnicas.furacao === 'Padrão: 20mm central' && (
-                        <div className="tecnica-card-check">
-                          <FiCheck />
-                        </div>
-                      )}
-                      <div className="tecnica-card-content">
-                        <strong>Padrão: 20mm central</strong>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Observação sobre furação */}
-                  <div style={{ 
-                    marginTop: '12px', 
-                    padding: '12px 15px', 
-                    background: '#fff9e6', 
-                    border: '1px solid #ffd700', 
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    color: '#856404',
-                    lineHeight: '1.6'
-                  }}>
-                    <strong style={{ display: 'block', marginBottom: '4px', color: '#856404' }}>ℹ️ Observação:</strong>
-                    Caso seja necessário mudar essa furação, mudar na proposta diretamente para o cliente.
-                  </div>
-                </div>
-              )}
             </>
           )}
 

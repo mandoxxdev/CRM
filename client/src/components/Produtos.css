@@ -237,6 +237,29 @@
   box-shadow: var(--shadow-lg);
 }
 
+/* Célula Nome com descritivo técnico abaixo */
+.produtos .produto-nome-cell {
+  max-width: 320px;
+  vertical-align: top;
+}
+
+.produtos .produto-nome-texto {
+  font-weight: 500;
+  color: var(--gmp-text);
+  margin-bottom: 2px;
+}
+
+.produtos .produto-nome-descritivo {
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 
 
 
