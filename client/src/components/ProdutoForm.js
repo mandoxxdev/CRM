@@ -1270,10 +1270,9 @@ const ProdutoForm = () => {
                 )}
               </div>
 
-              {/* Função - Apenas para Hélices e Acessórios */}
-              {formData.familia_produto === 'Hélices e Acessórios' && (
-                <div className="form-group" style={{ marginBottom: '30px' }}>
-                  <label style={{ marginBottom: '15px', display: 'block' }}>Função *</label>
+              {/* Função - Discos e Acessórios */}
+              <div className="form-group" style={{ marginBottom: '30px' }}>
+                <label style={{ marginBottom: '15px', display: 'block' }}>Função *</label>
                   <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
                     {['Alto nível de Cisalhamento', 'Homogenização'].map(opcao => (
                       <div
@@ -1311,12 +1310,10 @@ const ProdutoForm = () => {
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* Tratamento Térmico - Apenas para Hélices e Acessórios */}
-              {formData.familia_produto === 'Hélices e Acessórios' && (
-                <div className="form-group" style={{ marginBottom: '30px' }}>
-                  <label style={{ marginBottom: '15px', display: 'block' }}>Tratamento Térmico *</label>
+              {/* Tratamento Térmico - Discos e Acessórios */}
+              <div className="form-group" style={{ marginBottom: '30px' }}>
+                <label style={{ marginBottom: '15px', display: 'block' }}>Tratamento Térmico *</label>
                   <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
                     {['Aplicado', 'Não Aplicado'].map(opcao => (
                       <div
@@ -1382,12 +1379,10 @@ const ProdutoForm = () => {
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* Velocidade de Trabalho - Apenas para Hélices e Acessórios */}
-              {formData.familia_produto === 'Hélices e Acessórios' && (
-                <div className="form-group" style={{ marginBottom: '30px' }}>
-                  <label style={{ marginBottom: '15px', display: 'block' }}>Velocidade de Trabalho *</label>
+              {/* Velocidade de Trabalho - Discos e Acessórios */}
+              <div className="form-group" style={{ marginBottom: '30px' }}>
+                <label style={{ marginBottom: '15px', display: 'block' }}>Velocidade de Trabalho *</label>
                   <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
                     {['Informado', 'Não informado'].map(opcao => (
                       <div
@@ -1453,7 +1448,6 @@ const ProdutoForm = () => {
                     </div>
                   )}
                 </div>
-              )}
 
             </>
           )}

@@ -108,6 +108,24 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     } catch (e) { return ''; }
   };
 
+  // Descritivo técnico (material, espessura, etc.) para exibir no card
+  const getDescritivoTecnico = (produto) => {
+    let spec = {};
+    try {
+      const raw = produto.especificacoes_tecnicas;
+      if (raw) spec = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (_) {}
+    const parts = [];
+    if (spec.material_contato) parts.push(`Material: ${spec.material_contato}`);
+    if (spec.espessura) parts.push(`Espessura: ${spec.espessura}`);
+    if (spec.acabamento) parts.push(`Acabamento: ${spec.acabamento}`);
+    if (spec.diametro) parts.push(`Diâmetro: ${spec.diametro}`);
+    if (spec.funcao) parts.push(`Função: ${spec.funcao}`);
+    if (spec.tratamento_termico) parts.push(`Trat. Térmico: ${spec.tratamento_termico}`);
+    if (spec.velocidade_trabalho) parts.push(`Velocidade: ${spec.velocidade_trabalho}`);
+    return parts.length ? parts.join(' • ') : null;
+  };
+
   const limparFiltros = () => {
     setSearchTerm('');
     setFilterFamilia('');
@@ -268,11 +286,17 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                       <div className="produto-nome">{produto.nome}</div>
                       {produto.descricao && (
                         <div className="produto-descricao" title={produto.descricao}>
-                          {produto.descricao.length > 60 
-                            ? produto.descricao.substring(0, 60) + '...' 
-                            : produto.descricao}
+                          {produto.descricao}
                         </div>
                       )}
+                      {(() => {
+                        const descritivoTecnico = getDescritivoTecnico(produto);
+                        return descritivoTecnico ? (
+                          <div className="produto-descritivo-tecnico" title={descritivoTecnico}>
+                            {descritivoTecnico}
+                          </div>
+                        ) : null;
+                      })()}
                       {getClassificacaoArea(produto) && (
                         <div className="produto-classificacao-area-badge" data-base={getClassificacaoArea(produto).toUpperCase().includes('ÁGUA') ? 'agua' : 'solvente'}>
                           {getClassificacaoArea(produto)}

@@ -377,20 +377,27 @@
   font-weight: 600;
   color: var(--gmp-text);
   line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .produto-descricao {
   font-size: 13px;
   color: var(--gmp-text-light);
   line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.produto-descritivo-tecnico {
+  font-size: 12px;
+  color: var(--gmp-text-light);
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+  padding: 6px 0 0 0;
+  border-top: 1px solid var(--gmp-border);
+  margin-top: 2px;
 }
 
 .produto-meta {
