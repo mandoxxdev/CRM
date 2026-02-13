@@ -12,10 +12,9 @@
   transform: translateZ(0); /* Force GPU acceleration */
 }
 
-/* Faixa de logos - Clientes que confiam na GMP (rolagem contínua) */
+/* Faixa de logos - Clientes que confiam na GMP (rolagem contínua) - bem no topo */
 .dashboard-clientes-confiam {
-  margin: 0 calc(-1 * var(--spacing-xl));
-  margin-bottom: var(--spacing-xl);
+  margin: calc(-1 * var(--spacing-xl)) calc(-1 * var(--spacing-xl)) var(--spacing-xl);
   padding: var(--spacing-lg) 0;
   background: linear-gradient(180deg, rgba(0, 102, 204, 0.04) 0%, transparent 100%);
   border-bottom: 1px solid var(--gmp-border);
