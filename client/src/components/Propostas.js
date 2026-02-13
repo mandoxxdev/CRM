@@ -117,7 +117,18 @@ const Propostas = () => {
 
       const propostasRes = await api.get('/propostas', { params });
       if (loadDataRequestId.current !== currentId) return;
-      const propostasData = Array.isArray(propostasRes.data) ? propostasRes.data : [];
+      let propostasData = Array.isArray(propostasRes.data) ? propostasRes.data : [];
+      // Filtro local como garantia (número, título, razão social, nome fantasia)
+      if (searchVal) {
+        const term = searchVal.toLowerCase();
+        propostasData = propostasData.filter((p) => {
+          const num = (p.numero_proposta || '').toLowerCase();
+          const tit = (p.titulo || '').toLowerCase();
+          const cliente = (p.cliente_nome || '').toLowerCase();
+          const fantasia = (p.cliente_nome_fantasia || '').toLowerCase();
+          return num.includes(term) || tit.includes(term) || cliente.includes(term) || fantasia.includes(term);
+        });
+      }
       setPropostas(propostasData);
 
       // Verificar aprovações para propostas com desconto > 5%
