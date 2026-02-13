@@ -2370,7 +2370,12 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
   const searchTrim = typeof search === 'string' ? search.trim() : '';
   if (searchTrim) {
     const searchTerm = `%${searchTrim}%`;
-    query += ' AND (pr.numero_proposta LIKE ? OR pr.titulo LIKE ? OR COALESCE(c.razao_social, "") LIKE ? OR COALESCE(c.nome_fantasia, "") LIKE ?)';
+    query += ` AND (
+      LOWER(COALESCE(pr.numero_proposta, "")) LIKE LOWER(?) OR
+      LOWER(COALESCE(pr.titulo, "")) LIKE LOWER(?) OR
+      LOWER(COALESCE(c.razao_social, "")) LIKE LOWER(?) OR
+      LOWER(COALESCE(c.nome_fantasia, "")) LIKE LOWER(?)
+    )`;
     params.push(searchTerm, searchTerm, searchTerm, searchTerm);
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
@@ -25,6 +25,7 @@ const Propostas = () => {
   const [itensCache, setItensCache] = useState({});
   const [loadingItensId, setLoadingItensId] = useState(null);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // { left, top } para posicionar o popover
+  const loadDataRequestId = useRef(0);
 
   // Monta o descritivo de um item (material, espessura, etc.) a partir de especificacoes_tecnicas
   const getDescritivoItem = (item) => {
@@ -105,18 +106,20 @@ const Propostas = () => {
   };
 
   const loadData = async () => {
+    const currentId = loadDataRequestId.current + 1;
+    loadDataRequestId.current = currentId;
     setLoading(true);
     try {
-      // Carregar propostas e usuários, mas não falhar se usuários der erro
       const params = {};
       if (filtroUsuario) params.responsavel_id = filtroUsuario;
       const searchVal = typeof search === 'string' ? search.trim() : '';
       if (searchVal) params.search = searchVal;
 
       const propostasRes = await api.get('/propostas', { params });
+      if (loadDataRequestId.current !== currentId) return;
       const propostasData = Array.isArray(propostasRes.data) ? propostasRes.data : [];
       setPropostas(propostasData);
-      
+
       // Verificar aprovações para propostas com desconto > 5%
       const aprovacoesPromises = propostasData
         .filter(p => p.margem_desconto > 5)
@@ -126,26 +129,29 @@ const Propostas = () => {
         });
       
       const aprovacoesResults = await Promise.all(aprovacoesPromises);
+      if (loadDataRequestId.current !== currentId) return;
       const aprovacoesMapTemp = {};
       aprovacoesResults.forEach(({ propostaId, temAprovacao }) => {
         aprovacoesMapTemp[propostaId] = temAprovacao;
       });
       setAprovacoesMap(aprovacoesMapTemp);
-      
-      // Tentar carregar usuários, mas não bloquear se der erro
+
       try {
         const usuariosRes = await api.get('/usuarios');
+        if (loadDataRequestId.current !== currentId) return;
         setUsuarios((usuariosRes.data || []).filter(u => u.ativo !== 0 && u.ativo !== false));
       } catch (error) {
+        if (loadDataRequestId.current !== currentId) return;
         console.warn('⚠️ Erro ao carregar usuários (não crítico):', error);
         setUsuarios([]);
       }
       } catch (error) {
+        if (loadDataRequestId.current !== currentId) return;
         console.error('❌ Erro ao carregar dados:', error);
         console.error('❌ Detalhes do erro:', error.response?.data);
         toast.error('Erro ao carregar propostas. Verifique o console para mais detalhes.');
       } finally {
-        setLoading(false);
+        if (loadDataRequestId.current === currentId) setLoading(false);
       }
   };
 
