@@ -107,22 +107,14 @@ const Propostas = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      console.log('🔄 Carregando propostas...', { filtroUsuario, search });
       // Carregar propostas e usuários, mas não falhar se usuários der erro
       const params = {};
       if (filtroUsuario) params.responsavel_id = filtroUsuario;
-      if (search) params.search = search;
-      
+      const searchVal = typeof search === 'string' ? search.trim() : '';
+      if (searchVal) params.search = searchVal;
+
       const propostasRes = await api.get('/propostas', { params });
-      console.log('📊 Propostas recebidas:', propostasRes.data?.length || 0);
-      console.log('📄 Dados das propostas:', propostasRes.data);
-      console.log('📄 Tipo de dados:', typeof propostasRes.data);
-      console.log('📄 É array?', Array.isArray(propostasRes.data));
-      
-      const propostasData = propostasRes.data || [];
-      console.log('📄 Propostas após processamento:', propostasData);
-      console.log('📄 Tamanho do array:', propostasData.length);
-      
+      const propostasData = Array.isArray(propostasRes.data) ? propostasRes.data : [];
       setPropostas(propostasData);
       
       // Verificar aprovações para propostas com desconto > 5%
@@ -263,22 +255,12 @@ const Propostas = () => {
   };
 
 
-  // Debug: verificar estado atual
-  console.log('🎨 Renderizando componente Propostas');
-  console.log('📊 Estado propostas:', propostas);
-  console.log('📊 Tamanho do array propostas:', propostas.length);
-  console.log('📊 É array?', Array.isArray(propostas));
-
   return (
     <div className="propostas">
       <div className="page-header">
         <div>
           <h1>Propostas</h1>
           <p>Gestão de propostas comerciais</p>
-          {/* Debug visual */}
-          <small style={{ color: '#666', fontSize: '12px' }}>
-            Debug: {propostas.length} propostas no estado | Array: {Array.isArray(propostas) ? 'Sim' : 'Não'}
-          </small>
         </div>
         <div className="header-actions">
           <button onClick={handleExportExcel} className="btn-secondary" title="Exportar para Excel (Ctrl+E)">
@@ -302,7 +284,7 @@ const Propostas = () => {
           <FiSearch />
           <input
             type="text"
-            placeholder="Buscar por número, título, cliente..."
+            placeholder="Buscar por número, título, razão social ou nome fantasia..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -350,9 +332,7 @@ const Propostas = () => {
               </tr>
             ) : (
               Array.isArray(propostas) ? (
-                propostas.map(proposta => {
-                  console.log('🔄 Renderizando proposta:', proposta.id, proposta.numero_proposta);
-                  return (
+                propostas.map(proposta => (
                     <tr key={proposta.id}>
                       <td><strong>{proposta.numero_proposta || 'N/A'}</strong></td>
                       <td className="proposta-titulo-cell">
@@ -377,7 +357,12 @@ const Propostas = () => {
                           )}
                         </button>
                       </td>
-                      <td>{proposta.cliente_nome || 'Cliente não encontrado'}</td>
+                      <td>
+                        <span className="cliente-razao">{proposta.cliente_nome || 'Cliente não encontrado'}</span>
+                        {proposta.cliente_nome_fantasia && proposta.cliente_nome_fantasia !== proposta.cliente_nome && (
+                          <span className="cliente-fantasia"> ({proposta.cliente_nome_fantasia})</span>
+                        )}
+                      </td>
                       <td>{formatCurrency(proposta.valor_total || 0)}</td>
                       <td>
                         {proposta.validade
@@ -480,8 +465,7 @@ const Propostas = () => {
                         </div>
                       </td>
                     </tr>
-                  );
-                })
+                ))
               ) : (
                 <tr>
                   <td colSpan="8" className="no-data" style={{ color: 'red' }}>

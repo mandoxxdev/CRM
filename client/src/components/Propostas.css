@@ -82,6 +82,11 @@
   color: var(--gmp-text);
 }
 
+.propostas .cliente-fantasia {
+  color: var(--gmp-text-light);
+  font-size: 0.9em;
+}
+
 .propostas .page-header {
   display: flex;
   justify-content: space-between;

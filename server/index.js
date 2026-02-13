@@ -2338,7 +2338,7 @@ app.delete('/api/projetos/:id', authenticateToken, (req, res) => {
 // ========== ROTAS DE PROPOSTAS ==========
 app.get('/api/propostas', authenticateToken, (req, res) => {
   const { cliente_id, status, created_by, responsavel_id, search } = req.query;
-  let query = `SELECT pr.*, c.razao_social as cliente_nome, 
+  let query = `SELECT pr.*, c.razao_social as cliente_nome, c.nome_fantasia as cliente_nome_fantasia,
                u1.nome as created_by_nome, u2.nome as responsavel_nome
                FROM propostas pr
                LEFT JOIN clientes c ON pr.cliente_id = c.id
@@ -2367,9 +2367,10 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
     params.push(responsavel_id, responsavel_id);
   }
 
-  if (search) {
-    query += ' AND (pr.numero_proposta LIKE ? OR pr.titulo LIKE ? OR c.razao_social LIKE ? OR c.nome_fantasia LIKE ?)';
-    const searchTerm = `%${search}%`;
+  const searchTrim = typeof search === 'string' ? search.trim() : '';
+  if (searchTrim) {
+    const searchTerm = `%${searchTrim}%`;
+    query += ' AND (pr.numero_proposta LIKE ? OR pr.titulo LIKE ? OR COALESCE(c.razao_social, "") LIKE ? OR COALESCE(c.nome_fantasia, "") LIKE ?)';
     params.push(searchTerm, searchTerm, searchTerm, searchTerm);
   }
 
