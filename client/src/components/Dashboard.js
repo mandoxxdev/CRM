@@ -21,6 +21,7 @@ const Dashboard = () => {
   const [historico, setHistorico] = useState([]);
   const [dadosAvancados, setDadosAvancados] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [clientLogos, setClientLogos] = useState([]);
   const [animatedStats, setAnimatedStats] = useState({
     totalClientes: 0,
     totalProjetos: 0
@@ -91,6 +92,18 @@ const Dashboard = () => {
       window.removeEventListener('resize', handleResize);
       if (timeoutId) cancelAnimationFrame(timeoutId);
     };
+  }, []);
+
+  useEffect(() => {
+    const loadLogos = async () => {
+      try {
+        const res = await api.get('/clientes/logos', { params: { limit: 300 } });
+        setClientLogos(res.data?.logos || []);
+      } catch (_) {
+        setClientLogos([]);
+      }
+    };
+    loadLogos();
   }, []);
 
   useEffect(() => {
@@ -449,8 +462,33 @@ const Dashboard = () => {
     });
   };
 
+  const baseURL = api.defaults.baseURL || '';
+  const getLogoUrl = (logoUrl) => {
+    if (!logoUrl) return '';
+    return logoUrl.startsWith('http') ? logoUrl : `${baseURL}/uploads/logos/${logoUrl}`;
+  };
+
   return (
     <div className="dashboard premium-dashboard">
+      {clientLogos.length > 0 && (
+        <section className="dashboard-clientes-confiam">
+          <p className="dashboard-clientes-confiam-titulo">Alguns clientes que confiam na GMP</p>
+          <div className="dashboard-clientes-confiam-wrap">
+            <div className="dashboard-clientes-confiam-track">
+              {[...clientLogos, ...clientLogos, ...clientLogos].map((c, i) => (
+                <div key={`${c.id}-${i}`} className="dashboard-clientes-confiam-item">
+                  <img
+                    src={getLogoUrl(c.logo_url)}
+                    alt={c.nome_fantasia || c.razao_social || 'Cliente'}
+                    title={c.nome_fantasia || c.razao_social}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
       <div className="dashboard-header premium-header">
         <div>
           <h1>Dashboard Executivo</h1>

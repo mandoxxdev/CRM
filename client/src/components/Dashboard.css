@@ -12,6 +12,72 @@
   transform: translateZ(0); /* Force GPU acceleration */
 }
 
+/* Faixa de logos - Clientes que confiam na GMP (rolagem contínua) */
+.dashboard-clientes-confiam {
+  margin: 0 calc(-1 * var(--spacing-xl));
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-lg) 0;
+  background: linear-gradient(180deg, rgba(0, 102, 204, 0.04) 0%, transparent 100%);
+  border-bottom: 1px solid var(--gmp-border);
+}
+
+.dashboard-clientes-confiam-titulo {
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gmp-text);
+  margin: 0 0 var(--spacing-md) 0;
+}
+
+.dashboard-clientes-confiam-wrap {
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+
+.dashboard-clientes-confiam-track {
+  display: flex;
+  align-items: center;
+  gap: 3rem;
+  width: max-content;
+  animation: dashboard-logos-scroll 45s linear infinite;
+}
+
+.dashboard-clientes-confiam-track:hover {
+  animation-play-state: paused;
+}
+
+@keyframes dashboard-logos-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-33.333%); }
+}
+
+.dashboard-clientes-confiam-item {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  min-width: 120px;
+  padding: 0 1rem;
+  filter: grayscale(100%);
+  opacity: 0.85;
+  transition: filter 0.2s, opacity 0.2s;
+}
+
+.dashboard-clientes-confiam-item:hover {
+  filter: grayscale(0%);
+  opacity: 1;
+}
+
+.dashboard-clientes-confiam-item img {
+  max-height: 100%;
+  max-width: 140px;
+  width: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
 @keyframes modernFadeIn {
   from {
     opacity: 1;
