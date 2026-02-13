@@ -5,7 +5,7 @@ import api from '../services/api';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
-  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle
+  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle, FiBox
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -147,6 +147,7 @@ const Layout = () => {
     { path: '/comercial/clientes', icon: FiUsers, label: 'Clientes' },
     { path: '/comercial/projetos', icon: FiBriefcase, label: 'Projetos' },
     { path: '/comercial/produtos', icon: FiPackage, label: 'Produtos' },
+    { path: '/comercial/produtos-3d', icon: FiBox, label: 'Produtos 3D' },
     { path: '/comercial/propostas', icon: FiFileText, label: 'Propostas' },
     { path: '/comercial/aprovacoes', icon: FiCheckCircle, label: 'Aprovações' },
     { path: '/comercial/ordens-servico', icon: FiTool, label: 'Ordens de Serviço' },

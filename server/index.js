@@ -129,6 +129,12 @@ if (!fs.existsSync(uploadsProdutosDir)) {
   fs.mkdirSync(uploadsProdutosDir, { recursive: true });
 }
 
+// Configurar diretório de uploads de Produtos 3D (PDF e modelos 3D)
+const uploadsProdutos3dDir = path.join(__dirname, 'uploads', 'produtos-3d');
+if (!fs.existsSync(uploadsProdutos3dDir)) {
+  fs.mkdirSync(uploadsProdutos3dDir, { recursive: true });
+}
+
 // Configurar diretório de uploads de logos
 const uploadsLogosDir = path.join(__dirname, 'uploads', 'logos');
 if (!fs.existsSync(uploadsLogosDir)) {
@@ -265,6 +271,31 @@ const uploadProduto = multer({
     } else {
       cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
     }
+  }
+});
+
+// Storage para Produtos 3D: PDF e modelos 3D (GLB, GLTF, OBJ)
+const storageProdutos3d = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsProdutos3dDir);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname).toLowerCase();
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
+    cb(null, `produto3d_${timestamp}_${safeName}${ext}`);
+  }
+});
+
+const uploadProduto3d = multer({
+  storage: storageProdutos3d,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowed = ['.pdf', '.glb', '.gltf', '.obj'];
+    if (allowed.includes(ext)) return cb(null, true);
+    cb(new Error('Aceito apenas PDF ou modelos 3D (GLB, GLTF, OBJ). Para visualização 3D interativa use GLB/GLTF.'));
   }
 });
 
@@ -635,6 +666,16 @@ function initializeDatabase() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (proposta_id) REFERENCES propostas(id) ON DELETE CASCADE,
     FOREIGN KEY (criado_por) REFERENCES usuarios(id)
+  )`);
+
+  // Produtos 3D (nome + arquivo PDF ou modelo 3D)
+  db.run(`CREATE TABLE IF NOT EXISTS produtos_3d (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    arquivo_nome TEXT,
+    arquivo_tipo TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
   // Oportunidades
@@ -9539,6 +9580,83 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
   });
 });
 
+// ========== ROTAS DE PRODUTOS 3D ==========
+app.get('/api/produtos-3d', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM produtos_3d ORDER BY nome', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/produtos-3d/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.get('SELECT * FROM produtos_3d WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Produto 3D não encontrado' });
+    res.json(row);
+  });
+});
+
+app.post('/api/produtos-3d', authenticateToken, uploadProduto3d.single('arquivo'), (req, res) => {
+  const nome = (req.body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+  if (!req.file) return res.status(400).json({ error: 'Envie um arquivo (PDF ou modelo 3D: GLB, GLTF, OBJ)' });
+  const arquivo_nome = req.file.filename;
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  const arquivo_tipo = ext === '.pdf' ? 'pdf' : '3d';
+  db.run(
+    'INSERT INTO produtos_3d (nome, arquivo_nome, arquivo_tipo) VALUES (?, ?, ?)',
+    [nome.toUpperCase(), arquivo_nome, arquivo_tipo],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID, nome: nome.toUpperCase(), arquivo_nome, arquivo_tipo });
+    }
+  );
+});
+
+app.put('/api/produtos-3d/:id', authenticateToken, uploadProduto3d.single('arquivo'), (req, res) => {
+  const { id } = req.params;
+  const nome = (req.body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+  db.get('SELECT * FROM produtos_3d WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Produto 3D não encontrado' });
+    let arquivo_nome = row.arquivo_nome;
+    let arquivo_tipo = row.arquivo_tipo;
+    if (req.file) {
+      if (row.arquivo_nome && fs.existsSync(path.join(uploadsProdutos3dDir, row.arquivo_nome))) {
+        try { fs.unlinkSync(path.join(uploadsProdutos3dDir, row.arquivo_nome)); } catch (_) {}
+      }
+      arquivo_nome = req.file.filename;
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      arquivo_tipo = ext === '.pdf' ? 'pdf' : '3d';
+    }
+    db.run(
+      'UPDATE produtos_3d SET nome = ?, arquivo_nome = ?, arquivo_tipo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [nome.toUpperCase(), arquivo_nome, arquivo_tipo, id],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id, nome: nome.toUpperCase(), arquivo_nome, arquivo_tipo });
+      }
+    );
+  });
+});
+
+app.delete('/api/produtos-3d/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.get('SELECT * FROM produtos_3d WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Produto 3D não encontrado' });
+    if (row.arquivo_nome && fs.existsSync(path.join(uploadsProdutos3dDir, row.arquivo_nome))) {
+      try { fs.unlinkSync(path.join(uploadsProdutos3dDir, row.arquivo_nome)); } catch (_) {}
+    }
+    db.run('DELETE FROM produtos_3d WHERE id = ?', [id], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Produto 3D excluído' });
+    });
+  });
+});
+
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
   var ativo = req.query.ativo;
@@ -12461,6 +12579,9 @@ app.use('/api/uploads/cotacoes', express.static(uploadsDir));
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE PRODUTOS ==========
 // Servir arquivos estáticos de imagens de produtos
 app.use('/api/uploads/produtos', express.static(uploadsProdutosDir));
+
+// ========== ROTAS DE UPLOAD PRODUTOS 3D ==========
+app.use('/api/uploads/produtos-3d', express.static(uploadsProdutos3dDir));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE LOGOS ==========
 // Servir arquivos estáticos de logos

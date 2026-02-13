@@ -41,6 +41,15 @@ const Propostas = () => {
     if (spec.funcao) parts.push(`Função: ${spec.funcao}`);
     if (spec.tratamento_termico) parts.push(`Trat. Térmico: ${spec.tratamento_termico}`);
     if (spec.velocidade_trabalho) parts.push(`Velocidade: ${spec.velocidade_trabalho}`);
+    if (spec.ccm_incluso) parts.push(`CCM: ${spec.ccm_incluso}`);
+    if (spec.ccm_tensao) parts.push(`Tensão CCM: ${spec.ccm_tensao}`);
+    if (spec.celula_carga) parts.push(`Célula de Carga: ${spec.celula_carga}`);
+    if (spec.plc_ihm) parts.push(`PLC/IHM: ${spec.plc_ihm}`);
+    if (spec.valvula_saida_tanque) parts.push(`Válvula Saída: ${spec.valvula_saida_tanque}`);
+    const totalCV = [spec.motor_central_cv, spec.motoredutor_central_cv, spec.motores_laterais_cv]
+      .reduce((s, v) => s + (parseFloat(v) || 0), 0);
+    if (totalCV > 0) parts.push(`Potência: ${totalCV.toFixed(1).replace('.', ',')} CV`);
+    if (spec.classificacao_area) parts.push(`Class. Área: ${spec.classificacao_area}`);
     return parts.length ? parts.join(' • ') : null;
   };
 

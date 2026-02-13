@@ -67,7 +67,7 @@ const Produtos = () => {
     }).format(value || 0);
   };
 
-  // Monta o descritivo técnico (material, espessura, etc.) a partir de especificacoes_tecnicas
+  // Monta o descritivo técnico (material, espessura, etc. para discos; CCM, potência, etc. para equipamentos)
   const getDescritivoTecnico = (produto) => {
     let spec = {};
     try {
@@ -75,6 +75,7 @@ const Produtos = () => {
       if (raw) spec = typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch (_) {}
     const parts = [];
+    // Campos comuns / discos e acessórios
     if (spec.material_contato) parts.push(`Material: ${spec.material_contato}`);
     if (spec.espessura) parts.push(`Espessura: ${spec.espessura}`);
     if (spec.acabamento) parts.push(`Acabamento: ${spec.acabamento}`);
@@ -82,6 +83,17 @@ const Produtos = () => {
     if (spec.funcao) parts.push(`Função: ${spec.funcao}`);
     if (spec.tratamento_termico) parts.push(`Trat. Térmico: ${spec.tratamento_termico}`);
     if (spec.velocidade_trabalho) parts.push(`Velocidade: ${spec.velocidade_trabalho}`);
+    // Campos de equipamento
+    if (spec.ccm_incluso) parts.push(`CCM: ${spec.ccm_incluso}`);
+    if (spec.ccm_tensao) parts.push(`Tensão CCM: ${spec.ccm_tensao}`);
+    if (spec.celula_carga) parts.push(`Célula de Carga: ${spec.celula_carga}`);
+    if (spec.plc_ihm) parts.push(`PLC/IHM: ${spec.plc_ihm}`);
+    if (spec.valvula_saida_tanque) parts.push(`Válvula Saída: ${spec.valvula_saida_tanque}`);
+    const totalCV = [spec.motor_central_cv, spec.motoredutor_central_cv, spec.motores_laterais_cv]
+      .reduce((s, v) => s + (parseFloat(v) || 0), 0);
+    if (totalCV > 0) parts.push(`Potência: ${totalCV.toFixed(1).replace('.', ',')} CV`);
+    const classArea = spec.classificacao_area || produto.classificacao_area;
+    if (classArea) parts.push(`Class. Área: ${classArea}`);
     return parts.length ? parts.join(' • ') : null;
   };
 
