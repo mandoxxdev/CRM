@@ -118,4 +118,237 @@
   }
 }
 
+/* ========== Dashboard Painel Financeiro (estilo print) ========== */
+.financeiro-dashboard {
+  padding: 0;
+}
+
+.dashboard-loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--gmp-text-light);
+}
+
+.dashboard-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-header h1 {
+  font-size: 1.75rem;
+  color: var(--gmp-text);
+  margin: 0 0 4px 0;
+}
+
+.dashboard-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--gmp-text-light);
+}
+
+.dashboard-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-date-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 2px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-surface);
+}
+
+.dashboard-date-picker select {
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  color: var(--gmp-text);
+  cursor: pointer;
+}
+
+.btn-export-report {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--gmp-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-export-report:hover {
+  opacity: 0.9;
+}
+
+.dashboard-cards-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .dashboard-cards-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-card {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.dashboard-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.dashboard-card-icon.green {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4CAF50;
+}
+
+.dashboard-card-icon.red {
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
+}
+
+.dashboard-card-icon.blue {
+  background: rgba(33, 150, 243, 0.15);
+  color: #2196F3;
+}
+
+.dashboard-card-icon.orange {
+  background: rgba(255, 152, 0, 0.15);
+  color: #FF9800;
+}
+
+.dashboard-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-card-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gmp-text-light);
+  margin-bottom: 4px;
+}
+
+.dashboard-card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gmp-text);
+  margin-bottom: 4px;
+}
+
+.dashboard-card-variacao {
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dashboard-card-variacao.positive {
+  color: #4CAF50;
+}
+
+.dashboard-card-variacao.negative {
+  color: #f44336;
+}
+
+.dashboard-card-detail {
+  font-size: 0.85rem;
+  color: var(--gmp-text-light);
+  margin-top: 4px;
+}
+
+.dashboard-charts-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dashboard-chart-card {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-chart-card h3 {
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gmp-text);
+}
+
+.chart-subtitle {
+  margin: 0 0 12px 0;
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
+}
+
+.financeiro-relatorios-placeholder {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--gmp-text-light);
+  background: var(--gmp-surface);
+  border: 1px dashed var(--gmp-border);
+  border-radius: 12px;
+}
+
+.financeiro-relatorios-placeholder svg {
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.financeiro-relatorios-placeholder p {
+  margin: 0;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 

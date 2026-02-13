@@ -15,7 +15,6 @@ import ConfigTemplateProposta from './components/ConfigTemplateProposta';
 import EditorTemplateProposta from './components/EditorTemplateProposta';
 import Produtos from './components/Produtos';
 import ProdutoForm from './components/ProdutoForm';
-import Produtos3D from './components/Produtos3D';
 import Atividades from './components/Atividades';
 import Relatorios from './components/Relatorios';
 import MaquinasVendidas from './components/MaquinasVendidas';
@@ -179,7 +178,6 @@ function AppRoutes() {
         <Route path="produtos" element={<Produtos />} />
         <Route path="produtos/novo" element={<ProdutoForm />} />
         <Route path="produtos/editar/:id" element={<ProdutoForm />} />
-        <Route path="produtos-3d" element={<Produtos3D />} />
         <Route path="atividades" element={<Atividades />} />
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="maquinas-vendidas" element={<MaquinasVendidas />} />
@@ -240,6 +238,16 @@ function AppRoutes() {
           </ProtectedModuleRoute>
         } />
         <Route path="fluxo-caixa" element={
+          <ProtectedModuleRoute modulo="financeiro" nomeModulo="Financeiro">
+            <Financeiro />
+          </ProtectedModuleRoute>
+        } />
+        <Route path="dashboard" element={
+          <ProtectedModuleRoute modulo="financeiro" nomeModulo="Financeiro">
+            <Financeiro />
+          </ProtectedModuleRoute>
+        } />
+        <Route path="relatorios" element={
           <ProtectedModuleRoute modulo="financeiro" nomeModulo="Financeiro">
             <Financeiro />
           </ProtectedModuleRoute>

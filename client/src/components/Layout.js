@@ -5,7 +5,7 @@ import api from '../services/api';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
-  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle, FiBox
+  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle, FiGrid
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -147,7 +147,6 @@ const Layout = () => {
     { path: '/comercial/clientes', icon: FiUsers, label: 'Clientes' },
     { path: '/comercial/projetos', icon: FiBriefcase, label: 'Projetos' },
     { path: '/comercial/produtos', icon: FiPackage, label: 'Produtos' },
-    { path: '/comercial/produtos-3d', icon: FiBox, label: 'Produtos 3D' },
     { path: '/comercial/propostas', icon: FiFileText, label: 'Propostas' },
     { path: '/comercial/aprovacoes', icon: FiCheckCircle, label: 'Aprovações' },
     { path: '/comercial/ordens-servico', icon: FiTool, label: 'Ordens de Serviço' },
@@ -164,12 +163,14 @@ const Layout = () => {
     { path: '/compras/cotacoes', icon: FiFileText2, label: 'Cotações' },
   ];
 
-  // Menu do módulo Financeiro
+  // Menu do módulo Financeiro (estilo Painel Financeiro / FinanceHub)
   const financeiroMenuItems = [
+    { path: '/financeiro/dashboard', icon: FiGrid, label: 'Dashboard' },
     { path: '/financeiro/contas-pagar', icon: FiTrendingDown, label: 'Contas a Pagar' },
     { path: '/financeiro/contas-receber', icon: FiTrendingUp, label: 'Contas a Receber' },
     { path: '/financeiro/fluxo-caixa', icon: FiBarChart2, label: 'Fluxo de Caixa' },
-    { path: '/financeiro/bancos', icon: FiCreditCard, label: 'Bancos' },
+    { path: '/financeiro/relatorios', icon: FiBarChart2, label: 'Relatórios' },
+    { path: '/financeiro/bancos', icon: FiCreditCard, label: 'Conciliação Bancária' },
   ];
 
   // Menu do módulo Operacional (Fábrica)

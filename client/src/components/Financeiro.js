@@ -1,29 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { 
-  FiPlus, FiSearch, FiEdit, FiTrash2, FiDownload, 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, PieChart, Pie, Cell
+} from 'recharts';
+import {
+  FiPlus, FiSearch, FiEdit, FiTrash2, FiDownload,
   FiDollarSign, FiTrendingUp, FiTrendingDown, FiCreditCard,
-  FiFilter, FiCalendar, FiBarChart2, FiArrowDown, FiArrowUp
+  FiFilter, FiCalendar, FiBarChart2, FiArrowDown, FiArrowUp, FiGrid
 } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
 import './Financeiro.css';
 import './Loading.css';
 
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const CORES_PIZZA = ['#2196F3', '#4CAF50', '#FF9800', '#f44336', '#9C27B0', '#00BCD4'];
+
 const Financeiro = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // Detectar seção ativa baseada na rota
+  const now = new Date();
+
   const getActiveSection = () => {
     const path = location.pathname;
+    if (path.includes('/dashboard')) return 'dashboard';
+    if (path.includes('/relatorios')) return 'relatorios';
     if (path.includes('/contas-pagar')) return 'contas_pagar';
     if (path.includes('/contas-receber')) return 'contas_receber';
     if (path.includes('/fluxo-caixa')) return 'fluxo_caixa';
     if (path.includes('/bancos')) return 'bancos';
-    return 'contas_pagar'; // Default
+    return 'dashboard';
   };
 
   const activeSection = getActiveSection();
@@ -35,6 +44,9 @@ const Financeiro = () => {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPeriodo, setFilterPeriodo] = useState('mes');
+  const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardMes, setDashboardMes] = useState(now.getMonth() + 1);
+  const [dashboardAno, setDashboardAno] = useState(now.getFullYear());
 
   const tabs = [
     { id: 'contas_pagar', label: 'Contas a Pagar', icon: FiTrendingDown },
@@ -44,15 +56,32 @@ const Financeiro = () => {
   ];
 
   useEffect(() => {
-    // Redirecionar para contas-pagar se estiver na raiz
     if (location.pathname === '/financeiro' || location.pathname === '/financeiro/') {
-      navigate('/financeiro/contas-pagar', { replace: true });
+      navigate('/financeiro/dashboard', { replace: true });
     }
   }, [location.pathname, navigate]);
 
   useEffect(() => {
-    loadData();
+    if (activeSection === 'dashboard') loadDashboard();
+  }, [activeSection, dashboardMes, dashboardAno]);
+
+  useEffect(() => {
+    if (activeSection !== 'dashboard') loadData();
   }, [activeSection, search, filterStatus, filterPeriodo]);
+
+  const loadDashboard = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/financeiro/dashboard', { params: { mes: dashboardMes, ano: dashboardAno } });
+      setDashboardData(res.data);
+    } catch (e) {
+      console.error(e);
+      toast.error('Erro ao carregar painel financeiro');
+      setDashboardData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -544,6 +573,189 @@ const Financeiro = () => {
         return '#';
     }
   };
+
+  const renderDashboard = () => {
+    if (loading || !dashboardData) {
+      return (
+        <div className="financeiro-dashboard">
+          <div className="dashboard-loading">Carregando painel...</div>
+        </div>
+      );
+    }
+    const d = dashboardData;
+    const variacao = (v) => (v >= 0 ? `+${v.toFixed(1)}%` : `${v.toFixed(1)}%`);
+
+    return (
+      <div className="financeiro-dashboard">
+        <div className="dashboard-header">
+          <div>
+            <h1>Painel Financeiro</h1>
+            <p className="dashboard-subtitle">Visão geral do desempenho financeiro - {MESES[dashboardMes - 1]} {dashboardAno}</p>
+          </div>
+          <div className="dashboard-header-actions">
+            <div className="dashboard-date-picker">
+              <FiCalendar />
+              <select value={dashboardMes} onChange={(e) => setDashboardMes(Number(e.target.value))}>
+                {MESES.map((nome, i) => (
+                  <option key={i} value={i + 1}>{nome}</option>
+                ))}
+              </select>
+              <select value={dashboardAno} onChange={(e) => setDashboardAno(Number(e.target.value))}>
+                {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <button type="button" className="btn-export-report" onClick={() => toast.info('Exportar relatório em desenvolvimento')}>
+              <FiDownload /> Exportar Relatório
+            </button>
+          </div>
+        </div>
+
+        <div className="dashboard-cards-row dashboard-cards-metric">
+          <div className="dashboard-card card-receita">
+            <div className="dashboard-card-icon green"><FiDollarSign /></div>
+            <div className="dashboard-card-content">
+              <div className="dashboard-card-label">RECEITA MENSAL</div>
+              <div className="dashboard-card-value">{formatCurrency(d.receitaMensal)}</div>
+              <div className="dashboard-card-variacao positive">
+                <FiTrendingUp size={14} /> {variacao(d.receitaVariacao)} vs. mês anterior
+              </div>
+            </div>
+          </div>
+          <div className="dashboard-card card-despesas">
+            <div className="dashboard-card-icon red"><FiCreditCard /></div>
+            <div className="dashboard-card-content">
+              <div className="dashboard-card-label">DESPESAS</div>
+              <div className="dashboard-card-value">{formatCurrency(d.despesasMensal)}</div>
+              <div className="dashboard-card-variacao negative">
+                <FiTrendingDown size={14} /> {variacao(d.despesasVariacao)} vs. mês anterior
+              </div>
+            </div>
+          </div>
+          <div className="dashboard-card card-lucro">
+            <div className="dashboard-card-icon blue"><FiTrendingUp /></div>
+            <div className="dashboard-card-content">
+              <div className="dashboard-card-label">LUCRO LÍQUIDO</div>
+              <div className="dashboard-card-value">{formatCurrency(d.lucroLiquido)}</div>
+              <div className="dashboard-card-variacao positive">
+                <FiTrendingUp size={14} /> {variacao(d.lucroVariacao)} vs. mês anterior
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-cards-row dashboard-cards-summary">
+          <div className="dashboard-card card-contas-receber">
+            <div className="dashboard-card-icon orange"><FiDollarSign /></div>
+            <div className="dashboard-card-content">
+              <div className="dashboard-card-label">CONTAS A RECEBER</div>
+              <div className="dashboard-card-value">{formatCurrency(d.contasReceber?.total)}</div>
+              <div className="dashboard-card-detail">
+                {d.contasReceber?.count || 0} contas | {d.contasReceber?.vencidas || 0} vencidas
+              </div>
+            </div>
+          </div>
+          <div className="dashboard-card card-contas-pagar">
+            <div className="dashboard-card-icon red"><FiTrendingDown /></div>
+            <div className="dashboard-card-content">
+              <div className="dashboard-card-label">CONTAS A PAGAR</div>
+              <div className="dashboard-card-value">{formatCurrency(d.contasPagar?.total)}</div>
+              <div className="dashboard-card-detail">
+                {d.contasPagar?.count || 0} contas | {d.contasPagar?.vencidas || 0} vencidas
+              </div>
+            </div>
+          </div>
+          <div className="dashboard-card card-saldo">
+            <div className="dashboard-card-icon blue"><FiCreditCard /></div>
+            <div className="dashboard-card-content">
+              <div className="dashboard-card-label">SALDO BANCÁRIO</div>
+              <div className="dashboard-card-value">{formatCurrency(d.saldoBancario)}</div>
+              {d.saldoVariacao !== undefined && d.saldoVariacao !== 0 && (
+                <div className="dashboard-card-variacao positive">
+                  <FiTrendingUp size={14} /> {variacao(d.saldoVariacao)} vs. mês anterior
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-charts-row">
+          <div className="dashboard-chart-card">
+            <h3>Receitas vs Despesas</h3>
+            <p className="chart-subtitle">Comparativo mensal do ano</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={d.chartReceitasDespesas || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                <XAxis dataKey="nome" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v) => formatCurrency(v)} labelFormatter={(l) => l} />
+                <Legend />
+                <Bar dataKey="receita" name="Receita" fill="#4CAF50" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="despesa" name="Despesa" fill="#f44336" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="dashboard-chart-card">
+            <h3>Saldo Acumulado</h3>
+            <p className="chart-subtitle">Evolução do fluxo de caixa</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={d.chartSaldo || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v) => formatCurrency(v)} />
+                <Line type="monotone" dataKey="saldo" name="Saldo" stroke="#2196F3" strokeWidth={2} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="dashboard-chart-card">
+            <h3>Despesas por Categoria</h3>
+            <p className="chart-subtitle">Distribuição do mês atual</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={(d.chartCategorias || []).map((c, i) => ({ ...c, fill: CORES_PIZZA[i % CORES_PIZZA.length] }))}
+                  dataKey="valor"
+                  nameKey="nome"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={90}
+                  label={({ nome, percentual }) => `${nome} ${percentual?.toFixed(1)}%`}
+                >
+                  {(d.chartCategorias || []).map((_, i) => (
+                    <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => formatCurrency(v)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (activeSection === 'dashboard') {
+    return <div className="financeiro">{renderDashboard()}</div>;
+  }
+
+  if (activeSection === 'relatorios') {
+    return (
+      <div className="financeiro">
+        <div className="page-header">
+          <div>
+            <h1>Relatórios Financeiros</h1>
+            <p>Relatórios e análises do módulo financeiro</p>
+          </div>
+        </div>
+        <div className="financeiro-relatorios-placeholder">
+          <FiBarChart2 size={48} />
+          <p>Relatórios personalizados em desenvolvimento. Use &quot;Exportar Excel&quot; nas telas de Contas a Pagar, Contas a Receber e Bancos.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="financeiro">

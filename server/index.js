@@ -129,12 +129,6 @@ if (!fs.existsSync(uploadsProdutosDir)) {
   fs.mkdirSync(uploadsProdutosDir, { recursive: true });
 }
 
-// Configurar diretório de uploads de Produtos 3D (PDF e modelos 3D)
-const uploadsProdutos3dDir = path.join(__dirname, 'uploads', 'produtos-3d');
-if (!fs.existsSync(uploadsProdutos3dDir)) {
-  fs.mkdirSync(uploadsProdutos3dDir, { recursive: true });
-}
-
 // Configurar diretório de uploads de logos
 const uploadsLogosDir = path.join(__dirname, 'uploads', 'logos');
 if (!fs.existsSync(uploadsLogosDir)) {
@@ -271,31 +265,6 @@ const uploadProduto = multer({
     } else {
       cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
     }
-  }
-});
-
-// Storage para Produtos 3D: PDF e modelos 3D (GLB, GLTF, OBJ)
-const storageProdutos3d = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsProdutos3dDir);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname).toLowerCase();
-    const name = path.basename(file.originalname, path.extname(file.originalname));
-    const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 80);
-    cb(null, `produto3d_${timestamp}_${safeName}${ext}`);
-  }
-});
-
-const uploadProduto3d = multer({
-  storage: storageProdutos3d,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
-  fileFilter: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const allowed = ['.pdf', '.glb', '.gltf', '.obj'];
-    if (allowed.includes(ext)) return cb(null, true);
-    cb(new Error('Aceito apenas PDF ou modelos 3D (GLB, GLTF, OBJ). Para visualização 3D interativa use GLB/GLTF.'));
   }
 });
 
@@ -666,16 +635,6 @@ function initializeDatabase() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (proposta_id) REFERENCES propostas(id) ON DELETE CASCADE,
     FOREIGN KEY (criado_por) REFERENCES usuarios(id)
-  )`);
-
-  // Produtos 3D (nome + arquivo PDF ou modelo 3D)
-  db.run(`CREATE TABLE IF NOT EXISTS produtos_3d (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    arquivo_nome TEXT,
-    arquivo_tipo TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
   // Oportunidades
@@ -9580,83 +9539,6 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
   });
 });
 
-// ========== ROTAS DE PRODUTOS 3D ==========
-app.get('/api/produtos-3d', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM produtos_3d ORDER BY nome', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
-});
-
-app.get('/api/produtos-3d/:id', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  db.get('SELECT * FROM produtos_3d WHERE id = ?', [id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Produto 3D não encontrado' });
-    res.json(row);
-  });
-});
-
-app.post('/api/produtos-3d', authenticateToken, uploadProduto3d.single('arquivo'), (req, res) => {
-  const nome = (req.body.nome || '').trim();
-  if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
-  if (!req.file) return res.status(400).json({ error: 'Envie um arquivo (PDF ou modelo 3D: GLB, GLTF, OBJ)' });
-  const arquivo_nome = req.file.filename;
-  const ext = path.extname(req.file.originalname).toLowerCase();
-  const arquivo_tipo = ext === '.pdf' ? 'pdf' : '3d';
-  db.run(
-    'INSERT INTO produtos_3d (nome, arquivo_nome, arquivo_tipo) VALUES (?, ?, ?)',
-    [nome.toUpperCase(), arquivo_nome, arquivo_tipo],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.status(201).json({ id: this.lastID, nome: nome.toUpperCase(), arquivo_nome, arquivo_tipo });
-    }
-  );
-});
-
-app.put('/api/produtos-3d/:id', authenticateToken, uploadProduto3d.single('arquivo'), (req, res) => {
-  const { id } = req.params;
-  const nome = (req.body.nome || '').trim();
-  if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
-  db.get('SELECT * FROM produtos_3d WHERE id = ?', [id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Produto 3D não encontrado' });
-    let arquivo_nome = row.arquivo_nome;
-    let arquivo_tipo = row.arquivo_tipo;
-    if (req.file) {
-      if (row.arquivo_nome && fs.existsSync(path.join(uploadsProdutos3dDir, row.arquivo_nome))) {
-        try { fs.unlinkSync(path.join(uploadsProdutos3dDir, row.arquivo_nome)); } catch (_) {}
-      }
-      arquivo_nome = req.file.filename;
-      const ext = path.extname(req.file.originalname).toLowerCase();
-      arquivo_tipo = ext === '.pdf' ? 'pdf' : '3d';
-    }
-    db.run(
-      'UPDATE produtos_3d SET nome = ?, arquivo_nome = ?, arquivo_tipo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [nome.toUpperCase(), arquivo_nome, arquivo_tipo, id],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ id, nome: nome.toUpperCase(), arquivo_nome, arquivo_tipo });
-      }
-    );
-  });
-});
-
-app.delete('/api/produtos-3d/:id', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  db.get('SELECT * FROM produtos_3d WHERE id = ?', [id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Produto 3D não encontrado' });
-    if (row.arquivo_nome && fs.existsSync(path.join(uploadsProdutos3dDir, row.arquivo_nome))) {
-      try { fs.unlinkSync(path.join(uploadsProdutos3dDir, row.arquivo_nome)); } catch (_) {}
-    }
-    db.run('DELETE FROM produtos_3d WHERE id = ?', [id], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ message: 'Produto 3D excluído' });
-    });
-  });
-});
-
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
   var ativo = req.query.ativo;
@@ -12580,9 +12462,6 @@ app.use('/api/uploads/cotacoes', express.static(uploadsDir));
 // Servir arquivos estáticos de imagens de produtos
 app.use('/api/uploads/produtos', express.static(uploadsProdutosDir));
 
-// ========== ROTAS DE UPLOAD PRODUTOS 3D ==========
-app.use('/api/uploads/produtos-3d', express.static(uploadsProdutos3dDir));
-
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE LOGOS ==========
 // Servir arquivos estáticos de logos
 app.use('/api/uploads/logos', express.static(uploadsLogosDir));
@@ -14713,6 +14592,155 @@ app.get('/api/financeiro/bancos', authenticateToken, checkModulePermission('fina
       return res.status(500).json({ error: err.message });
     }
     res.json(rows);
+  });
+});
+
+// Dashboard financeiro - métricas e dados para gráficos
+app.get('/api/financeiro/dashboard', authenticateToken, checkModulePermission('financeiro'), (req, res) => {
+  const ano = parseInt(req.query.ano) || new Date().getFullYear();
+  const mes = parseInt(req.query.mes) !== undefined ? parseInt(req.query.mes) : new Date().getMonth() + 1;
+  const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  const fimMes = `${ano}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
+  const mesAnterior = mes === 1 ? 12 : mes - 1;
+  const anoAnterior = mes === 1 ? ano - 1 : ano;
+  const inicioMesAnt = `${anoAnterior}-${String(mesAnterior).padStart(2, '0')}-01`;
+  const fimMesAnt = `${anoAnterior}-${String(mesAnterior).padStart(2, '0')}-${String(new Date(anoAnterior, mesAnterior, 0).getDate()).padStart(2, '0')}`;
+  const hoje = new Date().toISOString().split('T')[0];
+
+  const runQueries = (cb) => {
+    let pending = 8;
+    const result = {};
+    const done = () => {
+      pending--;
+      if (pending === 0) cb(result);
+    };
+
+    db.get(
+      `SELECT COALESCE(SUM(valor), 0) as total FROM contas_receber WHERE status = 'recebido' AND ( (data_recebimento BETWEEN ? AND ?) OR (data_vencimento BETWEEN ? AND ?) )`,
+      [inicioMes, fimMes, inicioMes, fimMes],
+      (err, row) => { result.receitaMensal = (row && row.total) ? row.total : 0; done(); }
+    );
+    db.get(
+      `SELECT COALESCE(SUM(valor), 0) as total FROM contas_receber WHERE status = 'recebido' AND ( (data_recebimento BETWEEN ? AND ?) OR (data_vencimento BETWEEN ? AND ?) )`,
+      [inicioMesAnt, fimMesAnt, inicioMesAnt, fimMesAnt],
+      (err, row) => { result.receitaMesAnt = (row && row.total) ? row.total : 0; done(); }
+    );
+    db.get(
+      `SELECT COALESCE(SUM(valor), 0) as total FROM contas_pagar WHERE (data_pagamento BETWEEN ? AND ? AND status = 'pago')`,
+      [inicioMes, fimMes],
+      (err, row) => { result.despesasMensal = (row && row.total) ? row.total : 0; done(); }
+    );
+    db.get(
+      `SELECT COALESCE(SUM(valor), 0) as total FROM contas_pagar WHERE (data_pagamento BETWEEN ? AND ? AND status = 'pago')`,
+      [inicioMesAnt, fimMesAnt],
+      (err, row) => { result.despesasMesAnt = (row && row.total) ? row.total : 0; done(); }
+    );
+    db.get(
+      `SELECT COALESCE(SUM(valor), 0) as total, COUNT(*) as count FROM contas_receber WHERE status IN ('pendente', 'parcial')`,
+      [],
+      (err, row) => {
+        result.contasReceberTotal = (row && row.total) ? row.total : 0;
+        result.contasReceberCount = (row && row.count) ? row.count : 0;
+        done();
+      }
+    );
+    db.get(
+      `SELECT COUNT(*) as count FROM contas_receber WHERE status IN ('pendente', 'parcial') AND data_vencimento < ?`,
+      [hoje],
+      (err, row) => { result.contasReceberVencidas = (row && row.count) ? row.count : 0; done(); }
+    );
+    db.get(
+      `SELECT COALESCE(SUM(valor), 0) as total, COUNT(*) as count FROM contas_pagar WHERE status IN ('pendente', 'parcial')`,
+      [],
+      (err, row) => {
+        result.contasPagarTotal = (row && row.total) ? row.total : 0;
+        result.contasPagarCount = (row && row.count) ? row.count : 0;
+        done();
+      }
+    );
+    db.get(
+      `SELECT COUNT(*) as count FROM contas_pagar WHERE status IN ('pendente', 'parcial') AND data_vencimento < ?`,
+      [hoje],
+      (err, row) => { result.contasPagarVencidas = (row && row.count) ? row.count : 0; done(); }
+    );
+    db.get(
+      `SELECT COALESCE(SUM(saldo), 0) as total FROM bancos`,
+      [],
+      (err, row) => { result.saldoBancario = (row && row.total) ? row.total : 0; done(); }
+    );
+  };
+
+  runQueries((r) => {
+    const receitaVariacao = r.receitaMesAnt > 0 ? ((r.receitaMensal - r.receitaMesAnt) / r.receitaMesAnt) * 100 : (r.receitaMensal > 0 ? 100 : 0);
+    const despesasVariacao = r.despesasMesAnt > 0 ? ((r.despesasMensal - r.despesasMesAnt) / r.despesasMesAnt) * 100 : (r.despesasMesAnt > 0 ? -100 : 0);
+    const lucroLiquido = r.receitaMensal - r.despesasMensal;
+    const lucroMesAnt = r.receitaMesAnt - r.despesasMesAnt;
+    const lucroVariacao = lucroMesAnt !== 0 ? ((lucroLiquido - lucroMesAnt) / Math.abs(lucroMesAnt)) * 100 : (lucroLiquido > 0 ? 100 : 0);
+
+    db.all(
+      `SELECT strftime('%m', data_vencimento) as mes, strftime('%Y', data_vencimento) as ano,
+        SUM(CASE WHEN status = 'recebido' OR (status IN ('pendente','parcial') AND data_vencimento <= date('now')) THEN valor ELSE 0 END) as receita
+       FROM contas_receber WHERE strftime('%Y', data_vencimento) = ? GROUP BY mes, ano`,
+      [String(ano)],
+      (err, rowsReceita) => {
+        db.all(
+          `SELECT strftime('%m', data_vencimento) as mes, strftime('%Y', data_vencimento) as ano, SUM(valor) as despesa
+           FROM contas_pagar WHERE status = 'pago' AND strftime('%Y', data_pagamento) = ? GROUP BY strftime('%m', data_pagamento), strftime('%Y', data_pagamento)`,
+          [String(ano)],
+          (err2, rowsDespesa) => {
+            const meses = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+            const receitaPorMes = {};
+            (rowsReceita || []).forEach(x => { receitaPorMes[x.mes] = parseFloat(x.receita) || 0; });
+            const despesaPorMes = {};
+            (rowsDespesa || []).forEach(x => { despesaPorMes[x.mes] = parseFloat(x.despesa) || 0; });
+            const chartReceitasDespesas = meses.map(m => ({
+              mes: m,
+              nome: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(m) - 1],
+              receita: receitaPorMes[m] || 0,
+              despesa: despesaPorMes[m] || 0
+            }));
+
+            db.all(
+              `SELECT categoria, SUM(valor) as valor FROM contas_pagar WHERE status = 'pago' AND strftime('%Y', data_pagamento) = ? AND strftime('%m', data_pagamento) = ? GROUP BY COALESCE(categoria, 'Outros')`,
+              [String(ano), String(mes).padStart(2, '0')],
+              (err3, rowsCat) => {
+                const totalCat = (rowsCat || []).reduce((s, x) => s + (parseFloat(x.valor) || 0), 0);
+                const chartCategorias = (rowsCat || []).map(x => ({
+                  nome: x.categoria || 'Outros',
+                  valor: parseFloat(x.valor) || 0,
+                  percentual: totalCat > 0 ? ((parseFloat(x.valor) || 0) / totalCat) * 100 : 0
+                }));
+
+                let saldoAcum = 0;
+                const chartSaldo = chartReceitasDespesas.map((m, i) => {
+                  saldoAcum += (m.receita - m.despesa);
+                  return { mes: m.nome, saldo: Math.round(saldoAcum * 100) / 100 };
+                });
+
+                res.json({
+                  receitaMensal: r.receitaMensal,
+                  despesasMensal: r.despesasMensal,
+                  lucroLiquido,
+                  receitaVariacao,
+                  despesasVariacao,
+                  lucroVariacao,
+                  contasReceber: { total: r.contasReceberTotal, count: r.contasReceberCount, vencidas: r.contasReceberVencidas },
+                  contasPagar: { total: r.contasPagarTotal, count: r.contasPagarCount, vencidas: r.contasPagarVencidas },
+                  saldoBancario: r.saldoBancario,
+                  saldoVariacao: 0,
+                  chartReceitasDespesas,
+                  chartSaldo,
+                  chartCategorias,
+                  mes,
+                  ano
+                });
+              }
+            );
+          }
+        );
+      }
+    );
   });
 });
 
