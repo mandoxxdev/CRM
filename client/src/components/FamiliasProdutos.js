@@ -22,7 +22,12 @@ const FamiliasProdutos = () => {
   const loadFamilias = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/familias-produto');
+      let response = await api.get('/familias-produto').catch((e) => {
+        if (e.response?.status === 404 && typeof window !== 'undefined' && window.location.origin) {
+          return api.get(window.location.origin + '/familias-produto');
+        }
+        throw e;
+      });
       setFamilias(response.data || []);
     } catch (error) {
       console.error('Erro ao carregar famílias:', error);
@@ -40,7 +45,10 @@ const FamiliasProdutos = () => {
   const handleExcluir = async (id, nome) => {
     if (!window.confirm(`Desativar a família "${nome}"? Os produtos continuarão vinculados a esse nome.`)) return;
     try {
-      await api.delete(`/familias-produto/${id}`);
+      await api.delete(`/familias-produto/${id}`).catch((e) => {
+        if (e.response?.status === 404 && window.location.origin) return api.delete(window.location.origin + `/familias-produto/${id}`);
+        throw e;
+      });
       loadFamilias();
     } catch (error) {
       console.error('Erro ao desativar família:', error);

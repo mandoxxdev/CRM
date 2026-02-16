@@ -1674,22 +1674,23 @@ app.get('/api', (req, res) => {
   });
 });
 
-// ========== ROTAS DE FAMÍLIAS DE PRODUTOS (registradas cedo para evitar 404) ==========
-app.get('/api/familias-produto', authenticateToken, (req, res) => {
+// ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router montado em /api e sem /api para Coolify) ==========
+var routerFamilias = express.Router();
+routerFamilias.get('/', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
-app.get('/api/familias-produto/todas', authenticateToken, (req, res) => {
+routerFamilias.get('/todas', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   db.all('SELECT * FROM familias_produto ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
-app.get('/api/familias-produto/:id', authenticateToken, (req, res) => {
+routerFamilias.get('/:id', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   const id = req.params.id;
   db.get('SELECT * FROM familias_produto WHERE id = ?', [id], (err, row) => {
@@ -1698,7 +1699,7 @@ app.get('/api/familias-produto/:id', authenticateToken, (req, res) => {
     res.json(row);
   });
 });
-app.post('/api/familias-produto', authenticateToken, (req, res) => {
+routerFamilias.post('/', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   const body = req.body || {};
   const nome = (body.nome || '').trim();
@@ -1719,7 +1720,7 @@ app.post('/api/familias-produto', authenticateToken, (req, res) => {
     }
   );
 });
-app.put('/api/familias-produto/:id', authenticateToken, (req, res) => {
+routerFamilias.put('/:id', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   const id = req.params.id;
   const body = req.body || {};
@@ -1744,7 +1745,7 @@ app.put('/api/familias-produto/:id', authenticateToken, (req, res) => {
     });
   });
 });
-app.delete('/api/familias-produto/:id', authenticateToken, (req, res) => {
+routerFamilias.delete('/:id', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   const id = req.params.id;
   db.run('UPDATE familias_produto SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function (err) {
@@ -1753,7 +1754,7 @@ app.delete('/api/familias-produto/:id', authenticateToken, (req, res) => {
     res.json({ message: 'Família desativada com sucesso' });
   });
 });
-app.post('/api/familias-produto/:id/foto', authenticateToken, uploadFamilia.single('foto'), (req, res) => {
+routerFamilias.post('/:id/foto', authenticateToken, uploadFamilia.single('foto'), (req, res) => {
   const { id } = req.params;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
   const filename = req.file.filename;
@@ -1771,6 +1772,8 @@ app.post('/api/familias-produto/:id/foto', authenticateToken, uploadFamilia.sing
     });
   });
 });
+app.use('/api/familias-produto', routerFamilias);
+app.use('/familias-produto', routerFamilias);
 
 // ========== ROTA DE BUSCA DE CNPJ ==========
 // Endpoint para buscar dados de CNPJ (com autenticação)

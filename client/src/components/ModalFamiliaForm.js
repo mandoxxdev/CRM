@@ -53,23 +53,33 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
     }
     setSaving(true);
     setError('');
+    const requestOpts = { headers: { 'Content-Type': 'application/json' } };
+    const fallbackBase = typeof window !== 'undefined' ? window.location.origin : '';
     try {
       if (isEdit) {
-        await api.put(`/familias-produto/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        let r = await api.put(`/familias-produto/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts).catch(e => {
+          if (e.response?.status === 404 && fallbackBase) return api.put(`${fallbackBase}/familias-produto/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts);
+          throw e;
+        });
         if (fotoFile) {
           const formData = new FormData();
           formData.append('foto', fotoFile);
-          await api.post(`/familias-produto/${familia.id}/foto`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+          await api.post(`/familias-produto/${familia.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).catch(e => {
+            if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/familias-produto/${familia.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            throw e;
           });
         }
       } else {
-        const res = await api.post('/familias-produto', { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        let res = await api.post('/familias-produto', { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts).catch(e => {
+          if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/familias-produto`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts);
+          throw e;
+        });
         if (fotoFile && res.data && res.data.id) {
           const formData = new FormData();
           formData.append('foto', fotoFile);
-          await api.post(`/familias-produto/${res.data.id}/foto`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+          await api.post(`/familias-produto/${res.data.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).catch(e => {
+            if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/familias-produto/${res.data.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            throw e;
           });
         }
       }
@@ -79,7 +89,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
       const status = err.response?.status;
       const msg = err.response?.data?.error || err.message || 'Erro ao salvar.';
       if (status === 404) {
-        setError('Rota da API não encontrada (404). Se o app está no Coolify, faça um novo deploy com o código atualizado e tente novamente.');
+        setError('Rota da API não encontrada (404). Tente novamente após um novo deploy.');
       } else {
         setError(msg);
       }
