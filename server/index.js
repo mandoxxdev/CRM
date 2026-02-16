@@ -129,6 +129,12 @@ if (!fs.existsSync(uploadsProdutosDir)) {
   fs.mkdirSync(uploadsProdutosDir, { recursive: true });
 }
 
+// Diretório para uploads de fotos de famílias de produtos
+const uploadsFamiliasDir = path.join(__dirname, 'uploads', 'familias-produtos');
+if (!fs.existsSync(uploadsFamiliasDir)) {
+  fs.mkdirSync(uploadsFamiliasDir, { recursive: true });
+}
+
 // Configurar diretório de uploads de logos
 const uploadsLogosDir = path.join(__dirname, 'uploads', 'logos');
 if (!fs.existsSync(uploadsLogosDir)) {
@@ -259,7 +265,36 @@ const uploadProduto = multer({
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
-    
+    if (mimetype && extname) {
+      cb(null, true);
+    } else {
+      cb(new Error('Apenas imagens são permitidas (jpeg, jpg, png, gif, webp)'));
+    }
+  }
+});
+
+// Storage para fotos de famílias de produtos
+const storageFamilias = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsFamiliasDir);
+  },
+  filename: (req, file, cb) => {
+    const familiaId = req.params.id || 'temp';
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext);
+    const filename = `familia_${familiaId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
+    cb(null, filename);
+  }
+});
+
+const uploadFamilia = multer({
+  storage: storageFamilias,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
     if (mimetype && extname) {
       return cb(null, true);
     } else {
@@ -882,6 +917,20 @@ function initializeDatabase() {
         console.log('✅ Coluna classificacao_area verificada');
       }
     });
+  });
+
+  // Famílias de produtos (cadastro com nome e foto)
+  db.run(`CREATE TABLE IF NOT EXISTS familias_produto (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL UNIQUE,
+    foto TEXT,
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
+    if (err) console.error('Erro ao criar tabela familias_produto:', err);
+    else console.log('✅ Tabela familias_produto verificada');
   });
 
   // Criar usuário admin padrão
@@ -9545,16 +9594,126 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
   });
 });
 
+// ========== ROTAS DE FAMÍLIAS DE PRODUTOS ==========
+app.get('/api/familias-produto', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/familias-produto/todas', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM familias_produto ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+app.get('/api/familias-produto/:id', authenticateToken, (req, res) => {
+  const id = req.params.id;
+  db.get('SELECT * FROM familias_produto WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Família não encontrada' });
+    res.json(row);
+  });
+});
+
+app.post('/api/familias-produto', authenticateToken, (req, res) => {
+  const body = req.body || {};
+  const nome = (body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
+  const ordem = parseInt(body.ordem, 10) || 0;
+  db.run(
+    'INSERT INTO familias_produto (nome, ordem, ativo) VALUES (?, ?, 1)',
+    [nome, ordem],
+    function (err) {
+      if (err) {
+        if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+        return res.status(500).json({ error: err.message });
+      }
+      db.get('SELECT * FROM familias_produto WHERE id = ?', [this.lastID], (e, row) => {
+        if (e) return res.status(500).json({ error: e.message });
+        res.status(201).json(row);
+      });
+    }
+  );
+});
+
+app.put('/api/familias-produto/:id', authenticateToken, (req, res) => {
+  const id = req.params.id;
+  const body = req.body || {};
+  const nome = (body.nome || '').trim();
+  const ordem = parseInt(body.ordem, 10);
+  const ativo = body.ativo !== undefined ? (body.ativo === true || body.ativo === 1 || body.ativo === '1') ? 1 : 0 : undefined;
+  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
+  let query = 'UPDATE familias_produto SET nome = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP';
+  const params = [nome, isNaN(ordem) ? 0 : ordem];
+  if (ativo !== undefined) {
+    query += ', ativo = ?';
+    params.push(ativo);
+  }
+  query += ' WHERE id = ?';
+  params.push(id);
+  db.run(query, params, function (err) {
+    if (err) {
+      if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+      return res.status(500).json({ error: err.message });
+    }
+    if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
+    db.get('SELECT * FROM familias_produto WHERE id = ?', [id], (e, row) => {
+      if (e) return res.status(500).json({ error: e.message });
+      res.json(row);
+    });
+  });
+});
+
+app.delete('/api/familias-produto/:id', authenticateToken, (req, res) => {
+  const id = req.params.id;
+  db.run('UPDATE familias_produto SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
+    res.json({ message: 'Família desativada com sucesso' });
+  });
+});
+
+app.post('/api/familias-produto/:id/foto', authenticateToken, uploadFamilia.single('foto'), (req, res) => {
+  const { id } = req.params;
+  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  const filename = req.file.filename;
+  db.get('SELECT * FROM familias_produto WHERE id = ?', [id], (err, familia) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
+    const oldFoto = familia.foto;
+    db.run('UPDATE familias_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (updateErr) => {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (oldFoto) {
+        const oldPath = path.join(uploadsFamiliasDir, oldFoto);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      res.json({ foto: filename, url: `/api/uploads/familias-produtos/${filename}` });
+    });
+  });
+});
+
+// Servir fotos de famílias
+app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
+
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
   var ativo = req.query.ativo;
   var search = req.query.search;
+  var familia = req.query.familia;
   var query = 'SELECT * FROM produtos WHERE 1=1';
   var params = [];
 
   if (ativo !== undefined) {
     query += ' AND ativo = ?';
     params.push(ativo === 'true' || ativo === '1' ? 1 : 0);
+  }
+
+  if (familia && String(familia).trim()) {
+    query += ' AND TRIM(COALESCE(familia, \'\')) = ?';
+    params.push(String(familia).trim());
   }
 
   if (search) {

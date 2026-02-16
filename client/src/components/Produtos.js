@@ -1,28 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFileText } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFileText, FiArrowLeft } from 'react-icons/fi';
 import ModalSelecaoTipoProduto from './ModalSelecaoTipoProduto';
 import './Produtos.css';
 import './Loading.css';
 
-const Produtos = () => {
+const Produtos = ({ familiaFromUrl }) => {
+  const navigate = useNavigate();
   const [produtos, setProdutos] = useState([]);
+  const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterFamilia, setFilterFamilia] = useState('');
+  const [filterFamilia, setFilterFamilia] = useState(familiaFromUrl || '');
   const [showModalTipo, setShowModalTipo] = useState(false);
 
-  const familias = [
-    'Misturadores',
-    'Dosadores',
-    'Bombas',
-    'Válvulas',
-    'Tanques',
-    'Equipamentos de Processo',
-    'Hélices e Acessórios',
-    'Outros'
-  ];
+  useEffect(() => {
+    if (familiaFromUrl) setFilterFamilia(familiaFromUrl);
+  }, [familiaFromUrl]);
+
+  useEffect(() => {
+    api.get('/familias-produto').then((res) => {
+      const list = (res.data || []).map((f) => f.nome);
+      setFamilias(list);
+    }).catch(() => setFamilias([]));
+  }, []);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -110,7 +112,16 @@ const Produtos = () => {
     <div className="produtos">
       <div className="page-header">
         <div>
-          <h1>Produtos</h1>
+          {filterFamilia && (
+            <button
+              type="button"
+              onClick={() => navigate('/comercial/produtos')}
+              className="btn-voltar-familias"
+            >
+              <FiArrowLeft /> Voltar para famílias
+            </button>
+          )}
+          <h1>Produtos{filterFamilia ? ` – ${filterFamilia}` : ''}</h1>
           <p>Gerenciamento de produtos e geração de propostas</p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>

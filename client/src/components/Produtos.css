@@ -4,6 +4,23 @@
   margin: 0 auto;
 }
 
+.btn-voltar-familias {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  background: none;
+  border: none;
+  color: var(--gmp-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-voltar-familias:hover {
+  text-decoration: underline;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;

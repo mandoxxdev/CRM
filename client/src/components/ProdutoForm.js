@@ -101,25 +101,22 @@ const ProdutoForm = () => {
   });
   const setOutro = (field, active) => setOutroAtivo(prev => ({ ...prev, [field]: active }));
 
-  // Famílias disponíveis baseadas no tipo de produto
-  const todasFamilias = [
-    'Moinhos',
-    'Masseiras',
-    'Agitadores',
-    'Dispersores',
-    'Silos',
-    'Tanques de armazenamento',
-    'Unidade derivadora de Dosagem',
-    'Estação de Aditivos',
-    'Equipamentos de Envase',
-    'Equipamentos á Vácuo',
-    'Hélices e Acessórios',
-    'Outros'
+  // Famílias: carregadas da API (famílias cadastradas) com fallback para lista padrão
+  const [familiasFromApi, setFamiliasFromApi] = useState([]);
+  const todasFamiliasPadrao = [
+    'Moinhos', 'Masseiras', 'Agitadores', 'Dispersores', 'Silos',
+    'Tanques de armazenamento', 'Unidade derivadora de Dosagem', 'Estação de Aditivos',
+    'Equipamentos de Envase', 'Equipamentos á Vácuo', 'Hélices e Acessórios', 'Outros'
   ];
-  
-  // Se for discos e acessórios, mostrar apenas Hélices e Acessórios
-  const familias = tipoProduto === 'discos-acessorios' 
-    ? ['Hélices e Acessórios']
+  useEffect(() => {
+    api.get('/familias-produto').then((res) => {
+      const list = (res.data || []).map((f) => f.nome).filter(Boolean);
+      setFamiliasFromApi(list);
+    }).catch(() => setFamiliasFromApi([]));
+  }, []);
+  const todasFamilias = familiasFromApi.length > 0 ? familiasFromApi : todasFamiliasPadrao;
+  const familias = tipoProduto === 'discos-acessorios'
+    ? (todasFamilias.includes('Hélices e Acessórios') ? ['Hélices e Acessórios'] : todasFamilias)
     : todasFamilias;
 
   const unidades = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'PC'];

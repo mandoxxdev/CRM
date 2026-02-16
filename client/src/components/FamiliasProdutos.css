@@ -1,0 +1,145 @@
+.familias-produtos {
+  padding: var(--spacing-xl);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.familias-produtos .page-header {
+  margin-bottom: var(--spacing-xl);
+}
+
+.familias-produtos .header-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.familias-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.familia-card {
+  background: var(--gmp-surface);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  border: 1px solid var(--gmp-border);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.familia-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--gmp-primary);
+}
+
+.familia-card-foto {
+  position: relative;
+  aspect-ratio: 1;
+  background: var(--gmp-bg-subtle);
+  overflow: hidden;
+}
+
+.familia-card-foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.familia-card-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gmp-text-light);
+  background: linear-gradient(135deg, rgba(0, 102, 204, 0.08) 0%, rgba(0, 82, 163, 0.05) 100%);
+}
+
+.familia-card-actions {
+  position: absolute;
+  top: var(--spacing-xs);
+  right: var(--spacing-xs);
+  display: flex;
+  gap: var(--spacing-xs);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.familia-card:hover .familia-card-actions {
+  opacity: 1;
+}
+
+.btn-icon-card {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--border-radius);
+  border: none;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--gmp-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.2s, color 0.2s;
+}
+
+.btn-icon-card:hover {
+  background: var(--gmp-primary);
+  color: white;
+}
+
+.btn-icon-card.btn-danger {
+  background: rgba(255, 255, 255, 0.95);
+  color: #e74c3c;
+}
+
+.btn-icon-card.btn-danger:hover {
+  background: #e74c3c;
+  color: white;
+}
+
+.familia-card-nome {
+  padding: var(--spacing-md);
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--gmp-text);
+  text-align: center;
+}
+
+.familia-card-cta {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: 0.9rem;
+  color: var(--gmp-primary);
+  text-align: center;
+  margin-top: auto;
+  padding-bottom: var(--spacing-md);
+}
+
+.familias-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--spacing-xxl);
+  color: var(--gmp-text-light);
+}
+
+.familias-empty svg {
+  margin-bottom: var(--spacing-md);
+  opacity: 0.5;
+}
+
+.familias-empty .hint {
+  font-size: 0.9rem;
+  margin: var(--spacing-sm) 0 var(--spacing-lg);
+}
+
+.familias-empty .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}

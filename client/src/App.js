@@ -13,7 +13,7 @@ import PropostaForm from './components/PropostaForm';
 import Aprovacoes from './components/Aprovacoes';
 import ConfigTemplateProposta from './components/ConfigTemplateProposta';
 import EditorTemplateProposta from './components/EditorTemplateProposta';
-import Produtos from './components/Produtos';
+import ProdutosPage from './components/ProdutosPage';
 import ProdutoForm from './components/ProdutoForm';
 import Atividades from './components/Atividades';
 import Relatorios from './components/Relatorios';
@@ -175,7 +175,7 @@ function AppRoutes() {
         <Route path="ordens-servico" element={<OrdensServicoComercial />} />
         <Route path="ordens-servico/nova/:propostaId" element={<OSComercialForm />} />
         <Route path="ordens-servico/editar/:id" element={<OSFormPage />} />
-        <Route path="produtos" element={<Produtos />} />
+        <Route path="produtos" element={<ProdutosPage />} />
         <Route path="produtos/novo" element={<ProdutoForm />} />
         <Route path="produtos/editar/:id" element={<ProdutoForm />} />
         <Route path="atividades" element={<Atividades />} />
