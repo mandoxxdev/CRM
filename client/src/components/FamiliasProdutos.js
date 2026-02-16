@@ -28,7 +28,8 @@ const FamiliasProdutos = () => {
         }
         throw e;
       });
-      setFamilias(response.data || []);
+      const data = response?.data;
+      setFamilias(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Erro ao carregar famílias:', error);
     } finally {
@@ -112,7 +113,7 @@ const FamiliasProdutos = () => {
             </button>
           </div>
         ) : (
-          familias.map((f) => {
+          (Array.isArray(familias) ? familias : []).map((f) => {
             const fotoUrl = getFotoUrl(f.foto);
             return (
               <div

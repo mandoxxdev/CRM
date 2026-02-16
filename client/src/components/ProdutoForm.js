@@ -110,7 +110,8 @@ const ProdutoForm = () => {
   ];
   useEffect(() => {
     api.get('/familias-produto').then((res) => {
-      const list = (res.data || []).map((f) => f.nome).filter(Boolean);
+      const data = res?.data;
+      const list = Array.isArray(data) ? data.map((f) => f.nome).filter(Boolean) : [];
       setFamiliasFromApi(list);
     }).catch(() => setFamiliasFromApi([]));
   }, []);
