@@ -3,7 +3,7 @@ import { FiX, FiUploadCloud } from 'react-icons/fi';
 import api from '../services/api';
 import './ModalFamiliaForm.css';
 
-const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
+const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, useLocalOnly, familiasAtuais = [] }) => {
   const isEdit = !!familia && !!familia.id;
   const [nome, setNome] = useState('');
   const [ordem, setOrdem] = useState(0);
@@ -28,6 +28,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
 
   function getFotoUrl(foto) {
     if (!foto) return null;
+    if (typeof foto === 'string' && foto.startsWith('data:')) return foto;
     const base = api.defaults.baseURL || '/api';
     return base.replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/' + foto;
   }
@@ -53,6 +54,23 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
     }
     setSaving(true);
     setError('');
+
+    if (useLocalOnly) {
+      const ordemNum = Number(ordem) || 0;
+      let novaLista;
+      if (isEdit) {
+        novaLista = familiasAtuais.map((f) =>
+          String(f.id) === String(familia.id) ? { ...f, nome: nomeTrim, ordem: ordemNum } : f
+        );
+      } else {
+        const novoId = 'local_' + Date.now();
+        novaLista = [...familiasAtuais, { id: novoId, nome: nomeTrim, ordem: ordemNum, foto: null }];
+      }
+      onSavedLocal(novaLista);
+      setSaving(false);
+      return;
+    }
+
     try {
       if (isEdit) {
         await api.put(`/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
@@ -80,11 +98,15 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
       const msg = err.response?.data?.error || err.message || 'Erro ao salvar.';
       if (status === 404) {
         setError(
-          'O servidor não está reconhecendo o cadastro de famílias (erro 404). ' +
-          'Isso costuma acontecer quando o backend em produção não foi atualizado. ' +
-          'Faça um novo deploy no Coolify com o código mais recente do repositório. ' +
-          'Para testar agora, rode o servidor localmente (pasta server: npm run dev) e use o sistema em localhost.'
+          'A API de famílias não está disponível. Salvando só neste navegador (modo local). Recarregue a página para usar o cadastro local.'
         );
+        setTimeout(() => {
+          onSavedLocal([
+            ...familiasAtuais,
+            { id: 'local_' + Date.now(), nome: nomeTrim, ordem: Number(ordem) || 0, foto: null }
+          ]);
+          onClose();
+        }, 1500);
       } else if (status === 401 || status === 403) {
         setError('Sessão expirada. Faça login novamente.');
       } else {
@@ -107,6 +129,11 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
           </button>
         </div>
         <form onSubmit={handleSubmit} className="modal-familia-form">
+          {useLocalOnly && (
+            <div className="modal-familia-info" style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
+              Modo local: os dados ficam só neste navegador.
+            </div>
+          )}
           {error && <div className="modal-familia-error">{error}</div>}
           <div className="modal-familia-field">
             <label>Nome da família *</label>
@@ -127,32 +154,34 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
               onChange={(e) => setOrdem(e.target.value)}
             />
           </div>
-          <div className="modal-familia-field">
-            <label>Foto (opcional)</label>
-            <div className="modal-familia-foto-row">
-              <div className="modal-familia-preview">
-                {previewUrl ? (
-                  <img src={previewUrl} alt="Preview" />
-                ) : (
-                  <div className="modal-familia-preview-placeholder">
-                    <FiUploadCloud size={32} />
-                    <span>Nenhuma imagem</span>
-                  </div>
-                )}
-              </div>
-              <div className="modal-familia-upload">
-                <input
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                  onChange={handleFileChange}
-                  id="familia-foto-input"
-                />
-                <label htmlFor="familia-foto-input" className="btn-upload-label">
-                  {fotoFile ? 'Trocar imagem' : 'Enviar imagem'}
-                </label>
+          {!useLocalOnly && (
+            <div className="modal-familia-field">
+              <label>Foto (opcional)</label>
+              <div className="modal-familia-foto-row">
+                <div className="modal-familia-preview">
+                  {previewUrl ? (
+                    <img src={previewUrl} alt="Preview" />
+                  ) : (
+                    <div className="modal-familia-preview-placeholder">
+                      <FiUploadCloud size={32} />
+                      <span>Nenhuma imagem</span>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-familia-upload">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    onChange={handleFileChange}
+                    id="familia-foto-input"
+                  />
+                  <label htmlFor="familia-foto-input" className="btn-upload-label">
+                    {fotoFile ? 'Trocar imagem' : 'Enviar imagem'}
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <div className="modal-familia-actions">
             <button type="button" onClick={onClose} className="btn-cancel">
               Cancelar

@@ -5,36 +5,77 @@ import ModalFamiliaForm from './ModalFamiliaForm';
 import './FamiliasProdutos.css';
 import './Loading.css';
 
+const STORAGE_KEY = 'gmp_familias_produto';
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveToStorage(list) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  } catch (_) {}
+}
+
 const FamiliasProdutos = () => {
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModalFamilia, setShowModalFamilia] = useState(false);
   const [editingFamilia, setEditingFamilia] = useState(null);
-
-  useEffect(() => {
-    loadFamilias();
-  }, []);
+  const [useLocalOnly, setUseLocalOnly] = useState(false);
 
   const loadFamilias = async () => {
     setLoading(true);
+    if (useLocalOnly) {
+      setFamilias(loadFromStorage());
+      setLoading(false);
+      return;
+    }
     try {
       const response = await api.get('/familias');
       setFamilias(response.data || []);
+      setUseLocalOnly(false);
     } catch (error) {
-      console.error('Erro ao carregar famílias:', error);
+      console.error('Erro ao carregar famílias, usando lista local:', error);
+      setUseLocalOnly(true);
+      setFamilias(loadFromStorage());
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    loadFamilias();
+  }, []);
+
+  useEffect(() => {
+    if (useLocalOnly) {
+      setFamilias(loadFromStorage());
+    }
+  }, [useLocalOnly]);
+
   const getFotoUrl = (foto) => {
     if (!foto) return null;
+    if (foto.startsWith('data:')) return foto;
     const base = api.defaults.baseURL || '/api';
     return base.replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/' + foto;
   };
 
   const handleExcluir = async (id, nome) => {
     if (!window.confirm(`Desativar a família "${nome}"?`)) return;
+    if (useLocalOnly) {
+      const list = loadFromStorage().filter((f) => String(f.id) !== String(id));
+      saveToStorage(list);
+      setFamilias(list);
+      return;
+    }
     try {
       await api.delete(`/familias/${id}`);
       loadFamilias();
@@ -48,6 +89,14 @@ const FamiliasProdutos = () => {
     setShowModalFamilia(false);
     setEditingFamilia(null);
     loadFamilias();
+  };
+
+  const handleSaveLocal = (novaLista) => {
+    setUseLocalOnly(true);
+    saveToStorage(novaLista);
+    setFamilias(novaLista);
+    setShowModalFamilia(false);
+    setEditingFamilia(null);
   };
 
   if (loading) {
@@ -64,7 +113,11 @@ const FamiliasProdutos = () => {
       <div className="page-header familias-header">
         <div>
           <h1>Cadastro de Famílias</h1>
-          <p>Cadastre e gerencie as famílias de produtos</p>
+          <p>
+            {useLocalOnly
+              ? 'Modo local (dados só neste navegador). Cadastre e gerencie as famílias.'
+              : 'Cadastre e gerencie as famílias de produtos'}
+          </p>
         </div>
         <div className="header-actions">
           <button onClick={() => { setEditingFamilia(null); setShowModalFamilia(true); }} className="btn-premium">
@@ -81,7 +134,10 @@ const FamiliasProdutos = () => {
         isOpen={showModalFamilia}
         onClose={() => { setShowModalFamilia(false); setEditingFamilia(null); }}
         onSaved={handleSalvarFamilia}
+        onSavedLocal={handleSaveLocal}
         familia={editingFamilia}
+        useLocalOnly={useLocalOnly}
+        familiasAtuais={familias}
       />
 
       <div className="familias-grid">
