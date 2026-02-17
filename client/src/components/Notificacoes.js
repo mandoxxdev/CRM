@@ -39,6 +39,7 @@ const Notificacoes = () => {
       console.log('🔔 Carregando notificações...');
       const response = await api.get('/notificacoes');
       console.log('🔔 Notificações recebidas:', response.data);
+      // Garantir que só armazenamos array (evita "filter is not a function" se API retornar objeto)
       setNotificacoes(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('❌ Erro ao carregar notificações:', error);
@@ -79,12 +80,11 @@ const Notificacoes = () => {
     }
   };
 
-  const lista = Array.isArray(notificacoes) ? notificacoes : [];
-  const notificacoesPendentes = lista.filter(n => n.prioridade === 'vencido' || n.prioridade === 'hoje');
+  const listNotif = Array.isArray(notificacoes) ? notificacoes : [];
+  const notificacoesPendentes = listNotif.filter(n => n.prioridade === 'vencido' || n.prioridade === 'hoje');
   const countPendentes = notificacoesPendentes.length;
 
-
-  console.log('🔔 Notificacoes renderizando - total:', notificacoes.length, 'pendentes:', countPendentes);
+  console.log('🔔 Notificacoes renderizando - total:', listNotif.length, 'pendentes:', countPendentes);
 
   return (
     <div 
@@ -142,13 +142,13 @@ const Notificacoes = () => {
           <div className="notificacoes-list">
             {loading ? (
               <div className="notificacoes-loading">Carregando...</div>
-            ) : notificacoes.length === 0 ? (
+            ) : listNotif.length === 0 ? (
               <div className="notificacoes-empty">
                 <FiBell />
                 <p>Nenhuma notificação</p>
               </div>
             ) : (
-              notificacoes.map((notificacao) => (
+              listNotif.map((notificacao) => (
                 <div
                   key={notificacao.id}
                   className={`notificacao-item ${notificacao.prioridade}`}
@@ -187,7 +187,7 @@ const Notificacoes = () => {
             )}
           </div>
 
-          {notificacoes.length > 0 && (
+          {listNotif.length > 0 && (
             <div className="notificacoes-footer">
               <button
                 className="btn-ver-todas"

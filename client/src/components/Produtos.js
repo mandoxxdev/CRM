@@ -44,7 +44,7 @@ const Produtos = ({ familiaFromUrl }) => {
       params.ativo = 'true';
       
       const response = await api.get('/produtos', { params });
-      setProdutos(Array.isArray(response.data) ? response.data : []);
+      setProdutos(response.data);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
     } finally {

@@ -54,7 +54,7 @@ const ProjetoForm = () => {
   const loadUsuarios = async () => {
     try {
       const response = await api.get('/usuarios');
-      setUsuarios(Array.isArray(response.data) ? response.data.filter(u => u.ativo) : []);
+      setUsuarios((Array.isArray(response.data) ? response.data : []).filter(u => u.ativo));
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }

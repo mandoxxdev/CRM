@@ -73,8 +73,7 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave })
         const produtosRes = await api.get('/produtos', { 
           params: { ativo: 'true' } 
         });
-        const dados = Array.isArray(produtosRes.data) ? produtosRes.data : [];
-        const produtosFiltrados = dados.filter(p => 
+        const produtosFiltrados = (Array.isArray(produtosRes.data) ? produtosRes.data : []).filter(p => 
           codigosProdutos.includes(p.codigo)
         );
         setProdutosCompletos(produtosFiltrados);

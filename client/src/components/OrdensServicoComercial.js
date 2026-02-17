@@ -51,17 +51,18 @@ const OrdensServicoComercial = () => {
       
       // Primeiro carregar todas as OS para verificar quais propostas já têm OS
       const osResponse = await api.get('/comercial/ordens-servico');
-      const todasOS = Array.isArray(osResponse.data) ? osResponse.data : [];
-      const propostasComOS = new Set(todasOS.map(os => os.proposta_id).filter(id => id));
+      const todasOS = osResponse.data || [];
+      const propostasComOS = new Set((Array.isArray(todasOS) ? todasOS : []).map(os => os.proposta_id).filter(id => id));
       
       // Buscar propostas aprovadas
       const response = await api.get('/propostas', {
         params: { status: 'aprovada' }
       });
-      let propostas = Array.isArray(response.data) ? response.data : [];
+      let propostas = response.data || [];
       
+      const propostasList = Array.isArray(propostas) ? propostas : [];
       // Filtrar propostas que já têm OS criada - ELAS NÃO DEVEM APARECER
-      propostas = propostas.filter(proposta => !propostasComOS.has(proposta.id));
+      propostas = propostasList.filter(proposta => !propostasComOS.has(proposta.id));
       
       // Filtrar por busca se houver
       if (search) {
@@ -102,7 +103,8 @@ const OrdensServicoComercial = () => {
       const response = await api.get('/comercial/ordens-servico', {
         params: { search }
       });
-      let osData = Array.isArray(response.data) ? response.data : [];
+      const osDataRaw = response.data || [];
+      let osData = Array.isArray(osDataRaw) ? osDataRaw : [];
       
       // Filtrar por status se necessário
       if (osStatusFilter !== 'todas') {
@@ -131,7 +133,7 @@ const OrdensServicoComercial = () => {
 
   const handleCriarOS = (proposta) => {
     // Verificar se já existe OS para esta proposta
-    const osExistente = ordensServico.find(os => os.proposta_id === proposta.id);
+    const osExistente = (Array.isArray(ordensServico) ? ordensServico : []).find(os => os.proposta_id === proposta.id);
     if (osExistente) {
       toast.warning('Já existe uma Ordem de Serviço para esta proposta');
       return;
@@ -173,13 +175,14 @@ const OrdensServicoComercial = () => {
     return priorityMap[prioridade] || '#1a1f2e';
   };
 
+  const listOS = Array.isArray(ordensServico) ? ordensServico : [];
   // Calcular estatísticas
   const stats = {
-    total: ordensServico.length,
-    pendentes: ordensServico.filter(os => os.status === 'pendente').length,
-    em_andamento: ordensServico.filter(os => os.status === 'em_andamento').length,
-    concluidas: ordensServico.filter(os => os.status === 'concluido').length,
-    vencidas: ordensServico.filter(os => {
+    total: listOS.length,
+    pendentes: listOS.filter(os => os.status === 'pendente').length,
+    em_andamento: listOS.filter(os => os.status === 'em_andamento').length,
+    concluidas: listOS.filter(os => os.status === 'concluido').length,
+    vencidas: listOS.filter(os => {
       if (!os.data_prevista) return false;
       const hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
@@ -189,7 +192,7 @@ const OrdensServicoComercial = () => {
     }).length
   };
 
-  const filteredOrdensServico = ordensServico.filter(os => {
+  const filteredOrdensServico = listOS.filter(os => {
     if (search) {
       const searchLower = search.toLowerCase();
       return (
@@ -360,7 +363,7 @@ const OrdensServicoComercial = () => {
                   </tr>
                 ) : (
                   propostasAprovadas.map((proposta) => {
-                    const osExistente = ordensServico.find(os => os.proposta_id === proposta.id);
+                    const osExistente = listOS.find(os => os.proposta_id === proposta.id);
                     return (
                       <tr key={proposta.id}>
                         <td><strong>{proposta.numero_proposta}</strong></td>

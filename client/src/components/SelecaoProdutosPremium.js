@@ -23,7 +23,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     try {
       setLoading(true);
       const response = await api.get('/produtos', { params: { ativo: 'true' } });
-      setProdutos(Array.isArray(response.data) ? response.data : []);
+      setProdutos(response.data);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
       alert('Erro ao carregar produtos');
@@ -33,9 +33,10 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   };
 
   // Obter lista única de famílias
+  const listProdutos = Array.isArray(produtos) ? produtos : [];
   const familias = useMemo(() => {
     const familiasSet = new Set();
-    produtos.forEach(p => {
+    listProdutos.forEach(p => {
       if (p.familia) familiasSet.add(p.familia);
       if (p.familia_produto) familiasSet.add(p.familia_produto);
     });
@@ -44,7 +45,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
 
   // Filtrar produtos
   const produtosFiltrados = useMemo(() => {
-    return produtos.filter(produto => {
+    return listProdutos.filter(produto => {
       // Busca por termo
       if (searchTerm) {
         const termo = searchTerm.toLowerCase();
@@ -67,7 +68,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
 
       return true;
     });
-  }, [produtos, searchTerm, filterFamilia, filterPrecoMin, filterPrecoMax]);
+  }, [listProdutos, searchTerm, filterFamilia, filterPrecoMin, filterPrecoMax]);
 
   // Paginação
   const totalPages = Math.ceil(produtosFiltrados.length / itemsPerPage);
@@ -88,7 +89,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   };
 
   const handleConfirmar = () => {
-    const produtosSelecionadosList = produtos.filter(p => selecionados.has(p.id));
+    const produtosSelecionadosList = listProdutos.filter(p => selecionados.has(p.id));
     onSelect(produtosSelecionadosList);
     onClose();
   };
