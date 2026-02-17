@@ -51,14 +51,14 @@ const OrdensServicoComercial = () => {
       
       // Primeiro carregar todas as OS para verificar quais propostas já têm OS
       const osResponse = await api.get('/comercial/ordens-servico');
-      const todasOS = osResponse.data || [];
+      const todasOS = Array.isArray(osResponse.data) ? osResponse.data : [];
       const propostasComOS = new Set(todasOS.map(os => os.proposta_id).filter(id => id));
       
       // Buscar propostas aprovadas
       const response = await api.get('/propostas', {
         params: { status: 'aprovada' }
       });
-      let propostas = response.data || [];
+      let propostas = Array.isArray(response.data) ? response.data : [];
       
       // Filtrar propostas que já têm OS criada - ELAS NÃO DEVEM APARECER
       propostas = propostas.filter(proposta => !propostasComOS.has(proposta.id));
@@ -102,7 +102,7 @@ const OrdensServicoComercial = () => {
       const response = await api.get('/comercial/ordens-servico', {
         params: { search }
       });
-      let osData = response.data || [];
+      let osData = Array.isArray(response.data) ? response.data : [];
       
       // Filtrar por status se necessário
       if (osStatusFilter !== 'todas') {

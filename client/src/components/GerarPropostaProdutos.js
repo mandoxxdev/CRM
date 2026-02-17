@@ -29,7 +29,8 @@ const GerarPropostaProdutos = ({ clienteId, onClose }) => {
     try {
       const response = await api.get('/produtos', { params: { ativo: 'true' } });
       // Filtrar apenas produtos da família "Hélices e Acessórios"
-      const produtosFiltrados = response.data.filter(produto => 
+      const dados = Array.isArray(response.data) ? response.data : [];
+      const produtosFiltrados = dados.filter(produto => 
         produto.familia === 'Hélices e Acessórios'
       );
       setProdutos(produtosFiltrados);
@@ -41,7 +42,7 @@ const GerarPropostaProdutos = ({ clienteId, onClose }) => {
   const loadClientes = async () => {
     try {
       const response = await api.get('/clientes', { params: { status: 'ativo' } });
-      setClientes(response.data);
+      setClientes(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
     }
@@ -50,7 +51,7 @@ const GerarPropostaProdutos = ({ clienteId, onClose }) => {
   const loadProjetos = async () => {
     try {
       const response = await api.get('/projetos');
-      setProjetos(response.data);
+      setProjetos(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao carregar projetos:', error);
     }

@@ -23,7 +23,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     try {
       setLoading(true);
       const response = await api.get('/produtos', { params: { ativo: 'true' } });
-      setProdutos(response.data);
+      setProdutos(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
       alert('Erro ao carregar produtos');

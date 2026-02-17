@@ -172,7 +172,7 @@ const PropostaForm = () => {
   const loadClientes = async () => {
     try {
       const response = await api.get('/clientes', { params: { status: 'ativo' } });
-      setClientes(response.data);
+      setClientes(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
     }
@@ -181,7 +181,7 @@ const PropostaForm = () => {
   const loadProjetos = async () => {
     try {
       const response = await api.get('/projetos');
-      setProjetos(response.data);
+      setProjetos(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao carregar projetos:', error);
     }
@@ -190,7 +190,7 @@ const PropostaForm = () => {
   const loadUsuarios = async () => {
     try {
       const response = await api.get('/usuarios');
-      setUsuarios(response.data.filter(u => u.ativo));
+      setUsuarios(Array.isArray(response.data) ? response.data.filter(u => u.ativo) : []);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }
@@ -199,7 +199,7 @@ const PropostaForm = () => {
   const loadProdutos = async () => {
     try {
       const response = await api.get('/produtos', { params: { ativo: 'true' } });
-      setProdutos(response.data);
+      setProdutos(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
     }
@@ -209,7 +209,7 @@ const PropostaForm = () => {
     if (!id) return;
     try {
       const response = await api.get(`/propostas/${id}/revisoes`);
-      setHistoricoRevisoes(response.data || []);
+      setHistoricoRevisoes(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao carregar histórico de revisões:', error);
     }
@@ -219,7 +219,7 @@ const PropostaForm = () => {
     if (!id) return;
     try {
       const response = await api.get(`/propostas/${id}/followups`);
-      setFollowups(response.data || []);
+      setFollowups(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao carregar follow-ups:', error);
     }

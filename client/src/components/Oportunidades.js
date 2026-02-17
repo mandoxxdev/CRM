@@ -22,7 +22,7 @@ const Oportunidades = () => {
           api.get('/usuarios')
         ]);
         setOportunidades(oportunidadesRes.data);
-        setUsuarios(usuariosRes.data.filter(u => u.ativo));
+        setUsuarios(Array.isArray(usuariosRes.data) ? usuariosRes.data.filter(u => u.ativo) : []);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
       } finally {

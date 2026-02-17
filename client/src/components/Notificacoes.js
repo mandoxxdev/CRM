@@ -39,7 +39,7 @@ const Notificacoes = () => {
       console.log('🔔 Carregando notificações...');
       const response = await api.get('/notificacoes');
       console.log('🔔 Notificações recebidas:', response.data);
-      setNotificacoes(response.data || []);
+      setNotificacoes(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('❌ Erro ao carregar notificações:', error);
       console.error('❌ Detalhes do erro:', error.response?.data || error.message);
@@ -79,7 +79,8 @@ const Notificacoes = () => {
     }
   };
 
-  const notificacoesPendentes = notificacoes.filter(n => n.prioridade === 'vencido' || n.prioridade === 'hoje');
+  const lista = Array.isArray(notificacoes) ? notificacoes : [];
+  const notificacoesPendentes = lista.filter(n => n.prioridade === 'vencido' || n.prioridade === 'hoje');
   const countPendentes = notificacoesPendentes.length;
 
 

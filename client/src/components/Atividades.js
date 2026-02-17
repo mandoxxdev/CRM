@@ -68,7 +68,7 @@ const Atividades = () => {
         });
         
         setAtividades(atividadesOrdenadas);
-        setUsuarios(usuariosRes.data.filter(u => u.ativo));
+        setUsuarios(Array.isArray(usuariosRes.data) ? usuariosRes.data.filter(u => u.ativo) : []);
         setClientes(clientesRes.data || []);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
