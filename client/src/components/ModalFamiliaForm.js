@@ -79,7 +79,14 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
       const status = err.response?.status;
       const msg = err.response?.data?.error || err.message || 'Erro ao salvar.';
       if (status === 404) {
-        setError('Não foi possível salvar. Faça um novo deploy no Coolify e tente novamente.');
+        setError(
+          'O servidor não está reconhecendo o cadastro de famílias (erro 404). ' +
+          'Isso costuma acontecer quando o backend em produção não foi atualizado. ' +
+          'Faça um novo deploy no Coolify com o código mais recente do repositório. ' +
+          'Para testar agora, rode o servidor localmente (pasta server: npm run dev) e use o sistema em localhost.'
+        );
+      } else if (status === 401 || status === 403) {
+        setError('Sessão expirada. Faça login novamente.');
       } else {
         setError(msg);
       }
@@ -94,7 +101,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
     <div className="modal-familia-overlay" onClick={onClose}>
       <div className="modal-familia-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-familia-header">
-          <h2>{isEdit ? 'Editar Família' : 'Nova Família de Produtos'}</h2>
+          <h2>{isEdit ? 'Editar Família' : 'Nova Família'}</h2>
           <button type="button" className="modal-familia-close" onClick={onClose}>
             <FiX />
           </button>
@@ -107,12 +114,12 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
               type="text"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              placeholder="Ex: Misturadores, Dosadores, Bombas"
+              placeholder="Ex: Misturadores, Dosadores"
               autoFocus
             />
           </div>
           <div className="modal-familia-field">
-            <label>Ordem de exibição</label>
+            <label>Ordem (opcional)</label>
             <input
               type="number"
               min="0"
@@ -121,7 +128,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
             />
           </div>
           <div className="modal-familia-field">
-            <label>Foto da família</label>
+            <label>Foto (opcional)</label>
             <div className="modal-familia-foto-row">
               <div className="modal-familia-preview">
                 {previewUrl ? (
