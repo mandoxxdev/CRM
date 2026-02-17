@@ -190,7 +190,7 @@ const PropostaForm = () => {
   const loadUsuarios = async () => {
     try {
       const response = await api.get('/usuarios');
-      setUsuarios((Array.isArray(response.data) ? response.data : []).filter(u => u.ativo));
+      setUsuarios(response.data.filter(u => u.ativo));
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }
@@ -924,7 +924,7 @@ const PropostaForm = () => {
                 onChange={handleChange}
               >
                 <option value="">Nenhum</option>
-                {(Array.isArray(projetos) ? projetos : [])
+                {projetos
                   .filter(p => p.cliente_id === formData.cliente_id)
                   .map(projeto => (
                     <option key={projeto.id} value={projeto.id}>

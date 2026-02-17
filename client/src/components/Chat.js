@@ -207,7 +207,7 @@ const Chat = ({ isOpen, onClose }) => {
   const buscarUsuarios = async (search) => {
     try {
       const response = await api.get('/chat/usuarios', { params: { search } });
-      setUsuariosDisponiveis((Array.isArray(response.data) ? response.data : []).filter(u => u.id !== user.id));
+      setUsuariosDisponiveis(response.data.filter(u => u.id !== user.id));
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
     }

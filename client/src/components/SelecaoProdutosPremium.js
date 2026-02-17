@@ -33,10 +33,9 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   };
 
   // Obter lista única de famílias
-  const listProdutos = Array.isArray(produtos) ? produtos : [];
   const familias = useMemo(() => {
     const familiasSet = new Set();
-    listProdutos.forEach(p => {
+    produtos.forEach(p => {
       if (p.familia) familiasSet.add(p.familia);
       if (p.familia_produto) familiasSet.add(p.familia_produto);
     });
@@ -45,7 +44,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
 
   // Filtrar produtos
   const produtosFiltrados = useMemo(() => {
-    return listProdutos.filter(produto => {
+    return produtos.filter(produto => {
       // Busca por termo
       if (searchTerm) {
         const termo = searchTerm.toLowerCase();
@@ -68,7 +67,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
 
       return true;
     });
-  }, [listProdutos, searchTerm, filterFamilia, filterPrecoMin, filterPrecoMax]);
+  }, [produtos, searchTerm, filterFamilia, filterPrecoMin, filterPrecoMax]);
 
   // Paginação
   const totalPages = Math.ceil(produtosFiltrados.length / itemsPerPage);
@@ -89,7 +88,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   };
 
   const handleConfirmar = () => {
-    const produtosSelecionadosList = listProdutos.filter(p => selecionados.has(p.id));
+    const produtosSelecionadosList = produtos.filter(p => selecionados.has(p.id));
     onSelect(produtosSelecionadosList);
     onClose();
   };

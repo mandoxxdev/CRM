@@ -20,7 +20,7 @@ const Produtos = ({ familiaFromUrl }) => {
   }, [familiaFromUrl]);
 
   useEffect(() => {
-    api.get('/produtos/familias').then((res) => {
+    api.get('/familias-produto').then((res) => {
       const data = res?.data;
       const list = Array.isArray(data) ? data.map((f) => f.nome) : [];
       setFamilias(list);

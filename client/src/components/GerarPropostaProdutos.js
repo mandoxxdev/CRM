@@ -29,7 +29,7 @@ const GerarPropostaProdutos = ({ clienteId, onClose }) => {
     try {
       const response = await api.get('/produtos', { params: { ativo: 'true' } });
       // Filtrar apenas produtos da família "Hélices e Acessórios"
-      const produtosFiltrados = (Array.isArray(response.data) ? response.data : []).filter(produto => 
+      const produtosFiltrados = response.data.filter(produto => 
         produto.familia === 'Hélices e Acessórios'
       );
       setProdutos(produtosFiltrados);

@@ -150,7 +150,7 @@ const Propostas = () => {
       try {
         const usuariosRes = await api.get('/usuarios');
         if (loadDataRequestId.current !== currentId) return;
-        setUsuarios((Array.isArray(usuariosRes.data) ? usuariosRes.data : []).filter(u => u.ativo !== 0 && u.ativo !== false));
+        setUsuarios((usuariosRes.data || []).filter(u => u.ativo !== 0 && u.ativo !== false));
       } catch (error) {
         if (loadDataRequestId.current !== currentId) return;
         console.warn('⚠️ Erro ao carregar usuários (não crítico):', error);
