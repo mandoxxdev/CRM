@@ -57,28 +57,28 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
     const fallbackBase = typeof window !== 'undefined' ? window.location.origin : '';
     try {
       if (isEdit) {
-        let r = await api.put(`/familias-produto/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts).catch(e => {
-          if (e.response?.status === 404 && fallbackBase) return api.put(`${fallbackBase}/familias-produto/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts);
+        let r = await api.put(`/produtos/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts).catch(e => {
+          if (e.response?.status === 404 && fallbackBase) return api.put(`${fallbackBase}/api/produtos/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts);
           throw e;
         });
         if (fotoFile) {
           const formData = new FormData();
           formData.append('foto', fotoFile);
-          await api.post(`/familias-produto/${familia.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).catch(e => {
-            if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/familias-produto/${familia.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          await api.post(`/produtos/familias/${familia.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).catch(e => {
+            if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/api/produtos/familias/${familia.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             throw e;
           });
         }
       } else {
-        let res = await api.post('/familias-produto', { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts).catch(e => {
-          if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/familias-produto`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts);
+        let res = await api.post('/produtos/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts).catch(e => {
+          if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/api/produtos/familias`, { nome: nomeTrim, ordem: Number(ordem) || 0 }, requestOpts);
           throw e;
         });
         if (fotoFile && res.data && res.data.id) {
           const formData = new FormData();
           formData.append('foto', fotoFile);
-          await api.post(`/familias-produto/${res.data.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).catch(e => {
-            if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/familias-produto/${res.data.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          await api.post(`/produtos/familias/${res.data.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).catch(e => {
+            if (e.response?.status === 404 && fallbackBase) return api.post(`${fallbackBase}/api/produtos/familias/${res.data.id}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             throw e;
           });
         }

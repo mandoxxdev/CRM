@@ -1674,9 +1674,12 @@ app.get('/api', (req, res) => {
   });
 });
 
+// Rota de diagnóstico explícita (sem router) para garantir que existe após deploy
+app.get('/api/familias-produto/ping', (req, res) => { res.json({ ok: true, service: 'familias-produto', version: '1' }); });
+app.get('/familias-produto/ping', (req, res) => { res.json({ ok: true, service: 'familias-produto', version: '1' }); });
+
 // ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router montado em /api e sem /api para Coolify) ==========
 var routerFamilias = express.Router();
-// Rota de diagnóstico sem auth: GET .../familias-produto/ping retorna 200 (para testar se o path chega no servidor)
 routerFamilias.get('/ping', (req, res) => { res.json({ ok: true, service: 'familias-produto' }); });
 routerFamilias.get('/', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
@@ -9704,6 +9707,9 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 
 // Servir fotos de famílias (rotas de API já registradas acima)
 app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
+
+// Famílias de produtos sob /api/produtos/familias (path que já é roteado no proxy)
+app.use('/api/produtos/familias', routerFamilias);
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
