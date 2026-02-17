@@ -2210,6 +2210,10 @@ app.post('/api/clientes', authenticateToken, (req, res) => {
 app.get('/api/deploy-version', (req, res) => {
   res.json({ version: 'familias-2026-02', hasFamilias: true });
 });
+// Duplicar sem /api para proxy que repassa só /familias (Coolify etc.)
+app.get('/deploy-version', (req, res) => {
+  res.json({ version: 'familias-2026-02', hasFamilias: true });
+});
 app.get('/api/familias', authenticateToken, (req, res) => {
   db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
@@ -2217,6 +2221,26 @@ app.get('/api/familias', authenticateToken, (req, res) => {
   });
 });
 app.post('/api/familias', authenticateToken, (req, res) => {
+  var body = req.body || {};
+  var nome = (body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
+  var ordem = parseInt(body.ordem, 10) || 0;
+  db.run('INSERT INTO familias_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, ordem], function(err) {
+    if (err) {
+      if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ id: this.lastID, nome: nome, ordem: ordem });
+  });
+});
+// Rotas sem /api (fallback para proxy que repassa só o path após /api)
+app.get('/familias', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.post('/familias', authenticateToken, (req, res) => {
   var body = req.body || {};
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
