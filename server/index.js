@@ -1667,8 +1667,8 @@ app.get('/api', (req, res) => {
       projetos: '/api/projetos',
       propostas: '/api/propostas',
       produtos: '/api/produtos',
+      familiasProduto: '/api/familias-produto',
       relatorios: '/api/relatorios',
-      // Adicione outros endpoints conforme necessário
     },
     timestamp: new Date().toISOString()
   });
