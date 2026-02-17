@@ -7,8 +7,12 @@ function getApiBaseURL() {
     return process.env.REACT_APP_API_URL;
   }
   
-  // Em produção (build): URL absoluta evita 404 em proxy (Coolify, etc.)
+  // Em produção: se a app está em /comercial, a API pode estar em /comercial/api
   if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined' && window.location.origin) {
+    const pathname = window.location.pathname || '';
+    if (pathname.startsWith('/comercial')) {
+      return window.location.origin + '/comercial/api';
+    }
     return window.location.origin + '/api';
   }
   if (process.env.NODE_ENV === 'production') {

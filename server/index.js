@@ -9708,8 +9708,9 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 // Servir fotos de famílias (rotas de API já registradas acima)
 app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
 
-// Famílias de produtos sob /api/produtos/familias (path que já é roteado no proxy)
+// Famílias de produtos: /api/produtos/familias e /comercial/api/produtos/familias (caso o proxy use /comercial)
 app.use('/api/produtos/familias', routerFamilias);
+app.use('/comercial/api/produtos/familias', routerFamilias);
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
