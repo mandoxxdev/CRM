@@ -37,9 +37,12 @@ const api = axios.create({
   baseURL: getApiBaseURL(),
 });
 
-// Interceptor para adicionar token em todas as requisições
+// Interceptor para adicionar token em todas as requisições (localStorage, sessionStorage ou header global)
 api.interceptors.request.use((config) => {
-  let token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  let token = localStorage.getItem('token') || sessionStorage.getItem('token') ||
+    (typeof axios !== 'undefined' && axios.defaults && axios.defaults.headers && axios.defaults.headers.common && axios.defaults.headers.common.Authorization
+      ? axios.defaults.headers.common.Authorization.replace(/^Bearer\s+/i, '')
+      : null);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
     config.headers['X-Auth-Token'] = token;
