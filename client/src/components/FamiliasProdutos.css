@@ -91,8 +91,8 @@
 }
 
 .familia-card-chevron {
-  color: var(--gmp-primary);
-  opacity: 0.8;
+  color: #0066cc;
+  opacity: 0.9;
   flex-shrink: 0;
   transition: transform 0.3s ease;
 }
@@ -215,11 +215,12 @@
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: 0.02em;
-  color: var(--gmp-text);
+  color: #1e293b;
   text-align: center;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
-  border-top: 1px solid rgba(255, 255, 255, 0.8);
+  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
   min-height: 52px;
   display: flex;
   align-items: center;

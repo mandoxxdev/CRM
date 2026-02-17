@@ -10,9 +10,14 @@ const ProdutoForm = () => {
   const location = useLocation();
   const isEdit = !!id;
   
-  // Detectar tipo de produto via query params ou família do produto (ao editar)
+  // Tipo: padrao (formulário padrão), equipamentos, discos-acessorios, servicos
   const searchParams = new URLSearchParams(location.search);
-  const [tipoProduto, setTipoProduto] = useState(searchParams.get('tipo') || 'equipamentos');
+  const tipoFromUrl = searchParams.get('tipo');
+  const [tipoProduto, setTipoProduto] = useState(
+    tipoFromUrl && ['equipamentos', 'discos-acessorios', 'servicos'].includes(tipoFromUrl)
+      ? tipoFromUrl
+      : 'padrao'
+  );
 
   const [formData, setFormData] = useState({
     codigo: '',
@@ -132,16 +137,10 @@ const ProdutoForm = () => {
   }, [isEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // Se não estiver editando e não tiver tipo especificado, redirecionar para seleção
-    if (!isEdit && !tipoProduto) {
-      navigate('/comercial/produtos');
-    }
-    
     if (isEdit) {
       loadProduto();
     } else {
       // Gerar código automaticamente para novos produtos
-      // Aguardar um pouco para garantir que o formData está inicializado
       setTimeout(() => {
         generateCodigoProduto();
       }, 100);
@@ -278,7 +277,7 @@ const ProdutoForm = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const newValue = name === 'ativo' ? (value === 'true' ? 1 : 0) : 
+    const newValue = name === 'ativo' ? (value === 'true' || value === '1' ? 1 : 0) : 
                     (name === 'preco_base' || name === 'icms' || name === 'ipi') ? parseFloat(value) || 0 : value;
     
     setFormData(prev => {
@@ -501,6 +500,160 @@ const ProdutoForm = () => {
       setLoading(false);
     }
   };
+
+  // Formulário padrão de cadastro de produto (menu padrão – customizável depois)
+  const renderFormularioPadrao = () => (
+    <div className="produto-form">
+      <div className="form-header">
+        <h1>{isEdit ? 'Editar Produto' : 'Cadastro de Produto'}</h1>
+        <button type="button" onClick={() => navigate('/comercial/produtos')} className="btn-cancel">
+          <FiX /> Cancelar
+        </button>
+      </div>
+      {error && <div className="error-message">{error}</div>}
+      <form onSubmit={handleSubmit} className="form-container">
+        <div className="form-section">
+          <h2>Informações Básicas</h2>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Código *</label>
+              <input
+                type="text"
+                name="codigo"
+                value={formData.codigo}
+                onChange={handleChange}
+                required
+                placeholder="Código (gerado automaticamente)"
+                readOnly={!!isEdit}
+                className={formData.codigo ? 'field-valid' : ''}
+              />
+            </div>
+            <div className="form-group">
+              <label>Nome *</label>
+              <input
+                type="text"
+                name="nome"
+                value={formData.nome}
+                onChange={handleChange}
+                required
+                placeholder="Nome do produto"
+                className={formData.nome ? 'field-valid' : ''}
+              />
+            </div>
+            <div className="form-group">
+              <label>Família</label>
+              <select name="familia_produto" value={formData.familia_produto} onChange={handleChange}>
+                <option value="">Selecione...</option>
+                {familias.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Modelo</label>
+              <input
+                type="text"
+                name="modelo"
+                value={formData.modelo}
+                onChange={handleChange}
+                placeholder="Ex: ULTRAMIX, TQY-500"
+              />
+            </div>
+            <div className="form-group">
+              <label>Unidade</label>
+              <select name="unidade" value={formData.unidade} onChange={handleChange}>
+                {unidades.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Status</label>
+              <select name="ativo" value={formData.ativo} onChange={handleChange}>
+                <option value={1}>Ativo</option>
+                <option value={0}>Inativo</option>
+              </select>
+            </div>
+            <div className="form-group full-width">
+              <label>Descrição</label>
+              <textarea
+                name="descricao"
+                value={formData.descricao}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Descrição do produto"
+              />
+            </div>
+            {isEdit && id && (
+              <div className="form-group full-width">
+                <label>Foto do Produto</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {imagemProduto && (
+                    <div style={{ width: 200, height: 200, border: '1px solid var(--gmp-border)', borderRadius: 8, overflow: 'hidden' }}>
+                      <img src={`${api.defaults.baseURL || ''}/api/uploads/produtos/${imagemProduto}`} alt="Produto" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" onChange={handleUploadImagem} disabled={uploadingImagem || !id} />
+                  {!id && <span style={{ fontSize: '0.875rem', color: 'var(--gmp-text-secondary)' }}>Salve o produto antes de adicionar imagem.</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="form-section">
+          <h2>Informações Comerciais</h2>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Preço Base (R$)</label>
+              <input
+                type="number"
+                name="preco_base"
+                value={formData.preco_base}
+                onChange={handleChange}
+                step="0.01"
+                min={0}
+                placeholder="0,00"
+              />
+            </div>
+            <div className="form-group">
+              <label>ICMS (%)</label>
+              <input type="number" name="icms" value={formData.icms} onChange={handleChange} step="0.01" min={0} max={100} placeholder="0" />
+            </div>
+            <div className="form-group">
+              <label>IPI (%)</label>
+              <input type="number" name="ipi" value={formData.ipi} onChange={handleChange} step="0.01" min={0} max={100} placeholder="0" />
+            </div>
+            <div className="form-group">
+              <label>NCM</label>
+              <input type="text" name="ncm" value={formData.ncm} onChange={handleChange} placeholder="8 dígitos" maxLength={8} />
+            </div>
+          </div>
+        </div>
+        <div className="form-section">
+          <div className="form-group">
+            <label>Observações</label>
+            <textarea name="observacoes" value={formData.observacoes} onChange={handleChange} rows={3} placeholder="Observações adicionais" />
+          </div>
+        </div>
+        <div className="form-actions">
+          <button type="submit" className="btn-primary" disabled={loading}>
+            <FiSave /> {loading ? 'Salvando...' : 'Salvar'}
+          </button>
+          <button type="button" onClick={() => navigate('/comercial/produtos')} className="btn-secondary">
+            Cancelar
+          </button>
+        </div>
+      </form>
+      {showToast.show && (
+        <div className={`toast-notification toast-${showToast.type}`}>
+          <div className="toast-content">
+            {showToast.type === 'success' ? <FiCheckCircle style={{ fontSize: 20, marginRight: 10 }} /> : <FiAlertCircle style={{ fontSize: 20, marginRight: 10 }} />}
+            <span>{showToast.message}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   // Renderizar formulário básico para Discos/Acessórios e Serviços
   const renderFormularioBasico = () => {
@@ -782,7 +935,11 @@ const ProdutoForm = () => {
     );
   };
 
-  // Se for serviços e não estiver editando, renderizar formulário básico
+  // Formulário padrão: usado em "Novo Produto" (sem escolher tipo) ou ao editar com tipo padrão
+  if (tipoProduto === 'padrao') {
+    return renderFormularioPadrao();
+  }
+
   if (tipoProduto === 'servicos' && !isEdit) {
     return renderFormularioBasico();
   }

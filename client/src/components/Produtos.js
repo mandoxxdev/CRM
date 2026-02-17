@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFileText, FiArrowLeft } from 'react-icons/fi';
-import ModalSelecaoTipoProduto from './ModalSelecaoTipoProduto';
 import './Produtos.css';
 import './Loading.css';
 
@@ -13,7 +12,6 @@ const Produtos = ({ familiaFromUrl, familiaNome }) => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterFamilia, setFilterFamilia] = useState(familiaFromUrl || '');
-  const [showModalTipo, setShowModalTipo] = useState(false);
 
   useEffect(() => {
     if (familiaFromUrl) setFilterFamilia(familiaFromUrl);
@@ -125,7 +123,13 @@ const Produtos = ({ familiaFromUrl, familiaNome }) => {
           <p>Gerenciamento de produtos e geração de propostas</p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
-          <button onClick={() => setShowModalTipo(true)} className="btn-premium">
+          <button
+            onClick={() => {
+              const qs = filterFamilia || familiaNome ? `?familia=${encodeURIComponent(filterFamilia || familiaNome || '')}` : '';
+              navigate(`/comercial/produtos/novo${qs}`);
+            }}
+            className="btn-premium"
+          >
             <div className="btn-premium-icon">
               <FiPlus size={20} />
             </div>
@@ -134,12 +138,6 @@ const Produtos = ({ familiaFromUrl, familiaNome }) => {
           </button>
         </div>
       </div>
-
-      <ModalSelecaoTipoProduto 
-        isOpen={showModalTipo} 
-        onClose={() => setShowModalTipo(false)}
-        familiaNome={filterFamilia || familiaNome}
-      />
 
       <div className="filters">
         <div className="search-box">
