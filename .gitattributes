@@ -1,0 +1,3 @@
+# Normalizar fim de linha para LF (evita o warning CRLF no Windows)
+* text=auto eol=lf
+*.bat text eol=crlf
