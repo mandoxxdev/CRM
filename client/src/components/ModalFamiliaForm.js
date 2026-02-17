@@ -79,7 +79,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
       const status = err.response?.status;
       const msg = err.response?.data?.error || err.message || 'Erro ao salvar.';
       if (status === 404) {
-        setError('Rota da API não encontrada (404). Se o app está no Coolify, faça um novo deploy com o código atualizado e tente novamente.');
+        setError('Não foi possível salvar. Faça um novo deploy no Coolify e tente novamente.');
       } else {
         setError(msg);
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -40,7 +40,8 @@ const PropostaForm = () => {
   const [showModalAprovacaoNecessaria, setShowModalAprovacaoNecessaria] = useState(false);
   const [showXFullscreenAprovacao, setShowXFullscreenAprovacao] = useState(false);
   const [propostaParaSalvar, setPropostaParaSalvar] = useState(null);
-  const familiasProduto = [
+  const [familiasFromApi, setFamiliasFromApi] = useState([]);
+  const familiasProdutoPadrao = [
     'Moinhos',
     'Masseiras',
     'Agitadores',
@@ -53,6 +54,11 @@ const PropostaForm = () => {
     'Equipamentos á Vácuo',
     'Outros'
   ];
+  const familiasProduto = useMemo(() => {
+    const fromApi = (familiasFromApi || []).map((f) => (typeof f === 'string' ? f : f.nome)).filter(Boolean);
+    if (fromApi.length > 0) return fromApi.includes('Outros') ? fromApi : [...fromApi, 'Outros'];
+    return familiasProdutoPadrao;
+  }, [familiasFromApi]);
   const [formData, setFormData] = useState({
     cliente_id: '',
     projeto_id: '',
@@ -72,6 +78,29 @@ const PropostaForm = () => {
     lembrete_mensagem: '',
     margem_desconto: 0
   });
+
+  useEffect(() => {
+    api.get('/familias').then((res) => {
+      const list = res.data || [];
+      setFamiliasFromApi(Array.isArray(list) ? list : []);
+    }).catch(() => setFamiliasFromApi([]));
+  }, []);
+
+  // Quando a lista de famílias (API) atualizar, reavaliar "Outros" para proposta já carregada
+  useEffect(() => {
+    const fp = formData.familia_produto;
+    if (!fp) return;
+    if (familiasProduto.includes(fp)) {
+      setMostrarOutrosFamilia(false);
+      setOutrosFamiliaTexto('');
+    } else if (fp === 'Outros') {
+      setMostrarOutrosFamilia(true);
+      setOutrosFamiliaTexto('');
+    } else {
+      setMostrarOutrosFamilia(true);
+      setOutrosFamiliaTexto(fp);
+    }
+  }, [familiasProduto.join(','), formData.familia_produto]);
 
   useEffect(() => {
     loadClientes();

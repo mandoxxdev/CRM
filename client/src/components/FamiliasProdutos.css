@@ -37,6 +37,13 @@
   border-color: var(--gmp-primary);
 }
 
+.familia-card-only {
+  cursor: default;
+}
+.familia-card-only .familia-card-actions {
+  opacity: 1;
+}
+
 .familia-card-foto {
   position: relative;
   aspect-ratio: 1;
@@ -142,4 +149,5 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
+  margin-top: var(--spacing-md);
 }

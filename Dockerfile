@@ -16,8 +16,12 @@ RUN rm -f package-lock.json server/package-lock.json client/package-lock.json &&
     cd server && npm install --legacy-peer-deps && cd .. && \
     cd client && npm install --legacy-peer-deps && cd ..
 
-# Copiar resto do código
+# Copiar resto do código (ARG invalida cache ao fazer redeploy no Coolify)
+ARG CACHEBUST=1
 COPY . .
+
+# Garantir que a rota de famílias está no código (falha o build se o Coolify não tiver o código novo)
+RUN grep -q "'/api/familias'" server/index.js || (echo "ERRO: server/index.js nao tem rota /api/familias. Faca push do codigo e redeploy." && exit 1)
 
 # Build do cliente: mais memória para evitar falha no container, sem source maps para economizar RAM
 ENV CI=false

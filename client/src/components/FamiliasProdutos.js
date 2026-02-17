@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
-import { FiPlus, FiEdit2, FiTrash2, FiPackage, FiArrowLeft } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiPackage } from 'react-icons/fi';
 import ModalFamiliaForm from './ModalFamiliaForm';
 import './FamiliasProdutos.css';
 import './Loading.css';
 
 const FamiliasProdutos = () => {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const familiaFromUrl = searchParams.get('familia');
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModalFamilia, setShowModalFamilia] = useState(false);
@@ -38,7 +34,7 @@ const FamiliasProdutos = () => {
   };
 
   const handleExcluir = async (id, nome) => {
-    if (!window.confirm(`Desativar a família "${nome}"? Os produtos continuarão vinculados a esse nome.`)) return;
+    if (!window.confirm(`Desativar a família "${nome}"?`)) return;
     try {
       await api.delete(`/familias/${id}`);
       loadFamilias();
@@ -54,11 +50,6 @@ const FamiliasProdutos = () => {
     loadFamilias();
   };
 
-  // Se veio com ?familia= na URL, mostrar a lista de produtos filtrada (componente pai faz isso)
-  if (familiaFromUrl) {
-    return null; // Quem renderiza é o wrapper que mostra Produtos
-  }
-
   if (loading) {
     return (
       <div className="loading">
@@ -72,8 +63,8 @@ const FamiliasProdutos = () => {
     <div className="familias-produtos">
       <div className="page-header familias-header">
         <div>
-          <h1>Famílias de Produtos</h1>
-          <p>Selecione uma família para ver e gerenciar os produtos</p>
+          <h1>Cadastro de Famílias</h1>
+          <p>Cadastre e gerencie as famílias de produtos</p>
         </div>
         <div className="header-actions">
           <button onClick={() => { setEditingFamilia(null); setShowModalFamilia(true); }} className="btn-premium">
@@ -98,7 +89,7 @@ const FamiliasProdutos = () => {
           <div className="familias-empty">
             <FiPackage size={48} />
             <p>Nenhuma família cadastrada.</p>
-            <p className="hint">Cadastre famílias para organizar seus produtos (ex: Misturadores, Dosadores, Bombas).</p>
+            <p className="hint">Clique em Nova Família para cadastrar.</p>
             <button onClick={() => setShowModalFamilia(true)} className="btn-primary">
               <FiPlus /> Nova Família
             </button>
@@ -107,11 +98,7 @@ const FamiliasProdutos = () => {
           familias.map((f) => {
             const fotoUrl = getFotoUrl(f.foto);
             return (
-              <div
-                key={f.id}
-                className="familia-card"
-                onClick={() => navigate(`/comercial/produtos?familia=${encodeURIComponent(f.nome)}`)}
-              >
+              <div key={f.id} className="familia-card familia-card-only">
                 <div className="familia-card-foto">
                   {fotoUrl ? (
                     <img src={fotoUrl} alt={f.nome} />
@@ -124,21 +111,20 @@ const FamiliasProdutos = () => {
                     <button
                       className="btn-icon-card"
                       title="Editar família"
-                      onClick={(e) => { e.stopPropagation(); setEditingFamilia(f); setShowModalFamilia(true); }}
+                      onClick={() => { setEditingFamilia(f); setShowModalFamilia(true); }}
                     >
                       <FiEdit2 />
                     </button>
                     <button
                       className="btn-icon-card btn-danger"
                       title="Desativar família"
-                      onClick={(e) => { e.stopPropagation(); handleExcluir(f.id, f.nome); }}
+                      onClick={() => handleExcluir(f.id, f.nome)}
                     >
                       <FiTrash2 />
                     </button>
                   </div>
                 </div>
                 <div className="familia-card-nome">{f.nome}</div>
-                <div className="familia-card-cta">Ver produtos →</div>
               </div>
             );
           })
