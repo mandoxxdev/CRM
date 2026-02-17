@@ -22,7 +22,7 @@ const FamiliasProdutos = () => {
   const loadFamilias = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/produtos/familias');
+      const response = await api.get('/familias');
       setFamilias(response.data || []);
     } catch (error) {
       console.error('Erro ao carregar famílias:', error);
@@ -40,7 +40,7 @@ const FamiliasProdutos = () => {
   const handleExcluir = async (id, nome) => {
     if (!window.confirm(`Desativar a família "${nome}"? Os produtos continuarão vinculados a esse nome.`)) return;
     try {
-      await api.delete(`/produtos/familias/${id}`);
+      await api.delete(`/familias/${id}`);
       loadFamilias();
     } catch (error) {
       console.error('Erro ao desativar família:', error);

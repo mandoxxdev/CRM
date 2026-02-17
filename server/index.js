@@ -111,6 +111,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Debug: confirma que a rota de famílias existe no deploy (remover em produção se quiser)
+app.get('/api/produtos/familias/ping', (req, res) => {
+  res.json({ ok: true, route: 'familias', t: Date.now() });
+});
+
 // Configurar diretório de uploads
 const uploadsDir = path.join(__dirname, 'uploads', 'cotacoes');
 if (!fs.existsSync(uploadsDir)) {
@@ -1705,6 +1710,8 @@ app.get('/api/familias-produto', authenticateToken, handleGetFamilias);
 app.post('/api/familias-produto', authenticateToken, handlePostFamilias);
 app.get('/api/produtos/familias', authenticateToken, handleGetFamilias);
 app.post('/api/produtos/familias', authenticateToken, handlePostFamilias);
+app.get('/api/familias', authenticateToken, handleGetFamilias);
+app.post('/api/familias', authenticateToken, handlePostFamilias);
 
 // ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router para demais métodos e path sem /api) ==========
 var routerFamilias = express.Router();
@@ -1809,6 +1816,7 @@ routerFamilias.post('/:id/foto', authenticateToken, uploadFamilia.single('foto')
 app.use('/api/familias-produto', routerFamilias);
 app.use('/familias-produto', routerFamilias);
 app.use('/api/produtos/familias', routerFamilias);
+app.use('/api/familias', routerFamilias);
 
 // ========== ROTA DE BUSCA DE CNPJ ==========
 // Endpoint para buscar dados de CNPJ (com autenticação)
