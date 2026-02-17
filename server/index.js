@@ -2206,6 +2206,10 @@ app.post('/api/clientes', authenticateToken, (req, res) => {
 });
 
 // ========== ROTAS DE FAMÍLIAS DE PRODUTOS (igual clientes/projetos) ==========
+// Rota de diagnóstico: se esta URL responder, o backend tem o código novo (famílias)
+app.get('/api/deploy-version', (req, res) => {
+  res.json({ version: 'familias-2026-02', hasFamilias: true });
+});
 app.get('/api/familias', authenticateToken, (req, res) => {
   db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
