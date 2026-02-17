@@ -1674,15 +1674,15 @@ app.get('/api', (req, res) => {
   });
 });
 
-// ========== FAMÍLIAS DE PRODUTOS – rotas explícitas no topo para evitar 404 (listar e cadastrar) ==========
-app.get('/api/familias-produto', authenticateToken, (req, res) => {
+// ========== FAMÍLIAS DE PRODUTOS – rotas explícitas no topo (path principal + alias para evitar 404 em proxy) ==========
+function handleGetFamilias(req, res) {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
-});
-app.post('/api/familias-produto', authenticateToken, (req, res) => {
+}
+function handlePostFamilias(req, res) {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   var body = req.body || {};
   var nome = (body.nome || '').trim();
@@ -1699,7 +1699,12 @@ app.post('/api/familias-produto', authenticateToken, (req, res) => {
       res.status(201).json(row);
     });
   });
-});
+}
+
+app.get('/api/familias-produto', authenticateToken, handleGetFamilias);
+app.post('/api/familias-produto', authenticateToken, handlePostFamilias);
+app.get('/api/produtos/familias', authenticateToken, handleGetFamilias);
+app.post('/api/produtos/familias', authenticateToken, handlePostFamilias);
 
 // ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router para demais métodos e path sem /api) ==========
 var routerFamilias = express.Router();
@@ -1803,6 +1808,7 @@ routerFamilias.post('/:id/foto', authenticateToken, uploadFamilia.single('foto')
 
 app.use('/api/familias-produto', routerFamilias);
 app.use('/familias-produto', routerFamilias);
+app.use('/api/produtos/familias', routerFamilias);
 
 // ========== ROTA DE BUSCA DE CNPJ ==========
 // Endpoint para buscar dados de CNPJ (com autenticação)

@@ -55,20 +55,20 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, familia }) => {
     setError('');
     try {
       if (isEdit) {
-        await api.put(`/familias-produto/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        await api.put(`/produtos/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
         if (fotoFile) {
           const formData = new FormData();
           formData.append('foto', fotoFile);
-          await api.post(`/familias-produto/${familia.id}/foto`, formData, {
+          await api.post(`/produtos/familias/${familia.id}/foto`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
         }
       } else {
-        const res = await api.post('/familias-produto', { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        const res = await api.post('/produtos/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 });
         if (fotoFile && res.data && res.data.id) {
           const formData = new FormData();
           formData.append('foto', fotoFile);
-          await api.post(`/familias-produto/${res.data.id}/foto`, formData, {
+          await api.post(`/produtos/familias/${res.data.id}/foto`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
         }
