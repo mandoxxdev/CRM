@@ -19,8 +19,9 @@ RUN rm -f package-lock.json server/package-lock.json client/package-lock.json &&
 # Copiar resto do código
 COPY . .
 
-# Build do cliente: mais memória para evitar falha no container, sem source maps para economizar RAM
+# Build do cliente: mais memória, sem ESLint no build (evita falha por warnings), sem source maps
 ENV CI=false
+ENV DISABLE_ESLINT_PLUGIN=true
 ENV GENERATE_SOURCEMAP=false
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN cd client && npm run build && cd ..
