@@ -291,8 +291,8 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
           ) : (
             <>
               <div className="tipo-selecao-grid">
-                {modulosDisponiveis.length > 0 ? (
-                  modulosDisponiveis.map((modulo) => {
+                {(Array.isArray(modulosDisponiveis) ? modulosDisponiveis : []).length > 0 ? (
+                  (Array.isArray(modulosDisponiveis) ? modulosDisponiveis : []).map((modulo) => {
                     const Icon = modulo.icon;
                     const isDisponivel = modulo.disponivel;
                     

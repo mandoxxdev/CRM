@@ -98,7 +98,7 @@ const Dashboard = () => {
     const loadLogos = async () => {
       try {
         const res = await api.get('/clientes/logos', { params: { limit: 300 } });
-        setClientLogos(res.data?.logos || []);
+        setClientLogos(Array.isArray(res.data?.logos) ? res.data.logos : []);
       } catch (_) {
         setClientLogos([]);
       }
@@ -136,32 +136,36 @@ const Dashboard = () => {
             }
           }))
         ]);
-        setStats(dashboardRes.data || {
-          totalClientes: 0,
-          totalProjetos: 0,
-          projetosPorStatus: [],
-          propostasPorStatus: [],
-          valorTotalPropostasAprovadas: 0
+        const statsData = dashboardRes.data || {};
+        setStats({
+          totalClientes: statsData.totalClientes ?? 0,
+          totalProjetos: statsData.totalProjetos ?? 0,
+          projetosPorStatus: Array.isArray(statsData.projetosPorStatus) ? statsData.projetosPorStatus : [],
+          propostasPorStatus: Array.isArray(statsData.propostasPorStatus) ? statsData.propostasPorStatus : [],
+          valorTotalPropostasAprovadas: statsData.valorTotalPropostasAprovadas ?? 0
         });
         // Formatar histórico para o formato esperado pelos gráficos
-        const historicoFormatado = (historicoRes.data || []).map(item => ({
+        const historicoRaw = historicoRes.data;
+        const historicoFormatado = (Array.isArray(historicoRaw) ? historicoRaw : []).map(item => ({
           name: item.mes ? new Date(item.mes + '-01').toLocaleString('pt-BR', { month: 'short' }) : item.name || 'Sem data',
           clientes: item.clientes || 0,
           projetos: item.projetos || 0,
           receita: item.receita || item.propostas_aprovadas || item.valor_total || 0
         }));
         setHistorico(historicoFormatado);
-        setDadosAvancados(avancadoRes.data || {
-          propostasPorEstado: [],
-          volumeBuscaPorRegiao: [],
-          rankClientesCompras: [],
-          rankClientesPropostas: [],
-          rankRegiaoCompras: [],
-          rankOrigemBusca: [],
-          taxaConversaoFamilia: [],
-          rankClientesPorSegmento: [],
-          motivoNaoVenda: [],
-          cotacoesComLembrete: []
+        const avancadoData = avancadoRes.data || {};
+        const arr = (v) => Array.isArray(v) ? v : [];
+        setDadosAvancados({
+          propostasPorEstado: arr(avancadoData.propostasPorEstado),
+          volumeBuscaPorRegiao: arr(avancadoData.volumeBuscaPorRegiao),
+          rankClientesCompras: arr(avancadoData.rankClientesCompras),
+          rankClientesPropostas: arr(avancadoData.rankClientesPropostas),
+          rankRegiaoCompras: arr(avancadoData.rankRegiaoCompras),
+          rankOrigemBusca: arr(avancadoData.rankOrigemBusca),
+          taxaConversaoFamilia: arr(avancadoData.taxaConversaoFamilia),
+          rankClientesPorSegmento: arr(avancadoData.rankClientesPorSegmento),
+          motivoNaoVenda: arr(avancadoData.motivoNaoVenda),
+          cotacoesComLembrete: arr(avancadoData.cotacoesComLembrete)
         });
         setLoading(false);
       } catch (error) {
@@ -251,13 +255,16 @@ const Dashboard = () => {
 
 
   // Garantir que stats sempre existe com valores padrão (memoizado)
-  const safeStats = useMemo(() => stats || {
-    totalClientes: 0,
-    totalProjetos: 0,
-    projetosPorStatus: [],
-    propostasPorStatus: [],
-    valorTotalPropostasAprovadas: 0,
-    taxaConversao: 0
+  const safeStats = useMemo(() => {
+    const base = stats || {};
+    return {
+      totalClientes: base.totalClientes ?? 0,
+      totalProjetos: base.totalProjetos ?? 0,
+      projetosPorStatus: Array.isArray(base.projetosPorStatus) ? base.projetosPorStatus : [],
+      propostasPorStatus: Array.isArray(base.propostasPorStatus) ? base.propostasPorStatus : [],
+      valorTotalPropostasAprovadas: base.valorTotalPropostasAprovadas ?? 0,
+      taxaConversao: base.taxaConversao ?? 0
+    };
   }, [stats]);
 
   const COLORS = useMemo(() => ['#0066cc', '#00c853', '#00a8e8', '#ff9800', '#003d7a', '#9c27b0'], []);
@@ -374,11 +381,12 @@ const Dashboard = () => {
   const variacaoReceita = calcularVariacao('receita', safeStats.valorTotalPropostasAprovadas);
 
   const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
+    const payloadList = Array.isArray(payload) ? payload : [];
+    if (active && payloadList.length) {
       return (
         <div className="custom-tooltip">
           <p className="tooltip-label">{label}</p>
-          {payload.map((entry, index) => (
+          {payloadList.map((entry, index) => (
             <p key={index} className="tooltip-value" style={{ color: entry.color }}>
               {entry.name}: {typeof entry.value === 'number' && entry.value > 1000 
                 ? formatCurrency(entry.value) 
@@ -418,21 +426,22 @@ const Dashboard = () => {
     setTimeout(scrollToTop, 0);
     setTimeout(scrollToTop, 10);
     
+    const dadosSeguros = Array.isArray(dados) ? dados : [];
     let dadosFormatados = [];
     
     if (tipoGrafico === 'pie') {
-      dadosFormatados = dados.map(item => ({
+      dadosFormatados = dadosSeguros.map(item => ({
         name: item.status || item.name || item.uf || item.regiao || item.familia_produto || item.segmento || item.origem_busca || item.motivo_nao_venda || 'Outro',
         value: item.total || item.count || item.valor_total || item.total_propostas || item.total_clientes || item.taxa_conversao || 0
       }));
     } else if (tipoGrafico === 'composed') {
-      dadosFormatados = dados.map(item => ({
+      dadosFormatados = dadosSeguros.map(item => ({
         name: item.name || item.mes || item.status || 'Item',
         barValue: item.clientes || item.projetos || item.total || 0,
         lineValue: item.receita || item.valor_aprovado || 0
       }));
     } else {
-      dadosFormatados = dados.map(item => ({
+      dadosFormatados = dadosSeguros.map(item => ({
         name: item.name || item.mes || item.status || item.uf || item.regiao || item.razao_social || item.familia_produto || item.segmento || 'Item',
         value: item.clientes || item.projetos || item.receita || item.total || item.count || item.valor_total || item.total_propostas || item.total_clientes || item.taxa_conversao || 0
       }));
@@ -475,7 +484,7 @@ const Dashboard = () => {
           <p className="dashboard-clientes-confiam-titulo">Alguns clientes que confiam na GMP</p>
           <div className="dashboard-clientes-confiam-wrap">
             <div className="dashboard-clientes-confiam-track">
-              {[...clientLogos, ...clientLogos, ...clientLogos].map((c, i) => (
+              {(Array.isArray(clientLogos) ? [...clientLogos, ...clientLogos, ...clientLogos] : []).map((c, i) => (
                 <div key={`${c.id}-${i}`} className="dashboard-clientes-confiam-item">
                   <img
                     src={getLogoUrl(c.logo_url)}
@@ -1093,7 +1102,7 @@ const Dashboard = () => {
                     fill="#8884d8"
                     dataKey="total"
                   >
-                    {(dadosAvancados.rankOrigemBusca || []).map((entry, index) => (
+                    {(Array.isArray(dadosAvancados.rankOrigemBusca) ? dadosAvancados.rankOrigemBusca : []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -1201,7 +1210,7 @@ const Dashboard = () => {
                     fill="#8884d8"
                     dataKey="total"
                   >
-                    {(dadosAvancados.motivoNaoVenda || []).map((entry, index) => (
+                    {(Array.isArray(dadosAvancados.motivoNaoVenda) ? dadosAvancados.motivoNaoVenda : []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -1217,7 +1226,7 @@ const Dashboard = () => {
                 <p>Cotações com avisos e lembretes por data</p>
               </div>
               <div className="lembretes-list">
-                {dadosAvancados.cotacoesComLembrete && dadosAvancados.cotacoesComLembrete.length > 0 ? (
+                {Array.isArray(dadosAvancados.cotacoesComLembrete) && dadosAvancados.cotacoesComLembrete.length > 0 ? (
                   <table className="lembretes-table">
                     <thead>
                       <tr>
@@ -1231,7 +1240,7 @@ const Dashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {dadosAvancados.cotacoesComLembrete.map((item) => (
+                      {(Array.isArray(dadosAvancados.cotacoesComLembrete) ? dadosAvancados.cotacoesComLembrete : []).map((item) => (
                         <tr key={item.id} className={item.lembrete_vencido ? 'vencido' : ''}>
                           <td>{item.numero_proposta}</td>
                           <td>{item.razao_social}</td>

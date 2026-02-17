@@ -109,7 +109,8 @@ const Layout = () => {
   const loadUserGrupos = async () => {
     try {
       const response = await api.get(`/usuarios/${user.id}/grupos`);
-      setUserGrupos(response.data.grupos || []);
+      const grupos = response.data?.grupos;
+      setUserGrupos(Array.isArray(grupos) ? grupos : []);
     } catch (error) {
       console.error('Erro ao carregar grupos do usuário:', error);
       setUserGrupos([]);
@@ -228,7 +229,7 @@ const Layout = () => {
             <FiGrid />
             {sidebarOpen && <span>Selecionar Módulo</span>}
           </button>
-          {menuItems.map((item) => {
+          {(Array.isArray(menuItems) ? menuItems : []).map((item) => {
             // Verificar se é rota admin e se usuário é admin
             // Se não houver role definido, mostrar para todos (compatibilidade)
             if (item.adminOnly && user?.role && user?.role !== 'admin') {
@@ -266,16 +267,19 @@ const Layout = () => {
               <>
                 <div className="user-name">{user?.nome}</div>
                 <div className="user-role">
-                  {userGrupos.length > 0 ? (
-                    userGrupos.map((grupo, index) => (
-                      <span key={grupo.id}>
-                        {grupo.nome}
-                        {index < userGrupos.length - 1 && ', '}
-                      </span>
-                    ))
-                  ) : (
+                  {(() => {
+                    const grupos = Array.isArray(userGrupos) ? userGrupos : [];
+                    return grupos.length > 0 ? (
+                      grupos.map((grupo, index) => (
+                        <span key={grupo.id}>
+                          {grupo.nome}
+                          {index < grupos.length - 1 && ', '}
+                        </span>
+                      ))
+                    ) : (
                     <span>Sem grupo</span>
-                  )}
+                  );
+                  })()}
                 </div>
               </>
             )}
