@@ -1460,7 +1460,7 @@ function dbAllWithRetry(sql, params = [], callback, maxRetries = 3) {
   execute();
 }
 
-// Authentication Middleware (aceita Authorization, X-Auth-Token, query.token ou cookie token)
+// Authentication Middleware
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.split(' ')[1];
@@ -1469,10 +1469,6 @@ function authenticateToken(req, res, next) {
   }
   if (!token && req.query && req.query.token) {
     token = req.query.token;
-  }
-  if (!token && req.headers.cookie) {
-    const match = req.headers.cookie.match(/\btoken=([^;]+)/);
-    if (match) token = match[1].trim();
   }
 
   if (!token) {
@@ -1671,20 +1667,16 @@ app.get('/api', (req, res) => {
       projetos: '/api/projetos',
       propostas: '/api/propostas',
       produtos: '/api/produtos',
-      familiasProduto: '/api/familias-produto',
       relatorios: '/api/relatorios',
+      // Adicione outros endpoints conforme necessário
     },
     timestamp: new Date().toISOString()
   });
 });
 
-// Rota de diagnóstico explícita (sem router) para garantir que existe após deploy
-app.get('/api/familias-produto/ping', (req, res) => { res.json({ ok: true, service: 'familias-produto', version: '1' }); });
-app.get('/familias-produto/ping', (req, res) => { res.json({ ok: true, service: 'familias-produto', version: '1' }); });
-
-// ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router montado em /api e sem /api para Coolify) ==========
+// ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router montado em /api e sem /api para Coolify/proxies) ==========
 var routerFamilias = express.Router();
-routerFamilias.get('/ping', (req, res) => { res.json({ ok: true, service: 'familias-produto' }); });
+
 routerFamilias.get('/', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
@@ -1781,13 +1773,9 @@ routerFamilias.post('/:id/foto', authenticateToken, uploadFamilia.single('foto')
     });
   });
 });
-var basePath = (process.env.BASE_PATH || '').replace(/\/$/, '');
+
 app.use('/api/familias-produto', routerFamilias);
 app.use('/familias-produto', routerFamilias);
-if (basePath) {
-  app.use(basePath + '/api/familias-produto', routerFamilias);
-  app.use(basePath + '/familias-produto', routerFamilias);
-}
 
 // ========== ROTA DE BUSCA DE CNPJ ==========
 // Endpoint para buscar dados de CNPJ (com autenticação)
@@ -9711,10 +9699,6 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 
 // Servir fotos de famílias (rotas de API já registradas acima)
 app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
-
-// Famílias de produtos: /api/produtos/familias e /comercial/api/produtos/familias (caso o proxy use /comercial)
-app.use('/api/produtos/familias', routerFamilias);
-app.use('/comercial/api/produtos/familias', routerFamilias);
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {

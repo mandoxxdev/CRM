@@ -7,16 +7,10 @@ function getApiBaseURL() {
     return process.env.REACT_APP_API_URL;
   }
   
-  // Em produção: se a app está em /comercial, a API pode estar em /comercial/api
-  if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined' && window.location.origin) {
-    const pathname = window.location.pathname || '';
-    if (pathname.startsWith('/comercial')) {
-      return window.location.origin + '/comercial/api';
-    }
-    return window.location.origin + '/api';
-  }
+  // Em produção: URL absoluta do mesmo host para evitar 404 com proxies (Coolify, etc.)
   if (process.env.NODE_ENV === 'production') {
-    return '/api';
+    const origin = typeof window !== 'undefined' && window.location && window.location.origin ? window.location.origin : '';
+    return origin ? `${origin}/api` : '/api';
   }
   
   // Detectar se está sendo acessado por IP ou localhost (desenvolvimento)
@@ -43,9 +37,8 @@ const api = axios.create({
   baseURL: getApiBaseURL(),
 });
 
-// Interceptor: recalcular baseURL a cada request (path pode ser /comercial) e sempre enviar token
+// Interceptor para adicionar token em todas as requisições
 api.interceptors.request.use((config) => {
-  config.baseURL = getApiBaseURL();
   let token = localStorage.getItem('token') || sessionStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

@@ -22,14 +22,8 @@ const FamiliasProdutos = () => {
   const loadFamilias = async () => {
     setLoading(true);
     try {
-      let response = await api.get('/produtos/familias').catch((e) => {
-        if (e.response?.status === 404 && typeof window !== 'undefined' && window.location.origin) {
-          return api.get(window.location.origin + '/api/produtos/familias');
-        }
-        throw e;
-      });
-      const data = response?.data;
-      setFamilias(Array.isArray(data) ? data : []);
+      const response = await api.get('/familias-produto');
+      setFamilias(response.data || []);
     } catch (error) {
       console.error('Erro ao carregar famílias:', error);
     } finally {
@@ -46,10 +40,7 @@ const FamiliasProdutos = () => {
   const handleExcluir = async (id, nome) => {
     if (!window.confirm(`Desativar a família "${nome}"? Os produtos continuarão vinculados a esse nome.`)) return;
     try {
-      await api.delete(`/produtos/familias/${id}`).catch((e) => {
-        if (e.response?.status === 404 && window.location.origin) return api.delete(window.location.origin + `/api/produtos/familias/${id}`);
-        throw e;
-      });
+      await api.delete(`/familias-produto/${id}`);
       loadFamilias();
     } catch (error) {
       console.error('Erro ao desativar família:', error);
@@ -113,7 +104,7 @@ const FamiliasProdutos = () => {
             </button>
           </div>
         ) : (
-          (Array.isArray(familias) ? familias : []).map((f) => {
+          familias.map((f) => {
             const fotoUrl = getFotoUrl(f.foto);
             return (
               <div

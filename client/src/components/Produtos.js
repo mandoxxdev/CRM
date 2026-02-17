@@ -21,8 +21,7 @@ const Produtos = ({ familiaFromUrl }) => {
 
   useEffect(() => {
     api.get('/familias-produto').then((res) => {
-      const data = res?.data;
-      const list = Array.isArray(data) ? data.map((f) => f.nome) : [];
+      const list = (res.data || []).map((f) => f.nome);
       setFamilias(list);
     }).catch(() => setFamilias([]));
   }, []);
@@ -157,7 +156,7 @@ const Produtos = ({ familiaFromUrl }) => {
           className="filter-select"
         >
           <option value="">Todas as famílias</option>
-          {(Array.isArray(familias) ? familias : []).map(familia => (
+          {familias.map(familia => (
             <option key={familia} value={familia}>{familia}</option>
           ))}
         </select>

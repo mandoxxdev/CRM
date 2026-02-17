@@ -109,9 +109,8 @@ const ProdutoForm = () => {
     'Equipamentos de Envase', 'Equipamentos á Vácuo', 'Hélices e Acessórios', 'Outros'
   ];
   useEffect(() => {
-    api.get('/produtos/familias').then((res) => {
-      const data = res?.data;
-      const list = Array.isArray(data) ? data.map((f) => f.nome).filter(Boolean) : [];
+    api.get('/familias-produto').then((res) => {
+      const list = (res.data || []).map((f) => f.nome).filter(Boolean);
       setFamiliasFromApi(list);
     }).catch(() => setFamiliasFromApi([]));
   }, []);
