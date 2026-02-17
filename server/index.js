@@ -1676,6 +1676,8 @@ app.get('/api', (req, res) => {
 
 // ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router montado em /api e sem /api para Coolify) ==========
 var routerFamilias = express.Router();
+// Rota de diagnóstico sem auth: GET .../familias-produto/ping retorna 200 (para testar se o path chega no servidor)
+routerFamilias.get('/ping', (req, res) => { res.json({ ok: true, service: 'familias-produto' }); });
 routerFamilias.get('/', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco não disponível' });
   db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
@@ -1772,8 +1774,13 @@ routerFamilias.post('/:id/foto', authenticateToken, uploadFamilia.single('foto')
     });
   });
 });
+var basePath = (process.env.BASE_PATH || '').replace(/\/$/, '');
 app.use('/api/familias-produto', routerFamilias);
 app.use('/familias-produto', routerFamilias);
+if (basePath) {
+  app.use(basePath + '/api/familias-produto', routerFamilias);
+  app.use(basePath + '/familias-produto', routerFamilias);
+}
 
 // ========== ROTA DE BUSCA DE CNPJ ==========
 // Endpoint para buscar dados de CNPJ (com autenticação)

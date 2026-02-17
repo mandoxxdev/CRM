@@ -7,7 +7,10 @@ function getApiBaseURL() {
     return process.env.REACT_APP_API_URL;
   }
   
-  // Em produção (build), sempre usar /api (será servido pelo mesmo servidor)
+  // Em produção (build): URL absoluta evita 404 em proxy (Coolify, etc.)
+  if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin + '/api';
+  }
   if (process.env.NODE_ENV === 'production') {
     return '/api';
   }
