@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
+const archiver = require('archiver');
 const multer = require('multer');
 const puppeteer = require('puppeteer');
 
@@ -111,38 +112,44 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Pasta persistente: use volume em /app/server/data no Coolify para não sobrescrever o código
+const PERSISTENT_DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(PERSISTENT_DATA_DIR)) {
+  fs.mkdirSync(PERSISTENT_DATA_DIR, { recursive: true });
+}
+
 // Configurar diretório de uploads
-const uploadsDir = path.join(__dirname, 'uploads', 'cotacoes');
+const uploadsDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'cotacoes');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // Configurar diretório de uploads de comprovantes de viagens
-const uploadsComprovantesDir = path.join(__dirname, 'uploads', 'comprovantes-viagens');
+const uploadsComprovantesDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'comprovantes-viagens');
 if (!fs.existsSync(uploadsComprovantesDir)) {
   fs.mkdirSync(uploadsComprovantesDir, { recursive: true });
 }
 
 // Configurar diretório de uploads de imagens de produtos
-const uploadsProdutosDir = path.join(__dirname, 'uploads', 'produtos');
+const uploadsProdutosDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'produtos');
 if (!fs.existsSync(uploadsProdutosDir)) {
   fs.mkdirSync(uploadsProdutosDir, { recursive: true });
 }
 
 // Diretório para uploads de fotos de famílias de produtos
-const uploadsFamiliasDir = path.join(__dirname, 'uploads', 'familias-produtos');
+const uploadsFamiliasDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'familias-produtos');
 if (!fs.existsSync(uploadsFamiliasDir)) {
   fs.mkdirSync(uploadsFamiliasDir, { recursive: true });
 }
 
 // Configurar diretório de uploads de logos
-const uploadsLogosDir = path.join(__dirname, 'uploads', 'logos');
+const uploadsLogosDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'logos');
 if (!fs.existsSync(uploadsLogosDir)) {
   fs.mkdirSync(uploadsLogosDir, { recursive: true });
 }
 
 // Diretório para uploads de chat (arquivos e imagens)
-const uploadsChatDir = path.join(__dirname, 'uploads', 'chat');
+const uploadsChatDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'chat');
 if (!fs.existsSync(uploadsChatDir)) {
   fs.mkdirSync(uploadsChatDir, { recursive: true });
 }
@@ -171,19 +178,19 @@ const uploadChat = multer({
 });
 
 // Configurar diretório de uploads de imagens de cabeçalho
-const uploadsHeaderDir = path.join(__dirname, 'uploads', 'headers');
+const uploadsHeaderDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'headers');
 if (!fs.existsSync(uploadsHeaderDir)) {
   fs.mkdirSync(uploadsHeaderDir, { recursive: true });
 }
 
 // Configurar diretório de uploads de imagens de rodapé
-const uploadsFooterDir = path.join(__dirname, 'uploads', 'footers');
+const uploadsFooterDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'footers');
 if (!fs.existsSync(uploadsFooterDir)) {
   fs.mkdirSync(uploadsFooterDir, { recursive: true });
 }
 
 // Configurar diretório de uploads de PDFs de OS
-const uploadsOSDir = path.join(__dirname, 'uploads', 'ordens-servico');
+const uploadsOSDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'ordens-servico');
 if (!fs.existsSync(uploadsOSDir)) {
   fs.mkdirSync(uploadsOSDir, { recursive: true });
 }
@@ -436,8 +443,8 @@ const uploadFooter = multer({
   }
 });
 
-// Database
-const dbPath = path.join(__dirname, 'database.sqlite');
+// Database (em pasta persistente para Coolify: volume em /app/server/data)
+const dbPath = path.join(PERSISTENT_DATA_DIR, 'database.sqlite');
 
 // Garantir que o diretório existe
 const dbDir = path.dirname(dbPath);
@@ -1829,6 +1836,30 @@ app.get('/api/health', (req, res) => {
       hostname: req.hostname
     });
   });
+});
+
+// ========== BACKUP DE DADOS (banco + uploads) ==========
+// Uso: GET /api/backup?token=SEU_BACKUP_TOKEN (defina BACKUP_TOKEN no .env do servidor)
+app.get('/api/backup', (req, res) => {
+  const token = process.env.BACKUP_TOKEN;
+  const provided = req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!token || provided !== token) {
+    return res.status(401).json({ error: 'Token de backup inválido ou não configurado' });
+  }
+  const backupDir = PERSISTENT_DATA_DIR;
+  if (!fs.existsSync(backupDir)) {
+    return res.status(404).json({ error: 'Pasta de dados não encontrada' });
+  }
+  const filename = `crm-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', (err) => {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  });
+  archive.pipe(res);
+  archive.directory(backupDir, false);
+  archive.finalize();
 });
 
 // ========== ROTAS DE FAMÍLIAS (registradas cedo para evitar 404 com proxy) ==========
