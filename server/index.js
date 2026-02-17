@@ -111,11 +111,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Debug: confirma que a rota de famílias existe no deploy (remover em produção se quiser)
-app.get('/api/produtos/familias/ping', (req, res) => {
-  res.json({ ok: true, route: 'familias', t: Date.now() });
-});
-
 // Configurar diretório de uploads
 const uploadsDir = path.join(__dirname, 'uploads', 'cotacoes');
 if (!fs.existsSync(uploadsDir)) {
@@ -1678,145 +1673,6 @@ app.get('/api', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
-
-// ========== FAMÍLIAS DE PRODUTOS – rotas explícitas no topo (path principal + alias para evitar 404 em proxy) ==========
-function handleGetFamilias(req, res) {
-  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
-  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
-}
-function handlePostFamilias(req, res) {
-  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
-  var body = req.body || {};
-  var nome = (body.nome || '').trim();
-  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
-  var ordem = parseInt(body.ordem, 10) || 0;
-  db.run('INSERT INTO familias_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, ordem], function (err) {
-    if (err) {
-      if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
-      return res.status(500).json({ error: err.message });
-    }
-    var lastId = this.lastID;
-    db.get('SELECT * FROM familias_produto WHERE id = ?', [lastId], function (e, row) {
-      if (e) return res.status(500).json({ error: e.message });
-      res.status(201).json(row);
-    });
-  });
-}
-
-app.get('/api/familias-produto', authenticateToken, handleGetFamilias);
-app.post('/api/familias-produto', authenticateToken, handlePostFamilias);
-app.get('/api/produtos/familias', authenticateToken, handleGetFamilias);
-app.post('/api/produtos/familias', authenticateToken, handlePostFamilias);
-app.get('/api/familias', authenticateToken, handleGetFamilias);
-app.post('/api/familias', authenticateToken, handlePostFamilias);
-
-// ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router para demais métodos e path sem /api) ==========
-var routerFamilias = express.Router();
-
-routerFamilias.get('/', authenticateToken, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
-  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
-});
-routerFamilias.get('/todas', authenticateToken, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
-  db.all('SELECT * FROM familias_produto ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
-});
-routerFamilias.get('/:id', authenticateToken, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
-  const id = req.params.id;
-  db.get('SELECT * FROM familias_produto WHERE id = ?', [id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Família não encontrada' });
-    res.json(row);
-  });
-});
-routerFamilias.post('/', authenticateToken, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
-  const body = req.body || {};
-  const nome = (body.nome || '').trim();
-  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
-  const ordem = parseInt(body.ordem, 10) || 0;
-  db.run(
-    'INSERT INTO familias_produto (nome, ordem, ativo) VALUES (?, ?, 1)',
-    [nome, ordem],
-    function (err) {
-      if (err) {
-        if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Já existe uma família com este nome' });
-        return res.status(500).json({ error: err.message });
-      }
-      db.get('SELECT * FROM familias_produto WHERE id = ?', [this.lastID], (e, row) => {
-        if (e) return res.status(500).json({ error: e.message });
-        res.status(201).json(row);
-      });
-    }
-  );
-});
-routerFamilias.put('/:id', authenticateToken, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
-  const id = req.params.id;
-  const body = req.body || {};
-  const nome = (body.nome || '').trim();
-  const ordem = parseInt(body.ordem, 10);
-  const ativo = body.ativo !== undefined ? (body.ativo === true || body.ativo === 1 || body.ativo === '1') ? 1 : 0 : undefined;
-  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
-  let query = 'UPDATE familias_produto SET nome = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP';
-  const params = [nome, isNaN(ordem) ? 0 : ordem];
-  if (ativo !== undefined) { query += ', ativo = ?'; params.push(ativo); }
-  query += ' WHERE id = ?';
-  params.push(id);
-  db.run(query, params, function (err) {
-    if (err) {
-      if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Já existe uma família com este nome' });
-      return res.status(500).json({ error: err.message });
-    }
-    if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
-    db.get('SELECT * FROM familias_produto WHERE id = ?', [id], (e, row) => {
-      if (e) return res.status(500).json({ error: e.message });
-      res.json(row);
-    });
-  });
-});
-routerFamilias.delete('/:id', authenticateToken, (req, res) => {
-  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
-  const id = req.params.id;
-  db.run('UPDATE familias_produto SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
-    res.json({ message: 'Família desativada com sucesso' });
-  });
-});
-routerFamilias.post('/:id/foto', authenticateToken, uploadFamilia.single('foto'), (req, res) => {
-  const { id } = req.params;
-  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
-  const filename = req.file.filename;
-  db.get('SELECT * FROM familias_produto WHERE id = ?', [id], (err, familia) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
-    const oldFoto = familia.foto;
-    db.run('UPDATE familias_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (updateErr) => {
-      if (updateErr) return res.status(500).json({ error: updateErr.message });
-      if (oldFoto) {
-        const oldPath = path.join(uploadsFamiliasDir, oldFoto);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
-      res.json({ foto: filename, url: `/api/uploads/familias-produtos/${filename}` });
-    });
-  });
-});
-
-app.use('/api/familias-produto', routerFamilias);
-app.use('/familias-produto', routerFamilias);
-app.use('/api/produtos/familias', routerFamilias);
-app.use('/api/familias', routerFamilias);
 
 // ========== ROTA DE BUSCA DE CNPJ ==========
 // Endpoint para buscar dados de CNPJ (com autenticação)
@@ -9738,8 +9594,97 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
   });
 });
 
-// Servir fotos de famílias (rotas de API já registradas acima)
+// Servir fotos de famílias
 app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
+
+// ========== ROTAS DE FAMÍLIAS DE PRODUTOS (mesmo padrão das rotas de produtos) ==========
+app.get('/api/familias', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function (err, rows) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.post('/api/familias', authenticateToken, (req, res) => {
+  var body = req.body || {};
+  var nome = (body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
+  var ordem = parseInt(body.ordem, 10) || 0;
+  db.run('INSERT INTO familias_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, ordem], function (err) {
+    if (err) {
+      if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+      return res.status(500).json({ error: err.message });
+    }
+    var lastId = this.lastID;
+    db.get('SELECT * FROM familias_produto WHERE id = ?', [lastId], function (e, row) {
+      if (e) return res.status(500).json({ error: e.message });
+      res.status(201).json(row);
+    });
+  });
+});
+app.get('/api/familias/todas', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM familias_produto ORDER BY ordem ASC, nome ASC', [], function (err, rows) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.get('/api/familias/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function (err, row) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Família não encontrada' });
+    res.json(row);
+  });
+});
+app.put('/api/familias/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  var body = req.body || {};
+  var nome = (body.nome || '').trim();
+  var ordem = parseInt(body.ordem, 10);
+  var ativo = body.ativo !== undefined ? (body.ativo === true || body.ativo === 1 || body.ativo === '1') ? 1 : 0 : undefined;
+  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
+  var query = 'UPDATE familias_produto SET nome = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP';
+  var params = [nome, isNaN(ordem) ? 0 : ordem];
+  if (ativo !== undefined) { query += ', ativo = ?'; params.push(ativo); }
+  query += ' WHERE id = ?';
+  params.push(id);
+  db.run(query, params, function (err) {
+    if (err) {
+      if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+      return res.status(500).json({ error: err.message });
+    }
+    if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
+    db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function (e, row) {
+      if (e) return res.status(500).json({ error: e.message });
+      res.json(row);
+    });
+  });
+});
+app.delete('/api/familias/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  db.run('UPDATE familias_produto SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
+    res.json({ message: 'Família desativada com sucesso' });
+  });
+});
+app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto'), (req, res) => {
+  var id = req.params.id;
+  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  var filename = req.file.filename;
+  db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function (err, familia) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
+    var oldFoto = familia.foto;
+    db.run('UPDATE familias_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function (updateErr) {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (oldFoto) {
+        var oldPath = path.join(uploadsFamiliasDir, oldFoto);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+    });
+  });
+});
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
