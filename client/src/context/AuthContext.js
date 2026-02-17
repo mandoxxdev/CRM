@@ -26,6 +26,7 @@ export const AuthProvider = ({ children }) => {
             const parsedUser = JSON.parse(userData);
             setUser(parsedUser);
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            document.cookie = `token=${encodeURIComponent(token)}; path=/; SameSite=Lax; max-age=86400` + (typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '');
           } catch (error) {
             console.error('Erro ao parsear userData:', error);
             // Limpar dados inválidos
@@ -52,6 +53,7 @@ export const AuthProvider = ({ children }) => {
       sessionStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      document.cookie = `token=${encodeURIComponent(token)}; path=/; SameSite=Lax; max-age=86400` + (window.location.protocol === 'https:' ? '; Secure' : '');
       setUser(user);
 
       return { success: true };
@@ -67,6 +69,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     sessionStorage.removeItem('token');
+    document.cookie = 'token=; path=/; max-age=0';
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
   };

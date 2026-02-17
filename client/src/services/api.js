@@ -43,8 +43,9 @@ const api = axios.create({
   baseURL: getApiBaseURL(),
 });
 
-// Interceptor para adicionar token em todas as requisições
+// Interceptor: recalcular baseURL a cada request (path pode ser /comercial) e sempre enviar token
 api.interceptors.request.use((config) => {
+  config.baseURL = getApiBaseURL();
   let token = localStorage.getItem('token') || sessionStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

@@ -1460,7 +1460,7 @@ function dbAllWithRetry(sql, params = [], callback, maxRetries = 3) {
   execute();
 }
 
-// Authentication Middleware
+// Authentication Middleware (aceita Authorization, X-Auth-Token, query.token ou cookie token)
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.split(' ')[1];
@@ -1469,6 +1469,10 @@ function authenticateToken(req, res, next) {
   }
   if (!token && req.query && req.query.token) {
     token = req.query.token;
+  }
+  if (!token && req.headers.cookie) {
+    const match = req.headers.cookie.match(/\btoken=([^;]+)/);
+    if (match) token = match[1].trim();
   }
 
   if (!token) {
