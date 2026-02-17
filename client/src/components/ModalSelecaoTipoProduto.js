@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { FiTool, FiPackage, FiSettings, FiX } from 'react-icons/fi';
 import './ModalSelecaoTipoProduto.css';
 
-const ModalSelecaoTipoProduto = ({ isOpen, onClose }) => {
+const ModalSelecaoTipoProduto = ({ isOpen, onClose, familiaNome }) => {
   const navigate = useNavigate();
 
   // Se não receber isOpen, assumir que está sempre aberto (compatibilidade)
   if (isOpen === false) return null;
+
+  const queryFamilia = familiaNome ? `&familia=${encodeURIComponent(familiaNome)}` : '';
 
   const tiposProduto = [
     {
@@ -15,7 +17,7 @@ const ModalSelecaoTipoProduto = ({ isOpen, onClose }) => {
       nome: 'Equipamentos',
       descricao: 'Máquinas, sistemas e grandes componentes industriais',
       icon: FiTool,
-      rota: '/comercial/produtos/novo?tipo=equipamentos',
+      rota: `/comercial/produtos/novo?tipo=equipamentos${queryFamilia}`,
       gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       glowColor: 'rgba(102, 126, 234, 0.4)'
     },
@@ -24,7 +26,7 @@ const ModalSelecaoTipoProduto = ({ isOpen, onClose }) => {
       nome: 'Discos e Acessórios',
       descricao: 'Peças menores, consumíveis e complementos',
       icon: FiPackage,
-      rota: '/comercial/produtos/novo?tipo=discos-acessorios',
+      rota: `/comercial/produtos/novo?tipo=discos-acessorios${queryFamilia}`,
       gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
       glowColor: 'rgba(245, 87, 108, 0.4)'
     },
@@ -33,7 +35,7 @@ const ModalSelecaoTipoProduto = ({ isOpen, onClose }) => {
       nome: 'Serviços',
       descricao: 'Mão de obra, consultoria, manutenção e outros',
       icon: FiSettings,
-      rota: '/comercial/produtos/novo?tipo=servicos',
+      rota: `/comercial/produtos/novo?tipo=servicos${queryFamilia}`,
       gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
       glowColor: 'rgba(79, 172, 254, 0.4)'
     }

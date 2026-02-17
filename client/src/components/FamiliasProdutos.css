@@ -14,47 +14,117 @@
   align-items: center;
 }
 
+/* Grid com perspectiva para efeito 3D nos cards */
 .familias-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--spacing-lg);
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--spacing-xl);
+  perspective: 1200px;
 }
 
+/* ========== CARD 3D ========== */
 .familia-card {
-  background: var(--gmp-surface);
-  border-radius: var(--border-radius);
+  --card-radius: 16px;
+  --card-elevation: 8px;
+  --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --card-shadow-hover: 0 20px 40px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 102, 204, 0.15);
+  --card-border: 1px solid rgba(255, 255, 255, 0.6);
+  --card-bg: linear-gradient(165deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%);
+  --card-edge: rgba(0, 102, 204, 0.12);
+
+  position: relative;
+  background: var(--card-bg);
+  border-radius: var(--card-radius);
   overflow: hidden;
-  border: 1px solid var(--gmp-border);
+  border: var(--card-border);
+  box-shadow:
+    var(--card-shadow),
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
   display: flex;
   flex-direction: column;
+  transform-style: preserve-3d;
+  transition:
+    transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.4s ease,
+    border-color 0.3s ease;
+}
+
+.familia-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--card-radius);
+  padding: 1px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.9) 0%, rgba(0,0,0,0.04) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .familia-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--gmp-primary);
+  transform: translateY(-var(--card-elevation)) rotateX(2deg) scale(1.02);
+  box-shadow:
+    var(--card-shadow-hover),
+    0 0 0 1px rgba(0, 102, 204, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 102, 204, 0.25);
 }
 
 .familia-card-only {
   cursor: default;
 }
+
+.familia-card-clickable {
+  cursor: pointer;
+}
+
+.familia-card-clickable .familia-card-nome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+}
+
+.familia-card-chevron {
+  color: var(--gmp-primary);
+  opacity: 0.8;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+
+.familia-card:hover .familia-card-chevron {
+  transform: translateX(4px);
+}
+
 .familia-card-only .familia-card-actions {
   opacity: 1;
 }
 
+/* Área da foto com “moldura” 3D */
 .familia-card-foto {
   position: relative;
   aspect-ratio: 1;
-  background: var(--gmp-bg-subtle);
+  background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
   overflow: hidden;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .familia-card-foto img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.familia-card:hover .familia-card-foto img {
+  transform: scale(1.06);
 }
 
 .familia-card-placeholder {
@@ -64,17 +134,20 @@
   align-items: center;
   justify-content: center;
   color: var(--gmp-text-light);
-  background: linear-gradient(135deg, rgba(0, 102, 204, 0.08) 0%, rgba(0, 82, 163, 0.05) 100%);
+  background: linear-gradient(145deg, rgba(0, 102, 204, 0.12) 0%, rgba(0, 82, 163, 0.06) 50%, rgba(0, 102, 204, 0.08) 100%);
+  box-shadow: inset 0 2px 20px rgba(0, 102, 204, 0.1);
 }
 
+/* Botões com estilo 3D (relevo) */
 .familia-card-actions {
   position: absolute;
-  top: var(--spacing-xs);
-  right: var(--spacing-xs);
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
   display: flex;
   gap: var(--spacing-xs);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.25s ease;
+  z-index: 2;
 }
 
 .familia-card:hover .familia-card-actions {
@@ -82,41 +155,76 @@
 }
 
 .btn-icon-card {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--border-radius);
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   border: none;
-  background: rgba(255, 255, 255, 0.95);
+  background: linear-gradient(145deg, #ffffff 0%, #f1f5f9 100%);
   color: var(--gmp-primary);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-sm);
-  transition: background 0.2s, color 0.2s;
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
+  transform-style: preserve-3d;
 }
 
 .btn-icon-card:hover {
-  background: var(--gmp-primary);
+  background: linear-gradient(145deg, var(--gmp-primary) 0%, #0052a3 100%);
   color: white;
+  box-shadow:
+    0 6px 14px rgba(0, 102, 204, 0.4),
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.btn-icon-card:active {
+  transform: translateY(0);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.15),
+    inset 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .btn-icon-card.btn-danger {
-  background: rgba(255, 255, 255, 0.95);
-  color: #e74c3c;
+  background: linear-gradient(145deg, #ffffff 0%, #fef2f2 100%);
+  color: #dc2626;
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .btn-icon-card.btn-danger:hover {
-  background: #e74c3c;
+  background: linear-gradient(145deg, #dc2626 0%, #b91c1c 100%);
   color: white;
+  box-shadow:
+    0 6px 14px rgba(220, 38, 38, 0.4),
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
+/* Faixa do nome – painel “à frente” em 3D */
 .familia-card-nome {
-  padding: var(--spacing-md);
-  font-weight: 600;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-weight: 700;
   font-size: 1.05rem;
+  letter-spacing: 0.02em;
   color: var(--gmp-text);
   text-align: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+  border-top: 1px solid rgba(255, 255, 255, 0.8);
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .familia-card-cta {
@@ -128,6 +236,7 @@
   padding-bottom: var(--spacing-md);
 }
 
+/* Estado vazio */
 .familias-empty {
   grid-column: 1 / -1;
   text-align: center;
@@ -150,4 +259,23 @@
   align-items: center;
   gap: var(--spacing-xs);
   margin-top: var(--spacing-md);
+}
+
+/* Ajuste para temas escuros (se o app usar) */
+@media (prefers-color-scheme: dark) {
+  .familia-card {
+    --card-bg: linear-gradient(165deg, #1e293b 0%, #0f172a 50%, #020617 100%);
+    --card-border: 1px solid rgba(255, 255, 255, 0.08);
+    --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --card-shadow-hover: 0 20px 40px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 102, 204, 0.2);
+  }
+
+  .familia-card-nome {
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.99) 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .familia-card-foto {
+    background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+  }
 }

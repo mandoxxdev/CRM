@@ -121,6 +121,16 @@ const ProdutoForm = () => {
 
   const unidades = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'PC'];
 
+  // Pré-preencher família quando vier da URL (ex.: clicou em "Novo produto" dentro de uma família)
+  useEffect(() => {
+    if (!isEdit && searchParams.get('familia')) {
+      const familiaUrl = decodeURIComponent(searchParams.get('familia') || '');
+      if (familiaUrl) {
+        setFormData(prev => ({ ...prev, familia_produto: familiaUrl }));
+      }
+    }
+  }, [isEdit]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     // Se não estiver editando e não tiver tipo especificado, redirecionar para seleção
     if (!isEdit && !tipoProduto) {

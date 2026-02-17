@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { FiPlus, FiEdit2, FiTrash2, FiPackage } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiPackage, FiChevronRight } from 'react-icons/fi';
 import ModalFamiliaForm from './ModalFamiliaForm';
 import './FamiliasProdutos.css';
 import './Loading.css';
@@ -25,6 +26,7 @@ function saveToStorage(list) {
 }
 
 const FamiliasProdutos = () => {
+  const navigate = useNavigate();
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModalFamilia, setShowModalFamilia] = useState(false);
@@ -154,7 +156,14 @@ const FamiliasProdutos = () => {
           familias.map((f) => {
             const fotoUrl = getFotoUrl(f.foto);
             return (
-              <div key={f.id} className="familia-card familia-card-only">
+              <div
+                key={f.id}
+                className="familia-card familia-card-only familia-card-clickable"
+                onClick={() => navigate(`/comercial/produtos/familia/${f.id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/comercial/produtos/familia/${f.id}`); } }}
+              >
                 <div className="familia-card-foto">
                   {fotoUrl ? (
                     <img src={fotoUrl} alt={f.nome} />
@@ -163,8 +172,9 @@ const FamiliasProdutos = () => {
                       <FiPackage size={48} />
                     </div>
                   )}
-                  <div className="familia-card-actions">
+                  <div className="familia-card-actions" onClick={(e) => e.stopPropagation()}>
                     <button
+                      type="button"
                       className="btn-icon-card"
                       title="Editar família"
                       onClick={() => { setEditingFamilia(f); setShowModalFamilia(true); }}
@@ -172,6 +182,7 @@ const FamiliasProdutos = () => {
                       <FiEdit2 />
                     </button>
                     <button
+                      type="button"
                       className="btn-icon-card btn-danger"
                       title="Desativar família"
                       onClick={() => handleExcluir(f.id, f.nome)}
@@ -180,7 +191,10 @@ const FamiliasProdutos = () => {
                     </button>
                   </div>
                 </div>
-                <div className="familia-card-nome">{f.nome}</div>
+                <div className="familia-card-nome">
+                  {f.nome}
+                  <FiChevronRight className="familia-card-chevron" size={20} />
+                </div>
               </div>
             );
           })

@@ -6,7 +6,7 @@ import ModalSelecaoTipoProduto from './ModalSelecaoTipoProduto';
 import './Produtos.css';
 import './Loading.css';
 
-const Produtos = ({ familiaFromUrl }) => {
+const Produtos = ({ familiaFromUrl, familiaNome }) => {
   const navigate = useNavigate();
   const [produtos, setProdutos] = useState([]);
   const [familias, setFamilias] = useState([]);
@@ -137,7 +137,8 @@ const Produtos = ({ familiaFromUrl }) => {
 
       <ModalSelecaoTipoProduto 
         isOpen={showModalTipo} 
-        onClose={() => setShowModalTipo(false)} 
+        onClose={() => setShowModalTipo(false)}
+        familiaNome={filterFamilia || familiaNome}
       />
 
       <div className="filters">
