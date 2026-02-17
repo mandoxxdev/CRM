@@ -19,10 +19,10 @@ RUN rm -f package-lock.json server/package-lock.json client/package-lock.json &&
 # Copiar resto do código
 COPY . .
 
-# Build do cliente: mais memória para evitar falha no container, sem source maps para economizar RAM
+# Build do cliente: limite de 2GB para não estourar memória no Coolify (evita OOM kill)
 ENV CI=false
 ENV GENERATE_SOURCEMAP=false
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 RUN cd client && npm run build && cd ..
 
 # Expor porta
