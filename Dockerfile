@@ -1,23 +1,26 @@
 # Dockerfile customizado para Coolify
-# O build do client é feito no SEU PC; o Docker só copia a pasta client/build (evita OOM no Coolify).
+# Build do client DENTRO do Docker com pouca memória (1.5GB) para não estourar no Coolify.
 
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Copiar arquivos de dependências (só raiz e server; client não precisa de npm install)
 COPY package*.json ./
 COPY server/package*.json ./server/
+COPY client/package*.json ./client/
 
-RUN rm -f package-lock.json server/package-lock.json && \
+RUN rm -f package-lock.json server/package-lock.json client/package-lock.json && \
     npm install --legacy-peer-deps && \
-    cd server && npm install --legacy-peer-deps && cd ..
+    cd server && npm install --legacy-peer-deps && cd .. && \
+    cd client && npm install --legacy-peer-deps && cd ..
 
-# Copiar todo o código (incluindo client/build)
 COPY . .
 
-# Exigir que client/build exista (você deve rodar "cd client && npm run build" e "git add -f client/build" antes do push)
-RUN test -d client/build && test -f client/build/index.html || (echo "ERRO: Falta a pasta client/build. No seu PC rode: cd client && npm run build && git add -f client/build && git commit -m 'build' && git push" && exit 1)
+# Build do client com limite de 1.5GB (evita OOM no Coolify)
+ENV CI=false
+ENV GENERATE_SOURCEMAP=false
+ENV NODE_OPTIONS="--max-old-space-size=1536"
+RUN cd client && npm run build && cd ..
 
 # Expor porta
 EXPOSE 3000

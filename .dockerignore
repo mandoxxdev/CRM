@@ -1,7 +1,7 @@
 node_modules
 client/node_modules
 server/node_modules
-# client/build NAO ignorado: o Docker usa o build feito no seu PC (evita OOM no Coolify)
+client/build
 .git
 .gitignore
 *.md
