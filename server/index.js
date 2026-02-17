@@ -1674,7 +1674,34 @@ app.get('/api', (req, res) => {
   });
 });
 
-// ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router montado em /api e sem /api para Coolify/proxies) ==========
+// ========== FAMÍLIAS DE PRODUTOS – rotas explícitas no topo para evitar 404 (listar e cadastrar) ==========
+app.get('/api/familias-produto', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
+  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.post('/api/familias-produto', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco não disponível' });
+  var body = req.body || {};
+  var nome = (body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
+  var ordem = parseInt(body.ordem, 10) || 0;
+  db.run('INSERT INTO familias_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, ordem], function (err) {
+    if (err) {
+      if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+      return res.status(500).json({ error: err.message });
+    }
+    var lastId = this.lastID;
+    db.get('SELECT * FROM familias_produto WHERE id = ?', [lastId], function (e, row) {
+      if (e) return res.status(500).json({ error: e.message });
+      res.status(201).json(row);
+    });
+  });
+});
+
+// ========== ROTAS DE FAMÍLIAS DE PRODUTOS (router para demais métodos e path sem /api) ==========
 var routerFamilias = express.Router();
 
 routerFamilias.get('/', authenticateToken, (req, res) => {
