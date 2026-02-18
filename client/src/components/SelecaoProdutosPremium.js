@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign } from 'react-icons/fi';
+import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign, FiArrowLeft } from 'react-icons/fi';
 import './SelecaoProdutosPremium.css';
 
+const baseUploads = () => (api.defaults.baseURL || '/api').replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/';
+
 const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }) => {
+  const [step, setStep] = useState('familia'); // 'familia' -> escolher família; 'itens' -> escolher itens da família
+  const [familias, setFamilias] = useState([]);
+  const [familiaSelecionada, setFamiliaSelecionada] = useState(null);
   const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProdutos, setLoadingProdutos] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterFamilia, setFilterFamilia] = useState('');
   const [filterPrecoMin, setFilterPrecoMin] = useState('');
   const [filterPrecoMax, setFilterPrecoMax] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -16,36 +21,56 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   const itemsPerPage = 20;
 
   useEffect(() => {
-    loadProdutos();
+    loadFamilias();
   }, []);
 
-  const loadProdutos = async () => {
+  const loadFamilias = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/produtos', { params: { ativo: 'true' } });
-      setProdutos(response.data);
+      const response = await api.get('/familias');
+      setFamilias(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
-      console.error('Erro ao carregar produtos:', error);
-      alert('Erro ao carregar produtos');
+      console.error('Erro ao carregar famílias:', error);
+      setFamilias([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Obter lista única de famílias
-  const familias = useMemo(() => {
-    const familiasSet = new Set();
-    produtos.forEach(p => {
-      if (p.familia) familiasSet.add(p.familia);
-      if (p.familia_produto) familiasSet.add(p.familia_produto);
-    });
-    return Array.from(familiasSet).sort();
-  }, [produtos]);
+  const loadProdutos = async (familiaNome) => {
+    if (!familiaNome) return;
+    try {
+      setLoadingProdutos(true);
+      const response = await api.get('/produtos', { params: { ativo: 'true', familia: familiaNome } });
+      setProdutos(response.data || []);
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
+      setProdutos([]);
+    } finally {
+      setLoadingProdutos(false);
+    }
+  };
 
-  // Filtrar produtos
+  const escolherFamilia = (familia) => {
+    setFamiliaSelecionada(familia);
+    setStep('itens');
+    setCurrentPage(1);
+    setSelecionados(new Set());
+    loadProdutos(familia.nome);
+  };
+
+  const voltarParaFamilia = () => {
+    setFamiliaSelecionada(null);
+    setStep('familia');
+    setProdutos([]);
+    setSearchTerm('');
+    setFilterPrecoMin('');
+    setFilterPrecoMax('');
+  };
+
+  // Filtrar produtos (apenas busca e preço; família já veio da seleção)
   const produtosFiltrados = useMemo(() => {
     return produtos.filter(produto => {
-      // Busca por termo
       if (searchTerm) {
         const termo = searchTerm.toLowerCase();
         const matchCodigo = produto.codigo?.toLowerCase().includes(termo);
@@ -53,21 +78,12 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
         const matchDescricao = produto.descricao?.toLowerCase().includes(termo);
         if (!matchCodigo && !matchNome && !matchDescricao) return false;
       }
-
-      // Filtro por família
-      if (filterFamilia) {
-        const familia = produto.familia || produto.familia_produto;
-        if (familia !== filterFamilia) return false;
-      }
-
-      // Filtro por preço
       const preco = produto.preco_base || 0;
       if (filterPrecoMin && preco < parseFloat(filterPrecoMin)) return false;
       if (filterPrecoMax && preco > parseFloat(filterPrecoMax)) return false;
-
       return true;
     });
-  }, [produtos, searchTerm, filterFamilia, filterPrecoMin, filterPrecoMax]);
+  }, [produtos, searchTerm, filterPrecoMin, filterPrecoMax]);
 
   // Paginação
   const totalPages = Math.ceil(produtosFiltrados.length / itemsPerPage);
@@ -138,10 +154,17 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
 
   const limparFiltros = () => {
     setSearchTerm('');
-    setFilterFamilia('');
     setFilterPrecoMin('');
     setFilterPrecoMax('');
     setCurrentPage(1);
+  };
+
+  const familiasAtivas = useMemo(() => familias.filter(f => f.ativo !== 0), [familias]);
+  const urlEsquematico = (f) => {
+    if (!f || !f.esquematico) return null;
+    const base = baseUploads();
+    if (f.esquematico_dataurl) return f.esquematico_dataurl;
+    return base + encodeURIComponent(f.esquematico);
   };
 
   return (
@@ -151,16 +174,27 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
           <div className="header-content">
             <h2>
               <FiPackage style={{ marginRight: '10px' }} />
-              Selecionar Produtos
+              {step === 'familia' ? 'Escolher família' : 'Selecionar itens'}
+              {step === 'itens' && familiaSelecionada && (
+                <span className="header-familia-nome"> — {familiaSelecionada.nome}</span>
+              )}
             </h2>
             <div className="header-stats">
-              <span className="stat-item">
-                {produtosFiltrados.length} {produtosFiltrados.length === 1 ? 'produto encontrado' : 'produtos encontrados'}
-              </span>
-              {selecionados.size > 0 && (
-                <span className="stat-item selected">
-                  {selecionados.size} {selecionados.size === 1 ? 'selecionado' : 'selecionados'}
+              {step === 'familia' ? (
+                <span className="stat-item">
+                  {familiasAtivas.length} {familiasAtivas.length === 1 ? 'família' : 'famílias'}
                 </span>
+              ) : (
+                <>
+                  <span className="stat-item">
+                    {produtosFiltrados.length} {produtosFiltrados.length === 1 ? 'produto' : 'produtos'}
+                  </span>
+                  {selecionados.size > 0 && (
+                    <span className="stat-item selected">
+                      {selecionados.size} {selecionados.size === 1 ? 'selecionado' : 'selecionados'}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -169,99 +203,147 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
           </button>
         </div>
 
-        <div className="selecao-produtos-toolbar">
-          <div className="search-container">
-            <FiSearch className="search-icon" />
-            <input
-              type="text"
-              placeholder="Buscar por código, nome ou descrição..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="search-input"
-            />
-            {searchTerm && (
-              <button onClick={() => setSearchTerm('')} className="clear-search">
-                <FiX />
+        {step === 'itens' && (
+          <>
+            <div className="selecao-vista-frontal-bar">
+              <div className="vista-frontal-label">Vista frontal</div>
+              <div className="vista-frontal-preview">
+                {familiaSelecionada && urlEsquematico(familiaSelecionada) ? (
+                  <img
+                    src={urlEsquematico(familiaSelecionada)}
+                    alt={`Vista frontal ${familiaSelecionada.nome}`}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="vista-frontal-placeholder">
+                    <FiImage size={32} />
+                    <span>Sem esquemático</span>
+                  </div>
+                )}
+              </div>
+              <button type="button" onClick={voltarParaFamilia} className="btn-trocar-familia">
+                <FiArrowLeft /> Trocar família
               </button>
-            )}
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`btn-filter ${showFilters ? 'active' : ''}`}
-          >
-            <FiFilter /> Filtros
-          </button>
-        </div>
-
-        {showFilters && (
-          <div className="filters-panel">
-            <div className="filter-group">
-              <label>Família</label>
-              <select
-                value={filterFamilia}
-                onChange={(e) => {
-                  setFilterFamilia(e.target.value);
-                  setCurrentPage(1);
-                }}
+            </div>
+            <div className="selecao-produtos-toolbar">
+              <div className="search-container">
+                <FiSearch className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Buscar por código, nome ou descrição..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="search-input"
+                />
+                {searchTerm && (
+                  <button onClick={() => setSearchTerm('')} className="clear-search">
+                    <FiX />
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`btn-filter ${showFilters ? 'active' : ''}`}
               >
-                <option value="">Todas as famílias</option>
-                {familias.map(familia => (
-                  <option key={familia} value={familia}>{familia}</option>
-                ))}
-              </select>
+                <FiFilter /> Filtros
+              </button>
             </div>
-            <div className="filter-group">
-              <label>Preço Mínimo</label>
-              <input
-                type="number"
-                placeholder="R$ 0,00"
-                value={filterPrecoMin}
-                onChange={(e) => {
-                  setFilterPrecoMin(e.target.value);
-                  setCurrentPage(1);
-                }}
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div className="filter-group">
-              <label>Preço Máximo</label>
-              <input
-                type="number"
-                placeholder="R$ 999.999,99"
-                value={filterPrecoMax}
-                onChange={(e) => {
-                  setFilterPrecoMax(e.target.value);
-                  setCurrentPage(1);
-                }}
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <button onClick={limparFiltros} className="btn-clear-filters">
-              Limpar Filtros
-            </button>
-          </div>
+            {showFilters && (
+              <div className="filters-panel">
+                <div className="filter-group">
+                  <label>Preço Mínimo</label>
+                  <input
+                    type="number"
+                    placeholder="R$ 0,00"
+                    value={filterPrecoMin}
+                    onChange={(e) => {
+                      setFilterPrecoMin(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="filter-group">
+                  <label>Preço Máximo</label>
+                  <input
+                    type="number"
+                    placeholder="R$ 999.999,99"
+                    value={filterPrecoMax}
+                    onChange={(e) => {
+                      setFilterPrecoMax(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <button onClick={limparFiltros} className="btn-clear-filters">
+                  Limpar Filtros
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         <div className="selecao-produtos-content">
-          {loading ? (
-            <div className="loading-state">
-              <div className="spinner"></div>
-              <p>Carregando produtos...</p>
-            </div>
-          ) : produtosPaginados.length === 0 ? (
-            <div className="empty-state">
-              <FiPackage size={48} />
-              <p>Nenhum produto encontrado</p>
-              <p className="empty-hint">Tente ajustar os filtros ou termo de busca</p>
-            </div>
+          {step === 'familia' ? (
+            loading ? (
+              <div className="loading-state">
+                <div className="spinner"></div>
+                <p>Carregando famílias...</p>
+              </div>
+            ) : familiasAtivas.length === 0 ? (
+              <div className="empty-state">
+                <FiPackage size={48} />
+                <p>Nenhuma família cadastrada</p>
+              </div>
+            ) : (
+              <div className="familias-grid-selecao">
+                {familiasAtivas.map(familia => {
+                  const esquematicoUrl = urlEsquematico(familia);
+                  return (
+                    <div
+                      key={familia.id}
+                      className="familia-card-selecao"
+                      onClick={() => escolherFamilia(familia)}
+                    >
+                      <div className="familia-card-preview">
+                        {esquematicoUrl ? (
+                          <img src={esquematicoUrl} alt={familia.nome} />
+                        ) : (
+                          <div className="familia-card-placeholder">
+                            <FiImage size={40} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="familia-card-nome">{familia.nome}</div>
+                      <button type="button" className="familia-card-btn" onClick={(e) => { e.stopPropagation(); escolherFamilia(familia); }}>
+                        Abrir itens desta família
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )
           ) : (
-            <div className="produtos-grid-premium">
-              {produtosPaginados.map(produto => {
+            loadingProdutos ? (
+              <div className="loading-state">
+                <div className="spinner"></div>
+                <p>Carregando produtos...</p>
+              </div>
+            ) : produtosPaginados.length === 0 ? (
+              <div className="empty-state">
+                <FiPackage size={48} />
+                <p>Nenhum produto encontrado nesta família</p>
+                <p className="empty-hint">Tente ajustar os filtros ou termo de busca</p>
+              </div>
+            ) : (
+              <div className="produtos-grid-premium">
+                {produtosPaginados.map(produto => {
                 const isSelecionado = selecionados.has(produto.id);
                 return (
                   <div
@@ -326,10 +408,11 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                 );
               })}
             </div>
+            )
           )}
         </div>
 
-        {totalPages > 1 && (
+        {step === 'itens' && totalPages > 1 && (
           <div className="pagination">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
@@ -352,16 +435,18 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
         )}
 
         <div className="selecao-produtos-footer">
-          <button onClick={onClose} className="btn-cancel">
-            Cancelar
+          <button onClick={step === 'itens' ? voltarParaFamilia : onClose} className="btn-cancel">
+            {step === 'itens' ? <><FiArrowLeft /> Voltar</> : 'Cancelar'}
           </button>
-          <button
-            onClick={handleConfirmar}
-            className="btn-confirm"
-            disabled={selecionados.size === 0}
-          >
-            <FiCheck /> Adicionar {selecionados.size > 0 && `(${selecionados.size})`}
-          </button>
+          {step === 'itens' && (
+            <button
+              onClick={handleConfirmar}
+              className="btn-confirm"
+              disabled={selecionados.size === 0}
+            >
+              <FiCheck /> Adicionar {selecionados.size > 0 && `(${selecionados.size})`}
+            </button>
+          )}
         </div>
       </div>
     </div>
