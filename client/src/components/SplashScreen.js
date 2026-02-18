@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FiZap, FiTrendingUp, FiShoppingCart, FiDollarSign, 
   FiBriefcase, FiSettings, FiTarget, FiTool, FiX, FiShield
@@ -101,18 +101,6 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
     };
   }, []);
 
-  // Limpar splash do body de forma síncrona antes de onComplete (evita tela branca ao montar Layout)
-  const completeSplash = useCallback(() => {
-    document.body.classList.remove('splash-active');
-    document.body.style.overflow = '';
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar) {
-      sidebar.style.display = '';
-      sidebar.style.zIndex = '';
-    }
-    onComplete();
-  }, [onComplete]);
-
   // Verificar se deve mostrar erro quando showError mudar ou progresso chegar a 100%
   useEffect(() => {
     if (showError && progress >= 100 && !errorVisible) {
@@ -120,10 +108,12 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
       // Após mostrar o erro por 2 segundos, chamar onComplete
       setTimeout(() => {
         setFadeOut(true);
-        setTimeout(() => completeSplash(), 600);
+        setTimeout(() => {
+          onComplete();
+        }, 600);
       }, 2000);
     }
-  }, [showError, progress, errorVisible, onComplete, completeSplash]);
+  }, [showError, progress, errorVisible, onComplete]);
 
   useEffect(() => {
     // Se já mostrou erro, não fazer nada
@@ -152,7 +142,9 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
         if (!showError) {
           setTimeout(() => {
             setFadeOut(true);
-            setTimeout(() => completeSplash(), 600);
+            setTimeout(() => {
+              onComplete();
+            }, 600);
           }, 300);
         }
         // Se deve mostrar erro, o useEffect acima vai tratar
@@ -160,25 +152,11 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
     }, updateInterval);
 
     return () => clearInterval(interval);
-  }, [onComplete, showError, errorVisible, completeSplash]);
+  }, [onComplete, showError, errorVisible]);
 
-  // Se fadeOut, manter overlay com fundo do app para evitar tela branca até onComplete
+  // Se fadeOut, não renderizar nada
   if (fadeOut) {
-    return (
-      <div
-        className="splash-screen premium-splash splash-fade-out-cover"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          width: '100vw',
-          height: '100vh',
-          background: 'var(--gmp-bg)',
-          zIndex: 9999999,
-          pointerEvents: 'none',
-        }}
-        aria-hidden="true"
-      />
-    );
+    return null;
   }
 
   return (

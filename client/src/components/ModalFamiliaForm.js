@@ -76,14 +76,12 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [variaveisTecnicas, setVariaveisTecnicas] = useState([]);
   const [searchVariavel, setSearchVariavel] = useState('');
   const [showBolinhasPremium, setShowBolinhasPremium] = useState(false);
-  const [modoColocarMarcador, setModoColocarMarcador] = useState(false);
   const [draggingMarcadorId, setDraggingMarcadorId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
-      setModoColocarMarcador(false);
       api.get('/variaveis-tecnicas', { params: { ativo: 'true' } })
         .then((res) => setVariaveisTecnicas(Array.isArray(res.data) ? res.data : []))
         .catch(() => setVariaveisTecnicas([]));
@@ -176,7 +174,6 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   }, []);
 
   const handleVistaFrontalClick = useCallback((e) => {
-    if (!modoColocarMarcador) return;
     if (e.target.closest('.vista-marcador-bolinha')) return;
     const el = vistaFrontalRef.current;
     if (!el) return;
@@ -195,7 +192,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       }];
     });
     setEditingMarcadorId(novoId);
-  }, [modoColocarMarcador, variaveisList, getPosPctFromEvent]);
+  }, [variaveisList, getPosPctFromEvent]);
 
   const handleBolinhaMouseDown = useCallback((e, id) => {
     e.preventDefault();
@@ -314,16 +311,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         <div className="bolinhas-premium-header">
           <div className="bolinhas-premium-header-content">
             <h2>Variáveis na vista frontal</h2>
-            <p>
-              {modoColocarMarcador ? 'Clique na imagem para posicionar o marcador. Arraste para mover. Clique em "Sair do modo" para cancelar.' : 'Clique em "Colocar marcador" para ativar; depois clique na imagem. Arraste para reposicionar.'}
-            </p>
-            <button
-              type="button"
-              className={modoColocarMarcador ? 'btn-sair-modo-marcador bolinhas-premium-btn-mode' : 'btn-colocar-marcador bolinhas-premium-btn-mode'}
-              onClick={() => setModoColocarMarcador(!modoColocarMarcador)}
-            >
-              {modoColocarMarcador ? 'Sair do modo de inserção' : 'Colocar marcador'}
-            </button>
+            <p>Clique na imagem para adicionar um marcador. Arraste um marcador para mover. Edite na lista ao lado.</p>
           </div>
           <button type="button" className="bolinhas-premium-close" onClick={() => setShowBolinhasPremium(false)}>
             Concluído
@@ -386,13 +374,21 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                           value={m.variavel || (variaveisList[0]?.chave) || 'outro'}
                           onChange={(e) => updateMarcador(m.id, { variavel: e.target.value })}
                         >
-                          {variaveisFiltradas.length === 0 ? (
-                            <option value={m.variavel || ''}>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel || '—'}</option>
-                          ) : (
-                            variaveisFiltradas.map((v) => (
-                              <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
-                            ))
-                          )}
+                          {(() => {
+                            const opts = [...variaveisFiltradas];
+                            const currentChave = m.variavel || '';
+                            if (currentChave && !opts.some(v => v.chave === currentChave)) {
+                              const existing = variaveisList.find(v => v.chave === currentChave);
+                              opts.unshift(existing || { chave: currentChave, nome: currentChave, categoria: '' });
+                            }
+                            return opts.length === 0 ? (
+                              <option value={currentChave}>{variaveisList.find(v => v.chave === currentChave)?.nome || currentChave || '—'}</option>
+                            ) : (
+                              opts.map((v) => (
+                                <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
+                              ))
+                            );
+                          })()}
                         </select>
                         <div className="bolinhas-premium-card-actions">
                           <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }}>Ok</button>
@@ -407,7 +403,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                           <span>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}</span>
                         </div>
                         <div className="bolinhas-premium-card-actions">
-                          <button type="button" onClick={() => setEditingMarcadorId(m.id)} title="Editar">Editar</button>
+                          <button type="button" onClick={() => { setSearchVariavel(''); setEditingMarcadorId(m.id); }} title="Editar">Editar</button>
                           <button type="button" onClick={() => removeMarcador(m.id)} className="danger" title="Remover">Remover</button>
                         </div>
                       </>
@@ -497,7 +493,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                     ref={vistaFrontalRef}
                     className={`modal-familia-vista-frontal ${esquematicoPreviewUrl ? 'has-image' : ''}`}
                     onClick={esquematicoPreviewUrl && isEdit ? handleVistaFrontalClick : undefined}
-                    style={esquematicoPreviewUrl && isEdit && modoColocarMarcador ? { cursor: 'crosshair' } : {}}
+                    style={esquematicoPreviewUrl && isEdit ? { cursor: 'crosshair' } : {}}
                   >
                     {esquematicoPreviewUrl ? (
                       <>
@@ -538,26 +534,15 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                 {isEdit && esquematicoPreviewUrl && (
                   <div className="modal-familia-marcadores-section">
                     <div className="modal-familia-marcadores-header">
-                      <span className="marcadores-title">Marcadores na vista frontal</span>
-                      <span className="marcadores-hint">
-                        {modoColocarMarcador ? 'Clique na imagem para posicionar o marcador. Clique em "Sair do modo" para cancelar.' : 'Clique em "Colocar marcador" e depois na imagem para adicionar; edite abaixo.'}
-                      </span>
-                      <div className="marcadores-header-buttons">
-                        <button
-                          type="button"
-                          className={modoColocarMarcador ? 'btn-sair-modo-marcador' : 'btn-colocar-marcador'}
-                          onClick={() => setModoColocarMarcador(!modoColocarMarcador)}
-                        >
-                          {modoColocarMarcador ? 'Sair do modo de inserção' : 'Colocar marcador'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-abrir-bolinhas-premium"
-                          onClick={() => setShowBolinhasPremium(true)}
-                        >
-                          Abrir tela grande para configurar marcadores
-                        </button>
-                      </div>
+                      <span className="marcadores-title">Variáveis na vista (marcadores)</span>
+                      <span className="marcadores-hint">Clique na imagem para adicionar; edite abaixo.</span>
+                      <button
+                        type="button"
+                        className="btn-abrir-bolinhas-premium"
+                        onClick={() => setShowBolinhasPremium(true)}
+                      >
+                        Abrir tela grande para configurar marcadores
+                      </button>
                     </div>
                     <ul className="modal-familia-marcadores-list">
                       {marcadores.map((m) => (
@@ -590,15 +575,19 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                                     className="marcador-select"
                                   >
                                     {(() => {
-                                      const chaveAtual = m.variavel || '';
-                                      const jaIncluida = variaveisFiltradas.some(v => v.chave === chaveAtual);
-                                      const opcoes = jaIncluida ? variaveisFiltradas : [
-                                        { chave: chaveAtual, nome: variaveisList.find(v => v.chave === chaveAtual)?.nome || m.label || chaveAtual || '—', categoria: '' },
-                                        ...variaveisFiltradas
-                                      ];
-                                      return opcoes.map((v) => (
-                                        <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
-                                      ));
+                                      const opts = [...variaveisFiltradas];
+                                      const currentChave = m.variavel || '';
+                                      if (currentChave && !opts.some(v => v.chave === currentChave)) {
+                                        const existing = variaveisList.find(v => v.chave === currentChave);
+                                        opts.unshift(existing || { chave: currentChave, nome: currentChave, categoria: '' });
+                                      }
+                                      return opts.length === 0 ? (
+                                        <option value={currentChave}>{variaveisList.find(v => v.chave === currentChave)?.nome || currentChave || '—'}</option>
+                                      ) : (
+                                        opts.map((v) => (
+                                          <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
+                                        ))
+                                      );
                                     })()}
                                   </select>
                                 </div>

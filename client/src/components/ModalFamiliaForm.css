@@ -244,48 +244,6 @@
 .marcadores-hint {
   font-size: 0.8rem;
   color: var(--gmp-text-light);
-  width: 100%;
-}
-
-.marcadores-header-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.btn-colocar-marcador {
-  padding: 8px 14px;
-  background: var(--gmp-primary, #2563eb);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.btn-colocar-marcador:hover {
-  filter: brightness(1.08);
-}
-
-.btn-sair-modo-marcador {
-  padding: 8px 14px;
-  background: transparent;
-  color: var(--gmp-text-light);
-  border: 1px solid var(--gmp-border);
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.btn-sair-modo-marcador:hover {
-  background: var(--gmp-surface-hover, rgba(0,0,0,0.04));
-}
-
-.bolinhas-premium-btn-mode {
-  margin-top: 6px;
 }
 
 .modal-familia-marcadores-list {
