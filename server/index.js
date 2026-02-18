@@ -61,7 +61,7 @@ setInterval(() => {
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 
 // Rate limiting para todas as rotas da API
 app.use('/api', rateLimit);
@@ -2393,34 +2393,41 @@ app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto
 
 // Fallback: upload foto da família em base64 (JSON) quando multipart falha
 app.post('/api/familias/:id/foto-base64', authenticateToken, (req, res) => {
-  var id = req.params.id;
-  var b64 = req.body && req.body.foto_base64;
-  if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'Nenhuma imagem enviada' });
-  var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-  if (!match) return res.status(400).json({ error: 'Formato de imagem inválido. Use data:image/...;base64,...' });
-  var ext = (match[1] === 'jpeg' || match[1] === 'jpg') ? '.jpg' : '.' + match[1];
-  if (!/^(jpeg|jpg|png|gif|webp)$/i.test(match[1])) return res.status(400).json({ error: 'Apenas imagens JPEG, PNG, GIF, WEBP' });
-  var buf;
-  try { buf = Buffer.from(match[2], 'base64'); } catch (e) { return res.status(400).json({ error: 'Base64 inválido' }); }
-  if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Imagem muito grande (máx. 10MB)' });
-  var filename = 'foto_' + id + '_' + Date.now() + ext;
-  var filePath = path.join(uploadsFamiliasDir, filename);
-  fs.writeFile(filePath, buf, function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, familia) {
-      if (err) return res.status(500).json({ error: err.message });
-      if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
-      var oldFoto = familia.foto;
-      db.run('UPDATE familias_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
-        if (updateErr) return res.status(500).json({ error: updateErr.message });
-        if (oldFoto) {
-          var oldPath = path.join(uploadsFamiliasDir, oldFoto);
-          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-        }
-        res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+  try {
+    var id = req.params.id;
+    var b64 = req.body && req.body.foto_base64;
+    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+    var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!match) return res.status(400).json({ error: 'Formato de imagem inválido. Use data:image/...;base64,...' });
+    var ext = (match[1] === 'jpeg' || match[1] === 'jpg') ? '.jpg' : '.' + match[1];
+    if (!/^(jpeg|jpg|png|gif|webp)$/i.test(match[1])) return res.status(400).json({ error: 'Apenas imagens JPEG, PNG, GIF, WEBP' });
+    var base64Data = match[2].replace(/\s/g, '');
+    var buf;
+    try { buf = Buffer.from(base64Data, 'base64'); } catch (e) { return res.status(400).json({ error: 'Base64 inválido' }); }
+    if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Imagem muito grande (máx. 10MB)' });
+    if (!fs.existsSync(uploadsFamiliasDir)) fs.mkdirSync(uploadsFamiliasDir, { recursive: true });
+    var filename = 'foto_' + id + '_' + Date.now() + ext;
+    var filePath = path.join(uploadsFamiliasDir, filename);
+    fs.writeFile(filePath, buf, function(err) {
+      if (err) return res.status(500).json({ error: 'Erro ao salvar arquivo: ' + err.message });
+      db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, familia) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
+        var oldFoto = familia.foto;
+        db.run('UPDATE familias_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
+          if (updateErr) return res.status(500).json({ error: updateErr.message });
+          if (oldFoto) {
+            var oldPath = path.join(uploadsFamiliasDir, oldFoto);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          }
+          res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+        });
       });
     });
-  });
+  } catch (e) {
+    console.error('Erro foto-base64:', e);
+    return res.status(500).json({ error: e.message || 'Erro ao processar foto' });
+  }
 });
 
 const storageFamiliaEsquematico = multer.diskStorage({
@@ -2474,38 +2481,45 @@ app.post('/api/familias/:id/esquematico', authenticateToken, uploadFamiliaEsquem
 
 // Fallback: upload esquemático em base64 (JSON) quando multipart falha (ex.: proxy)
 app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) => {
-  var id = req.params.id;
-  var b64 = req.body && req.body.esquematico_base64;
-  if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'Nenhuma imagem enviada' });
-  var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-  if (!match) return res.status(400).json({ error: 'Formato de imagem inválido. Use data:image/...;base64,...' });
-  var ext = (match[1] === 'jpeg' || match[1] === 'jpg') ? '.jpg' : '.' + match[1];
-  if (!/^(jpeg|jpg|png|gif|webp)$/i.test(match[1])) return res.status(400).json({ error: 'Apenas imagens JPEG, PNG, GIF, WEBP' });
-  var buf;
   try {
-    buf = Buffer.from(match[2], 'base64');
-  } catch (e) {
-    return res.status(400).json({ error: 'Base64 inválido' });
-  }
-  if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Imagem muito grande (máx. 10MB)' });
-  var filename = 'esquematico_' + id + '_' + Date.now() + ext;
-  var filePath = path.join(uploadsFamiliasDir, filename);
-  fs.writeFile(filePath, buf, function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, familia) {
-      if (err) return res.status(500).json({ error: err.message });
-      if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
-      var oldEsq = familia.esquematico;
-      db.run('UPDATE familias_produto SET esquematico = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
-        if (updateErr) return res.status(500).json({ error: updateErr.message });
-        if (oldEsq) {
-          var oldPath = path.join(uploadsFamiliasDir, oldEsq);
-          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-        }
-        res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
+    var id = req.params.id;
+    var b64 = req.body && req.body.esquematico_base64;
+    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+    var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!match) return res.status(400).json({ error: 'Formato de imagem inválido. Use data:image/...;base64,...' });
+    var ext = (match[1] === 'jpeg' || match[1] === 'jpg') ? '.jpg' : '.' + match[1];
+    if (!/^(jpeg|jpg|png|gif|webp)$/i.test(match[1])) return res.status(400).json({ error: 'Apenas imagens JPEG, PNG, GIF, WEBP' });
+    var base64Data = match[2].replace(/\s/g, '');
+    var buf;
+    try {
+      buf = Buffer.from(base64Data, 'base64');
+    } catch (e) {
+      return res.status(400).json({ error: 'Base64 inválido' });
+    }
+    if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Imagem muito grande (máx. 10MB)' });
+    if (!fs.existsSync(uploadsFamiliasDir)) fs.mkdirSync(uploadsFamiliasDir, { recursive: true });
+    var filename = 'esquematico_' + id + '_' + Date.now() + ext;
+    var filePath = path.join(uploadsFamiliasDir, filename);
+    fs.writeFile(filePath, buf, function(err) {
+      if (err) return res.status(500).json({ error: 'Erro ao salvar arquivo: ' + err.message });
+      db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, familia) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
+        var oldEsq = familia.esquematico;
+        db.run('UPDATE familias_produto SET esquematico = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
+          if (updateErr) return res.status(500).json({ error: updateErr.message });
+          if (oldEsq) {
+            var oldPath = path.join(uploadsFamiliasDir, oldEsq);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          }
+          res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
+        });
       });
     });
-  });
+  } catch (e) {
+    console.error('Erro esquematico-base64:', e);
+    return res.status(500).json({ error: e.message || 'Erro ao processar esquemático' });
+  }
 });
 
 app.put('/api/clientes/:id', authenticateToken, (req, res) => {
