@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useTheme } from '../context/ThemeContext';
-import { FiSettings, FiSave, FiRefreshCw, FiBriefcase, FiMail, FiDatabase, FiGlobe, FiDollarSign, FiLayers } from 'react-icons/fi';
+import { FiSettings, FiSave, FiRefreshCw, FiBriefcase, FiMail, FiDatabase, FiGlobe, FiDollarSign, FiLayers, FiGrid } from 'react-icons/fi';
+import VariaveisTecnicas from './VariaveisTecnicas';
 import './Configuracoes.css';
 
 const Configuracoes = () => {
@@ -83,6 +84,7 @@ const Configuracoes = () => {
     { id: 'sistema', label: 'Sistema', icon: FiSettings },
     { id: 'email', label: 'Email', icon: FiMail },
     { id: 'backup', label: 'Backup', icon: FiDatabase },
+    { id: 'variaveis-tecnicas', label: 'Variáveis técnicas', icon: FiGrid },
   ];
 
   return (
@@ -311,6 +313,10 @@ const Configuracoes = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'variaveis-tecnicas' && (
+          <VariaveisTecnicas />
         )}
 
         {activeTab === 'backup' && (

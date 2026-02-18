@@ -948,8 +948,29 @@ function initializeDatabase() {
     if (err && err.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna esquematico:', err.message);
   });
 
+  db.run('ALTER TABLE familias_produto ADD COLUMN marcadores_vista TEXT', (err) => {
+    if (err && err.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna marcadores_vista:', err.message);
+  });
+
   db.run('UPDATE familias_produto SET codigo = id * 10 WHERE codigo IS NULL', (err) => {
     if (err) console.error('Erro ao preencher codigo:', err.message);
+  });
+
+  // Variáveis técnicas (motor, disco, etc.) para bolinhas na vista frontal e cadastro de produtos
+  db.run(`CREATE TABLE IF NOT EXISTS variaveis_tecnicas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    chave TEXT NOT NULL UNIQUE,
+    categoria TEXT,
+    tipo TEXT DEFAULT 'texto',
+    opcoes TEXT,
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
+    if (err) console.error('Erro ao criar tabela variaveis_tecnicas:', err);
+    else console.log('✅ Tabela variaveis_tecnicas verificada');
   });
 
   // Criar usuário admin padrão
@@ -2343,6 +2364,9 @@ app.get('/api/familias/:id', authenticateToken, (req, res) => {
   db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, row) {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Família não encontrada' });
+    if (row.marcadores_vista && typeof row.marcadores_vista === 'string') {
+      try { row.marcadores_vista = JSON.parse(row.marcadores_vista); } catch (_) {}
+    }
     res.json(row);
   });
 });
@@ -2352,7 +2376,22 @@ app.put('/api/familias/:id', authenticateToken, (req, res) => {
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
   var ordem = parseInt(body.ordem, 10) || 0;
-  db.run('UPDATE familias_produto SET nome = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nome, ordem, id], function(err) {
+  var marcadoresVista = body.marcadores_vista;
+  var marcadoresStr = null;
+  if (marcadoresVista !== undefined) {
+    if (typeof marcadoresVista === 'string') marcadoresStr = marcadoresVista;
+    else if (Array.isArray(marcadoresVista) || (marcadoresVista && typeof marcadoresVista === 'object'))
+      marcadoresStr = JSON.stringify(marcadoresVista);
+  }
+  var sql = 'UPDATE familias_produto SET nome = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP';
+  var params = [nome, ordem];
+  if (marcadoresStr !== undefined) {
+    sql += ', marcadores_vista = ?';
+    params.push(marcadoresStr);
+  }
+  sql += ' WHERE id = ?';
+  params.push(id);
+  db.run(sql, params, function(err) {
     if (err) {
       if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
       return res.status(500).json({ error: err.message });
@@ -2360,6 +2399,9 @@ app.put('/api/familias/:id', authenticateToken, (req, res) => {
     if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
     db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(e, row) {
       if (e) return res.status(500).json({ error: e.message });
+      if (row && row.marcadores_vista && typeof row.marcadores_vista === 'string') {
+        try { row.marcadores_vista = JSON.parse(row.marcadores_vista); } catch (_) {}
+      }
       res.json(row);
     });
   });
@@ -2520,6 +2562,134 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
     console.error('Erro esquematico-base64:', e);
     return res.status(500).json({ error: e.message || 'Erro ao processar esquemático' });
   }
+});
+
+// ========== VARIÁVEIS TÉCNICAS (cadastro para bolinhas vista frontal / 90+ variáveis) ==========
+app.get('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
+  var search = (req.query.search || '').trim();
+  var categoria = (req.query.categoria || '').trim();
+  var ativo = req.query.ativo;
+  var sql = 'SELECT * FROM variaveis_tecnicas WHERE 1=1';
+  var params = [];
+  if (ativo !== undefined) {
+    sql += ' AND ativo = ?';
+    params.push(ativo === 'true' || ativo === '1' ? 1 : 0);
+  } else {
+    sql += ' AND ativo = 1';
+  }
+  if (categoria) {
+    sql += ' AND categoria = ?';
+    params.push(categoria);
+  }
+  if (search) {
+    sql += ' AND (nome LIKE ? OR chave LIKE ?)';
+    var term = '%' + search + '%';
+    params.push(term, term);
+  }
+  sql += ' ORDER BY categoria ASC, ordem ASC, nome ASC';
+  db.all(sql, params, function(err, rows) {
+    if (err) return res.status(500).json({ error: err.message });
+    var list = (rows || []).map(function(r) {
+      if (r.opcoes && typeof r.opcoes === 'string') {
+        try { r.opcoes = JSON.parse(r.opcoes); } catch (_) { r.opcoes = []; }
+      }
+      return r;
+    });
+    res.json(list);
+  });
+});
+
+app.get('/api/variaveis-tecnicas/categorias', authenticateToken, (req, res) => {
+  db.all('SELECT DISTINCT categoria AS nome FROM variaveis_tecnicas WHERE ativo = 1 AND categoria IS NOT NULL AND TRIM(categoria) != \'\' ORDER BY categoria', [], function(err, rows) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json((rows || []).map(function(r) { return r.nome; }));
+  });
+});
+
+app.get('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  db.get('SELECT * FROM variaveis_tecnicas WHERE id = ?', [id], function(err, row) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Variável não encontrada' });
+    if (row.opcoes && typeof row.opcoes === 'string') {
+      try { row.opcoes = JSON.parse(row.opcoes); } catch (_) { row.opcoes = []; }
+    }
+    res.json(row);
+  });
+});
+
+app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
+  var body = req.body || {};
+  var nome = (body.nome || '').trim();
+  var chave = (body.chave || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+  if (!chave) chave = nome.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
+  var categoria = (body.categoria || '').trim() || null;
+  var tipo = (body.tipo || 'texto');
+  if (!['texto', 'numero', 'lista'].includes(tipo)) tipo = 'texto';
+  var opcoes = body.opcoes;
+  var opcoesStr = null;
+  if (Array.isArray(opcoes)) opcoesStr = JSON.stringify(opcoes);
+  else if (typeof opcoes === 'string') opcoesStr = opcoes;
+  var ordem = parseInt(body.ordem, 10) || 0;
+  db.run('INSERT INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, ativo) VALUES (?, ?, ?, ?, ?, ?, 1)',
+    [nome, chave, categoria, tipo, opcoesStr, ordem],
+    function(err) {
+      if (err) {
+        if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma variável com esta chave' });
+        return res.status(500).json({ error: err.message });
+      }
+      var id = this.lastID;
+      db.get('SELECT * FROM variaveis_tecnicas WHERE id = ?', [id], function(e, row) {
+        if (e) return res.status(500).json({ error: e.message });
+        if (row && row.opcoes && typeof row.opcoes === 'string') {
+          try { row.opcoes = JSON.parse(row.opcoes); } catch (_) {}
+        }
+        res.status(201).json(row);
+      });
+    });
+});
+
+app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  var body = req.body || {};
+  var nome = (body.nome || '').trim();
+  var chave = (body.chave || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+  if (!chave) return res.status(400).json({ error: 'Chave é obrigatória' });
+  var categoria = (body.categoria || '').trim() || null;
+  var tipo = (body.tipo || 'texto');
+  if (!['texto', 'numero', 'lista'].includes(tipo)) tipo = 'texto';
+  var opcoes = body.opcoes;
+  var opcoesStr = null;
+  if (Array.isArray(opcoes)) opcoesStr = JSON.stringify(opcoes);
+  else if (typeof opcoes === 'string') opcoesStr = opcoes;
+  var ordem = parseInt(body.ordem, 10) || 0;
+  db.run('UPDATE variaveis_tecnicas SET nome = ?, chave = ?, categoria = ?, tipo = ?, opcoes = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [nome, chave, categoria, tipo, opcoesStr, ordem, id],
+    function(err) {
+      if (err) {
+        if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe outra variável com esta chave' });
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) return res.status(404).json({ error: 'Variável não encontrada' });
+      db.get('SELECT * FROM variaveis_tecnicas WHERE id = ?', [id], function(e, row) {
+        if (e) return res.status(500).json({ error: e.message });
+        if (row && row.opcoes && typeof row.opcoes === 'string') {
+          try { row.opcoes = JSON.parse(row.opcoes); } catch (_) {}
+        }
+        res.json(row);
+      });
+    });
+});
+
+app.delete('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  db.run('UPDATE variaveis_tecnicas SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Variável não encontrada' });
+    res.json({ message: 'Variável desativada' });
+  });
 });
 
 app.put('/api/clientes/:id', authenticateToken, (req, res) => {

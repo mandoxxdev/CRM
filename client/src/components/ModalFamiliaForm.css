@@ -16,7 +16,9 @@
   background: var(--gmp-surface);
   border-radius: var(--border-radius);
   width: 100%;
-  max-width: 440px;
+  max-width: 720px;
+  max-height: 95vh;
+  overflow-y: auto;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--gmp-border);
 }
@@ -118,6 +120,245 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Vista frontal maior + bolinhas (marcadores) */
+.modal-familia-vista-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.modal-familia-vista-frontal {
+  position: relative;
+  width: 100%;
+  min-height: 280px;
+  max-height: 420px;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  border: 2px solid var(--gmp-border);
+  background: var(--gmp-bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-familia-vista-frontal.has-image {
+  min-height: 320px;
+  background: #1a1a1a;
+}
+
+.modal-familia-vista-frontal img {
+  width: 100%;
+  height: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+.modal-familia-vista-placeholder {
+  min-height: 200px;
+  font-size: 1rem;
+}
+
+.modal-familia-vista-upload {
+  flex-shrink: 0;
+}
+
+/* Bolinhas na vista frontal */
+.vista-marcador-bolinha {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: #FF6B35;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.vista-marcador-bolinha:hover {
+  transform: scale(1.2);
+  background: #F7931E;
+}
+
+/* Lista de marcadores (variáveis) */
+.modal-familia-marcadores-section {
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--gmp-border);
+}
+
+.modal-familia-marcadores-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--spacing-md);
+}
+
+.marcadores-title {
+  font-weight: 600;
+  color: var(--gmp-text);
+}
+
+.marcadores-hint {
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
+}
+
+.modal-familia-marcadores-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.marcador-item {
+  padding: 8px 12px;
+  border: 1px solid var(--gmp-border);
+  border-radius: var(--border-radius);
+  background: var(--gmp-surface);
+}
+
+.marcador-item.editing {
+  border-color: var(--gmp-primary);
+  background: rgba(255, 107, 53, 0.06);
+}
+
+.marcador-item-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.marcador-bolinha-preview {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #FF6B35;
+  flex-shrink: 0;
+}
+
+.marcador-label {
+  font-weight: 500;
+  min-width: 120px;
+}
+
+.marcador-variavel {
+  font-size: 0.85rem;
+  color: var(--gmp-text-light);
+  flex: 1;
+}
+
+.marcador-edit-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.marcador-input {
+  flex: 1;
+  min-width: 140px;
+  padding: 6px 10px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.marcador-variavel-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.marcador-variavel-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 6px;
+  background: var(--gmp-surface);
+}
+
+.marcador-variavel-search input {
+  border: none;
+  background: transparent;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+
+.marcador-variavel-search input:focus {
+  outline: none;
+}
+
+.marcador-select {
+  min-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+}
+
+.marcador-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.marcador-btn-ok,
+.marcador-btn-edit,
+.marcador-btn-remove {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.marcador-btn-ok {
+  background: var(--gmp-primary);
+  color: white;
+}
+
+.marcador-btn-edit {
+  background: var(--gmp-bg-subtle);
+  color: var(--gmp-text);
+}
+
+.marcador-btn-remove {
+  background: transparent;
+  color: #e74c3c;
+}
+
+.marcador-btn-remove:hover,
+.marcador-btn-edit:hover {
+  opacity: 0.9;
+}
+
+.marcadores-empty {
+  font-size: 0.9rem;
+  color: var(--gmp-text-light);
+  margin: 0;
+  font-style: italic;
 }
 
 .modal-familia-preview-placeholder {

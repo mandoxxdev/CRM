@@ -1,7 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { FiX, FiUploadCloud } from 'react-icons/fi';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { FiX, FiUploadCloud, FiTrash2, FiEdit2, FiSearch } from 'react-icons/fi';
 import api from '../services/api';
 import './ModalFamiliaForm.css';
+
+// Fallback mínimo se a API de variáveis não estiver disponível
+const VARIAVEIS_FALLBACK = [
+  { chave: 'motor_central_cv', nome: 'Potência motor central (CV)', categoria: 'Motor' },
+  { chave: 'diametro', nome: 'Diâmetro', categoria: 'Geral' },
+  { chave: 'outro', nome: 'Outro (campo livre)', categoria: null }
+];
 
 // Upload de arquivo com fetch para garantir Content-Type multipart com boundary (evita 400 no servidor)
 async function uploadFormData(endpoint, formData) {
@@ -47,6 +54,13 @@ async function uploadImagemFamilia(tipo, id, file) {
   }
 }
 
+function parseMarcadores(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(m => ({ ...m, id: m.id || 'm' + Math.random().toString(36).slice(2) }));
+  if (raw.marcadores && Array.isArray(raw.marcadores)) return raw.marcadores.map(m => ({ ...m, id: m.id || 'm' + Math.random().toString(36).slice(2) }));
+  return [];
+}
+
 const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, useLocalOnly, familiasAtuais = [] }) => {
   const isEdit = !!familia && !!familia.id;
   const [nome, setNome] = useState('');
@@ -55,8 +69,33 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [previewUrl, setPreviewUrl] = useState(null);
   const [esquematicoFile, setEsquematicoFile] = useState(null);
   const [esquematicoPreviewUrl, setEsquematicoPreviewUrl] = useState(null);
+  const [marcadores, setMarcadores] = useState([]);
+  const [editingMarcadorId, setEditingMarcadorId] = useState(null);
+  const [variaveisTecnicas, setVariaveisTecnicas] = useState([]);
+  const [searchVariavel, setSearchVariavel] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      api.get('/variaveis-tecnicas', { params: { ativo: 'true' } })
+        .then((res) => setVariaveisTecnicas(Array.isArray(res.data) ? res.data : []))
+        .catch(() => setVariaveisTecnicas([]));
+    }
+  }, [isOpen]);
+
+  const variaveisList = useMemo(() => {
+    const list = variaveisTecnicas.length ? variaveisTecnicas : VARIAVEIS_FALLBACK;
+    return list.map(v => ({ chave: v.chave || v.key, nome: v.nome || v.label, categoria: v.categoria || '' }));
+  }, [variaveisTecnicas]);
+
+  const variaveisFiltradas = useMemo(() => {
+    const t = (searchVariavel || '').trim().toLowerCase();
+    if (!t) return variaveisList;
+    return variaveisList.filter(v =>
+      (v.nome || '').toLowerCase().includes(t) || (v.chave || '').toLowerCase().includes(t)
+    );
+  }, [variaveisList, searchVariavel]);
 
   useEffect(() => {
     if (familia) {
@@ -64,6 +103,8 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       setOrdem(familia.ordem || 0);
       setPreviewUrl(familia.foto ? getFotoUrl(familia.foto) : null);
       setEsquematicoPreviewUrl(familia.esquematico ? getEsquematicoUrl(familia.esquematico) : null);
+      const raw = familia.marcadores_vista;
+      setMarcadores(parseMarcadores(typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return []; } })() : raw));
     } else {
       setNome('');
       setOrdem(0);
@@ -71,7 +112,9 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       setFotoFile(null);
       setEsquematicoPreviewUrl(null);
       setEsquematicoFile(null);
+      setMarcadores([]);
     }
+    setEditingMarcadorId(null);
     setError('');
   }, [familia, isOpen]);
 
@@ -112,6 +155,35 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     setEsquematicoPreviewUrl(URL.createObjectURL(file));
   };
 
+  const vistaFrontalRef = React.useRef(null);
+  const handleVistaFrontalClick = useCallback((e) => {
+    const el = vistaFrontalRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const primeiroChave = (variaveisList[0] && variaveisList[0].chave) || 'outro';
+    const novo = {
+      id: 'm' + Date.now(),
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+      label: 'Nova variável',
+      variavel: primeiroChave,
+      tipo: 'texto'
+    };
+    setMarcadores(prev => [...prev, novo]);
+    setEditingMarcadorId(novo.id);
+  }, [variaveisList]);
+
+  const updateMarcador = useCallback((id, updates) => {
+    setMarcadores(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  }, []);
+
+  const removeMarcador = useCallback((id) => {
+    setMarcadores(prev => prev.filter(m => m.id !== id));
+    if (editingMarcadorId === id) setEditingMarcadorId(null);
+  }, [editingMarcadorId]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const nomeTrim = nome.trim();
@@ -140,7 +212,11 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
 
     try {
       if (isEdit) {
-        await api.put(`/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        await api.put(`/familias/${familia.id}`, {
+          nome: nomeTrim,
+          ordem: Number(ordem) || 0,
+          marcadores_vista: marcadores
+        });
         if (fotoFile) await uploadImagemFamilia('foto', familia.id, fotoFile);
         if (esquematicoFile) await uploadImagemFamilia('esquematico', familia.id, esquematicoFile);
       } else {
@@ -244,19 +320,35 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
               </div>
               <div className="modal-familia-field">
                 <label>Vista frontal / Esquemático (opcional)</label>
-                <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos desta família</p>
-                <div className="modal-familia-foto-row">
-                  <div className="modal-familia-preview">
+                <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos. Clique na imagem para posicionar bolinhas de variáveis técnicas.</p>
+                <div className="modal-familia-vista-wrapper">
+                  <div
+                    ref={vistaFrontalRef}
+                    className={`modal-familia-vista-frontal ${esquematicoPreviewUrl ? 'has-image' : ''}`}
+                    onClick={esquematicoPreviewUrl && isEdit ? handleVistaFrontalClick : undefined}
+                    style={esquematicoPreviewUrl && isEdit ? { cursor: 'crosshair' } : {}}
+                  >
                     {esquematicoPreviewUrl ? (
-                      <img src={esquematicoPreviewUrl} alt="Esquemático" />
+                      <>
+                        <img src={esquematicoPreviewUrl} alt="Vista frontal" draggable={false} />
+                        {marcadores.map((m) => (
+                          <span
+                            key={m.id}
+                            className="vista-marcador-bolinha"
+                            style={{ left: m.x + '%', top: m.y + '%' }}
+                            title={m.label}
+                            onClick={(ev) => { ev.stopPropagation(); setEditingMarcadorId(editingMarcadorId === m.id ? null : m.id); }}
+                          />
+                        ))}
+                      </>
                     ) : (
-                      <div className="modal-familia-preview-placeholder">
-                        <FiUploadCloud size={32} />
+                      <div className="modal-familia-preview-placeholder modal-familia-vista-placeholder">
+                        <FiUploadCloud size={40} />
                         <span>Nenhum esquemático</span>
                       </div>
                     )}
                   </div>
-                  <div className="modal-familia-upload">
+                  <div className="modal-familia-vista-upload">
                     <input
                       type="file"
                       accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
@@ -268,6 +360,79 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                     </label>
                   </div>
                 </div>
+                {isEdit && esquematicoPreviewUrl && (
+                  <div className="modal-familia-marcadores-section">
+                    <div className="modal-familia-marcadores-header">
+                      <span className="marcadores-title">Variáveis na vista (bolinhas)</span>
+                      <span className="marcadores-hint">Clique na imagem para adicionar; edite abaixo.</span>
+                    </div>
+                    <ul className="modal-familia-marcadores-list">
+                      {marcadores.map((m) => (
+                        <li key={m.id} className={`marcador-item ${editingMarcadorId === m.id ? 'editing' : ''}`}>
+                          <div className="marcador-item-main">
+                            <span className="marcador-bolinha-preview" />
+                            {editingMarcadorId === m.id ? (
+                              <div className="marcador-edit-fields">
+                                <input
+                                  type="text"
+                                  value={m.label}
+                                  onChange={(e) => updateMarcador(m.id, { label: e.target.value })}
+                                  placeholder="Rótulo (ex: Potência CV)"
+                                  className="marcador-input"
+                                />
+                                <div className="marcador-variavel-select-wrap">
+                                  <div className="marcador-variavel-search">
+                                    <FiSearch size={14} />
+                                    <input
+                                      type="text"
+                                      value={searchVariavel}
+                                      onChange={(e) => setSearchVariavel(e.target.value)}
+                                      placeholder="Buscar variável..."
+                                      className="marcador-input"
+                                    />
+                                  </div>
+                                  <select
+                                    value={m.variavel || (variaveisList[0]?.chave) || 'outro'}
+                                    onChange={(e) => updateMarcador(m.id, { variavel: e.target.value })}
+                                    className="marcador-select"
+                                  >
+                                    {variaveisFiltradas.length === 0 ? (
+                                      <option value={m.variavel || ''}>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel || '—'}</option>
+                                    ) : (
+                                      variaveisFiltradas.map((v) => (
+                                        <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
+                                      ))
+                                    )}
+                                  </select>
+                                </div>
+                                <div className="marcador-edit-actions">
+                                  <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }} className="marcador-btn-ok">Ok</button>
+                                  <button type="button" onClick={() => removeMarcador(m.id)} className="marcador-btn-remove" title="Remover">
+                                    <FiTrash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="marcador-label">{m.label}</span>
+                                <span className="marcador-variavel">{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}</span>
+                                <button type="button" onClick={() => setEditingMarcadorId(m.id)} className="marcador-btn-edit" title="Editar">
+                                  <FiEdit2 size={14} />
+                                </button>
+                                <button type="button" onClick={() => removeMarcador(m.id)} className="marcador-btn-remove" title="Remover">
+                                  <FiTrash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {marcadores.length === 0 && (
+                      <p className="marcadores-empty">Nenhuma bolinha ainda. Clique na vista frontal acima para adicionar.</p>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
