@@ -944,6 +944,10 @@ function initializeDatabase() {
     if (err && err.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna codigo:', err.message);
   });
 
+  db.run('ALTER TABLE familias_produto ADD COLUMN esquematico TEXT', (err) => {
+    if (err && err.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna esquematico:', err.message);
+  });
+
   db.run('UPDATE familias_produto SET codigo = id * 10 WHERE codigo IS NULL', (err) => {
     if (err) console.error('Erro ao preencher codigo:', err.message);
   });
@@ -2354,6 +2358,43 @@ app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
       res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+    });
+  });
+});
+
+const storageFamiliaEsquematico = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsFamiliasDir),
+  filename: (req, file, cb) => {
+    const familiaId = req.params.id || 'temp';
+    const ext = path.extname(file.originalname) || '.png';
+    cb(null, `esquematico_${familiaId}_${Date.now()}${ext}`);
+  }
+});
+const uploadFamiliaEsquematico = multer({
+  storage: storageFamiliaEsquematico,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|webp/;
+    const ok = allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype);
+    cb(ok ? null : new Error('Apenas imagens (JPEG, PNG, GIF, WEBP)'));
+  }
+});
+
+app.post('/api/familias/:id/esquematico', authenticateToken, uploadFamiliaEsquematico.single('esquematico'), (req, res) => {
+  var id = req.params.id;
+  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  var filename = req.file.filename;
+  db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, familia) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
+    var oldEsq = familia.esquematico;
+    db.run('UPDATE familias_produto SET esquematico = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (oldEsq) {
+        var oldPath = path.join(uploadsFamiliasDir, oldEsq);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
     });
   });
 });

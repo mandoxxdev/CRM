@@ -106,8 +106,8 @@ const ProdutoForm = () => {
   });
   const setOutro = (field, active) => setOutroAtivo(prev => ({ ...prev, [field]: active }));
 
-  // Famílias: carregadas da API (famílias cadastradas) com fallback para lista padrão
-  const [familiasFromApi, setFamiliasFromApi] = useState([]);
+  // Famílias: lista completa da API (para nome + esquemático)
+  const [familiasList, setFamiliasList] = useState([]);
   const todasFamiliasPadrao = [
     'Moinhos', 'Masseiras', 'Agitadores', 'Dispersores', 'Silos',
     'Tanques de armazenamento', 'Unidade derivadora de Dosagem', 'Estação de Aditivos',
@@ -115,14 +115,17 @@ const ProdutoForm = () => {
   ];
   useEffect(() => {
     api.get('/familias').then((res) => {
-      const list = (res.data || []).map((f) => f.nome).filter(Boolean);
-      setFamiliasFromApi(list);
-    }).catch(() => setFamiliasFromApi([]));
+      setFamiliasList(Array.isArray(res.data) ? res.data : []);
+    }).catch(() => setFamiliasList([]));
   }, []);
-  const todasFamilias = familiasFromApi.length > 0 ? familiasFromApi : todasFamiliasPadrao;
+  const familiasNomes = familiasList.length > 0 ? familiasList.map((f) => f.nome).filter(Boolean) : todasFamiliasPadrao;
   const familias = tipoProduto === 'discos-acessorios'
-    ? (todasFamilias.includes('Hélices e Acessórios') ? ['Hélices e Acessórios'] : todasFamilias)
-    : todasFamilias;
+    ? (familiasNomes.includes('Hélices e Acessórios') ? ['Hélices e Acessórios'] : familiasNomes)
+    : familiasNomes;
+  const familiaSelecionada = formData.familia_produto ? familiasList.find((f) => f.nome === formData.familia_produto) : null;
+  const esquematicoUrl = familiaSelecionada?.esquematico
+    ? `${(api.defaults.baseURL || '').replace(/\/api\/?$/, '')}/api/uploads/familias-produtos/${familiaSelecionada.esquematico}`
+    : null;
 
   const unidades = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'PC'];
 
@@ -511,6 +514,15 @@ const ProdutoForm = () => {
         </button>
       </div>
       {error && <div className="error-message">{error}</div>}
+      {esquematicoUrl && (
+        <div className="produto-form-esquematico">
+          <h3>Vista frontal da família – {formData.familia_produto}</h3>
+          <p className="produto-form-esquematico-hint">Esquemático de referência ao cadastrar este produto</p>
+          <div className="produto-form-esquematico-img-wrap">
+            <img src={esquematicoUrl} alt={`Esquemático ${formData.familia_produto}`} className="produto-form-esquematico-img" />
+          </div>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="form-container">
         <div className="form-section">
           <h2>Informações Básicas</h2>

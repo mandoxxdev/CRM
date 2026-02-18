@@ -47,6 +47,43 @@
   border: 1px solid var(--gmp-error-border, #fcc);
 }
 
+.produto-form-esquematico {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.produto-form-esquematico h3 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 1.15rem;
+  color: var(--gmp-primary);
+}
+
+.produto-form-esquematico-hint {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: 0.9rem;
+  color: var(--gmp-text-light, #64748b);
+}
+
+.produto-form-esquematico-img-wrap {
+  max-width: 100%;
+  max-height: 320px;
+  overflow: auto;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--gmp-border);
+  background: var(--gmp-bg-subtle, #f8fafc);
+}
+
+.produto-form-esquematico-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
 .form-container {
   background: var(--gmp-surface);
   border-radius: var(--border-radius);

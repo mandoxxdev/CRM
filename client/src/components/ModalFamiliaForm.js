@@ -9,6 +9,8 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [ordem, setOrdem] = useState(0);
   const [fotoFile, setFotoFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [esquematicoFile, setEsquematicoFile] = useState(null);
+  const [esquematicoPreviewUrl, setEsquematicoPreviewUrl] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -17,11 +19,14 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       setNome(familia.nome || '');
       setOrdem(familia.ordem || 0);
       setPreviewUrl(familia.foto ? getFotoUrl(familia.foto) : null);
+      setEsquematicoPreviewUrl(familia.esquematico ? getEsquematicoUrl(familia.esquematico) : null);
     } else {
       setNome('');
       setOrdem(0);
       setPreviewUrl(null);
       setFotoFile(null);
+      setEsquematicoPreviewUrl(null);
+      setEsquematicoFile(null);
     }
     setError('');
   }, [familia, isOpen]);
@@ -31,6 +36,12 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     if (typeof foto === 'string' && foto.startsWith('data:')) return foto;
     const base = api.defaults.baseURL || '/api';
     return base.replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/' + foto;
+  }
+
+  function getEsquematicoUrl(esquematico) {
+    if (!esquematico) return null;
+    const base = api.defaults.baseURL || '/api';
+    return base.replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/' + esquematico;
   }
 
   const handleFileChange = (e) => {
@@ -43,6 +54,18 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     setError('');
     setFotoFile(file);
     setPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleEsquematicoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.type)) {
+      setError('Esquemático: use apenas imagens (JPEG, PNG, GIF, WEBP).');
+      return;
+    }
+    setError('');
+    setEsquematicoFile(file);
+    setEsquematicoPreviewUrl(URL.createObjectURL(file));
   };
 
   const handleSubmit = async (e) => {
@@ -75,20 +98,29 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       if (isEdit) {
         await api.put(`/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
         if (fotoFile) {
-          const formData = new FormData();
-          formData.append('foto', fotoFile);
-          await api.post(`/familias/${familia.id}/foto`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
+          const fd = new FormData();
+          fd.append('foto', fotoFile);
+          await api.post(`/familias/${familia.id}/foto`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        }
+        if (esquematicoFile) {
+          const fd = new FormData();
+          fd.append('esquematico', esquematicoFile);
+          await api.post(`/familias/${familia.id}/esquematico`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
         }
       } else {
         const res = await api.post('/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 });
-        if (fotoFile && res.data && res.data.id) {
-          const formData = new FormData();
-          formData.append('foto', fotoFile);
-          await api.post(`/familias/${res.data.id}/foto`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
+        const newId = res.data && res.data.id;
+        if (newId) {
+          if (fotoFile) {
+            const fd = new FormData();
+            fd.append('foto', fotoFile);
+            await api.post(`/familias/${newId}/foto`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+          }
+          if (esquematicoFile) {
+            const fd = new FormData();
+            fd.append('esquematico', esquematicoFile);
+            await api.post(`/familias/${newId}/esquematico`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+          }
         }
       }
       onSaved();
@@ -177,6 +209,33 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                   />
                   <label htmlFor="familia-foto-input" className="btn-upload-label">
                     {fotoFile ? 'Trocar imagem' : 'Enviar imagem'}
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="modal-familia-field">
+              <label>Vista frontal / Esquemático (opcional)</label>
+              <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos desta família</p>
+              <div className="modal-familia-foto-row">
+                <div className="modal-familia-preview">
+                  {esquematicoPreviewUrl ? (
+                    <img src={esquematicoPreviewUrl} alt="Esquemático" />
+                  ) : (
+                    <div className="modal-familia-preview-placeholder">
+                      <FiUploadCloud size={32} />
+                      <span>Nenhum esquemático</span>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-familia-upload">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    onChange={handleEsquematicoChange}
+                    id="familia-esquematico-input"
+                  />
+                  <label htmlFor="familia-esquematico-input" className="btn-upload-label">
+                    {esquematicoFile ? 'Trocar esquemático' : 'Enviar esquemático'}
                   </label>
                 </div>
               </div>

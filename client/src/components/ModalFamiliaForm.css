@@ -69,6 +69,12 @@
   margin-bottom: var(--spacing-lg);
 }
 
+.modal-familia-hint {
+  font-size: 0.85rem;
+  color: var(--gmp-text-light, #64748b);
+  margin: 0 0 8px 0;
+}
+
 .modal-familia-field label {
   display: block;
   margin-bottom: var(--spacing-xs);
