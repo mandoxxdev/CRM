@@ -127,6 +127,15 @@ const ProdutoForm = () => {
     ? `${(api.defaults.baseURL || '').replace(/\/api\/?$/, '')}/api/uploads/familias-produtos/${familiaSelecionada.esquematico}`
     : null;
 
+  // Variáveis das bolinhas da vista frontal (cadastradas na família) – aparecem como campos para preencher
+  const marcadoresVistaFamilia = useMemo(() => {
+    const raw = familiaSelecionada?.marcadores_vista;
+    if (!raw) return [];
+    const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return []; } })() : raw;
+    const arr = Array.isArray(parsed) ? parsed : (parsed && parsed.marcadores) ? parsed.marcadores : [];
+    return arr.filter((m) => m && (m.variavel || m.label));
+  }, [familiaSelecionada]);
+
   const unidades = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'PC'];
 
   // Pré-preencher família quando vier da URL (ex.: clicou em "Novo produto" dentro de uma família)
@@ -520,6 +529,34 @@ const ProdutoForm = () => {
           <p className="produto-form-esquematico-hint">Esquemático de referência ao cadastrar este produto</p>
           <div className="produto-form-esquematico-img-wrap">
             <img src={esquematicoUrl} alt={`Esquemático ${formData.familia_produto}`} className="produto-form-esquematico-img" />
+          </div>
+        </div>
+      )}
+      {marcadoresVistaFamilia.length > 0 && (
+        <div className="produto-form-variaveis-vista">
+          <h3>Informações das variáveis da vista frontal</h3>
+          <p className="produto-form-variaveis-vista-hint">
+            Preencha os valores das variáveis técnicas definidas para esta família (cada bolinha da vista).
+          </p>
+          <div className="produto-form-variaveis-vista-grid">
+            {marcadoresVistaFamilia.map((m) => {
+              const chave = m.variavel || m.key;
+              const label = m.label || chave;
+              const valor = especificacoesTecnicas[chave] ?? '';
+              const isNumero = (m.tipo || '').toLowerCase() === 'numero';
+              return (
+                <div key={m.id || chave} className="produto-form-variavel-field">
+                  <label>{label}</label>
+                  <input
+                    type={isNumero ? 'number' : 'text'}
+                    value={valor}
+                    onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
+                    placeholder={`Informe ${label.toLowerCase()}`}
+                    step={isNumero ? 'any' : undefined}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

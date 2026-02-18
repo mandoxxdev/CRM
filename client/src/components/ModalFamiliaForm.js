@@ -73,6 +73,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [editingMarcadorId, setEditingMarcadorId] = useState(null);
   const [variaveisTecnicas, setVariaveisTecnicas] = useState([]);
   const [searchVariavel, setSearchVariavel] = useState('');
+  const [showBolinhasPremium, setShowBolinhasPremium] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -115,6 +116,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       setMarcadores([]);
     }
     setEditingMarcadorId(null);
+    setShowBolinhasPremium(false);
     setError('');
   }, [familia, isOpen]);
 
@@ -255,6 +257,111 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
 
   if (!isOpen) return null;
 
+  const renderBolinhasPremium = () => (
+    <div className="bolinhas-premium-overlay" onClick={() => setShowBolinhasPremium(false)}>
+      <div className="bolinhas-premium-container" onClick={(e) => e.stopPropagation()}>
+        <div className="bolinhas-premium-header">
+          <div className="bolinhas-premium-header-content">
+            <h2>Variáveis na vista frontal</h2>
+            <p>Clique na imagem para posicionar cada variável técnica. Edite na lista ao lado.</p>
+          </div>
+          <button type="button" className="bolinhas-premium-close" onClick={() => setShowBolinhasPremium(false)}>
+            Concluído
+          </button>
+        </div>
+        <div className="bolinhas-premium-body">
+          <div className="bolinhas-premium-vista">
+            <div
+              ref={vistaFrontalRef}
+              className="bolinhas-premium-vista-inner"
+              onClick={handleVistaFrontalClick}
+            >
+              <img src={esquematicoPreviewUrl} alt="Vista frontal" draggable={false} />
+              {marcadores.map((m) => (
+                <span
+                  key={m.id}
+                  className="vista-marcador-bolinha bolinhas-premium-bolinha"
+                  style={{ left: m.x + '%', top: m.y + '%' }}
+                  title={m.label}
+                  onClick={(ev) => { ev.stopPropagation(); setEditingMarcadorId(editingMarcadorId === m.id ? null : m.id); }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="bolinhas-premium-list-panel">
+            <div className="bolinhas-premium-list-header">
+              <span className="bolinhas-premium-list-title">Variáveis ({marcadores.length})</span>
+            </div>
+            <ul className="bolinhas-premium-list">
+              {marcadores.length === 0 ? (
+                <li className="bolinhas-premium-empty">
+                  <p>Nenhuma variável ainda.</p>
+                  <p>Clique na vista frontal à esquerda para adicionar.</p>
+                </li>
+              ) : (
+                marcadores.map((m) => (
+                  <li key={m.id} className={`bolinhas-premium-card ${editingMarcadorId === m.id ? 'editing' : ''}`}>
+                    {editingMarcadorId === m.id ? (
+                      <div className="bolinhas-premium-card-edit">
+                        <input
+                          type="text"
+                          value={m.label}
+                          onChange={(e) => updateMarcador(m.id, { label: e.target.value })}
+                          placeholder="Rótulo (ex: Potência CV)"
+                        />
+                        <div className="bolinhas-premium-variavel-search">
+                          <FiSearch size={16} />
+                          <input
+                            type="text"
+                            value={searchVariavel}
+                            onChange={(e) => setSearchVariavel(e.target.value)}
+                            placeholder="Buscar variável..."
+                          />
+                        </div>
+                        <select
+                          value={m.variavel || (variaveisList[0]?.chave) || 'outro'}
+                          onChange={(e) => updateMarcador(m.id, { variavel: e.target.value })}
+                        >
+                          {variaveisFiltradas.length === 0 ? (
+                            <option value={m.variavel || ''}>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel || '—'}</option>
+                          ) : (
+                            variaveisFiltradas.map((v) => (
+                              <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
+                            ))
+                          )}
+                        </select>
+                        <div className="bolinhas-premium-card-actions">
+                          <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }}>Ok</button>
+                          <button type="button" onClick={() => removeMarcador(m.id)} className="danger">Remover</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="bolinhas-premium-dot" />
+                        <div className="bolinhas-premium-card-info">
+                          <strong>{m.label}</strong>
+                          <span>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}</span>
+                        </div>
+                        <div className="bolinhas-premium-card-actions">
+                          <button type="button" onClick={() => setEditingMarcadorId(m.id)} title="Editar">Editar</button>
+                          <button type="button" onClick={() => removeMarcador(m.id)} className="danger" title="Remover">Remover</button>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (showBolinhasPremium && isEdit && esquematicoPreviewUrl) {
+    return renderBolinhasPremium();
+  }
+
   return (
     <div className="modal-familia-overlay" onClick={onClose}>
       <div className="modal-familia-container" onClick={(e) => e.stopPropagation()}>
@@ -365,6 +472,13 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                     <div className="modal-familia-marcadores-header">
                       <span className="marcadores-title">Variáveis na vista (bolinhas)</span>
                       <span className="marcadores-hint">Clique na imagem para adicionar; edite abaixo.</span>
+                      <button
+                        type="button"
+                        className="btn-abrir-bolinhas-premium"
+                        onClick={() => setShowBolinhasPremium(true)}
+                      >
+                        Abrir tela grande para configurar bolinhas
+                      </button>
                     </div>
                     <ul className="modal-familia-marcadores-list">
                       {marcadores.map((m) => (

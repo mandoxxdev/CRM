@@ -10098,7 +10098,7 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
   }
 
   if (familia && String(familia).trim()) {
-    query += ' AND TRIM(COALESCE(familia, \'\')) = ?';
+    query += ' AND UPPER(TRIM(COALESCE(familia, \'\'))) = UPPER(?)';
     params.push(String(familia).trim());
   }
 

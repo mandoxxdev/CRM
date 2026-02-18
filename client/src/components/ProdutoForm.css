@@ -68,6 +68,57 @@
   color: var(--gmp-text-light, #64748b);
 }
 
+/* Variáveis da vista frontal (bolinhas da família) – preencher no cadastro do produto */
+.produto-form-variaveis-vista {
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.06) 0%, rgba(247, 147, 30, 0.04) 100%);
+  border: 1px solid rgba(255, 107, 53, 0.25);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.produto-form-variaveis-vista h3 {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: 1.15rem;
+  color: var(--gmp-primary);
+}
+
+.produto-form-variaveis-vista-hint {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: 0.9rem;
+  color: var(--gmp-text-light, #64748b);
+}
+
+.produto-form-variaveis-vista-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.produto-form-variavel-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--gmp-text);
+}
+
+.produto-form-variavel-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--gmp-border);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+}
+
+.produto-form-variavel-field input:focus {
+  outline: none;
+  border-color: var(--gmp-primary);
+}
+
 .produto-form-esquematico-img-wrap {
   max-width: 100%;
   height: 320px;
