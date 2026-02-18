@@ -76,12 +76,14 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [variaveisTecnicas, setVariaveisTecnicas] = useState([]);
   const [searchVariavel, setSearchVariavel] = useState('');
   const [showBolinhasPremium, setShowBolinhasPremium] = useState(false);
+  const [modoColocarMarcador, setModoColocarMarcador] = useState(false);
   const [draggingMarcadorId, setDraggingMarcadorId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
+      setModoColocarMarcador(false);
       api.get('/variaveis-tecnicas', { params: { ativo: 'true' } })
         .then((res) => setVariaveisTecnicas(Array.isArray(res.data) ? res.data : []))
         .catch(() => setVariaveisTecnicas([]));
@@ -174,6 +176,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   }, []);
 
   const handleVistaFrontalClick = useCallback((e) => {
+    if (!modoColocarMarcador) return;
     if (e.target.closest('.vista-marcador-bolinha')) return;
     const el = vistaFrontalRef.current;
     if (!el) return;
@@ -192,7 +195,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       }];
     });
     setEditingMarcadorId(novoId);
-  }, [variaveisList, getPosPctFromEvent]);
+  }, [modoColocarMarcador, variaveisList, getPosPctFromEvent]);
 
   const handleBolinhaMouseDown = useCallback((e, id) => {
     e.preventDefault();
@@ -311,7 +314,16 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         <div className="bolinhas-premium-header">
           <div className="bolinhas-premium-header-content">
             <h2>Variáveis na vista frontal</h2>
-            <p>Clique na imagem para adicionar um marcador. Arraste para reposicionar. Edite na lista ao lado.</p>
+            <p>
+              {modoColocarMarcador ? 'Clique na imagem para posicionar o marcador. Arraste para mover. Clique em "Sair do modo" para cancelar.' : 'Clique em "Colocar marcador" para ativar; depois clique na imagem. Arraste para reposicionar.'}
+            </p>
+            <button
+              type="button"
+              className={modoColocarMarcador ? 'btn-sair-modo-marcador bolinhas-premium-btn-mode' : 'btn-colocar-marcador bolinhas-premium-btn-mode'}
+              onClick={() => setModoColocarMarcador(!modoColocarMarcador)}
+            >
+              {modoColocarMarcador ? 'Sair do modo de inserção' : 'Colocar marcador'}
+            </button>
           </div>
           <button type="button" className="bolinhas-premium-close" onClick={() => setShowBolinhasPremium(false)}>
             Concluído
@@ -485,7 +497,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                     ref={vistaFrontalRef}
                     className={`modal-familia-vista-frontal ${esquematicoPreviewUrl ? 'has-image' : ''}`}
                     onClick={esquematicoPreviewUrl && isEdit ? handleVistaFrontalClick : undefined}
-                    style={esquematicoPreviewUrl && isEdit ? { cursor: 'crosshair' } : {}}
+                    style={esquematicoPreviewUrl && isEdit && modoColocarMarcador ? { cursor: 'crosshair' } : {}}
                   >
                     {esquematicoPreviewUrl ? (
                       <>
@@ -527,14 +539,25 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                   <div className="modal-familia-marcadores-section">
                     <div className="modal-familia-marcadores-header">
                       <span className="marcadores-title">Marcadores na vista frontal</span>
-                      <span className="marcadores-hint">Clique na imagem para adicionar; edite abaixo.</span>
-                      <button
-                        type="button"
-                        className="btn-abrir-bolinhas-premium"
-                        onClick={() => setShowBolinhasPremium(true)}
-                      >
-                        Abrir tela grande para configurar marcadores
-                      </button>
+                      <span className="marcadores-hint">
+                        {modoColocarMarcador ? 'Clique na imagem para posicionar o marcador. Clique em "Sair do modo" para cancelar.' : 'Clique em "Colocar marcador" e depois na imagem para adicionar; edite abaixo.'}
+                      </span>
+                      <div className="marcadores-header-buttons">
+                        <button
+                          type="button"
+                          className={modoColocarMarcador ? 'btn-sair-modo-marcador' : 'btn-colocar-marcador'}
+                          onClick={() => setModoColocarMarcador(!modoColocarMarcador)}
+                        >
+                          {modoColocarMarcador ? 'Sair do modo de inserção' : 'Colocar marcador'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-abrir-bolinhas-premium"
+                          onClick={() => setShowBolinhasPremium(true)}
+                        >
+                          Abrir tela grande para configurar marcadores
+                        </button>
+                      </div>
                     </div>
                     <ul className="modal-familia-marcadores-list">
                       {marcadores.map((m) => (
