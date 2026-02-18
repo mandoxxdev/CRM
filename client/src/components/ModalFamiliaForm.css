@@ -148,6 +148,10 @@
   background: #1a1a1a;
 }
 
+.modal-familia-vista-frontal.modo-adicionar {
+  cursor: crosshair;
+}
+
 .modal-familia-vista-frontal img {
   width: 100%;
   height: 100%;
@@ -243,6 +247,44 @@
 .marcadores-hint {
   font-size: 0.8rem;
   color: var(--gmp-text-light);
+}
+
+.modal-familia-marcadores-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-colocar-bolinha {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(255, 107, 53, 0.35);
+  transition: transform 0.12s, box-shadow 0.12s, background 0.15s;
+}
+
+.btn-colocar-bolinha:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.45);
+}
+
+.btn-colocar-bolinha.active {
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-colocar-bolinha.active:hover {
+  background: linear-gradient(135deg, #475569 0%, #334155 100%);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
 }
 
 .modal-familia-marcadores-list {
@@ -532,10 +574,57 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   padding: 20px 28px;
   background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
   color: white;
   flex-shrink: 0;
+}
+
+.bolinhas-premium-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bolinhas-premium-btn-adicionar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #c2410c;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.bolinhas-premium-btn-adicionar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  background: #fff;
+}
+
+.bolinhas-premium-btn-cancelar {
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s;
+}
+
+.bolinhas-premium-btn-cancelar:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .bolinhas-premium-header-content h2 {
@@ -596,11 +685,15 @@
   border-radius: 16px;
   overflow: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-  cursor: crosshair;
+  cursor: default;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.bolinhas-premium-vista-inner.modo-adicionar {
+  cursor: crosshair;
 }
 
 .bolinhas-premium-vista-inner img {
@@ -637,12 +730,48 @@
   background: var(--gmp-bg-subtle, #f1f5f9);
   border-bottom: 1px solid var(--gmp-border);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .bolinhas-premium-list-title {
   font-weight: 700;
   font-size: 1rem;
   color: var(--gmp-text);
+}
+
+.bolinhas-premium-list-btn-adicionar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.35);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.bolinhas-premium-list-btn-adicionar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.45);
+}
+
+.bolinhas-premium-list-hint {
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
+  font-style: italic;
+}
+
+.bolinhas-premium-close {
+  margin-left: 0;
 }
 
 .bolinhas-premium-list {

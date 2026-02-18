@@ -536,9 +536,19 @@ const ProdutoForm = () => {
       {esquematicoUrl && (
         <div className="produto-form-esquematico">
           <h3>Vista frontal da família – {formData.familia_produto}</h3>
-          <p className="produto-form-esquematico-hint">Esquemático de referência ao cadastrar este produto</p>
+          <p className="produto-form-esquematico-hint">Esquemático de referência ao cadastrar este produto. Os números indicam as variáveis técnicas a preencher abaixo.</p>
           <div className="produto-form-esquematico-img-wrap">
             <img src={esquematicoUrl} alt={`Esquemático ${formData.familia_produto}`} className="produto-form-esquematico-img" />
+            {marcadoresVistaFamilia.map((m) => (
+              <span
+                key={m.id || m.numero}
+                className="produto-form-bolinha"
+                style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%' }}
+                title={m.label ? `${m.numero != null ? m.numero + '. ' : ''}${m.label}` : ''}
+              >
+                {m.numero != null ? m.numero : ''}
+              </span>
+            ))}
           </div>
         </div>
       )}
