@@ -17597,7 +17597,7 @@ if (process.env.NODE_ENV === 'production') {
     // Servir arquivos estáticos
     app.use(express.static(clientBuildPath));
     
-    // Rota catch-all: serve o index.html para rotas SPA (não para arquivos estáticos)
+    // Rota catch-all: serve o index.html para todas as rotas não-API
     app.get('*', (req, res, next) => {
       // Ignorar rotas da API
       if (req.path.startsWith('/api') || 
@@ -17607,12 +17607,8 @@ if (process.env.NODE_ENV === 'production') {
           req.path.startsWith('/Logo_')) {
         return next();
       }
-      // Não enviar index.html para pedidos de arquivos estáticos (evita "Unexpected token '<'" quando o JS/CSS não existe, ex.: cache antigo)
-      if (req.path.startsWith('/static/') || /\.(js|css|map|ico|png|jpg|jpeg|gif|svg|woff2?|ttf|eot)$/i.test(req.path)) {
-        return res.status(404).send('Not found');
-      }
       
-      // Servir index.html para rotas do React (SPA)
+      // Servir index.html para rotas do React
       res.sendFile(path.join(clientBuildPath, 'index.html'), (err) => {
         if (err) {
           res.status(500).send('Erro ao carregar a aplicação');

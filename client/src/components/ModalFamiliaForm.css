@@ -195,7 +195,6 @@
 
 .vista-marcador-bolinha {
   cursor: grab;
-  user-select: none;
 }
 
 .vista-marcador-bolinha:active {
@@ -203,16 +202,16 @@
 }
 
 .vista-marcador-bolinha:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
   background: #F7931E;
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.5);
 }
 
-.vista-marcador-bolinha.dragging {
-  cursor: grabbing;
-  transform: scale(1.35);
-  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.6);
+.vista-marcador-bolinha.vista-marcador-dragging {
+  transform: scale(1.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   z-index: 10;
-  pointer-events: none;
+  cursor: grabbing;
 }
 
 .marcador-numero {
@@ -619,12 +618,6 @@
   margin-left: -12px;
   margin-top: -12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-}
-
-.bolinhas-premium-bolinha.dragging {
-  transform: scale(1.4);
-  box-shadow: 0 8px 24px rgba(255, 107, 53, 0.7);
-  z-index: 10;
 }
 
 .bolinhas-premium-list-panel {
