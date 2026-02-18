@@ -1929,6 +1929,30 @@ app.post('/familias', authenticateToken, (req, res) => {
 });
 
 // ========== ROTAS DE USUÁRIOS ==========
+// Lista apenas usuários com acesso ao módulo Comercial (para filtros do comercial: responsáveis)
+app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
+  const sql = `
+    SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.created_at
+    FROM usuarios u
+    WHERE u.ativo = 1
+    AND (
+      u.role = 'admin'
+      OR NOT EXISTS (SELECT 1 FROM usuarios_grupos ug WHERE ug.usuario_id = u.id)
+      OR EXISTS (
+        SELECT 1 FROM usuarios_grupos ug
+        INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = 'comercial' AND p.permissao = 1
+        WHERE ug.usuario_id = u.id
+      )
+    )
+    ORDER BY u.nome`;
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    return res.json(rows || []);
+  });
+});
+
 app.get('/api/usuarios', authenticateToken, (req, res) => {
   db.all('SELECT id, nome, email, cargo, role, ativo, created_at FROM usuarios ORDER BY nome', [], (err, rows) => {
     if (err) {

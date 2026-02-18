@@ -148,9 +148,9 @@ const Propostas = () => {
       setAprovacoesMap(aprovacoesMapTemp);
 
       try {
-        const usuariosRes = await api.get('/usuarios');
+        const usuariosRes = await api.get('/usuarios/comercial');
         if (loadDataRequestId.current !== currentId) return;
-        setUsuarios((usuariosRes.data || []).filter(u => u.ativo !== 0 && u.ativo !== false));
+        setUsuarios(usuariosRes.data || []);
       } catch (error) {
         if (loadDataRequestId.current !== currentId) return;
         console.warn('⚠️ Erro ao carregar usuários (não crítico):', error);

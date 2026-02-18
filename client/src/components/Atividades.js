@@ -43,7 +43,7 @@ const Atividades = () => {
         const params = filtroUsuario === 'todos' ? { todos: true } : filtroUsuario ? { responsavel_id: filtroUsuario } : {};
         const [atividadesRes, usuariosRes, clientesRes] = await Promise.all([
           api.get('/atividades', { params }),
-          api.get('/usuarios'),
+          api.get('/usuarios/comercial'),
           api.get('/clientes')
         ]);
         // Ordenar atividades: lembretes vencidos primeiro, depois por data
@@ -68,7 +68,7 @@ const Atividades = () => {
         });
         
         setAtividades(atividadesOrdenadas);
-        setUsuarios(usuariosRes.data.filter(u => u.ativo));
+        setUsuarios(usuariosRes.data || []);
         setClientes(clientesRes.data || []);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);

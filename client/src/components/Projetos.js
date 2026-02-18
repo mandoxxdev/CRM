@@ -21,10 +21,10 @@ const Projetos = () => {
         // Carregar em paralelo para melhor performance
         const [projetosRes, usuariosRes] = await Promise.all([
           api.get('/projetos', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} }),
-          api.get('/usuarios')
+          api.get('/usuarios/comercial')
         ]);
         setProjetos(projetosRes.data);
-        setUsuarios(usuariosRes.data.filter(u => u.ativo));
+        setUsuarios(usuariosRes.data || []);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
       } finally {

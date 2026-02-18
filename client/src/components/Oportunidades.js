@@ -19,10 +19,10 @@ const Oportunidades = () => {
         // Carregar em paralelo para melhor performance
         const [oportunidadesRes, usuariosRes] = await Promise.all([
           api.get('/oportunidades', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} }),
-          api.get('/usuarios')
+          api.get('/usuarios/comercial')
         ]);
         setOportunidades(oportunidadesRes.data);
-        setUsuarios(usuariosRes.data.filter(u => u.ativo));
+        setUsuarios(usuariosRes.data || []);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
       } finally {
