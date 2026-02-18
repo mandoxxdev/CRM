@@ -940,6 +940,14 @@ function initializeDatabase() {
     else console.log('✅ Tabela familias_produto verificada');
   });
 
+  db.run('ALTER TABLE familias_produto ADD COLUMN codigo INTEGER', (err) => {
+    if (err && err.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna codigo:', err.message);
+  });
+
+  db.run('UPDATE familias_produto SET codigo = id * 10 WHERE codigo IS NULL', (err) => {
+    if (err) console.error('Erro ao preencher codigo:', err.message);
+  });
+
   // Criar usuário admin padrão
   db.get('SELECT * FROM usuarios WHERE email = ?', ['admin@gmp.com.br'], (err, row) => {
     if (!row) {
@@ -1880,12 +1888,16 @@ app.post('/api/familias', authenticateToken, (req, res) => {
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
   var ordem = parseInt(body.ordem, 10) || 0;
-  db.run('INSERT INTO familias_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, ordem], function(err) {
-    if (err) {
-      if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ id: this.lastID, nome: nome, ordem: ordem });
+  db.get('SELECT COALESCE(MAX(codigo), 0) + 10 AS proximo FROM familias_produto', [], function(err, row) {
+    if (err) return res.status(500).json({ error: err.message });
+    var codigo = row && row.proximo != null ? row.proximo : 10;
+    db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo) VALUES (?, ?, ?, 1)', [nome, ordem, codigo], function(insertErr) {
+      if (insertErr) {
+        if (insertErr.message && insertErr.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+        return res.status(500).json({ error: insertErr.message });
+      }
+      res.json({ id: this.lastID, nome: nome, ordem: ordem, codigo: codigo });
+    });
   });
 });
 app.get('/familias', authenticateToken, (req, res) => {
@@ -1899,12 +1911,16 @@ app.post('/familias', authenticateToken, (req, res) => {
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
   var ordem = parseInt(body.ordem, 10) || 0;
-  db.run('INSERT INTO familias_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, ordem], function(err) {
-    if (err) {
-      if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
-      return res.status(500).json({ error: err.message });
-    }
-    res.json({ id: this.lastID, nome: nome, ordem: ordem });
+  db.get('SELECT COALESCE(MAX(codigo), 0) + 10 AS proximo FROM familias_produto', [], function(err, row) {
+    if (err) return res.status(500).json({ error: err.message });
+    var codigo = row && row.proximo != null ? row.proximo : 10;
+    db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo) VALUES (?, ?, ?, 1)', [nome, ordem, codigo], function(insertErr) {
+      if (insertErr) {
+        if (insertErr.message && insertErr.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+        return res.status(500).json({ error: insertErr.message });
+      }
+      res.json({ id: this.lastID, nome: nome, ordem: ordem, codigo: codigo });
+    });
   });
 });
 

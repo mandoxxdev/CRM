@@ -167,37 +167,38 @@ const FamiliasProdutos = () => {
               >
                 <div className="familia-card-header">
                   <div className="familia-card-header-shapes" aria-hidden="true" />
+                  <div className="familia-card-actions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="btn-icon-card"
+                      title="Editar família"
+                      onClick={() => { setEditingFamilia(f); setShowModalFamilia(true); }}
+                    >
+                      <FiEdit2 />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-icon-card btn-danger"
+                      title="Desativar família"
+                      onClick={() => handleExcluir(f.id, f.nome)}
+                    >
+                      <FiTrash2 />
+                    </button>
+                  </div>
                   <div className="familia-card-foto-wrap">
                     <div className="familia-card-foto">
                       {fotoUrl ? (
                         <img src={fotoUrl} alt={f.nome} />
                       ) : (
                         <div className="familia-card-placeholder">
-                          <FiPackage size={40} />
+                          <FiPackage size={56} />
                         </div>
                       )}
-                    </div>
-                    <div className="familia-card-actions" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className="btn-icon-card"
-                        title="Editar família"
-                        onClick={() => { setEditingFamilia(f); setShowModalFamilia(true); }}
-                      >
-                        <FiEdit2 />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-icon-card btn-danger"
-                        title="Desativar família"
-                        onClick={() => handleExcluir(f.id, f.nome)}
-                      >
-                        <FiTrash2 />
-                      </button>
                     </div>
                   </div>
                 </div>
                 <div className="familia-card-body">
+                  <div className="familia-card-codigo">{f.codigo != null ? f.codigo : (f.id * 10)}</div>
                   <div className="familia-card-nome">{f.nome}</div>
                   <span className="familia-card-cta-label">
                     Ver produtos <FiChevronRight className="familia-card-chevron" size={16} />
