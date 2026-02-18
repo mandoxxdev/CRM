@@ -154,9 +154,23 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
     return () => clearInterval(interval);
   }, [onComplete, showError, errorVisible]);
 
-  // Se fadeOut, não renderizar nada
+  // Se fadeOut, manter overlay com fundo do app para evitar tela branca até onComplete
   if (fadeOut) {
-    return null;
+    return (
+      <div
+        className="splash-screen premium-splash splash-fade-out-cover"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'var(--gmp-bg)',
+          zIndex: 9999999,
+          pointerEvents: 'none',
+        }}
+        aria-hidden="true"
+      />
+    );
   }
 
   return (
