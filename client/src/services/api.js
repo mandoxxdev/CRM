@@ -39,11 +39,20 @@ const api = axios.create({
 
 // Interceptor para adicionar token em todas as requisições (localStorage, sessionStorage ou header global)
 api.interceptors.request.use((config) => {
+  // Upload de arquivos: não definir Content-Type para o navegador enviar multipart/form-data com boundary
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    if (config.headers && typeof config.headers.delete === 'function') {
+      config.headers.delete('Content-Type');
+    } else if (config.headers) {
+      delete config.headers['Content-Type'];
+    }
+  }
   let token = localStorage.getItem('token') || sessionStorage.getItem('token') ||
     (typeof axios !== 'undefined' && axios.defaults && axios.defaults.headers && axios.defaults.headers.common && axios.defaults.headers.common.Authorization
       ? axios.defaults.headers.common.Authorization.replace(/^Bearer\s+/i, '')
       : null);
   if (token) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
     config.headers['X-Auth-Token'] = token;
   }

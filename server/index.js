@@ -2404,6 +2404,18 @@ const uploadFamiliaEsquematico = multer({
   }
 });
 
+// GET esquemático: servir imagem da família (evita 404 quando algo solicita essa URL)
+app.get('/api/familias/:id/esquematico', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  db.get('SELECT esquematico FROM familias_produto WHERE id = ?', [id], function(err, row) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row || !row.esquematico) return res.status(404).send();
+    var filePath = path.join(uploadsFamiliasDir, row.esquematico);
+    if (!fs.existsSync(filePath)) return res.status(404).send();
+    res.sendFile(filePath, { maxAge: '1d' });
+  });
+});
+
 app.post('/api/familias/:id/esquematico', authenticateToken, uploadFamiliaEsquematico.single('esquematico'), (req, res) => {
   var id = req.params.id;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
