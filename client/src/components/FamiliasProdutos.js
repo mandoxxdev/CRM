@@ -166,7 +166,17 @@ const FamiliasProdutos = () => {
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/comercial/produtos/familia/${f.id}`); } }}
               >
                 <div className="familia-card-header">
-                  <div className="familia-card-header-shapes" aria-hidden="true" />
+                  <div className="familia-card-foto-wrap">
+                    {fotoUrl ? (
+                      <img src={fotoUrl} alt={f.nome} className="familia-card-foto-img" />
+                    ) : (
+                      <div className="familia-card-placeholder">
+                        <FiPackage size={48} />
+                      </div>
+                    )}
+                  </div>
+                  {!fotoUrl && <div className="familia-card-header-shapes" aria-hidden="true" />}
+                  <div className="familia-card-header-overlay" aria-hidden="true" />
                   <div className="familia-card-actions" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
@@ -184,17 +194,6 @@ const FamiliasProdutos = () => {
                     >
                       <FiTrash2 />
                     </button>
-                  </div>
-                  <div className="familia-card-foto-wrap">
-                    <div className="familia-card-foto">
-                      {fotoUrl ? (
-                        <img src={fotoUrl} alt={f.nome} />
-                      ) : (
-                        <div className="familia-card-placeholder">
-                          <FiPackage size={56} />
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
                 <div className="familia-card-body">
