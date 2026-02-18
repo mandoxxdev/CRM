@@ -3,6 +3,22 @@ import { FiX, FiUploadCloud } from 'react-icons/fi';
 import api from '../services/api';
 import './ModalFamiliaForm.css';
 
+// Upload de arquivo com fetch para garantir Content-Type multipart com boundary (evita 400 no servidor)
+async function uploadFormData(endpoint, formData) {
+  const baseURL = (api.defaults.baseURL || '/api').replace(/\/$/, '');
+  const url = `${baseURL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(url, { method: 'POST', headers, body: formData });
+  if (!res.ok) {
+    const err = new Error(res.statusText || 'Erro no upload');
+    err.response = { status: res.status, data: await res.json().catch(() => ({})) };
+    throw err;
+  }
+  return res.json();
+}
+
 const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, useLocalOnly, familiasAtuais = [] }) => {
   const isEdit = !!familia && !!familia.id;
   const [nome, setNome] = useState('');
@@ -97,45 +113,29 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     try {
       if (isEdit) {
         await api.put(`/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
-        const uploadOpts = {
-          transformRequest: [(data, headers) => {
-            if (typeof FormData !== 'undefined' && data instanceof FormData) {
-              delete headers['Content-Type'];
-            }
-            return data;
-          }]
-        };
         if (fotoFile) {
           const fd = new FormData();
           fd.append('foto', fotoFile);
-          await api.post(`/familias/${familia.id}/foto`, fd, uploadOpts);
+          await uploadFormData(`/familias/${familia.id}/foto`, fd);
         }
         if (esquematicoFile) {
           const fd = new FormData();
           fd.append('esquematico', esquematicoFile);
-          await api.post(`/familias/${familia.id}/esquematico`, fd, uploadOpts);
+          await uploadFormData(`/familias/${familia.id}/esquematico`, fd);
         }
       } else {
         const res = await api.post('/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 });
         const newId = res.data && res.data.id;
         if (newId) {
-          const uploadOptsNew = {
-            transformRequest: [(data, headers) => {
-              if (typeof FormData !== 'undefined' && data instanceof FormData) {
-                delete headers['Content-Type'];
-              }
-              return data;
-            }]
-          };
           if (fotoFile) {
             const fd = new FormData();
             fd.append('foto', fotoFile);
-            await api.post(`/familias/${newId}/foto`, fd, uploadOptsNew);
+            await uploadFormData(`/familias/${newId}/foto`, fd);
           }
           if (esquematicoFile) {
             const fd = new FormData();
             fd.append('esquematico', esquematicoFile);
-            await api.post(`/familias/${newId}/esquematico`, fd, uploadOptsNew);
+            await uploadFormData(`/familias/${newId}/esquematico`, fd);
           }
         }
       }

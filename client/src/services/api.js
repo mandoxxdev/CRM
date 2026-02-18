@@ -123,12 +123,18 @@ api.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Token inválido ou expirado
+    // 401 = não autenticado (token inválido/expirado) -> login e limpar sessão
+    if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       sessionStorage.removeItem('token');
       window.location.href = '/login';
+      return Promise.reject(error);
+    }
+    // 403 = sem permissão (ex.: módulo negado) -> tela inicial para escolher módulo, mantendo login
+    if (error.response?.status === 403) {
+      window.location.href = '/';
+      return Promise.reject(error);
     }
     return Promise.reject(error);
   }

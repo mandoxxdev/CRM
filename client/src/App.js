@@ -156,7 +156,9 @@ function AppRoutes() {
         path="/comercial"
         element={
           <PrivateRoute>
-            <Layout />
+            <ProtectedModuleRoute modulo="comercial" nomeModulo="Comercial">
+              <Layout />
+            </ProtectedModuleRoute>
           </PrivateRoute>
         }
       >
@@ -191,7 +193,9 @@ function AppRoutes() {
         path="/compras"
         element={
           <PrivateRoute>
-            <Layout />
+            <ProtectedModuleRoute modulo="compras" nomeModulo="Compras">
+              <Layout />
+            </ProtectedModuleRoute>
           </PrivateRoute>
         }
       >
@@ -220,7 +224,9 @@ function AppRoutes() {
         path="/financeiro"
         element={
           <PrivateRoute>
-            <Layout />
+            <ProtectedModuleRoute modulo="financeiro" nomeModulo="Financeiro">
+              <Layout />
+            </ProtectedModuleRoute>
           </PrivateRoute>
         }
       >
@@ -296,29 +302,25 @@ function AppRoutes() {
         path="/configuracoes"
         element={
           <PrivateRoute>
-            <Layout />
+            <ProtectedModuleRoute modulo="administrativo" nomeModulo="Administrativo">
+              <Layout />
+            </ProtectedModuleRoute>
           </PrivateRoute>
         }
       >
-        <Route index element={
-          <ProtectedModuleRoute modulo="administrativo" nomeModulo="Administrativo">
-            <Configuracoes />
-          </ProtectedModuleRoute>
-        } />
+        <Route index element={<Configuracoes />} />
       </Route>
       <Route
         path="/admin"
         element={
           <PrivateRoute>
-            <Layout />
+            <ProtectedModuleRoute modulo="admin" nomeModulo="Administração">
+              <Layout />
+            </ProtectedModuleRoute>
           </PrivateRoute>
         }
       >
-        <Route index element={
-          <ProtectedModuleRoute modulo="admin" nomeModulo="Administração">
-            <Admin />
-          </ProtectedModuleRoute>
-        } />
+        <Route index element={<Admin />} />
         <Route path="usuarios/novo" element={<UsuarioForm />} />
         <Route path="usuarios/editar/:id" element={<UsuarioForm />} />
       </Route>
