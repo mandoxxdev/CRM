@@ -186,7 +186,7 @@
   color: #ffffff;
 }
 
-/* Corpo: fundo branco, nome em destaque e CTA alinhado na base */
+/* Corpo: fundo sempre claro para o texto escuro ser legível */
 .familia-card-body {
   width: 100%;
   padding: 20px 20px 24px;
@@ -200,25 +200,12 @@
   min-height: 140px;
 }
 
-/* Código da família – em destaque (10, 20, 30…) */
-.familia-card-codigo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 48px;
-  height: 48px;
-  padding: 0 14px;
-  margin-bottom: 10px;
-  font-weight: 800;
-  font-size: 1.35rem;
-  line-height: 1;
-  color: #ffffff !important;
-  background: var(--card-accent);
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+.familia-card-body,
+.familia-card-body * {
+  box-sizing: border-box;
 }
 
-/* Nome da família – sempre visível e em destaque */
+/* Nome da família – fundo claro e texto escuro para sempre legível */
 .familia-card .familia-card-nome,
 .familia-card-nome {
   font-weight: 700;
@@ -235,16 +222,16 @@
   display: block;
 }
 
-/* Botão "Ver produtos" – sempre na base do card e alinhado entre todos */
+/* Botão "Ver produtos" – texto sempre visível (cor forte no fundo claro) */
 .familia-card-cta-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 10px 20px;
   margin-top: auto;
-  border: 2px solid var(--card-accent);
+  border: 2px solid #0066cc;
   border-radius: 999px;
-  color: var(--card-accent);
+  color: #0066cc !important;
   font-weight: 600;
   font-size: 0.9rem;
   transition: all 0.25s ease;
@@ -252,7 +239,7 @@
 
 .familia-card:hover .familia-card-cta-label {
   background: var(--card-accent);
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .familia-card-chevron {
@@ -307,7 +294,7 @@
   margin-top: var(--spacing-md);
 }
 
-/* Tema escuro – corpo do card continua legível */
+/* Tema escuro – corpo do card permanece claro para o texto não sumir */
 @media (prefers-color-scheme: dark) {
   .familia-card {
     background: #1e293b;
@@ -315,20 +302,20 @@
   }
 
   .familia-card-body {
-    background: #1e293b !important;
+    background: #ffffff !important;
   }
 
   .familia-card .familia-card-nome,
   .familia-card-nome {
-    color: #f1f5f9 !important;
+    color: #1e293b !important;
   }
 
   .familia-card-body .familia-card-cta-label {
-    color: var(--card-accent);
-    border-color: var(--card-accent);
+    color: #0066cc !important;
+    border-color: #0066cc;
   }
 
   .familia-card:hover .familia-card-body .familia-card-cta-label {
-    color: #ffffff;
+    color: #ffffff !important;
   }
 }

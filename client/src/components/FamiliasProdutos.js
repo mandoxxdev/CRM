@@ -197,7 +197,6 @@ const FamiliasProdutos = () => {
                   </div>
                 </div>
                 <div className="familia-card-body">
-                  <div className="familia-card-codigo">{f.codigo != null ? f.codigo : (f.id * 10)}</div>
                   <div className="familia-card-nome">{f.nome}</div>
                   <span className="familia-card-cta-label">
                     Ver produtos <FiChevronRight className="familia-card-chevron" size={16} />
