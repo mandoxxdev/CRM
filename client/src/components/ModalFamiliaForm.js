@@ -97,29 +97,45 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     try {
       if (isEdit) {
         await api.put(`/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        const uploadOpts = {
+          transformRequest: [(data, headers) => {
+            if (typeof FormData !== 'undefined' && data instanceof FormData) {
+              delete headers['Content-Type'];
+            }
+            return data;
+          }]
+        };
         if (fotoFile) {
           const fd = new FormData();
           fd.append('foto', fotoFile);
-          await api.post(`/familias/${familia.id}/foto`, fd);
+          await api.post(`/familias/${familia.id}/foto`, fd, uploadOpts);
         }
         if (esquematicoFile) {
           const fd = new FormData();
           fd.append('esquematico', esquematicoFile);
-          await api.post(`/familias/${familia.id}/esquematico`, fd);
+          await api.post(`/familias/${familia.id}/esquematico`, fd, uploadOpts);
         }
       } else {
         const res = await api.post('/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 });
         const newId = res.data && res.data.id;
         if (newId) {
+          const uploadOptsNew = {
+            transformRequest: [(data, headers) => {
+              if (typeof FormData !== 'undefined' && data instanceof FormData) {
+                delete headers['Content-Type'];
+              }
+              return data;
+            }]
+          };
           if (fotoFile) {
             const fd = new FormData();
             fd.append('foto', fotoFile);
-            await api.post(`/familias/${newId}/foto`, fd);
+            await api.post(`/familias/${newId}/foto`, fd, uploadOptsNew);
           }
           if (esquematicoFile) {
             const fd = new FormData();
             fd.append('esquematico', esquematicoFile);
-            await api.post(`/familias/${newId}/esquematico`, fd);
+            await api.post(`/familias/${newId}/esquematico`, fd, uploadOptsNew);
           }
         }
       }
