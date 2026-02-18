@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import ReactDOM from 'react-dom';
 import { FiX, FiUploadCloud, FiTrash2, FiEdit2, FiSearch } from 'react-icons/fi';
 import api from '../services/api';
 import './ModalFamiliaForm.css';
@@ -56,9 +57,10 @@ async function uploadImagemFamilia(tipo, id, file) {
 
 function parseMarcadores(raw) {
   if (!raw) return [];
-  if (Array.isArray(raw)) return raw.map(m => ({ ...m, id: m.id || 'm' + Math.random().toString(36).slice(2) }));
-  if (raw.marcadores && Array.isArray(raw.marcadores)) return raw.marcadores.map(m => ({ ...m, id: m.id || 'm' + Math.random().toString(36).slice(2) }));
-  return [];
+  let arr = [];
+  if (Array.isArray(raw)) arr = raw.map(m => ({ ...m, id: m.id || 'm' + Math.random().toString(36).slice(2) }));
+  else if (raw.marcadores && Array.isArray(raw.marcadores)) arr = raw.marcadores.map(m => ({ ...m, id: m.id || 'm' + Math.random().toString(36).slice(2) }));
+  return arr.map((m, i) => ({ ...m, numero: m.numero != null ? m.numero : i + 1 }));
 }
 
 const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, useLocalOnly, familiasAtuais = [] }) => {
@@ -74,6 +76,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [variaveisTecnicas, setVariaveisTecnicas] = useState([]);
   const [searchVariavel, setSearchVariavel] = useState('');
   const [showBolinhasPremium, setShowBolinhasPremium] = useState(false);
+  const [draggingMarcadorId, setDraggingMarcadorId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -158,28 +161,73 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   };
 
   const vistaFrontalRef = React.useRef(null);
+  const justDraggedRef = React.useRef(false);
+
+  const getPosPctFromEvent = useCallback((e, el) => {
+    if (!el) return { x: 50, y: 50 };
+    const rect = el.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+    return { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
+  }, []);
+
   const handleVistaFrontalClick = useCallback((e) => {
+    if (e.target.closest('.vista-marcador-bolinha')) return;
     const el = vistaFrontalRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const { x, y } = getPosPctFromEvent(e, el);
     const primeiroChave = (variaveisList[0] && variaveisList[0].chave) || 'outro';
-    const novo = {
-      id: 'm' + Date.now(),
-      x: Math.max(0, Math.min(100, x)),
-      y: Math.max(0, Math.min(100, y)),
-      label: 'Nova variável',
-      variavel: primeiroChave,
-      tipo: 'texto'
-    };
-    setMarcadores(prev => [...prev, novo]);
-    setEditingMarcadorId(novo.id);
-  }, [variaveisList]);
+    const novoId = 'm' + Date.now();
+    setMarcadores(prev => {
+      const proximoNumero = prev.length === 0 ? 1 : Math.max(...prev.map(m => m.numero || 0), 0) + 1;
+      return [...prev, {
+        id: novoId,
+        x, y,
+        label: 'Nova variável',
+        variavel: primeiroChave,
+        tipo: 'texto',
+        numero: proximoNumero
+      }];
+    });
+    setEditingMarcadorId(novoId);
+  }, [variaveisList, getPosPctFromEvent]);
+
+  const handleBolinhaMouseDown = useCallback((e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingMarcadorId(id);
+  }, []);
 
   const updateMarcador = useCallback((id, updates) => {
     setMarcadores(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
   }, []);
+
+  useEffect(() => {
+    if (!draggingMarcadorId) return;
+    const el = vistaFrontalRef.current;
+    const onMove = (e) => {
+      if (e.touches) e.preventDefault();
+      const { x, y } = getPosPctFromEvent(e, el);
+      updateMarcador(draggingMarcadorId, { x, y });
+    };
+    const onEnd = () => {
+      justDraggedRef.current = true;
+      setDraggingMarcadorId(null);
+      setTimeout(() => { justDraggedRef.current = false; }, 0);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+  }, [draggingMarcadorId, getPosPctFromEvent, updateMarcador]);
 
   const removeMarcador = useCallback((id) => {
     setMarcadores(prev => prev.filter(m => m.id !== id));
@@ -263,7 +311,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         <div className="bolinhas-premium-header">
           <div className="bolinhas-premium-header-content">
             <h2>Variáveis na vista frontal</h2>
-            <p>Clique na imagem para posicionar cada variável técnica. Edite na lista ao lado.</p>
+            <p>Clique na imagem para adicionar um marcador. Arraste para reposicionar. Edite na lista ao lado.</p>
           </div>
           <button type="button" className="bolinhas-premium-close" onClick={() => setShowBolinhasPremium(false)}>
             Concluído
@@ -280,11 +328,15 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
               {marcadores.map((m) => (
                 <span
                   key={m.id}
-                  className="vista-marcador-bolinha bolinhas-premium-bolinha"
+                  className={`vista-marcador-bolinha bolinhas-premium-bolinha ${draggingMarcadorId === m.id ? 'dragging' : ''}`}
                   style={{ left: m.x + '%', top: m.y + '%' }}
-                  title={m.label}
-                  onClick={(ev) => { ev.stopPropagation(); setEditingMarcadorId(editingMarcadorId === m.id ? null : m.id); }}
-                />
+                  title={`${m.numero != null ? m.numero + '. ' : ''}${m.label} — Arraste para mover`}
+                  onMouseDown={(ev) => handleBolinhaMouseDown(ev, m.id)}
+                  onTouchStart={(ev) => handleBolinhaMouseDown(ev, m.id)}
+                  onClick={(ev) => { ev.stopPropagation(); if (!justDraggedRef.current) setEditingMarcadorId(editingMarcadorId === m.id ? null : m.id); }}
+                >
+                  {m.numero != null ? m.numero : ''}
+                </span>
               ))}
             </div>
           </div>
@@ -337,9 +389,9 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                       </div>
                     ) : (
                       <>
-                        <span className="bolinhas-premium-dot" />
+                        <span className="bolinhas-premium-dot bolinhas-premium-numero">{m.numero != null ? m.numero : '—'}</span>
                         <div className="bolinhas-premium-card-info">
-                          <strong>{m.label}</strong>
+                          <strong>{m.numero != null ? m.numero + '. ' : ''}{m.label}</strong>
                           <span>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}</span>
                         </div>
                         <div className="bolinhas-premium-card-actions">
@@ -359,7 +411,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   );
 
   if (showBolinhasPremium && isEdit && esquematicoPreviewUrl) {
-    return renderBolinhasPremium();
+    return ReactDOM.createPortal(renderBolinhasPremium(), document.body);
   }
 
   return (
@@ -427,7 +479,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
               </div>
               <div className="modal-familia-field">
                 <label>Vista frontal / Esquemático (opcional)</label>
-                <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos. Clique na imagem para posicionar bolinhas de variáveis técnicas.</p>
+                <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos. Clique na imagem para posicionar marcadores de variáveis técnicas.</p>
                 <div className="modal-familia-vista-wrapper">
                   <div
                     ref={vistaFrontalRef}
@@ -441,11 +493,15 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                         {marcadores.map((m) => (
                           <span
                             key={m.id}
-                            className="vista-marcador-bolinha"
+                            className={`vista-marcador-bolinha ${draggingMarcadorId === m.id ? 'dragging' : ''}`}
                             style={{ left: m.x + '%', top: m.y + '%' }}
-                            title={m.label}
-                            onClick={(ev) => { ev.stopPropagation(); setEditingMarcadorId(editingMarcadorId === m.id ? null : m.id); }}
-                          />
+                            title={`${m.numero != null ? m.numero + '. ' : ''}${m.label} — Arraste para mover`}
+                            onMouseDown={(ev) => handleBolinhaMouseDown(ev, m.id)}
+                            onTouchStart={(ev) => handleBolinhaMouseDown(ev, m.id)}
+                            onClick={(ev) => { ev.stopPropagation(); if (!justDraggedRef.current) setEditingMarcadorId(editingMarcadorId === m.id ? null : m.id); }}
+                          >
+                            {m.numero != null ? m.numero : ''}
+                          </span>
                         ))}
                       </>
                     ) : (
@@ -470,14 +526,14 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                 {isEdit && esquematicoPreviewUrl && (
                   <div className="modal-familia-marcadores-section">
                     <div className="modal-familia-marcadores-header">
-                      <span className="marcadores-title">Variáveis na vista (bolinhas)</span>
+                      <span className="marcadores-title">Marcadores na vista frontal</span>
                       <span className="marcadores-hint">Clique na imagem para adicionar; edite abaixo.</span>
                       <button
                         type="button"
                         className="btn-abrir-bolinhas-premium"
                         onClick={() => setShowBolinhasPremium(true)}
                       >
-                        Abrir tela grande para configurar bolinhas
+                        Abrir tela grande para configurar marcadores
                       </button>
                     </div>
                     <ul className="modal-familia-marcadores-list">
@@ -510,13 +566,17 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                                     onChange={(e) => updateMarcador(m.id, { variavel: e.target.value })}
                                     className="marcador-select"
                                   >
-                                    {variaveisFiltradas.length === 0 ? (
-                                      <option value={m.variavel || ''}>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel || '—'}</option>
-                                    ) : (
-                                      variaveisFiltradas.map((v) => (
+                                    {(() => {
+                                      const chaveAtual = m.variavel || '';
+                                      const jaIncluida = variaveisFiltradas.some(v => v.chave === chaveAtual);
+                                      const opcoes = jaIncluida ? variaveisFiltradas : [
+                                        { chave: chaveAtual, nome: variaveisList.find(v => v.chave === chaveAtual)?.nome || m.label || chaveAtual || '—', categoria: '' },
+                                        ...variaveisFiltradas
+                                      ];
+                                      return opcoes.map((v) => (
                                         <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
-                                      ))
-                                    )}
+                                      ));
+                                    })()}
                                   </select>
                                 </div>
                                 <div className="marcador-edit-actions">
@@ -528,9 +588,10 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                               </div>
                             ) : (
                               <>
+                                <span className="marcador-numero">{m.numero != null ? m.numero + '.' : ''}</span>
                                 <span className="marcador-label">{m.label}</span>
                                 <span className="marcador-variavel">{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}</span>
-                                <button type="button" onClick={() => setEditingMarcadorId(m.id)} className="marcador-btn-edit" title="Editar">
+                                <button type="button" onClick={() => { setSearchVariavel(''); setEditingMarcadorId(m.id); }} className="marcador-btn-edit" title="Editar">
                                   <FiEdit2 size={14} />
                                 </button>
                                 <button type="button" onClick={() => removeMarcador(m.id)} className="marcador-btn-remove" title="Remover">
@@ -543,7 +604,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                       ))}
                     </ul>
                     {marcadores.length === 0 && (
-                      <p className="marcadores-empty">Nenhuma bolinha ainda. Clique na vista frontal acima para adicionar.</p>
+                      <p className="marcadores-empty">Nenhum marcador ainda. Clique na vista frontal acima para adicionar.</p>
                     )}
                   </div>
                 )}

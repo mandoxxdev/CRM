@@ -73,20 +73,20 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
     return labels[type] || type;
   };
 
-  const getRoute = (type, id) => {
+  const getRoute = (type, id, item) => {
     const routes = {
-      cliente: `/clientes/editar/${id}`,
-      projeto: `/projetos/editar/${id}`,
-      proposta: `/propostas/editar/${id}`,
-      atividade: `/atividades`,
-      produto: `/produtos/editar/${id}`,
-      custo: `/custos-viagens`,
+      cliente: `/comercial/clientes/editar/${id}`,
+      projeto: `/comercial/projetos/editar/${id}`,
+      proposta: `/comercial/propostas/editar/${id}`,
+      atividade: `/comercial/atividades`,
+      produto: `/comercial/produtos/editar/${id}?tipo=${(item && item.familia === 'Hélices e Acessórios') ? 'discos-acessorios' : 'equipamentos'}`,
+      custo: `/comercial/custos-viagens`,
     };
     return routes[type] || '/';
   };
 
   const handleSelect = (result) => {
-    const route = getRoute(result.type, result.id);
+    const route = getRoute(result.type, result.id, result);
     navigate(route);
     onClose();
   };

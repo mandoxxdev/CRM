@@ -19,6 +19,14 @@ const ProdutoForm = () => {
       : 'padrao'
   );
 
+  // Manter tipo da URL ao editar (evita abrir formulário errado)
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get('tipo');
+    if (t && ['equipamentos', 'discos-acessorios', 'servicos'].includes(t) && t !== tipoProduto) {
+      setTipoProduto(t);
+    }
+  }, [location.search]);
+
   const [formData, setFormData] = useState({
     codigo: '',
     nome: '',
@@ -133,7 +141,9 @@ const ProdutoForm = () => {
     if (!raw) return [];
     const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return []; } })() : raw;
     const arr = Array.isArray(parsed) ? parsed : (parsed && parsed.marcadores) ? parsed.marcadores : [];
-    return arr.filter((m) => m && (m.variavel || m.label));
+    return arr
+      .filter((m) => m && (m.variavel || m.label))
+      .map((m, i) => ({ ...m, numero: m.numero != null ? m.numero : i + 1 }));
   }, [familiaSelecionada]);
 
   const unidades = ['UN', 'KG', 'L', 'M', 'M²', 'M³', 'PC'];
@@ -542,11 +552,13 @@ const ProdutoForm = () => {
             {marcadoresVistaFamilia.map((m) => {
               const chave = m.variavel || m.key;
               const label = m.label || chave;
+              const numero = m.numero != null ? m.numero : '';
+              const labelComNumero = numero ? `${numero}. ${label}` : label;
               const valor = especificacoesTecnicas[chave] ?? '';
               const isNumero = (m.tipo || '').toLowerCase() === 'numero';
               return (
                 <div key={m.id || chave} className="produto-form-variavel-field">
-                  <label>{label}</label>
+                  <label>{labelComNumero}</label>
                   <input
                     type={isNumero ? 'number' : 'text'}
                     value={valor}
