@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   FiZap, FiTrendingUp, FiShoppingCart, FiDollarSign, 
   FiBriefcase, FiSettings, FiTarget, FiTool, FiX, FiShield
@@ -101,6 +101,18 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
     };
   }, []);
 
+  // Limpar splash do body de forma síncrona antes de onComplete (evita tela branca ao montar Layout)
+  const completeSplash = useCallback(() => {
+    document.body.classList.remove('splash-active');
+    document.body.style.overflow = '';
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+      sidebar.style.display = '';
+      sidebar.style.zIndex = '';
+    }
+    onComplete();
+  }, [onComplete]);
+
   // Verificar se deve mostrar erro quando showError mudar ou progresso chegar a 100%
   useEffect(() => {
     if (showError && progress >= 100 && !errorVisible) {
@@ -108,12 +120,10 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
       // Após mostrar o erro por 2 segundos, chamar onComplete
       setTimeout(() => {
         setFadeOut(true);
-        setTimeout(() => {
-          onComplete();
-        }, 600);
+        setTimeout(() => completeSplash(), 600);
       }, 2000);
     }
-  }, [showError, progress, errorVisible, onComplete]);
+  }, [showError, progress, errorVisible, onComplete, completeSplash]);
 
   useEffect(() => {
     // Se já mostrou erro, não fazer nada
@@ -142,9 +152,7 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
         if (!showError) {
           setTimeout(() => {
             setFadeOut(true);
-            setTimeout(() => {
-              onComplete();
-            }, 600);
+            setTimeout(() => completeSplash(), 600);
           }, 300);
         }
         // Se deve mostrar erro, o useEffect acima vai tratar
@@ -152,7 +160,7 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
     }, updateInterval);
 
     return () => clearInterval(interval);
-  }, [onComplete, showError, errorVisible]);
+  }, [onComplete, showError, errorVisible, completeSplash]);
 
   // Se fadeOut, manter overlay com fundo do app para evitar tela branca até onComplete
   if (fadeOut) {
