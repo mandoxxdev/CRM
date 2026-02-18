@@ -1503,66 +1503,71 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// Middleware para verificar permissões de módulo
+// Middleware para verificar permissões de módulo (considera grupo E permissões diretas do usuário)
 function checkModulePermission(requiredModule) {
   return (req, res, next) => {
-    // Admin tem acesso total
     if (req.user.role === 'admin') {
       return next();
     }
 
     const userId = req.user.id;
 
-    // Buscar grupos do usuário
-    db.all(
-      `SELECT gp.id FROM grupos_permissoes gp
-       INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
-       WHERE ug.usuario_id = ? AND gp.ativo = 1`,
-      [userId],
-      (err, grupos) => {
+    // 1) Verificar permissão direta do usuário (usuario_id preenchido, grupo_id NULL)
+    db.get(
+      `SELECT 1 FROM permissoes
+       WHERE usuario_id = ? AND (grupo_id IS NULL OR grupo_id = 0)
+       AND modulo = ? AND permissao = 1 LIMIT 1`,
+      [userId, requiredModule],
+      (err, directRow) => {
         if (err) {
-          console.error('Erro ao verificar permissões:', err);
+          console.error('Erro ao verificar permissão direta:', err);
           return res.status(500).json({ error: 'Erro ao verificar permissões' });
         }
-
-        // Se não tem grupos, apenas comercial por padrão
-        if (!grupos || grupos.length === 0) {
-          if (requiredModule === 'comercial') {
-            return next();
-          }
-          // Registrar tentativa de acesso negado
-          registrarTentativaAcessoNegado(req, requiredModule);
-          return res.status(403).json({ 
-            error: 'Acesso negado ao módulo',
-            modulo: requiredModule
-          });
+        if (directRow) {
+          return next();
         }
 
-        const grupoIds = grupos.map(g => g.id);
-        const placeholders = grupoIds.map(() => '?').join(',');
-
-        // Verificar se algum grupo tem permissão para o módulo
-        db.get(
-          `SELECT COUNT(*) as count FROM permissoes
-           WHERE grupo_id IN (${placeholders})
-           AND modulo = ? AND permissao = 1`,
-          [...grupoIds, requiredModule],
-          (err, row) => {
+        // 2) Buscar grupos do usuário e verificar permissão via grupo
+        db.all(
+          `SELECT gp.id FROM grupos_permissoes gp
+           INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
+           WHERE ug.usuario_id = ? AND gp.ativo = 1`,
+          [userId],
+          (err, grupos) => {
             if (err) {
               console.error('Erro ao verificar permissões:', err);
               return res.status(500).json({ error: 'Erro ao verificar permissões' });
             }
 
-            if (row && row.count > 0) {
-              return next();
+            // Se não tem grupos, apenas comercial por padrão
+            if (!grupos || grupos.length === 0) {
+              if (requiredModule === 'comercial') {
+                return next();
+              }
+              registrarTentativaAcessoNegado(req, requiredModule);
+              return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: requiredModule });
             }
 
-            // Registrar tentativa de acesso negado
-            registrarTentativaAcessoNegado(req, requiredModule);
-            return res.status(403).json({ 
-              error: 'Acesso negado ao módulo',
-              modulo: requiredModule
-            });
+            const grupoIds = grupos.map(g => g.id);
+            const placeholders = grupoIds.map(() => '?').join(',');
+
+            db.get(
+              `SELECT COUNT(*) as count FROM permissoes
+               WHERE grupo_id IN (${placeholders})
+               AND modulo = ? AND permissao = 1`,
+              [...grupoIds, requiredModule],
+              (err, row) => {
+                if (err) {
+                  console.error('Erro ao verificar permissões:', err);
+                  return res.status(500).json({ error: 'Erro ao verificar permissões' });
+                }
+                if (row && row.count > 0) {
+                  return next();
+                }
+                registrarTentativaAcessoNegado(req, requiredModule);
+                return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: requiredModule });
+              }
+            );
           }
         );
       }
@@ -2386,6 +2391,38 @@ app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto
   });
 });
 
+// Fallback: upload foto da família em base64 (JSON) quando multipart falha
+app.post('/api/familias/:id/foto-base64', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  var b64 = req.body && req.body.foto_base64;
+  if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
+  if (!match) return res.status(400).json({ error: 'Formato de imagem inválido. Use data:image/...;base64,...' });
+  var ext = (match[1] === 'jpeg' || match[1] === 'jpg') ? '.jpg' : '.' + match[1];
+  if (!/^(jpeg|jpg|png|gif|webp)$/i.test(match[1])) return res.status(400).json({ error: 'Apenas imagens JPEG, PNG, GIF, WEBP' });
+  var buf;
+  try { buf = Buffer.from(match[2], 'base64'); } catch (e) { return res.status(400).json({ error: 'Base64 inválido' }); }
+  if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Imagem muito grande (máx. 10MB)' });
+  var filename = 'foto_' + id + '_' + Date.now() + ext;
+  var filePath = path.join(uploadsFamiliasDir, filename);
+  fs.writeFile(filePath, buf, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, familia) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
+      var oldFoto = familia.foto;
+      db.run('UPDATE familias_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
+        if (updateErr) return res.status(500).json({ error: updateErr.message });
+        if (oldFoto) {
+          var oldPath = path.join(uploadsFamiliasDir, oldFoto);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+        res.json({ foto: filename, url: '/api/uploads/familias-produtos/' + filename });
+      });
+    });
+  });
+});
+
 const storageFamiliaEsquematico = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsFamiliasDir),
   filename: (req, file, cb) => {
@@ -2431,6 +2468,42 @@ app.post('/api/familias/:id/esquematico', authenticateToken, uploadFamiliaEsquem
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
       res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
+    });
+  });
+});
+
+// Fallback: upload esquemático em base64 (JSON) quando multipart falha (ex.: proxy)
+app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  var b64 = req.body && req.body.esquematico_base64;
+  if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
+  if (!match) return res.status(400).json({ error: 'Formato de imagem inválido. Use data:image/...;base64,...' });
+  var ext = (match[1] === 'jpeg' || match[1] === 'jpg') ? '.jpg' : '.' + match[1];
+  if (!/^(jpeg|jpg|png|gif|webp)$/i.test(match[1])) return res.status(400).json({ error: 'Apenas imagens JPEG, PNG, GIF, WEBP' });
+  var buf;
+  try {
+    buf = Buffer.from(match[2], 'base64');
+  } catch (e) {
+    return res.status(400).json({ error: 'Base64 inválido' });
+  }
+  if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Imagem muito grande (máx. 10MB)' });
+  var filename = 'esquematico_' + id + '_' + Date.now() + ext;
+  var filePath = path.join(uploadsFamiliasDir, filename);
+  fs.writeFile(filePath, buf, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, familia) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
+      var oldEsq = familia.esquematico;
+      db.run('UPDATE familias_produto SET esquematico = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
+        if (updateErr) return res.status(500).json({ error: updateErr.message });
+        if (oldEsq) {
+          var oldPath = path.join(uploadsFamiliasDir, oldEsq);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+        res.json({ esquematico: filename, url: '/api/uploads/familias-produtos/' + filename });
+      });
     });
   });
 });

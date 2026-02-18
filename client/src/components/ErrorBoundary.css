@@ -1,0 +1,47 @@
+.error-boundary {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  background: var(--gmp-bg, #f5f5f5);
+  color: var(--gmp-text, #333);
+}
+
+.error-boundary h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.error-boundary p {
+  margin-bottom: 1.5rem;
+  color: var(--gmp-text-light, #666);
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.error-boundary-actions button {
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--gmp-primary, #2563eb);
+  color: #fff;
+}
+
+.error-boundary-actions button:hover {
+  opacity: 0.9;
+}
+
+.error-boundary-actions button:last-child {
+  background: var(--gmp-bg-elevated, #e5e5e5);
+  color: var(--gmp-text, #333);
+}

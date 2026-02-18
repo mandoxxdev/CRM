@@ -73,10 +73,12 @@ const Logs = () => {
     }
   };
 
-  const getTipoLabel = (tipo) => {
+  const getTipoLabel = (tipo, log) => {
     switch (tipo) {
       case 'acesso_negado':
-        return 'Acesso Negado';
+        // Deixar claro: negado AO MÓDULO (ex.: Comercial), não que o usuário não tem acesso a nada
+        const mod = log?.nome_modulo || log?.modulo;
+        return mod ? `Negado ao módulo` : 'Acesso Negado';
       case 'login':
         return 'Login';
       case 'logout':
@@ -209,8 +211,9 @@ const Logs = () => {
                       <span 
                         className="log-tipo-badge"
                         style={{ backgroundColor: getTipoBadgeColor(log.tipo) }}
+                        title={log.tipo === 'acesso_negado' ? `Tentativa de acesso ao módulo ${log.nome_modulo || log.modulo || ''} sem permissão (o usuário pode ter acesso a outros módulos)` : undefined}
                       >
-                        {getTipoLabel(log.tipo)}
+                        {getTipoLabel(log.tipo, log)}
                       </span>
                     </td>
                     <td>{log.nome_modulo || log.modulo || 'N/A'}</td>

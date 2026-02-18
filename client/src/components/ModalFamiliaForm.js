@@ -19,6 +19,34 @@ async function uploadFormData(endpoint, formData) {
   return res.json();
 }
 
+// Converte File para data URL (base64) para fallback quando multipart falha
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Tenta upload multipart; se der 400, reenvia em base64 (contorna proxy que quebra multipart)
+async function uploadImagemFamilia(tipo, id, file) {
+  const endpoint = `/familias/${id}/${tipo}`;
+  const formData = new FormData();
+  formData.append(tipo, file);
+  try {
+    return await uploadFormData(endpoint, formData);
+  } catch (err) {
+    if (err.response && err.response.status === 400) {
+      const base64 = await fileToDataUrl(file);
+      const body = tipo === 'foto' ? { foto_base64: base64 } : { esquematico_base64: base64 };
+      const { data } = await api.post(`/familias/${id}/${tipo}-base64`, body);
+      return data;
+    }
+    throw err;
+  }
+}
+
 const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, useLocalOnly, familiasAtuais = [] }) => {
   const isEdit = !!familia && !!familia.id;
   const [nome, setNome] = useState('');
@@ -113,30 +141,14 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     try {
       if (isEdit) {
         await api.put(`/familias/${familia.id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
-        if (fotoFile) {
-          const fd = new FormData();
-          fd.append('foto', fotoFile);
-          await uploadFormData(`/familias/${familia.id}/foto`, fd);
-        }
-        if (esquematicoFile) {
-          const fd = new FormData();
-          fd.append('esquematico', esquematicoFile);
-          await uploadFormData(`/familias/${familia.id}/esquematico`, fd);
-        }
+        if (fotoFile) await uploadImagemFamilia('foto', familia.id, fotoFile);
+        if (esquematicoFile) await uploadImagemFamilia('esquematico', familia.id, esquematicoFile);
       } else {
         const res = await api.post('/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 });
         const newId = res.data && res.data.id;
         if (newId) {
-          if (fotoFile) {
-            const fd = new FormData();
-            fd.append('foto', fotoFile);
-            await uploadFormData(`/familias/${newId}/foto`, fd);
-          }
-          if (esquematicoFile) {
-            const fd = new FormData();
-            fd.append('esquematico', esquematicoFile);
-            await uploadFormData(`/familias/${newId}/esquematico`, fd);
-          }
+          if (fotoFile) await uploadImagemFamilia('foto', newId, fotoFile);
+          if (esquematicoFile) await uploadImagemFamilia('esquematico', newId, esquematicoFile);
         }
       }
       onSaved();

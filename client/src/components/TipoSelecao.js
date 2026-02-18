@@ -72,22 +72,29 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     }
   ];
 
-  // Verificar se há rota pendente no sessionStorage (fallback caso componente seja desmontado)
+  // Ao abrir explicitamente "Selecionar Módulo" (forceShow), limpar rota pendente para não redirecionar depois
   useEffect(() => {
+    if (forceShow) {
+      sessionStorage.removeItem('rotaDestinoModulo');
+      sessionStorage.removeItem('moduloDestino');
+    }
+  }, [forceShow]);
+
+  // Verificar se há rota pendente no sessionStorage (fallback caso componente seja desmontado)
+  // Não redirecionar quando forceShow: usuário abriu a tela de seleção de propósito
+  useEffect(() => {
+    if (forceShow) return;
     const verificarRotaPendente = () => {
       const rotaPendente = sessionStorage.getItem('rotaDestinoModulo');
       if (rotaPendente && !showSplash) {
-        console.log('Rota pendente encontrada, navegando:', rotaPendente);
         sessionStorage.removeItem('rotaDestinoModulo');
         sessionStorage.removeItem('moduloDestino');
         navigate(rotaPendente, { replace: true });
       }
     };
-    
-    // Verificar após um pequeno delay
     const timer = setTimeout(verificarRotaPendente, 1000);
     return () => clearTimeout(timer);
-  }, [showSplash, navigate]);
+  }, [forceShow, showSplash, navigate]);
 
   useEffect(() => {
     const carregarModulosPermitidos = async () => {
@@ -291,7 +298,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
           ) : (
             <>
               <div className="tipo-selecao-grid">
-                {modulosDisponiveis.length > 0 ? (
+                {Array.isArray(modulosDisponiveis) && modulosDisponiveis.length > 0 ? (
                   modulosDisponiveis.map((modulo) => {
                     const Icon = modulo.icon;
                     const isDisponivel = modulo.disponivel;

@@ -41,6 +41,7 @@ import Admin from './components/Admin';
 import Layout from './components/Layout';
 import TipoSelecao from './components/TipoSelecao';
 import ProtectedModuleRoute from './components/ProtectedModuleRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
@@ -370,7 +371,9 @@ function App() {
                   onComplete={handleOnboardingComplete}
                 />
               )}
+              <ErrorBoundary>
               <AppRoutes />
+            </ErrorBoundary>
             </>
           )}
           <ToastContainer
