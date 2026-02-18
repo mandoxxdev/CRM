@@ -187,59 +187,61 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
             />
           </div>
           {!useLocalOnly && (
-            <div className="modal-familia-field">
-              <label>Foto (opcional)</label>
-              <div className="modal-familia-foto-row">
-                <div className="modal-familia-preview">
-                  {previewUrl ? (
-                    <img src={previewUrl} alt="Preview" />
-                  ) : (
-                    <div className="modal-familia-preview-placeholder">
-                      <FiUploadCloud size={32} />
-                      <span>Nenhuma imagem</span>
-                    </div>
-                  )}
-                </div>
-                <div className="modal-familia-upload">
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                    onChange={handleFileChange}
-                    id="familia-foto-input"
-                  />
-                  <label htmlFor="familia-foto-input" className="btn-upload-label">
-                    {fotoFile ? 'Trocar imagem' : 'Enviar imagem'}
-                  </label>
-                </div>
-              </div>
-            </div>
-            <div className="modal-familia-field">
-              <label>Vista frontal / Esquemático (opcional)</label>
-              <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos desta família</p>
-              <div className="modal-familia-foto-row">
-                <div className="modal-familia-preview">
-                  {esquematicoPreviewUrl ? (
-                    <img src={esquematicoPreviewUrl} alt="Esquemático" />
-                  ) : (
-                    <div className="modal-familia-preview-placeholder">
-                      <FiUploadCloud size={32} />
-                      <span>Nenhum esquemático</span>
-                    </div>
-                  )}
-                </div>
-                <div className="modal-familia-upload">
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                    onChange={handleEsquematicoChange}
-                    id="familia-esquematico-input"
-                  />
-                  <label htmlFor="familia-esquematico-input" className="btn-upload-label">
-                    {esquematicoFile ? 'Trocar esquemático' : 'Enviar esquemático'}
-                  </label>
+            <>
+              <div className="modal-familia-field">
+                <label>Foto (opcional)</label>
+                <div className="modal-familia-foto-row">
+                  <div className="modal-familia-preview">
+                    {previewUrl ? (
+                      <img src={previewUrl} alt="Preview" />
+                    ) : (
+                      <div className="modal-familia-preview-placeholder">
+                        <FiUploadCloud size={32} />
+                        <span>Nenhuma imagem</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="modal-familia-upload">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={handleFileChange}
+                      id="familia-foto-input"
+                    />
+                    <label htmlFor="familia-foto-input" className="btn-upload-label">
+                      {fotoFile ? 'Trocar imagem' : 'Enviar imagem'}
+                    </label>
+                  </div>
                 </div>
               </div>
-            </div>
+              <div className="modal-familia-field">
+                <label>Vista frontal / Esquemático (opcional)</label>
+                <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos desta família</p>
+                <div className="modal-familia-foto-row">
+                  <div className="modal-familia-preview">
+                    {esquematicoPreviewUrl ? (
+                      <img src={esquematicoPreviewUrl} alt="Esquemático" />
+                    ) : (
+                      <div className="modal-familia-preview-placeholder">
+                        <FiUploadCloud size={32} />
+                        <span>Nenhum esquemático</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="modal-familia-upload">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={handleEsquematicoChange}
+                      id="familia-esquematico-input"
+                    />
+                    <label htmlFor="familia-esquematico-input" className="btn-upload-label">
+                      {esquematicoFile ? 'Trocar esquemático' : 'Enviar esquemático'}
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
           <div className="modal-familia-actions">
             <button type="button" onClick={onClose} className="btn-cancel">
