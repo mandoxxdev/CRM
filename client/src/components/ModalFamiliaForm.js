@@ -100,12 +100,12 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         if (fotoFile) {
           const fd = new FormData();
           fd.append('foto', fotoFile);
-          await api.post(`/familias/${familia.id}/foto`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+          await api.post(`/familias/${familia.id}/foto`, fd);
         }
         if (esquematicoFile) {
           const fd = new FormData();
           fd.append('esquematico', esquematicoFile);
-          await api.post(`/familias/${familia.id}/esquematico`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+          await api.post(`/familias/${familia.id}/esquematico`, fd);
         }
       } else {
         const res = await api.post('/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 });
@@ -114,12 +114,12 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
           if (fotoFile) {
             const fd = new FormData();
             fd.append('foto', fotoFile);
-            await api.post(`/familias/${newId}/foto`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await api.post(`/familias/${newId}/foto`, fd);
           }
           if (esquematicoFile) {
             const fd = new FormData();
             fd.append('esquematico', esquematicoFile);
-            await api.post(`/familias/${newId}/esquematico`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            await api.post(`/familias/${newId}/esquematico`, fd);
           }
         }
       }
