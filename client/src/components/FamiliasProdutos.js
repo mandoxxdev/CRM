@@ -153,47 +153,55 @@ const FamiliasProdutos = () => {
             </button>
           </div>
         ) : (
-          familias.map((f) => {
+          familias.map((f, index) => {
             const fotoUrl = getFotoUrl(f.foto);
+            const themeIndex = index % 3;
             return (
               <div
                 key={f.id}
-                className="familia-card familia-card-only familia-card-clickable"
+                className={`familia-card familia-card-only familia-card-clickable familia-card-theme-${themeIndex}`}
                 onClick={() => navigate(`/comercial/produtos/familia/${f.id}`)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/comercial/produtos/familia/${f.id}`); } }}
               >
-                <div className="familia-card-foto">
-                  {fotoUrl ? (
-                    <img src={fotoUrl} alt={f.nome} />
-                  ) : (
-                    <div className="familia-card-placeholder">
-                      <FiPackage size={48} />
+                <div className="familia-card-header">
+                  <div className="familia-card-header-shapes" aria-hidden="true" />
+                  <div className="familia-card-foto-wrap">
+                    <div className="familia-card-foto">
+                      {fotoUrl ? (
+                        <img src={fotoUrl} alt={f.nome} />
+                      ) : (
+                        <div className="familia-card-placeholder">
+                          <FiPackage size={40} />
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div className="familia-card-actions" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className="btn-icon-card"
-                      title="Editar família"
-                      onClick={() => { setEditingFamilia(f); setShowModalFamilia(true); }}
-                    >
-                      <FiEdit2 />
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-icon-card btn-danger"
-                      title="Desativar família"
-                      onClick={() => handleExcluir(f.id, f.nome)}
-                    >
-                      <FiTrash2 />
-                    </button>
+                    <div className="familia-card-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="btn-icon-card"
+                        title="Editar família"
+                        onClick={() => { setEditingFamilia(f); setShowModalFamilia(true); }}
+                      >
+                        <FiEdit2 />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-icon-card btn-danger"
+                        title="Desativar família"
+                        onClick={() => handleExcluir(f.id, f.nome)}
+                      >
+                        <FiTrash2 />
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="familia-card-nome">
-                  {f.nome}
-                  <FiChevronRight className="familia-card-chevron" size={20} />
+                <div className="familia-card-body">
+                  <div className="familia-card-nome">{f.nome}</div>
+                  <span className="familia-card-cta-label">
+                    Ver produtos <FiChevronRight className="familia-card-chevron" size={16} />
+                  </span>
                 </div>
               </div>
             );
