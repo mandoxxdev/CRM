@@ -59,7 +59,8 @@ const ModuleSplash = ({ children }) => {
 
   // Verificar se a rota é protegida (ProtectedModuleRoute cuida do splash)
   const isProtectedRoute = (path) => {
-    return path.startsWith('/compras') || 
+    return path.startsWith('/comercial') ||
+           path.startsWith('/compras') || 
            path.startsWith('/financeiro') || 
            path.startsWith('/fabrica') || 
            path.startsWith('/configuracoes') || 

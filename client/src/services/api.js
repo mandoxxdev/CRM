@@ -131,9 +131,10 @@ api.interceptors.response.use(
       window.location.href = '/login';
       return Promise.reject(error);
     }
-    // 403 = sem permissão (ex.: módulo negado) -> tela inicial para escolher módulo, mantendo login
+    // 403 = sem permissão (ex.: módulo negado). Não redirecionar para '/' aqui para evitar
+    // que ao abrir um módulo (ex.: Comercial) uma chamada que retorne 403 leve o usuário de volta
+    // à seleção de módulo. O ProtectedModuleRoute e AcessoNegado tratam a negação de acesso.
     if (error.response?.status === 403) {
-      window.location.href = '/';
       return Promise.reject(error);
     }
     return Promise.reject(error);

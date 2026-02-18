@@ -56,7 +56,8 @@ const PrivateRoute = ({ children }) => {
   // Verificar se a rota atual é uma rota protegida de módulo
   const isProtectedModuleRoute = () => {
     const path = location.pathname;
-    return path.startsWith('/compras') || 
+    return path.startsWith('/comercial') ||
+           path.startsWith('/compras') || 
            path.startsWith('/financeiro') || 
            path.startsWith('/fabrica') || 
            path.startsWith('/configuracoes') || 
