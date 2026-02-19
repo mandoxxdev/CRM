@@ -114,7 +114,23 @@ const ProdutoForm = () => {
   });
   const setOutro = (field, active) => setOutroAtivo(prev => ({ ...prev, [field]: active }));
 
-  // Famílias: lista completa da API (para nome + esquemático)
+  // Nomes das variáveis técnicas (chave -> nome) para exibir em vez de "Nova variável"
+  const [variaveisNomesMap, setVariaveisNomesMap] = useState({});
+  useEffect(() => {
+    api.get('/variaveis-tecnicas', { params: { ativo: 'true' } })
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : [];
+        const map = {};
+        list.forEach((v) => {
+          const chave = v.chave || v.key;
+          if (chave) map[chave] = v.nome || v.label || chave;
+        });
+        setVariaveisNomesMap(map);
+      })
+      .catch(() => setVariaveisNomesMap({}));
+  }, []);
+
+  // Famílias: lista completa da API (para nome + esquemático e marcadores_vista)
   const [familiasList, setFamiliasList] = useState([]);
   const todasFamiliasPadrao = [
     'Moinhos', 'Masseiras', 'Agitadores', 'Dispersores', 'Silos',
@@ -563,9 +579,9 @@ const ProdutoForm = () => {
           <div className="produto-form-variaveis-vista-grid">
             {marcadoresVistaFamilia.map((m) => {
               const chave = m.variavel || m.key;
-              const label = m.label || chave;
+              const nomeVariavel = variaveisNomesMap[chave] || m.label || chave;
               const numero = m.numero != null ? m.numero : '';
-              const labelComNumero = numero ? `${numero}. ${label}` : label;
+              const labelComNumero = numero ? `${numero}. ${nomeVariavel}` : nomeVariavel;
               const valor = especificacoesTecnicas[chave] ?? '';
               const isNumero = (m.tipo || '').toLowerCase() === 'numero';
               return (
@@ -575,7 +591,7 @@ const ProdutoForm = () => {
                     type={isNumero ? 'number' : 'text'}
                     value={valor}
                     onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
-                    placeholder={`Informe ${label.toLowerCase()}`}
+                    placeholder={nomeVariavel ? `Informe ${nomeVariavel.toLowerCase()}` : 'Informe o valor'}
                     step={isNumero ? 'any' : undefined}
                   />
                 </div>
@@ -1008,8 +1024,8 @@ const ProdutoForm = () => {
     );
   };
 
-  // Formulário padrão: usado em "Novo Produto" (sem escolher tipo) ou ao editar com tipo padrão
-  if (tipoProduto === 'padrao') {
+  // Formulário com vista frontal e variáveis: usado ao editar ou quando tipo é padrão (abre a tela atual, não a antiga)
+  if (tipoProduto === 'padrao' || isEdit) {
     return renderFormularioPadrao();
   }
 
