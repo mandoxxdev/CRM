@@ -207,7 +207,7 @@
   overflow: hidden;
 }
 
-/* Área da vista = fundo escuro + card interno com sombra (igual cadastro família) */
+/* Área da vista = fundo escuro + barra de rolagem quando a imagem não couber */
 .marcadores-step-vista-wrap {
   flex: 1;
   min-width: 400px;
@@ -220,40 +220,37 @@
   overflow: auto;
 }
 
+/* Card branco com sombra; tamanho = conteúdo (imagem). Centralizado pelo pai; se maior que a tela, aparece scroll */
 .marcadores-step-vista-inner {
   position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 320px;
+  margin: auto;
+  display: inline-block;
   border-radius: 16px;
-  overflow: visible;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
   background: var(--gmp-surface);
 }
 
+/* Wrapper = tamanho da imagem (igual cadastro família). Limite em px para poder exceder viewport e gerar scroll */
 .marcadores-step-vista-inner .vista-image-wrap {
   position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 300px;
+  display: inline-block;
+  max-width: 1200px;
+  max-height: 900px;
   border-radius: 16px;
   overflow: visible;
 }
 
 .marcadores-step-vista-inner .vista-image-wrap img {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
   object-position: center;
-  display: block;
   pointer-events: none;
+  vertical-align: middle;
   border-radius: 16px;
 }
 
