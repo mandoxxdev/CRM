@@ -35,6 +35,28 @@ img {
   height: auto;
 }
 
+/* Vista frontal – tamanho único em todo o sistema (proposta, produto, família) */
+.vista-frontal-tamanho-fixo {
+  width: 320px;
+  height: 240px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  background: var(--gmp-bg-subtle, #f8fafc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.vista-frontal-tamanho-fixo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
+
 /* Design Tokens movidos para design-tokens.css */
 /* Mantendo apenas variáveis de compatibilidade aqui se necessário */
 

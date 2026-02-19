@@ -122,34 +122,36 @@
   border-color: var(--gmp-primary);
 }
 
-/* Wrapper centraliza a vista; .vista-image-wrap acompanha o tamanho da imagem = marcadores na mesma posição em qualquer tela */
+/* Vista frontal mesmo tamanho que na proposta (320x240) */
 .produto-form-esquematico-img-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  max-width: 800px;
+  width: 320px;
+  height: 240px;
+  flex-shrink: 0;
   margin: 0 auto;
   padding: 12px;
   border-radius: var(--border-radius);
   border: 1px solid var(--gmp-border);
   background: var(--gmp-bg-subtle, #f8fafc);
-  min-height: 200px;
 }
 
 .produto-form-esquematico-img-wrap .vista-image-wrap {
   position: relative;
-  display: inline-block;
-  max-width: 100%;
-  max-height: 380px;
+  width: 320px;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .produto-form-esquematico-img-wrap .vista-image-wrap img {
   display: block;
-  max-width: 100%;
-  max-height: 380px;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
+  max-width: 320px;
+  max-height: 240px;
   object-fit: contain;
   object-position: center;
   pointer-events: none;
