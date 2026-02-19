@@ -447,7 +447,8 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                   <div className="marcadores-step-row">
                     {familiaSelecionada && urlEsquematico(familiaSelecionada) && (
                       <div className="marcadores-step-vista-wrap">
-                        <div className="vista-image-wrap">
+                        <div className="marcadores-step-vista-inner">
+                          <div className="vista-image-wrap">
                           <img src={urlEsquematico(familiaSelecionada)} alt={`Vista ${familiaSelecionada.nome}`} />
                           {marcadoresList.map((m, index) => {
                             const chave = m.variavel || m.key;
@@ -506,29 +507,36 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                               </div>
                             );
                           })}
+                          </div>
                         </div>
                       </div>
                     )}
                     <div className="marcadores-step-panel">
-                      <p className="marcadores-step-hint">Clique nos números na imagem para configurar cada variável. Cada marcador abre as opções no local.</p>
-                      <div className="marcadores-step-resumo">
-                        {marcadoresList.map((m) => {
-                          const chave = m.variavel || m.key;
-                          const isSelecao = m.tipo === 'selecao';
-                          const valor = marcadoresStepSelecoes[chave];
-                          const preenchido = isSelecao ? valor === true : (valor != null && valor !== '');
-                          const texto = isSelecao ? (valor === true ? 'Incluído' : '—') : (valor || '—');
-                          return (
-                            <span key={m.id || chave} className={`marcador-resumo-item ${preenchido ? 'preenchido' : ''}`}>
-                              {m.numero != null ? m.numero : '—'}. {texto}
-                            </span>
-                          );
-                        })}
+                      <div className="marcadores-step-panel-header">
+                        <span className="marcadores-step-panel-title">Variáveis ({marcadoresList.length})</span>
+                        <p className="marcadores-step-hint">Clique nos números na imagem para configurar cada variável.</p>
                       </div>
-                      <div className="marcadores-step-actions">
-                        <button type="button" className="btn-verificar-existente" onClick={verificarExistente} disabled={loadingVerificacao}>
-                          {loadingVerificacao ? 'Verificando...' : 'Verificar existência'}
-                        </button>
+                      <div className="marcadores-step-panel-body">
+                        <div className="marcadores-step-resumo">
+                          {marcadoresList.map((m) => {
+                            const chave = m.variavel || m.key;
+                            const isSelecao = m.tipo === 'selecao';
+                            const valor = marcadoresStepSelecoes[chave];
+                            const preenchido = isSelecao ? valor === true : (valor != null && valor !== '');
+                            const texto = isSelecao ? (valor === true ? 'Incluído' : '—') : (valor || '—');
+                            return (
+                              <div key={m.id || chave} className={`marcador-resumo-item ${preenchido ? 'preenchido' : ''}`}>
+                                <span className="marcador-resumo-numero">{m.numero != null ? m.numero : '—'}</span>
+                                <span className="marcador-resumo-texto">{texto}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="marcadores-step-actions">
+                          <button type="button" className="btn-verificar-existente" onClick={verificarExistente} disabled={loadingVerificacao}>
+                            {loadingVerificacao ? 'Verificando...' : 'Verificar existência'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

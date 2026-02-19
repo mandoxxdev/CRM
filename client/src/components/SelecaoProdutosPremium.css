@@ -184,52 +184,67 @@
   cursor: not-allowed;
 }
 
-/* Modo configurar por marcadores: imagem GRANDE como na tela de adicionar marcadores */
+/* Modo configurar por marcadores: mesma estética da tela de cadastro da família (Marcadores técnicos na vista frontal) */
 .marcadores-step-content {
-  padding: 24px 30px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 0;
   max-width: 100%;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .marcadores-step-row {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 24px;
+  gap: 0;
   width: 100%;
   flex: 1;
   min-height: 420px;
+  overflow: hidden;
 }
 
-/* Área da vista = grande, ocupa a maior parte da tela (como na tela de adicionar marcadores) */
+/* Área da vista = fundo escuro + card interno com sombra (igual cadastro família) */
 .marcadores-step-vista-wrap {
   flex: 1;
   min-width: 400px;
-  min-height: 380px;
-  margin-bottom: 0;
-  border-radius: 12px;
-  overflow: visible;
-  border: 1px solid var(--gmp-border);
-  background: var(--gmp-surface);
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  overflow: auto;
 }
 
-.marcadores-step-vista-wrap .vista-image-wrap {
+.marcadores-step-vista-inner {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 360px;
-  border-radius: 12px;
+  min-height: 320px;
+  border-radius: 16px;
+  overflow: visible;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--gmp-surface);
+}
+
+.marcadores-step-vista-inner .vista-image-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  border-radius: 16px;
   overflow: visible;
 }
 
-.marcadores-step-vista-wrap .vista-image-wrap img {
+.marcadores-step-vista-inner .vista-image-wrap img {
   position: absolute;
   left: 0;
   top: 0;
@@ -239,13 +254,42 @@
   object-position: center;
   display: block;
   pointer-events: none;
+  border-radius: 16px;
 }
 
+/* Painel lateral = mesmo estilo do cadastro família (lista de marcadores) */
 .marcadores-step-panel {
-  flex: 0 0 auto;
-  width: 320px;
-  max-width: 360px;
-  min-width: 280px;
+  width: 380px;
+  min-width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--gmp-surface);
+  border-left: 1px solid var(--gmp-border);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.marcadores-step-panel-header {
+  padding: 16px 20px;
+  background: var(--gmp-bg-subtle, #f1f5f9);
+  border-bottom: 1px solid var(--gmp-border);
+  flex-shrink: 0;
+}
+
+.marcadores-step-panel-title {
+  display: block;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--gmp-text);
+  margin-bottom: 8px;
+}
+
+.marcadores-step-panel .marcadores-step-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gmp-text-light);
+  line-height: 1.45;
 }
 
 /* Wrapper do marcador na vista: posição em %; botão centralizado + popover (por cima da img) */
@@ -265,6 +309,7 @@
   pointer-events: auto;
 }
 
+/* Bolinhas na vista = mesmo estilo do cadastro família */
 .marcadores-step-vista-bolinha {
   position: absolute;
   left: 0;
@@ -276,7 +321,7 @@
   border-radius: 50%;
   background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
   border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -340,25 +385,71 @@
   justify-content: center;
 }
 
+.marcadores-step-panel-body {
+  padding: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .marcadores-step-resumo {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  font-size: 0.85rem;
-  color: var(--gmp-text-light);
+  flex-direction: column;
+  gap: 10px;
+  font-size: 0.9rem;
 }
 
 .marcador-resumo-item {
-  padding: 4px 10px;
-  background: var(--gmp-surface-secondary, #f1f5f9);
-  border-radius: 8px;
-  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 2px solid var(--gmp-border);
+  background: var(--gmp-surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.marcador-resumo-item:hover {
+  border-color: rgba(255, 107, 53, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.1);
 }
 
 .marcador-resumo-item.preenchido {
-  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.08);
   color: #166534;
-  border-color: rgba(34, 197, 94, 0.3);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
+}
+
+.marcador-resumo-numero {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: white;
+}
+
+.marcador-resumo-texto {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--gmp-text);
+}
+
+.marcador-resumo-item.preenchido .marcador-resumo-texto {
+  color: #166534;
 }
 
 .marcadores-step-hint {
@@ -472,13 +563,16 @@
   background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
   color: white;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
 }
 .btn-verificar-existente:hover:not(:disabled) {
-  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.45);
 }
 .btn-verificar-existente:disabled {
   opacity: 0.8;
