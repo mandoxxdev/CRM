@@ -135,7 +135,7 @@ const ProdutoForm = () => {
     ? `${(api.defaults.baseURL || '').replace(/\/api\/?$/, '')}/api/uploads/familias-produtos/${familiaSelecionada.esquematico}`
     : null;
 
-  // Variáveis das bolinhas da vista frontal (cadastradas na família) – aparecem como campos para preencher
+  // Variáveis dos marcadores técnicos da vista frontal (cadastradas na família) – aparecem como campos para preencher
   const marcadoresVistaFamilia = useMemo(() => {
     const raw = familiaSelecionada?.marcadores_vista;
     if (!raw) return [];
@@ -536,7 +536,7 @@ const ProdutoForm = () => {
       {esquematicoUrl && (
         <div className="produto-form-esquematico">
           <h3>Vista frontal da família – {formData.familia_produto}</h3>
-          <p className="produto-form-esquematico-hint">Esquemático de referência ao cadastrar este produto. Os números indicam as variáveis técnicas a preencher abaixo.</p>
+          <p className="produto-form-esquematico-hint">Esquemático de referência. Os números são os marcadores técnicos; preencha as variáveis correspondentes abaixo.</p>
           <div className="produto-form-esquematico-img-wrap">
             <img src={esquematicoUrl} alt={`Esquemático ${formData.familia_produto}`} className="produto-form-esquematico-img" />
             {marcadoresVistaFamilia.map((m) => (
@@ -556,7 +556,7 @@ const ProdutoForm = () => {
         <div className="produto-form-variaveis-vista">
           <h3>Informações das variáveis da vista frontal</h3>
           <p className="produto-form-variaveis-vista-hint">
-            Preencha os valores das variáveis técnicas definidas para esta família (cada bolinha da vista).
+            Preencha os valores das variáveis técnicas definidas para esta família (cada marcador da vista).
           </p>
           <div className="produto-form-variaveis-vista-grid">
             {marcadoresVistaFamilia.map((m) => {

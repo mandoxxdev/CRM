@@ -956,7 +956,7 @@ function initializeDatabase() {
     if (err) console.error('Erro ao preencher codigo:', err.message);
   });
 
-  // Variáveis técnicas (motor, disco, etc.) para bolinhas na vista frontal e cadastro de produtos
+  // Variáveis técnicas (motor, disco, etc.) para marcadores na vista frontal e cadastro de produtos
   db.run(`CREATE TABLE IF NOT EXISTS variaveis_tecnicas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT NOT NULL,
@@ -971,6 +971,22 @@ function initializeDatabase() {
   )`, (err) => {
     if (err) console.error('Erro ao criar tabela variaveis_tecnicas:', err);
     else console.log('✅ Tabela variaveis_tecnicas verificada');
+  });
+
+  // Opções de configuração por família e por variável (ex.: família Masseira Bimix + motor_central_cv → 30 CV, 50 CV, 75 CV)
+  db.run(`CREATE TABLE IF NOT EXISTS familia_variavel_opcoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    familia_id INTEGER NOT NULL,
+    variavel_chave TEXT NOT NULL,
+    valor TEXT NOT NULL,
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(familia_id, variavel_chave, valor),
+    FOREIGN KEY (familia_id) REFERENCES familias_produto(id)
+  )`, (err) => {
+    if (err) console.error('Erro ao criar tabela familia_variavel_opcoes:', err);
+    else console.log('✅ Tabela familia_variavel_opcoes verificada');
   });
 
   // Criar usuário admin padrão
@@ -2564,7 +2580,128 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
   }
 });
 
-// ========== VARIÁVEIS TÉCNICAS (cadastro para bolinhas vista frontal / 90+ variáveis) ==========
+// ========== OPÇÕES DE CONFIGURAÇÃO POR FAMÍLIA (valores disponíveis por marcador técnico, por família) ==========
+// GET: listar todas as opções de uma família, agrupadas por variável (para os marcadores dessa família)
+app.get('/api/familias/:familiaId/opcoes-variaveis', authenticateToken, (req, res) => {
+  var familiaId = req.params.familiaId;
+  db.all(
+    'SELECT id, familia_id, variavel_chave, valor, ordem FROM familia_variavel_opcoes WHERE familia_id = ? AND ativo = 1 ORDER BY variavel_chave, ordem, valor',
+    [familiaId],
+    function(err, rows) {
+      if (err) return res.status(500).json({ error: err.message });
+      var byVar = {};
+      (rows || []).forEach(function(r) {
+        if (!byVar[r.variavel_chave]) byVar[r.variavel_chave] = [];
+        byVar[r.variavel_chave].push({ id: r.id, valor: r.valor, ordem: r.ordem });
+      });
+      res.json(byVar);
+    }
+  );
+});
+
+// GET: opções de uma variável para uma família (para preencher dropdown ao clicar no marcador)
+app.get('/api/familias/:familiaId/variaveis/:variavelChave/opcoes', authenticateToken, (req, res) => {
+  var familiaId = req.params.familiaId;
+  var variavelChave = req.params.variavelChave;
+  db.all(
+    'SELECT id, valor, ordem FROM familia_variavel_opcoes WHERE familia_id = ? AND variavel_chave = ? AND ativo = 1 ORDER BY ordem, valor',
+    [familiaId, variavelChave],
+    function(err, rows) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
+// POST: adicionar opção (valor) para família + variável
+app.post('/api/familias/:familiaId/variaveis/:variavelChave/opcoes', authenticateToken, (req, res) => {
+  var familiaId = req.params.familiaId;
+  var variavelChave = req.params.variavelChave;
+  var valor = (req.body && req.body.valor) ? String(req.body.valor).trim() : '';
+  if (!valor) return res.status(400).json({ error: 'Valor da opção é obrigatório' });
+  var ordem = parseInt(req.body && req.body.ordem, 10) || 0;
+  db.run(
+    'INSERT INTO familia_variavel_opcoes (familia_id, variavel_chave, valor, ordem, ativo) VALUES (?, ?, ?, ?, 1)',
+    [familiaId, variavelChave, valor, ordem],
+    function(err) {
+      if (err) {
+        if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Esta opção já existe para esta família e variável' });
+        return res.status(500).json({ error: err.message });
+      }
+      db.get('SELECT * FROM familia_variavel_opcoes WHERE id = ?', [this.lastID], function(e, row) {
+        if (e) return res.status(500).json({ error: e.message });
+        res.status(201).json(row);
+      });
+    }
+  );
+});
+
+// PUT: atualizar opção
+app.put('/api/familias/:familiaId/variaveis/:variavelChave/opcoes/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  var valor = (req.body && req.body.valor) != null ? String(req.body.valor).trim() : null;
+  var ordem = req.body && req.body.ordem !== undefined ? parseInt(req.body.ordem, 10) : null;
+  var updates = [];
+  var params = [];
+  if (valor !== null) { updates.push('valor = ?'); params.push(valor); }
+  if (ordem !== null) { updates.push('ordem = ?'); params.push(ordem); }
+  if (updates.length === 0) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
+  params.push(id);
+  db.run('UPDATE familia_variavel_opcoes SET ' + updates.join(', ') + ' WHERE id = ?', params, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Opção não encontrada' });
+    db.get('SELECT * FROM familia_variavel_opcoes WHERE id = ?', [id], function(e, row) {
+      if (e) return res.status(500).json({ error: e.message });
+      res.json(row);
+    });
+  });
+});
+
+// DELETE: remover opção
+app.delete('/api/familias/:familiaId/variaveis/:variavelChave/opcoes/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  db.run('UPDATE familia_variavel_opcoes SET ativo = 0 WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Opção não encontrada' });
+    res.json({ message: 'Opção removida' });
+  });
+});
+
+// ========== VERIFICAR EQUIPAMENTO EXISTENTE (por família + especificações) ==========
+// POST body: { familia: string (nome), especificacoes: { variavel_chave: valor, ... } }
+// Retorna: { existente: boolean, produtos: [...] } — produtos com mesma família e specs compatíveis
+app.post('/api/produtos/verificar-existente', authenticateToken, (req, res) => {
+  var body = req.body || {};
+  var familiaNome = (body.familia || '').trim();
+  var especificacoes = body.especificacoes && typeof body.especificacoes === 'object' ? body.especificacoes : {};
+  if (!familiaNome) return res.status(400).json({ error: 'familia é obrigatório' });
+  db.all(
+    'SELECT id, codigo, nome, familia, especificacoes_tecnicas, preco_base FROM produtos WHERE ativo = 1 AND (TRIM(UPPER(COALESCE(familia,\'\'))) = TRIM(UPPER(?)))',
+    [familiaNome],
+    function(err, rows) {
+      if (err) return res.status(500).json({ error: err.message });
+      var matches = [];
+      (rows || []).forEach(function(r) {
+        var spec = {};
+        try {
+          if (r.especificacoes_tecnicas) spec = typeof r.especificacoes_tecnicas === 'string' ? JSON.parse(r.especificacoes_tecnicas) : r.especificacoes_tecnicas;
+        } catch (_) {}
+        var allMatch = true;
+        for (var k in especificacoes) {
+          if (especificacoes.hasOwnProperty(k)) {
+            var want = String(especificacoes[k] || '').trim();
+            var have = spec[k] != null ? String(spec[k]).trim() : '';
+            if (want !== have) { allMatch = false; break; }
+          }
+        }
+        if (allMatch) matches.push({ id: r.id, codigo: r.codigo, nome: r.nome, familia: r.familia, preco_base: r.preco_base });
+      });
+      res.json({ existente: matches.length > 0, produtos: matches });
+    }
+  );
+});
+
+// ========== VARIÁVEIS TÉCNICAS (cadastro para marcadores vista frontal / 90+ variáveis) ==========
 app.get('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
   var search = (req.query.search || '').trim();
   var categoria = (req.query.categoria || '').trim();

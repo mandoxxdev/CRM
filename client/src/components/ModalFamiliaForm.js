@@ -316,11 +316,11 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       <div className="bolinhas-premium-container" onClick={(e) => e.stopPropagation()}>
         <div className="bolinhas-premium-header">
           <div className="bolinhas-premium-header-content">
-            <h2>Variáveis na vista frontal</h2>
+            <h2>Marcadores técnicos na vista frontal</h2>
             <p>
               {modoAdicionarBolinha
-                ? 'Clique na imagem para posicionar uma bolinha. Depois edite na lista à direita.'
-                : 'Use o botão "Colocar bolinha" e clique na imagem para adicionar. Segure e arraste uma bolinha para mover; clique sem arrastar para editar.'}
+                ? 'Clique na imagem para posicionar um marcador. Depois edite na lista à direita.'
+                : 'Use o botão "Adicionar marcador" e clique na imagem. Arraste um marcador para mover; clique sem arrastar para editar.'}
             </p>
           </div>
           <div className="bolinhas-premium-header-actions">
@@ -330,7 +330,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
               </button>
             ) : (
               <button type="button" className="bolinhas-premium-btn-adicionar" onClick={() => setModoAdicionarBolinha(true)}>
-                <FiPlus size={18} /> Colocar bolinha
+                <FiPlus size={18} /> Adicionar marcador
               </button>
             )}
             <button type="button" className="bolinhas-premium-close" onClick={() => { setShowBolinhasPremium(false); setModoAdicionarBolinha(false); }}>
@@ -361,10 +361,10 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
           </div>
           <div className="bolinhas-premium-list-panel">
             <div className="bolinhas-premium-list-header">
-              <span className="bolinhas-premium-list-title">Variáveis ({marcadores.length})</span>
+              <span className="bolinhas-premium-list-title">Marcadores técnicos ({marcadores.length})</span>
               {!modoAdicionarBolinha ? (
                 <button type="button" className="bolinhas-premium-list-btn-adicionar" onClick={() => setModoAdicionarBolinha(true)}>
-                  <FiPlus size={16} /> Colocar bolinha
+                  <FiPlus size={16} /> Adicionar marcador
                 </button>
               ) : (
                 <span className="bolinhas-premium-list-hint">Clique na imagem para posicionar</span>
@@ -374,7 +374,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
               {marcadores.length === 0 ? (
                 <li className="bolinhas-premium-empty">
                   <p>Nenhuma variável ainda.</p>
-                  <p>Use o botão &quot;Colocar bolinha&quot; no topo e clique na imagem para adicionar.</p>
+                  <p>Use o botão &quot;Adicionar marcador&quot; no topo e clique na imagem para adicionar.</p>
                 </li>
               ) : (
                 marcadores.map((m) => (
@@ -505,7 +505,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
               </div>
               <div className="modal-familia-field">
                 <label>Vista frontal / Esquemático (opcional)</label>
-                <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos. Use o botão &quot;Colocar bolinha&quot; e clique na imagem para posicionar variáveis técnicas. Arraste as bolinhas para mover.</p>
+                <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos. Use o botão &quot;Adicionar marcador&quot; para posicionar variáveis técnicas na vista. Arraste os marcadores para mover.</p>
                 <div className="modal-familia-vista-wrapper">
                   <div
                     ref={vistaFrontalRef}
@@ -549,22 +549,22 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                 {isEdit && esquematicoPreviewUrl && (
                   <div className="modal-familia-marcadores-section">
                     <div className="modal-familia-marcadores-header">
-                      <span className="marcadores-title">Variáveis na vista (bolinhas)</span>
-                      <span className="marcadores-hint">Coloque bolinhas com o botão abaixo; segure e arraste para mover; clique sem arrastar para editar.</span>
+                      <span className="marcadores-title">Marcadores técnicos na vista</span>
+                      <span className="marcadores-hint">Adicione marcadores com o botão abaixo; arraste para mover; clique sem arrastar para editar.</span>
                       <div className="modal-familia-marcadores-buttons">
                         <button
                           type="button"
                           className={modoAdicionarBolinha ? 'btn-colocar-bolinha active' : 'btn-colocar-bolinha'}
                           onClick={() => setModoAdicionarBolinha(prev => !prev)}
                         >
-                          <FiPlus size={16} /> {modoAdicionarBolinha ? 'Cancelar' : 'Colocar bolinha'}
+                          <FiPlus size={16} /> {modoAdicionarBolinha ? 'Cancelar' : 'Adicionar marcador'}
                         </button>
                         <button
                           type="button"
                           className="btn-abrir-bolinhas-premium"
                           onClick={() => { setModoAdicionarBolinha(false); setShowBolinhasPremium(true); }}
                         >
-                          Abrir tela grande para configurar bolinhas
+                          Abrir tela grande para configurar marcadores
                         </button>
                       </div>
                     </div>
@@ -632,7 +632,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                       ))}
                     </ul>
                     {marcadores.length === 0 && (
-                      <p className="marcadores-empty">Nenhuma bolinha ainda. Use o botão &quot;Colocar bolinha&quot; e clique na vista frontal para adicionar.</p>
+                      <p className="marcadores-empty">Nenhum marcador técnico ainda. Use o botão &quot;Adicionar marcador&quot; e clique na vista frontal para adicionar.</p>
                     )}
                   </div>
                 )}

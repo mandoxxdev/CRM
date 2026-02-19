@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign, FiArrowLeft } from 'react-icons/fi';
+import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign, FiArrowLeft, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 import './SelecaoProdutosPremium.css';
 
 const baseUploads = () => (api.defaults.baseURL || '/api').replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/';
 
+function parseMarcadores(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((m, i) => ({ ...m, numero: m.numero != null ? m.numero : i + 1 }));
+  if (raw.marcadores && Array.isArray(raw.marcadores)) return raw.marcadores.map((m, i) => ({ ...m, numero: m.numero != null ? m.numero : i + 1 }));
+  return [];
+}
+
 const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }) => {
-  const [step, setStep] = useState('familia'); // 'familia' -> escolher família; 'itens' -> escolher itens da família
+  const [step, setStep] = useState('familia'); // 'familia' | 'itens' | 'marcadores'
   const [familias, setFamilias] = useState([]);
   const [familiaSelecionada, setFamiliaSelecionada] = useState(null);
   const [produtos, setProdutos] = useState([]);
@@ -19,6 +26,14 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   const [selecionados, setSelecionados] = useState(new Set(produtosSelecionados.map(p => p.id)));
   const [showFilters, setShowFilters] = useState(false);
   const itemsPerPage = 20;
+
+  // Modo "Configurar por marcadores técnicos"
+  const [marcadoresStepSelecoes, setMarcadoresStepSelecoes] = useState({});
+  const [marcadoresList, setMarcadoresList] = useState([]);
+  const [opcoesPorVariavel, setOpcoesPorVariavel] = useState({});
+  const [loadingMarcadores, setLoadingMarcadores] = useState(false);
+  const [resultadoVerificacao, setResultadoVerificacao] = useState(null);
+  const [loadingVerificacao, setLoadingVerificacao] = useState(false);
 
   useEffect(() => {
     loadFamilias();
@@ -66,6 +81,87 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     setSearchTerm('');
     setFilterPrecoMin('');
     setFilterPrecoMax('');
+    setResultadoVerificacao(null);
+    setMarcadoresStepSelecoes({});
+  };
+
+  const irParaMarcadores = async () => {
+    if (!familiaSelecionada || !familiaSelecionada.id) return;
+    setLoadingMarcadores(true);
+    setResultadoVerificacao(null);
+    setMarcadoresStepSelecoes({});
+    try {
+      const famRes = await api.get(`/familias/${familiaSelecionada.id}`);
+      let raw = famRes.data.marcadores_vista;
+      if (typeof raw === 'string') try { raw = JSON.parse(raw); } catch (_) { raw = []; }
+      const marcs = parseMarcadores(raw);
+      setMarcadoresList(marcs);
+      const opcoes = {};
+      for (const m of marcs) {
+        const chave = m.variavel || m.key;
+        if (!chave) continue;
+        try {
+          const opRes = await api.get(`/familias/${familiaSelecionada.id}/variaveis/${chave}/opcoes`);
+          opcoes[chave] = opRes.data || [];
+        } catch (_) {
+          opcoes[chave] = [];
+        }
+      }
+      setOpcoesPorVariavel(opcoes);
+      setStep('marcadores');
+    } catch (e) {
+      console.error(e);
+      setMarcadoresList([]);
+      setOpcoesPorVariavel({});
+    } finally {
+      setLoadingMarcadores(false);
+    }
+  };
+
+  const voltarParaItens = () => {
+    setStep('itens');
+    setResultadoVerificacao(null);
+  };
+
+  const setMarcadorValor = (variavelChave, valor) => {
+    setMarcadoresStepSelecoes(prev => ({ ...prev, [variavelChave]: valor }));
+    setResultadoVerificacao(null);
+  };
+
+  const verificarExistente = async () => {
+    if (!familiaSelecionada || !familiaSelecionada.nome) return;
+    setLoadingVerificacao(true);
+    setResultadoVerificacao(null);
+    try {
+      const res = await api.post('/produtos/verificar-existente', {
+        familia: familiaSelecionada.nome,
+        especificacoes: marcadoresStepSelecoes
+      });
+      setResultadoVerificacao(res.data);
+    } catch (e) {
+      console.error(e);
+      setResultadoVerificacao({ existente: false, produtos: [], error: e.response?.data?.error || e.message });
+    } finally {
+      setLoadingVerificacao(false);
+    }
+  };
+
+  const adicionarConfiguracaoMarcadores = () => {
+    if (resultadoVerificacao && resultadoVerificacao.existente && resultadoVerificacao.produtos && resultadoVerificacao.produtos.length > 0) {
+      onSelect(resultadoVerificacao.produtos.map(p => ({ ...p, familia: familiaSelecionada.nome })));
+    } else if (resultadoVerificacao && !resultadoVerificacao.existente) {
+      const specStr = Object.entries(marcadoresStepSelecoes).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`).join('; ');
+      onSelect([{
+        _configuradoPorMarcadores: true,
+        existente: false,
+        familia: familiaSelecionada.nome,
+        especificacoes: marcadoresStepSelecoes,
+        nome: `Equipamento sob consulta – ${familiaSelecionada.nome}${specStr ? ` (${specStr})` : ''}`,
+        codigo: 'SOB-CONSULTA',
+        preco_base: 0
+      }]);
+    }
+    onClose();
   };
 
   // Filtrar produtos (apenas busca e preço; família já veio da seleção)
@@ -174,8 +270,8 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
           <div className="header-content">
             <h2>
               <FiPackage style={{ marginRight: '10px' }} />
-              {step === 'familia' ? 'Escolher família' : 'Selecionar itens'}
-              {step === 'itens' && familiaSelecionada && (
+              {step === 'familia' ? 'Escolher família' : step === 'marcadores' ? 'Configurar por marcadores técnicos' : 'Selecionar itens'}
+              {(step === 'itens' || step === 'marcadores') && familiaSelecionada && (
                 <span className="header-familia-nome"> — {familiaSelecionada.nome}</span>
               )}
             </h2>
@@ -203,7 +299,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
           </button>
         </div>
 
-        {step === 'itens' && (
+        {(step === 'itens' || step === 'marcadores') && (
           <>
             <div className="selecao-vista-frontal-bar">
               <div className="vista-frontal-label">Vista frontal</div>
@@ -221,10 +317,21 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                   </div>
                 )}
               </div>
+              {step === 'itens' && (
+                <button type="button" onClick={() => irParaMarcadores()} className="btn-config-marcadores" disabled={loadingMarcadores}>
+                  {loadingMarcadores ? 'Carregando...' : 'Configurar por marcadores técnicos'}
+                </button>
+              )}
+              {step === 'marcadores' && (
+                <button type="button" onClick={voltarParaItens} className="btn-trocar-familia">
+                  <FiArrowLeft /> Voltar para lista
+                </button>
+              )}
               <button type="button" onClick={voltarParaFamilia} className="btn-trocar-familia">
                 <FiArrowLeft /> Trocar família
               </button>
             </div>
+            {step === 'itens' && (
             <div className="selecao-produtos-toolbar">
               <div className="search-container">
                 <FiSearch className="search-icon" />
@@ -286,11 +393,81 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                 </button>
               </div>
             )}
+            )}
           </>
         )}
 
         <div className="selecao-produtos-content">
-          {step === 'familia' ? (
+          {step === 'marcadores' ? (
+            <div className="marcadores-step-content">
+              {marcadoresList.length === 0 ? (
+                <div className="empty-state">
+                  <FiPackage size={48} />
+                  <p>Esta família não tem marcadores técnicos configurados.</p>
+                  <p className="empty-hint">Configure os marcadores na família (Configurações ou edição da família) e as opções em &quot;Opções por família&quot;.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="marcadores-step-panel">
+                    <p className="marcadores-step-hint">Selecione o valor de cada marcador técnico. Depois clique em &quot;Verificar existência&quot; para saber se é equipamento padrão (Existente) ou sob consulta (Não existente).</p>
+                    {marcadoresList.map((m) => {
+                      const chave = m.variavel || m.key;
+                      const opcoes = opcoesPorVariavel[chave] || [];
+                      const valor = marcadoresStepSelecoes[chave];
+                      return (
+                        <div key={m.id || chave} className="marcador-config-row">
+                          <label className="marcador-config-label">
+                            <span className="marcador-config-numero">{m.numero != null ? m.numero : '—'}</span>
+                            {m.label || chave || 'Variável'}
+                          </label>
+                          <select
+                            value={valor || ''}
+                            onChange={(e) => setMarcadorValor(chave, e.target.value)}
+                            className="marcador-config-select"
+                          >
+                            <option value="">Selecione...</option>
+                            {opcoes.map((o) => (
+                              <option key={o.id} value={o.valor}>{o.valor}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                    <div className="marcadores-step-actions">
+                      <button type="button" className="btn-verificar-existente" onClick={verificarExistente} disabled={loadingVerificacao}>
+                        {loadingVerificacao ? 'Verificando...' : 'Verificar existência'}
+                      </button>
+                    </div>
+                  </div>
+                  {resultadoVerificacao !== null && (
+                    <div className={`marcadores-resultado ${resultadoVerificacao.existente ? 'existente' : 'nao-existente'}`}>
+                      {resultadoVerificacao.existente ? (
+                        <>
+                          <FiCheckCircle size={24} />
+                          <h4>Equipamento padrão (Existente)</h4>
+                          <p>Foi encontrado produto(s) com esta configuração.</p>
+                          <ul className="marcadores-resultado-lista">
+                            {resultadoVerificacao.produtos.map((p) => (
+                              <li key={p.id}>{p.codigo} – {p.nome} – {formatCurrency(p.preco_base)}</li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : (
+                        <>
+                          <FiAlertCircle size={24} />
+                          <h4>Equipamento sob consulta (Não existente)</h4>
+                          <p>Não há produto cadastrado com esta combinação. Será adicionado como item sob consulta.</p>
+                        </>
+                      )}
+                      <button type="button" className="btn-adicionar-config-marcadores" onClick={adicionarConfiguracaoMarcadores}>
+                        <FiCheck /> Adicionar à proposta
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : step === 'familia' ? (
             loading ? (
               <div className="loading-state">
                 <div className="spinner"></div>
@@ -435,8 +612,11 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
         )}
 
         <div className="selecao-produtos-footer">
-          <button onClick={step === 'itens' ? voltarParaFamilia : onClose} className="btn-cancel">
-            {step === 'itens' ? <><FiArrowLeft /> Voltar</> : 'Cancelar'}
+          <button
+            onClick={step === 'marcadores' ? voltarParaItens : step === 'itens' ? voltarParaFamilia : onClose}
+            className="btn-cancel"
+          >
+            {step === 'marcadores' ? <><FiArrowLeft /> Voltar para lista</> : step === 'itens' ? <><FiArrowLeft /> Voltar</> : 'Cancelar'}
           </button>
           {step === 'itens' && (
             <button

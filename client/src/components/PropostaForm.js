@@ -1503,26 +1503,39 @@ const PropostaForm = () => {
         <SelecaoProdutosPremium
           onClose={() => setShowProdutosModal(false)}
           onSelect={(produtosSelecionados) => {
-            // Adicionar todos os produtos selecionados
             const novosItens = [...itens];
             produtosSelecionados.forEach(produto => {
-              novosItens.push({
-                produto_id: produto.id,
-                codigo_produto: produto.codigo,
-                descricao: produto.nome,
-                quantidade: 1,
-                unidade: produto.unidade || 'UN',
-                valor_unitario: produto.preco_base || 0,
-                valor_total: produto.preco_base || 0,
-                observacoes: produto.descricao || '',
-                familia_produto: produto.familia || produto.familia_produto || '',
-                regiao_busca: ''
-              });
+              if (produto._configuradoPorMarcadores && !produto.existente) {
+                novosItens.push({
+                  produto_id: null,
+                  codigo_produto: produto.codigo || 'SOB-CONSULTA',
+                  descricao: produto.nome || `Equipamento sob consulta – ${produto.familia || ''}`,
+                  quantidade: 1,
+                  unidade: 'UN',
+                  valor_unitario: 0,
+                  valor_total: 0,
+                  observacoes: produto.especificacoes ? JSON.stringify(produto.especificacoes) : '',
+                  familia_produto: produto.familia || '',
+                  regiao_busca: ''
+                });
+              } else {
+                novosItens.push({
+                  produto_id: produto.id,
+                  codigo_produto: produto.codigo,
+                  descricao: produto.nome,
+                  quantidade: 1,
+                  unidade: produto.unidade || 'UN',
+                  valor_unitario: produto.preco_base || 0,
+                  valor_total: produto.preco_base || 0,
+                  observacoes: produto.descricao || '',
+                  familia_produto: produto.familia || produto.familia_produto || '',
+                  regiao_busca: ''
+                });
+              }
             });
             setItens(novosItens);
             setShowProdutosModal(false);
             calculateTotal(novosItens);
-            // O useEffect vai atualizar automaticamente o campo "Equipamentos Ofertados"
           }}
         />
       )}
