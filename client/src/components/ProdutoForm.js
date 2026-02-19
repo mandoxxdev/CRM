@@ -146,7 +146,14 @@ const ProdutoForm = () => {
   const familias = tipoProduto === 'discos-acessorios'
     ? (familiasNomes.includes('Hélices e Acessórios') ? ['Hélices e Acessórios'] : familiasNomes)
     : familiasNomes;
-  const familiaSelecionada = formData.familia_produto ? familiasList.find((f) => f.nome === formData.familia_produto) : null;
+  const familiaSelecionada = useMemo(() => {
+    const nome = String(formData.familia_produto || '').trim();
+    if (!nome) return null;
+    const exact = familiasList.find((f) => (f.nome || '').trim() === nome);
+    if (exact) return exact;
+    const lower = nome.toLowerCase();
+    return familiasList.find((f) => (f.nome || '').trim().toLowerCase() === lower) || null;
+  }, [formData.familia_produto, familiasList]);
   const esquematicoUrl = familiaSelecionada?.esquematico
     ? `${(api.defaults.baseURL || '').replace(/\/api\/?$/, '')}/api/uploads/familias-produtos/${familiaSelecionada.esquematico}`
     : null;
@@ -168,23 +175,29 @@ const ProdutoForm = () => {
   useEffect(() => {
     if (!isEdit && searchParams.get('familia')) {
       const familiaUrl = decodeURIComponent(searchParams.get('familia') || '');
-      if (familiaUrl) {
-        setFormData(prev => ({ ...prev, familia_produto: familiaUrl }));
-      }
+      if (familiaUrl) setFormData(prev => ({ ...prev, familia_produto: familiaUrl }));
     }
   }, [isEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ao editar: normalizar familia_produto para o nome exato da lista (para o select e para achar marcadores_vista)
   useEffect(() => {
-    if (isEdit) {
+    if (!isEdit || !formData.familia_produto || familiasList.length === 0) return;
+    const nome = String(formData.familia_produto).trim();
+    const exact = familiasList.find((f) => (f.nome || '').trim() === nome);
+    if (exact) return;
+    const lower = nome.toLowerCase();
+    const found = familiasList.find((f) => (f.nome || '').trim().toLowerCase() === lower);
+    if (found) setFormData(prev => ({ ...prev, familia_produto: (found.nome || '').trim() }));
+  }, [isEdit, formData.familia_produto, familiasList]);
+
+  useEffect(() => {
+    if (isEdit && id) {
       loadProduto();
-    } else {
-      // Gerar código automaticamente para novos produtos
-      setTimeout(() => {
-        generateCodigoProduto();
-      }, 100);
+    } else if (!isEdit) {
+      setTimeout(() => { generateCodigoProduto(); }, 100);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, isEdit, tipoProduto, navigate]);
+  }, [id, isEdit]);
 
   const generateCodigoProduto = async (nomeParam = null, familiaParam = null) => {
     try {
@@ -248,17 +261,6 @@ const ProdutoForm = () => {
       const response = await api.get(`/produtos/${id}`);
       const data = response.data;
       
-      // Detectar tipo de produto baseado na família
-      const familia = data.familia || '';
-      const tipoCorreto = familia === 'Hélices e Acessórios' ? 'discos-acessorios' : 'equipamentos';
-      
-      // Se o tipo na URL não corresponder à família do produto, atualizar
-      if (tipoProduto !== tipoCorreto) {
-        setTipoProduto(tipoCorreto);
-        // Atualizar URL para incluir o tipo correto
-        navigate(`/comercial/produtos/editar/${id}?tipo=${tipoCorreto}`, { replace: true });
-      }
-      
       // Tentar parsear especificacoes_tecnicas se for JSON
       let especificacoes = {};
       if (data.especificacoes_tecnicas) {
@@ -295,11 +297,11 @@ const ProdutoForm = () => {
         tratamento_termico: !!(especificacoes.tratamento_termico && !opcoesTrat.includes(especificacoes.tratamento_termico)),
         velocidade_trabalho: !!(especificacoes.velocidade_trabalho && !opcoesVel.includes(especificacoes.velocidade_trabalho))
       }));
-      // Mapear familia para familia_produto (nome usado no frontend)
+      const familiaNome = (data.familia || '').trim();
       setFormData({
         ...data,
-        familia_produto: data.familia || '', // Mapear do backend para frontend
-        modelo: data.modelo || '', // Campo modelo do equipamento
+        familia_produto: familiaNome,
+        modelo: data.modelo || '',
         preco_base: data.preco_base || 0,
         icms: data.icms || 0,
         ipi: data.ipi || 0
