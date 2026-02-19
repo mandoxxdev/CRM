@@ -336,21 +336,6 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
         {(step === 'itens' || step === 'marcadores') && (
           <>
             <div className="selecao-vista-frontal-bar">
-              <div className="vista-frontal-label">Vista frontal</div>
-              <div className="vista-frontal-preview">
-                {familiaSelecionada && urlEsquematico(familiaSelecionada) ? (
-                  <img
-                    src={urlEsquematico(familiaSelecionada)}
-                    alt={`Vista frontal ${familiaSelecionada.nome}`}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                ) : (
-                  <div className="vista-frontal-placeholder">
-                    <FiImage size={32} />
-                    <span>Sem esquemático</span>
-                  </div>
-                )}
-              </div>
               {step === 'itens' && (
                 <button type="button" onClick={() => irParaMarcadores()} className="btn-config-marcadores" disabled={loadingMarcadores}>
                   {loadingMarcadores ? 'Carregando...' : 'Configurar por marcadores técnicos'}
