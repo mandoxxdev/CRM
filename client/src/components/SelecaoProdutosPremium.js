@@ -102,7 +102,6 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     if (!familiaSelecionada || !familiaSelecionada.id) return;
     setLoadingMarcadores(true);
     setResultadoVerificacao(null);
-    setMarcadoresStepSelecoes({});
     try {
       const [famRes, opcoesRes, vtRes] = await Promise.all([
         api.get(`/familias/${familiaSelecionada.id}`),
@@ -112,8 +111,8 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
       const vtList = Array.isArray(vtRes.data) ? vtRes.data : [];
       const nomesMap = {};
       vtList.forEach((v) => {
-        const chave = v.chave || v.key;
-        if (chave) nomesMap[chave] = v.nome || v.label || chave;
+        const chave = (v.chave || v.key || '').trim() || null;
+        if (chave) nomesMap[chave] = (v.nome || v.label || v.name || chave).trim() || chave;
       });
       setVariaveisNomesMap(nomesMap);
       let raw = famRes.data.marcadores_vista;
@@ -129,6 +128,33 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
         opcoes[chave] = Array.isArray(opcoesByVar[chave]) ? opcoesByVar[chave] : [];
       });
       setOpcoesPorVariavel(opcoes);
+      // Preencher todas as variáveis (qualquer chave existente ou futura) a partir do produto já selecionado ou na proposta
+      let iniciais = {};
+      const daFamilia = (arr) => (arr || []).filter((p) => (p.familia || p.familia_produto || '') === (familiaSelecionada && familiaSelecionada.nome));
+      const primeiroDaProposta = daFamilia(produtosSelecionados)[0];
+      const primeiroSelecionadoNaLista = produtos.find((p) => selecionados.has(p.id));
+      const produtoFonte = primeiroDaProposta || primeiroSelecionadoNaLista;
+      if (produtoFonte && produtoFonte.especificacoes_tecnicas) {
+        try {
+          const spec = typeof produtoFonte.especificacoes_tecnicas === 'string' ? JSON.parse(produtoFonte.especificacoes_tecnicas) : produtoFonte.especificacoes_tecnicas;
+          marcs.forEach((m) => {
+            const chave = m.variavel || m.key;
+            if (!chave) return;
+            const rawVal = spec[chave];
+            if (rawVal == null || rawVal === '') return;
+            let val = String(rawVal).trim();
+            const opcoesList = opcoes[chave] || [];
+            const opcoesValores = opcoesList.map((o) => (o.valor != null ? String(o.valor) : ''));
+            // Se o valor salvo não bater exatamente com uma opção, tentar casar (ex.: "30" com "30 CV")
+            if (opcoesValores.length > 0 && !opcoesValores.includes(val)) {
+              const match = opcoesValores.find((ov) => ov === val || ov.includes(val) || val.includes(ov));
+              if (match) val = match;
+            }
+            iniciais[chave] = val;
+          });
+        } catch (_) {}
+      }
+      setMarcadoresStepSelecoes(iniciais);
       setStep('marcadores');
     } catch (e) {
       console.error(e);

@@ -12,6 +12,8 @@ const Produtos = ({ familiaFromUrl, familiaNome }) => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterFamilia, setFilterFamilia] = useState(familiaFromUrl || '');
+  const [zerando, setZerando] = useState(false);
+  const [zerarMsg, setZerarMsg] = useState(null);
 
   useEffect(() => {
     if (familiaFromUrl) setFilterFamilia(familiaFromUrl);
@@ -136,8 +138,33 @@ const Produtos = ({ familiaFromUrl, familiaNome }) => {
             <span className="btn-premium-text">Novo Produto</span>
             <div className="btn-premium-shine"></div>
           </button>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!window.confirm('Zerar especificações técnicas dos produtos cadastrados no modelo antigo (formulário longo)? Eles ficarão vazios para você preencher de novo na tela com vista frontal.')) return;
+              setZerando(true);
+              setZerarMsg(null);
+              try {
+                const res = await api.post('/produtos/zerar-modelo-antigo');
+                setZerarMsg(res.data?.message || 'Concluído.');
+                if (res.data?.count > 0) loadProdutos();
+              } catch (e) {
+                setZerarMsg(e.response?.data?.error || e.message || 'Erro ao zerar.');
+              } finally {
+                setZerando(false);
+              }
+            }}
+            disabled={zerando}
+            className="btn-secondary"
+            title="Limpa especificações de produtos do formulário antigo"
+          >
+            {zerando ? 'Zerando...' : 'Zerar produtos modelo antigo'}
+          </button>
         </div>
       </div>
+      {zerarMsg && (
+        <div className="zerar-msg" style={{ marginTop: 8, padding: 8, background: '#e8f5e9', borderRadius: 4 }}>{zerarMsg}</div>
+      )}
 
       <div className="filters">
         <div className="search-box">
@@ -214,7 +241,7 @@ const Produtos = ({ familiaFromUrl, familiaNome }) => {
                   <td>
                     <div className="action-buttons">
                       <Link
-                        to={`/comercial/produtos/editar/${produto.id}?tipo=${produto.familia === 'Hélices e Acessórios' ? 'discos-acessorios' : 'equipamentos'}`}
+                        to={`/comercial/produtos/editar/${produto.id}`}
                         className="btn-icon"
                         title="Editar"
                       >

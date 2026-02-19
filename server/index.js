@@ -10735,6 +10735,58 @@ app.delete('/api/produtos/:id', authenticateToken, (req, res) => {
   });
 });
 
+// Zerar especificações de produtos do modelo antigo (formulário longo sem vista frontal)
+// POST body opcional: { ids?: number[] } — se ids informado, zera só esses; senão, zera todos que têm só chaves do formulário antigo
+var OLD_SPEC_KEYS = new Set([
+  'material_contato', 'motor_central_cv', 'motoredutor_central_cv', 'motores_laterais_cv',
+  'ccm_incluso', 'ccm_tensao', 'celula_carga', 'plc_ihm', 'valvula_saida_tanque',
+  'classificacao_area', 'densidade', 'viscosidade', 'espessura', 'acabamento', 'diametro',
+  'funcao', 'tratamento_termico', 'tratamento_termico_especifico', 'velocidade_trabalho', 'velocidade_trabalho_especifica', 'furacao'
+]);
+function soTemChavesAntigas(spec) {
+  if (!spec || typeof spec !== 'object') return true;
+  var keys = Object.keys(spec);
+  if (keys.length === 0) return false;
+  for (var i = 0; i < keys.length; i++) {
+    if (!OLD_SPEC_KEYS.has(keys[i])) return false;
+  }
+  return true;
+}
+app.post('/api/produtos/zerar-modelo-antigo', authenticateToken, (req, res) => {
+  var body = req.body || {};
+  var ids = Array.isArray(body.ids) ? body.ids : null;
+
+  if (ids && ids.length > 0) {
+    var placeholders = ids.map(function() { return '?'; }).join(',');
+    db.run('UPDATE produtos SET especificacoes_tecnicas = ? WHERE id IN (' + placeholders + ')', ['{}'].concat(ids), function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Especificações zeradas para ' + ids.length + ' produto(s) informado(s).', count: ids.length });
+    });
+    return;
+  }
+
+  db.all('SELECT id, especificacoes_tecnicas FROM produtos WHERE ativo = 1', [], function(err, rows) {
+    if (err) return res.status(500).json({ error: err.message });
+    var toZero = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var spec = {};
+      try {
+        if (r.especificacoes_tecnicas) spec = JSON.parse(r.especificacoes_tecnicas);
+      } catch (e) { continue; }
+      if (soTemChavesAntigas(spec)) toZero.push(r.id);
+    }
+    if (toZero.length === 0) {
+      return res.json({ message: 'Nenhum produto do modelo antigo encontrado.', count: 0 });
+    }
+    var placeholders = toZero.map(function() { return '?'; }).join(',');
+    db.run('UPDATE produtos SET especificacoes_tecnicas = ? WHERE id IN (' + placeholders + ')', ['{}'].concat(toZero), function(updateErr) {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      res.json({ message: 'Especificações zeradas para ' + toZero.length + ' produto(s) do modelo antigo.', count: toZero.length, ids: toZero });
+    });
+  });
+});
+
 // ========== ROTAS DE OPORTUNIDADES ==========
 app.get('/api/oportunidades', authenticateToken, (req, res) => {
   const { cliente_id, status, responsavel_id } = req.query;

@@ -79,7 +79,7 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
       projeto: `/comercial/projetos/editar/${id}`,
       proposta: `/comercial/propostas/editar/${id}`,
       atividade: `/comercial/atividades`,
-      produto: `/comercial/produtos/editar/${id}?tipo=${(item && item.familia === 'Hélices e Acessórios') ? 'discos-acessorios' : 'equipamentos'}`,
+      produto: `/comercial/produtos/editar/${id}`,
       custo: `/comercial/custos-viagens`,
     };
     return routes[type] || '/';

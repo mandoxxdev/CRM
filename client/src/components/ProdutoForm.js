@@ -114,7 +114,7 @@ const ProdutoForm = () => {
   });
   const setOutro = (field, active) => setOutroAtivo(prev => ({ ...prev, [field]: active }));
 
-  // Nomes das variáveis técnicas (chave -> nome) para exibir em vez de "Nova variável"
+  // Nomes das variáveis técnicas (chave -> nome) — para todas as variáveis, atuais e futuras; evita "Nova variável"
   const [variaveisNomesMap, setVariaveisNomesMap] = useState({});
   useEffect(() => {
     api.get('/variaveis-tecnicas', { params: { ativo: 'true' } })
@@ -122,8 +122,8 @@ const ProdutoForm = () => {
         const list = Array.isArray(res.data) ? res.data : [];
         const map = {};
         list.forEach((v) => {
-          const chave = v.chave || v.key;
-          if (chave) map[chave] = v.nome || v.label || chave;
+          const chave = (v.chave || v.key || '').trim() || null;
+          if (chave) map[chave] = (v.nome || v.label || v.name || chave).trim() || chave;
         });
         setVariaveisNomesMap(map);
       })
@@ -579,11 +579,11 @@ const ProdutoForm = () => {
           <div className="produto-form-variaveis-vista-grid">
             {marcadoresVistaFamilia.map((m) => {
               const chave = m.variavel || m.key;
-              const nomeVariavel = variaveisNomesMap[chave] || m.label || chave;
+              const nomeVariavel = (variaveisNomesMap[chave] || m.label || chave || '').trim() || chave;
               const numero = m.numero != null ? m.numero : '';
               const labelComNumero = numero ? `${numero}. ${nomeVariavel}` : nomeVariavel;
               const valor = especificacoesTecnicas[chave] ?? '';
-              const isNumero = (m.tipo || '').toLowerCase() === 'numero';
+              const isNumero = (String(m.tipo || '').toLowerCase() === 'numero');
               return (
                 <div key={m.id || chave} className="produto-form-variavel-field">
                   <label>{labelComNumero}</label>
