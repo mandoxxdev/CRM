@@ -332,67 +332,69 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
               </button>
             </div>
             {step === 'itens' && (
-            <div className="selecao-produtos-toolbar">
-              <div className="search-container">
-                <FiSearch className="search-icon" />
-                <input
-                  type="text"
-                  placeholder="Buscar por código, nome ou descrição..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="search-input"
-                />
-                {searchTerm && (
-                  <button onClick={() => setSearchTerm('')} className="clear-search">
-                    <FiX />
+              <>
+                <div className="selecao-produtos-toolbar">
+                  <div className="search-container">
+                    <FiSearch className="search-icon" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por código, nome ou descrição..."
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="search-input"
+                    />
+                    {searchTerm && (
+                      <button onClick={() => setSearchTerm('')} className="clear-search">
+                        <FiX />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`btn-filter ${showFilters ? 'active' : ''}`}
+                  >
+                    <FiFilter /> Filtros
                   </button>
+                </div>
+                {showFilters && (
+                  <div className="filters-panel">
+                    <div className="filter-group">
+                      <label>Preço Mínimo</label>
+                      <input
+                        type="number"
+                        placeholder="R$ 0,00"
+                        value={filterPrecoMin}
+                        onChange={(e) => {
+                          setFilterPrecoMin(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                    <div className="filter-group">
+                      <label>Preço Máximo</label>
+                      <input
+                        type="number"
+                        placeholder="R$ 999.999,99"
+                        value={filterPrecoMax}
+                        onChange={(e) => {
+                          setFilterPrecoMax(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                    <button onClick={limparFiltros} className="btn-clear-filters">
+                      Limpar Filtros
+                    </button>
+                  </div>
                 )}
-              </div>
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`btn-filter ${showFilters ? 'active' : ''}`}
-              >
-                <FiFilter /> Filtros
-              </button>
-            </div>
-            {showFilters && (
-              <div className="filters-panel">
-                <div className="filter-group">
-                  <label>Preço Mínimo</label>
-                  <input
-                    type="number"
-                    placeholder="R$ 0,00"
-                    value={filterPrecoMin}
-                    onChange={(e) => {
-                      setFilterPrecoMin(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div className="filter-group">
-                  <label>Preço Máximo</label>
-                  <input
-                    type="number"
-                    placeholder="R$ 999.999,99"
-                    value={filterPrecoMax}
-                    onChange={(e) => {
-                      setFilterPrecoMax(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <button onClick={limparFiltros} className="btn-clear-filters">
-                  Limpar Filtros
-                </button>
-              </div>
-            )}
+              </>
             )}
           </>
         )}
