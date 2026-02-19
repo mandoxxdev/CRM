@@ -538,17 +538,19 @@ const ProdutoForm = () => {
           <h3>Vista frontal da família – {formData.familia_produto}</h3>
           <p className="produto-form-esquematico-hint">Esquemático de referência. Os números são os marcadores técnicos; preencha as variáveis correspondentes abaixo.</p>
           <div className="produto-form-esquematico-img-wrap">
-            <img src={esquematicoUrl} alt={`Esquemático ${formData.familia_produto}`} className="produto-form-esquematico-img" />
-            {marcadoresVistaFamilia.map((m) => (
-              <span
-                key={m.id || m.numero}
-                className="produto-form-bolinha"
-                style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%' }}
-                title={m.label ? `${m.numero != null ? m.numero + '. ' : ''}${m.label}` : ''}
-              >
-                {m.numero != null ? m.numero : ''}
-              </span>
-            ))}
+            <div className="vista-image-wrap">
+              <img src={esquematicoUrl} alt={`Esquemático ${formData.familia_produto}`} className="produto-form-esquematico-img" />
+              {marcadoresVistaFamilia.map((m) => (
+                <span
+                  key={m.id || m.numero}
+                  className="produto-form-bolinha"
+                  style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%' }}
+                  title={m.label ? `${m.numero != null ? m.numero + '. ' : ''}${m.label}` : ''}
+                >
+                  {m.numero != null ? m.numero : ''}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       )}

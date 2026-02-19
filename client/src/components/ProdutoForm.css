@@ -122,20 +122,38 @@
   border-color: var(--gmp-primary);
 }
 
-/* Viewport fixo igual ao da família: mesma área de coordenadas para as bolinhas ficarem nas mesmas posições */
+/* Wrapper centraliza a vista; .vista-image-wrap acompanha o tamanho da imagem = marcadores na mesma posição em qualquer tela */
 .produto-form-esquematico-img-wrap {
-  position: relative;
-  width: 100%;
-  max-width: 800px;
-  height: 380px;
-  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 12px;
   border-radius: var(--border-radius);
   border: 1px solid var(--gmp-border);
   background: var(--gmp-bg-subtle, #f8fafc);
-  overflow: hidden;
+  min-height: 200px;
+}
+
+.produto-form-esquematico-img-wrap .vista-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 380px;
+}
+
+.produto-form-esquematico-img-wrap .vista-image-wrap img {
+  display: block;
+  max-width: 100%;
+  max-height: 380px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  vertical-align: middle;
 }
 
 .produto-form-esquematico-img {

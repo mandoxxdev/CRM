@@ -98,6 +98,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
       setMarcadoresList(marcs);
       const opcoes = {};
       for (const m of marcs) {
+        if (m.tipo === 'selecao') continue;
         const chave = m.variavel || m.key;
         if (!chave) continue;
         try {
@@ -128,14 +129,34 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     setResultadoVerificacao(null);
   };
 
+  const toggleMarcadorSelecao = (variavelChave) => {
+    setMarcadoresStepSelecoes(prev => ({ ...prev, [variavelChave]: !prev[variavelChave] }));
+    setResultadoVerificacao(null);
+  };
+
+  const buildEspecificacoesParaEnvio = () => {
+    const spec = {};
+    marcadoresList.forEach((m) => {
+      const chave = m.variavel || m.key;
+      const val = marcadoresStepSelecoes[chave];
+      if (m.tipo === 'selecao') {
+        if (val === true) spec[chave] = 'Sim';
+      } else {
+        if (val != null && val !== '') spec[chave] = val;
+      }
+    });
+    return spec;
+  };
+
   const verificarExistente = async () => {
     if (!familiaSelecionada || !familiaSelecionada.nome) return;
     setLoadingVerificacao(true);
     setResultadoVerificacao(null);
     try {
+      const especificacoes = buildEspecificacoesParaEnvio();
       const res = await api.post('/produtos/verificar-existente', {
         familia: familiaSelecionada.nome,
-        especificacoes: marcadoresStepSelecoes
+        especificacoes
       });
       setResultadoVerificacao(res.data);
     } catch (e) {
@@ -147,15 +168,16 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   };
 
   const adicionarConfiguracaoMarcadores = () => {
+    const especificacoes = buildEspecificacoesParaEnvio();
     if (resultadoVerificacao && resultadoVerificacao.existente && resultadoVerificacao.produtos && resultadoVerificacao.produtos.length > 0) {
       onSelect(resultadoVerificacao.produtos.map(p => ({ ...p, familia: familiaSelecionada.nome })));
     } else if (resultadoVerificacao && !resultadoVerificacao.existente) {
-      const specStr = Object.entries(marcadoresStepSelecoes).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`).join('; ');
+      const specStr = Object.entries(especificacoes).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`).join('; ');
       onSelect([{
         _configuradoPorMarcadores: true,
         existente: false,
         familia: familiaSelecionada.nome,
-        especificacoes: marcadoresStepSelecoes,
+        especificacoes,
         nome: `Equipamento sob consulta – ${familiaSelecionada.nome}${specStr ? ` (${specStr})` : ''}`,
         codigo: 'SOB-CONSULTA',
         preco_base: 0
@@ -410,28 +432,60 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                 </div>
               ) : (
                 <>
+                  {familiaSelecionada && urlEsquematico(familiaSelecionada) && (
+                    <div className="marcadores-step-vista-wrap">
+                      <div className="vista-image-wrap">
+                        <img src={urlEsquematico(familiaSelecionada)} alt={`Vista ${familiaSelecionada.nome}`} />
+                        {marcadoresList.map((m) => (
+                          <span
+                            key={m.id || m.variavel}
+                            className="marcadores-step-vista-bolinha"
+                            style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%' }}
+                            title={m.label || m.variavel}
+                          >
+                            {m.numero != null ? m.numero : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="marcadores-step-panel">
-                    <p className="marcadores-step-hint">Selecione o valor de cada marcador técnico. Depois clique em &quot;Verificar existência&quot; para saber se é equipamento padrão (Existente) ou sob consulta (Não existente).</p>
+                    <p className="marcadores-step-hint">Variáveis: escolha o valor no dropdown. Seleção simples: clique para incluir na proposta (fica verde); não clique para não incluir.</p>
                     {marcadoresList.map((m) => {
                       const chave = m.variavel || m.key;
+                      const isSelecao = m.tipo === 'selecao';
                       const opcoes = opcoesPorVariavel[chave] || [];
                       const valor = marcadoresStepSelecoes[chave];
+                      const selecionado = isSelecao && valor === true;
                       return (
-                        <div key={m.id || chave} className="marcador-config-row">
+                        <div key={m.id || chave} className={`marcador-config-row ${isSelecao ? 'marcador-config-row-selecao' : ''}`}>
                           <label className="marcador-config-label">
                             <span className="marcador-config-numero">{m.numero != null ? m.numero : '—'}</span>
                             {m.label || chave || 'Variável'}
+                            {isSelecao && <span className="marcador-config-selecao-badge">Seleção</span>}
                           </label>
-                          <select
-                            value={valor || ''}
-                            onChange={(e) => setMarcadorValor(chave, e.target.value)}
-                            className="marcador-config-select"
-                          >
-                            <option value="">Selecione...</option>
-                            {opcoes.map((o) => (
-                              <option key={o.id} value={o.valor}>{o.valor}</option>
-                            ))}
-                          </select>
+                          {isSelecao ? (
+                            <button
+                              type="button"
+                              className={`marcador-toggle-incluir ${selecionado ? 'marcador-toggle-incluir-ativo' : ''}`}
+                              onClick={() => toggleMarcadorSelecao(chave)}
+                              title={selecionado ? 'Incluído na proposta (clique para remover)' : 'Clique para incluir na proposta'}
+                            >
+                              {selecionado ? <FiCheck size={18} /> : null}
+                              <span>{selecionado ? 'Incluído na proposta' : 'Não incluído'}</span>
+                            </button>
+                          ) : (
+                            <select
+                              value={valor || ''}
+                              onChange={(e) => setMarcadorValor(chave, e.target.value)}
+                              className="marcador-config-select"
+                            >
+                              <option value="">Selecione...</option>
+                              {opcoes.map((o) => (
+                                <option key={o.id} value={o.valor}>{o.valor}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                       );
                     })}

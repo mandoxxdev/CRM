@@ -51,7 +51,8 @@ const OpcoesPorFamilia = () => {
     }).finally(() => setLoadingDetail(false));
   }, [familiaId]);
 
-  const marcadores = familiaDetail?.marcadores || [];
+  const todosMarcadores = familiaDetail?.marcadores || [];
+  const marcadores = todosMarcadores.filter((m) => m.tipo !== 'selecao');
 
   const addOpcao = async (variavelChave, valor) => {
     const v = (valor || novoValor[variavelChave] || '').trim();
@@ -115,7 +116,9 @@ const OpcoesPorFamilia = () => {
         <div className="opcoes-familia-content">
           {marcadores.length === 0 ? (
             <p className="opcoes-familia-empty">
-              Esta família ainda não tem marcadores técnicos na vista frontal. Edite a família e adicione marcadores na vista frontal para poder configurar as opções aqui.
+              {todosMarcadores.length === 0
+                ? 'Esta família ainda não tem marcadores técnicos na vista frontal. Edite a família e adicione marcadores na vista frontal para poder configurar as opções aqui.'
+                : 'Os marcadores desta família são apenas de seleção simples (clicar = incluir na proposta). Não é necessário configurar opções aqui.'}
             </p>
           ) : (
             <div className="opcoes-familia-marcadores">

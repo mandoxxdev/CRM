@@ -43,7 +43,7 @@ const Atividades = () => {
         const params = filtroUsuario === 'todos' ? { todos: true } : filtroUsuario ? { responsavel_id: filtroUsuario } : {};
         const [atividadesRes, usuariosRes, clientesRes] = await Promise.all([
           api.get('/atividades', { params }),
-          api.get('/usuarios/comercial'),
+          api.get('/usuarios/por-modulo/comercial'),
           api.get('/clientes')
         ]);
         // Ordenar atividades: lembretes vencidos primeiro, depois por data

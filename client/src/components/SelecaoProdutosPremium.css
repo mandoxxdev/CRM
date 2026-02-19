@@ -189,6 +189,51 @@
   max-width: 720px;
 }
 
+.marcadores-step-vista-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.marcadores-step-vista-wrap .vista-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 12px;
+  overflow: visible;
+  border: 1px solid var(--gmp-border);
+}
+
+.marcadores-step-vista-wrap .vista-image-wrap img {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.marcadores-step-vista-bolinha {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  pointer-events: none;
+}
+
 .marcadores-step-hint {
   margin: 0 0 20px 0;
   font-size: 0.95rem;
@@ -242,6 +287,53 @@
   font-size: 1rem;
   background: var(--gmp-surface);
   color: var(--gmp-text);
+}
+
+.marcador-config-row-selecao .marcador-config-label {
+  min-width: 200px;
+}
+
+.marcador-config-selecao-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #166534;
+  background: rgba(34, 197, 94, 0.15);
+  border-radius: 6px;
+}
+
+.marcador-toggle-incluir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 2px solid var(--gmp-border);
+  border-radius: 10px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text-light);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.marcador-toggle-incluir:hover {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.08);
+  color: #166534;
+}
+
+.marcador-toggle-incluir.marcador-toggle-incluir-ativo {
+  border-color: #22c55e;
+  background: #22c55e;
+  color: white;
+}
+
+.marcador-toggle-incluir.marcador-toggle-incluir-ativo:hover {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: white;
 }
 
 .marcadores-step-actions {

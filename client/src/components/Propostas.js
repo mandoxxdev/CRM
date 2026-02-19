@@ -148,7 +148,7 @@ const Propostas = () => {
       setAprovacoesMap(aprovacoesMapTemp);
 
       try {
-        const usuariosRes = await api.get('/usuarios/comercial');
+        const usuariosRes = await api.get('/usuarios/por-modulo/comercial');
         if (loadDataRequestId.current !== currentId) return;
         setUsuarios(usuariosRes.data || []);
       } catch (error) {

@@ -21,7 +21,7 @@ const Projetos = () => {
         // Carregar em paralelo para melhor performance
         const [projetosRes, usuariosRes] = await Promise.all([
           api.get('/projetos', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} }),
-          api.get('/usuarios/comercial')
+          api.get('/usuarios/por-modulo/comercial')
         ]);
         setProjetos(projetosRes.data);
         setUsuarios(usuariosRes.data || []);

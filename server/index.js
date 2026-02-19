@@ -1995,6 +1995,40 @@ app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
   });
 });
 
+// Lista usuários com acesso a um módulo (para filtros de responsável por módulo)
+// Módulos: comercial, compras, financeiro, operacional, administrativo, admin
+app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
+  const { modulo } = req.params;
+  const sql = `
+    SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.created_at
+    FROM usuarios u
+    WHERE u.ativo = 1
+    AND (
+      u.role = 'admin'
+      OR EXISTS (
+        SELECT 1 FROM permissoes p
+        WHERE p.usuario_id = u.id AND (p.grupo_id IS NULL OR p.grupo_id = 0)
+        AND p.modulo = ? AND p.permissao = 1
+      )
+      OR (
+        NOT EXISTS (SELECT 1 FROM usuarios_grupos ug WHERE ug.usuario_id = u.id)
+        AND ? = 'comercial'
+      )
+      OR EXISTS (
+        SELECT 1 FROM usuarios_grupos ug
+        INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = ? AND p.permissao = 1
+        WHERE ug.usuario_id = u.id
+      )
+    )
+    ORDER BY u.nome`;
+  db.all(sql, [modulo, modulo, modulo], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    return res.json(rows || []);
+  });
+});
+
 app.get('/api/usuarios', authenticateToken, (req, res) => {
   db.all('SELECT id, nome, email, cargo, role, ativo, created_at FROM usuarios ORDER BY nome', [], (err, rows) => {
     if (err) {

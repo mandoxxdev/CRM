@@ -162,11 +162,16 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   };
 
   const vistaFrontalRef = React.useRef(null);
+  const getVistaRect = useCallback(() => {
+    const el = vistaFrontalRef.current;
+    if (!el) return null;
+    const img = el.querySelector('img');
+    return (img && img.getBoundingClientRect) ? img.getBoundingClientRect() : el.getBoundingClientRect();
+  }, []);
   const handleVistaFrontalClick = useCallback((e) => {
     if (!modoAdicionarBolinha) return;
-    const el = vistaFrontalRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
+    const rect = getVistaRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
     const primeiroChave = (variaveisList[0] && variaveisList[0].chave) || 'outro';
@@ -185,7 +190,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       return [...prev, novo];
     });
     setEditingMarcadorId(novoId);
-  }, [variaveisList, modoAdicionarBolinha]);
+  }, [variaveisList, modoAdicionarBolinha, getVistaRect]);
 
   const [draggingMarcadorId, setDraggingMarcadorId] = useState(null);
   const dragStartRef = React.useRef({ x: 0, y: 0, id: null });
@@ -204,9 +209,8 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     const id = draggingMarcadorId;
     const handleMove = (e) => {
       didMoveRef.current = true;
-      const el = vistaFrontalRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
+      const rect = getVistaRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
       const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
       const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
       setMarcadores(prev => prev.map(m => m.id === id ? { ...m, x, y } : m));
@@ -229,7 +233,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
     };
-  }, [draggingMarcadorId]);
+  }, [draggingMarcadorId, getVistaRect]);
 
   const updateMarcador = useCallback((id, updates) => {
     setMarcadores(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
@@ -340,23 +344,25 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         </div>
         <div className="bolinhas-premium-body">
           <div className="bolinhas-premium-vista">
-            <div
-              ref={vistaFrontalRef}
-              className={`bolinhas-premium-vista-inner ${modoAdicionarBolinha ? 'modo-adicionar' : ''}`}
-              onClick={handleVistaFrontalClick}
-            >
-              <img src={esquematicoPreviewUrl} alt="Vista frontal" draggable={false} />
-              {marcadores.map((m) => (
-                <span
-                  key={m.id}
-                  className={`vista-marcador-bolinha bolinhas-premium-bolinha ${draggingMarcadorId === m.id ? 'vista-marcador-dragging' : ''}`}
-                  style={{ left: m.x + '%', top: m.y + '%' }}
-                  title={`${m.numero != null ? m.numero + '. ' : ''}${m.label} — Arraste para mover`}
-                  onMouseDown={(ev) => handleBolinhaMouseDown(ev, m.id)}
-                >
-                  {m.numero != null ? m.numero : ''}
-                </span>
-              ))}
+            <div className={`bolinhas-premium-vista-inner ${modoAdicionarBolinha ? 'modo-adicionar' : ''}`}>
+              <div
+                ref={vistaFrontalRef}
+                className="vista-image-wrap"
+                onClick={handleVistaFrontalClick}
+              >
+                <img src={esquematicoPreviewUrl} alt="Vista frontal" draggable={false} />
+                {marcadores.map((m) => (
+                  <span
+                    key={m.id}
+                    className={`vista-marcador-bolinha bolinhas-premium-bolinha ${draggingMarcadorId === m.id ? 'vista-marcador-dragging' : ''}`}
+                    style={{ left: m.x + '%', top: m.y + '%' }}
+                    title={`${m.numero != null ? m.numero + '. ' : ''}${m.label} — Arraste para mover`}
+                    onMouseDown={(ev) => handleBolinhaMouseDown(ev, m.id)}
+                  >
+                    {m.numero != null ? m.numero : ''}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
           <div className="bolinhas-premium-list-panel">
@@ -408,6 +414,17 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                             ))
                           )}
                         </select>
+                        <div className="bolinhas-premium-card-tipo">
+                          <label>Tipo na proposta:</label>
+                          <select
+                            value={m.tipo || 'texto'}
+                            onChange={(e) => updateMarcador(m.id, { tipo: e.target.value })}
+                          >
+                            <option value="texto">Variável (dropdown)</option>
+                            <option value="numero">Número</option>
+                            <option value="selecao">Seleção simples (clicar = incluir na proposta)</option>
+                          </select>
+                        </div>
                         <div className="bolinhas-premium-card-actions">
                           <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }}>Ok</button>
                           <button type="button" onClick={() => removeMarcador(m.id)} className="danger">Remover</button>
@@ -418,7 +435,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                         <span className="bolinhas-premium-dot bolinhas-premium-numero">{m.numero != null ? m.numero : '—'}</span>
                         <div className="bolinhas-premium-card-info">
                           <strong>{m.numero != null ? m.numero + '. ' : ''}{m.label}</strong>
-                          <span>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}</span>
+                          <span>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}{m.tipo === 'selecao' ? ' · Seleção' : ''}</span>
                         </div>
                         <div className="bolinhas-premium-card-actions">
                           <button type="button" onClick={() => setEditingMarcadorId(m.id)} title="Editar">Editar</button>
@@ -507,13 +524,13 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                 <label>Vista frontal / Esquemático (opcional)</label>
                 <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos. Use o botão &quot;Adicionar marcador&quot; para posicionar variáveis técnicas na vista. Arraste os marcadores para mover.</p>
                 <div className="modal-familia-vista-wrapper">
-                  <div
-                    ref={vistaFrontalRef}
-                    className={`modal-familia-vista-frontal ${esquematicoPreviewUrl ? 'has-image' : ''} ${modoAdicionarBolinha ? 'modo-adicionar' : ''}`}
-                    onClick={esquematicoPreviewUrl && isEdit && modoAdicionarBolinha ? handleVistaFrontalClick : undefined}
-                  >
+                  <div className={`modal-familia-vista-frontal ${esquematicoPreviewUrl ? 'has-image' : ''} ${modoAdicionarBolinha ? 'modo-adicionar' : ''}`}>
                     {esquematicoPreviewUrl ? (
-                      <>
+                      <div
+                        ref={vistaFrontalRef}
+                        className="vista-image-wrap"
+                        onClick={isEdit && modoAdicionarBolinha ? handleVistaFrontalClick : undefined}
+                      >
                         <img src={esquematicoPreviewUrl} alt="Vista frontal" draggable={false} />
                         {marcadores.map((m) => (
                           <span
@@ -526,7 +543,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                             {m.numero != null ? m.numero : ''}
                           </span>
                         ))}
-                      </>
+                      </div>
                     ) : (
                       <div className="modal-familia-preview-placeholder modal-familia-vista-placeholder">
                         <FiUploadCloud size={40} />
@@ -607,6 +624,18 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                                     )}
                                   </select>
                                 </div>
+                                <div className="marcador-tipo-wrap">
+                                  <label>Tipo na proposta:</label>
+                                  <select
+                                    value={m.tipo || 'texto'}
+                                    onChange={(e) => updateMarcador(m.id, { tipo: e.target.value })}
+                                    className="marcador-select"
+                                  >
+                                    <option value="texto">Variável (dropdown)</option>
+                                    <option value="numero">Número</option>
+                                    <option value="selecao">Seleção simples (clicar = incluir)</option>
+                                  </select>
+                                </div>
                                 <div className="marcador-edit-actions">
                                   <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }} className="marcador-btn-ok">Ok</button>
                                   <button type="button" onClick={() => removeMarcador(m.id)} className="marcador-btn-remove" title="Remover">
@@ -618,7 +647,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                               <>
                                 <span className="marcador-numero">{m.numero != null ? m.numero + '.' : ''}</span>
                                 <span className="marcador-label">{m.label}</span>
-                                <span className="marcador-variavel">{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}</span>
+                                <span className="marcador-variavel">{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}{m.tipo === 'selecao' ? ' · Seleção' : ''}</span>
                                 <button type="button" onClick={() => setEditingMarcadorId(m.id)} className="marcador-btn-edit" title="Editar">
                                   <FiEdit2 size={14} />
                                 </button>

@@ -200,7 +200,7 @@ const OSComercialForm = ({ proposta: propostaProp, onClose }) => {
 
   const loadUsuarios = async () => {
     try {
-      const response = await api.get('/usuarios');
+      const response = await api.get('/usuarios/por-modulo/comercial');
       setUsuarios(response.data || []);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);

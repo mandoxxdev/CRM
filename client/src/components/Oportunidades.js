@@ -19,7 +19,7 @@ const Oportunidades = () => {
         // Carregar em paralelo para melhor performance
         const [oportunidadesRes, usuariosRes] = await Promise.all([
           api.get('/oportunidades', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} }),
-          api.get('/usuarios/comercial')
+          api.get('/usuarios/por-modulo/comercial')
         ]);
         setOportunidades(oportunidadesRes.data);
         setUsuarios(usuariosRes.data || []);
