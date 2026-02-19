@@ -438,11 +438,18 @@
   color: white;
 }
 
+.marcador-resumo-nome {
+  font-weight: 600;
+  color: var(--gmp-text);
+  min-width: 0;
+}
+
 .marcador-resumo-texto {
   flex: 1;
   min-width: 0;
   font-weight: 500;
   color: var(--gmp-text);
+  margin-left: 4px;
 }
 
 .marcador-resumo-item.preenchido .marcador-resumo-texto {

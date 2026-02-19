@@ -31,6 +31,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   const [marcadoresStepSelecoes, setMarcadoresStepSelecoes] = useState({});
   const [marcadoresList, setMarcadoresList] = useState([]);
   const [opcoesPorVariavel, setOpcoesPorVariavel] = useState({});
+  const [variaveisNomesMap, setVariaveisNomesMap] = useState({}); // chave -> nome (para exibir nome da variável em vez de "Nova variável")
   const [loadingMarcadores, setLoadingMarcadores] = useState(false);
   const [resultadoVerificacao, setResultadoVerificacao] = useState(null);
   const [loadingVerificacao, setLoadingVerificacao] = useState(false);
@@ -103,29 +104,37 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     setResultadoVerificacao(null);
     setMarcadoresStepSelecoes({});
     try {
-      const famRes = await api.get(`/familias/${familiaSelecionada.id}`);
+      const [famRes, opcoesRes, vtRes] = await Promise.all([
+        api.get(`/familias/${familiaSelecionada.id}`),
+        api.get(`/familias/${familiaSelecionada.id}/opcoes-variaveis`),
+        api.get('/variaveis-tecnicas', { params: { ativo: 'true' } }).catch(() => ({ data: [] }))
+      ]);
+      const vtList = Array.isArray(vtRes.data) ? vtRes.data : [];
+      const nomesMap = {};
+      vtList.forEach((v) => {
+        const chave = v.chave || v.key;
+        if (chave) nomesMap[chave] = v.nome || v.label || chave;
+      });
+      setVariaveisNomesMap(nomesMap);
       let raw = famRes.data.marcadores_vista;
       if (typeof raw === 'string') try { raw = JSON.parse(raw); } catch (_) { raw = []; }
       const marcs = parseMarcadores(raw);
       setMarcadoresList(marcs);
+      const opcoesByVar = opcoesRes.data || {};
       const opcoes = {};
-      for (const m of marcs) {
-        if (m.tipo === 'selecao') continue;
+      marcs.forEach((m) => {
+        if (m.tipo === 'selecao') return;
         const chave = m.variavel || m.key;
-        if (!chave) continue;
-        try {
-          const opRes = await api.get(`/familias/${familiaSelecionada.id}/variaveis/${chave}/opcoes`);
-          opcoes[chave] = opRes.data || [];
-        } catch (_) {
-          opcoes[chave] = [];
-        }
-      }
+        if (!chave) return;
+        opcoes[chave] = Array.isArray(opcoesByVar[chave]) ? opcoesByVar[chave] : [];
+      });
       setOpcoesPorVariavel(opcoes);
       setStep('marcadores');
     } catch (e) {
       console.error(e);
       setMarcadoresList([]);
       setOpcoesPorVariavel({});
+      setVariaveisNomesMap({});
     } finally {
       setLoadingMarcadores(false);
     }
@@ -437,6 +446,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                           <img src={urlEsquematico(familiaSelecionada)} alt={`Vista ${familiaSelecionada.nome}`} />
                           {marcadoresList.map((m, index) => {
                             const chave = m.variavel || m.key;
+                            const nomeVariavel = variaveisNomesMap[chave] || m.label || chave;
                             const isSelecao = m.tipo === 'selecao';
                             const opcoes = opcoesPorVariavel[chave] || [];
                             const valor = marcadoresStepSelecoes[chave];
@@ -451,7 +461,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                                 <button
                                   type="button"
                                   className={`marcadores-step-vista-bolinha ${aberto ? 'marcador-aberto' : ''} ${selecionado && isSelecao ? 'marcador-preenchido' : ''}`}
-                                  title={m.label || chave}
+                                  title={nomeVariavel}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setMarcadorAbertoIndex(aberto ? null : index);
@@ -462,7 +472,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                                 {aberto && (
                                   <div className="marcador-popover" onClick={(e) => e.stopPropagation()}>
                                     <div className="marcador-popover-label">
-                                      {m.numero != null ? `${m.numero}. ` : ''}{m.label || chave || 'Variável'}
+                                      {m.numero != null ? `${m.numero}. ` : ''}{nomeVariavel || 'Variável'}
                                       {isSelecao && <span className="marcador-config-selecao-badge">Seleção</span>}
                                     </div>
                                     {isSelecao ? (
@@ -505,6 +515,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                         <div className="marcadores-step-resumo">
                           {marcadoresList.map((m) => {
                             const chave = m.variavel || m.key;
+                            const nomeVariavel = variaveisNomesMap[chave] || m.label || chave;
                             const isSelecao = m.tipo === 'selecao';
                             const valor = marcadoresStepSelecoes[chave];
                             const preenchido = isSelecao ? valor === true : (valor != null && valor !== '');
@@ -512,6 +523,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                             return (
                               <div key={m.id || chave} className={`marcador-resumo-item ${preenchido ? 'preenchido' : ''}`}>
                                 <span className="marcador-resumo-numero">{m.numero != null ? m.numero : '—'}</span>
+                                <span className="marcador-resumo-nome">{nomeVariavel}</span>
                                 <span className="marcador-resumo-texto">{texto}</span>
                               </div>
                             );
