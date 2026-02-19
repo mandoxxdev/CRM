@@ -34,22 +34,22 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   const [loadingMarcadores, setLoadingMarcadores] = useState(false);
   const [resultadoVerificacao, setResultadoVerificacao] = useState(null);
   const [loadingVerificacao, setLoadingVerificacao] = useState(false);
-  const [marcadorAbertoChave, setMarcadorAbertoChave] = useState(null);
+  const [marcadorAbertoIndex, setMarcadorAbertoIndex] = useState(null);
 
   useEffect(() => {
     loadFamilias();
   }, []);
 
-  const fecharPopoverMarcador = () => setMarcadorAbertoChave(null);
+  const fecharPopoverMarcador = () => setMarcadorAbertoIndex(null);
   useEffect(() => {
-    if (!marcadorAbertoChave) return;
+    if (marcadorAbertoIndex === null) return;
     const handleClickFora = (e) => {
       if (e.target.closest('.marcador-popover') || e.target.closest('.marcadores-step-vista-bolinha')) return;
       fecharPopoverMarcador();
     };
     document.addEventListener('click', handleClickFora, true);
     return () => document.removeEventListener('click', handleClickFora, true);
-  }, [marcadorAbertoChave]);
+  }, [marcadorAbertoIndex]);
 
   const loadFamilias = async () => {
     try {
@@ -449,16 +449,16 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                       <div className="marcadores-step-vista-wrap">
                         <div className="vista-image-wrap">
                           <img src={urlEsquematico(familiaSelecionada)} alt={`Vista ${familiaSelecionada.nome}`} />
-                          {marcadoresList.map((m) => {
+                          {marcadoresList.map((m, index) => {
                             const chave = m.variavel || m.key;
                             const isSelecao = m.tipo === 'selecao';
                             const opcoes = opcoesPorVariavel[chave] || [];
                             const valor = marcadoresStepSelecoes[chave];
                             const selecionado = isSelecao && valor === true;
-                            const aberto = marcadorAbertoChave === chave;
+                            const aberto = marcadorAbertoIndex === index;
                             return (
                               <div
-                                key={m.id || chave}
+                                key={m.id || chave || index}
                                 className="marcador-wrapper-na-vista"
                                 style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%' }}
                               >
@@ -468,7 +468,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                                   title={m.label || chave}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setMarcadorAbertoChave(aberto ? null : chave);
+                                    setMarcadorAbertoIndex(aberto ? null : index);
                                   }}
                                 >
                                   {m.numero != null ? m.numero : ''}
