@@ -97,13 +97,14 @@
 }
 
 .selecao-vista-frontal-bar {
-  padding: 12px 30px;
-  border-bottom: 1px solid var(--gmp-border);
-  background: var(--gmp-surface-secondary, #f8f9fa);
+  padding: 16px 30px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   display: flex;
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 }
 
 .vista-frontal-label {
@@ -167,24 +168,28 @@
 
 .btn-config-marcadores {
   margin-left: 12px;
-  padding: 8px 18px;
+  padding: 10px 22px;
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.9rem;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  letter-spacing: 0.02em;
   cursor: pointer;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .btn-config-marcadores:hover:not(:disabled) {
-  filter: brightness(1.15);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.45);
 }
 .btn-config-marcadores:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
 
-/* Modo configurar por marcadores: mesma estética da tela de cadastro da família (Marcadores técnicos na vista frontal) */
+/* ========== MARCADORES TÉCNICOS — ASPECTO ULTRA PREMIUM ========== */
 .marcadores-step-content {
   padding: 0;
   display: flex;
@@ -194,6 +199,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
 }
 
 .marcadores-step-row {
@@ -207,7 +213,6 @@
   overflow: hidden;
 }
 
-/* Área da vista = fundo escuro + barra de rolagem quando a imagem não couber */
 .marcadores-step-vista-wrap {
   flex: 1;
   min-width: 400px;
@@ -215,29 +220,39 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  padding: 28px;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 35%, #334155 100%);
   overflow: auto;
 }
 
-/* Card branco com sombra; tamanho = conteúdo (imagem). Centralizado pelo pai; se maior que a tela, aparece scroll */
 .marcadores-step-vista-inner {
   position: relative;
   margin: auto;
   display: inline-block;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  border-radius: 20px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 4px 24px rgba(0, 0, 0, 0.25),
+    0 24px 64px rgba(0, 0, 0, 0.35);
   flex-shrink: 0;
-  background: var(--gmp-surface);
+  background: #fff;
+  overflow: hidden;
+  transition: box-shadow 0.25s ease;
 }
 
-/* Wrapper = tamanho da imagem (igual cadastro família). Limite em px para poder exceder viewport e gerar scroll */
+.marcadores-step-vista-inner:hover {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8px 32px rgba(0, 0, 0, 0.28),
+    0 32px 80px rgba(0, 0, 0, 0.4);
+}
+
 .marcadores-step-vista-inner .vista-image-wrap {
   position: relative;
   display: inline-block;
   max-width: 1200px;
   max-height: 900px;
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: visible;
 }
 
@@ -251,42 +266,44 @@
   object-position: center;
   pointer-events: none;
   vertical-align: middle;
-  border-radius: 16px;
+  border-radius: 20px;
 }
 
-/* Painel lateral = mesmo estilo do cadastro família (lista de marcadores) */
 .marcadores-step-panel {
-  width: 380px;
-  min-width: 320px;
+  width: 400px;
+  min-width: 340px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--gmp-surface);
-  border-left: 1px solid var(--gmp-border);
+  background: #ffffff;
+  border-left: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.06);
   overflow: hidden;
   min-height: 0;
 }
 
 .marcadores-step-panel-header {
-  padding: 16px 20px;
-  background: var(--gmp-bg-subtle, #f1f5f9);
-  border-bottom: 1px solid var(--gmp-border);
+  padding: 24px 28px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
   flex-shrink: 0;
 }
 
 .marcadores-step-panel-title {
   display: block;
   font-weight: 700;
-  font-size: 1rem;
-  color: var(--gmp-text);
-  margin-bottom: 8px;
+  font-size: 1.125rem;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  margin-bottom: 6px;
 }
 
 .marcadores-step-panel .marcadores-step-hint {
   margin: 0;
-  font-size: 0.9rem;
-  color: var(--gmp-text-light);
-  line-height: 1.45;
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.5;
+  font-weight: 500;
 }
 
 /* Wrapper do marcador na vista: posição e tamanho podem vir do inline style (width/height do marcador) */
@@ -321,77 +338,95 @@
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
-/* Máscara: botão invisível, só o indicador (ponto vermelho/verde) aparece */
+/* Máscara: botão invisível, quadrado no tamanho cadastrado (não circular) */
 .marcadores-step-vista-bolinha.marcador-mascara {
   background: transparent;
   border: none;
   box-shadow: none;
+  border-radius: 2px;
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara .marcador-indicador {
-  border-radius: 50%;
+  border-radius: 2px;
   flex-shrink: 0;
-  transition: box-shadow 0.15s, transform 0.15s;
-  /* width/height via inline style por marcador */
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara.marcador-vazio .marcador-indicador {
-  background: #ef4444;
-  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  background: linear-gradient(145deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara.marcador-preenchido .marcador-indicador {
-  background: #22c55e;
-  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  background: linear-gradient(145deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara:hover .marcador-indicador {
-  transform: scale(1.25);
+  transform: scale(1.1);
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara.marcador-vazio:hover .marcador-indicador {
-  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.4), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara.marcador-preenchido:hover .marcador-indicador {
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara.marcador-aberto .marcador-indicador {
-  transform: scale(1.35);
+  transform: scale(1.12);
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara.marcador-aberto.marcador-vazio .marcador-indicador {
-  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.45), 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .marcadores-step-vista-bolinha.marcador-mascara.marcador-aberto.marcador-preenchido .marcador-indicador {
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.5);
+  box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
-/* Popover ao clicar no marcador */
+/* Popover ao clicar no marcador — ultra premium */
 .marcador-popover {
   position: absolute;
   top: 100%;
   left: 50%;
-  transform: translate(-50%, 10px);
-  min-width: 220px;
-  max-width: 280px;
-  padding: 12px 14px;
-  background: var(--gmp-surface);
-  border: 2px solid var(--gmp-border);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  transform: translate(-50%, 12px);
+  min-width: 260px;
+  max-width: 320px;
+  padding: 20px 22px;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 12px 40px rgba(0, 0, 0, 0.12),
+    0 24px 64px rgba(0, 0, 0, 0.08);
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+  animation: marcador-popover-in 0.2s ease;
+}
+
+@keyframes marcador-popover-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 12px);
+  }
 }
 
 .marcador-popover-label {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--gmp-text);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  color: #0f172a;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -409,77 +444,89 @@
 }
 
 .marcadores-step-panel-body {
-  padding: 16px;
+  padding: 20px 28px 28px;
   overflow-y: auto;
   overflow-x: hidden;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .marcadores-step-resumo {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  font-size: 0.9rem;
+  font-size: 0.9375rem;
 }
 
 .marcador-resumo-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 2px solid var(--gmp-border);
-  background: var(--gmp-surface);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: #fafbfc;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  border-left: 3px solid transparent;
 }
 
 .marcador-resumo-item:hover {
-  border-color: rgba(255, 107, 53, 0.4);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.1);
+  border-color: rgba(255, 107, 53, 0.25);
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.08);
 }
 
 .marcador-resumo-item.preenchido {
-  border-color: rgba(34, 197, 94, 0.5);
-  background: rgba(34, 197, 94, 0.08);
+  border-left-color: #16a34a;
+  border-color: rgba(34, 197, 94, 0.2);
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.06) 0%, rgba(34, 197, 94, 0.02) 100%);
   color: #166534;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
+  box-shadow: 0 2px 12px rgba(34, 197, 94, 0.1);
 }
 
 .marcador-resumo-numero {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 10px;
   background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   color: white;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.35);
+}
+
+.marcador-resumo-item.preenchido .marcador-resumo-numero {
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.35);
 }
 
 .marcador-resumo-nome {
   font-weight: 600;
-  color: var(--gmp-text);
+  color: #0f172a;
   min-width: 0;
+  letter-spacing: -0.01em;
 }
 
 .marcador-resumo-texto {
   flex: 1;
   min-width: 0;
   font-weight: 500;
-  color: var(--gmp-text);
+  color: #475569;
   margin-left: 4px;
+  font-size: 0.875rem;
 }
 
 .marcador-resumo-item.preenchido .marcador-resumo-texto {
   color: #166534;
+  font-weight: 600;
 }
 
 .marcadores-step-hint {
@@ -529,12 +576,22 @@
 .marcador-config-select {
   flex: 1;
   min-width: 200px;
-  padding: 10px 14px;
-  border: 2px solid var(--gmp-border);
-  border-radius: 8px;
-  font-size: 1rem;
-  background: var(--gmp-surface);
-  color: var(--gmp-text);
+  padding: 12px 16px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  background: #fff;
+  color: #0f172a;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.marcador-config-select:hover {
+  border-color: rgba(15, 23, 42, 0.2);
+}
+.marcador-config-select:focus {
+  outline: none;
+  border-color: #FF6B35;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.2);
 }
 
 .marcador-config-row-selecao .marcador-config-label {
@@ -554,110 +611,140 @@
 .marcador-toggle-incluir {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 10px 18px;
-  border: 2px solid var(--gmp-border);
-  border-radius: 10px;
-  background: var(--gmp-surface);
-  color: var(--gmp-text-light);
-  font-size: 0.95rem;
+  padding: 12px 20px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .marcador-toggle-incluir:hover {
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.06);
   color: #166534;
 }
 
 .marcador-toggle-incluir.marcador-toggle-incluir-ativo {
   border-color: #22c55e;
-  background: #22c55e;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   color: white;
+  box-shadow: 0 2px 12px rgba(34, 197, 94, 0.35);
 }
 
 .marcador-toggle-incluir.marcador-toggle-incluir-ativo:hover {
-  background: #16a34a;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
   border-color: #16a34a;
   color: white;
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4);
 }
 
 .marcadores-step-actions {
-  margin-top: 8px;
+  margin-top: 16px;
 }
 
 .btn-verificar-existente {
-  padding: 12px 24px;
+  width: 100%;
+  padding: 16px 28px;
   background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
   color: white;
   border: none;
-  border-radius: 12px;
+  border-radius: 14px;
   font-weight: 700;
   font-size: 1rem;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
-  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 20px rgba(255, 107, 53, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .btn-verificar-existente:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.45);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(255, 107, 53, 0.5);
 }
 .btn-verificar-existente:disabled {
-  opacity: 0.8;
+  opacity: 0.85;
   cursor: wait;
+  transform: none;
 }
 
 .marcadores-resultado {
-  padding: 20px 24px;
-  border-radius: 12px;
-  border: 2px solid;
+  padding: 24px 28px;
+  border-radius: 16px;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .marcadores-resultado.existente {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: #22c55e;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.04) 100%);
+  border-color: rgba(34, 197, 94, 0.4);
   color: #166534;
 }
 
 .marcadores-resultado.nao-existente {
-  background: rgba(245, 158, 11, 0.08);
-  border-color: #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+  border-color: rgba(245, 158, 11, 0.5);
   color: #b45309;
 }
 
+.marcadores-resultado-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.marcadores-resultado-header svg {
+  flex-shrink: 0;
+}
+
 .marcadores-resultado h4 {
-  margin: 0 0 8px 0;
-  font-size: 1.1rem;
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .marcadores-resultado p {
-  margin: 0 0 12px 0;
-  font-size: 0.95rem;
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  opacity: 0.95;
 }
 
 .marcadores-resultado-lista {
-  margin: 0 0 16px 0;
-  padding-left: 20px;
+  margin: 0;
+  padding-left: 24px;
   font-size: 0.9rem;
+  line-height: 1.6;
 }
 
 .btn-adicionar-config-marcadores {
-  margin-top: 8px;
-  padding: 10px 20px;
-  background: var(--gmp-primary);
+  margin-top: 12px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-weight: 600;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9375rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .btn-adicionar-config-marcadores:hover {
-  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(34, 197, 94, 0.5);
 }
 
 .familias-grid-selecao {

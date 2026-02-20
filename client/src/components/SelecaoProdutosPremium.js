@@ -503,12 +503,13 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                             const aberto = marcadorAbertoIndex === index;
                             const w = Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12));
                             const h = Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12));
-                            const size = Math.max(w, h, 24);
+                            const wrapW = Math.max(w, 24);
+                            const wrapH = Math.max(h, 24);
                             return (
                               <div
                                 key={m.id || chave || index}
                                 className="marcador-wrapper-na-vista"
-                                style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%', width: size + 'px', height: size + 'px', marginLeft: -size / 2 + 'px', marginTop: -size / 2 + 'px' }}
+                                style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%', width: wrapW + 'px', height: wrapH + 'px', marginLeft: -wrapW / 2 + 'px', marginTop: -wrapH / 2 + 'px' }}
                               >
                                 <button
                                   type="button"
@@ -593,8 +594,10 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                     <div className={`marcadores-resultado ${resultadoVerificacao.existente ? 'existente' : 'nao-existente'}`}>
                       {resultadoVerificacao.existente ? (
                         <>
-                          <FiCheckCircle size={24} />
-                          <h4>Equipamento padrão (Existente)</h4>
+                          <div className="marcadores-resultado-header">
+                            <FiCheckCircle size={26} />
+                            <h4>Equipamento padrão (Existente)</h4>
+                          </div>
                           <p>Foi encontrado produto(s) com esta configuração.</p>
                           <ul className="marcadores-resultado-lista">
                             {resultadoVerificacao.produtos.map((p) => (
@@ -604,8 +607,10 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                         </>
                       ) : (
                         <>
-                          <FiAlertCircle size={24} />
-                          <h4>Equipamento sob consulta (Não existente)</h4>
+                          <div className="marcadores-resultado-header">
+                            <FiAlertCircle size={26} />
+                            <h4>Equipamento sob consulta (Não existente)</h4>
+                          </div>
                           <p>Não há produto cadastrado com esta combinação. Será adicionado como item sob consulta.</p>
                         </>
                       )}

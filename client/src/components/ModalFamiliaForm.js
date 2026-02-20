@@ -465,53 +465,62 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                   <li key={m.id} className={`bolinhas-premium-card ${editingMarcadorId === m.id ? 'editing' : ''}`}>
                     {editingMarcadorId === m.id ? (
                       <div className="bolinhas-premium-card-edit">
-                        <input
-                          type="text"
-                          value={m.label}
-                          onChange={(e) => updateMarcador(m.id, { label: e.target.value })}
-                          placeholder="Rótulo (ex: Potência CV)"
-                        />
-                        <div className="bolinhas-premium-variavel-search">
-                          <FiSearch size={16} />
+                        <p className="bolinhas-premium-edit-titulo">Editar marcador {m.numero != null ? m.numero : ''}</p>
+                        <div className="bolinhas-premium-edit-campo">
+                          <label>Rótulo</label>
                           <input
                             type="text"
-                            value={searchVariavel}
-                            onChange={(e) => setSearchVariavel(e.target.value)}
-                            placeholder="Buscar variável..."
+                            value={m.label}
+                            onChange={(e) => updateMarcador(m.id, { label: e.target.value })}
+                            placeholder="Ex: Potência CV"
                           />
                         </div>
-                        <select
-                          value={m.variavel || (variaveisList[0]?.chave) || 'outro'}
-                          onChange={(e) => updateMarcador(m.id, { variavel: e.target.value })}
-                        >
-                          {variaveisFiltradas.length === 0 ? (
-                            <option value={m.variavel || ''}>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel || '—'}</option>
-                          ) : (
-                            variaveisFiltradas.map((v) => (
-                              <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
-                            ))
-                          )}
-                        </select>
-                        <div className="bolinhas-premium-card-tipo">
-                          <label>Tipo na proposta:</label>
+                        <div className="bolinhas-premium-edit-campo">
+                          <label>Variável técnica</label>
+                          <div className="bolinhas-premium-variavel-search">
+                            <FiSearch size={16} />
+                            <input
+                              type="text"
+                              value={searchVariavel}
+                              onChange={(e) => setSearchVariavel(e.target.value)}
+                              placeholder="Buscar..."
+                            />
+                          </div>
+                          <select
+                            value={m.variavel || (variaveisList[0]?.chave) || 'outro'}
+                            onChange={(e) => updateMarcador(m.id, { variavel: e.target.value })}
+                          >
+                            {variaveisFiltradas.length === 0 ? (
+                              <option value={m.variavel || ''}>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel || '—'}</option>
+                            ) : (
+                              variaveisFiltradas.map((v) => (
+                                <option key={v.chave} value={v.chave}>{v.nome} {v.categoria ? `(${v.categoria})` : ''}</option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                        <div className="bolinhas-premium-edit-campo">
+                          <label>Tipo na proposta</label>
                           <select
                             value={m.tipo || 'texto'}
                             onChange={(e) => updateMarcador(m.id, { tipo: e.target.value })}
                           >
                             <option value="texto">Variável (dropdown)</option>
                             <option value="numero">Número</option>
-                            <option value="selecao">Seleção simples (clicar = incluir na proposta)</option>
+                            <option value="selecao">Seleção (clicar = incluir)</option>
                           </select>
                         </div>
-                        <div className="bolinhas-premium-card-tamanho">
-                          <label>Tamanho:</label>
+                        <div className="bolinhas-premium-edit-campo bolinhas-premium-tamanho-campo">
+                          <label>Tamanho (quadrado na imagem)</label>
                           <p className="bolinhas-premium-tamanho-hint">
-                            {Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12))} × {Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12))} px — arraste as alças na imagem
+                            {Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12))} × {Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12))} px — arraste as alças na imagem para ajustar
                           </p>
                         </div>
                         <div className="bolinhas-premium-card-actions">
-                          <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }}>Ok</button>
-                          <button type="button" onClick={() => removeMarcador(m.id)} className="danger">Remover</button>
+                          <button type="button" className="bolinhas-premium-btn-ok" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }}>
+                            Concluído
+                          </button>
+                          <button type="button" onClick={() => removeMarcador(m.id)} className="danger">Remover marcador</button>
                         </div>
                       </div>
                     ) : (

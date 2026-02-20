@@ -196,7 +196,7 @@
 .produto-form-bolinha.produto-form-bolinha-mascara .marcador-indicador {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: 2px;
   flex-shrink: 0;
 }
 
