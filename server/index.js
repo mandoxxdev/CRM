@@ -2625,12 +2625,65 @@ app.get('/api/familias/:familiaId/opcoes-variaveis', authenticateToken, (req, re
       if (err) return res.status(500).json({ error: err.message });
       var byVar = {};
       (rows || []).forEach(function(r) {
-        if (!byVar[r.variavel_chave]) byVar[r.variavel_chave] = [];
-        byVar[r.variavel_chave].push({ id: r.id, valor: r.valor, ordem: r.ordem });
+        var chave = (r.variavel_chave != null ? String(r.variavel_chave) : '').trim();
+        if (!chave) return;
+        if (!byVar[chave]) byVar[chave] = [];
+        byVar[chave].push({ id: r.id, valor: r.valor != null ? r.valor : '', ordem: r.ordem });
       });
       res.json(byVar);
     }
   );
+});
+
+// GET: opções por variável vindas dos PRODUTOS cadastrados (valores distintos em especificacoes_tecnicas da família)
+app.get('/api/familias/:familiaId/opcoes-variaveis-from-produtos', authenticateToken, (req, res) => {
+  var familiaId = req.params.familiaId;
+  db.get('SELECT id, nome, marcadores_vista FROM familias_produto WHERE id = ?', [familiaId], function(err, familia) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!familia) return res.status(404).json({ error: 'Família não encontrada' });
+    var familiaNome = (familia.nome || '').trim();
+    if (!familiaNome) return res.json({});
+    var raw = familia.marcadores_vista;
+    var marcs = [];
+    try {
+      if (typeof raw === 'string') raw = JSON.parse(raw);
+      if (Array.isArray(raw)) marcs = raw;
+      else if (raw && raw.marcadores && Array.isArray(raw.marcadores)) marcs = raw.marcadores;
+    } catch (e) {}
+    var chaves = [];
+    marcs.forEach(function(m) {
+      var chave = (m.variavel || m.key || '').trim();
+      if (chave && chaves.indexOf(chave) === -1) chaves.push(chave);
+    });
+    db.all(
+      'SELECT id, familia, especificacoes_tecnicas FROM produtos WHERE ativo = 1 AND TRIM(UPPER(COALESCE(familia,\'\'))) = TRIM(UPPER(?))',
+      [familiaNome],
+      function(err2, rows) {
+        if (err2) return res.status(500).json({ error: err2.message });
+        var byVar = {};
+        chaves.forEach(function(chave) { byVar[chave] = {}; });
+        (rows || []).forEach(function(r) {
+          var spec = {};
+          try {
+            if (r.especificacoes_tecnicas) spec = typeof r.especificacoes_tecnicas === 'string' ? JSON.parse(r.especificacoes_tecnicas) : r.especificacoes_tecnicas;
+          } catch (e) {}
+          chaves.forEach(function(chave) {
+            var val = spec[chave];
+            if (val != null && String(val).trim() !== '') {
+              var v = String(val).trim();
+              if (!byVar[chave][v]) byVar[chave][v] = true;
+            }
+          });
+        });
+        var out = {};
+        chaves.forEach(function(chave) {
+          var vals = Object.keys(byVar[chave] || {}).sort();
+          out[chave] = vals.map(function(v, i) { return { id: 'prod-' + chave + '-' + i, valor: v }; });
+        });
+        res.json(out);
+      }
+    );
+  });
 });
 
 // GET: opções de uma variável para uma família (para preencher dropdown ao clicar no marcador)

@@ -103,9 +103,9 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     setLoadingMarcadores(true);
     setResultadoVerificacao(null);
     try {
-      const [famRes, opcoesRes, vtRes] = await Promise.all([
+      const [famRes, opcoesFromProdutosRes, vtRes] = await Promise.all([
         api.get(`/familias/${familiaSelecionada.id}`),
-        api.get(`/familias/${familiaSelecionada.id}/opcoes-variaveis`),
+        api.get(`/familias/${familiaSelecionada.id}/opcoes-variaveis-from-produtos`).catch(() => ({ data: {} })),
         api.get('/variaveis-tecnicas', { params: { ativo: 'true' } }).catch(() => ({ data: [] }))
       ]);
       const vtList = Array.isArray(vtRes.data) ? vtRes.data : [];
@@ -119,13 +119,35 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
       if (typeof raw === 'string') try { raw = JSON.parse(raw); } catch (_) { raw = []; }
       const marcs = parseMarcadores(raw);
       setMarcadoresList(marcs);
-      const opcoesByVar = opcoesRes.data || {};
+      const opcoesByVar = opcoesFromProdutosRes.data || {};
+      const byVarNormalized = {};
+      Object.keys(opcoesByVar || {}).forEach((k) => {
+        const arr = Array.isArray(opcoesByVar[k]) ? opcoesByVar[k] : [];
+        const keyTrim = (k || '').trim();
+        const keyLower = keyTrim.toLowerCase();
+        if (keyTrim) byVarNormalized[keyTrim] = arr;
+        if (keyLower !== keyTrim) byVarNormalized[keyLower] = arr;
+      });
+      const vtByChave = {};
+      (vtList || []).forEach((v) => {
+        const c = (v.chave || v.key || '').trim();
+        if (c) vtByChave[c] = v;
+        if (c && c.toLowerCase() !== c) vtByChave[c.toLowerCase()] = v;
+      });
       const opcoes = {};
       marcs.forEach((m) => {
         if (m.tipo === 'selecao') return;
-        const chave = m.variavel || m.key;
+        const chave = (m.variavel || m.key || '').trim();
         if (!chave) return;
-        opcoes[chave] = Array.isArray(opcoesByVar[chave]) ? opcoesByVar[chave] : [];
+        let lista = byVarNormalized[chave] || byVarNormalized[chave.toLowerCase()] || opcoesByVar[chave] || [];
+        if (lista.length === 0) {
+          const vt = vtByChave[chave] || vtByChave[chave.toLowerCase()];
+          const vtOpcoes = vt && vt.opcoes;
+          if (Array.isArray(vtOpcoes) && vtOpcoes.length > 0) {
+            lista = vtOpcoes.map((val, idx) => ({ id: 'vt-' + idx, valor: typeof val === 'string' ? val : (val && val.valor) || String(val) }));
+          }
+        }
+        opcoes[chave] = lista;
       });
       setOpcoesPorVariavel(opcoes);
       // Preencher todas as variáveis (qualquer chave existente ou futura) a partir do produto já selecionado ou na proposta
