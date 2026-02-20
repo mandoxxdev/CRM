@@ -241,6 +241,92 @@
   cursor: grabbing;
 }
 
+/* Marcador em edição: preview + alças de redimensionamento (arrastar nas laterais) */
+.vista-marcador-resize-wrap {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  margin-left: 0;
+  margin-top: 0;
+  z-index: 8;
+  pointer-events: auto;
+}
+
+.vista-marcador-resize-preview {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.7);
+  border: 2px solid #22c55e;
+  pointer-events: none;
+}
+
+.vista-marcador-handle {
+  position: absolute;
+  background: #fff;
+  border: 2px solid #22c55e;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  z-index: 2;
+}
+
+.vista-marcador-handle:hover {
+  background: #22c55e;
+  transform: scale(1.15);
+}
+
+.vista-marcador-handle-e {
+  width: 10px;
+  height: 24px;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.vista-marcador-handle-w {
+  width: 10px;
+  height: 24px;
+  left: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.vista-marcador-handle-s {
+  width: 24px;
+  height: 10px;
+  bottom: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.vista-marcador-handle-n {
+  width: 24px;
+  height: 10px;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.vista-marcador-handle:hover {
+  background: #22c55e;
+}
+
+.vista-marcador-handle-e:hover,
+.vista-marcador-handle-w:hover {
+  transform: translateY(-50%) scale(1.15);
+}
+
+.vista-marcador-handle-n:hover,
+.vista-marcador-handle-s:hover {
+  transform: translateX(-50%) scale(1.15);
+}
+
 .marcador-numero {
   font-weight: 700;
   color: var(--gmp-primary);
@@ -424,6 +510,24 @@
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--gmp-text-light);
+}
+
+.marcador-tamanho-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marcador-tamanho-wrap label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gmp-text-light);
+}
+
+.marcador-tamanho-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--gmp-text);
 }
 
 .marcador-edit-actions {
@@ -975,6 +1079,24 @@
 
 .bolinhas-premium-card-tipo select {
   width: 100%;
+}
+
+.bolinhas-premium-card-tamanho {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bolinhas-premium-card-tamanho label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gmp-text-light);
+}
+
+.bolinhas-premium-tamanho-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gmp-text);
 }
 
 .bolinhas-premium-card-actions {

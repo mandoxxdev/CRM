@@ -499,23 +499,27 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                             const opcoes = opcoesPorVariavel[chave] || [];
                             const valor = marcadoresStepSelecoes[chave];
                             const selecionado = isSelecao && valor === true;
+                            const preenchido = isSelecao ? valor === true : (valor != null && valor !== '');
                             const aberto = marcadorAbertoIndex === index;
+                            const w = Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12));
+                            const h = Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12));
+                            const size = Math.max(w, h, 24);
                             return (
                               <div
                                 key={m.id || chave || index}
                                 className="marcador-wrapper-na-vista"
-                                style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%' }}
+                                style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%', width: size + 'px', height: size + 'px', marginLeft: -size / 2 + 'px', marginTop: -size / 2 + 'px' }}
                               >
                                 <button
                                   type="button"
-                                  className={`marcadores-step-vista-bolinha ${aberto ? 'marcador-aberto' : ''} ${selecionado && isSelecao ? 'marcador-preenchido' : ''}`}
-                                  title={nomeVariavel}
+                                  className={`marcadores-step-vista-bolinha marcador-mascara ${aberto ? 'marcador-aberto' : ''} ${preenchido ? 'marcador-preenchido' : 'marcador-vazio'}`}
+                                  title={`${m.numero != null ? m.numero + '. ' : ''}${nomeVariavel}${preenchido ? ' — definido' : ' — clique para definir'}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setMarcadorAbertoIndex(aberto ? null : index);
                                   }}
                                 >
-                                  {m.numero != null ? m.numero : ''}
+                                  <span className="marcador-indicador" style={{ width: w + 'px', height: h + 'px' }} aria-hidden />
                                 </button>
                                 {aberto && (
                                   <div className="marcador-popover" onClick={(e) => e.stopPropagation()}>

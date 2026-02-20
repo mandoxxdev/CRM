@@ -185,7 +185,9 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         label: 'Nova variável',
         variavel: primeiroChave,
         tipo: 'texto',
-        numero: proximoNumero
+        numero: proximoNumero,
+        width: 12,
+        height: 12
       };
       return [...prev, novo];
     });
@@ -196,6 +198,10 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const dragStartRef = React.useRef({ x: 0, y: 0, id: null });
   const didMoveRef = React.useRef(false);
 
+  const [resizingMarcadorId, setResizingMarcadorId] = useState(null);
+  const [resizeHandle, setResizeHandle] = useState(null);
+  const resizeStartRef = React.useRef({ x: 0, y: 0, width: 12, height: 12 });
+
   const handleBolinhaMouseDown = useCallback((e, id) => {
     e.preventDefault();
     e.stopPropagation();
@@ -203,6 +209,57 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     didMoveRef.current = false;
     setDraggingMarcadorId(id);
   }, []);
+
+  const handleResizeHandleMouseDown = useCallback((e, id, handle) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const m = marcadores.find(mr => mr.id === id);
+    if (!m) return;
+    resizeStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      width: Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12)),
+      height: Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12))
+    };
+    setResizingMarcadorId(id);
+    setResizeHandle(handle);
+  }, [marcadores]);
+
+  useEffect(() => {
+    if (!resizingMarcadorId || !resizeHandle) return;
+    const id = resizingMarcadorId;
+    const handle = resizeHandle;
+    const clamp = (v) => Math.max(6, Math.min(80, v));
+    const handleMove = (e) => {
+      const dx = e.clientX - resizeStartRef.current.x;
+      const dy = e.clientY - resizeStartRef.current.y;
+      let w = resizeStartRef.current.width;
+      let h = resizeStartRef.current.height;
+      if (handle === 'e') w = clamp(resizeStartRef.current.width + dx);
+      if (handle === 'w') w = clamp(resizeStartRef.current.width - dx);
+      if (handle === 's') h = clamp(resizeStartRef.current.height + dy);
+      if (handle === 'n') h = clamp(resizeStartRef.current.height - dy);
+      setMarcadores(prev => prev.map(m => m.id === id ? { ...m, width: w, height: h } : m));
+    };
+    const handleUp = () => {
+      setResizingMarcadorId(null);
+      setResizeHandle(null);
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    document.body.style.cursor = handle === 'e' || handle === 'w' ? 'ew-resize' : 'ns-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizingMarcadorId, resizeHandle]);
 
   useEffect(() => {
     if (!draggingMarcadorId) return;
@@ -351,17 +408,38 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                 onClick={handleVistaFrontalClick}
               >
                 <img src={esquematicoPreviewUrl} alt="Vista frontal" draggable={false} />
-                {marcadores.map((m) => (
-                  <span
-                    key={m.id}
-                    className={`vista-marcador-bolinha bolinhas-premium-bolinha ${draggingMarcadorId === m.id ? 'vista-marcador-dragging' : ''}`}
-                    style={{ left: m.x + '%', top: m.y + '%' }}
-                    title={`${m.numero != null ? m.numero + '. ' : ''}${m.label} — Arraste para mover`}
-                    onMouseDown={(ev) => handleBolinhaMouseDown(ev, m.id)}
-                  >
-                    {m.numero != null ? m.numero : ''}
-                  </span>
-                ))}
+                {marcadores.map((m) => {
+                  const w = Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12));
+                  const h = Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12));
+                  const isEditing = editingMarcadorId === m.id;
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={m.id}
+                        className="vista-marcador-resize-wrap"
+                        style={{ left: m.x + '%', top: m.y + '%' }}
+                        title="Arraste as alças nas laterais para redimensionar"
+                      >
+                        <span className="vista-marcador-resize-preview" style={{ width: w + 'px', height: h + 'px' }} />
+                        <span className="vista-marcador-handle vista-marcador-handle-e" onMouseDown={(ev) => handleResizeHandleMouseDown(ev, m.id, 'e')} title="Largura" />
+                        <span className="vista-marcador-handle vista-marcador-handle-w" onMouseDown={(ev) => handleResizeHandleMouseDown(ev, m.id, 'w')} title="Largura" />
+                        <span className="vista-marcador-handle vista-marcador-handle-s" onMouseDown={(ev) => handleResizeHandleMouseDown(ev, m.id, 's')} title="Altura" />
+                        <span className="vista-marcador-handle vista-marcador-handle-n" onMouseDown={(ev) => handleResizeHandleMouseDown(ev, m.id, 'n')} title="Altura" />
+                      </div>
+                    );
+                  }
+                  return (
+                    <span
+                      key={m.id}
+                      className={`vista-marcador-bolinha bolinhas-premium-bolinha ${draggingMarcadorId === m.id ? 'vista-marcador-dragging' : ''}`}
+                      style={{ left: m.x + '%', top: m.y + '%' }}
+                      title={`${m.numero != null ? m.numero + '. ' : ''}${m.label} — Arraste para mover`}
+                      onMouseDown={(ev) => handleBolinhaMouseDown(ev, m.id)}
+                    >
+                      {m.numero != null ? m.numero : ''}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -424,6 +502,12 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                             <option value="numero">Número</option>
                             <option value="selecao">Seleção simples (clicar = incluir na proposta)</option>
                           </select>
+                        </div>
+                        <div className="bolinhas-premium-card-tamanho">
+                          <label>Tamanho:</label>
+                          <p className="bolinhas-premium-tamanho-hint">
+                            {Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12))} × {Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12))} px — arraste as alças na imagem
+                          </p>
                         </div>
                         <div className="bolinhas-premium-card-actions">
                           <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }}>Ok</button>
@@ -635,6 +719,10 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                                     <option value="numero">Número</option>
                                     <option value="selecao">Seleção simples (clicar = incluir)</option>
                                   </select>
+                                </div>
+                                <div className="marcador-tamanho-wrap">
+                                  <label>Tamanho:</label>
+                                  <p className="marcador-tamanho-hint">{Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12))} × {Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12))} px — arraste as alças na imagem</p>
                                 </div>
                                 <div className="marcador-edit-actions">
                                   <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }} className="marcador-btn-ok">Ok</button>

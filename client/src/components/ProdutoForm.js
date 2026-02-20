@@ -558,16 +558,24 @@ const ProdutoForm = () => {
           <div className="produto-form-esquematico-img-wrap">
             <div className="vista-image-wrap">
               <img src={esquematicoUrl} alt={`Esquemático ${formData.familia_produto}`} className="produto-form-esquematico-img" />
-              {marcadoresVistaFamilia.map((m) => (
-                <span
-                  key={m.id || m.numero}
-                  className="produto-form-bolinha"
-                  style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%' }}
-                  title={m.label ? `${m.numero != null ? m.numero + '. ' : ''}${m.label}` : ''}
-                >
-                  {m.numero != null ? m.numero : ''}
-                </span>
-              ))}
+              {marcadoresVistaFamilia.map((m) => {
+                const chave = m.variavel || m.key;
+                const valor = especificacoesTecnicas[chave] ?? '';
+                const preenchido = valor !== '' && valor != null;
+                const nomeVariavel = (variaveisNomesMap[chave] || m.label || chave || '').trim() || chave;
+                const w = Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 10));
+                const h = Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 10));
+                return (
+                  <span
+                    key={m.id || m.numero}
+                    className={`produto-form-bolinha produto-form-bolinha-mascara ${preenchido ? 'marcador-preenchido' : 'marcador-vazio'}`}
+                    style={{ left: (m.x != null ? m.x : 0) + '%', top: (m.y != null ? m.y : 0) + '%' }}
+                    title={nomeVariavel ? `${m.numero != null ? m.numero + '. ' : ''}${nomeVariavel}${preenchido ? ' — definido' : ' — não preenchido'}` : ''}
+                  >
+                    <span className="marcador-indicador" style={{ width: w + 'px', height: h + 'px' }} aria-hidden />
+                  </span>
+                );
+              })}
             </div>
           </div>
         </div>
