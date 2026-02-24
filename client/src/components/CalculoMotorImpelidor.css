@@ -165,6 +165,12 @@
   color: #92400e;
 }
 
+.calculo-motor-impelidor-obs-faixa {
+  background: #ffedd5;
+  border-color: #ea580c;
+  color: #9a3412;
+}
+
 .calculo-motor-impelidor-detalhes {
   padding-top: 1rem;
   border-top: 1px solid var(--gmp-border, #e2e8f0);

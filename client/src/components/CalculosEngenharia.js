@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiSliders, FiCircle, FiDroplet, FiZap } from 'react-icons/fi';
+import { FiSliders, FiCircle, FiDroplet, FiZap, FiLayers } from 'react-icons/fi';
 import './CalculosEngenharia.css';
 
 const CalculosEngenharia = () => {
@@ -46,6 +46,17 @@ const CalculosEngenharia = () => {
           </div>
           <h3>Motor + Impelidor</h3>
           <p>Disco dispersor (Cowles): diâmetro, rotação, potência e torque</p>
+        </button>
+        <button
+          type="button"
+          className="calculos-engenharia-card"
+          onClick={() => navigate('/engenharia/selecao-agitadores')}
+        >
+          <div className="calculos-engenharia-card-icon calculos-engenharia-card-icon-selecao">
+            <FiLayers />
+          </div>
+          <h3>Seleção de Agitadores</h3>
+          <p>Escolha e dimensione Cowles, hélice, turbina, âncora ou helicoidal conforme o processo</p>
         </button>
       </div>
     </div>
