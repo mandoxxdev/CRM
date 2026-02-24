@@ -9,45 +9,90 @@ const TIPOS_PROCESSO = {
   pesado: { label: 'Pesado (alto sólido)', fatorDi: 0.38, velPeriferica: 25, kWporM3: 4.0 },
 };
 
+function fatorViscosidade(muCp) {
+  const mu = Number(muCp) || 0;
+  if (mu <= 500) return { Fmu: 1.0, obs: null };
+  if (mu <= 2000) return { Fmu: 1.2, obs: null };
+  if (mu <= 10000) return { Fmu: 1.5, obs: null };
+  return { Fmu: 1.5, obs: 'Viscosidade > 10000 cP: disco dispersor sozinho pode não ser adequado. Avaliar sistema com recirculação ou outro tipo de agitador.' };
+}
+
 const CalculoMotorImpelidor = () => {
   const [T, setT] = useState(1000);
   const [H, setH] = useState(1500);
   const [tipoProcesso, setTipoProcesso] = useState('padrao');
-  const [viscosidade, setViscosidade] = useState('');
   const [densidade, setDensidade] = useState(1000);
+  const [viscosidade, setViscosidade] = useState(500);
   const resultadoRef = useRef(null);
 
   const { resultado, detalhes } = useMemo(() => {
     const tipo = TIPOS_PROCESSO[tipoProcesso] || TIPOS_PROCESSO.padrao;
+    const rho = Number(densidade) || 1000;
+    const mu = Number(viscosidade) || 0;
+
+    // PASSO 1 – Diâmetro do disco (Di)
     const Di = tipo.fatorDi * T;
     const Di_m = Di / 1000;
+
+    // PASSO 2 – Velocidade periférica
     const v = tipo.velPeriferica;
+
+    // PASSO 3 – Rotação (rpm)
     const n = (60 * v) / (Math.PI * Di_m);
-    const V_m3 = (Math.PI * (T / 1000) ** 2 / 4) * (H / 1000);
-    const P_kW = tipo.kWporM3 * V_m3;
-    const torque = n > 0 ? (9550 * P_kW) / n : 0;
+
+    // PASSO 4 – Volume útil (m³)
+    const T_m = T / 1000;
+    const H_m = H / 1000;
+    const V_m3 = Math.PI * (T_m * T_m / 4) * H_m;
+
+    // PASSO 5 – Potência base por volume
+    const P_base = tipo.kWporM3 * V_m3;
+
+    // PASSO 6 – Correção por densidade
+    const P_dens = P_base * (rho / 1000);
+
+    // PASSO 7 – Correção por viscosidade
+    const { Fmu, obs } = fatorViscosidade(mu);
+    const P_final_kW = P_dens * Fmu;
+
+    // PASSO 8 – CV
+    const CV = 1.3596 * P_final_kW;
+
+    // PASSO 9 – Torque (Nm)
+    const torque = n > 0 ? (9550 * P_final_kW) / n : 0;
 
     return {
       resultado: {
         Di: Math.round(Di * 10) / 10,
+        velPeriferica: v,
         rpm: Math.round(n),
         V_m3: V_m3.toFixed(4),
-        P_kW: P_kW.toFixed(2),
+        P_kW: P_final_kW.toFixed(2),
+        CV: CV.toFixed(2),
         torque: torque.toFixed(2),
+        obsViscosidade: obs,
       },
       detalhes: {
         tipo: tipo.label,
         fatorDi: tipo.fatorDi,
         velPeriferica: v,
         kWporM3: tipo.kWporM3,
+        rho,
+        mu,
+        Fmu,
+        P_base: P_base.toFixed(2),
+        P_dens: P_dens.toFixed(2),
         formulaDi: `Di = ${tipo.fatorDi} × T = ${tipo.fatorDi} × ${T} = ${Math.round(Di * 10) / 10} mm`,
-        formulaRpm: `n = (60 × v) / (π × Di) = (60 × ${v}) / (π × ${Di_m.toFixed(4)}) = ${Math.round(n)} rpm`,
-        formulaV: `V = π × (T²/4) × H = π × (${(T / 1000).toFixed(3)}²/4) × ${(H / 1000).toFixed(3)} = ${V_m3.toFixed(4)} m³`,
-        formulaP: `P = ${tipo.kWporM3} kW/m³ × ${V_m3.toFixed(4)} m³ = ${P_kW.toFixed(2)} kW`,
-        formulaTq: `T = (9550 × P) / n = (9550 × ${P_kW.toFixed(2)}) / ${Math.round(n)} = ${torque.toFixed(2)} Nm`,
+        formulaRpm: `n = (60 × v) / (π × Di_m) = (60 × ${v}) / (π × ${Di_m.toFixed(4)}) = ${Math.round(n)} rpm`,
+        formulaV: `V = π × (T_m²/4) × H_m = π × (${T_m.toFixed(3)}²/4) × ${H_m.toFixed(3)} = ${V_m3.toFixed(4)} m³`,
+        formulaPbase: `P_base = ${tipo.kWporM3} kW/m³ × ${V_m3.toFixed(4)} m³ = ${P_base.toFixed(2)} kW`,
+        formulaPdens: `P_dens = P_base × (ρ/1000) = ${P_base.toFixed(2)} × (${rho}/1000) = ${P_dens.toFixed(2)} kW`,
+        formulaFmu: `Fμ = ${Fmu} (viscosidade ${mu} cP) → P_final = P_dens × Fμ = ${P_dens.toFixed(2)} × ${Fmu} = ${P_final_kW.toFixed(2)} kW`,
+        formulaCV: `CV = 1,3596 × P_final = 1,3596 × ${P_final_kW.toFixed(2)} = ${CV.toFixed(2)} CV`,
+        formulaTq: `Torque = (9550 × P_final) / n = (9550 × ${P_final_kW.toFixed(2)}) / ${Math.round(n)} = ${torque.toFixed(2)} Nm`,
       },
     };
-  }, [T, H, tipoProcesso]);
+  }, [T, H, tipoProcesso, densidade, viscosidade]);
 
   const scrollToResultado = () => {
     resultadoRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -101,17 +146,7 @@ const CalculoMotorImpelidor = () => {
               </select>
             </div>
             <div className="calculo-motor-impelidor-campo">
-              <label>Viscosidade aproximada</label>
-              <input
-                type="text"
-                value={viscosidade}
-                onChange={(ev) => setViscosidade(ev.target.value)}
-                placeholder="ex.: 500 cP ou baixa"
-              />
-              <span className="unidade">cP ou descrição</span>
-            </div>
-            <div className="calculo-motor-impelidor-campo">
-              <label>Densidade do produto</label>
+              <label>Densidade do produto (ρ)</label>
               <input
                 type="number"
                 value={densidade}
@@ -120,6 +155,17 @@ const CalculoMotorImpelidor = () => {
                 step={10}
               />
               <span className="unidade">kg/m³</span>
+            </div>
+            <div className="calculo-motor-impelidor-campo">
+              <label>Viscosidade aproximada (μ)</label>
+              <input
+                type="number"
+                value={viscosidade}
+                onChange={(ev) => setViscosidade(Number(ev.target.value) || 0)}
+                min={0}
+                step={10}
+              />
+              <span className="unidade">cP</span>
             </div>
           </div>
           <button type="button" className="calculo-motor-impelidor-btn-calcular" onClick={scrollToResultado}>
@@ -130,13 +176,15 @@ const CalculoMotorImpelidor = () => {
         <section className="calculo-motor-impelidor-section regras">
           <h2>Regras de dimensionamento</h2>
           <ul>
-            <li><strong>Diâmetro do disco (Di):</strong> Leve = 0,28×T; Padrão = 0,33×T; Pesado = 0,38×T</li>
-            <li><strong>Velocidade periférica:</strong> Leve 18 m/s; Padrão 22 m/s; Pesado 25 m/s</li>
-            <li><strong>Rotação:</strong> n = (60 × v) / (π × Di), com Di em metros</li>
-            <li><strong>Volume útil:</strong> V = π × (T²/4) × H (mm → m)</li>
-            <li><strong>Potência específica:</strong> Leve 1,5 kW/m³; Padrão 2,5 kW/m³; Pesado 4,0 kW/m³</li>
-            <li><strong>Potência:</strong> P = kW/m³ × V</li>
-            <li><strong>Torque:</strong> T = (9550 × P) / n (Nm)</li>
+            <li><strong>PASSO 1 – Diâmetro do disco (Di):</strong> Leve = 0,28×T; Padrão = 0,33×T; Pesado = 0,38×T</li>
+            <li><strong>PASSO 2 – Velocidade periférica:</strong> Leve 18 m/s; Padrão 22 m/s; Pesado 25 m/s</li>
+            <li><strong>PASSO 3 – Rotação:</strong> n = (60 × v) / (π × Di_m), Di_m = Di/1000</li>
+            <li><strong>PASSO 4 – Volume útil:</strong> V = π × (T_m²/4) × H_m (T e H em m)</li>
+            <li><strong>PASSO 5 – Potência base:</strong> P_base = (kW/m³) × V — Leve 1,5; Padrão 2,5; Pesado 4,0 kW/m³</li>
+            <li><strong>PASSO 6 – Correção por densidade:</strong> P_dens = P_base × (ρ/1000)</li>
+            <li><strong>PASSO 7 – Correção por viscosidade:</strong> μ≤500→Fμ=1,0; 500&lt;μ≤2000→1,2; 2000&lt;μ≤10000→1,5; μ&gt;10000→avaliar adequação</li>
+            <li><strong>PASSO 8 – CV:</strong> CV = 1,3596 × P_final_kW</li>
+            <li><strong>PASSO 9 – Torque:</strong> Torque (Nm) = (9550 × P_final_kW) / n</li>
           </ul>
         </section>
 
@@ -148,6 +196,10 @@ const CalculoMotorImpelidor = () => {
               <span className="valor">{resultado.Di} mm</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
+              <span className="nome">Velocidade periférica</span>
+              <span className="valor">{resultado.velPeriferica} m/s</span>
+            </div>
+            <div className="calculo-motor-impelidor-resultado-item">
               <span className="nome">Rotação</span>
               <span className="valor">{resultado.rpm} rpm</span>
             </div>
@@ -156,21 +208,33 @@ const CalculoMotorImpelidor = () => {
               <span className="valor">{resultado.V_m3} m³</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
-              <span className="nome">Potência estimada</span>
+              <span className="nome">Potência final</span>
               <span className="valor">{resultado.P_kW} kW</span>
+            </div>
+            <div className="calculo-motor-impelidor-resultado-item">
+              <span className="nome">Potência em CV</span>
+              <span className="valor">{resultado.CV} CV</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
               <span className="nome">Torque no eixo</span>
               <span className="valor">{resultado.torque} Nm</span>
             </div>
           </div>
+          {resultado.obsViscosidade && (
+            <div className="calculo-motor-impelidor-obs">
+              <strong>Observação:</strong> {resultado.obsViscosidade}
+            </div>
+          )}
           <div className="calculo-motor-impelidor-detalhes">
             <h3>Detalhamento dos cálculos</h3>
-            <p><strong>Diâmetro do disco:</strong> {detalhes.formulaDi}</p>
-            <p><strong>Rotação:</strong> {detalhes.formulaRpm}</p>
-            <p><strong>Volume útil:</strong> {detalhes.formulaV}</p>
-            <p><strong>Potência:</strong> {detalhes.formulaP}</p>
-            <p><strong>Torque:</strong> {detalhes.formulaTq}</p>
+            <p><strong>PASSO 1 – Di:</strong> {detalhes.formulaDi}</p>
+            <p><strong>PASSO 3 – Rotação:</strong> {detalhes.formulaRpm}</p>
+            <p><strong>PASSO 4 – Volume:</strong> {detalhes.formulaV}</p>
+            <p><strong>PASSO 5 – P_base:</strong> {detalhes.formulaPbase}</p>
+            <p><strong>PASSO 6 – P_dens:</strong> {detalhes.formulaPdens}</p>
+            <p><strong>PASSO 7 – Fμ e P_final:</strong> {detalhes.formulaFmu}</p>
+            <p><strong>PASSO 8 – CV:</strong> {detalhes.formulaCV}</p>
+            <p><strong>PASSO 9 – Torque:</strong> {detalhes.formulaTq}</p>
           </div>
         </section>
       </div>
