@@ -59,6 +59,14 @@
   font-size: 1.5rem;
 }
 
+.calculos-engenharia-card-icon-volume {
+  background: linear-gradient(135deg, #ccfbf1, #0d9488);
+}
+
+.calculos-engenharia-card-icon-motor {
+  background: linear-gradient(135deg, #fef3c7, #f59e0b);
+}
+
 .calculos-engenharia-card h3 {
   font-size: 1.1rem;
   font-weight: 600;

@@ -41,6 +41,8 @@ import Admin from './components/Admin';
 import Layout from './components/Layout';
 import CalculosEngenharia from './components/CalculosEngenharia';
 import CalculoTampo from './components/CalculoTampo';
+import CalculoVolume from './components/CalculoVolume';
+import CalculoMotorImpelidor from './components/CalculoMotorImpelidor';
 import TipoSelecao from './components/TipoSelecao';
 import ProtectedModuleRoute from './components/ProtectedModuleRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -315,6 +317,8 @@ function AppRoutes() {
       >
         <Route index element={<CalculosEngenharia />} />
         <Route path="calculo-tampo" element={<CalculoTampo />} />
+        <Route path="calculo-volume" element={<CalculoVolume />} />
+        <Route path="calculo-motor-impelidor" element={<CalculoMotorImpelidor />} />
       </Route>
       <Route
         path="/configuracoes"

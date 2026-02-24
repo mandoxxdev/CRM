@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowLeft, FiCalculator } from 'react-icons/fi';
+import { FiArrowLeft, FiCheck } from 'react-icons/fi';
 import './CalculoTampo.css';
 
 const CalculoTampo = () => {
@@ -92,7 +92,7 @@ const CalculoTampo = () => {
             </div>
           </div>
           <button type="button" className="calculo-tampo-btn-calcular" onClick={scrollToResultado}>
-            <FiCalculator /> Calcular
+            <FiCheck /> Calcular
           </button>
         </section>
 

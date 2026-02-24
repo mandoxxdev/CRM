@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiSliders, FiCircle } from 'react-icons/fi';
+import { FiSliders, FiCircle, FiDroplet, FiZap } from 'react-icons/fi';
 import './CalculosEngenharia.css';
 
 const CalculosEngenharia = () => {
@@ -24,6 +24,28 @@ const CalculosEngenharia = () => {
           </div>
           <h3>Cálculo de Tampo</h3>
           <p>Dimensionamento de tampo (tampa/casco) conforme normas técnicas</p>
+        </button>
+        <button
+          type="button"
+          className="calculos-engenharia-card"
+          onClick={() => navigate('/engenharia/calculo-volume')}
+        >
+          <div className="calculos-engenharia-card-icon calculos-engenharia-card-icon-volume">
+            <FiDroplet />
+          </div>
+          <h3>Cálculo de Volume</h3>
+          <p>Volume do tanque a partir do diâmetro e da altura</p>
+        </button>
+        <button
+          type="button"
+          className="calculos-engenharia-card"
+          onClick={() => navigate('/engenharia/calculo-motor-impelidor')}
+        >
+          <div className="calculos-engenharia-card-icon calculos-engenharia-card-icon-motor">
+            <FiZap />
+          </div>
+          <h3>Motor + Impelidor</h3>
+          <p>Disco dispersor (Cowles): diâmetro, rotação, potência e torque</p>
         </button>
       </div>
     </div>
