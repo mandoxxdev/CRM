@@ -5,14 +5,19 @@
   right: 0;
   bottom: 0;
   z-index: 10000;
-  background: var(--gmp-bg);
+  background: linear-gradient(160deg, #f0f4f8 0%, #e2e8f0 50%, #f8fafc 100%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
   animation: fadeIn 0.3s ease;
   overflow-y: auto;
-  padding: 2rem;
+  overflow-x: hidden;
+  padding: 1.5rem 2rem 2rem;
   position: relative;
+}
+
+[data-theme="dark"] .tipo-selecao-container {
+  background: linear-gradient(160deg, #1e293b 0%, #0f172a 50%, #334155 100%);
 }
 
 .tipo-selecao-container > :first-child {
@@ -35,19 +40,23 @@
 
 .tipo-selecao-background {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1280px;
+  flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
   position: relative;
   z-index: 1;
+  min-height: min-content;
 }
 
 .tipo-selecao-content {
   width: 100%;
-  max-width: 1200px;
   animation: slideUp 0.4s ease;
   position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes slideUp {
@@ -63,57 +72,86 @@
 
 .tipo-selecao-header {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
+  flex-shrink: 0;
 }
 
 .tipo-selecao-header h1 {
-  font-size: 2.5rem;
+  font-size: 1.85rem;
   font-weight: 700;
-  color: var(--gmp-text);
-  margin-bottom: 0.75rem;
+  color: #1e293b;
+  margin-bottom: 0.35rem;
   letter-spacing: -0.02em;
 }
 
 [data-theme="dark"] .tipo-selecao-header h1 {
-  color: #ffffff;
+  color: #f1f5f9;
 }
 
 .tipo-selecao-header p {
-  font-size: 1.1rem;
-  color: var(--gmp-text-light);
+  font-size: 0.95rem;
+  color: #64748b;
   margin: 0;
+}
+
+[data-theme="dark"] .tipo-selecao-header p {
+  color: #94a3b8;
+}
+
+.tipo-selecao-badge-admin {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.35rem 0.85rem;
+  background: #dcfce7;
+  color: #16a34a;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .tipo-selecao-badge-admin {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
 }
 
 .tipo-selecao-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 3rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+  width: 100%;
 }
 
 .tipo-card {
-  background: var(--gmp-surface);
-  border: 2px solid var(--gmp-border);
-  border-radius: 16px;
-  padding: 2rem;
-  transition: all 0.3s ease;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem 1.35rem;
+  transition: all 0.25s ease;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  min-height: 200px;
+  gap: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  min-height: 160px;
 }
 
 [data-theme="dark"] .tipo-card {
-  background: var(--gmp-surface);
-  border-color: var(--gmp-border);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .tipo-card.disponivel {
-  border-color: var(--gmp-primary);
-  border-width: 2px;
+  border-color: #3b82f6;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+}
+
+[data-theme="dark"] .tipo-card.disponivel {
+  background: #1e293b;
+  border-color: #60a5fa;
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.15);
 }
 
 .tipo-card.clickable {
@@ -121,122 +159,140 @@
 }
 
 .tipo-card.clickable:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 102, 204, 0.15);
-  border-color: var(--gmp-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.12);
+  border-color: #3b82f6;
 }
 
 [data-theme="dark"] .tipo-card.clickable:hover {
-  box-shadow: 0 8px 24px rgba(0, 168, 232, 0.25);
+  box-shadow: 0 8px 20px rgba(96, 165, 250, 0.2);
+  border-color: #60a5fa;
 }
 
 .tipo-card.bloqueado {
-  opacity: 0.65;
+  opacity: 0.7;
   cursor: not-allowed;
+  background: #f8fafc;
+}
+
+[data-theme="dark"] .tipo-card.bloqueado {
+  background: #0f172a;
 }
 
 .tipo-card.bloqueado:hover {
   transform: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-color: var(--gmp-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border-color: #e2e8f0;
 }
 
 .tipo-card-lock {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  width: 36px;
-  height: 36px;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.05);
+  background: #f1f5f9;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gmp-text-light);
-  font-size: 18px;
+  color: #94a3b8;
+  font-size: 14px;
   z-index: 2;
 }
 
 [data-theme="dark"] .tipo-card-lock {
-  background: rgba(255, 255, 255, 0.1);
+  background: #334155;
+  color: #64748b;
 }
 
 .tipo-card-check-icon {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  width: 36px;
-  height: 36px;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--gmp-success) 0%, #00c853 100%);
+  background: #22c55e;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 18px;
-  box-shadow: 0 4px 12px rgba(0, 200, 83, 0.3);
+  font-size: 14px;
   z-index: 10;
 }
 
 .tipo-card-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(0, 102, 204, 0.1) 0%, rgba(0, 102, 204, 0.05) 100%);
-  border: 2px solid var(--gmp-border);
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: #eff6ff;
+  border: 1px solid #e0e7ff;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gmp-primary);
-  font-size: 32px;
-  transition: all 0.3s ease;
+  color: #3b82f6;
+  font-size: 24px;
+  transition: all 0.25s ease;
 }
 
 [data-theme="dark"] .tipo-card-icon {
-  background: rgba(0, 168, 232, 0.1);
-  border-color: rgba(0, 168, 232, 0.3);
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: #60a5fa;
 }
 
 .tipo-card-icon.ativo {
-  background: linear-gradient(135deg, var(--gmp-primary) 0%, var(--gmp-primary-dark) 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
-  border-color: var(--gmp-primary);
-  box-shadow: 0 4px 16px rgba(0, 102, 204, 0.25);
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
 }
 
 [data-theme="dark"] .tipo-card-icon.ativo {
-  box-shadow: 0 4px 16px rgba(0, 168, 232, 0.35);
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
 }
 
 .tipo-card-icon-svg {
-  transition: transform 0.3s ease;
+  transition: transform 0.25s ease;
 }
 
 .tipo-card.clickable:hover .tipo-card-icon-svg {
-  transform: scale(1.1);
+  transform: scale(1.08);
 }
 
 .tipo-card-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  min-height: 0;
 }
 
 .tipo-card-content h3 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   font-weight: 700;
-  color: var(--gmp-text);
-  letter-spacing: 0.5px;
+  color: #1e293b;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+[data-theme="dark"] .tipo-card-content h3 {
+  color: #f1f5f9;
 }
 
 .tipo-card-content p {
   margin: 0;
-  font-size: 0.95rem;
-  color: var(--gmp-text-light);
-  line-height: 1.6;
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.45;
   flex: 1;
+}
+
+[data-theme="dark"] .tipo-card-content p {
+  color: #94a3b8;
 }
 
 .tipo-card-disponivel {
@@ -244,20 +300,20 @@
   align-items: center;
   justify-content: center;
   margin-top: auto;
-  padding: 0.5rem 1.25rem;
-  background: linear-gradient(135deg, rgba(0, 200, 83, 0.15) 0%, rgba(0, 200, 83, 0.25) 100%);
-  color: var(--gmp-success);
-  border-radius: 12px;
-  font-size: 0.875rem;
+  padding: 0.4rem 0.9rem;
+  background: #dcfce7;
+  color: #16a34a;
+  border-radius: 8px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.03em;
   width: fit-content;
 }
 
 [data-theme="dark"] .tipo-card-disponivel {
-  background: rgba(0, 200, 83, 0.2);
-  color: var(--gmp-success);
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
 }
 
 .tipo-card-indisponivel {
@@ -265,20 +321,20 @@
   align-items: center;
   justify-content: center;
   margin-top: auto;
-  padding: 0.5rem 1.25rem;
-  background: var(--gmp-border);
-  color: var(--gmp-text-light);
-  border-radius: 12px;
-  font-size: 0.875rem;
+  padding: 0.4rem 0.9rem;
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-radius: 8px;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.03em;
   width: fit-content;
 }
 
 [data-theme="dark"] .tipo-card-indisponivel {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--gmp-text-light);
+  background: #334155;
+  color: #64748b;
 }
 
 .tipo-selecao-footer {
@@ -382,10 +438,9 @@
 }
 
 /* Responsive */
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .tipo-selecao-grid {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
 }
 
@@ -395,21 +450,22 @@
   }
 
   .tipo-selecao-header h1 {
-    font-size: 2rem;
+    font-size: 1.5rem;
   }
 
   .tipo-selecao-header p {
-    font-size: 1rem;
+    font-size: 0.9rem;
   }
 
   .tipo-selecao-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
+    margin-bottom: 1.5rem;
   }
 
   .tipo-card {
-    padding: 1.5rem;
-    min-height: auto;
+    padding: 1.25rem;
+    min-height: 140px;
   }
 
   .tipo-selecao-footer {
@@ -426,16 +482,20 @@
 
 @media (max-width: 480px) {
   .tipo-selecao-header h1 {
-    font-size: 1.75rem;
+    font-size: 1.35rem;
   }
 
   .tipo-card-icon {
-    width: 64px;
-    height: 64px;
-    font-size: 28px;
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
   }
 
   .tipo-card-content h3 {
-    font-size: 1.25rem;
+    font-size: 1rem;
+  }
+
+  .tipo-card-content p {
+    font-size: 0.8rem;
   }
 }

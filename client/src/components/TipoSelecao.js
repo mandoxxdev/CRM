@@ -280,21 +280,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
 
   return (
     <div className="tipo-selecao-container">
-      <AnimatedBackground nodeCount={150} connectionDistance={250} />
+      <AnimatedBackground nodeCount={120} connectionDistance={220} />
       <div className="tipo-selecao-background">
         <div className="tipo-selecao-content">
           <div className="tipo-selecao-header">
-            <h1>Módulos do Sistema</h1>
-            <p>Selecione um módulo para acessar ou visualize os módulos disponíveis</p>
+            <h1>Selecione o módulo</h1>
+            <p>Escolha abaixo o módulo que deseja acessar</p>
             {user?.role && String(user.role).toLowerCase() === 'admin' && (
-              <p style={{ 
-                marginTop: '0.5rem', 
-                color: 'var(--gmp-success)', 
-                fontSize: '0.9rem',
-                fontWeight: 600
-              }}>
-                ✓ Você tem acesso a todos os módulos (Administrador)
-              </p>
+              <span className="tipo-selecao-badge-admin">Acesso total (Administrador)</span>
             )}
           </div>
 
