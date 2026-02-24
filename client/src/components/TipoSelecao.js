@@ -5,7 +5,7 @@ import api from '../services/api';
 import {
   FiBriefcase, FiShoppingCart, FiDollarSign, FiUsers,
   FiSettings, FiBarChart2, FiPackage, FiTarget,
-  FiLock, FiCheckCircle, FiShield, FiTool
+  FiLock, FiCheckCircle, FiShield, FiTool, FiSliders
 } from 'react-icons/fi';
 import SplashScreen from './SplashScreen';
 import AnimatedBackground from './AnimatedBackground';
@@ -61,6 +61,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiSettings,
       modulo: 'administrativo',
       rota: '/configuracoes'
+    },
+    {
+      id: 'engenharia',
+      nome: 'CÁLCULOS DE ENGENHARIA',
+      descricao: 'Cálculos técnicos: tampo, pressão e dimensionamento',
+      icon: FiSliders,
+      modulo: 'engenharia',
+      rota: '/engenharia'
     },
     {
       id: 'admin',

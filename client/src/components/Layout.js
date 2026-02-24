@@ -5,7 +5,7 @@ import api from '../services/api';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
-  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle
+  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle, FiSliders, FiCircle
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -135,6 +135,7 @@ const Layout = () => {
     if (path.startsWith('/financeiro')) return 'financeiro';
     if (path.startsWith('/fabrica')) return 'operacional';
     if (path.startsWith('/admin')) return 'admin';
+    if (path.startsWith('/engenharia')) return 'engenharia';
     if (path.startsWith('/comercial')) return 'crm';
     return 'crm'; // Default para CRM
   };
@@ -186,6 +187,12 @@ const Layout = () => {
     { path: '/admin/permissoes', icon: FiShield, label: 'Permissões' },
   ];
 
+  // Menu do módulo Cálculos de Engenharia
+  const engenhariaMenuItems = [
+    { path: '/engenharia', icon: FiSliders, label: 'Início' },
+    { path: '/engenharia/calculo-tampo', icon: FiCircle, label: 'Cálculo de Tampo' },
+  ];
+
   // Selecionar menu baseado no módulo ativo
   const getMenuItems = () => {
     switch (activeModule) {
@@ -197,6 +204,8 @@ const Layout = () => {
         return operacionalMenuItems;
       case 'admin':
         return adminMenuItems;
+      case 'engenharia':
+        return engenhariaMenuItems;
       default:
         return crmMenuItems;
     }

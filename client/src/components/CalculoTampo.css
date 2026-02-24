@@ -1,0 +1,179 @@
+.calculo-tampo {
+  padding: 1.5rem 2rem;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.calculo-tampo-header {
+  margin-bottom: 1.5rem;
+}
+
+.calculo-tampo-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--gmp-primary, #3b82f6);
+  text-decoration: none;
+  margin-bottom: 0.75rem;
+}
+
+.calculo-tampo-back:hover {
+  text-decoration: underline;
+}
+
+.calculo-tampo-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gmp-text-primary, #1a1a2e);
+  margin: 0 0 0.2rem 0;
+}
+
+.calculo-tampo-header p {
+  font-size: 0.9rem;
+  color: var(--gmp-text-light, #64748b);
+  margin: 0;
+}
+
+.calculo-tampo-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.calculo-tampo-section {
+  background: var(--gmp-card-bg, #fff);
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+}
+
+.calculo-tampo-section h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gmp-text-primary, #1a1a2e);
+  margin: 0 0 1rem 0;
+}
+
+/* Referência: parâmetros e fórmulas */
+.calculo-tampo-ref-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.calculo-tampo-diagrama-ref {
+  padding: 0.75rem;
+  background: var(--gmp-bg-subtle, #f1f5f9);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--gmp-text-secondary, #475569);
+}
+
+.diagrama-label {
+  margin: 0;
+}
+
+.calculo-tampo-regras {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+  color: var(--gmp-text-secondary, #475569);
+  line-height: 1.8;
+}
+
+.calculo-tampo-regras li {
+  margin-bottom: 0.15rem;
+}
+
+/* Entradas: 3 campos + botão */
+.calculo-tampo-campos-simples {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.calculo-tampo-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.calculo-tampo-campo label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--gmp-text-primary, #1a1a2e);
+}
+
+.calculo-tampo-campo input {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.calculo-tampo-campo input:focus {
+  outline: none;
+  border-color: var(--gmp-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.calculo-tampo-campo .unidade {
+  font-size: 0.75rem;
+  color: var(--gmp-text-light, #94a3b8);
+}
+
+.calculo-tampo-btn-calcular {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  background: var(--gmp-primary, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calculo-tampo-btn-calcular:hover {
+  filter: brightness(1.05);
+}
+
+/* Resultado: 3 linhas em destaque */
+.calculo-tampo-resultado-linhas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.calculo-tampo-resultado-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--gmp-bg-subtle, #f8fafc);
+  border-radius: 8px;
+}
+
+.calculo-tampo-resultado-item .nome {
+  font-size: 0.95rem;
+  color: var(--gmp-text-secondary, #475569);
+}
+
+.calculo-tampo-resultado-item .valor {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gmp-primary, #3b82f6);
+}
+
+@media (max-width: 640px) {
+  .calculo-tampo {
+    padding: 1rem;
+  }
+  .calculo-tampo-campos-simples {
+    grid-template-columns: 1fr;
+  }
+}

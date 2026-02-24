@@ -1624,7 +1624,8 @@ function registrarTentativaAcessoNegado(req, modulo) {
     'financeiro': 'Financeiro',
     'operacional': 'Operacional',
     'administrativo': 'Administrativo',
-    'admin': 'Administração'
+    'admin': 'Administração',
+    'engenharia': 'Cálculos de Engenharia'
   };
 
   const nome_modulo = nomesModulos[modulo] || modulo;

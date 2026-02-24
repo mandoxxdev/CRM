@@ -39,6 +39,8 @@ import Usuarios from './components/Usuarios';
 import UsuarioForm from './components/UsuarioForm';
 import Admin from './components/Admin';
 import Layout from './components/Layout';
+import CalculosEngenharia from './components/CalculosEngenharia';
+import CalculoTampo from './components/CalculoTampo';
 import TipoSelecao from './components/TipoSelecao';
 import ProtectedModuleRoute from './components/ProtectedModuleRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -60,6 +62,7 @@ const PrivateRoute = ({ children }) => {
            path.startsWith('/compras') || 
            path.startsWith('/financeiro') || 
            path.startsWith('/fabrica') || 
+           path.startsWith('/engenharia') ||
            path.startsWith('/configuracoes') || 
            path.startsWith('/admin');
   };
@@ -299,6 +302,19 @@ function AppRoutes() {
         <Route path="alarmistica/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Alarmística</h2><p>Em desenvolvimento...</p></div>} />
         <Route path="logs/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Logs e Histórico</h2><p>Em desenvolvimento...</p></div>} />
         <Route path="configuracoes" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Configurações MES</h2><p>Em desenvolvimento...</p></div>} />
+      </Route>
+      <Route
+        path="/engenharia"
+        element={
+          <PrivateRoute>
+            <ProtectedModuleRoute modulo="engenharia" nomeModulo="Cálculos de Engenharia">
+              <Layout />
+            </ProtectedModuleRoute>
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<CalculosEngenharia />} />
+        <Route path="calculo-tampo" element={<CalculoTampo />} />
       </Route>
       <Route
         path="/configuracoes"
