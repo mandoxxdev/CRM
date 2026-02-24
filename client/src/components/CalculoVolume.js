@@ -31,16 +31,16 @@ const CalculoVolume = () => {
           <FiArrowLeft /> Voltar
         </Link>
         <h1>Cálculo de Volume</h1>
-        <p>Volume do tanque cilíndrico a partir do diâmetro e da altura</p>
+        <p>Volume do tanque em formato de cilindro (diâmetro × altura)</p>
       </div>
 
       <div className="calculo-volume-layout">
         <section className="calculo-volume-section entradas">
           <h2>Dados do tanque</h2>
-          <p className="calculo-volume-desc">Fórmula: V = π × (D/2)² × h — cilindro</p>
+          <p className="calculo-volume-desc">Informe o diâmetro e a altura em mm; o volume é calculado como se o tanque fosse um cilindro.</p>
           <div className="calculo-volume-campos">
             <div className="calculo-volume-campo">
-              <label>Diâmetro (D)</label>
+              <label>Diâmetro do tanque</label>
               <input
                 type="number"
                 value={diametro}
@@ -51,7 +51,7 @@ const CalculoVolume = () => {
               <span className="unidade">mm</span>
             </div>
             <div className="calculo-volume-campo">
-              <label>Altura do tanque (h)</label>
+              <label>Altura do líquido</label>
               <input
                 type="number"
                 value={altura}
@@ -71,11 +71,11 @@ const CalculoVolume = () => {
           <h2>Resultado</h2>
           <div className="calculo-volume-resultado-linhas">
             <div className="calculo-volume-resultado-item">
-              <span className="nome">Volume</span>
+              <span className="nome">Volume em litros</span>
               <span className="valor">{resultado.volumeLts} L</span>
             </div>
             <div className="calculo-volume-resultado-item">
-              <span className="nome">Volume</span>
+              <span className="nome">Volume em metros cúbicos</span>
               <span className="valor">{resultado.volumeM3} m³</span>
             </div>
           </div>

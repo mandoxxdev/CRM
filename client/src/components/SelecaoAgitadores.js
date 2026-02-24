@@ -4,11 +4,11 @@ import { FiArrowLeft, FiCheck } from 'react-icons/fi';
 import './SelecaoAgitadores.css';
 
 const OBJETIVOS = {
-  A: { id: 'A', label: 'Homogeneização / mistura simples' },
-  B: { id: 'B', label: 'Suspensão de sólidos / evitar sedimentação' },
-  C: { id: 'C', label: 'Dispersão de pigmentos / quebra de aglomerados (alto cisalhamento)' },
-  D: { id: 'D', label: 'Alto viscoso / pastoso (âncora/helicoidal)' },
-  E: { id: 'E', label: 'Processo híbrido (dispersão + controle de parede e troca térmica)' },
+  A: { id: 'A', label: 'Só misturar / homogenizar (líquidos de viscosidade baixa ou média)' },
+  B: { id: 'B', label: 'Manter sólidos em suspensão / evitar que assentem no fundo' },
+  C: { id: 'C', label: 'Dispersar pigmentos / quebrar grumos (produto mais fino, tipo tinta)' },
+  D: { id: 'D', label: 'Produto bem grosso ou pastoso (ex.: massa, creme)' },
+  E: { id: 'E', label: 'Combo: dispersar + raspar parede e trocar calor (dois agitadores)' },
 };
 
 const POLOS_OPCOES = [2, 4, 6, 8];
@@ -62,30 +62,30 @@ function SelecaoAgitadores() {
     const tipos = [];
     let isHibrido = false;
     if (objetivo === 'C' && mu <= 5000) {
-      tipos.push({ id: 'cowles', nome: 'Disco dispersor (Cowles)', justificativa: 'Objetivo de dispersão com viscosidade adequada para alto cisalhamento.' });
+      tipos.push({ id: 'cowles', nome: 'Disco dispersor (Cowles)', justificativa: 'Indicado para dispersar e deixar o produto mais fino; viscosidade está adequada para esse tipo de agitador.' });
     }
     if (objetivo === 'D' || mu > 5000) {
       if (mu > 10000) {
-        tipos.push({ id: 'helical', nome: 'Helicoidal (helical ribbon)', justificativa: 'Viscosidade muito alta; helicoidal é mais eficiente para pastosos.' });
+        tipos.push({ id: 'helical', nome: 'Helicoidal (fita em espiral)', justificativa: 'Produto muito grosso; o helicoidal mistura melhor pastas e massas.' });
       }
-      tipos.push({ id: 'ancora', nome: 'Âncora', justificativa: 'Alto viscoso/pastoso ou viscosidade elevada; varredura de parede.' });
+      tipos.push({ id: 'ancora', nome: 'Âncora', justificativa: 'Produto grosso ou pastoso; a âncora raspa a parede do tanque e ajuda na mistura.' });
     }
     if (objetivo === 'A' && mu < 5000 && !tipos.length) {
-      tipos.push({ id: 'helice', nome: 'Hélice axial (marine/propeller)', justificativa: 'Mistura simples com viscosidade baixa/moderada.' });
+      tipos.push({ id: 'helice', nome: 'Hélice (tipo ventilador)', justificativa: 'Mistura simples; ideal para líquidos mais fluidos.' });
     }
     if (objetivo === 'B' && mu < 5000 && !tipos.length) {
-      tipos.push({ id: 'turbina', nome: 'Turbina de pás inclinadas', justificativa: 'Suspensão de sólidos com bom bombeamento axial.' });
+      tipos.push({ id: 'turbina', nome: 'Turbina de pás inclinadas', justificativa: 'Mantém os sólidos em suspensão e movimenta bem o líquido.' });
     }
     if (objetivo === 'E') {
       isHibrido = true;
       tipos.length = 0;
       tipos.push(
-        { id: 'cowles', nome: 'Disco dispersor (Cowles)', justificativa: 'Alto cisalhamento para dispersão.' },
-        { id: 'ancora', nome: 'Âncora', justificativa: 'Varredura de parede e troca térmica no híbrido.' }
+        { id: 'cowles', nome: 'Disco dispersor (Cowles)', justificativa: 'Faz a dispersão (deixar o produto fino).' },
+        { id: 'ancora', nome: 'Âncora', justificativa: 'Raspa a parede e ajuda na troca de calor no combo.' }
       );
     }
     if (!tipos.length) {
-      tipos.push({ id: 'cowles', nome: 'Disco dispersor (Cowles)', justificativa: 'Configuração padrão para dispersão.' });
+      tipos.push({ id: 'cowles', nome: 'Disco dispersor (Cowles)', justificativa: 'Opção padrão para dispersão.' });
     }
 
     const Fmu = fatorViscosidade(mu);
@@ -145,25 +145,25 @@ function SelecaoAgitadores() {
         torque: torque.toFixed(2),
         foraFaixa,
         vForaFaixa,
-        posicao: t.id === 'ancora' || t.id === 'helical' ? 'Próximo ao fundo, folga 5–25 mm' : 'Altura típica: 0,3–0,5 × H a partir do fundo',
+        posicao: t.id === 'ancora' || t.id === 'helical' ? 'Perto do fundo do tanque, com pequena folga (5 a 25 mm)' : 'Altura sugerida: entre 30% e 50% da altura do líquido, medindo do fundo',
       });
     }
 
     const alertas = [];
-    if (recomendarBaffles) alertas.push('Sem chicanas com impulsor axial/radial: recomenda-se 4 chicanas (10–12% da largura) ou montagem off-center para reduzir vórtice.');
-    if (mu > 10000 && objetivo !== 'D' && objetivo !== 'E') alertas.push('Viscosidade > 10000 cP: considerar âncora ou helicoidal como primário.');
-    if (viscosidadeVaria) alertas.push('Viscosidade varia no processo: avaliar VFD ou dois estágios de agitação.');
+    if (recomendarBaffles) alertas.push('O tanque não tem chicanas. Com esse tipo de agitador é recomendado usar 4 chicanas (chapas verticais na parede que evitam redemoinho) ou instalar o agitador deslocado do centro.');
+    if (mu > 10000 && objetivo !== 'D' && objetivo !== 'E') alertas.push('Produto muito grosso (acima de 10000 cP). O ideal é usar âncora ou helicoidal como agitador principal.');
+    if (viscosidadeVaria) alertas.push('A viscosidade muda durante o processo. Vale considerar inversor de frequência (para variar a rotação) ou duas etapas de agitação.');
     impulsores.forEach(imp => {
-      if (imp.vForaFaixa && comVFD === 'nao') alertas.push(`${imp.nome}: velocidade periférica (${imp.v_calc} m/s) fora da faixa ideal (${imp.vMin}–${imp.vMax} m/s). Recomenda-se VFD ou mudança de polos.`);
-      if (imp.foraFaixa) alertas.push(`${imp.nome}: Di fora da faixa geométrica recomendada. Verificar proporção Di/T.`);
+      if (imp.vForaFaixa && comVFD === 'nao') alertas.push(`${imp.nome}: a velocidade na ponta do disco (${imp.v_calc} m/s) está fora do ideal (${imp.vMin} a ${imp.vMax} m/s). Recomenda-se usar inversor de frequência ou trocar o número de polos do motor.`);
+      if (imp.foraFaixa) alertas.push(`${imp.nome}: o diâmetro do disco está fora da faixa recomendada em relação ao diâmetro do tanque. Verifique a proporção.`);
     });
     if (isHibrido) {
-      alertas.push('Sistema híbrido: considerar dois motores (âncora baixa rotação + Cowles alto giro) ou redutor + motor separado; operação em etapas (dispersão com Cowles, homogeneização com âncora).');
+      alertas.push('Sistema com dois agitadores: pode usar dois motores (um para âncora em baixa rotação e outro para o disco em alta) ou um redutor + outro motor. Operar em etapas: dispersão com o disco, depois homogeneizar com a âncora.');
     }
 
     const configMecanica = mu > 5000
-      ? 'Eixo reforçado; selagem mecânica ou gaxeta adequada a alto viscoso; mancais dimensionados ao torque; redutor para âncora/helicoidal.'
-      : 'Eixo padrão; selagem conforme produto; verificar deflexão em vão livre.';
+      ? 'Para produto grosso: eixo mais resistente; vedação adequada ao produto; mancais que aguentem o torque; redutor para âncora/helicoidal.'
+      : 'Para produto fluido: eixo padrão; vedação conforme o produto; conferir se o eixo não flexiona demais.';
 
     return {
       T, H, T_m, H_m, V_m3, V_L,
@@ -190,42 +190,42 @@ function SelecaoAgitadores() {
         <Link to="/engenharia" className="selecao-agitadores-back">
           <FiArrowLeft /> Voltar
         </Link>
-        <h1>Seleção e dimensionamento de agitadores</h1>
-        <p>Tanque cilíndrico vertical — mistura, dispersão e alto viscoso</p>
+        <h1>Seleção de agitadores</h1>
+        <p>Para tanque cilíndrico em pé — mistura, dispersão ou produto grosso</p>
       </div>
 
       <div className="selecao-agitadores-layout">
         <section className="selecao-agitadores-section entradas">
-          <h2>Dados de entrada</h2>
+          <h2>Informe os dados</h2>
           <div className="selecao-agitadores-grid">
             <div className="campo">
-              <label>Diâmetro interno do tanque T (mm)</label>
+              <label>Diâmetro do tanque (por dentro), em mm</label>
               <input type="number" value={T} onChange={e => setT(Number(e.target.value) || 0)} min={1} />
             </div>
             <div className="campo">
-              <label>Altura útil do líquido H (mm)</label>
+              <label>Altura do líquido no tanque, em mm</label>
               <input type="number" value={H} onChange={e => setH(Number(e.target.value) || 0)} min={1} />
             </div>
             <div className="campo">
-              <label>Volume útil desejado (L) — opcional</label>
-              <input type="number" value={volumeDesejadoL} onChange={e => setVolumeDesejadoL(e.target.value)} placeholder="Deixe vazio para calcular por T e H" min={0} />
+              <label>Volume desejado em litros (opcional)</label>
+              <input type="number" value={volumeDesejadoL} onChange={e => setVolumeDesejadoL(e.target.value)} placeholder="Deixe em branco para calcular pelo diâmetro e altura" min={0} />
             </div>
             <div className="campo">
-              <label>Viscosidade μ (cP)</label>
+              <label>Viscosidade do produto, em cP (quanto maior, mais grosso)</label>
               <input type="number" value={viscosidade} onChange={e => setViscosidade(e.target.value)} min={0} />
             </div>
             <div className="campo campo-check">
               <label>
                 <input type="checkbox" checked={viscosidadeVaria} onChange={e => setViscosidadeVaria(e.target.checked)} />
-                Viscosidade varia no processo (ex.: início baixo, final alto)
+                A viscosidade muda durante o processo (ex.: começa fina e termina grossa)
               </label>
             </div>
             <div className="campo">
-              <label>Densidade ρ (kg/m³)</label>
+              <label>Densidade do produto, em kg/m³</label>
               <input type="number" value={densidade} onChange={e => setDensidade(e.target.value)} min={1} />
             </div>
             <div className="campo campo-full">
-              <label>Objetivo do processo</label>
+              <label>O que você precisa fazer no tanque?</label>
               <select value={objetivo} onChange={e => setObjetivo(e.target.value)}>
                 {Object.values(OBJETIVOS).map(o => (
                   <option key={o.id} value={o.id}>({o.id}) {o.label}</option>
@@ -233,11 +233,11 @@ function SelecaoAgitadores() {
               </select>
             </div>
             <div className="campo">
-              <label>% sólidos (se aplicável)</label>
+              <label>Porcentagem de sólidos, se tiver (opcional)</label>
               <input type="number" value={pctSolidos} onChange={e => setPctSolidos(e.target.value)} placeholder="—" min={0} max={100} />
             </div>
             <div className="campo">
-              <label>Chicanas/baffles</label>
+              <label>O tanque tem chicanas? (chapas na parede que evitam redemoinho)</label>
               <select value={baffles} onChange={e => setBaffles(e.target.value)}>
                 <option value="sim">Sim</option>
                 <option value="nao">Não</option>
@@ -245,26 +245,26 @@ function SelecaoAgitadores() {
             </div>
             {baffles === 'sim' && (
               <div className="campo">
-                <label>Quantidade de baffles</label>
+                <label>Quantas chicanas?</label>
                 <input type="number" value={qtdBaffles} onChange={e => setQtdBaffles(Number(e.target.value) || 4)} min={2} max={8} />
               </div>
             )}
             <div className="campo">
-              <label>Polos do motor</label>
+              <label>Polos do motor (2, 4, 6 ou 8 — define a rotação)</label>
               <select value={polos} onChange={e => setPolos(Number(e.target.value))}>
-                {POLOS_OPCOES.map(p => <option key={p} value={p}>{p}P</option>)}
+                {POLOS_OPCOES.map(p => <option key={p} value={p}>{p} polos</option>)}
               </select>
             </div>
             <div className="campo">
-              <label>Frequência f (Hz)</label>
+              <label>Frequência da rede elétrica, em Hz (Brasil: 60)</label>
               <input type="number" value={frequencia} onChange={e => setFrequencia(e.target.value)} min={50} max={60} />
             </div>
             <div className="campo">
-              <label>Slip (%)</label>
+              <label>Escorregamento do motor, em % (geralmente 3)</label>
               <input type="number" value={slip} onChange={e => setSlip(e.target.value)} min={0} max={10} step={0.5} />
             </div>
             <div className="campo campo-full">
-              <label>Inversor de frequência (VFD)</label>
+              <label>Vai usar inversor de frequência? (permite variar a rotação)</label>
               <select value={comVFD} onChange={e => setComVFD(e.target.value)}>
                 <option value="nao">Não</option>
                 <option value="sim">Sim</option>
@@ -277,10 +277,10 @@ function SelecaoAgitadores() {
         </section>
 
         <section ref={resultadoRef} className="selecao-agitadores-section relatorio">
-          <h2>Relatório — Seleção e dimensionamento</h2>
+          <h2>Relatório</h2>
 
           <div className="bloco">
-            <h3>1. Tipo(s) de impulsor recomendado(s)</h3>
+            <h3>1. Qual agitador usar</h3>
             {report.tipos.map(t => (
               <div key={t.id} className="impulsor-resumo">
                 <strong>{t.nome}</strong>
@@ -290,32 +290,32 @@ function SelecaoAgitadores() {
           </div>
 
           <div className="bloco">
-            <h3>2. Rotação disponível (polos e slip)</h3>
-            <p>n_s = (120 × f) / P = (120 × {report.f}) / {report.P} = <strong>{report.n_s} rpm</strong> (síncrona)</p>
-            <p>n = n_s × (1 − slip) = {report.n_s} × (1 − {report.slip.toFixed(2)}) = <strong>{report.n} rpm</strong> (real)</p>
+            <h3>2. Rotação do motor</h3>
+            <p>Rotação teórica (síncrona): <strong>{report.n_s} rpm</strong></p>
+            <p>Rotação real (com escorregamento): <strong>{report.n} rpm</strong></p>
           </div>
 
           <div className="bloco">
-            <h3>3. Volume e geometria</h3>
-            <p>Volume útil: <strong>{report.V_m3.toFixed(4)} m³</strong> ({report.V_L.toFixed(1)} L)</p>
-            <p>T = {report.T} mm, H = {report.H} mm</p>
+            <h3>3. Volume do tanque</h3>
+            <p>Volume útil: <strong>{report.V_m3.toFixed(4)} m³</strong> ({report.V_L.toFixed(1)} litros)</p>
+            <p>Diâmetro do tanque: {report.T} mm — Altura do líquido: {report.H} mm</p>
           </div>
 
           <div className="bloco">
-            <h3>4. Dimensionamento por impulsor</h3>
+            <h3>4. Tamanho e potência de cada agitador</h3>
             {report.impulsores.map((imp, idx) => (
               <div key={idx} className="impulsor-detalhe">
                 <h4>{imp.nome}</h4>
                 <ul>
-                  <li>Diâmetro Di: <strong>{imp.Di} mm</strong></li>
-                  <li>Relação Di/T: <strong>{imp.relacaoDiT}</strong></li>
-                  <li>Posição: {imp.posicao}</li>
-                  <li>Velocidade periférica v: <strong>{imp.v_calc} m/s</strong> (faixa ideal: {imp.vMin}–{imp.vMax} m/s)</li>
+                  <li>Diâmetro do disco/impulsor: <strong>{imp.Di} mm</strong></li>
+                  <li>Proporção disco ÷ tanque: <strong>{imp.relacaoDiT}</strong></li>
+                  <li>Onde instalar: {imp.posicao}</li>
+                  <li>Velocidade na ponta do disco: <strong>{imp.v_calc} m/s</strong> (faixa ideal: {imp.vMin} a {imp.vMax} m/s)</li>
                   <li>Potência estimada: <strong>{imp.P_kW} kW</strong> ({imp.CV} CV)</li>
-                  <li>Torque estimado: <strong>{imp.torque} Nm</strong></li>
+                  <li>Torque no eixo (força de giro): <strong>{imp.torque} Nm</strong></li>
                 </ul>
                 {(imp.foraFaixa || imp.vForaFaixa) && (
-                  <p className="aviso-imp">Atenção: verificar faixa geométrica ou velocidade; considerar VFD ou ajuste de polos.</p>
+                  <p className="aviso-imp">Atenção: o diâmetro ou a velocidade estão fora do ideal. Considere usar inversor de frequência ou trocar o motor (número de polos).</p>
                 )}
               </div>
             ))}
@@ -323,34 +323,34 @@ function SelecaoAgitadores() {
 
           {report.recomendarBaffles && (
             <div className="bloco">
-              <h3>5. Chicanas (baffles)</h3>
+              <h3>5. Chicanas</h3>
               <p className="aviso">{report.alertas.find(a => a.includes('chicanas'))}</p>
             </div>
           )}
 
           <div className="bloco">
-            <h3>{report.recomendarBaffles ? '6' : '5'}. Alertas e recomendações</h3>
+            <h3>{report.recomendarBaffles ? '6' : '5'}. Avisos e recomendações</h3>
             {report.alertas.length ? (
               <ul className="lista-alertas">
                 {report.alertas.map((a, i) => <li key={i}>{a}</li>)}
               </ul>
             ) : (
-              <p>Nenhum alerta crítico. Configuração dentro das faixas recomendadas.</p>
+              <p>Nada crítico. A configuração está dentro do recomendado.</p>
             )}
           </div>
 
           <div className="bloco">
-            <h3>{report.recomendarBaffles ? '7' : '6'}. Configuração mecânica sugerida</h3>
+            <h3>{report.recomendarBaffles ? '7' : '6'}. Sugestão de parte mecânica</h3>
             <p>{report.configMecanica}</p>
           </div>
 
           {report.isHibrido && (
             <div className="bloco">
-              <h3>Sistema híbrido — estratégia de operação</h3>
-              <p><strong>Início:</strong> âncora em baixa rotação + Cowles em rampa.</p>
-              <p><strong>Dispersão:</strong> Cowles na velocidade periférica alvo; âncora mantendo circulação.</p>
-              <p><strong>Final:</strong> reduzir Cowles e manter âncora para homogeneização e troca térmica.</p>
-              <p>Opções de acionamento: (1) Dois motores independentes; (2) Um motor com redutor + segundo motor alto giro; (3) Conjunto com VFDs separados.</p>
+              <h3>Combo de dois agitadores — como operar</h3>
+              <p><strong>Início:</strong> ligar a âncora em rotação baixa e subir a rotação do disco aos poucos.</p>
+              <p><strong>Dispersão:</strong> disco na velocidade ideal; âncora girando para manter o produto em movimento.</p>
+              <p><strong>Final:</strong> reduzir o disco e manter a âncora para homogenizar e trocar calor na parede.</p>
+              <p>Formas de acionar: (1) Dois motores separados; (2) Um motor com redutor para a âncora e outro para o disco; (3) Dois inversores de frequência, um para cada.</p>
             </div>
           )}
         </section>

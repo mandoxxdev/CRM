@@ -27,16 +27,16 @@ const CalculoTampo = () => {
           <FiArrowLeft /> Voltar
         </Link>
         <h1>EURO-06</h1>
-        <p>Cálculo dimensional — tampo (GMP Industriais)</p>
+        <p>Cálculo de tampo (tampa abobadada) — GMP Industriais</p>
       </div>
 
       <div className="calculo-tampo-layout">
         {/* Referência: diagrama e parâmetros */}
         <section className="calculo-tampo-section referencia">
-          <h2>Parâmetros e fórmulas</h2>
+          <h2>Como é calculado</h2>
           <div className="calculo-tampo-ref-grid">
             <div className="calculo-tampo-diagrama-ref">
-              <p className="diagrama-label">D = diâmetro · R = raio esférico · r = raio do knuckle · H = altura total · h1 = altura flange · h2 = altura curva · e = espessura</p>
+              <p className="diagrama-label">D = diâmetro do tampo · R = raio da parte esférica · r = raio da curva · H = altura total · h1 = altura da abra · h2 = altura da curva · e = espessura da chapa</p>
             </div>
             <ul className="calculo-tampo-regras">
               <li><strong>R = D</strong></li>
@@ -53,10 +53,10 @@ const CalculoTampo = () => {
 
         {/* Faça o cálculo dimensional */}
         <section className="calculo-tampo-section entradas">
-          <h2>Faça o cálculo dimensional</h2>
+          <h2>Informe os dados (tudo em milímetros)</h2>
           <div className="calculo-tampo-campos-simples">
             <div className="calculo-tampo-campo">
-              <label>Diâmetro</label>
+              <label>Diâmetro do tampo</label>
               <input
                 type="number"
                 value={D}
@@ -68,7 +68,7 @@ const CalculoTampo = () => {
               <span className="unidade">*Em milímetros</span>
             </div>
             <div className="calculo-tampo-campo">
-              <label>Espessura</label>
+              <label>Espessura da chapa</label>
               <input
                 type="number"
                 value={e}
@@ -79,7 +79,7 @@ const CalculoTampo = () => {
               <span className="unidade">*Em milímetros</span>
             </div>
             <div className="calculo-tampo-campo">
-              <label>Altura 1 (h1)</label>
+              <label>Altura da abra (h1)</label>
               <input
                 type="number"
                 value={h1}
@@ -105,11 +105,11 @@ const CalculoTampo = () => {
               <span className="valor">{resultado.volumeLts} Lts.</span>
             </div>
             <div className="calculo-tampo-resultado-item">
-              <span className="nome">Ds (ø Disco)</span>
+              <span className="nome">Diâmetro do disco (chapa antes de conformar)</span>
               <span className="valor">{resultado.Ds} mm</span>
             </div>
             <div className="calculo-tampo-resultado-item">
-              <span className="nome">H2</span>
+              <span className="nome">Altura da parte curva (h2)</span>
               <span className="valor">{resultado.H2} mm</span>
             </div>
           </div>

@@ -16,7 +16,7 @@ function fatorViscosidade(muCp) {
   if (mu <= 500) return { Fmu: 1.0, obs: null };
   if (mu <= 2000) return { Fmu: 1.2, obs: null };
   if (mu <= 10000) return { Fmu: 1.5, obs: null };
-  return { Fmu: 1.5, obs: 'Viscosidade > 10000 cP: disco dispersor sozinho pode não ser adequado. Avaliar sistema com recirculação ou outro tipo de agitador.' };
+  return { Fmu: 1.5, obs: 'Produto muito grosso (acima de 10000 cP). Só o disco pode não ser suficiente; avalie usar outro tipo de agitador ou recirculação.' };
 }
 
 const CalculoMotorImpelidor = () => {
@@ -54,7 +54,7 @@ const CalculoMotorImpelidor = () => {
     const Di_max = 0.4 * T;
     const foraDaFaixa = Di < Di_min || Di > Di_max;
     const obsFaixa = foraDaFaixa
-      ? `Di (${Math.round(Di * 10) / 10} mm) está fora da faixa recomendada (${Math.round(Di_min)}–${Math.round(Di_max)} mm, ou seja 0,28T a 0,40T). Considere ajustar o disco ou utilizar inversor de frequência para variar a rotação.`
+      ? `O diâmetro do disco (${Math.round(Di * 10) / 10} mm) está fora do recomendado (entre ${Math.round(Di_min)} e ${Math.round(Di_max)} mm). Ajuste o disco ou use inversor de frequência para variar a rotação.`
       : null;
 
     // Velocidade periférica final (com Di calculado e n_real)
@@ -134,16 +134,16 @@ const CalculoMotorImpelidor = () => {
         <Link to="/engenharia" className="calculo-motor-impelidor-back">
           <FiArrowLeft /> Voltar
         </Link>
-        <h1>Motor + Impelidor — Disco dispersor (Cowles)</h1>
-        <p>Dimensionamento considerando polaridade do motor (polos e frequência)</p>
+        <h1>Disco dispersor (Cowles) — Motor + Impelidor</h1>
+        <p>Dimensionamento do disco a partir do tanque, do motor (polos) e da rede</p>
       </div>
 
       <div className="calculo-motor-impelidor-layout">
         <section className="calculo-motor-impelidor-section entradas">
-          <h2>Dados de entrada</h2>
+          <h2>Dados do tanque e do processo</h2>
           <div className="calculo-motor-impelidor-campos">
             <div className="calculo-motor-impelidor-campo">
-              <label>Diâmetro interno do tanque (T)</label>
+              <label>Diâmetro do tanque (por dentro), mm</label>
               <input
                 type="number"
                 value={T}
@@ -154,7 +154,7 @@ const CalculoMotorImpelidor = () => {
               <span className="unidade">mm</span>
             </div>
             <div className="calculo-motor-impelidor-campo">
-              <label>Altura útil do líquido (H)</label>
+              <label>Altura do líquido no tanque, mm</label>
               <input
                 type="number"
                 value={H}
@@ -165,18 +165,18 @@ const CalculoMotorImpelidor = () => {
               <span className="unidade">mm</span>
             </div>
             <div className="calculo-motor-impelidor-campo campo-full">
-              <label>Tipo de processo</label>
+              <label>Tipo de processo (quanto mais pesado, disco maior e mais potência)</label>
               <select
                 value={tipoProcesso}
                 onChange={(ev) => setTipoProcesso(ev.target.value)}
               >
                 <option value="leve">Leve</option>
                 <option value="padrao">Padrão</option>
-                <option value="pesado">Pesado (alto sólido)</option>
+                <option value="pesado">Pesado (muito sólido)</option>
               </select>
             </div>
             <div className="calculo-motor-impelidor-campo">
-              <label>Densidade (ρ)</label>
+              <label>Densidade do produto, kg/m³</label>
               <input
                 type="number"
                 value={densidade}
@@ -187,7 +187,7 @@ const CalculoMotorImpelidor = () => {
               <span className="unidade">kg/m³</span>
             </div>
             <div className="calculo-motor-impelidor-campo">
-              <label>Viscosidade (μ)</label>
+              <label>Viscosidade do produto, cP (quanto maior, mais grosso)</label>
               <input
                 type="number"
                 value={viscosidade}
@@ -198,7 +198,7 @@ const CalculoMotorImpelidor = () => {
               <span className="unidade">cP</span>
             </div>
             <div className="calculo-motor-impelidor-campo">
-              <label>Número de polos do motor</label>
+              <label>Número de polos do motor (define a rotação)</label>
               <select
                 value={polos}
                 onChange={(ev) => setPolos(Number(ev.target.value))}
@@ -227,38 +227,32 @@ const CalculoMotorImpelidor = () => {
         </section>
 
         <section className="calculo-motor-impelidor-section regras">
-          <h2>Regras de dimensionamento</h2>
+          <h2>Como é feito o cálculo</h2>
           <ul>
-            <li><strong>PASSO 1 – Rotação síncrona:</strong> n_s = (120 × f) / P</li>
-            <li><strong>PASSO 2 – Slip 3%:</strong> n_real = n_s × 0,97</li>
-            <li><strong>PASSO 3 – Velocidade periférica alvo:</strong> Leve 18 m/s; Padrão 22 m/s; Pesado 25 m/s</li>
-            <li><strong>PASSO 4 – Diâmetro do disco:</strong> Di_m = (60 × v) / (π × n_real); Di = Di_m × 1000 mm</li>
-            <li><strong>PASSO 5 – Proporção ideal:</strong> Di entre 0,28T e 0,40T; fora da faixa → recomendar inversor</li>
-            <li><strong>PASSO 6 – Volume útil:</strong> V = π × (T_m²/4) × H_m</li>
-            <li><strong>PASSO 7 – Potência base:</strong> P_base = (kW/m³) × V — Leve 1,5; Padrão 2,5; Pesado 4,0 kW/m³</li>
-            <li><strong>PASSO 8 – Correções:</strong> P_dens = P_base × (ρ/1000); Fμ por μ; P_final = P_dens × Fμ</li>
-            <li><strong>PASSO 9 – CV:</strong> CV = 1,3596 × P_final</li>
-            <li><strong>PASSO 10 – Torque:</strong> Torque = (9550 × P_final) / n_real (Nm)</li>
+            <li>Rotação do motor a partir dos polos e da frequência da rede</li>
+            <li>Diâmetro do disco para atingir a velocidade ideal na ponta (leve 18 m/s; padrão 22 m/s; pesado 25 m/s)</li>
+            <li>Volume do tanque e potência por metro cúbico, corrigida pela densidade e viscosidade</li>
+            <li>Potência em kW e em CV; torque no eixo em Nm</li>
           </ul>
         </section>
 
         <section ref={resultadoRef} className="calculo-motor-impelidor-section resultado-box">
-          <h2>Resultados</h2>
+          <h2>Resultado</h2>
           <div className="calculo-motor-impelidor-resultado-linhas">
             <div className="calculo-motor-impelidor-resultado-item">
-              <span className="nome">Rotação real</span>
+              <span className="nome">Rotação do motor</span>
               <span className="valor">{resultado.rpm} rpm</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
-              <span className="nome">Diâmetro necessário do disco</span>
+              <span className="nome">Diâmetro do disco</span>
               <span className="valor">{resultado.Di} mm</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
-              <span className="nome">Relação Di/T</span>
+              <span className="nome">Proporção disco ÷ tanque</span>
               <span className="valor">{resultado.relacaoDiT}</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
-              <span className="nome">Velocidade periférica final</span>
+              <span className="nome">Velocidade na ponta do disco</span>
               <span className="valor">{resultado.velPerifericaFinal} m/s</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
@@ -266,7 +260,7 @@ const CalculoMotorImpelidor = () => {
               <span className="valor">{resultado.P_kW} kW</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
-              <span className="nome">Potência</span>
+              <span className="nome">Potência em cavalos</span>
               <span className="valor">{resultado.CV} CV</span>
             </div>
             <div className="calculo-motor-impelidor-resultado-item">
@@ -285,7 +279,7 @@ const CalculoMotorImpelidor = () => {
             </div>
           )}
           <div className="calculo-motor-impelidor-detalhes">
-            <h3>Detalhamento dos cálculos</h3>
+            <h3>Detalhes dos cálculos</h3>
             <p><strong>PASSO 1 – n_s:</strong> {detalhes.formulaNs}</p>
             <p><strong>PASSO 2 – n_real:</strong> {detalhes.formulaNreal}</p>
             <p><strong>PASSO 4 – Di:</strong> {detalhes.formulaDi}</p>
