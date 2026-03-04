@@ -971,6 +971,25 @@ function initializeDatabase() {
   )`, (err) => {
     if (err) console.error('Erro ao criar tabela variaveis_tecnicas:', err);
     else console.log('✅ Tabela variaveis_tecnicas verificada');
+    // Seed variáveis base a partir de data/variaveis-base.json se a tabela estiver vazia (ex.: após rodar script da planilha)
+    db.get('SELECT COUNT(*) AS c FROM variaveis_tecnicas WHERE ativo = 1', [], (e, r) => {
+      if (e || !r || r.c > 0) return;
+      const basePath = path.join(PERSISTENT_DATA_DIR, 'variaveis-base.json');
+      if (!fs.existsSync(basePath)) return;
+      let list;
+      try { list = JSON.parse(fs.readFileSync(basePath, 'utf8')); } catch (_) { return; }
+      if (!Array.isArray(list) || list.length === 0) return;
+      const slug = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
+      const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, 1)');
+      list.forEach((item, i) => {
+        const nome = (item && item.nome) ? item.nome : (typeof item === 'string' ? item : '');
+        if (!nome) return;
+        const chave = slug(nome);
+        const ordem = (item && item.ordem != null) ? item.ordem : i;
+        stmt.run(nome, chave, ordem);
+      });
+      stmt.finalize(() => console.log('✅ Variáveis base carregadas de variaveis-base.json'));
+    });
   });
 
   // Opções de configuração por família e por variável (ex.: família Masseira Bimix + motor_central_cv → 30 CV, 50 CV, 75 CV)

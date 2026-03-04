@@ -1,0 +1,322 @@
+[
+  {
+    "nome": "VOLUME ÚTIL [L]",
+    "ordem": 0
+  },
+  {
+    "nome": "ÁREA DE INSTALAÇÃO",
+    "ordem": 1
+  },
+  {
+    "nome": "FREQUÊNCIA [Hz]",
+    "ordem": 2
+  },
+  {
+    "nome": "GRAU DE PROTEÇÃO MOTORES",
+    "ordem": 3
+  },
+  {
+    "nome": "MOTOR ESQUERDO [KW]",
+    "ordem": 4
+  },
+  {
+    "nome": "MARCA DO MOTOR ESQUERDO",
+    "ordem": 5
+  },
+  {
+    "nome": "ROTAÇÃO MOTOR ESQUERDO [RPM]",
+    "ordem": 6
+  },
+  {
+    "nome": "CARCAÇA DO MOTOR ESQUERDO",
+    "ordem": 7
+  },
+  {
+    "nome": "MOTOR/MOTOREDUTOR CENTRAL [KW]",
+    "ordem": 8
+  },
+  {
+    "nome": "MARCA DO MOTOREDUTOR/ REDUTOR CENTRAL",
+    "ordem": 9
+  },
+  {
+    "nome": "MARCA DO MOTOR CENTRAL",
+    "ordem": 10
+  },
+  {
+    "nome": "ROTAÇÃO DE SAIDA DO REDUTOR [RPM]",
+    "ordem": 11
+  },
+  {
+    "nome": "ROTAÇÃO DO MOTOR [RPM]",
+    "ordem": 12
+  },
+  {
+    "nome": "MODELO DO MOTOREDUTOR/ REDUTOR",
+    "ordem": 13
+  },
+  {
+    "nome": "CARCAÇA DO MOTOR CENTRAL",
+    "ordem": 14
+  },
+  {
+    "nome": "MOTOR DIREITO [KW]",
+    "ordem": 15
+  },
+  {
+    "nome": "MARCA DO MOTOR ESQUERDO",
+    "ordem": 16
+  },
+  {
+    "nome": "ROTAÇÃO MOTOR ESQUERDO [RPM]",
+    "ordem": 17
+  },
+  {
+    "nome": "CARCAÇA DO MOTOR ESQUERDO",
+    "ordem": 18
+  },
+  {
+    "nome": "POTÊNCIA TOTAL [KW]",
+    "ordem": 19
+  },
+  {
+    "nome": "MATERIAL TANQUE",
+    "ordem": 20
+  },
+  {
+    "nome": "MATERIAL EIXOS E HÉLICES",
+    "ordem": 21
+  },
+  {
+    "nome": "MATERIAL SUPORTES E REFORCOS",
+    "ordem": 22
+  },
+  {
+    "nome": "TAMPO SUPERIOR",
+    "ordem": 23
+  },
+  {
+    "nome": "TAMPO INFERIOR",
+    "ordem": 24
+  },
+  {
+    "nome": "DIÂMETRO BOCAL DE SAIDA [POL.]",
+    "ordem": 25
+  },
+  {
+    "nome": "QUANTIDADE DE SAIDAS",
+    "ordem": 26
+  },
+  {
+    "nome": "CONEXÂO DO BOCAL DE SAIDA",
+    "ordem": 27
+  },
+  {
+    "nome": "POSIÇÃO DO BOCAL DE SAIDA 1",
+    "ordem": 28
+  },
+  {
+    "nome": "POSIÇÃO DO BOCAL DE SAIDA 2",
+    "ordem": 29
+  },
+  {
+    "nome": "CAMISA",
+    "ordem": 30
+  },
+  {
+    "nome": "SERPENTINA",
+    "ordem": 31
+  },
+  {
+    "nome": "MATERIAL DA CAMISA",
+    "ordem": 32
+  },
+  {
+    "nome": "MATERIAL DA SERPENTINA",
+    "ordem": 33
+  },
+  {
+    "nome": "RASPADOR",
+    "ordem": 34
+  },
+  {
+    "nome": "SISTEMA DE AGITAÇÃO PRIMÁRIO",
+    "ordem": 35
+  },
+  {
+    "nome": "SISTEMA DE AGITAÇÃO SECUNDÁRIO",
+    "ordem": 36
+  },
+  {
+    "nome": "PÁ INTERMEDIARIA",
+    "ordem": 37
+  },
+  {
+    "nome": "DIÂMETRO DISCO INFERIOR",
+    "ordem": 38
+  },
+  {
+    "nome": "DIÂMETRO DISCO SUPERIOR",
+    "ordem": 39
+  },
+  {
+    "nome": "ACABAMENTO INTERNO DO TANQUE",
+    "ordem": 40
+  },
+  {
+    "nome": "ACABAMENTO EXTERNO DO TANQUE",
+    "ordem": 41
+  },
+  {
+    "nome": "ACABAMENTO PEÇAS DE AÇO CARBONO",
+    "ordem": 42
+  },
+  {
+    "nome": "TENSÃO DE TRABALHO [V]",
+    "ordem": 43
+  },
+  {
+    "nome": "PAINEL ELÉTRICO",
+    "ordem": 44
+  },
+  {
+    "nome": "NÍVEL DE AUTOMAÇÃO",
+    "ordem": 45
+  },
+  {
+    "nome": "ACIONAMENTO",
+    "ordem": 46
+  },
+  {
+    "nome": "MARCA DO ACIONAMENTO P/ MOTOR ESQUERDO",
+    "ordem": 47
+  },
+  {
+    "nome": "MARCA DO ACIONAMENTO P/ MOTOR CENTRAL",
+    "ordem": 48
+  },
+  {
+    "nome": "MARCA DO ACIONAMENTO P/ MOTOR DIREITO",
+    "ordem": 49
+  },
+  {
+    "nome": "MODELO DO ACIONAMENTO P/ MOTOR ESQUERDO",
+    "ordem": 50
+  },
+  {
+    "nome": "MODELO DO ACIONAMENTO P/ MOTOR CENTRAL",
+    "ordem": 51
+  },
+  {
+    "nome": "MODELO DO ACIONAMENTO P/ MOTOR DIREITO",
+    "ordem": 52
+  },
+  {
+    "nome": "MATERIAL DO CCM",
+    "ordem": 53
+  },
+  {
+    "nome": "MATERIAL DA BOTOEIRA",
+    "ordem": 54
+  },
+  {
+    "nome": "GRAU DE PROTEÇÃO DO CCM",
+    "ordem": 55
+  },
+  {
+    "nome": "GRAU DE PROTEÇÃO DA BOTOEIRA",
+    "ordem": 56
+  },
+  {
+    "nome": "SUPORTE DE BOTOEIRA",
+    "ordem": 57
+  },
+  {
+    "nome": "MODELO VÁLVULA DE SAÍDA",
+    "ordem": 58
+  },
+  {
+    "nome": "ACIONAMENTO DA VÁLVULA DE SAIDA",
+    "ordem": 59
+  },
+  {
+    "nome": "SISTEMA DE PESAGEM",
+    "ordem": 60
+  },
+  {
+    "nome": "MARCA DO SISTEMA DE PESAGEM",
+    "ordem": 61
+  },
+  {
+    "nome": "DESPOEIRADOR",
+    "ordem": 62
+  },
+  {
+    "nome": "MARCA DO DESPOEIRADOR",
+    "ordem": 63
+  },
+  {
+    "nome": "MODELO DO DESPOEIRADOR",
+    "ordem": 64
+  },
+  {
+    "nome": "BOMBA DE VÁCUO",
+    "ordem": 65
+  },
+  {
+    "nome": "MARCA DA BOMBA DE VACUO",
+    "ordem": 66
+  },
+  {
+    "nome": "MODELO DA BOMBA DE VACUO",
+    "ordem": 67
+  },
+  {
+    "nome": "SISTEMA DE AQUECIMENTO ELÉTRICO",
+    "ordem": 68
+  },
+  {
+    "nome": "ALTURA DE OPERAÇÃO [mm]",
+    "ordem": 69
+  },
+  {
+    "nome": "QUANTIDADE DE SAPATAS",
+    "ordem": 70
+  },
+  {
+    "nome": "PÉS DE SUSTENTAÇÃO",
+    "ordem": 71
+  },
+  {
+    "nome": "BOCAIS ADICIONAIS",
+    "ordem": 72
+  },
+  {
+    "nome": "EXTRAS",
+    "ordem": 73
+  },
+  {
+    "nome": "PESO ESTIMADO DO EQUIPAMENTO [KG]",
+    "ordem": 74
+  },
+  {
+    "nome": "PESO ESTIMADO DO CCM [KG]",
+    "ordem": 75
+  },
+  {
+    "nome": "PESO ESTIMADO DA BOTOEIRA [KG]",
+    "ordem": 76
+  },
+  {
+    "nome": "PESO ESTIMADO Do SUPORTE DA BOTOEIRA [KG]",
+    "ordem": 77
+  },
+  {
+    "nome": "PESO TOTAL ESTIMADO [KG]",
+    "ordem": 78
+  },
+  {
+    "nome": "DIMENSÕES GERAIS ESTIMADAS (Larg. X Comp. X Alt) [m]",
+    "ordem": 79
+  }
+]
