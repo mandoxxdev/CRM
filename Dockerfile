@@ -16,11 +16,11 @@ RUN rm -f package-lock.json server/package-lock.json client/package-lock.json &&
 
 COPY . .
 
-# Build do client com limite de 1.5GB (evita OOM no Coolify)
+# Build do client: CI=false evita falha por avisos do ESLint; limite 1.5GB evita OOM no Coolify
 ENV CI=false
 ENV GENERATE_SOURCEMAP=false
 ENV NODE_OPTIONS="--max-old-space-size=1536"
-RUN cd client && npm run build && cd ..
+RUN cd client && CI=false npm run build && cd ..
 
 # Expor porta
 EXPOSE 3000
