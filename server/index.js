@@ -114,6 +114,34 @@ app.get('/health', (req, res) => {
 
 // Pasta persistente: use volume em /app/server/data no Coolify para não sobrescrever o código
 const PERSISTENT_DATA_DIR = path.join(__dirname, 'data');
+
+// Lista padrão de variáveis técnicas (usada no seed quando a tabela está vazia e não há variaveis-base.json)
+const VARIAVEIS_BASE_DEFAULT = [
+  'ITEM', 'CÓDIGO / VERSÃO', 'GRUPO', 'FAMÍLIA', 'MODELO', 'VOLUME ÚTIL [L]', 'ÁREA DE INSTALAÇÃO',
+  'FREQUÊNCIA [Hz]', 'GRAU DE PROTEÇÃO MOTORES', 'MOTOR ESQUERDO [kW]', 'MARCA DO MOTOR ESQUERDO',
+  'ROTAÇÃO MOTOR ESQUERDO [RPM]', 'CARCAÇA DO MOTOR ESQUERDO', 'MOTOR / MOTOREDUTOR CENTRAL [kW]',
+  'MARCA DO MOTOREDUTOR / REDUTOR CENTRAL', 'MARCA DO MOTOR CENTRAL', 'ROTAÇÃO DE SAÍDA DO REDUTOR [RPM]',
+  'ROTAÇÃO DO MOTOR [RPM]', 'MODELO DO MOTOREDUTOR / REDUTOR', 'CARCAÇA DO MOTOR CENTRAL',
+  'MOTOR DIREITO [kW]', 'MARCA DO MOTOR DIREITO', 'ROTAÇÃO MOTOR DIREITO [RPM]', 'CARCAÇA DO MOTOR DIREITO',
+  'POTÊNCIA TOTAL [kW]', 'MATERIAL TANQUE', 'MATERIAL EIXOS E HÉLICES', 'MATERIAL SUPORTES E REFORÇOS',
+  'TAMPO SUPERIOR', 'TAMPO INFERIOR', 'DIÂMETRO BOCAL DE SAÍDA [pol.]', 'QUANTIDADE DE SAÍDAS',
+  'CONEXÃO DO BOCAL DE SAÍDA', 'POSIÇÃO DO BOCAL DE SAÍDA 1', 'POSIÇÃO DO BOCAL DE SAÍDA 2',
+  'CAMISA', 'SERPENTINA', 'MATERIAL DA CAMISA', 'MATERIAL DA SERPENTINA', 'RASPADOR',
+  'SISTEMA DE AGITAÇÃO PRIMÁRIO', 'SISTEMA DE AGITAÇÃO SECUNDÁRIO', 'PÁ INTERMEDIÁRIA',
+  'DIÂMETRO DISCO INFERIOR', 'DIÂMETRO DISCO SUPERIOR', 'ACABAMENTO INTERNO DO TANQUE',
+  'ACABAMENTO EXTERNO DO TANQUE', 'ACABAMENTO PEÇAS DE AÇO CARBONO', 'TENSÃO DE TRABALHO [V]',
+  'PAINEL ELÉTRICO', 'NÍVEL DE AUTOMAÇÃO', 'ACIONAMENTO',
+  'MARCA DO ACIONAMENTO P/ MOTOR ESQUERDO', 'MARCA DO ACIONAMENTO P/ MOTOR CENTRAL', 'MARCA DO ACIONAMENTO P/ MOTOR DIREITO',
+  'MODELO DO ACIONAMENTO P/ MOTOR ESQUERDO', 'MODELO DO ACIONAMENTO P/ MOTOR CENTRAL', 'MODELO DO ACIONAMENTO P/ MOTOR DIREITO',
+  'MATERIAL DO CCM', 'MATERIAL DA BOTOEIRA', 'GRAU DE PROTEÇÃO DO CCM', 'GRAU DE PROTEÇÃO DA BOTOEIRA',
+  'SUPORTE DE BOTOEIRA', 'MODELO VÁLVULA DE SAÍDA', 'ACIONAMENTO DA VÁLVULA DE SAÍDA',
+  'SISTEMA DE PESAGEM', 'MARCA DO SISTEMA DE PESAGEM', 'DESPOEIRADOR', 'MARCA DO DESPOEIRADOR',
+  'MODELO DO DESPOEIRADOR', 'BOMBA DE VÁCUO', 'MARCA DA BOMBA DE VÁCUO', 'MODELO DA BOMBA DE VÁCUO',
+  'SISTEMA DE AQUECIMENTO ELÉTRICO', 'ALTURA DE OPERAÇÃO [mm]', 'QUANTIDADE DE SAPATAS', 'PÉS DE SUSTENTAÇÃO',
+  'BOCAIS ADICIONAIS', 'EXTRAS', 'PESO ESTIMADO DO EQUIPAMENTO [kg]', 'PESO ESTIMADO DO CCM [kg]',
+  'PESO ESTIMADO DA BOTOEIRA [kg]', 'PESO ESTIMADO DO SUPORTE DA BOTOEIRA [kg]', 'PESO TOTAL ESTIMADO [kg]',
+  'DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]'
+];
 if (!fs.existsSync(PERSISTENT_DATA_DIR)) {
   fs.mkdirSync(PERSISTENT_DATA_DIR, { recursive: true });
 }
@@ -971,14 +999,18 @@ function initializeDatabase() {
   )`, (err) => {
     if (err) console.error('Erro ao criar tabela variaveis_tecnicas:', err);
     else console.log('✅ Tabela variaveis_tecnicas verificada');
-    // Seed variáveis base a partir de data/variaveis-base.json se a tabela estiver vazia (ex.: após rodar script da planilha)
+    // Seed variáveis base: de data/variaveis-base.json ou da lista padrão (VARIAVEIS_BASE_DEFAULT), quando a tabela estiver vazia
     db.get('SELECT COUNT(*) AS c FROM variaveis_tecnicas WHERE ativo = 1', [], (e, r) => {
       if (e || !r || r.c > 0) return;
+      let list = [];
       const basePath = path.join(PERSISTENT_DATA_DIR, 'variaveis-base.json');
-      if (!fs.existsSync(basePath)) return;
-      let list;
-      try { list = JSON.parse(fs.readFileSync(basePath, 'utf8')); } catch (_) { return; }
-      if (!Array.isArray(list) || list.length === 0) return;
+      if (fs.existsSync(basePath)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(basePath, 'utf8'));
+          if (Array.isArray(parsed) && parsed.length > 0) list = parsed;
+        } catch (_) {}
+      }
+      if (list.length === 0) list = VARIAVEIS_BASE_DEFAULT.map((nome, ordem) => ({ nome, ordem }));
       const slug = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
       const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, 1)');
       list.forEach((item, i) => {
@@ -988,7 +1020,7 @@ function initializeDatabase() {
         const ordem = (item && item.ordem != null) ? item.ordem : i;
         stmt.run(nome, chave, ordem);
       });
-      stmt.finalize(() => console.log('✅ Variáveis base carregadas de variaveis-base.json'));
+      stmt.finalize(() => console.log('✅ Variáveis base carregadas (' + list.length + ' variáveis)'));
     });
   });
 
