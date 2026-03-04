@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
-import { FiX, FiUploadCloud, FiTrash2, FiEdit2, FiSearch, FiPlus } from 'react-icons/fi';
+import { FiX, FiUploadCloud, FiTrash2, FiEdit2, FiSearch, FiPlus, FiLayers, FiImage, FiSliders, FiCheck } from 'react-icons/fi';
 import api from '../services/api';
 import './ModalFamiliaForm.css';
 
@@ -584,102 +584,137 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
 
   return (
     <div className="modal-familia-overlay" onClick={onClose}>
-      <div className="modal-familia-container" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-familia-header">
-          <h2>{isEdit ? 'Editar Família' : 'Nova Família'}</h2>
-          <button type="button" className="modal-familia-close" onClick={onClose}>
-            <FiX />
+      <div className="modal-familia-container modal-familia-premium" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-familia-header premium">
+          <div className="modal-familia-header-inner">
+            <div className="modal-familia-header-icon">
+              <FiLayers size={28} />
+            </div>
+            <div>
+              <h2>{isEdit ? 'Editar Família' : 'Nova Família'}</h2>
+              <p className="modal-familia-header-sub">Configure nome, variáveis e imagens desta família de produtos</p>
+            </div>
+          </div>
+          <button type="button" className="modal-familia-close premium" onClick={onClose} aria-label="Fechar">
+            <FiX size={22} />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="modal-familia-form">
           {useLocalOnly && (
-            <div className="modal-familia-info" style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
-              Modo local: os dados ficam só neste navegador.
-            </div>
+            <div className="modal-familia-info premium">Modo local: os dados ficam só neste navegador.</div>
           )}
-          {error && <div className="modal-familia-error">{error}</div>}
-          <div className="modal-familia-field">
-            <label>Nome da família *</label>
-            <input
-              type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Ex: Misturadores, Dosadores"
-              autoFocus
-            />
-          </div>
-          <div className="modal-familia-field">
-            <label>Ordem (opcional)</label>
-            <input
-              type="number"
-              min="0"
-              value={ordem}
-              onChange={(e) => setOrdem(e.target.value)}
-            />
-          </div>
+          {error && <div className="modal-familia-error premium">{error}</div>}
+
+          <section className="modal-familia-section-card">
+            <div className="modal-familia-section-head">
+              <FiSliders size={20} className="section-icon" />
+              <h3>Dados básicos</h3>
+            </div>
+            <div className="modal-familia-section-body">
+              <div className="modal-familia-field">
+                <label>Nome da família *</label>
+                <input
+                  type="text"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  placeholder="Ex: Misturadores, Dosadores"
+                  autoFocus
+                  className="input-premium"
+                />
+              </div>
+              <div className="modal-familia-field">
+                <label>Ordem (opcional)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={ordem}
+                  onChange={(e) => setOrdem(e.target.value)}
+                  className="input-premium"
+                />
+              </div>
+            </div>
+          </section>
+
           {!useLocalOnly && (
             <>
-              <div className="modal-familia-field modal-familia-variaveis-section">
-                <label>Variáveis desta família</label>
-                <p className="modal-familia-hint">Marque as variáveis que os produtos desta família podem preencher. Não é obrigatório ter marcadores (bolinhas) na vista — os marcadores servem só para orçamento rápido.</p>
-                <div className="modal-familia-variaveis-search">
-                  <FiSearch size={16} />
+              <section className="modal-familia-section-card modal-familia-variaveis-card">
+                <div className="modal-familia-section-head">
+                  <FiLayers size={20} className="section-icon" />
+                  <h3>Variáveis desta família</h3>
+                  <span className="modal-familia-variaveis-badge">{variaveisDaFamiliaChaves.length}</span>
+                </div>
+                <p className="modal-familia-hint premium">Marque as variáveis que os produtos desta família podem preencher. Os marcadores na vista são opcionais e servem para orçamento rápido.</p>
+                <div className="modal-familia-variaveis-search premium">
+                  <FiSearch size={18} />
                   <input
                     type="text"
                     value={searchVariavelFamilia}
                     onChange={(e) => setSearchVariavelFamilia(e.target.value)}
-                    placeholder="Buscar variável..."
+                    placeholder="Buscar variável por nome..."
                   />
                 </div>
-                <div className="modal-familia-variaveis-list">
+                <div className="modal-familia-variaveis-list premium">
                   {(searchVariavelFamilia ? variaveisFiltradasFamilia : variaveisList).slice(0, 100).map((v) => {
                     const chave = v.chave || '';
                     const checked = variaveisDaFamiliaChaves.includes(chave);
                     return (
-                      <label key={chave} className="modal-familia-variavel-check">
+                      <label key={chave} className={`modal-familia-variavel-check premium ${checked ? 'checked' : ''}`}>
+                        <span className="variavel-checkbox-custom">
+                          {checked && <FiCheck size={14} strokeWidth={3} />}
+                        </span>
                         <input
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleVariavelFamilia(chave)}
+                          className="sr-only"
                         />
-                        <span>{v.nome || chave}</span>
-                        {v.categoria && <span className="modal-familia-variavel-cat">({v.categoria})</span>}
+                        <span className="variavel-nome">{v.nome || chave}</span>
+                        {v.categoria && <span className="modal-familia-variavel-cat">{v.categoria}</span>}
                       </label>
                     );
                   })}
                 </div>
-                <p className="modal-familia-variaveis-count">{variaveisDaFamiliaChaves.length} variável(is) selecionada(s) para esta família</p>
-              </div>
-              <div className="modal-familia-field">
-                <label>Foto (opcional)</label>
-                <div className="modal-familia-foto-row">
-                  <div className="modal-familia-preview">
-                    {previewUrl ? (
-                      <img src={previewUrl} alt="Preview" />
-                    ) : (
-                      <div className="modal-familia-preview-placeholder">
-                        <FiUploadCloud size={32} />
-                        <span>Nenhuma imagem</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="modal-familia-upload">
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                      onChange={handleFileChange}
-                      id="familia-foto-input"
-                    />
-                    <label htmlFor="familia-foto-input" className="btn-upload-label">
-                      {fotoFile ? 'Trocar imagem' : 'Enviar imagem'}
-                    </label>
-                  </div>
+                <p className="modal-familia-variaveis-count premium">
+                  <strong>{variaveisDaFamiliaChaves.length}</strong> variável(is) selecionada(s) para esta família
+                </p>
+              </section>
+
+              <section className="modal-familia-section-card">
+                <div className="modal-familia-section-head">
+                  <FiImage size={20} className="section-icon" />
+                  <h3>Imagens</h3>
                 </div>
-              </div>
-              <div className="modal-familia-field">
-                <label>Vista frontal / Esquemático (opcional)</label>
-                <p className="modal-familia-hint">Imagem de referência ao cadastrar produtos. Use o botão &quot;Adicionar marcador&quot; para posicionar variáveis técnicas na vista. Arraste os marcadores para mover.</p>
-                <div className="modal-familia-vista-wrapper">
+                <div className="modal-familia-section-body">
+                  <div className="modal-familia-field">
+                    <label>Foto (opcional)</label>
+                    <div className="modal-familia-foto-row premium">
+                      <div className="modal-familia-preview premium">
+                        {previewUrl ? (
+                          <img src={previewUrl} alt="Preview" />
+                        ) : (
+                          <div className="modal-familia-preview-placeholder">
+                            <FiUploadCloud size={36} />
+                            <span>Nenhuma imagem</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="modal-familia-upload">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                          onChange={handleFileChange}
+                          id="familia-foto-input"
+                        />
+                        <label htmlFor="familia-foto-input" className="btn-upload-label premium">
+                          {fotoFile ? 'Trocar imagem' : 'Enviar imagem'}
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="modal-familia-field">
+                    <label>Vista frontal / Esquemático (opcional)</label>
+                    <p className="modal-familia-hint premium">Imagem de referência ao cadastrar produtos. Use o botão abaixo para posicionar marcadores na vista.</p>
+                    <div className="modal-familia-vista-wrapper">
                   <div className={`modal-familia-vista-frontal ${esquematicoPreviewUrl ? 'has-image' : ''} ${modoAdicionarBolinha ? 'modo-adicionar' : ''}`}>
                     {esquematicoPreviewUrl ? (
                       <div
@@ -714,7 +749,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                       onChange={handleEsquematicoChange}
                       id="familia-esquematico-input"
                     />
-                    <label htmlFor="familia-esquematico-input" className="btn-upload-label">
+                    <label htmlFor="familia-esquematico-input" className="btn-upload-label premium">
                       {esquematicoFile ? 'Trocar esquemático' : 'Enviar esquemático'}
                     </label>
                   </div>
@@ -821,14 +856,16 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                       ))}
                     </ul>
                     {marcadores.length === 0 && (
-                      <p className="marcadores-empty">Nenhum marcador técnico ainda. Use o botão &quot;Adicionar marcador&quot; e clique na vista frontal para adicionar.</p>
+                      <p className="marcadores-empty premium">Nenhum marcador ainda. Use &quot;Adicionar marcador&quot; e clique na vista para posicionar.</p>
                     )}
                   </div>
                 )}
-              </div>
+                  </div>
+                </div>
+              </section>
             </>
           )}
-          <div className="modal-familia-actions">
+          <div className="modal-familia-actions premium">
             <button type="button" onClick={onClose} className="btn-cancel">
               Cancelar
             </button>
