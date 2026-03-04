@@ -170,6 +170,12 @@ if (!fs.existsSync(uploadsFamiliasDir)) {
   fs.mkdirSync(uploadsFamiliasDir, { recursive: true });
 }
 
+// Diretório para uploads de fotos de grupos de produtos
+const uploadsGruposDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'grupos-produtos');
+if (!fs.existsSync(uploadsGruposDir)) {
+  fs.mkdirSync(uploadsGruposDir, { recursive: true });
+}
+
 // Configurar diretório de uploads de logos
 const uploadsLogosDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'logos');
 if (!fs.existsSync(uploadsLogosDir)) {
@@ -335,6 +341,31 @@ const uploadFamilia = multer({
     } else {
       cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
     }
+  }
+});
+
+// Storage para fotos de grupos de produtos
+const storageGrupos = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsGruposDir);
+  },
+  filename: (req, file, cb) => {
+    const grupoId = req.params.id || 'temp';
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext);
+    cb(null, `grupo_${grupoId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`);
+  }
+});
+const uploadGrupo = multer({
+  storage: storageGrupos,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) return cb(null, true);
+    cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
   }
 });
 
@@ -966,6 +997,9 @@ function initializeDatabase() {
     if (err) console.error('Erro ao criar tabela grupos_produto:', err);
     else {
       console.log('✅ Tabela grupos_produto verificada');
+      db.run('ALTER TABLE grupos_produto ADD COLUMN foto TEXT', (e) => {
+        if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna foto em grupos_produto:', e.message);
+      });
       db.get('SELECT COUNT(*) AS n FROM grupos_produto', [], function(er, row) {
         if (!er && row && row.n === 0) {
           var defaults = ['Masseira', 'Dispersores', 'Tanques e Reatores', 'Hélices e Acessórios', 'Outros'];
@@ -2080,6 +2114,64 @@ app.delete('/api/grupos/:id', authenticateToken, (req, res) => {
     if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
     res.json({ message: 'Grupo desativado' });
   });
+});
+
+app.post('/api/grupos/:id/foto', authenticateToken, uploadGrupo.single('foto'), (req, res) => {
+  var id = req.params.id;
+  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  var filename = req.file.filename;
+  db.get('SELECT * FROM grupos_produto WHERE id = ?', [id], function(err, grupo) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!grupo) return res.status(404).json({ error: 'Grupo não encontrado' });
+    var oldFoto = grupo.foto;
+    db.run('UPDATE grupos_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(updateErr) {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (oldFoto) {
+        var oldPath = path.join(uploadsGruposDir, oldFoto);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      res.json({ foto: filename, url: '/api/uploads/grupos-produtos/' + filename });
+    });
+  });
+});
+
+app.post('/api/grupos/:id/foto-base64', authenticateToken, (req, res) => {
+  try {
+    var id = req.params.id;
+    var b64 = req.body && req.body.foto_base64;
+    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'foto_base64 é obrigatório' });
+    var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
+    var ext = '.jpg';
+    var buf = b64;
+    if (match) {
+      ext = match[1] === 'jpeg' ? '.jpg' : '.' + match[1];
+      buf = Buffer.from(match[2], 'base64');
+    } else {
+      buf = Buffer.from(b64, 'base64');
+    }
+    if (!fs.existsSync(uploadsGruposDir)) fs.mkdirSync(uploadsGruposDir, { recursive: true });
+    var filename = 'grupo_' + id + '_' + Date.now() + ext;
+    var filePath = path.join(uploadsGruposDir, filename);
+    fs.writeFile(filePath, buf, function(err) {
+      if (err) return res.status(500).json({ error: 'Erro ao salvar arquivo: ' + err.message });
+      db.get('SELECT * FROM grupos_produto WHERE id = ?', [id], function(dbErr, grupo) {
+        if (dbErr) return res.status(500).json({ error: dbErr.message });
+        if (!grupo) return res.status(404).json({ error: 'Grupo não encontrado' });
+        var oldFoto = grupo.foto;
+        db.run('UPDATE grupos_produto SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], function(upErr) {
+          if (upErr) return res.status(500).json({ error: upErr.message });
+          if (oldFoto) {
+            var oldPath = path.join(uploadsGruposDir, oldFoto);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          }
+          res.json({ foto: filename, url: '/api/uploads/grupos-produtos/' + filename });
+        });
+      });
+    });
+  } catch (e) {
+    console.error('Erro foto-base64 grupo:', e);
+    return res.status(500).json({ error: e.message || 'Erro ao processar foto' });
+  }
 });
 
 app.get('/api/familias', authenticateToken, (req, res) => {
@@ -10562,6 +10654,7 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 
 // Servir fotos de famílias
 app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
+app.use('/api/uploads/grupos-produtos', express.static(uploadsGruposDir));
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {

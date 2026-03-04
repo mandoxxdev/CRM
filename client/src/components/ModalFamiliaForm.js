@@ -81,14 +81,26 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [searchVariavelFamilia, setSearchVariavelFamilia] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [gruposList, setGruposList] = useState([]);
+  const [selectedGrupoId, setSelectedGrupoId] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
       api.get('/variaveis-tecnicas', { params: { ativo: 'true' } })
         .then((res) => setVariaveisTecnicas(Array.isArray(res.data) ? res.data : []))
         .catch(() => setVariaveisTecnicas([]));
+      api.get('/grupos')
+        .then((res) => setGruposList(Array.isArray(res.data) ? res.data : []))
+        .catch(() => setGruposList([]));
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && (familia || grupoId != null)) {
+      const next = familia && familia.grupo_id != null ? familia.grupo_id : (grupoId != null && grupoId !== '' ? Number(grupoId) : null);
+      setSelectedGrupoId(next);
+    }
+  }, [isOpen, familia, grupoId]);
 
   const variaveisList = useMemo(() => {
     const list = variaveisTecnicas.length ? variaveisTecnicas : VARIAVEIS_FALLBACK;
@@ -147,7 +159,9 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     setShowBolinhasPremium(false);
     setModoAdicionarBolinha(false);
     setError('');
-  }, [familia, isOpen, useLocalOnly]);
+    const nextGrupo = familia && familia.grupo_id != null ? familia.grupo_id : (grupoId != null && grupoId !== '' ? Number(grupoId) : null);
+    setSelectedGrupoId(nextGrupo);
+  }, [familia, isOpen, useLocalOnly, grupoId]);
 
   function getFotoUrl(foto) {
     if (!foto) return null;
@@ -358,7 +372,8 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         await api.put(`/familias/${familia.id}`, {
           nome: nomeTrim,
           ordem: Number(ordem) || 0,
-          marcadores_vista: marcadores
+          marcadores_vista: marcadores,
+          ...(selectedGrupoId != null ? { grupo_id: selectedGrupoId } : { grupo_id: null })
         });
         familiaId = familia.id;
         if (fotoFile) await uploadImagemFamilia('foto', familia.id, fotoFile);
@@ -367,7 +382,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         const res = await api.post('/familias', {
           nome: nomeTrim,
           ordem: Number(ordem) || 0,
-          ...(grupoId != null && grupoId !== '' ? { grupo_id: Number(grupoId) } : {})
+          ...(selectedGrupoId != null ? { grupo_id: selectedGrupoId } : (grupoId != null && grupoId !== '' ? { grupo_id: Number(grupoId) } : {}))
         });
         familiaId = res.data && res.data.id;
         if (familiaId) {
@@ -636,6 +651,24 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                   className="input-premium"
                 />
               </div>
+              {!useLocalOnly && gruposList.length > 0 && (
+                <div className="modal-familia-field">
+                  <label>Grupo</label>
+                  <select
+                    value={selectedGrupoId != null ? selectedGrupoId : ''}
+                    onChange={(e) => setSelectedGrupoId(e.target.value === '' ? null : Number(e.target.value))}
+                    className="input-premium"
+                  >
+                    <option value="">— Sem grupo —</option>
+                    {gruposList.map((gr) => (
+                      <option key={gr.id} value={gr.id}>{gr.nome}</option>
+                    ))}
+                  </select>
+                  <p className="modal-familia-hint premium" style={{ marginTop: 6, marginBottom: 0 }}>
+                    Troque o grupo para mover esta família (ex.: de Dispersores para Masseira).
+                  </p>
+                </div>
+              )}
             </div>
           </section>
 
