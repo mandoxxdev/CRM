@@ -106,8 +106,10 @@
 .grupo-card-foto-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   display: block;
+  background: linear-gradient(135deg, var(--card-accent) 0%, var(--card-accent-light) 100%);
 }
 
 .grupo-card-placeholder {
