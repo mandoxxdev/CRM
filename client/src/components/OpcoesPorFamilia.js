@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
-import { FiPackage, FiPlus, FiTrash2, FiChevronDown } from 'react-icons/fi';
+import { FiPackage, FiPlus, FiTrash2 } from 'react-icons/fi';
 import './OpcoesPorFamilia.css';
-
-function parseMarcadores(raw) {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw.map((m, i) => ({ ...m, numero: m.numero != null ? m.numero : i + 1 }));
-  if (raw.marcadores && Array.isArray(raw.marcadores)) return raw.marcadores.map((m, i) => ({ ...m, numero: m.numero != null ? m.numero : i + 1 }));
-  return [];
-}
 
 const OpcoesPorFamilia = () => {
   const [familias, setFamilias] = useState([]);
@@ -35,13 +28,12 @@ const OpcoesPorFamilia = () => {
     setLoadingDetail(true);
     Promise.all([
       api.get(`/familias/${familiaId}`),
+      api.get(`/familias/${familiaId}/variaveis`),
       api.get(`/familias/${familiaId}/opcoes-variaveis`)
-    ]).then(([famRes, opcRes]) => {
+    ]).then(([famRes, varRes, opcRes]) => {
       const fam = famRes.data;
-      let raw = fam.marcadores_vista;
-      if (typeof raw === 'string') try { raw = JSON.parse(raw); } catch (_) { raw = []; }
-      const marcadores = parseMarcadores(raw);
-      setFamiliaDetail({ ...fam, marcadores });
+      const variaveis = Array.isArray(varRes.data) ? varRes.data : [];
+      setFamiliaDetail({ ...fam, variaveis });
       setOpcoesByVar(opcRes.data || {});
       setNovoValor({});
     }).catch((err) => {
@@ -51,8 +43,7 @@ const OpcoesPorFamilia = () => {
     }).finally(() => setLoadingDetail(false));
   }, [familiaId]);
 
-  const todosMarcadores = familiaDetail?.marcadores || [];
-  const marcadores = todosMarcadores.filter((m) => m.tipo !== 'selecao');
+  const variaveisDaFamilia = familiaDetail?.variaveis || [];
 
   const addOpcao = async (variavelChave, valor) => {
     const v = (valor || novoValor[variavelChave] || '').trim();
@@ -94,7 +85,7 @@ const OpcoesPorFamilia = () => {
     <div className="config-section opcoes-por-familia">
       <h2><FiPackage /> Opções de configuração por família</h2>
       <p className="opcoes-familia-desc">
-        Defina, para cada família, os valores disponíveis em cada marcador técnico. Na proposta, o vendedor escolherá marcador a marcador e o sistema indicará se o equipamento é <strong>Existente</strong> (padrão) ou <strong>Não existente</strong> (sob consulta).
+        Defina, para cada família, os valores disponíveis em cada variável técnica (as mesmas variáveis que você definiu em &quot;Variáveis desta família&quot; no cadastro da família). Na proposta, o vendedor escolherá valor a valor e o sistema indicará se o equipamento é <strong>Existente</strong> (padrão) ou <strong>Não existente</strong> (sob consulta).
       </p>
       <div className="opcoes-familia-select-wrap">
         <label>Família</label>
@@ -110,27 +101,25 @@ const OpcoesPorFamilia = () => {
         </select>
       </div>
 
-      {loadingDetail && <div className="opcoes-familia-loading">Carregando marcadores e opções...</div>}
+      {loadingDetail && <div className="opcoes-familia-loading">Carregando variáveis e opções...</div>}
 
       {!loadingDetail && familiaId && familiaDetail && (
         <div className="opcoes-familia-content">
-          {marcadores.length === 0 ? (
+          {variaveisDaFamilia.length === 0 ? (
             <p className="opcoes-familia-empty">
-              {todosMarcadores.length === 0
-                ? 'Esta família ainda não tem marcadores técnicos na vista frontal. Edite a família e adicione marcadores na vista frontal para poder configurar as opções aqui.'
-                : 'Os marcadores desta família são apenas de seleção simples (clicar = incluir na proposta). Não é necessário configurar opções aqui.'}
+              Esta família ainda não tem variáveis definidas. Edite a família em <strong>Configurações → Famílias</strong> e marque as variáveis em &quot;Variáveis desta família&quot; para poder configurar as opções aqui.
             </p>
           ) : (
             <div className="opcoes-familia-marcadores">
-              {marcadores.map((m) => {
-                const chave = m.variavel || m.key || '';
+              {variaveisDaFamilia.map((v) => {
+                const chave = v.chave || '';
                 const opcoes = opcoesByVar[chave] || [];
                 const valorNovo = novoValor[chave] || '';
+                const nomeVar = v.nome || chave;
                 return (
-                  <div key={m.id || chave} className="opcoes-familia-card">
+                  <div key={chave} className="opcoes-familia-card">
                     <div className="opcoes-familia-card-header">
-                      <span className="opcoes-familia-numero">{m.numero != null ? m.numero : '—'}</span>
-                      <span className="opcoes-familia-label">{m.label || chave || 'Variável'}</span>
+                      <span className="opcoes-familia-label">{nomeVar}</span>
                       <span className="opcoes-familia-chave">{chave}</span>
                     </div>
                     <div className="opcoes-familia-card-body">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { FiMail, FiLock, FiLogIn, FiAlertCircle } from 'react-icons/fi';
 import './Login.css';
@@ -11,18 +11,18 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sessaoExpirada = searchParams.get('sessao_expirada') === '1';
 
   useEffect(() => {
-    // Desativar scroll do body quando o componente montar
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
-    
-    // Reativar scroll quando o componente desmontar
     return () => {
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
     };
   }, []);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -116,6 +116,11 @@ const Login = () => {
           </div>
         </div>
         <form onSubmit={handleSubmit} className="login-form">
+          {sessaoExpirada && (
+            <div className="login-sessao-expirada" role="alert">
+              <FiAlertCircle size={18} /> Sessão expirada. Faça login novamente para continuar.
+            </div>
+          )}
           {error && (
             <div className="error-message">
               <FiAlertCircle />

@@ -158,7 +158,20 @@ const ProdutoForm = () => {
     ? `${(api.defaults.baseURL || '').replace(/\/api\/?$/, '')}/api/uploads/familias-produtos/${familiaSelecionada.esquematico}`
     : null;
 
-  // Variáveis dos marcadores técnicos da vista frontal (cadastradas na família) – aparecem como campos para preencher
+  // Variáveis da família (definidas no cadastro da família – independente dos marcadores/bolinhas)
+  const [variaveisDaFamilia, setVariaveisDaFamilia] = useState([]);
+  useEffect(() => {
+    const id = familiaSelecionada?.id;
+    if (!id) {
+      setVariaveisDaFamilia([]);
+      return;
+    }
+    api.get(`/familias/${id}/variaveis`)
+      .then((res) => setVariaveisDaFamilia(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setVariaveisDaFamilia([]));
+  }, [familiaSelecionada?.id]);
+
+  // Marcadores (bolinhas) da vista frontal – opcionais, só para referência visual no esquemático
   const marcadoresVistaFamilia = useMemo(() => {
     const raw = familiaSelecionada?.marcadores_vista;
     if (!raw) return [];
@@ -554,7 +567,7 @@ const ProdutoForm = () => {
       {esquematicoUrl && (
         <div className="produto-form-esquematico">
           <h3>Vista frontal da família – {formData.familia_produto}</h3>
-          <p className="produto-form-esquematico-hint">Esquemático de referência. Os números são os marcadores técnicos; preencha as variáveis correspondentes abaixo.</p>
+          <p className="produto-form-esquematico-hint">Esquemático de referência. Os números são os marcadores (opcionais para orçamento rápido). As variáveis desta família são preenchidas abaixo.</p>
           <div className="produto-form-esquematico-img-wrap">
             <div className="vista-image-wrap">
               <img src={esquematicoUrl} alt={`Esquemático ${formData.familia_produto}`} className="produto-form-esquematico-img" />
@@ -580,23 +593,26 @@ const ProdutoForm = () => {
           </div>
         </div>
       )}
-      {marcadoresVistaFamilia.length > 0 && (
+      {familiaSelecionada && variaveisDaFamilia.length === 0 && (
+        <div className="produto-form-variaveis-aviso">
+          <p>Nenhuma variável definida para esta família. Para exibir os campos de variáveis técnicas, edite a família em <strong>Configurações → Famílias</strong> e marque as variáveis em &quot;Variáveis desta família&quot;.</p>
+        </div>
+      )}
+      {variaveisDaFamilia.length > 0 && (
         <div className="produto-form-variaveis-vista">
-          <h3>Informações das variáveis da vista frontal</h3>
+          <h3>Variáveis técnicas desta família</h3>
           <p className="produto-form-variaveis-vista-hint">
-            Preencha os valores das variáveis técnicas definidas para esta família (cada marcador da vista).
+            Preencha os valores das variáveis definidas para esta família (não é obrigatório ter marcadores na vista).
           </p>
           <div className="produto-form-variaveis-vista-grid">
-            {marcadoresVistaFamilia.map((m) => {
-              const chave = m.variavel || m.key;
-              const nomeVariavel = (variaveisNomesMap[chave] || m.label || chave || '').trim() || chave;
-              const numero = m.numero != null ? m.numero : '';
-              const labelComNumero = numero ? `${numero}. ${nomeVariavel}` : nomeVariavel;
+            {variaveisDaFamilia.map((v, idx) => {
+              const chave = v.chave || '';
+              const nomeVariavel = (v.nome || variaveisNomesMap[chave] || chave || '').trim() || chave;
               const valor = especificacoesTecnicas[chave] ?? '';
-              const isNumero = (String(m.tipo || '').toLowerCase() === 'numero');
+              const isNumero = (String(v.tipo || '').toLowerCase() === 'numero');
               return (
-                <div key={m.id || chave} className="produto-form-variavel-field">
-                  <label>{labelComNumero}</label>
+                <div key={chave || idx} className="produto-form-variavel-field">
+                  <label>{nomeVariavel}</label>
                   <input
                     type={isNumero ? 'number' : 'text'}
                     value={valor}

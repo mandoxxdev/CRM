@@ -1045,6 +1045,21 @@ function initializeDatabase() {
     else console.log('✅ Tabela familia_variavel_opcoes verificada');
   });
 
+  // Variáveis por família: quais variáveis técnicas esta família usa (independente dos marcadores/bolinhas)
+  db.run(`CREATE TABLE IF NOT EXISTS familia_variaveis (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    familia_id INTEGER NOT NULL,
+    variavel_chave TEXT NOT NULL,
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(familia_id, variavel_chave),
+    FOREIGN KEY (familia_id) REFERENCES familias_produto(id)
+  )`, (err) => {
+    if (err) console.error('Erro ao criar tabela familia_variaveis:', err);
+    else console.log('✅ Tabela familia_variaveis verificada');
+  });
+
   // Criar usuário admin padrão
   db.get('SELECT * FROM usuarios WHERE email = ?', ['admin@gmp.com.br'], (err, row) => {
     if (!row) {
@@ -1589,7 +1604,7 @@ function authenticateToken(req, res, next) {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ error: 'Token inválido ou expirado' });
+      return res.status(401).json({ error: 'Token inválido ou expirado' });
     }
     req.user = user;
     next();
@@ -2669,6 +2684,76 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
     console.error('Erro esquematico-base64:', e);
     return res.status(500).json({ error: e.message || 'Erro ao processar esquemático' });
   }
+});
+
+// ========== VARIÁVEIS POR FAMÍLIA (quais variáveis esta família usa – independente de marcadores/bolinhas) ==========
+// GET: listar variáveis atribuídas a uma família (com dados da variável técnica)
+app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
+  var familiaId = req.params.familiaId;
+  db.all(
+    `SELECT fv.variavel_chave AS chave, fv.ordem, vt.nome, vt.categoria, vt.tipo, vt.opcoes
+     FROM familia_variaveis fv
+     LEFT JOIN variaveis_tecnicas vt ON vt.chave = fv.variavel_chave AND vt.ativo = 1
+     WHERE fv.familia_id = ? AND fv.ativo = 1
+     ORDER BY fv.ordem, fv.variavel_chave`,
+    [familiaId],
+    function(err, rows) {
+      if (err) return res.status(500).json({ error: err.message });
+      var list = (rows || []).map(function(r) {
+        var opcoes = r.opcoes;
+        if (opcoes && typeof opcoes === 'string') { try { opcoes = JSON.parse(opcoes); } catch (_) {} }
+        return {
+          chave: r.chave,
+          ordem: r.ordem != null ? r.ordem : 0,
+          nome: r.nome || r.chave,
+          categoria: r.categoria,
+          tipo: r.tipo || 'texto',
+          opcoes: opcoes
+        };
+      });
+      res.json(list);
+    }
+  );
+});
+
+// PUT: definir lista de variáveis da família (substitui a lista atual). Body: { variaveis: [ { chave, ordem? }, ... ] }
+app.put('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
+  var familiaId = req.params.familiaId;
+  var body = req.body || {};
+  var variaveis = Array.isArray(body.variaveis) ? body.variaveis : [];
+  db.get('SELECT id FROM familias_produto WHERE id = ?', [familiaId], function(err, fam) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!fam) return res.status(404).json({ error: 'Família não encontrada' });
+    db.run('UPDATE familia_variaveis SET ativo = 0 WHERE familia_id = ?', [familiaId], function(upErr) {
+      if (upErr) return res.status(500).json({ error: upErr.message });
+      var insertMany = function(idx) {
+        if (idx >= variaveis.length) {
+          return db.all(
+            'SELECT variavel_chave AS chave, ordem FROM familia_variaveis WHERE familia_id = ? AND ativo = 1 ORDER BY ordem, variavel_chave',
+            [familiaId],
+            function(selErr, rows) {
+              if (selErr) return res.status(500).json({ error: selErr.message });
+              res.json({ message: 'Variáveis da família atualizadas', variaveis: rows || [] });
+            }
+          );
+        }
+        var v = variaveis[idx];
+        var chave = (v.chave || v.variavel_chave || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        if (!chave) return insertMany(idx + 1);
+        var ordem = parseInt(v.ordem, 10);
+        if (isNaN(ordem)) ordem = idx;
+        db.run(
+          'INSERT OR REPLACE INTO familia_variaveis (familia_id, variavel_chave, ordem, ativo) VALUES (?, ?, ?, 1)',
+          [familiaId, chave, ordem],
+          function(insErr) {
+            if (insErr) return res.status(500).json({ error: insErr.message });
+            insertMany(idx + 1);
+          }
+        );
+      };
+      insertMany(0);
+    });
+  });
 });
 
 // ========== OPÇÕES DE CONFIGURAÇÃO POR FAMÍLIA (valores disponíveis por marcador técnico, por família) ==========

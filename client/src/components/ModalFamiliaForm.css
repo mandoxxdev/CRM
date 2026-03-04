@@ -77,6 +77,67 @@
   margin: 0 0 8px 0;
 }
 
+.modal-familia-variaveis-section .modal-familia-hint {
+  margin-bottom: 10px;
+}
+
+.modal-familia-variaveis-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--gmp-border);
+  border-radius: var(--border-radius);
+  background: var(--gmp-bg-subtle, #f8fafc);
+}
+
+.modal-familia-variaveis-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 4px 0;
+  font-size: 0.95rem;
+}
+
+.modal-familia-variaveis-search input:focus {
+  outline: none;
+}
+
+.modal-familia-variaveis-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--gmp-border);
+  border-radius: var(--border-radius);
+  padding: 8px;
+  background: var(--gmp-surface);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px 12px;
+}
+
+.modal-familia-variavel-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--gmp-text);
+}
+
+.modal-familia-variavel-check input { margin: 0; }
+
+.modal-familia-variavel-cat {
+  font-size: 0.8rem;
+  color: var(--gmp-text-light, #64748b);
+}
+
+.modal-familia-variaveis-count {
+  margin: 8px 0 0 0;
+  font-size: 0.85rem;
+  color: var(--gmp-text-light, #64748b);
+}
+
 .modal-familia-field label {
   display: block;
   margin-bottom: var(--spacing-xs);

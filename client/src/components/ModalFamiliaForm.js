@@ -77,6 +77,8 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [searchVariavel, setSearchVariavel] = useState('');
   const [showBolinhasPremium, setShowBolinhasPremium] = useState(false);
   const [modoAdicionarBolinha, setModoAdicionarBolinha] = useState(false);
+  const [variaveisDaFamiliaChaves, setVariaveisDaFamiliaChaves] = useState([]);
+  const [searchVariavelFamilia, setSearchVariavelFamilia] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -101,6 +103,20 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     );
   }, [variaveisList, searchVariavel]);
 
+  const variaveisFiltradasFamilia = useMemo(() => {
+    const t = (searchVariavelFamilia || '').trim().toLowerCase();
+    if (!t) return variaveisList;
+    return variaveisList.filter(v =>
+      (v.nome || '').toLowerCase().includes(t) || (v.chave || '').toLowerCase().includes(t)
+    );
+  }, [variaveisList, searchVariavelFamilia]);
+
+  const toggleVariavelFamilia = useCallback((chave) => {
+    setVariaveisDaFamiliaChaves((prev) =>
+      prev.includes(chave) ? prev.filter((c) => c !== chave) : [...prev, chave]
+    );
+  }, []);
+
   useEffect(() => {
     if (familia) {
       setNome(familia.nome || '');
@@ -109,6 +125,13 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       setEsquematicoPreviewUrl(familia.esquematico ? getEsquematicoUrl(familia.esquematico) : null);
       const raw = familia.marcadores_vista;
       setMarcadores(parseMarcadores(typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return []; } })() : raw));
+      if (familia.id && !useLocalOnly) {
+        api.get(`/familias/${familia.id}/variaveis`)
+          .then((res) => setVariaveisDaFamiliaChaves(Array.isArray(res.data) ? res.data.map((v) => v.chave).filter(Boolean) : []))
+          .catch(() => setVariaveisDaFamiliaChaves([]));
+      } else {
+        setVariaveisDaFamiliaChaves([]);
+      }
     } else {
       setNome('');
       setOrdem(0);
@@ -117,12 +140,14 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       setEsquematicoPreviewUrl(null);
       setEsquematicoFile(null);
       setMarcadores([]);
+      setVariaveisDaFamiliaChaves([]);
     }
+    setSearchVariavelFamilia('');
     setEditingMarcadorId(null);
     setShowBolinhasPremium(false);
     setModoAdicionarBolinha(false);
     setError('');
-  }, [familia, isOpen]);
+  }, [familia, isOpen, useLocalOnly]);
 
   function getFotoUrl(foto) {
     if (!foto) return null;
@@ -328,21 +353,28 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     }
 
     try {
+      let familiaId = familia && familia.id;
       if (isEdit) {
         await api.put(`/familias/${familia.id}`, {
           nome: nomeTrim,
           ordem: Number(ordem) || 0,
           marcadores_vista: marcadores
         });
+        familiaId = familia.id;
         if (fotoFile) await uploadImagemFamilia('foto', familia.id, fotoFile);
         if (esquematicoFile) await uploadImagemFamilia('esquematico', familia.id, esquematicoFile);
       } else {
         const res = await api.post('/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 });
-        const newId = res.data && res.data.id;
-        if (newId) {
-          if (fotoFile) await uploadImagemFamilia('foto', newId, fotoFile);
-          if (esquematicoFile) await uploadImagemFamilia('esquematico', newId, esquematicoFile);
+        familiaId = res.data && res.data.id;
+        if (familiaId) {
+          if (fotoFile) await uploadImagemFamilia('foto', familiaId, fotoFile);
+          if (esquematicoFile) await uploadImagemFamilia('esquematico', familiaId, esquematicoFile);
         }
+      }
+      if (familiaId && variaveisDaFamiliaChaves.length >= 0) {
+        await api.put(`/familias/${familiaId}/variaveis`, {
+          variaveis: variaveisDaFamiliaChaves.map((chave, ordem) => ({ chave, ordem }))
+        });
       }
       onSaved();
       onClose();
@@ -587,6 +619,37 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
           </div>
           {!useLocalOnly && (
             <>
+              <div className="modal-familia-field modal-familia-variaveis-section">
+                <label>Variáveis desta família</label>
+                <p className="modal-familia-hint">Marque as variáveis que os produtos desta família podem preencher. Não é obrigatório ter marcadores (bolinhas) na vista — os marcadores servem só para orçamento rápido.</p>
+                <div className="modal-familia-variaveis-search">
+                  <FiSearch size={16} />
+                  <input
+                    type="text"
+                    value={searchVariavelFamilia}
+                    onChange={(e) => setSearchVariavelFamilia(e.target.value)}
+                    placeholder="Buscar variável..."
+                  />
+                </div>
+                <div className="modal-familia-variaveis-list">
+                  {(searchVariavelFamilia ? variaveisFiltradasFamilia : variaveisList).slice(0, 100).map((v) => {
+                    const chave = v.chave || '';
+                    const checked = variaveisDaFamiliaChaves.includes(chave);
+                    return (
+                      <label key={chave} className="modal-familia-variavel-check">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleVariavelFamilia(chave)}
+                        />
+                        <span>{v.nome || chave}</span>
+                        {v.categoria && <span className="modal-familia-variavel-cat">({v.categoria})</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="modal-familia-variaveis-count">{variaveisDaFamiliaChaves.length} variável(is) selecionada(s) para esta família</p>
+              </div>
               <div className="modal-familia-field">
                 <label>Foto (opcional)</label>
                 <div className="modal-familia-foto-row">

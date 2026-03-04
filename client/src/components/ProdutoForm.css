@@ -72,6 +72,18 @@
 }
 
 /* Variáveis da vista frontal (bolinhas da família) – preencher no cadastro do produto */
+.produto-form-variaveis-aviso {
+  padding: var(--spacing-md);
+  background: rgba(255, 193, 7, 0.12);
+  border: 1px solid rgba(255, 193, 7, 0.4);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-lg);
+  font-size: 0.95rem;
+  color: var(--gmp-text, #334155);
+}
+
+.produto-form-variaveis-aviso p { margin: 0; }
+
 .produto-form-variaveis-vista {
   background: linear-gradient(135deg, rgba(255, 107, 53, 0.06) 0%, rgba(247, 147, 30, 0.04) 100%);
   border: 1px solid rgba(255, 107, 53, 0.25);

@@ -123,18 +123,26 @@ api.interceptors.response.use(
       }
     }
 
-    // 401 = não autenticado (token inválido/expirado) -> login e limpar sessão
+    // 401 = não autenticado (token inválido/expirado) -> volta para a tela de login
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       sessionStorage.removeItem('token');
-      window.location.href = '/login';
+      const msg = error.response?.data?.error || '';
+      const sessaoExpirada = /expirado|inválido|não fornecido/i.test(msg);
+      window.location.href = sessaoExpirada ? '/login?sessao_expirada=1' : '/login';
       return Promise.reject(error);
     }
-    // 403 = sem permissão (ex.: módulo negado). Não redirecionar para '/' aqui para evitar
-    // que ao abrir um módulo (ex.: Comercial) uma chamada que retorne 403 leve o usuário de volta
-    // à seleção de módulo. O ProtectedModuleRoute e AcessoNegado tratam a negação de acesso.
+    // 403 com mensagem de token = token expirado (fallback se o servidor enviar 403 nesse caso)
     if (error.response?.status === 403) {
+      const msg = (error.response?.data?.error || '').toString();
+      if (/token inválido ou expirado/i.test(msg)) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        sessionStorage.removeItem('token');
+        window.location.href = '/login?sessao_expirada=1';
+        return Promise.reject(error);
+      }
       return Promise.reject(error);
     }
     return Promise.reject(error);
