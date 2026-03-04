@@ -999,9 +999,8 @@ function initializeDatabase() {
   )`, (err) => {
     if (err) console.error('Erro ao criar tabela variaveis_tecnicas:', err);
     else console.log('✅ Tabela variaveis_tecnicas verificada');
-    // Seed variáveis base: de data/variaveis-base.json ou da lista padrão (VARIAVEIS_BASE_DEFAULT), quando a tabela estiver vazia
-    db.get('SELECT COUNT(*) AS c FROM variaveis_tecnicas WHERE ativo = 1', [], (e, r) => {
-      if (e || !r || r.c > 0) return;
+    // Sempre garantir variáveis base na subida: inserir as que faltam (INSERT OR IGNORE não duplica por chave)
+    (function garantirVariaveisBase() {
       let list = [];
       const basePath = path.join(PERSISTENT_DATA_DIR, 'variaveis-base.json');
       if (fs.existsSync(basePath)) {
@@ -1011,17 +1010,23 @@ function initializeDatabase() {
         } catch (_) {}
       }
       if (list.length === 0) list = VARIAVEIS_BASE_DEFAULT.map((nome, ordem) => ({ nome, ordem }));
+      const total = list.length;
+      if (total === 0) return;
       const slug = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
       const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, 1)');
+      let done = 0;
+      function onDone() {
+        done++;
+        if (done === total) stmt.finalize(() => console.log('✅ Variáveis base garantidas (' + total + ')'));
+      }
       list.forEach((item, i) => {
         const nome = (item && item.nome) ? item.nome : (typeof item === 'string' ? item : '');
-        if (!nome) return;
+        if (!nome) { onDone(); return; }
         const chave = slug(nome);
         const ordem = (item && item.ordem != null) ? item.ordem : i;
-        stmt.run(nome, chave, ordem);
+        stmt.run(nome, chave, ordem, onDone);
       });
-      stmt.finalize(() => console.log('✅ Variáveis base carregadas (' + list.length + ' variáveis)'));
-    });
+    })();
   });
 
   // Opções de configuração por família e por variável (ex.: família Masseira Bimix + motor_central_cv → 30 CV, 50 CV, 75 CV)
