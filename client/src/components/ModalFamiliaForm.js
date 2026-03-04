@@ -63,7 +63,7 @@ function parseMarcadores(raw) {
   return arr.map((m, i) => ({ ...m, numero: m.numero != null ? m.numero : i + 1 }));
 }
 
-const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, useLocalOnly, familiasAtuais = [] }) => {
+const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, useLocalOnly, familiasAtuais = [], grupoId = null }) => {
   const isEdit = !!familia && !!familia.id;
   const [nome, setNome] = useState('');
   const [ordem, setOrdem] = useState(0);
@@ -364,7 +364,11 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
         if (fotoFile) await uploadImagemFamilia('foto', familia.id, fotoFile);
         if (esquematicoFile) await uploadImagemFamilia('esquematico', familia.id, esquematicoFile);
       } else {
-        const res = await api.post('/familias', { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        const res = await api.post('/familias', {
+          nome: nomeTrim,
+          ordem: Number(ordem) || 0,
+          ...(grupoId != null && grupoId !== '' ? { grupo_id: Number(grupoId) } : {})
+        });
         familiaId = res.data && res.data.id;
         if (familiaId) {
           if (fotoFile) await uploadImagemFamilia('foto', familiaId, fotoFile);

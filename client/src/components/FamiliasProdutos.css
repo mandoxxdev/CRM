@@ -14,6 +14,23 @@
   align-items: center;
 }
 
+.btn-voltar-grupos {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  background: none;
+  border: none;
+  color: var(--gmp-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-voltar-grupos:hover {
+  text-decoration: underline;
+}
+
 .familias-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

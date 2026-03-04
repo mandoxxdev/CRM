@@ -1,8 +1,8 @@
 import React from 'react';
-import FamiliasProdutos from './FamiliasProdutos';
+import GruposProdutos from './GruposProdutos';
 
 const ProdutosPage = () => {
-  return <FamiliasProdutos />;
+  return <GruposProdutos />;
 };
 
 export default ProdutosPage;

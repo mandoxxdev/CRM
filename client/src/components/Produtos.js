@@ -5,7 +5,7 @@ import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFileText, FiArrowLeft } from 'rea
 import './Produtos.css';
 import './Loading.css';
 
-const Produtos = ({ familiaFromUrl, familiaNome }) => {
+const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
   const navigate = useNavigate();
   const [produtos, setProdutos] = useState([]);
   const [familias, setFamilias] = useState([]);
@@ -115,10 +115,10 @@ const Produtos = ({ familiaFromUrl, familiaNome }) => {
           {filterFamilia && (
             <button
               type="button"
-              onClick={() => navigate('/comercial/produtos')}
+              onClick={() => navigate(grupoId ? `/comercial/produtos/grupo/${grupoId}` : '/comercial/produtos')}
               className="btn-voltar-familias"
             >
-              <FiArrowLeft /> Voltar para famílias
+              <FiArrowLeft /> {grupoId ? 'Voltar para famílias' : 'Voltar para grupos'}
             </button>
           )}
           <h1>Produtos{filterFamilia ? ` – ${filterFamilia}` : ''}</h1>

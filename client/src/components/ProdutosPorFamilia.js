@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import Produtos from './Produtos';
 import './Loading.css';
@@ -7,6 +7,7 @@ import './Loading.css';
 const ProdutosPorFamilia = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [familia, setFamilia] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -35,17 +36,19 @@ const ProdutosPorFamilia = () => {
     );
   }
   if (error || !familia) {
+    const backPath = location.state?.grupoId ? `/comercial/produtos/grupo/${location.state.grupoId}` : '/comercial/produtos';
     return (
       <div style={{ padding: '24px' }}>
         <p>{error || 'Família não encontrada'}</p>
-        <button type="button" className="btn-primary" onClick={() => navigate('/comercial/produtos')}>
-          Voltar para famílias
+        <button type="button" className="btn-primary" onClick={() => navigate(backPath)}>
+          Voltar
         </button>
       </div>
     );
   }
 
-  return <Produtos familiaFromUrl={familia.nome} familiaNome={familia.nome} />;
+  const grupoId = familia.grupo_id != null ? familia.grupo_id : location.state?.grupoId;
+  return <Produtos familiaFromUrl={familia.nome} familiaNome={familia.nome} grupoId={grupoId} />;
 };
 
 export default ProdutosPorFamilia;

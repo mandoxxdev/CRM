@@ -954,6 +954,37 @@ function initializeDatabase() {
     });
   });
 
+  // Grupos de produtos (ex.: Masseira, Dispersores) – tela anterior às famílias
+  db.run(`CREATE TABLE IF NOT EXISTS grupos_produto (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
+    if (err) console.error('Erro ao criar tabela grupos_produto:', err);
+    else {
+      console.log('✅ Tabela grupos_produto verificada');
+      db.get('SELECT COUNT(*) AS n FROM grupos_produto', [], function(er, row) {
+        if (!er && row && row.n === 0) {
+          var defaults = ['Masseira', 'Dispersores', 'Tanques e Reatores', 'Hélices e Acessórios', 'Outros'];
+          defaults.forEach(function(nome, i) {
+            db.run('INSERT INTO grupos_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, i]);
+          });
+          console.log('✅ Grupos padrão criados: ' + defaults.join(', '));
+        }
+        // Atribuir famílias sem grupo ao primeiro grupo
+        db.run(
+          'UPDATE familias_produto SET grupo_id = (SELECT id FROM grupos_produto WHERE ativo = 1 ORDER BY ordem ASC LIMIT 1) WHERE grupo_id IS NULL',
+          function(upErr) {
+            if (!upErr && this.changes > 0) console.log('✅ Famílias existentes vinculadas ao primeiro grupo');
+          }
+        );
+      });
+    }
+  });
+
   // Famílias de produtos (cadastro com nome e foto)
   db.run(`CREATE TABLE IF NOT EXISTS familias_produto (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -978,6 +1009,10 @@ function initializeDatabase() {
 
   db.run('ALTER TABLE familias_produto ADD COLUMN marcadores_vista TEXT', (err) => {
     if (err && err.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna marcadores_vista:', err.message);
+  });
+
+  db.run('ALTER TABLE familias_produto ADD COLUMN grupo_id INTEGER REFERENCES grupos_produto(id)', (err) => {
+    if (err && err.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna grupo_id:', err.message);
   });
 
   db.run('UPDATE familias_produto SET codigo = id * 10 WHERE codigo IS NULL', (err) => {
@@ -1995,8 +2030,68 @@ app.get('/api/deploy-version', (req, res) => {
 app.get('/deploy-version', (req, res) => {
   res.json({ version: 'familias-2026-02', hasFamilias: true });
 });
+// ========== GRUPOS DE PRODUTOS (Masseira, Dispersores, etc.) ==========
+app.get('/api/grupos', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM grupos_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.get('/grupos', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM grupos_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.get('/api/grupos/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  db.get('SELECT * FROM grupos_produto WHERE id = ? AND ativo = 1', [id], function(err, row) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Grupo não encontrado' });
+    res.json(row);
+  });
+});
+app.post('/api/grupos', authenticateToken, (req, res) => {
+  var body = req.body || {};
+  var nome = (body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
+  var ordem = parseInt(body.ordem, 10) || 0;
+  db.run('INSERT INTO grupos_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, ordem], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(201).json({ id: this.lastID, nome: nome, ordem: ordem });
+  });
+});
+app.put('/api/grupos/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  var body = req.body || {};
+  var nome = (body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
+  var ordem = parseInt(body.ordem, 10) || 0;
+  db.run('UPDATE grupos_produto SET nome = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nome, ordem, id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
+    res.json({ id: id, nome: nome, ordem: ordem });
+  });
+});
+app.delete('/api/grupos/:id', authenticateToken, (req, res) => {
+  var id = req.params.id;
+  db.run('UPDATE grupos_produto SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
+    res.json({ message: 'Grupo desativado' });
+  });
+});
+
 app.get('/api/familias', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
+  var grupoId = req.query.grupo_id;
+  var sql = 'SELECT * FROM familias_produto WHERE ativo = 1';
+  var params = [];
+  if (grupoId) {
+    sql += ' AND grupo_id = ?';
+    params.push(grupoId);
+  }
+  sql += ' ORDER BY ordem ASC, nome ASC';
+  db.all(sql, params.length ? params : [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
@@ -2006,10 +2101,12 @@ app.post('/api/familias', authenticateToken, (req, res) => {
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
   var ordem = parseInt(body.ordem, 10) || 0;
+  var grupoId = body.grupo_id != null ? parseInt(body.grupo_id, 10) : null;
+  if (grupoId === 0 || isNaN(grupoId)) grupoId = null;
   db.get('SELECT COALESCE(MAX(codigo), 0) + 10 AS proximo FROM familias_produto', [], function(err, row) {
     if (err) return res.status(500).json({ error: err.message });
     var codigo = row && row.proximo != null ? row.proximo : 10;
-    db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo) VALUES (?, ?, ?, 1)', [nome, ordem, codigo], function(insertErr) {
+    db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo, grupo_id) VALUES (?, ?, ?, 1, ?)', [nome, ordem, codigo, grupoId], function(insertErr) {
       if (insertErr) {
         if (insertErr.message && insertErr.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
         return res.status(500).json({ error: insertErr.message });
@@ -2019,7 +2116,15 @@ app.post('/api/familias', authenticateToken, (req, res) => {
   });
 });
 app.get('/familias', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
+  var grupoId = req.query.grupo_id;
+  var sql = 'SELECT * FROM familias_produto WHERE ativo = 1';
+  var params = [];
+  if (grupoId) {
+    sql += ' AND grupo_id = ?';
+    params.push(grupoId);
+  }
+  sql += ' ORDER BY ordem ASC, nome ASC';
+  db.all(sql, params.length ? params : [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
@@ -2029,15 +2134,17 @@ app.post('/familias', authenticateToken, (req, res) => {
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
   var ordem = parseInt(body.ordem, 10) || 0;
+  var grupoId = body.grupo_id != null ? parseInt(body.grupo_id, 10) : null;
+  if (grupoId === 0 || isNaN(grupoId)) grupoId = null;
   db.get('SELECT COALESCE(MAX(codigo), 0) + 10 AS proximo FROM familias_produto', [], function(err, row) {
     if (err) return res.status(500).json({ error: err.message });
     var codigo = row && row.proximo != null ? row.proximo : 10;
-    db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo) VALUES (?, ?, ?, 1)', [nome, ordem, codigo], function(insertErr) {
+    db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo, grupo_id) VALUES (?, ?, ?, 1, ?)', [nome, ordem, codigo, grupoId], function(insertErr) {
       if (insertErr) {
         if (insertErr.message && insertErr.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
         return res.status(500).json({ error: insertErr.message });
       }
-      res.json({ id: this.lastID, nome: nome, ordem: ordem, codigo: codigo });
+      res.json({ id: this.lastID, nome: nome, ordem: ordem, codigo: codigo, grupo_id: grupoId });
     });
   });
 });
@@ -2498,6 +2605,8 @@ app.put('/api/familias/:id', authenticateToken, (req, res) => {
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
   var ordem = parseInt(body.ordem, 10) || 0;
+  var grupoId = body.grupo_id != null ? parseInt(body.grupo_id, 10) : undefined;
+  if (grupoId !== undefined && (grupoId === 0 || isNaN(grupoId))) grupoId = null;
   var marcadoresVista = body.marcadores_vista;
   var marcadoresStr = null;
   if (marcadoresVista !== undefined) {
@@ -2507,6 +2616,10 @@ app.put('/api/familias/:id', authenticateToken, (req, res) => {
   }
   var sql = 'UPDATE familias_produto SET nome = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP';
   var params = [nome, ordem];
+  if (grupoId !== undefined) {
+    sql += ', grupo_id = ?';
+    params.push(grupoId);
+  }
   if (marcadoresStr !== undefined) {
     sql += ', marcadores_vista = ?';
     params.push(marcadoresStr);
