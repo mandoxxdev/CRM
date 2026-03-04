@@ -755,56 +755,58 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                   </div>
                 </div>
                 {isEdit && esquematicoPreviewUrl && (
-                  <div className="modal-familia-marcadores-section">
-                    <div className="modal-familia-marcadores-header">
-                      <span className="marcadores-title">Marcadores técnicos na vista</span>
-                      <span className="marcadores-hint">Adicione marcadores com o botão abaixo; arraste para mover; clique sem arrastar para editar.</span>
-                      <div className="modal-familia-marcadores-buttons">
+                  <div className="modal-familia-marcadores-section premium">
+                    <div className="modal-familia-marcadores-header premium">
+                      <div className="marcadores-header-text">
+                        <h4 className="marcadores-title premium">Marcadores na vista frontal</h4>
+                        <p className="marcadores-hint premium">Posicione marcadores na imagem para orçamento rápido. Arraste para mover; clique para editar.</p>
+                      </div>
+                      <div className="modal-familia-marcadores-buttons premium">
                         <button
                           type="button"
-                          className={modoAdicionarBolinha ? 'btn-colocar-bolinha active' : 'btn-colocar-bolinha'}
+                          className={modoAdicionarBolinha ? 'btn-colocar-bolinha premium active' : 'btn-colocar-bolinha premium'}
                           onClick={() => setModoAdicionarBolinha(prev => !prev)}
                         >
-                          <FiPlus size={16} /> {modoAdicionarBolinha ? 'Cancelar' : 'Adicionar marcador'}
+                          <FiPlus size={18} /> {modoAdicionarBolinha ? 'Cancelar' : 'Adicionar marcador'}
                         </button>
                         <button
                           type="button"
                           className="btn-abrir-bolinhas-premium"
                           onClick={() => { setModoAdicionarBolinha(false); setShowBolinhasPremium(true); }}
                         >
-                          Abrir tela grande para configurar marcadores
+                          Abrir tela grande para configurar
                         </button>
                       </div>
                     </div>
-                    <ul className="modal-familia-marcadores-list">
+                    <ul className="modal-familia-marcadores-list premium">
                       {marcadores.map((m) => (
-                        <li key={m.id} className={`marcador-item ${editingMarcadorId === m.id ? 'editing' : ''}`}>
-                          <div className="marcador-item-main">
-                            <span className="marcador-bolinha-preview" />
+                        <li key={m.id} className={`marcador-item premium ${editingMarcadorId === m.id ? 'editing' : ''}`}>
+                          <div className="marcador-item-main premium">
+                            <span className="marcador-bolinha-preview premium" />
                             {editingMarcadorId === m.id ? (
-                              <div className="marcador-edit-fields">
+                              <div className="marcador-edit-fields premium">
                                 <input
                                   type="text"
                                   value={m.label}
                                   onChange={(e) => updateMarcador(m.id, { label: e.target.value })}
                                   placeholder="Rótulo (ex: Potência CV)"
-                                  className="marcador-input"
+                                  className="marcador-input premium"
                                 />
-                                <div className="marcador-variavel-select-wrap">
-                                  <div className="marcador-variavel-search">
-                                    <FiSearch size={14} />
+                                <div className="marcador-variavel-select-wrap premium">
+                                  <div className="marcador-variavel-search premium">
+                                    <FiSearch size={16} />
                                     <input
                                       type="text"
                                       value={searchVariavel}
                                       onChange={(e) => setSearchVariavel(e.target.value)}
                                       placeholder="Buscar variável..."
-                                      className="marcador-input"
+                                      className="marcador-input premium"
                                     />
                                   </div>
                                   <select
                                     value={m.variavel || (variaveisList[0]?.chave) || 'outro'}
                                     onChange={(e) => updateMarcador(m.id, { variavel: e.target.value })}
-                                    className="marcador-select"
+                                    className="marcador-select premium"
                                   >
                                     {variaveisFiltradas.length === 0 ? (
                                       <option value={m.variavel || ''}>{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel || '—'}</option>
@@ -815,40 +817,44 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                                     )}
                                   </select>
                                 </div>
-                                <div className="marcador-tipo-wrap">
-                                  <label>Tipo na proposta:</label>
+                                <div className="marcador-tipo-wrap premium">
+                                  <label>Tipo na proposta</label>
                                   <select
                                     value={m.tipo || 'texto'}
                                     onChange={(e) => updateMarcador(m.id, { tipo: e.target.value })}
-                                    className="marcador-select"
+                                    className="marcador-select premium"
                                   >
                                     <option value="texto">Variável (dropdown)</option>
                                     <option value="numero">Número</option>
                                     <option value="selecao">Seleção simples (clicar = incluir)</option>
                                   </select>
                                 </div>
-                                <div className="marcador-tamanho-wrap">
-                                  <label>Tamanho:</label>
-                                  <p className="marcador-tamanho-hint">{Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12))} × {Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12))} px — arraste as alças na imagem</p>
+                                <div className="marcador-tamanho-wrap premium">
+                                  <label>Tamanho na imagem</label>
+                                  <p className="marcador-tamanho-hint premium">{Math.max(6, Math.min(80, m.width != null ? Number(m.width) : 12))} × {Math.max(6, Math.min(80, m.height != null ? Number(m.height) : 12))} px — use as alças na vista para redimensionar</p>
                                 </div>
-                                <div className="marcador-edit-actions">
-                                  <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }} className="marcador-btn-ok">Ok</button>
-                                  <button type="button" onClick={() => removeMarcador(m.id)} className="marcador-btn-remove" title="Remover">
-                                    <FiTrash2 size={14} />
+                                <div className="marcador-edit-actions premium">
+                                  <button type="button" onClick={() => { setEditingMarcadorId(null); setSearchVariavel(''); }} className="marcador-btn-ok premium">Concluído</button>
+                                  <button type="button" onClick={() => removeMarcador(m.id)} className="marcador-btn-remove premium" title="Remover">
+                                    <FiTrash2 size={16} /> Remover
                                   </button>
                                 </div>
                               </div>
                             ) : (
                               <>
-                                <span className="marcador-numero">{m.numero != null ? m.numero + '.' : ''}</span>
-                                <span className="marcador-label">{m.label}</span>
-                                <span className="marcador-variavel">{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}{m.tipo === 'selecao' ? ' · Seleção' : ''}</span>
-                                <button type="button" onClick={() => setEditingMarcadorId(m.id)} className="marcador-btn-edit" title="Editar">
-                                  <FiEdit2 size={14} />
-                                </button>
-                                <button type="button" onClick={() => removeMarcador(m.id)} className="marcador-btn-remove" title="Remover">
-                                  <FiTrash2 size={14} />
-                                </button>
+                                <span className="marcador-numero premium">{m.numero != null ? m.numero : '—'}</span>
+                                <div className="marcador-content-wrap">
+                                  <span className="marcador-label premium">{m.label}</span>
+                                  <span className="marcador-variavel premium">{variaveisList.find(v => v.chave === m.variavel)?.nome || m.variavel}{m.tipo === 'selecao' ? ' · Seleção' : ''}</span>
+                                </div>
+                                <div className="marcador-item-actions">
+                                  <button type="button" onClick={() => setEditingMarcadorId(m.id)} className="marcador-btn-edit premium" title="Editar">
+                                    <FiEdit2 size={16} />
+                                  </button>
+                                  <button type="button" onClick={() => removeMarcador(m.id)} className="marcador-btn-remove premium" title="Remover">
+                                    <FiTrash2 size={16} />
+                                  </button>
+                                </div>
                               </>
                             )}
                           </div>

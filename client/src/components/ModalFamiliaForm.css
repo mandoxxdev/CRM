@@ -348,6 +348,30 @@
   background: var(--gmp-bg-subtle, #f8fafc);
   grid-template-columns: repeat(2, 1fr);
   gap: 10px 16px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #e2e8f0;
+}
+
+.modal-familia-variaveis-list.premium::-webkit-scrollbar {
+  width: 10px;
+}
+
+.modal-familia-variaveis-list.premium::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 10px;
+  margin: 4px 0;
+}
+
+.modal-familia-variaveis-list.premium::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+}
+
+.modal-familia-variaveis-list.premium::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .modal-familia-variavel-check {
@@ -708,7 +732,7 @@
   min-width: 1.2em;
 }
 
-/* Lista de marcadores (variáveis) */
+/* Lista de marcadores (variáveis) – base */
 .modal-familia-marcadores-section {
   margin-top: var(--spacing-lg);
   padding-top: var(--spacing-lg);
@@ -925,7 +949,322 @@
 
 .marcador-btn-ok {
   background: var(--gmp-primary);
-  color: white;
+}
+
+/* ========== Marcadores – Premium ========== */
+.modal-familia-marcadores-section.premium {
+  margin-top: 24px;
+  padding: 0;
+  border-top: none;
+  background: var(--gmp-surface, #fff);
+  border-radius: 16px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.modal-familia-marcadores-header.premium {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  background: linear-gradient(180deg, rgba(255, 107, 53, 0.06) 0%, rgba(247, 147, 30, 0.04) 100%);
+  border-bottom: 1px solid var(--gmp-border, #e2e8f0);
+}
+
+.marcadores-header-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.marcadores-title.premium {
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gmp-text, #0f172a);
+  letter-spacing: -0.01em;
+}
+
+.marcadores-hint.premium {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--gmp-text-light, #64748b);
+  line-height: 1.45;
+}
+
+.modal-familia-marcadores-buttons.premium {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-colocar-bolinha.premium {
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
+}
+
+.btn-colocar-bolinha.premium.active {
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.btn-abrir-bolinhas-premium {
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: transparent;
+  color: #ff6b35;
+  border: 2px solid rgba(255, 107, 53, 0.5);
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.btn-abrir-bolinhas-premium:hover {
+  background: rgba(255, 107, 53, 0.1);
+  border-color: #ff6b35;
+  color: #ea580c;
+  transform: none;
+  box-shadow: none;
+}
+
+.modal-familia-marcadores-list.premium {
+  padding: 16px 22px 20px;
+  gap: 12px;
+}
+
+.marcador-item.premium {
+  padding: 0;
+  border: 2px solid var(--gmp-border, #e2e8f0);
+  border-radius: 14px;
+  background: var(--gmp-surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.marcador-item.premium:hover {
+  border-color: rgba(255, 107, 53, 0.25);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.marcador-item.premium.editing {
+  border-color: #ff6b35;
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.06) 0%, rgba(247, 147, 30, 0.04) 100%);
+  box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.2);
+}
+
+.marcador-item-main.premium {
+  padding: 16px 18px;
+  gap: 16px;
+  align-items: center;
+}
+
+.marcador-bolinha-preview.premium {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.35);
+  flex-shrink: 0;
+}
+
+.marcador-numero.premium {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(255, 107, 53, 0.3);
+}
+
+.marcador-content-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.marcador-label.premium {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--gmp-text, #0f172a);
+  min-width: 0;
+}
+
+.marcador-variavel.premium {
+  font-size: 0.85rem;
+  color: var(--gmp-text-light, #64748b);
+}
+
+.marcador-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Botões ícone na linha do marcador (ver/editar/remover) */
+.marcador-item-actions .marcador-btn-edit.premium,
+.marcador-item-actions .marcador-btn-remove.premium {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  min-width: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  background: var(--gmp-surface);
+  color: var(--gmp-text-light, #64748b);
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.marcador-item-actions .marcador-btn-edit.premium:hover {
+  background: rgba(255, 107, 53, 0.1);
+  color: #ff6b35;
+  border-color: rgba(255, 107, 53, 0.3);
+}
+
+.marcador-item-actions .marcador-btn-remove.premium:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+.marcador-edit-fields.premium {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+  padding: 4px 0 0 0;
+}
+
+.marcador-edit-fields.premium .marcador-variavel-select-wrap.premium {
+  grid-column: span 2;
+}
+
+.marcador-edit-fields.premium .marcador-tipo-wrap.premium {
+  min-width: 0;
+}
+
+.marcador-edit-fields.premium .marcador-tamanho-wrap.premium {
+  grid-column: span 2;
+  min-width: 0;
+}
+
+.marcador-edit-actions.premium {
+  grid-column: span 2;
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--gmp-border, #e2e8f0);
+  margin-top: 4px;
+}
+
+.marcador-input.premium {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 2px solid var(--gmp-border, #e2e8f0);
+  font-size: 0.95rem;
+  min-width: 0;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.marcador-input.premium:focus {
+  outline: none;
+  border-color: #ff6b35;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+}
+
+.marcador-variavel-search.premium {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 2px solid var(--gmp-border, #e2e8f0);
+  background: var(--gmp-surface);
+  transition: border-color 0.2s;
+}
+
+.marcador-variavel-search.premium:focus-within {
+  border-color: #ff6b35;
+}
+
+.marcador-select.premium {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 2px solid var(--gmp-border, #e2e8f0);
+  font-size: 0.95rem;
+  min-width: 0;
+  width: 100%;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  transition: border-color 0.2s;
+}
+
+.marcador-select.premium:focus {
+  outline: none;
+  border-color: #ff6b35;
+}
+
+.marcador-tipo-wrap.premium label,
+.marcador-tamanho-wrap.premium label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gmp-text-light, #64748b);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.marcador-tamanho-hint.premium {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gmp-text-light, #64748b);
+  line-height: 1.4;
+}
+
+.marcador-btn-ok.premium {
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.marcador-btn-ok.premium:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255, 107, 53, 0.4);
+}
+
+/* Botão Remover no formulário de edição (com texto) */
+.marcador-edit-actions.premium .marcador-btn-remove.premium {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  background: transparent;
+  color: var(--gmp-text-light);
+  border: 1px solid var(--gmp-border);
+  gap: 6px;
+}
+
+.marcador-edit-actions.premium .marcador-btn-remove.premium:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.4);
 }
 
 .marcador-btn-edit {
@@ -1155,6 +1494,51 @@
 [data-theme="dark"] .modal-familia-variaveis-list.premium {
   background: var(--gmp-bg-subtle);
   border-color: var(--gmp-border);
+  scrollbar-color: #475569 #334155;
+}
+
+[data-theme="dark"] .modal-familia-variaveis-list.premium::-webkit-scrollbar-track {
+  background: #334155;
+}
+
+[data-theme="dark"] .modal-familia-variaveis-list.premium::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .modal-familia-variaveis-list.premium::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+[data-theme="dark"] .modal-familia-marcadores-section.premium {
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .modal-familia-marcadores-header.premium {
+  background: linear-gradient(180deg, rgba(255, 107, 53, 0.08) 0%, rgba(247, 147, 30, 0.04) 100%);
+  border-bottom-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .marcadores-title.premium {
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .marcador-item.premium {
+  border-color: var(--gmp-border);
+  background: var(--gmp-surface);
+}
+
+[data-theme="dark"] .marcador-item.premium.editing {
+  background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(247, 147, 30, 0.06) 100%);
+}
+
+[data-theme="dark"] .marcador-item-actions .marcador-btn-edit.premium,
+[data-theme="dark"] .marcador-item-actions .marcador-btn-remove.premium {
+  background: var(--gmp-bg-subtle);
+  border-color: var(--gmp-border);
+  color: var(--gmp-text-light);
 }
 
 [data-theme="dark"] .bolinhas-premium-container {
