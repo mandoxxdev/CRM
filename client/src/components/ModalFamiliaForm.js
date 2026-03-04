@@ -654,25 +654,39 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                   />
                 </div>
                 <div className="modal-familia-variaveis-list premium">
-                  {(searchVariavelFamilia ? variaveisFiltradasFamilia : variaveisList).slice(0, 100).map((v) => {
-                    const chave = v.chave || '';
-                    const checked = variaveisDaFamiliaChaves.includes(chave);
-                    return (
-                      <label key={chave} className={`modal-familia-variavel-check premium ${checked ? 'checked' : ''}`}>
-                        <span className="variavel-checkbox-custom">
-                          {checked && <FiCheck size={14} strokeWidth={3} />}
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleVariavelFamilia(chave)}
-                          className="sr-only"
-                        />
-                        <span className="variavel-nome">{v.nome || chave}</span>
-                        {v.categoria && <span className="modal-familia-variavel-cat">{v.categoria}</span>}
-                      </label>
-                    );
-                  })}
+                  {(searchVariavelFamilia ? variaveisFiltradasFamilia : variaveisList)
+                    .filter((v) => v != null)
+                    .slice(0, 100)
+                    .map((v, i) => {
+                      const chave = (v && v.chave) || '';
+                      const checked = variaveisDaFamiliaChaves.includes(chave);
+                      return (
+                        <div
+                          key={`var-${i}-${chave}`}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={checked}
+                          className={`modal-familia-variavel-check premium ${checked ? 'checked' : ''}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleVariavelFamilia(chave);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              toggleVariavelFamilia(chave);
+                            }
+                          }}
+                        >
+                          <span className="variavel-checkbox-custom">
+                            {checked && <FiCheck size={14} strokeWidth={3} />}
+                          </span>
+                          <span className="variavel-nome">{(v && v.nome) || chave}</span>
+                          {v && v.categoria && <span className="modal-familia-variavel-cat">{v.categoria}</span>}
+                        </div>
+                      );
+                    })}
                 </div>
                 <p className="modal-familia-variaveis-count premium">
                   <strong>{variaveisDaFamiliaChaves.length}</strong> variável(is) selecionada(s) para esta família
