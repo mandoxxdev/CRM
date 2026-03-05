@@ -9,84 +9,6 @@ import './Loading.css';
 
 const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-// Normaliza texto para comparação (minúsculo, sem acentos)
-function normalizar(s) {
-  if (s == null) return '';
-  return String(s).toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
-}
-
-// Listas de possíveis nomes de coluna (normalizados)
-const COLS_DESCRICAO = ['descricao', 'descrição', 'descricao do produto', 'produto', 'item', 'nome', 'designacao', 'designação', 'material', 'especificacao', 'denominacao', 'nome do produto', 'desc'];
-const COLS_CODIGO = ['codigo', 'código', 'cod', 'sku', 'referencia', 'referência', 'ref', 'codigo do produto', 'código do produto'];
-const COLS_UNIDADE = ['unidade', 'und', 'um', 'un', 'unid', 'unidade de medida', 'medida'];
-const COLS_PRECO = ['preco', 'preço', 'valor', 'valor unitario', 'valor unitário', 'price', 'vlr', 'preco unitario', 'preço unitário', 'valor unit', 'preco unit'];
-
-function colunaMatch(norm, listas) {
-  for (const list of listas) {
-    for (const k of list) {
-      if (norm.includes(k) || k.includes(norm)) return true;
-    }
-  }
-  return false;
-}
-
-function acharIndicesCabecalho(headers) {
-  const normHeaders = headers.map((h, idx) => ({ norm: normalizar(h), original: h, idx }));
-  let descIdx = -1, codIdx = -1, undIdx = -1, precoIdx = -1;
-  for (const { norm, idx } of normHeaders) {
-    if (!norm) continue;
-    if (descIdx < 0 && colunaMatch(norm, [COLS_DESCRICAO])) descIdx = idx;
-    if (codIdx < 0 && colunaMatch(norm, [COLS_CODIGO])) codIdx = idx;
-    if (undIdx < 0 && colunaMatch(norm, [COLS_UNIDADE])) undIdx = idx;
-    if (precoIdx < 0 && colunaMatch(norm, [COLS_PRECO])) precoIdx = idx;
-  }
-  return { descIdx, codIdx, undIdx, precoIdx };
-}
-
-function parsePreco(val) {
-  if (val == null || val === '') return 0;
-  if (typeof val === 'number' && !isNaN(val)) return val;
-  const s = String(val).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-
-function extrairLinhas(rows, indices) {
-  const { descIdx, codIdx, undIdx, precoIdx } = indices;
-  const linhas = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i] || [];
-    let descricao = '';
-    if (descIdx >= 0 && row[descIdx] != null) descricao = String(row[descIdx]).trim();
-    if (!descricao) {
-      for (let c = 0; c < row.length; c++) {
-        const v = row[c];
-        if (v != null && String(v).trim() !== '' && isNaN(parsePreco(v))) {
-          descricao = String(v).trim();
-          break;
-        }
-      }
-    }
-    if (!descricao && row.length > 0 && row[0] != null) descricao = String(row[0]).trim();
-    if (!descricao) continue;
-    const codigo = codIdx >= 0 && row[codIdx] != null ? String(row[codIdx]).trim() : '';
-    const unidade = undIdx >= 0 && row[undIdx] != null ? String(row[undIdx]).trim() : 'UN';
-    let preco = 0;
-    if (precoIdx >= 0 && row[precoIdx] != null) preco = parsePreco(row[precoIdx]);
-    else {
-      for (let c = 0; c < row.length; c++) {
-        const v = row[c];
-        if (v != null && String(v).trim() !== '' && (typeof v === 'number' || !isNaN(parsePreco(v)))) {
-          preco = parsePreco(v);
-          break;
-        }
-      }
-    }
-    linhas.push({ codigo: codigo || undefined, descricao, unidade: unidade || 'UN', preco });
-  }
-  return linhas;
-}
-
 const ItensFornecedor = () => {
   const { fornecedorId } = useParams();
   const navigate = useNavigate();
@@ -101,7 +23,9 @@ const ItensFornecedor = () => {
   const [formPreco, setFormPreco] = useState('');
   const [formObservacoes, setFormObservacoes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [planilhaRows, setPlanilhaRows] = useState(null);
+  const [planilhaNome, setPlanilhaNome] = useState('');
+  const [carregandoPlanilha, setCarregandoPlanilha] = useState(false);
 
   const loadFornecedor = () => {
     api.get('/compras/fornecedores').then((res) => {
@@ -194,10 +118,12 @@ const ItensFornecedor = () => {
     }
   };
 
-  const handleFileImport = (e) => {
+  const handleVisualizarPlanilha = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImporting(true);
+    setCarregandoPlanilha(true);
+    setPlanilhaRows(null);
+    setPlanilhaNome(file.name);
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -207,39 +133,24 @@ const ItensFornecedor = () => {
         const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
         if (!rows.length) {
           toast.warning('Planilha vazia');
-          setImporting(false);
-          return;
+          setPlanilhaRows([]);
+        } else {
+          setPlanilhaRows(rows);
+          toast.success('Planilha carregada. Visualize os dados abaixo.');
         }
-        let headerRowIndex = 0;
-        const firstRow = rows[0] || [];
-        const nonEmptyFirst = firstRow.filter((c) => c != null && String(c).trim() !== '').length;
-        if (nonEmptyFirst < 2 && rows.length > 1) {
-          headerRowIndex = 1;
-        }
-        const headers = (rows[headerRowIndex] || []).map((h) => String(h ?? '').trim());
-        const dataStartIndex = headerRowIndex + 1;
-        const dataRows = rows.slice(dataStartIndex);
-        const indices = acharIndicesCabecalho(headers);
-        const linhas = extrairLinhas([headers, ...dataRows], indices);
-        if (linhas.length === 0) {
-          toast.warning('Nenhuma linha válida encontrada. A planilha deve ter ao menos uma coluna com descrição do item (ou nome do produto).');
-          setImporting(false);
-          return;
-        }
-        api.post(`/compras/fornecedores/${fornecedorId}/itens/importar`, { linhas })
-          .then(() => {
-            toast.success(`${linhas.length} item(ns) importado(s)`);
-            loadItens();
-          })
-          .catch((err) => toast.error(err.response?.data?.error || 'Erro na importação'))
-          .finally(() => setImporting(false));
       } catch (err) {
-        toast.error('Erro ao ler planilha. Verifique se o arquivo é Excel (.xlsx, .xls) ou CSV.');
-        setImporting(false);
+        toast.error('Erro ao ler arquivo. Use Excel (.xlsx, .xls) ou CSV.');
+        setPlanilhaRows(null);
       }
+      setCarregandoPlanilha(false);
+      e.target.value = '';
     };
     reader.readAsArrayBuffer(file);
-    e.target.value = '';
+  };
+
+  const fecharVisualizacaoPlanilha = () => {
+    setPlanilhaRows(null);
+    setPlanilhaNome('');
   };
 
   if (loading) {
@@ -264,17 +175,17 @@ const ItensFornecedor = () => {
             <FiArrowLeft /> Voltar
           </button>
           <h1>Itens e preços – {fornecedor ? fornecedor.razao_social : 'Fornecedor'}</h1>
-          <p>Lista de itens padrão e preços. Importe qualquer planilha (Excel/CSV): o sistema detecta automaticamente colunas de descrição, código, unidade e preço.</p>
+          <p>Lista de itens cadastrados. Use &quot;Visualizar planilha&quot; para abrir um arquivo do fornecedor e ver o conteúdo sem cadastrar.</p>
         </div>
         <div className="header-actions">
           <label className="btn-premium" style={{ cursor: 'pointer', marginRight: 8 }}>
             <FiUpload size={18} style={{ marginRight: 6 }} />
-            {importing ? 'Importando...' : 'Importar planilha'}
+            {carregandoPlanilha ? 'Carregando...' : 'Visualizar planilha'}
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
-              onChange={handleFileImport}
-              disabled={importing}
+              onChange={handleVisualizarPlanilha}
+              disabled={carregandoPlanilha}
               style={{ display: 'none' }}
             />
           </label>
@@ -288,6 +199,56 @@ const ItensFornecedor = () => {
           </button>
         </div>
       </div>
+
+      {/* Modal visualização da planilha */}
+      {planilhaRows !== null && (
+        <div className="modal-grupo-overlay" onClick={fecharVisualizacaoPlanilha}>
+          <div className="modal-grupo-container modal-planilha-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '95vw', width: 960 }}>
+            <div className="modal-grupo-header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Visualização da planilha</h2>
+                {planilhaNome && <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>{planilhaNome}</p>}
+              </div>
+              <button type="button" className="modal-grupo-close" onClick={fecharVisualizacaoPlanilha} aria-label="Fechar">×</button>
+            </div>
+            <div className="modal-planilha-body" style={{ padding: 16, maxHeight: '70vh', overflow: 'auto' }}>
+              {planilhaRows.length === 0 ? (
+                <p style={{ color: '#64748b' }}>Planilha vazia.</p>
+              ) : (() => {
+                const headerRow = planilhaRows[0] || [];
+                const numCols = Math.max(headerRow.length, ...planilhaRows.slice(1).map((r) => (r || []).length), 1);
+                return (
+                  <table className="data-table" style={{ width: '100%', tableLayout: 'auto' }}>
+                    <thead>
+                      <tr>
+                        {Array.from({ length: numCols }, (_, c) => (
+                          <th key={c} style={{ whiteSpace: 'nowrap', padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
+                            {headerRow[c] != null ? String(headerRow[c]) : `Col ${c + 1}`}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {planilhaRows.slice(1).map((row, r) => (
+                        <tr key={r}>
+                          {Array.from({ length: numCols }, (_, c) => (
+                            <td key={c} style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                              {row[c] != null && row[c] !== '' ? String(row[c]) : '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+            <div style={{ padding: '12px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button type="button" className="btn-secondary" onClick={fecharVisualizacaoPlanilha}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal add/edit item */}
       {showModalItem && (
@@ -331,7 +292,7 @@ const ItensFornecedor = () => {
         {itens.length === 0 ? (
           <div className="no-data" style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
             <p>Nenhum item cadastrado.</p>
-            <p style={{ fontSize: 14 }}>Adicione itens manualmente ou importe uma planilha (colunas: descrição, codigo, unidade, preco).</p>
+            <p style={{ fontSize: 14 }}>Adicione itens manualmente ou use &quot;Visualizar planilha&quot; para abrir um arquivo do fornecedor.</p>
             <button type="button" className="btn-primary" style={{ marginTop: 16 }} onClick={() => setShowModalItem(true)}>
               <FiPlus /> Novo item
             </button>
