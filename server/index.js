@@ -176,6 +176,12 @@ if (!fs.existsSync(uploadsGruposDir)) {
   fs.mkdirSync(uploadsGruposDir, { recursive: true });
 }
 
+// Diretório para uploads de fotos de grupos de compras (fornecedores homologados)
+const uploadsGruposComprasDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'grupos-compras');
+if (!fs.existsSync(uploadsGruposComprasDir)) {
+  fs.mkdirSync(uploadsGruposComprasDir, { recursive: true });
+}
+
 // Configurar diretório de uploads de logos
 const uploadsLogosDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'logos');
 if (!fs.existsSync(uploadsLogosDir)) {
@@ -366,6 +372,24 @@ const uploadGrupo = multer({
     const mimetype = allowedTypes.test(file.mimetype);
     if (mimetype && extname) return cb(null, true);
     cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
+  }
+});
+
+const storageGruposCompras = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadsGruposComprasDir); },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, 'grupo_compras_' + unique + ext);
+  }
+});
+const uploadGrupoCompras = multer({
+  storage: storageGruposCompras,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|webp/;
+    if (allowed.test(file.mimetype)) return cb(null, true);
+    cb(new Error('Apenas imagens (JPEG, PNG, GIF, WEBP)'));
   }
 });
 
@@ -10677,6 +10701,7 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 // Servir fotos de famílias
 app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
 app.use('/api/uploads/grupos-produtos', express.static(uploadsGruposDir));
+app.use('/api/uploads/grupos-compras', express.static(uploadsGruposComprasDir));
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
@@ -14856,6 +14881,34 @@ db.run(`CREATE TABLE IF NOT EXISTS cotacoes (
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)
 )`);
 
+// Grupos de fornecedores homologados (ex.: Insumos, Peças, Serviços)
+db.run(`CREATE TABLE IF NOT EXISTS grupos_compras (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome TEXT NOT NULL,
+  numero INTEGER DEFAULT 10,
+  ordem INTEGER DEFAULT 0,
+  foto TEXT,
+  ativo INTEGER DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`);
+db.run('ALTER TABLE fornecedores ADD COLUMN grupo_id INTEGER REFERENCES grupos_compras(id)', (e) => {
+  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar grupo_id em fornecedores:', e.message);
+});
+// Itens padrão / lista de preços por fornecedor (planilha)
+db.run(`CREATE TABLE IF NOT EXISTS itens_fornecedor (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  fornecedor_id INTEGER NOT NULL,
+  codigo TEXT,
+  descricao TEXT NOT NULL,
+  unidade TEXT DEFAULT 'UN',
+  preco REAL DEFAULT 0,
+  observacoes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)
+)`);
+
 // ========== TABELAS MÓDULO FINANCEIRO ==========
 db.run(`CREATE TABLE IF NOT EXISTS contas_pagar (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15650,6 +15703,239 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
     }
     res.json({ message: 'Item excluído com sucesso' });
   });
+});
+
+// ---------- Grupos de fornecedores homologados (Compras) ----------
+app.get('/api/compras/grupos', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  db.all('SELECT * FROM grupos_compras WHERE ativo = 1 ORDER BY COALESCE(numero, 999) ASC, ordem ASC, nome ASC', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.get('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const id = req.params.id;
+  db.get('SELECT * FROM grupos_compras WHERE id = ? AND ativo = 1', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Grupo não encontrado' });
+    res.json(row);
+  });
+});
+app.post('/api/compras/grupos', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const body = req.body || {};
+  const nome = (body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
+  const numero = parseInt(body.numero, 10);
+  const ordem = parseInt(body.ordem, 10) || 0;
+  db.run('INSERT INTO grupos_compras (nome, numero, ordem, ativo) VALUES (?, ?, ?, 1)', [nome, isNaN(numero) || numero < 10 ? 10 : numero, ordem], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(201).json({ id: this.lastID, nome, numero: isNaN(numero) || numero < 10 ? 10 : numero, ordem });
+  });
+});
+app.put('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const id = req.params.id;
+  const body = req.body || {};
+  const nome = (body.nome || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
+  const numero = parseInt(body.numero, 10);
+  const ordem = parseInt(body.ordem, 10) || 0;
+  db.run('UPDATE grupos_compras SET nome = ?, numero = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nome, isNaN(numero) || numero < 10 ? 10 : numero, ordem, id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
+    res.json({ id, nome, numero: isNaN(numero) || numero < 10 ? 10 : numero, ordem });
+  });
+});
+app.delete('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const id = req.params.id;
+  db.run('UPDATE grupos_compras SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
+    res.json({ message: 'Grupo desativado' });
+  });
+});
+app.post('/api/compras/grupos/:id/foto', authenticateToken, checkModulePermission('compras'), uploadGrupoCompras.single('foto'), (req, res) => {
+  const id = req.params.id;
+  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  const filename = req.file.filename;
+  db.get('SELECT * FROM grupos_compras WHERE id = ?', [id], (err, grupo) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!grupo) return res.status(404).json({ error: 'Grupo não encontrado' });
+    const oldFoto = grupo.foto;
+    db.run('UPDATE grupos_compras SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (updateErr) => {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (oldFoto) {
+        const oldPath = path.join(uploadsGruposComprasDir, oldFoto);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      res.json({ foto: filename, url: '/api/uploads/grupos-compras/' + filename });
+    });
+  });
+});
+app.post('/api/compras/grupos/:id/foto-base64', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  try {
+    const id = req.params.id;
+    const b64 = req.body && req.body.foto_base64;
+    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'foto_base64 é obrigatório' });
+    const match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
+    let ext = '.jpg';
+    let buf = b64;
+    if (match) {
+      ext = match[1] === 'jpeg' ? '.jpg' : '.' + match[1];
+      buf = Buffer.from(match[2], 'base64');
+    } else {
+      buf = Buffer.from(b64, 'base64');
+    }
+    if (!fs.existsSync(uploadsGruposComprasDir)) fs.mkdirSync(uploadsGruposComprasDir, { recursive: true });
+    const filename = 'grupo_compras_' + id + '_' + Date.now() + ext;
+    const filePath = path.join(uploadsGruposComprasDir, filename);
+    fs.writeFile(filePath, buf, (err) => {
+      if (err) return res.status(500).json({ error: 'Erro ao salvar arquivo: ' + err.message });
+      db.get('SELECT * FROM grupos_compras WHERE id = ?', [id], (dbErr, grupo) => {
+        if (dbErr) return res.status(500).json({ error: dbErr.message });
+        if (!grupo) return res.status(404).json({ error: 'Grupo não encontrado' });
+        const oldFoto = grupo.foto;
+        db.run('UPDATE grupos_compras SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (upErr) => {
+          if (upErr) return res.status(500).json({ error: upErr.message });
+          if (oldFoto) {
+            const oldPath = path.join(uploadsGruposComprasDir, oldFoto);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          }
+          res.json({ foto: filename, url: '/api/uploads/grupos-compras/' + filename });
+        });
+      });
+    });
+  } catch (e) {
+    console.error('Erro foto-base64 grupo compras:', e);
+    res.status(500).json({ error: e.message || 'Erro ao processar foto' });
+  }
+});
+
+// Fornecedores de um grupo (homologados no grupo)
+app.get('/api/compras/grupos/:grupoId/fornecedores', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const grupoId = req.params.grupoId;
+  db.all('SELECT * FROM fornecedores WHERE grupo_id = ? AND status = ? ORDER BY razao_social', [grupoId, 'ativo'], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+// Criar fornecedor (opcional: grupo_id para já homologar no grupo)
+app.post('/api/compras/fornecedores', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const body = req.body || {};
+  const razao_social = (body.razao_social || '').trim();
+  const nome_fantasia = (body.nome_fantasia || '').trim();
+  const cnpj = (body.cnpj || '').trim();
+  const contato = body.contato != null ? String(body.contato).trim() : null;
+  const email = body.email != null ? String(body.email).trim() : null;
+  const telefone = body.telefone != null ? String(body.telefone).trim() : null;
+  const grupo_id = body.grupo_id != null ? (parseInt(body.grupo_id, 10) || null) : null;
+  if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
+  db.run('INSERT INTO fornecedores (razao_social, nome_fantasia, cnpj, contato, email, telefone, grupo_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [razao_social, nome_fantasia, cnpj, contato, email, telefone, grupo_id, 'ativo'], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(201).json({ id: this.lastID, razao_social, nome_fantasia, grupo_id });
+  });
+});
+
+// Atualizar fornecedor (ex.: grupo_id para homologar no grupo)
+app.put('/api/compras/fornecedores/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const id = req.params.id;
+  const body = req.body || {};
+  const razao_social = (body.razao_social || '').trim();
+  const nome_fantasia = (body.nome_fantasia || '').trim();
+  const cnpj = (body.cnpj || '').trim();
+  const contato = body.contato != null ? String(body.contato).trim() : null;
+  const email = body.email != null ? String(body.email).trim() : null;
+  const telefone = body.telefone != null ? String(body.telefone).trim() : null;
+  const endereco = body.endereco != null ? String(body.endereco).trim() : null;
+  const grupo_id = body.grupo_id != null ? (parseInt(body.grupo_id, 10) || null) : undefined;
+  if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
+  const updates = ['razao_social = ?', 'nome_fantasia = ?', 'cnpj = ?', 'contato = ?', 'email = ?', 'telefone = ?', 'endereco = ?', 'updated_at = CURRENT_TIMESTAMP'];
+  const params = [razao_social, nome_fantasia, cnpj, contato, email, telefone, endereco];
+  if (grupo_id !== undefined) {
+    updates.push('grupo_id = ?');
+    params.push(grupo_id);
+  }
+  params.push(id);
+  db.run('UPDATE fornecedores SET ' + updates.join(', ') + ' WHERE id = ?', params, function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+    res.json({ message: 'Fornecedor atualizado' });
+  });
+});
+
+// Itens padrão / lista de preços do fornecedor
+app.get('/api/compras/fornecedores/:fornecedorId/itens', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const fornecedorId = req.params.fornecedorId;
+  db.all('SELECT * FROM itens_fornecedor WHERE fornecedor_id = ? ORDER BY descricao', [fornecedorId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.post('/api/compras/fornecedores/:fornecedorId/itens', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const fornecedorId = req.params.fornecedorId;
+  const body = req.body || {};
+  const codigo = (body.codigo || '').trim();
+  const descricao = (body.descricao || '').trim();
+  const unidade = (body.unidade || 'UN').trim();
+  const preco = parseFloat(body.preco);
+  const observacoes = (body.observacoes || '').trim();
+  if (!descricao) return res.status(400).json({ error: 'Descrição é obrigatória' });
+  db.run('INSERT INTO itens_fornecedor (fornecedor_id, codigo, descricao, unidade, preco, observacoes) VALUES (?, ?, ?, ?, ?, ?)',
+    [fornecedorId, codigo || null, descricao, unidade || 'UN', isNaN(preco) ? 0 : preco, observacoes || null], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(201).json({ id: this.lastID, fornecedor_id: parseInt(fornecedorId, 10), codigo, descricao, unidade, preco: isNaN(preco) ? 0 : preco, observacoes: observacoes || null });
+  });
+});
+app.put('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const { fornecedorId, id } = req.params;
+  const body = req.body || {};
+  const codigo = (body.codigo || '').trim();
+  const descricao = (body.descricao || '').trim();
+  const unidade = (body.unidade || 'UN').trim();
+  const preco = parseFloat(body.preco);
+  const observacoes = (body.observacoes || '').trim();
+  if (!descricao) return res.status(400).json({ error: 'Descrição é obrigatória' });
+  db.run('UPDATE itens_fornecedor SET codigo = ?, descricao = ?, unidade = ?, preco = ?, observacoes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND fornecedor_id = ?',
+    [codigo || null, descricao, unidade || 'UN', isNaN(preco) ? 0 : preco, observacoes || null, id, fornecedorId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json({ message: 'Item atualizado' });
+  });
+});
+app.delete('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const { fornecedorId, id } = req.params;
+  db.run('DELETE FROM itens_fornecedor WHERE id = ? AND fornecedor_id = ?', [id, fornecedorId], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json({ message: 'Item excluído' });
+  });
+});
+
+// Importar itens do fornecedor via planilha (JSON de linhas ou arquivo)
+app.post('/api/compras/fornecedores/:fornecedorId/itens/importar', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const fornecedorId = req.params.fornecedorId;
+  const body = req.body || {};
+  const linhas = body.linhas || body.rows || [];
+  if (!Array.isArray(linhas) || linhas.length === 0) {
+    return res.status(400).json({ error: 'Envie "linhas" ou "rows" com array de objetos { codigo?, descricao, unidade?, preco? }' });
+  }
+  let inseridos = 0;
+  const next = (i) => {
+    if (i >= linhas.length) return res.json({ message: 'Importação concluída', inseridos });
+    const row = linhas[i];
+    const descricao = (row.descricao != null ? String(row.descricao).trim() : (row.descricao_produto || row.item || '')).trim();
+    const codigo = (row.codigo != null ? String(row.codigo) : (row.cod || row.sku || '')).trim();
+    const unidade = (row.unidade != null ? String(row.unidade) : (row.und || 'UN')).trim() || 'UN';
+    const preco = parseFloat(row.preco != null ? row.preco : (row.valor != null ? row.valor : row.price));
+    if (!descricao) return next(i + 1);
+    db.run('INSERT INTO itens_fornecedor (fornecedor_id, codigo, descricao, unidade, preco) VALUES (?, ?, ?, ?, ?)',
+      [fornecedorId, codigo || null, descricao, unidade, isNaN(preco) ? 0 : preco], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        inseridos++;
+        next(i + 1);
+      });
+  };
+  next(0);
 });
 
 // ========== ROTAS MÓDULO FINANCEIRO ==========

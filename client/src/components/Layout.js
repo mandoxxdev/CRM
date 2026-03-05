@@ -160,6 +160,7 @@ const Layout = () => {
   // Menu do módulo de Compras
   const comprasMenuItems = [
     { path: '/compras/fornecedores', icon: FiTruck, label: 'Fornecedores' },
+    { path: '/compras/fornecedores-homologados', icon: FiPackage, label: 'Fornecedores homologados' },
     { path: '/compras/pedidos', icon: FiShoppingCart, label: 'Pedidos de Compra' },
     { path: '/compras/cotacoes', icon: FiFileText2, label: 'Cotações' },
   ];

@@ -24,6 +24,9 @@ import CustosViagens from './components/CustosViagens';
 import OrdensServicoComercial from './components/OrdensServicoComercial';
 import OSComercialForm from './components/OSComercialForm';
 import Compras from './components/Compras';
+import GruposFornecedores from './components/GruposFornecedores';
+import FornecedoresDoGrupo from './components/FornecedoresDoGrupo';
+import ItensFornecedor from './components/ItensFornecedor';
 import Financeiro from './components/Financeiro';
 import Fabrica from './components/Fabrica';
 import DashboardMES from './components/mes/DashboardMES';
@@ -228,6 +231,21 @@ function AppRoutes() {
         <Route path="cotacoes" element={
           <ProtectedModuleRoute modulo="compras" nomeModulo="Compras">
             <Compras />
+          </ProtectedModuleRoute>
+        } />
+        <Route path="fornecedores-homologados" element={
+          <ProtectedModuleRoute modulo="compras" nomeModulo="Compras">
+            <GruposFornecedores />
+          </ProtectedModuleRoute>
+        } />
+        <Route path="fornecedores-homologados/grupo/:grupoId" element={
+          <ProtectedModuleRoute modulo="compras" nomeModulo="Compras">
+            <FornecedoresDoGrupo />
+          </ProtectedModuleRoute>
+        } />
+        <Route path="fornecedores-homologados/fornecedor/:fornecedorId" element={
+          <ProtectedModuleRoute modulo="compras" nomeModulo="Compras">
+            <ItensFornecedor />
           </ProtectedModuleRoute>
         } />
       </Route>
