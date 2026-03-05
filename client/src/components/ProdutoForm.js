@@ -621,8 +621,21 @@ const ProdutoForm = () => {
               const valor = especificacoesTecnicas[chave] ?? '';
               const isNumero = (String(v.tipo || '').toLowerCase() === 'numero');
               const isLista = (String(v.tipo || '').toLowerCase() === 'lista');
-              const opcoes = opcoesPorVariavel[chave] || [];
-              const opcoesOrdenadas = Array.isArray(opcoes) ? [...opcoes].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)) : [];
+              // Opções: primeiro as cadastradas por família (Opções por família); se vazio, usar as da variável (Editar variável → opções uma por linha)
+              const opcoesFamilia = opcoesPorVariavel[chave] || [];
+              const opcoesVar = v.opcoes;
+              const opcoesLista = (() => {
+                if (Array.isArray(opcoesFamilia) && opcoesFamilia.length > 0) {
+                  return [...opcoesFamilia].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map((o) => ({ id: o.id, valor: o.valor != null ? String(o.valor) : '' }));
+                }
+                if (Array.isArray(opcoesVar) && opcoesVar.length > 0) {
+                  return opcoesVar.map((o, i) => (typeof o === 'string' ? { id: `vt-${i}`, valor: o } : { id: o.id || `vt-${i}`, valor: (o.valor != null ? String(o.valor) : '') }));
+                }
+                if (opcoesVar && typeof opcoesVar === 'string') {
+                  return opcoesVar.split(/\n/).map((s, i) => ({ id: `vt-${i}`, valor: s.trim() })).filter((o) => o.valor);
+                }
+                return [];
+              })();
               return (
                 <div key={chave || idx} className="produto-form-variavel-field">
                   <label>{nomeVariavel}</label>
@@ -630,12 +643,12 @@ const ProdutoForm = () => {
                     <select
                       value={valor}
                       onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
-                      className="produto-form-variavel-select"
+                      className="produto-form-variavel-select produto-form-variavel-select-premium"
                     >
                       <option value="">Selecione...</option>
-                      {opcoesOrdenadas.map((opt) => (
-                        <option key={opt.id || opt.valor} value={opt.valor != null ? String(opt.valor) : ''}>
-                          {opt.valor != null ? String(opt.valor) : ''}
+                      {opcoesLista.map((opt) => (
+                        <option key={opt.id || opt.valor} value={opt.valor}>
+                          {opt.valor}
                         </option>
                       ))}
                     </select>
