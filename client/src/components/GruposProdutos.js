@@ -117,6 +117,9 @@ const GruposProdutos = () => {
                   </div>
                 </div>
                 <div className="grupo-card-body">
+                  {g.numero != null && (
+                    <span className="grupo-card-numero">Nº {g.numero}</span>
+                  )}
                   <div className="grupo-card-nome">{g.nome}</div>
                   <span className="grupo-card-cta-label">
                     Ver famílias <FiChevronRight className="grupo-card-chevron" size={16} />

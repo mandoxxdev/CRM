@@ -43,9 +43,12 @@ async function uploadFotoGrupo(id, file) {
   }
 }
 
+const NUMEROS_GRUPO = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
 const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo }) => {
   const isEdit = !!grupo && !!grupo.id;
   const [nome, setNome] = useState('');
+  const [numero, setNumero] = useState(10);
   const [ordem, setOrdem] = useState(0);
   const [fotoFile, setFotoFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -56,11 +59,13 @@ const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo }) => {
   useEffect(() => {
     if (grupo) {
       setNome(grupo.nome || '');
+      setNumero(NUMEROS_GRUPO.includes(Number(grupo.numero)) ? Number(grupo.numero) : (grupo.numero != null ? Number(grupo.numero) : 10));
       setOrdem(grupo.ordem ?? 0);
       setPreviewUrl(grupo.foto ? getFotoUrl(grupo.foto) : null);
       setFotoFile(null);
     } else {
       setNome('');
+      setNumero(10);
       setOrdem(0);
       setPreviewUrl(null);
       setFotoFile(null);
@@ -98,10 +103,11 @@ const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo }) => {
     setError('');
     try {
       let id = grupo && grupo.id;
+      const numeroVal = NUMEROS_GRUPO.includes(Number(numero)) ? Number(numero) : 10;
       if (isEdit) {
-        await api.put(`/grupos/${id}`, { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        await api.put(`/grupos/${id}`, { nome: nomeTrim, numero: numeroVal, ordem: Number(ordem) || 0 });
       } else {
-        const res = await api.post('/grupos', { nome: nomeTrim, ordem: Number(ordem) || 0 });
+        const res = await api.post('/grupos', { nome: nomeTrim, numero: numeroVal, ordem: Number(ordem) || 0 });
         id = res.data && res.data.id;
       }
       if (id && fotoFile) {
@@ -155,6 +161,19 @@ const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo }) => {
               placeholder="Ex: Masseira, Dispersores"
               autoFocus
             />
+          </div>
+          <div className="modal-grupo-field">
+            <label>Número do grupo</label>
+            <select
+              value={numero}
+              onChange={(e) => setNumero(Number(e.target.value))}
+              title="Número do grupo (10, 20, 30...)"
+            >
+              {NUMEROS_GRUPO.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span className="modal-grupo-field-hint">Ex.: 10, 20, 30, 40, 50 — define a ordem e identificação do grupo.</span>
           </div>
           <div className="modal-grupo-field">
             <label>Ordem (opcional)</label>

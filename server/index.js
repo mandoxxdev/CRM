@@ -989,6 +989,7 @@ function initializeDatabase() {
   db.run(`CREATE TABLE IF NOT EXISTS grupos_produto (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT NOT NULL,
+    numero INTEGER DEFAULT 10,
     ordem INTEGER DEFAULT 0,
     ativo INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1000,13 +1001,22 @@ function initializeDatabase() {
       db.run('ALTER TABLE grupos_produto ADD COLUMN foto TEXT', (e) => {
         if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna foto em grupos_produto:', e.message);
       });
+      db.run('ALTER TABLE grupos_produto ADD COLUMN numero INTEGER DEFAULT 10', (e) => {
+        if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna numero em grupos_produto:', e.message);
+      });
       db.get('SELECT COUNT(*) AS n FROM grupos_produto', [], function(er, row) {
         if (!er && row && row.n === 0) {
-          var defaults = ['Masseira', 'Dispersores', 'Tanques e Reatores', 'Hélices e Acessórios', 'Outros'];
-          defaults.forEach(function(nome, i) {
-            db.run('INSERT INTO grupos_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, i]);
+          var defaults = [
+            { nome: 'Masseira', numero: 10 },
+            { nome: 'Dispersores', numero: 20 },
+            { nome: 'Tanques e Reatores', numero: 30 },
+            { nome: 'Hélices e Acessórios', numero: 40 },
+            { nome: 'Outros', numero: 50 }
+          ];
+          defaults.forEach(function(item, i) {
+            db.run('INSERT INTO grupos_produto (nome, numero, ordem, ativo) VALUES (?, ?, ?, 1)', [item.nome, item.numero, i]);
           });
-          console.log('✅ Grupos padrão criados: ' + defaults.join(', '));
+          console.log('✅ Grupos padrão criados: ' + defaults.map(function(d) { return d.nome + ' (nº ' + d.numero + ')'; }).join(', '));
         }
         // Atribuir famílias sem grupo ao primeiro grupo
         db.run(
@@ -2066,13 +2076,13 @@ app.get('/deploy-version', (req, res) => {
 });
 // ========== GRUPOS DE PRODUTOS (Masseira, Dispersores, etc.) ==========
 app.get('/api/grupos', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM grupos_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
+  db.all('SELECT * FROM grupos_produto WHERE ativo = 1 ORDER BY COALESCE(numero, 999) ASC, ordem ASC, nome ASC', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
 app.get('/grupos', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM grupos_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
+  db.all('SELECT * FROM grupos_produto WHERE ativo = 1 ORDER BY COALESCE(numero, 999) ASC, ordem ASC, nome ASC', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
@@ -2089,10 +2099,12 @@ app.post('/api/grupos', authenticateToken, (req, res) => {
   var body = req.body || {};
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
+  var numero = parseInt(body.numero, 10);
+  if (isNaN(numero) || numero < 10) numero = 10;
   var ordem = parseInt(body.ordem, 10) || 0;
-  db.run('INSERT INTO grupos_produto (nome, ordem, ativo) VALUES (?, ?, 1)', [nome, ordem], function(err) {
+  db.run('INSERT INTO grupos_produto (nome, numero, ordem, ativo) VALUES (?, ?, ?, 1)', [nome, numero, ordem], function(err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, nome: nome, ordem: ordem });
+    res.status(201).json({ id: this.lastID, nome: nome, numero: numero, ordem: ordem });
   });
 });
 app.put('/api/grupos/:id', authenticateToken, (req, res) => {
@@ -2100,11 +2112,13 @@ app.put('/api/grupos/:id', authenticateToken, (req, res) => {
   var body = req.body || {};
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
+  var numero = parseInt(body.numero, 10);
+  if (isNaN(numero) || numero < 10) numero = 10;
   var ordem = parseInt(body.ordem, 10) || 0;
-  db.run('UPDATE grupos_produto SET nome = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nome, ordem, id], function(err) {
+  db.run('UPDATE grupos_produto SET nome = ?, numero = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nome, numero, ordem, id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
-    res.json({ id: id, nome: nome, ordem: ordem });
+    res.json({ id: id, nome: nome, numero: numero, ordem: ordem });
   });
 });
 app.delete('/api/grupos/:id', authenticateToken, (req, res) => {

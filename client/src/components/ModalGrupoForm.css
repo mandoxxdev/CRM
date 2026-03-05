@@ -72,18 +72,30 @@
 }
 
 .modal-grupo-field input[type="text"],
-.modal-grupo-field input[type="number"] {
+.modal-grupo-field input[type="number"],
+.modal-grupo-field select {
   width: 100%;
   padding: 12px 14px;
   border: 2px solid var(--gmp-border, #e2e8f0);
   border-radius: 10px;
   font-size: 1rem;
   box-sizing: border-box;
+  background: var(--gmp-surface, #fff);
+  color: var(--gmp-text);
 }
 
-.modal-grupo-field input:focus {
+.modal-grupo-field input:focus,
+.modal-grupo-field select:focus {
   outline: none;
   border-color: #ff6b35;
+}
+
+.modal-grupo-field-hint {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--gmp-text-light, #64748b);
+  margin-top: 6px;
+  line-height: 1.3;
 }
 
 .modal-grupo-foto-row {

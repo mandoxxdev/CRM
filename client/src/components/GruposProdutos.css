@@ -162,6 +162,17 @@
   min-height: 120px;
 }
 
+.grupo-card-numero {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gmp-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.1);
+  padding: 4px 10px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+}
+
 .grupo-card-nome {
   font-weight: 700;
   font-size: 1.2rem;
