@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { FiArrowLeft, FiPlus, FiTrash2, FiUpload, FiEdit2 } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiTrash2, FiUpload, FiEdit2, FiEye } from 'react-icons/fi';
 import './Compras.css';
 import './Loading.css';
 
@@ -23,9 +23,9 @@ const ItensFornecedor = () => {
   const [formPreco, setFormPreco] = useState('');
   const [formObservacoes, setFormObservacoes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [planilhaRows, setPlanilhaRows] = useState(null);
-  const [planilhaNome, setPlanilhaNome] = useState('');
-  const [carregandoPlanilha, setCarregandoPlanilha] = useState(false);
+  const [planilhaSalva, setPlanilhaSalva] = useState(null);
+  const [showModalPlanilha, setShowModalPlanilha] = useState(false);
+  const [salvandoPlanilha, setSalvandoPlanilha] = useState(false);
 
   const loadFornecedor = () => {
     api.get('/compras/fornecedores').then((res) => {
@@ -42,6 +42,20 @@ const ItensFornecedor = () => {
       .catch(() => setItens([]));
   };
 
+  const loadPlanilha = () => {
+    if (!fornecedorId) return;
+    api.get(`/compras/fornecedores/${fornecedorId}/planilha`)
+      .then((res) => {
+        const d = res.data;
+        if (d && Array.isArray(d.linhas) && d.linhas.length > 0) {
+          setPlanilhaSalva({ nome: d.nome || 'Planilha', linhas: d.linhas, atualizado_em: d.atualizado_em });
+        } else {
+          setPlanilhaSalva(null);
+        }
+      })
+      .catch(() => setPlanilhaSalva(null));
+  };
+
   useEffect(() => {
     if (!fornecedorId) {
       setLoading(false);
@@ -49,10 +63,17 @@ const ItensFornecedor = () => {
     }
     setLoading(true);
     loadFornecedor();
-    api.get(`/compras/fornecedores/${fornecedorId}/itens`)
-      .then((res) => setItens(res.data || []))
-      .catch(() => setItens([]))
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.get(`/compras/fornecedores/${fornecedorId}/itens`).then((r) => setItens(r.data || [])).catch(() => setItens([])),
+      api.get(`/compras/fornecedores/${fornecedorId}/planilha`).then((r) => {
+        const d = r.data;
+        if (d && Array.isArray(d.linhas) && d.linhas.length > 0) {
+          setPlanilhaSalva({ nome: d.nome || 'Planilha', linhas: d.linhas, atualizado_em: d.atualizado_em });
+        } else {
+          setPlanilhaSalva(null);
+        }
+      }).catch(() => setPlanilhaSalva(null))
+    ]).finally(() => setLoading(false));
   }, [fornecedorId]);
 
   const resetForm = () => {
@@ -118,12 +139,10 @@ const ItensFornecedor = () => {
     }
   };
 
-  const handleVisualizarPlanilha = (e) => {
+  const handleSalvarPlanilha = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setCarregandoPlanilha(true);
-    setPlanilhaRows(null);
-    setPlanilhaNome(file.name);
+    setSalvandoPlanilha(true);
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -133,24 +152,24 @@ const ItensFornecedor = () => {
         const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
         if (!rows.length) {
           toast.warning('Planilha vazia');
-          setPlanilhaRows([]);
-        } else {
-          setPlanilhaRows(rows);
-          toast.success('Planilha carregada. Visualize os dados abaixo.');
+          setSalvandoPlanilha(false);
+          e.target.value = '';
+          return;
         }
+        api.post(`/compras/fornecedores/${fornecedorId}/planilha`, { nome: file.name, linhas: rows })
+          .then(() => {
+            setPlanilhaSalva({ nome: file.name, linhas: rows, atualizado_em: new Date().toISOString() });
+            toast.success('Planilha salva. Use "Visualizar planilha" para ver no software.');
+          })
+          .catch((err) => toast.error(err.response?.data?.error || 'Erro ao salvar planilha'))
+          .finally(() => { setSalvandoPlanilha(false); e.target.value = ''; });
       } catch (err) {
         toast.error('Erro ao ler arquivo. Use Excel (.xlsx, .xls) ou CSV.');
-        setPlanilhaRows(null);
+        setSalvandoPlanilha(false);
+        e.target.value = '';
       }
-      setCarregandoPlanilha(false);
-      e.target.value = '';
     };
     reader.readAsArrayBuffer(file);
-  };
-
-  const fecharVisualizacaoPlanilha = () => {
-    setPlanilhaRows(null);
-    setPlanilhaNome('');
   };
 
   if (loading) {
@@ -175,20 +194,30 @@ const ItensFornecedor = () => {
             <FiArrowLeft /> Voltar
           </button>
           <h1>Itens e preços – {fornecedor ? fornecedor.razao_social : 'Fornecedor'}</h1>
-          <p>Lista de itens cadastrados. Use &quot;Visualizar planilha&quot; para abrir um arquivo do fornecedor e ver o conteúdo sem cadastrar.</p>
+          <p>Lista de itens cadastrados. Salve a planilha do fornecedor e visualize quando quiser, direto no software.</p>
         </div>
         <div className="header-actions">
-          <label className="btn-premium" style={{ cursor: 'pointer', marginRight: 8 }}>
+          <label className="btn-premium" style={{ cursor: salvandoPlanilha ? 'wait' : 'pointer', marginRight: 8 }}>
             <FiUpload size={18} style={{ marginRight: 6 }} />
-            {carregandoPlanilha ? 'Carregando...' : 'Visualizar planilha'}
+            {salvandoPlanilha ? 'Salvando...' : 'Salvar planilha'}
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
-              onChange={handleVisualizarPlanilha}
-              disabled={carregandoPlanilha}
+              onChange={handleSalvarPlanilha}
+              disabled={salvandoPlanilha}
               style={{ display: 'none' }}
             />
           </label>
+          <button
+            type="button"
+            className="btn-premium"
+            style={{ opacity: planilhaSalva ? 1 : 0.6, cursor: planilhaSalva ? 'pointer' : 'not-allowed' }}
+            onClick={() => planilhaSalva && setShowModalPlanilha(true)}
+            title={planilhaSalva ? 'Abrir planilha salva' : 'Salve uma planilha antes para visualizar'}
+          >
+            <FiEye size={18} style={{ marginRight: 6 }} />
+            Visualizar planilha
+          </button>
           <button
             type="button"
             className="btn-premium"
@@ -200,23 +229,28 @@ const ItensFornecedor = () => {
         </div>
       </div>
 
-      {/* Modal visualização da planilha */}
-      {planilhaRows !== null && (
-        <div className="modal-grupo-overlay" onClick={fecharVisualizacaoPlanilha}>
+      {/* Modal visualização da planilha salva */}
+      {showModalPlanilha && planilhaSalva && (
+        <div className="modal-grupo-overlay" onClick={() => setShowModalPlanilha(false)}>
           <div className="modal-grupo-container modal-planilha-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '95vw', width: 960 }}>
             <div className="modal-grupo-header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div>
-                <h2 style={{ margin: 0 }}>Visualização da planilha</h2>
-                {planilhaNome && <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>{planilhaNome}</p>}
+                <h2 style={{ margin: 0 }}>Planilha – {planilhaSalva.nome}</h2>
+                {planilhaSalva.atualizado_em && (
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+                    Salva em {new Date(planilhaSalva.atualizado_em).toLocaleString('pt-BR')}
+                  </p>
+                )}
               </div>
-              <button type="button" className="modal-grupo-close" onClick={fecharVisualizacaoPlanilha} aria-label="Fechar">×</button>
+              <button type="button" className="modal-grupo-close" onClick={() => setShowModalPlanilha(false)} aria-label="Fechar">×</button>
             </div>
             <div className="modal-planilha-body" style={{ padding: 16, maxHeight: '70vh', overflow: 'auto' }}>
-              {planilhaRows.length === 0 ? (
+              {!planilhaSalva.linhas || planilhaSalva.linhas.length === 0 ? (
                 <p style={{ color: '#64748b' }}>Planilha vazia.</p>
               ) : (() => {
-                const headerRow = planilhaRows[0] || [];
-                const numCols = Math.max(headerRow.length, ...planilhaRows.slice(1).map((r) => (r || []).length), 1);
+                const rows = planilhaSalva.linhas;
+                const headerRow = rows[0] || [];
+                const numCols = Math.max(headerRow.length, ...rows.slice(1).map((r) => (r || []).length), 1);
                 return (
                   <table className="data-table" style={{ width: '100%', tableLayout: 'auto' }}>
                     <thead>
@@ -229,7 +263,7 @@ const ItensFornecedor = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {planilhaRows.slice(1).map((row, r) => (
+                      {rows.slice(1).map((row, r) => (
                         <tr key={r}>
                           {Array.from({ length: numCols }, (_, c) => (
                             <td key={c} style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
@@ -244,7 +278,7 @@ const ItensFornecedor = () => {
               })()}
             </div>
             <div style={{ padding: '12px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-              <button type="button" className="btn-secondary" onClick={fecharVisualizacaoPlanilha}>Fechar</button>
+              <button type="button" className="btn-secondary" onClick={() => setShowModalPlanilha(false)}>Fechar</button>
             </div>
           </div>
         </div>
@@ -292,7 +326,7 @@ const ItensFornecedor = () => {
         {itens.length === 0 ? (
           <div className="no-data" style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
             <p>Nenhum item cadastrado.</p>
-            <p style={{ fontSize: 14 }}>Adicione itens manualmente ou use &quot;Visualizar planilha&quot; para abrir um arquivo do fornecedor.</p>
+            <p style={{ fontSize: 14 }}>Adicione itens manualmente. Salve a planilha do fornecedor para visualizá-la aqui no software.</p>
             <button type="button" className="btn-primary" style={{ marginTop: 16 }} onClick={() => setShowModalItem(true)}>
               <FiPlus /> Novo item
             </button>

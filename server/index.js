@@ -14895,6 +14895,15 @@ db.run(`CREATE TABLE IF NOT EXISTS grupos_compras (
 db.run('ALTER TABLE fornecedores ADD COLUMN grupo_id INTEGER REFERENCES grupos_compras(id)', (e) => {
   if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar grupo_id em fornecedores:', e.message);
 });
+db.run('ALTER TABLE fornecedores ADD COLUMN planilha_dados TEXT', (e) => {
+  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar planilha_dados em fornecedores:', e.message);
+});
+db.run('ALTER TABLE fornecedores ADD COLUMN planilha_nome TEXT', (e) => {
+  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar planilha_nome em fornecedores:', e.message);
+});
+db.run('ALTER TABLE fornecedores ADD COLUMN planilha_atualizado_em DATETIME', (e) => {
+  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar planilha_atualizado_em em fornecedores:', e.message);
+});
 // Itens padrão / lista de preços por fornecedor (planilha)
 db.run(`CREATE TABLE IF NOT EXISTS itens_fornecedor (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15908,6 +15917,43 @@ app.delete('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToke
     if (err) return res.status(500).json({ error: err.message });
     if (this.changes === 0) return res.status(404).json({ error: 'Item não encontrado' });
     res.json({ message: 'Item excluído' });
+  });
+});
+
+// Salvar planilha do fornecedor (para visualização no software)
+app.post('/api/compras/fornecedores/:fornecedorId/planilha', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const fornecedorId = req.params.fornecedorId;
+  const body = req.body || {};
+  const nome = (body.nome || body.nomeArquivo || '').trim() || 'planilha';
+  const linhas = body.linhas || body.rows || [];
+  if (!Array.isArray(linhas)) {
+    return res.status(400).json({ error: 'Envie "linhas" com array de linhas (array de arrays)' });
+  }
+  const planilhaDados = JSON.stringify(linhas);
+  db.run(
+    'UPDATE fornecedores SET planilha_dados = ?, planilha_nome = ?, planilha_atualizado_em = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [planilhaDados, nome, fornecedorId],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+      res.json({ message: 'Planilha salva', nome, linhas: linhas.length });
+    }
+  );
+});
+
+// Obter planilha salva do fornecedor (para visualização no software)
+app.get('/api/compras/fornecedores/:fornecedorId/planilha', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const fornecedorId = req.params.fornecedorId;
+  db.get('SELECT planilha_dados, planilha_nome, planilha_atualizado_em FROM fornecedores WHERE id = ?', [fornecedorId], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+    let linhas = [];
+    if (row.planilha_dados) {
+      try {
+        linhas = JSON.parse(row.planilha_dados);
+      } catch (_) {}
+    }
+    res.json({ nome: row.planilha_nome || null, linhas, atualizado_em: row.planilha_atualizado_em || null });
   });
 });
 
