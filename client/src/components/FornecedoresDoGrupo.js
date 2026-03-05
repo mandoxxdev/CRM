@@ -2,9 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { FiPlus, FiTruck, FiChevronRight, FiArrowLeft, FiEdit2, FiUserMinus } from 'react-icons/fi';
+import { FiPlus, FiTruck, FiChevronRight, FiArrowLeft, FiEdit2, FiUserMinus, FiUploadCloud } from 'react-icons/fi';
 import './FamiliasProdutos.css';
+import './ModalGrupoForm.css';
 import './Loading.css';
+
+function getFotoUrlFornecedor(foto) {
+  if (!foto) return null;
+  if (typeof foto === 'string' && foto.startsWith('data:')) return foto;
+  const base = api.defaults.baseURL || '/api';
+  return base.replace(/\/api\/?$/, '') + '/api/uploads/fornecedores/' + foto;
+}
+
+async function uploadFotoFornecedor(id, file) {
+  const baseURL = (api.defaults.baseURL || '/api').replace(/\/$/, '');
+  const url = `${baseURL}/compras/fornecedores/${id}/foto`;
+  const formData = new FormData();
+  formData.append('foto', file);
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(url, { method: 'POST', headers, body: formData });
+  if (res.ok) return res.json();
+  if (res.status === 400) {
+    const reader = new FileReader();
+    const base64 = await new Promise((resolve, reject) => {
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+      reader.readAsDataURL(file);
+    });
+    const { data } = await api.post(`/compras/fornecedores/${id}/foto-base64`, { foto_base64: base64 });
+    return data;
+  }
+  const errData = await res.json().catch(() => ({}));
+  throw new Error(errData.error || res.statusText);
+}
 
 const FornecedoresDoGrupo = () => {
   const { grupoId } = useParams();
@@ -15,6 +47,16 @@ const FornecedoresDoGrupo = () => {
   const [loading, setLoading] = useState(true);
   const [showModalAdd, setShowModalAdd] = useState(false);
   const [showModalNovo, setShowModalNovo] = useState(false);
+  const [editingFornecedor, setEditingFornecedor] = useState(null);
+  const [editRazao, setEditRazao] = useState('');
+  const [editFantasia, setEditFantasia] = useState('');
+  const [editCnpj, setEditCnpj] = useState('');
+  const [editContato, setEditContato] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editTelefone, setEditTelefone] = useState('');
+  const [editEndereco, setEditEndereco] = useState('');
+  const [editFotoFile, setEditFotoFile] = useState(null);
+  const [editPreviewUrl, setEditPreviewUrl] = useState(null);
   const [selectedFornecedorId, setSelectedFornecedorId] = useState('');
   const [novoRazao, setNovoRazao] = useState('');
   const [novoFantasia, setNovoFantasia] = useState('');
@@ -46,6 +88,64 @@ const FornecedoresDoGrupo = () => {
     setLoading(true);
     loadData();
   }, [grupoId]);
+
+  useEffect(() => {
+    if (editingFornecedor) {
+      setEditRazao(editingFornecedor.razao_social || '');
+      setEditFantasia(editingFornecedor.nome_fantasia || '');
+      setEditCnpj(editingFornecedor.cnpj || '');
+      setEditContato(editingFornecedor.contato || '');
+      setEditEmail(editingFornecedor.email || '');
+      setEditTelefone(editingFornecedor.telefone || '');
+      setEditEndereco(editingFornecedor.endereco || '');
+      setEditFotoFile(null);
+      setEditPreviewUrl(editingFornecedor.foto ? getFotoUrlFornecedor(editingFornecedor.foto) : null);
+    }
+  }, [editingFornecedor]);
+
+  const handleEditFotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.type)) {
+      toast.warning('Envie apenas imagens (JPEG, PNG, GIF, WEBP).');
+      return;
+    }
+    setEditFotoFile(file);
+    setEditPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editingFornecedor || !editingFornecedor.id) return;
+    const razao = (editRazao || '').trim();
+    if (!razao) {
+      toast.warning('Razão social é obrigatória');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.put(`/compras/fornecedores/${editingFornecedor.id}`, {
+        razao_social: razao,
+        nome_fantasia: (editFantasia || '').trim(),
+        cnpj: (editCnpj || '').trim(),
+        contato: (editContato || '').trim(),
+        email: (editEmail || '').trim(),
+        telefone: (editTelefone || '').trim(),
+        endereco: (editEndereco || '').trim(),
+        grupo_id: grupoId
+      });
+      if (editFotoFile) {
+        await uploadFotoFornecedor(editingFornecedor.id, editFotoFile);
+      }
+      toast.success('Fornecedor atualizado');
+      setEditingFornecedor(null);
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || err.message || 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const fornecedoresDisponiveis = todosFornecedores.filter(
     (f) => !f.grupo_id || String(f.grupo_id) !== String(grupoId)
@@ -241,6 +341,74 @@ const FornecedoresDoGrupo = () => {
         </div>
       )}
 
+      {/* Modal: Editar fornecedor */}
+      {editingFornecedor && (
+        <div className="modal-grupo-overlay" onClick={() => { if (editFotoFile && editPreviewUrl) URL.revokeObjectURL(editPreviewUrl); setEditingFornecedor(null); }}>
+          <div className="modal-grupo-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-grupo-header">
+              <h2>Editar fornecedor</h2>
+              <button type="button" className="modal-grupo-close" onClick={() => { if (editFotoFile && editPreviewUrl) URL.revokeObjectURL(editPreviewUrl); setEditingFornecedor(null); }} aria-label="Fechar">×</button>
+            </div>
+            <form onSubmit={handleSaveEdit} className="modal-grupo-form">
+              <div className="modal-grupo-field">
+                <label>Razão social *</label>
+                <input type="text" value={editRazao} onChange={(e) => setEditRazao(e.target.value)} placeholder="Razão social" required />
+              </div>
+              <div className="modal-grupo-field">
+                <label>Nome fantasia</label>
+                <input type="text" value={editFantasia} onChange={(e) => setEditFantasia(e.target.value)} placeholder="Nome fantasia" />
+              </div>
+              <div className="modal-grupo-field">
+                <label>CNPJ</label>
+                <input type="text" value={editCnpj} onChange={(e) => setEditCnpj(e.target.value)} placeholder="CNPJ" />
+              </div>
+              <div className="modal-grupo-field">
+                <label>Contato</label>
+                <input type="text" value={editContato} onChange={(e) => setEditContato(e.target.value)} placeholder="Nome do contato" />
+              </div>
+              <div className="modal-grupo-field">
+                <label>E-mail</label>
+                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="E-mail" />
+              </div>
+              <div className="modal-grupo-field">
+                <label>Telefone</label>
+                <input type="text" value={editTelefone} onChange={(e) => setEditTelefone(e.target.value)} placeholder="Telefone" />
+              </div>
+              <div className="modal-grupo-field">
+                <label>Endereço</label>
+                <input type="text" value={editEndereco} onChange={(e) => setEditEndereco(e.target.value)} placeholder="Endereço" />
+              </div>
+              <div className="modal-grupo-field">
+                <label>Foto (opcional)</label>
+                <div className="modal-grupo-foto-row">
+                  <div className="modal-grupo-preview">
+                    {editPreviewUrl ? (
+                      <img src={editPreviewUrl} alt="Preview" />
+                    ) : (
+                      <span className="modal-grupo-preview-placeholder">Sem imagem</span>
+                    )}
+                  </div>
+                  <label className="btn-upload-label">
+                    <FiUploadCloud size={18} />
+                    {editFotoFile ? 'Trocar imagem' : 'Enviar imagem'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={handleEditFotoChange}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="modal-grupo-actions-right" style={{ marginTop: 16 }}>
+                <button type="button" className="btn-cancel" onClick={() => { if (editFotoFile && editPreviewUrl) URL.revokeObjectURL(editPreviewUrl); setEditingFornecedor(null); }}>Cancelar</button>
+                <button type="submit" className="btn-save" disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="familias-grid">
         {fornecedores.length === 0 ? (
           <div className="familias-empty">
@@ -270,11 +438,27 @@ const FornecedoresDoGrupo = () => {
               >
                 <div className="familia-card-header">
                   <div className="familia-card-foto-wrap">
-                    <div className="familia-card-placeholder">
-                      <FiTruck size={48} />
-                    </div>
+                    {f.foto ? (
+                      <img
+                        src={getFotoUrlFornecedor(f.foto)}
+                        alt=""
+                        className="familia-card-foto-img"
+                      />
+                    ) : (
+                      <div className="familia-card-placeholder">
+                        <FiTruck size={48} />
+                      </div>
+                    )}
                   </div>
                   <div className="familia-card-actions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="btn-icon-card"
+                      title="Editar fornecedor"
+                      onClick={() => setEditingFornecedor(f)}
+                    >
+                      <FiEdit2 />
+                    </button>
                     <button
                       type="button"
                       className="btn-icon-card btn-danger"

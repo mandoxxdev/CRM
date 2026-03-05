@@ -182,6 +182,12 @@ if (!fs.existsSync(uploadsGruposComprasDir)) {
   fs.mkdirSync(uploadsGruposComprasDir, { recursive: true });
 }
 
+// Diretório para uploads de fotos de fornecedores (cadastro por grupo)
+const uploadsFornecedoresDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'fornecedores');
+if (!fs.existsSync(uploadsFornecedoresDir)) {
+  fs.mkdirSync(uploadsFornecedoresDir, { recursive: true });
+}
+
 // Configurar diretório de uploads de logos
 const uploadsLogosDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'logos');
 if (!fs.existsSync(uploadsLogosDir)) {
@@ -385,6 +391,25 @@ const storageGruposCompras = multer.diskStorage({
 });
 const uploadGrupoCompras = multer({
   storage: storageGruposCompras,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|webp/;
+    if (allowed.test(file.mimetype)) return cb(null, true);
+    cb(new Error('Apenas imagens (JPEG, PNG, GIF, WEBP)'));
+  }
+});
+
+const storageFornecedor = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadsFornecedoresDir); },
+  filename: (req, file, cb) => {
+    const id = req.params.id || 'temp';
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, 'fornecedor_' + id + '_' + unique + ext);
+  }
+});
+const uploadFornecedor = multer({
+  storage: storageFornecedor,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|gif|webp/;
@@ -10702,6 +10727,7 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
 app.use('/api/uploads/grupos-produtos', express.static(uploadsGruposDir));
 app.use('/api/uploads/grupos-compras', express.static(uploadsGruposComprasDir));
+app.use('/api/uploads/fornecedores', express.static(uploadsFornecedoresDir));
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
@@ -14904,6 +14930,9 @@ db.run('ALTER TABLE fornecedores ADD COLUMN planilha_nome TEXT', (e) => {
 db.run('ALTER TABLE fornecedores ADD COLUMN planilha_atualizado_em DATETIME', (e) => {
   if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar planilha_atualizado_em em fornecedores:', e.message);
 });
+db.run('ALTER TABLE fornecedores ADD COLUMN foto TEXT', (e) => {
+  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar foto em fornecedores:', e.message);
+});
 // Itens padrão / lista de preços por fornecedor (planilha)
 db.run(`CREATE TABLE IF NOT EXISTS itens_fornecedor (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15870,6 +15899,63 @@ app.put('/api/compras/fornecedores/:id', authenticateToken, checkModulePermissio
     if (this.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
     res.json({ message: 'Fornecedor atualizado' });
   });
+});
+
+app.post('/api/compras/fornecedores/:id/foto', authenticateToken, checkModulePermission('compras'), uploadFornecedor.single('foto'), (req, res) => {
+  const id = req.params.id;
+  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  const filename = req.file.filename;
+  db.get('SELECT * FROM fornecedores WHERE id = ?', [id], (err, fornecedor) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!fornecedor) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+    const oldFoto = fornecedor.foto;
+    db.run('UPDATE fornecedores SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (updateErr) => {
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+      if (oldFoto) {
+        const oldPath = path.join(uploadsFornecedoresDir, oldFoto);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      res.json({ foto: filename, url: '/api/uploads/fornecedores/' + filename });
+    });
+  });
+});
+app.post('/api/compras/fornecedores/:id/foto-base64', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  try {
+    const id = req.params.id;
+    const b64 = req.body && req.body.foto_base64;
+    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'foto_base64 é obrigatório' });
+    const match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
+    let ext = '.jpg';
+    let buf = b64;
+    if (match) {
+      ext = match[1] === 'jpeg' ? '.jpg' : '.' + match[1];
+      buf = Buffer.from(match[2], 'base64');
+    } else {
+      buf = Buffer.from(b64, 'base64');
+    }
+    if (!fs.existsSync(uploadsFornecedoresDir)) fs.mkdirSync(uploadsFornecedoresDir, { recursive: true });
+    const filename = 'fornecedor_' + id + '_' + Date.now() + ext;
+    const filePath = path.join(uploadsFornecedoresDir, filename);
+    fs.writeFile(filePath, buf, (err) => {
+      if (err) return res.status(500).json({ error: 'Erro ao salvar arquivo: ' + err.message });
+      db.get('SELECT * FROM fornecedores WHERE id = ?', [id], (dbErr, fornecedor) => {
+        if (dbErr) return res.status(500).json({ error: dbErr.message });
+        if (!fornecedor) return res.status(404).json({ error: 'Fornecedor não encontrado' });
+        const oldFoto = fornecedor.foto;
+        db.run('UPDATE fornecedores SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (upErr) => {
+          if (upErr) return res.status(500).json({ error: upErr.message });
+          if (oldFoto) {
+            const oldPath = path.join(uploadsFornecedoresDir, oldFoto);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+          }
+          res.json({ foto: filename, url: '/api/uploads/fornecedores/' + filename });
+        });
+      });
+    });
+  } catch (e) {
+    console.error('Erro foto-base64 fornecedor:', e);
+    res.status(500).json({ error: e.message || 'Erro ao processar foto' });
+  }
 });
 
 // Itens padrão / lista de preços do fornecedor
