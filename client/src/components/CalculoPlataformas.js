@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiArrowLeft, FiPlus, FiTrash2, FiBox } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiTrash2, FiUpload } from 'react-icons/fi';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import './CalculoPlataformas.css';
 
 const SCALE = 100; // 1 unidade 3D = 100 mm (para não ficar gigante)
@@ -35,7 +36,8 @@ function calcularLayout(equipamentos, larguraPlat, comprimentoPlat, margem, espa
       diametro: d,
       nome: eq.nome || `Equip ${i + 1}`,
       altura: Math.max(1, altTotal),
-      alturaAcima: Math.min(altTotal, Math.max(0, altAcima))
+      alturaAcima: Math.min(altTotal, Math.max(0, altAcima)),
+      modelUrl: eq.modelUrl || null
     });
     x += d + espacamento;
     maxAlturaLinha = Math.max(maxAlturaLinha, d);
@@ -137,6 +139,41 @@ function createTanqueMistura(scene, r, hEquip, posX, posY, posZ) {
   scene.add(grupo);
 }
 
+// Carrega modelo 3D (GLB/GLTF) e coloca na cena, escalado pelo diâmetro e altura informados no cadastro
+function loadModeloEquipamento(scene, modelUrl, diametroMm, alturaTotalMm, hEquip, posX, posY, posZ) {
+  const loader = new GLTFLoader();
+  loader.load(
+    modelUrl,
+    (gltf) => {
+      const model = gltf.scene;
+      const bbox = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      bbox.getSize(size);
+      const center = new THREE.Vector3();
+      bbox.getCenter(center);
+      model.position.sub(center);
+      const diametroCena = diametroMm / SCALE;
+      const maxLateral = Math.max(size.x, size.z) || 1;
+      const altModelo = size.y || 1;
+      const scaleXZ = diametroCena / maxLateral;
+      const scaleY = hEquip / altModelo;
+      model.scale.set(scaleXZ, scaleY, scaleXZ);
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+      const grupo = new THREE.Group();
+      grupo.add(model);
+      grupo.position.set(posX, posY, posZ);
+      scene.add(grupo);
+    },
+    undefined,
+    (err) => console.warn('Erro ao carregar modelo 3D:', err)
+  );
+}
+
 function CalculoPlataformas() {
   const navigate = useNavigate();
   const containerRef = useRef(null);
@@ -155,7 +192,14 @@ function CalculoPlataformas() {
     { id: 1, nome: 'Masseira 500L', diametro: 1200, altura: 1200, alturaAcima: 825 },
     { id: 2, nome: 'Dispersor', diametro: 800, altura: 1000, alturaAcima: 600 }
   ]);
-  const [mostrar3D, setMostrar3D] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      equipamentos.forEach((e) => {
+        if (e.modelUrl?.startsWith('blob:')) try { URL.revokeObjectURL(e.modelUrl); } catch (_) {}
+      });
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const adicionarEquipamento = () => {
     setEquipamentos((prev) => [
@@ -165,18 +209,35 @@ function CalculoPlataformas() {
   };
 
   const removerEquipamento = (id) => {
-    setEquipamentos((prev) => prev.filter((e) => e.id !== id));
+    setEquipamentos((prev) => {
+      const eq = prev.find((e) => e.id === id);
+      if (eq?.modelUrl?.startsWith('blob:')) try { URL.revokeObjectURL(eq.modelUrl); } catch (_) {}
+      return prev.filter((e) => e.id !== id);
+    });
   };
 
   const atualizarEquipamento = (id, field, value) => {
     const numFields = ['diametro', 'altura', 'alturaAcima'];
     setEquipamentos((prev) =>
-      prev.map((e) =>
-        e.id === id
-          ? { ...e, [field]: numFields.includes(field) ? Number(value) || 0 : value }
-          : e
-      )
+      prev.map((e) => {
+        if (e.id !== id) return e;
+        if (field === 'modelUrl') {
+          if (e.modelUrl?.startsWith('blob:')) try { URL.revokeObjectURL(e.modelUrl); } catch (_) {}
+          return { ...e, modelUrl: value || '', modelFileName: value ? e.modelFileName : '' };
+        }
+        return { ...e, [field]: numFields.includes(field) ? Number(value) || 0 : value };
+      })
     );
+  };
+
+  const handleModeloFile = (id, file) => {
+    if (!file) return;
+    setEquipamentos((prev) => {
+      const eq = prev.find((e) => e.id === id);
+      if (eq?.modelUrl?.startsWith('blob:')) try { URL.revokeObjectURL(eq.modelUrl); } catch (_) {}
+      const url = URL.createObjectURL(file);
+      return prev.map((e) => (e.id === id ? { ...e, modelUrl: url, modelFileName: file.name } : e));
+    });
   };
 
   const posicoes = calcularLayout(
@@ -301,13 +362,19 @@ function CalculoPlataformas() {
     b4.castShadow = true;
     scene.add(b4);
 
-    // Equipamentos como tanques de mistura (corpo + fundo cônico + faixas + agitadores)
+    // Equipamentos: modelo 3D (GLB/GLTF) se tiver arquivo, senão tanque de mistura padrão
     posicoes.forEach((p) => {
       const r = p.diametro / 2 / SCALE;
       const hEquip = (p.altura || ALTURA_EQUIP_DEFAULT) / SCALE;
       const alturaAcima = (p.alturaAcima ?? ALTURA_ACIMA_DEFAULT) / SCALE;
       const cy = H + alturaAcima - hEquip / 2;
-      createTanqueMistura(scene, r, hEquip, p.z / SCALE, cy, p.x / SCALE);
+      const posX = p.z / SCALE;
+      const posZ = p.x / SCALE;
+      if (p.modelUrl) {
+        loadModeloEquipamento(scene, p.modelUrl, p.diametro, p.altura || ALTURA_EQUIP_DEFAULT, hEquip, posX, cy, posZ);
+      } else {
+        createTanqueMistura(scene, r, hEquip, posX, cy, posZ);
+      }
     });
 
     const animate = () => {
@@ -319,7 +386,6 @@ function CalculoPlataformas() {
   }, [comprimento, largura, altura, posicoes]);
 
   useEffect(() => {
-    if (!mostrar3D || !posicoes.length) return;
     const container = containerRef.current;
     if (!container) return;
     initScene();
@@ -347,7 +413,7 @@ function CalculoPlataformas() {
       controlsRef.current = null;
       cameraRef.current = null;
     };
-  }, [mostrar3D, initScene, posicoes.length]);
+  }, [initScene]);
 
   return (
     <div className="calculo-plataformas">
@@ -356,7 +422,7 @@ function CalculoPlataformas() {
           <FiArrowLeft /> Voltar
         </button>
         <h1>Cálculo de plataformas</h1>
-        <p>Defina as dimensões da plataforma e os diâmetros dos equipamentos. O sistema gera a visualização 3D com o layout sugerido.</p>
+        <p>Altere as dimensões e os equipamentos; a visualização 3D atualiza automaticamente.</p>
       </header>
 
       <div className="calculo-plataformas-layout">
@@ -428,6 +494,9 @@ function CalculoPlataformas() {
             <p className="calculo-plataformas-hint">
               Altura total: tamanho do equipamento. Altura acima: parte que fica para cima da plataforma; o restante fica dentro/abaixo do piso.
             </p>
+            <p className="calculo-plataformas-hint">
+              <strong>Modelo 3D:</strong> Exporte do Inventor (ou outro CAD) em <strong>GLB ou GLTF</strong> e envie aqui. Se não enviar, será usado o tanque padrão.
+            </p>
             <div className="calculo-plataformas-table-wrap">
               <table className="calculo-plataformas-table">
                 <thead>
@@ -436,6 +505,7 @@ function CalculoPlataformas() {
                     <th>Diâmetro (mm)</th>
                     <th>Altura total (mm)</th>
                     <th>Altura acima (mm)</th>
+                    <th>Modelo 3D (GLB/GLTF)</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -479,6 +549,27 @@ function CalculoPlataformas() {
                           title="Parte que fica acima do piso da plataforma"
                         />
                       </td>
+                      <td className="calculo-plataformas-td-modelo">
+                        <label className="calculo-plataformas-file-label">
+                          <input
+                            type="file"
+                            accept=".glb,.gltf"
+                            onChange={(e) => handleModeloFile(eq.id, e.target.files?.[0])}
+                            className="calculo-plataformas-file-input"
+                          />
+                          <span className="calculo-plataformas-file-btn"><FiUpload /> {eq.modelFileName ? eq.modelFileName : 'Enviar GLB/GLTF'}</span>
+                        </label>
+                        {eq.modelUrl && (
+                          <button
+                            type="button"
+                            className="calculo-plataformas-btn-limpar-modelo"
+                            onClick={() => atualizarEquipamento(eq.id, 'modelUrl', '')}
+                            title="Remover modelo 3D"
+                          >
+                            Limpar
+                          </button>
+                        )}
+                      </td>
                       <td>
                         <button
                           type="button"
@@ -496,30 +587,20 @@ function CalculoPlataformas() {
             </div>
           </div>
 
-          <button
-            type="button"
-            className="calculo-plataformas-btn-gerar"
-            onClick={() => setMostrar3D(true)}
-            disabled={!equipamentos.some((e) => (e.diametro || 0) > 0)}
-          >
-            <FiBox /> Gerar visualização 3D
-          </button>
         </section>
 
-        {mostrar3D && (
-          <section className="calculo-plataformas-3d">
-            <div className="calculo-plataformas-3d-header">
-              <h2>Visualização 3D</h2>
-              <p>Arraste para girar • Scroll para zoom</p>
+        <section className="calculo-plataformas-3d">
+          <div className="calculo-plataformas-3d-header">
+            <h2>Visualização 3D</h2>
+            <p>Atualiza ao editar • Arraste para girar • Scroll para zoom</p>
+          </div>
+          <div ref={containerRef} className="calculo-plataformas-canvas" />
+          {posicoes.length === 0 && (
+            <div className="calculo-plataformas-3d-aviso">
+              Adicione pelo menos um equipamento com diâmetro &gt; 0 para ver na plataforma.
             </div>
-            <div ref={containerRef} className="calculo-plataformas-canvas" />
-            {posicoes.length === 0 && (
-              <div className="calculo-plataformas-3d-aviso">
-                Adicione pelo menos um equipamento com diâmetro &gt; 0 e clique em &quot;Gerar visualização 3D&quot;.
-              </div>
-            )}
-          </section>
-        )}
+          )}
+        </section>
       </div>
     </div>
   );
