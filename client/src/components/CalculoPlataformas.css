@@ -127,29 +127,41 @@
 
 .calculo-plataformas-table {
   width: 100%;
+  min-width: 560px;
   border-collapse: collapse;
   font-size: 0.9rem;
+  table-layout: fixed;
 }
 
 .calculo-plataformas-table th,
 .calculo-plataformas-table td {
-  padding: 8px 10px;
+  padding: 12px 14px;
   text-align: left;
   border-bottom: 1px solid var(--gmp-border, #e2e8f0);
+  vertical-align: middle;
 }
 
 .calculo-plataformas-table th {
   font-weight: 600;
   color: var(--gmp-text, #334155);
   background: var(--gmp-bg-subtle, #f8fafc);
+  line-height: 1.3;
 }
+
+.calculo-plataformas-table th:nth-child(1) { width: 22%; min-width: 120px; }
+.calculo-plataformas-table th:nth-child(2) { width: 18%; min-width: 100px; }
+.calculo-plataformas-table th:nth-child(3) { width: 22%; min-width: 120px; }
+.calculo-plataformas-table th:nth-child(4) { width: 22%; min-width: 120px; }
+.calculo-plataformas-table th:nth-child(5) { width: 16%; min-width: 48px; }
 
 .calculo-plataformas-table td input {
   width: 100%;
-  padding: 6px 10px;
+  min-width: 0;
+  padding: 10px 12px;
   border: 1px solid var(--gmp-border);
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  box-sizing: border-box;
 }
 
 .calculo-plataformas-btn-add {

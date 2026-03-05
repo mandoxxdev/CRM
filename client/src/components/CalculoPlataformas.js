@@ -43,6 +43,100 @@ function calcularLayout(equipamentos, larguraPlat, comprimentoPlat, margem, espa
   return posicoes;
 }
 
+// Cria um tanque de mistura (corpo cilíndrico + fundo cônico + faixas + tampa + sugestão de agitadores)
+function createTanqueMistura(scene, r, hEquip, posX, posY, posZ) {
+  const coneRatio = 0.18;
+  const coneH = hEquip * coneRatio;
+  const cylH = hEquip - coneH;
+  const rOutlet = Math.max(r * 0.12, 0.02);
+  const matInox = new THREE.MeshStandardMaterial({
+    color: 0xc0c4c8,
+    metalness: 0.5,
+    roughness: 0.45
+  });
+  const matBanda = new THREE.MeshStandardMaterial({
+    color: 0xd97706,
+    metalness: 0.5,
+    roughness: 0.5
+  });
+  const matMotorCentral = new THREE.MeshStandardMaterial({
+    color: 0x4b5563,
+    metalness: 0.4,
+    roughness: 0.6
+  });
+  const matMotorLateral = new THREE.MeshStandardMaterial({
+    color: 0x2563eb,
+    metalness: 0.45,
+    roughness: 0.55
+  });
+
+  const grupo = new THREE.Group();
+
+  // Corpo cilíndrico (parte reta)
+  const centroCil = -hEquip / 2 + coneH + cylH / 2;
+  const geoCorpo = new THREE.CylinderGeometry(r, r, cylH, 32);
+  const corpo = new THREE.Mesh(geoCorpo, matInox);
+  corpo.position.y = centroCil;
+  corpo.castShadow = true;
+  corpo.receiveShadow = true;
+  grupo.add(corpo);
+
+  // Fundo cônico
+  const geoCono = new THREE.CylinderGeometry(rOutlet, r, coneH, 32);
+  const cono = new THREE.Mesh(geoCono, matInox);
+  cono.position.y = -hEquip / 2 + coneH / 2;
+  cono.castShadow = true;
+  cono.receiveShadow = true;
+  grupo.add(cono);
+
+  // Duas faixas horizontais (anéis)
+  const espBanda = Math.min(r * 0.08, 0.08);
+  const raioBanda = r + espBanda * 0.5;
+  const geoBanda = new THREE.TorusGeometry(raioBanda, espBanda, 8, 32);
+  const banda1 = new THREE.Mesh(geoBanda, matBanda);
+  banda1.position.y = centroCil - cylH * 0.25;
+  banda1.rotation.x = Math.PI / 2;
+  banda1.castShadow = true;
+  grupo.add(banda1);
+  const banda2 = new THREE.Mesh(geoBanda, matBanda);
+  banda2.position.y = centroCil + cylH * 0.2;
+  banda2.rotation.x = Math.PI / 2;
+  banda2.castShadow = true;
+  grupo.add(banda2);
+
+  // Tampa superior (disco fino)
+  const altTampa = Math.min(hEquip * 0.02, 0.05);
+  const geoTampa = new THREE.CylinderGeometry(r, r, altTampa, 32);
+  const tampa = new THREE.Mesh(geoTampa, matInox);
+  tampa.position.y = hEquip / 2 - altTampa / 2;
+  tampa.castShadow = true;
+  grupo.add(tampa);
+
+  // Agitadores no topo: 1 central (cinza) + 2 laterais (azul)
+  const yTopo = hEquip / 2 + altTampa / 2;
+  const altMotor = Math.min(r * 0.5, 0.2);
+  const rMotorCentral = r * 0.2;
+  const rMotorLateral = r * 0.12;
+  const distLateral = r * 0.35;
+  const geoMotorC = new THREE.CylinderGeometry(rMotorCentral, rMotorCentral, altMotor, 16);
+  const motorC = new THREE.Mesh(geoMotorC, matMotorCentral);
+  motorC.position.set(0, yTopo + altMotor / 2, 0);
+  motorC.castShadow = true;
+  grupo.add(motorC);
+  const geoMotorL = new THREE.CylinderGeometry(rMotorLateral, rMotorLateral, altMotor * 0.9, 16);
+  const motorL1 = new THREE.Mesh(geoMotorL, matMotorLateral);
+  motorL1.position.set(-distLateral, yTopo + altMotor * 0.45, 0);
+  motorL1.castShadow = true;
+  grupo.add(motorL1);
+  const motorL2 = new THREE.Mesh(geoMotorL, matMotorLateral);
+  motorL2.position.set(distLateral, yTopo + altMotor * 0.45, 0);
+  motorL2.castShadow = true;
+  grupo.add(motorL2);
+
+  grupo.position.set(posX, posY, posZ);
+  scene.add(grupo);
+}
+
 function CalculoPlataformas() {
   const navigate = useNavigate();
   const containerRef = useRef(null);
@@ -134,26 +228,27 @@ function CalculoPlataformas() {
     dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
-    // --- Plataforma estilo industrial: piso concreto + colunas + bordas ---
+    // --- Plataforma vazada: só piso fino no topo + pilares (altura = altura dos pilares) ---
     const corConcreto = 0xb8bcc4;
     const corEstrutura = 0x64748b;
     const corGuardaCorpo = 0xf59e0b;
     const espColuna = Math.min(L, W) * 0.04;
     const altGuardaCorpo = Math.min(L, W) * 0.015;
+    const espessuraPiso = Math.min(Math.max(L, W) * 0.02, 0.25);
 
-    // Laje principal (piso tipo concreto)
-    const geoLaje = new THREE.BoxGeometry(L, H, W);
-    const matLaje = new THREE.MeshStandardMaterial({
+    // Piso fino só no topo (embaixo fica vazado)
+    const geoPiso = new THREE.BoxGeometry(L, espessuraPiso, W);
+    const matPiso = new THREE.MeshStandardMaterial({
       color: corConcreto,
       metalness: 0.08,
       roughness: 0.92
     });
-    const laje = new THREE.Mesh(geoLaje, matLaje);
-    laje.position.set(L / 2, H / 2, W / 2);
-    laje.receiveShadow = true;
-    scene.add(laje);
+    const piso = new THREE.Mesh(geoPiso, matPiso);
+    piso.position.set(L / 2, H - espessuraPiso / 2, W / 2);
+    piso.receiveShadow = true;
+    scene.add(piso);
 
-    // Colunas de apoio (cantos)
+    // Pilares: altura H (o campo "altura" define só os pilares); espaço embaixo fica vazio
     const matColuna = new THREE.MeshStandardMaterial({
       color: corEstrutura,
       metalness: 0.35,
@@ -163,7 +258,11 @@ function CalculoPlataformas() {
       [espColuna / 2, espColuna / 2],
       [L - espColuna / 2, espColuna / 2],
       [L - espColuna / 2, W - espColuna / 2],
-      [espColuna / 2, W - espColuna / 2]
+      [espColuna / 2, W - espColuna / 2],
+      [L / 2, espColuna / 2],
+      [L / 2, W - espColuna / 2],
+      [espColuna / 2, W / 2],
+      [L - espColuna / 2, W / 2]
     ];
     posColunas.forEach(([px, pz]) => {
       const col = new THREE.Mesh(new THREE.BoxGeometry(espColuna, H, espColuna), matColuna);
@@ -202,25 +301,13 @@ function CalculoPlataformas() {
     b4.castShadow = true;
     scene.add(b4);
 
-    // Equipamentos (cilindros): parte acima da plataforma, parte “dentro” (abaixo do topo)
-    const corEquip = 0x0ea5e9;
+    // Equipamentos como tanques de mistura (corpo + fundo cônico + faixas + agitadores)
     posicoes.forEach((p) => {
       const r = p.diametro / 2 / SCALE;
       const hEquip = (p.altura || ALTURA_EQUIP_DEFAULT) / SCALE;
       const alturaAcima = (p.alturaAcima ?? ALTURA_ACIMA_DEFAULT) / SCALE;
-      const geo = new THREE.CylinderGeometry(r, r, hEquip, 32);
-      const mat = new THREE.MeshStandardMaterial({
-        color: corEquip,
-        metalness: 0.2,
-        roughness: 0.8
-      });
-      const cilindro = new THREE.Mesh(geo, mat);
-      // Centro do cilindro: topo da plataforma (H) + altura acima - metade da altura total → parte para cima, parte para baixo
       const cy = H + alturaAcima - hEquip / 2;
-      cilindro.position.set(p.z / SCALE, cy, p.x / SCALE);
-      cilindro.castShadow = true;
-      cilindro.receiveShadow = true;
-      scene.add(cilindro);
+      createTanqueMistura(scene, r, hEquip, p.z / SCALE, cy, p.x / SCALE);
     });
 
     const animate = () => {
