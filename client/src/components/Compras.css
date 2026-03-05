@@ -204,6 +204,59 @@
   font-size: 1rem;
 }
 
+/* Modal visualização planilha – tabela fiel ao arquivo + busca */
+.modal-planilha-container .modal-planilha-body {
+  background: #fff;
+}
+
+.modal-planilha-container .modal-planilha-body .data-table {
+  font-size: 0.8125rem;
+  margin-top: 0;
+}
+
+.modal-planilha-container .modal-planilha-body .data-table thead tr {
+  background: #f1f5f9;
+}
+
+.modal-planilha-container .modal-planilha-body .data-table thead th {
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-planilha-container .modal-planilha-body .data-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.modal-planilha-container .modal-planilha-body .data-table tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.modal-planilha-container .planilha-busca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 320px;
+  margin-bottom: 0;
+}
+
+.modal-planilha-container .planilha-busca input {
+  flex: 1;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.875rem;
+}
+
+.modal-planilha-container .planilha-busca input:focus {
+  outline: none;
+  border-color: var(--gmp-primary, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .compras {

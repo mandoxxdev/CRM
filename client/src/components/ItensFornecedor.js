@@ -8,29 +8,24 @@ import './Compras.css';
 import './Loading.css';
 
 const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-const formatNumber = (v) => (typeof v === 'number' && !isNaN(v) ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(v) : String(v ?? ''));
 
-// Verifica se o cabeçalho da coluna indica preço/valor (para formatar como moeda)
-function isColunaPreco(headerCell) {
-  const s = String(headerCell ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
-  return /preco|preço|valor|price|vlr|unitario|unitário|total|total\s*\(r?\$?\)/.test(s) || s.includes('valor');
-}
-
-// Normaliza célula da planilha para valor primitivo (evita objeto/caracteres estranhos na visualização)
+// Normaliza célula: usa texto formatado (.w) do Excel quando existir, senão valor primitivo
 function normalizarCelula(cell) {
   if (cell == null || cell === '') return '';
-  if (typeof cell === 'object' && cell !== null && 'v' in cell) return cell.v;
+  if (typeof cell === 'object' && cell !== null) {
+    if ('w' in cell && cell.w != null && String(cell.w).trim() !== '') return String(cell.w).trim();
+    if ('v' in cell) return cell.v;
+  }
   if (typeof cell === 'number' && !isNaN(cell)) return cell;
   if (typeof cell === 'boolean') return cell ? 'Sim' : 'Não';
   if (cell instanceof Date) return cell.toLocaleDateString('pt-BR');
-  const s = String(cell).trim();
-  return s;
+  return String(cell).trim();
 }
 
-// Para exibição: sempre texto limpo (remove caracteres não imprimíveis e caracteres de substituição)
+// Para exibição: sempre texto limpo (remove caracteres não imprimíveis)
 function exibirCelula(cell) {
   const v = normalizarCelula(cell);
-  if (v === '') return '—';
+  if (v === '' || v == null) return '—';
   let s = String(v)
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     .replace(/\uFFFD/g, '')
@@ -39,17 +34,26 @@ function exibirCelula(cell) {
   return s;
 }
 
-// Exibe célula com formatação: preço como R$, número como número pt-BR, resto como texto
-function formatarCelulaExibicao(cell, isPriceColumn) {
-  const v = normalizarCelula(cell);
-  if (v === '' || v == null) return '—';
-  if (typeof v === 'number' && !isNaN(v)) {
-    return isPriceColumn ? formatCurrency(v) : formatNumber(v);
+// Extrai linhas da planilha usando o texto exibido (como no Excel) quando disponível
+function sheetToRowsComoTela(sheet) {
+  if (!sheet || !sheet['!ref']) return [];
+  const range = XLSX.utils.decode_range(sheet['!ref']);
+  const rows = [];
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    const row = [];
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = sheet[addr];
+      let val = '';
+      if (cell) {
+        if (cell.w != null && String(cell.w).trim() !== '') val = String(cell.w).trim();
+        else if (cell.v !== undefined) val = cell.v;
+      }
+      row.push(val === '' ? '' : val);
+    }
+    rows.push(row);
   }
-  const num = parseFloat(String(v).replace(/\./g, '').replace(',', '.'));
-  if (!isNaN(num) && isPriceColumn) return formatCurrency(num);
-  if (!isNaN(num)) return formatNumber(num);
-  return exibirCelula(cell);
+  return rows;
 }
 
 const ItensFornecedor = () => {
@@ -201,10 +205,10 @@ const ItensFornecedor = () => {
     reader.onload = (ev) => {
       try {
         const data = new Uint8Array(ev.target.result);
-        const wb = XLSX.read(data, { type: 'array', raw: true });
+        const wb = XLSX.read(data, { type: 'array', raw: false, cellNF: true });
         const firstSheet = wb.Sheets[wb.SheetNames[0]];
-        const rawRows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
-        const rows = rawRows.map((row) => (Array.isArray(row) ? row.map(normalizarCelula) : []));
+        const rawRows = sheetToRowsComoTela(firstSheet);
+        const rows = rawRows.map((row) => (Array.isArray(row) ? row.map((c) => (c === '' || c == null ? '' : c)) : []));
         if (!rows.length) {
           toast.warning('Planilha vazia');
           setSalvandoPlanilha(false);
@@ -301,14 +305,13 @@ const ItensFornecedor = () => {
             </div>
             {planilhaSalva.linhas && planilhaSalva.linhas.length > 0 && (
               <div style={{ padding: '0 24px 12px', borderBottom: '1px solid #e2e8f0' }}>
-                <div style={{ maxWidth: 320, margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div className="planilha-busca">
                   <FiSearch size={18} style={{ color: '#64748b', flexShrink: 0 }} />
                   <input
                     type="text"
                     placeholder="Buscar na planilha..."
                     value={filtroPlanilha}
                     onChange={(e) => setFiltroPlanilha(e.target.value)}
-                    style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', width: '100%' }}
                   />
                 </div>
               </div>
@@ -350,16 +353,8 @@ const ItensFornecedor = () => {
                         {linhasFiltradas.map((row, r) => (
                           <tr key={r}>
                             {Array.from({ length: numCols }, (_, c) => (
-                              <td
-                                key={c}
-                                style={{
-                                  padding: '8px 12px',
-                                  borderBottom: '1px solid #e2e8f0',
-                                  verticalAlign: 'top',
-                                  textAlign: isColunaPreco(headerRow[c]) ? 'right' : 'left'
-                                }}
-                              >
-                                {formatarCelulaExibicao(row[c], isColunaPreco(headerRow[c]))}
+                              <td key={c} style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                                {exibirCelula(row[c])}
                               </td>
                             ))}
                           </tr>
