@@ -257,6 +257,39 @@
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
+/* Planilha inline na página do fornecedor (em vez de só no modal) */
+.planilha-inline-wrap .planilha-inline-header .planilha-busca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.planilha-inline-wrap .planilha-inline-table {
+  font-size: 0.8125rem;
+  margin-top: 0;
+}
+
+.planilha-inline-wrap .planilha-inline-table thead tr {
+  background: #f1f5f9;
+}
+
+.planilha-inline-wrap .planilha-inline-table thead th {
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.planilha-inline-wrap .planilha-inline-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.planilha-inline-wrap .planilha-inline-table tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .compras {

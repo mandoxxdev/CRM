@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { FiArrowLeft, FiPlus, FiTrash2, FiUpload, FiEdit2, FiEye, FiSearch } from 'react-icons/fi';
+import { FiArrowLeft, FiUpload, FiEye, FiSearch } from 'react-icons/fi';
 import './Compras.css';
 import './Loading.css';
 
@@ -253,7 +253,7 @@ const ItensFornecedor = () => {
             <FiArrowLeft /> Voltar
           </button>
           <h1>Itens e preços – {fornecedor ? fornecedor.razao_social : 'Fornecedor'}</h1>
-          <p>Lista de itens cadastrados. Salve a planilha do fornecedor e visualize quando quiser, direto no software.</p>
+          <p>Salve a planilha do fornecedor para visualizá-la aqui. Use a busca para filtrar os dados.</p>
         </div>
         <div className="header-actions">
           <label className="btn-premium" style={{ cursor: salvandoPlanilha ? 'wait' : 'pointer', marginRight: 8 }}>
@@ -272,18 +272,10 @@ const ItensFornecedor = () => {
             className="btn-premium"
             style={{ opacity: planilhaSalva ? 1 : 0.6, cursor: planilhaSalva ? 'pointer' : 'not-allowed' }}
             onClick={() => planilhaSalva && setShowModalPlanilha(true)}
-            title={planilhaSalva ? 'Abrir planilha salva' : 'Salve uma planilha antes para visualizar'}
+            title={planilhaSalva ? 'Abrir em tela cheia' : 'Salve uma planilha antes para visualizar'}
           >
             <FiEye size={18} style={{ marginRight: 6 }} />
-            Visualizar planilha
-          </button>
-          <button
-            type="button"
-            className="btn-premium"
-            onClick={() => { resetForm(); setShowModalItem(true); }}
-          >
-            <FiPlus size={20} style={{ marginRight: 6 }} />
-            Novo item
+            Visualizar em tela cheia
           </button>
         </div>
       </div>
@@ -413,47 +405,87 @@ const ItensFornecedor = () => {
         </div>
       )}
 
-      <div className="table-container">
-        {itens.length === 0 ? (
-          <div className="no-data" style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
-            <p>Nenhum item cadastrado.</p>
-            <p style={{ fontSize: 14 }}>Adicione itens manualmente. Salve a planilha do fornecedor para visualizá-la aqui no software.</p>
-            <button type="button" className="btn-primary" style={{ marginTop: 16 }} onClick={() => setShowModalItem(true)}>
-              <FiPlus /> Novo item
-            </button>
-          </div>
+      <div className="table-container planilha-inline-wrap">
+        {planilhaSalva && planilhaSalva.linhas && planilhaSalva.linhas.length > 0 ? (
+          <>
+            <div className="planilha-inline-header" style={{ marginBottom: 16, padding: '12px 0', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18 }}>{planilhaSalva.nome}</h3>
+                  {planilhaSalva.atualizado_em && (
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+                      Salva em {new Date(planilhaSalva.atualizado_em).toLocaleString('pt-BR')}
+                    </p>
+                  )}
+                </div>
+                <div className="planilha-busca" style={{ maxWidth: 320 }}>
+                  <FiSearch size={18} style={{ color: '#64748b', flexShrink: 0 }} />
+                  <input
+                    type="text"
+                    placeholder="Buscar na planilha..."
+                    value={filtroPlanilha}
+                    onChange={(e) => setFiltroPlanilha(e.target.value)}
+                    style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px' }}
+                  />
+                </div>
+              </div>
+            </div>
+            {(() => {
+              const rows = planilhaSalva.linhas;
+              const headerRow = rows[0] || [];
+              const numCols = Math.max(headerRow.length, ...rows.slice(1).map((r) => (r || []).length), 1);
+              const termo = filtroPlanilha.trim().toLowerCase();
+              const dataRows = rows.slice(1);
+              const linhasFiltradas = termo
+                ? dataRows.filter((row) =>
+                    Array.from({ length: numCols }, (_, c) => row[c]).some((cell) =>
+                      exibirCelula(cell).toLowerCase().includes(termo)
+                    )
+                  )
+                : dataRows;
+              return (
+                <>
+                  {termo && (
+                    <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+                      {linhasFiltradas.length} de {dataRows.length} linha(s)
+                    </p>
+                  )}
+                  <div style={{ overflowX: 'auto', maxHeight: '65vh', overflowY: 'auto' }}>
+                    <table className="data-table planilha-inline-table" style={{ width: '100%', tableLayout: 'auto' }}>
+                      <thead>
+                        <tr>
+                          {Array.from({ length: numCols }, (_, c) => (
+                            <th key={c} style={{ whiteSpace: 'nowrap', padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
+                              {c < headerRow.length ? exibirCelula(headerRow[c]) : `Col ${c + 1}`}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {linhasFiltradas.map((row, r) => (
+                          <tr key={r}>
+                            {Array.from({ length: numCols }, (_, c) => (
+                              <td key={c} style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                                {exibirCelula(row[c])}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {linhasFiltradas.length === 0 && termo && (
+                    <p style={{ color: '#64748b', marginTop: 16 }}>Nenhuma linha encontrada para &quot;{filtroPlanilha.trim()}&quot;</p>
+                  )}
+                </>
+              );
+            })()}
+          </>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Descrição</th>
-                <th>Unidade</th>
-                <th>Preço</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {itens.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.codigo || '-'}</td>
-                  <td><div className="cell-primary">{item.descricao}</div></td>
-                  <td>{item.unidade || 'UN'}</td>
-                  <td><strong>{formatCurrency(item.preco)}</strong></td>
-                  <td>
-                    <div className="action-buttons">
-                      <button type="button" className="btn-icon" title="Editar" onClick={() => openEdit(item)}>
-                        <FiEdit2 />
-                      </button>
-                      <button type="button" className="btn-icon btn-danger" title="Excluir" onClick={() => handleDeleteItem(item)}>
-                        <FiTrash2 />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="no-data" style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
+            <p style={{ fontWeight: 600 }}>Nenhuma planilha salva.</p>
+            <p style={{ fontSize: 14 }}>Use &quot;Salvar planilha&quot; acima para enviar o arquivo do fornecedor e visualizá-lo aqui.</p>
+          </div>
         )}
       </div>
     </div>
