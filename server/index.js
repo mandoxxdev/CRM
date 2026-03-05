@@ -15912,24 +15912,73 @@ app.delete('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToke
 });
 
 // Importar itens do fornecedor via planilha (JSON de linhas ou arquivo)
+// Aceita qualquer formato: o backend tenta achar descrição, código, unidade e preço em várias chaves possíveis
+function normalizarCampo(s) {
+  if (s == null || s === '') return '';
+  return String(s).trim();
+}
+function parsePrecoBackend(val) {
+  if (val == null || val === '') return 0;
+  if (typeof val === 'number' && !isNaN(val)) return val;
+  const s = String(val).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+function extrairDoRow(row, ...candidatos) {
+  for (const k of candidatos) {
+    const v = row[k];
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
+function extrairPrecoDoRow(row) {
+  const chavesPreco = ['preco', 'preço', 'valor', 'valor unitario', 'valor unitário', 'price', 'vlr', 'preco unitario', 'preço unitário', 'valor unit', 'preco unit', 'valor_unitario', 'preco_unitario'];
+  for (const k of chavesPreco) {
+    const v = row[k];
+    if (v != null && v !== '') {
+      const n = parsePrecoBackend(v);
+      if (!isNaN(n)) return n;
+    }
+  }
+  for (const k of Object.keys(row || {})) {
+    const v = row[k];
+    if (v == null || v === '') continue;
+    if (typeof v === 'number' && !isNaN(v)) return v;
+    const n = parsePrecoBackend(v);
+    if (!isNaN(n)) return n;
+  }
+  return 0;
+}
+function extrairDescricaoDoRow(row) {
+  const desc = extrairDoRow(row, 'descricao', 'descrição', 'descricao_produto', 'descricao produto', 'produto', 'item', 'nome', 'designacao', 'designação', 'material', 'especificacao', 'denominacao', 'nome do produto', 'desc');
+  if (desc) return desc;
+  for (const k of Object.keys(row || {})) {
+    const v = row[k];
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s === '') continue;
+    if (isNaN(parsePrecoBackend(v))) return s;
+  }
+  return '';
+}
 app.post('/api/compras/fornecedores/:fornecedorId/itens/importar', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const fornecedorId = req.params.fornecedorId;
   const body = req.body || {};
   const linhas = body.linhas || body.rows || [];
   if (!Array.isArray(linhas) || linhas.length === 0) {
-    return res.status(400).json({ error: 'Envie "linhas" ou "rows" com array de objetos { codigo?, descricao, unidade?, preco? }' });
+    return res.status(400).json({ error: 'Envie "linhas" ou "rows" com array de objetos (qualquer formato de planilha)' });
   }
   let inseridos = 0;
   const next = (i) => {
     if (i >= linhas.length) return res.json({ message: 'Importação concluída', inseridos });
     const row = linhas[i];
-    const descricao = (row.descricao != null ? String(row.descricao).trim() : (row.descricao_produto || row.item || '')).trim();
-    const codigo = (row.codigo != null ? String(row.codigo) : (row.cod || row.sku || '')).trim();
-    const unidade = (row.unidade != null ? String(row.unidade) : (row.und || 'UN')).trim() || 'UN';
-    const preco = parseFloat(row.preco != null ? row.preco : (row.valor != null ? row.valor : row.price));
+    const descricao = extrairDescricaoDoRow(row);
     if (!descricao) return next(i + 1);
+    const codigo = extrairDoRow(row, 'codigo', 'código', 'cod', 'sku', 'referencia', 'referência', 'ref') || null;
+    const unidade = (extrairDoRow(row, 'unidade', 'und', 'um', 'un', 'unid') || 'UN').trim();
+    const preco = extrairPrecoDoRow(row);
     db.run('INSERT INTO itens_fornecedor (fornecedor_id, codigo, descricao, unidade, preco) VALUES (?, ?, ?, ?, ?)',
-      [fornecedorId, codigo || null, descricao, unidade, isNaN(preco) ? 0 : preco], function(err) {
+      [fornecedorId, codigo, descricao, unidade || 'UN', preco], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         inseridos++;
         next(i + 1);

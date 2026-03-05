@@ -9,6 +9,84 @@ import './Loading.css';
 
 const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+// Normaliza texto para comparação (minúsculo, sem acentos)
+function normalizar(s) {
+  if (s == null) return '';
+  return String(s).toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
+}
+
+// Listas de possíveis nomes de coluna (normalizados)
+const COLS_DESCRICAO = ['descricao', 'descrição', 'descricao do produto', 'produto', 'item', 'nome', 'designacao', 'designação', 'material', 'especificacao', 'denominacao', 'nome do produto', 'desc'];
+const COLS_CODIGO = ['codigo', 'código', 'cod', 'sku', 'referencia', 'referência', 'ref', 'codigo do produto', 'código do produto'];
+const COLS_UNIDADE = ['unidade', 'und', 'um', 'un', 'unid', 'unidade de medida', 'medida'];
+const COLS_PRECO = ['preco', 'preço', 'valor', 'valor unitario', 'valor unitário', 'price', 'vlr', 'preco unitario', 'preço unitário', 'valor unit', 'preco unit'];
+
+function colunaMatch(norm, listas) {
+  for (const list of listas) {
+    for (const k of list) {
+      if (norm.includes(k) || k.includes(norm)) return true;
+    }
+  }
+  return false;
+}
+
+function acharIndicesCabecalho(headers) {
+  const normHeaders = headers.map((h, idx) => ({ norm: normalizar(h), original: h, idx }));
+  let descIdx = -1, codIdx = -1, undIdx = -1, precoIdx = -1;
+  for (const { norm, idx } of normHeaders) {
+    if (!norm) continue;
+    if (descIdx < 0 && colunaMatch(norm, [COLS_DESCRICAO])) descIdx = idx;
+    if (codIdx < 0 && colunaMatch(norm, [COLS_CODIGO])) codIdx = idx;
+    if (undIdx < 0 && colunaMatch(norm, [COLS_UNIDADE])) undIdx = idx;
+    if (precoIdx < 0 && colunaMatch(norm, [COLS_PRECO])) precoIdx = idx;
+  }
+  return { descIdx, codIdx, undIdx, precoIdx };
+}
+
+function parsePreco(val) {
+  if (val == null || val === '') return 0;
+  if (typeof val === 'number' && !isNaN(val)) return val;
+  const s = String(val).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function extrairLinhas(rows, indices) {
+  const { descIdx, codIdx, undIdx, precoIdx } = indices;
+  const linhas = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i] || [];
+    let descricao = '';
+    if (descIdx >= 0 && row[descIdx] != null) descricao = String(row[descIdx]).trim();
+    if (!descricao) {
+      for (let c = 0; c < row.length; c++) {
+        const v = row[c];
+        if (v != null && String(v).trim() !== '' && isNaN(parsePreco(v))) {
+          descricao = String(v).trim();
+          break;
+        }
+      }
+    }
+    if (!descricao && row.length > 0 && row[0] != null) descricao = String(row[0]).trim();
+    if (!descricao) continue;
+    const codigo = codIdx >= 0 && row[codIdx] != null ? String(row[codIdx]).trim() : '';
+    const unidade = undIdx >= 0 && row[undIdx] != null ? String(row[undIdx]).trim() : 'UN';
+    let preco = 0;
+    if (precoIdx >= 0 && row[precoIdx] != null) preco = parsePreco(row[precoIdx]);
+    else {
+      for (let c = 0; c < row.length; c++) {
+        const v = row[c];
+        if (v != null && String(v).trim() !== '' && (typeof v === 'number' || !isNaN(parsePreco(v)))) {
+          preco = parsePreco(v);
+          break;
+        }
+      }
+    }
+    linhas.push({ codigo: codigo || undefined, descricao, unidade: unidade || 'UN', preco });
+  }
+  return linhas;
+}
+
 const ItensFornecedor = () => {
   const { fornecedorId } = useParams();
   const navigate = useNavigate();
@@ -124,31 +202,27 @@ const ItensFornecedor = () => {
     reader.onload = (ev) => {
       try {
         const data = new Uint8Array(ev.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
+        const wb = XLSX.read(data, { type: 'array', raw: false });
         const firstSheet = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
         if (!rows.length) {
           toast.warning('Planilha vazia');
           setImporting(false);
           return;
         }
-        const headers = (rows[0] || []).map((h) => String(h || '').toLowerCase());
-        const linhas = [];
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i] || [];
-          const obj = {};
-          headers.forEach((h, j) => { obj[h] = row[j]; });
-          const descricao = obj.descricao ?? obj.descrição ?? obj.item ?? obj.produto ?? obj['descricao produto'] ?? '';
-          if (!String(descricao).trim()) continue;
-          linhas.push({
-            codigo: obj.codigo ?? obj.código ?? obj.sku ?? obj.cod ?? '',
-            descricao: String(descricao).trim(),
-            unidade: obj.unidade ?? obj.und ?? obj.um ?? 'UN',
-            preco: obj.preco ?? obj.valor ?? obj.price ?? obj.preço ?? 0
-          });
+        let headerRowIndex = 0;
+        const firstRow = rows[0] || [];
+        const nonEmptyFirst = firstRow.filter((c) => c != null && String(c).trim() !== '').length;
+        if (nonEmptyFirst < 2 && rows.length > 1) {
+          headerRowIndex = 1;
         }
+        const headers = (rows[headerRowIndex] || []).map((h) => String(h ?? '').trim());
+        const dataStartIndex = headerRowIndex + 1;
+        const dataRows = rows.slice(dataStartIndex);
+        const indices = acharIndicesCabecalho(headers);
+        const linhas = extrairLinhas([headers, ...dataRows], indices);
         if (linhas.length === 0) {
-          toast.warning('Nenhuma linha válida (use coluna Descrição ou similar)');
+          toast.warning('Nenhuma linha válida encontrada. A planilha deve ter ao menos uma coluna com descrição do item (ou nome do produto).');
           setImporting(false);
           return;
         }
@@ -160,7 +234,7 @@ const ItensFornecedor = () => {
           .catch((err) => toast.error(err.response?.data?.error || 'Erro na importação'))
           .finally(() => setImporting(false));
       } catch (err) {
-        toast.error('Erro ao ler planilha');
+        toast.error('Erro ao ler planilha. Verifique se o arquivo é Excel (.xlsx, .xls) ou CSV.');
         setImporting(false);
       }
     };
@@ -190,7 +264,7 @@ const ItensFornecedor = () => {
             <FiArrowLeft /> Voltar
           </button>
           <h1>Itens e preços – {fornecedor ? fornecedor.razao_social : 'Fornecedor'}</h1>
-          <p>Lista de itens padrão e preços. Importe uma planilha (Excel/CSV) com colunas: descrição, codigo, unidade, preco.</p>
+          <p>Lista de itens padrão e preços. Importe qualquer planilha (Excel/CSV): o sistema detecta automaticamente colunas de descrição, código, unidade e preço.</p>
         </div>
         <div className="header-actions">
           <label className="btn-premium" style={{ cursor: 'pointer', marginRight: 8 }}>
