@@ -9,6 +9,29 @@ import './Loading.css';
 
 const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
+// Normaliza célula da planilha para valor primitivo (evita objeto/caracteres estranhos na visualização)
+function normalizarCelula(cell) {
+  if (cell == null || cell === '') return '';
+  if (typeof cell === 'object' && cell !== null && 'v' in cell) return cell.v;
+  if (typeof cell === 'number' && !isNaN(cell)) return cell;
+  if (typeof cell === 'boolean') return cell ? 'Sim' : 'Não';
+  if (cell instanceof Date) return cell.toLocaleDateString('pt-BR');
+  const s = String(cell).trim();
+  return s;
+}
+
+// Para exibição: sempre texto limpo (remove caracteres não imprimíveis e caracteres de substituição)
+function exibirCelula(cell) {
+  const v = normalizarCelula(cell);
+  if (v === '') return '—';
+  let s = String(v)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/\uFFFD/g, '')
+    .trim();
+  if (!s) return '—';
+  return s;
+}
+
 const ItensFornecedor = () => {
   const { fornecedorId } = useParams();
   const navigate = useNavigate();
@@ -42,13 +65,22 @@ const ItensFornecedor = () => {
       .catch(() => setItens([]));
   };
 
+  const normalizarLinhasParaExibicao = (linhas) => {
+    if (!Array.isArray(linhas)) return [];
+    return linhas.map((row) => (Array.isArray(row) ? row.map(normalizarCelula) : []));
+  };
+
   const loadPlanilha = () => {
     if (!fornecedorId) return;
     api.get(`/compras/fornecedores/${fornecedorId}/planilha`)
       .then((res) => {
         const d = res.data;
         if (d && Array.isArray(d.linhas) && d.linhas.length > 0) {
-          setPlanilhaSalva({ nome: d.nome || 'Planilha', linhas: d.linhas, atualizado_em: d.atualizado_em });
+          setPlanilhaSalva({
+            nome: d.nome || 'Planilha',
+            linhas: normalizarLinhasParaExibicao(d.linhas),
+            atualizado_em: d.atualizado_em
+          });
         } else {
           setPlanilhaSalva(null);
         }
@@ -68,7 +100,8 @@ const ItensFornecedor = () => {
       api.get(`/compras/fornecedores/${fornecedorId}/planilha`).then((r) => {
         const d = r.data;
         if (d && Array.isArray(d.linhas) && d.linhas.length > 0) {
-          setPlanilhaSalva({ nome: d.nome || 'Planilha', linhas: d.linhas, atualizado_em: d.atualizado_em });
+          const linhasNorm = d.linhas.map((row) => (Array.isArray(row) ? row.map(normalizarCelula) : []));
+          setPlanilhaSalva({ nome: d.nome || 'Planilha', linhas: linhasNorm, atualizado_em: d.atualizado_em });
         } else {
           setPlanilhaSalva(null);
         }
@@ -147,9 +180,10 @@ const ItensFornecedor = () => {
     reader.onload = (ev) => {
       try {
         const data = new Uint8Array(ev.target.result);
-        const wb = XLSX.read(data, { type: 'array', raw: false });
+        const wb = XLSX.read(data, { type: 'array', raw: true });
         const firstSheet = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+        const rawRows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+        const rows = rawRows.map((row) => (Array.isArray(row) ? row.map(normalizarCelula) : []));
         if (!rows.length) {
           toast.warning('Planilha vazia');
           setSalvandoPlanilha(false);
@@ -257,7 +291,7 @@ const ItensFornecedor = () => {
                       <tr>
                         {Array.from({ length: numCols }, (_, c) => (
                           <th key={c} style={{ whiteSpace: 'nowrap', padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
-                            {headerRow[c] != null ? String(headerRow[c]) : `Col ${c + 1}`}
+                            {c < headerRow.length ? exibirCelula(headerRow[c]) : `Col ${c + 1}`}
                           </th>
                         ))}
                       </tr>
@@ -267,7 +301,7 @@ const ItensFornecedor = () => {
                         <tr key={r}>
                           {Array.from({ length: numCols }, (_, c) => (
                             <td key={c} style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                              {row[c] != null && row[c] !== '' ? String(row[c]) : '—'}
+                              {exibirCelula(row[c])}
                             </td>
                           ))}
                         </tr>
