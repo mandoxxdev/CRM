@@ -200,6 +200,8 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     setEsquematicoPreviewUrl(URL.createObjectURL(file));
   };
 
+  const fotoInputRef = React.useRef(null);
+  const esquematicoInputRef = React.useRef(null);
   const vistaFrontalRef = React.useRef(null);
   const getVistaRect = useCallback(() => {
     const el = vistaFrontalRef.current;
@@ -751,14 +753,33 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                       </div>
                       <div className="modal-familia-upload">
                         <input
+                          ref={fotoInputRef}
                           type="file"
                           accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                           onChange={handleFileChange}
-                          id="familia-foto-input"
+                          className="sr-only"
+                          tabIndex={-1}
+                          aria-hidden="true"
                         />
-                        <label htmlFor="familia-foto-input" className="btn-upload-label premium">
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          className="btn-upload-label premium"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            fotoInputRef.current?.click();
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              fotoInputRef.current?.click();
+                            }
+                          }}
+                        >
+                          <FiUploadCloud size={18} />
                           {fotoFile ? 'Trocar imagem' : 'Enviar imagem'}
-                        </label>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -795,14 +816,33 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                   </div>
                   <div className="modal-familia-vista-upload">
                     <input
+                      ref={esquematicoInputRef}
                       type="file"
                       accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                       onChange={handleEsquematicoChange}
-                      id="familia-esquematico-input"
+                      className="sr-only"
+                      tabIndex={-1}
+                      aria-hidden="true"
                     />
-                    <label htmlFor="familia-esquematico-input" className="btn-upload-label premium">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className="btn-upload-label premium"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        esquematicoInputRef.current?.click();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          esquematicoInputRef.current?.click();
+                        }
+                      }}
+                    >
+                      <FiUploadCloud size={18} />
                       {esquematicoFile ? 'Trocar esquemático' : 'Enviar esquemático'}
-                    </label>
+                    </div>
                   </div>
                 </div>
                 {isEdit && esquematicoPreviewUrl && (

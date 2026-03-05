@@ -160,15 +160,25 @@ const ProdutoForm = () => {
 
   // Variáveis da família (definidas no cadastro da família – independente dos marcadores/bolinhas)
   const [variaveisDaFamilia, setVariaveisDaFamilia] = useState([]);
+  // Opções por variável (lista) cadastradas em Configurações → Opções por família – para exibir dropdown no cadastro do equipamento
+  const [opcoesPorVariavel, setOpcoesPorVariavel] = useState({});
   useEffect(() => {
     const id = familiaSelecionada?.id;
     if (!id) {
       setVariaveisDaFamilia([]);
+      setOpcoesPorVariavel({});
       return;
     }
-    api.get(`/familias/${id}/variaveis`)
-      .then((res) => setVariaveisDaFamilia(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setVariaveisDaFamilia([]));
+    Promise.all([
+      api.get(`/familias/${id}/variaveis`),
+      api.get(`/familias/${id}/opcoes-variaveis`)
+    ]).then(([varRes, opcRes]) => {
+      setVariaveisDaFamilia(Array.isArray(varRes.data) ? varRes.data : []);
+      setOpcoesPorVariavel(typeof opcRes.data === 'object' && opcRes.data !== null ? opcRes.data : {});
+    }).catch(() => {
+      setVariaveisDaFamilia([]);
+      setOpcoesPorVariavel({});
+    });
   }, [familiaSelecionada?.id]);
 
   // Marcadores (bolinhas) da vista frontal – opcionais, só para referência visual no esquemático
@@ -610,16 +620,34 @@ const ProdutoForm = () => {
               const nomeVariavel = (v.nome || variaveisNomesMap[chave] || chave || '').trim() || chave;
               const valor = especificacoesTecnicas[chave] ?? '';
               const isNumero = (String(v.tipo || '').toLowerCase() === 'numero');
+              const isLista = (String(v.tipo || '').toLowerCase() === 'lista');
+              const opcoes = opcoesPorVariavel[chave] || [];
+              const opcoesOrdenadas = Array.isArray(opcoes) ? [...opcoes].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)) : [];
               return (
                 <div key={chave || idx} className="produto-form-variavel-field">
                   <label>{nomeVariavel}</label>
-                  <input
-                    type={isNumero ? 'number' : 'text'}
-                    value={valor}
-                    onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
-                    placeholder={nomeVariavel ? `Informe ${nomeVariavel.toLowerCase()}` : 'Informe o valor'}
-                    step={isNumero ? 'any' : undefined}
-                  />
+                  {isLista ? (
+                    <select
+                      value={valor}
+                      onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
+                      className="produto-form-variavel-select"
+                    >
+                      <option value="">Selecione...</option>
+                      {opcoesOrdenadas.map((opt) => (
+                        <option key={opt.id || opt.valor} value={opt.valor != null ? String(opt.valor) : ''}>
+                          {opt.valor != null ? String(opt.valor) : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={isNumero ? 'number' : 'text'}
+                      value={valor}
+                      onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
+                      placeholder={nomeVariavel ? `Informe ${nomeVariavel.toLowerCase()}` : 'Informe o valor'}
+                      step={isNumero ? 'any' : undefined}
+                    />
+                  )}
                 </div>
               );
             })}
