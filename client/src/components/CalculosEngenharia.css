@@ -71,6 +71,10 @@
   background: linear-gradient(135deg, #e0e7ff, #6366f1);
 }
 
+.calculos-engenharia-card-icon-plataformas {
+  background: linear-gradient(135deg, #d1fae5, #059669);
+}
+
 .calculos-engenharia-card h3 {
   font-size: 1.1rem;
   font-weight: 600;

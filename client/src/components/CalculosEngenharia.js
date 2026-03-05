@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiSliders, FiCircle, FiDroplet, FiZap, FiLayers } from 'react-icons/fi';
+import { FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiGrid } from 'react-icons/fi';
 import './CalculosEngenharia.css';
 
 const CalculosEngenharia = () => {
@@ -57,6 +57,17 @@ const CalculosEngenharia = () => {
           </div>
           <h3>Seleção de Agitadores</h3>
           <p>Escolha e dimensione Cowles, hélice, turbina, âncora ou helicoidal conforme o processo</p>
+        </button>
+        <button
+          type="button"
+          className="calculos-engenharia-card"
+          onClick={() => navigate('/engenharia/calculo-plataformas')}
+        >
+          <div className="calculos-engenharia-card-icon calculos-engenharia-card-icon-plataformas">
+            <FiGrid />
+          </div>
+          <h3>Cálculo de plataformas</h3>
+          <p>Gere a planta 3D da plataforma com base nos diâmetros dos equipamentos e parâmetros indicados</p>
         </button>
       </div>
     </div>
