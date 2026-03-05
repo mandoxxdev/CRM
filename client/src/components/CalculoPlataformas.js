@@ -6,7 +6,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import './CalculoPlataformas.css';
 
 const SCALE = 100; // 1 unidade 3D = 100 mm (para não ficar gigante)
-const ALTURA_EQUIP_DEFAULT = 800; // altura padrão do cilindro que representa o equipamento (mm)
+const ALTURA_EQUIP_DEFAULT = 1200; // altura total padrão (mm)
+const ALTURA_ACIMA_DEFAULT = 825;   // parte acima da plataforma (mm); o restante fica “dentro” da plataforma
 
 // Calcula posições (x, z) em mm para cada equipamento em filas, com margem e espaçamento
 function calcularLayout(equipamentos, larguraPlat, comprimentoPlat, margem, espacamento) {
@@ -25,11 +26,16 @@ function calcularLayout(equipamentos, larguraPlat, comprimentoPlat, margem, espa
       maxAlturaLinha = 0;
     }
     if (y + d > comprimentoPlat - margem) break;
+    const eq = equipamentos[i];
+    const altTotal = Number(eq.altura) || ALTURA_EQUIP_DEFAULT;
+    const altAcima = Number(eq.alturaAcima) ?? ALTURA_ACIMA_DEFAULT;
     posicoes.push({
       x: x + raio,
       z: y + raio,
       diametro: d,
-      nome: equipamentos[i].nome || `Equip ${i + 1}`
+      nome: eq.nome || `Equip ${i + 1}`,
+      altura: Math.max(1, altTotal),
+      alturaAcima: Math.min(altTotal, Math.max(0, altAcima))
     });
     x += d + espacamento;
     maxAlturaLinha = Math.max(maxAlturaLinha, d);
@@ -52,15 +58,15 @@ function CalculoPlataformas() {
   const [margem, setMargem] = useState(200);
   const [espacamento, setEspacamento] = useState(150);
   const [equipamentos, setEquipamentos] = useState([
-    { id: 1, nome: 'Masseira 500L', diametro: 1200 },
-    { id: 2, nome: 'Dispersor', diametro: 800 }
+    { id: 1, nome: 'Masseira 500L', diametro: 1200, altura: 1200, alturaAcima: 825 },
+    { id: 2, nome: 'Dispersor', diametro: 800, altura: 1000, alturaAcima: 600 }
   ]);
   const [mostrar3D, setMostrar3D] = useState(false);
 
   const adicionarEquipamento = () => {
     setEquipamentos((prev) => [
       ...prev,
-      { id: Math.max(0, ...prev.map((e) => e.id)) + 1, nome: '', diametro: 500 }
+      { id: Math.max(0, ...prev.map((e) => e.id)) + 1, nome: '', diametro: 500, altura: ALTURA_EQUIP_DEFAULT, alturaAcima: ALTURA_ACIMA_DEFAULT }
     ]);
   };
 
@@ -69,8 +75,13 @@ function CalculoPlataformas() {
   };
 
   const atualizarEquipamento = (id, field, value) => {
+    const numFields = ['diametro', 'altura', 'alturaAcima'];
     setEquipamentos((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, [field]: field === 'diametro' ? Number(value) || 0 : value } : e))
+      prev.map((e) =>
+        e.id === id
+          ? { ...e, [field]: numFields.includes(field) ? Number(value) || 0 : value }
+          : e
+      )
     );
   };
 
@@ -114,32 +125,89 @@ function CalculoPlataformas() {
     controlsRef.current = controls;
 
     // Luz
-    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.55);
     scene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(50, 100, 50);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    dirLight.position.set(L * 0.5, L + W, W * 0.5);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
-    // Plataforma (chão) – caixa
-    const geoPlat = new THREE.BoxGeometry(L, H, W);
-    const matPlat = new THREE.MeshStandardMaterial({
-      color: 0x475569,
-      metalness: 0.3,
-      roughness: 0.7
-    });
-    const plataforma = new THREE.Mesh(geoPlat, matPlat);
-    plataforma.position.set(L / 2, H / 2, W / 2);
-    plataforma.receiveShadow = true;
-    scene.add(plataforma);
+    // --- Plataforma estilo industrial: piso concreto + colunas + bordas ---
+    const corConcreto = 0xb8bcc4;
+    const corEstrutura = 0x64748b;
+    const corGuardaCorpo = 0xf59e0b;
+    const espColuna = Math.min(L, W) * 0.04;
+    const altGuardaCorpo = Math.min(L, W) * 0.015;
 
-    // Equipamentos (cilindros)
+    // Laje principal (piso tipo concreto)
+    const geoLaje = new THREE.BoxGeometry(L, H, W);
+    const matLaje = new THREE.MeshStandardMaterial({
+      color: corConcreto,
+      metalness: 0.08,
+      roughness: 0.92
+    });
+    const laje = new THREE.Mesh(geoLaje, matLaje);
+    laje.position.set(L / 2, H / 2, W / 2);
+    laje.receiveShadow = true;
+    scene.add(laje);
+
+    // Colunas de apoio (cantos)
+    const matColuna = new THREE.MeshStandardMaterial({
+      color: corEstrutura,
+      metalness: 0.35,
+      roughness: 0.65
+    });
+    const posColunas = [
+      [espColuna / 2, espColuna / 2],
+      [L - espColuna / 2, espColuna / 2],
+      [L - espColuna / 2, W - espColuna / 2],
+      [espColuna / 2, W - espColuna / 2]
+    ];
+    posColunas.forEach(([px, pz]) => {
+      const col = new THREE.Mesh(new THREE.BoxGeometry(espColuna, H, espColuna), matColuna);
+      col.position.set(px, H / 2, pz);
+      col.castShadow = true;
+      col.receiveShadow = true;
+      scene.add(col);
+    });
+
+    // Guarda-corpos / bordas no topo (estilo industrial)
+    const matGuarda = new THREE.MeshStandardMaterial({
+      color: corGuardaCorpo,
+      metalness: 0.4,
+      roughness: 0.6
+    });
+    const gH = altGuardaCorpo;
+    const gEsp = espColuna * 0.6;
+    const compFront = L + gEsp * 2;
+    const largFront = gEsp;
+    const geoBorda1 = new THREE.BoxGeometry(compFront, gH, largFront);
+    const geoBorda2 = new THREE.BoxGeometry(largFront, gH, W + gEsp * 2);
+    const b1 = new THREE.Mesh(geoBorda1, matGuarda);
+    b1.position.set(L / 2, H + gH / 2, -largFront / 2);
+    b1.castShadow = true;
+    scene.add(b1);
+    const b2 = new THREE.Mesh(geoBorda1, matGuarda);
+    b2.position.set(L / 2, H + gH / 2, W + largFront / 2);
+    b2.castShadow = true;
+    scene.add(b2);
+    const b3 = new THREE.Mesh(geoBorda2, matGuarda);
+    b3.position.set(-largFront / 2, H + gH / 2, W / 2);
+    b3.castShadow = true;
+    scene.add(b3);
+    const b4 = new THREE.Mesh(geoBorda2, matGuarda);
+    b4.position.set(L + largFront / 2, H + gH / 2, W / 2);
+    b4.castShadow = true;
+    scene.add(b4);
+
+    // Equipamentos (cilindros): parte acima da plataforma, parte “dentro” (abaixo do topo)
     const corEquip = 0x0ea5e9;
-    posicoes.forEach((p, i) => {
+    posicoes.forEach((p) => {
       const r = p.diametro / 2 / SCALE;
-      const hEquip = ALTURA_EQUIP_DEFAULT / SCALE;
+      const hEquip = (p.altura || ALTURA_EQUIP_DEFAULT) / SCALE;
+      const alturaAcima = (p.alturaAcima ?? ALTURA_ACIMA_DEFAULT) / SCALE;
       const geo = new THREE.CylinderGeometry(r, r, hEquip, 32);
       const mat = new THREE.MeshStandardMaterial({
         color: corEquip,
@@ -147,8 +215,9 @@ function CalculoPlataformas() {
         roughness: 0.8
       });
       const cilindro = new THREE.Mesh(geo, mat);
-      // Layout: p.x = pos ao longo da largura, p.z = pos ao longo do comprimento → 3D: X=comprimento, Z=largura
-      cilindro.position.set(p.z / SCALE, H + hEquip / 2, p.x / SCALE);
+      // Centro do cilindro: topo da plataforma (H) + altura acima - metade da altura total → parte para cima, parte para baixo
+      const cy = H + alturaAcima - hEquip / 2;
+      cilindro.position.set(p.z / SCALE, cy, p.x / SCALE);
       cilindro.castShadow = true;
       cilindro.receiveShadow = true;
       scene.add(cilindro);
@@ -264,17 +333,22 @@ function CalculoPlataformas() {
 
           <div className="calculo-plataformas-card">
             <div className="calculo-plataformas-card-header">
-              <h2>Equipamentos (diâmetro em mm)</h2>
+              <h2>Equipamentos</h2>
               <button type="button" className="calculo-plataformas-btn-add" onClick={adicionarEquipamento}>
                 <FiPlus /> Adicionar
               </button>
             </div>
+            <p className="calculo-plataformas-hint">
+              Altura total: tamanho do equipamento. Altura acima: parte que fica para cima da plataforma; o restante fica dentro/abaixo do piso.
+            </p>
             <div className="calculo-plataformas-table-wrap">
               <table className="calculo-plataformas-table">
                 <thead>
                   <tr>
-                    <th>Nome / identificação</th>
+                    <th>Nome</th>
                     <th>Diâmetro (mm)</th>
+                    <th>Altura total (mm)</th>
+                    <th>Altura acima (mm)</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -293,9 +367,29 @@ function CalculoPlataformas() {
                         <input
                           type="number"
                           min={1}
-                          value={eq.diametro || ''}
+                          value={eq.diametro ?? ''}
                           onChange={(e) => atualizarEquipamento(eq.id, 'diametro', e.target.value)}
                           placeholder="mm"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={1}
+                          value={eq.altura ?? ''}
+                          onChange={(e) => atualizarEquipamento(eq.id, 'altura', e.target.value)}
+                          placeholder="Ex: 1200"
+                          title="Altura total do equipamento"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          value={eq.alturaAcima ?? ''}
+                          onChange={(e) => atualizarEquipamento(eq.id, 'alturaAcima', e.target.value)}
+                          placeholder="Ex: 825"
+                          title="Parte que fica acima do piso da plataforma"
                         />
                       </td>
                       <td>
