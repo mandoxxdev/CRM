@@ -3,11 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { FiArrowLeft, FiPlus, FiTrash2, FiUpload, FiEdit2, FiEye } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiTrash2, FiUpload, FiEdit2, FiEye, FiSearch } from 'react-icons/fi';
 import './Compras.css';
 import './Loading.css';
 
 const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+const formatNumber = (v) => (typeof v === 'number' && !isNaN(v) ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(v) : String(v ?? ''));
+
+// Verifica se o cabeçalho da coluna indica preço/valor (para formatar como moeda)
+function isColunaPreco(headerCell) {
+  const s = String(headerCell ?? '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  return /preco|preço|valor|price|vlr|unitario|unitário|total|total\s*\(r?\$?\)/.test(s) || s.includes('valor');
+}
 
 // Normaliza célula da planilha para valor primitivo (evita objeto/caracteres estranhos na visualização)
 function normalizarCelula(cell) {
@@ -32,6 +39,19 @@ function exibirCelula(cell) {
   return s;
 }
 
+// Exibe célula com formatação: preço como R$, número como número pt-BR, resto como texto
+function formatarCelulaExibicao(cell, isPriceColumn) {
+  const v = normalizarCelula(cell);
+  if (v === '' || v == null) return '—';
+  if (typeof v === 'number' && !isNaN(v)) {
+    return isPriceColumn ? formatCurrency(v) : formatNumber(v);
+  }
+  const num = parseFloat(String(v).replace(/\./g, '').replace(',', '.'));
+  if (!isNaN(num) && isPriceColumn) return formatCurrency(num);
+  if (!isNaN(num)) return formatNumber(num);
+  return exibirCelula(cell);
+}
+
 const ItensFornecedor = () => {
   const { fornecedorId } = useParams();
   const navigate = useNavigate();
@@ -48,6 +68,7 @@ const ItensFornecedor = () => {
   const [saving, setSaving] = useState(false);
   const [planilhaSalva, setPlanilhaSalva] = useState(null);
   const [showModalPlanilha, setShowModalPlanilha] = useState(false);
+  const [filtroPlanilha, setFiltroPlanilha] = useState('');
   const [salvandoPlanilha, setSalvandoPlanilha] = useState(false);
 
   const loadFornecedor = () => {
@@ -265,7 +286,7 @@ const ItensFornecedor = () => {
 
       {/* Modal visualização da planilha salva */}
       {showModalPlanilha && planilhaSalva && (
-        <div className="modal-grupo-overlay" onClick={() => setShowModalPlanilha(false)}>
+        <div className="modal-grupo-overlay" onClick={() => { setShowModalPlanilha(false); setFiltroPlanilha(''); }}>
           <div className="modal-grupo-container modal-planilha-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '95vw', width: 960 }}>
             <div className="modal-grupo-header" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div>
@@ -276,8 +297,22 @@ const ItensFornecedor = () => {
                   </p>
                 )}
               </div>
-              <button type="button" className="modal-grupo-close" onClick={() => setShowModalPlanilha(false)} aria-label="Fechar">×</button>
+              <button type="button" className="modal-grupo-close" onClick={() => { setShowModalPlanilha(false); setFiltroPlanilha(''); }} aria-label="Fechar">×</button>
             </div>
+            {planilhaSalva.linhas && planilhaSalva.linhas.length > 0 && (
+              <div style={{ padding: '0 24px 12px', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ maxWidth: 320, margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <FiSearch size={18} style={{ color: '#64748b', flexShrink: 0 }} />
+                  <input
+                    type="text"
+                    placeholder="Buscar na planilha..."
+                    value={filtroPlanilha}
+                    onChange={(e) => setFiltroPlanilha(e.target.value)}
+                    style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', width: '100%' }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="modal-planilha-body" style={{ padding: 16, maxHeight: '70vh', overflow: 'auto' }}>
               {!planilhaSalva.linhas || planilhaSalva.linhas.length === 0 ? (
                 <p style={{ color: '#64748b' }}>Planilha vazia.</p>
@@ -285,34 +320,61 @@ const ItensFornecedor = () => {
                 const rows = planilhaSalva.linhas;
                 const headerRow = rows[0] || [];
                 const numCols = Math.max(headerRow.length, ...rows.slice(1).map((r) => (r || []).length), 1);
+                const termo = filtroPlanilha.trim().toLowerCase();
+                const dataRows = rows.slice(1);
+                const linhasFiltradas = termo
+                  ? dataRows.filter((row) =>
+                      Array.from({ length: numCols }, (_, c) => row[c]).some((cell) =>
+                        exibirCelula(cell).toLowerCase().includes(termo)
+                      )
+                    )
+                  : dataRows;
                 return (
-                  <table className="data-table" style={{ width: '100%', tableLayout: 'auto' }}>
-                    <thead>
-                      <tr>
-                        {Array.from({ length: numCols }, (_, c) => (
-                          <th key={c} style={{ whiteSpace: 'nowrap', padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
-                            {c < headerRow.length ? exibirCelula(headerRow[c]) : `Col ${c + 1}`}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.slice(1).map((row, r) => (
-                        <tr key={r}>
+                  <>
+                    {termo && (
+                      <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+                        {linhasFiltradas.length} de {dataRows.length} linha(s)
+                      </p>
+                    )}
+                    <table className="data-table" style={{ width: '100%', tableLayout: 'auto' }}>
+                      <thead>
+                        <tr>
                           {Array.from({ length: numCols }, (_, c) => (
-                            <td key={c} style={{ padding: '8px 12px', borderBottom: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                              {exibirCelula(row[c])}
-                            </td>
+                            <th key={c} style={{ whiteSpace: 'nowrap', padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>
+                              {c < headerRow.length ? exibirCelula(headerRow[c]) : `Col ${c + 1}`}
+                            </th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {linhasFiltradas.map((row, r) => (
+                          <tr key={r}>
+                            {Array.from({ length: numCols }, (_, c) => (
+                              <td
+                                key={c}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderBottom: '1px solid #e2e8f0',
+                                  verticalAlign: 'top',
+                                  textAlign: isColunaPreco(headerRow[c]) ? 'right' : 'left'
+                                }}
+                              >
+                                {formatarCelulaExibicao(row[c], isColunaPreco(headerRow[c]))}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {linhasFiltradas.length === 0 && termo && (
+                      <p style={{ color: '#64748b', marginTop: 16 }}>Nenhuma linha encontrada para &quot;{filtroPlanilha.trim()}&quot;</p>
+                    )}
+                  </>
                 );
               })()}
             </div>
             <div style={{ padding: '12px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-              <button type="button" className="btn-secondary" onClick={() => setShowModalPlanilha(false)}>Fechar</button>
+              <button type="button" className="btn-secondary" onClick={() => { setShowModalPlanilha(false); setFiltroPlanilha(''); }}>Fechar</button>
             </div>
           </div>
         </div>
