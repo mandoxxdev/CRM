@@ -1004,6 +1004,14 @@ function initializeDatabase() {
       db.run('ALTER TABLE grupos_produto ADD COLUMN numero INTEGER DEFAULT 10', (e) => {
         if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar coluna numero em grupos_produto:', e.message);
       });
+      db.all('SELECT id FROM grupos_produto WHERE numero IS NULL ORDER BY id', [], function(upErr, nullRows) {
+        if (!upErr && nullRows && nullRows.length > 0) {
+          nullRows.forEach(function(r, i) {
+            db.run('UPDATE grupos_produto SET numero = ? WHERE id = ?', [10 * (i + 1), r.id]);
+          });
+          console.log('✅ Grupos com numero NULL atualizados para 10, 20, 30...');
+        }
+      });
       db.get('SELECT COUNT(*) AS n FROM grupos_produto', [], function(er, row) {
         if (!er && row && row.n === 0) {
           var defaults = [

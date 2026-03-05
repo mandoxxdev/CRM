@@ -164,13 +164,14 @@
 
 .grupo-card-numero {
   display: inline-block;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  color: var(--gmp-primary, #2563eb);
-  background: rgba(37, 99, 235, 0.1);
-  padding: 4px 10px;
-  border-radius: 20px;
-  margin-bottom: 8px;
+  color: var(--gmp-text-light, #64748b);
+  background: var(--gmp-bg-subtle, #f1f5f9);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
 }
 
 .grupo-card-nome {

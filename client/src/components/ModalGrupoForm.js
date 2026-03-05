@@ -43,9 +43,15 @@ async function uploadFotoGrupo(id, file) {
   }
 }
 
-const NUMEROS_GRUPO = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+function buildOpcoesNumero(totalGrupos, numeroAtual) {
+  const maxN = Math.max(5, (totalGrupos || 0) + 1);
+  const maxVal = Math.max(10 * maxN, numeroAtual && numeroAtual >= 10 ? numeroAtual : 10);
+  const opcoes = [];
+  for (let n = 10; n <= maxVal; n += 10) opcoes.push(n);
+  return opcoes;
+}
 
-const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo }) => {
+const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo, totalGrupos = 0 }) => {
   const isEdit = !!grupo && !!grupo.id;
   const [nome, setNome] = useState('');
   const [numero, setNumero] = useState(10);
@@ -56,10 +62,16 @@ const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo }) => {
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState('');
 
+  const opcoesNumero = React.useMemo(
+    () => buildOpcoesNumero(totalGrupos, grupo?.numero != null ? Number(grupo.numero) : null),
+    [totalGrupos, grupo?.numero]
+  );
+
   useEffect(() => {
     if (grupo) {
       setNome(grupo.nome || '');
-      setNumero(NUMEROS_GRUPO.includes(Number(grupo.numero)) ? Number(grupo.numero) : (grupo.numero != null ? Number(grupo.numero) : 10));
+      const n = Number(grupo.numero);
+      setNumero((n >= 10 && n % 10 === 0) ? n : 10);
       setOrdem(grupo.ordem ?? 0);
       setPreviewUrl(grupo.foto ? getFotoUrl(grupo.foto) : null);
       setFotoFile(null);
@@ -103,7 +115,7 @@ const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo }) => {
     setError('');
     try {
       let id = grupo && grupo.id;
-      const numeroVal = NUMEROS_GRUPO.includes(Number(numero)) ? Number(numero) : 10;
+      const numeroVal = Number(numero) >= 10 && Number(numero) % 10 === 0 ? Number(numero) : 10;
       if (isEdit) {
         await api.put(`/grupos/${id}`, { nome: nomeTrim, numero: numeroVal, ordem: Number(ordem) || 0 });
       } else {
@@ -162,18 +174,19 @@ const ModalGrupoForm = ({ isOpen, onClose, onSaved, grupo }) => {
               autoFocus
             />
           </div>
-          <div className="modal-grupo-field">
+          <div className="modal-grupo-field modal-grupo-field-numero">
             <label>Número do grupo</label>
             <select
-              value={numero}
+              value={String(numero)}
               onChange={(e) => setNumero(Number(e.target.value))}
-              title="Número do grupo (10, 20, 30...)"
+              title="10, 20, 30… conforme a quantidade de grupos"
+              className="modal-grupo-select-numero"
             >
-              {NUMEROS_GRUPO.map((n) => (
-                <option key={n} value={n}>{n}</option>
+              {opcoesNumero.map((n) => (
+                <option key={n} value={String(n)}>{n}</option>
               ))}
             </select>
-            <span className="modal-grupo-field-hint">Ex.: 10, 20, 30, 40, 50 — define a ordem e identificação do grupo.</span>
+            <span className="modal-grupo-field-hint">10, 20, 30… até o máximo permitido pela quantidade de grupos.</span>
           </div>
           <div className="modal-grupo-field">
             <label>Ordem (opcional)</label>

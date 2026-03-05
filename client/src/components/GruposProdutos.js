@@ -65,6 +65,7 @@ const GruposProdutos = () => {
         onClose={() => { setShowModalGrupo(false); setEditingGrupo(null); }}
         onSaved={loadGrupos}
         grupo={editingGrupo}
+        totalGrupos={grupos.length}
       />
 
       <div className="grupos-grid">
