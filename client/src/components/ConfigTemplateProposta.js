@@ -404,6 +404,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
           <p className="config-hint config-hint-print" style={{ marginTop: '12px', marginBottom: '12px', padding: '10px 12px', background: '#f0f7ff', borderRadius: '8px', border: '1px solid #1a4d7a' }}>
             Use <strong>Margens: Nenhuma</strong> na janela de impressão. Assim o cabeçalho e o rodapé (imagens) ficam na borda da página e só o <strong>texto</strong> é recuado pelas margens que você define aqui. Com &quot;Padrão&quot;, o navegador aplica margem em tudo e o cabeçalho/rodapé também recuam.
           </p>
+        </div>
 
         <div className="config-section">
           <h2>Formato do Número da Proposta</h2>
