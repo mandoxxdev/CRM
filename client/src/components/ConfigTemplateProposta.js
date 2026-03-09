@@ -30,7 +30,8 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
     variaveis_proposta_por_familia: {},
     margin_impressao_top_primeira: 20,
     margin_impressao_top_outras: 50,
-    margin_impressao_bottom: 45
+    margin_impressao_bottom: 45,
+    margin_impressao_lateral: 20
   });
   const [logoPreview, setLogoPreview] = useState(null);
   const [headerPreview, setHeaderPreview] = useState(null);
@@ -79,7 +80,8 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
           variaveis_proposta_por_familia: vpf && typeof vpf === 'object' ? vpf : {},
           margin_impressao_top_primeira: response.data.margin_impressao_top_primeira != null ? Number(response.data.margin_impressao_top_primeira) : 20,
           margin_impressao_top_outras: response.data.margin_impressao_top_outras != null ? Number(response.data.margin_impressao_top_outras) : 50,
-          margin_impressao_bottom: response.data.margin_impressao_bottom != null ? Number(response.data.margin_impressao_bottom) : 45
+          margin_impressao_bottom: response.data.margin_impressao_bottom != null ? Number(response.data.margin_impressao_bottom) : 45,
+          margin_impressao_lateral: response.data.margin_impressao_lateral != null ? Number(response.data.margin_impressao_lateral) : 20
         });
         if (response.data.logo_url) {
           setLogoPreview(`/api/uploads/logos/${response.data.logo_url}`);
@@ -342,8 +344,8 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
           <p className="config-hint" style={{ marginBottom: '12px' }}>
             Ajuste em milímetros (mm). Evita que o conteúdo fique por baixo do cabeçalho e do rodapé. Teste gerando uma proposta e imprimindo.
           </p>
-          <p className="config-hint config-hint-print" style={{ marginBottom: '12px', padding: '10px 12px', background: '#f0f7ff', borderRadius: '8px', border: '1px solid #1a4d7a' }}>
-            <strong>Na janela de impressão do navegador</strong>, use <strong>Margens: Nenhuma</strong> e <strong>Escala: Padrão</strong>. Assim as margens que você configurou aqui são aplicadas; outras opções podem sobrepor ou ignorar esse layout.
+          <p className="config-hint" style={{ marginBottom: '12px', fontSize: '12px', color: '#666' }}>
+            Depois de salvar, <strong>feche e abra de novo a visualização da proposta</strong> (ou atualize a página) para que as novas margens entrem em efeito.
           </p>
           <div className="margins-grid">
             <div className="form-group">
@@ -385,8 +387,23 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
               />
               <small>Ex.: 45 — espaço para o rodapé fixo</small>
             </div>
+            <div className="form-group">
+              <label>Margem lateral — esquerda e direita (mm)</label>
+              <input
+                type="number"
+                name="margin_impressao_lateral"
+                min={10}
+                max={50}
+                step={1}
+                value={config.margin_impressao_lateral ?? 20}
+                onChange={handleChange}
+              />
+              <small>Ex.: 20 — espaço nas laterais</small>
+            </div>
           </div>
-        </div>
+          <p className="config-hint config-hint-print" style={{ marginTop: '12px', marginBottom: '12px', padding: '10px 12px', background: '#f0f7ff', borderRadius: '8px', border: '1px solid #1a4d7a' }}>
+            Use <strong>Margens: Nenhuma</strong> na janela de impressão. Assim o cabeçalho e o rodapé (imagens) ficam na borda da página e só o <strong>texto</strong> é recuado pelas margens que você define aqui. Com &quot;Padrão&quot;, o navegador aplica margem em tudo e o cabeçalho/rodapé também recuam.
+          </p>
 
         <div className="config-section">
           <h2>Formato do Número da Proposta</h2>
