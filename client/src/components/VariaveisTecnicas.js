@@ -17,7 +17,7 @@ const VariaveisTecnicas = () => {
   const [filterCategoria, setFilterCategoria] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0 });
+  const [form, setForm] = useState({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -53,7 +53,7 @@ const VariaveisTecnicas = () => {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0 });
+    setForm({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '' });
     setError('');
     setModalOpen(true);
   };
@@ -67,7 +67,8 @@ const VariaveisTecnicas = () => {
       categoria: v.categoria || '',
       tipo: v.tipo || 'texto',
       opcoes,
-      ordem: v.ordem || 0
+      ordem: v.ordem || 0,
+      sufixo: v.sufixo || ''
     });
     setError('');
     setModalOpen(true);
@@ -85,13 +86,14 @@ const VariaveisTecnicas = () => {
     const opcoesStr = (form.opcoes || '').trim();
     const opcoes = opcoesStr ? opcoesStr.split(/\n/).map(s => s.trim()).filter(Boolean) : [];
     const ordem = Number(form.ordem) || 0;
+    const sufixo = (form.sufixo || '').trim() || null;
     setSaving(true);
     setError('');
     try {
       if (editing) {
-        await api.put(`/variaveis-tecnicas/${editing.id}`, { nome, chave, categoria, tipo, opcoes, ordem });
+        await api.put(`/variaveis-tecnicas/${editing.id}`, { nome, chave, categoria, tipo, opcoes, ordem, sufixo });
       } else {
-        await api.post('/variaveis-tecnicas', { nome, chave, categoria, tipo, opcoes, ordem });
+        await api.post('/variaveis-tecnicas', { nome, chave, categoria, tipo, opcoes, ordem, sufixo });
       }
       setModalOpen(false);
       loadList();
@@ -156,6 +158,7 @@ const VariaveisTecnicas = () => {
                 <th>Chave</th>
                 <th>Categoria</th>
                 <th>Tipo</th>
+                <th>Sufixo</th>
                 <th>Ordem</th>
                 <th>Ações</th>
               </tr>
@@ -163,7 +166,7 @@ const VariaveisTecnicas = () => {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="vt-empty">
+                  <td colSpan={7} className="vt-empty">
                     {list.length === 0
                       ? 'Nenhuma variável cadastrada. Clique em "Nova variável" para começar.'
                       : 'Nenhum resultado para a busca ou filtro.'}
@@ -176,6 +179,7 @@ const VariaveisTecnicas = () => {
                     <td className="vt-chave"><code>{v.chave}</code></td>
                     <td>{v.categoria || '—'}</td>
                     <td>{TIPOS.find(t => t.value === v.tipo)?.label || v.tipo}</td>
+                    <td>{v.sufixo || '—'}</td>
                     <td>{v.ordem}</td>
                     <td>
                       <button type="button" onClick={() => openEdit(v)} className="vt-btn-icon" title="Editar">
@@ -233,6 +237,16 @@ const VariaveisTecnicas = () => {
                 <datalist id="vt-categorias-list">
                   {categorias.map(c => <option key={c} value={c} />)}
                 </datalist>
+              </div>
+              <div className="vt-form-group">
+                <label>Sufixo (unidade exibida após o valor)</label>
+                <input
+                  type="text"
+                  value={form.sufixo}
+                  onChange={(e) => setForm(f => ({ ...f, sufixo: e.target.value }))}
+                  placeholder="Ex: kW, CV, L, RPM, Hz (deixe vazio se não houver)"
+                />
+                <small className="vt-form-hint">Ex.: motor → o cliente informa &quot;30&quot; e o sistema exibe &quot;30 kW&quot; ou &quot;30 CV&quot;</small>
               </div>
               <div className="vt-form-row">
                 <div className="vt-form-group">

@@ -119,6 +119,25 @@
   color: var(--gmp-text);
 }
 
+.produto-form-variavel-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.produto-form-variavel-input-wrap input,
+.produto-form-variavel-input-wrap select {
+  flex: 1;
+  min-width: 0;
+}
+
+.produto-form-var-sufixo {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--gmp-text-light, #64748b);
+}
+
 .produto-form-variavel-field input {
   width: 100%;
   padding: 10px 12px;

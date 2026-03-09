@@ -636,30 +636,37 @@ const ProdutoForm = () => {
                 }
                 return [];
               })();
+              const sufixo = (v.sufixo || '').trim() || null;
               return (
                 <div key={chave || idx} className="produto-form-variavel-field">
-                  <label>{nomeVariavel}</label>
+                  <label>{nomeVariavel}{sufixo ? ` (${sufixo})` : ''}</label>
                   {isLista ? (
-                    <select
-                      value={valor}
-                      onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
-                      className="produto-form-variavel-select produto-form-variavel-select-premium"
-                    >
-                      <option value="">Selecione...</option>
-                      {opcoesLista.map((opt) => (
-                        <option key={opt.id || opt.valor} value={opt.valor}>
-                          {opt.valor}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="produto-form-variavel-input-wrap">
+                      <select
+                        value={valor}
+                        onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
+                        className="produto-form-variavel-select produto-form-variavel-select-premium"
+                      >
+                        <option value="">Selecione...</option>
+                        {opcoesLista.map((opt) => (
+                          <option key={opt.id || opt.valor} value={opt.valor}>
+                            {opt.valor}
+                          </option>
+                        ))}
+                      </select>
+                      {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
+                    </div>
                   ) : (
-                    <input
-                      type={isNumero ? 'number' : 'text'}
-                      value={valor}
-                      onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
-                      placeholder={nomeVariavel ? `Informe ${nomeVariavel.toLowerCase()}` : 'Informe o valor'}
-                      step={isNumero ? 'any' : undefined}
-                    />
+                    <div className="produto-form-variavel-input-wrap">
+                      <input
+                        type={isNumero ? 'number' : 'text'}
+                        value={valor}
+                        onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
+                        placeholder={nomeVariavel ? `Informe ${nomeVariavel.toLowerCase()}` : 'Informe o valor'}
+                        step={isNumero ? 'any' : undefined}
+                      />
+                      {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
+                    </div>
                   )}
                 </div>
               );

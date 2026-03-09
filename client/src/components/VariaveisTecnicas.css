@@ -272,6 +272,13 @@
   border-color: var(--gmp-primary);
 }
 
+.vt-form-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
+}
+
 .vt-form-row {
   display: flex;
   gap: 1rem;

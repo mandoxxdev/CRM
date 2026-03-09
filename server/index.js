@@ -1129,12 +1129,17 @@ function initializeDatabase() {
     tipo TEXT DEFAULT 'texto',
     opcoes TEXT,
     ordem INTEGER DEFAULT 0,
+    sufixo TEXT,
     ativo INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`, (err) => {
     if (err) console.error('Erro ao criar tabela variaveis_tecnicas:', err);
     else console.log('✅ Tabela variaveis_tecnicas verificada');
+    // Migração: adicionar coluna sufixo se não existir (bancos já existentes)
+    db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN sufixo TEXT', (alterErr) => {
+      if (alterErr && !String(alterErr.message || '').includes('duplicate column')) console.error('Migração sufixo:', alterErr.message);
+    });
     // Sempre garantir variáveis base na subida: inserir as que faltam (INSERT OR IGNORE não duplica por chave)
     (function garantirVariaveisBase() {
       let list = [];
@@ -1149,7 +1154,7 @@ function initializeDatabase() {
       const total = list.length;
       if (total === 0) return;
       const slug = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
-      const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, 1)');
+      const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, NULL, 1)');
       let done = 0;
       function onDone() {
         done++;
@@ -2967,7 +2972,7 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
 app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
   var familiaId = req.params.familiaId;
   db.all(
-    `SELECT fv.variavel_chave AS chave, fv.ordem, vt.nome, vt.categoria, vt.tipo, vt.opcoes
+    `SELECT fv.variavel_chave AS chave, fv.ordem, vt.nome, vt.categoria, vt.tipo, vt.opcoes, vt.sufixo
      FROM familia_variaveis fv
      LEFT JOIN variaveis_tecnicas vt ON vt.chave = fv.variavel_chave AND vt.ativo = 1
      WHERE fv.familia_id = ? AND fv.ativo = 1
@@ -2984,7 +2989,8 @@ app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
           nome: r.nome || r.chave,
           categoria: r.categoria,
           tipo: r.tipo || 'texto',
-          opcoes: opcoes
+          opcoes: opcoes,
+          sufixo: (r.sufixo || '').trim() || null
         };
       });
       res.json(list);
@@ -3274,8 +3280,9 @@ app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
   if (Array.isArray(opcoes)) opcoesStr = JSON.stringify(opcoes);
   else if (typeof opcoes === 'string') opcoesStr = opcoes;
   var ordem = parseInt(body.ordem, 10) || 0;
-  db.run('INSERT INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, ativo) VALUES (?, ?, ?, ?, ?, ?, 1)',
-    [nome, chave, categoria, tipo, opcoesStr, ordem],
+  var sufixo = (body.sufixo || '').trim() || null;
+  db.run('INSERT INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
+    [nome, chave, categoria, tipo, opcoesStr, ordem, sufixo],
     function(err) {
       if (err) {
         if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma variável com esta chave' });
@@ -3307,8 +3314,9 @@ app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
   if (Array.isArray(opcoes)) opcoesStr = JSON.stringify(opcoes);
   else if (typeof opcoes === 'string') opcoesStr = opcoes;
   var ordem = parseInt(body.ordem, 10) || 0;
-  db.run('UPDATE variaveis_tecnicas SET nome = ?, chave = ?, categoria = ?, tipo = ?, opcoes = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [nome, chave, categoria, tipo, opcoesStr, ordem, id],
+  var sufixo = (body.sufixo || '').trim() || null;
+  db.run('UPDATE variaveis_tecnicas SET nome = ?, chave = ?, categoria = ?, tipo = ?, opcoes = ?, ordem = ?, sufixo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [nome, chave, categoria, tipo, opcoesStr, ordem, sufixo, id],
     function(err) {
       if (err) {
         if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe outra variável com esta chave' });
