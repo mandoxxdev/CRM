@@ -60,18 +60,19 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     let y = margin;
 
-    // ---- CAPA: Imagem de cabeçalho (se configurada) ----
+    // ---- CAPA: Bloco azul igual ao preview (proposta-header) ----
+    const capaAltura = 200;
+    doc.rect(margin, y, pageWidth, capaAltura).fill('#1a4d7a');
     const headerPath = config.header_image_url ? path.join(UPLOADS_HEADERS, config.header_image_url) : null;
     if (headerPath && fs.existsSync(headerPath)) {
       try {
-        doc.image(headerPath, margin, y, { width: pageWidth, height: 70 });
-        y += 70;
+        doc.opacity(0.5).image(headerPath, margin, y, { width: pageWidth, height: capaAltura });
+        doc.opacity(1);
       } catch (e) {
         console.warn('Cabeçalho não carregado no PDF:', e.message);
       }
     }
-
-    // ---- CAPA: Título + logo da empresa (template) à direita ----
+    y += 28;
     const logoPath = config.logo_url ? path.join(UPLOADS_LOGO, config.logo_url) : null;
     if (logoPath && fs.existsSync(logoPath)) {
       try {
@@ -80,14 +81,15 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
         console.warn('Logo GMP não carregado no PDF:', e.message);
       }
     }
-    doc.fontSize(22).font('Helvetica-Bold').fillColor('#1a4d7a').text('PROPOSTA TÉCNICA', margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingCapa, lineGap: TYPO.lineGapTight });
+    doc.fontSize(22).font('Helvetica-Bold').fillColor('#ffffff').text('PROPOSTA TÉCNICA', margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingCapa, lineGap: TYPO.lineGapTight });
     y += 22;
     doc.fontSize(22).font('Helvetica-Bold').text('COMERCIAL', margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingCapa, lineGap: TYPO.lineGapTight });
     y += 26;
-    doc.fontSize(20).fillColor('#0d2b4a').text(`Nº ${numeroProposta}`, margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingNumero, lineGap: TYPO.lineGapTight });
+    doc.fontSize(20).text(`Nº ${numeroProposta}`, margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingNumero, lineGap: TYPO.lineGapTight });
     y += 28;
-    doc.fontSize(10).fillColor('#333').text('Excelência em Soluções Industriais', margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingSmall });
-    y += 30;
+    doc.fontSize(10).fillColor('#e8eef4').text('Excelência em Soluções Industriais', margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingSmall });
+    y = margin + capaAltura + 18;
+    doc.fillColor('#000');
 
     // ---- CAPA: Logo do cliente (se tiver) ----
     const clienteLogoPath = proposta.cliente_logo_url ? path.join(UPLOADS_LOGO, proposta.cliente_logo_url) : null;
@@ -101,12 +103,14 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     }
     y += 10;
 
-    doc.moveTo(margin, y).lineTo(doc.page.width - margin, y).stroke().fillColor('#000');
+    doc.moveTo(margin, y).lineTo(doc.page.width - margin, y).stroke();
     y += 22;
 
-    // ---- Dados do cliente ----
-    doc.fontSize(12).font('Helvetica-Bold').text('DADOS DO CLIENTE', margin, y, { characterSpacing: TYPO.charSpacingSection });
-    y += 20;
+    // ---- Dados do cliente (título com linha laranja igual ao preview) ----
+    doc.fontSize(12).font('Helvetica-Bold').fillColor('#1a1d21').text('DADOS DO CLIENTE', margin, y, { characterSpacing: TYPO.charSpacingSection });
+    y += 6;
+    doc.strokeColor('#ff6b35').lineWidth(2).moveTo(margin, y).lineTo(margin + 220, y).stroke().strokeColor('#000').lineWidth(1);
+    y += 16;
     doc.fontSize(10).font('Helvetica');
     const cliente = [
       proposta.razao_social && `Razão Social: ${proposta.razao_social}`,
@@ -127,8 +131,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     const secao = (titulo, texto) => {
       y = checkNewPage(doc, y, margin, 120);
-      doc.fontSize(11).font('Helvetica-Bold').text(titulo, margin, y, { characterSpacing: TYPO.charSpacingSection });
-      y += 16;
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d21').text(titulo, margin, y, { characterSpacing: TYPO.charSpacingSection });
+      y += 6;
+      doc.strokeColor('#ff6b35').lineWidth(2).moveTo(margin, y).lineTo(margin + Math.min(220, titulo.length * 8), y).stroke().strokeColor('#000').lineWidth(1);
+      y += 14;
       doc.fontSize(10).font('Helvetica').text(texto, margin, y, { width: pageWidth, align: 'justify', lineGap: TYPO.lineGapBody, paragraphGap: TYPO.paragraphGap });
       y += doc.heightOfString(texto, { width: pageWidth, lineGap: TYPO.lineGapBody }) + 12;
     };
@@ -142,8 +148,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 4. ESCOPO DE FORNECIMENTO ----
     y = checkNewPage(doc, y, margin, 150);
-    doc.fontSize(11).font('Helvetica-Bold').text('4. ESCOPO DE FORNECIMENTO', margin, y, { characterSpacing: TYPO.charSpacingSection });
-    y += 18;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d21').text('4. ESCOPO DE FORNECIMENTO', margin, y, { characterSpacing: TYPO.charSpacingSection });
+    y += 6;
+    doc.strokeColor('#ff6b35').lineWidth(2).moveTo(margin, y).lineTo(margin + 280, y).stroke().strokeColor('#000').lineWidth(1);
+    y += 14;
 
     const itensList = Array.isArray(itens) ? itens : [];
     const colDesc = margin;
@@ -197,8 +205,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 11. PREÇO E CONDIÇÃO DE PAGAMENTO ----
     y = checkNewPage(doc, y, margin, 200);
-    doc.fontSize(11).font('Helvetica-Bold').text('11. PREÇO E CONDIÇÃO DE PAGAMENTO', margin, y, { characterSpacing: TYPO.charSpacingSection });
-    y += 20;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d21').text('11. PREÇO E CONDIÇÃO DE PAGAMENTO', margin, y, { characterSpacing: TYPO.charSpacingSection });
+    y += 6;
+    doc.strokeColor('#ff6b35').lineWidth(2).moveTo(margin, y).lineTo(margin + 380, y).stroke().strokeColor('#000').lineWidth(1);
+    y += 16;
     doc.fontSize(10).font('Helvetica-Bold').text('Tabela de Preços', margin, y, { characterSpacing: TYPO.charSpacingSmall });
     y += 18;
 
@@ -245,8 +255,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 12. DADOS CADASTRAIS DA CONTRATADA ----
     y = checkNewPage(doc, y, margin, 280);
-    doc.fontSize(11).font('Helvetica-Bold').text('12. DADOS CADASTRAIS DA CONTRATADA', margin, y, { characterSpacing: TYPO.charSpacingSection });
-    y += 20;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d21').text('12. DADOS CADASTRAIS DA CONTRATADA', margin, y, { characterSpacing: TYPO.charSpacingSection });
+    y += 6;
+    doc.strokeColor('#ff6b35').lineWidth(2).moveTo(margin, y).lineTo(margin + 380, y).stroke().strokeColor('#000').lineWidth(1);
+    y += 16;
     doc.fontSize(10).font('Helvetica-Bold').text('INFORMAÇÕES GERAIS', margin, y, { characterSpacing: TYPO.charSpacingSmall });
     y += 16;
     doc.font('Helvetica').fontSize(9);
@@ -281,8 +293,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 12.1. INFORMAÇÕES BANCÁRIAS ----
     y = checkNewPage(doc, y, margin, 80);
-    doc.fontSize(11).font('Helvetica-Bold').text('12.1. INFORMAÇÕES BANCÁRIAS', margin, y, { characterSpacing: TYPO.charSpacingSection });
-    y += 18;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d21').text('12.1. INFORMAÇÕES BANCÁRIAS', margin, y, { characterSpacing: TYPO.charSpacingSection });
+    y += 6;
+    doc.strokeColor('#ff6b35').lineWidth(2).moveTo(margin, y).lineTo(margin + 260, y).stroke().strokeColor('#000').lineWidth(1);
+    y += 14;
     doc.fontSize(9).font('Helvetica');
     [['Banco:', 'Itaú'], ['Agência:', '1690'], ['Conta corrente:', '65623-4'], ['Chave Pix (CNPJ):', '13.273.368/0001-75']].forEach(([l, v]) => {
       doc.font('Helvetica-Bold').text(l, margin, y, { width: labelW });
@@ -293,8 +307,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 13. CLASSIFICAÇÃO FISCAL E IMPOSTOS ----
     y = checkNewPage(doc, y, margin, 220);
-    doc.fontSize(11).font('Helvetica-Bold').text('13. CLASSIFICAÇÃO FISCAL E IMPOSTOS', margin, y, { characterSpacing: TYPO.charSpacingSection });
-    y += 20;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d21').text('13. CLASSIFICAÇÃO FISCAL E IMPOSTOS', margin, y, { characterSpacing: TYPO.charSpacingSection });
+    y += 6;
+    doc.strokeColor('#ff6b35').lineWidth(2).moveTo(margin, y).lineTo(margin + 400, y).stroke().strokeColor('#000').lineWidth(1);
+    y += 16;
     doc.fontSize(10).font('Helvetica-Bold').text('Classificação Fiscal', margin, y, { characterSpacing: TYPO.charSpacingSmall });
     y += 16;
     doc.font('Helvetica').fontSize(9);
@@ -354,8 +370,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 15. CONSIDERAÇÃO FINAL ----
     y = checkNewPage(doc, y, margin, 140);
-    doc.fontSize(11).font('Helvetica-Bold').text('15. CONSIDERAÇÃO FINAL', margin, y, { characterSpacing: TYPO.charSpacingSection });
-    y += 18;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d21').text('15. CONSIDERAÇÃO FINAL', margin, y, { characterSpacing: TYPO.charSpacingSection });
+    y += 6;
+    doc.strokeColor('#ff6b35').lineWidth(2).moveTo(margin, y).lineTo(margin + 240, y).stroke().strokeColor('#000').lineWidth(1);
+    y += 14;
     doc.fontSize(10).font('Helvetica');
     doc.text('Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:', margin, y, { width: pageWidth, lineGap: TYPO.lineGapBody });
     y += doc.heightOfString('Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:', { width: pageWidth }) + 12;

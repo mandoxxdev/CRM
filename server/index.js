@@ -6377,6 +6377,8 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
           proposta.numero_proposta = 'N/A';
         }
         
+        const omitPrintBar = req.query.embed === '1' || req.query.embed === 'true';
+        
         // Buscar configuração do template
         db.get('SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1', [], (err, templateConfig) => {
           if (err) {
@@ -6394,7 +6396,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
           function runGerar() {
             let html;
             try {
-              html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL);
+              html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
             } catch (genError) {
               console.error('Erro ao gerar HTML da proposta:', genError);
               console.error('Stack trace:', genError.stack);
@@ -7029,7 +7031,8 @@ app.post('/api/proposta-template/footer-image', authenticateToken, uploadFooter.
 
 // Função para gerar HTML premium da proposta - Versão Limpa e Profissional
 // forPdfServer = true: usado quando o PDF é gerado no servidor (Puppeteer); omite cabeçalho/rodapé fixos no HTML (Puppeteer usa displayHeaderFooter)
-function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null, baseURLOverride = null, forPdfServer = false) {
+// omitPrintBar = true: omite a barra "Gerar PDF" no topo (para preview embed/iframe), assim o cabeçalho da proposta fica visível no topo
+function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null, baseURLOverride = null, forPdfServer = false, omitPrintBar = false) {
   try {
     // Validar parâmetros
     if (!proposta) {
@@ -8197,13 +8200,13 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
   </style>
 </head>
 <body>
-  ${forPdfServer ? '' : `
+  ${(forPdfServer || omitPrintBar) ? '' : `
   <div class="print-tip-bar">
     <button class="btn-gerar-pdf" id="btnGerarPDF" onclick="window.print()">Gerar PDF</button>
     <p class="print-tip-text">Baixe o PDF pelo botão abaixo (gerado no servidor, sem usar a impressora do navegador).</p>
   </div>
   `}
-  <div class="proposta-container">
+  <div class="proposta-container"${omitPrintBar ? ' style="margin-top: 0;"' : ''}>
     <!-- Cabeçalho -->
     <div class="proposta-header">
       <div class="industry-badge">INDÚSTRIA 4.0</div>

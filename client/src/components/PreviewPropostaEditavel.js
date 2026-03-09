@@ -206,8 +206,8 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
         valor_total: calcularTotal()
       });
       
-      // Depois, buscar o HTML atualizado
-      const response = await api.get(`/propostas/${proposta.id}/premium`, {
+      // embed=1: servidor omite a barra "Gerar PDF" no topo, assim o cabeçalho da proposta (PROPOSTA TÉCNICA COMERCIAL) fica visível no preview
+      const response = await api.get(`/propostas/${proposta.id}/premium?embed=1`, {
         responseType: 'text'
       });
       
@@ -346,8 +346,19 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
         </script>
       `;
       
-      // Inserir o script antes do </body>
-      htmlEditavel = htmlEditavel.replace('</body>', scriptEditavel + '</body>');
+      // Garantir que o iframe mostre do topo (cabeçalho da proposta visível)
+      const scrollTopScript = `
+        <script>
+          (function() {
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', function() { window.scrollTo(0, 0); });
+            } else {
+              window.scrollTo(0, 0);
+            }
+          })();
+        </script>
+      `;
+      htmlEditavel = htmlEditavel.replace('</body>', scrollTopScript + scriptEditavel + '</body>');
       
       setPreviewHTML(htmlEditavel);
     } catch (error) {
