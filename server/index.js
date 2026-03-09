@@ -7771,7 +7771,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       }
       
       @page {
-        margin: 20mm 20mm 32mm 20mm;
+        margin: 20mm 20mm 45mm 20mm;
         size: A4;
       }
       
@@ -7850,17 +7850,24 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         letter-spacing: 0.5px;
       }
       
-      /* Rodapé visível na impressão (no final do documento) */
+      /* Rodapé fixo na impressão - aparece em todas as páginas */
       .proposta-footer {
         display: flex !important;
         visibility: visible !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        z-index: 1000 !important;
         page-break-inside: avoid !important;
+        margin: 0 !important;
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.08) !important;
       }
       
-      /* Conteúdo com padding-bottom para não ficar sob o rodapé fixo */
+      /* Conteúdo com padding para não ficar sob cabeçalho/rodapé fixos */
       .proposta-body {
-        padding: 0 20px 30px 20px !important;
-        padding-bottom: 40px !important;
+        padding: 0 20px 50px 20px !important;
         margin: 0 !important;
       }
       
@@ -8064,17 +8071,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         border: 1px solid #e55a2b !important;
       }
       
-      /* Cabeçalho fixo para impressão - aparece em TODAS as páginas (mesma lógica do rodapé) */
-      /* Cabeçalho fixo - esconder na primeira página */
-      @page:first {
-        margin-top: 0 !important;
-      }
-      
-      /* A partir da segunda página, o padding-top será aplicado via JavaScript */
-      @page:not(:first) {
-        margin-top: 0 !important; /* O padding será aplicado no body via JavaScript */
-      }
-      
       /* Por padrão, mostrar o cabeçalho em todas as páginas */
       .header-image-print {
         display: block !important;
@@ -8091,14 +8087,14 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         opacity: 1 !important;
       }
       
-      /* Esconder cabeçalho na primeira página */
+      /* Primeira página: margem normal */
       @page:first {
-        margin-top: 0 !important;
+        margin-top: 20mm !important;
       }
       
-      /* A partir da segunda página, adicionar margin-top para o cabeçalho fixo */
+      /* A partir da segunda página: margem-top maior para o cabeçalho fixo não sobrepor o conteúdo */
       @page:not(:first) {
-        margin-top: 150px !important; /* Margem pré-definida para o cabeçalho (será ajustada pelo JavaScript) */
+        margin-top: 50mm !important;
       }
       
       /* Garantir que o primeiro elemento após a primeira página tenha margin-top */
@@ -8147,8 +8143,14 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       .proposta-footer {
         display: flex !important;
         visibility: visible !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        z-index: 1000 !important;
       }
-      
+
       /* Rodapé fixo para impressão - aparece em todas as páginas */
       .footer-image-print {
         display: block !important;
