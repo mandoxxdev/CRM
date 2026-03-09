@@ -6685,7 +6685,9 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
     margin_impressao_bottom,
     margin_impressao_lateral,
     margin_navegador_top,
-    margin_navegador_bottom
+    margin_navegador_bottom,
+    header_image_url,
+    footer_image_url
   } = req.body;
 
   // Verificar se já existe configuração para esta família
@@ -6717,6 +6719,7 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           variaveis_proposta_tecnica = ?, variaveis_proposta_por_familia = ?,
           margin_impressao_top_primeira = ?, margin_impressao_top_outras = ?, margin_impressao_bottom = ?, margin_impressao_lateral = ?,
           margin_navegador_top = ?, margin_navegador_bottom = ?,
+          header_image_url = ?, footer_image_url = ?,
           updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
@@ -6742,6 +6745,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           marginLateral,
           marginNavegadorTop,
           marginNavegadorBottom,
+          header_image_url !== undefined ? header_image_url : existing.header_image_url,
+          footer_image_url !== undefined ? footer_image_url : existing.footer_image_url,
           existing.id
         ],
         function(err) {
@@ -6766,8 +6771,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           mostrar_logo, cabecalho_customizado, rodape_customizado, texto_introducao,
           mostrar_especificacoes, mostrar_imagens_produtos, formato_numero_proposta, componentes, variaveis_proposta_tecnica, variaveis_proposta_por_familia,
           margin_impressao_top_primeira, margin_impressao_top_outras, margin_impressao_bottom, margin_impressao_lateral,
-          margin_navegador_top, margin_navegador_bottom
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          margin_navegador_top, margin_navegador_bottom, header_image_url, footer_image_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           familia || 'Geral',
           nome_empresa || 'GMP INDUSTRIAIS',
@@ -6790,7 +6795,9 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           marginBottom,
           marginLateral,
           marginNavegadorTop,
-          marginNavegadorBottom
+          marginNavegadorBottom,
+          header_image_url || null,
+          footer_image_url || null
         ],
         function(err) {
           if (err) {
@@ -7114,6 +7121,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     const marginTopOutras = Math.max(20, Math.min(120, Number(config.margin_impressao_top_outras) || 50));
     const marginBottom = Math.max(20, Math.min(80, Number(config.margin_impressao_bottom) || 45));
     const marginLateral = Math.max(10, Math.min(50, Number(config.margin_impressao_lateral) || 20));
+    /* Reserva de espaço (mm) para cabeçalho no topo e rodapé no fim — o texto da proposta fica sempre no meio entre eles */
+    const reservaCabecalho = 32;
+    const reservaRodape = 32;
     // Compensação quando imprime com Margens: Padrão/Personalizado — puxa cabeçalho/rodapé para a borda da folha
     const marginNavegadorTop = Math.max(0, Math.min(50, Number(config.margin_navegador_top) || 19));
     const marginNavegadorBottom = Math.max(0, Math.min(50, Number(config.margin_navegador_bottom) || 19));
@@ -7686,11 +7696,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         display: none !important;
       }
       
-      /* Margens da página: só o CONTEÚDO é recuado; cabeçalho/rodapé fixos ficam na borda da folha.
-         Use "Margens: Nenhuma" no diálogo de impressão para o cabeçalho e rodapé ficarem no topo/fim da página. */
+      /* Margens da página: cabeçalho no topo, rodapé no fim, texto da proposta no meio (entre eles) */
       @page {
         size: A4;
-        margin: ${marginTopOutras}mm ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important;
+        margin: ${Math.max(marginTopOutras, reservaCabecalho)}mm ${marginLateral}mm ${Math.max(marginBottom, reservaRodape)}mm ${marginLateral}mm !important;
       }
       @page:first {
         margin-top: ${marginTopPrimeira}mm !important;
@@ -7771,26 +7780,28 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         letter-spacing: 0.5px;
       }
       
-      /* Rodapé fixo no fim físico da página; compensação quando usa Margens Padrão/Personalizado */
+      /* Rodapé (texto) fixo só no fim da página — altura limitada para o texto ficar sempre no meio */
       .proposta-footer {
         display: flex !important;
         visibility: visible !important;
         position: fixed !important;
         top: auto !important;
-        bottom: -${marginNavegadorBottom}mm !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
+        bottom: 0 !important;
+        left: ${marginLateral}mm !important;
+        right: ${marginLateral}mm !important;
+        width: calc(100% - ${marginLateral * 2}mm) !important;
+        max-width: calc(100% - ${marginLateral * 2}mm) !important;
+        max-height: ${reservaRodape}mm !important;
         z-index: 1000 !important;
         page-break-inside: avoid !important;
         margin: 0 !important;
-        padding-bottom: 12mm !important;
+        padding: 8px ${marginLateral}mm 8mm ${marginLateral}mm !important;
         box-shadow: 0 -2px 8px rgba(0,0,0,0.08) !important;
       }
       
-      /* Conteúdo: recuo lateral e inferior (o recuo superior vem do @page) */
+      /* Conteúdo: recuo para cabecalho/rodapé fixos — texto da proposta SEMPRE no meio, sem cair atrás das imagens */
       .proposta-body {
-        padding: 0 ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important;
+        padding: ${reservaCabecalho}mm ${marginLateral}mm ${reservaRodape}mm ${marginLateral}mm !important;
         margin: 0 !important;
       }
       
@@ -7994,20 +8005,29 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         border: 1px solid #e55a2b !important;
       }
       
-      /* Cabeçalho fixo no topo físico: com Margens Padrão/Personalizado, compensação puxa para a borda */
+      /* Cabeçalho fixo só no topo da página — altura limitada para o texto ficar sempre no meio */
       .header-image-print {
         display: block !important;
         position: fixed !important;
-        top: -${marginNavegadorTop}mm !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
+        top: 0 !important;
+        left: ${marginLateral}mm !important;
+        right: ${marginLateral}mm !important;
+        width: calc(100% - ${marginLateral * 2}mm) !important;
+        max-width: calc(100% - ${marginLateral * 2}mm) !important;
+        max-height: ${reservaCabecalho}mm !important;
         z-index: 1000 !important;
         margin: 0 !important;
         padding: 0 !important;
         page-break-inside: avoid !important;
         visibility: visible !important;
         opacity: 1 !important;
+      }
+      .header-image-print img {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: ${reservaCabecalho}mm !important;
+        object-fit: contain !important;
+        object-position: top center !important;
       }
       
       /* Garantir que o primeiro elemento após a primeira página tenha margin-top */
@@ -8027,9 +8047,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         opacity: 0 !important;
       }
       
-      /* Ajustar padding-top do body para dar espaço ao cabeçalho fixo em todas as páginas */
+      /* Conteúdo da proposta SEMPRE no meio: padding reserva espaço para cabeçalho (topo) e rodapé (fim) */
       body .proposta-body {
-        padding-top: 0 !important; /* Será ajustado pelo JavaScript dinamicamente */
+        padding: ${reservaCabecalho}mm ${marginLateral}mm ${reservaRodape}mm ${marginLateral}mm !important;
+        margin: 0 !important;
       }
       
       .header-image-print img {
@@ -8037,9 +8058,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         height: auto !important;
         display: block !important;
         max-width: 100% !important;
+        max-height: ${reservaCabecalho}mm !important;
         margin: 0 !important;
         padding: 0 !important;
         object-fit: contain !important;
+        object-position: top center !important;
       }
       
       /* Cabeçalho fixo nas páginas 2+ (quando configurado) */
@@ -8058,24 +8081,27 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         visibility: visible !important;
         position: fixed !important;
         bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
+        left: ${marginLateral}mm !important;
+        right: ${marginLateral}mm !important;
+        width: calc(100% - ${marginLateral * 2}mm) !important;
+        max-width: calc(100% - ${marginLateral * 2}mm) !important;
         z-index: 1000 !important;
       }
 
-      /* Rodapé (imagem) fixo no fim físico; compensação quando usa Margens Padrão/Personalizado */
+      /* Rodapé (imagem) fixo só no fim da página — altura limitada para o texto ficar sempre no meio */
       .footer-image-print {
         display: block !important;
         position: fixed !important;
         top: auto !important;
-        bottom: -${marginNavegadorBottom}mm !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
+        bottom: 0 !important;
+        left: ${marginLateral}mm !important;
+        right: ${marginLateral}mm !important;
+        width: calc(100% - ${marginLateral * 2}mm) !important;
+        max-width: calc(100% - ${marginLateral * 2}mm) !important;
+        max-height: ${reservaRodape}mm !important;
         z-index: 1000 !important;
         margin: 0 !important;
-        padding-bottom: 10mm !important;
+        padding: 0 0 4mm 0 !important;
         page-break-inside: avoid !important;
       }
       
@@ -8084,10 +8110,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         height: auto !important;
         display: block !important;
         max-width: 100% !important;
+        max-height: ${reservaRodape}mm !important;
         margin: 0 !important;
         padding: 0 !important;
-        /* Manter proporção natural da imagem */
         object-fit: contain !important;
+        object-position: bottom center !important;
       }
       
       /* Esconder rodapé do conteúdo na impressão (já temos o fixo) */

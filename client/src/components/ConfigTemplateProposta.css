@@ -184,6 +184,29 @@
   background: var(--gmp-primary-hover);
 }
 
+.btn-remove-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: transparent;
+  color: #b91c1c;
+  border: 1px solid #b91c1c;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-remove-image:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #991b1b;
+}
+.btn-remove-image:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .form-checkbox {
   display: flex;
   align-items: center;

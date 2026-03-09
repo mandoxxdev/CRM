@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { FiSave, FiUpload, FiX, FiSettings, FiSearch, FiFileText } from 'react-icons/fi';
+import { FiSave, FiUpload, FiX, FiSettings, FiSearch, FiFileText, FiTrash2 } from 'react-icons/fi';
 import './ConfigTemplateProposta.css';
 
 const ConfigTemplateProposta = ({ embedded = false }) => {
@@ -195,12 +195,66 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
     }
   };
 
+  const handleRemoveHeader = async () => {
+    if (!headerPreview && !config.header_image_url) return;
+    if (!window.confirm('Remover a imagem de cabeçalho? O cabeçalho fixo não aparecerá nas propostas.')) return;
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('/api/proposta-template', {
+        ...config,
+        header_image_url: null,
+        mostrar_logo: config.mostrar_logo ? 1 : 0,
+        mostrar_especificacoes: config.mostrar_especificacoes ? 1 : 0,
+        mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0,
+        variaveis_proposta_tecnica: Array.isArray(config.variaveis_proposta_tecnica) ? config.variaveis_proposta_tecnica : [],
+        variaveis_proposta_por_familia: config.variaveis_proposta_por_familia && typeof config.variaveis_proposta_por_familia === 'object' ? config.variaveis_proposta_por_familia : {}
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setConfig(prev => ({ ...prev, header_image_url: null }));
+      setHeaderPreview(null);
+      alert('Cabeçalho removido. As propostas não exibirão imagem de cabeçalho fixo.');
+    } catch (error) {
+      console.error('Erro ao remover cabeçalho:', error);
+      alert('Erro: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveFooter = async () => {
+    if (!footerPreview && !config.footer_image_url) return;
+    if (!window.confirm('Remover a imagem de rodapé? O rodapé não aparecerá nas propostas.')) return;
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('/api/proposta-template', {
+        ...config,
+        footer_image_url: null,
+        mostrar_logo: config.mostrar_logo ? 1 : 0,
+        mostrar_especificacoes: config.mostrar_especificacoes ? 1 : 0,
+        mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0,
+        variaveis_proposta_tecnica: Array.isArray(config.variaveis_proposta_tecnica) ? config.variaveis_proposta_tecnica : [],
+        variaveis_proposta_por_familia: config.variaveis_proposta_por_familia && typeof config.variaveis_proposta_por_familia === 'object' ? config.variaveis_proposta_por_familia : {}
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setConfig(prev => ({ ...prev, footer_image_url: null }));
+      setFooterPreview(null);
+      alert('Rodapé removido. As propostas não exibirão imagem de rodapé.');
+    } catch (error) {
+      console.error('Erro ao remover rodapé:', error);
+      alert('Erro: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
       await axios.post('/api/proposta-template', {
         ...config,
+        header_image_url: config.header_image_url || null,
+        footer_image_url: config.footer_image_url || null,
         mostrar_logo: config.mostrar_logo ? 1 : 0,
         mostrar_especificacoes: config.mostrar_especificacoes ? 1 : 0,
         mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0,
@@ -493,7 +547,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                 <img src={headerPreview} alt="Cabeçalho" style={{ maxWidth: '100%', maxHeight: '200px' }} />
               </div>
             )}
-            <div className="upload-logo-container">
+            <div className="upload-logo-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <input
                 type="file"
                 id="header-image-upload"
@@ -504,6 +558,11 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
               <label htmlFor="header-image-upload" className="btn-upload-logo">
                 <FiUpload /> {uploadingHeader ? 'Enviando...' : headerPreview ? 'Alterar Imagem de Cabeçalho' : 'Enviar Imagem de Cabeçalho'}
               </label>
+              {(headerPreview || config.header_image_url) && (
+                <button type="button" onClick={handleRemoveHeader} className="btn-remove-image" disabled={saving}>
+                  <FiTrash2 /> Remover cabeçalho
+                </button>
+              )}
             </div>
             <small style={{ display: 'block', marginTop: '5px', color: '#666' }}>
               A imagem aparecerá como cabeçalho fixo a partir da segunda página (onde está "OBJETIVO DA PROPOSTA")
@@ -517,7 +576,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                 <img src={footerPreview} alt="Rodapé" style={{ maxWidth: '100%', maxHeight: '200px' }} />
               </div>
             )}
-            <div className="upload-logo-container">
+            <div className="upload-logo-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <input
                 type="file"
                 id="footer-image-upload"
@@ -528,6 +587,11 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
               <label htmlFor="footer-image-upload" className="btn-upload-logo">
                 <FiUpload /> {uploadingFooter ? 'Enviando...' : footerPreview ? 'Alterar Imagem de Rodapé' : 'Enviar Imagem de Rodapé'}
               </label>
+              {(footerPreview || config.footer_image_url) && (
+                <button type="button" onClick={handleRemoveFooter} className="btn-remove-image" disabled={saving}>
+                  <FiTrash2 /> Remover rodapé
+                </button>
+              )}
             </div>
             <small style={{ display: 'block', marginTop: '5px', color: '#666' }}>
               A imagem aparecerá no final da proposta como parte do conteúdo
