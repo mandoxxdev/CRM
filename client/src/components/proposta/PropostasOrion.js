@@ -87,7 +87,18 @@ export default function PropostasOrion() {
       window.URL.revokeObjectURL(url);
       toast.success('PDF baixado (gerado no servidor).');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao gerar PDF.');
+      let msg = 'Erro ao gerar PDF.';
+      if (err.response?.data) {
+        const d = err.response.data;
+        if (typeof d === 'object' && d.error) msg = d.error;
+        else if (typeof d.text === 'function') {
+          try {
+            const j = JSON.parse(await d.text());
+            if (j.error) msg = j.error;
+          } catch (_) {}
+        }
+      }
+      toast.error(msg);
     }
   };
 

@@ -6650,8 +6650,8 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       '<span>contato@gmp.ind.br · +55 (11) 4513-9570</span>' +
       '</div>';
     
-    // Iniciar Puppeteer com configurações mais robustas
-    browser = await puppeteer.launch({
+    // Iniciar Puppeteer (opções para servidor Linux/Docker; use PUPPETEER_EXECUTABLE_PATH se Chromium não estiver no PATH)
+    const launchOpts = {
       headless: true,
       args: [
         '--no-sandbox',
@@ -6660,7 +6660,11 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
         '--disable-accelerated-2d-canvas',
         '--disable-gpu'
       ]
-    });
+    };
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      launchOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+    browser = await puppeteer.launch(launchOpts);
     
     const page = await browser.newPage();
     
@@ -6775,18 +6779,13 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     }
     
     if (!res.headersSent) {
-      // Retornar erro mais detalhado em desenvolvimento
-      const errorMessage = process.env.NODE_ENV === 'production' 
-        ? 'Erro ao gerar PDF. Tente novamente mais tarde.'
+      const isProd = process.env.NODE_ENV === 'production';
+      const errorMessage = isProd
+        ? `Erro ao gerar PDF: ${error.message || 'erro desconhecido'}`
         : `Erro ao gerar PDF: ${error.message}\nStack: ${error.stack}`;
-      
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: errorMessage,
-        details: process.env.NODE_ENV !== 'production' ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : undefined
+        details: !isProd ? { message: error.message, stack: error.stack, name: error.name } : { message: error.message }
       });
     }
   }
