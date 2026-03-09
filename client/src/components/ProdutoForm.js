@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import api from '../services/api';
-import { FiSave, FiX, FiCheck, FiInfo, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
+import { FiSave, FiX, FiCheck, FiInfo, FiCheckCircle, FiAlertCircle, FiSliders } from 'react-icons/fi';
 import './ProdutoForm.css';
 
 const ProdutoForm = () => {
@@ -609,11 +609,21 @@ const ProdutoForm = () => {
         </div>
       )}
       {variaveisDaFamilia.length > 0 && (
-        <div className="produto-form-variaveis-vista">
-          <h3>Variáveis técnicas desta família</h3>
-          <p className="produto-form-variaveis-vista-hint">
-            Preencha os valores das variáveis definidas para esta família (não é obrigatório ter marcadores na vista).
-          </p>
+        <div className="produto-form-variaveis-vista produto-form-variaveis-premium">
+          <div className="produto-form-variaveis-premium-header">
+            <div className="produto-form-variaveis-premium-title-wrap">
+              <span className="produto-form-variaveis-premium-icon" aria-hidden>
+                <FiSliders />
+              </span>
+              <div>
+                <h3 className="produto-form-variaveis-premium-title">Variáveis técnicas desta família</h3>
+                <p className="produto-form-variaveis-vista-hint">
+                  Preencha os valores das variáveis definidas para esta família (não é obrigatório ter marcadores na vista).
+                </p>
+              </div>
+            </div>
+            <span className="produto-form-variaveis-premium-badge">{variaveisDaFamilia.length} variáveis</span>
+          </div>
           <div className="produto-form-variaveis-vista-grid">
             {variaveisDaFamilia.map((v, idx) => {
               const chave = v.chave || '';
@@ -621,7 +631,7 @@ const ProdutoForm = () => {
               const valor = especificacoesTecnicas[chave] ?? '';
               const isNumero = (String(v.tipo || '').toLowerCase() === 'numero');
               const isLista = (String(v.tipo || '').toLowerCase() === 'lista');
-              // Opções: primeiro as cadastradas por família (Opções por família); se vazio, usar as da variável (Editar variável → opções uma por linha)
+              const preenchido = valor !== '' && valor != null;
               const opcoesFamilia = opcoesPorVariavel[chave] || [];
               const opcoesVar = v.opcoes;
               const opcoesLista = (() => {
@@ -638,36 +648,38 @@ const ProdutoForm = () => {
               })();
               const sufixo = (v.sufixo || '').trim() || null;
               return (
-                <div key={chave || idx} className="produto-form-variavel-field">
-                  <label>{nomeVariavel}{sufixo ? ` (${sufixo})` : ''}</label>
-                  {isLista ? (
-                    <div className="produto-form-variavel-input-wrap">
-                      <select
-                        value={valor}
-                        onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
-                        className="produto-form-variavel-select produto-form-variavel-select-premium"
-                      >
-                        <option value="">Selecione...</option>
-                        {opcoesLista.map((opt) => (
-                          <option key={opt.id || opt.valor} value={opt.valor}>
-                            {opt.valor}
-                          </option>
-                        ))}
-                      </select>
-                      {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
-                    </div>
-                  ) : (
-                    <div className="produto-form-variavel-input-wrap">
-                      <input
-                        type={isNumero ? 'number' : 'text'}
-                        value={valor}
-                        onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
-                        placeholder={nomeVariavel ? `Informe ${nomeVariavel.toLowerCase()}` : 'Informe o valor'}
-                        step={isNumero ? 'any' : undefined}
-                      />
-                      {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
-                    </div>
-                  )}
+                <div key={chave || idx} className={`produto-form-variavel-card ${preenchido ? 'produto-form-variavel-card-preenchido' : ''}`}>
+                  <div className="produto-form-variavel-field">
+                    <label>{nomeVariavel}{sufixo ? ` (${sufixo})` : ''}</label>
+                    {isLista ? (
+                      <div className="produto-form-variavel-input-wrap">
+                        <select
+                          value={valor}
+                          onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
+                          className="produto-form-variavel-select produto-form-variavel-select-premium"
+                        >
+                          <option value="">Selecione...</option>
+                          {opcoesLista.map((opt) => (
+                            <option key={opt.id || opt.valor} value={opt.valor}>
+                              {opt.valor}
+                            </option>
+                          ))}
+                        </select>
+                        {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
+                      </div>
+                    ) : (
+                      <div className="produto-form-variavel-input-wrap">
+                        <input
+                          type={isNumero ? 'number' : 'text'}
+                          value={valor}
+                          onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
+                          placeholder={nomeVariavel ? `Informe ${nomeVariavel.toLowerCase()}` : 'Informe o valor'}
+                          step={isNumero ? 'any' : undefined}
+                        />
+                        {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
