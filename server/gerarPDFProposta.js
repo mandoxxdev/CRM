@@ -129,7 +129,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     const textoApresentacao = 'A MOINHO YPIRANGA é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Somos uma das maiores empresas com foco e participação no desenvolvimento, fabricação e comercialização de equipamentos para produção de produtos químicos do MERCOSUL, destacando nossas competências no fornecimento de plantas em regime Turn-Key. Neste regime Turn-Key, quando contratado, assumimos o gerenciamento integral de todas as etapas de implantação do empreendimento, entregando a planta totalmente construída e pronta para o funcionamento. Todas as fases desse processo contam com o suporte de recursos tecnológicos adequados, com um moderno sistema de gestão de projetos, além de uma equipe técnica própria e altamente qualificada para atender às necessidades do cliente.';
     secao('3. APRESENTAÇÃO DA EMPRESA', textoApresentacao);
 
-    // ---- 4. ESCOPO - Tabela de produtos ----
+    // ---- 4. ESCOPO DE FORNECIMENTO ----
     y = checkNewPage(doc, y, margin, 150);
     doc.fontSize(11).font('Helvetica-Bold').text('4. ESCOPO DE FORNECIMENTO', margin, y);
     y += 18;
@@ -163,62 +163,224 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
       doc.text(formatMoney(vTotal), colTotal, y);
       y += rowH;
     });
-    y += 18;
-
-    // ---- 5. VALORES ----
-    y = checkNewPage(doc, y, margin, 180);
-    doc.fontSize(11).font('Helvetica-Bold').text('5. VALORES', margin, y);
     y += 20;
 
-    const sub = Number(totais.subtotal) || 0;
-    const icmsVal = Number(totais.icms) || 0;
-    const ipiVal = Number(totais.ipi) || 0;
-    const totalVal = Number(totais.total) || sub + icmsVal + ipiVal;
-    const colVal = margin + pageWidth - 95;
-    doc.fontSize(10).font('Helvetica');
-    doc.text('Subtotal:', margin, y); doc.text(formatMoney(sub), colVal, y);
-    y += 18;
-    doc.text('ICMS:', margin, y); doc.text(formatMoney(icmsVal), colVal, y);
-    y += 18;
-    doc.text('IPI:', margin, y); doc.text(formatMoney(ipiVal), colVal, y);
+    // ---- 5. PRAZO DE ENTREGA ----
+    secao('5. PRAZO DE ENTREGA', proposta.prazo_entrega || 'Dentro de 15 (quinze) dias úteis, a contar da data de confirmação do pedido via e compensação do pagamento (quando aplicável).');
+
+    // ---- 6. TRANSPORTE E EMBALAGEM ----
+    secao('6. TRANSPORTE E EMBALAGEM', 'Transporte: EXW (Ex Work) [Coleta na fábrica da Moinho Ypiranga]\nEmbalagem: Caixa de papelão e/ou plástico bolha');
+
+    // ---- 7. VALIDADE DA PROPOSTA ----
+    secao('7. VALIDADE DA PROPOSTA', 'Proposta válida por 15 (quinze) dias corridos, contados da data de emissão.');
+
+    // ---- 8. GARANTIA ----
+    secao('8. GARANTIA', (proposta.garantia || 'Garantia de 12 (doze) meses, contados da data de emissão da nota fiscal, contra defeitos de fabricação.') + ' Garantia válida, para peças colocadas na fábrica da Moinho Ypiranga.');
+
+    // ---- 9. CONSIDERAÇÃO CONSTRUTIVA ----
+    secao('9. CONSIDERAÇÃO CONSTRUTIVA', 'Fica entendido que todas as informações foram apresentadas ao CONTRATANTE nesta proposta técnica comercial, e foram suficientes para o entendimento e aceite do produto e/ou serviço que será fornecido, desta forma, qualquer informação e/ou característica que não foi apresentada previamente neste documento, seguirá o padrão do projeto e/ou serviço da CONTRATADA.');
+
+    // ---- 10. EXCLUSO DO FORNECIMENTO ----
+    const excluso = '• Transporte e seguro das peças;\n• Parafusos e buchas de fixação;\n• Serviço de instalação e montagem;\n• Eixos e hastes;\n• Projetos, croquis, laudos e certificados;\n• E demais itens não citados nesta proposta comercial.';
+    secao('10. EXCLUSO DO FORNECIMENTO', excluso);
+
+    // ---- 11. PREÇO E CONDIÇÃO DE PAGAMENTO ----
+    y = checkNewPage(doc, y, margin, 200);
+    doc.fontSize(11).font('Helvetica-Bold').text('11. PREÇO E CONDIÇÃO DE PAGAMENTO', margin, y);
     y += 20;
-    doc.font('Helvetica-Bold').text('TOTAL:', margin, y); doc.text(formatMoney(totalVal), colVal, y);
+    doc.fontSize(10).font('Helvetica-Bold').text('Tabela de Preços', margin, y);
+    y += 18;
+
+    const colItem = margin;
+    const colNome = margin + 35;
+    const colQuant = margin + pageWidth - 200;
+    const colPreco = margin + pageWidth - 145;
+    const colTotalTab = margin + pageWidth - 75;
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text('ITEM', colItem, y);
+    doc.text('NOME DO ITEM', colNome, y, { width: colQuant - colNome - 5 });
+    doc.text('QUANT.', colQuant, y);
+    doc.text('PREÇO UNIT.', colPreco, y);
+    doc.text('TOTAL', colTotalTab, y);
+    y += rowH;
+    doc.moveTo(margin, y).lineTo(doc.page.width - margin, y).stroke();
+    y += 10;
+
+    doc.font('Helvetica').fontSize(9);
+    let totalProposta = 0;
+    itensList.forEach((item, index) => {
+      y = checkNewPage(doc, y, margin, 50);
+      const nome = (item.descricao || item.produto_nome || item.nome || 'Item').substring(0, 45);
+      const qtd = item.quantidade != null ? item.quantidade : 1;
+      const vUnit = parseFloat(item.valor_unitario) || parseFloat(item.preco_base) || 0;
+      const vTotal = vUnit * qtd;
+      totalProposta += vTotal;
+      doc.text('4.' + (index + 1), colItem, y);
+      doc.text(nome, colNome, y, { width: colQuant - colNome - 5 });
+      doc.text(String(qtd), colQuant, y);
+      doc.text(formatMoney(vUnit), colPreco, y);
+      doc.text(formatMoney(vTotal), colTotalTab, y);
+      y += rowH;
+    });
+    y += 8;
+    doc.font('Helvetica-Bold').fillColor('#ff6b35');
+    doc.text('TOTAL DA PROPOSTA', margin, y, { width: pageWidth - 80 });
+    doc.text(formatMoney(totalProposta), colTotalTab, y);
+    doc.fillColor('#000');
+    y += 22;
+    doc.font('Helvetica').fontSize(10);
+    doc.text('Condição de pagamento: ' + (proposta.condicoes_pagamento || '28/42/56DDL a partir da assinatura da proposta via boleto bancário.'), margin, y, { width: pageWidth });
     y += 24;
 
-    if (totais.dataEmissao || totais.dataValidade) {
-      doc.font('Helvetica');
-      if (totais.dataEmissao) { doc.text(`Data de emissão: ${totais.dataEmissao}`, margin, y); y += 16; }
-      if (totais.dataValidade) { doc.text(`Validade: ${totais.dataValidade}`, margin, y); y += 16; }
-    }
-    y += 18;
+    // ---- 12. DADOS CADASTRAIS DA CONTRATADA ----
+    y = checkNewPage(doc, y, margin, 280);
+    doc.fontSize(11).font('Helvetica-Bold').text('12. DADOS CADASTRAIS DA CONTRATADA', margin, y);
+    y += 20;
+    doc.fontSize(10).font('Helvetica-Bold').text('INFORMAÇÕES GERAIS', margin, y);
+    y += 16;
+    doc.font('Helvetica').fontSize(9);
+    const dadosCadastrais = [
+      ['Nome Fantasia:', 'Moinho Ypiranga'],
+      ['Razão Social:', 'Moinho Ypiranga indústria de maquinas Ltda'],
+      ['CNPJ:', '13.273.368/0001-75'],
+      ['Inscrição Estadual:', '799.890.695.115'],
+      ['Inscrição Municipal:', '356.586-6'],
+      ['Data de constituição:', '07/02/2011'],
+      ['Logradouro:', 'Av. Ângelo Demarchi, n° 130'],
+      ['CEP:', '09844-100'],
+      ['Bairro:', 'Batistini'],
+      ['Município:', 'São Bernardo do Campo'],
+      ['Estado:', 'São Paulo'],
+      ['País:', 'Brasil'],
+      ['Telefone:', '+55 (11) 4513-9570'],
+      ['E-mail comercial:', 'contato@gmp.ind.br / vendas@moinhoypiranga.com'],
+      ['E-mail financeiro:', 'financeiro@gmp.ind.br / contato@moinhoypiranga.com'],
+      ['Site:', 'www.gmp.ind.br / www.moinhoypiranga.com'],
+      ['Regime tributário:', 'Lucro Presumido'],
+      ['Ramo de Atividade:', 'Fabricação de maquinas e equipamentos industriais']
+    ];
+    const labelW = 120;
+    dadosCadastrais.forEach(([label, value]) => {
+      y = checkNewPage(doc, y, margin, 25);
+      doc.font('Helvetica-Bold').text(label, margin, y, { width: labelW });
+      doc.font('Helvetica').text(value, margin + labelW, y, { width: pageWidth - labelW });
+      y += 14;
+    });
+    y += 12;
 
-    // ---- 6. CONDIÇÕES COMERCIAIS ----
-    if (proposta.condicoes_pagamento || proposta.prazo_entrega || proposta.garantia || proposta.observacoes) {
-      y = checkNewPage(doc, y, margin, 120);
-      doc.fontSize(11).font('Helvetica-Bold').text('6. CONDIÇÕES COMERCIAIS', margin, y);
-      y += 18;
-      doc.fontSize(10).font('Helvetica');
-      if (proposta.condicoes_pagamento) {
-        doc.text('Condições de pagamento: ' + proposta.condicoes_pagamento, margin, y, { width: pageWidth });
-        y += 16;
-      }
-      if (proposta.prazo_entrega) {
-        doc.text('Prazo de entrega: ' + proposta.prazo_entrega, margin, y, { width: pageWidth });
-        y += 16;
-      }
-      if (proposta.garantia) {
-        doc.text('Garantia: ' + proposta.garantia, margin, y, { width: pageWidth });
-        y += 16;
-      }
-      if (proposta.observacoes) {
-        doc.text('Observações: ' + proposta.observacoes, margin, y, { width: pageWidth });
-        y += doc.heightOfString(proposta.observacoes, { width: pageWidth }) + 10;
-      }
-      y += 12;
-    }
-
-    // ---- Contato ----
+    // ---- 12.1. INFORMAÇÕES BANCÁRIAS ----
     y = checkNewPage(doc, y, margin, 80);
+    doc.fontSize(11).font('Helvetica-Bold').text('12.1. INFORMAÇÕES BANCÁRIAS', margin, y);
+    y += 18;
+    doc.fontSize(9).font('Helvetica');
+    [['Banco:', 'Itaú'], ['Agência:', '1690'], ['Conta corrente:', '65623-4'], ['Chave Pix (CNPJ):', '13.273.368/0001-75']].forEach(([l, v]) => {
+      doc.font('Helvetica-Bold').text(l, margin, y, { width: labelW });
+      doc.font('Helvetica').text(v, margin + labelW, y);
+      y += 14;
+    });
+    y += 12;
+
+    // ---- 13. CLASSIFICAÇÃO FISCAL E IMPOSTOS ----
+    y = checkNewPage(doc, y, margin, 220);
+    doc.fontSize(11).font('Helvetica-Bold').text('13. CLASSIFICAÇÃO FISCAL E IMPOSTOS', margin, y);
+    y += 20;
+    doc.fontSize(10).font('Helvetica-Bold').text('Classificação Fiscal', margin, y);
+    y += 16;
+    doc.font('Helvetica').fontSize(9);
+    doc.text('NCM', margin, y);
+    doc.text('IDENTIFICAÇÃO PRODUTOS MOINHO YPIRANGA', margin + 90, y, { width: pageWidth - 95 });
+    y += 14;
+    doc.moveTo(margin, y).lineTo(doc.page.width - margin, y).stroke();
+    y += 10;
+    doc.text('8474.39.00', margin, y);
+    doc.text('Hélices, impelidores, discos, eixos, hastes, acoplamento, telas, e outros.', margin + 90, y, { width: pageWidth - 95 });
+    y += 14;
+    doc.text('7309.00.90', margin, y);
+    doc.text('Tanques, tachos, reservatórios e baldes.', margin + 90, y, { width: pageWidth - 95 });
+    y += 20;
+    doc.font('Helvetica').fontSize(9).fillColor('#555');
+    doc.text('Nota: Para outros produtos, a classificação fiscal deverá ser consultada caso a caso.', margin, y, { width: pageWidth });
+    y += 22;
+    doc.fillColor('#000');
+    doc.font('Helvetica-Bold').fontSize(10).text('Tabela de Impostos e Alíquotas', margin, y);
+    y += 16;
+    doc.font('Helvetica').fontSize(8);
+    const thFiscal = [margin, margin + 55, margin + 95, margin + 130, margin + 165, margin + 200, margin + 235];
+    doc.text('NCM', thFiscal[0], y);
+    doc.text('ICMS R1', thFiscal[1], y);
+    doc.text('ICMS R2', thFiscal[2], y);
+    doc.text('ICMS R3', thFiscal[3], y);
+    doc.text('IPI', thFiscal[4], y);
+    doc.text('PIS', thFiscal[5], y);
+    doc.text('COFINS', thFiscal[6], y);
+    y += 12;
+    doc.text('8474.39.00', thFiscal[0], y);
+    doc.text('18,00%', thFiscal[1], y);
+    doc.text('12,00%', thFiscal[2], y);
+    doc.text('7,00%', thFiscal[3], y);
+    doc.text('0%', thFiscal[4], y);
+    doc.text('0,65%', thFiscal[5], y);
+    doc.text('3,00%', thFiscal[6], y);
+    y += 12;
+    doc.text('7309.00.90', thFiscal[0], y);
+    doc.text('12,00%', thFiscal[1], y);
+    doc.text('12,00%', thFiscal[2], y);
+    doc.text('7,00%', thFiscal[3], y);
+    doc.text('0%', thFiscal[4], y);
+    doc.text('0,65%', thFiscal[5], y);
+    doc.text('3,00%', thFiscal[6], y);
+    y += 18;
+    doc.fontSize(9);
+    doc.text('Região 1: São Paulo (SP). Região 2: MG, PR, RJ, RS, SC. Região 3: demais estados.', margin, y, { width: pageWidth });
+    y += 14;
+    doc.font('Helvetica').fillColor('#555');
+    doc.text('Nota: Redução tributária aplicada nos produtos NCM 8474.39.00, Inciso II, Artigo 12, Anexo II do RICMS/SP.', margin, y, { width: pageWidth });
+    y += 22;
+    doc.fillColor('#000');
+
+    // ---- 14. REAJUSTE DE PREÇO ----
+    secao('14. REAJUSTE DE PREÇO', 'Havendo alterações na legislação tributária vigente na época, a CONTRATADA se resguarda ao direito de atualizar os preços apresentados, de acordo com a nova tributação, com prévia aprovação do CONTRATANTE.\n\nPara vendas fora do território nacional (BRASIL), os preços apresentados nesta proposta técnica comercial, poderão ser reajustado pela taxa do Dólar Americano, valor comercial de venda, até a data do faturamento, utilizando como taxa base USD 1,00 = VALOR DA COTAÇÃO NA DATA DA PROPOSTA.');
+
+    // ---- 15. CONSIDERAÇÃO FINAL ----
+    y = checkNewPage(doc, y, margin, 140);
+    doc.fontSize(11).font('Helvetica-Bold').text('15. CONSIDERAÇÃO FINAL', margin, y);
+    y += 18;
+    doc.fontSize(10).font('Helvetica');
+    doc.text('Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:', margin, y, { width: pageWidth });
+    y += doc.heightOfString('Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:', { width: pageWidth }) + 12;
+    doc.rect(margin, y, pageWidth, 55).stroke();
+    y += 12;
+    doc.text('Data da assinatura: _____/_____/_____', margin + 10, y);
+    y += 14;
+    doc.text('Assinatura e carimbo da empresa CONTRATANTE:', margin + 10, y);
+    y += 45;
+
+    // ---- Assinaturas (Atenciosamente) ----
+    y = checkNewPage(doc, y, margin, 100);
+    doc.fontSize(11).font('Helvetica').text('Atenciosamente,', margin, y, { align: 'center', width: pageWidth });
+    y += 28;
+    const assinaturas = [
+      { nome: 'Junior Machado', cargo: 'Diretor Comercial', tel: 'T +55 (11) 4513-9570', cel: 'M +55 (11) 9.9351-5046', email: 'junior@gmp.ind.br' },
+      { nome: 'Bruno Machado', cargo: 'Gerente Comercial', tel: 'T +55 (11) 4513-9570', cel: 'M +55 (11) 9.9351-5543', email: 'bruno@gmp.ind.br' },
+      { nome: 'Alex Junior', cargo: 'Vendas Técnica', tel: 'T +55 (11) 4513-9570', cel: 'M +55 (11) 9.8908-5127', email: 'alexjunior@gmp.ind.br' },
+      { nome: 'Matheus Honrado', cargo: 'Vendas Técnica', tel: 'T +55 (11) 4513-9570', cel: 'M +55 (11) 9.3386-9232', email: 'matheus@gmp.ind.br' }
+    ];
+    const colWidth = pageWidth / 4;
+    const baseY = y;
+    assinaturas.forEach((a, i) => {
+      const x = margin + i * colWidth + 8;
+      const w = colWidth - 16;
+      doc.fontSize(10).font('Helvetica-Bold').text(a.nome, x, baseY, { width: w, align: 'center' });
+      doc.font('Helvetica').fontSize(9).text(a.cargo, x, baseY + 14, { width: w, align: 'center' });
+      doc.fontSize(8).text(a.tel, x, baseY + 26, { width: w, align: 'center' });
+      doc.text(a.cel, x, baseY + 36, { width: w, align: 'center' });
+      doc.fillColor('#1a4d7a').text(a.email, x, baseY + 46, { width: w, align: 'center' });
+      doc.fillColor('#000');
+    });
+    y = baseY + 62;
+
+    // ---- Contato final ----
+    y = checkNewPage(doc, y, margin, 40);
     doc.fontSize(10).font('Helvetica').fillColor('#333');
     doc.text('Para dúvidas ou negociação: contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br', margin, y, { width: pageWidth, align: 'center' });
 
