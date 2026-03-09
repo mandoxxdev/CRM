@@ -221,6 +221,113 @@
   font-size: 18px;
 }
 
+.config-hint {
+  margin: -8px 0 14px 0;
+  font-size: 0.9rem;
+  color: var(--gmp-text-light, #64748b);
+}
+
+.variaveis-proposta-search-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.variaveis-proposta-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gmp-text-light);
+  font-size: 1rem;
+}
+
+.variaveis-proposta-search-input {
+  width: 100%;
+  padding: 10px 12px 10px 40px;
+  border: 2px solid var(--gmp-border-color);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: var(--gmp-bg-secondary);
+  color: var(--gmp-text-primary);
+}
+
+.variaveis-proposta-search-input:focus {
+  outline: none;
+  border-color: var(--gmp-primary);
+}
+
+.variaveis-proposta-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 2px solid var(--gmp-border-color);
+  border-radius: 10px;
+  background: var(--gmp-surface, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.variaveis-proposta-empty {
+  padding: 1.25rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--gmp-text-light);
+}
+
+.variaveis-proposta-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.variaveis-proposta-item:hover {
+  background: rgba(0, 82, 163, 0.06);
+  border-color: rgba(0, 82, 163, 0.15);
+}
+
+.variaveis-proposta-item-selected {
+  background: linear-gradient(135deg, rgba(0, 82, 163, 0.1) 0%, rgba(0, 82, 163, 0.06) 100%);
+  border-color: rgba(0, 82, 163, 0.25);
+}
+
+.variaveis-proposta-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--gmp-primary);
+}
+
+.variaveis-proposta-item-nome {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.variaveis-proposta-item-chave {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 3px 6px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--gmp-text-light);
+  border-radius: 4px;
+}
+
+.variaveis-proposta-selecionadas {
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: var(--gmp-primary);
+  background: rgba(0, 82, 163, 0.08);
+  border-radius: 8px;
+  font-weight: 500;
+}
+
 @media (max-width: 768px) {
   .config-template-container {
     padding: 15px;

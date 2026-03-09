@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { FiPlus, FiTrash2, FiPackage, FiX, FiCheck, FiClock, FiList, FiMessageSquare, FiSend, FiPaperclip, FiDownload, FiFile, FiAlertCircle, FiDollarSign, FiFileText } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiPackage, FiX, FiCheck, FiClock, FiList, FiMessageSquare, FiSend, FiPaperclip, FiDownload, FiFile, FiAlertCircle, FiDollarSign, FiFileText, FiShoppingCart, FiSettings } from 'react-icons/fi';
 import PreviewPropostaEditavel from './PreviewPropostaEditavel';
 import SelecaoProdutosPremium from './SelecaoProdutosPremium';
 import './PropostaForm.css';
@@ -1089,22 +1089,39 @@ const PropostaForm = () => {
           </div>
         </div>
 
-        <div className="form-section">
-          <div className="section-header">
-            <h2>Itens da Proposta</h2>
-            <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-              <button type="button" onClick={() => setShowProdutosModal(true)} className="btn-add-item btn-primary">
-                <FiPackage /> Selecionar Produto
+        <div className="form-section form-section-carrinho">
+          <div className="section-header section-header-carrinho">
+            <div>
+              <h2><FiShoppingCart className="section-icon-carrinho" /> Carrinho de compras</h2>
+              <p className="section-desc-carrinho">
+                Adicione os produtos ao carrinho a partir do catálogo. Ao salvar ou gerar o PDF, a proposta será montada com o template e as variáveis técnicas definidos em <strong>Configurações → Template de Proposta</strong>.
+              </p>
+            </div>
+            <div className="carrinho-actions">
+              <button type="button" onClick={() => setShowProdutosModal(true)} className="btn-add-item btn-primary btn-add-carrinho">
+                <FiShoppingCart /> Adicionar produtos ao carrinho
               </button>
               <button type="button" onClick={() => addItem()} className="btn-add-item btn-secondary">
-                <FiPlus /> Adicionar Item Manual
+                <FiPlus /> Adicionar item manual (sem catálogo)
               </button>
             </div>
           </div>
           {itens.length === 0 ? (
-            <p className="no-items">Nenhum item adicionado. Clique em "Adicionar Item" para começar.</p>
+            <div className="carrinho-empty">
+              <FiShoppingCart className="carrinho-empty-icon" aria-hidden />
+              <h3>Seu carrinho está vazio</h3>
+              <p>Clique em <strong>&quot;Adicionar produtos ao carrinho&quot;</strong> para escolher produtos do catálogo. Você também pode adicionar um item manual (linha livre).</p>
+              <p className="carrinho-empty-hint">A proposta gerada utilizará automaticamente o layout e as variáveis técnicas configuradas no sistema.</p>
+              <button type="button" onClick={() => setShowProdutosModal(true)} className="btn-add-item btn-primary btn-empty-cta">
+                <FiShoppingCart /> Adicionar produtos ao carrinho
+              </button>
+            </div>
           ) : (
-            <div className="itens-table">
+            <>
+            <p className="carrinho-config-hint">
+              <FiSettings size={14} /> A proposta (preview e PDF) usará o template e as variáveis técnicas definidos nas configurações do sistema.
+            </p>
+            <div className="itens-table itens-table-carrinho">
               <table>
                 <thead>
                   <tr>
@@ -1336,6 +1353,7 @@ const PropostaForm = () => {
                 )}
               </div>
             </div>
+            </>
           )}
         </div>
 

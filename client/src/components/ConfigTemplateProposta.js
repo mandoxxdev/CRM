@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { FiSave, FiUpload, FiX, FiSettings } from 'react-icons/fi';
+import { FiSave, FiUpload, FiX, FiSettings, FiSearch } from 'react-icons/fi';
 import './ConfigTemplateProposta.css';
 
 const ConfigTemplateProposta = () => {
@@ -11,6 +11,8 @@ const ConfigTemplateProposta = () => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingHeader, setUploadingHeader] = useState(false);
   const [uploadingFooter, setUploadingFooter] = useState(false);
+  const [variaveisList, setVariaveisList] = useState([]);
+  const [variaveisPropostaSearch, setVariaveisPropostaSearch] = useState('');
   const [config, setConfig] = useState({
     nome_empresa: 'GMP INDUSTRIAIS',
     logo_url: null,
@@ -23,7 +25,8 @@ const ConfigTemplateProposta = () => {
     texto_introducao: '',
     mostrar_especificacoes: true,
     mostrar_imagens_produtos: true,
-    formato_numero_proposta: 'PROPOSTA TÉCNICA COMERCIAL N° {numero}'
+    formato_numero_proposta: 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
+    variaveis_proposta_tecnica: []
   });
   const [logoPreview, setLogoPreview] = useState(null);
   const [headerPreview, setHeaderPreview] = useState(null);
@@ -33,6 +36,13 @@ const ConfigTemplateProposta = () => {
     loadConfig();
   }, []);
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    axios.get('/api/variaveis-tecnicas', { params: { ativo: 'true' }, headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => setVariaveisList(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setVariaveisList([]));
+  }, []);
+
   const loadConfig = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -40,11 +50,13 @@ const ConfigTemplateProposta = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data) {
+        const vpt = response.data.variaveis_proposta_tecnica;
         setConfig({
           ...response.data,
           mostrar_logo: response.data.mostrar_logo !== 0,
           mostrar_especificacoes: response.data.mostrar_especificacoes !== 0,
-          mostrar_imagens_produtos: response.data.mostrar_imagens_produtos !== 0
+          mostrar_imagens_produtos: response.data.mostrar_imagens_produtos !== 0,
+          variaveis_proposta_tecnica: Array.isArray(vpt) ? vpt : []
         });
         if (response.data.logo_url) {
           setLogoPreview(`/api/uploads/logos/${response.data.logo_url}`);
@@ -162,7 +174,8 @@ const ConfigTemplateProposta = () => {
         ...config,
         mostrar_logo: config.mostrar_logo ? 1 : 0,
         mostrar_especificacoes: config.mostrar_especificacoes ? 1 : 0,
-        mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0
+        mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0,
+        variaveis_proposta_tecnica: Array.isArray(config.variaveis_proposta_tecnica) ? config.variaveis_proposta_tecnica : []
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -416,6 +429,60 @@ const ConfigTemplateProposta = () => {
             />
             <label>Mostrar imagens dos produtos</label>
           </div>
+        </div>
+
+        <div className="config-section config-section-variaveis-proposta">
+          <h2>Variáveis técnicas na proposta</h2>
+          <p className="config-hint">Selecione quais variáveis técnicas podem aparecer na proposta técnica comercial. Se nenhuma for marcada, será usada a lista padrão (comportamento anterior).</p>
+          <div className="variaveis-proposta-search-wrap">
+            <FiSearch className="variaveis-proposta-search-icon" aria-hidden />
+            <input
+              type="text"
+              value={variaveisPropostaSearch}
+              onChange={(e) => setVariaveisPropostaSearch(e.target.value)}
+              placeholder="Pesquisar variáveis por nome ou chave..."
+              className="variaveis-proposta-search-input"
+              aria-label="Pesquisar variáveis para exibir na proposta"
+            />
+          </div>
+          <div className="variaveis-proposta-list">
+            {(() => {
+              const termo = (variaveisPropostaSearch || '').trim().toLowerCase();
+              const filtradas = termo
+                ? variaveisList.filter((v) => (v.nome || '').toLowerCase().includes(termo) || (v.chave || '').toLowerCase().includes(termo))
+                : variaveisList;
+              const selecionadas = config.variaveis_proposta_tecnica || [];
+              return filtradas.length === 0 ? (
+                <div className="variaveis-proposta-empty">
+                  {variaveisList.length === 0 ? 'Carregando variáveis...' : 'Nenhuma variável encontrada para o termo pesquisado.'}
+                </div>
+              ) : (
+                filtradas.map((v) => {
+                  const chave = v.chave || '';
+                  const checked = selecionadas.includes(chave);
+                  return (
+                    <label key={v.id} className={`variaveis-proposta-item ${checked ? 'variaveis-proposta-item-selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = checked ? selecionadas.filter((c) => c !== chave) : [...selecionadas, chave];
+                          setConfig((prev) => ({ ...prev, variaveis_proposta_tecnica: next }));
+                        }}
+                      />
+                      <span className="variaveis-proposta-item-nome">{v.nome || chave}</span>
+                      <code className="variaveis-proposta-item-chave">{chave}</code>
+                    </label>
+                  );
+                })
+              );
+            })()}
+          </div>
+          {(config.variaveis_proposta_tecnica || []).length > 0 && (
+            <div className="variaveis-proposta-selecionadas">
+              {(config.variaveis_proposta_tecnica || []).length} variável(is) selecionada(s) para aparecer na proposta
+            </div>
+          )}
         </div>
 
         <div className="config-actions">

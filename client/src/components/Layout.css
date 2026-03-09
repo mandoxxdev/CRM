@@ -22,6 +22,23 @@
   z-index: -1;
 }
 
+.orion-version-badge {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 999;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.9);
+  background: linear-gradient(135deg, var(--gmp-primary, #0066cc) 0%, var(--gmp-primary-dark, #004499) 100%);
+  border-bottom-left-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  user-select: none;
+}
+
 .sidebar {
   width: 280px;
   background: linear-gradient(180deg, var(--gmp-secondary) 0%, var(--gmp-primary-dark) 100%);

@@ -219,6 +219,7 @@ const Layout = () => {
 
   return (
     <div className="layout">
+      <div className="orion-version-badge" aria-hidden="true">Orion-BETA-V0</div>
       {animatedBackgroundEnabled && <AnimatedBackground />}
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">

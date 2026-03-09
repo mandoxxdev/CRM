@@ -164,12 +164,15 @@ const ProdutoForm = () => {
   const [opcoesPorVariavel, setOpcoesPorVariavel] = useState({});
   // Opções vindas de fornecedores homologados (variáveis com fonte_opcoes = fornecedores_grupo)
   const [opcoesFornecedoresByChave, setOpcoesFornecedoresByChave] = useState({});
+  // Por variável lista_condicional: opções de fornecedores por primeira escolha (porEscolha[opt] = { tipo, grupo_compras_id })
+  const [opcoesCondicionalFornecedores, setOpcoesCondicionalFornecedores] = useState({});
   useEffect(() => {
     const id = familiaSelecionada?.id;
     if (!id) {
       setVariaveisDaFamilia([]);
       setOpcoesPorVariavel({});
       setOpcoesFornecedoresByChave({});
+      setOpcoesCondicionalFornecedores({});
       return;
     }
     Promise.all([
@@ -191,10 +194,35 @@ const ProdutoForm = () => {
           .catch(() => setOpcoesFornecedoresByChave((prev) => ({ ...prev, [chave]: [] })));
       });
       if (toFetch.length === 0) setOpcoesFornecedoresByChave({});
+      const condicionalFornecedores = {};
+      vars.filter((v) => String(v.tipo || '').toLowerCase() === 'lista_condicional' && v.opcoes && v.opcoes.porEscolha && v.opcoes.primeiraEscolha).forEach((v) => {
+        const chave = v.chave;
+        const primeiraEscolha = v.opcoes.primeiraEscolha || [];
+        const porEscolha = v.opcoes.porEscolha || {};
+        condicionalFornecedores[chave] = {};
+        primeiraEscolha.forEach((escolha) => {
+          const val = porEscolha[escolha];
+          if (val && typeof val === 'object' && !Array.isArray(val) && val.tipo === 'fornecedores_grupo') {
+            api.get(`/variaveis-tecnicas/opcoes/${encodeURIComponent(chave)}`, { params: { escolha } })
+              .then((res) => {
+                const opcoes = Array.isArray(res.data?.opcoes) ? res.data.opcoes : [];
+                setOpcoesCondicionalFornecedores((prev) => ({
+                  ...prev,
+                  [chave]: { ...(prev[chave] || {}), [escolha]: opcoes }
+                }));
+              })
+              .catch(() => setOpcoesCondicionalFornecedores((prev) => ({
+                ...prev,
+                [chave]: { ...(prev[chave] || {}), [escolha]: [] }
+              })));
+          }
+        });
+      });
     }).catch(() => {
       setVariaveisDaFamilia([]);
       setOpcoesPorVariavel({});
       setOpcoesFornecedoresByChave({});
+      setOpcoesCondicionalFornecedores({});
     });
   }, [familiaSelecionada?.id]);
 
@@ -696,6 +724,10 @@ const ProdutoForm = () => {
                   const arr = opcoesCondicional.porEscolha[valorCond];
                   if (Array.isArray(arr) && arr.length > 0) {
                     return arr.map((o, i) => ({ id: `cond-${i}`, valor: typeof o === 'string' ? o : (o && o.valor != null ? String(o.valor) : '') }));
+                  }
+                  if (arr && typeof arr === 'object' && !Array.isArray(arr) && arr.tipo === 'fornecedores_grupo') {
+                    const opts = (opcoesCondicionalFornecedores[chave] || {})[valorCond] || [];
+                    return opts.map((o) => ({ id: o.id, valor: o.valor != null ? String(o.valor) : '' }));
                   }
                   return [];
                 }

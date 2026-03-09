@@ -1443,7 +1443,8 @@ function executeMigrations(callback) {
     { nome: 'nome_template', tipo: 'TEXT' },
     { nome: 'is_padrao', tipo: 'INTEGER DEFAULT 0' },
     { nome: 'header_image_url', tipo: 'TEXT' },
-    { nome: 'footer_image_url', tipo: 'TEXT' }
+    { nome: 'footer_image_url', tipo: 'TEXT' },
+    { nome: 'variaveis_proposta_tecnica', tipo: 'TEXT' }
   ];
   
   colunasTemplate.forEach(coluna => {
@@ -3283,12 +3284,34 @@ app.get('/api/variaveis-tecnicas/categorias', authenticateToken, (req, res) => {
 });
 
 // Opções de uma variável: lista manual ou fornecedores do grupo homologado (para dropdown no cadastro de produtos)
+// Para lista_condicional, use ?escolha=ValorDaPrimeiraEscolha para obter as opções da segunda lista (manual ou grupo de fornecedores)
 app.get('/api/variaveis-tecnicas/opcoes/:chave', authenticateToken, (req, res) => {
   var chave = (req.params.chave || '').trim();
+  var escolha = (req.query.escolha != null && req.query.escolha !== '') ? String(req.query.escolha).trim() : null;
   if (!chave) return res.status(400).json({ error: 'Chave da variável é obrigatória' });
-  db.get('SELECT fonte_opcoes, grupo_compras_id, opcoes FROM variaveis_tecnicas WHERE chave = ? AND ativo = 1', [chave], function(err, row) {
+  db.get('SELECT tipo, fonte_opcoes, grupo_compras_id, opcoes FROM variaveis_tecnicas WHERE chave = ? AND ativo = 1', [chave], function(err, row) {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Variável não encontrada' });
+    if (row.tipo === 'lista_condicional' && escolha != null) {
+      var opcoesRaw = row.opcoes;
+      if (typeof opcoesRaw === 'string') { try { opcoesRaw = JSON.parse(opcoesRaw); } catch (_) { opcoesRaw = {}; } }
+      var porEscolha = (opcoesRaw && opcoesRaw.porEscolha && typeof opcoesRaw.porEscolha === 'object') ? opcoesRaw.porEscolha : {};
+      var valorEscolha = porEscolha[escolha];
+      if (valorEscolha != null && typeof valorEscolha === 'object' && !Array.isArray(valorEscolha) && valorEscolha.tipo === 'fornecedores_grupo' && valorEscolha.grupo_compras_id) {
+        var gid = parseInt(valorEscolha.grupo_compras_id, 10);
+        if (gid) {
+          db.all('SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia), \'\'), razao_social) AS valor FROM fornecedores WHERE grupo_id = ? AND status = ? ORDER BY razao_social', [gid, 'ativo'], function(e, rows) {
+            if (e) return res.status(500).json({ error: e.message });
+            return res.json({ opcoes: (rows || []).map(function(r) { return { id: r.id, valor: r.valor || String(r.id) }; }) });
+          });
+          return;
+        }
+      }
+      if (Array.isArray(valorEscolha)) {
+        return res.json({ opcoes: valorEscolha.map(function(val, i) { return { id: 'opt-' + i, valor: typeof val === 'string' ? val : (val && val.valor != null ? String(val.valor) : '') }; }) });
+      }
+      return res.json({ opcoes: [] });
+    }
     if (row.fonte_opcoes === 'fornecedores_grupo' && row.grupo_compras_id) {
       db.all('SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia), \'\'), razao_social) AS valor FROM fornecedores WHERE grupo_id = ? AND status = ? ORDER BY razao_social', [row.grupo_compras_id, 'ativo'], function(e, rows) {
         if (e) return res.status(500).json({ error: e.message });
@@ -6348,48 +6371,66 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
             console.error('Erro ao buscar configuração do template:', err);
             templateConfig = null; // Usar valores padrão
           }
-          
-          // Gerar HTML premium
-          let html;
-          try {
-            html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig);
-          } catch (genError) {
-            console.error('Erro ao gerar HTML da proposta:', genError);
-            console.error('Stack trace:', genError.stack);
-            console.error('Dados da proposta:', JSON.stringify({
-              id: proposta.id,
-              numero_proposta: proposta.numero_proposta,
-              titulo: proposta.titulo,
-              itensCount: itensArray.length
-            }, null, 2));
-            return res.status(500).json({ error: 'Erro ao gerar HTML da proposta: ' + genError.message });
-          }
-          
-          if (!html || typeof html !== 'string' || html.trim().length === 0) {
-            console.error('HTML gerado está vazio ou undefined');
-            console.error('Tipo do HTML:', typeof html);
-            return res.status(500).json({ error: 'Erro: HTML não foi gerado corretamente' });
-          }
-          
-          try {
-            res.setHeader('Content-Type', 'text/html; charset=utf-8');
-            res.send(html);
-          } catch (sendError) {
-            console.error('Erro ao enviar resposta:', sendError);
-            console.error('Stack trace:', sendError.stack);
-            // Se a resposta já foi enviada, não fazer nada
-            if (!res.headersSent) {
-              return res.status(500).json({ error: 'Erro ao enviar preview: ' + sendError.message });
+          function runGerar() {
+            let html;
+            try {
+              html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig);
+            } catch (genError) {
+              console.error('Erro ao gerar HTML da proposta:', genError);
+              console.error('Stack trace:', genError.stack);
+              console.error('Dados da proposta:', JSON.stringify({
+                id: proposta.id,
+                numero_proposta: proposta.numero_proposta,
+                titulo: proposta.titulo,
+                itensCount: itensArray.length
+              }, null, 2));
+              if (!res.headersSent) return res.status(500).json({ error: 'Erro ao gerar HTML da proposta: ' + genError.message });
+              return;
+            }
+            if (!html || typeof html !== 'string' || html.trim().length === 0) {
+              console.error('HTML gerado está vazio ou undefined');
+              if (!res.headersSent) return res.status(500).json({ error: 'Erro: HTML não foi gerado corretamente' });
+              return;
+            }
+            try {
+              res.setHeader('Content-Type', 'text/html; charset=utf-8');
+              res.send(html);
+            } catch (sendError) {
+              console.error('Erro ao enviar resposta:', sendError);
+              if (!res.headersSent) return res.status(500).json({ error: 'Erro ao enviar preview: ' + sendError.message });
             }
           }
+          let chaves = [];
+          if (templateConfig && templateConfig.variaveis_proposta_tecnica != null) {
+            if (typeof templateConfig.variaveis_proposta_tecnica === 'string') {
+              try { chaves = JSON.parse(templateConfig.variaveis_proposta_tecnica); } catch (_) {}
+            } else if (Array.isArray(templateConfig.variaveis_proposta_tecnica)) {
+              chaves = templateConfig.variaveis_proposta_tecnica;
+            }
+          }
+          if (!Array.isArray(chaves)) chaves = [];
+          if (templateConfig) {
+            templateConfig.variaveis_proposta_tecnica = chaves;
+            templateConfig.variaveis_proposta_labels = {};
+          }
+          if (chaves.length === 0) {
+            runGerar();
+            return;
+          }
+          const placeholders = chaves.map(() => '?').join(',');
+          db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chaves, (err2, rows) => {
+            if (templateConfig && rows && rows.length) {
+              templateConfig.variaveis_proposta_labels = {};
+              rows.forEach(function (r) {
+                templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
+              });
+            }
+            runGerar();
+          });
         });
       } catch (error) {
         console.error('Erro geral ao processar proposta:', error);
-        console.error('Stack trace:', error.stack);
-        console.error('ID da proposta:', id);
-        if (!res.headersSent) {
-          return res.status(500).json({ error: 'Erro ao gerar preview da proposta: ' + error.message });
-        }
+        if (!res.headersSent) return res.status(500).json({ error: 'Erro ao gerar preview da proposta: ' + error.message });
       }
     });
   });
@@ -6515,7 +6556,31 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     } catch (e) {
       console.error('Erro ao buscar template config:', e);
     }
-    
+    let chaves = [];
+    if (templateConfig && templateConfig.variaveis_proposta_tecnica != null) {
+      if (typeof templateConfig.variaveis_proposta_tecnica === 'string') {
+        try { chaves = JSON.parse(templateConfig.variaveis_proposta_tecnica); } catch (_) {}
+      } else if (Array.isArray(templateConfig.variaveis_proposta_tecnica)) {
+        chaves = templateConfig.variaveis_proposta_tecnica;
+      }
+    }
+    if (!Array.isArray(chaves)) chaves = [];
+    templateConfig = templateConfig || {};
+    templateConfig.variaveis_proposta_tecnica = chaves;
+    templateConfig.variaveis_proposta_labels = {};
+    if (chaves.length > 0) {
+      try {
+        const placeholders = chaves.map(() => '?').join(',');
+        const rows = await new Promise((resolve, reject) => {
+          db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chaves, (err, r) => { if (err) reject(err); else resolve(r || []); });
+        });
+        rows.forEach(function (r) {
+          templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
+        });
+      } catch (e) {
+        console.error('Erro ao buscar labels das variáveis para proposta:', e);
+      }
+    }
     // Gerar HTML
     const html = gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig);
     
@@ -6695,8 +6760,19 @@ app.get('/api/proposta-template', authenticateToken, (req, res) => {
         mostrar_especificacoes: 1,
         mostrar_imagens_produtos: 1,
         formato_numero_proposta: 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
-        componentes: null
+        componentes: null,
+        variaveis_proposta_tecnica: []
       });
+    }
+    if (config.variaveis_proposta_tecnica && typeof config.variaveis_proposta_tecnica === 'string') {
+      try {
+        config.variaveis_proposta_tecnica = JSON.parse(config.variaveis_proposta_tecnica);
+      } catch (_) {
+        config.variaveis_proposta_tecnica = [];
+      }
+    }
+    if (!Array.isArray(config.variaveis_proposta_tecnica)) {
+      config.variaveis_proposta_tecnica = [];
     }
     res.json(config);
   });
@@ -6718,7 +6794,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
     mostrar_especificacoes,
     mostrar_imagens_produtos,
     formato_numero_proposta,
-    componentes
+    componentes,
+    variaveis_proposta_tecnica
   } = req.body;
 
   // Verificar se já existe configuração para esta família
@@ -6732,13 +6809,14 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
 
     if (existing) {
       // Atualizar
+      const variaveisPropostaStr = Array.isArray(variaveis_proposta_tecnica) ? JSON.stringify(variaveis_proposta_tecnica) : (variaveis_proposta_tecnica || null);
       db.run(
         `UPDATE proposta_template_config SET 
           familia = ?, nome_empresa = ?, logo_url = ?, cor_primaria = ?, cor_secundaria = ?,
           cor_texto = ?, mostrar_logo = ?, cabecalho_customizado = ?,
           rodape_customizado = ?, texto_introducao = ?, mostrar_especificacoes = ?,
           mostrar_imagens_produtos = ?, formato_numero_proposta = ?, componentes = ?,
-          updated_at = CURRENT_TIMESTAMP
+          variaveis_proposta_tecnica = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
           familia || 'Geral',
@@ -6755,6 +6833,7 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           mostrar_imagens_produtos !== undefined ? mostrar_imagens_produtos : 1,
           formato_numero_proposta || 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
           componentes || null,
+          variaveisPropostaStr,
           existing.id
         ],
         function(err) {
@@ -6766,12 +6845,13 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
       );
     } else {
       // Criar nova
+      const variaveisPropostaStr = Array.isArray(variaveis_proposta_tecnica) ? JSON.stringify(variaveis_proposta_tecnica) : (variaveis_proposta_tecnica || null);
       db.run(
         `INSERT INTO proposta_template_config (
           familia, nome_empresa, logo_url, cor_primaria, cor_secundaria, cor_texto,
           mostrar_logo, cabecalho_customizado, rodape_customizado, texto_introducao,
-          mostrar_especificacoes, mostrar_imagens_produtos, formato_numero_proposta, componentes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          mostrar_especificacoes, mostrar_imagens_produtos, formato_numero_proposta, componentes, variaveis_proposta_tecnica
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           familia || 'Geral',
           nome_empresa || 'GMP INDUSTRIAIS',
@@ -6786,7 +6866,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           mostrar_especificacoes !== undefined ? mostrar_especificacoes : 1,
           mostrar_imagens_produtos !== undefined ? mostrar_imagens_produtos : 1,
           formato_numero_proposta || 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
-          componentes || null
+          componentes || null,
+          variaveisPropostaStr
         ],
         function(err) {
           if (err) {
@@ -8329,7 +8410,31 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           const espessura = especs.espessura || especs.Espessura || '';
           const funcao = especs.funcao || especs.Função || '';
           const descricao_tecnica = especs.descricao || produto.descricao || '';
-          
+          const variaveisList = config.variaveis_proposta_tecnica;
+          const variaveisLabels = config.variaveis_proposta_labels || {};
+          let tableRowsHtml;
+          if (config.mostrar_especificacoes && Array.isArray(variaveisList) && variaveisList.length > 0) {
+            const specRows = variaveisList.filter(function (k) { return k && String(k).indexOf('_cond') === -1; }).map(function (k) {
+              const val = especs[k];
+              const displayVal = (val !== undefined && val !== null && val !== '') ? String(val).trim() : '';
+              const label = (variaveisLabels[k] && variaveisLabels[k].nome) ? variaveisLabels[k].nome : k;
+              const sufixo = (variaveisLabels[k] && variaveisLabels[k].sufixo) ? variaveisLabels[k].sufixo : '';
+              const valueDisplay = displayVal + (sufixo && displayVal !== '' ? ' ' + sufixo : '');
+              return '<tr><td class="dados-label" style="width: 152.83125px; font-weight: 600; font-size: 0.8490625em;">' + esc(label) + ':</td><td class="dados-value" contenteditable="true" style="font-size: 0.8490625em;">' + esc(valueDisplay) + '</td></tr>';
+            }).join('');
+            tableRowsHtml = '<tr><td class="dados-label" style="width: 152.83125px; font-weight: 600; font-size: 0.8490625em;">Descrição:</td><td class="dados-value" contenteditable="true" style="font-size: 0.8490625em;">' + esc(nome) + '</td></tr>' + specRows + '<tr><td class="dados-label">Quantidade:</td><td class="dados-value"><strong>' + quantidade + ' ' + (quantidade === 1 ? 'unidade' : 'unidades') + '</strong></td></tr>';
+          } else {
+            tableRowsHtml = '<tr><td class="dados-label" style="width: 152.83125px; font-weight: 600; font-size: 0.8490625em;">Acessório:</td><td class="dados-value" contenteditable="true" style="font-size: 0.8490625em;">' + esc(nome) + '</td></tr>' +
+              (funcao ? '<tr><td class="dados-label">Função:</td><td class="dados-value" contenteditable="true">' + esc(funcao) + '</td></tr>' : '<tr><td class="dados-label">Função:</td><td class="dados-value" contenteditable="true"></td></tr>') +
+              (dimensoes ? '<tr><td class="dados-label">Dimensões:</td><td class="dados-value" contenteditable="true">' + esc(dimensoes) + '</td></tr>' : '<tr><td class="dados-label">Dimensões:</td><td class="dados-value" contenteditable="true"></td></tr>') +
+              (material ? '<tr><td class="dados-label">Material de fabricação:</td><td class="dados-value" contenteditable="true">' + esc(material) + '</td></tr>' : '<tr><td class="dados-label">Material de fabricação:</td><td class="dados-value" contenteditable="true"></td></tr>') +
+              (tratamento_termico ? '<tr><td class="dados-label">Tratamento térmico:</td><td class="dados-value" contenteditable="true">' + esc(tratamento_termico) + '</td></tr>' : '<tr><td class="dados-label">Tratamento térmico:</td><td class="dados-value" contenteditable="true">Não Aplicado</td></tr>') +
+              (velocidade_trabalho ? '<tr><td class="dados-label">Velocidade de trabalho:</td><td class="dados-value" contenteditable="true">' + esc(velocidade_trabalho) + '</td></tr>' : '<tr><td class="dados-label">Velocidade de trabalho:</td><td class="dados-value" contenteditable="true">Não informado</td></tr>') +
+              (furacao ? '<tr><td class="dados-label">Furação:</td><td class="dados-value" contenteditable="true">' + esc(furacao) + '</td></tr>' : '<tr><td class="dados-label">Furação:</td><td class="dados-value" contenteditable="true"></td></tr>') +
+              (acabamento ? '<tr><td class="dados-label">Acabamento:</td><td class="dados-value" contenteditable="true">' + esc(acabamento) + '</td></tr>' : '<tr><td class="dados-label">Acabamento:</td><td class="dados-value" contenteditable="true"></td></tr>') +
+              (espessura ? '<tr><td class="dados-label">Espessura:</td><td class="dados-value" contenteditable="true">' + esc(espessura) + '</td></tr>' : '<tr><td class="dados-label">Espessura:</td><td class="dados-value" contenteditable="true"></td></tr>') +
+              '<tr><td class="dados-label">Quantidade:</td><td class="dados-value"><strong>' + quantidade + ' ' + (quantidade === 1 ? 'unidade' : 'unidades') + '</strong></td></tr>';
+          }
           return `
               <div class="produto-item" style="margin-bottom: 25px;">
             <div class="produto-subsection" style="margin-bottom: 15px;">
@@ -8338,16 +8443,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
               <div style="display: flex; gap: 20px; margin-bottom: 15px; align-items: flex-start; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 300px;">
                   <table class="dados-table" style="width: 100%; margin-bottom: 15px; font-size: 0.8490625em;">
-                    <tr><td class="dados-label" style="width: 152.83125px; font-weight: 600; font-size: 0.8490625em;">Acessório:</td><td class="dados-value" contenteditable="true" style="font-size: 0.8490625em;">${esc(nome)}</td></tr>
-                    ${funcao ? `<tr><td class="dados-label">Função:</td><td class="dados-value" contenteditable="true">${esc(funcao)}</td></tr>` : `<tr><td class="dados-label">Função:</td><td class="dados-value" contenteditable="true"></td></tr>`}
-                    ${dimensoes ? `<tr><td class="dados-label">Dimensões:</td><td class="dados-value" contenteditable="true">${esc(dimensoes)}</td></tr>` : `<tr><td class="dados-label">Dimensões:</td><td class="dados-value" contenteditable="true"></td></tr>`}
-                    ${material ? `<tr><td class="dados-label">Material de fabricação:</td><td class="dados-value" contenteditable="true">${esc(material)}</td></tr>` : `<tr><td class="dados-label">Material de fabricação:</td><td class="dados-value" contenteditable="true"></td></tr>`}
-                    ${tratamento_termico ? `<tr><td class="dados-label">Tratamento térmico:</td><td class="dados-value" contenteditable="true">${esc(tratamento_termico)}</td></tr>` : `<tr><td class="dados-label">Tratamento térmico:</td><td class="dados-value" contenteditable="true">Não Aplicado</td></tr>`}
-                    ${velocidade_trabalho ? `<tr><td class="dados-label">Velocidade de trabalho:</td><td class="dados-value" contenteditable="true">${esc(velocidade_trabalho)}</td></tr>` : `<tr><td class="dados-label">Velocidade de trabalho:</td><td class="dados-value" contenteditable="true">Não informado</td></tr>`}
-                    ${furacao ? `<tr><td class="dados-label">Furação:</td><td class="dados-value" contenteditable="true">${esc(furacao)}</td></tr>` : `<tr><td class="dados-label">Furação:</td><td class="dados-value" contenteditable="true"></td></tr>`}
-                    ${acabamento ? `<tr><td class="dados-label">Acabamento:</td><td class="dados-value" contenteditable="true">${esc(acabamento)}</td></tr>` : `<tr><td class="dados-label">Acabamento:</td><td class="dados-value" contenteditable="true"></td></tr>`}
-                    ${espessura ? `<tr><td class="dados-label">Espessura:</td><td class="dados-value" contenteditable="true">${esc(espessura)}</td></tr>` : `<tr><td class="dados-label">Espessura:</td><td class="dados-value" contenteditable="true"></td></tr>`}
-                    <tr><td class="dados-label">Quantidade:</td><td class="dados-value"><strong>${quantidade} ${quantidade === 1 ? 'unidade' : 'unidades'}</strong></td></tr>
+                    ${tableRowsHtml}
                   </table>
                 </div>
                 

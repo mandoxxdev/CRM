@@ -25,9 +25,10 @@ const VariaveisTecnicas = () => {
   const [filterCategoria, setFilterCategoria] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, variaveisSoma: [] });
+  const [form, setForm] = useState({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, fontePorEscolha: {}, grupoPorEscolha: {}, variaveisSoma: [] });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [somaSearch, setSomaSearch] = useState('');
 
   const loadList = async () => {
     try {
@@ -64,8 +65,9 @@ const VariaveisTecnicas = () => {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, variaveisSoma: [] });
+    setForm({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, fontePorEscolha: {}, grupoPorEscolha: {}, variaveisSoma: [] });
     setError('');
+    setSomaSearch('');
     setModalOpen(true);
   };
 
@@ -75,11 +77,24 @@ const VariaveisTecnicas = () => {
     let primeiraEscolha = '';
     let opcoesPorEscolha = {};
     let variaveisSoma = [];
+    let fontePorEscolha = {};
+    let grupoPorEscolha = {};
     if (v.tipo === 'lista_condicional' && v.opcoes && typeof v.opcoes === 'object' && v.opcoes.primeiraEscolha && v.opcoes.porEscolha) {
       primeiraEscolha = Array.isArray(v.opcoes.primeiraEscolha) ? v.opcoes.primeiraEscolha.join('\n') : '';
-      opcoesPorEscolha = (v.opcoes.porEscolha && typeof v.opcoes.porEscolha === 'object') ? Object.fromEntries(
-        Object.entries(v.opcoes.porEscolha).map(([k, arr]) => [k, Array.isArray(arr) ? arr.join('\n') : (arr || '')])
-      ) : {};
+      const porEscolha = v.opcoes.porEscolha || {};
+      Object.keys(porEscolha).forEach((k) => {
+        const val = porEscolha[k];
+        if (Array.isArray(val)) {
+          fontePorEscolha[k] = 'manual';
+          opcoesPorEscolha[k] = val.join('\n');
+        } else if (val && typeof val === 'object' && val.tipo === 'fornecedores_grupo' && val.grupo_compras_id != null) {
+          fontePorEscolha[k] = 'fornecedores_grupo';
+          grupoPorEscolha[k] = String(val.grupo_compras_id);
+        } else {
+          fontePorEscolha[k] = 'manual';
+          opcoesPorEscolha[k] = '';
+        }
+      });
     } else if (v.tipo === 'soma' && v.opcoes && typeof v.opcoes === 'object' && Array.isArray(v.opcoes.variaveis)) {
       variaveisSoma = v.opcoes.variaveis;
     } else {
@@ -97,9 +112,12 @@ const VariaveisTecnicas = () => {
       grupo_compras_id: v.grupo_compras_id != null ? String(v.grupo_compras_id) : '',
       primeiraEscolha,
       opcoesPorEscolha,
+      fontePorEscolha,
+      grupoPorEscolha,
       variaveisSoma
     });
     setError('');
+    setSomaSearch('');
     setModalOpen(true);
   };
 
@@ -121,8 +139,15 @@ const VariaveisTecnicas = () => {
       }
       const porEscolha = {};
       primeiraEscolhaArr.forEach((opt) => {
-        const raw = (form.opcoesPorEscolha[opt] || '').trim();
-        porEscolha[opt] = raw ? raw.split(/\n/).map(s => s.trim()).filter(Boolean) : [];
+        const fonte = form.fontePorEscolha && form.fontePorEscolha[opt];
+        if (fonte === 'fornecedores_grupo' && form.grupoPorEscolha && form.grupoPorEscolha[opt]) {
+          const gid = parseInt(form.grupoPorEscolha[opt], 10);
+          if (gid) porEscolha[opt] = { tipo: 'fornecedores_grupo', grupo_compras_id: gid };
+          else porEscolha[opt] = [];
+        } else {
+          const raw = (form.opcoesPorEscolha[opt] || '').trim();
+          porEscolha[opt] = raw ? raw.split(/\n/).map(s => s.trim()).filter(Boolean) : [];
+        }
       });
       opcoes = { primeiraEscolha: primeiraEscolhaArr, porEscolha };
     } else if (tipo === 'soma') {
@@ -334,30 +359,63 @@ const VariaveisTecnicas = () => {
               {form.tipo !== 'lista' && form.tipo !== 'lista_condicional' && form.tipo !== 'soma' && (
                 <p className="vt-form-hint vt-form-hint-block">Para vincular esta variável ao módulo <strong>Compras (fornecedores homologados)</strong>, altere o tipo para <strong>Lista (opções fixas)</strong>. Em seguida será exibida a opção &quot;Fonte das opções&quot; com o grupo de fornecedores.</p>
               )}
-              {form.tipo === 'soma' && (
-                <div className="vt-form-group">
-                  <label>Variáveis a somar (ex.: potência de cada motor)</label>
-                  <div className="vt-soma-variaveis-list">
-                    {list
-                      .filter(x => x.tipo !== 'soma' && x.chave && (editing ? x.chave !== editing.chave : true))
-                      .map(x => (
-                        <label key={x.id} className="vt-soma-variavel-item">
-                          <input
-                            type="checkbox"
-                            checked={(form.variaveisSoma || []).includes(x.chave)}
-                            onChange={(e) => {
-                              const cur = form.variaveisSoma || [];
-                              const next = e.target.checked ? [...cur, x.chave] : cur.filter(c => c !== x.chave);
-                              setForm(f => ({ ...f, variaveisSoma: next }));
-                            }}
-                          />
-                          <span>{x.nome || x.chave} <code>{x.chave}</code></span>
-                        </label>
-                      ))}
+              {form.tipo === 'soma' && (() => {
+                const candidatas = list.filter(x => x.tipo !== 'soma' && x.chave && (editing ? x.chave !== editing.chave : true));
+                const termo = (somaSearch || '').trim().toLowerCase();
+                const filtradas = termo
+                  ? candidatas.filter(x => (x.nome || '').toLowerCase().includes(termo) || (x.chave || '').toLowerCase().includes(termo))
+                  : candidatas;
+                return (
+                  <div className="vt-form-group vt-soma-block">
+                    <label>Variáveis a somar (ex.: potência de cada motor)</label>
+                    <div className="vt-soma-search-wrap">
+                      <FiSearch className="vt-soma-search-icon" aria-hidden />
+                      <input
+                        type="text"
+                        value={somaSearch}
+                        onChange={(e) => setSomaSearch(e.target.value)}
+                        placeholder="Pesquisar variáveis por nome ou chave..."
+                        className="vt-soma-search-input"
+                        aria-label="Pesquisar variáveis para somar"
+                      />
+                    </div>
+                    <div className="vt-soma-variaveis-list">
+                      {filtradas.length === 0 ? (
+                        <div className="vt-soma-empty">
+                          {candidatas.length === 0
+                            ? 'Nenhuma outra variável disponível para somar.'
+                            : 'Nenhuma variável encontrada para o termo pesquisado.'}
+                        </div>
+                      ) : (
+                        filtradas.map(x => {
+                          const checked = (form.variaveisSoma || []).includes(x.chave);
+                          return (
+                            <label key={x.id} className={`vt-soma-variavel-item ${checked ? 'vt-soma-variavel-item-selected' : ''}`}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const cur = form.variaveisSoma || [];
+                                  const next = e.target.checked ? [...cur, x.chave] : cur.filter(c => c !== x.chave);
+                                  setForm(f => ({ ...f, variaveisSoma: next }));
+                                }}
+                              />
+                              <span className="vt-soma-variavel-nome">{x.nome || x.chave}</span>
+                              <code className="vt-soma-variavel-chave">{x.chave}</code>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                    {(form.variaveisSoma || []).length > 0 && (
+                      <div className="vt-soma-selecionadas">
+                        {(form.variaveisSoma || []).length} variável(is) selecionada(s) para a soma
+                      </div>
+                    )}
+                    <small className="vt-form-hint">O valor desta variável será calculado automaticamente como a soma dos valores numéricos das variáveis marcadas (ex.: Potência total = motor 1 + motor 2 + …).</small>
                   </div>
-                  <small className="vt-form-hint">O valor desta variável será calculado automaticamente como a soma dos valores numéricos das variáveis marcadas (ex.: Potência total = motor 1 + motor 2 + …).</small>
-                </div>
-              )}
+                );
+              })()}
               {form.tipo === 'lista_condicional' && (
                 <>
                   <div className="vt-form-group">
@@ -368,17 +426,54 @@ const VariaveisTecnicas = () => {
                       placeholder="Motor&#10;Motoredutor"
                       rows={3}
                     />
-                    <small className="vt-form-hint">Ex.: Motor e Motoredutor. O usuário escolhe um; em seguida aparece a lista correspondente.</small>
+                    <small className="vt-form-hint">Ex.: Motor e Motoredutor. O usuário escolhe um; em seguida aparece a lista correspondente (manual ou fornecedores homologados).</small>
                   </div>
                   {(form.primeiraEscolha || '').trim().split(/\n/).map(s => s.trim()).filter(Boolean).map((opt) => (
-                    <div key={opt} className="vt-form-group">
-                      <label>Opções quando selecionar &quot;{opt}&quot; (uma por linha)</label>
-                      <textarea
-                        value={form.opcoesPorEscolha[opt] || ''}
-                        onChange={(e) => setForm(f => ({ ...f, opcoesPorEscolha: { ...f.opcoesPorEscolha, [opt]: e.target.value } }))}
-                        placeholder="10 kW&#10;20 kW&#10;30 kW"
-                        rows={3}
-                      />
+                    <div key={opt} className="vt-form-group vt-condicional-opcao-block">
+                      <label>Quando selecionar &quot;{opt}&quot;</label>
+                      <div className="vt-condicional-fonte-row">
+                        <label className="vt-condicional-fonte-label">Fonte das opções:</label>
+                        <select
+                          value={(form.fontePorEscolha && form.fontePorEscolha[opt]) || 'manual'}
+                          onChange={(e) => setForm(f => ({
+                            ...f,
+                            fontePorEscolha: { ...(f.fontePorEscolha || {}), [opt]: e.target.value },
+                            grupoPorEscolha: e.target.value === 'manual' ? { ...(f.grupoPorEscolha || {}), [opt]: '' } : (f.grupoPorEscolha || {})
+                          }))}
+                          className="vt-form-select vt-condicional-fonte-select"
+                        >
+                          <option value="manual">Lista manual (opções abaixo)</option>
+                          <option value="fornecedores_grupo">Fornecedores homologados (grupo de compras)</option>
+                        </select>
+                      </div>
+                      {(form.fontePorEscolha && form.fontePorEscolha[opt]) === 'fornecedores_grupo' ? (
+                        <div className="vt-form-group">
+                          <label>Grupo de fornecedores homologados</label>
+                          <select
+                            value={(form.grupoPorEscolha && form.grupoPorEscolha[opt]) || ''}
+                            onChange={(e) => setForm(f => ({ ...f, grupoPorEscolha: { ...(f.grupoPorEscolha || {}), [opt]: e.target.value } }))}
+                            className="vt-form-select"
+                          >
+                            <option value="">Selecione o grupo...</option>
+                            {gruposCompras.map((g) => (
+                              <option key={g.id} value={g.id}>{g.nome || `Grupo ${g.id}`}</option>
+                            ))}
+                          </select>
+                          {gruposCompras.length === 0 && (
+                            <small className="vt-form-hint">Nenhum grupo cadastrado. Cadastre em Compras → Fornecedores homologados.</small>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="vt-form-group">
+                          <label>Opções (uma por linha)</label>
+                          <textarea
+                            value={form.opcoesPorEscolha[opt] || ''}
+                            onChange={(e) => setForm(f => ({ ...f, opcoesPorEscolha: { ...f.opcoesPorEscolha, [opt]: e.target.value } }))}
+                            placeholder="10 kW&#10;20 kW&#10;30 kW"
+                            rows={3}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </>
