@@ -11,6 +11,29 @@ const multer = require('multer');
 const puppeteer = require('puppeteer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 
+// Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
+function getPuppeteerLaunchOptions() {
+  const opts = { headless: true, timeout: 30000 };
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || process.env.CHROMIUM_PATH;
+  if (envPath && fs.existsSync(envPath)) {
+    opts.executablePath = envPath;
+    console.log('Puppeteer: usando executável definido em env:', envPath);
+    return opts;
+  }
+  // Em Linux (servidor/Docker) o Chrome baixado pelo Puppeteer costuma falhar (ENOENT); tentar Chromium do sistema
+  if (process.platform === 'linux') {
+    const candidates = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'];
+    for (const exe of candidates) {
+      if (fs.existsSync(exe)) {
+        opts.executablePath = exe;
+        console.log('Puppeteer: usando Chromium/Chrome do sistema:', exe);
+        return opts;
+      }
+    }
+  }
+  return opts;
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'gmp-industriais-secret-key-2024';
@@ -6614,15 +6637,14 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     }
     
     browser = await puppeteer.launch({
-      headless: true,
+      ...getPuppeteerLaunchOptions(),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu'
-      ],
-      timeout: 30000
+      ]
     });
     const page = await browser.newPage();
     await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
@@ -17798,15 +17820,14 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, asy
     // Iniciar Puppeteer
     try {
       browser = await puppeteer.launch({
-        headless: true,
+        ...getPuppeteerLaunchOptions(),
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-accelerated-2d-canvas',
           '--disable-gpu'
-        ],
-        timeout: 30000
+        ]
       });
     } catch (error) {
       console.error('Erro ao iniciar Puppeteer:', error);
