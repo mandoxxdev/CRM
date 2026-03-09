@@ -1906,6 +1906,16 @@ function toUpper(val) {
   return String(val).toUpperCase();
 }
 
+// Normaliza nome de família para comparação (trim, maiúsculas, remove acentos) — evita produto não aparecer na família por diferença de encoding
+function normalizarFamiliaComparacao(str) {
+  if (str == null || typeof str !== 'string') return '';
+  var s = str.trim().toUpperCase();
+  try {
+    s = s.normalize('NFD').replace(/\u0300-\u036f/g, '');
+  } catch (e) {}
+  return s.replace(/\s+/g, ' ');
+}
+
 // ========== ROTAS DE AUTENTICAÇÃO ==========
 app.post('/api/auth/login', (req, res) => {
   const { email, senha } = req.body;
@@ -10787,6 +10797,7 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
   var ativo = req.query.ativo;
   var search = req.query.search;
   var familia = req.query.familia;
+  try { if (typeof familia === 'string') familia = decodeURIComponent(familia); } catch (e) {}
   var query = 'SELECT * FROM produtos WHERE 1=1';
   var params = [];
 
@@ -10795,10 +10806,7 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
     params.push(ativo === 'true' || ativo === '1' ? 1 : 0);
   }
 
-  if (familia && String(familia).trim()) {
-    query += ' AND UPPER(TRIM(COALESCE(familia, \'\'))) = UPPER(?)';
-    params.push(String(familia).trim());
-  }
+  var familiaTrim = (familia != null && String(familia).trim() !== '') ? String(familia).trim() : '';
 
   if (search) {
     query += ' AND (nome LIKE ? OR codigo LIKE ? OR descricao LIKE ? OR modelo LIKE ?)';
@@ -10814,6 +10822,12 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
         return res.status(500).json({ error: err.message });
       }
       var list = rows || [];
+      if (familiaTrim) {
+        var familiaNorm = normalizarFamiliaComparacao(familiaTrim);
+        list = list.filter(function(r) {
+          return normalizarFamiliaComparacao(r.familia || '') === familiaNorm;
+        });
+      }
       for (var i = 0; i < list.length; i++) {
         var r = list[i];
         if (!Object.prototype.hasOwnProperty.call(r, 'classificacao_area') || r.classificacao_area == null || r.classificacao_area === '') {
@@ -11141,11 +11155,12 @@ app.post('/api/produtos', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Código e nome são obrigatórios' });
   }
   var classificacao_area = (body.classificacao_area != null && String(body.classificacao_area).trim() !== '') ? toUpper(String(body.classificacao_area).trim()) : null;
+  var familiaVal = (body.familia != null && String(body.familia).trim() !== '') ? toUpper(String(body.familia).trim()) : '';
   var insertValues = [
     codigo,
     toUpper(nome),
     toUpper(body.descricao) || '',
-    toUpper(body.familia) || '',
+    familiaVal,
     body.modelo ? toUpper(body.modelo) : null,
     parseFloat(body.preco_base) || 0,
     parseFloat(body.icms) || 0,
@@ -11198,7 +11213,7 @@ app.put('/api/produtos/:id', authenticateToken, (req, res) => {
     var codigo = body.codigo !== undefined ? body.codigo : row.codigo;
     var nome = body.nome !== undefined ? body.nome : row.nome;
     var descricao = body.descricao !== undefined ? body.descricao : row.descricao;
-    var familia = body.familia !== undefined ? body.familia : row.familia;
+    var familia = body.familia !== undefined ? String(body.familia).trim() : (row.familia || '');
     var modelo = body.modelo !== undefined ? body.modelo : row.modelo;
     var especificacoes_tecnicas = body.especificacoes_tecnicas !== undefined ? body.especificacoes_tecnicas : row.especificacoes_tecnicas;
     var imagem = body.imagem !== undefined ? body.imagem : row.imagem;
@@ -11218,7 +11233,7 @@ app.put('/api/produtos/:id', authenticateToken, (req, res) => {
           codigo,
           toUpper(nome),
           toUpper(descricao) || '',
-          toUpper(familia) || '',
+          (familia && String(familia).trim() !== '') ? toUpper(String(familia).trim()) : '',
           modelo ? toUpper(modelo) : null,
           preco_base || 0,
           icms || 0,

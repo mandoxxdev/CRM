@@ -550,12 +550,13 @@ const ProdutoForm = () => {
 
     try {
       // Converter especificacoes_tecnicas para JSON string
-      // Mapear familia_produto para familia (nome usado no backend)
+      // Mapear familia_produto para familia (nome usado no backend); trim para bater com filtro da lista
       const { familia_produto, ...restFormData } = formData;
+      const familiaTrim = (familia_produto || '').trim();
       const classificacao = (especificacoesTecnicas.classificacao_area || formData.classificacao_area || '').trim();
       const dataToSend = {
         ...restFormData,
-        familia: familia_produto,
+        familia: familiaTrim,
         especificacoes_tecnicas: JSON.stringify(especificacoesTecnicas),
         imagem: imagemProduto || null,
         classificacao_area: classificacao
