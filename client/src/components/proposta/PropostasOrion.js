@@ -109,19 +109,35 @@ export default function PropostasOrion() {
     }
   };
 
-  const openPdf = async (id) => {
+  const [downloadingPdfId, setDownloadingPdfId] = useState(null);
+  const openPdf = async (id, numero) => {
+    if (downloadingPdfId) return;
+    setDownloadingPdfId(id);
     try {
-      const { data } = await api.get(`/propostas/${id}/premium`, { responseType: 'text' });
-      const blob = new Blob([data], { type: 'text/html; charset=utf-8' });
+      const response = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
-      const w = window.open(url, '_blank', 'noopener,noreferrer');
-      if (!w) {
-        toast.warning('Permita pop-ups para abrir a proposta e gerar o PDF.');
-        return;
-      }
-      toast.success('Abra a proposta na nova aba e use Imprimir → Salvar como PDF (ou o botão "Gerar PDF" na página).');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `proposta-${(numero || id).toString().replace(/[/\\]/g, '-')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF gerado (igual ao preview) e baixado.');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao abrir proposta para PDF.');
+      const msg = err.response?.data?.error || err.message || 'Erro ao gerar PDF.';
+      try {
+        if (err.response?.data instanceof Blob) {
+          const text = await err.response.data.text();
+          const j = JSON.parse(text);
+          toast.error(j.error || msg);
+        } else toast.error(msg);
+      } catch (_) {
+        toast.error(msg);
+      }
+    } finally {
+      setDownloadingPdfId(null);
     }
   };
 
@@ -154,7 +170,7 @@ export default function PropostasOrion() {
       </header>
 
       <p className="propostas-orion-hint">
-        <strong>Ver proposta</strong> e <strong>PDF</strong> abrem a proposta em nova aba. Use <strong>Imprimir → Salvar como PDF</strong> (ou o botão laranja na página) para gerar o PDF pelo navegador. <strong>Ver e editar</strong> abre o preview editável.
+        <strong>Ver proposta</strong> abre a proposta em nova aba. <strong>PDF</strong> gera e baixa o PDF no servidor (Puppeteer), idêntico ao preview. <strong>Ver e editar</strong> abre o preview editável.
       </p>
       <div className="propostas-orion-filters">
         <div className="propostas-orion-search">
@@ -249,10 +265,11 @@ export default function PropostasOrion() {
                         <button
                           type="button"
                           className="propostas-orion-btn-icon propostas-orion-btn-pdf"
-                          onClick={() => openPdf(p.id)}
-                          title="Abrir proposta em nova aba para imprimir ou Salvar como PDF pelo navegador"
+                          onClick={() => openPdf(p.id, p.numero_proposta)}
+                          disabled={downloadingPdfId === p.id}
+                          title="Gerar e baixar PDF (igual ao preview, via Puppeteer no servidor)"
                         >
-                          <FiDownload /> PDF
+                          {downloadingPdfId === p.id ? '...' : <><FiDownload /> PDF</>}
                         </button>
                         <Link
                           to={`/comercial/propostas/editar/${p.id}`}
