@@ -1,18 +1,28 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../services/api';
 import { useTheme } from '../context/ThemeContext';
-import { FiSettings, FiSave, FiRefreshCw, FiBriefcase, FiMail, FiDatabase, FiGlobe, FiDollarSign, FiLayers, FiGrid, FiPackage } from 'react-icons/fi';
+import { FiSettings, FiSave, FiRefreshCw, FiBriefcase, FiMail, FiDatabase, FiGlobe, FiDollarSign, FiLayers, FiGrid, FiPackage, FiFileText } from 'react-icons/fi';
 import VariaveisTecnicas from './VariaveisTecnicas';
 import OpcoesPorFamilia from './OpcoesPorFamilia';
+import ConfigTemplateProposta from './ConfigTemplateProposta';
 import './Configuracoes.css';
 
 const Configuracoes = () => {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [configs, setConfigs] = useState({});
   const [activeTab, setActiveTab] = useState('empresa');
   const [mensagem, setMensagem] = useState(null);
   const { theme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    const tab = location.state?.tab;
+    if (tab && ['empresa', 'sistema', 'email', 'backup', 'variaveis-tecnicas', 'template-proposta', 'opcoes-familia'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [location.state?.tab]);
 
   useEffect(() => {
     loadConfiguracoes();
@@ -86,6 +96,7 @@ const Configuracoes = () => {
     { id: 'email', label: 'Email', icon: FiMail },
     { id: 'backup', label: 'Backup', icon: FiDatabase },
     { id: 'variaveis-tecnicas', label: 'Variáveis técnicas', icon: FiGrid },
+    { id: 'template-proposta', label: 'Template de proposta', icon: FiFileText },
     { id: 'opcoes-familia', label: 'Opções por família', icon: FiPackage },
   ];
 
@@ -319,6 +330,10 @@ const Configuracoes = () => {
 
         {activeTab === 'variaveis-tecnicas' && (
           <VariaveisTecnicas />
+        )}
+
+        {activeTab === 'template-proposta' && (
+          <ConfigTemplateProposta embedded />
         )}
 
         {activeTab === 'opcoes-familia' && (

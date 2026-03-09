@@ -1,0 +1,201 @@
+.propostas-orion {
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.propostas-orion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.propostas-orion-header h1 {
+  font-size: 1.5rem;
+  color: var(--gmp-text-primary, #1e293b);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.25rem 0;
+}
+
+.propostas-orion-header p {
+  margin: 0;
+  color: var(--gmp-text-secondary, #64748b);
+  font-size: 0.9rem;
+}
+
+.propostas-orion-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.btn-orion {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s, color 0.2s;
+}
+
+.btn-orion-secondary {
+  background: var(--gmp-bg-secondary, #f1f5f9);
+  color: var(--gmp-text-primary, #1e293b);
+  border: 1px solid var(--gmp-border-color, #e2e8f0);
+}
+
+.btn-orion-secondary:hover {
+  background: var(--gmp-bg-hover, #e2e8f0);
+}
+
+.btn-orion-primary {
+  background: var(--gmp-primary, #0066cc);
+  color: #fff;
+}
+
+.btn-orion-primary:hover {
+  background: var(--gmp-primary-dark, #004499);
+  color: #fff;
+}
+
+.propostas-orion-filters {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.propostas-orion-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 200px;
+  padding: 0.5rem 0.75rem;
+  background: var(--gmp-bg-secondary, #fff);
+  border: 1px solid var(--gmp-border-color, #e2e8f0);
+  border-radius: 8px;
+}
+
+.propostas-orion-search svg {
+  color: var(--gmp-text-secondary, #64748b);
+  flex-shrink: 0;
+}
+
+.propostas-orion-search input {
+  border: none;
+  background: none;
+  outline: none;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+.propostas-orion-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--gmp-border-color, #e2e8f0);
+  border-radius: 8px;
+  background: var(--gmp-bg-secondary, #fff);
+  font-size: 0.9rem;
+  min-width: 180px;
+}
+
+.propostas-orion-table-wrap {
+  background: var(--gmp-bg-secondary, #fff);
+  border: 1px solid var(--gmp-border-color, #e2e8f0);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.propostas-orion-loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--gmp-text-secondary, #64748b);
+}
+
+.propostas-orion-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.propostas-orion-table th,
+.propostas-orion-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--gmp-border-color, #e2e8f0);
+}
+
+.propostas-orion-table th {
+  background: var(--gmp-bg-tertiary, #f8fafc);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--gmp-text-secondary, #64748b);
+}
+
+.propostas-orion-table tbody tr:hover {
+  background: var(--gmp-bg-hover, #f8fafc);
+}
+
+.propostas-orion-fantasia {
+  color: var(--gmp-text-secondary, #64748b);
+  font-size: 0.85em;
+}
+
+.propostas-orion-status {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.propostas-orion-cell-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.propostas-orion-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gmp-text-secondary, #64748b);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  text-decoration: none;
+}
+
+.propostas-orion-btn-icon:hover {
+  background: var(--gmp-bg-hover, #e2e8f0);
+  color: var(--gmp-primary, #0066cc);
+}
+
+.propostas-orion-btn-danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.propostas-orion-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--gmp-text-secondary, #64748b);
+}

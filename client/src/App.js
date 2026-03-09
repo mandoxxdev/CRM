@@ -8,8 +8,8 @@ import Clientes from './components/Clientes';
 import ClienteForm from './components/ClienteForm';
 import Projetos from './components/Projetos';
 import ProjetoForm from './components/ProjetoForm';
-import Propostas from './components/Propostas';
-import PropostaForm from './components/PropostaForm';
+import PropostasOrion from './components/proposta/PropostasOrion';
+import PropostaFormOrion from './components/proposta/PropostaFormOrion';
 import Aprovacoes from './components/Aprovacoes';
 import ConfigTemplateProposta from './components/ConfigTemplateProposta';
 import EditorTemplateProposta from './components/EditorTemplateProposta';
@@ -182,9 +182,9 @@ function AppRoutes() {
         <Route path="projetos" element={<Projetos />} />
         <Route path="projetos/novo" element={<ProjetoForm />} />
         <Route path="projetos/editar/:id" element={<ProjetoForm />} />
-        <Route path="propostas" element={<Propostas />} />
-        <Route path="propostas/nova" element={<PropostaForm />} />
-        <Route path="propostas/editar/:id" element={<PropostaForm />} />
+        <Route path="propostas" element={<PropostasOrion />} />
+        <Route path="propostas/nova" element={<PropostaFormOrion />} />
+        <Route path="propostas/editar/:id" element={<PropostaFormOrion />} />
         <Route path="propostas/config-template" element={<ConfigTemplateProposta />} />
         <Route path="propostas/editor-template" element={<EditorTemplateProposta />} />
         <Route path="aprovacoes" element={<Aprovacoes />} />

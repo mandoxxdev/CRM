@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { FiSave, FiUpload, FiX, FiSettings, FiSearch } from 'react-icons/fi';
+import { FiSave, FiUpload, FiX, FiSettings, FiSearch, FiFileText } from 'react-icons/fi';
 import './ConfigTemplateProposta.css';
 
-const ConfigTemplateProposta = () => {
+const ConfigTemplateProposta = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -180,7 +180,7 @@ const ConfigTemplateProposta = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert('Configuração salva com sucesso!');
-      navigate('/comercial/propostas');
+      if (!embedded) navigate('/comercial/propostas');
     } catch (error) {
       console.error('Erro ao salvar configuração:', error);
       alert('Erro ao salvar configuração: ' + (error.response?.data?.error || error.message));
@@ -194,14 +194,18 @@ const ConfigTemplateProposta = () => {
   }
 
   return (
-    <div className="config-template-container">
-      <div className="config-template-header">
-        <h1><FiSettings /> Configurar Template de Proposta</h1>
-        <button onClick={() => navigate('/comercial/propostas')} className="btn-close">
-          <FiX /> Fechar
-        </button>
-      </div>
-
+    <div className={`config-template-container ${embedded ? 'config-template-embedded' : ''}`}>
+      {!embedded && (
+        <div className="config-template-header">
+          <h1><FiSettings /> Configurar Template de Proposta</h1>
+          <button onClick={() => navigate('/comercial/propostas')} className="btn-close">
+            <FiX /> Fechar
+          </button>
+        </div>
+      )}
+      {embedded && (
+        <h2 className="config-template-embedded-title"><FiFileText /> Template de proposta — variáveis na proposta e layout</h2>
+      )}
       <div className="config-template-content">
         <div className="config-section">
           <h2>Informações da Empresa</h2>

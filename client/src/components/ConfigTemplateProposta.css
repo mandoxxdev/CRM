@@ -4,6 +4,21 @@
   margin: 0 auto;
 }
 
+.config-template-container.config-template-embedded {
+  padding: 0;
+  max-width: none;
+  margin: 0;
+}
+
+.config-template-embedded-title {
+  font-size: 1.125rem;
+  color: var(--gmp-text-primary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .config-template-header {
   display: flex;
   justify-content: space-between;
