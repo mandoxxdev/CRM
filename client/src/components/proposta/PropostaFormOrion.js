@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
-  FiSave, FiX, FiShoppingCart, FiPlus, FiTrash2, FiUser, FiFileText,
+  FiSave, FiX, FiShoppingCart, FiPlus, FiTrash2, FiUser, FiFileText, FiEye,
 } from 'react-icons/fi';
 import SelecaoProdutosPremium from '../SelecaoProdutosPremium';
 import './PropostaFormOrion.css';
@@ -220,6 +220,19 @@ export default function PropostaFormOrion() {
   const formatMoney = (v) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
 
+  const openPreview = async () => {
+    if (!id) return;
+    try {
+      const { data } = await api.get(`/propostas/${id}/premium`, { responseType: 'text' });
+      const blob = new Blob([data], { type: 'text/html; charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!w) toast.warning('Permita pop-ups para abrir o preview.');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao abrir preview.');
+    }
+  };
+
   if (loadingData) {
     return (
       <div className="proposta-form-orion">
@@ -233,6 +246,11 @@ export default function PropostaFormOrion() {
       <header className="proposta-form-orion-header">
         <h1><FiFileText /> {isEdit ? 'Editar proposta' : 'Nova proposta'}</h1>
         <div className="proposta-form-orion-header-actions">
+          {isEdit && (
+            <button type="button" className="btn-orion-outline" onClick={openPreview} title="Abrir proposta completa em nova aba para visualizar">
+              <FiEye /> Ver proposta
+            </button>
+          )}
           <button type="button" className="btn-orion-outline" onClick={() => navigate('/comercial/propostas')}>
             <FiX /> Cancelar
           </button>

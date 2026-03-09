@@ -130,6 +130,9 @@ export default function PropostasOrion() {
         </div>
       </header>
 
+      <p className="propostas-orion-hint">
+        <strong>Ver proposta</strong> abre a proposta completa (cabeçalho, rodapé, logo do cliente) para você revisar. Use <strong>Editar</strong> para alterar dados; <strong>PDF</strong> para baixar.
+      </p>
       <div className="propostas-orion-filters">
         <div className="propostas-orion-search">
           <FiSearch />
@@ -206,11 +209,11 @@ export default function PropostasOrion() {
                       <div className="propostas-orion-cell-actions">
                         <button
                           type="button"
-                          className="propostas-orion-btn-icon"
+                          className="propostas-orion-btn-icon propostas-orion-btn-preview"
                           onClick={() => openPreview(p.id)}
-                          title="Visualizar (HTML)"
+                          title="Abrir proposta completa em nova aba (visualizar / imprimir)"
                         >
-                          <FiEye />
+                          <FiEye /> Ver proposta
                         </button>
                         <button
                           type="button"
