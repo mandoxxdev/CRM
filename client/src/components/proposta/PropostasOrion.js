@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiEye, FiDownload, FiFileText, FiSettings } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiEye, FiDownload, FiFileText, FiSettings, FiEdit2 } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import PreviewPropostaEditavel from '../PreviewPropostaEditavel';
 import './PropostasOrion.css';
 
 const STATUS_LABELS = {
@@ -29,6 +30,8 @@ export default function PropostasOrion() {
   const [loading, setLoading] = useState(true);
   const [filterUser, setFilterUser] = useState('');
   const [search, setSearch] = useState('');
+  const [showPreviewEditavel, setShowPreviewEditavel] = useState(false);
+  const [previewEditavelData, setPreviewEditavelData] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,6 +74,38 @@ export default function PropostasOrion() {
       if (!w) toast.warning('Permita pop-ups para visualizar o preview.');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao abrir preview.');
+    }
+  };
+
+  const openPreviewEditavel = async (id) => {
+    try {
+      const { data } = await api.get(`/propostas/${id}`);
+      const formData = {
+        titulo: data.titulo ?? '',
+        descricao: data.descricao ?? '',
+        condicoes_pagamento: data.condicoes_pagamento ?? '',
+        prazo_entrega: data.prazo_entrega ?? '',
+        garantia: data.garantia ?? '',
+        observacoes: data.observacoes ?? '',
+        cliente_id: data.cliente_id ?? '',
+        cliente_contato: data.cliente_contato ?? '',
+        cliente_telefone: data.cliente_telefone ?? '',
+        cliente_email: data.cliente_email ?? '',
+      };
+      const itens = (data.itens || []).map((i) => ({
+        descricao: i.descricao ?? '',
+        quantidade: Number(i.quantidade) || 1,
+        unidade: i.unidade ?? 'UN',
+        valor_unitario: Number(i.valor_unitario) || 0,
+        valor_total: Number(i.valor_total) || 0,
+        codigo_produto: i.codigo_produto ?? null,
+        familia_produto: i.familia_produto ?? '',
+        regiao_busca: i.regiao_busca ?? '',
+      }));
+      setPreviewEditavelData({ proposta: data, formData, itens });
+      setShowPreviewEditavel(true);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao abrir preview editável.');
     }
   };
 
@@ -131,7 +166,7 @@ export default function PropostasOrion() {
       </header>
 
       <p className="propostas-orion-hint">
-        <strong>Ver proposta</strong> abre a proposta completa (cabeçalho, rodapé, logo do cliente) para você revisar. Use <strong>Editar</strong> para alterar dados; <strong>PDF</strong> para baixar.
+        <strong>Ver proposta</strong> abre só a visualização em nova aba. <strong>Ver e editar</strong> abre o preview com layout editável (título, itens, condições, etc.). Use <strong>Editar</strong> para alterar dados do formulário; <strong>PDF</strong> para baixar.
       </p>
       <div className="propostas-orion-filters">
         <div className="propostas-orion-search">
@@ -211,9 +246,17 @@ export default function PropostasOrion() {
                           type="button"
                           className="propostas-orion-btn-icon propostas-orion-btn-preview"
                           onClick={() => openPreview(p.id)}
-                          title="Abrir proposta completa em nova aba (visualizar / imprimir)"
+                          title="Abrir proposta em nova aba (só visualizar)"
                         >
                           <FiEye /> Ver proposta
+                        </button>
+                        <button
+                          type="button"
+                          className="propostas-orion-btn-icon propostas-orion-btn-edit-preview"
+                          onClick={() => openPreviewEditavel(p.id)}
+                          title="Abrir preview editável (editar layout e textos da proposta)"
+                        >
+                          <FiEdit2 /> Ver e editar
                         </button>
                         <button
                           type="button"
@@ -247,6 +290,26 @@ export default function PropostasOrion() {
           </table>
         )}
       </div>
+
+      {showPreviewEditavel && previewEditavelData && (
+        <PreviewPropostaEditavel
+          proposta={previewEditavelData.proposta}
+          formData={previewEditavelData.formData}
+          itens={previewEditavelData.itens}
+          onClose={() => {
+            setShowPreviewEditavel(false);
+            setPreviewEditavelData(null);
+          }}
+          onSave={(result) => {
+            if (result?.error) {
+              toast.error(result.error);
+              return;
+            }
+            load();
+            toast.success('Alterações salvas.');
+          }}
+        />
+      )}
     </div>
   );
 }

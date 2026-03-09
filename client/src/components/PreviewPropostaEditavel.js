@@ -3,7 +3,7 @@ import api from '../services/api';
 import { FiX, FiSave, FiDownload, FiEdit2 } from 'react-icons/fi';
 import './PreviewPropostaEditavel.css';
 
-const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave }) => {
+const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: onSaveCallback }) => {
   const [dadosEditaveis, setDadosEditaveis] = useState({
     titulo: formData.titulo || '',
     descricao: formData.descricao || '',
@@ -124,11 +124,13 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave })
         itens: itensEditaveis,
         valor_total: calcularTotal()
       });
-      
-      alert('Proposta salva com sucesso!');
+      if (onSaveCallback) onSaveCallback();
+      else alert('Proposta salva com sucesso!');
       onClose();
     } catch (error) {
-      alert('Erro ao salvar alterações: ' + (error.response?.data?.error || error.message));
+      const msg = error.response?.data?.error || error.message;
+      if (onSaveCallback) onSaveCallback({ error: msg });
+      else alert('Erro ao salvar alterações: ' + msg);
     } finally {
       setLoading(false);
     }

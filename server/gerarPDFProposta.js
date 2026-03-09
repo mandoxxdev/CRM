@@ -17,6 +17,17 @@ function formatMoney(v) {
 
 const FOOTER_RESERVE = 50; // espaço reservado para rodapé (imagem ou texto)
 
+// Tipografia alinhada ao HTML (fontes, espaçamento entre letras e linhas)
+const TYPO = {
+  lineGapBody: 6,        // line-height ~1.65 para fontSize 10 (10 + 6 = 16)
+  lineGapTight: 3,       // line-height ~1.2 para títulos
+  charSpacingCapa: 1.2,  // letter-spacing ~1.5px nos títulos da capa
+  charSpacingNumero: 1.5, // letter-spacing ~2px no número
+  charSpacingSection: 0.5, // letter-spacing em títulos de seção
+  charSpacingSmall: 0.3,  // tagline, rótulos
+  paragraphGap: 4        // espaço entre parágrafos
+};
+
 function checkNewPage(doc, y, margin, need) {
   if (y > doc.page.height - margin - FOOTER_RESERVE - need) {
     doc.addPage();
@@ -69,13 +80,13 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
         console.warn('Logo GMP não carregado no PDF:', e.message);
       }
     }
-    doc.fontSize(22).font('Helvetica-Bold').fillColor('#1a4d7a').text('PROPOSTA TÉCNICA', margin, y, { width: pageWidth - 130 });
+    doc.fontSize(22).font('Helvetica-Bold').fillColor('#1a4d7a').text('PROPOSTA TÉCNICA', margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingCapa, lineGap: TYPO.lineGapTight });
     y += 22;
-    doc.fontSize(22).font('Helvetica-Bold').text('COMERCIAL', margin, y, { width: pageWidth - 130 });
+    doc.fontSize(22).font('Helvetica-Bold').text('COMERCIAL', margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingCapa, lineGap: TYPO.lineGapTight });
     y += 26;
-    doc.fontSize(20).fillColor('#0d2b4a').text(`Nº ${numeroProposta}`, margin, y, { width: pageWidth - 130 });
+    doc.fontSize(20).fillColor('#0d2b4a').text(`Nº ${numeroProposta}`, margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingNumero, lineGap: TYPO.lineGapTight });
     y += 28;
-    doc.fontSize(10).fillColor('#333').text('Excelência em Soluções Industriais', margin, y, { width: pageWidth - 130 });
+    doc.fontSize(10).fillColor('#333').text('Excelência em Soluções Industriais', margin, y, { width: pageWidth - 130, characterSpacing: TYPO.charSpacingSmall });
     y += 30;
 
     // ---- CAPA: Logo do cliente (se tiver) ----
@@ -94,7 +105,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     y += 22;
 
     // ---- Dados do cliente ----
-    doc.fontSize(12).font('Helvetica-Bold').text('DADOS DO CLIENTE', margin, y);
+    doc.fontSize(12).font('Helvetica-Bold').text('DADOS DO CLIENTE', margin, y, { characterSpacing: TYPO.charSpacingSection });
     y += 20;
     doc.fontSize(10).font('Helvetica');
     const cliente = [
@@ -109,17 +120,17 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     ].filter(Boolean);
     cliente.forEach((linha) => {
       y = checkNewPage(doc, y, margin, 80);
-      doc.text(linha, margin, y, { width: pageWidth });
+      doc.text(linha, margin, y, { width: pageWidth, lineGap: TYPO.lineGapBody });
       y += 16;
     });
     y += 18;
 
     const secao = (titulo, texto) => {
       y = checkNewPage(doc, y, margin, 120);
-      doc.fontSize(11).font('Helvetica-Bold').text(titulo, margin, y);
+      doc.fontSize(11).font('Helvetica-Bold').text(titulo, margin, y, { characterSpacing: TYPO.charSpacingSection });
       y += 16;
-      doc.fontSize(10).font('Helvetica').text(texto, margin, y, { width: pageWidth, align: 'justify' });
-      y += doc.heightOfString(texto, { width: pageWidth }) + 12;
+      doc.fontSize(10).font('Helvetica').text(texto, margin, y, { width: pageWidth, align: 'justify', lineGap: TYPO.lineGapBody, paragraphGap: TYPO.paragraphGap });
+      y += doc.heightOfString(texto, { width: pageWidth, lineGap: TYPO.lineGapBody }) + 12;
     };
 
     secao('1. OBJETIVO DA PROPOSTA', 'Apresentar condições técnicas e comerciais, para fornecimento de peças e acessórios para equipamentos.');
@@ -131,7 +142,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 4. ESCOPO DE FORNECIMENTO ----
     y = checkNewPage(doc, y, margin, 150);
-    doc.fontSize(11).font('Helvetica-Bold').text('4. ESCOPO DE FORNECIMENTO', margin, y);
+    doc.fontSize(11).font('Helvetica-Bold').text('4. ESCOPO DE FORNECIMENTO', margin, y, { characterSpacing: TYPO.charSpacingSection });
     y += 18;
 
     const itensList = Array.isArray(itens) ? itens : [];
@@ -142,7 +153,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     const rowH = 18;
 
     doc.fontSize(9).font('Helvetica-Bold');
-    doc.text('Item / Descrição', colDesc, y);
+    doc.text('Item / Descrição', colDesc, y, { characterSpacing: TYPO.charSpacingSmall });
     doc.text('Qtd', colQtd, y);
     doc.text('Valor unit.', colUnit, y);
     doc.text('Total', colTotal, y);
@@ -157,7 +168,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
       const qtd = item.quantidade != null ? item.quantidade : 1;
       const vUnit = parseFloat(item.valor_unitario) || parseFloat(item.preco_base) || 0;
       const vTotal = vUnit * qtd;
-      doc.text(`${index + 1}. ${nome}`, colDesc, y, { width: colQtd - colDesc - 5 });
+      doc.text(`${index + 1}. ${nome}`, colDesc, y, { width: colQtd - colDesc - 5, lineGap: TYPO.lineGapTight });
       doc.text(String(qtd), colQtd, y);
       doc.text(formatMoney(vUnit), colUnit, y);
       doc.text(formatMoney(vTotal), colTotal, y);
@@ -186,9 +197,9 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 11. PREÇO E CONDIÇÃO DE PAGAMENTO ----
     y = checkNewPage(doc, y, margin, 200);
-    doc.fontSize(11).font('Helvetica-Bold').text('11. PREÇO E CONDIÇÃO DE PAGAMENTO', margin, y);
+    doc.fontSize(11).font('Helvetica-Bold').text('11. PREÇO E CONDIÇÃO DE PAGAMENTO', margin, y, { characterSpacing: TYPO.charSpacingSection });
     y += 20;
-    doc.fontSize(10).font('Helvetica-Bold').text('Tabela de Preços', margin, y);
+    doc.fontSize(10).font('Helvetica-Bold').text('Tabela de Preços', margin, y, { characterSpacing: TYPO.charSpacingSmall });
     y += 18;
 
     const colItem = margin;
@@ -197,7 +208,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     const colPreco = margin + pageWidth - 145;
     const colTotalTab = margin + pageWidth - 75;
     doc.fontSize(9).font('Helvetica-Bold');
-    doc.text('ITEM', colItem, y);
+    doc.text('ITEM', colItem, y, { characterSpacing: TYPO.charSpacingSmall });
     doc.text('NOME DO ITEM', colNome, y, { width: colQuant - colNome - 5 });
     doc.text('QUANT.', colQuant, y);
     doc.text('PREÇO UNIT.', colPreco, y);
@@ -229,14 +240,14 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     doc.fillColor('#000');
     y += 22;
     doc.font('Helvetica').fontSize(10);
-    doc.text('Condição de pagamento: ' + (proposta.condicoes_pagamento || '28/42/56DDL a partir da assinatura da proposta via boleto bancário.'), margin, y, { width: pageWidth });
+    doc.text('Condição de pagamento: ' + (proposta.condicoes_pagamento || '28/42/56DDL a partir da assinatura da proposta via boleto bancário.'), margin, y, { width: pageWidth, lineGap: TYPO.lineGapBody });
     y += 24;
 
     // ---- 12. DADOS CADASTRAIS DA CONTRATADA ----
     y = checkNewPage(doc, y, margin, 280);
-    doc.fontSize(11).font('Helvetica-Bold').text('12. DADOS CADASTRAIS DA CONTRATADA', margin, y);
+    doc.fontSize(11).font('Helvetica-Bold').text('12. DADOS CADASTRAIS DA CONTRATADA', margin, y, { characterSpacing: TYPO.charSpacingSection });
     y += 20;
-    doc.fontSize(10).font('Helvetica-Bold').text('INFORMAÇÕES GERAIS', margin, y);
+    doc.fontSize(10).font('Helvetica-Bold').text('INFORMAÇÕES GERAIS', margin, y, { characterSpacing: TYPO.charSpacingSmall });
     y += 16;
     doc.font('Helvetica').fontSize(9);
     const dadosCadastrais = [
@@ -270,7 +281,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 12.1. INFORMAÇÕES BANCÁRIAS ----
     y = checkNewPage(doc, y, margin, 80);
-    doc.fontSize(11).font('Helvetica-Bold').text('12.1. INFORMAÇÕES BANCÁRIAS', margin, y);
+    doc.fontSize(11).font('Helvetica-Bold').text('12.1. INFORMAÇÕES BANCÁRIAS', margin, y, { characterSpacing: TYPO.charSpacingSection });
     y += 18;
     doc.fontSize(9).font('Helvetica');
     [['Banco:', 'Itaú'], ['Agência:', '1690'], ['Conta corrente:', '65623-4'], ['Chave Pix (CNPJ):', '13.273.368/0001-75']].forEach(([l, v]) => {
@@ -282,9 +293,9 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 13. CLASSIFICAÇÃO FISCAL E IMPOSTOS ----
     y = checkNewPage(doc, y, margin, 220);
-    doc.fontSize(11).font('Helvetica-Bold').text('13. CLASSIFICAÇÃO FISCAL E IMPOSTOS', margin, y);
+    doc.fontSize(11).font('Helvetica-Bold').text('13. CLASSIFICAÇÃO FISCAL E IMPOSTOS', margin, y, { characterSpacing: TYPO.charSpacingSection });
     y += 20;
-    doc.fontSize(10).font('Helvetica-Bold').text('Classificação Fiscal', margin, y);
+    doc.fontSize(10).font('Helvetica-Bold').text('Classificação Fiscal', margin, y, { characterSpacing: TYPO.charSpacingSmall });
     y += 16;
     doc.font('Helvetica').fontSize(9);
     doc.text('NCM', margin, y);
@@ -299,10 +310,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     doc.text('Tanques, tachos, reservatórios e baldes.', margin + 90, y, { width: pageWidth - 95 });
     y += 20;
     doc.font('Helvetica').fontSize(9).fillColor('#555');
-    doc.text('Nota: Para outros produtos, a classificação fiscal deverá ser consultada caso a caso.', margin, y, { width: pageWidth });
+    doc.text('Nota: Para outros produtos, a classificação fiscal deverá ser consultada caso a caso.', margin, y, { width: pageWidth, lineGap: TYPO.lineGapBody });
     y += 22;
     doc.fillColor('#000');
-    doc.font('Helvetica-Bold').fontSize(10).text('Tabela de Impostos e Alíquotas', margin, y);
+    doc.font('Helvetica-Bold').fontSize(10).text('Tabela de Impostos e Alíquotas', margin, y, { characterSpacing: TYPO.charSpacingSmall });
     y += 16;
     doc.font('Helvetica').fontSize(8);
     const thFiscal = [margin, margin + 55, margin + 95, margin + 130, margin + 165, margin + 200, margin + 235];
@@ -331,10 +342,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     doc.text('3,00%', thFiscal[6], y);
     y += 18;
     doc.fontSize(9);
-    doc.text('Região 1: São Paulo (SP). Região 2: MG, PR, RJ, RS, SC. Região 3: demais estados.', margin, y, { width: pageWidth });
+    doc.text('Região 1: São Paulo (SP). Região 2: MG, PR, RJ, RS, SC. Região 3: demais estados.', margin, y, { width: pageWidth, lineGap: TYPO.lineGapBody });
     y += 14;
     doc.font('Helvetica').fillColor('#555');
-    doc.text('Nota: Redução tributária aplicada nos produtos NCM 8474.39.00, Inciso II, Artigo 12, Anexo II do RICMS/SP.', margin, y, { width: pageWidth });
+    doc.text('Nota: Redução tributária aplicada nos produtos NCM 8474.39.00, Inciso II, Artigo 12, Anexo II do RICMS/SP.', margin, y, { width: pageWidth, lineGap: TYPO.lineGapBody });
     y += 22;
     doc.fillColor('#000');
 
@@ -343,10 +354,10 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- 15. CONSIDERAÇÃO FINAL ----
     y = checkNewPage(doc, y, margin, 140);
-    doc.fontSize(11).font('Helvetica-Bold').text('15. CONSIDERAÇÃO FINAL', margin, y);
+    doc.fontSize(11).font('Helvetica-Bold').text('15. CONSIDERAÇÃO FINAL', margin, y, { characterSpacing: TYPO.charSpacingSection });
     y += 18;
     doc.fontSize(10).font('Helvetica');
-    doc.text('Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:', margin, y, { width: pageWidth });
+    doc.text('Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:', margin, y, { width: pageWidth, lineGap: TYPO.lineGapBody });
     y += doc.heightOfString('Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:', { width: pageWidth }) + 12;
     doc.rect(margin, y, pageWidth, 55).stroke();
     y += 12;
@@ -357,7 +368,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
 
     // ---- Assinaturas (Atenciosamente) ----
     y = checkNewPage(doc, y, margin, 100);
-    doc.fontSize(11).font('Helvetica').text('Atenciosamente,', margin, y, { align: 'center', width: pageWidth });
+    doc.fontSize(11).font('Helvetica').text('Atenciosamente,', margin, y, { align: 'center', width: pageWidth, characterSpacing: TYPO.charSpacingSmall });
     y += 28;
     const assinaturas = [
       { nome: 'Junior Machado', cargo: 'Diretor Comercial', tel: 'T +55 (11) 4513-9570', cel: 'M +55 (11) 9.9351-5046', email: 'junior@gmp.ind.br' },
@@ -382,7 +393,7 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
     // ---- Contato final ----
     y = checkNewPage(doc, y, margin, 40);
     doc.fontSize(10).font('Helvetica').fillColor('#333');
-    doc.text('Para dúvidas ou negociação: contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br', margin, y, { width: pageWidth, align: 'center' });
+    doc.text('Para dúvidas ou negociação: contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br', margin, y, { width: pageWidth, align: 'center', characterSpacing: TYPO.charSpacingSmall });
 
     // ---- Rodapé em todas as páginas (imagem se configurada, senão texto) ----
     const totalPages = doc.bufferedPageRange().count;
@@ -397,12 +408,12 @@ function gerarPDFProposta(proposta, itens, totais, templateConfig) {
         try {
           doc.image(footerImgPath, margin, pageHeight - margin - footerImgH, { width: pageWidth, height: footerImgH });
         } catch (e) {
-          doc.text(`Moinho Ypiranga · Proposta nº ${numeroProposta}`, margin, footerY, { width: pageWidth / 2 });
-          doc.text('contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br', margin + pageWidth / 2, footerY, { width: pageWidth / 2, align: 'right' });
+          doc.text(`Moinho Ypiranga · Proposta nº ${numeroProposta}`, margin, footerY, { width: pageWidth / 2, characterSpacing: TYPO.charSpacingSmall });
+          doc.text('contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br', margin + pageWidth / 2, footerY, { width: pageWidth / 2, align: 'right', characterSpacing: TYPO.charSpacingSmall });
         }
       } else {
-        doc.text(`Moinho Ypiranga · Proposta nº ${numeroProposta}`, margin, footerY, { width: pageWidth / 2 });
-        doc.text('contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br', margin + pageWidth / 2, footerY, { width: pageWidth / 2, align: 'right' });
+        doc.text(`Moinho Ypiranga · Proposta nº ${numeroProposta}`, margin, footerY, { width: pageWidth / 2, characterSpacing: TYPO.charSpacingSmall });
+        doc.text('contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br', margin + pageWidth / 2, footerY, { width: pageWidth / 2, align: 'right', characterSpacing: TYPO.charSpacingSmall });
       }
     }
 

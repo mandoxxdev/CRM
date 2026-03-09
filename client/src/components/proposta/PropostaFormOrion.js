@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
-  FiSave, FiX, FiShoppingCart, FiPlus, FiTrash2, FiUser, FiFileText, FiEye,
+  FiSave, FiX, FiShoppingCart, FiPlus, FiTrash2, FiUser, FiFileText, FiEye, FiEdit2,
 } from 'react-icons/fi';
 import SelecaoProdutosPremium from '../SelecaoProdutosPremium';
+import PreviewPropostaEditavel from '../PreviewPropostaEditavel';
 import './PropostaFormOrion.css';
 
 const defaultForm = {
@@ -65,6 +66,7 @@ export default function PropostaFormOrion() {
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [showProdutosModal, setShowProdutosModal] = useState(false);
+  const [showPreviewEditavel, setShowPreviewEditavel] = useState(false);
 
   const recalcTotal = useCallback((items) => {
     const total = (items || []).reduce((s, i) => s + (Number(i.valor_total) || 0), 0);
@@ -247,9 +249,14 @@ export default function PropostaFormOrion() {
         <h1><FiFileText /> {isEdit ? 'Editar proposta' : 'Nova proposta'}</h1>
         <div className="proposta-form-orion-header-actions">
           {isEdit && (
-            <button type="button" className="btn-orion-outline" onClick={openPreview} title="Abrir proposta completa em nova aba para visualizar">
-              <FiEye /> Ver proposta
-            </button>
+            <>
+              <button type="button" className="btn-orion-outline" onClick={openPreview} title="Abrir proposta em nova aba (só visualizar)">
+                <FiEye /> Ver proposta
+              </button>
+              <button type="button" className="btn-orion-outline btn-orion-preview-edit" onClick={() => setShowPreviewEditavel(true)} title="Abrir preview editável (editar layout e textos da proposta)">
+                <FiEdit2 /> Preview editável
+              </button>
+            </>
           )}
           <button type="button" className="btn-orion-outline" onClick={() => navigate('/comercial/propostas')}>
             <FiX /> Cancelar
@@ -438,6 +445,15 @@ export default function PropostaFormOrion() {
           onClose={() => setShowProdutosModal(false)}
           onSelect={onProductsSelected}
           produtosSelecionados={[]}
+        />
+      )}
+
+      {isEdit && showPreviewEditavel && (
+        <PreviewPropostaEditavel
+          proposta={{ id: Number(id), numero_proposta: form.numero_proposta, ...form }}
+          formData={form}
+          itens={itens}
+          onClose={() => setShowPreviewEditavel(false)}
         />
       )}
     </div>

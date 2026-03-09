@@ -216,6 +216,21 @@
   padding-right: 8px;
   gap: 4px;
 }
+
+.propostas-orion-btn-edit-preview {
+  width: auto;
+  min-width: 32px;
+  padding-left: 8px;
+  padding-right: 8px;
+  gap: 4px;
+  background: linear-gradient(135deg, #1a4d7a 0%, #0d2b4a 100%);
+  color: #fff;
+}
+.propostas-orion-btn-edit-preview:hover {
+  background: linear-gradient(135deg, #0d2b4a 0%, #1a4d7a 100%);
+  color: #fff;
+}
+
 .propostas-orion-btn-pdf {
   width: auto;
   min-width: 32px;
