@@ -6716,8 +6716,8 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       // Continuar mesmo com timeout
     }
     
-    // Aguardar renderização completa
-    await page.waitForTimeout(3000);
+    // Aguardar renderização completa (Puppeteer 22+ não tem waitForTimeout)
+    await new Promise(r => setTimeout(r, 3000));
     
     // Aguardar que todas as imagens estejam carregadas
     await page.evaluate(() => {
@@ -6735,7 +6735,7 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       console.warn('Erro ao aguardar imagens:', err.message);
     });
     
-    await page.waitForTimeout(1500);
+    await new Promise(r => setTimeout(r, 1500));
     
     // PDF gerado no servidor: margens do template + cabeçalho/rodapé fixos (Puppeteer)
     const pdfBuffer = await page.pdf({
@@ -17952,9 +17952,9 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, asy
       // Continuar mesmo se houver erro com imagens
     }
     
-    // Aguardar renderização
+    // Aguardar renderização (Puppeteer 22+ não tem waitForTimeout)
     try {
-      await page.waitForTimeout(2000);
+      await new Promise(r => setTimeout(r, 2000));
     } catch (error) {
       console.warn('Erro ao aguardar timeout:', error.message);
     }
