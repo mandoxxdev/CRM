@@ -6630,7 +6630,25 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       }
     }
     const pdfBaseURL = (req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000');
-    const html = gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig, pdfBaseURL);
+    const html = gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig, pdfBaseURL, true);
+    
+    // Margens do template (mm) para o PDF gerado no servidor
+    const marginTop = Math.max(15, Math.min(80, Number(templateConfig.margin_impressao_top_outras) || 50));
+    const marginBottom = Math.max(15, Math.min(80, Number(templateConfig.margin_impressao_bottom) || 45));
+    const marginLateral = Math.max(10, Math.min(50, Number(templateConfig.margin_impressao_lateral) || 20));
+    
+    // Cabeçalho e rodapé do PDF (Puppeteer displayHeaderFooter) — sempre no topo/fim da página
+    const headerImgUrl = (templateConfig.header_image_url)
+      ? (pdfBaseURL + '/api/uploads/headers/' + encodeURIComponent(templateConfig.header_image_url))
+      : (templateConfig.logo_url ? (pdfBaseURL + '/api/uploads/logos/' + encodeURIComponent(templateConfig.logo_url)) : (pdfBaseURL + '/logo-gmp.png'));
+    const footerImgUrl = (templateConfig.footer_image_url)
+      ? (pdfBaseURL + '/api/uploads/footers/' + encodeURIComponent(templateConfig.footer_image_url))
+      : '';
+    const headerTemplate = '<div style="width:100%; text-align:center; font-size:9px;"><img src="' + headerImgUrl + '" style="max-height:18mm; width:auto; display:inline-block;" onerror="this.style.display=\'none\'"></div>';
+    const footerTemplate = '<div style="width:100%; font-size:9px; color:#333; padding:0 10px; display:flex; justify-content:space-between; align-items:center;">' +
+      '<span>Moinho Ypiranga · Proposta Técnica Comercial nº ' + (proposta.numero_proposta || '').replace(/</g, '&lt;') + '</span>' +
+      '<span>contato@gmp.ind.br · +55 (11) 4513-9570</span>' +
+      '</div>';
     
     // Iniciar Puppeteer com configurações mais robustas
     browser = await puppeteer.launch({
@@ -6717,21 +6735,21 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       console.warn('Erro ao aguardar imagens:', err.message);
     });
     
-    // Layout limpo sem cabeçalhos/rodapés fixos - apenas aguardar renderização
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1500);
     
-    // Gerar PDF com configurações otimizadas - Layout limpo sem cabeçalhos/rodapés fixos
+    // PDF gerado no servidor: margens do template + cabeçalho/rodapé fixos (Puppeteer)
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: {
-        top: '20mm',
-        right: '15mm',
-        bottom: '20mm',
-        left: '15mm'
+        top: marginTop + 'mm',
+        right: marginLateral + 'mm',
+        bottom: marginBottom + 'mm',
+        left: marginLateral + 'mm'
       },
-      preferCSSPageSize: true,
-      displayHeaderFooter: false,
+      displayHeaderFooter: true,
+      headerTemplate,
+      footerTemplate,
       scale: 1.0
     });
     
@@ -7218,7 +7236,8 @@ app.post('/api/proposta-template/footer-image', authenticateToken, uploadFooter.
 });
 
 // Função para gerar HTML premium da proposta - Versão Limpa e Profissional
-function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null, baseURLOverride = null) {
+// forPdfServer = true: usado quando o PDF é gerado no servidor (Puppeteer); omite cabeçalho/rodapé fixos no HTML (Puppeteer usa displayHeaderFooter)
+function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null, baseURLOverride = null, forPdfServer = false) {
   try {
     // Validar parâmetros
     if (!proposta) {
@@ -8386,11 +8405,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
   </style>
 </head>
 <body>
+  ${forPdfServer ? '' : `
   <div class="print-tip-bar">
     <button class="btn-gerar-pdf" id="btnGerarPDF" onclick="window.print()">Gerar PDF</button>
-    <p class="print-tip-text">Use <strong>Margens: Padrão</strong> (ou Personalizado) ao imprimir. Se o cabeçalho/rodapé recuarem, ajuste &quot;Margem do navegador&quot; em Configurações → Template de proposta.</p>
+    <p class="print-tip-text">Baixe o PDF pelo botão abaixo (gerado no servidor, sem usar a impressora do navegador).</p>
   </div>
-  
+  `}
   <div class="proposta-container">
     <!-- Cabeçalho -->
     <div class="proposta-header">
@@ -8909,17 +8929,18 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      <!-- Rodapé da proposta - sempre visível -->
+      ${forPdfServer ? '' : `<!-- Rodapé da proposta - sempre visível (omitido no PDF servidor; Puppeteer usa displayHeaderFooter) -->
       <footer class="proposta-footer">
         <div class="footer-content">
           <div class="footer-left">Moinho Ypiranga · Proposta Técnica Comercial nº ${esc(proposta.numero_proposta)}</div>
           <div class="footer-right">contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br</div>
         </div>
       </footer>
+      `}
     </div>
   </div>
   
-  ${headerImageFixedURL ? `
+  ${forPdfServer ? '' : (headerImageFixedURL ? `
   <!-- Cabeçalho como imagem - parte do conteúdo na visualização normal -->
   <div class="header-image-container">
     <img src="${headerImageFixedURL}" alt="Cabeçalho" onerror="this.style.display='none';">
@@ -8932,9 +8953,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
   
   <!-- Spacer fixo para garantir que conteúdo comece após o cabeçalho a partir da segunda página -->
   <div class="header-spacer-print" id="header-spacer-print" style="display: none; visibility: hidden; height: 0;"></div>
-  ` : ''}
+  ` : '')}
   
-  ${footerImageURL ? `
+  ${forPdfServer ? '' : (footerImageURL ? `
   <!-- Rodapé como imagem - parte do conteúdo na visualização normal -->
   <div class="footer-image-container">
     <img src="${footerImageURL}" alt="Rodapé" onerror="this.style.display='none';">
@@ -8944,7 +8965,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
   <div class="footer-image-print" id="footer-image-print">
     <img src="${footerImageURL}" alt="Rodapé" id="footer-img" onerror="this.style.display='none';">
   </div>
-  ` : ''}
+  ` : '')}
   
   <script>
     // Tornar elementos editáveis

@@ -74,12 +74,18 @@ export default function PropostasOrion() {
     }
   };
 
-  const openPdf = async (id) => {
+  const openPdf = async (id, numeroProposta) => {
     try {
       const { data } = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(data);
-      const w = window.open(url, '_blank', 'noopener,noreferrer');
-      if (!w) toast.warning('Permita pop-ups para baixar o PDF.');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `proposta-${numeroProposta || id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF baixado (gerado no servidor).');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao gerar PDF.');
     }
@@ -197,11 +203,11 @@ export default function PropostasOrion() {
                         </button>
                         <button
                           type="button"
-                          className="propostas-orion-btn-icon"
-                          onClick={() => openPdf(p.id)}
-                          title="Download PDF"
+                          className="propostas-orion-btn-icon propostas-orion-btn-pdf"
+                          onClick={() => openPdf(p.id, p.numero_proposta)}
+                          title="Baixar PDF (gerado no servidor, sem usar impressora do navegador)"
                         >
-                          <FiDownload />
+                          <FiDownload /> PDF
                         </button>
                         <Link
                           to={`/comercial/propostas/editar/${p.id}`}
