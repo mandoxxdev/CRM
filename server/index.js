@@ -1138,43 +1138,44 @@ function initializeDatabase() {
   )`, (err) => {
     if (err) console.error('Erro ao criar tabela variaveis_tecnicas:', err);
     else console.log('✅ Tabela variaveis_tecnicas verificada');
+    // Migrações de colunas (bancos antigos); depois garantir variáveis base
     db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN sufixo TEXT', (alterErr) => {
       if (alterErr && !String(alterErr.message || '').includes('duplicate column')) console.error('Migração sufixo:', alterErr.message);
-    });
-    db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN fonte_opcoes TEXT', (e1) => {
-      if (e1 && !String(e1.message || '').includes('duplicate column')) console.error('Migração fonte_opcoes:', e1.message);
-    });
-    db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN grupo_compras_id INTEGER', (e2) => {
-      if (e2 && !String(e2.message || '').includes('duplicate column')) console.error('Migração grupo_compras_id:', e2.message);
-    });
-    // Sempre garantir variáveis base na subida: inserir as que faltam (INSERT OR IGNORE não duplica por chave)
-    (function garantirVariaveisBase() {
-      let list = [];
-      const basePath = path.join(PERSISTENT_DATA_DIR, 'variaveis-base.json');
-      if (fs.existsSync(basePath)) {
-        try {
-          const parsed = JSON.parse(fs.readFileSync(basePath, 'utf8'));
-          if (Array.isArray(parsed) && parsed.length > 0) list = parsed;
-        } catch (_) {}
-      }
-      if (list.length === 0) list = VARIAVEIS_BASE_DEFAULT.map((nome, ordem) => ({ nome, ordem }));
-      const total = list.length;
-      if (total === 0) return;
-      const slug = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
-      const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, fonte_opcoes, grupo_compras_id, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, NULL, NULL, NULL, 1)');
-      let done = 0;
-      function onDone() {
-        done++;
-        if (done === total) stmt.finalize(() => console.log('✅ Variáveis base garantidas (' + total + ')'));
-      }
-      list.forEach((item, i) => {
-        const nome = (item && item.nome) ? item.nome : (typeof item === 'string' ? item : '');
-        if (!nome) { onDone(); return; }
-        const chave = slug(nome);
-        const ordem = (item && item.ordem != null) ? item.ordem : i;
-        stmt.run(nome, chave, ordem, onDone);
+      db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN fonte_opcoes TEXT', (e1) => {
+        if (e1 && !String(e1.message || '').includes('duplicate column')) console.error('Migração fonte_opcoes:', e1.message);
+        db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN grupo_compras_id INTEGER', (e2) => {
+          if (e2 && !String(e2.message || '').includes('duplicate column')) console.error('Migração grupo_compras_id:', e2.message);
+          // Sempre garantir variáveis base na subida (após colunas existirem)
+          (function garantirVariaveisBase() {
+            let list = [];
+            const basePath = path.join(PERSISTENT_DATA_DIR, 'variaveis-base.json');
+            if (fs.existsSync(basePath)) {
+              try {
+                const parsed = JSON.parse(fs.readFileSync(basePath, 'utf8'));
+                if (Array.isArray(parsed) && parsed.length > 0) list = parsed;
+              } catch (_) {}
+            }
+            if (list.length === 0) list = VARIAVEIS_BASE_DEFAULT.map((nome, ordem) => ({ nome, ordem }));
+            const total = list.length;
+            if (total === 0) return;
+            const slug = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
+            const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, fonte_opcoes, grupo_compras_id, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, NULL, NULL, NULL, 1)');
+            let done = 0;
+            function onDone() {
+              done++;
+              if (done === total) stmt.finalize(() => console.log('✅ Variáveis base garantidas (' + total + ')'));
+            }
+            list.forEach((item, i) => {
+              const nome = (item && item.nome) ? item.nome : (typeof item === 'string' ? item : '');
+              if (!nome) { onDone(); return; }
+              const chave = slug(nome);
+              const ordem = (item && item.ordem != null) ? item.ordem : i;
+              stmt.run(nome, chave, ordem, onDone);
+            });
+          })();
+        });
       });
-    })();
+    });
   });
 
   // Opções de configuração por família e por variável (ex.: família Masseira Bimix + motor_central_cv → 30 CV, 50 CV, 75 CV)
@@ -1347,6 +1348,14 @@ function executeMigrations(callback) {
     if (err && !err.message.includes('duplicate column')) {
       console.error('Erro ao adicionar coluna ativo em grupos_permissoes:', err);
     }
+  });
+
+  // Variáveis técnicas: colunas para vincular opções ao módulo Compras (fornecedores homologados)
+  db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN fonte_opcoes TEXT', (err) => {
+    if (err && !String(err.message || '').includes('duplicate column')) console.error('Migração variaveis_tecnicas.fonte_opcoes:', err.message);
+  });
+  db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN grupo_compras_id INTEGER', (err) => {
+    if (err && !String(err.message || '').includes('duplicate column')) console.error('Migração variaveis_tecnicas.grupo_compras_id:', err.message);
   });
 
   // Garantir coluna classificacao_area na tabela produtos (para classificação Base Água / Base Solvente)

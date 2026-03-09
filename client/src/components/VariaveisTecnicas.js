@@ -289,6 +289,9 @@ const VariaveisTecnicas = () => {
                   />
                 </div>
               </div>
+              {form.tipo !== 'lista' && (
+                <p className="vt-form-hint vt-form-hint-block">Para vincular esta variável ao módulo <strong>Compras (fornecedores homologados)</strong>, altere o tipo para <strong>Lista (opções fixas)</strong>. Em seguida será exibida a opção &quot;Fonte das opções&quot; com o grupo de fornecedores.</p>
+              )}
               {form.tipo === 'lista' && (
                 <>
                   <div className="vt-form-group">
