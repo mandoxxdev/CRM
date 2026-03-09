@@ -7847,9 +7847,14 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         display: none !important;
       }
       
+      /* Margens da página: só o CONTEÚDO é recuado; cabeçalho/rodapé fixos ficam na borda da folha.
+         Use "Margens: Nenhuma" no diálogo de impressão para o cabeçalho e rodapé ficarem no topo/fim da página. */
       @page {
-        margin: ${marginTopPrimeira}mm ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important;
         size: A4;
+        margin: ${marginTopOutras}mm ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important;
+      }
+      @page:first {
+        margin-top: ${marginTopPrimeira}mm !important;
       }
       
       /* Cabeçalho fixo REMOVIDO - não usar mais */
@@ -7927,11 +7932,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         letter-spacing: 0.5px;
       }
       
-      /* Rodapé fixo na impressão - aparece em todas as páginas */
+      /* Rodapé fixo na impressão - sempre no fim físico da página; padding evita corte na impressora */
       .proposta-footer {
         display: flex !important;
         visibility: visible !important;
         position: fixed !important;
+        top: auto !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
@@ -7939,13 +7945,13 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         z-index: 1000 !important;
         page-break-inside: avoid !important;
         margin: 0 !important;
+        padding-bottom: 12mm !important;
         box-shadow: 0 -2px 8px rgba(0,0,0,0.08) !important;
       }
       
-      /* Conteúdo: padding inferior como fallback quando @page é ignorado pelo navegador */
+      /* Conteúdo: recuo lateral e inferior (o recuo superior vem do @page) */
       .proposta-body {
-        padding: 0 20px 50px 20px !important;
-        padding-bottom: ${marginBottom}mm !important;
+        padding: 0 ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important;
         margin: 0 !important;
       }
       
@@ -8149,7 +8155,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         border: 1px solid #e55a2b !important;
       }
       
-      /* Por padrão, mostrar o cabeçalho em todas as páginas */
+      /* Cabeçalho fixo sempre no topo físico da página (não afetado pelas margens do @page) */
       .header-image-print {
         display: block !important;
         position: fixed !important;
@@ -8163,16 +8169,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         page-break-inside: avoid !important;
         visibility: visible !important;
         opacity: 1 !important;
-      }
-      
-      /* Primeira página: margem superior configurável */
-      @page:first {
-        margin-top: ${marginTopPrimeira}mm !important;
-      }
-      
-      /* A partir da segunda página: margem-top para o cabeçalho fixo */
-      @page:not(:first) {
-        margin-top: ${marginTopOutras}mm !important;
       }
       
       /* Garantir que o primeiro elemento após a primeira página tenha margin-top */
@@ -8229,17 +8225,18 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         z-index: 1000 !important;
       }
 
-      /* Rodapé fixo para impressão - aparece em todas as páginas */
+      /* Rodapé (imagem) fixo sempre no fim físico da página; padding evita corte na impressora */
       .footer-image-print {
         display: block !important;
         position: fixed !important;
+        top: auto !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
         width: 100% !important;
         z-index: 1000 !important;
         margin: 0 !important;
-        padding: 0 !important;
+        padding-bottom: 10mm !important;
         page-break-inside: avoid !important;
       }
       
@@ -8343,10 +8340,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         break-inside: avoid !important;
       }
       
-      /* Garantir que não haja espaço extra após o rodapé */
+      /* Rodapé imagem: margem zero; padding-bottom já definido acima para zona segura */
       .footer-image-print {
         margin-bottom: 0 !important;
-        padding-bottom: 0 !important;
       }
       
       /* Garantir que o cabeçalho completo da primeira página seja visível */
@@ -8367,7 +8363,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
 <body>
   <div class="print-tip-bar">
     <button class="btn-gerar-pdf" id="btnGerarPDF" onclick="window.print()">Gerar PDF</button>
-    <p class="print-tip-text">Use <strong>Margens: Nenhuma</strong> na impressão: assim o cabeçalho e o rodapé ficam na borda da página e só o texto usa as margens configuradas.</p>
+    <p class="print-tip-text">Use <strong>Margens: Nenhuma</strong> ao imprimir: o cabeçalho e o rodapé ficam fixos no topo e no fim de cada página; apenas o conteúdo usa as margens configuradas.</p>
   </div>
   
   <div class="proposta-container">
