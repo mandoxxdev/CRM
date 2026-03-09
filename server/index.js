@@ -9,6 +9,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const multer = require('multer');
 const puppeteer = require('puppeteer');
+const { gerarPDFProposta } = require('./gerarPDFProposta');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -6466,16 +6467,14 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
   });
 });
 
-// ========== ROTA PARA GERAR PDF COM PUPPETEER ==========
+// ========== ROTA PARA GERAR PDF (PDFKit - sem Puppeteer) ==========
 app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
   const { id } = req.params;
   
-  // Validar ID
   if (!id || isNaN(parseInt(id))) {
     return res.status(400).json({ error: 'ID da proposta inválido' });
   }
   
-  // Verificar se o banco está pronto
   if (!db || !dbReady) {
     return res.status(503).json({ 
       error: 'Banco de dados ainda está sendo inicializado. Aguarde alguns segundos e tente novamente.',
@@ -6483,9 +6482,7 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     });
   }
   
-  let browser;
   try {
-    // Buscar proposta completa (mesma lógica da rota /premium)
     const proposta = await new Promise((resolve, reject) => {
       db.get(`
         SELECT p.*, 
@@ -6510,7 +6507,6 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
     
-    // Buscar itens (produto_imagem explícito para exibir foto do produto no PDF)
     const itens = await new Promise((resolve, reject) => {
       db.all(`
         SELECT pi.*, pr.id as produto_id, pr.codigo as produto_codigo, pr.nome as produto_nome, pr.imagem as produto_imagem,
@@ -6526,7 +6522,6 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       });
     });
     
-    // Calcular totais
     const subtotal = parseFloat(proposta.valor_total) || 0;
     const itensArray = Array.isArray(itens) ? itens : [];
     const icms = itensArray.reduce((sum, item) => {
@@ -6545,35 +6540,15 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     }, 0);
     const total = subtotal + icms + ipi;
     
-    // Formatar datas
     let dataEmissao = '';
-    try {
-      if (proposta.created_at) {
-        dataEmissao = new Date(proposta.created_at).toLocaleDateString('pt-BR');
-      }
-    } catch (e) {
-      console.error('Erro ao formatar data de emissão:', e);
-    }
-    
     let dataValidade = '';
     try {
-      if (proposta.data_validade) {
-        dataValidade = new Date(proposta.data_validade).toLocaleDateString('pt-BR');
-      }
-    } catch (e) {
-      console.error('Erro ao formatar data de validade:', e);
-    }
+      if (proposta.created_at) dataEmissao = new Date(proposta.created_at).toLocaleDateString('pt-BR');
+      if (proposta.data_validade) dataValidade = new Date(proposta.data_validade).toLocaleDateString('pt-BR');
+    } catch (e) {}
     
-    const totais = {
-      subtotal,
-      icms,
-      ipi,
-      total,
-      dataEmissao,
-      dataValidade
-    };
+    const totais = { subtotal, icms, ipi, total, dataEmissao, dataValidade };
     
-    // Buscar template config (usar ORDER BY id DESC LIMIT 1 para pegar a mais recente)
     let templateConfig = null;
     try {
       const configRow = await new Promise((resolve, reject) => {
@@ -6582,184 +6557,13 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
           else resolve(row);
         });
       });
-      if (configRow) {
-        templateConfig = configRow;
-        templateConfig.margin_impressao_top_primeira = templateConfig.margin_impressao_top_primeira != null ? Number(templateConfig.margin_impressao_top_primeira) : 20;
-        templateConfig.margin_impressao_top_outras = templateConfig.margin_impressao_top_outras != null ? Number(templateConfig.margin_impressao_top_outras) : 50;
-        templateConfig.margin_impressao_bottom = templateConfig.margin_impressao_bottom != null ? Number(templateConfig.margin_impressao_bottom) : 45;
-        templateConfig.margin_impressao_lateral = templateConfig.margin_impressao_lateral != null ? Number(templateConfig.margin_impressao_lateral) : 20;
-        templateConfig.margin_navegador_top = templateConfig.margin_navegador_top != null ? Number(templateConfig.margin_navegador_top) : 19;
-        templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
-      }
+      if (configRow) templateConfig = configRow;
     } catch (e) {
       console.error('Erro ao buscar template config:', e);
     }
-    let chaves = [];
-    if (templateConfig && templateConfig.variaveis_proposta_tecnica != null) {
-      if (typeof templateConfig.variaveis_proposta_tecnica === 'string') {
-        try { chaves = JSON.parse(templateConfig.variaveis_proposta_tecnica); } catch (_) {}
-      } else if (Array.isArray(templateConfig.variaveis_proposta_tecnica)) {
-        chaves = templateConfig.variaveis_proposta_tecnica;
-      }
-    }
-    if (!Array.isArray(chaves)) chaves = [];
-    let porFamiliaPdf = {};
-    if (templateConfig && templateConfig.variaveis_proposta_por_familia != null) {
-      if (typeof templateConfig.variaveis_proposta_por_familia === 'string') {
-        try { porFamiliaPdf = JSON.parse(templateConfig.variaveis_proposta_por_familia); } catch (_) {}
-      } else if (typeof templateConfig.variaveis_proposta_por_familia === 'object') {
-        porFamiliaPdf = templateConfig.variaveis_proposta_por_familia;
-      }
-    }
-    templateConfig = templateConfig || {};
-    templateConfig.variaveis_proposta_tecnica = chaves;
-    templateConfig.variaveis_proposta_por_familia = porFamiliaPdf;
-    templateConfig.variaveis_proposta_labels = {};
-    const chavesUnicasPdf = [...new Set([].concat(chaves, Object.values(porFamiliaPdf).filter(Array.isArray).reduce((a, b) => a.concat(b), [])))];
-    if (chavesUnicasPdf.length > 0) {
-      try {
-        const placeholders = chavesUnicasPdf.map(() => '?').join(',');
-        const rows = await new Promise((resolve, reject) => {
-          db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicasPdf, (err, r) => { if (err) reject(err); else resolve(r || []); });
-        });
-        rows.forEach(function (r) {
-          templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
-        });
-      } catch (e) {
-        console.error('Erro ao buscar labels das variáveis para proposta:', e);
-      }
-    }
-    const pdfBaseURL = (req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000');
-    const html = gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig, pdfBaseURL, true);
     
-    // Margens do template (mm) para o PDF gerado no servidor
-    const marginTop = Math.max(15, Math.min(80, Number(templateConfig.margin_impressao_top_outras) || 50));
-    const marginBottom = Math.max(15, Math.min(80, Number(templateConfig.margin_impressao_bottom) || 45));
-    const marginLateral = Math.max(10, Math.min(50, Number(templateConfig.margin_impressao_lateral) || 20));
+    const pdfBuffer = await gerarPDFProposta(proposta, itens, totais, templateConfig || {});
     
-    // Cabeçalho e rodapé do PDF (Puppeteer displayHeaderFooter) — sempre no topo/fim da página
-    const headerImgUrl = (templateConfig.header_image_url)
-      ? (pdfBaseURL + '/api/uploads/headers/' + encodeURIComponent(templateConfig.header_image_url))
-      : (templateConfig.logo_url ? (pdfBaseURL + '/api/uploads/logos/' + encodeURIComponent(templateConfig.logo_url)) : (pdfBaseURL + '/logo-gmp.png'));
-    const footerImgUrl = (templateConfig.footer_image_url)
-      ? (pdfBaseURL + '/api/uploads/footers/' + encodeURIComponent(templateConfig.footer_image_url))
-      : '';
-    const headerTemplate = '<div style="width:100%; text-align:center; font-size:9px;"><img src="' + headerImgUrl + '" style="max-height:18mm; width:auto; display:inline-block;" onerror="this.style.display=\'none\'"></div>';
-    const footerTemplate = '<div style="width:100%; font-size:9px; color:#333; padding:0 10px; display:flex; justify-content:space-between; align-items:center;">' +
-      '<span>Moinho Ypiranga · Proposta Técnica Comercial nº ' + (proposta.numero_proposta || '').replace(/</g, '&lt;') + '</span>' +
-      '<span>contato@gmp.ind.br · +55 (11) 4513-9570</span>' +
-      '</div>';
-    
-    // Iniciar Puppeteer (opções para servidor Linux/Docker; use PUPPETEER_EXECUTABLE_PATH se Chromium não estiver no PATH)
-    const launchOpts = {
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
-      ]
-    };
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-      launchOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-    }
-    browser = await puppeteer.launch(launchOpts);
-    
-    const page = await browser.newPage();
-    
-    // Configurar viewport
-    await page.setViewport({
-      width: 1200,
-      height: 1600,
-      deviceScaleFactor: 2
-    });
-    
-    // Configurar URL base para recursos
-    const baseURL = process.env.API_URL || `http://localhost:${PORT}`;
-    
-    // Interceptar requisições para converter URLs relativas em absolutas
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const url = request.url();
-      // Ignorar requisições de dados e blob
-      if (url.startsWith('data:') || url.startsWith('blob:')) {
-        request.abort();
-        return;
-      }
-      
-      // Converter URLs relativas para absolutas
-      if (url.startsWith('/api/') || url.startsWith('/Logo_') || url.startsWith('/cabecalho') || url.startsWith('/logo-') || url.startsWith('/folha-')) {
-        const absoluteUrl = url.startsWith('http') ? url : `${baseURL}${url}`;
-        request.continue({
-          url: absoluteUrl
-        });
-      } else if (!url.startsWith('http')) {
-        // URLs relativas sem / no início
-        request.continue({
-          url: `${baseURL}/${url}`
-        });
-      } else {
-        request.continue();
-      }
-    });
-    
-    // Tratar erros de requisição
-    page.on('requestfailed', (request) => {
-      console.warn('Requisição falhou:', request.url());
-    });
-    
-    // Carregar HTML com timeout maior e estratégia mais flexível
-    try {
-      await page.setContent(html, {
-        waitUntil: ['load', 'domcontentloaded'],
-        timeout: 60000
-      });
-    } catch (timeoutError) {
-      console.warn('Timeout ao carregar HTML, tentando continuar...', timeoutError.message);
-      // Continuar mesmo com timeout
-    }
-    
-    // Aguardar renderização completa (Puppeteer 22+ não tem waitForTimeout)
-    await new Promise(r => setTimeout(r, 3000));
-    
-    // Aguardar que todas as imagens estejam carregadas
-    await page.evaluate(() => {
-      return Promise.all(
-        Array.from(document.images).map(img => {
-          if (img.complete) return Promise.resolve();
-          return new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = resolve; // Continuar mesmo se a imagem falhar
-            setTimeout(resolve, 5000); // Timeout de 5s por imagem
-          });
-        })
-      );
-    }).catch(err => {
-      console.warn('Erro ao aguardar imagens:', err.message);
-    });
-    
-    await new Promise(r => setTimeout(r, 1500));
-    
-    // PDF gerado no servidor: margens do template + cabeçalho/rodapé fixos (Puppeteer)
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: marginTop + 'mm',
-        right: marginLateral + 'mm',
-        bottom: marginBottom + 'mm',
-        left: marginLateral + 'mm'
-      },
-      displayHeaderFooter: true,
-      headerTemplate,
-      footerTemplate,
-      scale: 1.0
-    });
-    
-    await browser.close();
-    
-    // Enviar PDF
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="proposta-${proposta.numero_proposta || id}.pdf"`);
     res.send(pdfBuffer);
@@ -6767,17 +6571,6 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Erro ao gerar PDF:', error);
     console.error('Stack trace:', error.stack);
-    console.error('ID da proposta:', id);
-    
-    // Fechar browser se ainda estiver aberto
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeError) {
-        console.error('Erro ao fechar browser:', closeError);
-      }
-    }
-    
     if (!res.headersSent) {
       const isProd = process.env.NODE_ENV === 'production';
       const errorMessage = isProd
