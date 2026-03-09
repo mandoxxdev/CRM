@@ -1130,15 +1130,22 @@ function initializeDatabase() {
     opcoes TEXT,
     ordem INTEGER DEFAULT 0,
     sufixo TEXT,
+    fonte_opcoes TEXT,
+    grupo_compras_id INTEGER,
     ativo INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`, (err) => {
     if (err) console.error('Erro ao criar tabela variaveis_tecnicas:', err);
     else console.log('✅ Tabela variaveis_tecnicas verificada');
-    // Migração: adicionar coluna sufixo se não existir (bancos já existentes)
     db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN sufixo TEXT', (alterErr) => {
       if (alterErr && !String(alterErr.message || '').includes('duplicate column')) console.error('Migração sufixo:', alterErr.message);
+    });
+    db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN fonte_opcoes TEXT', (e1) => {
+      if (e1 && !String(e1.message || '').includes('duplicate column')) console.error('Migração fonte_opcoes:', e1.message);
+    });
+    db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN grupo_compras_id INTEGER', (e2) => {
+      if (e2 && !String(e2.message || '').includes('duplicate column')) console.error('Migração grupo_compras_id:', e2.message);
     });
     // Sempre garantir variáveis base na subida: inserir as que faltam (INSERT OR IGNORE não duplica por chave)
     (function garantirVariaveisBase() {
@@ -1154,7 +1161,7 @@ function initializeDatabase() {
       const total = list.length;
       if (total === 0) return;
       const slug = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
-      const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, NULL, 1)');
+      const stmt = db.prepare('INSERT OR IGNORE INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, fonte_opcoes, grupo_compras_id, ativo) VALUES (?, ?, NULL, \'texto\', NULL, ?, NULL, NULL, NULL, 1)');
       let done = 0;
       function onDone() {
         done++;
@@ -2972,7 +2979,7 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
 app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
   var familiaId = req.params.familiaId;
   db.all(
-    `SELECT fv.variavel_chave AS chave, fv.ordem, vt.nome, vt.categoria, vt.tipo, vt.opcoes, vt.sufixo
+    `SELECT fv.variavel_chave AS chave, fv.ordem, vt.nome, vt.categoria, vt.tipo, vt.opcoes, vt.sufixo, vt.fonte_opcoes, vt.grupo_compras_id
      FROM familia_variaveis fv
      LEFT JOIN variaveis_tecnicas vt ON vt.chave = fv.variavel_chave AND vt.ativo = 1
      WHERE fv.familia_id = ? AND fv.ativo = 1
@@ -2990,7 +2997,9 @@ app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
           categoria: r.categoria,
           tipo: r.tipo || 'texto',
           opcoes: opcoes,
-          sufixo: (r.sufixo || '').trim() || null
+          sufixo: (r.sufixo || '').trim() || null,
+          fonte_opcoes: (r.fonte_opcoes || '').trim() || null,
+          grupo_compras_id: r.grupo_compras_id != null ? r.grupo_compras_id : null
         };
       });
       res.json(list);
@@ -3254,6 +3263,27 @@ app.get('/api/variaveis-tecnicas/categorias', authenticateToken, (req, res) => {
   });
 });
 
+// Opções de uma variável: lista manual ou fornecedores do grupo homologado (para dropdown no cadastro de produtos)
+app.get('/api/variaveis-tecnicas/opcoes/:chave', authenticateToken, (req, res) => {
+  var chave = (req.params.chave || '').trim();
+  if (!chave) return res.status(400).json({ error: 'Chave da variável é obrigatória' });
+  db.get('SELECT fonte_opcoes, grupo_compras_id, opcoes FROM variaveis_tecnicas WHERE chave = ? AND ativo = 1', [chave], function(err, row) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Variável não encontrada' });
+    if (row.fonte_opcoes === 'fornecedores_grupo' && row.grupo_compras_id) {
+      db.all('SELECT id, COALESCE(NULLIF(TRIM(nome_fantasia), \'\'), razao_social) AS valor FROM fornecedores WHERE grupo_id = ? AND status = ? ORDER BY razao_social', [row.grupo_compras_id, 'ativo'], function(e, rows) {
+        if (e) return res.status(500).json({ error: e.message });
+        res.json({ opcoes: (rows || []).map(function(r) { return { id: r.id, valor: r.valor || String(r.id) }; }) });
+      });
+    } else {
+      var opcoes = row.opcoes;
+      if (typeof opcoes === 'string') { try { opcoes = JSON.parse(opcoes); } catch (_) { opcoes = []; } }
+      if (!Array.isArray(opcoes)) opcoes = [];
+      res.json({ opcoes: opcoes.map(function(val, i) { return { id: 'opt-' + i, valor: typeof val === 'string' ? val : (val && val.valor != null ? String(val.valor) : ''); }; }) });
+    }
+  });
+});
+
 app.get('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
   var id = req.params.id;
   db.get('SELECT * FROM variaveis_tecnicas WHERE id = ?', [id], function(err, row) {
@@ -3281,8 +3311,11 @@ app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
   else if (typeof opcoes === 'string') opcoesStr = opcoes;
   var ordem = parseInt(body.ordem, 10) || 0;
   var sufixo = (body.sufixo || '').trim() || null;
-  db.run('INSERT INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
-    [nome, chave, categoria, tipo, opcoesStr, ordem, sufixo],
+  var fonte_opcoes = (body.fonte_opcoes || '').trim() || null;
+  if (fonte_opcoes && fonte_opcoes !== 'manual' && fonte_opcoes !== 'fornecedores_grupo') fonte_opcoes = null;
+  var grupo_compras_id = body.grupo_compras_id != null ? (parseInt(body.grupo_compras_id, 10) || null) : null;
+  db.run('INSERT INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, fonte_opcoes, grupo_compras_id, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+    [nome, chave, categoria, tipo, opcoesStr, ordem, sufixo, fonte_opcoes, grupo_compras_id],
     function(err) {
       if (err) {
         if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma variável com esta chave' });
@@ -3315,8 +3348,11 @@ app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
   else if (typeof opcoes === 'string') opcoesStr = opcoes;
   var ordem = parseInt(body.ordem, 10) || 0;
   var sufixo = (body.sufixo || '').trim() || null;
-  db.run('UPDATE variaveis_tecnicas SET nome = ?, chave = ?, categoria = ?, tipo = ?, opcoes = ?, ordem = ?, sufixo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [nome, chave, categoria, tipo, opcoesStr, ordem, sufixo, id],
+  var fonte_opcoes = (body.fonte_opcoes || '').trim() || null;
+  if (fonte_opcoes && fonte_opcoes !== 'manual' && fonte_opcoes !== 'fornecedores_grupo') fonte_opcoes = null;
+  var grupo_compras_id = body.grupo_compras_id != null ? (parseInt(body.grupo_compras_id, 10) || null) : null;
+  db.run('UPDATE variaveis_tecnicas SET nome = ?, chave = ?, categoria = ?, tipo = ?, opcoes = ?, ordem = ?, sufixo = ?, fonte_opcoes = ?, grupo_compras_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [nome, chave, categoria, tipo, opcoesStr, ordem, sufixo, fonte_opcoes, grupo_compras_id, id],
     function(err) {
       if (err) {
         if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe outra variável com esta chave' });

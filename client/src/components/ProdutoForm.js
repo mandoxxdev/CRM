@@ -162,22 +162,39 @@ const ProdutoForm = () => {
   const [variaveisDaFamilia, setVariaveisDaFamilia] = useState([]);
   // Opções por variável (lista) cadastradas em Configurações → Opções por família – para exibir dropdown no cadastro do equipamento
   const [opcoesPorVariavel, setOpcoesPorVariavel] = useState({});
+  // Opções vindas de fornecedores homologados (variáveis com fonte_opcoes = fornecedores_grupo)
+  const [opcoesFornecedoresByChave, setOpcoesFornecedoresByChave] = useState({});
   useEffect(() => {
     const id = familiaSelecionada?.id;
     if (!id) {
       setVariaveisDaFamilia([]);
       setOpcoesPorVariavel({});
+      setOpcoesFornecedoresByChave({});
       return;
     }
     Promise.all([
       api.get(`/familias/${id}/variaveis`),
       api.get(`/familias/${id}/opcoes-variaveis`)
     ]).then(([varRes, opcRes]) => {
-      setVariaveisDaFamilia(Array.isArray(varRes.data) ? varRes.data : []);
+      const vars = Array.isArray(varRes.data) ? varRes.data : [];
+      setVariaveisDaFamilia(vars);
       setOpcoesPorVariavel(typeof opcRes.data === 'object' && opcRes.data !== null ? opcRes.data : {});
+      const byChave = {};
+      const toFetch = vars.filter((v) => (v.fonte_opcoes === 'fornecedores_grupo' && v.chave));
+      toFetch.forEach((v) => {
+        const chave = v.chave;
+        api.get(`/variaveis-tecnicas/opcoes/${encodeURIComponent(chave)}`)
+          .then((res) => {
+            const opcoes = Array.isArray(res.data?.opcoes) ? res.data.opcoes : [];
+            setOpcoesFornecedoresByChave((prev) => ({ ...prev, [chave]: opcoes }));
+          })
+          .catch(() => setOpcoesFornecedoresByChave((prev) => ({ ...prev, [chave]: [] })));
+      });
+      if (toFetch.length === 0) setOpcoesFornecedoresByChave({});
     }).catch(() => {
       setVariaveisDaFamilia([]);
       setOpcoesPorVariavel({});
+      setOpcoesFornecedoresByChave({});
     });
   }, [familiaSelecionada?.id]);
 
@@ -634,7 +651,11 @@ const ProdutoForm = () => {
               const preenchido = valor !== '' && valor != null;
               const opcoesFamilia = opcoesPorVariavel[chave] || [];
               const opcoesVar = v.opcoes;
+              const opcoesFornecedores = v.fonte_opcoes === 'fornecedores_grupo' ? (opcoesFornecedoresByChave[chave] || []) : null;
               const opcoesLista = (() => {
+                if (Array.isArray(opcoesFornecedores) && opcoesFornecedores.length > 0) {
+                  return opcoesFornecedores.map((o) => ({ id: o.id, valor: o.valor != null ? String(o.valor) : '' }));
+                }
                 if (Array.isArray(opcoesFamilia) && opcoesFamilia.length > 0) {
                   return [...opcoesFamilia].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map((o) => ({ id: o.id, valor: o.valor != null ? String(o.valor) : '' }));
                 }
