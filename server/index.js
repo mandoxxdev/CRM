@@ -7771,7 +7771,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       }
       
       @page {
-        margin: 20mm;
+        margin: 20mm 20mm 32mm 20mm;
         size: A4;
       }
       
@@ -7857,9 +7857,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         page-break-inside: avoid !important;
       }
       
-      /* Conteúdo sem restrições de rodapé */
+      /* Conteúdo com padding-bottom para não ficar sob o rodapé fixo */
       .proposta-body {
         padding: 0 20px 30px 20px !important;
+        padding-bottom: 40px !important;
         margin: 0 !important;
       }
       
