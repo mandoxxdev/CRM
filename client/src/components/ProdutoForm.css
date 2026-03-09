@@ -207,6 +207,12 @@
   width: 100%;
 }
 
+.produto-form-variavel-condicional {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .produto-form-variavel-field label {
   display: block;
   margin-bottom: 0.5rem;
@@ -239,6 +245,19 @@
   font-weight: 600;
   border-radius: 8px;
   letter-spacing: 0.02em;
+}
+
+.produto-form-variavel-soma .produto-form-variavel-soma-input {
+  background: rgba(0, 82, 163, 0.06);
+  cursor: default;
+  font-weight: 600;
+}
+
+.produto-form-variavel-soma-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--gmp-text-light, #64748b);
 }
 
 .produto-form-variavel-field input {

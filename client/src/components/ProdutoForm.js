@@ -198,6 +198,34 @@ const ProdutoForm = () => {
     });
   }, [familiaSelecionada?.id]);
 
+  // Sincronizar valor calculado das variáveis tipo "soma" (ex.: potência total) com o estado
+  const somaVarsConfig = useMemo(() => {
+    return (variaveisDaFamilia || [])
+      .filter((v) => String(v.tipo || '').toLowerCase() === 'soma')
+      .map((v) => ({
+        chave: v.chave,
+        chaves: (v.opcoes && typeof v.opcoes === 'object' && Array.isArray(v.opcoes.variaveis)) ? v.opcoes.variaveis : []
+      }))
+      .filter((x) => x.chave && x.chaves.length > 0);
+  }, [variaveisDaFamilia]);
+
+  useEffect(() => {
+    if (somaVarsConfig.length === 0) return;
+    setEspecificacoesTecnicas((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      somaVarsConfig.forEach(({ chave, chaves }) => {
+        const sum = chaves.reduce((acc, ch) => acc + (parseFloat(prev[ch]) || 0), 0);
+        const sumStr = String(sum);
+        if (String(prev[chave] || '') !== sumStr) {
+          next[chave] = sumStr;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [somaVarsConfig, especificacoesTecnicas]);
+
   // Marcadores (bolinhas) da vista frontal – opcionais, só para referência visual no esquemático
   const marcadoresVistaFamilia = useMemo(() => {
     const raw = familiaSelecionada?.marcadores_vista;
@@ -646,14 +674,31 @@ const ProdutoForm = () => {
             {variaveisDaFamilia.map((v, idx) => {
               const chave = v.chave || '';
               const nomeVariavel = (v.nome || variaveisNomesMap[chave] || chave || '').trim() || chave;
+              const isListaCondicional = (String(v.tipo || '').toLowerCase() === 'lista_condicional');
+              const isSoma = (String(v.tipo || '').toLowerCase() === 'soma');
+              const valorCond = isListaCondicional ? (especificacoesTecnicas[chave + '_cond'] ?? '') : '';
               const valor = especificacoesTecnicas[chave] ?? '';
               const isNumero = (String(v.tipo || '').toLowerCase() === 'numero');
-              const isLista = (String(v.tipo || '').toLowerCase() === 'lista');
-              const preenchido = valor !== '' && valor != null;
+              const isLista = (String(v.tipo || '').toLowerCase() === 'lista') || isListaCondicional;
+              const variaveisSoma = isSoma && v.opcoes && typeof v.opcoes === 'object' && Array.isArray(v.opcoes.variaveis) ? v.opcoes.variaveis : [];
+              const valorSoma = isSoma && variaveisSoma.length > 0
+                ? variaveisSoma.reduce((acc, ch) => acc + (parseFloat(especificacoesTecnicas[ch]) || 0), 0)
+                : 0;
+              const preenchido = isListaCondicional ? (valorCond !== '' && valor !== '' && valor != null) : (isSoma ? (valor !== '' && valor != null && Number(valor) > 0) : (valor !== '' && valor != null));
               const opcoesFamilia = opcoesPorVariavel[chave] || [];
               const opcoesVar = v.opcoes;
               const opcoesFornecedores = v.fonte_opcoes === 'fornecedores_grupo' ? (opcoesFornecedoresByChave[chave] || []) : null;
+              const opcoesCondicional = isListaCondicional && v.opcoes && typeof v.opcoes === 'object' && v.opcoes.primeiraEscolha && v.opcoes.porEscolha
+                ? { primeiraEscolha: v.opcoes.primeiraEscolha, porEscolha: v.opcoes.porEscolha }
+                : null;
               const opcoesLista = (() => {
+                if (isListaCondicional && opcoesCondicional && valorCond) {
+                  const arr = opcoesCondicional.porEscolha[valorCond];
+                  if (Array.isArray(arr) && arr.length > 0) {
+                    return arr.map((o, i) => ({ id: `cond-${i}`, valor: typeof o === 'string' ? o : (o && o.valor != null ? String(o.valor) : '') }));
+                  }
+                  return [];
+                }
                 if (Array.isArray(opcoesFornecedores) && opcoesFornecedores.length > 0) {
                   return opcoesFornecedores.map((o) => ({ id: o.id, valor: o.valor != null ? String(o.valor) : '' }));
                 }
@@ -672,6 +717,61 @@ const ProdutoForm = () => {
               return (
                 <div key={chave || idx} className={`produto-form-variavel-card ${preenchido ? 'produto-form-variavel-card-preenchido' : ''}`}>
                   <div className="produto-form-variavel-field">
+                    {isListaCondicional && opcoesCondicional ? (
+                      <>
+                        <label>{nomeVariavel}{sufixo ? ` (${sufixo})` : ''}</label>
+                        <div className="produto-form-variavel-condicional">
+                          <div className="produto-form-variavel-input-wrap">
+                            <select
+                              value={valorCond}
+                              onChange={(e) => {
+                                handleEspecificacaoChange(chave + '_cond', e.target.value);
+                                handleEspecificacaoChange(chave, '');
+                              }}
+                              className="produto-form-variavel-select produto-form-variavel-select-premium"
+                            >
+                              <option value="">Selecione o tipo...</option>
+                              {(opcoesCondicional.primeiraEscolha || []).map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {valorCond && (
+                            <div className="produto-form-variavel-input-wrap">
+                              <select
+                                value={valor}
+                                onChange={(e) => handleEspecificacaoChange(chave, e.target.value)}
+                                className="produto-form-variavel-select produto-form-variavel-select-premium"
+                              >
+                                <option value="">Selecione...</option>
+                                {opcoesLista.map((opt) => (
+                                  <option key={opt.id || opt.valor} value={opt.valor}>
+                                    {opt.valor}
+                                  </option>
+                                ))}
+                              </select>
+                              {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : isSoma ? (
+                      <>
+                        <label>{nomeVariavel}{sufixo ? ` (${sufixo})` : ''}</label>
+                        <div className="produto-form-variavel-input-wrap produto-form-variavel-soma">
+                          <input
+                            type="text"
+                            value={valorSoma}
+                            readOnly
+                            className="produto-form-variavel-soma-input"
+                            aria-label={`${nomeVariavel} (calculado automaticamente)`}
+                          />
+                          {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
+                        </div>
+                        <small className="produto-form-variavel-soma-hint">Soma automática das variáveis configuradas</small>
+                      </>
+                    ) : (
+                      <>
                     <label>{nomeVariavel}{sufixo ? ` (${sufixo})` : ''}</label>
                     {isLista ? (
                       <div className="produto-form-variavel-input-wrap">
@@ -700,6 +800,8 @@ const ProdutoForm = () => {
                         />
                         {sufixo && <span className="produto-form-var-sufixo">{sufixo}</span>}
                       </div>
+                    )}
+                      </>
                     )}
                   </div>
                 </div>

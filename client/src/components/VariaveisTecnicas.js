@@ -6,7 +6,9 @@ import './VariaveisTecnicas.css';
 const TIPOS = [
   { value: 'texto', label: 'Texto' },
   { value: 'numero', label: 'Número' },
-  { value: 'lista', label: 'Lista (opções fixas)' }
+  { value: 'lista', label: 'Lista (opções fixas)' },
+  { value: 'lista_condicional', label: 'Lista condicional (1ª escolha define a lista)' },
+  { value: 'soma', label: 'Soma automática (soma outras variáveis)' }
 ];
 
 const FONTE_OPCOES = [
@@ -23,7 +25,7 @@ const VariaveisTecnicas = () => {
   const [filterCategoria, setFilterCategoria] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '' });
+  const [form, setForm] = useState({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, variaveisSoma: [] });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,14 +64,27 @@ const VariaveisTecnicas = () => {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '' });
+    setForm({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, variaveisSoma: [] });
     setError('');
     setModalOpen(true);
   };
 
   const openEdit = (v) => {
     setEditing(v);
-    const opcoes = Array.isArray(v.opcoes) ? v.opcoes.join('\n') : (v.opcoes || '');
+    let opcoes = '';
+    let primeiraEscolha = '';
+    let opcoesPorEscolha = {};
+    let variaveisSoma = [];
+    if (v.tipo === 'lista_condicional' && v.opcoes && typeof v.opcoes === 'object' && v.opcoes.primeiraEscolha && v.opcoes.porEscolha) {
+      primeiraEscolha = Array.isArray(v.opcoes.primeiraEscolha) ? v.opcoes.primeiraEscolha.join('\n') : '';
+      opcoesPorEscolha = (v.opcoes.porEscolha && typeof v.opcoes.porEscolha === 'object') ? Object.fromEntries(
+        Object.entries(v.opcoes.porEscolha).map(([k, arr]) => [k, Array.isArray(arr) ? arr.join('\n') : (arr || '')])
+      ) : {};
+    } else if (v.tipo === 'soma' && v.opcoes && typeof v.opcoes === 'object' && Array.isArray(v.opcoes.variaveis)) {
+      variaveisSoma = v.opcoes.variaveis;
+    } else {
+      opcoes = Array.isArray(v.opcoes) ? v.opcoes.join('\n') : (v.opcoes || '');
+    }
     setForm({
       nome: v.nome || '',
       chave: v.chave || '',
@@ -79,7 +94,10 @@ const VariaveisTecnicas = () => {
       ordem: v.ordem || 0,
       sufixo: v.sufixo || '',
       fonte_opcoes: v.fonte_opcoes === 'fornecedores_grupo' ? 'fornecedores_grupo' : 'manual',
-      grupo_compras_id: v.grupo_compras_id != null ? String(v.grupo_compras_id) : ''
+      grupo_compras_id: v.grupo_compras_id != null ? String(v.grupo_compras_id) : '',
+      primeiraEscolha,
+      opcoesPorEscolha,
+      variaveisSoma
     });
     setError('');
     setModalOpen(true);
@@ -94,8 +112,30 @@ const VariaveisTecnicas = () => {
     const chave = (form.chave || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || nome.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const categoria = (form.categoria || '').trim() || null;
     const tipo = form.tipo || 'texto';
-    const opcoesStr = (form.opcoes || '').trim();
-    const opcoes = opcoesStr ? opcoesStr.split(/\n/).map(s => s.trim()).filter(Boolean) : [];
+    let opcoes = null;
+    if (tipo === 'lista_condicional') {
+      const primeiraEscolhaArr = (form.primeiraEscolha || '').trim().split(/\n/).map(s => s.trim()).filter(Boolean);
+      if (!primeiraEscolhaArr.length) {
+        setError('Lista condicional: informe ao menos uma opção na "Primeira escolha".');
+        return;
+      }
+      const porEscolha = {};
+      primeiraEscolhaArr.forEach((opt) => {
+        const raw = (form.opcoesPorEscolha[opt] || '').trim();
+        porEscolha[opt] = raw ? raw.split(/\n/).map(s => s.trim()).filter(Boolean) : [];
+      });
+      opcoes = { primeiraEscolha: primeiraEscolhaArr, porEscolha };
+    } else if (tipo === 'soma') {
+      const variaveisSoma = Array.isArray(form.variaveisSoma) ? form.variaveisSoma.filter(Boolean) : [];
+      if (!variaveisSoma.length) {
+        setError('Soma automática: selecione ao menos uma variável para somar.');
+        return;
+      }
+      opcoes = { variaveis: variaveisSoma };
+    } else {
+      const opcoesStr = (form.opcoes || '').trim();
+      opcoes = opcoesStr ? opcoesStr.split(/\n/).map(s => s.trim()).filter(Boolean) : [];
+    }
     const ordem = Number(form.ordem) || 0;
     const sufixo = (form.sufixo || '').trim() || null;
     const fonte_opcoes = form.tipo === 'lista' && form.fonte_opcoes === 'fornecedores_grupo' ? 'fornecedores_grupo' : 'manual';
@@ -195,9 +235,11 @@ const VariaveisTecnicas = () => {
                     <td>{TIPOS.find(t => t.value === v.tipo)?.label || v.tipo}</td>
                     <td>{v.sufixo || '—'}</td>
                     <td>
-                      {v.tipo === 'lista' && v.fonte_opcoes === 'fornecedores_grupo'
-                        ? (gruposCompras.find(g => g.id === v.grupo_compras_id)?.nome || `Grupo #${v.grupo_compras_id}`)
-                        : (v.tipo === 'lista' ? 'Manual' : '—')}
+                      {v.tipo === 'soma'
+                        ? (Array.isArray(v.opcoes?.variaveis) ? `Soma de ${v.opcoes.variaveis.length} variável(is)` : '—')
+                        : (v.tipo === 'lista' && v.fonte_opcoes === 'fornecedores_grupo'
+                          ? (gruposCompras.find(g => g.id === v.grupo_compras_id)?.nome || `Grupo #${v.grupo_compras_id}`)
+                          : (v.tipo === 'lista' ? 'Manual' : '—'))}
                     </td>
                     <td>{v.ordem}</td>
                     <td>
@@ -289,8 +331,57 @@ const VariaveisTecnicas = () => {
                   />
                 </div>
               </div>
-              {form.tipo !== 'lista' && (
+              {form.tipo !== 'lista' && form.tipo !== 'lista_condicional' && form.tipo !== 'soma' && (
                 <p className="vt-form-hint vt-form-hint-block">Para vincular esta variável ao módulo <strong>Compras (fornecedores homologados)</strong>, altere o tipo para <strong>Lista (opções fixas)</strong>. Em seguida será exibida a opção &quot;Fonte das opções&quot; com o grupo de fornecedores.</p>
+              )}
+              {form.tipo === 'soma' && (
+                <div className="vt-form-group">
+                  <label>Variáveis a somar (ex.: potência de cada motor)</label>
+                  <div className="vt-soma-variaveis-list">
+                    {list
+                      .filter(x => x.tipo !== 'soma' && x.chave && (editing ? x.chave !== editing.chave : true))
+                      .map(x => (
+                        <label key={x.id} className="vt-soma-variavel-item">
+                          <input
+                            type="checkbox"
+                            checked={(form.variaveisSoma || []).includes(x.chave)}
+                            onChange={(e) => {
+                              const cur = form.variaveisSoma || [];
+                              const next = e.target.checked ? [...cur, x.chave] : cur.filter(c => c !== x.chave);
+                              setForm(f => ({ ...f, variaveisSoma: next }));
+                            }}
+                          />
+                          <span>{x.nome || x.chave} <code>{x.chave}</code></span>
+                        </label>
+                      ))}
+                  </div>
+                  <small className="vt-form-hint">O valor desta variável será calculado automaticamente como a soma dos valores numéricos das variáveis marcadas (ex.: Potência total = motor 1 + motor 2 + …).</small>
+                </div>
+              )}
+              {form.tipo === 'lista_condicional' && (
+                <>
+                  <div className="vt-form-group">
+                    <label>Primeira escolha (uma opção por linha)</label>
+                    <textarea
+                      value={form.primeiraEscolha}
+                      onChange={(e) => setForm(f => ({ ...f, primeiraEscolha: e.target.value }))}
+                      placeholder="Motor&#10;Motoredutor"
+                      rows={3}
+                    />
+                    <small className="vt-form-hint">Ex.: Motor e Motoredutor. O usuário escolhe um; em seguida aparece a lista correspondente.</small>
+                  </div>
+                  {(form.primeiraEscolha || '').trim().split(/\n/).map(s => s.trim()).filter(Boolean).map((opt) => (
+                    <div key={opt} className="vt-form-group">
+                      <label>Opções quando selecionar &quot;{opt}&quot; (uma por linha)</label>
+                      <textarea
+                        value={form.opcoesPorEscolha[opt] || ''}
+                        onChange={(e) => setForm(f => ({ ...f, opcoesPorEscolha: { ...f.opcoesPorEscolha, [opt]: e.target.value } }))}
+                        placeholder="10 kW&#10;20 kW&#10;30 kW"
+                        rows={3}
+                      />
+                    </div>
+                  ))}
+                </>
               )}
               {form.tipo === 'lista' && (
                 <>

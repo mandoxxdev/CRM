@@ -3323,11 +3323,16 @@ app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
   if (!chave) chave = nome.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
   var categoria = (body.categoria || '').trim() || null;
   var tipo = (body.tipo || 'texto');
-  if (!['texto', 'numero', 'lista'].includes(tipo)) tipo = 'texto';
+  if (!['texto', 'numero', 'lista', 'lista_condicional', 'soma'].includes(tipo)) tipo = 'texto';
   var opcoes = body.opcoes;
   var opcoesStr = null;
-  if (Array.isArray(opcoes)) opcoesStr = JSON.stringify(opcoes);
-  else if (typeof opcoes === 'string') opcoesStr = opcoes;
+  if ((tipo === 'lista_condicional' || tipo === 'soma') && typeof opcoes === 'object' && opcoes !== null && !Array.isArray(opcoes)) {
+    opcoesStr = JSON.stringify(opcoes);
+  } else if (Array.isArray(opcoes)) {
+    opcoesStr = JSON.stringify(opcoes);
+  } else if (typeof opcoes === 'string') {
+    opcoesStr = opcoes;
+  }
   var ordem = parseInt(body.ordem, 10) || 0;
   var sufixo = (body.sufixo || '').trim() || null;
   var fonte_opcoes = (body.fonte_opcoes || '').trim() || null;
@@ -3360,11 +3365,16 @@ app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
   if (!chave) return res.status(400).json({ error: 'Chave é obrigatória' });
   var categoria = (body.categoria || '').trim() || null;
   var tipo = (body.tipo || 'texto');
-  if (!['texto', 'numero', 'lista'].includes(tipo)) tipo = 'texto';
+  if (!['texto', 'numero', 'lista', 'lista_condicional', 'soma'].includes(tipo)) tipo = 'texto';
   var opcoes = body.opcoes;
   var opcoesStr = null;
-  if (Array.isArray(opcoes)) opcoesStr = JSON.stringify(opcoes);
-  else if (typeof opcoes === 'string') opcoesStr = opcoes;
+  if ((tipo === 'lista_condicional' || tipo === 'soma') && typeof opcoes === 'object' && opcoes !== null && !Array.isArray(opcoes)) {
+    opcoesStr = JSON.stringify(opcoes);
+  } else if (Array.isArray(opcoes)) {
+    opcoesStr = JSON.stringify(opcoes);
+  } else if (typeof opcoes === 'string') {
+    opcoesStr = opcoes;
+  }
   var ordem = parseInt(body.ordem, 10) || 0;
   var sufixo = (body.sufixo || '').trim() || null;
   var fonte_opcoes = (body.fonte_opcoes || '').trim() || null;
