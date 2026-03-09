@@ -1444,7 +1444,8 @@ function executeMigrations(callback) {
     { nome: 'is_padrao', tipo: 'INTEGER DEFAULT 0' },
     { nome: 'header_image_url', tipo: 'TEXT' },
     { nome: 'footer_image_url', tipo: 'TEXT' },
-    { nome: 'variaveis_proposta_tecnica', tipo: 'TEXT' }
+    { nome: 'variaveis_proposta_tecnica', tipo: 'TEXT' },
+    { nome: 'variaveis_proposta_por_familia', tipo: 'TEXT' }
   ];
   
   colunasTemplate.forEach(coluna => {
@@ -6288,9 +6289,13 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
     
-    // Buscar itens da proposta com dados completos dos produtos
+    const requestBaseURL = (req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000');
+    
+    // Buscar itens da proposta com dados completos dos produtos (produto_imagem explícito para exibir foto do produto)
     db.all(`
-      SELECT pi.*, pr.*
+      SELECT pi.*, pr.id as produto_id, pr.codigo as produto_codigo, pr.nome as produto_nome, pr.imagem as produto_imagem,
+             pr.descricao as produto_descricao, pr.especificacoes_tecnicas, pr.familia as produto_familia,
+             pr.preco_base, pr.icms, pr.ipi
       FROM proposta_itens pi
       LEFT JOIN produtos pr ON pi.codigo_produto = pr.codigo
       WHERE pi.proposta_id = ?
@@ -6374,7 +6379,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
           function runGerar() {
             let html;
             try {
-              html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig);
+              html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL);
             } catch (genError) {
               console.error('Erro ao gerar HTML da proposta:', genError);
               console.error('Stack trace:', genError.stack);
@@ -6409,16 +6414,26 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
             }
           }
           if (!Array.isArray(chaves)) chaves = [];
+          let porFamilia = {};
+          if (templateConfig && templateConfig.variaveis_proposta_por_familia != null) {
+            if (typeof templateConfig.variaveis_proposta_por_familia === 'string') {
+              try { porFamilia = JSON.parse(templateConfig.variaveis_proposta_por_familia); } catch (_) {}
+            } else if (typeof templateConfig.variaveis_proposta_por_familia === 'object') {
+              porFamilia = templateConfig.variaveis_proposta_por_familia;
+            }
+          }
+          templateConfig.variaveis_proposta_por_familia = porFamilia;
+          const chavesUnicas = [...new Set([].concat(chaves, Object.values(porFamilia).filter(Array.isArray).reduce((a, b) => a.concat(b), [])))];
           if (templateConfig) {
             templateConfig.variaveis_proposta_tecnica = chaves;
             templateConfig.variaveis_proposta_labels = {};
           }
-          if (chaves.length === 0) {
+          if (chavesUnicas.length === 0) {
             runGerar();
             return;
           }
-          const placeholders = chaves.map(() => '?').join(',');
-          db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chaves, (err2, rows) => {
+          const placeholders = chavesUnicas.map(() => '?').join(',');
+          db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err2, rows) => {
             if (templateConfig && rows && rows.length) {
               templateConfig.variaveis_proposta_labels = {};
               rows.forEach(function (r) {
@@ -6480,10 +6495,12 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
     
-    // Buscar itens
+    // Buscar itens (produto_imagem explícito para exibir foto do produto no PDF)
     const itens = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT pi.*, pr.*
+        SELECT pi.*, pr.id as produto_id, pr.codigo as produto_codigo, pr.nome as produto_nome, pr.imagem as produto_imagem,
+               pr.descricao as produto_descricao, pr.especificacoes_tecnicas, pr.familia as produto_familia,
+               pr.preco_base, pr.icms, pr.ipi
         FROM proposta_itens pi
         LEFT JOIN produtos pr ON pi.codigo_produto = pr.codigo
         WHERE pi.proposta_id = ?
@@ -6565,14 +6582,24 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       }
     }
     if (!Array.isArray(chaves)) chaves = [];
+    let porFamiliaPdf = {};
+    if (templateConfig && templateConfig.variaveis_proposta_por_familia != null) {
+      if (typeof templateConfig.variaveis_proposta_por_familia === 'string') {
+        try { porFamiliaPdf = JSON.parse(templateConfig.variaveis_proposta_por_familia); } catch (_) {}
+      } else if (typeof templateConfig.variaveis_proposta_por_familia === 'object') {
+        porFamiliaPdf = templateConfig.variaveis_proposta_por_familia;
+      }
+    }
     templateConfig = templateConfig || {};
     templateConfig.variaveis_proposta_tecnica = chaves;
+    templateConfig.variaveis_proposta_por_familia = porFamiliaPdf;
     templateConfig.variaveis_proposta_labels = {};
-    if (chaves.length > 0) {
+    const chavesUnicasPdf = [...new Set([].concat(chaves, Object.values(porFamiliaPdf).filter(Array.isArray).reduce((a, b) => a.concat(b), [])))];
+    if (chavesUnicasPdf.length > 0) {
       try {
-        const placeholders = chaves.map(() => '?').join(',');
+        const placeholders = chavesUnicasPdf.map(() => '?').join(',');
         const rows = await new Promise((resolve, reject) => {
-          db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chaves, (err, r) => { if (err) reject(err); else resolve(r || []); });
+          db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicasPdf, (err, r) => { if (err) reject(err); else resolve(r || []); });
         });
         rows.forEach(function (r) {
           templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
@@ -6581,8 +6608,8 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
         console.error('Erro ao buscar labels das variáveis para proposta:', e);
       }
     }
-    // Gerar HTML
-    const html = gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig);
+    const pdfBaseURL = (req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000');
+    const html = gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig, pdfBaseURL);
     
     // Iniciar Puppeteer com configurações mais robustas
     browser = await puppeteer.launch({
@@ -6761,7 +6788,8 @@ app.get('/api/proposta-template', authenticateToken, (req, res) => {
         mostrar_imagens_produtos: 1,
         formato_numero_proposta: 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
         componentes: null,
-        variaveis_proposta_tecnica: []
+        variaveis_proposta_tecnica: [],
+        variaveis_proposta_por_familia: {}
       });
     }
     if (config.variaveis_proposta_tecnica && typeof config.variaveis_proposta_tecnica === 'string') {
@@ -6773,6 +6801,16 @@ app.get('/api/proposta-template', authenticateToken, (req, res) => {
     }
     if (!Array.isArray(config.variaveis_proposta_tecnica)) {
       config.variaveis_proposta_tecnica = [];
+    }
+    if (config.variaveis_proposta_por_familia != null && typeof config.variaveis_proposta_por_familia === 'string') {
+      try {
+        config.variaveis_proposta_por_familia = JSON.parse(config.variaveis_proposta_por_familia);
+      } catch (_) {
+        config.variaveis_proposta_por_familia = {};
+      }
+    }
+    if (!config.variaveis_proposta_por_familia || typeof config.variaveis_proposta_por_familia !== 'object') {
+      config.variaveis_proposta_por_familia = {};
     }
     res.json(config);
   });
@@ -6795,13 +6833,16 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
     mostrar_imagens_produtos,
     formato_numero_proposta,
     componentes,
-    variaveis_proposta_tecnica
+    variaveis_proposta_tecnica,
+    variaveis_proposta_por_familia
   } = req.body;
 
   // Verificar se já existe configuração para esta família
   const queryFamilia = familia ? 'WHERE familia = ?' : 'WHERE familia IS NULL OR familia = \'Geral\'';
   const paramsFamilia = familia ? [familia] : [];
-  
+  const variaveisPorFamiliaStr = (variaveis_proposta_por_familia && typeof variaveis_proposta_por_familia === 'object')
+    ? JSON.stringify(variaveis_proposta_por_familia) : '{}';
+
   db.get(`SELECT * FROM proposta_template_config ${queryFamilia} ORDER BY id DESC LIMIT 1`, paramsFamilia, (err, existing) => {
     if (err) {
       return res.status(500).json({ error: err.message });
@@ -6816,7 +6857,7 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           cor_texto = ?, mostrar_logo = ?, cabecalho_customizado = ?,
           rodape_customizado = ?, texto_introducao = ?, mostrar_especificacoes = ?,
           mostrar_imagens_produtos = ?, formato_numero_proposta = ?, componentes = ?,
-          variaveis_proposta_tecnica = ?, updated_at = CURRENT_TIMESTAMP
+          variaveis_proposta_tecnica = ?, variaveis_proposta_por_familia = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
           familia || 'Geral',
@@ -6834,6 +6875,7 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           formato_numero_proposta || 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
           componentes || null,
           variaveisPropostaStr,
+          variaveisPorFamiliaStr,
           existing.id
         ],
         function(err) {
@@ -6850,8 +6892,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
         `INSERT INTO proposta_template_config (
           familia, nome_empresa, logo_url, cor_primaria, cor_secundaria, cor_texto,
           mostrar_logo, cabecalho_customizado, rodape_customizado, texto_introducao,
-          mostrar_especificacoes, mostrar_imagens_produtos, formato_numero_proposta, componentes, variaveis_proposta_tecnica
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          mostrar_especificacoes, mostrar_imagens_produtos, formato_numero_proposta, componentes, variaveis_proposta_tecnica, variaveis_proposta_por_familia
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           familia || 'Geral',
           nome_empresa || 'GMP INDUSTRIAIS',
@@ -6867,7 +6909,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           mostrar_imagens_produtos !== undefined ? mostrar_imagens_produtos : 1,
           formato_numero_proposta || 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
           componentes || null,
-          variaveisPropostaStr
+          variaveisPropostaStr,
+          variaveisPorFamiliaStr
         ],
         function(err) {
           if (err) {
@@ -7107,7 +7150,7 @@ app.post('/api/proposta-template/footer-image', authenticateToken, uploadFooter.
 });
 
 // Função para gerar HTML premium da proposta - Versão Limpa e Profissional
-function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null) {
+function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null, baseURLOverride = null) {
   try {
     // Validar parâmetros
     if (!proposta) {
@@ -7120,9 +7163,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       totais = { subtotal: 0, icms: 0, ipi: 0, total: 0, dataEmissao: '', dataValidade: '' };
     }
     
-    // Configurações
+    // Configurações (baseURL do request para imagens carregarem corretamente no navegador)
     const config = templateConfig || {};
-    const logoBaseURL = process.env.API_URL || 'http://localhost:5000';
+    const logoBaseURL = (baseURLOverride && typeof baseURLOverride === 'string') ? baseURLOverride.replace(/\/$/, '') : (process.env.API_URL || 'http://localhost:5000');
     const logoMoinhoYpiranga = `${logoBaseURL}/Logo_MY.jpg`;
     
     // Logo GMP para o cabeçalho (sempre GMP, nunca logo do cliente)
@@ -7199,16 +7242,19 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     }
     
     body {
-      font-family: 'Century Gothic', 'CenturyGothic', 'AppleGothic', sans-serif;
-      color: #2c3e50;
-      line-height: 1.6;
-      background: #ffffff;
+      font-family: 'Segoe UI', 'Century Gothic', 'CenturyGothic', 'Frutiger', 'Helvetica Neue', sans-serif;
+      color: #1a1d21;
+      line-height: 1.65;
+      background: #fafbfc;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
     }
     
     .proposta-container {
-      max-width: 100%;
+      max-width: 900px;
       margin: 0 auto;
       background: #ffffff;
+      box-shadow: 0 0 40px rgba(0,0,0,0.06);
     }
     
     /* Cabeçalho - Estilo exato da imagem */
@@ -7377,9 +7423,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     
     /* Conteúdo principal */
     .proposta-body {
-      padding: 50px;
-      padding-top: 60px;
-      padding-bottom: 80px;
+      padding: 48px 56px 64px;
       background: #ffffff;
       margin-bottom: 0;
     }
@@ -7460,20 +7504,21 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       padding: 0;
     }
     
-    /* Rodapé fixo */
+    /* Rodapé visível - premium */
     .proposta-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: #ffffff;
-      border-top: 2px solid #1a4d7a;
-      padding: 15px 50px;
-      z-index: 1000;
-      display: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      background: linear-gradient(180deg, #0d2b4a 0%, #0f3460 100%);
+      color: #fff;
+      padding: 18px 40px;
+      margin-top: 0;
+      border-top: 3px solid #ff6b35;
+      font-size: 12px;
+      letter-spacing: 0.02em;
     }
-    
-    /* Rodapé removido completamente */
     
     .footer-content {
       display: flex;
@@ -7481,24 +7526,28 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       align-items: center;
       flex-wrap: wrap;
       gap: 20px;
-      font-size: 11px;
-      color: #2c3e50;
+      width: 100%;
+      font-size: 12px;
+      color: rgba(255,255,255,0.95);
     }
     
     .footer-left {
       flex: 1;
-      min-width: 300px;
+      min-width: 200px;
+      font-weight: 600;
+      color: #fff;
     }
     
     .footer-right {
       flex: 1;
       text-align: right;
-      min-width: 300px;
+      min-width: 200px;
+      opacity: 0.95;
     }
     
     .footer-divider {
       height: 1px;
-      background: #e0e0e0;
+      background: rgba(255,255,255,0.2);
       margin: 10px 0;
     }
     
@@ -7540,12 +7589,13 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     }
     
     .section-title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
-      color: #1a4d7a;
-      margin-bottom: 20px;
-      padding-bottom: 8px;
-      border-bottom: 2px solid #1a4d7a;
+      color: #0d2b4a;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #ff6b35;
+      letter-spacing: 0.02em;
       text-transform: none;
     }
     
@@ -7800,12 +7850,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         letter-spacing: 0.5px;
       }
       
-      /* Rodapé removido - não usar mais */
+      /* Rodapé visível na impressão (no final do documento) */
       .proposta-footer {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        overflow: hidden !important;
+        display: flex !important;
+        visibility: visible !important;
+        page-break-inside: avoid !important;
       }
       
       /* Conteúdo sem restrições de rodapé */
@@ -8083,15 +8132,20 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         object-fit: contain !important;
       }
       
-      /* Esconder cabeçalho do conteúdo na impressão (já temos o fixo) */
+      /* Cabeçalho fixo nas páginas 2+ (quando configurado) */
+      .header-image-print {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+      
       .header-image-container {
         display: none !important;
       }
       
-      /* Rodapé removido */
       .proposta-footer {
-        display: none !important;
-        visibility: hidden !important;
+        display: flex !important;
+        visibility: visible !important;
       }
       
       /* Rodapé fixo para impressão - aparece em todas as páginas */
@@ -8342,9 +8396,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         <div class="section-title">4. ESCOPO DE FORNECIMENTO</div>
         ${(itens || []).map((item, index) => {
           const produto = item || {};
-          const nome = item.nome || item.descricao || produto.nome || produto.descricao || 'Produto sem nome';
+          const nome = item.descricao || item.produto_nome || item.nome || produto.nome || produto.descricao || 'Produto sem nome';
           const quantidade = item.quantidade || 1;
-          const imagem = produto.imagem || '';
+          const imagem = (item.produto_imagem != null && item.produto_imagem !== '') ? item.produto_imagem : (produto.imagem || item.imagem || '');
           const imagemURL = imagem ? `${logoBaseURL}/api/uploads/produtos/${imagem}` : '';
           
           // Campos técnicos do produto
@@ -8410,7 +8464,18 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           const espessura = especs.espessura || especs.Espessura || '';
           const funcao = especs.funcao || especs.Função || '';
           const descricao_tecnica = especs.descricao || produto.descricao || '';
-          const variaveisList = config.variaveis_proposta_tecnica;
+          let variaveisList = config.variaveis_proposta_tecnica;
+          const porFamilia = config.variaveis_proposta_por_familia;
+          if (porFamilia && typeof porFamilia === 'object') {
+            const familiaItem = (item.familia_produto || item.produto_familia || produto.familia || '').trim();
+            const familiaNorm = familiaItem ? normalizarFamiliaComparacao(familiaItem) : '';
+            let listPorFamilia = null;
+            if (familiaNorm) {
+              const keyMatch = Object.keys(porFamilia).find(function (k) { return normalizarFamiliaComparacao(String(k)) === familiaNorm; });
+              if (keyMatch && Array.isArray(porFamilia[keyMatch]) && porFamilia[keyMatch].length > 0) listPorFamilia = porFamilia[keyMatch];
+            }
+            if (listPorFamilia) variaveisList = listPorFamilia;
+          }
           const variaveisLabels = config.variaveis_proposta_labels || {};
           let tableRowsHtml;
           if (config.mostrar_especificacoes && Array.isArray(variaveisList) && variaveisList.length > 0) {
@@ -8449,8 +8514,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
                 
                 ${imagemURL ? `
                 <div style="flex: 0 0 280px; text-align: center;">
-                  <img src="${imagemURL}" alt="${esc(nome)}" style="max-width: 100%; max-height: 300px; height: auto; border: 1px solid #e0e0e0; border-radius: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); object-fit: contain;" onerror="this.style.display='none';">
-                  <p style="text-align: center; font-size: 11px; color: #666; margin-top: 8px; font-style: italic; font-weight: 500;">IMAGEM ILUSTRATIVA</p>
+                  <img src="${imagemURL}" alt="${esc(nome)}" style="max-width: 100%; max-height: 300px; height: auto; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); object-fit: contain;" onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'padding: 40px 20px; font-size: 12px; color: #999;\\'>Foto não disponível</div>';">
+                  <p style="text-align: center; font-size: 11px; color: #1a4d7a; margin-top: 8px; font-weight: 500;">Foto do produto</p>
                 </div>
                 ` : ''}
               </div>
@@ -8738,6 +8803,14 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           </table>
         </div>
       </div>
+      
+      <!-- Rodapé da proposta - sempre visível -->
+      <footer class="proposta-footer">
+        <div class="footer-content">
+          <div class="footer-left">Moinho Ypiranga · Proposta Técnica Comercial nº ${esc(proposta.numero_proposta)}</div>
+          <div class="footer-right">contato@gmp.ind.br · +55 (11) 4513-9570 · www.gmp.ind.br</div>
+        </div>
+      </footer>
     </div>
   </div>
   

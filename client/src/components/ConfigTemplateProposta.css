@@ -343,6 +343,38 @@
   font-weight: 500;
 }
 
+.config-section-variaveis-por-equipamento {
+  margin-top: 1.5rem;
+}
+
+.variaveis-por-equipamento-select-wrap {
+  margin-bottom: 1rem;
+}
+
+.variaveis-por-equipamento-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--gmp-text-primary);
+  margin-bottom: 6px;
+}
+
+.variaveis-por-equipamento-select {
+  width: 100%;
+  max-width: 360px;
+  padding: 10px 12px;
+  border: 2px solid var(--gmp-border-color);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: var(--gmp-bg-secondary);
+  color: var(--gmp-text-primary);
+}
+
+.variaveis-por-equipamento-select:focus {
+  outline: none;
+  border-color: var(--gmp-primary);
+}
+
 @media (max-width: 768px) {
   .config-template-container {
     padding: 15px;
