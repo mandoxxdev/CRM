@@ -31,7 +31,9 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
     margin_impressao_top_primeira: 20,
     margin_impressao_top_outras: 50,
     margin_impressao_bottom: 45,
-    margin_impressao_lateral: 20
+    margin_impressao_lateral: 20,
+    margin_navegador_top: 19,
+    margin_navegador_bottom: 19
   });
   const [logoPreview, setLogoPreview] = useState(null);
   const [headerPreview, setHeaderPreview] = useState(null);
@@ -81,7 +83,9 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
           margin_impressao_top_primeira: response.data.margin_impressao_top_primeira != null ? Number(response.data.margin_impressao_top_primeira) : 20,
           margin_impressao_top_outras: response.data.margin_impressao_top_outras != null ? Number(response.data.margin_impressao_top_outras) : 50,
           margin_impressao_bottom: response.data.margin_impressao_bottom != null ? Number(response.data.margin_impressao_bottom) : 45,
-          margin_impressao_lateral: response.data.margin_impressao_lateral != null ? Number(response.data.margin_impressao_lateral) : 20
+          margin_impressao_lateral: response.data.margin_impressao_lateral != null ? Number(response.data.margin_impressao_lateral) : 20,
+          margin_navegador_top: response.data.margin_navegador_top != null ? Number(response.data.margin_navegador_top) : 19,
+          margin_navegador_bottom: response.data.margin_navegador_bottom != null ? Number(response.data.margin_navegador_bottom) : 19
         });
         if (response.data.logo_url) {
           setLogoPreview(`/api/uploads/logos/${response.data.logo_url}`);
@@ -400,9 +404,35 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
               />
               <small>Ex.: 20 — espaço nas laterais</small>
             </div>
+            <div className="form-group">
+              <label>Margem do navegador — topo (mm)</label>
+              <input
+                type="number"
+                name="margin_navegador_top"
+                min={0}
+                max={50}
+                step={1}
+                value={config.margin_navegador_top ?? 19}
+                onChange={handleChange}
+              />
+              <small>Quando imprime com Margens: Padrão/Personalizado, use este valor para o cabeçalho ficar no topo da folha (ex.: 19)</small>
+            </div>
+            <div className="form-group">
+              <label>Margem do navegador — base (mm)</label>
+              <input
+                type="number"
+                name="margin_navegador_bottom"
+                min={0}
+                max={50}
+                step={1}
+                value={config.margin_navegador_bottom ?? 19}
+                onChange={handleChange}
+              />
+              <small>Quando imprime com Margens: Padrão/Personalizado, use este valor para o rodapé ficar no fim da folha (ex.: 19)</small>
+            </div>
           </div>
           <p className="config-hint config-hint-print" style={{ marginTop: '12px', marginBottom: '12px', padding: '10px 12px', background: '#f0f7ff', borderRadius: '8px', border: '1px solid #1a4d7a' }}>
-            Use <strong>Margens: Nenhuma</strong> na janela de impressão. Assim o cabeçalho e o rodapé (imagens) ficam na borda da página e só o <strong>texto</strong> é recuado pelas margens que você define aqui. Com &quot;Padrão&quot;, o navegador aplica margem em tudo e o cabeçalho/rodapé também recuam.
+            Use <strong>Margens: Padrão</strong> (ou Personalizado) na janela de impressão para as margens acima funcionarem. Se o cabeçalho ou o rodapé ficarem recuados, aumente &quot;Margem do navegador&quot; (topo/base) até eles encostarem na borda da página.
           </p>
         </div>
 
