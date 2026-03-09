@@ -87,6 +87,7 @@
 }
 
 .form-group input[type="text"],
+.form-group input[type="number"],
 .form-group input[type="color"],
 .form-group textarea {
   width: 100%;
@@ -115,6 +116,16 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
+}
+
+.margins-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.config-section-margins .form-group {
+  margin-bottom: 0;
 }
 
 .color-input-group {

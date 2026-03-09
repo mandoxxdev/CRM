@@ -1445,7 +1445,10 @@ function executeMigrations(callback) {
     { nome: 'header_image_url', tipo: 'TEXT' },
     { nome: 'footer_image_url', tipo: 'TEXT' },
     { nome: 'variaveis_proposta_tecnica', tipo: 'TEXT' },
-    { nome: 'variaveis_proposta_por_familia', tipo: 'TEXT' }
+    { nome: 'variaveis_proposta_por_familia', tipo: 'TEXT' },
+    { nome: 'margin_impressao_top_primeira', tipo: 'REAL' },
+    { nome: 'margin_impressao_top_outras', tipo: 'REAL' },
+    { nome: 'margin_impressao_bottom', tipo: 'REAL' }
   ];
   
   colunasTemplate.forEach(coluna => {
@@ -6789,7 +6792,10 @@ app.get('/api/proposta-template', authenticateToken, (req, res) => {
         formato_numero_proposta: 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
         componentes: null,
         variaveis_proposta_tecnica: [],
-        variaveis_proposta_por_familia: {}
+        variaveis_proposta_por_familia: {},
+        margin_impressao_top_primeira: 20,
+        margin_impressao_top_outras: 50,
+        margin_impressao_bottom: 45
       });
     }
     if (config.variaveis_proposta_tecnica && typeof config.variaveis_proposta_tecnica === 'string') {
@@ -6812,6 +6818,9 @@ app.get('/api/proposta-template', authenticateToken, (req, res) => {
     if (!config.variaveis_proposta_por_familia || typeof config.variaveis_proposta_por_familia !== 'object') {
       config.variaveis_proposta_por_familia = {};
     }
+    if (config.margin_impressao_top_primeira == null) config.margin_impressao_top_primeira = 20;
+    if (config.margin_impressao_top_outras == null) config.margin_impressao_top_outras = 50;
+    if (config.margin_impressao_bottom == null) config.margin_impressao_bottom = 45;
     res.json(config);
   });
 });
@@ -6834,7 +6843,10 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
     formato_numero_proposta,
     componentes,
     variaveis_proposta_tecnica,
-    variaveis_proposta_por_familia
+    variaveis_proposta_por_familia,
+    margin_impressao_top_primeira,
+    margin_impressao_top_outras,
+    margin_impressao_bottom
   } = req.body;
 
   // Verificar se já existe configuração para esta família
@@ -6851,13 +6863,18 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
     if (existing) {
       // Atualizar
       const variaveisPropostaStr = Array.isArray(variaveis_proposta_tecnica) ? JSON.stringify(variaveis_proposta_tecnica) : (variaveis_proposta_tecnica || null);
+      const marginTopPrimeira = margin_impressao_top_primeira != null ? Number(margin_impressao_top_primeira) : 20;
+      const marginTopOutras = margin_impressao_top_outras != null ? Number(margin_impressao_top_outras) : 50;
+      const marginBottom = margin_impressao_bottom != null ? Number(margin_impressao_bottom) : 45;
       db.run(
         `UPDATE proposta_template_config SET 
           familia = ?, nome_empresa = ?, logo_url = ?, cor_primaria = ?, cor_secundaria = ?,
           cor_texto = ?, mostrar_logo = ?, cabecalho_customizado = ?,
           rodape_customizado = ?, texto_introducao = ?, mostrar_especificacoes = ?,
           mostrar_imagens_produtos = ?, formato_numero_proposta = ?, componentes = ?,
-          variaveis_proposta_tecnica = ?, variaveis_proposta_por_familia = ?, updated_at = CURRENT_TIMESTAMP
+          variaveis_proposta_tecnica = ?, variaveis_proposta_por_familia = ?,
+          margin_impressao_top_primeira = ?, margin_impressao_top_outras = ?, margin_impressao_bottom = ?,
+          updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
           familia || 'Geral',
@@ -6876,6 +6893,9 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           componentes || null,
           variaveisPropostaStr,
           variaveisPorFamiliaStr,
+          marginTopPrimeira,
+          marginTopOutras,
+          marginBottom,
           existing.id
         ],
         function(err) {
@@ -6888,12 +6908,16 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
     } else {
       // Criar nova
       const variaveisPropostaStr = Array.isArray(variaveis_proposta_tecnica) ? JSON.stringify(variaveis_proposta_tecnica) : (variaveis_proposta_tecnica || null);
+      const marginTopPrimeira = margin_impressao_top_primeira != null ? Number(margin_impressao_top_primeira) : 20;
+      const marginTopOutras = margin_impressao_top_outras != null ? Number(margin_impressao_top_outras) : 50;
+      const marginBottom = margin_impressao_bottom != null ? Number(margin_impressao_bottom) : 45;
       db.run(
         `INSERT INTO proposta_template_config (
           familia, nome_empresa, logo_url, cor_primaria, cor_secundaria, cor_texto,
           mostrar_logo, cabecalho_customizado, rodape_customizado, texto_introducao,
-          mostrar_especificacoes, mostrar_imagens_produtos, formato_numero_proposta, componentes, variaveis_proposta_tecnica, variaveis_proposta_por_familia
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          mostrar_especificacoes, mostrar_imagens_produtos, formato_numero_proposta, componentes, variaveis_proposta_tecnica, variaveis_proposta_por_familia,
+          margin_impressao_top_primeira, margin_impressao_top_outras, margin_impressao_bottom
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           familia || 'Geral',
           nome_empresa || 'GMP INDUSTRIAIS',
@@ -6910,7 +6934,10 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           formato_numero_proposta || 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
           componentes || null,
           variaveisPropostaStr,
-          variaveisPorFamiliaStr
+          variaveisPorFamiliaStr,
+          marginTopPrimeira,
+          marginTopOutras,
+          marginBottom
         ],
         function(err) {
           if (err) {
@@ -7227,6 +7254,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     // Função auxiliar para escapar HTML
     const esc = (text) => (text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     
+    // Margens de impressão (mm) - editáveis em Configurações
+    const marginTopPrimeira = Math.max(10, Math.min(80, Number(config.margin_impressao_top_primeira) || 20));
+    const marginTopOutras = Math.max(20, Math.min(120, Number(config.margin_impressao_top_outras) || 50));
+    const marginBottom = Math.max(20, Math.min(80, Number(config.margin_impressao_bottom) || 45));
+    const marginLateral = 20;
+    
     // HTML completo - Design limpo e profissional
     return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -7253,6 +7286,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     .proposta-container {
       max-width: 900px;
       margin: 0 auto;
+      margin-top: 52px;
       background: #ffffff;
       box-shadow: 0 0 40px rgba(0,0,0,0.06);
     }
@@ -7736,11 +7770,31 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       font-weight: 700 !important;
     }
     
-    /* Botão Gerar PDF */
-    .btn-gerar-pdf {
+    /* Barra com botão e dica de impressão */
+    .print-tip-bar {
       position: fixed;
-      top: 20px;
-      right: 20px;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #0d2b4a 0%, #1a4d7a 100%);
+      color: #fff;
+      font-size: 13px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    }
+    .print-tip-text {
+      margin: 0;
+      opacity: 0.95;
+    }
+    .print-tip-text strong {
+      color: #ff9f43;
+    }
+    .btn-gerar-pdf {
+      flex-shrink: 0;
       background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
       color: #ffffff;
       border: none;
@@ -7766,12 +7820,15 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     
     /* Print styles */
     @media print {
+      .print-tip-bar {
+        display: none !important;
+      }
       .btn-gerar-pdf {
         display: none !important;
       }
       
       @page {
-        margin: 20mm 20mm 45mm 20mm;
+        margin: ${marginTopPrimeira}mm ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm;
         size: A4;
       }
       
@@ -8087,14 +8144,14 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         opacity: 1 !important;
       }
       
-      /* Primeira página: margem normal */
+      /* Primeira página: margem superior configurável */
       @page:first {
-        margin-top: 20mm !important;
+        margin-top: ${marginTopPrimeira}mm !important;
       }
       
-      /* A partir da segunda página: margem-top maior para o cabeçalho fixo não sobrepor o conteúdo */
+      /* A partir da segunda página: margem-top para o cabeçalho fixo não sobrepor o conteúdo */
       @page:not(:first) {
-        margin-top: 50mm !important;
+        margin-top: ${marginTopOutras}mm !important;
       }
       
       /* Garantir que o primeiro elemento após a primeira página tenha margin-top */
@@ -8287,7 +8344,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
   </style>
 </head>
 <body>
-  <button class="btn-gerar-pdf" id="btnGerarPDF" onclick="window.print()">Gerar PDF</button>
+  <div class="print-tip-bar">
+    <button class="btn-gerar-pdf" id="btnGerarPDF" onclick="window.print()">Gerar PDF</button>
+    <p class="print-tip-text">Na janela de impressão, use <strong>Margens: Nenhuma</strong> e <strong>Escala: Padrão</strong> para o cabeçalho e rodapé não sobreporem o conteúdo.</p>
+  </div>
   
   <div class="proposta-container">
     <!-- Cabeçalho -->

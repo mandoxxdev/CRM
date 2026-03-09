@@ -27,7 +27,10 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
     mostrar_imagens_produtos: true,
     formato_numero_proposta: 'PROPOSTA TÉCNICA COMERCIAL N° {numero}',
     variaveis_proposta_tecnica: [],
-    variaveis_proposta_por_familia: {}
+    variaveis_proposta_por_familia: {},
+    margin_impressao_top_primeira: 20,
+    margin_impressao_top_outras: 50,
+    margin_impressao_bottom: 45
   });
   const [logoPreview, setLogoPreview] = useState(null);
   const [headerPreview, setHeaderPreview] = useState(null);
@@ -73,7 +76,10 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
           mostrar_especificacoes: response.data.mostrar_especificacoes !== 0,
           mostrar_imagens_produtos: response.data.mostrar_imagens_produtos !== 0,
           variaveis_proposta_tecnica: Array.isArray(vpt) ? vpt : [],
-          variaveis_proposta_por_familia: vpf && typeof vpf === 'object' ? vpf : {}
+          variaveis_proposta_por_familia: vpf && typeof vpf === 'object' ? vpf : {},
+          margin_impressao_top_primeira: response.data.margin_impressao_top_primeira != null ? Number(response.data.margin_impressao_top_primeira) : 20,
+          margin_impressao_top_outras: response.data.margin_impressao_top_outras != null ? Number(response.data.margin_impressao_top_outras) : 50,
+          margin_impressao_bottom: response.data.margin_impressao_bottom != null ? Number(response.data.margin_impressao_bottom) : 45
         });
         if (response.data.logo_url) {
           setLogoPreview(`/api/uploads/logos/${response.data.logo_url}`);
@@ -327,6 +333,57 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                   className="color-text-input"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="config-section config-section-margins">
+          <h2>Margens de impressão (PDF / imprimir)</h2>
+          <p className="config-hint" style={{ marginBottom: '12px' }}>
+            Ajuste em milímetros (mm). Evita que o conteúdo fique por baixo do cabeçalho e do rodapé. Teste gerando uma proposta e imprimindo.
+          </p>
+          <p className="config-hint config-hint-print" style={{ marginBottom: '12px', padding: '10px 12px', background: '#f0f7ff', borderRadius: '8px', border: '1px solid #1a4d7a' }}>
+            <strong>Na janela de impressão do navegador</strong>, use <strong>Margens: Nenhuma</strong> e <strong>Escala: Padrão</strong>. Assim as margens que você configurou aqui são aplicadas; outras opções podem sobrepor ou ignorar esse layout.
+          </p>
+          <div className="margins-grid">
+            <div className="form-group">
+              <label>Margem superior — 1ª página (mm)</label>
+              <input
+                type="number"
+                name="margin_impressao_top_primeira"
+                min={10}
+                max={80}
+                step={1}
+                value={config.margin_impressao_top_primeira ?? 20}
+                onChange={handleChange}
+              />
+              <small>Ex.: 20 — espaço no topo da capa</small>
+            </div>
+            <div className="form-group">
+              <label>Margem superior — demais páginas (mm)</label>
+              <input
+                type="number"
+                name="margin_impressao_top_outras"
+                min={20}
+                max={120}
+                step={1}
+                value={config.margin_impressao_top_outras ?? 50}
+                onChange={handleChange}
+              />
+              <small>Ex.: 50 — espaço para o cabeçalho fixo</small>
+            </div>
+            <div className="form-group">
+              <label>Margem inferior — todas as páginas (mm)</label>
+              <input
+                type="number"
+                name="margin_impressao_bottom"
+                min={20}
+                max={80}
+                step={1}
+                value={config.margin_impressao_bottom ?? 45}
+                onChange={handleChange}
+              />
+              <small>Ex.: 45 — espaço para o rodapé fixo</small>
             </div>
           </div>
         </div>
