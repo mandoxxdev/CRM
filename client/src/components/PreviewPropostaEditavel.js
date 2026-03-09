@@ -139,53 +139,25 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
   const handleGerarPDF = async () => {
     setLoading(true);
     try {
-      // Atualizar proposta com dados editados antes de gerar PDF
       await api.put(`/propostas/${proposta.id}`, {
         ...formData,
         ...dadosEditaveis,
         itens: itensEditaveis,
         valor_total: calcularTotal()
       });
-      
-      // Gerar PDF usando Puppeteer no backend
-      const token = localStorage.getItem('token');
-      const baseURL = api.defaults.baseURL || '/api';
-      let urlPDF;
-      
-      if (baseURL.startsWith('http')) {
-        urlPDF = `${baseURL}/propostas/${proposta.id}/pdf?token=${encodeURIComponent(token || '')}`;
-      } else {
-        urlPDF = `${baseURL}/propostas/${proposta.id}/pdf?token=${encodeURIComponent(token || '')}`;
-      }
-      
-      // Fazer download do PDF
-      const response = await fetch(urlPDF, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erro ao gerar PDF' }));
-        throw new Error(errorData.error || 'Erro ao gerar PDF');
-      }
-      
-      // Criar blob e fazer download
-      const blob = await response.blob();
+      // Abrir proposta em nova aba para gerar PDF pelo navegador (Imprimir → Salvar como PDF)
+      const response = await api.get(`/propostas/${proposta.id}/premium`, { responseType: 'text' });
+      const blob = new Blob([response.data], { type: 'text/html; charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `proposta-${proposta.numero_proposta || proposta.id}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      alert('PDF gerado e baixado com sucesso!');
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (w) {
+        setTimeout(() => { w.print(); }, 600);
+      } else {
+        alert('Permita pop-ups para abrir a proposta. Depois use Imprimir → Salvar como PDF.');
+      }
     } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      alert('Erro ao gerar PDF: ' + (error.message || 'Erro desconhecido'));
+      console.error('Erro ao abrir proposta para PDF:', error);
+      alert('Erro: ' + (error.response?.data?.error || error.message || 'Erro ao abrir proposta'));
     } finally {
       setLoading(false);
     }
@@ -669,7 +641,7 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
             className="btn-primary"
             disabled={loading}
           >
-            <FiDownload /> {loading ? 'Gerando...' : 'Gerar PDF'}
+            <FiDownload /> {loading ? 'Abrindo...' : 'Gerar PDF (navegador)'}
           </button>
         </div>
       </div>
