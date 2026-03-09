@@ -3279,7 +3279,7 @@ app.get('/api/variaveis-tecnicas/opcoes/:chave', authenticateToken, (req, res) =
       var opcoes = row.opcoes;
       if (typeof opcoes === 'string') { try { opcoes = JSON.parse(opcoes); } catch (_) { opcoes = []; } }
       if (!Array.isArray(opcoes)) opcoes = [];
-      res.json({ opcoes: opcoes.map(function(val, i) { return { id: 'opt-' + i, valor: typeof val === 'string' ? val : (val && val.valor != null ? String(val.valor) : ''); }; }) });
+      res.json({ opcoes: opcoes.map(function(val, i) { return { id: 'opt-' + i, valor: typeof val === 'string' ? val : (val && val.valor != null ? String(val.valor) : '') }; }) });
     }
   });
 });
