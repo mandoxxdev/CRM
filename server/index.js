@@ -6319,7 +6319,9 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
     
-    const requestBaseURL = (req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000');
+    const requestBaseURL = (process.env.API_URL && process.env.API_URL.trim())
+      ? process.env.API_URL.replace(/\/$/, '')
+      : (req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000');
     
     // Buscar itens da proposta com dados completos dos produtos (produto_imagem explícito para exibir foto do produto)
     db.all(`

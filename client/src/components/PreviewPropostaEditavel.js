@@ -145,14 +145,24 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
         itens: itensEditaveis,
         valor_total: calcularTotal()
       });
-      // Abrir proposta em nova aba para gerar PDF pelo navegador (Imprimir → Salvar como PDF)
       const response = await api.get(`/propostas/${proposta.id}/premium`, { responseType: 'text' });
-      const blob = new Blob([response.data], { type: 'text/html; charset=utf-8' });
+      let html = response.data;
+
+      // Garantir que imagens (cabeçalho/rodapé, logos, etc.) carreguem na janela do PDF: usar origem da API
+      const apiBase = api.defaults.baseURL || '';
+      const apiOrigin = (apiBase.startsWith('http') ? apiBase.replace(/\/api\/?$/, '') : window.location.origin);
+      html = html.replace(/src="(https?:)?\/\/[^/]+(\/api\/uploads\/[^"]+)"/g, (_, __, path) => `src="${apiOrigin}${path}"`);
+
+      // Imprimir só depois da página (e imagens) carregarem, para não travar o navegador
+      const autoPrintScript = '<script>window.onload=function(){setTimeout(function(){window.print();},400);}</script>';
+      if (html.includes('</body>') && !html.includes('window.onload=function(){setTimeout')) {
+        html = html.replace('</body>', autoPrintScript + '\n</body>');
+      }
+
+      const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const w = window.open(url, '_blank', 'noopener,noreferrer');
-      if (w) {
-        setTimeout(() => { w.print(); }, 600);
-      } else {
+      if (!w) {
         alert('Permita pop-ups para abrir a proposta. Depois use Imprimir → Salvar como PDF.');
       }
     } catch (error) {
@@ -183,8 +193,11 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
         responseType: 'text'
       });
       
-      // Substituir os textos editáveis no HTML com contenteditable
       let htmlEditavel = response.data;
+      // Garantir que imagens (cabeçalho/rodapé, logos) carreguem no iframe: usar origem da API
+      const apiBase = api.defaults.baseURL || '';
+      const apiOrigin = (apiBase.startsWith('http') ? apiBase.replace(/\/api\/?$/, '') : window.location.origin);
+      htmlEditavel = htmlEditavel.replace(/src="(https?:)?\/\/[^/]+(\/api\/uploads\/[^"]+)"/g, (_, __, path) => `src="${apiOrigin}${path}"`);
       
       // Adicionar script para tornar TODOS os textos editáveis e comunicar mudanças
       const scriptEditavel = `
