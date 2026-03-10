@@ -1,0 +1,26 @@
+.proposta-form { padding: 1.5rem; max-width: 1000px; margin: 0 auto; }
+.proposta-form-loading { padding: 2rem; text-align: center; color: #64748b; }
+.proposta-form-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+.proposta-form-header h1 { margin: 0; font-size: 1.35rem; }
+.proposta-form-header-actions { display: flex; gap: 0.75rem; }
+.proposta-form .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; border: none; cursor: pointer; text-decoration: none; }
+.proposta-form .btn-sec { background: #f1f5f9; color: #1e293b; border: 1px solid #e2e8f0; }
+.proposta-form .btn-pri { background: #0066cc; color: #fff; }
+.proposta-form-alert { padding: 0.75rem 1rem; margin-bottom: 1rem; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; color: #92400e; font-size: 0.9rem; }
+.proposta-form-form { display: flex; flex-direction: column; gap: 1.5rem; }
+.proposta-form-section { padding: 1rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+.proposta-form-section h2 { margin: 0 0 1rem 0; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.proposta-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.proposta-form-field { margin-bottom: 1rem; }
+.proposta-form-field.full { grid-column: 1 / -1; }
+.proposta-form-field label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.25rem; }
+.proposta-form-field input, .proposta-form-field select, .proposta-form-field textarea { width: 100%; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; }
+.proposta-form-empty { margin: 0; color: #64748b; }
+.proposta-form-table-wrap { margin-top: 0.75rem; overflow: auto; }
+.proposta-form-table { width: 100%; border-collapse: collapse; }
+.proposta-form-table th, .proposta-form-table td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+.proposta-form-table th { background: #f8fafc; font-size: 0.8rem; }
+.proposta-form-table .input-num { width: 80px; padding: 0.35rem; }
+.proposta-form-table .btn-remove { background: none; border: none; cursor: pointer; color: #64748b; padding: 0.25rem; }
+.proposta-form-table .btn-remove:hover { color: #dc2626; }
+.proposta-form-total { margin: 0.5rem 0 0 0; padding-top: 0.5rem; border-top: 1px solid #e2e8f0; }

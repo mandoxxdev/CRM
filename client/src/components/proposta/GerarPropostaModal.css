@@ -1,0 +1,29 @@
+.gerar-proposta-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+.gerar-proposta-modal { background: #fff; border-radius: 12px; max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+.gerar-proposta-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid #e2e8f0; }
+.gerar-proposta-modal-header h2 { margin: 0; font-size: 1.25rem; }
+.gerar-proposta-modal-close { background: none; border: none; font-size: 1.25rem; cursor: pointer; color: #64748b; padding: 0.25rem; }
+.gerar-proposta-modal-hint { margin: 0; padding: 0.75rem 1.5rem; background: #e8f5e9; border-left: 4px solid #4caf50; font-size: 0.9rem; color: #2e7d32; }
+.gerar-proposta-modal-form { padding: 1.5rem; }
+.gerar-proposta-modal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.gerar-proposta-modal-field { margin-bottom: 1rem; }
+.gerar-proposta-modal-field label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.25rem; }
+.gerar-proposta-modal-field select, .gerar-proposta-modal-field input, .gerar-proposta-modal-field textarea { width: 100%; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; }
+.gerar-proposta-modal-produtos { margin: 1.5rem 0; }
+.gerar-proposta-modal-produtos h3 { margin: 0 0 0.75rem 0; font-size: 1rem; }
+.gerar-proposta-modal-empty { color: #64748b; margin: 0; }
+.gerar-proposta-modal-produtos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem; }
+.gerar-proposta-modal-prod-card { position: relative; padding: 0.75rem; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; }
+.gerar-proposta-modal-prod-card.selecionado { border-color: #0066cc; background: #eff6ff; }
+.gerar-proposta-modal-prod-card .check { position: absolute; top: 0.5rem; right: 0.5rem; color: #0066cc; }
+.gerar-proposta-modal-prod-card strong, .gerar-proposta-modal-prod-card span { display: block; font-size: 0.85rem; }
+.gerar-proposta-modal-selecionados { margin: 1rem 0; padding: 1rem; background: #f8fafc; border-radius: 8px; }
+.gerar-proposta-modal-selecionados h3 { margin: 0 0 0.5rem 0; font-size: 0.95rem; }
+.gerar-proposta-modal-selecionados ul { list-style: none; padding: 0; margin: 0; }
+.gerar-proposta-modal-selecionados li { display: flex; align-items: center; gap: 0.75rem; padding: 0.35rem 0; }
+.gerar-proposta-modal-selecionados li input { width: 60px; padding: 0.25rem; }
+.gerar-proposta-modal-total { margin: 0.5rem 0 0 0; padding-top: 0.5rem; border-top: 1px solid #e2e8f0; }
+.gerar-proposta-modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; }
+.gerar-proposta-modal .btn { padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; cursor: pointer; border: none; }
+.gerar-proposta-modal .btn-sec { background: #f1f5f9; color: #1e293b; }
+.gerar-proposta-modal .btn-pri { background: #0066cc; color: #fff; }

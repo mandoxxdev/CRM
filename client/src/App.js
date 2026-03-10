@@ -8,9 +8,9 @@ import Clientes from './components/Clientes';
 import ClienteForm from './components/ClienteForm';
 import Projetos from './components/Projetos';
 import ProjetoForm from './components/ProjetoForm';
-import PropostasOrion from './components/proposta/PropostasOrion';
-import PropostaFormOrion from './components/proposta/PropostaFormOrion';
-import PropostaDetalheOrion from './components/proposta/PropostaDetalheOrion';
+import PropostasList from './components/proposta/PropostasList';
+import PropostaForm from './components/proposta/PropostaForm';
+import PropostaDetalhe from './components/proposta/PropostaDetalhe';
 import Aprovacoes from './components/Aprovacoes';
 import ConfigTemplateProposta from './components/ConfigTemplateProposta';
 import EditorTemplateProposta from './components/EditorTemplateProposta';
@@ -183,10 +183,10 @@ function AppRoutes() {
         <Route path="projetos" element={<Projetos />} />
         <Route path="projetos/novo" element={<ProjetoForm />} />
         <Route path="projetos/editar/:id" element={<ProjetoForm />} />
-        <Route path="propostas" element={<PropostasOrion />} />
-        <Route path="propostas/detalhe/:id" element={<PropostaDetalheOrion />} />
-        <Route path="propostas/nova" element={<PropostaFormOrion />} />
-        <Route path="propostas/editar/:id" element={<PropostaFormOrion />} />
+        <Route path="propostas" element={<PropostasList />} />
+        <Route path="propostas/detalhe/:id" element={<PropostaDetalhe />} />
+        <Route path="propostas/nova" element={<PropostaForm />} />
+        <Route path="propostas/editar/:id" element={<PropostaForm />} />
         <Route path="propostas/config-template" element={<ConfigTemplateProposta />} />
         <Route path="propostas/editor-template" element={<EditorTemplateProposta />} />
         <Route path="aprovacoes" element={<Aprovacoes />} />
