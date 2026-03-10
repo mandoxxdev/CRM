@@ -19,6 +19,40 @@
   gap: 0.5rem;
 }
 
+.config-template-editor-cta {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, rgba(var(--gmp-primary-rgb, 0, 102, 204), 0.08) 0%, rgba(var(--gmp-primary-rgb, 0, 102, 204), 0.04) 100%);
+  border: 1px solid rgba(var(--gmp-primary-rgb, 0, 102, 204), 0.25);
+  border-radius: 12px;
+}
+
+.btn-editor-visual {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  background: var(--gmp-primary, #0066cc);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+
+.btn-editor-visual:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.35);
+  color: #fff;
+}
+
+.config-template-editor-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  color: var(--gmp-text-secondary);
+  line-height: 1.4;
+}
+
 .config-template-header {
   display: flex;
   justify-content: space-between;

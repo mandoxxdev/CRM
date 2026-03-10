@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { FiSave, FiUpload, FiX, FiSettings, FiSearch, FiFileText, FiTrash2 } from 'react-icons/fi';
+import { FiSave, FiUpload, FiX, FiSettings, FiSearch, FiFileText, FiTrash2, FiEdit2 } from 'react-icons/fi';
 import './ConfigTemplateProposta.css';
 
 const ConfigTemplateProposta = ({ embedded = false }) => {
@@ -288,7 +289,15 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
         </div>
       )}
       {embedded && (
-        <h2 className="config-template-embedded-title"><FiFileText /> Template de proposta — variáveis na proposta e layout</h2>
+        <>
+          <h2 className="config-template-embedded-title"><FiFileText /> Template de proposta — variáveis na proposta e layout</h2>
+          <div className="config-template-editor-cta">
+            <Link to="/comercial/propostas/editor-template" className="btn-editor-visual">
+              <FiEdit2 /> Editar template no modo visual
+            </Link>
+            <p className="config-template-editor-hint">Arraste blocos, reordene seções e edite textos como no Word. O que você salvar aqui será usado no preview e no PDF da proposta.</p>
+          </div>
+        </>
       )}
       <div className="config-template-content">
         <div className="config-section">

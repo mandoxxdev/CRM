@@ -6419,7 +6419,17 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
           function runGerar() {
             let html;
             try {
-              html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
+              let compList = [];
+              if (templateConfig && templateConfig.componentes) {
+                if (typeof templateConfig.componentes === 'string') { try { compList = JSON.parse(templateConfig.componentes); } catch (_) {} }
+                else if (Array.isArray(templateConfig.componentes)) compList = templateConfig.componentes;
+              }
+              if (Array.isArray(compList) && compList.length > 0) {
+                html = gerarHTMLPropostaFromComponentes(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
+              }
+              if (!html) {
+                html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
+              }
             } catch (genError) {
               console.error('Erro ao gerar HTML da proposta:', genError);
               console.error('Stack trace:', genError.stack);
@@ -6631,7 +6641,14 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     }
     
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
-    const html = gerarHTMLPropostaPremium(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true);
+    let compList = [];
+    if (templateConfig && templateConfig.componentes) {
+      if (typeof templateConfig.componentes === 'string') { try { compList = JSON.parse(templateConfig.componentes); } catch (_) {} }
+      else if (Array.isArray(templateConfig.componentes)) compList = templateConfig.componentes;
+    }
+    let html = (Array.isArray(compList) && compList.length > 0)
+      ? gerarHTMLPropostaFromComponentes(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true)
+      : gerarHTMLPropostaPremium(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true);
     if (!html || typeof html !== 'string' || html.trim().length === 0) {
       throw new Error('HTML da proposta está vazio');
     }
@@ -7140,6 +7157,149 @@ app.post('/api/proposta-template/footer-image', authenticateToken, uploadFooter.
     );
   });
 });
+
+// Gera HTML da proposta a partir dos componentes salvos no editor de template (modo visual).
+// Usado quando o usuário configurou blocos no Editor de Template; preview e PDF usam esse layout.
+function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfig, baseURLOverride, forPdfServer, omitPrintBar) {
+  const config = templateConfig || {};
+  let componentes = [];
+  if (config.componentes) {
+    if (typeof config.componentes === 'string') {
+      try { componentes = JSON.parse(config.componentes); } catch (_) {}
+    } else if (Array.isArray(config.componentes)) {
+      componentes = config.componentes;
+    }
+  }
+  if (!Array.isArray(componentes) || componentes.length === 0) return null;
+
+  const logoBaseURL = (baseURLOverride && typeof baseURLOverride === 'string') ? baseURLOverride.replace(/\/$/, '') : (process.env.API_URL || 'http://localhost:5000');
+  let logoGMP = `${logoBaseURL}/logo-gmp.png`;
+  if (config.logo_url) logoGMP = `${logoBaseURL}/api/uploads/logos/${config.logo_url}`;
+  const esc = (t) => (t || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fmt = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(n) || 0);
+  proposta = proposta || {};
+  proposta.numero_proposta = proposta.numero_proposta || 'N/A';
+  proposta.titulo = proposta.titulo || 'Proposta Técnica Comercial';
+  totais = totais || { subtotal: 0, total: 0, dataEmissao: '', dataValidade: '' };
+  itens = Array.isArray(itens) ? itens : [];
+
+  let headerImageURL = `${logoBaseURL}/cabecalho.jpg?t=${Date.now()}`;
+  let headerImageFixedURL = null;
+  if (config.header_image_url) headerImageFixedURL = `${logoBaseURL}/api/uploads/headers/${config.header_image_url}?t=${Date.now()}`;
+  let footerImageURL = null;
+  if (config.footer_image_url) footerImageURL = `${logoBaseURL}/api/uploads/footers/${config.footer_image_url}?t=${Date.now()}`;
+
+  const marginTopPrimeira = Math.max(10, Math.min(80, Number(config.margin_impressao_top_primeira) || 20));
+  const marginTopOutras = Math.max(20, Math.min(120, Number(config.margin_impressao_top_outras) || 50));
+  const marginBottom = Math.max(20, Math.min(80, Number(config.margin_impressao_bottom) || 45));
+  const marginLateral = Math.max(10, Math.min(50, Number(config.margin_impressao_lateral) || 20));
+
+  function renderBlock(c) {
+    const tipo = (c.tipo || '').toLowerCase();
+    const cf = c.config || {};
+    switch (tipo) {
+      case 'cabecalho':
+        return `<div class="proposta-header" style="background: linear-gradient(135deg, #0d2b4a 0%, #1a4d7a 50%, #0f3460 100%); padding: 40px 50px; min-height: 200px; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-size: 28px; font-weight: 700; color: #fff;">PROPOSTA TÉCNICA COMERCIAL Nº ${esc(proposta.numero_proposta)}</div>
+            <div style="font-size: 14px; color: rgba(255,255,255,0.95); margin-top: 8px;">${esc(proposta.titulo)}</div>
+          </div>
+          <div>${config.logo_url ? `<img src="${logoBaseURL}/api/uploads/logos/${config.logo_url}" alt="Logo" style="max-height: 120px;">` : `<img src="${logoGMP}" alt="Logo" style="max-height: 120px;">`}</div>
+        </div>`;
+      case 'dados_cliente':
+        return `<div class="section" style="page-break-inside: avoid;"><div class="section-title">EMPRESA CONTRATANTE: ${esc(proposta.nome_fantasia || proposta.razao_social || '')}</div>
+          <table class="dados-table" style="width:100%; border-collapse: collapse;"><tbody>
+            ${proposta.cnpj ? `<tr><td style="padding:4px 8px 4px 0; color:#555;">CNPJ:</td><td>${esc(proposta.cnpj)}</td></tr>` : ''}
+            <tr><td style="padding:4px 8px 4px 0; color:#555;">A/c.:</td><td>${esc(proposta.cliente_contato || '')}</td></tr>
+            <tr><td style="padding:4px 8px 4px 0; color:#555;">Departamento:</td><td>${esc(proposta.cliente_departamento || '')}</td></tr>
+            <tr><td style="padding:4px 8px 4px 0; color:#555;">Data de emissão:</td><td>${esc(totais.dataEmissao || '')}</td></tr>
+          </tbody></table></div>`;
+      case 'produtos':
+        return `<div class="section" style="page-break-inside: avoid;"><div class="section-title">OFERTA / PRODUTOS</div>
+          <table style="width:100%; border-collapse: collapse; border: 1px solid #ddd;"><thead><tr><th style="border:1px solid #ddd; padding:8px;">ITEM</th><th style="border:1px solid #ddd; padding:8px;">QUANT.</th><th style="border:1px solid #ddd; padding:8px;">DESCRIÇÃO</th></tr></thead><tbody>
+          ${itens.map((item, i) => `<tr><td style="border:1px solid #ddd; padding:8px;">${i + 1}</td><td style="border:1px solid #ddd; padding:8px;">${esc(item.quantidade || '')} ${esc(item.unidade || 'UN')}</td><td style="border:1px solid #ddd; padding:8px;">${esc(item.descricao || item.nome || '')}</td></tr>`).join('')}
+          </tbody></table></div>`;
+      case 'valores':
+        return `<div class="section" style="page-break-inside: avoid;"><div class="section-title">TABELA DE PREÇOS</div>
+          <table style="width:100%; border-collapse: collapse; border: 1px solid #ddd;"><thead><tr><th style="border:1px solid #ddd; padding:8px;">ITEM</th><th style="border:1px solid #ddd; padding:8px;">DESCRIÇÃO</th><th style="border:1px solid #ddd; padding:8px;">QUANT.</th><th style="border:1px solid #ddd; padding:8px;">PREÇO UNIT.</th><th style="border:1px solid #ddd; padding:8px;">TOTAL</th></tr></thead><tbody>
+          ${itens.map((item, i) => {
+            const q = parseFloat(item.quantidade) || 1;
+            const u = parseFloat(item.valor_unitario) || 0;
+            const t = parseFloat(item.valor_total) || (q * u);
+            return `<tr><td style="border:1px solid #ddd; padding:8px;">${i + 1}</td><td style="border:1px solid #ddd; padding:8px;">${esc(item.descricao || item.nome || '')}</td><td style="border:1px solid #ddd; padding:8px;">${q} ${esc(item.unidade || 'UN')}</td><td style="border:1px solid #ddd; padding:8px;">${fmt(u)}</td><td style="border:1px solid #ddd; padding:8px;">${fmt(t)}</td></tr>`;
+          }).join('')}
+          </tbody></table><p style="margin-top:12px; text-align:right;"><strong>Total: ${fmt(totais.total)}</strong></p></div>`;
+      case 'condicoes':
+        return `<div class="section" style="page-break-inside: avoid;"><div class="section-title">CONDIÇÕES COMERCIAIS</div><div class="texto-corpo"><p>Condições de pagamento, prazo de entrega e garantia conforme acordado.</p></div></div>`;
+      case 'texto':
+        return `<div class="section" style="page-break-inside: avoid;">${cf.titulo ? `<div class="section-title">${esc(cf.titulo)}</div>` : ''}<div class="texto-corpo"><p style="font-size: ${cf.tamanho === 'grande' ? '16px' : cf.tamanho === 'pequeno' ? '12px' : '14px' };">${esc(cf.conteudo || '')}</p></div></div>`;
+      case 'tabela':
+        return `<div class="section" style="page-break-inside: avoid;">${cf.titulo ? `<div class="section-title">${esc(cf.titulo)}</div>` : ''}<table style="width:100%; border-collapse: collapse; border: 1px solid #ddd;"><thead><tr>${(cf.colunas || []).map(col => `<th style="border:1px solid #ddd; padding:8px;">${esc(col)}</th>`).join('')}</tr></thead><tbody>${(cf.linhas || []).map(linha => `<tr>${(linha || []).map(cel => `<td style="border:1px solid #ddd; padding:8px;">${esc(cel)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      case 'imagem':
+        return cf.url ? `<div class="section" style="page-break-inside: avoid;"><div style="text-align:center;"><img src="${esc(cf.url)}" alt="${esc(cf.alt)}" style="max-width: ${cf.largura || '100%'}; height: auto;"></div></div>` : '';
+      case 'rodape':
+        return `<div class="section" style="page-break-inside: avoid; padding: 20px; background: #0f3460; color: #fff; text-align: center;"><p>${esc(config.nome_empresa || 'GMP')}</p></div>`;
+      case 'divisor':
+        return `<div style="border-top: 2px solid ${config.cor_primaria || '#0066CC'}; margin: 15px 0;"></div>`;
+      case 'espaco':
+        return `<div style="height: ${cf.altura || '30px'};"></div>`;
+      case 'titulo':
+        return `<h2 style="color: ${config.cor_primaria || '#0066CC'}; font-size: 18px; font-weight: bold; margin-bottom: 10px;">${esc(cf.texto || 'Título')}</h2>`;
+      case 'subtitulo':
+        return `<h3 style="color: ${config.cor_secundaria || '#003366'}; font-size: 14px; font-weight: 600; margin-bottom: 8px;">${esc(cf.texto || 'Subtítulo')}</h3>`;
+      case 'lista':
+        return `<div class="section" style="page-break-inside: avoid;">${cf.titulo ? `<div class="section-title">${esc(cf.titulo)}</div>` : ''}<ul style="padding-left: 20px;">${(cf.itens || []).map(li => `<li style="margin-bottom: 5px;">${esc(li)}</li>`).join('')}</ul></div>`;
+      default:
+        return '';
+    }
+  }
+
+  const partsBeforeBody = [];
+  const partsBody = [];
+  if (headerImageFixedURL) partsBeforeBody.push(`<div class="inicio-image-block"><img src="${headerImageFixedURL}" alt="Cabeçalho"></div>`);
+  componentes.forEach(comp => {
+    const html = renderBlock(comp);
+    if (!html) return;
+    if ((comp.tipo || '').toLowerCase() === 'cabecalho') partsBeforeBody.push(html);
+    else partsBody.push(html);
+  });
+  if (footerImageURL) partsBody.push(`<div class="fim-image-block"><img src="${footerImageURL}" alt="Rodapé"></div>`);
+  const bodyParts = partsBeforeBody.concat(['<div class="proposta-body">'], partsBody, ['</div>']);
+
+  const printBar = (forPdfServer || omitPrintBar) ? '' : `<div class="print-tip-bar" style="padding:10px; background:#1a4d7a; color:#fff; text-align:center;"><button onclick="window.print()" style="padding:8px 20px; cursor:pointer;">Gerar PDF</button></div>`;
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${esc(proposta.titulo)}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', 'Century Gothic', sans-serif; color: #1a1d21; line-height: 1.65; background: #fafbfc; font-size: 15px; }
+    .proposta-container { max-width: 900px; margin: 0 auto; margin-top: 20px; background: #fff; box-shadow: 0 0 40px rgba(0,0,0,0.06); }
+    .proposta-body { padding: 48px 56px 64px; background: #fff; }
+    .section { margin-bottom: 24px; }
+    .section-title { font-weight: 700; font-size: 14px; color: #0d2b4a; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .texto-corpo p { margin-bottom: 10px; }
+    .inicio-image-block, .fim-image-block { width: 100%; margin: 0 0 24px 0; page-break-inside: avoid; }
+    .inicio-image-block img, .fim-image-block img { width: 100%; height: auto; display: block; }
+    @media print {
+      .print-tip-bar { display: none !important; }
+      @page { size: A4; margin: ${marginTopOutras}mm ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important; }
+      @page:first { margin-top: ${marginTopPrimeira}mm !important; }
+      .section, .proposta-body p, table, .texto-corpo, ul, ol, li { page-break-inside: avoid !important; }
+    }
+  </style>
+</head>
+<body>
+  ${printBar}
+  <div class="proposta-container"${omitPrintBar ? ' style="margin-top: 0;"' : ''}>
+    ${bodyParts.join('')}
+  </div>
+</body>
+</html>`;
+}
 
 // Função para gerar HTML premium da proposta - Versão Limpa e Profissional
 // forPdfServer = true: usado quando o PDF é gerado no servidor (Puppeteer); omite cabeçalho/rodapé fixos no HTML (Puppeteer usa displayHeaderFooter)
@@ -8075,32 +8235,25 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         break-before: page !important;
       }
       
-      /* REGRA PRINCIPAL: Seções podem ser divididas naturalmente entre páginas */
-      /* Apenas garantimos que títulos não sejam cortados */
+      /* REGRA: Se um bloco não couber inteiro na página, o bloco TODO pula para a próxima (nada cortado no meio) */
       .section {
-        page-break-inside: auto !important; /* PERMITIR divisão natural */
-        break-inside: auto !important; /* Suporte moderno */
-      }
-      
-      /* Itens de produto: não dividir */
-      .produto-item {
-        page-break-inside: avoid !important; /* Não dividir itens de produto */
+        page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
       
-      /* Tabelas dentro de seções podem ser divididas se necessário */
+      .produto-item {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      
+      /* Tabelas: não cortar no meio; se não couber, tabela inteira na próxima página */
       .section table,
-      .section .dados-table {
-        page-break-inside: auto !important;
-        break-inside: auto !important;
-      }
-      
-      /* Tabelas fora de seções podem ser divididas se necessário */
+      .section .dados-table,
       table {
-        page-break-inside: auto !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       
-      /* Garantir que títulos de seção não sejam cortados */
       .section-title {
         page-break-after: avoid !important;
         page-break-inside: avoid !important;
@@ -8110,35 +8263,29 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         break-before: avoid !important;
       }
       
-      /* Permitir divisão natural do conteúdo de seção */
+      /* Bloco de texto: se não couber inteiro, pula todo para a próxima página */
       .texto-corpo {
-        page-break-inside: auto !important;
-        break-inside: auto !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       
-      /* Proteger último parágrafo de seções para não ficar sozinho na próxima página */
-      .texto-corpo p:last-child {
-        page-break-before: avoid !important;
-        break-before: avoid !important;
-        orphans: 3 !important;
-        widows: 3 !important;
+      /* Cada parágrafo fica inteiro; se não couber, parágrafo todo na próxima */
+      .texto-corpo p,
+      .section p {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       
-      /* Permitir divisão natural de listas dentro de seções */
+      /* Listas: bloco da lista e cada item não são cortados no meio */
       .texto-corpo ul,
       .texto-corpo ol {
-        page-break-inside: auto !important;
-        break-inside: auto !important;
-        page-break-before: auto !important;
-        break-before: auto !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       
-      /* Permitir divisão natural dos itens da lista */
       .texto-corpo li {
-        page-break-inside: auto !important;
-        break-inside: auto !important;
-        page-break-before: auto !important;
-        break-before: auto !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
       }
       
       /* Garantir que dados-cliente-section também não seja dividida */
