@@ -7597,12 +7597,13 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       margin-bottom: 0;
     }
     
-    /* Imagem de início (mesma lógica da capa: bloco no fluxo, depois vem o texto) */
+    /* Imagem de início (bloco no fluxo, depois vem o texto — sempre visível quando configurada) */
     .inicio-image-block {
       width: 100%;
       margin: 0 0 24px 0;
       page-break-inside: avoid;
       display: block;
+      min-height: 60px;
     }
     .inicio-image-block img {
       width: 100%;
@@ -7611,15 +7612,17 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       max-width: 100%;
       margin: 0;
       padding: 0;
+      vertical-align: top;
     }
     
-    /* Imagem de fim (mesma lógica da capa: bloco no fluxo, no final do documento) */
+    /* Imagem de fim (bloco no fluxo, no final do documento — sempre visível quando configurada) */
     .fim-image-block {
       width: 100%;
       margin-top: 24px;
       margin-bottom: 0;
       page-break-inside: avoid;
       display: block;
+      min-height: 60px;
     }
     .fim-image-block img {
       width: 100%;
@@ -7628,6 +7631,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       max-width: 100%;
       margin: 0;
       padding: 0;
+      vertical-align: top;
     }
     
     /* Rodapé visível - premium */
@@ -9078,7 +9082,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      ${!forPdfServer && footerImageURL ? `
+      ${footerImageURL ? `
       <!-- Imagem de fim no fluxo (como no Word: “em linha com texto”, sem sobreposição) -->
       <div class="fim-image-block">
         <img src="${footerImageURL}" alt="Rodapé" onerror="this.style.display='none';">
