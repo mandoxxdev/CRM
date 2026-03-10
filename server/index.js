@@ -7263,14 +7263,14 @@ function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfi
 
   const partsBeforeBody = [];
   const partsBody = [];
-  if (headerImageFixedURL) partsBeforeBody.push(`<div class="inicio-image-block"><img src="${headerImageFixedURL}" alt="Cabeçalho"></div>`);
+  if (headerImageFixedURL && !hasPageTopImage) partsBeforeBody.push(`<div class="inicio-image-block"><img src="${headerImageFixedURL}" alt="Cabeçalho"></div>`);
   componentes.forEach(comp => {
     const html = renderBlock(comp);
     if (!html) return;
     if ((comp.tipo || '').toLowerCase() === 'cabecalho') partsBeforeBody.push(html);
     else partsBody.push(html);
   });
-  if (footerImageURL) partsBody.push(`<div class="fim-image-block"><img src="${footerImageURL}" alt="Rodapé"></div>`);
+  if (footerImageURL && !hasPageBottomImage) partsBody.push(`<div class="fim-image-block"><img src="${footerImageURL}" alt="Rodapé"></div>`);
   const bodyParts = partsBeforeBody.concat(['<div class="proposta-body">'], partsBody, ['</div>']);
 
   const printBar = (forPdfServer || omitPrintBar) ? '' : `<div class="print-tip-bar" style="padding:10px; background:#1a4d7a; color:#fff; text-align:center;"><button onclick="window.print()" style="padding:8px 20px; cursor:pointer;">Gerar PDF</button></div>`;
@@ -7955,6 +7955,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       @page:first {
         margin-top: ${effectiveMarginTopFirst}mm !important;
       }
+      /* Reforço: conteúdo nunca invade a faixa das imagens fixas (primeira e última página) */
+      body {
+        padding-top: ${hasPageTopImage ? PAGE_TOP_IMAGE_MM : 0}mm !important;
+        padding-bottom: ${hasPageBottomImage ? PAGE_BOTTOM_IMAGE_MM : 0}mm !important;
+      }
       /* Imagem fixa no topo de cada página (só em impressão; fica na margem, conteúdo começa depois) */
       .print-page-top-image {
         display: block !important;
@@ -8405,8 +8410,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </div>
     </div>
     
-    ${headerImageFixedURL ? `
-    <!-- Imagem de início (mesma lógica da capa: bloco no fluxo, depois vem o texto) -->
+    ${headerImageFixedURL && !hasPageTopImage ? `
+    <!-- Imagem de início no fluxo (só quando NÃO está em uso a imagem fixa no topo de cada página) -->
     <div class="inicio-image-block">
       <img src="${headerImageFixedURL}" alt="Cabeçalho" onerror="this.style.display='none';">
     </div>
@@ -9138,12 +9143,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      ${forPdfServer ? '' : (footerImageURL ? `
-      <!-- Imagem de fim (mesma lógica da capa: bloco no fluxo, no final do documento) -->
+      ${!forPdfServer && footerImageURL && !hasPageBottomImage ? `
+      <!-- Imagem de fim no fluxo (só quando NÃO está em uso a imagem fixa no fim de cada página) -->
       <div class="fim-image-block">
         <img src="${footerImageURL}" alt="Rodapé" onerror="this.style.display='none';">
       </div>
-      ` : '')}
+      ` : ''}
       ${forPdfServer ? '' : `<!-- Rodapé texto - no fluxo, no final -->
       <footer class="proposta-footer">
         <div class="footer-content">
