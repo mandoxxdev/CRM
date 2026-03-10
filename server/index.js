@@ -9246,32 +9246,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           
           // FIM - não precisa de mais lógica complexa
           // A verificação simples acima já trata todos os casos: se não cabe, move para próxima página
-        });
-            // Primeira seção na primeira página - permitir divisão natural
-            element.style.pageBreakBefore = '';
-            element.style.breakBefore = '';
-            element.style.pageBreakInside = 'auto'; // PERMITIR divisão natural
-            element.classList.remove('avoid-footer-overlap');
-            
-            // Permitir divisão natural do conteúdo interno
-            const textoCorpo = element.querySelector('.texto-corpo');
-            if (textoCorpo) {
-              textoCorpo.style.pageBreakBefore = '';
-              textoCorpo.style.breakBefore = '';
-              textoCorpo.style.pageBreakInside = 'auto'; // PERMITIR divisão
-            }
-            
-            // Permitir divisão natural de parágrafos
-            const paragraphs = element.querySelectorAll('p');
-            paragraphs.forEach(p => {
-              p.style.pageBreakBefore = '';
-              p.style.breakBefore = '';
-              p.style.pageBreakInside = 'auto'; // PERMITIR divisão
-            });
-            
-            // Continuar processamento normal (não retornar aqui)
-            // A lógica abaixo vai tratar normalmente
-          }
           
           // REGRA ESPECIAL PARA ITENS DE PRODUTO: Verificar se está dentro de uma seção
           const isProdutoItem = element.classList.contains('produto-item');
