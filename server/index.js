@@ -8949,6 +8949,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         console.log('📊 Verificando', elementsToCheck.length, 'elementos em todas as páginas...');
         
         elementsToCheck.forEach(function(element, index) {
+          try {
+          // Nunca aplicar quebra na capa nem no container do body (evita capa ir para baixo / layout quebrar no blob)
+          if (element.classList.contains('proposta-header') || element.classList.contains('proposta-body')) {
+            return;
+          }
+          
           // Obter posição REAL do elemento no documento
           const elementRect = element.getBoundingClientRect();
           const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -9388,7 +9394,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           // - Se há espaço (mesmo que pequeno), SEMPRE permitir que o elemento comece na página atual
           // - Apenas o residual vai para a próxima página
           
-          // Verificar se é elemento muito pequeno (só estes podem ser movidos inteiros)
+          const canStartInCurrentPage = (footerDangerZoneStart - positionInPage) > 50;
           const isVerySmallElement = elementHeight < 100; // Apenas elementos muito pequenos (< 100px)
           
           // REGRA PRINCIPAL: Se há espaço na página atual, SEMPRE permitir que o elemento comece lá
@@ -9422,6 +9428,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
               element.classList.remove('avoid-footer-overlap');
             }
           }
+          } catch (e) { /* evita travar no blob se um elemento der erro */ }
         });
         
         console.log('✅ Verificação concluída para todas as páginas');
