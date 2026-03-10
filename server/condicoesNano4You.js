@@ -348,4 +348,73 @@ function getCondicoesGeraisNano4YouHTML(proposta, itens, totais, config, esc) {
       </div>`;
 }
 
-module.exports = { getCondicoesGeraisNano4YouHTML };
+/**
+ * Proposta apenas de equipamentos: preço, condição de pagamento e consideração final.
+ * As condições gerais ficam no CONTRATO em anexo (documento separado).
+ */
+function getPropostaEquipamentosOnlyHTML(proposta, itens, totais, config, esc) {
+  proposta = proposta || {};
+  itens = Array.isArray(itens) ? itens : [];
+  totais = totais || {};
+  const fmt = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(n) || 0);
+  const condPag = proposta.condicoes_pagamento || 'Primeira Parcela/Entrada – 40% sobre o valor total, pago na assinatura da proposta, via transferência bancária. Segunda Parcela/Liberação – 30%, pago no comunicado de liberação do pedido. Terceira Parcela/Saldo – 30%, via boleto bancário, 28 DDL contados do comunicado de liberação. Em caso de inadimplemento: multa de 2%, juros de mora 1% ao mês e correção monetária.';
+  let totalProposta = totais.total || 0;
+  if (itens.length > 0) {
+    totalProposta = itens.reduce((s, item) => s + (parseFloat(item.quantidade) || 1) * (parseFloat(item.valor_unitario) || parseFloat(item.preco_base) || 0), 0);
+  }
+  const linhasTabelaPrecos = (itens || []).map((item, index) => {
+    const nome = item.descricao || item.nome || 'Item sem nome';
+    const quantidade = parseFloat(item.quantidade) || 1;
+    const precoUnitario = parseFloat(item.valor_unitario) || parseFloat(item.preco_base) || 0;
+    const total = parseFloat(item.valor_total) || (quantidade * precoUnitario);
+    return `<tr><td>4.${index + 1}</td><td contenteditable="true">${esc(nome)}</td><td>${quantidade}</td><td>${fmt(precoUnitario)}</td><td>${fmt(total)}</td></tr>`;
+  }).join('');
+
+  return `<!-- Proposta apenas equipamentos – contrato em anexo -->
+      <div class="section">
+        <div class="section-title">5. PREÇO E CONDIÇÃO DE PAGAMENTO</div>
+        <div class="texto-corpo" style="margin-bottom: 15px;">
+          <p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>
+        </div>
+        <div style="margin-top: 20px;">
+          <div style="font-weight: 700; margin-bottom: 15px; font-size: 14px;">Tabela de Preços</div>
+          <table class="valores-table">
+            <thead>
+              <tr><th>ITEM</th><th>DESCRIÇÃO</th><th>QUANT.</th><th>PREÇO UNITÁRIO</th><th>TOTAL</th></tr>
+            </thead>
+            <tbody>
+              ${linhasTabelaPrecos}
+              <tr class="total-row" style="display: table-row !important; visibility: visible !important; background: #ff6b35 !important; color: #ffffff !important;">
+                <td colspan="4" style="text-align: right; font-weight: 700; background: #ff6b35 !important; color: #ffffff !important; padding: 15px !important; border: 1px solid #e55a2b !important;">TOTAL DA PROPOSTA</td>
+                <td style="font-weight: 700; background: #ff6b35 !important; color: #ffffff !important; padding: 15px !important; border: 1px solid #e55a2b !important;">${fmt(totalProposta)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="margin-top: 20px; font-size: 13px;">
+            <strong>CONDIÇÃO DE PAGAMENTO:</strong><br>
+            <span contenteditable="true">${esc(condPag)}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">ANEXO – CONTRATO</div>
+        <div class="texto-corpo">
+          <p>As condições gerais de fornecimento (prazo de entrega, transporte, garantia, obrigações das partes, alteração de pedido, cancelamento e demais cláusulas) constam no documento <strong>CONTRATO</strong> em anexo a esta proposta, que a acompanha e integra o presente instrumento.</p>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">CONSIDERAÇÃO FINAL</div>
+        <div class="texto-corpo" style="margin-bottom: 0;">
+          <p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se válida como pedido de compra mediante assinatura do responsável e carimbo da empresa no campo abaixo:</p>
+          <div style="margin-top: 10px; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px;">
+            <p style="margin-bottom: 5px;"><strong>Data da assinatura:</strong> _____/_____/_____</p>
+            <p style="margin-bottom: 3px;"><strong>Assinatura e carimbo da empresa CONTRATANTE:</strong></p>
+            <div style="margin-top: 5px; border-top: 2px solid #e0e0e0; padding-top: 3px; min-height: 30px;"></div>
+          </div>
+        </div>
+      </div>`;
+}
+
+module.exports = { getCondicoesGeraisNano4YouHTML, getPropostaEquipamentosOnlyHTML };

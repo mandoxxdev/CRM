@@ -12,6 +12,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingHeader, setUploadingHeader] = useState(false);
   const [uploadingFooter, setUploadingFooter] = useState(false);
+  const [uploadingContrato, setUploadingContrato] = useState(false);
   const [variaveisList, setVariaveisList] = useState([]);
   const [variaveisPropostaSearch, setVariaveisPropostaSearch] = useState('');
   const [config, setConfig] = useState({
@@ -97,6 +98,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
         if (response.data.footer_image_url) {
           setFooterPreview(`/api/uploads/footers/${response.data.footer_image_url}`);
         }
+        // contrato_anexo_url carregado em config
       }
     } catch (error) {
       console.error('Erro ao carregar configuração:', error);
@@ -248,6 +250,52 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
     }
   };
 
+  const handleContratoAnexoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingContrato(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('contratoAnexo', file);
+      const response = await axios.post('/api/proposta-template/contrato-anexo', formData, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+      });
+      setConfig(prev => ({ ...prev, contrato_anexo_url: response.data.filename }));
+      alert('Contrato anexo enviado! Ele será oferecido junto à proposta ao gerar PDF.');
+    } catch (error) {
+      console.error('Erro ao enviar contrato:', error);
+      alert('Erro: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setUploadingContrato(false);
+    }
+  };
+
+  const handleRemoveContrato = async () => {
+    if (!config.contrato_anexo_url) return;
+    if (!window.confirm('Remover o contrato anexo? A proposta deixará de ter o documento de contrato junto.')) return;
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('/api/proposta-template', {
+        ...config,
+        contrato_anexo_url: null,
+        mostrar_logo: config.mostrar_logo ? 1 : 0,
+        mostrar_especificacoes: config.mostrar_especificacoes ? 1 : 0,
+        mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0,
+        variaveis_proposta_tecnica: Array.isArray(config.variaveis_proposta_tecnica) ? config.variaveis_proposta_tecnica : [],
+        variaveis_proposta_por_familia: config.variaveis_proposta_por_familia && typeof config.variaveis_proposta_por_familia === 'object' ? config.variaveis_proposta_por_familia : {}
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      setConfig(prev => ({ ...prev, contrato_anexo_url: null }));
+      alert('Contrato anexo removido.');
+    } catch (error) {
+      console.error('Erro ao remover contrato:', error);
+      alert('Erro: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -256,6 +304,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
         ...config,
         header_image_url: config.header_image_url || null,
         footer_image_url: config.footer_image_url || null,
+        contrato_anexo_url: config.contrato_anexo_url || null,
         mostrar_logo: config.mostrar_logo ? 1 : 0,
         mostrar_especificacoes: config.mostrar_especificacoes ? 1 : 0,
         mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0,
@@ -605,6 +654,36 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
             <small style={{ display: 'block', marginTop: '5px', color: '#666' }}>
               A imagem aparecerá no final da proposta como parte do conteúdo
             </small>
+          </div>
+
+          <div className="form-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
+            <label>Contrato (anexo)</label>
+            <p className="config-hint" style={{ marginBottom: '10px', fontSize: '13px', color: '#555' }}>
+              A proposta gerada fica só com equipamentos e preços. O contrato (condições gerais) é um documento separado que você envia junto. Envie o Word ou PDF do seu contrato padrão; ele será oferecido para download ao gerar a proposta.
+            </p>
+            {(config.contrato_anexo_url) && (
+              <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <FiFileText style={{ fontSize: '20px', color: '#1a4d7a' }} />
+                <a href={`/api/uploads/contrato/${config.contrato_anexo_url}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a4d7a' }}>
+                  {config.contrato_anexo_url}
+                </a>
+                <button type="button" onClick={handleRemoveContrato} className="btn-remove-image" disabled={saving}>
+                  <FiTrash2 /> Remover contrato
+                </button>
+              </div>
+            )}
+            <div className="upload-logo-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <input
+                type="file"
+                id="contrato-anexo-upload"
+                accept=".pdf,.doc,.docx"
+                onChange={handleContratoAnexoUpload}
+                style={{ display: 'none' }}
+              />
+              <label htmlFor="contrato-anexo-upload" className="btn-upload-logo">
+                <FiUpload /> {uploadingContrato ? 'Enviando...' : config.contrato_anexo_url ? 'Substituir contrato' : 'Enviar contrato (Word ou PDF)'}
+              </label>
+            </div>
           </div>
         </div>
 

@@ -23,6 +23,7 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
   const [previewHTML, setPreviewHTML] = useState('');
   const [carregandoPreview, setCarregandoPreview] = useState(false);
   const [mostrarPreview, setMostrarPreview] = useState(true);
+  const [contratoAnexoUrl, setContratoAnexoUrl] = useState(null);
 
   useEffect(() => {
     loadDadosCompletos();
@@ -78,6 +79,13 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
         );
         setProdutosCompletos(produtosFiltrados);
       }
+      // Contrato anexo (template): se houver, mostrar botão de download
+      try {
+        const templateRes = await api.get('/proposta-template');
+        if (templateRes.data && templateRes.data.contrato_anexo_url) {
+          setContratoAnexoUrl(templateRes.data.contrato_anexo_url);
+        }
+      } catch (_) {}
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     }
@@ -656,6 +664,17 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
           >
             <FiDownload /> {loading ? 'Abrindo...' : 'Gerar PDF (navegador)'}
           </button>
+          {contratoAnexoUrl && (
+            <a
+              href={`${(api.defaults.baseURL || '').replace(/\/api\/?$/, '') || ''}/api/uploads/contrato/${contratoAnexoUrl}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
+            >
+              <FiDownload /> Baixar contrato (anexo)
+            </a>
+          )}
         </div>
       </div>
     </div>

@@ -10,7 +10,7 @@ const archiver = require('archiver');
 const multer = require('multer');
 const puppeteer = require('puppeteer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
-const { getCondicoesGeraisNano4YouHTML } = require('./condicoesNano4You');
+const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
 function getPuppeteerLaunchOptions() {
@@ -258,6 +258,12 @@ if (!fs.existsSync(uploadsHeaderDir)) {
 const uploadsFooterDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'footers');
 if (!fs.existsSync(uploadsFooterDir)) {
   fs.mkdirSync(uploadsFooterDir, { recursive: true });
+}
+
+// Diretório para contrato anexo (Word/PDF) – acompanha a proposta
+const uploadsContratoDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'contrato');
+if (!fs.existsSync(uploadsContratoDir)) {
+  fs.mkdirSync(uploadsContratoDir, { recursive: true });
 }
 
 // Configurar diretório de uploads de PDFs de OS
@@ -573,6 +579,26 @@ const uploadFooter = multer({
     } else {
       cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
     }
+  }
+});
+
+// Storage para contrato anexo (Word / PDF)
+const storageContrato = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadsContratoDir); },
+  filename: (req, file, cb) => {
+    const ext = (path.extname(file.originalname) || '').toLowerCase();
+    const safe = (path.basename(file.originalname, ext) || 'contrato').replace(/[^a-zA-Z0-9_-]/g, '_');
+    cb(null, `contrato_${Date.now()}_${safe}${ext || '.pdf'}`);
+  }
+});
+const uploadContrato = multer({
+  storage: storageContrato,
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+  fileFilter: (req, file, cb) => {
+    const ext = (path.extname(file.originalname) || '').toLowerCase();
+    const ok = ['.pdf', '.doc', '.docx'].includes(ext);
+    if (ok) return cb(null, true);
+    cb(new Error('Apenas PDF ou Word (.pdf, .doc, .docx) são permitidos para o contrato.'));
   }
 });
 
@@ -1469,6 +1495,7 @@ function executeMigrations(callback) {
     { nome: 'is_padrao', tipo: 'INTEGER DEFAULT 0' },
     { nome: 'header_image_url', tipo: 'TEXT' },
     { nome: 'footer_image_url', tipo: 'TEXT' },
+    { nome: 'contrato_anexo_url', tipo: 'TEXT' },
     { nome: 'variaveis_proposta_tecnica', tipo: 'TEXT' },
     { nome: 'variaveis_proposta_por_familia', tipo: 'TEXT' },
     { nome: 'margin_impressao_top_primeira', tipo: 'REAL' },
@@ -6812,7 +6839,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
     margin_navegador_top,
     margin_navegador_bottom,
     header_image_url,
-    footer_image_url
+    footer_image_url,
+    contrato_anexo_url
   } = req.body;
 
   // Verificar se já existe configuração para esta família
@@ -6844,7 +6872,7 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           variaveis_proposta_tecnica = ?, variaveis_proposta_por_familia = ?,
           margin_impressao_top_primeira = ?, margin_impressao_top_outras = ?, margin_impressao_bottom = ?, margin_impressao_lateral = ?,
           margin_navegador_top = ?, margin_navegador_bottom = ?,
-          header_image_url = ?, footer_image_url = ?,
+          header_image_url = ?, footer_image_url = ?, contrato_anexo_url = ?,
           updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
@@ -6872,6 +6900,7 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           marginNavegadorBottom,
           header_image_url !== undefined ? header_image_url : existing.header_image_url,
           footer_image_url !== undefined ? footer_image_url : existing.footer_image_url,
+          contrato_anexo_url !== undefined ? contrato_anexo_url : existing.contrato_anexo_url,
           existing.id
         ],
         function(err) {
@@ -6896,8 +6925,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           mostrar_logo, cabecalho_customizado, rodape_customizado, texto_introducao,
           mostrar_especificacoes, mostrar_imagens_produtos, formato_numero_proposta, componentes, variaveis_proposta_tecnica, variaveis_proposta_por_familia,
           margin_impressao_top_primeira, margin_impressao_top_outras, margin_impressao_bottom, margin_impressao_lateral,
-          margin_navegador_top, margin_navegador_bottom, header_image_url, footer_image_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          margin_navegador_top, margin_navegador_bottom, header_image_url, footer_image_url, contrato_anexo_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           familia || 'Geral',
           nome_empresa || 'GMP INDUSTRIAIS',
@@ -6922,7 +6951,8 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
           marginNavegadorTop,
           marginNavegadorBottom,
           header_image_url || null,
-          footer_image_url || null
+          footer_image_url || null,
+          contrato_anexo_url || null
         ],
         function(err) {
           if (err) {
@@ -7161,6 +7191,34 @@ app.post('/api/proposta-template/footer-image', authenticateToken, uploadFooter.
   });
 });
 
+// Upload de contrato anexo (Word/PDF) – acompanha a proposta
+app.post('/api/proposta-template/contrato-anexo', authenticateToken, uploadContrato.single('contratoAnexo'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+  }
+  db.get('SELECT contrato_anexo_url FROM proposta_template_config ORDER BY id DESC LIMIT 1', [], (err, config) => {
+    if (config && config.contrato_anexo_url) {
+      const oldPath = path.join(uploadsContratoDir, config.contrato_anexo_url);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    db.run(
+      'UPDATE proposta_template_config SET contrato_anexo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = (SELECT id FROM proposta_template_config ORDER BY id DESC LIMIT 1)',
+      [req.file.filename],
+      (err) => {
+        if (err) {
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+          return res.status(500).json({ error: err.message });
+        }
+        res.json({
+          message: 'Contrato anexo enviado com sucesso',
+          filename: req.file.filename,
+          url: `/api/uploads/contrato/${req.file.filename}`
+        });
+      }
+    );
+  });
+});
+
 // Gera HTML da proposta a partir dos componentes salvos no editor de template (modo visual).
 // Usado quando o usuário configurou blocos no Editor de Template; preview e PDF usam esse layout.
 function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfig, baseURLOverride, forPdfServer, omitPrintBar) {
@@ -7233,7 +7291,7 @@ function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfi
           }).join('')}
           </tbody></table><p style="margin-top:12px; text-align:right;"><strong>Total: ${fmt(totais.total)}</strong></p></div>`;
       case 'condicoes':
-        return getCondicoesGeraisNano4YouHTML(proposta, itens, totais, config, esc);
+        return getPropostaEquipamentosOnlyHTML(proposta, itens, totais, config, esc);
       case 'texto':
         return `<div class="section" style="page-break-inside: avoid;">${cf.titulo ? `<div class="section-title">${esc(cf.titulo)}</div>` : ''}<div class="texto-corpo"><p style="font-size: ${cf.tamanho === 'grande' ? '16px' : cf.tamanho === 'pequeno' ? '12px' : '14px' };">${esc(cf.conteudo || '')}</p></div></div>`;
       case 'tabela':
@@ -8631,7 +8689,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         ` : ''}
       </div>
       
-      ${getCondicoesGeraisNano4YouHTML(proposta, itens, totais, config, esc)}
+      ${getPropostaEquipamentosOnlyHTML(proposta, itens, totais, config, esc)}
       
       <!-- Tabela com Dados Cadastrais da CONTRATADA (igual ao PDF - Diadema) -->
       <div class="section">
@@ -13830,6 +13888,9 @@ app.use('/api/uploads/footers', (req, res, next) => {
   res.setHeader('Expires', '0');
   next();
 }, express.static(uploadsFooterDir));
+
+// Contrato anexo (Word/PDF) – download para anexar à proposta
+app.use('/api/uploads/contrato', express.static(uploadsContratoDir));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE CHAT ==========
 // Servir arquivos estáticos de chat
