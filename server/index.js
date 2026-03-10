@@ -9083,7 +9083,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           }
           
           // Se chegou aqui, o elemento não vai sobrepor e está a uma distância segura
-          // Permitir divisão natural, mas garantir que não vai sobrepor
+          // NÃO limpar pageBreakBefore se este elemento já foi marcado para quebra (ex: por um filho que sobrepunha).
+          // Caso contrário o bloco (ex: 4.1) voltaria a ser cortado — título numa página, conteúdo na outra.
+          if (element.classList.contains('avoid-footer-overlap') || element.classList.contains('avoid-header-overlap')) {
+            return; // Manter a quebra aplicada no bloco inteiro
+          }
           element.style.pageBreakBefore = '';
           element.style.breakBefore = '';
           element.style.pageBreakInside = 'auto';
@@ -9124,12 +9128,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             
             // Item de produto FORA de uma seção - tratar isoladamente
             const spaceNeeded = elementHeight;
-            const spaceAvailable = dangerZoneStart - positionInPage;
+            const spaceAvailable = footerDangerZoneStart - positionInPage;
             const fitsCompletely = spaceNeeded <= spaceAvailable;
             
             // Verificar se o título do item está sendo cortado (primeiros 200px do item)
             const titleHeight = 200;
-            const titleFits = (positionInPage + titleHeight) <= dangerZoneStart;
+            const titleFits = (positionInPage + titleHeight) <= footerDangerZoneStart;
             
             if (!fitsCompletely && positionInPage > 100) {
               // Item não cabe completamente e há conteúdo na página - mover inteiro para próxima
@@ -9179,8 +9183,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           }
           
           // REGRA ESPECIAL PARA SEÇÕES: Verificar se tem subitens (produtos) e manter juntos
-          // NOTA: isSection já foi verificado acima, mas verificamos novamente para clareza
+          // Se a seção já foi marcada para quebra (ex: tabela filha sobrepunha rodapé), não sobrescrever — manter bloco inteiro na mesma página.
           if (isSection) {
+            if (element.classList.contains('avoid-footer-overlap') || element.classList.contains('avoid-header-overlap')) {
+              return; // Manter pageBreakBefore aplicado (ex: INFORMAÇÕES BANCÁRIAS, 4.1, etc.)
+            }
             const sectionTitle = element.querySelector('.section-title');
             
             // Verificar se a seção tem itens de produto dentro (subitens)
@@ -9191,10 +9198,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             const titleHeight = sectionTitle ? (sectionTitle.offsetHeight + 15) : 60;
             
             // Verificar espaço disponível na página atual
-            const spaceAvailable = dangerZoneStart - positionInPage;
+            const spaceAvailable = footerDangerZoneStart - positionInPage;
             
             // Verificar se o título cabe
-            const titleFits = (positionInPage + titleHeight) <= dangerZoneStart;
+            const titleFits = (positionInPage + titleHeight) <= footerDangerZoneStart;
             
             // Se tem subitens (produtos), verificar se título + primeiro item cabem
             let firstItemHeight = 0;
@@ -9204,7 +9211,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             
             // Espaço necessário para título + primeiro subitem (se houver)
             const spaceNeededForTitleAndFirstItem = titleHeight + (hasProdutoItems ? firstItemHeight : 0);
-            const titleAndFirstItemFit = (positionInPage + spaceNeededForTitleAndFirstItem) <= dangerZoneStart;
+            const titleAndFirstItemFit = (positionInPage + spaceNeededForTitleAndFirstItem) <= footerDangerZoneStart;
             
             // REGRA ULTRA PERMISSIVA PARA SEÇÕES:
             // SEMPRE permitir que a seção comece na página atual se o título cabe
@@ -9262,15 +9269,23 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
                 element.classList.remove('avoid-footer-overlap');
               }
             } else {
-              // Seção sem subitens - lógica ultra permissiva
-              // Verificar se tem listas dentro (como "Apresentação da Empresa")
+              // Seção sem subitens (ex: INFORMAÇÕES BANCÁRIAS, Tabela Dados Cadastrais, etc.)
+              // REGRA: se a seção não cabe inteira no restante da página, mover bloco inteiro para a próxima
+              const sectionFitsInPage = (positionInPage + elementHeight) <= footerDangerZoneStart;
+              if (!sectionFitsInPage && positionInPage > 80) {
+                element.style.pageBreakBefore = 'always';
+                element.style.breakBefore = 'page';
+                element.style.pageBreakInside = 'avoid';
+                element.classList.add('avoid-footer-overlap');
+                return;
+              }
               const hasLists = element.querySelectorAll('.texto-corpo ul, .texto-corpo ol').length > 0;
               
               if (titleFits) {
-                // Título cabe - SEMPRE permitir que a seção comece na página atual
+                // Título cabe - permitir que a seção comece na página atual (se couber inteira)
                 element.style.pageBreakBefore = '';
                 element.style.breakBefore = '';
-                element.style.pageBreakInside = 'auto'; // PERMITIR divisão natural
+                element.style.pageBreakInside = 'avoid'; // Manter seção inteira na mesma página
                 element.classList.remove('avoid-footer-overlap');
                 
                 // Se tem listas, garantir que elas possam começar imediatamente
@@ -9291,10 +9306,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
                 
                 console.log('🔀 Seção movida - título não cabe E muito conteúdo', pageNumber + 1, 'posição:', Math.round(positionInPage), 'espaço disponível:', Math.round(spaceAvailable));
               } else {
-                // Título não cabe mas pouco conteúdo - permitir divisão natural
+                // Título não cabe mas pouco conteúdo - manter seção inteira (evitar título numa página, conteúdo na outra)
                 element.style.pageBreakBefore = '';
                 element.style.breakBefore = '';
-                element.style.pageBreakInside = 'auto'; // PERMITIR divisão natural
+                element.style.pageBreakInside = 'avoid';
                 element.classList.remove('avoid-footer-overlap');
               }
             }
