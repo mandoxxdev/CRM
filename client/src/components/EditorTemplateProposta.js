@@ -38,7 +38,7 @@ const EditorTemplateProposta = () => {
     { id: 'dados_cliente', nome: 'Dados do Cliente', icone: '👤', descricao: 'Informações do cliente' },
     { id: 'produtos', nome: 'Produtos', icone: '📦', descricao: 'Lista de produtos' },
     { id: 'valores', nome: 'Valores', icone: '💰', descricao: 'Tabela de valores' },
-    { id: 'condicoes', nome: 'Condições', icone: '📋', descricao: 'Condições comerciais' },
+    { id: 'condicoes', nome: 'Condições Comerciais (5.1 a 5.24)', icone: '📋', descricao: 'Condições Gerais de Fornecimento – prazo, transporte, garantia, obrigações, preço, impostos (modelo Nano4You)' },
     { id: 'texto', nome: 'Texto Livre', icone: '📝', descricao: 'Texto personalizado' },
     { id: 'tabela', nome: 'Tabela', icone: '📊', descricao: 'Tabela de dados' },
     { id: 'imagem', nome: 'Imagem', icone: '🖼️', descricao: 'Imagem' },
@@ -333,10 +333,8 @@ const EditorTemplateProposta = () => {
       case 'condicoes':
         return (
           <div className="preview-condicoes">
-            <h3 style={{ color: config.cor_primaria }}>Condições Comerciais</h3>
-            <p>Prazo de entrega: 30 dias</p>
-            <p>Condições de pagamento: A combinar</p>
-            <p>Garantia: 12 meses</p>
+            <h3 style={{ color: config.cor_primaria }}>5. Condições Gerais de Fornecimento (5.1 a 5.24)</h3>
+            <p>Prazo, transporte, garantia, obrigações, preço, impostos e consideração final (modelo Nano4You)</p>
           </div>
         );
       case 'texto':
