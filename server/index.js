@@ -7193,13 +7193,6 @@ function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfi
   const marginTopOutras = Math.max(20, Math.min(120, Number(config.margin_impressao_top_outras) || 50));
   const marginBottom = Math.max(20, Math.min(80, Number(config.margin_impressao_bottom) || 45));
   const marginLateral = Math.max(10, Math.min(50, Number(config.margin_impressao_lateral) || 20));
-  const PAGE_TOP_IMAGE_MM = 28;
-  const PAGE_BOTTOM_IMAGE_MM = 28;
-  const hasPageTopImage = !!headerImageFixedURL;
-  const hasPageBottomImage = !!footerImageURL;
-  const effectiveMarginTop = marginTopOutras + (hasPageTopImage ? PAGE_TOP_IMAGE_MM : 0);
-  const effectiveMarginBottom = marginBottom + (hasPageBottomImage ? PAGE_BOTTOM_IMAGE_MM : 0);
-  const effectiveMarginTopFirst = marginTopPrimeira + (hasPageTopImage ? PAGE_TOP_IMAGE_MM : 0);
 
   function renderBlock(c) {
     const tipo = (c.tipo || '').toLowerCase();
@@ -7263,14 +7256,14 @@ function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfi
 
   const partsBeforeBody = [];
   const partsBody = [];
-  if (headerImageFixedURL && !hasPageTopImage) partsBeforeBody.push(`<div class="inicio-image-block"><img src="${headerImageFixedURL}" alt="Cabeçalho"></div>`);
+  if (headerImageFixedURL) partsBeforeBody.push(`<div class="inicio-image-block"><img src="${headerImageFixedURL}" alt="Cabeçalho"></div>`);
   componentes.forEach(comp => {
     const html = renderBlock(comp);
     if (!html) return;
     if ((comp.tipo || '').toLowerCase() === 'cabecalho') partsBeforeBody.push(html);
     else partsBody.push(html);
   });
-  if (footerImageURL && !hasPageBottomImage) partsBody.push(`<div class="fim-image-block"><img src="${footerImageURL}" alt="Rodapé"></div>`);
+  if (footerImageURL) partsBody.push(`<div class="fim-image-block"><img src="${footerImageURL}" alt="Rodapé"></div>`);
   const bodyParts = partsBeforeBody.concat(['<div class="proposta-body">'], partsBody, ['</div>']);
 
   const printBar = (forPdfServer || omitPrintBar) ? '' : `<div class="print-tip-bar" style="padding:10px; background:#1a4d7a; color:#fff; text-align:center;"><button onclick="window.print()" style="padding:8px 20px; cursor:pointer;">Gerar PDF</button></div>`;
@@ -7289,24 +7282,18 @@ function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfi
     .section { margin-bottom: 24px; }
     .section-title { font-weight: 700; font-size: 14px; color: #0d2b4a; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
     .texto-corpo p { margin-bottom: 10px; }
-    .inicio-image-block, .fim-image-block { width: 100%; margin: 0 0 24px 0; page-break-inside: avoid; }
-    .inicio-image-block img, .fim-image-block img { width: 100%; height: auto; display: block; }
-    .print-page-top-image, .print-page-bottom-image { display: none !important; }
+    .inicio-image-block, .fim-image-block { width: 100%; margin: 0 0 24px 0; page-break-inside: avoid; display: block; }
+    .inicio-image-block img, .fim-image-block img { width: 100%; height: auto; display: block; vertical-align: top; }
     @media print {
       .print-tip-bar { display: none !important; }
-      @page { size: A4; margin: ${effectiveMarginTop}mm ${marginLateral}mm ${effectiveMarginBottom}mm ${marginLateral}mm !important; }
-      @page:first { margin-top: ${effectiveMarginTopFirst}mm !important; }
-      .print-page-top-image { display: block !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; width: 100% !important; height: ${PAGE_TOP_IMAGE_MM}mm !important; z-index: 9999 !important; overflow: hidden !important; }
-      .print-page-top-image img { width: 100% !important; height: 100% !important; object-fit: contain !important; object-position: top center !important; }
-      .print-page-bottom-image { display: block !important; position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; width: 100% !important; height: ${PAGE_BOTTOM_IMAGE_MM}mm !important; z-index: 9999 !important; overflow: hidden !important; }
-      .print-page-bottom-image img { width: 100% !important; height: 100% !important; object-fit: contain !important; object-position: bottom center !important; }
+      @page { size: A4; margin: ${marginTopOutras}mm ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important; }
+      @page:first { margin-top: ${marginTopPrimeira}mm !important; }
+      .inicio-image-block, .fim-image-block { page-break-inside: avoid !important; }
       .section, .proposta-body p, table, .texto-corpo, ul, ol, li { page-break-inside: avoid !important; }
     }
   </style>
 </head>
 <body>
-  ${hasPageTopImage ? `<div class="print-page-top-image" aria-hidden="true"><img src="${headerImageFixedURL}" alt=""></div>` : ''}
-  ${hasPageBottomImage ? `<div class="print-page-bottom-image" aria-hidden="true"><img src="${footerImageURL}" alt=""></div>` : ''}
   ${printBar}
   <div class="proposta-container"${omitPrintBar ? ' style="margin-top: 0;"' : ''}>
     ${bodyParts.join('')}
@@ -7406,15 +7393,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     // Compensação quando imprime com Margens: Padrão/Personalizado — puxa cabeçalho/rodapé para a borda da folha
     const marginNavegadorTop = Math.max(0, Math.min(50, Number(config.margin_navegador_top) || 19));
     const marginNavegadorBottom = Math.max(0, Math.min(50, Number(config.margin_navegador_bottom) || 19));
-    
-    // Imagens fixas no topo e no fim de CADA página (não são cabeçalho/rodapé): o conteúdo começa DEPOIS da imagem do topo e termina ANTES da do fim
-    const PAGE_TOP_IMAGE_MM = 28;
-    const PAGE_BOTTOM_IMAGE_MM = 28;
-    const hasPageTopImage = !!headerImageFixedURL;
-    const hasPageBottomImage = !!footerImageURL;
-    const effectiveMarginTop = marginTopOutras + (hasPageTopImage ? PAGE_TOP_IMAGE_MM : 0);
-    const effectiveMarginBottom = marginBottom + (hasPageBottomImage ? PAGE_BOTTOM_IMAGE_MM : 0);
-    const effectiveMarginTopFirst = marginTopPrimeira + (hasPageTopImage ? PAGE_TOP_IMAGE_MM : 0);
     
     // HTML completo - Design limpo e profissional
     return `<!DOCTYPE html>
@@ -7927,12 +7905,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       box-shadow: 0 6px 20px rgba(255, 107, 53, 0.6);
     }
     
-    /* Imagens fixas topo/fim de cada página: ocultas na tela, só aparecem na impressão */
-    .print-page-top-image,
-    .print-page-bottom-image {
-      display: none !important;
-    }
-    
     /* Cabeçalho fixo - escondido na visualização normal, visível apenas no print */
     .print-header {
       display: none;
@@ -7947,54 +7919,19 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         display: none !important;
       }
       
-      /* Margens da página: espaço reservado para as imagens fixas (conteúdo NUNCA fica por baixo) */
+      /* Margens da página */
       @page {
         size: A4;
-        margin: ${effectiveMarginTop}mm ${marginLateral}mm ${effectiveMarginBottom}mm ${marginLateral}mm !important;
+        margin: ${marginTopOutras}mm ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important;
       }
       @page:first {
-        margin-top: ${effectiveMarginTopFirst}mm !important;
+        margin-top: ${marginTopPrimeira}mm !important;
       }
-      /* Reforço: conteúdo nunca invade a faixa das imagens fixas (primeira e última página) */
-      body {
-        padding-top: ${hasPageTopImage ? PAGE_TOP_IMAGE_MM : 0}mm !important;
-        padding-bottom: ${hasPageBottomImage ? PAGE_BOTTOM_IMAGE_MM : 0}mm !important;
-      }
-      /* Imagem fixa no topo de cada página (só em impressão; fica na margem, conteúdo começa depois) */
-      .print-page-top-image {
+      /* Imagens de início/fim são blocos no fluxo (como no Word “em linha com texto”) — nunca sobrepõem */
+      .inicio-image-block,
+      .fim-image-block {
+        page-break-inside: avoid !important;
         display: block !important;
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        height: ${PAGE_TOP_IMAGE_MM}mm !important;
-        z-index: 9999 !important;
-        overflow: hidden !important;
-      }
-      .print-page-top-image img {
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: contain !important;
-        object-position: top center !important;
-      }
-      /* Imagem fixa no fim de cada página (só em impressão; fica na margem, conteúdo termina antes) */
-      .print-page-bottom-image {
-        display: block !important;
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        height: ${PAGE_BOTTOM_IMAGE_MM}mm !important;
-        z-index: 9999 !important;
-        overflow: hidden !important;
-      }
-      .print-page-bottom-image img {
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: contain !important;
-        object-position: bottom center !important;
       }
       
       /* Cabeçalho fixo REMOVIDO - não usar mais */
@@ -8380,8 +8317,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
   </style>
 </head>
 <body>
-  ${hasPageTopImage ? `<div class="print-page-top-image" aria-hidden="true"><img src="${headerImageFixedURL}" alt=""></div>` : ''}
-  ${hasPageBottomImage ? `<div class="print-page-bottom-image" aria-hidden="true"><img src="${footerImageURL}" alt=""></div>` : ''}
   ${(forPdfServer || omitPrintBar) ? '' : `
   <div class="print-tip-bar">
     <button class="btn-gerar-pdf" id="btnGerarPDF" onclick="window.print()">Gerar PDF</button>
@@ -8410,8 +8345,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </div>
     </div>
     
-    ${headerImageFixedURL && !hasPageTopImage ? `
-    <!-- Imagem de início no fluxo (só quando NÃO está em uso a imagem fixa no topo de cada página) -->
+    ${headerImageFixedURL ? `
+    <!-- Imagem de início no fluxo (como no Word: “em linha com texto”, sem sobreposição) -->
     <div class="inicio-image-block">
       <img src="${headerImageFixedURL}" alt="Cabeçalho" onerror="this.style.display='none';">
     </div>
@@ -9143,8 +9078,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      ${!forPdfServer && footerImageURL && !hasPageBottomImage ? `
-      <!-- Imagem de fim no fluxo (só quando NÃO está em uso a imagem fixa no fim de cada página) -->
+      ${!forPdfServer && footerImageURL ? `
+      <!-- Imagem de fim no fluxo (como no Word: “em linha com texto”, sem sobreposição) -->
       <div class="fim-image-block">
         <img src="${footerImageURL}" alt="Rodapé" onerror="this.style.display='none';">
       </div>
