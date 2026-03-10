@@ -745,6 +745,20 @@ function initializeDatabase() {
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // Templates de proposta versionados (nome, versão, html, css, schema, tipo)
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    versao TEXT NOT NULL DEFAULT '1.0',
+    html TEXT,
+    css TEXT,
+    schema_campos TEXT,
+    tipo_proposta TEXT NOT NULL DEFAULT 'tecnica',
+    is_padrao INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Projetos
   db.run(`CREATE TABLE IF NOT EXISTS projetos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1572,7 +1586,12 @@ function executeMigrations(callback) {
         { nome: 'margem_desconto', tipo: 'REAL DEFAULT 0' },
         { nome: 'cliente_contato', tipo: 'TEXT' },
         { nome: 'cliente_telefone', tipo: 'TEXT' },
-        { nome: 'cliente_email', tipo: 'TEXT' }
+        { nome: 'cliente_email', tipo: 'TEXT' },
+        { nome: 'template_id', tipo: 'INTEGER' },
+        { nome: 'template_versao', tipo: 'TEXT' },
+        { nome: 'html_rendered', tipo: 'TEXT' },
+        { nome: 'css_snapshot', tipo: 'TEXT' },
+        { nome: 'pdf_gerado_at', tipo: 'DATETIME' }
       ];
       
       // Criar tabela de revisões se não existir
@@ -6449,6 +6468,15 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
           function runGerar() {
             let html;
             try {
+              // Se existe snapshot (HTML renderizado gravado), usar para preview idêntico ao PDF
+              if (proposta.html_rendered && String(proposta.html_rendered).trim().length > 0) {
+                html = proposta.html_rendered;
+                html = html.replace(/src="(https?:)?\/\/[^/]+(\/api\/uploads\/[^"]+)"/g, (_, __, p) => `src="${requestBaseURL}${p}"`);
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+                res.send(html);
+                return;
+              }
               let compList = [];
               if (templateConfig && templateConfig.componentes) {
                 if (typeof templateConfig.componentes === 'string') { try { compList = JSON.parse(templateConfig.componentes); } catch (_) {} }
@@ -6671,14 +6699,20 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     }
     
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
-    let compList = [];
-    if (templateConfig && templateConfig.componentes) {
-      if (typeof templateConfig.componentes === 'string') { try { compList = JSON.parse(templateConfig.componentes); } catch (_) {} }
-      else if (Array.isArray(templateConfig.componentes)) compList = templateConfig.componentes;
+    let html;
+    const usouSnapshot = proposta.html_rendered && String(proposta.html_rendered).trim().length > 0;
+    if (usouSnapshot) {
+      html = proposta.html_rendered;
+    } else {
+      let compList = [];
+      if (templateConfig && templateConfig.componentes) {
+        if (typeof templateConfig.componentes === 'string') { try { compList = JSON.parse(templateConfig.componentes); } catch (_) {} }
+        else if (Array.isArray(templateConfig.componentes)) compList = templateConfig.componentes;
+      }
+      html = (Array.isArray(compList) && compList.length > 0)
+        ? gerarHTMLPropostaFromComponentes(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true)
+        : gerarHTMLPropostaPremium(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true);
     }
-    let html = (Array.isArray(compList) && compList.length > 0)
-      ? gerarHTMLPropostaFromComponentes(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true)
-      : gerarHTMLPropostaPremium(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true);
     if (!html || typeof html !== 'string' || html.trim().length === 0) {
       throw new Error('HTML da proposta está vazio');
     }
@@ -6718,6 +6752,19 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     
     await browser.close();
     browser = null;
+    
+    // Snapshot: gravar cópia exata do HTML/CSS usado para reproduzir a proposta no futuro
+    if (!usouSnapshot && html) {
+      const cssMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+      const cssSnapshot = (cssMatch && cssMatch[1]) ? cssMatch[1].trim() : null;
+      db.run(
+        `UPDATE propostas SET html_rendered = ?, css_snapshot = ?, pdf_gerado_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [html, cssSnapshot || null, id],
+        (errUpdate) => {
+          if (errUpdate) console.error('Aviso: não foi possível gravar snapshot da proposta:', errUpdate.message);
+        }
+      );
+    }
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="proposta-${(proposta.numero_proposta || id).replace(/[/\\]/g, '-')}.pdf"`);
