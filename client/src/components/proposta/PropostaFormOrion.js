@@ -9,6 +9,13 @@ import SelecaoProdutosPremium from '../SelecaoProdutosPremium';
 import PreviewPropostaEditavel from '../PreviewPropostaEditavel';
 import './PropostaFormOrion.css';
 
+const TIPO_PROPOSTA_OPCOES = [
+  { value: 'comercial', label: 'Comercial' },
+  { value: 'tecnica', label: 'Técnica' },
+  { value: 'orcamento', label: 'Orçamento' },
+  { value: 'aditivo', label: 'Aditivo' },
+];
+
 const defaultForm = {
   cliente_id: '',
   titulo: '',
@@ -26,6 +33,9 @@ const defaultForm = {
   cliente_contato: '',
   cliente_telefone: '',
   cliente_email: '',
+  oportunidade_id: '',
+  tipo_proposta: '',
+  expira_em: '',
 };
 
 function buildItemFromProduct(produto) {
@@ -63,6 +73,7 @@ export default function PropostaFormOrion() {
   const [itens, setItens] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const [oportunidades, setOportunidades] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [showProdutosModal, setShowProdutosModal] = useState(false);
@@ -77,13 +88,15 @@ export default function PropostaFormOrion() {
     let cancelled = false;
     (async () => {
       try {
-        const [cliRes, usrRes] = await Promise.all([
+        const [cliRes, usrRes, oppRes] = await Promise.all([
           api.get('/clientes', { params: { ativo: 'true' } }),
           api.get('/usuarios/por-modulo/comercial').catch(() => ({ data: [] })),
+          api.get('/oportunidades', { params: { status: 'ativa' } }).catch(() => ({ data: [] })),
         ]);
         if (cancelled) return;
         setClientes(Array.isArray(cliRes.data) ? cliRes.data : []);
         setUsuarios(Array.isArray(usrRes.data) ? usrRes.data : []);
+        setOportunidades(Array.isArray(oppRes?.data) ? oppRes.data : []);
       } catch (e) {
         if (!cancelled) toast.error('Erro ao carregar clientes/usuários.');
       } finally {
@@ -122,6 +135,9 @@ export default function PropostaFormOrion() {
           cliente_contato: data.cliente_contato ?? '',
           cliente_telefone: data.cliente_telefone ?? '',
           cliente_email: data.cliente_email ?? '',
+          oportunidade_id: data.oportunidade_id ?? '',
+          tipo_proposta: data.tipo_proposta ?? '',
+          expira_em: data.expira_em ? data.expira_em.split('T')[0] : '',
         });
         setItens((data.itens || []).map((i) => ({
           descricao: i.descricao ?? '',
@@ -192,6 +208,9 @@ export default function PropostaFormOrion() {
         responsavel_id: form.responsavel_id ? Number(form.responsavel_id) : undefined,
         valor_total: form.valor_total,
         margem_desconto: Number(form.margem_desconto) || 0,
+        oportunidade_id: form.oportunidade_id ? Number(form.oportunidade_id) : undefined,
+        tipo_proposta: form.tipo_proposta || undefined,
+        expira_em: form.expira_em || undefined,
         itens: itens.map((i) => ({
           descricao: i.descricao,
           quantidade: i.quantidade,
@@ -243,6 +262,8 @@ export default function PropostaFormOrion() {
     );
   }
 
+  const isReadOnly = isEdit && form.status !== 'rascunho';
+
   return (
     <div className="proposta-form-orion">
       <header className="proposta-form-orion-header">
@@ -253,19 +274,29 @@ export default function PropostaFormOrion() {
               <button type="button" className="btn-orion-outline" onClick={openPreview} title="Abrir proposta em nova aba (só visualizar)">
                 <FiEye /> Ver proposta
               </button>
-              <button type="button" className="btn-orion-outline btn-orion-preview-edit" onClick={() => setShowPreviewEditavel(true)} title="Abrir preview editável (editar layout e textos da proposta)">
-                <FiEdit2 /> Preview editável
-              </button>
+              {form.status === 'rascunho' && (
+                <button type="button" className="btn-orion-outline btn-orion-preview-edit" onClick={() => setShowPreviewEditavel(true)} title="Abrir preview editável (editar layout e textos da proposta)">
+                  <FiEdit2 /> Preview editável
+                </button>
+              )}
             </>
           )}
           <button type="button" className="btn-orion-outline" onClick={() => navigate('/comercial/propostas')}>
             <FiX /> Cancelar
           </button>
-          <button type="submit" form="proposta-form-orion-form" className="btn-orion-primary" disabled={loading}>
-            <FiSave /> {loading ? 'Salvando...' : 'Salvar'}
-          </button>
+          {!isReadOnly && (
+            <button type="submit" form="proposta-form-orion-form" className="btn-orion-primary" disabled={loading}>
+              <FiSave /> {loading ? 'Salvando...' : 'Salvar'}
+            </button>
+          )}
         </div>
       </header>
+
+      {isReadOnly && (
+        <div className="proposta-form-orion-readonly-banner">
+          Proposta só pode ser editada em rascunho. Use &quot;Nova revisão&quot; na listagem para criar uma nova versão editável.
+        </div>
+      )}
 
       <form id="proposta-form-orion-form" onSubmit={handleSubmit} className="proposta-form-orion-form">
         <section className="proposta-form-orion-section">
@@ -277,6 +308,7 @@ export default function PropostaFormOrion() {
                 value={form.cliente_id}
                 onChange={(e) => setForm((p) => ({ ...p, cliente_id: e.target.value }))}
                 required
+                disabled={isReadOnly}
               >
                 <option value="">Selecione...</option>
                 {clientes.map((c) => (
@@ -294,6 +326,7 @@ export default function PropostaFormOrion() {
                 onChange={(e) => setForm((p) => ({ ...p, titulo: e.target.value }))}
                 placeholder="Ex.: Proposta técnica comercial"
                 required
+                disabled={isReadOnly}
               />
             </div>
             <div className="proposta-form-orion-field">
@@ -302,6 +335,7 @@ export default function PropostaFormOrion() {
                 type="date"
                 value={form.validade}
                 onChange={(e) => setForm((p) => ({ ...p, validade: e.target.value }))}
+                disabled={isReadOnly}
               />
             </div>
             <div className="proposta-form-orion-field">
@@ -309,6 +343,7 @@ export default function PropostaFormOrion() {
               <select
                 value={form.responsavel_id}
                 onChange={(e) => setForm((p) => ({ ...p, responsavel_id: e.target.value }))}
+                disabled={form.status !== 'rascunho'}
               >
                 <option value="">—</option>
                 {usuarios.map((u) => (
@@ -316,12 +351,48 @@ export default function PropostaFormOrion() {
                 ))}
               </select>
             </div>
+            <div className="proposta-form-orion-field">
+              <label>Oportunidade</label>
+              <select
+                value={form.oportunidade_id}
+                onChange={(e) => setForm((p) => ({ ...p, oportunidade_id: e.target.value }))}
+                disabled={form.status !== 'rascunho'}
+              >
+                <option value="">— Nenhuma —</option>
+                {oportunidades.map((o) => (
+                  <option key={o.id} value={o.id}>{o.titulo || `Oportunidade ${o.id}`}</option>
+                ))}
+              </select>
+            </div>
+            <div className="proposta-form-orion-field">
+              <label>Tipo de proposta</label>
+              <select
+                value={form.tipo_proposta}
+                onChange={(e) => setForm((p) => ({ ...p, tipo_proposta: e.target.value }))}
+                disabled={form.status !== 'rascunho'}
+              >
+                <option value="">— Selecione —</option>
+                {TIPO_PROPOSTA_OPCOES.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="proposta-form-orion-field">
+              <label>Expira em</label>
+              <input
+                type="date"
+                value={form.expira_em}
+                onChange={(e) => setForm((p) => ({ ...p, expira_em: e.target.value }))}
+                disabled={form.status !== 'rascunho'}
+              />
+            </div>
             <div className="proposta-form-orion-field full">
               <label>Descrição</label>
               <textarea
                 value={form.descricao}
                 onChange={(e) => setForm((p) => ({ ...p, descricao: e.target.value }))}
                 rows={2}
+                disabled={isReadOnly}
               />
             </div>
             <div className="proposta-form-orion-field full">
@@ -330,6 +401,7 @@ export default function PropostaFormOrion() {
                 type="text"
                 value={form.condicoes_pagamento}
                 onChange={(e) => setForm((p) => ({ ...p, condicoes_pagamento: e.target.value }))}
+                disabled={isReadOnly}
               />
             </div>
             <div className="proposta-form-orion-field">
@@ -338,6 +410,7 @@ export default function PropostaFormOrion() {
                 type="text"
                 value={form.prazo_entrega}
                 onChange={(e) => setForm((p) => ({ ...p, prazo_entrega: e.target.value }))}
+                disabled={isReadOnly}
               />
             </div>
             <div className="proposta-form-orion-field">
@@ -346,6 +419,7 @@ export default function PropostaFormOrion() {
                 type="text"
                 value={form.garantia}
                 onChange={(e) => setForm((p) => ({ ...p, garantia: e.target.value }))}
+                disabled={isReadOnly}
               />
             </div>
             <div className="proposta-form-orion-field">
@@ -356,6 +430,7 @@ export default function PropostaFormOrion() {
                 step="0.01"
                 value={form.margem_desconto}
                 onChange={(e) => setForm((p) => ({ ...p, margem_desconto: e.target.value }))}
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -366,15 +441,17 @@ export default function PropostaFormOrion() {
           <p className="proposta-form-orion-hint">
             Adicione produtos ao carrinho. A proposta gerada usará o template e as variáveis técnicas definidas em Configurações.
           </p>
-          <div className="proposta-form-orion-cart-actions">
-            <button
-              type="button"
-              className="btn-orion-primary"
-              onClick={() => setShowProdutosModal(true)}
-            >
-              <FiPlus /> Adicionar produtos
-            </button>
-          </div>
+          {!isReadOnly && (
+            <div className="proposta-form-orion-cart-actions">
+              <button
+                type="button"
+                className="btn-orion-primary"
+                onClick={() => setShowProdutosModal(true)}
+              >
+                <FiPlus /> Adicionar produtos
+              </button>
+            </div>
+          )}
           {itens.length === 0 ? (
             <div className="proposta-form-orion-cart-empty">
               Nenhum item no carrinho. Clique em &quot;Adicionar produtos&quot; para escolher itens do catálogo.
@@ -404,6 +481,7 @@ export default function PropostaFormOrion() {
                           value={item.quantidade}
                           onChange={(e) => updateItem(idx, 'quantidade', e.target.value)}
                           className="proposta-form-orion-input-num"
+                          disabled={isReadOnly}
                         />
                       </td>
                       <td>{item.unidade}</td>
@@ -415,18 +493,21 @@ export default function PropostaFormOrion() {
                           value={item.valor_unitario}
                           onChange={(e) => updateItem(idx, 'valor_unitario', e.target.value)}
                           className="proposta-form-orion-input-num"
+                          disabled={isReadOnly}
                         />
                       </td>
                       <td>{formatMoney(item.valor_total)}</td>
                       <td>
-                        <button
-                          type="button"
-                          className="proposta-form-orion-btn-remove"
-                          onClick={() => removeItem(idx)}
-                          title="Remover"
-                        >
-                          <FiTrash2 />
-                        </button>
+                        {!isReadOnly && (
+                          <button
+                            type="button"
+                            className="proposta-form-orion-btn-remove"
+                            onClick={() => removeItem(idx)}
+                            title="Remover"
+                          >
+                            <FiTrash2 />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

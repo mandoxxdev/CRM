@@ -1591,8 +1591,31 @@ function executeMigrations(callback) {
         { nome: 'template_versao', tipo: 'TEXT' },
         { nome: 'html_rendered', tipo: 'TEXT' },
         { nome: 'css_snapshot', tipo: 'TEXT' },
-        { nome: 'pdf_gerado_at', tipo: 'DATETIME' }
+        { nome: 'pdf_gerado_at', tipo: 'DATETIME' },
+        { nome: 'oportunidade_id', tipo: 'INTEGER' },
+        { nome: 'tipo_proposta', tipo: 'TEXT' },
+        { nome: 'enviada_em', tipo: 'DATETIME' },
+        { nome: 'expira_em', tipo: 'DATETIME' }
       ];
+      
+      // Histórico de status (auditoria enterprise - Salesforce-like)
+      db.run(`CREATE TABLE IF NOT EXISTS proposta_status_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        proposta_id INTEGER NOT NULL,
+        status_anterior TEXT,
+        status_novo TEXT NOT NULL,
+        usuario_id INTEGER,
+        observacao TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (proposta_id) REFERENCES propostas(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+      )`, (err) => {
+        if (err && !err.message.includes('already exists')) {
+          console.log('⚠️ Aviso ao criar proposta_status_history:', err.message);
+        } else if (!err) {
+          console.log('✅ Tabela proposta_status_history criada/verificada');
+        }
+      });
       
       // Criar tabela de revisões se não existir
       db.run(`CREATE TABLE IF NOT EXISTS proposta_revisoes (
@@ -3689,7 +3712,7 @@ app.delete('/api/projetos/:id', authenticateToken, (req, res) => {
 
 // ========== ROTAS DE PROPOSTAS ==========
 app.get('/api/propostas', authenticateToken, (req, res) => {
-  const { cliente_id, status, created_by, responsavel_id, search } = req.query;
+  const { cliente_id, status, created_by, responsavel_id, oportunidade_id, tipo_proposta, search } = req.query;
   let query = `SELECT pr.*, c.razao_social as cliente_nome, c.nome_fantasia as cliente_nome_fantasia,
                u1.nome as created_by_nome, u2.nome as responsavel_nome
                FROM propostas pr
@@ -3707,6 +3730,16 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
   if (status) {
     query += ' AND pr.status = ?';
     params.push(status);
+  }
+
+  if (oportunidade_id) {
+    query += ' AND pr.oportunidade_id = ?';
+    params.push(oportunidade_id);
+  }
+
+  if (tipo_proposta) {
+    query += ' AND pr.tipo_proposta = ?';
+    params.push(tipo_proposta);
   }
 
   if (created_by) {
@@ -3744,7 +3777,13 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
 app.get('/api/propostas/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   
-  db.get('SELECT * FROM propostas WHERE id = ?', [id], (err, proposta) => {
+  db.get(
+    `SELECT pr.*, c.razao_social as cliente_nome, c.nome_fantasia as cliente_nome_fantasia
+     FROM propostas pr
+     LEFT JOIN clientes c ON pr.cliente_id = c.id
+     WHERE pr.id = ?`,
+    [id],
+    (err, proposta) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -5529,7 +5568,8 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
       validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, status: statusOriginal,
       responsavel_id, origem_busca, motivo_nao_venda, familia_produto,
       lembrete_data, lembrete_mensagem, margem_desconto, itens,
-      cliente_contato, cliente_telefone, cliente_email
+      cliente_contato, cliente_telefone, cliente_email,
+      oportunidade_id, tipo_proposta, expira_em
     } = req.body;
     
     // Usar variável mutável para status
@@ -5634,13 +5674,14 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
           validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, status,
           responsavel_id, created_by, motivo_nao_venda, origem_busca, familia_produto,
           lembrete_data, lembrete_mensagem, margem_desconto, revisao,
-          cliente_contato, cliente_telefone, cliente_email)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          cliente_contato, cliente_telefone, cliente_email, oportunidade_id, tipo_proposta, expira_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [clienteIdNum, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
           validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status || 'rascunho',
           responsavelIdNum, createdByIdNum, motivo_nao_venda || null, origem_busca || null,
           familia_produto || null, lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, 0,
-          cliente_contato || null, cliente_telefone || null, cliente_email || null],
+          cliente_contato || null, cliente_telefone || null, cliente_email || null,
+          oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null],
         function(err) {
           if (err) {
             console.error('❌ Erro ao inserir proposta:', err);
@@ -5768,7 +5809,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, status,
     responsavel_id, origem_busca, motivo_nao_venda, familia_produto,
     lembrete_data, lembrete_mensagem, margem_desconto, itens,
-    cliente_contato, cliente_telefone, cliente_email
+    cliente_contato, cliente_telefone, cliente_email,
+    oportunidade_id, tipo_proposta, expira_em
   } = req.body;
 
   // Buscar proposta atual completa para comparação
@@ -5779,6 +5821,13 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     
     if (!propostaAtual) {
       return res.status(404).json({ error: 'Proposta não encontrada' });
+    }
+    
+    // Regra enterprise: só editar proposta em rascunho (Salesforce-like)
+    if (propostaAtual.status && propostaAtual.status !== 'rascunho') {
+      return res.status(400).json({
+        error: 'Só é possível editar proposta em rascunho. Use "Nova revisão" para criar uma nova versão editável.'
+      });
     }
     
     // VALIDAÇÃO: Se desconto > 5% e status não for rascunho, verificar se há aprovação aprovada
@@ -5960,13 +6009,15 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               garantia = ?, observacoes = ?, status = ?, responsavel_id = ?,
               motivo_nao_venda = ?, origem_busca = ?, familia_produto = ?,
               lembrete_data = ?, lembrete_mensagem = ?, margem_desconto = ?, revisao = ?,
-              cliente_contato = ?, cliente_telefone = ?, cliente_email = ?, updated_at = CURRENT_TIMESTAMP
+              cliente_contato = ?, cliente_telefone = ?, cliente_email = ?,
+              oportunidade_id = ?, tipo_proposta = ?, expira_em = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
             [clienteIdFinal, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
               validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status,
               responsavelIdFinal, motivo_nao_venda || null, origem_busca || null, familia_produto || null,
               lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, novaRevisao,
-              cliente_contato || null, cliente_telefone || null, cliente_email || null, id],
+              cliente_contato || null, cliente_telefone || null, cliente_email || null,
+              oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null, id],
             (err) => {
               if (err) {
                 // Tratar erro de UNIQUE constraint especificamente
@@ -6116,6 +6167,10 @@ app.delete('/api/propostas/:id', authenticateToken, (req, res) => {
             console.log('✅ Follow-ups deletados');
           }
           
+          // Deletar histórico de status (auditoria)
+          db.run('DELETE FROM proposta_status_history WHERE proposta_id = ?', [id], (err) => {
+            if (err) console.error('❌ Erro ao deletar status_history:', err);
+          });
           // Deletar revisões (tem CASCADE, mas vamos garantir)
           db.run('DELETE FROM proposta_revisoes WHERE proposta_id = ?', [id], (err) => {
             if (err) {
@@ -6145,6 +6200,186 @@ app.delete('/api/propostas/:id', authenticateToken, (req, res) => {
           });
         });
       });
+    });
+  });
+});
+
+// ========== CICLO DE VIDA ENTERPRISE (Salesforce-like) ==========
+// Registrar mudança de status (auditoria)
+function registrarStatusProposta(propostaId, statusAnterior, statusNovo, usuarioId, observacao, cb) {
+  db.run(
+    `INSERT INTO proposta_status_history (proposta_id, status_anterior, status_novo, usuario_id, observacao) VALUES (?, ?, ?, ?, ?)`,
+    [propostaId, statusAnterior || null, statusNovo, usuarioId || null, observacao || null],
+    (err) => { if (cb) cb(err); }
+  );
+}
+
+// GET histórico de status da proposta
+app.get('/api/propostas/:id/status-history', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.all(
+    `SELECT h.*, u.nome as usuario_nome FROM proposta_status_history h
+     LEFT JOIN usuarios u ON h.usuario_id = u.id
+     WHERE h.proposta_id = ? ORDER BY h.created_at DESC`,
+    [id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
+// POST enviar proposta (rascunho → enviada)
+app.post('/api/propostas/:id/enviar', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  db.get('SELECT id, status FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
+    if (proposta.status !== 'rascunho') {
+      return res.status(400).json({ error: 'Só é possível enviar proposta em rascunho' });
+    }
+    db.run(
+      `UPDATE propostas SET status = 'enviada', enviada_em = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [id],
+      (errUpdate) => {
+        if (errUpdate) return res.status(500).json({ error: errUpdate.message });
+        registrarStatusProposta(id, 'rascunho', 'enviada', userId, 'Proposta enviada ao cliente', () => {});
+        res.json({ message: 'Proposta marcada como enviada', status: 'enviada', enviada_em: new Date().toISOString() });
+      }
+    );
+  });
+});
+
+// POST marcar como visualizada (enviada → visualizada)
+app.post('/api/propostas/:id/marcar-visualizada', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  db.get('SELECT id, status FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
+    if (proposta.status !== 'enviada') {
+      return res.status(400).json({ error: 'Só é possível marcar visualizada em proposta enviada' });
+    }
+    db.run(
+      `UPDATE propostas SET status = 'visualizada', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [id],
+      (errUpdate) => {
+        if (errUpdate) return res.status(500).json({ error: errUpdate.message });
+        registrarStatusProposta(id, 'enviada', 'visualizada', userId, null, () => {});
+        res.json({ message: 'Proposta marcada como visualizada', status: 'visualizada' });
+      }
+    );
+  });
+});
+
+// POST aceitar proposta (enviada/visualizada → aceita)
+app.post('/api/propostas/:id/aceitar', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  const { observacao } = req.body || {};
+  db.get('SELECT id, status FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
+    if (!['enviada', 'visualizada'].includes(proposta.status)) {
+      return res.status(400).json({ error: 'Só é possível aceitar proposta enviada ou visualizada' });
+    }
+    const statusAnterior = proposta.status;
+    db.run(
+      `UPDATE propostas SET status = 'aceita', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [id],
+      (errUpdate) => {
+        if (errUpdate) return res.status(500).json({ error: errUpdate.message });
+        registrarStatusProposta(id, statusAnterior, 'aceita', userId, observacao || 'Proposta aceita', () => {});
+        res.json({ message: 'Proposta aceita', status: 'aceita' });
+      }
+    );
+  });
+});
+
+// POST rejeitar proposta (enviada/visualizada → rejeitada)
+app.post('/api/propostas/:id/rejeitar', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  const { motivo_rejeicao, observacao } = req.body || {};
+  db.get('SELECT id, status FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
+    if (!['enviada', 'visualizada'].includes(proposta.status)) {
+      return res.status(400).json({ error: 'Só é possível rejeitar proposta enviada ou visualizada' });
+    }
+    const statusAnterior = proposta.status;
+    db.run(
+      `UPDATE propostas SET status = 'rejeitada', motivo_nao_venda = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [motivo_rejeicao || observacao || null, id],
+      (errUpdate) => {
+        if (errUpdate) return res.status(500).json({ error: errUpdate.message });
+        registrarStatusProposta(id, statusAnterior, 'rejeitada', userId, motivo_rejeicao || observacao, () => {});
+        res.json({ message: 'Proposta rejeitada', status: 'rejeitada' });
+      }
+    );
+  });
+});
+
+// POST nova revisão (cria novo rascunho a partir da proposta atual; incrementa revisao)
+app.post('/api/propostas/:id/nova-revisao', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  db.get('SELECT * FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
+    const revisaoNova = (parseInt(proposta.revisao, 10) || 0) + 1;
+    const statusAnterior = proposta.status;
+    // Mesma proposta: volta para rascunho, limpa snapshot para regenerar, incrementa revisao
+    db.run(
+      `UPDATE propostas SET status = 'rascunho', revisao = ?, html_rendered = NULL, css_snapshot = NULL, pdf_gerado_at = NULL, enviada_em = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [revisaoNova, id],
+      (errUpdate) => {
+        if (errUpdate) return res.status(500).json({ error: errUpdate.message });
+        registrarStatusProposta(id, statusAnterior, 'rascunho', userId, `Nova revisão #${revisaoNova}`, () => {});
+        res.json({ message: 'Nova revisão criada', revisao: revisaoNova, status: 'rascunho' });
+      }
+    );
+  });
+});
+
+// POST clonar proposta (nova proposta com mesmo cliente/itens, status rascunho, novo número)
+app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  db.get('SELECT * FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
+    db.get('SELECT COUNT(*) as total FROM propostas WHERE cliente_id = ?', [proposta.cliente_id], (errCount, rowCount) => {
+      if (errCount) return res.status(500).json({ error: errCount.message });
+      const numeroNovo = `COPIA-${proposta.numero_proposta}-${Date.now().toString(36).toUpperCase()}`;
+      const campos = 'cliente_id, projeto_id, numero_proposta, titulo, descricao, valor_total, validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, responsavel_id, created_by, cliente_contato, cliente_telefone, cliente_email, oportunidade_id, tipo_proposta';
+      const placeholders = campos.split(',').map(() => '?').join(',');
+      const valores = [
+        proposta.cliente_id, proposta.projeto_id, numeroNovo,
+        (proposta.titulo || '').replace(/^/, '[Cópia] '), proposta.descricao, proposta.valor_total, proposta.validade,
+        proposta.condicoes_pagamento, proposta.prazo_entrega, proposta.garantia, proposta.observacoes,
+        userId, userId, proposta.cliente_contato, proposta.cliente_telefone, proposta.cliente_email,
+        proposta.oportunidade_id || null, proposta.tipo_proposta || null
+      ];
+      db.run(
+        `INSERT INTO propostas (${campos}, status, revisao) VALUES (${placeholders}, 'rascunho', 0)`,
+        valores,
+        function (errInsert) {
+          if (errInsert) return res.status(500).json({ error: errInsert.message });
+          const novaId = this.lastID;
+          db.all('SELECT * FROM proposta_itens WHERE proposta_id = ?', [id], (errItens, itens) => {
+            if (!errItens && itens && itens.length > 0) {
+              const stmt = db.prepare('INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+              itens.forEach((item) => {
+                stmt.run([novaId, item.descricao, item.quantidade, item.unidade, item.valor_unitario, item.valor_total, item.codigo_produto, item.familia_produto, item.regiao_busca]);
+              });
+              stmt.finalize();
+            }
+            res.status(201).json({ message: 'Proposta clonada', id: novaId, numero_proposta: numeroNovo });
+          });
+        }
+      );
     });
   });
 });
@@ -6191,12 +6426,6 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
       db.all(`SELECT * FROM produtos WHERE id IN (${placeholders})`, produtosIds, (err, produtosData) => {
         if (err) {
           return reject(err);
-        }
-
-        // Verificar se todos os produtos são da família "Hélices e Acessórios"
-        const produtosInvalidos = produtosData.filter(p => p.familia !== 'Hélices e Acessórios');
-        if (produtosInvalidos.length > 0) {
-          return reject(new Error('A geração automática de propostas está disponível apenas para produtos da família "Hélices e Acessórios". Outras famílias requerem proposta manual.'));
         }
 
         produtos.forEach(produtoReq => {
@@ -6259,17 +6488,28 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
         return res.status(500).json({ error: 'Erro ao gerar número da proposta: ' + (err?.message || 'Número não gerado') });
       }
 
+      // Validade: usar data enviada ou calcular a partir de validade_dias
+      let validadeFinal = outrosDados.validade || null;
+      if (!validadeFinal && outrosDados.validade_dias) {
+        const d = new Date();
+        d.setDate(d.getDate() + (parseInt(outrosDados.validade_dias, 10) || 15));
+        validadeFinal = d.toISOString().split('T')[0];
+      }
+
+      const oportunidadeIdFinal = outrosDados.oportunidade_id != null && outrosDados.oportunidade_id !== '' ? parseInt(outrosDados.oportunidade_id, 10) : null;
+      const expiraEmFinal = outrosDados.expira_em || validadeFinal || null;
+
       db.run(
         `INSERT INTO propostas (cliente_id, projeto_id, numero_proposta, titulo, descricao, valor_total,
           validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, status,
           responsavel_id, created_by, motivo_nao_venda, origem_busca, familia_produto, lembrete_data, lembrete_mensagem, margem_desconto, revisao,
-          cliente_contato, cliente_telefone, cliente_email)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          cliente_contato, cliente_telefone, cliente_email, oportunidade_id, tipo_proposta, expira_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           clienteIdNum, projetoIdFinal, numeroProposta,
           outrosDados.titulo || `Proposta ${numeroProposta}`,
           outrosDados.descricao || '', valorTotal,
-          outrosDados.validade || null, outrosDados.condicoes_pagamento || '',
+          validadeFinal, outrosDados.condicoes_pagamento || '',
           outrosDados.prazo_entrega || '', outrosDados.garantia || '',
           outrosDados.observacoes || '', outrosDados.status || 'rascunho',
           responsavelIdNum, createdByIdNum,
@@ -6282,7 +6522,10 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
           0,
           outrosDados.cliente_contato || null,
           outrosDados.cliente_telefone || null,
-          outrosDados.cliente_email || null
+          outrosDados.cliente_email || null,
+          oportunidadeIdFinal,
+          outrosDados.tipo_proposta || null,
+          expiraEmFinal
         ],
         function(err) {
           if (err) {

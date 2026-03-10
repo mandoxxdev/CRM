@@ -255,3 +255,52 @@
   padding: 2rem;
   color: var(--gmp-text-secondary, #64748b);
 }
+
+.propostas-orion-link-num {
+  color: var(--gmp-primary, #0066cc);
+  font-weight: 600;
+  text-decoration: none;
+}
+.propostas-orion-link-num:hover {
+  text-decoration: underline;
+}
+
+.propostas-orion-btn-enviar:hover { background: #0ea5e9; color: #fff; }
+.propostas-orion-btn-aceitar:hover { background: #22c55e; color: #fff; }
+.propostas-orion-btn-rejeitar:hover { background: #ef4444; color: #fff; }
+
+.propostas-orion-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.propostas-orion-modal {
+  background: var(--gmp-bg-secondary, #fff);
+  border-radius: 12px;
+  padding: 1.5rem;
+  min-width: 360px;
+  max-width: 90vw;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+.propostas-orion-modal h3 { margin: 0 0 0.5rem 0; font-size: 1.1rem; }
+.propostas-orion-modal p { margin: 0 0 0.75rem 0; color: var(--gmp-text-secondary, #64748b); font-size: 0.9rem; }
+.propostas-orion-modal textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--gmp-border-color, #e2e8f0);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+.propostas-orion-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+.propostas-orion-modal-actions .btn-orion-secondary,
+.propostas-orion-modal-actions .btn-orion-primary { padding: 0.5rem 1rem; }
