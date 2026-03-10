@@ -8307,7 +8307,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         break-before: page !important;
       }
       
-      /* REGRA: Se um bloco não couber inteiro na página, o bloco TODO pula para a próxima (nada cortado no meio) */
+      /* REGRA: Se um bloco não couber inteiro na página, o bloco TODO pula para a próxima (nada cortado no meio).
+         REGRA "começa e termina na mesma página": ex. 4.1, 4.2, etc. — o item inteiro fica na mesma página. */
       .section {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
@@ -9010,16 +9011,19 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           
           // REGRA ABSOLUTA: Se houver sobreposição, SEMPRE quebrar (sem exceções)
           // Não importa se está no topo da página ou não - NUNCA permitir sobreposição
-          // REGRA ABSOLUTA: Se houver QUALQUER sobreposição, SEMPRE mover para próxima página
-          // NÃO há exceções - NUNCA permitir texto abaixo do cabeçalho ou rodapé
+          // REGRA "COMEÇA E TERMINA NA MESMA PÁGINA": Se o elemento está dentro de um bloco lógico (ex: 4.1, 4.2),
+          // aplicar a quebra no BLOCO INTEIRO para que o item não comece numa página e termine na seguinte.
+          const containerItem = element.closest('.produto-item');
+          const containerSection = element.closest('.section');
+          const target = (containerItem || (containerSection && !containerSection.querySelector('.produto-item') ? containerSection : null)) || element;
           if (willOverlap) {
             // Elemento vai sobrepor o rodapé ou o cabeçalho - SEMPRE forçar quebra antes (mover inteiro para próxima página)
-            element.style.pageBreakBefore = 'always';
-            element.style.breakBefore = 'page';
-            element.style.pageBreakInside = 'avoid'; // Para tabelas, evitar divisão - mover inteira
-            element.classList.add('avoid-footer-overlap');
+            target.style.pageBreakBefore = 'always';
+            target.style.breakBefore = 'page';
+            target.style.pageBreakInside = 'avoid'; // Para tabelas, evitar divisão - mover inteira
+            target.classList.add('avoid-footer-overlap');
             if (willOverlapHeader) {
-              element.classList.add('avoid-header-overlap');
+              target.classList.add('avoid-header-overlap');
             }
             
             // Identificar tipo de elemento para log mais claro
@@ -9053,11 +9057,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             const distanceToHeader = headerBottomInPage - positionInPage;
             // Se a distância é muito pequena (<30px) OU se o elemento começa antes do fim do cabeçalho, mover para próxima página
             if ((distanceToHeader < 30 && distanceToHeader >= 0) || positionInPage < headerBottomInPage) {
-              element.style.pageBreakBefore = 'always';
-              element.style.breakBefore = 'page';
-              element.style.pageBreakInside = 'avoid';
-              element.classList.add('avoid-header-overlap');
-              console.log('⚠️ Elemento muito próximo do cabeçalho (verificação adicional) - movendo para próxima página (distância:', Math.round(distanceToHeader), 'px, posição na página:', Math.round(positionInPage), 'px, fim cabeçalho na página:', Math.round(headerBottomInPage), 'px)');
+              const targetProx = element.closest('.produto-item') || (element.closest('.section') && !element.closest('.section').querySelector('.produto-item') ? element.closest('.section') : null) || element;
+              targetProx.style.pageBreakBefore = 'always';
+              targetProx.style.breakBefore = 'page';
+              targetProx.style.pageBreakInside = 'avoid';
+              targetProx.classList.add('avoid-header-overlap');
+              console.log('⚠️ Elemento muito próximo do cabeçalho (verificação adicional) - movendo bloco para próxima página (distância:', Math.round(distanceToHeader), 'px)');
               return;
             }
           }
@@ -9067,11 +9072,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             const distanceToFooter = footerDangerZoneStart - elementBottom;
             // Se a distância é muito pequena (<20px), mover para próxima página
             if (distanceToFooter < 20 && distanceToFooter >= 0) {
-              element.style.pageBreakBefore = 'always';
-              element.style.breakBefore = 'page';
-              element.style.pageBreakInside = 'avoid';
-              element.classList.add('avoid-footer-overlap');
-              console.log('⚠️ Elemento muito próximo do rodapé - movendo para próxima página (distância:', Math.round(distanceToFooter), 'px)');
+              const targetProx = element.closest('.produto-item') || (element.closest('.section') && !element.closest('.section').querySelector('.produto-item') ? element.closest('.section') : null) || element;
+              targetProx.style.pageBreakBefore = 'always';
+              targetProx.style.breakBefore = 'page';
+              targetProx.style.pageBreakInside = 'avoid';
+              targetProx.classList.add('avoid-footer-overlap');
+              console.log('⚠️ Elemento muito próximo do rodapé - movendo bloco para próxima página (distância:', Math.round(distanceToFooter), 'px)');
               return;
             }
           }
