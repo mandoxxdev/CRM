@@ -161,9 +161,9 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
       const apiOrigin = (apiBase.startsWith('http') ? apiBase.replace(/\/api\/?$/, '') : window.location.origin);
       html = html.replace(/src="(https?:)?\/\/[^/]+(\/api\/uploads\/[^"]+)"/g, (_, __, path) => `src="${apiOrigin}${path}"`);
 
-      // Imprimir só depois da página (e imagens) carregarem, para não travar o navegador
-      const autoPrintScript = '<script>window.onload=function(){setTimeout(function(){window.print();},400);}</script>';
-      if (html.includes('</body>') && !html.includes('window.onload=function(){setTimeout')) {
+      // Disparar beforeprint para rodar a lógica de quebra (seção inteira na mesma página), depois imprimir
+      const autoPrintScript = '<script>window.onload=function(){setTimeout(function(){window.dispatchEvent(new Event("beforeprint"));setTimeout(window.print,450);},400);}</script>';
+      if (html.includes('</body>') && !html.includes('window.dispatchEvent(new Event')) {
         html = html.replace('</body>', autoPrintScript + '\n</body>');
       }
 

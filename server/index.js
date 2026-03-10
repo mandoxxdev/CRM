@@ -6703,6 +6703,10 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     
     await new Promise((r) => setTimeout(r, 1500));
     
+    // Disparar lógica de quebra de página (evitar seção começar numa página e terminar na outra)
+    await page.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
+    await new Promise((r) => setTimeout(r, 450));
+    
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -8796,13 +8800,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     });
     
     // SOLUÇÃO SEM MARGENS: Detectar quando conteúdo está prestes a sobrepor o rodapé e o cabeçalho e forçar quebra de página
+    // Roda mesmo sem footer/header (ex: PDF via blob no servidor) — usa altura padrão para zona de perigo
     (function() {
       const footerImg = document.getElementById('footer-img');
       const footerPrint = document.getElementById('footer-image-print');
       const headerImg = document.getElementById('header-img');
       const headerPrint = document.getElementById('header-image-print');
-      
-      if (!footerImg || !footerPrint) return;
       
       function checkAndPreventOverlap() {
         // SOLUÇÃO SIMPLIFICADA: Adicionar padding-top no body baseado na altura do cabeçalho
@@ -8886,13 +8889,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           }
         }
         
-        // Obter posição REAL da imagem do rodapé
+        // Obter posição REAL da imagem do rodapé (ou usar padrão quando não há elemento — ex: PDF via blob)
         let footerRect = null;
-        let footerHeight = 0;
+        let footerHeight = 80;
         if (footerPrint) {
           footerRect = footerPrint.getBoundingClientRect();
-          const footerScrollTop = window.pageYOffset || document.documentElement.scrollTop;
-          footerHeight = footerRect.height || footerImg.offsetHeight || footerImg.naturalHeight || 80;
+          footerHeight = footerRect.height || (footerImg ? (footerImg.offsetHeight || footerImg.naturalHeight || 80) : 80);
         } else if (footerImg) {
           footerHeight = footerImg.offsetHeight || footerImg.naturalHeight || 80;
         }
@@ -9425,13 +9427,17 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         console.log('✅ Verificação concluída para todas as páginas');
       }
       
-      // Executar quando a imagem do rodapé carregar
-      if (footerImg.complete) {
-        setTimeout(checkAndPreventOverlap, 200);
-      } else {
-        footerImg.addEventListener('load', function() {
+      // Executar quando a imagem do rodapé carregar (ou logo ao carregar se não houver elemento — ex: PDF via blob)
+      if (footerImg && footerPrint) {
+        if (footerImg.complete) {
           setTimeout(checkAndPreventOverlap, 200);
-        });
+        } else {
+          footerImg.addEventListener('load', function() {
+            setTimeout(checkAndPreventOverlap, 200);
+          });
+        }
+      } else {
+        setTimeout(checkAndPreventOverlap, 200);
       }
       
       // Re-executar em intervalos para capturar mudanças de layout
