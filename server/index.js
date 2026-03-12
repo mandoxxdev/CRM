@@ -6906,14 +6906,6 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             if (responseSent) return;
             let html;
             try {
-              if (proposta.html_rendered && String(proposta.html_rendered).trim().length > 0) {
-                html = proposta.html_rendered;
-                html = (html || '').replace(/src="(https?:)?\/\/[^/]+(\/api\/uploads\/[^"]+)"/g, (_, __, p) => `src="${requestBaseURL}${p}"`);
-                res.setHeader('Content-Type', 'text/html; charset=utf-8');
-                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-                sendOnce(200, html);
-                return;
-              }
               let compList = [];
               if (templateConfig && templateConfig.componentes) {
                 if (typeof templateConfig.componentes === 'string') { try { compList = JSON.parse(templateConfig.componentes); } catch (_) {} }
