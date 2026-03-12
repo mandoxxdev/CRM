@@ -6961,7 +6961,10 @@ app.get('/api/propostas/:id/premium', (req, res) => {
               porFamilia = templateConfig.variaveis_proposta_por_familia;
             }
           }
-          templateConfig.variaveis_proposta_por_familia = porFamilia;
+          // Só atribuir se templateConfig existir; evita TypeError quando não há template configurado
+          if (templateConfig) {
+            templateConfig.variaveis_proposta_por_familia = porFamilia;
+          }
           const chavesUnicas = [...new Set([].concat(chaves, Object.values(porFamilia).filter(Array.isArray).reduce((a, b) => a.concat(b), [])))];
           if (templateConfig) {
             templateConfig.variaveis_proposta_tecnica = chaves;
