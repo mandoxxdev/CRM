@@ -8620,7 +8620,13 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         page-break-inside: auto !important;
         break-inside: auto !important;
       }
-      
+
+      /* Itens 4.1, 4.2 e 4.3 sempre na mesma página */
+      .produto-group-1-2-3 {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
       /* Tabelas: não cortar no meio; se não couber, tabela inteira na próxima página */
       .section table,
       .section .dados-table,
@@ -8856,6 +8862,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       <div class="section section-escopo">
         <div class="section-title">4. ESCOPO DE FORNECIMENTO</div>
         ${(itens || []).map((item, index) => {
+          const itensArr = itens || [];
+          const openWrap = (index === 0 && itensArr.length >= 3) ? '<div class="produto-group-1-2-3">' : '';
+          const closeWrap = (index === 2 && itensArr.length >= 3) ? '</div>' : '';
           const produto = item || {};
           const nome = item.descricao || item.produto_nome || item.nome || produto.nome || produto.descricao || 'Produto sem nome';
           const quantidade = item.quantidade || 1;
@@ -8961,7 +8970,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
               (espessura ? '<tr><td class="dados-label">Espessura:</td><td class="dados-value" contenteditable="true">' + esc(espessura) + '</td></tr>' : '<tr><td class="dados-label">Espessura:</td><td class="dados-value" contenteditable="true"></td></tr>') +
               '<tr><td class="dados-label">Quantidade:</td><td class="dados-value"><strong>' + quantidade + ' ' + (quantidade === 1 ? 'unidade' : 'unidades') + '</strong></td></tr>';
           }
-          return `
+          const blockHtml = `
               <div class="produto-item" style="margin-bottom: 25px;">
             <div class="produto-subsection" style="margin-bottom: 15px;">
               <h3 style="font-size: 20px; font-weight: 700; color: #1a4d7a; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #ff6b35;">4.${index + 1} - ${esc(nome.toUpperCase())}</h3>
@@ -8983,6 +8992,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             </div>
           </div>
           `;
+          return openWrap + blockHtml + closeWrap;
         }).join('')}
         
         ${(!itens || itens.length === 0) ? `
