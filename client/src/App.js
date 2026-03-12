@@ -193,7 +193,7 @@ function AppRoutes() {
         <Route path="propostas/editar/:id" element={<PropostaForm />} />
         <Route path="propostas/config-template" element={<ConfigTemplateProposta />} />
         <Route path="propostas/editor-template" element={<EditorTemplateProposta />} />
-        <Route path="cpq" element={<Navigate to="cpq/projetos" replace />} />
+        <Route path="cpq" element={<Navigate to="/comercial/cpq/projetos" replace />} />
         <Route path="cpq/configurador" element={<CPQConfigurator />} />
         <Route path="cpq/projetos" element={<CPQProjects />} />
         <Route path="cpq/projetos/:id" element={<CPQProjectDetail />} />
