@@ -8092,9 +8092,14 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       box-sizing: border-box;
     }
 
+    @page {
+      size: A4;
+      margin: 40mm 14mm 30mm 14mm;
+    }
+
     :root {
-      --page-header-height: 120px;
-      --page-footer-height: 70px;
+      --document-header-height: 120px;
+      --document-footer-height: 80px;
     }
     
     body {
@@ -8114,51 +8119,69 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       box-shadow: 0 0 40px rgba(0,0,0,0.06);
     }
 
-    /* Página controlada: header e footer no fluxo (sem position:fixed) — evita texto por trás do cabeçalho */
-    .pdf-page {
-      width: 210mm;
-      min-height: 297mm;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      page-break-before: always;
-      page-break-after: always;
+    /* Header fixo: repete em todas as páginas; conteúdo nunca por trás */
+    .document-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--document-header-height);
+      z-index: 1000;
       background: #fff;
     }
-    .pdf-page:first-of-type {
-      page-break-before: auto;
-    }
-    .page-header {
-      flex-shrink: 0;
-    }
-    .page-header img {
+    .document-header img {
       width: 100%;
-      height: var(--page-header-height);
+      height: 100%;
       object-fit: contain;
       object-position: top center;
       display: block;
     }
-    .page-content {
-      flex: 1;
-      padding: 10mm 14mm 12mm 14mm;
-      min-height: 0;
+
+    /* Footer fixo: repete em todas as páginas */
+    .document-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--document-footer-height);
+      z-index: 1000;
+      background: #fff;
     }
-    .page-footer {
-      flex-shrink: 0;
-    }
-    .page-footer img {
+    .document-footer img {
       width: 100%;
-      height: var(--page-footer-height);
+      height: 100%;
       object-fit: contain;
       object-position: bottom center;
       display: block;
     }
+
+    /* Conteúdo: padding reserva espaço para header e footer — zero sobreposição */
+    .document-content {
+      padding-top: calc(var(--document-header-height) + 20px);
+      padding-bottom: calc(var(--document-footer-height) + 20px);
+      padding-left: 14mm;
+      padding-right: 14mm;
+    }
+
+    /* Títulos não quebram no final da página */
+    h1, h2, h3, .section-title {
+      page-break-after: avoid;
+    }
+    /* Evitar quebra dentro de tabelas e blocos */
+    table {
+      page-break-inside: avoid;
+    }
+    /* Repetir cabeçalho de tabela em cada página */
+    thead {
+      display: table-header-group;
+    }
     
-    /* Capa: quebra de página depois para o miolo começar na próxima */
+    /* Capa: ocupa a primeira página e cobre header/footer nela (z-index + margens) */
     .proposta-header {
       background: linear-gradient(135deg, #0d2b4a 0%, #1a4d7a 50%, #0f3460 100%);
       padding: 40px 50px;
       position: relative;
+      z-index: 1001;
       overflow: hidden;
       min-height: 280px;
       max-height: 320px;
@@ -8166,6 +8189,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       flex-direction: column;
       justify-content: center;
       page-break-after: always;
+      margin-top: calc(-1 * (var(--document-header-height) + 20px));
+      padding-top: calc(var(--document-header-height) + 20px + 40px);
+      margin-bottom: calc(-1 * (var(--document-footer-height) + 20px));
+      padding-bottom: calc(var(--document-footer-height) + 20px + 40px);
     }
     
     .proposta-header::before {
@@ -8654,10 +8681,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         display: none !important;
       }
       
-      /* Margens da página */
       @page {
         size: A4;
-        margin: ${marginTopOutras}mm ${marginLateral}mm ${marginBottom}mm ${marginLateral}mm !important;
+        margin: 40mm 14mm 30mm 14mm !important;
       }
       @page:first {
         margin-top: ${marginTopPrimeira}mm !important;
@@ -9098,12 +9124,13 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </div>
     </div>
     
-    <!-- Página controlada: header e footer no fluxo (não fixos) — conteúdo nunca fica por trás do cabeçalho -->
-    <div class="pdf-page">
-      <div class="page-header">
-        <img src="${headerImageFixedURL}" alt="Cabeçalho">
-      </div>
-      <div class="page-content">
+    <header class="document-header">
+      <img src="${headerImageFixedURL}" alt="Cabeçalho">
+    </header>
+    <footer class="document-footer">
+      <img src="${footerImageURL ? footerImageURL : headerImageFixedURL}" alt="Rodapé">
+    </footer>
+    <main class="document-content">
     <div class="proposta-body">
       <!-- Dados do Cliente (EMPRESA CONTRATANTE - igual ao PDF) -->
       <div class="section dados-cliente-section">
@@ -9480,9 +9507,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </footer>
       `}
     </div>
-      </div>
-      ${footerImageURL ? `<div class="page-footer"><img src="${footerImageURL}" alt="Rodapé"></div>` : ''}
-    </div>
+    </main>
   </div>
   
   <script>
