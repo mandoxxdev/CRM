@@ -149,6 +149,7 @@ const Layout = () => {
     { path: '/comercial/projetos', icon: FiBriefcase, label: 'Projetos' },
     { path: '/comercial/produtos', icon: FiPackage, label: 'Produtos' },
     { path: '/comercial/propostas', icon: FiFileText, label: 'Propostas' },
+    { path: '/comercial/cpq', icon: FiLayers, label: 'CPQ (Configure Price Quote)' },
     { path: '/comercial/aprovacoes', icon: FiCheckCircle, label: 'Aprovações' },
     { path: '/comercial/ordens-servico', icon: FiTool, label: 'Ordens de Serviço' },
     { path: '/comercial/atividades', icon: FiCalendar, label: 'Atividades' },

@@ -8,7 +8,17 @@ import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSe
 import GerarPropostaModal from './GerarPropostaModal';
 import './PropostasList.css';
 
-const STATUS = { rascunho: 'Rascunho', enviada: 'Enviada', visualizada: 'Visualizada', aceita: 'Aceita', rejeitada: 'Rejeitada', expirada: 'Expirada' };
+const STATUS = {
+  rascunho: 'Rascunho',
+  em_revisao: 'Em revisão',
+  aprovada_internamente: 'Aprovada internamente',
+  enviada: 'Enviada',
+  visualizada: 'Visualizada',
+  aceita: 'Aceita',
+  rejeitada: 'Rejeitada',
+  cancelada: 'Cancelada',
+  expirada: 'Expirada'
+};
 const TIPOS = { comercial: 'Comercial', tecnica: 'Técnica', orcamento: 'Orçamento', aditivo: 'Aditivo' };
 
 export default function PropostasList() {
@@ -110,7 +120,7 @@ export default function PropostasList() {
 
   const isRascunho = (s) => s === 'rascunho';
   const podeAceitarRejeitar = (s) => s === 'enviada' || s === 'visualizada';
-  const podeNovaRevisao = (s) => ['enviada', 'visualizada', 'aceita', 'rejeitada', 'expirada'].includes(s);
+  const podeNovaRevisao = (s) => ['enviada', 'visualizada', 'aceita', 'rejeitada', 'cancelada', 'expirada'].includes(s);
 
   return (
     <div className="propostas-list">

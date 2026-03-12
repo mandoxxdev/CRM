@@ -1,0 +1,53 @@
+.cpq-page { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.cpq-header { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 24px; }
+.cpq-header h1 { font-size: 1.5rem; margin: 0; flex: 1; }
+.cpq-subtitle { color: #666; font-size: 0.9rem; margin: 4px 0 0 0; width: 100%; }
+.cpq-back { color: #1a4d7a; text-decoration: none; font-size: 0.9rem; }
+.cpq-config-grid { display: grid; gap: 24px; }
+.cpq-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.cpq-card h2 { font-size: 1.1rem; margin: 0 0 16px 0; color: #1a4d7a; }
+.cpq-type-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.cpq-type-btn { padding: 10px 16px; border: 1px solid #ddd; background: #fff; border-radius: 6px; cursor: pointer; }
+.cpq-type-btn.active { background: #1a4d7a; color: #fff; border-color: #1a4d7a; }
+.cpq-params { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.cpq-param label { display: block; font-size: 0.8rem; color: #555; margin-bottom: 4px; }
+.cpq-param input[type="text"], .cpq-param input[type="number"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+.cpq-btn { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.9rem; }
+.cpq-btn-primary { background: #1a4d7a; color: #fff; }
+.cpq-btn-sec { background: #f0f0f0; color: #333; }
+.cpq-btn.small { padding: 6px 12px; font-size: 0.85rem; }
+.cpq-result .cpq-suggested { margin-bottom: 16px; padding: 12px; background: #f8f9fa; border-radius: 6px; }
+.cpq-create-project { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.cpq-create-project input, .cpq-create-project select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; min-width: 200px; }
+.cpq-table-wrap { overflow-x: auto; }
+.cpq-table { width: 100%; border-collapse: collapse; }
+.cpq-table th, .cpq-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+.cpq-table th { background: #f5f5f5; font-weight: 600; font-size: 0.85rem; }
+.cpq-table input[type="number"] { width: 70px; padding: 4px 8px; }
+.cpq-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #e8f4fc; color: #1a4d7a; }
+.cpq-link { margin-right: 12px; color: #1a4d7a; cursor: pointer; background: none; border: none; font-size: 0.9rem; text-decoration: underline; }
+.cpq-link.danger { color: #c00; }
+.cpq-composition { display: flex; flex-direction: column; gap: 20px; }
+.cpq-group { position: relative; }
+.cpq-group h2 { margin-right: 80px; }
+.cpq-group .cpq-btn.small { position: absolute; top: 20px; right: 20px; }
+.cpq-actions { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.cpq-price-result { font-weight: 700; font-size: 1.1rem; }
+
+/* Processo químico: params grid, sizing, rules, composition */
+.cpq-params-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.cpq-sizing { display: flex; flex-direction: column; gap: 12px; }
+.cpq-sizing-block { padding: 10px 12px; background: #f8f9fa; border-radius: 6px; font-size: 0.9rem; }
+.cpq-sizing-block pre { margin: 4px 0 0 0; font-size: 0.8rem; white-space: pre-wrap; }
+.cpq-sizing-block ul { margin: 4px 0 0 0; padding-left: 18px; }
+.cpq-alertas { background: #fff8e6; border: 1px solid #f0e0a0; }
+.cpq-rules-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.cpq-rule-item { padding: 10px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #1a4d7a; }
+.cpq-justificativa { margin: 6px 0 0 0; font-size: 0.9rem; color: #555; }
+.cpq-composition-list { list-style: none; padding: 0; margin: 0; }
+.cpq-composition-list li { padding: 6px 0; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; }
+.cpq-group-badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #e8f4fc; color: #1a4d7a; }
+.cpq-alert { background: #fff5f5; border: 1px solid #f0c0c0; }
+.cpq-alert h2 { color: #c00; }
+.cpq-create-project-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.cpq-create-project-fields input { min-width: 220px; }

@@ -11,6 +11,7 @@ const multer = require('multer');
 const puppeteer = require('puppeteer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
+const propostaComposition = require('./propostaCompositionEngine');
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
 function getPuppeteerLaunchOptions() {
@@ -758,6 +759,254 @@ function initializeDatabase() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Blocos técnicos e comerciais (motor de composição)
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_blocos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT NOT NULL DEFAULT 'technical',
+    id_bloco TEXT NOT NULL,
+    titulo TEXT,
+    conteudo TEXT,
+    familia TEXT,
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_regras_exibicao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    block_id TEXT NOT NULL,
+    quando TEXT NOT NULL DEFAULT 'always',
+    campo TEXT,
+    expr TEXT,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // ========== CPQ (Configure Price Quote) ==========
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_system_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_composition_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_engineering_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT,
+    condicao_tipo TEXT NOT NULL DEFAULT 'expr',
+    condicao_campo TEXT,
+    condicao_operador TEXT,
+    condicao_valor TEXT,
+    condicao_expr TEXT,
+    resultado_tipo TEXT NOT NULL DEFAULT 'equipment',
+    resultado_equipamento TEXT,
+    resultado_especificacao TEXT,
+    resultado_json TEXT,
+    prioridade INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id INTEGER,
+    oportunidade_id INTEGER,
+    sistema_tipo_codigo TEXT,
+    titulo TEXT NOT NULL,
+    params_json TEXT,
+    status TEXT DEFAULT 'rascunho',
+    proposta_id INTEGER,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+    FOREIGN KEY (oportunidade_id) REFERENCES oportunidades(id),
+    FOREIGN KEY (proposta_id) REFERENCES propostas(id),
+    FOREIGN KEY (created_by) REFERENCES usuarios(id)
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_project_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cpq_project_id INTEGER NOT NULL,
+    composition_group_id INTEGER NOT NULL,
+    produto_id INTEGER,
+    codigo_produto TEXT,
+    quantidade REAL DEFAULT 1,
+    unidade TEXT DEFAULT 'UN',
+    valor_unitario REAL DEFAULT 0,
+    valor_total REAL DEFAULT 0,
+    specs_json TEXT,
+    descritivo_gerado TEXT,
+    ordem INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cpq_project_id) REFERENCES cpq_projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (composition_group_id) REFERENCES cpq_composition_groups(id),
+    FOREIGN KEY (produto_id) REFERENCES produtos(id)
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_cost_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    percentual_padrao REAL DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    sistema_tipo_codigo TEXT,
+    html_content TEXT,
+    estrutura_json TEXT,
+    idioma TEXT DEFAULT 'pt',
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_descriptive_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo_equipamento TEXT,
+    modelo TEXT,
+    template_texto TEXT NOT NULL,
+    placeholders TEXT,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    periodo TEXT NOT NULL,
+    propostas_geradas INTEGER DEFAULT 0,
+    propostas_fechadas INTEGER DEFAULT 0,
+    valor_total REAL DEFAULT 0,
+    ticket_medio REAL DEFAULT 0,
+    tempo_medio_dias REAL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_sizing_result (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cpq_project_id INTEGER,
+    viscosity_cps REAL,
+    density REAL,
+    volume_util REAL,
+    potencia_sugerida_min REAL,
+    potencia_sugerida_max REAL,
+    tipo_impelidor TEXT,
+    tipo_vedacao TEXT,
+    material_contato_sugerido TEXT,
+    tipo_acionamento TEXT,
+    alertas_json TEXT,
+    origem_calculo TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cpq_project_id) REFERENCES cpq_projects(id)
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_solution_suggestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sistema_tipo_codigo TEXT NOT NULL,
+    group_codigo TEXT NOT NULL,
+    item_sugerido TEXT NOT NULL,
+    ordem INTEGER DEFAULT 0,
+    condicao_expr TEXT,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS cpq_applied_rules_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cpq_project_id INTEGER,
+    rule_id INTEGER,
+    rule_nome TEXT,
+    justificativa TEXT,
+    resultado_json TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cpq_project_id) REFERENCES cpq_projects(id)
+  )`);
+
+  db.get('SELECT COUNT(*) as c FROM cpq_system_types', [], (_, r) => {
+    if (r && r.c === 0) {
+      const types = [
+        ['dispersor', 'Dispersor', 'Sistemas de dispersão para tintas, massas, químicos'],
+        ['moinho', 'Moinho', 'Moinhos industriais'],
+        ['agitador', 'Agitador', 'Agitação e homogeneização'],
+        ['tanque', 'Tanque', 'Tanques de processo e armazenagem'],
+        ['reator', 'Reator', 'Reatores químicos'],
+        ['tubulacao', 'Tubulação', 'Tubulações e transferência'],
+        ['dosagem', 'Sistema de dosagem', 'Dosagem e transferência'],
+        ['agua_gelada', 'Sistema água gelada', 'Chillers e utilidades'],
+        ['linha_processo', 'Linha de processo', 'Linhas completas (dispersão + moagem + automação)'],
+        ['turn_key', 'Projeto turn-key', 'Plantas industriais turn-key']
+      ];
+      const stmt = db.prepare('INSERT INTO cpq_system_types (codigo, nome, descricao, ordem) VALUES (?,?,?,?)');
+      types.forEach((t, i) => stmt.run(t[0], t[1], t[2], i));
+      stmt.finalize();
+    }
+  });
+  db.get('SELECT COUNT(*) as c FROM cpq_composition_groups', [], (_, r) => {
+    if (r && r.c === 0) {
+      const groups = [
+        ['equipamentos_principais', 'Equipamentos principais', 0],
+        ['tubulacao', 'Tubulação', 1],
+        ['valvulas', 'Válvulas', 2],
+        ['instrumentacao', 'Instrumentação', 3],
+        ['automacao', 'Automação', 4],
+        ['paineis_eletricos', 'Painéis elétricos', 5],
+        ['servicos', 'Serviços', 6],
+        ['montagem', 'Montagem', 7],
+        ['comissionamento', 'Comissionamento', 8]
+      ];
+      const stmt = db.prepare('INSERT INTO cpq_composition_groups (codigo, nome, ordem) VALUES (?,?,?)');
+      groups.forEach(g => stmt.run(g[0], g[1], g[2]));
+      stmt.finalize();
+    }
+  });
+  db.run('ALTER TABLE cpq_engineering_rules ADD COLUMN justificativa_tecnica TEXT', () => {});
+  db.run('ALTER TABLE cpq_engineering_rules ADD COLUMN bloqueia INTEGER DEFAULT 0', () => {});
+
+  db.get('SELECT COUNT(*) as c FROM cpq_engineering_rules', [], (_, r) => {
+    if (r && r.c === 0) {
+      db.run(`INSERT INTO cpq_engineering_rules (nome, condicao_tipo, condicao_expr, resultado_tipo, resultado_equipamento, resultado_especificacao, prioridade, justificativa_tecnica) VALUES
+        ('Viscosidade <= 500 cPs -> agitador baixa viscosidade', 'expr', 'viscosidade > 0 && viscosidade <= 500', 'equipment', 'AGIT-BAIXA-VISC', NULL, 20, 'Faixa reológica indica agitação de baixa viscosidade.'),
+        ('Viscosidade 500-3000 cPs -> dispersor média viscosidade', 'expr', 'viscosidade > 500 && viscosidade <= 3000', 'equipment', 'DISP-MEDIA-VISC', NULL, 20, 'Faixa reológica indica dispersão de média viscosidade.'),
+        ('Viscosidade > 3000 cPs -> helicoidal/âncora alta viscosidade', 'expr', 'viscosidade > 3000', 'equipment', 'AGIT-HELIC-ANCORA', NULL, 20, 'Alta viscosidade exige agitador helicoidal, âncora ou sistema específico.'),
+        ('Produto base solvente -> motor EX', 'expr', "base_quimica && (base_quimica.indexOf('solvente')>=0 || produto.indexOf('solvente')>=0)", 'equipment', 'MOTOR-EX', NULL, 15, 'Produto base solvente exige motor à prova de explosão.'),
+        ('Área classificada -> painel e botoeira EX', 'expr', 'area_classificada === true', 'spec', NULL, 'PAINEL-EX', 15, 'Área classificada exige painel e botoeira à prova de explosão.'),
+        ('Volume > 2000 L -> motor >= 75 CV', 'expr', 'volume > 2000', 'equipment', 'MOTOR-75CV', NULL, 10, 'Volume útil acima de 2000 L indica potência mínima 75 CV.'),
+        ('Produto corrosivo -> material inox 316', 'expr', 'produto_corrosivo === true', 'spec', NULL, 'MATERIAL-INOX316', 15, 'Produto corrosivo exige material de contato inox 316 ou compatível.'),
+        ('Produto abrasivo -> revestimento reforçado', 'expr', 'produto_abrasivo === true', 'spec', NULL, 'REVEST-REFORCADO', 10, 'Produto abrasivo exige revestimentos e materiais reforçados.'),
+        ('Densidade elevada -> revisar potência e torque', 'expr', 'densidade >= 1.5', 'spec', NULL, 'REVISAR-POTENCIA', 5, 'Densidade elevada impacta torque, potência e estrutura mecânica.')`);
+    }
+  });
+  db.get('SELECT COUNT(*) as c FROM cpq_solution_suggestions', [], (_, r) => {
+    if (r && r.c === 0) {
+      const sug = [
+        ['agua_gelada', 'equipamentos_principais', 'Chiller', 0],
+        ['agua_gelada', 'equipamentos_principais', 'Bombas circulação', 1],
+        ['agua_gelada', 'valvulas', 'Válvulas linha fria', 2],
+        ['agua_gelada', 'tubulacao', 'Tubulação isolada', 3],
+        ['agua_gelada', 'equipamentos_principais', 'Tanque expansão', 4],
+        ['dispersor', 'equipamentos_principais', 'Tanque dispersor', 0],
+        ['dispersor', 'paineis_eletricos', 'Painel comando', 1],
+        ['dispersor', 'equipamentos_principais', 'Bomba transferência', 2],
+        ['dispersor', 'tubulacao', 'Tubulação compatível', 3],
+        ['linha_processo', 'equipamentos_principais', 'Dispersor', 0],
+        ['linha_processo', 'equipamentos_principais', 'Moinho', 1],
+        ['linha_processo', 'automacao', 'Automação', 2],
+        ['linha_processo', 'tubulacao', 'Tubulação', 3]
+      ];
+      const stmt = db.prepare('INSERT INTO cpq_solution_suggestions (sistema_tipo_codigo, group_codigo, item_sugerido, ordem) VALUES (?,?,?,?)');
+      sug.forEach(s => stmt.run(s[0], s[1], s[2], s[3]));
+      stmt.finalize();
+    }
+  });
 
   // Projetos
   db.run(`CREATE TABLE IF NOT EXISTS projetos (
@@ -1595,7 +1844,11 @@ function executeMigrations(callback) {
         { nome: 'oportunidade_id', tipo: 'INTEGER' },
         { nome: 'tipo_proposta', tipo: 'TEXT' },
         { nome: 'enviada_em', tipo: 'DATETIME' },
-        { nome: 'expira_em', tipo: 'DATETIME' }
+        { nome: 'expira_em', tipo: 'DATETIME' },
+        { nome: 'idioma', tipo: 'TEXT' },
+        { nome: 'moeda', tipo: 'TEXT' },
+        { nome: 'incoterm', tipo: 'TEXT' },
+        { nome: 'unidade_negocio', tipo: 'TEXT' }
       ];
       
       // Histórico de status (auditoria enterprise - Salesforce-like)
@@ -1677,7 +1930,19 @@ function executeMigrations(callback) {
       const novasColunas = [
         { nome: 'codigo_produto', tipo: 'TEXT' },
         { nome: 'familia_produto', tipo: 'TEXT' },
-        { nome: 'regiao_busca', tipo: 'TEXT' }
+        { nome: 'regiao_busca', tipo: 'TEXT' },
+        { nome: 'tag', tipo: 'TEXT' },
+        { nome: 'modelo', tipo: 'TEXT' },
+        { nome: 'categoria', tipo: 'TEXT' },
+        { nome: 'descricao_resumida', tipo: 'TEXT' },
+        { nome: 'descritivo_tecnico', tipo: 'TEXT' },
+        { nome: 'dados_processo', tipo: 'TEXT' },
+        { nome: 'materiais_construtivos', tipo: 'TEXT' },
+        { nome: 'utilidades_requeridas', tipo: 'TEXT' },
+        { nome: 'opcionais', tipo: 'TEXT' },
+        { nome: 'exclusoes', tipo: 'TEXT' },
+        { nome: 'prazo_individual', tipo: 'TEXT' },
+        { nome: 'numero_item', tipo: 'INTEGER' }
       ];
       
       novasColunas.forEach(col => {
@@ -1691,6 +1956,39 @@ function executeMigrations(callback) {
           });
         }
       });
+    }
+  });
+
+  // Tabela de especificações estruturadas por item (descritivo técnico dinâmico)
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_item_specs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposta_item_id INTEGER NOT NULL,
+    flow_rate_value REAL,
+    flow_rate_unit TEXT,
+    power_value REAL,
+    power_unit TEXT,
+    voltage_value REAL,
+    voltage_unit TEXT,
+    pressure_value REAL,
+    pressure_unit TEXT,
+    temperature_value REAL,
+    temperature_unit TEXT,
+    volume_value REAL,
+    volume_unit TEXT,
+    viscosity_value REAL,
+    viscosity_unit TEXT,
+    density_value REAL,
+    density_unit TEXT,
+    protection_degree TEXT,
+    area_classificada TEXT,
+    outros TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proposta_item_id) REFERENCES proposta_itens(id) ON DELETE CASCADE
+  )`, (err) => {
+    if (err && !err.message.includes('already exists')) {
+      console.log('⚠️ Aviso ao criar proposta_item_specs:', err && err.message);
+    } else if (!err) {
+      console.log('✅ Tabela proposta_item_specs criada/verificada');
     }
   });
 
@@ -5569,7 +5867,8 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
       responsavel_id, origem_busca, motivo_nao_venda, familia_produto,
       lembrete_data, lembrete_mensagem, margem_desconto, itens,
       cliente_contato, cliente_telefone, cliente_email,
-      oportunidade_id, tipo_proposta, expira_em
+      oportunidade_id, tipo_proposta, expira_em,
+      idioma, moeda, incoterm, unidade_negocio
     } = req.body;
     
     // Usar variável mutável para status
@@ -5674,14 +5973,16 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
           validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, status,
           responsavel_id, created_by, motivo_nao_venda, origem_busca, familia_produto,
           lembrete_data, lembrete_mensagem, margem_desconto, revisao,
-          cliente_contato, cliente_telefone, cliente_email, oportunidade_id, tipo_proposta, expira_em)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          cliente_contato, cliente_telefone, cliente_email, oportunidade_id, tipo_proposta, expira_em,
+          idioma, moeda, incoterm, unidade_negocio)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [clienteIdNum, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
           validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status || 'rascunho',
           responsavelIdNum, createdByIdNum, motivo_nao_venda || null, origem_busca || null,
           familia_produto || null, lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, 0,
           cliente_contato || null, cliente_telefone || null, cliente_email || null,
-          oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null],
+          oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null,
+          idioma || null, moeda || null, incoterm || null, unidade_negocio || null],
         function(err) {
           if (err) {
             console.error('❌ Erro ao inserir proposta:', err);
@@ -5713,22 +6014,36 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
           try {
             const stmt = db.prepare(
               `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
-                valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
+                tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
+                materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             );
 
             itens.forEach((item, index) => {
               try {
                 stmt.run([
-                  propostaId, 
-                  item.descricao || item.nome || '', 
-                  item.quantidade || 1, 
+                  propostaId,
+                  item.descricao || item.nome || '',
+                  item.quantidade || 1,
                   item.unidade || 'UN',
-                  item.valor_unitario || 0, 
+                  item.valor_unitario || 0,
                   item.valor_total || 0,
-                  item.codigo_produto || null, 
-                  item.familia_produto || null, 
-                  item.regiao_busca || null
+                  item.codigo_produto || null,
+                  item.familia_produto || null,
+                  item.regiao_busca || null,
+                  item.tag || null,
+                  item.modelo || null,
+                  item.categoria || null,
+                  item.descricao_resumida || null,
+                  item.descritivo_tecnico || null,
+                  item.dados_processo || null,
+                  item.materiais_construtivos || null,
+                  item.utilidades_requeridas || null,
+                  item.opcionais || null,
+                  item.exclusoes || null,
+                  item.prazo_individual || null,
+                  item.numero_item != null ? item.numero_item : (index + 1)
                 ]);
               } catch (itemErr) {
                 console.error(`❌ Erro ao inserir item ${index}:`, itemErr);
@@ -5810,7 +6125,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     responsavel_id, origem_busca, motivo_nao_venda, familia_produto,
     lembrete_data, lembrete_mensagem, margem_desconto, itens,
     cliente_contato, cliente_telefone, cliente_email,
-    oportunidade_id, tipo_proposta, expira_em
+    oportunidade_id, tipo_proposta, expira_em,
+    idioma, moeda, incoterm, unidade_negocio
   } = req.body;
 
   // Buscar proposta atual completa para comparação
@@ -6010,14 +6326,16 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               motivo_nao_venda = ?, origem_busca = ?, familia_produto = ?,
               lembrete_data = ?, lembrete_mensagem = ?, margem_desconto = ?, revisao = ?,
               cliente_contato = ?, cliente_telefone = ?, cliente_email = ?,
-              oportunidade_id = ?, tipo_proposta = ?, expira_em = ?, updated_at = CURRENT_TIMESTAMP
+              oportunidade_id = ?, tipo_proposta = ?, expira_em = ?,
+              idioma = ?, moeda = ?, incoterm = ?, unidade_negocio = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
             [clienteIdFinal, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
               validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status,
               responsavelIdFinal, motivo_nao_venda || null, origem_busca || null, familia_produto || null,
               lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, novaRevisao,
               cliente_contato || null, cliente_telefone || null, cliente_email || null,
-              oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null, id],
+              oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null,
+              idioma || null, moeda || null, incoterm || null, unidade_negocio || null, id],
             (err) => {
               if (err) {
                 // Tratar erro de UNIQUE constraint especificamente
@@ -6038,15 +6356,22 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               if (itens && Array.isArray(itens) && itens.length > 0) {
                 const stmt = db.prepare(
                   `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
-                    valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                    valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
+                    tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
+                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                 );
 
-                itens.forEach(item => {
+                itens.forEach((item, idx) => {
                   stmt.run([
-                    id, item.descricao, item.quantidade || 1, item.unidade || 'UN',
+                    id, item.descricao || item.nome || '', item.quantidade || 1, item.unidade || 'UN',
                     item.valor_unitario || 0, item.valor_total || 0,
-                    item.codigo_produto || null, item.familia_produto || null, item.regiao_busca || null
+                    item.codigo_produto || null, item.familia_produto || null, item.regiao_busca || null,
+                    item.tag || null, item.modelo || null, item.categoria || null,
+                    item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
+                    item.materiais_construtivos || null, item.utilidades_requeridas || null,
+                    item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
+                    item.numero_item != null ? item.numero_item : idx + 1
                   ]);
                 });
 
@@ -6353,14 +6678,15 @@ app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
     db.get('SELECT COUNT(*) as total FROM propostas WHERE cliente_id = ?', [proposta.cliente_id], (errCount, rowCount) => {
       if (errCount) return res.status(500).json({ error: errCount.message });
       const numeroNovo = `COPIA-${proposta.numero_proposta}-${Date.now().toString(36).toUpperCase()}`;
-      const campos = 'cliente_id, projeto_id, numero_proposta, titulo, descricao, valor_total, validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, responsavel_id, created_by, cliente_contato, cliente_telefone, cliente_email, oportunidade_id, tipo_proposta';
+      const campos = 'cliente_id, projeto_id, numero_proposta, titulo, descricao, valor_total, validade, condicoes_pagamento, prazo_entrega, garantia, observacoes, responsavel_id, created_by, cliente_contato, cliente_telefone, cliente_email, oportunidade_id, tipo_proposta, idioma, moeda, incoterm, unidade_negocio';
       const placeholders = campos.split(',').map(() => '?').join(',');
       const valores = [
         proposta.cliente_id, proposta.projeto_id, numeroNovo,
         (proposta.titulo || '').replace(/^/, '[Cópia] '), proposta.descricao, proposta.valor_total, proposta.validade,
         proposta.condicoes_pagamento, proposta.prazo_entrega, proposta.garantia, proposta.observacoes,
         userId, userId, proposta.cliente_contato, proposta.cliente_telefone, proposta.cliente_email,
-        proposta.oportunidade_id || null, proposta.tipo_proposta || null
+        proposta.oportunidade_id || null, proposta.tipo_proposta || null,
+        proposta.idioma || null, proposta.moeda || null, proposta.incoterm || null, proposta.unidade_negocio || null
       ];
       db.run(
         `INSERT INTO propostas (${campos}, status, revisao) VALUES (${placeholders}, 'rascunho', 0)`,
@@ -6370,9 +6696,19 @@ app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
           const novaId = this.lastID;
           db.all('SELECT * FROM proposta_itens WHERE proposta_id = ?', [id], (errItens, itens) => {
             if (!errItens && itens && itens.length > 0) {
-              const stmt = db.prepare('INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-              itens.forEach((item) => {
-                stmt.run([novaId, item.descricao, item.quantidade, item.unidade, item.valor_unitario, item.valor_total, item.codigo_produto, item.familia_produto, item.regiao_busca]);
+              const stmt = db.prepare(
+                `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca, tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo, materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              );
+              itens.forEach((item, idx) => {
+                stmt.run([
+                  novaId, item.descricao, item.quantidade, item.unidade, item.valor_unitario, item.valor_total,
+                  item.codigo_produto, item.familia_produto, item.regiao_busca,
+                  item.tag || null, item.modelo || null, item.categoria || null,
+                  item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
+                  item.materiais_construtivos || null, item.utilidades_requeridas || null,
+                  item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
+                  item.numero_item != null ? item.numero_item : idx + 1
+                ]);
               });
               stmt.finalize();
             }
@@ -6398,6 +6734,200 @@ app.put('/api/propostas/:id/remover-lembrete', authenticateToken, (req, res) => 
       res.json({ message: 'Lembrete removido com sucesso' });
     }
   );
+});
+
+// ========== CPQ (Configure Price Quote) ==========
+const cpqConfigurator = require('./cpq/configurator');
+const cpqPriceEngine = require('./cpq/priceEngine');
+const cpqDescriptiveEngine = require('./cpq/descriptiveEngine');
+
+app.get('/api/cpq/system-types', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM cpq_system_types WHERE ativo = 1 ORDER BY ordem, id', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.get('/api/cpq/composition-groups', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM cpq_composition_groups WHERE ativo = 1 ORDER BY ordem, id', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.get('/api/cpq/engineering-rules', authenticateToken, (req, res) => {
+  db.all('SELECT * FROM cpq_engineering_rules WHERE ativo = 1 ORDER BY prioridade DESC, id', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.post('/api/cpq/engineering-rules', authenticateToken, (req, res) => {
+  const b = req.body || {};
+  db.run(
+    `INSERT INTO cpq_engineering_rules (nome, condicao_tipo, condicao_campo, condicao_operador, condicao_valor, condicao_expr, resultado_tipo, resultado_equipamento, resultado_especificacao, resultado_json, prioridade, ativo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [b.nome || null, b.condicao_tipo || 'expr', b.condicao_campo, b.condicao_operador, b.condicao_valor, b.condicao_expr, b.resultado_tipo || 'equipment', b.resultado_equipamento, b.resultado_especificacao, b.resultado_json ? JSON.stringify(b.resultado_json) : null, b.prioridade || 0, 1],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID, ...b });
+    }
+  );
+});
+app.put('/api/cpq/engineering-rules/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const b = req.body || {};
+  db.run(
+    `UPDATE cpq_engineering_rules SET nome=?, condicao_tipo=?, condicao_campo=?, condicao_operador=?, condicao_valor=?, condicao_expr=?, resultado_tipo=?, resultado_equipamento=?, resultado_especificacao=?, resultado_json=?, prioridade=?, ativo=? WHERE id=?`,
+    [b.nome || null, b.condicao_tipo || 'expr', b.condicao_campo, b.condicao_operador, b.condicao_valor, b.condicao_expr, b.resultado_tipo || 'equipment', b.resultado_equipamento, b.resultado_especificacao, b.resultado_json ? JSON.stringify(b.resultado_json) : null, b.prioridade || 0, b.ativo != null ? b.ativo : 1, id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Regra atualizada' });
+    }
+  );
+});
+app.post('/api/cpq/configure', authenticateToken, (req, res) => {
+  cpqConfigurator.configure(db, req.body || {}, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(result);
+  });
+});
+app.get('/api/cpq/projects', authenticateToken, (req, res) => {
+  const { cliente_id, oportunidade_id, status } = req.query;
+  let q = 'SELECT cp.*, c.nome_fantasia as cliente_nome FROM cpq_projects cp LEFT JOIN clientes c ON cp.cliente_id = c.id WHERE 1=1';
+  const params = [];
+  if (cliente_id) { q += ' AND cp.cliente_id = ?'; params.push(cliente_id); }
+  if (oportunidade_id) { q += ' AND cp.oportunidade_id = ?'; params.push(oportunidade_id); }
+  if (status) { q += ' AND cp.status = ?'; params.push(status); }
+  q += ' ORDER BY cp.updated_at DESC';
+  db.all(q, params, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+app.get('/api/cpq/projects/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  db.get('SELECT * FROM cpq_projects WHERE id = ?', [id], (err, project) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!project) return res.status(404).json({ error: 'Projeto CPQ não encontrado' });
+    db.all(
+      `SELECT pi.*, pr.nome as produto_nome, pr.codigo as produto_codigo, pr.preco_base, g.nome as group_name
+       FROM cpq_project_items pi
+       LEFT JOIN produtos pr ON pi.produto_id = pr.id
+       LEFT JOIN cpq_composition_groups g ON pi.composition_group_id = g.id
+       WHERE pi.cpq_project_id = ? ORDER BY g.ordem, pi.ordem, pi.id`,
+      [id],
+      (err2, items) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ ...project, items: items || [] });
+      }
+    );
+  });
+});
+app.post('/api/cpq/projects', authenticateToken, (req, res) => {
+  const b = req.body || {};
+  db.run(
+    `INSERT INTO cpq_projects (cliente_id, oportunidade_id, sistema_tipo_codigo, titulo, params_json, status, created_by) VALUES (?, ?, ?, ?, ?, 'rascunho', ?)`,
+    [b.cliente_id || null, b.oportunidade_id || null, b.sistema_tipo_codigo || null, b.titulo || 'Novo projeto CPQ', b.params_json ? JSON.stringify(b.params_json) : null, req.user.id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID, titulo: b.titulo, status: 'rascunho' });
+    }
+  );
+});
+app.put('/api/cpq/projects/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const b = req.body || {};
+  db.run(
+    `UPDATE cpq_projects SET cliente_id=?, oportunidade_id=?, sistema_tipo_codigo=?, titulo=?, params_json=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    [b.cliente_id || null, b.oportunidade_id || null, b.sistema_tipo_codigo || null, b.titulo, b.params_json ? JSON.stringify(b.params_json) : null, b.status || 'rascunho', id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Projeto atualizado' });
+    }
+  );
+});
+app.delete('/api/cpq/projects/:id', authenticateToken, (req, res) => {
+  db.run('DELETE FROM cpq_projects WHERE id = ?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Projeto excluído' });
+  });
+});
+app.post('/api/cpq/projects/:id/items', authenticateToken, (req, res) => {
+  const pid = req.params.id;
+  const b = req.body || {};
+  db.run(
+    `INSERT INTO cpq_project_items (cpq_project_id, composition_group_id, produto_id, codigo_produto, quantidade, unidade, valor_unitario, valor_total, specs_json, ordem) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [pid, b.composition_group_id, b.produto_id || null, b.codigo_produto || null, b.quantidade || 1, b.unidade || 'UN', b.valor_unitario || 0, b.valor_total || 0, b.specs_json ? JSON.stringify(b.specs_json) : null, b.ordem || 0],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID });
+    }
+  );
+});
+app.put('/api/cpq/projects/:id/items/:itemId', authenticateToken, (req, res) => {
+  const b = req.body || {};
+  db.run(
+    `UPDATE cpq_project_items SET composition_group_id=?, quantidade=?, valor_unitario=?, valor_total=?, specs_json=?, descritivo_gerado=?, ordem=? WHERE id=? AND cpq_project_id=?`,
+    [b.composition_group_id, b.quantidade || 1, b.valor_unitario || 0, b.valor_total || 0, b.specs_json ? JSON.stringify(b.specs_json) : null, b.descritivo_gerado || null, b.ordem || 0, req.params.itemId, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Item atualizado' });
+    }
+  );
+});
+app.delete('/api/cpq/projects/:id/items/:itemId', authenticateToken, (req, res) => {
+  db.run('DELETE FROM cpq_project_items WHERE id = ? AND cpq_project_id = ?', [req.params.itemId, req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Item excluído' });
+  });
+});
+app.post('/api/cpq/price/calculate', authenticateToken, (req, res) => {
+  cpqPriceEngine.calculate(db, req.body.items || [], req.body.options || {}, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(result);
+  });
+});
+app.post('/api/cpq/descriptive/generate', authenticateToken, (req, res) => {
+  cpqDescriptiveEngine.generate(db, req.body.item || {}, req.body.params || {}, (err, text) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ text });
+  });
+});
+app.post('/api/cpq/projects/:id/generate-proposal', authenticateToken, (req, res) => {
+  const projectId = req.params.id;
+  const { cliente_id, titulo, validade, condicoes_pagamento } = req.body || {};
+  db.get('SELECT * FROM cpq_projects WHERE id = ?', [projectId], (err, project) => {
+    if (err || !project) return res.status(err ? 500 : 404).json({ error: err ? err.message : 'Projeto não encontrado' });
+    const cid = cliente_id || project.cliente_id;
+    if (!cid) return res.status(400).json({ error: 'Cliente é obrigatório' });
+    db.all('SELECT pi.*, pr.nome as produto_nome, pr.codigo as produto_codigo, pr.preco_base FROM cpq_project_items pi LEFT JOIN produtos pr ON pi.produto_id = pr.id WHERE pi.cpq_project_id = ?', [projectId], (err2, items) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      const itensProposta = (items || []).map(i => ({
+        descricao: i.produto_nome || i.descritivo_gerado || 'Item',
+        quantidade: i.quantidade || 1,
+        unidade: i.unidade || 'UN',
+        valor_unitario: i.valor_unitario || i.preco_base || 0,
+        valor_total: i.valor_total || (i.quantidade * (i.valor_unitario || i.preco_base || 0)),
+        codigo_produto: i.produto_codigo || i.codigo_produto,
+        familia_produto: null
+      }));
+      const valorTotal = itensProposta.reduce((s, i) => s + (i.valor_total || 0), 0);
+      gerarNumeroProposta(parseInt(cid), req.user.id, 0, (err3, numero) => {
+        if (err3 || !numero) return res.status(500).json({ error: 'Erro ao gerar número da proposta' });
+        db.run(
+          `INSERT INTO propostas (cliente_id, numero_proposta, titulo, descricao, valor_total, validade, condicoes_pagamento, status, responsavel_id, created_by, revisao) VALUES (?, ?, ?, ?, ?, ?, ?, 'rascunho', ?, ?, 0)`,
+          [cid, numero, titulo || project.titulo || 'Proposta CPQ', null, valorTotal, validade || null, condicoes_pagamento || null, req.user.id, req.user.id],
+          function (err4) {
+            if (err4) return res.status(500).json({ error: err4.message });
+            const propostaId = this.lastID;
+            db.run('UPDATE cpq_projects SET proposta_id = ?, status = ? WHERE id = ?', [propostaId, 'proposta_gerada', projectId]);
+            const stmt = db.prepare('INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto) VALUES (?,?,?,?,?,?,?)');
+            itensProposta.forEach(i => { stmt.run([propostaId, i.descricao, i.quantidade, i.unidade, i.valor_unitario, i.valor_total, i.codigo_produto]); });
+            stmt.finalize();
+            res.status(201).json({ proposta_id: propostaId, numero_proposta: numero });
+          }
+        );
+      });
+    });
+  });
 });
 
 // ========== ROTA DE GERAÇÃO AUTOMÁTICA DE PROPOSTA ==========
@@ -6537,15 +7067,22 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
           // Inserir itens
           const stmt = db.prepare(
             `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
-              valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
+              tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
+              materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           );
 
-          itens.forEach(item => {
+          itens.forEach((item, idx) => {
             stmt.run([
-              propostaId, item.descricao, item.quantidade, item.unidade,
-              item.valor_unitario, item.valor_total,
-              item.codigo_produto, item.familia_produto, item.regiao_busca
+              propostaId, item.descricao || item.nome || '', item.quantidade || 1, item.unidade || 'UN',
+              item.valor_unitario || 0, item.valor_total || 0,
+              item.codigo_produto || null, item.familia_produto || null, item.regiao_busca || null,
+              item.tag || null, item.modelo || null, item.categoria || null,
+              item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
+              item.materiais_construtivos || null, item.utilidades_requeridas || null,
+              item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
+              item.numero_item != null ? item.numero_item : idx + 1
             ]);
           });
 
@@ -6694,8 +7231,13 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
         
         const omitPrintBar = req.query.embed === '1' || req.query.embed === 'true';
         
-        // Buscar configuração do template
-        db.get('SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1', [], (err, templateConfig) => {
+        // Template por família: buscar config que corresponda à familia_produto da proposta (ou padrão)
+        const familiaProposta = (proposta.familia_produto || '').trim() || null;
+        const templateQuery = familiaProposta
+          ? 'SELECT * FROM proposta_template_config WHERE (familia = ? OR familia IS NULL OR familia = \'\') ORDER BY CASE WHEN familia = ? THEN 0 ELSE 1 END, id DESC LIMIT 1'
+          : 'SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1';
+        const templateParams = familiaProposta ? [familiaProposta, familiaProposta] : [];
+        db.get(templateQuery, templateParams, (err, templateConfig) => {
           if (err) {
             console.error('Erro ao buscar configuração do template:', err);
             templateConfig = null;
@@ -6892,8 +7434,13 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     } catch (e) {}
     const totais = { subtotal, icms, ipi, total, dataEmissao, dataValidade };
     
+    const familiaPropostaPdf = (proposta.familia_produto || '').trim() || null;
+    const templateQueryPdf = familiaPropostaPdf
+      ? 'SELECT * FROM proposta_template_config WHERE (familia = ? OR familia IS NULL OR familia = \'\') ORDER BY CASE WHEN familia = ? THEN 0 ELSE 1 END, id DESC LIMIT 1'
+      : 'SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1';
+    const templateParamsPdf = familiaPropostaPdf ? [familiaPropostaPdf, familiaPropostaPdf] : [];
     let templateConfig = await new Promise((resolve, reject) => {
-      db.get('SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1', [], (err, row) => {
+      db.get(templateQueryPdf, templateParamsPdf, (err, row) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -6996,8 +7543,9 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     await browser.close();
     browser = null;
     
-    // Snapshot: gravar cópia exata do HTML/CSS usado para reproduzir a proposta no futuro
-    if (!usouSnapshot && html) {
+    // Snapshot imutável: gravar apenas se proposta em rascunho ou ainda sem snapshot (não sobrescrever após envio)
+    const podeGravarSnapshot = proposta.status === 'rascunho' || !proposta.html_rendered || String(proposta.html_rendered).trim() === '';
+    if (!usouSnapshot && html && podeGravarSnapshot) {
       const cssMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/);
       const cssSnapshot = (cssMatch && cssMatch[1]) ? cssMatch[1].trim() : null;
       db.run(
@@ -7657,6 +8205,43 @@ function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfi
 </html>`;
 }
 
+// Substitui placeholders {{proposal.number}}, {{client.name}}, etc. no HTML da proposta (templates reutilizáveis)
+function substituirPlaceholdersProposta(html, proposta, itens, totais) {
+  if (!html || typeof html !== 'string') return html || '';
+  const p = proposta || {};
+  const its = Array.isArray(itens) ? itens : [];
+  const tot = totais || {};
+  const fmt = (v) => (v != null && v !== '' ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00');
+  const rev = (p.revisao != null ? `R${String(p.revisao).padStart(2, '0')}` : 'R00');
+  const replacements = {
+    '{{proposal.number}}': p.numero_proposta || '',
+    '{{proposal.date}}': tot.dataEmissao || (p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : ''),
+    '{{proposal.revision}}': rev,
+    '{{client.name}}': p.nome_fantasia || p.razao_social || p.cliente_nome || '',
+    '{{client.cnpj}}': p.cnpj || '',
+    '{{client.contact}}': p.cliente_contato || '',
+    '{{commercial.delivery_time}}': p.prazo_entrega || '',
+    '{{commercial.payment_terms}}': p.condicoes_pagamento || '',
+    '{{totals.grand_total}}': fmt(tot.total)
+  };
+  let out = html;
+  Object.keys(replacements).forEach(ph => {
+    out = out.split(ph).join(replacements[ph]);
+  });
+  // Placeholders por item: {{item.tag}}, {{item.model}}, etc. (substitui apenas o primeiro item se múltiplos; para lista usar template por item)
+  if (its.length > 0) {
+    const i = its[0];
+    const itemRepl = {
+      '{{item.tag}}': i.tag || '',
+      '{{item.model}}': i.modelo || i.produto_codigo || '',
+      '{{item.quantity}}': `${i.quantidade || 1} ${i.unidade || 'UN'}`,
+      '{{item.description}}': i.descritivo_tecnico || i.descricao || i.produto_nome || ''
+    };
+    Object.keys(itemRepl).forEach(ph => { out = out.split(ph).join(itemRepl[ph]); });
+  }
+  return out;
+}
+
 // Função para gerar HTML premium da proposta - Versão Limpa e Profissional
 // forPdfServer = true: usado quando o PDF é gerado no servidor (Puppeteer); omite cabeçalho/rodapé fixos no HTML (Puppeteer usa displayHeaderFooter)
 // omitPrintBar = true: omite a barra "Gerar PDF" no topo (para preview embed/iframe), assim o cabeçalho da proposta fica visível no topo
@@ -7749,8 +8334,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     const marginNavegadorTop = Math.max(0, Math.min(50, Number(config.margin_navegador_top) || 19));
     const marginNavegadorBottom = Math.max(0, Math.min(50, Number(config.margin_navegador_bottom) || 19));
     
-    // HTML completo - Design limpo e profissional
-    return `<!DOCTYPE html>
+    // HTML completo - Design limpo e profissional (placeholders {{...}} substituídos ao final)
+    const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <!-- Margens impressão (mm): top_primeira=${marginTopPrimeira} top_outras=${marginTopOutras} bottom=${marginBottom} lateral=${marginLateral} -->
@@ -8858,11 +9443,16 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      <!-- Seção 4: Escopo - sempre começa em nova página (diagramação) -->
+      <!-- Seção 4: Escopo - sempre começa em nova página; agrupamento por categoria técnica/comercial -->
       <div class="section section-escopo">
         <div class="section-title">4. ESCOPO DE FORNECIMENTO</div>
         ${(itens || []).map((item, index) => {
           const itensArr = itens || [];
+          const categoriaAtual = (item.categoria || item.familia_produto || '').trim();
+          const prevItem = itensArr[index - 1];
+          const categoriaAnterior = prevItem ? ((prevItem.categoria || prevItem.familia_produto || '').trim()) : '';
+          const showCategoryHeader = categoriaAtual && categoriaAtual !== categoriaAnterior;
+          const categoryHeaderHtml = showCategoryHeader ? `<div class="item-category-header" style="font-weight:700;color:#1a4d7a;margin-top:16px;margin-bottom:8px;font-size:13px;">${esc(categoriaAtual)}</div>` : '';
           const openWrap = (index === 0 && itensArr.length >= 3) ? '<div class="produto-group-1-2-3">' : '';
           const closeWrap = (index === 2 && itensArr.length >= 3) ? '</div>' : '';
           const produto = item || {};
@@ -8992,7 +9582,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             </div>
           </div>
           `;
-          return openWrap + blockHtml + closeWrap;
+          return categoryHeaderHtml + openWrap + blockHtml + closeWrap;
         }).join('')}
         
         ${(!itens || itens.length === 0) ? `
@@ -9919,6 +10509,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
   </script>
 </body>
 </html>`;
+    const displayModel = propostaComposition.buildDisplayModel({ proposta, itens, totais }, {});
+    return propostaComposition.resolveAllPlaceholders(html, displayModel);
   } catch (error) {
     console.error('Erro na função gerarHTMLPropostaPremium:', error);
     throw error;
