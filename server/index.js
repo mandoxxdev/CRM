@@ -110,10 +110,11 @@ function checkDatabaseReady(req, res, next) {
   }
   
   if (!dbReady) {
-    return res.status(503).json({ 
-      error: 'Banco de dados ainda está sendo inicializado. Aguarde alguns segundos e tente novamente.',
-      retryAfter: 2
-    });
+    console.warn('[DB READY WARNING] Requisição recebida enquanto dbReady=false. Permitindo continuar para evitar bloqueio permanente.');
+    // Em vez de bloquear o uso da API, vamos permitir que a requisição siga.
+    // O SQLite consegue lidar com operações enquanto migrations/seed rodam,
+    // e isso evita que um eventual problema na flag dbReady deixe o sistema travado.
+    return next();
   }
   
   next();
