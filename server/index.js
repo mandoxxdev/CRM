@@ -6727,6 +6727,7 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
 });
 
 // ========== ROTA PARA GERAR PROPOSTA PREMIUM ==========
+// v2026-03: header/footer fixos com imagens do módulo; preview sempre regenera HTML (sem snapshot); fallback template.
 // IMPORTANTE: rota liberada sem autenticação para permitir abertura direta via link/PDF.
 // Proteções para evitar 502: timeout de resposta, guarda de resposta única, não exige dbReady.
 const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Traefik) devolva 502 por timeout
