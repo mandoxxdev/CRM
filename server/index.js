@@ -8083,6 +8083,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       padding: 0;
       box-sizing: border-box;
     }
+
+    :root {
+      /* Alturas usadas para reservar espaço para cabeçalho/rodapé fixos nas páginas internas */
+      --proposta-header-height: 80px;
+      --proposta-footer-height: 70px;
+    }
     
     body {
       font-family: 'Segoe UI', 'Century Gothic', 'CenturyGothic', 'Frutiger', 'Helvetica Neue', sans-serif;
@@ -8099,6 +8105,39 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       margin-top: 52px;
       background: #ffffff;
       box-shadow: 0 0 40px rgba(0,0,0,0.06);
+    }
+
+    /* Cabeçalho e rodapé fixos para páginas internas (usam imagens do módulo de configurações) */
+    .fixed-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--proposta-header-height);
+      z-index: 1000;
+    }
+
+    .fixed-header img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .fixed-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--proposta-footer-height);
+      z-index: 1000;
+    }
+
+    .fixed-footer img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     
     /* Cabeçalho - Estilo exato da imagem */
@@ -8425,9 +8464,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       display: inline-block;
     }
     
-    /* Garantir que dados do cliente apareçam na primeira página */
+    /* Conteúdo principal deve respeitar o espaço reservado para cabeçalho/rodapé fixos.
+       Mantemos top=0 na primeira página visual, mas adicionamos padding se as imagens existirem. */
     .proposta-body {
-      padding-top: 0;
+      padding-top: ${headerImageFixedURL ? 'calc(var(--proposta-header-height) + 20px)' : '0'};
+      padding-bottom: ${footerImageURL ? 'calc(var(--proposta-footer-height) + 20px)' : '40px'};
     }
     
     .dados-cliente-section {
@@ -9043,8 +9084,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     </div>
     
     ${headerImageFixedURL ? `
-    <!-- Imagem de início no fluxo (como no Word: “em linha com texto”, sem sobreposição) -->
-    <div class="inicio-image-block">
+    <!-- Cabeçalho fixo com imagem configurada no módulo de templates -->
+    <div class="fixed-header">
       <img src="${headerImageFixedURL}" alt="Cabeçalho" onerror="this.style.display='none';">
     </div>
     ` : ''}
@@ -9418,8 +9459,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </div>
       
       ${footerImageURL ? `
-      <!-- Imagem de fim no fluxo (como no Word: “em linha com texto”, sem sobreposição) -->
-      <div class="fim-image-block">
+      <!-- Rodapé fixo com imagem configurada no módulo de templates -->
+      <div class="fixed-footer">
         <img src="${footerImageURL}" alt="Rodapé" onerror="this.style.display='none';">
       </div>
       ` : ''}
