@@ -7198,7 +7198,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       printBackground: true,
       preferCSSPageSize: true,
       displayHeaderFooter: false,
-      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+      margin: { top: '0', right: '0', bottom: '0', left: '0' },
       scale: 1.0
     });
     
@@ -8128,6 +8128,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       height: var(--document-header-height);
       z-index: 1000;
       background: #fff;
+      overflow: hidden;
     }
     .document-header img {
       width: 100%;
@@ -8146,6 +8147,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       height: var(--document-footer-height);
       z-index: 1000;
       background: #fff;
+      overflow: hidden;
     }
     .document-footer img {
       width: 100%;
@@ -8688,6 +8690,14 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       @page:first {
         margin-top: ${marginTopPrimeira}mm !important;
       }
+      
+      /* Obrigatório: reservar espaço para header/footer fixos; evita que @media print anule o padding */
+      main.document-content {
+        padding-top: calc(var(--document-header-height) + 20px) !important;
+        padding-bottom: calc(var(--document-footer-height) + 20px) !important;
+        padding-left: 14mm !important;
+        padding-right: 14mm !important;
+      }
       /* Imagens de início/fim são blocos no fluxo (como no Word “em linha com texto”) — nunca sobrepõem */
       .inicio-image-block,
       .fim-image-block {
@@ -8932,10 +8942,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       
       .proposta-body {
         padding: 25px 20px 45mm 20px !important;
-        margin-top: 30mm !important;
+        margin-top: 0 !important;
       }
       
-      /* Espaçamento antes do primeiro conteúdo para começar abaixo do cabeçalho */
       .proposta-body > *:first-child {
         margin-top: 25px !important;
         padding-top: 0 !important;
