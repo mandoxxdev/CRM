@@ -6880,14 +6880,28 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             console.error('Erro ao buscar configuração do template:', err);
             templateConfig = null;
           }
-          if (templateConfig) {
-            templateConfig.margin_impressao_top_primeira = templateConfig.margin_impressao_top_primeira != null ? Number(templateConfig.margin_impressao_top_primeira) : 20;
-            templateConfig.margin_impressao_top_outras = templateConfig.margin_impressao_top_outras != null ? Number(templateConfig.margin_impressao_top_outras) : 50;
-            templateConfig.margin_impressao_bottom = templateConfig.margin_impressao_bottom != null ? Number(templateConfig.margin_impressao_bottom) : 45;
-            templateConfig.margin_impressao_lateral = templateConfig.margin_impressao_lateral != null ? Number(templateConfig.margin_impressao_lateral) : 20;
-            templateConfig.margin_navegador_top = templateConfig.margin_navegador_top != null ? Number(templateConfig.margin_navegador_top) : 19;
-            templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
-          }
+          if (!templateConfig) templateConfig = {};
+          templateConfig.margin_impressao_top_primeira = templateConfig.margin_impressao_top_primeira != null ? Number(templateConfig.margin_impressao_top_primeira) : 20;
+          templateConfig.margin_impressao_top_outras = templateConfig.margin_impressao_top_outras != null ? Number(templateConfig.margin_impressao_top_outras) : 50;
+          templateConfig.margin_impressao_bottom = templateConfig.margin_impressao_bottom != null ? Number(templateConfig.margin_impressao_bottom) : 45;
+          templateConfig.margin_impressao_lateral = templateConfig.margin_impressao_lateral != null ? Number(templateConfig.margin_impressao_lateral) : 20;
+          templateConfig.margin_navegador_top = templateConfig.margin_navegador_top != null ? Number(templateConfig.margin_navegador_top) : 19;
+          templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
+          const hasHeaderOrFooter = (templateConfig.header_image_url && String(templateConfig.header_image_url).trim()) || (templateConfig.footer_image_url && String(templateConfig.footer_image_url).trim());
+          const tryMergeImages = (cb) => {
+            if (hasHeaderOrFooter) return cb();
+            db.all('SELECT header_image_url, footer_image_url FROM proposta_template_config ORDER BY id DESC LIMIT 5', [], (e2, rows) => {
+              if (rows && rows.length) {
+                const row = rows.find(r => (r.header_image_url && String(r.header_image_url).trim()) || (r.footer_image_url && String(r.footer_image_url).trim()));
+                if (row) {
+                  if (!(templateConfig.header_image_url && String(templateConfig.header_image_url).trim())) templateConfig.header_image_url = row.header_image_url || templateConfig.header_image_url;
+                  if (!(templateConfig.footer_image_url && String(templateConfig.footer_image_url).trim())) templateConfig.footer_image_url = row.footer_image_url || templateConfig.footer_image_url;
+                }
+              }
+              cb();
+            });
+          };
+          tryMergeImages(() => {
           function runGerar() {
             if (responseSent) return;
             let html;
@@ -6986,6 +7000,7 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             runGerarSafe();
           });
         });
+      });
       } catch (error) {
         console.error('Erro geral ao processar proposta:', error);
         sendOnce(500, { error: 'Erro ao gerar preview da proposta: ' + (error && error.message ? error.message : String(error)) });
@@ -7844,11 +7859,15 @@ function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfi
   totais = totais || { subtotal: 0, total: 0, dataEmissao: '', dataValidade: '' };
   itens = Array.isArray(itens) ? itens : [];
 
-  let headerImageURL = `${logoBaseURL}/cabecalho.jpg?t=${Date.now()}`;
-  let headerImageFixedURL = null;
-  if (config.header_image_url) headerImageFixedURL = `${logoBaseURL}/api/uploads/headers/${config.header_image_url}?t=${Date.now()}`;
+  const ts = Date.now();
+  let headerImageURL = `${logoBaseURL}/cabecalho.jpg?t=${ts}`;
+  let headerImageFixedURL = (config.header_image_url && String(config.header_image_url).trim())
+    ? `${logoBaseURL}/api/uploads/headers/${String(config.header_image_url).trim()}?t=${ts}`
+    : headerImageURL;
   let footerImageURL = null;
-  if (config.footer_image_url) footerImageURL = `${logoBaseURL}/api/uploads/footers/${config.footer_image_url}?t=${Date.now()}`;
+  if (config.footer_image_url && String(config.footer_image_url).trim()) {
+    footerImageURL = `${logoBaseURL}/api/uploads/footers/${String(config.footer_image_url).trim()}?t=${ts}`;
+  }
 
   const marginTopPrimeira = Math.max(10, Math.min(80, Number(config.margin_impressao_top_primeira) || 20));
   const marginTopOutras = Math.max(20, Math.min(120, Number(config.margin_impressao_top_outras) || 50));
@@ -8032,19 +8051,15 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     let headerImageURL = `${logoBaseURL}/${defaultHeaderImage}?t=${timestamp}`;
     // NOTA: config.header_image_url é para o cabeçalho fixo das outras páginas, não para a capa
     
-    // Cabeçalho fixo para impressão (a partir da segunda página)
-    let headerImageFixedURL = null;
-    if (config.header_image_url) {
-      // Adicionar timestamp para evitar cache do navegador
-      const timestamp = new Date().getTime();
-      headerImageFixedURL = `${logoBaseURL}/api/uploads/headers/${config.header_image_url}?t=${timestamp}`;
-    }
-    
+    // Cabeçalho fixo: imagem do módulo de configurações ou fallback = mesma imagem da capa
+    const ts = new Date().getTime();
+    let headerImageFixedURL = (config.header_image_url && String(config.header_image_url).trim())
+      ? `${logoBaseURL}/api/uploads/headers/${String(config.header_image_url).trim()}?t=${ts}`
+      : `${logoBaseURL}/${defaultHeaderImage}?t=${ts}`;
+
     let footerImageURL = null;
-    if (config.footer_image_url) {
-      // Adicionar timestamp para evitar cache do navegador
-      const timestamp = new Date().getTime();
-      footerImageURL = `${logoBaseURL}/api/uploads/footers/${config.footer_image_url}?t=${timestamp}`;
+    if (config.footer_image_url && String(config.footer_image_url).trim()) {
+      footerImageURL = `${logoBaseURL}/api/uploads/footers/${String(config.footer_image_url).trim()}?t=${ts}`;
     }
     
     // Garantir valores padrão
@@ -8467,7 +8482,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     /* Conteúdo principal deve respeitar o espaço reservado para cabeçalho/rodapé fixos.
        Mantemos top=0 na primeira página visual, mas adicionamos padding se as imagens existirem. */
     .proposta-body {
-      padding-top: ${headerImageFixedURL ? 'calc(var(--proposta-header-height) + 20px)' : '0'};
+      padding-top: calc(var(--proposta-header-height) + 20px);
       padding-bottom: ${footerImageURL ? 'calc(var(--proposta-footer-height) + 20px)' : '40px'};
     }
     
@@ -9083,14 +9098,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </div>
     </div>
     
-    ${headerImageFixedURL ? `
-    <!-- Cabeçalho fixo com imagem configurada no módulo de templates -->
+    <!-- Cabeçalho fixo: imagem do módulo ou capa; sempre exibido nas páginas internas -->
     <div class="fixed-header">
-      <img src="${headerImageFixedURL}" alt="Cabeçalho" onerror="this.style.display='none';">
+      <img src="${headerImageFixedURL}" alt="Cabeçalho">
     </div>
-    ` : ''}
     
-    <!-- Conteúdo -->
+    <!-- Conteúdo (padding reserva espaço para header/footer fixos) -->
     <div class="proposta-body">
       <!-- Dados do Cliente (EMPRESA CONTRATANTE - igual ao PDF) -->
       <div class="section dados-cliente-section">
