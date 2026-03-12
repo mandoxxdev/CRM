@@ -6867,12 +6867,13 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
             templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
           }
           function runGerar() {
+            if (res.headersSent) return;
             let html;
             try {
               // Se existe snapshot (HTML renderizado gravado), usar para preview idêntico ao PDF
               if (proposta.html_rendered && String(proposta.html_rendered).trim().length > 0) {
                 html = proposta.html_rendered;
-                html = html.replace(/src="(https?:)?\/\/[^/]+(\/api\/uploads\/[^"]+)"/g, (_, __, p) => `src="${requestBaseURL}${p}"`);
+                html = (html || '').replace(/src="(https?:)?\/\/[^/]+(\/api\/uploads\/[^"]+)"/g, (_, __, p) => `src="${requestBaseURL}${p}"`);
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
                 res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
                 res.send(html);
@@ -6898,7 +6899,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
                 titulo: proposta.titulo,
                 itensCount: itensArray.length
               }, null, 2));
-              if (!res.headersSent) return res.status(500).json({ error: 'Erro ao gerar HTML da proposta: ' + genError.message });
+              if (!res.headersSent) return res.status(500).json({ error: 'Erro ao gerar HTML da proposta: ' + (genError && genError.message ? genError.message : String(genError)) });
               return;
             }
             if (!html || typeof html !== 'string' || html.trim().length === 0) {
@@ -6912,7 +6913,16 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
               res.send(html);
             } catch (sendError) {
               console.error('Erro ao enviar resposta:', sendError);
-              if (!res.headersSent) return res.status(500).json({ error: 'Erro ao enviar preview: ' + sendError.message });
+              if (!res.headersSent) return res.status(500).json({ error: 'Erro ao enviar preview: ' + (sendError && sendError.message ? sendError.message : String(sendError)) });
+            }
+          }
+          function runGerarSafe() {
+            try {
+              runGerar();
+            } catch (err) {
+              console.error('Erro ao abrir proposta (runGerar):', err);
+              console.error(err && err.stack);
+              if (!res.headersSent) res.status(500).json({ error: 'Erro ao abrir proposta. Tente novamente.' });
             }
           }
           let chaves = [];
@@ -6939,7 +6949,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
             templateConfig.variaveis_proposta_labels = {};
           }
           if (chavesUnicas.length === 0) {
-            runGerar();
+            runGerarSafe();
             return;
           }
           const placeholders = chavesUnicas.map(() => '?').join(',');
@@ -6950,7 +6960,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
                 templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
               });
             }
-            runGerar();
+            runGerarSafe();
           });
         });
       } catch (error) {
