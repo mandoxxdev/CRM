@@ -8613,6 +8613,14 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         break-inside: avoid !important;
       }
       
+      /* Seção 4 (Escopo): sempre começa em nova página; conteúdo pode fluir nas próximas (cada 4.1, 4.2 não corta no meio) */
+      .section-escopo {
+        page-break-before: always !important;
+        break-before: page !important;
+        page-break-inside: auto !important;
+        break-inside: auto !important;
+      }
+      
       /* Tabelas: não cortar no meio; se não couber, tabela inteira na próxima página */
       .section table,
       .section .dados-table,
@@ -8844,8 +8852,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      <!-- Seção 4: Escopo -->
-      <div class="section">
+      <!-- Seção 4: Escopo - sempre começa em nova página (diagramação) -->
+      <div class="section section-escopo">
         <div class="section-title">4. ESCOPO DE FORNECIMENTO</div>
         ${(itens || []).map((item, index) => {
           const produto = item || {};
@@ -9077,6 +9085,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
   </div>
   
   <script>
+    var __forPdfServer = ${forPdfServer ? 'true' : 'false'};
     // Tornar elementos editáveis
     document.querySelectorAll('[contenteditable="true"]').forEach(el => {
       el.addEventListener('focus', function() {
@@ -9089,8 +9098,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       });
     });
     
-    // SOLUÇÃO SEM MARGENS: Detectar quando conteúdo está prestes a sobrepor o rodapé e o cabeçalho e forçar quebra de página
-    // Roda mesmo sem footer/header (ex: PDF via blob no servidor) — usa altura padrão para zona de perigo
+    // No servidor (PDF): não rodar script de overlap — só as regras CSS (section-escopo + produto-item) garantem a diagramação
+    if (!__forPdfServer) {
     (function() {
       const footerImg = document.getElementById('footer-img');
       const footerPrint = document.getElementById('footer-image-print');
@@ -9256,26 +9265,17 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           const pageNumber = Math.floor(elementTop / usablePageHeight);
           const positionInPage = elementTop % usablePageHeight;
           
-          // VERIFICAÇÃO DIRETA COM A IMAGEM DO CABEÇALHO:
-          // O cabeçalho fixo está sempre no topo (0) de cada página durante a impressão
-          // Verificar se o elemento está dentro da área do cabeçalho naquela página específica
+          // VERIFICAÇÃO COM A IMAGEM DO CABEÇALHO (apenas quando há cabeçalho fixo repetido em cada página):
+          // Só considerar sobreposição ao cabeçalho se o elemento começa DENTRO da zona real do cabeçalho (headerHeight + margem).
+          // NÃO usar zona fixa de 200px: isso empurrava o item 2 para a página 3 mesmo com muito espaço na página 2.
           let willOverlapHeader = false;
           if (headerHeight > 0 && pageNumber > 0) {
-            // O cabeçalho ocupa de 0 até headerHeight + margem em cada página
-            // positionInPage é a posição do elemento dentro da página atual (0 = topo da página)
-            const headerBottomInPage = headerHeight + 80; // Fim do cabeçalho na página atual (margem aumentada para 80px)
-            
-            // REGRA ABSOLUTA: Se o elemento começa antes do fim do cabeçalho + margem, SEMPRE mover para próxima página
-            // Não há exceções - NUNCA permitir texto abaixo do cabeçalho
-            // Verificação mais rigorosa: qualquer elemento que esteja dentro ou muito próximo da zona do cabeçalho
-            willOverlapHeader = (
-              positionInPage < headerBottomInPage || // Elemento começa dentro da zona do cabeçalho
-              (positionInPage >= 0 && positionInPage <= headerBottomInPage + 50) || // Elemento está muito próximo (50px de margem extra)
-              positionInPage < 200 // Se está nos primeiros 200px da página, considerar que pode sobrepor
-            );
-            
+            const headerBottomInPage = headerHeight + 80; // Fim do cabeçalho na página atual
+            const headerZoneWithMargin = headerBottomInPage + 30; // Pequena margem (30px) abaixo do cabeçalho
+            // Só quebrar se o elemento realmente começa dentro ou logo abaixo do cabeçalho (não nos primeiros 200px arbitrários)
+            willOverlapHeader = (positionInPage < headerZoneWithMargin);
             if (willOverlapHeader) {
-              console.log('🚫 REGRA ABSOLUTA - Elemento sobrepondo cabeçalho - MOVENDO para próxima página (posição na página:', Math.round(positionInPage), 'px, zona cabeçalho:', Math.round(headerBottomInPage), 'px, página:', pageNumber + 1, ')');
+              console.log('🚫 Elemento sobrepondo cabeçalho - MOVENDO para próxima página (posição na página:', Math.round(positionInPage), 'px, zona cabeçalho:', Math.round(headerZoneWithMargin), 'px, página:', pageNumber + 1, ')');
             }
           }
           
@@ -9348,19 +9348,16 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             return; // Pular para próximo elemento (já tratamos este - movido para próxima página)
           }
           
-          // REGRA ABSOLUTA ADICIONAL: Verificar também se o elemento está muito próximo do cabeçalho
-          // Esta verificação é uma camada extra de segurança
+          // Verificação adicional: só forçar quebra se o elemento realmente começa dentro da zona do cabeçalho (não por “proximidade” ampla)
           if (headerHeight > 0 && !willOverlapHeader && pageNumber > 0) {
-            const headerBottomInPage = headerHeight + safetyMargin;
-            const distanceToHeader = headerBottomInPage - positionInPage;
-            // Se a distância é muito pequena (<30px) OU se o elemento começa antes do fim do cabeçalho, mover para próxima página
-            if ((distanceToHeader < 30 && distanceToHeader >= 0) || positionInPage < headerBottomInPage) {
+            const headerBottomInPage = headerHeight + 80;
+            if (positionInPage < headerBottomInPage) {
               const targetProx = element.closest('.produto-item') || (element.closest('.section') && !element.closest('.section').querySelector('.produto-item') ? element.closest('.section') : null) || element;
               targetProx.style.pageBreakBefore = 'always';
               targetProx.style.breakBefore = 'page';
               targetProx.style.pageBreakInside = 'avoid';
               targetProx.classList.add('avoid-header-overlap');
-              console.log('⚠️ Elemento muito próximo do cabeçalho (verificação adicional) - movendo bloco para próxima página (distância:', Math.round(distanceToHeader), 'px)');
+              console.log('⚠️ Elemento dentro da zona do cabeçalho - movendo bloco para próxima página (posição:', Math.round(positionInPage), 'px, limite:', Math.round(headerBottomInPage), 'px)');
               return;
             }
           }
@@ -9747,8 +9744,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         setTimeout(checkAndPreventOverlap, 100);
       });
     })();
+    }
     
-    // LÓGICA PARA CABEÇALHO FIXO: Mostrar em TODAS as páginas (mesma lógica do rodapé)
+    // LÓGICA PARA CABEÇALHO FIXO (só no navegador; no PDF servidor usa só CSS)
+    if (!__forPdfServer) {
     (function() {
       const headerImg = document.getElementById('header-img');
       const headerPrint = document.getElementById('header-image-print');
@@ -9906,6 +9905,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         setTimeout(setupHeaderForAllPages, 100);
       });
     })();
+    }
   </script>
 </body>
 </html>`;
