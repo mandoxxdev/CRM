@@ -632,6 +632,17 @@ try {
       console.log('✅ Conectado ao banco de dados SQLite');
       console.log(`   Localização: ${dbPath}`);
       
+      // Fallback: se após 10s o banco ainda não estiver "pronto", marcar como pronto para evitar 503 infinito
+      const dbReadyFallback = setTimeout(() => {
+        if (!dbReady) {
+          dbReady = true;
+          console.warn('⚠️ Banco marcado como pronto por timeout (inicialização pode ainda estar em andamento).');
+        }
+      }, 10000);
+      const clearFallback = () => {
+        if (dbReadyFallback) clearTimeout(dbReadyFallback);
+      };
+
       // Configurar SQLite para melhor performance com requisições simultâneas
       db.configure('busyTimeout', 10000); // 10 segundos de timeout
       
@@ -650,7 +661,7 @@ try {
       db.run('PRAGMA foreign_keys = ON;');
       
       // Inicializar banco após configurações
-      initializeDatabase();
+      initializeDatabase(clearFallback);
     }
   });
 } catch (error) {
@@ -659,8 +670,8 @@ try {
   dbReady = false;
 }
 
-// Initialize Database
-function initializeDatabase() {
+// Initialize Database (opcional: onReadyCallback para limpar fallback quando dbReady for setado)
+function initializeDatabase(onReadyCallback) {
   console.log('🔄 Iniciando criação de tabelas...');
   
   // Usuários
@@ -1352,7 +1363,7 @@ function initializeDatabase() {
     }
   );
 
-  // Executar migrações após um pequeno delay
+  // Executar migrações após um pequeno delay (500ms para subir mais rápido)
   setTimeout(() => {
     executeMigrations(() => {
       // Inicializar configurações padrão após migrações
@@ -1364,6 +1375,7 @@ function initializeDatabase() {
             dbReady = false;
           } else {
             dbReady = true;
+            if (typeof onReadyCallback === 'function') onReadyCallback();
             console.log('✅ Banco de dados totalmente inicializado e pronto para uso');
             console.log('   - WAL mode: Habilitado para melhor concorrência');
             console.log('   - Busy timeout: 10 segundos');
@@ -1372,7 +1384,7 @@ function initializeDatabase() {
         });
       });
     });
-  }, 1000);
+  }, 500);
 }
 
 // Inicializar configurações padrão
@@ -19517,6 +19529,15 @@ if (process.env.NODE_ENV === 'production') {
   
   // Verificar se a pasta build existe
   if (fs.existsSync(clientBuildPath)) {
+    // Garantir MIME type correto para CSS/JS (evita "Refused to apply style" quando proxy serve como text/plain)
+    app.use('/static', (req, res, next) => {
+      if (req.path.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=UTF-8');
+      } else if (req.path.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+      }
+      next();
+    });
     // Servir arquivos estáticos
     app.use(express.static(clientBuildPath));
     
