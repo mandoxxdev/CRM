@@ -8093,9 +8093,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     }
 
     :root {
-      /* Alturas usadas para reservar espaço para cabeçalho/rodapé fixos nas páginas internas */
-      --proposta-header-height: 80px;
-      --proposta-footer-height: 70px;
+      --page-header-height: 120px;
+      --page-footer-height: 70px;
     }
     
     body {
@@ -8115,40 +8114,47 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       box-shadow: 0 0 40px rgba(0,0,0,0.06);
     }
 
-    /* Cabeçalho e rodapé fixos para páginas internas (usam imagens do módulo de configurações) */
-    .fixed-header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: var(--proposta-header-height);
-      z-index: 1000;
+    /* Página controlada: header e footer no fluxo (sem position:fixed) — evita texto por trás do cabeçalho */
+    .pdf-page {
+      width: 210mm;
+      min-height: 297mm;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      page-break-before: always;
+      page-break-after: always;
+      background: #fff;
     }
-
-    .fixed-header img {
+    .pdf-page:first-of-type {
+      page-break-before: auto;
+    }
+    .page-header {
+      flex-shrink: 0;
+    }
+    .page-header img {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
+      height: var(--page-header-height);
+      object-fit: contain;
+      object-position: top center;
       display: block;
     }
-
-    .fixed-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: var(--proposta-footer-height);
-      z-index: 1000;
+    .page-content {
+      flex: 1;
+      padding: 10mm 14mm 12mm 14mm;
+      min-height: 0;
     }
-
-    .fixed-footer img {
+    .page-footer {
+      flex-shrink: 0;
+    }
+    .page-footer img {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
+      height: var(--page-footer-height);
+      object-fit: contain;
+      object-position: bottom center;
       display: block;
     }
     
-    /* Cabeçalho - Estilo exato da imagem */
+    /* Capa: quebra de página depois para o miolo começar na próxima */
     .proposta-header {
       background: linear-gradient(135deg, #0d2b4a 0%, #1a4d7a 50%, #0f3460 100%);
       padding: 40px 50px;
@@ -8159,6 +8165,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       display: flex;
       flex-direction: column;
       justify-content: center;
+      page-break-after: always;
     }
     
     .proposta-header::before {
@@ -8475,8 +8482,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     /* Conteúdo principal deve respeitar o espaço reservado para cabeçalho/rodapé fixos.
        Mantemos top=0 na primeira página visual, mas adicionamos padding se as imagens existirem. */
     .proposta-body {
-      padding-top: calc(var(--proposta-header-height) + 20px);
-      padding-bottom: ${footerImageURL ? 'calc(var(--proposta-footer-height) + 20px)' : '40px'};
+      padding-top: 0;
+      padding-bottom: 0;
     }
     
     .dados-cliente-section {
@@ -9091,12 +9098,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </div>
     </div>
     
-    <!-- Cabeçalho fixo: imagem do módulo ou capa; sempre exibido nas páginas internas -->
-    <div class="fixed-header">
-      <img src="${headerImageFixedURL}" alt="Cabeçalho">
-    </div>
-    
-    <!-- Conteúdo (padding reserva espaço para header/footer fixos) -->
+    <!-- Página controlada: header e footer no fluxo (não fixos) — conteúdo nunca fica por trás do cabeçalho -->
+    <div class="pdf-page">
+      <div class="page-header">
+        <img src="${headerImageFixedURL}" alt="Cabeçalho">
+      </div>
+      <div class="page-content">
     <div class="proposta-body">
       <!-- Dados do Cliente (EMPRESA CONTRATANTE - igual ao PDF) -->
       <div class="section dados-cliente-section">
@@ -9464,13 +9471,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      ${footerImageURL ? `
-      <!-- Rodapé fixo com imagem configurada no módulo de templates -->
-      <div class="fixed-footer">
-        <img src="${footerImageURL}" alt="Rodapé" onerror="this.style.display='none';">
-      </div>
-      ` : ''}
-      ${forPdfServer ? '' : `<!-- Rodapé texto - no fluxo, no final -->
+      ${forPdfServer ? '' : `<!-- Rodapé texto (opcional) - no fluxo -->
       <footer class="proposta-footer">
         <div class="footer-content">
           <div class="footer-left">Moinho Ypiranga · Proposta Técnica Comercial nº ${esc(proposta.numero_proposta)}</div>
@@ -9478,6 +9479,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </footer>
       `}
+    </div>
+      </div>
+      ${footerImageURL ? `<div class="page-footer"><img src="${footerImageURL}" alt="Rodapé"></div>` : ''}
     </div>
   </div>
   
