@@ -6728,25 +6728,41 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
 
 // ========== ROTA PARA GERAR PROPOSTA PREMIUM ==========
 // IMPORTANTE: rota liberada sem autenticação para permitir abertura direta via link/PDF.
-// A segurança comercial continua sendo garantida pelo controle de acesso ao próprio sistema.
+// Proteções para evitar 502: timeout de resposta, guarda de resposta única, não exige dbReady.
+const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Traefik) devolva 502 por timeout
+
 app.get('/api/propostas/:id/premium', (req, res) => {
-  const { id } = req.params;
-  
-  // Validar ID
-  if (!id || isNaN(parseInt(id))) {
-    return res.status(400).json({ error: 'ID da proposta inválido' });
-  }
-  
-  // Verificar se o banco está pronto
-  if (!db || !dbReady) {
-    return res.status(503).json({ 
-      error: 'Banco de dados ainda está sendo inicializado. Aguarde alguns segundos e tente novamente.',
-      retryAfter: 2
-    });
-  }
-  
-  // Buscar proposta completa com todos os dados
-  db.get(`
+  let responseSent = false;
+  let timeoutId = null;
+
+  const sendOnce = (code, body) => {
+    if (responseSent) return;
+    responseSent = true;
+    if (timeoutId) clearTimeout(timeoutId);
+    if (typeof body === 'object' && body !== null && !(body instanceof Buffer)) res.status(code).json(body);
+    else res.status(code).send(body);
+  };
+
+  timeoutId = setTimeout(() => {
+    if (responseSent) return;
+    console.warn('[premium] Timeout ao gerar preview da proposta', req.params.id);
+    sendOnce(503, { error: 'Timeout ao gerar preview. Tente novamente.', retryAfter: 5 });
+  }, PREMIUM_ROUTE_TIMEOUT_MS);
+
+  try {
+    const { id } = req.params;
+
+    if (!id || isNaN(parseInt(id))) {
+      return sendOnce(400, { error: 'ID da proposta inválido' });
+    }
+
+    if (!db) {
+      return sendOnce(503, { error: 'Banco de dados não disponível.', retryAfter: 5 });
+    }
+    // Não exigir dbReady: permite atender mesmo durante inicialização e evita 503 permanente
+
+    // Buscar proposta completa com todos os dados
+    db.get(`
     SELECT p.*, 
            c.razao_social, c.nome_fantasia, c.cnpj, c.logo_url as cliente_logo_url,
            c.endereco as cliente_endereco, c.cidade as cliente_cidade, 
@@ -6763,18 +6779,13 @@ app.get('/api/propostas/:id/premium', (req, res) => {
     if (err) {
       console.error('Erro ao buscar proposta:', err);
       console.error('Stack trace:', err.stack);
-      // Verificar se é erro de lock do banco
       if (err.message && (err.message.includes('database is locked') || err.message.includes('SQLITE_BUSY'))) {
-        return res.status(503).json({ 
-          error: 'Banco de dados temporariamente ocupado. Tente novamente em alguns segundos.',
-          retryAfter: 2
-        });
+        return sendOnce(503, { error: 'Banco de dados temporariamente ocupado. Tente novamente em alguns segundos.', retryAfter: 2 });
       }
-      return res.status(500).json({ error: 'Erro ao buscar proposta: ' + err.message });
+      return sendOnce(500, { error: 'Erro ao buscar proposta: ' + err.message });
     }
-    
     if (!proposta) {
-      return res.status(404).json({ error: 'Proposta não encontrada' });
+      return sendOnce(404, { error: 'Proposta não encontrada' });
     }
     
     const requestBaseURL = (process.env.API_URL && process.env.API_URL.trim())
@@ -6794,14 +6805,10 @@ app.get('/api/propostas/:id/premium', (req, res) => {
       if (err) {
         console.error('Erro ao buscar itens da proposta:', err);
         console.error('Stack trace:', err.stack);
-        // Verificar se é erro de lock do banco
         if (err.message && (err.message.includes('database is locked') || err.message.includes('SQLITE_BUSY'))) {
-          return res.status(503).json({ 
-            error: 'Banco de dados temporariamente ocupado. Tente novamente em alguns segundos.',
-            retryAfter: 2
-          });
+          return sendOnce(503, { error: 'Banco de dados temporariamente ocupado. Tente novamente em alguns segundos.', retryAfter: 2 });
         }
-        return res.status(500).json({ error: 'Erro ao buscar itens da proposta: ' + err.message });
+        return sendOnce(500, { error: 'Erro ao buscar itens da proposta: ' + err.message });
       }
       
       try {
@@ -6882,16 +6889,15 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
           }
           function runGerar() {
-            if (res.headersSent) return;
+            if (responseSent) return;
             let html;
             try {
-              // Se existe snapshot (HTML renderizado gravado), usar para preview idêntico ao PDF
               if (proposta.html_rendered && String(proposta.html_rendered).trim().length > 0) {
                 html = proposta.html_rendered;
                 html = (html || '').replace(/src="(https?:)?\/\/[^/]+(\/api\/uploads\/[^"]+)"/g, (_, __, p) => `src="${requestBaseURL}${p}"`);
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
                 res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-                res.send(html);
+                sendOnce(200, html);
                 return;
               }
               let compList = [];
@@ -6914,21 +6920,19 @@ app.get('/api/propostas/:id/premium', (req, res) => {
                 titulo: proposta.titulo,
                 itensCount: itensArray.length
               }, null, 2));
-              if (!res.headersSent) return res.status(500).json({ error: 'Erro ao gerar HTML da proposta: ' + (genError && genError.message ? genError.message : String(genError)) });
-              return;
+              return sendOnce(500, { error: 'Erro ao gerar HTML da proposta: ' + (genError && genError.message ? genError.message : String(genError)) });
             }
             if (!html || typeof html !== 'string' || html.trim().length === 0) {
               console.error('HTML gerado está vazio ou undefined');
-              if (!res.headersSent) return res.status(500).json({ error: 'Erro: HTML não foi gerado corretamente' });
-              return;
+              return sendOnce(500, { error: 'Erro: HTML não foi gerado corretamente' });
             }
             try {
               res.setHeader('Content-Type', 'text/html; charset=utf-8');
               res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-              res.send(html);
+              sendOnce(200, html);
             } catch (sendError) {
               console.error('Erro ao enviar resposta:', sendError);
-              if (!res.headersSent) return res.status(500).json({ error: 'Erro ao enviar preview: ' + (sendError && sendError.message ? sendError.message : String(sendError)) });
+              sendOnce(500, { error: 'Erro ao enviar preview: ' + (sendError && sendError.message ? sendError.message : String(sendError)) });
             }
           }
           function runGerarSafe() {
@@ -6937,7 +6941,7 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             } catch (err) {
               console.error('Erro ao abrir proposta (runGerar):', err);
               console.error(err && err.stack);
-              if (!res.headersSent) res.status(500).json({ error: 'Erro ao abrir proposta. Tente novamente.' });
+              sendOnce(500, { error: 'Erro ao abrir proposta. Tente novamente.' });
             }
           }
           let chaves = [];
@@ -6969,10 +6973,11 @@ app.get('/api/propostas/:id/premium', (req, res) => {
           }
           const placeholders = chavesUnicas.map(() => '?').join(',');
           db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err2, rows) => {
-            if (templateConfig && rows && rows.length) {
+            if (err2) console.error('Erro ao buscar variaveis_tecnicas (ignorado, preview segue):', err2.message);
+            if (templateConfig && rows && Array.isArray(rows) && rows.length) {
               templateConfig.variaveis_proposta_labels = {};
               rows.forEach(function (r) {
-                templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
+                if (r && r.chave != null) templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
               });
             }
             runGerarSafe();
@@ -6980,10 +6985,14 @@ app.get('/api/propostas/:id/premium', (req, res) => {
         });
       } catch (error) {
         console.error('Erro geral ao processar proposta:', error);
-        if (!res.headersSent) return res.status(500).json({ error: 'Erro ao gerar preview da proposta: ' + error.message });
+        sendOnce(500, { error: 'Erro ao gerar preview da proposta: ' + (error && error.message ? error.message : String(error)) });
       }
     });
   });
+  } catch (topError) {
+    console.error('Erro no handler /api/propostas/:id/premium:', topError);
+    sendOnce(500, { error: 'Erro interno ao abrir proposta. Tente novamente.' });
+  }
 });
 
 // ========== ROTA PARA GERAR PDF (Puppeteer = igual ao preview) ==========
