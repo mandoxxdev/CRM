@@ -7159,23 +7159,32 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     await browser.close();
     browser = null;
     
-    // Snapshot imutável: gravar HTML/CSS + checksum para integridade e histórico
+    // Snapshot: gravar HTML/CSS (e checksum se a coluna existir) para reprodução futura
     if (!usouSnapshot && html) {
       const cssMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/);
       const cssSnapshot = (cssMatch && cssMatch[1]) ? cssMatch[1].trim() : null;
-      const checksum = propostaEngine.snapshotChecksum(html, cssSnapshot || '');
       db.run(
-        `UPDATE propostas SET html_rendered = ?, css_snapshot = ?, pdf_gerado_at = CURRENT_TIMESTAMP, snapshot_checksum = ? WHERE id = ?`,
-        [html, cssSnapshot || null, checksum, id],
+        `UPDATE propostas SET html_rendered = ?, css_snapshot = ?, pdf_gerado_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [html, cssSnapshot || null, id],
         (errUpdate) => {
           if (errUpdate) console.error('Aviso: não foi possível gravar snapshot da proposta:', errUpdate.message);
         }
       );
-      db.run(
-        `INSERT INTO proposta_snapshot (proposta_id, html_rendered, css_snapshot, checksum) VALUES (?, ?, ?, ?)`,
-        [id, html, cssSnapshot || null, checksum],
-        (errSnap) => { if (errSnap && !errSnap.message.includes('no such table')) console.error('Aviso: proposta_snapshot:', errSnap.message); }
-      );
+      try {
+        const checksum = propostaEngine.snapshotChecksum(html, cssSnapshot || '');
+        db.run(
+          `UPDATE propostas SET snapshot_checksum = ? WHERE id = ?`,
+          [checksum, id],
+          (errChecksum) => { if (errChecksum) { /* coluna pode não existir ainda */ } }
+        );
+        db.run(
+          `INSERT INTO proposta_snapshot (proposta_id, html_rendered, css_snapshot, checksum) VALUES (?, ?, ?, ?)`,
+          [id, html, cssSnapshot || null, checksum],
+          (errSnap) => { if (errSnap && !errSnap.message.includes('no such table')) console.error('Aviso: proposta_snapshot:', errSnap.message); }
+        );
+      } catch (e) {
+        /* snapshot opcional; não falhar PDF */
+      }
     }
     
     res.setHeader('Content-Type', 'application/pdf');
@@ -7919,10 +7928,15 @@ function gerarHTMLPropostaFromComponentes(proposta, itens, totais, templateConfi
 // Substitui placeholders (simples e avançados: {{#if}}, {{#each}}, etc.) — usa motor de composição
 function substituirPlaceholdersProposta(html, proposta, itens, totais) {
   if (!html || typeof html !== 'string') return html || '';
-  const { prepareCompositionData, resolveAdvancedPlaceholders, buildPlaceholderContext } = propostaEngine;
-  const { rawData, displayFields } = prepareCompositionData(proposta, itens, totais, {});
-  const phContext = buildPlaceholderContext(proposta, itens, totais, displayFields, rawData);
-  return resolveAdvancedPlaceholders(html, phContext);
+  try {
+    const { prepareCompositionData, resolveAdvancedPlaceholders, buildPlaceholderContext } = propostaEngine;
+    const { rawData, displayFields } = prepareCompositionData(proposta || {}, itens, totais, {});
+    const phContext = buildPlaceholderContext(proposta || {}, itens, totais, displayFields, rawData);
+    return resolveAdvancedPlaceholders(html, phContext);
+  } catch (e) {
+    console.error('Aviso: substituição de placeholders falhou, retornando HTML original:', e && e.message);
+    return html;
+  }
 }
 
 // Função para gerar HTML premium da proposta - Versão Limpa e Profissional
@@ -9156,9 +9170,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             const prefix = isFirstInGroup ? ('<div class="escopo-grupo" data-categoria="' + esc(groupLabel || '') + '">' + (groupLabel ? '<div class="section-subtitle escopo-grupo-titulo">' + esc(groupLabel) + '</div>' : '')) : '';
             const suffix = isLastInGroup ? '</div>' : '';
             const produto = item || {};
-          const nome = item.descricao || item.produto_nome || item.nome || produto.nome || produto.descricao || 'Produto sem nome';
-          const quantidade = item.quantidade || 1;
-          const imagem = (item.produto_imagem != null && item.produto_imagem !== '') ? item.produto_imagem : (produto.imagem || item.imagem || '');
+            const nome = (produto.descricao || produto.produto_nome || produto.nome || 'Produto sem nome').toString();
+            const quantidade = produto.quantidade || 1;
+            const imagem = (produto.produto_imagem != null && produto.produto_imagem !== '') ? produto.produto_imagem : (produto.imagem || '');
           const imagemURL = imagem ? `${logoBaseURL}/api/uploads/produtos/${imagem}` : '';
           
           // Campos técnicos do produto
@@ -9168,8 +9182,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           // Buscar especificacoes_tecnicas do produto
           // No JOIN, os campos do produto podem vir com prefixo ou sem prefixo
           // Vamos tentar todas as possibilidades
-          const especsTecnicas = produto.especificacoes_tecnicas || 
-                                 item.especificacoes_tecnicas || 
+          const especsTecnicas = produto.especificacoes_tecnicas ||
                                  (produto.id ? produto.especificacoes_tecnicas : null) ||
                                  '';
           
@@ -9201,19 +9214,17 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           // Priorizar diâmetro do cadastro do produto (está em especificacoes_tecnicas como JSON)
           const dimensoes = especs.diametro || especs.diâmetro || especs.Diametro || especs.Diâmetro ||
                            produto.diametro || produto.diâmetro || produto.Diametro || produto.Diâmetro ||
-                           item.diametro || item.diâmetro ||
-                           especs.dimensoes || especs.Dimensões || especs.dimensao || especs.Dimensao || 
+                           especs.dimensoes || especs.Dimensões || especs.dimensao || especs.Dimensao ||
                            especs.dimensão || especs.Dimensão ||
                            especs['dimensoes'] || especs['Dimensões'] || especs['dimensão'] || especs['Dimensão'] ||
-                           item.dimensoes || produto.dimensoes ||
+                           produto.dimensoes ||
                            (typeof especs === 'object' ? Object.values(especs).find(v => v && String(v).toLowerCase().includes('dimens')) : '') || '';
           
-          const material = especs.material || especs.Material || 
+          const material = especs.material || especs.Material ||
                           especs['Material de fabricação'] || especs['material de fabricação'] || especs['Material de Fabricação'] ||
                           especs.material_fabricacao || especs.materialFabricacao || especs.materialFabricação ||
                           especs['material_fabricacao'] || especs['Material de Fabricacao'] ||
-                          item.material || produto.material || 
-                          item.material_fabricacao || produto.material_fabricacao ||
+                          produto.material || produto.material_fabricacao ||
                           (typeof especs === 'object' ? Object.entries(especs).find(([k, v]) => 
                             k && String(k).toLowerCase().includes('material') && v
                           )?.[1] : '') || '';
@@ -9227,7 +9238,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           let variaveisList = config.variaveis_proposta_tecnica;
           const porFamilia = config.variaveis_proposta_por_familia;
           if (porFamilia && typeof porFamilia === 'object') {
-            const familiaItem = (item.familia_produto || item.produto_familia || produto.familia || '').trim();
+            const familiaItem = (produto.familia_produto || produto.produto_familia || produto.familia || '').trim();
             const familiaNorm = familiaItem ? normalizarFamiliaComparacao(familiaItem) : '';
             let listPorFamilia = null;
             if (familiaNorm) {
