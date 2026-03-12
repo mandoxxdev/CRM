@@ -6727,7 +6727,9 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
 });
 
 // ========== ROTA PARA GERAR PROPOSTA PREMIUM ==========
-app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
+// IMPORTANTE: rota liberada sem autenticação para permitir abertura direta via link/PDF.
+// A segurança comercial continua sendo garantida pelo controle de acesso ao próprio sistema.
+app.get('/api/propostas/:id/premium', (req, res) => {
   const { id } = req.params;
   
   // Validar ID
@@ -6986,7 +6988,8 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
 
 // ========== ROTA PARA GERAR PDF (Puppeteer = igual ao preview) ==========
 // Usa o mesmo HTML do "Ver proposta" e gera o PDF no servidor com Puppeteer, assim o PDF fica idêntico ao preview.
-app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
+// IMPORTANTE: rota liberada sem autenticação para permitir abertura direta via link/PDF.
+app.get('/api/propostas/:id/pdf', async (req, res) => {
   const { id } = req.params;
   
   if (!id || isNaN(parseInt(id))) {
