@@ -29,13 +29,11 @@ RUN rm -f package-lock.json server/package-lock.json client/package-lock.json &&
 
 COPY . .
 
-# Build do client: agora é feito LOCALMENTE antes do deploy
-# para deixar o build do Docker mais leve e evitar timeout no Coolify.
-# No pipeline atual, o diretório client/build já chega pronto no repositório.
 ENV CI=false
 ENV GENERATE_SOURCEMAP=false
 ENV DISABLE_ESLINT_PLUGIN=true
 ENV NODE_OPTIONS="--max-old-space-size=1536"
+RUN cd client && npm run build && cd ..
 
 # Expor porta
 EXPOSE 3000
