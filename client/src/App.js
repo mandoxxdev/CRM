@@ -11,10 +11,6 @@ import ProjetoForm from './components/ProjetoForm';
 import PropostasList from './components/proposta/PropostasList';
 import PropostaForm from './components/proposta/PropostaForm';
 import PropostaDetalhe from './components/proposta/PropostaDetalhe';
-import CPQConfigurator from './components/cpq/CPQConfigurator';
-import CPQProjects from './components/cpq/CPQProjects';
-import CPQProjectDetail from './components/cpq/CPQProjectDetail';
-import CPQRules from './components/cpq/CPQRules';
 import Aprovacoes from './components/Aprovacoes';
 import ConfigTemplateProposta from './components/ConfigTemplateProposta';
 import EditorTemplateProposta from './components/EditorTemplateProposta';
@@ -193,11 +189,6 @@ function AppRoutes() {
         <Route path="propostas/editar/:id" element={<PropostaForm />} />
         <Route path="propostas/config-template" element={<ConfigTemplateProposta />} />
         <Route path="propostas/editor-template" element={<EditorTemplateProposta />} />
-        <Route path="cpq" element={<Navigate to="/comercial/cpq/projetos" replace />} />
-        <Route path="cpq/configurador" element={<CPQConfigurator />} />
-        <Route path="cpq/projetos" element={<CPQProjects />} />
-        <Route path="cpq/projetos/:id" element={<CPQProjectDetail />} />
-        <Route path="cpq/regras" element={<CPQRules />} />
         <Route path="aprovacoes" element={<Aprovacoes />} />
         <Route path="ordens-servico" element={<OrdensServicoComercial />} />
         <Route path="ordens-servico/nova/:propostaId" element={<OSComercialForm />} />

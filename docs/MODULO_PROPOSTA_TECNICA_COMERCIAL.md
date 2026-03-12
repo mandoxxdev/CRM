@@ -256,15 +256,19 @@ Este documento serve como referência para implementação incremental do módul
 
 ---
 
-## 12. Motor de composição (blocos e regras)
+## 12. Motor de composição (blocos, regras, placeholders, snapshot)
 
-Implementado em `server/propostaCompositionEngine.js`:
+Implementado em `server/propostaCompositionEngine.js` e integrado ao fluxo de proposta:
 
-- **Blocos técnicos e comerciais:** `buildDisplayModel()` monta `technicalBlocks` e `commercialBlocks` a partir dos dados brutos; tabelas `proposta_blocos` e `proposta_regras_exibicao` permitem persistir blocos e regras.
-- **Separação de camadas:** dados brutos (proposta, itens, totais) → **displayModel** (proposal, items, itemsByCategory, totals, blocks) → **texto renderizado** (HTML após placeholders).
-- **Regras condicionais:** `evaluateCondition(rule, context)` e `getBlocksToRender(blocks, rules, context)`; regra pode ser `when: 'always' | 'has_field' | 'expr'` com `field` ou `expr`.
-- **Placeholders avançados:** `{{path}}`, `{{#if path}}...{{/if}}`, `{{#unless path}}...{{/unless}}`, `{{#each path}}...{{/each}}`; contexto expõe `proposal`, `client`, `commercial`, `items`, `itemsByCategory`, `totals`.
-- **Template por família:** na rota de preview e de PDF, a configuração do template é obtida por `familia_produto` da proposta (config com `familia` correspondente ou padrão).
-- **Snapshot imutável:** o HTML gravado em `html_rendered` só é atualizado se a proposta estiver em **rascunho** ou ainda não tiver snapshot; após envio, o snapshot não é sobrescrito.
-- **Mesmo template para preview e PDF:** o mesmo HTML gerado por `gerarHTMLPropostaPremium` é usado na rota de preview e na geração do PDF (Puppeteer).
-- **Agrupamento por categoria:** na seção 4 (Escopo), é exibido um subtítulo quando a categoria técnica/comercial do item muda (`item.categoria` ou `item.familia_produto`); templates customizados podem usar `{{#each itemsByCategory}}` para listar por grupo.
+- **Blocos técnicos e comerciais:** Tabela `proposta_blocos` (familia, tipo, nome, conteudo_html, ordem, regras_condicionais). APIs: `GET/POST/PUT/DELETE /api/proposta-blocos`.
+- **Regras condicionais:** Cada bloco pode ter `regras_condicionais` (JSON array de `{ campo, op, valor }`). Operadores: `eq`, `ne`, `empty`, `not_empty`, `in`, `gt`, `lt`. O bloco só é exibido se todas as regras forem verdadeiras no contexto (proposta, itens, totais).
+- **Separação de dados:** `prepareCompositionData(proposta, itens, totais, biblioteca)` retorna `rawData`, `displayFields` e `renderedText` (biblioteca de textos em `proposta_texto_biblioteca`). APIs: `GET/POST/PUT/DELETE /api/proposta-texto-biblioteca`.
+- **Templates por família:** A configuração do template (`proposta_template_config`) é buscada por `familia` quando existir `proposta.familia_produto` ou `itens[0].familia_produto`, garantindo template adequado à família do produto.
+- **Placeholders avançados:** No HTML da proposta são suportados:
+  - `{{path}}` — valor simples (ex.: `{{proposal.number}}`, `{{client.name}}`);
+  - `{{#if path}}...{{/if}}` — exibe se path for truthy;
+  - `{{#unless path}}...{{/unless}}` — exibe se path for falsy;
+  - `{{#each items}}...{{/each}}` — repete o bloco para cada item; dentro do bloco `{{item.xxx}}` ou `{{xxx}}` = valor do item.
+- **Snapshot imutável:** Ao gerar PDF, além de gravar `html_rendered` e `css_snapshot` em `propostas`, é calculado `snapshot_checksum` (SHA-256) e gravado em `propostas.snapshot_checksum` e em `proposta_snapshot` (histórico). Permite verificar integridade do documento.
+- **Agrupamento por categoria:** Na seção 4 (Escopo de Fornecimento), os itens são agrupados por `item.categoria` ou `item.familia_produto`. Cada grupo exibe um subtítulo (`.escopo-grupo-titulo`) e depois os itens do grupo. Itens sem categoria vão para o grupo "Outros".
+- **Preview = PDF:** O mesmo HTML gerado é usado na rota de preview e na geração do PDF (Puppeteer); quando existe snapshot gravado, ele é reutilizado para ambos.
