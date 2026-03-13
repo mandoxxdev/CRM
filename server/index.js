@@ -7189,7 +7189,11 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     
     await new Promise((r) => setTimeout(r, 1500));
     
-    // Disparar lógica de quebra de página (evitar seção começar numa página e terminar na outra)
+    await page.evaluate(function() {
+      if (typeof window.paginateProposalContent === 'function') window.paginateProposalContent();
+    });
+    await new Promise((r) => setTimeout(r, 400));
+    
     await page.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
     await new Promise((r) => setTimeout(r, 450));
     
@@ -9560,20 +9564,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             if (currentContent.scrollHeight > maxContentHeightPx) break;
           }
         }
-        var finalPages = container.querySelectorAll('.pdf-page').length;
-        try {
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[PDF Pagination] source initial children:', totalNodes, '| pages generated:', finalPages);
-          }
-        } catch (e) {}
         source.remove();
         container.classList.add('paginated');
       }
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() { setTimeout(paginateProposalContent, 150); });
-      } else {
-        setTimeout(paginateProposalContent, 150);
-      }
+      window.paginateProposalContent = paginateProposalContent;
     }
     document.querySelectorAll('[contenteditable="true"]').forEach(el => {
       el.addEventListener('focus', function() {
