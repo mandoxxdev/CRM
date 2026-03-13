@@ -9526,8 +9526,18 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         var headerImg = (container.getAttribute('data-header-img') || '').replace(/&amp;/g, '&');
         var footerImg = (container.getAttribute('data-footer-img') || '').replace(/&amp;/g, '&');
         var maxContentHeightPx = 873;
-        var children = Array.from(source.childNodes);
-        if (children.length === 0) return;
+        var nodes = [];
+        var n;
+        while ((n = source.firstChild)) {
+          nodes.push(n);
+          source.removeChild(n);
+        }
+        var totalNodes = nodes.length;
+        if (totalNodes === 0) {
+          source.remove();
+          container.classList.add('paginated');
+          return;
+        }
         function createPage() {
           var section = document.createElement('section');
           section.className = 'pdf-page';
@@ -9537,16 +9547,25 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           return content;
         }
         var currentContent = createPage();
-        for (var i = 0; i < children.length; i++) {
-          var node = children[i];
+        var pageCount = 1;
+        for (var i = 0; i < nodes.length; i++) {
+          var node = nodes[i];
           currentContent.appendChild(node);
           while (currentContent.scrollHeight > maxContentHeightPx && currentContent.lastChild) {
             var last = currentContent.lastChild;
             currentContent.removeChild(last);
             currentContent = createPage();
+            pageCount++;
             currentContent.appendChild(last);
+            if (currentContent.scrollHeight > maxContentHeightPx) break;
           }
         }
+        var finalPages = container.querySelectorAll('.pdf-page').length;
+        try {
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[PDF Pagination] source initial children:', totalNodes, '| pages generated:', finalPages);
+          }
+        } catch (e) {}
         source.remove();
         container.classList.add('paginated');
       }
