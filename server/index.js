@@ -7153,7 +7153,8 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
     let html;
     const usouSnapshot = proposta.html_rendered && String(proposta.html_rendered).trim().length > 0;
-    if (usouSnapshot) {
+    const sempreRegenerarParaPdf = true;
+    if (usouSnapshot && !sempreRegenerarParaPdf) {
       html = proposta.html_rendered;
     } else {
       let compList = [];
@@ -8700,9 +8701,18 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         height: 297mm;
         overflow: hidden;
       }
+      .pages-container:not(.paginated) .pdf-page {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+      }
       .pdf-page .page-content {
         max-height: 231mm;
         overflow: hidden;
+      }
+      .pages-container:not(.paginated) .pdf-page .page-content {
+        max-height: none !important;
+        overflow: visible !important;
       }
       /* Imagens de início/fim são blocos no fluxo (como no Word “em linha com texto”) — nunca sobrepõem */
       .inicio-image-block,
