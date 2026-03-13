@@ -8145,15 +8145,16 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     .pdf-page .page-content {
       flex: 1;
       padding: 8mm 14mm;
-      overflow: hidden;
       min-height: 0;
       box-sizing: border-box;
     }
     .pages-container.paginated .pdf-page .page-content {
       max-height: 231mm;
+      overflow: hidden;
     }
     .pages-container:not(.paginated) .pdf-page .page-content {
       max-height: none;
+      overflow: visible;
     }
     .pdf-page .page-footer {
       flex-shrink: 0;
@@ -9529,15 +9530,19 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         if (!container || !source) return;
         var headerImg = (container.getAttribute('data-header-img') || '').replace(/&amp;/g, '&');
         var footerImg = (container.getAttribute('data-footer-img') || '').replace(/&amp;/g, '&');
-        var maxContentHeightPx = 873;
+        var maxContentHeightPx = 750;
         var nodes = [];
-        var n;
-        while ((n = source.firstChild)) {
-          nodes.push(n);
-          source.removeChild(n);
+        var i;
+        var childList = source.children && source.children.length >= 0
+          ? Array.from(source.children)
+          : (source.querySelectorAll ? Array.from(source.querySelectorAll(':scope > *')) : []);
+        for (i = 0; i < childList.length; i++) {
+          nodes.push(childList[i]);
         }
-        var totalNodes = nodes.length;
-        if (totalNodes === 0) {
+        for (i = nodes.length - 1; i >= 0; i--) {
+          source.removeChild(nodes[i]);
+        }
+        if (nodes.length === 0) {
           source.remove();
           container.classList.add('paginated');
           return;
@@ -9551,15 +9556,13 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           return content;
         }
         var currentContent = createPage();
-        var pageCount = 1;
-        for (var i = 0; i < nodes.length; i++) {
+        for (i = 0; i < nodes.length; i++) {
           var node = nodes[i];
           currentContent.appendChild(node);
           while (currentContent.scrollHeight > maxContentHeightPx && currentContent.lastChild) {
             var last = currentContent.lastChild;
             currentContent.removeChild(last);
             currentContent = createPage();
-            pageCount++;
             currentContent.appendChild(last);
             if (currentContent.scrollHeight > maxContentHeightPx) break;
           }
