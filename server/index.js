@@ -8097,11 +8097,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       margin: 40mm 14mm 30mm 14mm;
     }
 
-    :root {
-      --document-header-height: 120px;
-      --document-footer-height: 80px;
-    }
-    
     body {
       font-family: 'Segoe UI', 'Century Gothic', 'CenturyGothic', 'Frutiger', 'Helvetica Neue', sans-serif;
       color: #1a1d21;
@@ -8119,50 +8114,58 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       box-shadow: 0 0 40px rgba(0,0,0,0.06);
     }
 
-    /* Header fixo: repete em todas as páginas; conteúdo nunca por trás */
-    .document-header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: var(--document-header-height);
-      z-index: 1000;
+    /* Páginas internas: header e footer no fluxo (sem position fixed) */
+    .pdf-page {
+      width: 210mm;
+      min-height: 297mm;
+      max-width: 210mm;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      page-break-after: always;
       background: #fff;
-      overflow: hidden;
+      margin: 0 auto;
     }
-    .document-header img {
+    .pdf-page .page-header {
+      flex-shrink: 0;
+      height: 32mm;
+      background: #fff;
+    }
+    .pdf-page .page-header img {
       width: 100%;
       height: 100%;
       object-fit: contain;
       object-position: top center;
       display: block;
     }
-
-    /* Footer fixo: repete em todas as páginas */
-    .document-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: var(--document-footer-height);
-      z-index: 1000;
-      background: #fff;
+    .pdf-page .page-content {
+      flex: 1;
+      padding: 8mm 14mm;
       overflow: hidden;
+      min-height: 0;
+      box-sizing: border-box;
     }
-    .document-footer img {
+    .pages-container.paginated .pdf-page .page-content {
+      max-height: 231mm;
+    }
+    .pages-container:not(.paginated) .pdf-page .page-content {
+      max-height: none;
+    }
+    .pdf-page .page-footer {
+      flex-shrink: 0;
+      height: 18mm;
+      background: #fff;
+    }
+    .pdf-page .page-footer img {
       width: 100%;
       height: 100%;
       object-fit: contain;
       object-position: bottom center;
       display: block;
     }
-
-    /* Conteúdo: padding reserva espaço para header e footer — zero sobreposição */
-    .document-content {
-      padding-top: calc(var(--document-header-height) + 20px);
-      padding-bottom: calc(var(--document-footer-height) + 20px);
-      padding-left: 14mm;
-      padding-right: 14mm;
+    .pages-container {
+      margin: 0;
+      padding: 0;
     }
 
     /* Títulos não quebram no final da página */
@@ -8178,12 +8181,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       display: table-header-group;
     }
     
-    /* Capa: ocupa a primeira página e cobre header/footer nela (z-index + margens) */
+    /* Capa: primeira página; páginas internas usam .pdf-page (header/footer no fluxo) */
     .proposta-header {
       background: linear-gradient(135deg, #0d2b4a 0%, #1a4d7a 50%, #0f3460 100%);
       padding: 40px 50px;
       position: relative;
-      z-index: 1001;
       overflow: hidden;
       min-height: 280px;
       max-height: 320px;
@@ -8191,10 +8193,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       flex-direction: column;
       justify-content: center;
       page-break-after: always;
-      margin-top: calc(-1 * (var(--document-header-height) + 20px));
-      padding-top: calc(var(--document-header-height) + 20px + 40px);
-      margin-bottom: calc(-1 * (var(--document-footer-height) + 20px));
-      padding-bottom: calc(var(--document-footer-height) + 20px + 40px);
     }
     
     .proposta-header::before {
@@ -8691,12 +8689,15 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         margin-top: ${marginTopPrimeira}mm !important;
       }
       
-      /* Obrigatório: reservar espaço para header/footer fixos; evita que @media print anule o padding */
-      main.document-content {
-        padding-top: calc(var(--document-header-height) + 20px) !important;
-        padding-bottom: calc(var(--document-footer-height) + 20px) !important;
-        padding-left: 14mm !important;
-        padding-right: 14mm !important;
+      .pdf-page {
+        min-height: 297mm;
+        max-height: 297mm;
+        height: 297mm;
+        overflow: hidden;
+      }
+      .pdf-page .page-content {
+        max-height: 231mm;
+        overflow: hidden;
       }
       /* Imagens de início/fim são blocos no fluxo (como no Word “em linha com texto”) — nunca sobrepõem */
       .inicio-image-block,
@@ -9133,14 +9134,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </div>
     </div>
     
-    <header class="document-header">
-      <img src="${headerImageFixedURL}" alt="Cabeçalho">
-    </header>
-    <footer class="document-footer">
-      <img src="${footerImageURL ? footerImageURL : headerImageFixedURL}" alt="Rodapé">
-    </footer>
-    <main class="document-content">
-    <div class="proposta-body">
+    ${forPdfServer
+      ? `<div class="pages-container" id="pages-container" data-header-img="${esc(headerImageFixedURL || '')}" data-footer-img="${esc(footerImageURL || headerImageFixedURL || '')}"><div id="proposta-content-source" class="proposta-body">`
+      : `<div class="pages-container"><section class="pdf-page"><div class="page-header"><img src="${headerImageFixedURL}" alt="Cabeçalho"></div><div class="page-content"><div class="proposta-body">`
+    }
       <!-- Dados do Cliente (EMPRESA CONTRATANTE - igual ao PDF) -->
       <div class="section dados-cliente-section">
         ${proposta.cliente_logo_url ? 
@@ -9516,12 +9513,49 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       </footer>
       `}
     </div>
-    </main>
+    ${forPdfServer ? '</div>' : '</div></div></section>'}
   </div>
   
   <script>
     var __forPdfServer = ${forPdfServer ? 'true' : 'false'};
-    // Tornar elementos editáveis
+    if (__forPdfServer) {
+      function paginateProposalContent() {
+        var container = document.getElementById('pages-container');
+        var source = document.getElementById('proposta-content-source');
+        if (!container || !source) return;
+        var headerImg = (container.getAttribute('data-header-img') || '').replace(/&amp;/g, '&');
+        var footerImg = (container.getAttribute('data-footer-img') || '').replace(/&amp;/g, '&');
+        var maxContentHeightPx = 873;
+        var children = Array.from(source.childNodes);
+        if (children.length === 0) return;
+        function createPage() {
+          var section = document.createElement('section');
+          section.className = 'pdf-page';
+          section.innerHTML = '<div class="page-header"><img src="' + headerImg + '" alt="Cabeçalho"></div><div class="page-content"></div><div class="page-footer"><img src="' + footerImg + '" alt="Rodapé"></div>';
+          var content = section.querySelector('.page-content');
+          container.appendChild(section);
+          return content;
+        }
+        var currentContent = createPage();
+        for (var i = 0; i < children.length; i++) {
+          var node = children[i];
+          currentContent.appendChild(node);
+          while (currentContent.scrollHeight > maxContentHeightPx && currentContent.lastChild) {
+            var last = currentContent.lastChild;
+            currentContent.removeChild(last);
+            currentContent = createPage();
+            currentContent.appendChild(last);
+          }
+        }
+        source.remove();
+        container.classList.add('paginated');
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() { setTimeout(paginateProposalContent, 150); });
+      } else {
+        setTimeout(paginateProposalContent, 150);
+      }
+    }
     document.querySelectorAll('[contenteditable="true"]').forEach(el => {
       el.addEventListener('focus', function() {
         this.style.backgroundColor = '#f0f7ff';
