@@ -160,6 +160,7 @@ const Layout = () => {
 
   // Menu do módulo de Compras
   const comprasMenuItems = [
+    { path: '/compras/solicitacoes', icon: FiCheckCircle, label: 'Solicitações de Compra' },
     { path: '/compras/fornecedores', icon: FiTruck, label: 'Fornecedores' },
     { path: '/compras/fornecedores-homologados', icon: FiPackage, label: 'Fornecedores homologados' },
     { path: '/compras/pedidos', icon: FiShoppingCart, label: 'Pedidos de Compra' },
@@ -204,6 +205,7 @@ const Layout = () => {
     { path: '/engenharia-projetos', icon: FiBriefcase, label: 'Início' },
     { path: '/engenharia-projetos/solicitacao-material-escritorio', icon: FiShoppingCart, label: 'Solicitação (cesta)' },
     { path: '/engenharia-projetos/cadastro-materiais-escritorio', icon: FiPackage, label: 'Cadastro materiais' },
+    { path: '/engenharia-projetos/minhas-solicitacoes', icon: FiCheckCircle, label: 'Minhas solicitações' },
   ];
 
   // Selecionar menu baseado no módulo ativo

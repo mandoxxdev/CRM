@@ -1063,6 +1063,67 @@ function initializeDatabase(onReadyCallback) {
     stmt.finalize();
   });
 
+  // ==========================
+  // Compras - Solicitações de Compra (workflow)
+  // ==========================
+  db.run(`CREATE TABLE IF NOT EXISTS solicitacoes_compra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitante_usuario_id INTEGER NOT NULL,
+    setor TEXT NOT NULL,
+    titulo TEXT,
+    observacoes TEXT,
+    status TEXT DEFAULT 'pendente', -- pendente|aprovada|rejeitada|cancelada
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (solicitante_usuario_id) REFERENCES usuarios(id)
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS solicitacoes_compra_itens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitacao_id INTEGER NOT NULL,
+    material_tipo TEXT DEFAULT 'escritorio',
+    material_id INTEGER,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    unidade TEXT,
+    quantidade REAL NOT NULL,
+    valor_unitario REAL,
+    foto_url TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (solicitacao_id) REFERENCES solicitacoes_compra(id) ON DELETE CASCADE
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS solicitacoes_compra_decisoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitacao_id INTEGER NOT NULL,
+    decisor_usuario_id INTEGER NOT NULL,
+    acao TEXT NOT NULL, -- aprovar|rejeitar
+    motivo TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (solicitacao_id) REFERENCES solicitacoes_compra(id) ON DELETE CASCADE,
+    FOREIGN KEY (decisor_usuario_id) REFERENCES usuarios(id)
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS limites_setor (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    setor TEXT UNIQUE NOT NULL,
+    limite_mensal_total REAL DEFAULT 0,
+    alerta_percentual REAL DEFAULT 0.85,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS limites_setor_material (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    setor TEXT NOT NULL,
+    material_tipo TEXT DEFAULT 'escritorio',
+    material_id INTEGER,
+    valor_maximo REAL,
+    quantidade_maxima REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(setor, material_tipo, material_id)
+  )`);
+
   // Assinaturas Digitais
   db.run(`CREATE TABLE IF NOT EXISTS assinaturas_digitais (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2178,7 +2239,6 @@ async function getEmailConfig() {
   // Observação: isso grava credenciais no repositório/imagem. Mantido por solicitação explícita.
   return {
     host: 'smtp.locaweb.com.br',
-    port: 587, // STARTTLS
     user: 'solicitacoes@gmp.ind.br',
     pass: 'Solicitacoes123@',
     from: 'solicitacoes@gmp.ind.br',
@@ -2190,20 +2250,44 @@ async function sendEmail({ to, cc, subject, html, text }) {
   if (!cfg.host || !cfg.from) {
     throw new Error('SMTP não configurado.');
   }
-  const transporter = nodemailer.createTransport({
-    host: cfg.host,
-    port: cfg.port,
-    secure: cfg.port === 465,
-    auth: cfg.user ? { user: cfg.user, pass: cfg.pass } : undefined,
-  });
-  await transporter.sendMail({
-    from: cfg.from,
-    to,
-    cc,
-    subject,
-    text,
-    html,
-  });
+  // Locaweb: tentar 587 (STARTTLS) e fallback 465 (SSL) em caso de timeout/bloqueio de porta.
+  const attempts = [
+    { port: 587, secure: false, requireTLS: true },
+    { port: 465, secure: true, requireTLS: false },
+  ];
+  let lastErr = null;
+  for (const a of attempts) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: cfg.host,
+        port: a.port,
+        secure: a.secure,
+        requireTLS: a.requireTLS,
+        auth: cfg.user ? { user: cfg.user, pass: cfg.pass } : undefined,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
+        tls: {
+          servername: cfg.host,
+        },
+      });
+      await transporter.sendMail({
+        from: cfg.from,
+        to,
+        cc,
+        subject,
+        text,
+        html,
+      });
+      return;
+    } catch (e) {
+      lastErr = e;
+      const code = e && (e.code || e.command);
+      const isTimeout = code === 'ETIMEDOUT' || code === 'ECONNECTION' || code === 'CONN' || (String(e.message || '').toLowerCase().includes('timeout'));
+      if (!isTimeout) break;
+    }
+  }
+  throw lastErr || new Error('Falha ao enviar e-mail');
 }
 
 // Função auxiliar para registrar tentativa de acesso negado
@@ -15589,17 +15673,193 @@ app.post('/api/engenharia/solicitacoes-materiais-escritorio', authenticateToken,
     `;
 
     // Enviar para compras e cc para usuário (se tiver email)
-    await sendEmail({
-      to: comprasTo,
-      cc: userEmail || undefined,
-      subject,
-      html,
-      text: `Solicitação #${solicitacaoId} - ${solicitanteNome}\n\n${itensDetalhe.map(r => `- ${r.nome}: ${r.quantidade} ${r.unidade || ''}` ).join('\n')}${observacoes ? `\n\nObs: ${observacoes}` : ''}`,
-    });
+    let emailStatus = 'enviado';
+    try {
+      await sendEmail({
+        to: comprasTo,
+        cc: userEmail || undefined,
+        subject,
+        html,
+        text: `Solicitação #${solicitacaoId} - ${solicitanteNome}\n\n${itensDetalhe.map(r => `- ${r.nome}: ${r.quantidade} ${r.unidade || ''}` ).join('\n')}${observacoes ? `\n\nObs: ${observacoes}` : ''}`,
+      });
+    } catch (mailErr) {
+      emailStatus = 'falhou';
+      console.error('Falha ao enviar e-mail da solicitação:', mailErr);
+    }
 
-    res.json({ message: 'Solicitação criada e e-mail enviado', solicitacao_id: solicitacaoId });
+    res.json({ message: 'Solicitação criada', email_status: emailStatus, solicitacao_id: solicitacaoId });
   } catch (e) {
     console.error('Erro ao criar solicitação de material de escritório:', e);
+    res.status(500).json({ error: e.message || 'Erro interno' });
+  }
+});
+
+// ========== SOLICITAÇÕES DE COMPRA (GERAL) ==========
+// Criar solicitação (qualquer módulo/setor)
+app.post('/api/solicitacoes-compra', authenticateToken, async (req, res) => {
+  try {
+    const solicitanteId = req.user?.id;
+    const { setor, titulo, observacoes, itens } = req.body || {};
+    if (!solicitanteId) return res.status(401).json({ error: 'Usuário não autenticado' });
+    const s = String(setor || '').trim();
+    if (!s) return res.status(400).json({ error: 'Setor é obrigatório' });
+    if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ error: 'Informe itens' });
+
+    const cleanItems = itens.map((it) => ({
+      material_tipo: String(it.material_tipo || 'escritorio'),
+      material_id: it.material_id != null ? parseInt(it.material_id, 10) : null,
+      nome: String(it.nome || '').trim(),
+      descricao: String(it.descricao || '').trim() || null,
+      unidade: String(it.unidade || '').trim() || null,
+      quantidade: Number(it.quantidade),
+      valor_unitario: it.valor_unitario != null ? Number(it.valor_unitario) : null,
+      foto_url: String(it.foto_url || '').trim() || null,
+    })).filter((it) => it.nome && it.quantidade > 0);
+    if (cleanItems.length === 0) return res.status(400).json({ error: 'Itens inválidos' });
+
+    const solicitacaoId = await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO solicitacoes_compra (solicitante_usuario_id, setor, titulo, observacoes, status) VALUES (?, ?, ?, ?, ?)',
+        [solicitanteId, s, (titulo || '').trim() || null, (observacoes || '').trim() || null, 'pendente'],
+        function (err) { if (err) reject(err); else resolve(this.lastID); }
+      );
+    });
+
+    await new Promise((resolve, reject) => {
+      const stmt = db.prepare(
+        `INSERT INTO solicitacoes_compra_itens
+         (solicitacao_id, material_tipo, material_id, nome, descricao, unidade, quantidade, valor_unitario, foto_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      cleanItems.forEach((it) => {
+        stmt.run([solicitacaoId, it.material_tipo, it.material_id, it.nome, it.descricao, it.unidade, it.quantidade, it.valor_unitario, it.foto_url]);
+      });
+      stmt.finalize((err) => err ? reject(err) : resolve());
+    });
+
+    res.json({ id: solicitacaoId, status: 'pendente' });
+  } catch (e) {
+    console.error('Erro ao criar solicitacao_compra:', e);
+    res.status(500).json({ error: e.message || 'Erro interno' });
+  }
+});
+
+// Minhas solicitações (por usuário)
+app.get('/api/solicitacoes-compra/minhas', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Usuário não autenticado' });
+    db.all(
+      `SELECT sc.*,
+        (SELECT u.nome FROM usuarios u
+          JOIN solicitacoes_compra_decisoes d ON d.decisor_usuario_id = u.id
+          WHERE d.solicitacao_id = sc.id
+          ORDER BY d.created_at DESC
+          LIMIT 1) as decisor_nome
+       FROM solicitacoes_compra sc
+       WHERE sc.solicitante_usuario_id = ?
+       ORDER BY sc.id DESC`,
+      [userId],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ solicitacoes: rows || [] });
+      }
+    );
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Erro interno' });
+  }
+});
+
+// Compras: listar todas com filtros
+app.get('/api/compras/solicitacoes-compra', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const userRole = String(req.user?.role || '').toLowerCase();
+  if (userRole !== 'admin') {
+    // Permitir também usuários do módulo compras via permissões, mas manter admin como bypass.
+  }
+  const { setor, status, q, from, to } = req.query || {};
+  const where = [];
+  const params = [];
+  if (setor) { where.push('sc.setor = ?'); params.push(String(setor)); }
+  if (status) { where.push('sc.status = ?'); params.push(String(status)); }
+  if (q) { where.push('(LOWER(sc.titulo) LIKE ? OR LOWER(sc.observacoes) LIKE ?)'); params.push(`%${String(q).toLowerCase()}%`, `%${String(q).toLowerCase()}%`); }
+  if (from) { where.push("date(sc.created_at) >= date(?)"); params.push(String(from)); }
+  if (to) { where.push("date(sc.created_at) <= date(?)"); params.push(String(to)); }
+  const whereSql = where.length ? ('WHERE ' + where.join(' AND ')) : '';
+  db.all(
+    `SELECT sc.*,
+        u.nome as solicitante_nome,
+        u.email as solicitante_email,
+        (SELECT d.acao FROM solicitacoes_compra_decisoes d WHERE d.solicitacao_id = sc.id ORDER BY d.created_at DESC LIMIT 1) as ultima_acao,
+        (SELECT d.created_at FROM solicitacoes_compra_decisoes d WHERE d.solicitacao_id = sc.id ORDER BY d.created_at DESC LIMIT 1) as decisao_em,
+        (SELECT uu.nome FROM solicitacoes_compra_decisoes d JOIN usuarios uu ON uu.id = d.decisor_usuario_id WHERE d.solicitacao_id = sc.id ORDER BY d.created_at DESC LIMIT 1) as decisor_nome
+     FROM solicitacoes_compra sc
+     JOIN usuarios u ON u.id = sc.solicitante_usuario_id
+     ${whereSql}
+     ORDER BY sc.id DESC
+     LIMIT 500`,
+    params,
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ solicitacoes: rows || [] });
+    }
+  );
+});
+
+// Compras: detalhes + itens
+app.get('/api/compras/solicitacoes-compra/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ error: 'ID inválido' });
+  db.get(
+    `SELECT sc.*, u.nome as solicitante_nome, u.email as solicitante_email
+     FROM solicitacoes_compra sc
+     JOIN usuarios u ON u.id = sc.solicitante_usuario_id
+     WHERE sc.id = ?`,
+    [id],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!row) return res.status(404).json({ error: 'Não encontrada' });
+      db.all(
+        `SELECT * FROM solicitacoes_compra_itens WHERE solicitacao_id = ? ORDER BY id`,
+        [id],
+        (err2, itens) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ solicitacao: row, itens: itens || [] });
+        }
+      );
+    }
+  );
+});
+
+// Compras: aprovar/rejeitar
+app.post('/api/compras/solicitacoes-compra/:id/decisao', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const decisorId = req.user?.id;
+    const { acao, motivo } = req.body || {};
+    const a = String(acao || '').trim();
+    if (!id) return res.status(400).json({ error: 'ID inválido' });
+    if (!decisorId) return res.status(401).json({ error: 'Usuário não autenticado' });
+    if (a !== 'aprovar' && a !== 'rejeitar') return res.status(400).json({ error: 'Ação inválida' });
+
+    const status = a === 'aprovar' ? 'aprovada' : 'rejeitada';
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE solicitacoes_compra SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [status, id],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO solicitacoes_compra_decisoes (solicitacao_id, decisor_usuario_id, acao, motivo) VALUES (?, ?, ?, ?)`,
+        [id, decisorId, a, (motivo || '').trim() || null],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    res.json({ message: 'Decisão registrada', status });
+  } catch (e) {
+    console.error('Erro ao decidir solicitacao_compra:', e);
     res.status(500).json({ error: e.message || 'Erro interno' });
   }
 });

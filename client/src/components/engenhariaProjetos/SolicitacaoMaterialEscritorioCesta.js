@@ -82,9 +82,20 @@ export default function SolicitacaoMaterialEscritorioCesta() {
     }
     try {
       setSending(true);
-      await api.post('/engenharia/solicitacoes-materiais-escritorio', {
-        itens: cartItems.map((x) => ({ material_id: x.id, quantidade: x.quantidade })),
+      // Criar solicitação de compra genérica (visível para Compras aprovar)
+      await api.post('/solicitacoes-compra', {
+        setor: 'Engenharia / Projetos',
+        titulo: 'Solicitação de material de escritório',
         observacoes,
+        itens: cartItems.map((x) => ({
+          material_tipo: 'escritorio',
+          material_id: x.id,
+          nome: x.nome,
+          descricao: x.descricao,
+          unidade: x.unidade,
+          quantidade: x.quantidade,
+          foto_url: x.foto_url || null,
+        }))
       });
       toast.success('Solicitação enviada');
       clearCart();

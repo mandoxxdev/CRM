@@ -25,6 +25,7 @@ import CustosViagens from './components/CustosViagens';
 import OrdensServicoComercial from './components/OrdensServicoComercial';
 import OSComercialForm from './components/OSComercialForm';
 import Compras from './components/Compras';
+import ComprasSolicitacoesCompra from './components/ComprasSolicitacoesCompra';
 import GruposFornecedores from './components/GruposFornecedores';
 import FornecedoresDoGrupo from './components/FornecedoresDoGrupo';
 import ItensFornecedor from './components/ItensFornecedor';
@@ -57,6 +58,7 @@ import SolicitacaoMaterialEscritorio from './components/engenharia/SolicitacaoMa
 import EngenhariaProjetosHome from './components/engenhariaProjetos/EngenhariaProjetosHome';
 import CadastroMateriaisEscritorio from './components/engenhariaProjetos/CadastroMateriaisEscritorio';
 import SolicitacaoMaterialEscritorioCesta from './components/engenhariaProjetos/SolicitacaoMaterialEscritorioCesta';
+import MinhasSolicitacoesCompra from './components/MinhasSolicitacoesCompra';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
@@ -219,6 +221,11 @@ function AppRoutes() {
           </PrivateRoute>
         }
       >
+        <Route path="solicitacoes" element={
+          <ProtectedModuleRoute modulo="compras" nomeModulo="Compras">
+            <ComprasSolicitacoesCompra />
+          </ProtectedModuleRoute>
+        } />
         <Route path="*" element={
           <ProtectedModuleRoute modulo="compras" nomeModulo="Compras">
             <Compras />
@@ -364,6 +371,7 @@ function AppRoutes() {
         <Route index element={<EngenhariaProjetosHome />} />
         <Route path="solicitacao-material-escritorio" element={<SolicitacaoMaterialEscritorioCesta />} />
         <Route path="cadastro-materiais-escritorio" element={<CadastroMateriaisEscritorio />} />
+        <Route path="minhas-solicitacoes" element={<MinhasSolicitacoesCompra />} />
       </Route>
       <Route
         path="/configuracoes"
