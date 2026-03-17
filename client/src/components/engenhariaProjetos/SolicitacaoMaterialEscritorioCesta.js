@@ -129,7 +129,15 @@ export default function SolicitacaoMaterialEscritorioCesta() {
                 const inCart = cart.get(String(m.id));
                 return (
                   <div key={m.id} className="engc-card">
+                    <div className="engc-card-media">
+                      {m.foto_url ? (
+                        <img className="engc-card-img" src={m.foto_url} alt={m.nome} loading="lazy" />
+                      ) : (
+                        <div className="engc-card-imgPlaceholder">Sem foto</div>
+                      )}
+                    </div>
                     <div className="engc-card-name">{m.nome}</div>
+                    <div className="engc-card-desc">{m.descricao || '—'}</div>
                     <div className="engc-card-meta">{m.unidade ? `Unidade: ${m.unidade}` : ''}</div>
                     <div className="engc-card-actions">
                       <button className="engc-btn engc-btn--ghost" type="button" onClick={() => addToCart(m, 1)}>
@@ -160,8 +168,14 @@ export default function SolicitacaoMaterialEscritorioCesta() {
             {cartItems.map((m) => (
               <div key={m.id} className="engc-cart-item">
                 <div className="engc-cart-main">
-                  <div className="engc-cart-name">{m.nome}</div>
-                  <div className="engc-subtle">{m.unidade || 'un'}</div>
+                  <div className="engc-cart-thumb">
+                    {m.foto_url ? <img src={m.foto_url} alt={m.nome} loading="lazy" /> : <div className="engc-cart-thumbPlaceholder">—</div>}
+                  </div>
+                  <div className="engc-cart-text">
+                    <div className="engc-cart-name">{m.nome}</div>
+                    <div className="engc-cart-desc">{m.descricao || '—'}</div>
+                    <div className="engc-subtle">{m.unidade || 'un'}</div>
+                  </div>
                 </div>
                 <div className="engc-qty">
                   <button type="button" className="engc-qty-btn" onClick={() => addToCart(m, -1)} aria-label="Diminuir">

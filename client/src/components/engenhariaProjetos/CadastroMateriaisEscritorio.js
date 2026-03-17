@@ -9,7 +9,7 @@ export default function CadastroMateriaisEscritorio() {
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [novo, setNovo] = useState({ nome: '', unidade: 'un', ativo: true });
+  const [novo, setNovo] = useState({ nome: '', descricao: '', unidade: 'un', ativo: true, fotoFile: null });
 
   async function load() {
     setLoading(true);
@@ -47,6 +47,7 @@ export default function CadastroMateriaisEscritorio() {
       setSaving(true);
       await api.put(`/engenharia/materiais-escritorio/${m.id}`, {
         nome: patch.nome ?? m.nome,
+        descricao: patch.descricao ?? m.descricao,
         unidade: patch.unidade ?? m.unidade,
       });
       setMateriais((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...patch } : x)));
@@ -56,6 +57,13 @@ export default function CadastroMateriaisEscritorio() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const uploadFoto = async (materialId, file) => {
+    const form = new FormData();
+    form.append('foto', file);
+    const res = await api.post(`/engenharia/materiais-escritorio/${materialId}/foto`, form);
+    return res.data;
   };
 
   const create = async () => {
@@ -68,11 +76,21 @@ export default function CadastroMateriaisEscritorio() {
       setSaving(true);
       const res = await api.post('/engenharia/materiais-escritorio', {
         nome,
+        descricao: (novo.descricao || '').trim(),
         unidade: (novo.unidade || 'un').trim() || 'un',
         ativo: novo.ativo ? 1 : 0,
       });
-      setNovo({ nome: '', unidade: 'un', ativo: true });
-      setMateriais((prev) => [res.data, ...(prev || [])]);
+      let created = res.data;
+      if (novo.fotoFile) {
+        try {
+          const up = await uploadFoto(created.id, novo.fotoFile);
+          created = { ...created, foto_url: up.foto_url, foto: up.foto };
+        } catch (e) {
+          toast.warn(e.response?.data?.error || 'Material criado, mas falhou ao enviar foto');
+        }
+      }
+      setNovo({ nome: '', descricao: '', unidade: 'un', ativo: true, fotoFile: null });
+      setMateriais((prev) => [created, ...(prev || [])]);
       toast.success('Material criado');
     } catch (e) {
       toast.error(e.response?.data?.error || 'Erro ao criar');
@@ -99,6 +117,14 @@ export default function CadastroMateriaisEscritorio() {
           <div className="engp-mat-form">
             <label>Nome</label>
             <input value={novo.nome} onChange={(e) => setNovo((p) => ({ ...p, nome: e.target.value }))} placeholder="Ex.: Papel A4" />
+            <label>Descritivo</label>
+            <textarea
+              className="engp-mat-textarea"
+              value={novo.descricao}
+              onChange={(e) => setNovo((p) => ({ ...p, descricao: e.target.value }))}
+              placeholder="Ex.: Resma 500 folhas, 75g/m²"
+              rows={3}
+            />
             <div className="engp-mat-form-row">
               <div>
                 <label>Unidade</label>
@@ -114,6 +140,21 @@ export default function CadastroMateriaisEscritorio() {
                   {novo.ativo ? 'Sim' : 'Não'}
                 </button>
               </div>
+            </div>
+            <label>Foto</label>
+            <div className="engp-mat-photo">
+              <div className="engp-mat-photo-preview">
+                {novo.fotoFile ? (
+                  <img src={URL.createObjectURL(novo.fotoFile)} alt="Prévia" />
+                ) : (
+                  <div className="engp-mat-photo-placeholder">Sem foto</div>
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setNovo((p) => ({ ...p, fotoFile: e.target.files?.[0] || null }))}
+              />
             </div>
             <button type="button" className="engp-mat-btn engp-mat-btn--primary" onClick={create} disabled={saving}>
               {saving ? 'Salvando…' : 'Cadastrar'}
@@ -137,12 +178,41 @@ export default function CadastroMateriaisEscritorio() {
           ) : (
             <div className="engp-mat-table">
               <div className="engp-mat-row head">
+                <div>Foto</div>
                 <div>Nome</div>
+                <div>Descritivo</div>
                 <div>Unidade</div>
                 <div>Status</div>
               </div>
               {filtered.map((m) => (
                 <div className="engp-mat-row" key={m.id}>
+                  <div className="engp-mat-thumb">
+                    {m.foto_url ? <img src={m.foto_url} alt={m.nome} /> : <div className="engp-mat-thumb-placeholder">—</div>}
+                    <label className="engp-mat-thumb-btn">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            setSaving(true);
+                            const up = await uploadFoto(m.id, file);
+                            setMateriais((prev) =>
+                              prev.map((x) => (x.id === m.id ? { ...x, foto_url: up.foto_url, foto: up.foto } : x))
+                            );
+                            toast.success('Foto atualizada');
+                          } catch (err) {
+                            toast.error(err.response?.data?.error || 'Erro ao enviar foto');
+                          } finally {
+                            setSaving(false);
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      Trocar
+                    </label>
+                  </div>
                   <div>
                     <input
                       className="engp-mat-inline"
@@ -150,6 +220,17 @@ export default function CadastroMateriaisEscritorio() {
                       onBlur={(e) => {
                         const v = e.target.value.trim();
                         if (v && v !== m.nome) updateItem(m, { nome: v });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <textarea
+                      className="engp-mat-inline engp-mat-inline--textarea"
+                      defaultValue={m.descricao || ''}
+                      rows={2}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v !== (m.descricao || '')) updateItem(m, { descricao: v });
                       }}
                     />
                   </div>

@@ -192,6 +192,12 @@ if (!fs.existsSync(uploadsProdutosDir)) {
   fs.mkdirSync(uploadsProdutosDir, { recursive: true });
 }
 
+// Diretório para uploads de fotos de materiais de escritório
+const uploadsMateriaisEscritorioDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'materiais-escritorio');
+if (!fs.existsSync(uploadsMateriaisEscritorioDir)) {
+  fs.mkdirSync(uploadsMateriaisEscritorioDir, { recursive: true });
+}
+
 // Diretório para uploads de fotos de famílias de produtos
 const uploadsFamiliasDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'familias-produtos');
 if (!fs.existsSync(uploadsFamiliasDir)) {
@@ -349,6 +355,38 @@ const uploadProduto = multer({
   },
   fileFilter: (req, file, cb) => {
     // Aceitar apenas imagens
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) {
+      cb(null, true);
+    } else {
+      cb(new Error('Apenas imagens são permitidas (jpeg, jpg, png, gif, webp)'));
+    }
+  }
+});
+
+// Storage específico para fotos de materiais de escritório
+const storageMateriaisEscritorio = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsMateriaisEscritorioDir);
+  },
+  filename: (req, file, cb) => {
+    const materialId = req.params.id || 'temp';
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext);
+    const filename = `material_escritorio_${materialId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
+    cb(null, filename);
+  }
+});
+
+const uploadMaterialEscritorioFoto = multer({
+  storage: storageMateriaisEscritorio,
+  limits: {
+    fileSize: 10 * 1024 * 1024
+  },
+  fileFilter: (req, file, cb) => {
     const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
@@ -961,10 +999,28 @@ function initializeDatabase(onReadyCallback) {
   db.run(`CREATE TABLE IF NOT EXISTS materiais_escritorio (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT NOT NULL,
+    descricao TEXT,
     unidade TEXT DEFAULT 'un',
+    foto TEXT,
     ativo INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Migração leve (caso a tabela já exista sem as colunas novas)
+  db.all("PRAGMA table_info(materiais_escritorio)", (err, cols) => {
+    if (err || !Array.isArray(cols)) return;
+    const names = new Set(cols.map(c => c.name));
+    if (!names.has('descricao')) {
+      db.run('ALTER TABLE materiais_escritorio ADD COLUMN descricao TEXT', (e) => {
+        if (e) console.warn('⚠️ Migração materiais_escritorio.descricao:', e.message);
+      });
+    }
+    if (!names.has('foto')) {
+      db.run('ALTER TABLE materiais_escritorio ADD COLUMN foto TEXT', (e) => {
+        if (e) console.warn('⚠️ Migração materiais_escritorio.foto:', e.message);
+      });
+    }
+  });
 
   // Engenharia - Solicitações de Materiais de Escritório
   db.run(`CREATE TABLE IF NOT EXISTS solicitacoes_material_escritorio (
@@ -14786,6 +14842,9 @@ app.use('/api/uploads/cotacoes', express.static(uploadsDir));
 // Servir arquivos estáticos de imagens de produtos
 app.use('/api/uploads/produtos', express.static(uploadsProdutosDir));
 
+// ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE MATERIAIS (ESCRITÓRIO) ==========
+app.use('/api/uploads/materiais-escritorio', express.static(uploadsMateriaisEscritorioDir));
+
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE LOGOS ==========
 // Servir arquivos estáticos de logos
 app.use('/api/uploads/logos', express.static(uploadsLogosDir));
@@ -15319,7 +15378,12 @@ app.get('/api/configuracoes', authenticateToken, (req, res) => {
 // ========== ENGENHARIA - SOLICITAÇÃO DE MATERIAL DE ESCRITÓRIO ==========
 app.get('/api/engenharia/materiais-escritorio', authenticateToken, checkModulePermission('engenharia'), (req, res) => {
   db.all(
-    'SELECT id, nome, unidade FROM materiais_escritorio WHERE ativo = 1 ORDER BY nome',
+    `SELECT 
+       id, nome, descricao, unidade,
+       CASE WHEN foto IS NOT NULL AND foto != '' THEN ('/api/uploads/materiais-escritorio/' || foto) ELSE NULL END as foto_url
+     FROM materiais_escritorio
+     WHERE ativo = 1
+     ORDER BY nome`,
     [],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -15332,7 +15396,12 @@ app.get('/api/engenharia/materiais-escritorio', authenticateToken, checkModulePe
 app.get('/api/engenharia/materiais-escritorio/admin', authenticateToken, checkModulePermission('engenharia_projetos'), (req, res) => {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
   db.all(
-    'SELECT id, nome, unidade, ativo, created_at FROM materiais_escritorio ORDER BY ativo DESC, nome',
+    `SELECT 
+       id, nome, descricao, unidade, ativo, created_at,
+       CASE WHEN foto IS NOT NULL AND foto != '' THEN ('/api/uploads/materiais-escritorio/' || foto) ELSE NULL END as foto_url,
+       foto
+     FROM materiais_escritorio
+     ORDER BY ativo DESC, nome`,
     [],
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -15343,17 +15412,18 @@ app.get('/api/engenharia/materiais-escritorio/admin', authenticateToken, checkMo
 
 app.post('/api/engenharia/materiais-escritorio', authenticateToken, checkModulePermission('engenharia_projetos'), (req, res) => {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
-  const { nome, unidade, ativo } = req.body || {};
+  const { nome, descricao, unidade, ativo } = req.body || {};
   const n = String(nome || '').trim();
   if (!n) return res.status(400).json({ error: 'Nome é obrigatório' });
+  const d = String(descricao || '').trim() || null;
   const u = String(unidade || 'un').trim() || 'un';
   const a = ativo === 0 || ativo === false ? 0 : 1;
   db.run(
-    'INSERT INTO materiais_escritorio (nome, unidade, ativo) VALUES (?, ?, ?)',
-    [n, u, a],
+    'INSERT INTO materiais_escritorio (nome, descricao, unidade, ativo) VALUES (?, ?, ?, ?)',
+    [n, d, u, a],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID, nome: n, unidade: u, ativo: a });
+      res.json({ id: this.lastID, nome: n, descricao: d, unidade: u, ativo: a, foto_url: null });
     }
   );
 });
@@ -15361,19 +15431,49 @@ app.post('/api/engenharia/materiais-escritorio', authenticateToken, checkModuleP
 app.put('/api/engenharia/materiais-escritorio/:id', authenticateToken, checkModulePermission('engenharia_projetos'), (req, res) => {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
   const id = parseInt(req.params.id, 10);
-  const { nome, unidade } = req.body || {};
+  const { nome, descricao, unidade } = req.body || {};
   const n = String(nome || '').trim();
   if (!id) return res.status(400).json({ error: 'ID inválido' });
   if (!n) return res.status(400).json({ error: 'Nome é obrigatório' });
+  const d = String(descricao || '').trim() || null;
   const u = String(unidade || 'un').trim() || 'un';
   db.run(
-    'UPDATE materiais_escritorio SET nome = ?, unidade = ? WHERE id = ?',
-    [n, u, id],
+    'UPDATE materiais_escritorio SET nome = ?, descricao = ?, unidade = ? WHERE id = ?',
+    [n, d, u, id],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ message: 'Atualizado' });
     }
   );
+});
+
+// Upload de foto do material (admin)
+app.post('/api/engenharia/materiais-escritorio/:id/foto', authenticateToken, checkModulePermission('engenharia_projetos'), uploadMaterialEscritorioFoto.single('foto'), (req, res) => {
+  if (req.user?.role !== 'admin') {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(403).json({ error: 'Apenas admin' });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (!id) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(400).json({ error: 'ID inválido' });
+  }
+  if (!req.file) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  db.get('SELECT id, foto FROM materiais_escritorio WHERE id = ?', [id], (err, row) => {
+    if (err || !row) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Material não encontrado' });
+    }
+    if (row.foto) {
+      const oldPath = path.join(uploadsMateriaisEscritorioDir, row.foto);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    const filename = req.file.filename;
+    db.run('UPDATE materiais_escritorio SET foto = ? WHERE id = ?', [filename, id], (e2) => {
+      if (e2) return res.status(500).json({ error: e2.message });
+      res.json({ foto: filename, foto_url: `/api/uploads/materiais-escritorio/${filename}` });
+    });
+  });
 });
 
 app.patch('/api/engenharia/materiais-escritorio/:id/ativo', authenticateToken, checkModulePermission('engenharia_projetos'), (req, res) => {
