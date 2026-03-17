@@ -1,0 +1,112 @@
+.eng-solm {
+  padding: 24px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.eng-solm-header h1 {
+  margin: 0 0 6px 0;
+}
+
+.eng-solm-header p {
+  margin: 0 0 18px 0;
+  opacity: 0.85;
+}
+
+.eng-solm-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+.eng-solm-loading {
+  padding: 14px 6px;
+}
+
+.eng-solm-table {
+  display: grid;
+  gap: 10px;
+}
+
+.eng-solm-row {
+  display: grid;
+  grid-template-columns: 1fr 180px 120px;
+  gap: 10px;
+  align-items: center;
+}
+
+.eng-solm-row--head {
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.eng-solm-row select,
+.eng-solm-row input,
+.eng-solm-obs textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  outline: none;
+  background: #fff;
+}
+
+.eng-solm-row input[type='number'] {
+  width: 110px;
+  margin-right: 8px;
+}
+
+.eng-solm-unit {
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.eng-solm-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.eng-solm-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  gap: 12px;
+}
+
+.eng-solm-btn {
+  border-radius: 12px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.eng-solm-btn--primary {
+  background: #0d2b4a;
+  color: #fff;
+}
+
+.eng-solm-btn--primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.eng-solm-btn--ghost {
+  background: transparent;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.eng-solm-obs {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.eng-solm-obs label {
+  font-weight: 700;
+  opacity: 0.85;
+}
+

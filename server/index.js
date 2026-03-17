@@ -9,6 +9,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const multer = require('multer');
 const puppeteer = require('puppeteer');
+const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const propostaEngine = require('./propostaCompositionEngine');
@@ -955,6 +956,56 @@ function initializeDatabase(onReadyCallback) {
     descricao TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Engenharia - Materiais de Escritório
+  db.run(`CREATE TABLE IF NOT EXISTS materiais_escritorio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    unidade TEXT DEFAULT 'un',
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // Engenharia - Solicitações de Materiais de Escritório
+  db.run(`CREATE TABLE IF NOT EXISTS solicitacoes_material_escritorio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER NOT NULL,
+    observacoes TEXT,
+    status TEXT DEFAULT 'pendente',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS solicitacoes_material_escritorio_itens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitacao_id INTEGER NOT NULL,
+    material_id INTEGER NOT NULL,
+    quantidade REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (solicitacao_id) REFERENCES solicitacoes_material_escritorio(id) ON DELETE CASCADE,
+    FOREIGN KEY (material_id) REFERENCES materiais_escritorio(id)
+  )`);
+
+  // Seed básico (apenas se estiver vazio)
+  db.get('SELECT COUNT(1) as c FROM materiais_escritorio', [], (err, row) => {
+    if (err) return;
+    if ((row?.c || 0) > 0) return;
+    const seeds = [
+      ['Papel A4', 'resma'],
+      ['Caneta azul', 'un'],
+      ['Caneta preta', 'un'],
+      ['Lápis', 'un'],
+      ['Borracha', 'un'],
+      ['Marcador texto', 'un'],
+      ['Grampeador', 'un'],
+      ['Grampos', 'cx'],
+      ['Clips', 'cx'],
+      ['Envelope', 'un'],
+    ];
+    const stmt = db.prepare('INSERT INTO materiais_escritorio (nome, unidade, ativo) VALUES (?, ?, 1)');
+    seeds.forEach(([nome, unidade]) => stmt.run([nome, unidade]));
+    stmt.finalize();
+  });
 
   // Assinaturas Digitais
   db.run(`CREATE TABLE IF NOT EXISTS assinaturas_digitais (
@@ -2061,6 +2112,47 @@ function checkModulePermission(requiredModule) {
       }
     );
   };
+}
+
+async function getEmailConfig() {
+  const keys = ['email_smtp_host', 'email_smtp_port', 'email_smtp_user', 'email_smtp_pass', 'email_from'];
+  const rows = await new Promise((resolve, reject) => {
+    const placeholders = keys.map(() => '?').join(',');
+    db.all(`SELECT chave, valor FROM configuracoes WHERE chave IN (${placeholders})`, keys, (err, r) => {
+      if (err) reject(err);
+      else resolve(r || []);
+    });
+  });
+  const map = {};
+  rows.forEach(r => { map[r.chave] = r.valor; });
+  return {
+    host: (map.email_smtp_host || '').trim(),
+    port: parseInt(map.email_smtp_port || '587', 10) || 587,
+    user: (map.email_smtp_user || '').trim(),
+    pass: (map.email_smtp_pass || '').trim(),
+    from: (map.email_from || map.email_smtp_user || '').trim(),
+  };
+}
+
+async function sendEmail({ to, cc, subject, html, text }) {
+  const cfg = await getEmailConfig();
+  if (!cfg.host || !cfg.from) {
+    throw new Error('SMTP não configurado. Preencha email_smtp_host/email_smtp_user/email_smtp_pass/email_from em Configurações.');
+  }
+  const transporter = nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.port === 465,
+    auth: cfg.user ? { user: cfg.user, pass: cfg.pass } : undefined,
+  });
+  await transporter.sendMail({
+    from: cfg.from,
+    to,
+    cc,
+    subject,
+    text,
+    html,
+  });
 }
 
 // Função auxiliar para registrar tentativa de acesso negado
@@ -15219,6 +15311,128 @@ app.get('/api/configuracoes', authenticateToken, (req, res) => {
     });
     res.json(configs);
   });
+});
+
+// ========== ENGENHARIA - SOLICITAÇÃO DE MATERIAL DE ESCRITÓRIO ==========
+app.get('/api/engenharia/materiais-escritorio', authenticateToken, checkModulePermission('engenharia'), (req, res) => {
+  db.all(
+    'SELECT id, nome, unidade FROM materiais_escritorio WHERE ativo = 1 ORDER BY nome',
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ materiais: rows || [] });
+    }
+  );
+});
+
+app.post('/api/engenharia/solicitacoes-materiais-escritorio', authenticateToken, checkModulePermission('engenharia'), async (req, res) => {
+  try {
+    const usuarioId = req.user?.id;
+    const { itens, observacoes } = req.body || {};
+    if (!usuarioId) return res.status(401).json({ error: 'Usuário não autenticado' });
+    if (!Array.isArray(itens) || itens.length === 0) {
+      return res.status(400).json({ error: 'Informe ao menos 1 item' });
+    }
+    const clean = itens
+      .map((it) => ({
+        material_id: parseInt(it.material_id, 10),
+        quantidade: Number(it.quantidade),
+      }))
+      .filter((it) => it.material_id && it.quantidade > 0);
+    if (clean.length === 0) {
+      return res.status(400).json({ error: 'Itens inválidos' });
+    }
+
+    const solicitacaoId = await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO solicitacoes_material_escritorio (usuario_id, observacoes, status) VALUES (?, ?, ?)',
+        [usuarioId, (observacoes || '').trim() || null, 'pendente'],
+        function (err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        }
+      );
+    });
+
+    await new Promise((resolve, reject) => {
+      const stmt = db.prepare(
+        'INSERT INTO solicitacoes_material_escritorio_itens (solicitacao_id, material_id, quantidade) VALUES (?, ?, ?)'
+      );
+      for (const it of clean) {
+        stmt.run([solicitacaoId, it.material_id, it.quantidade]);
+      }
+      stmt.finalize((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    const userRow = await new Promise((resolve, reject) => {
+      db.get('SELECT id, nome, email FROM usuarios WHERE id = ?', [usuarioId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    const itensDetalhe = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT i.material_id, i.quantidade, m.nome, m.unidade
+         FROM solicitacoes_material_escritorio_itens i
+         JOIN materiais_escritorio m ON m.id = i.material_id
+         WHERE i.solicitacao_id = ?
+         ORDER BY m.nome`,
+        [solicitacaoId],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    const comprasEmail = 'compras@gmp.ind.br';
+    const userEmail = (userRow?.email || '').trim();
+    const solicitanteNome = userRow?.nome || userEmail || `Usuário ${usuarioId}`;
+
+    const subject = `Solicitação de material de escritório #${solicitacaoId} - ${solicitanteNome}`;
+    const rowsHtml = itensDetalhe
+      .map((r) => `<tr><td style="padding:6px 8px;border:1px solid #ddd;">${String(r.nome || '')}</td><td style="padding:6px 8px;border:1px solid #ddd;text-align:right;">${r.quantidade}</td><td style="padding:6px 8px;border:1px solid #ddd;">${String(r.unidade || '')}</td></tr>`)
+      .join('');
+
+    const html = `
+      <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111;">
+        <h2 style="margin:0 0 8px 0;">Solicitação de material de escritório</h2>
+        <div><strong>ID:</strong> ${solicitacaoId}</div>
+        <div><strong>Solicitante:</strong> ${String(solicitanteNome)}</div>
+        <div><strong>E-mail:</strong> ${String(userEmail || 'N/A')}</div>
+        ${observacoes ? `<div style="margin-top:8px;"><strong>Observações:</strong><br/>${String(observacoes).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}
+        <div style="margin-top:12px;"><strong>Itens:</strong></div>
+        <table style="border-collapse:collapse;margin-top:6px;width:100%;max-width:720px;">
+          <thead>
+            <tr>
+              <th style="padding:6px 8px;border:1px solid #ddd;text-align:left;background:#f6f6f6;">Material</th>
+              <th style="padding:6px 8px;border:1px solid #ddd;text-align:right;background:#f6f6f6;">Quantidade</th>
+              <th style="padding:6px 8px;border:1px solid #ddd;text-align:left;background:#f6f6f6;">Unidade</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    `;
+
+    // Enviar para compras e cc para usuário (se tiver email)
+    await sendEmail({
+      to: comprasEmail,
+      cc: userEmail || undefined,
+      subject,
+      html,
+      text: `Solicitação #${solicitacaoId} - ${solicitanteNome}\n\n${itensDetalhe.map(r => `- ${r.nome}: ${r.quantidade} ${r.unidade || ''}` ).join('\n')}${observacoes ? `\n\nObs: ${observacoes}` : ''}`,
+    });
+
+    res.json({ message: 'Solicitação criada e e-mail enviado', solicitacao_id: solicitacaoId });
+  } catch (e) {
+    console.error('Erro ao criar solicitação de material de escritório:', e);
+    res.status(500).json({ error: e.message || 'Erro interno' });
+  }
 });
 
 // Obter configuração específica

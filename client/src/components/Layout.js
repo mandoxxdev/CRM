@@ -5,7 +5,7 @@ import api from '../services/api';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
-  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers
+  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -191,6 +191,7 @@ const Layout = () => {
   // Menu do módulo Cálculos de Engenharia
   const engenhariaMenuItems = [
     { path: '/engenharia', icon: FiSliders, label: 'Início' },
+    { path: '/engenharia/solicitacao-material-escritorio', icon: FiClipboard, label: 'Material escritório' },
     { path: '/engenharia/calculo-tampo', icon: FiCircle, label: 'Cálculo de Tampo' },
     { path: '/engenharia/calculo-volume', icon: FiDroplet, label: 'Cálculo de Volume' },
     { path: '/engenharia/calculo-motor-impelidor', icon: FiZap, label: 'Motor + Impelidor' },

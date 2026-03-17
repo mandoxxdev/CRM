@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiGrid } from 'react-icons/fi';
+import { FiCircle, FiDroplet, FiZap, FiLayers, FiGrid, FiClipboard } from 'react-icons/fi';
 import './CalculosEngenharia.css';
 
 const CalculosEngenharia = () => {
@@ -14,6 +14,17 @@ const CalculosEngenharia = () => {
       </header>
 
       <div className="calculos-engenharia-grid">
+        <button
+          type="button"
+          className="calculos-engenharia-card"
+          onClick={() => navigate('/engenharia/solicitacao-material-escritorio')}
+        >
+          <div className="calculos-engenharia-card-icon">
+            <FiClipboard />
+          </div>
+          <h3>Material de escritório</h3>
+          <p>Solicite materiais cadastrados e envie automaticamente para Compras</p>
+        </button>
         <button
           type="button"
           className="calculos-engenharia-card"

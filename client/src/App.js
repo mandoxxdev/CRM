@@ -53,6 +53,7 @@ import CalculoPlataformas from './components/CalculoPlataformas';
 import TipoSelecao from './components/TipoSelecao';
 import ProtectedModuleRoute from './components/ProtectedModuleRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import SolicitacaoMaterialEscritorio from './components/engenharia/SolicitacaoMaterialEscritorio';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
@@ -340,6 +341,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<CalculosEngenharia />} />
+        <Route path="solicitacao-material-escritorio" element={<SolicitacaoMaterialEscritorio />} />
         <Route path="calculo-tampo" element={<CalculoTampo />} />
         <Route path="calculo-volume" element={<CalculoVolume />} />
         <Route path="calculo-motor-impelidor" element={<CalculoMotorImpelidor />} />
