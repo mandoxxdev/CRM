@@ -2174,29 +2174,21 @@ function checkModulePermission(requiredModule) {
 }
 
 async function getEmailConfig() {
-  const keys = ['email_smtp_host', 'email_smtp_port', 'email_smtp_user', 'email_smtp_pass', 'email_from'];
-  const rows = await new Promise((resolve, reject) => {
-    const placeholders = keys.map(() => '?').join(',');
-    db.all(`SELECT chave, valor FROM configuracoes WHERE chave IN (${placeholders})`, keys, (err, r) => {
-      if (err) reject(err);
-      else resolve(r || []);
-    });
-  });
-  const map = {};
-  rows.forEach(r => { map[r.chave] = r.valor; });
+  // HARD CODED (solicitado pelo usuário): SMTP Locaweb fixo no código
+  // Observação: isso grava credenciais no repositório/imagem. Mantido por solicitação explícita.
   return {
-    host: (map.email_smtp_host || '').trim(),
-    port: parseInt(map.email_smtp_port || '587', 10) || 587,
-    user: (map.email_smtp_user || '').trim(),
-    pass: (map.email_smtp_pass || '').trim(),
-    from: (map.email_from || map.email_smtp_user || '').trim(),
+    host: 'smtp.locaweb.com.br',
+    port: 587, // STARTTLS
+    user: 'solicitacoes@gmp.ind.br',
+    pass: 'Solicitacoes123@',
+    from: 'solicitacoes@gmp.ind.br',
   };
 }
 
 async function sendEmail({ to, cc, subject, html, text }) {
   const cfg = await getEmailConfig();
   if (!cfg.host || !cfg.from) {
-    throw new Error('SMTP não configurado. Preencha email_smtp_host/email_smtp_user/email_smtp_pass/email_from em Configurações.');
+    throw new Error('SMTP não configurado.');
   }
   const transporter = nodemailer.createTransport({
     host: cfg.host,
