@@ -1803,6 +1803,38 @@ function executeMigrations(callback) {
           }
         });
       }
+
+      // ======= MÓDULO PREMIUM: FILTRAGEM DE USUÁRIOS (Setor + Flags) =======
+      // Regras:
+      // - Flags por função (ex: flag_vendedor, flag_compras, flag_ti)
+      // - Usuário pertence a um setor (ex: Vendas, Compras, TI)
+      // - Filtros sempre respeitam contexto do usuário logado (e admin pode ver tudo)
+      const colunasUsersFiltro = [
+        { nome: 'setor', tipo: 'TEXT' },
+        { nome: 'departamento', tipo: 'TEXT' },
+        { nome: 'flag_vendedor', tipo: 'INTEGER DEFAULT 0' },
+        { nome: 'flag_compras', tipo: 'INTEGER DEFAULT 0' },
+        { nome: 'flag_ti', tipo: 'INTEGER DEFAULT 0' }
+      ];
+
+      colunasUsersFiltro.forEach((coluna) => {
+        if (!colunasExistentes.includes(coluna.nome)) {
+          db.run(`ALTER TABLE usuarios ADD COLUMN ${coluna.nome} ${coluna.tipo}`, (err2) => {
+            if (err2 && !err2.message.includes('duplicate') && !err2.message.includes('already exists')) {
+              console.log(`⚠️ Aviso ao adicionar coluna ${coluna.nome}:`, err2.message);
+            } else if (!err2) {
+              console.log(`✅ Coluna ${coluna.nome} adicionada à tabela usuarios`);
+            }
+          });
+        }
+      });
+
+      // Índices (performance) - seguro rodar múltiplas vezes
+      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_setor_ativo_nome ON usuarios(setor, ativo, nome)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_departamento_ativo_nome ON usuarios(departamento, ativo, nome)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_vendedor ON usuarios(flag_vendedor)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_compras ON usuarios(flag_compras)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_ti ON usuarios(flag_ti)`);
     }
   });
 
@@ -2396,7 +2428,12 @@ app.post('/api/auth/login', (req, res) => {
         nome: user.nome,
         email: user.email,
         cargo: user.cargo,
-        role: user.role
+        role: user.role,
+        setor: user.setor || null,
+        departamento: user.departamento || null,
+        flag_vendedor: !!user.flag_vendedor,
+        flag_compras: !!user.flag_compras,
+        flag_ti: !!user.flag_ti
       }
     });
   });
@@ -2818,6 +2855,134 @@ app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
   });
 });
 
+// ======= FILTRO PREMIUM DE USUÁRIOS (flags + setor + contexto do logado) =======
+// Exemplo:
+//   GET /api/usuarios/filtrar?flag=vendedor&ativo=1&q=mat&limit=25&offset=0
+// Regras:
+// - Apenas retorna usuários com a flag solicitada
+// - Usuário não-admin só pode filtrar flags "relevantes" ao seu próprio perfil (ele precisa ter a flag)
+// - Usuário não-admin só enxerga usuários do mesmo setor (evita vazamento entre setores)
+// - Filtros adicionais: ativo/inativo, departamento, busca textual, paginação
+app.get('/api/usuarios/filtrar', authenticateToken, (req, res) => {
+  const rawFlag = (req.query.flag || '').toString().trim().toLowerCase();
+  const q = (req.query.q || '').toString().trim();
+  const departamento = (req.query.departamento || '').toString().trim();
+
+  // ativo pode ser: 1, 0, true, false, all
+  const ativoRaw = (req.query.ativo ?? '1').toString().trim().toLowerCase();
+  const limit = Math.max(1, Math.min(parseInt(req.query.limit || '50', 10) || 50, 200));
+  const offset = Math.max(0, parseInt(req.query.offset || '0', 10) || 0);
+
+  const FLAG_TO_COLUMN = {
+    vendedor: 'flag_vendedor',
+    compras: 'flag_compras',
+    ti: 'flag_ti'
+  };
+
+  const flagColumn = FLAG_TO_COLUMN[rawFlag];
+  if (!flagColumn) {
+    return res.status(400).json({
+      error: 'flag inválida. Use: vendedor | compras | ti',
+      allowed: Object.keys(FLAG_TO_COLUMN)
+    });
+  }
+
+  // Buscar contexto atual direto no DB (mais seguro do que depender do token)
+  db.get(
+    `SELECT id, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti
+     FROM usuarios WHERE id = ? LIMIT 1`,
+    [req.user.id],
+    (ctxErr, ctxUser) => {
+      if (ctxErr) return res.status(500).json({ error: ctxErr.message });
+      if (!ctxUser) return res.status(401).json({ error: 'Usuário não encontrado' });
+
+      const isAdmin = ctxUser.role === 'admin';
+
+      // Segurança: usuário inativo não deve conseguir usar filtros (evita reuso de token antigo)
+      if (!ctxUser.ativo) {
+        return res.status(403).json({ error: 'Usuário inativo' });
+      }
+
+      // Regra 4: usuário não-admin não pode ver filtros que não são relevantes para o seu setor/função.
+      // Implementação objetiva: ele só pode pedir uma flag que ele mesmo possua.
+      if (!isAdmin && !ctxUser[flagColumn]) {
+        return res.status(403).json({ error: 'Filtro não permitido para o seu perfil' });
+      }
+
+      const where = [];
+      const params = [];
+
+      // Regra 3: apenas usuários com a flag solicitada
+      where.push(`u.${flagColumn} = 1`);
+
+      // Regra 4: isolamento por setor (não-admin)
+      if (!isAdmin) {
+        where.push(`COALESCE(u.setor, '') = COALESCE(?, '')`);
+        params.push(ctxUser.setor || '');
+      } else {
+        // Admin pode opcionalmente filtrar por setor
+        const setorParam = (req.query.setor || '').toString().trim();
+        if (setorParam) {
+          where.push(`COALESCE(u.setor, '') = COALESCE(?, '')`);
+          params.push(setorParam);
+        }
+      }
+
+      // Filtro ativo/inativo
+      if (ativoRaw !== 'all') {
+        const ativoBool =
+          ativoRaw === '1' || ativoRaw === 'true' ? 1 :
+          ativoRaw === '0' || ativoRaw === 'false' ? 0 :
+          1;
+        where.push(`u.ativo = ?`);
+        params.push(ativoBool);
+      }
+
+      // Filtro por departamento (configurável)
+      if (departamento) {
+        where.push(`COALESCE(u.departamento, '') = ?`);
+        params.push(departamento);
+      }
+
+      // Busca textual (nome/email/cargo)
+      if (q) {
+        where.push(`(
+          u.nome LIKE ? OR u.email LIKE ? OR COALESCE(u.cargo, '') LIKE ?
+        )`);
+        const like = `%${q}%`;
+        params.push(like, like, like);
+      }
+
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+      // Observação de performance:
+      // - Não retornamos senha
+      // - Paginamos (limit/offset)
+      // - Seleção mínima de colunas para dropdowns
+      const sql = `
+        SELECT
+          u.id, u.nome, u.email, u.cargo, u.role, u.ativo,
+          u.setor, u.departamento,
+          u.flag_vendedor, u.flag_compras, u.flag_ti
+        FROM usuarios u
+        ${whereSql}
+        ORDER BY u.nome
+        LIMIT ? OFFSET ?`;
+
+      db.all(sql, [...params, limit, offset], (listErr, rows) => {
+        if (listErr) return res.status(500).json({ error: listErr.message });
+        return res.json({
+          flag: rawFlag,
+          limit,
+          offset,
+          count: (rows || []).length,
+          items: rows || []
+        });
+      });
+    }
+  );
+});
+
 // Lista usuários com acesso a um módulo (para filtros de responsável por módulo)
 // Módulos: comercial, compras, financeiro, operacional, administrativo, admin
 app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
@@ -2853,7 +3018,7 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
 });
 
 app.get('/api/usuarios', authenticateToken, (req, res) => {
-  db.all('SELECT id, nome, email, cargo, role, ativo, created_at FROM usuarios ORDER BY nome', [], (err, rows) => {
+  db.all('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, created_at FROM usuarios ORDER BY nome', [], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -2894,7 +3059,7 @@ app.get('/api/usuarios', authenticateToken, (req, res) => {
 
 app.get('/api/usuarios/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  db.get('SELECT id, nome, email, cargo, role, ativo, pode_aprovar_descontos, created_at FROM usuarios WHERE id = ?', [id], (err, row) => {
+  db.get('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, pode_aprovar_descontos, created_at FROM usuarios WHERE id = ?', [id], (err, row) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -3006,7 +3171,20 @@ app.get('/api/usuarios/:id/grupos', authenticateToken, (req, res) => {
 
 app.post('/api/usuarios', authenticateToken, (req, res) => {
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
-  const { nome, email, senha, cargo, role, ativo, pode_aprovar_descontos } = req.body;
+  const {
+    nome,
+    email,
+    senha,
+    cargo,
+    role,
+    ativo,
+    pode_aprovar_descontos,
+    setor,
+    departamento,
+    flag_vendedor,
+    flag_compras,
+    flag_ti
+  } = req.body;
 
   if (!nome || !email || !senha) {
     return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
@@ -3019,8 +3197,21 @@ app.post('/api/usuarios', authenticateToken, (req, res) => {
   const hashedPassword = bcrypt.hashSync(senha, 10);
 
   db.run(
-    'INSERT INTO usuarios (nome, email, senha, cargo, role, ativo, pode_aprovar_descontos) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [nome, email, hashedPassword, cargo || '', role || 'usuario', ativo !== undefined ? ativo : 1, pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0],
+    'INSERT INTO usuarios (nome, email, senha, cargo, role, ativo, pode_aprovar_descontos, setor, departamento, flag_vendedor, flag_compras, flag_ti) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      nome,
+      email,
+      hashedPassword,
+      cargo || '',
+      role || 'usuario',
+      ativo !== undefined ? ativo : 1,
+      pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0,
+      setor || null,
+      departamento || null,
+      flag_vendedor ? 1 : 0,
+      flag_compras ? 1 : 0,
+      flag_ti ? 1 : 0
+    ],
     function(err) {
       if (err) {
         if (err.message.includes('UNIQUE constraint')) {
@@ -3028,7 +3219,20 @@ app.post('/api/usuarios', authenticateToken, (req, res) => {
         }
         return res.status(500).json({ error: err.message });
       }
-      res.json({ id: this.lastID, nome, email, cargo, role: role || 'usuario', ativo: ativo !== undefined ? ativo : 1, pode_aprovar_descontos: pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0 });
+      res.json({
+        id: this.lastID,
+        nome,
+        email,
+        cargo,
+        role: role || 'usuario',
+        ativo: ativo !== undefined ? ativo : 1,
+        pode_aprovar_descontos: pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0,
+        setor: setor || null,
+        departamento: departamento || null,
+        flag_vendedor: flag_vendedor ? 1 : 0,
+        flag_compras: flag_compras ? 1 : 0,
+        flag_ti: flag_ti ? 1 : 0
+      });
     }
   );
 });
@@ -3036,7 +3240,20 @@ app.post('/api/usuarios', authenticateToken, (req, res) => {
 app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
-  const { nome, email, cargo, role, ativo, senha, pode_aprovar_descontos } = req.body;
+  const {
+    nome,
+    email,
+    cargo,
+    role,
+    ativo,
+    senha,
+    pode_aprovar_descontos,
+    setor,
+    departamento,
+    flag_vendedor,
+    flag_compras,
+    flag_ti
+  } = req.body;
 
   if (senha && senha.length < 6) {
     return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
@@ -3054,8 +3271,22 @@ app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
     if (senha) {
       const hashedPassword = bcrypt.hashSync(senha, 10);
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, senha = ? WHERE id = ?',
-        [nome, email, cargo, role, ativo, pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0, hashedPassword, id],
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, senha = ? WHERE id = ?',
+        [
+          nome,
+          email,
+          cargo,
+          role,
+          ativo,
+          pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0,
+          setor || null,
+          departamento || null,
+          flag_vendedor ? 1 : 0,
+          flag_compras ? 1 : 0,
+          flag_ti ? 1 : 0,
+          hashedPassword,
+          id
+        ],
         (err) => {
           if (err) {
             return res.status(500).json({ error: err.message });
@@ -3065,8 +3296,21 @@ app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
       );
     } else {
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ? WHERE id = ?',
-        [nome, email, cargo, role, ativo, pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0, id],
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ? WHERE id = ?',
+        [
+          nome,
+          email,
+          cargo,
+          role,
+          ativo,
+          pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0,
+          setor || null,
+          departamento || null,
+          flag_vendedor ? 1 : 0,
+          flag_compras ? 1 : 0,
+          flag_ti ? 1 : 0,
+          id
+        ],
         (err) => {
           if (err) {
             return res.status(500).json({ error: err.message });

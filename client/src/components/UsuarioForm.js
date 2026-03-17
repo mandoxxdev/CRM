@@ -19,7 +19,12 @@ const UsuarioForm = () => {
     cargo: '',
     role: 'usuario',
     ativo: 1,
-    pode_aprovar_descontos: 0
+    pode_aprovar_descontos: 0,
+    setor: '',
+    departamento: '',
+    flag_vendedor: 0,
+    flag_compras: 0,
+    flag_ti: 0,
   });
 
   const [modulosSelecionados, setModulosSelecionados] = useState([]);
@@ -29,6 +34,8 @@ const UsuarioForm = () => {
     { value: 'compras', label: 'Compras', descricao: 'Gestão de fornecedores, pedidos e cotações' },
     { value: 'financeiro', label: 'Financeiro', descricao: 'Contas a pagar/receber, fluxo de caixa e bancos' },
     { value: 'operacional', label: 'Operacional', descricao: 'Gestão de projetos e atividades' },
+    { value: 'engenharia', label: 'Engenharia', descricao: 'Cálculos e utilitários de engenharia' },
+    { value: 'engenharia_projetos', label: 'Engenharia / Projetos', descricao: 'Solicitações (cesta), cadastro e OS (projetos)' },
     { value: 'relatorios', label: 'Relatórios', descricao: 'Análises e relatórios executivos' },
     { value: 'administrativo', label: 'Administrativo', descricao: 'Configurações e gestão do sistema' },
     { value: 'admin', label: 'Admin', descricao: 'Gestão de usuários e permissões' },
@@ -62,7 +69,12 @@ const UsuarioForm = () => {
         senha: '',
         confirmarSenha: '',
         ativo: response.data.ativo !== undefined ? response.data.ativo : 1,
-        pode_aprovar_descontos: response.data.pode_aprovar_descontos !== undefined ? response.data.pode_aprovar_descontos : 0
+        pode_aprovar_descontos: response.data.pode_aprovar_descontos !== undefined ? response.data.pode_aprovar_descontos : 0,
+        setor: response.data.setor || '',
+        departamento: response.data.departamento || '',
+        flag_vendedor: response.data.flag_vendedor ? 1 : 0,
+        flag_compras: response.data.flag_compras ? 1 : 0,
+        flag_ti: response.data.flag_ti ? 1 : 0,
       };
       
       console.log('📝 Dados do usuário a serem definidos:', usuarioData);
@@ -172,7 +184,12 @@ const UsuarioForm = () => {
         cargo: formData.cargo?.trim() || '',
         role: formData.role || 'usuario',
         ativo: formData.ativo !== undefined ? formData.ativo : 1,
-        pode_aprovar_descontos: formData.pode_aprovar_descontos !== undefined ? formData.pode_aprovar_descontos : 0
+        pode_aprovar_descontos: formData.pode_aprovar_descontos !== undefined ? formData.pode_aprovar_descontos : 0,
+        setor: formData.setor?.trim() || '',
+        departamento: formData.departamento?.trim() || '',
+        flag_vendedor: formData.flag_vendedor ? 1 : 0,
+        flag_compras: formData.flag_compras ? 1 : 0,
+        flag_ti: formData.flag_ti ? 1 : 0,
       };
       
       console.log('📤 Dados a serem enviados:', dataToSend);
@@ -363,6 +380,68 @@ const UsuarioForm = () => {
                 />
               </div>
             )}
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h2>Setor e Flags</h2>
+          <p className="section-description">
+            Defina o setor do usuário e quais “funções” ele representa para aparecer corretamente nos filtros (Vendedor/Compras/TI).
+          </p>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Setor</label>
+              <input
+                type="text"
+                name="setor"
+                value={formData.setor}
+                onChange={handleChange}
+                placeholder="Ex: Vendas, Compras, TI"
+              />
+            </div>
+            <div className="form-group">
+              <label>Departamento</label>
+              <input
+                type="text"
+                name="departamento"
+                value={formData.departamento}
+                onChange={handleChange}
+                placeholder="Opcional"
+              />
+            </div>
+            <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <label className="checkbox-label" style={{ marginBottom: 0 }}>
+                <input
+                  type="checkbox"
+                  name="flag_vendedor"
+                  checked={formData.flag_vendedor === 1}
+                  onChange={handleChange}
+                />
+                <span>Flag Vendedor</span>
+              </label>
+            </div>
+            <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <label className="checkbox-label" style={{ marginBottom: 0 }}>
+                <input
+                  type="checkbox"
+                  name="flag_compras"
+                  checked={formData.flag_compras === 1}
+                  onChange={handleChange}
+                />
+                <span>Flag Compras</span>
+              </label>
+            </div>
+            <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <label className="checkbox-label" style={{ marginBottom: 0 }}>
+                <input
+                  type="checkbox"
+                  name="flag_ti"
+                  checked={formData.flag_ti === 1}
+                  onChange={handleChange}
+                />
+                <span>Flag TI</span>
+              </label>
+            </div>
           </div>
         </div>
 
