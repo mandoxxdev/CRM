@@ -54,6 +54,9 @@ import TipoSelecao from './components/TipoSelecao';
 import ProtectedModuleRoute from './components/ProtectedModuleRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import SolicitacaoMaterialEscritorio from './components/engenharia/SolicitacaoMaterialEscritorio';
+import EngenhariaProjetosHome from './components/engenhariaProjetos/EngenhariaProjetosHome';
+import CadastroMateriaisEscritorio from './components/engenhariaProjetos/CadastroMateriaisEscritorio';
+import SolicitacaoMaterialEscritorioCesta from './components/engenhariaProjetos/SolicitacaoMaterialEscritorioCesta';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
@@ -347,6 +350,20 @@ function AppRoutes() {
         <Route path="calculo-motor-impelidor" element={<CalculoMotorImpelidor />} />
         <Route path="selecao-agitadores" element={<SelecaoAgitadores />} />
         <Route path="calculo-plataformas" element={<CalculoPlataformas />} />
+      </Route>
+      <Route
+        path="/engenharia-projetos"
+        element={
+          <PrivateRoute>
+            <ProtectedModuleRoute modulo="engenharia_projetos" nomeModulo="Engenharia / Projetos">
+              <Layout />
+            </ProtectedModuleRoute>
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<EngenhariaProjetosHome />} />
+        <Route path="solicitacao-material-escritorio" element={<SolicitacaoMaterialEscritorioCesta />} />
+        <Route path="cadastro-materiais-escritorio" element={<CadastroMateriaisEscritorio />} />
       </Route>
       <Route
         path="/configuracoes"

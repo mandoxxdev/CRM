@@ -5,7 +5,7 @@ import api from '../services/api';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
-  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard
+  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard, FiBriefcase
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -135,6 +135,7 @@ const Layout = () => {
     if (path.startsWith('/financeiro')) return 'financeiro';
     if (path.startsWith('/fabrica')) return 'operacional';
     if (path.startsWith('/admin')) return 'admin';
+    if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
     if (path.startsWith('/engenharia')) return 'engenharia';
     if (path.startsWith('/comercial')) return 'crm';
     return 'crm'; // Default para CRM
@@ -198,6 +199,13 @@ const Layout = () => {
     { path: '/engenharia/selecao-agitadores', icon: FiLayers, label: 'Seleção de Agitadores' },
   ];
 
+  // Menu do módulo Engenharia / Projetos (separado)
+  const engenhariaProjetosMenuItems = [
+    { path: '/engenharia-projetos', icon: FiBriefcase, label: 'Início' },
+    { path: '/engenharia-projetos/solicitacao-material-escritorio', icon: FiShoppingCart, label: 'Solicitação (cesta)' },
+    { path: '/engenharia-projetos/cadastro-materiais-escritorio', icon: FiPackage, label: 'Cadastro materiais' },
+  ];
+
   // Selecionar menu baseado no módulo ativo
   const getMenuItems = () => {
     switch (activeModule) {
@@ -211,6 +219,8 @@ const Layout = () => {
         return adminMenuItems;
       case 'engenharia':
         return engenhariaMenuItems;
+      case 'engenharia_projetos':
+        return engenhariaProjetosMenuItems;
       default:
         return crmMenuItems;
     }

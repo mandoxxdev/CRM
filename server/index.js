@@ -1465,6 +1465,9 @@ function inicializarConfiguracoesPadrao(callback) {
     { chave: 'email_smtp_user', valor: '', tipo: 'text', categoria: 'email', descricao: 'Usuário SMTP' },
     { chave: 'email_smtp_pass', valor: '', tipo: 'text', categoria: 'email', descricao: 'Senha SMTP' },
     { chave: 'email_from', valor: '', tipo: 'text', categoria: 'email', descricao: 'Email remetente' },
+
+    // Engenharia
+    { chave: 'engenharia_compras_emails', valor: 'compras@gmp.ind.br', tipo: 'text', categoria: 'engenharia', descricao: 'Destinatários (separados por vírgula) para solicitações de material de escritório' },
     
     // Backup
     { chave: 'backup_automatico', valor: 'false', tipo: 'boolean', categoria: 'backup', descricao: 'Backup automático' },
@@ -15325,6 +15328,70 @@ app.get('/api/engenharia/materiais-escritorio', authenticateToken, checkModulePe
   );
 });
 
+// Cadastro (admin/engenharia_projetos): listar todos
+app.get('/api/engenharia/materiais-escritorio/admin', authenticateToken, checkModulePermission('engenharia_projetos'), (req, res) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
+  db.all(
+    'SELECT id, nome, unidade, ativo, created_at FROM materiais_escritorio ORDER BY ativo DESC, nome',
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ materiais: rows || [] });
+    }
+  );
+});
+
+app.post('/api/engenharia/materiais-escritorio', authenticateToken, checkModulePermission('engenharia_projetos'), (req, res) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
+  const { nome, unidade, ativo } = req.body || {};
+  const n = String(nome || '').trim();
+  if (!n) return res.status(400).json({ error: 'Nome é obrigatório' });
+  const u = String(unidade || 'un').trim() || 'un';
+  const a = ativo === 0 || ativo === false ? 0 : 1;
+  db.run(
+    'INSERT INTO materiais_escritorio (nome, unidade, ativo) VALUES (?, ?, ?)',
+    [n, u, a],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID, nome: n, unidade: u, ativo: a });
+    }
+  );
+});
+
+app.put('/api/engenharia/materiais-escritorio/:id', authenticateToken, checkModulePermission('engenharia_projetos'), (req, res) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
+  const id = parseInt(req.params.id, 10);
+  const { nome, unidade } = req.body || {};
+  const n = String(nome || '').trim();
+  if (!id) return res.status(400).json({ error: 'ID inválido' });
+  if (!n) return res.status(400).json({ error: 'Nome é obrigatório' });
+  const u = String(unidade || 'un').trim() || 'un';
+  db.run(
+    'UPDATE materiais_escritorio SET nome = ?, unidade = ? WHERE id = ?',
+    [n, u, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Atualizado' });
+    }
+  );
+});
+
+app.patch('/api/engenharia/materiais-escritorio/:id/ativo', authenticateToken, checkModulePermission('engenharia_projetos'), (req, res) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
+  const id = parseInt(req.params.id, 10);
+  const { ativo } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'ID inválido' });
+  const a = ativo === 0 || ativo === false ? 0 : 1;
+  db.run(
+    'UPDATE materiais_escritorio SET ativo = ? WHERE id = ?',
+    [a, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Atualizado' });
+    }
+  );
+});
+
 app.post('/api/engenharia/solicitacoes-materiais-escritorio', authenticateToken, checkModulePermission('engenharia'), async (req, res) => {
   try {
     const usuarioId = req.user?.id;
@@ -15389,7 +15456,17 @@ app.post('/api/engenharia/solicitacoes-materiais-escritorio', authenticateToken,
       );
     });
 
-    const comprasEmail = 'compras@gmp.ind.br';
+    const comprasCfg = await new Promise((resolve) => {
+      db.get('SELECT valor FROM configuracoes WHERE chave = ?', ['engenharia_compras_emails'], (err, row) => {
+        if (err) return resolve(null);
+        resolve(row?.valor || null);
+      });
+    });
+    const comprasEmails = String(comprasCfg || 'compras@gmp.ind.br')
+      .split(/[;,]/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const comprasTo = comprasEmails.length ? comprasEmails.join(', ') : 'compras@gmp.ind.br';
     const userEmail = (userRow?.email || '').trim();
     const solicitanteNome = userRow?.nome || userEmail || `Usuário ${usuarioId}`;
 
@@ -15421,7 +15498,7 @@ app.post('/api/engenharia/solicitacoes-materiais-escritorio', authenticateToken,
 
     // Enviar para compras e cc para usuário (se tiver email)
     await sendEmail({
-      to: comprasEmail,
+      to: comprasTo,
       cc: userEmail || undefined,
       subject,
       html,

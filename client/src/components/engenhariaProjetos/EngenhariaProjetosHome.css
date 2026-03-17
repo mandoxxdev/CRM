@@ -1,0 +1,64 @@
+.engp {
+  padding: 28px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.engp-header h1 {
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+
+.engp-header p {
+  margin: 0 0 18px 0;
+  opacity: 0.85;
+}
+
+.engp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.engp-card {
+  text-align: left;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 18px;
+  padding: 18px;
+  background: radial-gradient(1200px 400px at 10% 0%, rgba(13, 43, 74, 0.10), rgba(255,255,255,0.92)),
+              linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.86));
+  box-shadow: 0 18px 45px rgba(0,0,0,0.08);
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.engp-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 60px rgba(0,0,0,0.10);
+}
+
+.engp-card-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(13, 43, 74, 0.10);
+  color: #0d2b4a;
+  margin-bottom: 10px;
+}
+
+.engp-card-icon--alt {
+  background: rgba(255, 107, 53, 0.12);
+  color: #ff6b35;
+}
+
+.engp-card h3 {
+  margin: 0 0 6px 0;
+}
+
+.engp-card p {
+  margin: 0;
+  opacity: 0.82;
+}
+
