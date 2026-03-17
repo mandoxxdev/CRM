@@ -2908,9 +2908,18 @@ app.post('/familias', authenticateToken, (req, res) => {
 });
 
 // ========== ROTAS DE USUÁRIOS ==========
-// Lista apenas usuários com acesso ao módulo Comercial (para filtros do comercial: responsáveis)
+// Lista apenas usuários com acesso ao módulo Comercial (para filtros do comercial: responsáveis).
+// Regra: só aparecem quem tem permissão explícita ao módulo (direta ou via grupo) e, se não for admin, mesmo setor.
+function buildSetorCondition(isAdmin, setorParam) {
+  if (isAdmin) return { sql: '', params: [] };
+  const s = (setorParam != null && setorParam !== '') ? String(setorParam).trim() : '';
+  return {
+    sql: `AND LOWER(TRIM(COALESCE(u.setor, ''))) = LOWER(?)`,
+    params: [s]
+  };
+}
+
 app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
-  // Contexto do logado (para isolamento por setor)
   db.get(
     `SELECT id, role, ativo, setor FROM usuarios WHERE id = ? LIMIT 1`,
     [req.user.id],
@@ -2920,16 +2929,20 @@ app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
       if (!ctxUser.ativo) return res.status(403).json({ error: 'Usuário inativo' });
 
       const isAdmin = ctxUser.role === 'admin';
-      const whereSetor = isAdmin ? '' : `AND COALESCE(u.setor, '') = COALESCE(?, '')`;
+      const setorCond = buildSetorCondition(isAdmin, ctxUser.setor);
 
       const sql = `
         SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.created_at
         FROM usuarios u
         WHERE u.ativo = 1
-        ${whereSetor}
+        ${setorCond.sql}
         AND (
           u.role = 'admin'
-          OR NOT EXISTS (SELECT 1 FROM usuarios_grupos ug WHERE ug.usuario_id = u.id)
+          OR EXISTS (
+            SELECT 1 FROM permissoes p
+            WHERE p.usuario_id = u.id AND (p.grupo_id IS NULL OR p.grupo_id = 0)
+            AND p.modulo = 'comercial' AND p.permissao = 1
+          )
           OR EXISTS (
             SELECT 1 FROM usuarios_grupos ug
             INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = 'comercial' AND p.permissao = 1
@@ -2938,11 +2951,9 @@ app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
         )
         ORDER BY u.nome`;
 
-      const params = isAdmin ? [] : [ctxUser.setor || ''];
+      const params = setorCond.params;
       db.all(sql, params, (err, rows) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
+        if (err) return res.status(500).json({ error: err.message });
         return res.json(rows || []);
       });
     }
@@ -3077,11 +3088,11 @@ app.get('/api/usuarios/filtrar', authenticateToken, (req, res) => {
   );
 });
 
-// Lista usuários com acesso a um módulo (para filtros de responsável por módulo)
-// Módulos: comercial, compras, financeiro, operacional, administrativo, admin
+// Lista usuários com acesso a um módulo (para filtros de responsável por módulo).
+// Só retorna quem tem permissão explícita ao módulo (direta ou via grupo) e, se não for admin, mesmo setor.
+// Módulos: comercial, compras, financeiro, operacional, administrativo, admin, engenharia, engenharia_projetos
 app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
   const { modulo } = req.params;
-  // Contexto do logado (para isolamento por setor)
   db.get(
     `SELECT id, role, ativo, setor FROM usuarios WHERE id = ? LIMIT 1`,
     [req.user.id],
@@ -3091,23 +3102,19 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
       if (!ctxUser.ativo) return res.status(403).json({ error: 'Usuário inativo' });
 
       const isAdmin = ctxUser.role === 'admin';
-      const whereSetor = isAdmin ? '' : `AND COALESCE(u.setor, '') = COALESCE(?, '')`;
+      const setorCond = buildSetorCondition(isAdmin, ctxUser.setor);
 
       const sql = `
         SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.created_at
         FROM usuarios u
         WHERE u.ativo = 1
-        ${whereSetor}
+        ${setorCond.sql}
         AND (
           u.role = 'admin'
           OR EXISTS (
             SELECT 1 FROM permissoes p
             WHERE p.usuario_id = u.id AND (p.grupo_id IS NULL OR p.grupo_id = 0)
             AND p.modulo = ? AND p.permissao = 1
-          )
-          OR (
-            NOT EXISTS (SELECT 1 FROM usuarios_grupos ug WHERE ug.usuario_id = u.id)
-            AND ? = 'comercial'
           )
           OR EXISTS (
             SELECT 1 FROM usuarios_grupos ug
@@ -3117,14 +3124,10 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
         )
         ORDER BY u.nome`;
 
-      const params = isAdmin
-        ? [modulo, modulo, modulo]
-        : [ctxUser.setor || '', modulo, modulo, modulo];
+      const params = [...setorCond.params, modulo, modulo];
 
       db.all(sql, params, (err, rows) => {
-        if (err) {
-          return res.status(500).json({ error: err.message });
-        }
+        if (err) return res.status(500).json({ error: err.message });
         return res.json(rows || []);
       });
     }
