@@ -2266,6 +2266,83 @@ function checkModulePermission(requiredModule) {
   };
 }
 
+// Middleware: permite acesso se usuário tiver permissão em QUALQUER módulo da lista.
+// Útil para módulos "irmãos" que compartilham endpoints (ex: engenharia e engenharia_projetos).
+function checkAnyModulePermission(requiredModules) {
+  const mods = Array.isArray(requiredModules) ? requiredModules.filter(Boolean) : [];
+  if (mods.length === 0) return checkModulePermission('comercial');
+
+  return (req, res, next) => {
+    if (req.user.role === 'admin') {
+      return next();
+    }
+
+    const userId = req.user.id;
+    const placeholders = mods.map(() => '?').join(',');
+
+    // 1) Permissão direta do usuário (usuario_id preenchido, grupo_id NULL)
+    db.get(
+      `SELECT 1 FROM permissoes
+       WHERE usuario_id = ? AND (grupo_id IS NULL OR grupo_id = 0)
+       AND modulo IN (${placeholders}) AND permissao = 1 LIMIT 1`,
+      [userId, ...mods],
+      (err, directRow) => {
+        if (err) {
+          console.error('Erro ao verificar permissão direta (any):', err);
+          return res.status(500).json({ error: 'Erro ao verificar permissões' });
+        }
+        if (directRow) {
+          return next();
+        }
+
+        // 2) Verificar permissão via grupos
+        db.all(
+          `SELECT gp.id FROM grupos_permissoes gp
+           INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
+           WHERE ug.usuario_id = ? AND gp.ativo = 1`,
+          [userId],
+          (err2, grupos) => {
+            if (err2) {
+              console.error('Erro ao verificar permissões (any):', err2);
+              return res.status(500).json({ error: 'Erro ao verificar permissões' });
+            }
+
+            // Se não tem grupos, apenas comercial por padrão
+            if (!grupos || grupos.length === 0) {
+              if (mods.includes('comercial')) {
+                return next();
+              }
+              registrarTentativaAcessoNegado(req, mods.join('|'));
+              return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: mods });
+            }
+
+            const grupoIds = grupos.map(g => g.id);
+            const gPlaceholders = grupoIds.map(() => '?').join(',');
+
+            db.get(
+              `SELECT COUNT(*) as count FROM permissoes
+               WHERE grupo_id IN (${gPlaceholders})
+               AND modulo IN (${placeholders}) AND permissao = 1`,
+              [...grupoIds, ...mods],
+              (err3, row) => {
+                if (err3) {
+                  console.error('Erro ao verificar permissões (any):', err3);
+                  return res.status(500).json({ error: 'Erro ao verificar permissões' });
+                }
+                if (row && row.count > 0) {
+                  return next();
+                }
+                registrarTentativaAcessoNegado(req, mods.join('|'));
+                return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: mods });
+              }
+            );
+          }
+        );
+      }
+    );
+  };
+}
+
 async function getEmailConfig() {
   // HARD CODED (solicitado pelo usuário): SMTP Locaweb fixo no código
   // Observação: isso grava credenciais no repositório/imagem. Mantido por solicitação explícita.
@@ -2833,26 +2910,43 @@ app.post('/familias', authenticateToken, (req, res) => {
 // ========== ROTAS DE USUÁRIOS ==========
 // Lista apenas usuários com acesso ao módulo Comercial (para filtros do comercial: responsáveis)
 app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
-  const sql = `
-    SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.created_at
-    FROM usuarios u
-    WHERE u.ativo = 1
-    AND (
-      u.role = 'admin'
-      OR NOT EXISTS (SELECT 1 FROM usuarios_grupos ug WHERE ug.usuario_id = u.id)
-      OR EXISTS (
-        SELECT 1 FROM usuarios_grupos ug
-        INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = 'comercial' AND p.permissao = 1
-        WHERE ug.usuario_id = u.id
-      )
-    )
-    ORDER BY u.nome`;
-  db.all(sql, [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+  // Contexto do logado (para isolamento por setor)
+  db.get(
+    `SELECT id, role, ativo, setor FROM usuarios WHERE id = ? LIMIT 1`,
+    [req.user.id],
+    (ctxErr, ctxUser) => {
+      if (ctxErr) return res.status(500).json({ error: ctxErr.message });
+      if (!ctxUser) return res.status(401).json({ error: 'Usuário não encontrado' });
+      if (!ctxUser.ativo) return res.status(403).json({ error: 'Usuário inativo' });
+
+      const isAdmin = ctxUser.role === 'admin';
+      const whereSetor = isAdmin ? '' : `AND COALESCE(u.setor, '') = COALESCE(?, '')`;
+
+      const sql = `
+        SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.created_at
+        FROM usuarios u
+        WHERE u.ativo = 1
+        ${whereSetor}
+        AND (
+          u.role = 'admin'
+          OR NOT EXISTS (SELECT 1 FROM usuarios_grupos ug WHERE ug.usuario_id = u.id)
+          OR EXISTS (
+            SELECT 1 FROM usuarios_grupos ug
+            INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = 'comercial' AND p.permissao = 1
+            WHERE ug.usuario_id = u.id
+          )
+        )
+        ORDER BY u.nome`;
+
+      const params = isAdmin ? [] : [ctxUser.setor || ''];
+      db.all(sql, params, (err, rows) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+        return res.json(rows || []);
+      });
     }
-    return res.json(rows || []);
-  });
+  );
 });
 
 // ======= FILTRO PREMIUM DE USUÁRIOS (flags + setor + contexto do logado) =======
@@ -2987,34 +3081,54 @@ app.get('/api/usuarios/filtrar', authenticateToken, (req, res) => {
 // Módulos: comercial, compras, financeiro, operacional, administrativo, admin
 app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
   const { modulo } = req.params;
-  const sql = `
-    SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.created_at
-    FROM usuarios u
-    WHERE u.ativo = 1
-    AND (
-      u.role = 'admin'
-      OR EXISTS (
-        SELECT 1 FROM permissoes p
-        WHERE p.usuario_id = u.id AND (p.grupo_id IS NULL OR p.grupo_id = 0)
-        AND p.modulo = ? AND p.permissao = 1
-      )
-      OR (
-        NOT EXISTS (SELECT 1 FROM usuarios_grupos ug WHERE ug.usuario_id = u.id)
-        AND ? = 'comercial'
-      )
-      OR EXISTS (
-        SELECT 1 FROM usuarios_grupos ug
-        INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = ? AND p.permissao = 1
-        WHERE ug.usuario_id = u.id
-      )
-    )
-    ORDER BY u.nome`;
-  db.all(sql, [modulo, modulo, modulo], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+  // Contexto do logado (para isolamento por setor)
+  db.get(
+    `SELECT id, role, ativo, setor FROM usuarios WHERE id = ? LIMIT 1`,
+    [req.user.id],
+    (ctxErr, ctxUser) => {
+      if (ctxErr) return res.status(500).json({ error: ctxErr.message });
+      if (!ctxUser) return res.status(401).json({ error: 'Usuário não encontrado' });
+      if (!ctxUser.ativo) return res.status(403).json({ error: 'Usuário inativo' });
+
+      const isAdmin = ctxUser.role === 'admin';
+      const whereSetor = isAdmin ? '' : `AND COALESCE(u.setor, '') = COALESCE(?, '')`;
+
+      const sql = `
+        SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.created_at
+        FROM usuarios u
+        WHERE u.ativo = 1
+        ${whereSetor}
+        AND (
+          u.role = 'admin'
+          OR EXISTS (
+            SELECT 1 FROM permissoes p
+            WHERE p.usuario_id = u.id AND (p.grupo_id IS NULL OR p.grupo_id = 0)
+            AND p.modulo = ? AND p.permissao = 1
+          )
+          OR (
+            NOT EXISTS (SELECT 1 FROM usuarios_grupos ug WHERE ug.usuario_id = u.id)
+            AND ? = 'comercial'
+          )
+          OR EXISTS (
+            SELECT 1 FROM usuarios_grupos ug
+            INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = ? AND p.permissao = 1
+            WHERE ug.usuario_id = u.id
+          )
+        )
+        ORDER BY u.nome`;
+
+      const params = isAdmin
+        ? [modulo, modulo, modulo]
+        : [ctxUser.setor || '', modulo, modulo, modulo];
+
+      db.all(sql, params, (err, rows) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+        return res.json(rows || []);
+      });
     }
-    return res.json(rows || []);
-  });
+  );
 });
 
 app.get('/api/usuarios', authenticateToken, (req, res) => {
@@ -15696,7 +15810,7 @@ app.get('/api/configuracoes', authenticateToken, (req, res) => {
 });
 
 // ========== ENGENHARIA - SOLICITAÇÃO DE MATERIAL DE ESCRITÓRIO ==========
-app.get('/api/engenharia/materiais-escritorio', authenticateToken, checkModulePermission('engenharia'), (req, res) => {
+app.get('/api/engenharia/materiais-escritorio', authenticateToken, checkAnyModulePermission(['engenharia', 'engenharia_projetos']), (req, res) => {
   db.all(
     `SELECT 
        id, nome, descricao, unidade,
