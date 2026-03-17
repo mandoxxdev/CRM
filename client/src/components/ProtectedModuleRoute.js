@@ -20,6 +20,8 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
     if (path.startsWith('/fabrica')) return 'operacional';
     if (path.startsWith('/configuracoes')) return 'administrativo';
     if (path.startsWith('/admin')) return 'admin';
+    if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
+    if (path.startsWith('/engenharia')) return 'engenharia';
     if (path.startsWith('/comercial') || path.startsWith('/comercial/clientes') || path.startsWith('/comercial/oportunidades') ||
         path.startsWith('/comercial/propostas') || path.startsWith('/comercial/produtos') || path.startsWith('/comercial/projetos') ||
         path.startsWith('/comercial/atividades') || path.startsWith('/comercial/maquinas-vendidas') ||

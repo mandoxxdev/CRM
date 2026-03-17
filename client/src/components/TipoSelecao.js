@@ -71,6 +71,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       rota: '/engenharia'
     },
     {
+      id: 'engenharia_projetos',
+      nome: 'ENGENHARIA / PROJETOS',
+      descricao: 'Solicitações, cadastros e rotinas (cesta de compras)',
+      icon: FiBriefcase,
+      modulo: 'engenharia_projetos',
+      rota: '/engenharia-projetos'
+    },
+    {
       id: 'admin',
       nome: 'ADMIN',
       descricao: 'Gestão de usuários e permissões',
