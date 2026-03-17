@@ -5,7 +5,10 @@
   right: 0;
   bottom: 0;
   z-index: 10000;
-  background: radial-gradient(circle at top left, #eff6ff 0%, #e2e8f0 35%, #f8fafc 100%);
+  /* Evita "faixa branca" em telas altas: fundo contínuo com base levemente mais escura */
+  background: radial-gradient(circle at top left, #eff6ff 0%, #e2e8f0 38%, #eef2f7 100%);
+  background-attachment: fixed;
+  background-color: #eef2f7;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -14,6 +17,8 @@
   overflow-x: hidden;
   padding: 1.5rem 2rem 2rem;
   position: relative;
+  height: 100vh;
+  min-height: 100vh;
 }
 
 [data-theme="dark"] .tipo-selecao-container {
