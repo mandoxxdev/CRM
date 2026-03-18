@@ -11171,6 +11171,24 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         }
       }
 
+      const normKey = (s) => String(s || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '_');
+
+      const getSpecValue = (obj, key) => {
+        if (!obj || typeof obj !== 'object') return '';
+        if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
+        const k2 = String(key || '').trim();
+        if (k2 && Object.prototype.hasOwnProperty.call(obj, k2)) return obj[k2];
+        const target = normKey(key);
+        if (!target) return '';
+        const foundKey = Object.keys(obj).find((k) => normKey(k) === target);
+        return foundKey ? obj[foundKey] : '';
+      };
+
       const variaveisLabelsRaw = config.variaveis_proposta_labels || {};
       const variaveisLabels = parseJsonMaybe(variaveisLabelsRaw, (variaveisLabelsRaw && typeof variaveisLabelsRaw === 'object') ? variaveisLabelsRaw : {});
       const variaveisList = getVariaveisListForFamilia(it.familia_produto || it.produto_familia || it.familia || '');
@@ -11182,7 +11200,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               const meta = variaveisLabels[k] || {};
               const label = (meta && meta.nome) ? meta.nome : k;
               const sufixo = (meta && meta.sufixo) ? meta.sufixo : '';
-              const rawVal = specs && typeof specs === 'object' ? specs[k] : '';
+              const rawVal = getSpecValue(specs, k);
               const displayVal = (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '')
                 ? String(rawVal).trim()
                 : '';
@@ -11648,9 +11666,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     .proposal-document { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
     .proposal-page { width: 210mm; min-height: 297mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; page-break-after: always; break-after: page; }
-    .page-header { flex: 0 0 auto; width: 100%; min-height: 28mm; padding: 0; margin: 0; }
+    /* Header/footers com altura fixa para repetir corretamente em todas as páginas */
+    .page-header { flex: 0 0 auto; width: 100%; height: 28mm; padding: 0; margin: 0; }
     .page-content { flex: 1 1 auto; width: 100%; padding: 10mm 14mm 10mm 14mm; margin: 0; overflow: hidden; }
-    .page-footer { flex: 0 0 auto; width: 100%; min-height: 18mm; padding: 0; margin: 0; }
+    .page-footer { flex: 0 0 auto; width: 100%; height: 18mm; padding: 0; margin: 0; }
 
     .stack-xs, .stack-sm, .stack-md, .stack-lg, .stack-xl { display: flex; flex-direction: column; }
     .stack-xs { gap: 4px; } .stack-sm { gap: 8px; } .stack-md { gap: 12px; } .stack-lg { gap: 16px; } .stack-xl { gap: 24px; }
@@ -11743,22 +11762,27 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .page-footer-strong { color: var(--blue-900); font-weight: 700; }
     .page-footer-right { text-align: right; white-space: nowrap; color: var(--blue-900); font-weight: 700; }
 
-    /* Capa estilo "ondas" (referência enviada) */
-    .cover-hero {
-      height: 100%;
-      min-height: 28mm;
-      position: relative;
-      overflow: hidden;
-      padding: 10mm 14mm;
-      background: #fff;
-      color: var(--ink);
-    }
-    .cover-wave {
+    /* Capa estilo "ondas" (referência enviada) — página inteira */
+    .cover-page { position: relative; overflow: hidden; background: #fff; }
+    .cover-page .cover-wave {
       position: absolute;
       inset: 0;
       pointer-events: none;
+      z-index: 0;
     }
-    .cover-wave svg { width: 100%; height: 100%; display: block; }
+    .cover-page .cover-wave svg { width: 100%; height: 100%; display: block; }
+    .cover-page .page-header,
+    .cover-page .page-content,
+    .cover-page .page-footer { position: relative; z-index: 2; }
+
+    .cover-hero {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      padding: 10mm 14mm 0 14mm;
+      color: var(--ink);
+    }
     .cover-topbar {
       position: relative;
       z-index: 2;
@@ -11790,6 +11814,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .cover-sub { font-size: 11pt; color: var(--blue-700); margin: 0 0 8px 0; }
     .cover-meta { font-size: 10pt; color: var(--muted); margin: 0; }
 
+    .cover-panels { display: flex; flex-direction: column; gap: 10mm; }
+    .cover-panel {
+      background: rgba(255,255,255,0.92);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8mm 10mm;
+      box-shadow: 0 14px 34px rgba(10,42,79,0.10);
+    }
+    .cover-panel h2 { margin-bottom: 6px; }
+
     .avoid-break { break-inside: avoid; page-break-inside: avoid; }
     .allow-break { break-inside: auto; page-break-inside: auto; }
 
@@ -11811,28 +11845,27 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
   ${printBar}
   <div class="proposal-document" id="proposalDocument">
     <section class="proposal-page cover-page">
+      <div class="cover-wave" aria-hidden="true">
+        <svg viewBox="0 0 1000 1400" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- canto superior direito (marinho) -->
+          <path d="M650,0 C770,150 860,140 1000,0 L1000,0 L1000,420 C880,360 760,350 650,420 C585,462 545,520 470,560 C360,620 250,610 0,540 L0,0 Z"
+                fill="var(--navy-950)" opacity="0.92"/>
+          <!-- onda superior (aqua) -->
+          <path d="M1000,360 C860,300 760,310 650,360 C560,402 505,470 420,520 C300,590 185,575 0,520 L0,660 C240,720 370,720 500,670 C610,628 660,560 740,520 C830,470 910,460 1000,500 Z"
+                fill="var(--aqua-500)" opacity="0.92"/>
+          <!-- separador (mist) -->
+          <path d="M1000,430 C870,380 760,390 650,430 C560,465 505,530 420,580 C300,650 180,630 0,570 L0,650 C210,720 360,730 510,680 C620,642 670,570 760,535 C850,500 920,500 1000,540 Z"
+                fill="var(--mist-200)" opacity="0.95"/>
+          <!-- onda inferior (aqua claro) -->
+          <path d="M0,1040 C220,960 390,960 520,1010 C640,1055 700,1130 800,1170 C885,1203 940,1200 1000,1185 L1000,1400 L0,1400 Z"
+                fill="var(--aqua-300)" opacity="0.92"/>
+          <!-- base inferior (marinho) -->
+          <path d="M0,1120 C230,1040 420,1040 560,1100 C700,1160 760,1250 860,1295 C920,1325 960,1330 1000,1320 L1000,1400 L0,1400 Z"
+                fill="var(--navy-950)" opacity="0.92"/>
+        </svg>
+      </div>
       <header class="page-header">
         <div class="cover-hero">
-          <div class="cover-wave" aria-hidden="true">
-            <svg viewBox="0 0 1000 1400" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- canto superior direito (marinho) -->
-              <path d="M650,0 C770,150 860,140 1000,0 L1000,0 L1000,420 C880,360 760,350 650,420 C585,462 545,520 470,560 C360,620 250,610 0,540 L0,0 Z"
-                    fill="var(--navy-950)" opacity="0.92"/>
-              <!-- onda superior (aqua) -->
-              <path d="M1000,360 C860,300 760,310 650,360 C560,402 505,470 420,520 C300,590 185,575 0,520 L0,660 C240,720 370,720 500,670 C610,628 660,560 740,520 C830,470 910,460 1000,500 Z"
-                    fill="var(--aqua-500)" opacity="0.92"/>
-              <!-- separador (mist) -->
-              <path d="M1000,430 C870,380 760,390 650,430 C560,465 505,530 420,580 C300,650 180,630 0,570 L0,650 C210,720 360,730 510,680 C620,642 670,570 760,535 C850,500 920,500 1000,540 Z"
-                    fill="var(--mist-200)" opacity="0.95"/>
-              <!-- onda inferior (aqua claro) -->
-              <path d="M0,1040 C220,960 390,960 520,1010 C640,1055 700,1130 800,1170 C885,1203 940,1200 1000,1185 L1000,1400 L0,1400 Z"
-                    fill="var(--aqua-300)" opacity="0.92"/>
-              <!-- base inferior (marinho) -->
-              <path d="M0,1120 C230,1040 420,1040 560,1100 C700,1160 760,1250 860,1295 C920,1325 960,1330 1000,1320 L1000,1400 L0,1400 Z"
-                    fill="var(--navy-950)" opacity="0.92"/>
-            </svg>
-          </div>
-
           <div class="cover-topbar">
             <div class="cover-kicker">GMP INDUSTRIAIS</div>
             <div class="cover-logos">
@@ -11849,45 +11882,50 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </header>
       <main class="page-content stack-lg">
-        <div class="block stack-sm avoid-break">
-          <h1>${titulo}</h1>
-          <p class="muted">Documento gerado para apresentação comercial. Emissão: ${dataEmissao || '—'} • Validade: ${dataValidade || '—'}.</p>
-        </div>
-        <div class="block stack-sm avoid-break">
-          <h2>Dados do cliente</h2>
-          <table class="table">
-            <tbody>
-              <tr>
-                <th>Cliente</th>
-                <td>${clienteNome}</td>
-              </tr>
-              <tr>
-                <th>CNPJ</th>
-                <td>${clienteCnpj}</td>
-              </tr>
-              <tr>
-                <th>Contato</th>
-                <td>${esc(proposta.cliente_contato || '—')}</td>
-              </tr>
-              <tr>
-                <th>E-mail</th>
-                <td>${esc(proposta.cliente_email || '—')}</td>
-              </tr>
-              <tr>
-                <th>Telefone</th>
-                <td>${esc(proposta.cliente_telefone || '—')}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="block stack-sm avoid-break">
-          <h2>Resumo</h2>
-          <p>${esc(proposta.descricao || '—')}</p>
-        </div>
-        <div class="block stack-sm avoid-break">
-          <h2>Responsável</h2>
-          <p><strong>${responsavelNome}</strong></p>
-          <p class="muted">${esc(proposta.responsavel_email || '')}</p>
+        <div class="cover-panels">
+          <div class="cover-panel avoid-break">
+            <h1>${titulo}</h1>
+            <p class="muted">Documento gerado para apresentação comercial.</p>
+          </div>
+
+          <div class="cover-panel avoid-break">
+            <h2>Dados do cliente</h2>
+            <table class="table">
+              <tbody>
+                <tr>
+                  <th>Cliente</th>
+                  <td>${clienteNome}</td>
+                </tr>
+                <tr>
+                  <th>CNPJ</th>
+                  <td>${clienteCnpj}</td>
+                </tr>
+                <tr>
+                  <th>Contato</th>
+                  <td>${esc(proposta.cliente_contato || '—')}</td>
+                </tr>
+                <tr>
+                  <th>E-mail</th>
+                  <td>${esc(proposta.cliente_email || '—')}</td>
+                </tr>
+                <tr>
+                  <th>Telefone</th>
+                  <td>${esc(proposta.cliente_telefone || '—')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="cover-panel avoid-break">
+            <h2>Resumo</h2>
+            <p>${esc(proposta.descricao || '—')}</p>
+          </div>
+
+          <div class="cover-panel avoid-break">
+            <h2>Responsável</h2>
+            <p><strong>${responsavelNome}</strong></p>
+            <p class="muted">${esc(proposta.responsavel_email || '')}</p>
+          </div>
         </div>
       </main>
       <footer class="page-footer">
@@ -11998,6 +12036,24 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         const fits = () => pageContent.scrollHeight <= pageContent.clientHeight;
         const addNode = (node) => { stack.appendChild(node); };
 
+        const wouldOverflowIfAdd = (node) => {
+          addNode(node);
+          const overflow = !fits();
+          stack.removeChild(node);
+          return overflow;
+        };
+
+        const getKeepPair = (blockEl) => {
+          // Regra: manter junto "título + primeiro bloco de texto"
+          // Heurística: primeiro heading (h2/h3/h4) + próximo elemento (p/ul/ol/table/div)
+          const heading = blockEl.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6');
+          if (!heading) return null;
+          let next = heading.nextElementSibling;
+          while (next && next.tagName === 'BR') next = next.nextElementSibling;
+          if (!next) return null;
+          return { heading, next };
+        };
+
         for (const block of blocks) {
           ensurePage();
           const isAvoid = block.classList.contains('avoid-break');
@@ -12025,6 +12081,22 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             }
             continue;
           }
+          // Se faltar espaço para título+primeiro texto, empurra o tópico para próxima página
+          const keepPair = getKeepPair(block);
+          if (keepPair) {
+            const probe = document.createElement('div');
+            probe.className = 'keep-probe';
+            probe.style.display = 'block';
+            probe.style.margin = '0';
+            probe.style.padding = '0';
+            probe.appendChild(keepPair.heading.cloneNode(true));
+            probe.appendChild(keepPair.next.cloneNode(true));
+            if (wouldOverflowIfAdd(probe)) {
+              page = null;
+              ensurePage();
+            }
+          }
+
           const node = block.cloneNode(true);
           addNode(node);
           if (!fits()) {
