@@ -269,6 +269,12 @@ if (!fs.existsSync(uploadsFooterDir)) {
   fs.mkdirSync(uploadsFooterDir, { recursive: true });
 }
 
+// Configurar diretório de uploads de imagem da CAPA (área azul/onda)
+const uploadsCoverDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'covers');
+if (!fs.existsSync(uploadsCoverDir)) {
+  fs.mkdirSync(uploadsCoverDir, { recursive: true });
+}
+
 // Diretório para contrato anexo (Word/PDF) – acompanha a proposta
 const uploadsContratoDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'contrato');
 if (!fs.existsSync(uploadsContratoDir)) {
@@ -620,6 +626,29 @@ const uploadFooter = multer({
     } else {
       cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
     }
+  }
+});
+
+// Storage específico para imagem de CAPA (onda azul)
+const storageCover = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadsCoverDir); },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext);
+    const filename = `cover_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
+    cb(null, filename);
+  }
+});
+const uploadCover = multer({
+  storage: storageCover,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) return cb(null, true);
+    cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
   }
 });
 
@@ -1732,6 +1761,7 @@ function executeMigrations(callback) {
     { nome: 'is_padrao', tipo: 'INTEGER DEFAULT 0' },
     { nome: 'header_image_url', tipo: 'TEXT' },
     { nome: 'footer_image_url', tipo: 'TEXT' },
+    { nome: 'cover_image_url', tipo: 'TEXT' },
     { nome: 'contrato_anexo_url', tipo: 'TEXT' },
     { nome: 'variaveis_proposta_tecnica', tipo: 'TEXT' },
     { nome: 'variaveis_proposta_por_familia', tipo: 'TEXT' },
@@ -7772,7 +7802,8 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
     
     await page.setContent(html, {
-      waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
+      // Com imagens embedadas em base64, não precisamos depender de networkidle0 (evita travas no primeiro PDF)
+      waitUntil: ['load', 'domcontentloaded'],
       timeout: 60000
     });
     
@@ -8297,6 +8328,28 @@ app.post('/api/proposta-template/footer-image', authenticateToken, uploadFooter.
           filename: req.file.filename,
           url: `/api/uploads/footers/${req.file.filename}`
         });
+      }
+    );
+  });
+});
+
+// Upload de imagem de CAPA (área azul/onda)
+app.post('/api/proposta-template/cover-image', authenticateToken, uploadCover.single('coverImage'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+  db.get('SELECT cover_image_url FROM proposta_template_config ORDER BY id DESC LIMIT 1', [], (err, config) => {
+    if (config && config.cover_image_url) {
+      const oldImagePath = path.join(uploadsCoverDir, config.cover_image_url);
+      if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
+    }
+    db.run(
+      'UPDATE proposta_template_config SET cover_image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = (SELECT id FROM proposta_template_config ORDER BY id DESC LIMIT 1)',
+      [req.file.filename],
+      (e2) => {
+        if (e2) {
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+          return res.status(500).json({ error: e2.message });
+        }
+        res.json({ message: 'Imagem de capa enviada com sucesso', filename: req.file.filename, url: `/api/uploads/covers/${req.file.filename}` });
       }
     );
   });
@@ -11020,6 +11073,28 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       : (process.env.API_URL || 'http://localhost:5000');
     const ts = Date.now();
 
+    const fileToDataUrl = (absPath) => {
+      try {
+        if (!absPath || !fs.existsSync(absPath)) return '';
+        const ext = path.extname(absPath).toLowerCase().replace('.', '');
+        const mime = ext === 'png' ? 'image/png'
+          : ext === 'webp' ? 'image/webp'
+          : ext === 'gif' ? 'image/gif'
+          : ext === 'svg' ? 'image/svg+xml'
+          : 'image/jpeg';
+        const buf = fs.readFileSync(absPath);
+        return `data:${mime};base64,${buf.toString('base64')}`;
+      } catch (_) {
+        return '';
+      }
+    };
+
+    const uploadToDataUrl = (dirAbs, filename) => {
+      const f = String(filename || '').trim();
+      if (!f) return '';
+      return fileToDataUrl(path.join(dirAbs, f));
+    };
+
     const esc = (v) => String(v ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -11039,23 +11114,58 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     else if (fs.existsSync(publicCBC2Path)) defaultCoverImage = 'CBC2.png';
 
     const coverImageURL = `${baseURL}/${defaultCoverImage}?t=${ts}`;
-    const logoGMP = (config.logo_url && String(config.logo_url).trim())
-      ? `${baseURL}/api/uploads/logos/${String(config.logo_url).trim()}?t=${ts}`
-      : `${baseURL}/logo-gmp.png?t=${ts}`;
+
+    const coverWaveImageUrl = (() => {
+      const f = (config.cover_image_url && String(config.cover_image_url).trim()) ? String(config.cover_image_url).trim() : '';
+      if (!f) return '';
+      if (forPdfServer) {
+        const data = uploadToDataUrl(uploadsCoverDir, f);
+        if (data) return data;
+      }
+      return `${baseURL}/api/uploads/covers/${encodeURIComponent(f)}?t=${ts}`;
+    })();
+
+    const coverSvgDefs = coverWaveImageUrl
+      ? `<defs>
+           <pattern id="coverImgPattern" patternUnits="userSpaceOnUse" x="0" y="0" width="1000" height="1400">
+             <image href="${coverWaveImageUrl}" x="0" y="0" width="1000" height="1400" preserveAspectRatio="xMidYMid slice" />
+           </pattern>
+         </defs>`
+      : '';
+    const coverNavyFill = coverWaveImageUrl ? 'url(#coverImgPattern)' : 'var(--navy-950)';
+    const logoGMP = (() => {
+      const f = (config.logo_url && String(config.logo_url).trim()) ? String(config.logo_url).trim() : '';
+      if (forPdfServer && f) {
+        const data = uploadToDataUrl(uploadsLogosDir, f);
+        if (data) return data;
+      }
+      return f ? `${baseURL}/api/uploads/logos/${encodeURIComponent(f)}?t=${ts}` : `${baseURL}/logo-gmp.png?t=${ts}`;
+    })();
+
     const headerImageURL = (config.header_image_url && String(config.header_image_url).trim())
-      ? `${baseURL}/api/uploads/headers/${String(config.header_image_url).trim()}?t=${ts}`
+      ? (forPdfServer
+          ? (uploadToDataUrl(uploadsHeaderDir, String(config.header_image_url).trim()) || `${baseURL}/api/uploads/headers/${encodeURIComponent(String(config.header_image_url).trim())}?t=${ts}`)
+          : `${baseURL}/api/uploads/headers/${encodeURIComponent(String(config.header_image_url).trim())}?t=${ts}`)
       : null;
     const footerImageURL = (config.footer_image_url && String(config.footer_image_url).trim())
-      ? `${baseURL}/api/uploads/footers/${String(config.footer_image_url).trim()}?t=${ts}`
+      ? (forPdfServer
+          ? (uploadToDataUrl(uploadsFooterDir, String(config.footer_image_url).trim()) || `${baseURL}/api/uploads/footers/${encodeURIComponent(String(config.footer_image_url).trim())}?t=${ts}`)
+          : `${baseURL}/api/uploads/footers/${encodeURIComponent(String(config.footer_image_url).trim())}?t=${ts}`)
       : null;
 
     const numero = esc(proposta.numero_proposta || 'N/A');
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
     const clienteNome = esc(proposta.razao_social || proposta.nome_fantasia || '—');
     const clienteCnpj = esc(proposta.cnpj || '—');
-    const clienteLogoUrl = (proposta.cliente_logo_url && String(proposta.cliente_logo_url).trim())
-      ? `${baseURL}/api/uploads/logos/${encodeURIComponent(String(proposta.cliente_logo_url).trim())}?t=${ts}`
-      : '';
+    const clienteLogoUrl = (() => {
+      const f = (proposta.cliente_logo_url && String(proposta.cliente_logo_url).trim()) ? String(proposta.cliente_logo_url).trim() : '';
+      if (!f) return '';
+      if (forPdfServer) {
+        const data = uploadToDataUrl(uploadsLogosDir, f);
+        if (data) return data;
+      }
+      return `${baseURL}/api/uploads/logos/${encodeURIComponent(f)}?t=${ts}`;
+    })();
     const responsavelNome = esc(proposta.responsavel_nome || '—');
     const dataEmissao = esc(totais.dataEmissao || '');
     const dataValidade = esc(totais.dataValidade || '');
@@ -11217,7 +11327,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         ? it.produto_imagem_base64
         : (() => {
             const file = String(it.produto_imagem || it.imagem || '').trim();
-            return file ? `${baseURL}/api/uploads/produtos/${encodeURIComponent(file)}?t=${ts}` : '';
+            if (!file) return '';
+            if (forPdfServer) {
+              const data = uploadToDataUrl(uploadsProdutosDir, file);
+              if (data) return data;
+            }
+            return `${baseURL}/api/uploads/produtos/${encodeURIComponent(file)}?t=${ts}`;
           })();
 
       const fotoHtml = produtoImagem
@@ -11506,9 +11621,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       <section class="block stack-md allow-break">
         <h3>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>
         <p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>
+      </section>
 
+      <section class="block stack-md allow-break">
         <div class="table-caption">Tabela de Preços</div>
-        <table class="table">
+        <table class="table" data-split-table="true">
           <thead>
             <tr>
               <th class="col-center">ITEM</th>
@@ -11526,14 +11643,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             </tr>
           </tbody>
         </table>
+      </section>
 
+      <section class="block stack-md allow-break">
         <p><strong>CONDIÇÃO DE PAGAMENTO:</strong> Primeira Parcela/Entrada – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p>
         <p>Segunda Parcela/Liberação – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p>
         <p>Terceira Parcela/Saldo – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p>
         <p>Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>
+      </section>
 
+      <section class="block stack-md allow-break">
         <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
-        <table class="table">
+        <table class="table" data-split-table="true">
           <thead>
             <tr>
               <th class="col-center">ITEM</th>
@@ -11557,10 +11678,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <tr><td class="col-center">12</td><td>Envasadora</td><td class="col-center">03451453</td><td class="col-center">ENVASADORA</td></tr>
           </tbody>
         </table>
+      </section>
 
+      <section class="block stack-md allow-break">
         <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
         <div class="table-caption">Tabela de Classificação Fiscal</div>
-        <table class="table">
+        <table class="table" data-split-table="true">
           <thead>
             <tr>
               <th class="col-center">NCM</th>
@@ -11575,7 +11698,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </table>
 
         <div class="table-caption">Tabela de Impostos e Alíquotas</div>
-        <table class="table">
+        <table class="table" data-split-table="true">
           <thead>
             <tr>
               <th class="col-center">NCM</th>
@@ -11618,6 +11741,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <li>Para outros produtos, os impostos e alíquotas deverão ser consultados caso a caso.</li>
           </ul>
         </div>
+      </section>
       </section>
 
       <section class="block stack-md allow-break">
@@ -11686,7 +11810,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       --line-strong: rgba(26,77,122,0.75);
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Arial, Calibri, Helvetica, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; }
+    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Arial, Calibri, Helvetica, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; }
     img { max-width: 100%; height: auto; display: block; }
 
     h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
@@ -11695,7 +11819,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     h1 { margin: 0 0 10px 0; font-size: 14pt; font-weight: 700; line-height: 1.15; }
     h2 { margin: 0 0 8px 0; font-size: 14pt; font-weight: 700; line-height: 1.15; }
     h3 { margin: 0 0 6px 0; font-size: 12pt; font-weight: 700; line-height: 1.15; }
-    p, li { margin: 0 0 6px 0; font-size: 11pt; line-height: 1.15; text-align: justify; }
+    p, li { margin: 0 0 6px 0; font-size: 11pt; line-height: 1.15; text-align: justify; text-transform: none; font-variant: normal; }
     ul, ol { padding-left: 16px; margin-bottom: 6px; }
 
     .proposal-document { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
@@ -11726,6 +11850,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       font-size: 11pt;
       border: 1px solid var(--line);
       color: var(--ink);
+      text-transform: none;
+      font-variant: normal;
     }
     th { text-align: left; background: var(--blue-100); font-weight: 700; color: var(--blue-900); }
     .table-caption { font-weight: 700; margin: 6px 0 6px 0; color: var(--blue-900); }
@@ -11890,9 +12016,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     <section class="proposal-page cover-page">
       <div class="cover-wave" aria-hidden="true">
         <svg viewBox="0 0 1000 1400" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          ${coverSvgDefs}
           <!-- canto superior direito (marinho) -->
           <path d="M650,0 C770,150 860,140 1000,0 L1000,0 L1000,420 C880,360 760,350 650,420 C585,462 545,520 470,560 C360,620 250,610 0,540 L0,0 Z"
-                fill="var(--navy-950)" opacity="0.92"/>
+                fill="${coverNavyFill}" opacity="0.92"/>
           <!-- onda superior (laranja) -->
           <path d="M1000,360 C860,300 760,310 650,360 C560,402 505,470 420,520 C300,590 185,575 0,520 L0,660 C240,720 370,720 500,670 C610,628 660,560 740,520 C830,470 910,460 1000,500 Z"
                 fill="var(--orange-500)" opacity="0.92"/>
@@ -11904,7 +12031,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
                 fill="var(--orange-200)" opacity="0.92"/>
           <!-- base inferior (marinho) -->
           <path d="M0,1120 C230,1040 420,1040 560,1100 C700,1160 760,1250 860,1295 C920,1325 960,1330 1000,1320 L1000,1400 L0,1400 Z"
-                fill="var(--navy-950)" opacity="0.92"/>
+                fill="${coverNavyFill}" opacity="0.92"/>
         </svg>
       </div>
       <header class="page-header">
@@ -16454,6 +16581,9 @@ app.use('/api/uploads/footers', (req, res, next) => {
   res.setHeader('Expires', '0');
   next();
 }, express.static(uploadsFooterDir));
+
+// ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGEM DE CAPA ==========
+app.use('/api/uploads/covers', express.static(uploadsCoverDir));
 
 // Contrato anexo (Word/PDF) – download para anexar à proposta
 app.use('/api/uploads/contrato', express.static(uploadsContratoDir));
