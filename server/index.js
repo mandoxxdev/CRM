@@ -11138,15 +11138,20 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       return f ? `${baseURL}/api/uploads/logos/${encodeURIComponent(f)}?t=${ts}` : `${baseURL}/logo-gmp.png?t=${ts}`;
     })();
 
+    // Header/Footer: sempre embedar em base64 para não depender de carregamento HTTP (evita sumir no 1o PDF).
     const headerImageURL = (config.header_image_url && String(config.header_image_url).trim())
-      ? (forPdfServer
-          ? (uploadToDataUrl(uploadsHeaderDir, String(config.header_image_url).trim()) || `${baseURL}/api/uploads/headers/${encodeURIComponent(String(config.header_image_url).trim())}?t=${ts}`)
-          : `${baseURL}/api/uploads/headers/${encodeURIComponent(String(config.header_image_url).trim())}?t=${ts}`)
+      ? (() => {
+          const f = String(config.header_image_url).trim();
+          const data = uploadToDataUrl(uploadsHeaderDir, f);
+          return data || `${baseURL}/api/uploads/headers/${encodeURIComponent(f)}?t=${ts}`;
+        })()
       : null;
     const footerImageURL = (config.footer_image_url && String(config.footer_image_url).trim())
-      ? (forPdfServer
-          ? (uploadToDataUrl(uploadsFooterDir, String(config.footer_image_url).trim()) || `${baseURL}/api/uploads/footers/${encodeURIComponent(String(config.footer_image_url).trim())}?t=${ts}`)
-          : `${baseURL}/api/uploads/footers/${encodeURIComponent(String(config.footer_image_url).trim())}?t=${ts}`)
+      ? (() => {
+          const f = String(config.footer_image_url).trim();
+          const data = uploadToDataUrl(uploadsFooterDir, f);
+          return data || `${baseURL}/api/uploads/footers/${encodeURIComponent(f)}?t=${ts}`;
+        })()
       : null;
 
     const numero = esc(proposta.numero_proposta || 'N/A');
@@ -11766,40 +11771,63 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:</p>
         <p>Data da assinatura: _____/_____/_____</p>
         <p>Assinatura e carimbo da empresa CONTRATANTE: _____________________________________</p>
-        <p>Atenciosamente.</p>
+        <p>Atenciosamente,</p>
+
+        <div class="signature-grid avoid-break">
+          <div class="sig-col">
+            <div class="sig-name">Junior Machado</div>
+            <div class="sig-role">Diretor Comercial</div>
+            <div class="sig-line">T +55 (11) 4513-9570</div>
+            <div class="sig-line">M +55 (11) 9.9351-5046</div>
+            <div class="sig-email">junior@gmp.ind.br</div>
+          </div>
+          <div class="sig-col">
+            <div class="sig-name">Bruno Machado</div>
+            <div class="sig-role">Gerente Comercial</div>
+            <div class="sig-line">T +55 (11) 4513-9570</div>
+            <div class="sig-line">M +55 (11) 9.9351-5543</div>
+            <div class="sig-email">bruno@gmp.ind.br</div>
+          </div>
+          <div class="sig-col">
+            <div class="sig-name">Alex Junior</div>
+            <div class="sig-role">Vendas Técnica</div>
+            <div class="sig-line">T +55 (11) 4513-9570</div>
+            <div class="sig-line">M +55 (11) 9.8908-5127</div>
+            <div class="sig-email">alexjunior@gmp.ind.br</div>
+          </div>
+          <div class="sig-col">
+            <div class="sig-name">Matheus Honrado</div>
+            <div class="sig-role">Depto. Comercial</div>
+            <div class="sig-line">T +55 (11) 4513-9570</div>
+            <div class="sig-line">M +55 (11) 9.3386-9232</div>
+            <div class="sig-email">matheus@gmp.ind.br</div>
+          </div>
+        </div>
       </section>
     `;
 
-    const pageHeaderTemplateHtml = headerImageURL
-      ? `<img class="header-image" src="${headerImageURL}" alt="" onerror="this.style.display='none'; this.parentElement.querySelector('.page-header-inner').style.display='grid';" />
-         <div class="page-header-inner" style="display:none">
-           <div class="page-header-logo"><img src="${logoGMP}" alt="GMP" /></div>
-           <div class="page-header-mid">
-             <p class="page-header-title">Proposta Técnica Comercial</p>
-             <p class="page-header-sub">${clienteNome} • ${clienteCnpj}</p>
-           </div>
-           <div class="page-header-right"><span class="page-header-pill">Nº ${numero}</span></div>
-         </div>`
-      : `<div class="page-header-inner">
-           <div class="page-header-logo"><img src="${logoGMP}" alt="GMP" /></div>
-           <div class="page-header-mid">
-             <p class="page-header-title">Proposta Técnica Comercial</p>
-             <p class="page-header-sub">${clienteNome} • ${clienteCnpj}</p>
-           </div>
-           <div class="page-header-right"><span class="page-header-pill">Nº ${numero}</span></div>
-         </div>`;
+    const pageHeaderTemplateHtml = `
+      <div class="page-header-inner">
+        <div class="page-header-logo"><img src="${logoGMP}" alt="GMP" /></div>
+        <div class="page-header-mid">
+          <p class="page-header-title">Proposta Técnica Comercial</p>
+          <p class="page-header-sub">${clienteNome} • ${clienteCnpj}</p>
+        </div>
+        <div class="page-header-right"><span class="page-header-pill">Nº ${numero}</span></div>
+      </div>
+      ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" onerror="this.remove();" />` : ''}`;
 
-    const pageFooterTemplateHtml = footerImageURL
-      ? `<img class="footer-image" src="${footerImageURL}" alt="" />`
-      : `<div class="page-footer-inner">
-           <div class="page-footer-left">
-             <span class="page-footer-strong">GMP • Moinho Ypiranga</span>
-             <span>Av. Dr. Ulysses Guimarães, 4105 • Diadema/SP</span>
-           </div>
-           <div class="page-footer-right">
-             Página <span class="js-page-number"></span> de <span class="js-page-count"></span>
-           </div>
-         </div>`;
+    const pageFooterTemplateHtml = `
+      <div class="page-footer-inner">
+        <div class="page-footer-left">
+          <span class="page-footer-strong">GMP • Moinho Ypiranga</span>
+          <span>Av. Dr. Ulysses Guimarães, 4105 • Diadema/SP</span>
+        </div>
+        <div class="page-footer-right">
+          Página <span class="js-page-number"></span> de <span class="js-page-count"></span>
+        </div>
+      </div>
+      ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" onerror="this.remove();" />` : ''}`;
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -11881,6 +11909,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .equip-photo-img { width: 100%; height: 70mm; object-fit: contain; border-radius: 6px; }
     .equip-photo-fallback { font-size: 10pt; color: var(--muted); text-align: center; padding: 22mm 6mm; background: var(--blue-100); border-radius: 6px; }
     .equip-tech { flex: 1 1 auto; min-width: 0; }
+
+    /* Assinaturas/setor comercial (após “Atenciosamente,”) */
+    .signature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10mm; align-items: start; margin-top: 8mm; }
+    .sig-col { display: flex; flex-direction: column; gap: 2mm; }
+    .sig-name { font-size: 11pt; font-weight: 800; color: var(--blue-900); }
+    .sig-role { font-size: 9.5pt; font-weight: 700; color: var(--blue-700); }
+    .sig-line { font-size: 9.5pt; color: var(--blue-900); font-weight: 700; }
+    .sig-email { font-size: 9.5pt; color: var(--blue-700); font-weight: 600; }
     tr, img, table, blockquote { page-break-inside: avoid; break-inside: avoid; }
     .col-idx { width: 10mm; text-align: right; }
     .col-qtd { width: 16mm; text-align: right; }
@@ -11893,7 +11929,17 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .sig-name { font-weight: 700; }
     .sig-role { font-size: 11px; opacity: 0.75; }
 
-    .header-image, .footer-image { width: 100%; height: 100%; object-fit: cover; }
+    .page-header { position: relative; }
+    .page-footer { position: relative; }
+    .header-image, .footer-image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+    .page-header-inner, .page-footer-inner { position: relative; z-index: 1; }
     .page-footer-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 14mm; font-size: 10pt; color: var(--muted); border-top: 1px solid var(--line); }
 
     /* Cabeçalho / Rodapé padrão (quando não houver imagens configuradas) */
