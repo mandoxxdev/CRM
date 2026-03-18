@@ -11108,16 +11108,24 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, ' ');
 
+    const parseJsonMaybe = (v, fallback) => {
+      if (v == null) return fallback;
+      if (typeof v === 'object') return v;
+      if (typeof v !== 'string') return fallback;
+      const s = v.trim();
+      if (!s) return fallback;
+      try { return JSON.parse(s); } catch (_) { return fallback; }
+    };
+
     const parseVariaveisList = () => {
-      let list = config.variaveis_proposta_tecnica;
-      if (typeof list === 'string') {
-        try { list = JSON.parse(list); } catch (_) { list = []; }
-      }
+      const listRaw = config.variaveis_proposta_tecnica;
+      let list = parseJsonMaybe(listRaw, Array.isArray(listRaw) ? listRaw : []);
       if (!Array.isArray(list)) list = [];
-      // Variáveis por família (se configurado no admin)
-      const porFamilia = config.variaveis_proposta_por_familia;
-      if (porFamilia && typeof porFamilia === 'object') {
-        // retorna uma função que escolhe list por família
+
+      // Variáveis por família (configuradas no admin)
+      const porFamiliaRaw = config.variaveis_proposta_por_familia;
+      const porFamilia = parseJsonMaybe(porFamiliaRaw, (porFamiliaRaw && typeof porFamiliaRaw === 'object') ? porFamiliaRaw : null);
+      if (porFamilia && typeof porFamilia === 'object' && !Array.isArray(porFamilia)) {
         return (familia) => {
           const famNorm = normalizarFamiliaComparacao(familia);
           if (!famNorm) return list;
@@ -11163,9 +11171,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         }
       }
 
-      const variaveisLabels = config.variaveis_proposta_labels || {};
+      const variaveisLabelsRaw = config.variaveis_proposta_labels || {};
+      const variaveisLabels = parseJsonMaybe(variaveisLabelsRaw, (variaveisLabelsRaw && typeof variaveisLabelsRaw === 'object') ? variaveisLabelsRaw : {});
       const variaveisList = getVariaveisListForFamilia(it.familia_produto || it.produto_familia || it.familia || '');
-      const specRowsHtml = (config.mostrar_especificacoes && Array.isArray(variaveisList) && variaveisList.length > 0)
+      // Sempre respeitar a seleção do admin (por família). Se não houver lista, não imprime specs extras.
+      const specRowsHtml = (Array.isArray(variaveisList) && variaveisList.length > 0)
         ? variaveisList
             .filter((k) => k && String(k).indexOf('_cond') === -1)
             .map((k) => {
@@ -11615,6 +11625,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       --blue-900: #0b3a66;
       --blue-700: #1a4d7a;
       --blue-100: #e8f2fb;
+      --navy-950: #0a2a4f;
+      --navy-900: #123a68;
+      --aqua-500: #25b7be;
+      --aqua-300: #7ad6d5;
+      --mist-200: #e6ecef;
       --line: rgba(26,77,122,0.45);
       --line-strong: rgba(26,77,122,0.75);
     }
@@ -11684,15 +11699,96 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .header-image, .footer-image { width: 100%; height: 100%; object-fit: cover; }
     .page-footer-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 14mm; font-size: 10pt; color: var(--muted); border-top: 1px solid var(--line); }
 
-    .cover-hero { height: 100%; min-height: 28mm; display: flex; align-items: center; justify-content: space-between; padding: 8mm 14mm; background: linear-gradient(135deg, rgba(11,58,102,0.78), rgba(26,77,122,0.26)), url('${coverImageURL}') center/cover no-repeat; color: #fff; }
-    .cover-logo { width: 56mm; max-width: 56mm; background: rgba(255,255,255,0.92); border-radius: 10px; padding: 8px 10px; }
-    .cover-logo img { width: 100%; height: auto; object-fit: contain; }
-    .cover-client-logo { width: 56mm; max-width: 56mm; background: rgba(255,255,255,0.92); border-radius: 10px; padding: 8px 10px; }
-    .cover-client-logo img { width: 100%; height: auto; object-fit: contain; }
-    .cover-title { max-width: 120mm; }
-    .cover-kicker { font-size: 10pt; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.95; margin-bottom: 6px; }
-    .cover-number { font-size: 16pt; font-weight: 800; margin-bottom: 6px; line-height: 1.15; }
-    .cover-sub { font-size: 11pt; opacity: 0.95; }
+    /* Cabeçalho / Rodapé padrão (quando não houver imagens configuradas) */
+    .page-header-inner {
+      height: 100%;
+      display: grid;
+      grid-template-columns: 46mm 1fr 54mm;
+      align-items: center;
+      gap: 8mm;
+      padding: 0 14mm;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(232,242,251,0.55), rgba(255,255,255,0));
+    }
+    .page-header-logo img { height: 14mm; width: auto; object-fit: contain; }
+    .page-header-mid { text-align: center; }
+    .page-header-title { font-size: 11pt; font-weight: 700; color: var(--blue-900); margin: 0; }
+    .page-header-sub { font-size: 9.5pt; color: var(--muted); margin: 2px 0 0 0; }
+    .page-header-right { text-align: right; }
+    .page-header-pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.85);
+      font-size: 9.5pt;
+      color: var(--blue-900);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .page-footer-inner {
+      height: 100%;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 8mm;
+      padding: 0 14mm;
+      font-size: 9.5pt;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      background: linear-gradient(0deg, rgba(232,242,251,0.55), rgba(255,255,255,0));
+    }
+    .page-footer-left { display: flex; flex-direction: column; gap: 2px; }
+    .page-footer-strong { color: var(--blue-900); font-weight: 700; }
+    .page-footer-right { text-align: right; white-space: nowrap; color: var(--blue-900); font-weight: 700; }
+
+    /* Capa estilo "ondas" (referência enviada) */
+    .cover-hero {
+      height: 100%;
+      min-height: 28mm;
+      position: relative;
+      overflow: hidden;
+      padding: 10mm 14mm;
+      background: #fff;
+      color: var(--ink);
+    }
+    .cover-wave {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .cover-wave svg { width: 100%; height: 100%; display: block; }
+    .cover-topbar {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10mm;
+      margin-bottom: 10mm;
+    }
+    .cover-logos { display: flex; gap: 8mm; align-items: flex-start; }
+    .cover-logo, .cover-client-logo {
+      width: 44mm;
+      max-width: 44mm;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 7px 9px;
+      box-shadow: 0 10px 28px rgba(10,42,79,0.10);
+    }
+    .cover-logo img, .cover-client-logo img { width: 100%; height: auto; object-fit: contain; }
+    .cover-title {
+      position: relative;
+      z-index: 2;
+      max-width: 120mm;
+      margin-top: 22mm;
+    }
+    .cover-kicker { font-size: 10pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--blue-700); margin: 0 0 6px 0; }
+    .cover-number { font-size: 18pt; font-weight: 800; margin: 0 0 8px 0; line-height: 1.1; color: var(--navy-950); }
+    .cover-sub { font-size: 11pt; color: var(--blue-700); margin: 0 0 8px 0; }
+    .cover-meta { font-size: 10pt; color: var(--muted); margin: 0; }
 
     .avoid-break { break-inside: avoid; page-break-inside: avoid; }
     .allow-break { break-inside: auto; page-break-inside: auto; }
@@ -11717,14 +11813,38 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     <section class="proposal-page cover-page">
       <header class="page-header">
         <div class="cover-hero">
-          <div class="cover-title">
+          <div class="cover-wave" aria-hidden="true">
+            <svg viewBox="0 0 1000 1400" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- canto superior direito (marinho) -->
+              <path d="M650,0 C770,150 860,140 1000,0 L1000,0 L1000,420 C880,360 760,350 650,420 C585,462 545,520 470,560 C360,620 250,610 0,540 L0,0 Z"
+                    fill="var(--navy-950)" opacity="0.92"/>
+              <!-- onda superior (aqua) -->
+              <path d="M1000,360 C860,300 760,310 650,360 C560,402 505,470 420,520 C300,590 185,575 0,520 L0,660 C240,720 370,720 500,670 C610,628 660,560 740,520 C830,470 910,460 1000,500 Z"
+                    fill="var(--aqua-500)" opacity="0.92"/>
+              <!-- separador (mist) -->
+              <path d="M1000,430 C870,380 760,390 650,430 C560,465 505,530 420,580 C300,650 180,630 0,570 L0,650 C210,720 360,730 510,680 C620,642 670,570 760,535 C850,500 920,500 1000,540 Z"
+                    fill="var(--mist-200)" opacity="0.95"/>
+              <!-- onda inferior (aqua claro) -->
+              <path d="M0,1040 C220,960 390,960 520,1010 C640,1055 700,1130 800,1170 C885,1203 940,1200 1000,1185 L1000,1400 L0,1400 Z"
+                    fill="var(--aqua-300)" opacity="0.92"/>
+              <!-- base inferior (marinho) -->
+              <path d="M0,1120 C230,1040 420,1040 560,1100 C700,1160 760,1250 860,1295 C920,1325 960,1330 1000,1320 L1000,1400 L0,1400 Z"
+                    fill="var(--navy-950)" opacity="0.92"/>
+            </svg>
+          </div>
+
+          <div class="cover-topbar">
             <div class="cover-kicker">GMP INDUSTRIAIS</div>
+            <div class="cover-logos">
+              ${clienteLogoUrl ? `<div class="cover-client-logo"><img src="${clienteLogoUrl}" alt="Logo do cliente" /></div>` : ``}
+              <div class="cover-logo"><img src="${logoGMP}" alt="GMP" /></div>
+            </div>
+          </div>
+
+          <div class="cover-title">
             <div class="cover-number">Proposta Técnica Comercial<br/>Nº ${numero}</div>
             <div class="cover-sub">${clienteNome} • ${clienteCnpj}</div>
-          </div>
-          <div class="stack-sm" style="align-items: flex-end;">
-            ${clienteLogoUrl ? `<div class="cover-client-logo"><img src="${clienteLogoUrl}" alt="Logo do cliente" /></div>` : ``}
-            <div class="cover-logo"><img src="${logoGMP}" alt="GMP" /></div>
+            <p class="cover-meta">Emissão: ${dataEmissao || '—'} • Validade: ${dataValidade || '—'}</p>
           </div>
         </div>
       </header>
@@ -11780,13 +11900,36 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     <section class="proposal-page" id="proposalPageTemplate" style="display:none">
       <header class="page-header">
-        ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" />` : `<div class="page-footer-inner" style="border-top:none;border-bottom:1px solid rgba(0,0,0,0.08);color:rgba(0,0,0,0.70);"><span>GMP • Proposta ${numero}</span><span>${clienteNome}</span></div>`}
+        ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" />` : `
+          <div class="page-header-inner">
+            <div class="page-header-logo">
+              <img src="${logoGMP}" alt="GMP" />
+            </div>
+            <div class="page-header-mid">
+              <p class="page-header-title">Proposta Técnica Comercial</p>
+              <p class="page-header-sub">${clienteNome} • ${clienteCnpj}</p>
+            </div>
+            <div class="page-header-right">
+              <span class="page-header-pill">Nº ${numero}</span>
+            </div>
+          </div>
+        `}
       </header>
       <main class="page-content">
         <div class="page-stack stack-lg"></div>
       </main>
       <footer class="page-footer">
-        ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" />` : `<div class="page-footer-inner"><span>GMP</span><span>Página <span class="js-page-number"></span> de <span class="js-page-count"></span></span></div>`}
+        ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" />` : `
+          <div class="page-footer-inner">
+            <div class="page-footer-left">
+              <span class="page-footer-strong">GMP • Moinho Ypiranga</span>
+              <span>Av. Dr. Ulysses Guimarães, 4105 • Diadema/SP</span>
+            </div>
+            <div class="page-footer-right">
+              Página <span class="js-page-number"></span> de <span class="js-page-count"></span>
+            </div>
+          </div>
+        `}
       </footer>
     </section>
   </div>
