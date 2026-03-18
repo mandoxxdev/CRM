@@ -11053,6 +11053,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
     const clienteNome = esc(proposta.razao_social || proposta.nome_fantasia || '—');
     const clienteCnpj = esc(proposta.cnpj || '—');
+    const clienteLogoUrl = (proposta.cliente_logo_url && String(proposta.cliente_logo_url).trim())
+      ? `${baseURL}/api/uploads/logos/${encodeURIComponent(String(proposta.cliente_logo_url).trim())}?t=${ts}`
+      : '';
     const responsavelNome = esc(proposta.responsavel_nome || '—');
     const dataEmissao = esc(totais.dataEmissao || '');
     const dataValidade = esc(totais.dataValidade || '');
@@ -11098,6 +11101,35 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>`;
     }).join('');
 
+    const normalizarFamiliaComparacao = (s) => String(s || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ');
+
+    const parseVariaveisList = () => {
+      let list = config.variaveis_proposta_tecnica;
+      if (typeof list === 'string') {
+        try { list = JSON.parse(list); } catch (_) { list = []; }
+      }
+      if (!Array.isArray(list)) list = [];
+      // Variáveis por família (se configurado no admin)
+      const porFamilia = config.variaveis_proposta_por_familia;
+      if (porFamilia && typeof porFamilia === 'object') {
+        // retorna uma função que escolhe list por família
+        return (familia) => {
+          const famNorm = normalizarFamiliaComparacao(familia);
+          if (!famNorm) return list;
+          const keyMatch = Object.keys(porFamilia).find((k) => normalizarFamiliaComparacao(k) === famNorm);
+          const candidate = keyMatch ? porFamilia[keyMatch] : null;
+          return Array.isArray(candidate) && candidate.length > 0 ? candidate : list;
+        };
+      }
+      return () => list;
+    };
+    const getVariaveisListForFamilia = parseVariaveisList();
+
     // 4.0 DESCRITIVO DOS EQUIPAMENTOS: 4.1 / 4.2 / ...
     const equipDescritivoHtml = (itens || []).map((it, idx) => {
       const n = idx + 1;
@@ -11131,21 +11163,34 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         }
       }
 
-      const specEntries = (specs && typeof specs === 'object')
-        ? Object.entries(specs)
-            .filter(([k, v]) => k && v != null && String(v).trim() !== '')
-            .slice(0, 30) // evita estourar layout com spec gigantes; segue padrão estável
-        : [];
-
-      const specRowsHtml = specEntries.map(([k, v]) => `
-        <tr>
-          <th>${esc(k)}</th>
-          <td>${esc(typeof v === 'string' ? v : JSON.stringify(v))}</td>
-        </tr>`).join('');
+      const variaveisLabels = config.variaveis_proposta_labels || {};
+      const variaveisList = getVariaveisListForFamilia(it.familia_produto || it.produto_familia || it.familia || '');
+      const specRowsHtml = (config.mostrar_especificacoes && Array.isArray(variaveisList) && variaveisList.length > 0)
+        ? variaveisList
+            .filter((k) => k && String(k).indexOf('_cond') === -1)
+            .map((k) => {
+              const meta = variaveisLabels[k] || {};
+              const label = (meta && meta.nome) ? meta.nome : k;
+              const sufixo = (meta && meta.sufixo) ? meta.sufixo : '';
+              const rawVal = specs && typeof specs === 'object' ? specs[k] : '';
+              const displayVal = (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '')
+                ? String(rawVal).trim()
+                : '';
+              const valueDisplay = displayVal + (sufixo && displayVal !== '' ? ` ${sufixo}` : '');
+              return `
+                <tr>
+                  <th>${esc(label)}</th>
+                  <td>${esc(valueDisplay || '—')}</td>
+                </tr>`;
+            }).join('')
+        : '';
 
       const produtoImagem = it.produto_imagem_base64
         ? it.produto_imagem_base64
-        : ((it.produto_imagem || it.imagem) ? `${baseURL}/api/uploads/produtos/${esc(it.produto_imagem || it.imagem)}?t=${ts}` : '');
+        : (() => {
+            const file = String(it.produto_imagem || it.imagem || '').trim();
+            return file ? `${baseURL}/api/uploads/produtos/${encodeURIComponent(file)}?t=${ts}` : '';
+          })();
 
       const fotoHtml = produtoImagem
         ? `<img class="equip-photo-img" src="${produtoImagem}" alt="Foto do equipamento" onerror="this.style.display='none'; this.parentElement.querySelector('.equip-photo-fallback').style.display='block';" />`
@@ -11155,10 +11200,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <section class="block stack-md allow-break">
           <h3>${itemNo} ${nome}</h3>
           <div class="equip-descritivo">
-            <div class="equip-photo">
-              ${fotoHtml}
-              <div class="equip-photo-fallback" style="display:${produtoImagem ? 'none' : 'block'}">Foto não disponível</div>
-            </div>
             <div class="equip-tech">
               <table class="table" data-split-table="true">
                 <thead>
@@ -11179,6 +11220,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
                   ${specRowsHtml}
                 </tbody>
               </table>
+            </div>
+            <div class="equip-photo">
+              ${fotoHtml}
+              <div class="equip-photo-fallback" style="display:${produtoImagem ? 'none' : 'block'}">Foto não disponível</div>
             </div>
           </div>
         </section>
@@ -11564,8 +11609,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
   <title>${titulo}</title>
   <style>
     :root{
-      --ink: #0b1f33;
-      --muted: rgba(11,31,51,0.68);
+      /* Padrão corporativo: todas as fontes em azul */
+      --ink: #0b3a66;
+      --muted: rgba(11,58,102,0.68);
       --blue-900: #0b3a66;
       --blue-700: #1a4d7a;
       --blue-100: #e8f2fb;
@@ -11610,6 +11656,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       overflow-wrap: break-word;
       font-size: 11pt;
       border: 1px solid var(--line);
+      color: var(--ink);
     }
     th { text-align: left; background: var(--blue-100); font-weight: 700; color: var(--blue-900); }
     .table-caption { font-weight: 700; margin: 6px 0 6px 0; color: var(--blue-900); }
@@ -11640,6 +11687,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .cover-hero { height: 100%; min-height: 28mm; display: flex; align-items: center; justify-content: space-between; padding: 8mm 14mm; background: linear-gradient(135deg, rgba(11,58,102,0.78), rgba(26,77,122,0.26)), url('${coverImageURL}') center/cover no-repeat; color: #fff; }
     .cover-logo { width: 56mm; max-width: 56mm; background: rgba(255,255,255,0.92); border-radius: 10px; padding: 8px 10px; }
     .cover-logo img { width: 100%; height: auto; object-fit: contain; }
+    .cover-client-logo { width: 56mm; max-width: 56mm; background: rgba(255,255,255,0.92); border-radius: 10px; padding: 8px 10px; }
+    .cover-client-logo img { width: 100%; height: auto; object-fit: contain; }
     .cover-title { max-width: 120mm; }
     .cover-kicker { font-size: 10pt; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.95; margin-bottom: 6px; }
     .cover-number { font-size: 16pt; font-weight: 800; margin-bottom: 6px; line-height: 1.15; }
@@ -11673,7 +11722,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <div class="cover-number">Proposta Técnica Comercial<br/>Nº ${numero}</div>
             <div class="cover-sub">${clienteNome} • ${clienteCnpj}</div>
           </div>
-          <div class="cover-logo"><img src="${logoGMP}" alt="GMP" /></div>
+          <div class="stack-sm" style="align-items: flex-end;">
+            ${clienteLogoUrl ? `<div class="cover-client-logo"><img src="${clienteLogoUrl}" alt="Logo do cliente" /></div>` : ``}
+            <div class="cover-logo"><img src="${logoGMP}" alt="GMP" /></div>
+          </div>
         </div>
       </header>
       <main class="page-content stack-lg">
