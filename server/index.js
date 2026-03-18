@@ -10300,15 +10300,36 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           measuredMax = Math.floor(currentContent.getBoundingClientRect().height);
         } catch (_) {}
         if (measuredMax > 0) maxContentHeightPx = Math.max(0, measuredMax - 2);
+
+        // Regra especial: item 5.5 tende a ficar grande e invadir o rodapé.
+        // Ajuste: quando o bloco for o 5.5, reduzimos o limite disponível para forçar
+        // ele a começar na página seguinte ANTES de encostar no rodapé.
+        var footerHeightPx = 0;
+        try {
+          var footerEl = currentContent && currentContent.parentElement ? currentContent.parentElement.querySelector('.page-footer') : null;
+          footerHeightPx = footerEl ? Math.floor(footerEl.getBoundingClientRect().height) : 0;
+        } catch (_) {}
+        var safety55Px = Math.max(24, Math.floor((footerHeightPx > 0 ? footerHeightPx : 80) * 0.75));
+
+        function isItem55Block(el) {
+          try {
+            if (!el || !el.querySelector) return false;
+            var h3 = el.querySelector(':scope > h3');
+            var txt = (h3 && h3.textContent) ? h3.textContent.trim() : (el.textContent || '').trim();
+            return txt.startsWith('5.5') || txt.includes('5.5 SUPERVIS') || txt.includes('5.5 SUPERVISÃO') || txt.includes('5.5 SUPERVISAO');
+          } catch (_) { return false; }
+        }
         for (i = 0; i < nodes.length; i++) {
           var node = nodes[i];
+          var effectiveMax = maxContentHeightPx;
+          if (isItem55Block(node)) effectiveMax = Math.max(0, maxContentHeightPx - safety55Px);
           currentContent.appendChild(node);
-          while (currentContent.scrollHeight > maxContentHeightPx && currentContent.lastChild) {
+          while (currentContent.scrollHeight > effectiveMax && currentContent.lastChild) {
             var last = currentContent.lastChild;
             currentContent.removeChild(last);
             currentContent = createPage();
             currentContent.appendChild(last);
-            if (currentContent.scrollHeight > maxContentHeightPx) break;
+            if (currentContent.scrollHeight > effectiveMax) break;
           }
         }
         source.remove();
@@ -12472,12 +12493,26 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             pageContent = page.querySelector('.page-content');
           }
         };
-        const fits = () => pageContent.scrollHeight <= pageContent.clientHeight;
+        const footerEl = page && page.querySelector ? page.querySelector('.page-footer') : null;
+        const footerHeightPx = footerEl && footerEl.getBoundingClientRect ? Math.floor(footerEl.getBoundingClientRect().height) : 0;
+        const safety55Px = Math.max(24, Math.floor((footerHeightPx > 0 ? footerHeightPx : 80) * 0.75));
+
+        function isItem55Block(blockEl) {
+          try {
+            if (!blockEl || !blockEl.querySelector) return false;
+            const h3 = blockEl.querySelector(':scope > h3');
+            const txt = (h3 && h3.textContent) ? h3.textContent.trim() : (blockEl.textContent || '').trim();
+            return txt.startsWith('5.5') || txt.includes('5.5 SUPERVIS') || txt.includes('5.5 SUPERVISÃO') || txt.includes('5.5 SUPERVISAO');
+          } catch (_) { return false; }
+        }
+
+        const fits = (limitPx) => pageContent.scrollHeight <= limitPx;
         const addNode = (node) => { stack.appendChild(node); };
 
         const wouldOverflowIfAdd = (node) => {
           addNode(node);
-          const overflow = !fits();
+          const limitPx = isItem55Block(node) ? Math.max(0, pageContent.clientHeight - safety55Px) : pageContent.clientHeight;
+          const overflow = !fits(limitPx);
           stack.removeChild(node);
           return overflow;
         };
@@ -12509,6 +12544,19 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               const tb = t.querySelector('tbody');
               tb.innerHTML = '';
               Array.from(parts[i].querySelectorAll('tbody > tr')).forEach(r => tb.appendChild(r.cloneNode(true)));
+
+              // Quando a tabela do item precisar ser dividida em múltiplas partes,
+              // não replique o título "4.x" e a foto nas partes seguintes.
+              // Isso elimina o efeito de "vários 4.2" para um mesmo equipamento.
+              if (i > 0) {
+                const heading = partBlock.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6');
+                if (heading) heading.remove();
+                const equipPhoto = partBlock.querySelector('.equip-photo');
+                if (equipPhoto) equipPhoto.remove();
+                const thead = t && t.querySelector('thead');
+                if (thead) thead.remove();
+              }
+
               addNode(partBlock);
               if (!fits()) {
                 stack.removeChild(partBlock);
