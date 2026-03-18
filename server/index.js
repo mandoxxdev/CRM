@@ -7488,8 +7488,18 @@ app.get('/api/propostas/:id/premium', (req, res) => {
         
         const omitPrintBar = req.query.embed === '1' || req.query.embed === 'true';
         
-        // Template por família de produto: preferir config com familia = proposta.familia_produto ou primeiro item
-        const familiaTemplate = proposta.familia_produto || (itensArray && itensArray[0] && itensArray[0].familia_produto) || null;
+        // Template por família: o admin salva templates por CATEGORIA (ex: Geral/Equipamentos),
+        // mas os itens podem trazer "família do equipamento" com código entre parênteses (ex: ... (MPY)).
+        // Se usarmos isso como "familia" do template, pegamos configuração errada e as variáveis não aparecem.
+        const familiaTemplateCandidate = proposta.familia_produto || (itensArray && itensArray[0] && itensArray[0].familia_produto) || null;
+        const pareceFamiliaDeTemplate = (s) => {
+          const t = String(s || '').trim();
+          if (!t) return false;
+          // Famílias de equipamento vêm tipicamente com "(XYZ)".
+          if (/\([^)]*\)/.test(t)) return false;
+          return true;
+        };
+        const familiaTemplate = pareceFamiliaDeTemplate(familiaTemplateCandidate) ? familiaTemplateCandidate : null;
         const templateQuery = familiaTemplate
           ? 'SELECT * FROM proposta_template_config WHERE (familia = ? OR familia IS NULL OR familia = \'\') ORDER BY CASE WHEN familia = ? THEN 0 ELSE 1 END, id DESC LIMIT 1'
           : 'SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1';
@@ -7716,7 +7726,14 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     } catch (e) {}
     const totais = { subtotal, icms, ipi, total, dataEmissao, dataValidade };
     
-    const familiaTemplate = proposta.familia_produto || (itens && itens[0] && itens[0].familia_produto) || null;
+    const familiaTemplateCandidate = proposta.familia_produto || (itens && itens[0] && itens[0].familia_produto) || null;
+    const pareceFamiliaDeTemplate = (s) => {
+      const t = String(s || '').trim();
+      if (!t) return false;
+      if (/\([^)]*\)/.test(t)) return false;
+      return true;
+    };
+    const familiaTemplate = pareceFamiliaDeTemplate(familiaTemplateCandidate) ? familiaTemplateCandidate : null;
     const templateQuery = familiaTemplate
       ? 'SELECT * FROM proposta_template_config WHERE (familia = ? OR familia IS NULL OR familia = \'\') ORDER BY CASE WHEN familia = ? THEN 0 ELSE 1 END, id DESC LIMIT 1'
       : 'SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1';
@@ -12050,7 +12067,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     h1 { margin: 0 0 10px 0; font-size: 14pt; font-weight: 700; line-height: 1.15; }
     h2 { margin: 0 0 8px 0; font-size: 14pt; font-weight: 700; line-height: 1.15; }
     h3 { margin: 0 0 6px 0; font-size: 12pt; font-weight: 700; line-height: 1.15; }
-    p, li { margin: 0 0 6px 0; font-size: 11pt; line-height: 1.15; text-align: justify; text-transform: none; font-variant: normal; }
+    p, li { margin: 0 0 6px 0; font-size: 11pt; line-height: 1.15; text-align: justify; text-transform: none; font-variant: normal; font-weight: 400; }
     ul, ol { padding-left: 16px; margin-bottom: 6px; }
 
     .proposal-document { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
@@ -12085,6 +12102,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       font-variant: normal;
     }
     th { text-align: left; background: var(--blue-100); font-weight: 700; color: var(--blue-900); }
+    td { font-weight: 400; }
     .table-caption { font-weight: 700; margin: 6px 0 6px 0; color: var(--blue-900); }
     .col-right { text-align: right; white-space: nowrap; }
     .col-center { text-align: center; }
