@@ -7754,7 +7754,56 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     templateConfig.variaveis_proposta_por_familia = porFamilia;
     templateConfig.variaveis_proposta_tecnica = chaves;
     templateConfig.variaveis_proposta_labels = {};
-    const chavesUnicas = [...new Set([].concat(chaves, Object.values(porFamilia).filter(Array.isArray).reduce((a, b) => a.concat(b), [])))];
+
+    const normalizeVariavelKeyServer = (item) => {
+      if (item == null) return '';
+      if (typeof item === 'string' || typeof item === 'number') return String(item).trim();
+      if (typeof item === 'object') return String(item.chave || item.key || item.variavel_chave || item.id || '').trim();
+      return '';
+    };
+    const parseKeysArrayServer = (raw) => {
+      if (raw == null) return [];
+      if (Array.isArray(raw)) return raw.map(normalizeVariavelKeyServer).filter(Boolean);
+      if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (!s) return [];
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) return parsed.map(normalizeVariavelKeyServer).filter(Boolean);
+          if (typeof parsed === 'object' && parsed) return Object.keys(parsed).filter((k) => parsed[k]).map(normalizeVariavelKeyServer).filter(Boolean);
+        } catch (_) { /* ignora */ }
+        return s
+          .replace(/^\[|\]$/g, '')
+          .split(/[,\n;]+/g)
+          .map((p) => p.replace(/^['"]|['"]$/g, '').trim())
+          .filter(Boolean)
+          .map(normalizeVariavelKeyServer)
+          .filter(Boolean);
+      }
+      if (typeof raw === 'object') {
+        if (Array.isArray(raw.selected)) return parseKeysArrayServer(raw.selected);
+        if (Array.isArray(raw.chaves)) return parseKeysArrayServer(raw.chaves);
+        // objeto do tipo { "0": "key1", "1":"key2" }
+        const keys = Object.keys(raw);
+        if (keys.length > 0 && keys.every((k) => String(+k) === k)) {
+          const vals = Object.values(raw);
+          if (vals.every((v) => typeof v === 'string' || typeof v === 'number')) {
+            return vals.map(normalizeVariavelKeyServer).filter(Boolean);
+          }
+        }
+        // mapa do tipo { key1:true, key2:true }
+        const anyTruthy = Object.keys(raw).some((k) => Boolean(raw[k]));
+        if (anyTruthy) {
+          return Object.keys(raw).filter((k) => Boolean(raw[k])).map(normalizeVariavelKeyServer).filter(Boolean);
+        }
+        // fallback: valores diretos
+        return Object.values(raw).map(normalizeVariavelKeyServer).filter(Boolean);
+      }
+      return [];
+    };
+
+    const porFamiliaKeys = Object.values(porFamilia || {}).reduce((acc, v) => acc.concat(parseKeysArrayServer(v)), []);
+    const chavesUnicas = [...new Set(chaves.concat(porFamiliaKeys))].filter(Boolean);
     if (chavesUnicas.length > 0) {
       const rows = await new Promise((resolve, reject) => {
         const placeholders = chavesUnicas.map(() => '?').join(',');
@@ -8787,7 +8836,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       box-sizing: border-box;
     }
     .pages-container.paginated .pdf-page .page-content {
-      max-height: 231mm;
+      max-height: 230mm;
       overflow: hidden;
     }
     .pages-container:not(.paginated) .pdf-page .page-content {
@@ -8796,7 +8845,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     }
     .pdf-page .page-footer {
       flex-shrink: 0;
-      height: 18mm;
+      height: 19mm;
       background: #fff;
     }
     .pdf-page .page-footer img {
@@ -9344,7 +9393,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         overflow: visible !important;
       }
       .pdf-page .page-content {
-        max-height: 231mm;
+        max-height: 230mm;
         overflow: hidden;
       }
       .pages-container:not(.paginated) .pdf-page .page-content {
@@ -11240,32 +11289,54 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const parseKeysArray = (raw) => {
       if (raw == null) return [];
       // já é array
-      if (Array.isArray(raw)) {
-        return raw.map(normalizeVariavelKey).filter(Boolean);
-      }
+      if (Array.isArray(raw)) return raw.map(normalizeVariavelKey).filter(Boolean);
+
       if (typeof raw === 'string') {
         const s = raw.trim();
         if (!s) return [];
+
         // tentar JSON
         const parsed = parseJsonMaybe(s, null);
         if (parsed) {
           if (Array.isArray(parsed)) return parsed.map(normalizeVariavelKey).filter(Boolean);
           if (typeof parsed === 'object') {
-            // objeto { chave: true }
+            // objeto { chave: true } ou { chave: 1 }
             return Object.keys(parsed).filter((k) => parsed[k]).map(normalizeVariavelKey).filter(Boolean);
           }
         }
-        // fallback: string com separadores
+
+        // fallback: string com separadores (CSV/newline/etc)
         return s
           .replace(/^\[|\]$/g, '')
           .split(/[,\n;]+/g)
-          .map(p => p.replace(/^['"]|['"]$/g, '').trim())
+          .map((p) => p.replace(/^['"]|['"]$/g, '').trim())
           .filter(Boolean);
       }
-      // se for objeto (map) inesperado
+
       if (typeof raw === 'object') {
-        return Object.keys(raw).map(normalizeVariavelKey).filter(Boolean);
+        // formatos comuns vindos do frontend
+        if (Array.isArray(raw.selected)) return parseKeysArray(raw.selected);
+        if (Array.isArray(raw.chaves)) return parseKeysArray(raw.chaves);
+
+        // array-like objeto do tipo { "0":"key1", "1":"key2" }
+        const keys = Object.keys(raw);
+        if (keys.length > 0 && keys.every((k) => String(+k) === k)) {
+          const vals = Object.values(raw);
+          if (vals.every((v) => typeof v === 'string' || typeof v === 'number')) {
+            return vals.map(normalizeVariavelKey).filter(Boolean);
+          }
+        }
+
+        // mapa do tipo { key1:true, key2:true }
+        const anyTruthy = Object.keys(raw).some((k) => Boolean(raw[k]));
+        if (anyTruthy) {
+          return Object.keys(raw).filter((k) => raw[k]).map(normalizeVariavelKey).filter(Boolean);
+        }
+
+        // fallback: valores diretos
+        return Object.values(raw).map(normalizeVariavelKey).filter(Boolean);
       }
+
       return [];
     };
 
@@ -11282,11 +11353,47 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const baseKeys = parseKeysArray(config.variaveis_proposta_tecnica);
     const porFamiliaMap = parsePorFamiliaMap(config.variaveis_proposta_por_familia);
 
+    const extrairCodigoFamiliaParens = (s) => {
+      const m = String(s || '').match(/\(([^)]+)\)/);
+      return m && m[1] ? m[1] : '';
+    };
+    const normalizarCodigoFamilia = (s) => String(s || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '');
+
     const getVariaveisListForFamilia = (familia) => {
       const famNorm = normalizarFamiliaComparacao(familia);
       if (!famNorm) return baseKeys;
-      const keyMatch = Object.keys(porFamiliaMap).find((k) => normalizarFamiliaComparacao(k) === famNorm);
+
+      const keysMap = Object.keys(porFamiliaMap);
+
+      // 1) match exato (nome da família)
+      let keyMatch = keysMap.find((k) => normalizarFamiliaComparacao(k) === famNorm) || null;
+
+      // 2) match por código dentro de parênteses (ex: (DHY))
+      if (!keyMatch) {
+        const codeFam = normalizarCodigoFamilia(extrairCodigoFamiliaParens(familia));
+        if (codeFam) {
+          keyMatch = keysMap.find((k) => {
+            const codeKey = normalizarCodigoFamilia(extrairCodigoFamiliaParens(k));
+            return codeKey && codeKey === codeFam;
+          }) || null;
+        }
+      }
+
+      // 3) match por inclusão (evita diferença de acento/descritor)
+      if (!keyMatch) {
+        keyMatch = keysMap.find((k) => {
+          const kNorm = normalizarFamiliaComparacao(k);
+          return kNorm && (kNorm.includes(famNorm) || famNorm.includes(kNorm));
+        }) || null;
+      }
+
       if (!keyMatch) return baseKeys;
+
       const candidate = Array.isArray(porFamiliaMap[keyMatch]) ? porFamiliaMap[keyMatch] : [];
       return candidate.length > 0 ? candidate : baseKeys;
     };
@@ -11904,7 +12011,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     /* Header/footers com altura fixa para repetir corretamente em todas as páginas */
     .page-header { flex: 0 0 auto; width: 100%; height: 28mm; padding: 0; margin: 0; }
     .page-content { flex: 1 1 auto; width: 100%; padding: 10mm 14mm 10mm 14mm; margin: 0; overflow: hidden; }
-    .page-footer { flex: 0 0 auto; width: 100%; height: 19mm; padding: 0; margin: 0; }
+    .page-footer { flex: 0 0 auto; width: 100%; height: 20mm; padding: 0; margin: 0; }
 
     .stack-xs, .stack-sm, .stack-md, .stack-lg, .stack-xl { display: flex; flex-direction: column; }
     .stack-xs { gap: 4px; } .stack-sm { gap: 8px; } .stack-md { gap: 12px; } .stack-lg { gap: 16px; } .stack-xl { gap: 24px; }
