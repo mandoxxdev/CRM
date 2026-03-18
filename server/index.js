@@ -7504,7 +7504,7 @@ app.get('/api/propostas/:id/premium', (req, res) => {
                 html = gerarHTMLPropostaFromComponentes(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
               }
               if (!html) {
-                html = gerarHTMLPropostaPremium(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
+                html = gerarHTMLPropostaPremiumV2(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
               }
             } catch (genError) {
               console.error('Erro ao gerar HTML da proposta:', genError);
@@ -7752,7 +7752,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       }
       html = (Array.isArray(compList) && compList.length > 0)
         ? gerarHTMLPropostaFromComponentes(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true)
-        : gerarHTMLPropostaPremium(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true);
+        : gerarHTMLPropostaPremiumV2(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true);
     }
     if (!html || typeof html !== 'string' || html.trim().length === 0) {
       throw new Error('HTML da proposta está vazio');
@@ -10995,6 +10995,414 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
     return substituirPlaceholdersProposta(html, proposta, itens, totais);
   } catch (error) {
     console.error('Erro na função gerarHTMLPropostaPremium:', error);
+    throw error;
+  }
+}
+
+// Versão 2 (reescrita estrutural completa) do HTML/CSS da proposta comercial.
+// Atende às regras:
+// - Sem position: fixed para header/footer
+// - proposal-document > proposal-page > header/content/footer
+// - Reset + spacing por stack/gap (sem margens aleatórias)
+// - Páginas A4 previsíveis em tela e impressão
+// - Paginação dinâmica simples (medição de altura real) com suporte a:
+//   - .avoid-break (move bloco inteiro)
+//   - tabelas longas (quebra por linhas com thead repetido)
+function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = null, baseURLOverride = null, forPdfServer = false, omitPrintBar = false) {
+  try {
+    if (!proposta) throw new Error('Proposta não fornecida');
+    if (!Array.isArray(itens)) itens = [];
+    if (!totais) totais = { subtotal: 0, icms: 0, ipi: 0, total: 0, dataEmissao: '', dataValidade: '' };
+
+    const config = templateConfig || {};
+    const baseURL = (baseURLOverride && typeof baseURLOverride === 'string')
+      ? baseURLOverride.replace(/\/$/, '')
+      : (process.env.API_URL || 'http://localhost:5000');
+    const ts = Date.now();
+
+    const esc = (v) => String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const moedaBRL = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Cover image (capa): tenta achar arquivos do public (fallback previsível)
+    const publicCabecalhoJPGPath = path.join(__dirname, '..', 'client', 'public', 'cabecalho.jpg');
+    const publicCabecalhoPNGPath = path.join(__dirname, '..', 'client', 'public', 'CABECALHO.PNG');
+    const publicCBC2Path = path.join(__dirname, '..', 'client', 'public', 'CBC2.png');
+    let defaultCoverImage = 'cabecalho.jpg';
+    if (fs.existsSync(publicCabecalhoJPGPath)) defaultCoverImage = 'cabecalho.jpg';
+    else if (fs.existsSync(publicCabecalhoPNGPath)) defaultCoverImage = 'CABECALHO.PNG';
+    else if (fs.existsSync(publicCBC2Path)) defaultCoverImage = 'CBC2.png';
+
+    const coverImageURL = `${baseURL}/${defaultCoverImage}?t=${ts}`;
+    const logoGMP = (config.logo_url && String(config.logo_url).trim())
+      ? `${baseURL}/api/uploads/logos/${String(config.logo_url).trim()}?t=${ts}`
+      : `${baseURL}/logo-gmp.png?t=${ts}`;
+    const headerImageURL = (config.header_image_url && String(config.header_image_url).trim())
+      ? `${baseURL}/api/uploads/headers/${String(config.header_image_url).trim()}?t=${ts}`
+      : null;
+    const footerImageURL = (config.footer_image_url && String(config.footer_image_url).trim())
+      ? `${baseURL}/api/uploads/footers/${String(config.footer_image_url).trim()}?t=${ts}`
+      : null;
+
+    const numero = esc(proposta.numero_proposta || 'N/A');
+    const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
+    const clienteNome = esc(proposta.razao_social || proposta.nome_fantasia || '—');
+    const clienteCnpj = esc(proposta.cnpj || '—');
+    const responsavelNome = esc(proposta.responsavel_nome || '—');
+    const dataEmissao = esc(totais.dataEmissao || '');
+    const dataValidade = esc(totais.dataValidade || '');
+
+    const itensRows = itens.map((it, idx) => {
+      const qtdNum = Number(it.quantidade) || 1;
+      const vUnitNum = Number(it.valor_unitario) || Number(it.preco_base) || 0;
+      const vTotNum = Number(it.valor_total) || (qtdNum * vUnitNum);
+      return `
+        <tr>
+          <td class="col-idx">${idx + 1}</td>
+          <td class="col-desc">${esc(it.descricao || it.produto_nome || `Item ${idx + 1}`)}</td>
+          <td class="col-qtd">${esc(qtdNum)}</td>
+          <td class="col-und">${esc(it.unidade || 'UN')}</td>
+          <td class="col-money">${esc(moedaBRL(vUnitNum))}</td>
+          <td class="col-money">${esc(moedaBRL(vTotNum))}</td>
+        </tr>`;
+    }).join('');
+
+    const printBar = (omitPrintBar || forPdfServer) ? '' : `
+      <div class="printbar" role="region" aria-label="Ações da proposta">
+        <div class="printbar-inner">
+          <div class="printbar-title">Pré-visualização • Proposta ${numero}</div>
+          <button type="button" class="printbar-btn" onclick="window.print()">Imprimir / Salvar PDF</button>
+        </div>
+      </div>`;
+
+    const blocksHtml = `
+      <section class="block stack-md avoid-break">
+        <h2>Dados do cliente</h2>
+        <div class="grid-2 stack-sm">
+          <div class="kv"><div class="k">Cliente</div><div class="v">${clienteNome}</div></div>
+          <div class="kv"><div class="k">CNPJ</div><div class="v">${clienteCnpj}</div></div>
+          <div class="kv"><div class="k">Contato</div><div class="v">${esc(proposta.cliente_contato || '—')}</div></div>
+          <div class="kv"><div class="k">E-mail</div><div class="v">${esc(proposta.cliente_email || '—')}</div></div>
+          <div class="kv"><div class="k">Telefone</div><div class="v">${esc(proposta.cliente_telefone || '—')}</div></div>
+          <div class="kv"><div class="k">Responsável</div><div class="v">${responsavelNome}</div></div>
+        </div>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Escopo e itens</h2>
+        <div class="table-wrap allow-break">
+          <table class="table allow-break" data-split-table="true">
+            <thead>
+              <tr>
+                <th class="col-idx">#</th>
+                <th class="col-desc">Descrição</th>
+                <th class="col-qtd">Qtd</th>
+                <th class="col-und">Un</th>
+                <th class="col-money">Valor unit.</th>
+                <th class="col-money">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itensRows || `<tr><td colspan="6" class="muted">Nenhum item cadastrado.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="block stack-md avoid-break">
+        <h2>Totais</h2>
+        <div class="grid-2 stack-sm">
+          <div class="kv"><div class="k">Subtotal</div><div class="v">${esc(moedaBRL(totais.subtotal))}</div></div>
+          <div class="kv"><div class="k">ICMS</div><div class="v">${esc(moedaBRL(totais.icms))}</div></div>
+          <div class="kv"><div class="k">IPI</div><div class="v">${esc(moedaBRL(totais.ipi))}</div></div>
+          <div class="kv"><div class="k">Total</div><div class="v"><strong>${esc(moedaBRL(totais.total))}</strong></div></div>
+          <div class="kv"><div class="k">Emissão</div><div class="v">${dataEmissao || '—'}</div></div>
+          <div class="kv"><div class="k">Validade</div><div class="v">${dataValidade || '—'}</div></div>
+        </div>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Condições comerciais</h2>
+        <div class="stack-sm">
+          <p>${esc(proposta.condicoes_pagamento || '—')}</p>
+          <p><strong>Prazo de entrega:</strong> ${esc(proposta.prazo_entrega || '—')}</p>
+          <p><strong>Garantia:</strong> ${esc(proposta.garantia || '—')}</p>
+          <p><strong>Observações:</strong> ${esc(proposta.observacoes || '—')}</p>
+        </div>
+      </section>
+
+      <section class="block stack-md avoid-break">
+        <h2>Assinaturas</h2>
+        <div class="signatures">
+          <div class="sig">
+            <div class="sig-line"></div>
+            <div class="sig-name">${responsavelNome}</div>
+            <div class="sig-role">GMP • Responsável</div>
+          </div>
+          <div class="sig">
+            <div class="sig-line"></div>
+            <div class="sig-name">${clienteNome}</div>
+            <div class="sig-role">Cliente</div>
+          </div>
+        </div>
+      </section>
+    `;
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${titulo}</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Arial, Helvetica, sans-serif; color: #222; }
+    img { max-width: 100%; height: auto; display: block; }
+
+    h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
+    p:last-child, ul:last-child, ol:last-child { margin-bottom: 0; }
+    h1 { margin: 0 0 10px 0; font-size: 24px; line-height: 1.2; }
+    h2 { margin: 0 0 8px 0; font-size: 18px; line-height: 1.25; }
+    h3 { margin: 0 0 6px 0; font-size: 15px; line-height: 1.3; }
+    p, li { margin: 0 0 6px 0; font-size: 12px; line-height: 1.5; }
+    ul, ol { padding-left: 16px; margin-bottom: 6px; }
+
+    .proposal-document { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
+    .proposal-page { width: 210mm; min-height: 297mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; page-break-after: always; break-after: page; }
+    .page-header { flex: 0 0 auto; width: 100%; min-height: 28mm; padding: 0; margin: 0; }
+    .page-content { flex: 1 1 auto; width: 100%; padding: 10mm 14mm 10mm 14mm; margin: 0; overflow: hidden; }
+    .page-footer { flex: 0 0 auto; width: 100%; min-height: 18mm; padding: 0; margin: 0; }
+
+    .stack-xs, .stack-sm, .stack-md, .stack-lg, .stack-xl { display: flex; flex-direction: column; }
+    .stack-xs { gap: 4px; } .stack-sm { gap: 8px; } .stack-md { gap: 12px; } .stack-lg { gap: 16px; } .stack-xl { gap: 24px; }
+    .muted { color: rgba(0,0,0,0.55); }
+    .block { width: 100%; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; row-gap: 10px; }
+    .kv .k { font-size: 11px; opacity: 0.72; margin-bottom: 2px; }
+    .kv .v { font-size: 12px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    .table { border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; overflow: hidden; }
+    thead { display: table-header-group; }
+    th, td { vertical-align: top; padding: 6px 8px; word-wrap: break-word; overflow-wrap: break-word; font-size: 12px; }
+    th { text-align: left; background: rgba(0,0,0,0.04); font-weight: 700; }
+    tr, img, table, blockquote { page-break-inside: avoid; break-inside: avoid; }
+    .col-idx { width: 10mm; text-align: right; }
+    .col-qtd { width: 16mm; text-align: right; }
+    .col-und { width: 14mm; text-align: center; }
+    .col-money { width: 26mm; text-align: right; white-space: nowrap; }
+
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .sig { border: 1px solid rgba(0,0,0,0.10); border-radius: 10px; padding: 10px 12px; }
+    .sig-line { height: 1px; background: rgba(0,0,0,0.35); margin: 22px 0 8px 0; }
+    .sig-name { font-weight: 700; }
+    .sig-role { font-size: 11px; opacity: 0.75; }
+
+    .header-image, .footer-image { width: 100%; height: 100%; object-fit: cover; }
+    .page-footer-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 14mm; font-size: 11px; color: rgba(0,0,0,0.65); border-top: 1px solid rgba(0,0,0,0.08); }
+
+    .cover-hero { height: 100%; min-height: 28mm; display: flex; align-items: center; justify-content: space-between; padding: 8mm 14mm; background: linear-gradient(135deg, rgba(0,0,0,0.55), rgba(0,0,0,0.15)), url('${coverImageURL}') center/cover no-repeat; color: #fff; }
+    .cover-logo { width: 56mm; max-width: 56mm; background: rgba(255,255,255,0.92); border-radius: 10px; padding: 8px 10px; }
+    .cover-logo img { width: 100%; height: auto; object-fit: contain; }
+    .cover-title { max-width: 120mm; }
+    .cover-kicker { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.95; margin-bottom: 6px; }
+    .cover-number { font-size: 22px; font-weight: 800; margin-bottom: 6px; line-height: 1.15; }
+    .cover-sub { font-size: 12px; opacity: 0.95; }
+
+    .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+    .allow-break { break-inside: auto; page-break-inside: auto; }
+
+    .printbar { position: sticky; top: 0; z-index: 10; width: 100%; background: rgba(243,243,243,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(0,0,0,0.08); }
+    .printbar-inner { max-width: 1320px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .printbar-title { font-size: 12px; color: rgba(0,0,0,0.7); font-weight: 700; }
+    .printbar-btn { border: 1px solid rgba(0,0,0,0.18); background: #0d2b4a; color: #fff; font-weight: 700; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+
+    @page { size: A4; margin: 0; }
+    @media print {
+      html, body { width: 210mm; height: auto; background: #fff; }
+      .printbar { display: none !important; }
+      .proposal-document { display: block; }
+      .proposal-page { margin: 0; box-shadow: none; break-after: page; page-break-after: always; }
+    }
+  </style>
+</head>
+<body>
+  ${printBar}
+  <div class="proposal-document" id="proposalDocument">
+    <section class="proposal-page cover-page">
+      <header class="page-header">
+        <div class="cover-hero">
+          <div class="cover-title">
+            <div class="cover-kicker">GMP INDUSTRIAIS</div>
+            <div class="cover-number">Proposta Técnica Comercial<br/>Nº ${numero}</div>
+            <div class="cover-sub">${clienteNome} • ${clienteCnpj}</div>
+          </div>
+          <div class="cover-logo"><img src="${logoGMP}" alt="GMP" /></div>
+        </div>
+      </header>
+      <main class="page-content stack-lg">
+        <div class="block stack-sm avoid-break">
+          <h1>${titulo}</h1>
+          <p class="muted">Documento gerado para apresentação comercial. Emissão: ${dataEmissao || '—'} • Validade: ${dataValidade || '—'}.</p>
+        </div>
+        <div class="block stack-sm avoid-break">
+          <h2>Resumo</h2>
+          <p>${esc(proposta.descricao || '—')}</p>
+        </div>
+        <div class="block stack-sm avoid-break">
+          <h2>Responsável</h2>
+          <p><strong>${responsavelNome}</strong></p>
+          <p class="muted">${esc(proposta.responsavel_email || '')}</p>
+        </div>
+      </main>
+      <footer class="page-footer">
+        <div class="page-footer-inner">
+          <span>GMP • Proposta ${numero}</span>
+          <span>Página <span class="js-page-number">1</span> de <span class="js-page-count">1</span></span>
+        </div>
+      </footer>
+    </section>
+
+    <section class="proposal-page" id="proposalPageTemplate" style="display:none">
+      <header class="page-header">
+        ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" />` : `<div class="page-footer-inner" style="border-top:none;border-bottom:1px solid rgba(0,0,0,0.08);color:rgba(0,0,0,0.70);"><span>GMP • Proposta ${numero}</span><span>${clienteNome}</span></div>`}
+      </header>
+      <main class="page-content">
+        <div class="page-stack stack-lg"></div>
+      </main>
+      <footer class="page-footer">
+        ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" />` : `<div class="page-footer-inner"><span>GMP</span><span>Página <span class="js-page-number"></span> de <span class="js-page-count"></span></span></div>`}
+      </footer>
+    </section>
+  </div>
+
+  <div id="proposalSource" style="display:none">${blocksHtml}</div>
+
+  <script>
+    (function () {
+      function isElement(node) { return node && node.nodeType === 1; }
+      function splitTableByRows(tableEl, pageContentEl) {
+        const thead = tableEl.querySelector('thead');
+        const rows = Array.from(tableEl.querySelectorAll('tbody > tr'));
+        if (!rows.length) return [tableEl];
+        const mkTable = () => {
+          const t = tableEl.cloneNode(false);
+          const cg = tableEl.querySelector('colgroup');
+          if (cg) t.appendChild(cg.cloneNode(true));
+          if (thead) t.appendChild(thead.cloneNode(true));
+          const tb = document.createElement('tbody');
+          t.appendChild(tb);
+          return t;
+        };
+        const parts = [];
+        let current = mkTable();
+        parts.push(current);
+        for (const r of rows) {
+          current.querySelector('tbody').appendChild(r.cloneNode(true));
+          pageContentEl.appendChild(current);
+          const overflow = pageContentEl.scrollHeight > pageContentEl.clientHeight;
+          pageContentEl.removeChild(current);
+          if (overflow) {
+            current.querySelector('tbody').removeChild(current.querySelector('tbody').lastElementChild);
+            current = mkTable();
+            current.querySelector('tbody').appendChild(r.cloneNode(true));
+            parts.push(current);
+          }
+        }
+        return parts;
+      }
+      function paginateProposalContent() {
+        const doc = document.getElementById('proposalDocument');
+        const template = document.getElementById('proposalPageTemplate');
+        const source = document.getElementById('proposalSource');
+        if (!doc || !template || !source) return;
+        Array.from(doc.querySelectorAll('.proposal-page[data-generated=\"1\"]')).forEach(p => p.remove());
+        const blocks = Array.from(source.children).filter(isElement);
+        if (!blocks.length) return;
+        const createPage = () => {
+          const page = template.cloneNode(true);
+          page.removeAttribute('id');
+          page.style.display = '';
+          page.setAttribute('data-generated', '1');
+          doc.appendChild(page);
+          return page;
+        };
+        let page = createPage();
+        let stack = page.querySelector('.page-stack');
+        let pageContent = page.querySelector('.page-content');
+        const ensurePage = () => {
+          if (!page) {
+            page = createPage();
+            stack = page.querySelector('.page-stack');
+            pageContent = page.querySelector('.page-content');
+          }
+        };
+        const fits = () => pageContent.scrollHeight <= pageContent.clientHeight;
+        const addNode = (node) => { stack.appendChild(node); };
+
+        for (const block of blocks) {
+          ensurePage();
+          const isAvoid = block.classList.contains('avoid-break');
+          const table = block.querySelector('table[data-split-table=\"true\"]');
+          if (table) {
+            const wrapper = block.cloneNode(true);
+            const tableInWrapper = wrapper.querySelector('table[data-split-table=\"true\"]');
+            const tbody = tableInWrapper && tableInWrapper.querySelector('tbody');
+            if (tbody) tbody.innerHTML = '';
+            const parts = splitTableByRows(table, pageContent);
+            for (let i = 0; i < parts.length; i++) {
+              const partBlock = wrapper.cloneNode(true);
+              const t = partBlock.querySelector('table[data-split-table=\"true\"]');
+              const tb = t.querySelector('tbody');
+              tb.innerHTML = '';
+              Array.from(parts[i].querySelectorAll('tbody > tr')).forEach(r => tb.appendChild(r.cloneNode(true)));
+              addNode(partBlock);
+              if (!fits()) {
+                stack.removeChild(partBlock);
+                page = null;
+                ensurePage();
+                addNode(partBlock);
+              }
+              if (i < parts.length - 1) page = null;
+            }
+            continue;
+          }
+          const node = block.cloneNode(true);
+          addNode(node);
+          if (!fits()) {
+            stack.removeChild(node);
+            page = null;
+            ensurePage();
+            addNode(node);
+          }
+        }
+        const pages = Array.from(doc.querySelectorAll('.proposal-page')).filter(p => p.style.display !== 'none');
+        const total = pages.length;
+        pages.forEach((p, idx) => {
+          const n = idx + 1;
+          p.querySelectorAll('.js-page-number').forEach(el => { el.textContent = String(n); });
+          p.querySelectorAll('.js-page-count').forEach(el => { el.textContent = String(total); });
+        });
+      }
+      window.paginateProposalContent = paginateProposalContent;
+      const run = () => { try { paginateProposalContent(); } catch (_) {} };
+      window.addEventListener('load', () => { run(); setTimeout(run, 250); });
+      window.addEventListener('beforeprint', () => { run(); });
+      let t = null;
+      window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(run, 200); });
+    })();
+  </script>
+</body>
+</html>`;
+
+    return substituirPlaceholdersProposta(html, proposta, itens, totais);
+  } catch (error) {
+    console.error('Erro na função gerarHTMLPropostaPremiumV2:', error);
     throw error;
   }
 }
@@ -14837,9 +15245,11 @@ app.get('/api/notificacoes', authenticateToken, (req, res) => {
         solicitado_por_nome: row.solicitado_por_nome
       }));
 
-      const todasNotificacoes = [...notificacoesLembretes, ...notificacoesAprovacoes];
+      // IMPORTANTE: Aprovação de desconto NÃO é "lembrete" e não deve aparecer na tela de Atividades/Lembretes.
+      // Ela continua existindo e sendo tratada na tela específica de Aprovações.
+      const todasNotificacoes = [...notificacoesLembretes];
       
-      console.log(`✅ Retornando ${todasNotificacoes.length} notificações (${notificacoesLembretes.length} lembretes, ${notificacoesAprovacoes.length} aprovações)`);
+      console.log(`✅ Retornando ${todasNotificacoes.length} notificações (${notificacoesLembretes.length} lembretes)`);
       res.json(todasNotificacoes);
     });
   });

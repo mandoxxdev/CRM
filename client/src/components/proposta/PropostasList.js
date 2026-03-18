@@ -124,6 +124,15 @@ export default function PropostasList() {
   const isRascunho = (s) => s === 'rascunho';
   const podeAceitarRejeitar = (s) => s === 'enviada' || s === 'visualizada';
   const podeNovaRevisao = (s) => ['enviada', 'visualizada', 'aceita', 'rejeitada', 'cancelada', 'expirada'].includes(s);
+  const confirmExcluir = (p) => {
+    const numero = p?.numero_proposta || `#${p?.id}`;
+    const st = STATUS[p?.status] || p?.status || '—';
+    return window.confirm(
+      `Tem certeza que deseja excluir a proposta ${numero}?\n\n` +
+      `Status atual: ${st}\n\n` +
+      `Esta ação não pode ser desfeita.`
+    );
+  };
 
   return (
     <div className="propostas-list">
@@ -210,9 +219,13 @@ export default function PropostasList() {
                       {podeNovaRevisao(p.status) && <button type="button" title="Nova revisão" onClick={() => acao('nova-revisao', p.id)}><FiRotateCcw /></button>}
                       <button type="button" title="Clonar" onClick={() => acao('clone', p.id)}><FiCopy /></button>
                       {isRascunho(p.status) && <Link to={`/comercial/propostas/editar/${p.id}`} title="Editar"><FiEdit /></Link>}
-                      {isRascunho(p.status) && (
-                        <button type="button" title="Excluir" onClick={() => window.confirm('Excluir esta proposta?') && acao('excluir', p.id)}><FiTrash2 /></button>
-                      )}
+                      <button
+                        type="button"
+                        title="Excluir"
+                        onClick={() => confirmExcluir(p) && acao('excluir', p.id)}
+                      >
+                        <FiTrash2 />
+                      </button>
                     </div>
                   </td>
                 </tr>
