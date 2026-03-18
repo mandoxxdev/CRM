@@ -11220,7 +11220,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       if (typeof v !== 'string') return fallback;
       const s = v.trim();
       if (!s) return fallback;
-      try { return JSON.parse(s); } catch (_) { return fallback; }
+      try { return JSON.parse(s); } catch (_) {
+        // Fallback: lista separada por vírgula / ponto-e-vírgula / quebras de linha
+        // (caso admin salve como string simples e não como JSON)
+        if (s.includes(',') || s.includes(';') || s.includes('\n')) {
+          const parts = s
+            .split(/[,\n;]+/g)
+            .map(p => p.trim())
+            .filter(Boolean);
+          return parts;
+        }
+        return fallback;
+      }
     };
 
     const parseVariaveisList = () => {
@@ -11258,7 +11269,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       const ncm = esc(it.ncm || it.produto_ncm || '—');
 
       const descritivoTecRaw = it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '';
-      const descritivoTec = esc(String(descritivoTecRaw || '').trim() || '—');
+      let descritivoTec = esc(String(descritivoTecRaw || '').trim());
 
       // especificacoes_tecnicas pode vir como JSON string/objeto
       let specs = {};
@@ -11276,6 +11287,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           specs = { 'Especificações técnicas': String(specsRaw) };
         }
       }
+
+      // Se não veio "descritivo técnico" direto do item, tentar usar campos comuns do JSON de especificações.
+      if (!descritivoTec) {
+        const cand =
+          (specs && typeof specs === 'object')
+            ? (specs.descricao || specs.descritivo || specs.descricao_tecnica || specs['Descrição'] || specs['Especificações técnicas'] || '')
+            : '';
+        descritivoTec = esc(String(cand || '').trim());
+      }
+      if (!descritivoTec) descritivoTec = '—';
 
       const normKey = (s) => String(s || '')
         .trim()
@@ -11324,10 +11345,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         : (() => {
             const file = String(it.produto_imagem || it.imagem || '').trim();
             if (!file) return '';
-            if (forPdfServer) {
-              const data = uploadToDataUrl(uploadsProdutosDir, file);
-              if (data) return data;
-            }
+            // Embed base64 para evitar qualquer dependência de carregamento HTTP (preview e PDF).
+            // Fallback: se não conseguir ler do filesystem, usar URL.
+            const data = uploadToDataUrl(uploadsProdutosDir, file);
+            if (data) return data;
             return `${baseURL}/api/uploads/produtos/${encodeURIComponent(file)}?t=${ts}`;
           })();
 
@@ -12013,21 +12034,46 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       <div class="cover-wave" aria-hidden="true">
         <svg viewBox="0 0 1000 1400" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
           ${coverSvgDefs}
-          <!-- canto superior direito (marinho) -->
-          <path d="M650,0 C770,150 860,140 1000,0 L1000,0 L1000,420 C880,360 760,350 650,420 C585,462 545,520 470,560 C360,620 250,610 0,540 L0,0 Z"
-                fill="${coverNavyFill}" opacity="0.92"/>
-          <!-- onda superior (laranja) -->
-          <path d="M1000,360 C860,300 760,310 650,360 C560,402 505,470 420,520 C300,590 185,575 0,520 L0,660 C240,720 370,720 500,670 C610,628 660,560 740,520 C830,470 910,460 1000,500 Z"
-                fill="var(--orange-500)" opacity="0.92"/>
-          <!-- separador (mist) -->
-          <path d="M1000,430 C870,380 760,390 650,430 C560,465 505,530 420,580 C300,650 180,630 0,570 L0,650 C210,720 360,730 510,680 C620,642 670,570 760,535 C850,500 920,500 1000,540 Z"
-                fill="var(--mist-200)" opacity="0.95"/>
-          <!-- onda inferior (laranja claro) -->
-          <path d="M0,1040 C220,960 390,960 520,1010 C640,1055 700,1130 800,1170 C885,1203 940,1200 1000,1185 L1000,1400 L0,1400 Z"
-                fill="var(--orange-200)" opacity="0.92"/>
-          <!-- base inferior (marinho) -->
-          <path d="M0,1120 C230,1040 420,1040 560,1100 C700,1160 760,1250 860,1295 C920,1325 960,1330 1000,1320 L1000,1400 L0,1400 Z"
-                fill="${coverNavyFill}" opacity="0.92"/>
+          <!-- Fundo marinho -->
+          <rect x="0" y="0" width="1000" height="1400" fill="var(--navy-950)"/>
+
+          <!-- Faixas diagonais -->
+          <polygon points="0,0 760,0 520,540 0,540"
+                   fill="${coverWaveImageUrl ? 'url(#coverImgPattern)' : 'var(--aqua-500)'}" opacity="0.95"/>
+          <polygon points="520,0 1000,0 1000,560 730,470" fill="var(--blue-700)" opacity="0.92"/>
+
+          <!-- Cinza claro -->
+          <polygon points="-40,220 420,20 520,140 80,360" fill="var(--mist-200)" opacity="0.75"/>
+
+          <!-- Ribbon/onda central (aproximação do modelo enviado) -->
+          <path d="M230,470
+                   C290,360 430,320 535,380
+                   C630,435 640,565 545,640
+                   C455,710 340,680 280,610
+                   C235,555 205,520 230,470 Z"
+                fill="#ffffff" opacity="0.92"/>
+          <path d="M300,505
+                   C340,430 440,405 515,445
+                   C580,480 585,555 520,605
+                   C460,650 380,625 345,585
+                   C315,555 280,540 300,505 Z"
+                fill="var(--aqua-500)" opacity="0.95"/>
+
+          <!-- Base branca inferior com curva -->
+          <path d="M0,740
+                   C170,680 360,695 520,735
+                   C700,780 860,800 1000,770
+                   L1000,1400 L0,1400 Z"
+                fill="#ffffff"/>
+
+          <!-- Onda teal suave no topo do branco -->
+          <path d="M0,800
+                   C190,745 360,760 520,800
+                   C690,845 860,860 1000,835
+                   L1000,920
+                   C845,955 685,945 520,915
+                   C350,885 170,875 0,905 Z"
+                fill="rgba(37,183,190,0.45)"/>
         </svg>
       </div>
       <header class="page-header">
