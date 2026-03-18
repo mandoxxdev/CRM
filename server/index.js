@@ -7525,17 +7525,19 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             if (responseSent) return;
             let html;
             try {
-              let compList = [];
-              if (templateConfig && templateConfig.componentes) {
-                if (typeof templateConfig.componentes === 'string') { try { compList = JSON.parse(templateConfig.componentes); } catch (_) {} }
-                else if (Array.isArray(templateConfig.componentes)) compList = templateConfig.componentes;
-              }
-              if (Array.isArray(compList) && compList.length > 0) {
-                html = gerarHTMLPropostaFromComponentes(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
-              }
-              if (!html) {
-                html = gerarHTMLPropostaPremiumV2(proposta, itensArray, { subtotal, icms, ipi, total, dataEmissao, dataValidade }, templateConfig, requestBaseURL, false, omitPrintBar);
-              }
+              // Forçar V2 no preview para manter consistência com o PDF:
+              // - imagens do produto/capa/header/footer
+              // - variáveis técnicas por família (configurações do admin)
+              // - paginação estável
+              html = gerarHTMLPropostaPremiumV2(
+                proposta,
+                itensArray,
+                { subtotal, icms, ipi, total, dataEmissao, dataValidade },
+                templateConfig,
+                requestBaseURL,
+                false,
+                omitPrintBar
+              );
             } catch (genError) {
               console.error('Erro ao gerar HTML da proposta:', genError);
               console.error('Stack trace:', genError.stack);
@@ -7775,14 +7777,8 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     if (usouSnapshot && !sempreRegenerarParaPdf) {
       html = proposta.html_rendered;
     } else {
-      let compList = [];
-      if (templateConfig && templateConfig.componentes) {
-        if (typeof templateConfig.componentes === 'string') { try { compList = JSON.parse(templateConfig.componentes); } catch (_) {} }
-        else if (Array.isArray(templateConfig.componentes)) compList = templateConfig.componentes;
-      }
-      html = (Array.isArray(compList) && compList.length > 0)
-        ? gerarHTMLPropostaFromComponentes(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true)
-        : gerarHTMLPropostaPremiumV2(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true);
+      // Forçar V2 no PDF: garante embed base64 de imagens e variáveis por família.
+      html = gerarHTMLPropostaPremiumV2(proposta, itensArray, totais, templateConfig, requestBaseURL, true, true);
     }
     if (!html || typeof html !== 'string' || html.trim().length === 0) {
       throw new Error('HTML da proposta está vazio');
