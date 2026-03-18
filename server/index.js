@@ -11098,17 +11098,109 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>`;
     }).join('');
 
+    // 4.0 DESCRITIVO DOS EQUIPAMENTOS: 4.1 / 4.2 / ...
+    const equipDescritivoHtml = (itens || []).map((it, idx) => {
+      const n = idx + 1;
+      const itemNo = `4.${n}`;
+      const nome = esc(it.produto_nome || it.descricao || `Equipamento ${n}`);
+      const codigo = esc(it.codigo_produto || it.produto_codigo || '—');
+      const qtd = esc(Number(it.quantidade) || 1);
+      const und = esc(it.unidade || 'UN');
+      const familia = esc(it.familia_produto || it.produto_familia || it.familia || '—');
+      const modelo = esc(it.modelo || '—');
+      const categoria = esc(it.categoria || '—');
+      const ncm = esc(it.ncm || it.produto_ncm || '—');
+
+      const descritivoTecRaw = it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '';
+      const descritivoTec = esc(String(descritivoTecRaw || '').trim() || '—');
+
+      // especificacoes_tecnicas pode vir como JSON string/objeto
+      let specs = {};
+      const specsRaw = it.especificacoes_tecnicas || it.produto_especificacoes || '';
+      if (specsRaw) {
+        try {
+          if (typeof specsRaw === 'string') {
+            const trimmed = specsRaw.trim();
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) specs = JSON.parse(trimmed);
+            else specs = { 'Especificações técnicas': trimmed };
+          } else if (typeof specsRaw === 'object') {
+            specs = specsRaw;
+          }
+        } catch (_) {
+          specs = { 'Especificações técnicas': String(specsRaw) };
+        }
+      }
+
+      const specEntries = (specs && typeof specs === 'object')
+        ? Object.entries(specs)
+            .filter(([k, v]) => k && v != null && String(v).trim() !== '')
+            .slice(0, 30) // evita estourar layout com spec gigantes; segue padrão estável
+        : [];
+
+      const specRowsHtml = specEntries.map(([k, v]) => `
+        <tr>
+          <th>${esc(k)}</th>
+          <td>${esc(typeof v === 'string' ? v : JSON.stringify(v))}</td>
+        </tr>`).join('');
+
+      const produtoImagem = it.produto_imagem_base64
+        ? it.produto_imagem_base64
+        : ((it.produto_imagem || it.imagem) ? `${baseURL}/api/uploads/produtos/${esc(it.produto_imagem || it.imagem)}?t=${ts}` : '');
+
+      const fotoHtml = produtoImagem
+        ? `<img class="equip-photo-img" src="${produtoImagem}" alt="Foto do equipamento" onerror="this.style.display='none'; this.parentElement.querySelector('.equip-photo-fallback').style.display='block';" />`
+        : '';
+
+      return `
+        <section class="block stack-md allow-break">
+          <h3>${itemNo} ${nome}</h3>
+          <div class="equip-descritivo">
+            <div class="equip-photo">
+              ${fotoHtml}
+              <div class="equip-photo-fallback" style="display:${produtoImagem ? 'none' : 'block'}">Foto não disponível</div>
+            </div>
+            <div class="equip-tech">
+              <table class="table" data-split-table="true">
+                <thead>
+                  <tr>
+                    <th colspan="2">Dados técnicos do produto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><th>Equipamento</th><td>${nome}</td></tr>
+                  <tr><th>Código</th><td>${codigo}</td></tr>
+                  <tr><th>Quantidade</th><td>${qtd}</td></tr>
+                  <tr><th>Unidade</th><td>${und}</td></tr>
+                  <tr><th>Família</th><td>${familia}</td></tr>
+                  <tr><th>Modelo</th><td>${modelo}</td></tr>
+                  <tr><th>Categoria</th><td>${categoria}</td></tr>
+                  <tr><th>NCM</th><td>${ncm}</td></tr>
+                  <tr><th>Descritivo técnico</th><td>${descritivoTec}</td></tr>
+                  ${specRowsHtml}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      `;
+    }).join('');
+
     // Documento corporativo/jurídico: inserir bloco 5.* exatamente como fornecido.
     // Observação: a TABELA DE PREÇOS é gerada a partir dos itens selecionados na proposta (cadastro de produtos).
     const tabelaPrecosRows = (itens || []).map((it, idx) => {
       const itemRef = esc(it.numero_item != null ? it.numero_item : (idx + 1));
-      const descricao = esc(it.produto_nome || it.descricao || `Item ${idx + 1}`);
+      const nome = esc(it.produto_nome || it.descricao || `Item ${idx + 1}`);
+      const descritivoTecRaw = it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '';
+      const descritivoTec = esc(String(descritivoTecRaw || '').trim());
+      const descHtml = descritivoTec
+        ? `${nome}<div class="tech-desc">${descritivoTec}</div>`
+        : `${nome}`;
       const qtd = esc(Number(it.quantidade) || 1);
       const vUnitNum = Number(it.valor_unitario) || Number(it.preco_base) || 0;
       const vTotNum = Number(it.valor_total) || ((Number(it.quantidade) || 1) * vUnitNum);
       return `<tr>
         <td class="col-center">${itemRef}</td>
-        <td>${descricao}</td>
+        <td>${descHtml}</td>
         <td class="col-right">${qtd}</td>
         <td class="col-right">${esc(moedaBRL(vUnitNum))}</td>
         <td class="col-right">${esc(moedaBRL(vTotNum))}</td>
@@ -11116,6 +11208,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     }).join('');
 
     const blocksHtml = `
+      <section class="block stack-md allow-break">
+        <h2>4.0 DESCRITIVO DOS EQUIPAMENTOS</h2>
+      </section>
+      ${equipDescritivoHtml || `<section class="block stack-md allow-break"><p class="muted">Nenhum equipamento selecionado nesta proposta.</p></section>`}
+
       <section class="block stack-md allow-break">
         <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
       </section>
@@ -11466,8 +11563,17 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${titulo}</title>
   <style>
+    :root{
+      --ink: #0b1f33;
+      --muted: rgba(11,31,51,0.68);
+      --blue-900: #0b3a66;
+      --blue-700: #1a4d7a;
+      --blue-100: #e8f2fb;
+      --line: rgba(26,77,122,0.45);
+      --line-strong: rgba(26,77,122,0.75);
+    }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Arial, Calibri, Helvetica, sans-serif; color: #222; font-size: 11pt; line-height: 1.15; }
+    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Arial, Calibri, Helvetica, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; }
     img { max-width: 100%; height: auto; display: block; }
 
     h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
@@ -11487,20 +11593,35 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     .stack-xs, .stack-sm, .stack-md, .stack-lg, .stack-xl { display: flex; flex-direction: column; }
     .stack-xs { gap: 4px; } .stack-sm { gap: 8px; } .stack-md { gap: 12px; } .stack-lg { gap: 16px; } .stack-xl { gap: 24px; }
-    .muted { color: rgba(0,0,0,0.55); }
+    .muted { color: var(--muted); }
     .block { width: 100%; }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; row-gap: 10px; }
     .kv .k { font-size: 11px; opacity: 0.72; margin-bottom: 2px; }
     .kv .v { font-size: 12px; }
 
     table { width: 100%; border-collapse: collapse; }
-    .table { border: 1px solid rgba(0,0,0,0.35); border-radius: 6px; overflow: hidden; }
+    /* Grade completa: linhas internas e externas */
+    .table { border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; }
     thead { display: table-header-group; }
-    th, td { vertical-align: top; padding: 6px 8px; word-wrap: break-word; overflow-wrap: break-word; font-size: 11pt; }
-    th { text-align: left; background: rgba(0,0,0,0.06); font-weight: 700; }
-    .table-caption { font-weight: 700; margin: 6px 0 6px 0; }
+    th, td {
+      vertical-align: top;
+      padding: 6px 8px;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      font-size: 11pt;
+      border: 1px solid var(--line);
+    }
+    th { text-align: left; background: var(--blue-100); font-weight: 700; color: var(--blue-900); }
+    .table-caption { font-weight: 700; margin: 6px 0 6px 0; color: var(--blue-900); }
     .col-right { text-align: right; white-space: nowrap; }
     .col-center { text-align: center; }
+    .tech-desc { margin-top: 4px; font-size: 10pt; line-height: 1.15; color: var(--muted); text-align: justify; }
+
+    .equip-descritivo { display: flex; gap: 12mm; align-items: flex-start; }
+    .equip-photo { flex: 0 0 60mm; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
+    .equip-photo-img { width: 100%; height: 70mm; object-fit: contain; border-radius: 6px; }
+    .equip-photo-fallback { font-size: 10pt; color: var(--muted); text-align: center; padding: 22mm 6mm; background: var(--blue-100); border-radius: 6px; }
+    .equip-tech { flex: 1 1 auto; min-width: 0; }
     tr, img, table, blockquote { page-break-inside: avoid; break-inside: avoid; }
     .col-idx { width: 10mm; text-align: right; }
     .col-qtd { width: 16mm; text-align: right; }
@@ -11514,9 +11635,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .sig-role { font-size: 11px; opacity: 0.75; }
 
     .header-image, .footer-image { width: 100%; height: 100%; object-fit: cover; }
-    .page-footer-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 14mm; font-size: 11px; color: rgba(0,0,0,0.65); border-top: 1px solid rgba(0,0,0,0.08); }
+    .page-footer-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 14mm; font-size: 10pt; color: var(--muted); border-top: 1px solid var(--line); }
 
-    .cover-hero { height: 100%; min-height: 28mm; display: flex; align-items: center; justify-content: space-between; padding: 8mm 14mm; background: linear-gradient(135deg, rgba(0,0,0,0.55), rgba(0,0,0,0.15)), url('${coverImageURL}') center/cover no-repeat; color: #fff; }
+    .cover-hero { height: 100%; min-height: 28mm; display: flex; align-items: center; justify-content: space-between; padding: 8mm 14mm; background: linear-gradient(135deg, rgba(11,58,102,0.78), rgba(26,77,122,0.26)), url('${coverImageURL}') center/cover no-repeat; color: #fff; }
     .cover-logo { width: 56mm; max-width: 56mm; background: rgba(255,255,255,0.92); border-radius: 10px; padding: 8px 10px; }
     .cover-logo img { width: 100%; height: auto; object-fit: contain; }
     .cover-title { max-width: 120mm; }
@@ -11530,7 +11651,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .printbar { position: sticky; top: 0; z-index: 10; width: 100%; background: rgba(243,243,243,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(0,0,0,0.08); }
     .printbar-inner { max-width: 1320px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .printbar-title { font-size: 12px; color: rgba(0,0,0,0.7); font-weight: 700; }
-    .printbar-btn { border: 1px solid rgba(0,0,0,0.18); background: #0d2b4a; color: #fff; font-weight: 700; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+    .printbar-btn { border: 1px solid var(--line-strong); background: var(--blue-900); color: #fff; font-weight: 700; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
 
     @page { size: A4; margin: 0; }
     @media print {
