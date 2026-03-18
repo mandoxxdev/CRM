@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { FiX, FiSave, FiDownload, FiEdit2 } from 'react-icons/fi';
 import './PreviewPropostaEditavel.css';
 
 const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: onSaveCallback }) => {
+  const iframeRef = useRef(null);
   const [dadosEditaveis, setDadosEditaveis] = useState({
     titulo: formData.titulo || '',
     descricao: formData.descricao || '',
@@ -125,12 +126,24 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
   const handleSalvar = async () => {
     setLoading(true);
     try {
+      // Capturar HTML já editado no preview (contenteditable dentro do iframe)
+      // para persistir apenas nesta proposta (nunca no template).
+      let html_rendered = null;
+      try {
+        const iframe = iframeRef.current;
+        const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+        if (doc?.documentElement) {
+          html_rendered = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+        }
+      } catch (_) {}
+
       // Atualizar proposta com dados editados
       await api.put(`/propostas/${proposta.id}`, {
         ...formData,
         ...dadosEditaveis,
         itens: itensEditaveis,
-        valor_total: calcularTotal()
+        valor_total: calcularTotal(),
+        ...(html_rendered ? { html_rendered } : {})
       });
       if (onSaveCallback) onSaveCallback();
       else alert('Proposta salva com sucesso!');
@@ -147,14 +160,28 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
   const handleGerarPDF = async () => {
     setLoading(true);
     try {
-      await api.put(`/propostas/${proposta.id}`, {
-        ...formData,
-        ...dadosEditaveis,
-        itens: itensEditaveis,
-        valor_total: calcularTotal()
-      });
-      const response = await api.get(`/propostas/${proposta.id}/premium`, { responseType: 'text' });
-      let html = response.data;
+      // Capturar HTML já editado no preview (contenteditable dentro do iframe)
+      // para o PDF sair exatamente com o que o usuário alterou.
+      let html = null;
+      try {
+        const iframe = iframeRef.current;
+        const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+        if (doc?.documentElement) {
+          html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+        }
+      } catch (_) {}
+
+      // Fallback: se não conseguir acessar o iframe, gera o HTML padrão no backend
+      if (!html) {
+        await api.put(`/propostas/${proposta.id}`, {
+          ...formData,
+          ...dadosEditaveis,
+          itens: itensEditaveis,
+          valor_total: calcularTotal()
+        });
+        const response = await api.get(`/propostas/${proposta.id}/premium`, { responseType: 'text' });
+        html = response.data;
+      }
 
       // Garantir que imagens (cabeçalho/rodapé, logos, etc.) carreguem na janela do PDF: usar origem da API
       const apiBase = api.defaults.baseURL || '';
@@ -607,6 +634,7 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
                   </div>
                 ) : previewHTML ? (
                   <iframe
+                    ref={iframeRef}
                     srcDoc={previewHTML}
                     style={{
                       width: '100%',

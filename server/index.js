@@ -6567,7 +6567,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     lembrete_data, lembrete_mensagem, margem_desconto, itens,
     cliente_contato, cliente_telefone, cliente_email,
     oportunidade_id, tipo_proposta, expira_em,
-    idioma, moeda, incoterm, unidade_negocio
+      idioma, moeda, incoterm, unidade_negocio,
+      html_rendered
   } = req.body;
 
   // Buscar proposta atual completa para comparação
@@ -6768,7 +6769,7 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               lembrete_data = ?, lembrete_mensagem = ?, margem_desconto = ?, revisao = ?,
               cliente_contato = ?, cliente_telefone = ?, cliente_email = ?,
               oportunidade_id = ?, tipo_proposta = ?, expira_em = ?,
-              idioma = ?, moeda = ?, incoterm = ?, unidade_negocio = ?, updated_at = CURRENT_TIMESTAMP
+              idioma = ?, moeda = ?, incoterm = ?, unidade_negocio = ?, html_rendered = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
             [clienteIdFinal, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
               validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status,
@@ -6776,7 +6777,7 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, novaRevisao,
               cliente_contato || null, cliente_telefone || null, cliente_email || null,
               oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null,
-              idioma || null, moeda || null, incoterm || null, unidade_negocio || null, id],
+              idioma || null, moeda || null, incoterm || null, unidade_negocio || null, html_rendered || null, id],
             (err) => {
               if (err) {
                 // Tratar erro de UNIQUE constraint especificamente
