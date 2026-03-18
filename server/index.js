@@ -11225,40 +11225,71 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       if (typeof v !== 'string') return fallback;
       const s = v.trim();
       if (!s) return fallback;
-      try { return JSON.parse(s); } catch (_) {
-        // Fallback: lista separada por vírgula / ponto-e-vírgula / quebras de linha
-        // (caso admin salve como string simples e não como JSON)
-        if (s.includes(',') || s.includes(';') || s.includes('\n')) {
-          const parts = s
-            .split(/[,\n;]+/g)
-            .map(p => p.trim())
-            .filter(Boolean);
-          return parts;
+      try { return JSON.parse(s); } catch (_) { return fallback; }
+    };
+
+    const normalizeVariavelKey = (item) => {
+      if (item == null) return '';
+      if (typeof item === 'string' || typeof item === 'number') return String(item).trim();
+      if (typeof item === 'object') {
+        return String(item.chave || item.key || item.variavel_chave || item.id || '').trim();
+      }
+      return '';
+    };
+
+    const parseKeysArray = (raw) => {
+      if (raw == null) return [];
+      // já é array
+      if (Array.isArray(raw)) {
+        return raw.map(normalizeVariavelKey).filter(Boolean);
+      }
+      if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (!s) return [];
+        // tentar JSON
+        const parsed = parseJsonMaybe(s, null);
+        if (parsed) {
+          if (Array.isArray(parsed)) return parsed.map(normalizeVariavelKey).filter(Boolean);
+          if (typeof parsed === 'object') {
+            // objeto { chave: true }
+            return Object.keys(parsed).filter((k) => parsed[k]).map(normalizeVariavelKey).filter(Boolean);
+          }
         }
-        return fallback;
+        // fallback: string com separadores
+        return s
+          .replace(/^\[|\]$/g, '')
+          .split(/[,\n;]+/g)
+          .map(p => p.replace(/^['"]|['"]$/g, '').trim())
+          .filter(Boolean);
       }
+      // se for objeto (map) inesperado
+      if (typeof raw === 'object') {
+        return Object.keys(raw).map(normalizeVariavelKey).filter(Boolean);
+      }
+      return [];
     };
 
-    const parseVariaveisList = () => {
-      const listRaw = config.variaveis_proposta_tecnica;
-      let list = parseJsonMaybe(listRaw, Array.isArray(listRaw) ? listRaw : []);
-      if (!Array.isArray(list)) list = [];
-
-      // Variáveis por família (configuradas no admin)
-      const porFamiliaRaw = config.variaveis_proposta_por_familia;
-      const porFamilia = parseJsonMaybe(porFamiliaRaw, (porFamiliaRaw && typeof porFamiliaRaw === 'object') ? porFamiliaRaw : null);
-      if (porFamilia && typeof porFamilia === 'object' && !Array.isArray(porFamilia)) {
-        return (familia) => {
-          const famNorm = normalizarFamiliaComparacao(familia);
-          if (!famNorm) return list;
-          const keyMatch = Object.keys(porFamilia).find((k) => normalizarFamiliaComparacao(k) === famNorm);
-          const candidate = keyMatch ? porFamilia[keyMatch] : null;
-          return Array.isArray(candidate) && candidate.length > 0 ? candidate : list;
-        };
+    const parsePorFamiliaMap = (raw) => {
+      const parsed = parseJsonMaybe(raw, null);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+      const out = {};
+      for (const [fam, val] of Object.entries(parsed)) {
+        out[fam] = parseKeysArray(val);
       }
-      return () => list;
+      return out;
     };
-    const getVariaveisListForFamilia = parseVariaveisList();
+
+    const baseKeys = parseKeysArray(config.variaveis_proposta_tecnica);
+    const porFamiliaMap = parsePorFamiliaMap(config.variaveis_proposta_por_familia);
+
+    const getVariaveisListForFamilia = (familia) => {
+      const famNorm = normalizarFamiliaComparacao(familia);
+      if (!famNorm) return baseKeys;
+      const keyMatch = Object.keys(porFamiliaMap).find((k) => normalizarFamiliaComparacao(k) === famNorm);
+      if (!keyMatch) return baseKeys;
+      const candidate = Array.isArray(porFamiliaMap[keyMatch]) ? porFamiliaMap[keyMatch] : [];
+      return candidate.length > 0 ? candidate : baseKeys;
+    };
 
     // 4.0 DESCRITIVO DOS EQUIPAMENTOS: 4.1 / 4.2 / ...
     const equipDescritivoHtml = (itens || []).map((it, idx) => {
@@ -11807,7 +11838,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     `;
 
     const pageHeaderTemplateHtml = `
-      <div class="page-header-inner">
+      <div class="page-header-inner" style="${headerImageURL ? 'display:none;' : ''}">
         <div class="page-header-logo"><img src="${logoGMP}" alt="GMP" /></div>
         <div class="page-header-mid">
           <p class="page-header-title">Proposta Técnica Comercial</p>
@@ -11818,7 +11849,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" onerror="this.remove();" />` : ''}`;
 
     const pageFooterTemplateHtml = `
-      <div class="page-footer-inner">
+      <div class="page-footer-inner" style="${footerImageURL ? 'display:none;' : ''}">
         <div class="page-footer-left">
           <span class="page-footer-strong">GMP • Moinho Ypiranga</span>
           <span>Av. Dr. Ulysses Guimarães, 4105 • Diadema/SP</span>
@@ -11855,7 +11886,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       --line-strong: rgba(26,77,122,0.75);
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Arial, Calibri, Helvetica, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; }
+    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: 'Century Gothic', 'CenturyGothic', Arial, Calibri, Helvetica, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; }
     img { max-width: 100%; height: auto; display: block; }
 
     h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
@@ -11873,7 +11904,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     /* Header/footers com altura fixa para repetir corretamente em todas as páginas */
     .page-header { flex: 0 0 auto; width: 100%; height: 28mm; padding: 0; margin: 0; }
     .page-content { flex: 1 1 auto; width: 100%; padding: 10mm 14mm 10mm 14mm; margin: 0; overflow: hidden; }
-    .page-footer { flex: 0 0 auto; width: 100%; height: 18mm; padding: 0; margin: 0; }
+    .page-footer { flex: 0 0 auto; width: 100%; height: 19mm; padding: 0; margin: 0; }
 
     .stack-xs, .stack-sm, .stack-md, .stack-lg, .stack-xl { display: flex; flex-direction: column; }
     .stack-xs { gap: 4px; } .stack-sm { gap: 8px; } .stack-md { gap: 12px; } .stack-lg { gap: 16px; } .stack-xl { gap: 24px; }
