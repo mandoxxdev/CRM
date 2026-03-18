@@ -7387,7 +7387,7 @@ app.get('/api/propostas/:id/premium', (req, res) => {
              pr.descricao as produto_descricao, pr.especificacoes_tecnicas, pr.familia as produto_familia,
              pr.preco_base, pr.icms, pr.ipi
       FROM proposta_itens pi
-      LEFT JOIN produtos pr ON pi.codigo_produto = pr.codigo
+      LEFT JOIN produtos pr ON TRIM(COALESCE(pi.codigo_produto,'')) = TRIM(COALESCE(pr.codigo,''))
       WHERE pi.proposta_id = ?
       ORDER BY pi.id
     `, [id], (err, itens) => {
@@ -7645,7 +7645,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
                pr.descricao as produto_descricao, pr.especificacoes_tecnicas, pr.familia as produto_familia,
                pr.preco_base, pr.icms, pr.ipi
         FROM proposta_itens pi
-        LEFT JOIN produtos pr ON pi.codigo_produto = pr.codigo
+        LEFT JOIN produtos pr ON TRIM(COALESCE(pi.codigo_produto,'')) = TRIM(COALESCE(pr.codigo,''))
         WHERE pi.proposta_id = ?
         ORDER BY pi.id
       `, [id], (err, rows) => {
@@ -11629,6 +11629,37 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
     `;
 
+    const pageHeaderTemplateHtml = headerImageURL
+      ? `<img class="header-image" src="${headerImageURL}" alt="" onerror="this.style.display='none'; this.parentElement.querySelector('.page-header-inner').style.display='grid';" />
+         <div class="page-header-inner" style="display:none">
+           <div class="page-header-logo"><img src="${logoGMP}" alt="GMP" /></div>
+           <div class="page-header-mid">
+             <p class="page-header-title">Proposta Técnica Comercial</p>
+             <p class="page-header-sub">${clienteNome} • ${clienteCnpj}</p>
+           </div>
+           <div class="page-header-right"><span class="page-header-pill">Nº ${numero}</span></div>
+         </div>`
+      : `<div class="page-header-inner">
+           <div class="page-header-logo"><img src="${logoGMP}" alt="GMP" /></div>
+           <div class="page-header-mid">
+             <p class="page-header-title">Proposta Técnica Comercial</p>
+             <p class="page-header-sub">${clienteNome} • ${clienteCnpj}</p>
+           </div>
+           <div class="page-header-right"><span class="page-header-pill">Nº ${numero}</span></div>
+         </div>`;
+
+    const pageFooterTemplateHtml = footerImageURL
+      ? `<img class="footer-image" src="${footerImageURL}" alt="" />`
+      : `<div class="page-footer-inner">
+           <div class="page-footer-left">
+             <span class="page-footer-strong">GMP • Moinho Ypiranga</span>
+             <span>Av. Dr. Ulysses Guimarães, 4105 • Diadema/SP</span>
+           </div>
+           <div class="page-footer-right">
+             Página <span class="js-page-number"></span> de <span class="js-page-count"></span>
+           </div>
+         </div>`;
+
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -11645,8 +11676,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       --blue-100: #e8f2fb;
       --navy-950: #0a2a4f;
       --navy-900: #123a68;
-      --aqua-500: #25b7be;
-      --aqua-300: #7ad6d5;
+      /* Cores GMP: azul + laranja */
+      --orange-500: #ff6b35;
+      --orange-200: #ffd4c6;
+      --aqua-500: #25b7be; /* legado (não usar na capa) */
+      --aqua-300: #7ad6d5; /* legado (não usar na capa) */
       --mist-200: #e6ecef;
       --line: rgba(26,77,122,0.45);
       --line-strong: rgba(26,77,122,0.75);
@@ -11665,7 +11699,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     ul, ol { padding-left: 16px; margin-bottom: 6px; }
 
     .proposal-document { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
-    .proposal-page { width: 210mm; min-height: 297mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; page-break-after: always; break-after: page; }
+    /* Cada section é uma página A4 independente (altura fixa) */
+    .proposal-page { width: 210mm; height: 297mm; min-height: 297mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; page-break-after: always; break-after: page; }
     /* Header/footers com altura fixa para repetir corretamente em todas as páginas */
     .page-header { flex: 0 0 auto; width: 100%; height: 28mm; padding: 0; margin: 0; }
     .page-content { flex: 1 1 auto; width: 100%; padding: 10mm 14mm 10mm 14mm; margin: 0; overflow: hidden; }
@@ -11764,6 +11799,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     /* Capa estilo "ondas" (referência enviada) — página inteira */
     .cover-page { position: relative; overflow: hidden; background: #fff; }
+    /* Cabeçalho da capa precisa ser maior para não cortar logos */
+    .cover-page .page-header { height: 42mm; }
     .cover-page .cover-wave {
       position: absolute;
       inset: 0;
@@ -11802,7 +11839,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       padding: 7px 9px;
       box-shadow: 0 10px 28px rgba(10,42,79,0.10);
     }
-    .cover-logo img, .cover-client-logo img { width: 100%; height: auto; object-fit: contain; }
+    .cover-logo img, .cover-client-logo img {
+      width: 100%;
+      height: 18mm;
+      max-height: 18mm;
+      object-fit: contain;
+      display: block;
+    }
     .cover-title {
       position: relative;
       z-index: 2;
@@ -11850,15 +11893,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <!-- canto superior direito (marinho) -->
           <path d="M650,0 C770,150 860,140 1000,0 L1000,0 L1000,420 C880,360 760,350 650,420 C585,462 545,520 470,560 C360,620 250,610 0,540 L0,0 Z"
                 fill="var(--navy-950)" opacity="0.92"/>
-          <!-- onda superior (aqua) -->
+          <!-- onda superior (laranja) -->
           <path d="M1000,360 C860,300 760,310 650,360 C560,402 505,470 420,520 C300,590 185,575 0,520 L0,660 C240,720 370,720 500,670 C610,628 660,560 740,520 C830,470 910,460 1000,500 Z"
-                fill="var(--aqua-500)" opacity="0.92"/>
+                fill="var(--orange-500)" opacity="0.92"/>
           <!-- separador (mist) -->
           <path d="M1000,430 C870,380 760,390 650,430 C560,465 505,530 420,580 C300,650 180,630 0,570 L0,650 C210,720 360,730 510,680 C620,642 670,570 760,535 C850,500 920,500 1000,540 Z"
                 fill="var(--mist-200)" opacity="0.95"/>
-          <!-- onda inferior (aqua claro) -->
+          <!-- onda inferior (laranja claro) -->
           <path d="M0,1040 C220,960 390,960 520,1010 C640,1055 700,1130 800,1170 C885,1203 940,1200 1000,1185 L1000,1400 L0,1400 Z"
-                fill="var(--aqua-300)" opacity="0.92"/>
+                fill="var(--orange-200)" opacity="0.92"/>
           <!-- base inferior (marinho) -->
           <path d="M0,1120 C230,1040 420,1040 560,1100 C700,1160 760,1250 860,1295 C920,1325 960,1330 1000,1320 L1000,1400 L0,1400 Z"
                 fill="var(--navy-950)" opacity="0.92"/>
@@ -11938,36 +11981,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     <section class="proposal-page" id="proposalPageTemplate" style="display:none">
       <header class="page-header">
-        ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" />` : `
-          <div class="page-header-inner">
-            <div class="page-header-logo">
-              <img src="${logoGMP}" alt="GMP" />
-            </div>
-            <div class="page-header-mid">
-              <p class="page-header-title">Proposta Técnica Comercial</p>
-              <p class="page-header-sub">${clienteNome} • ${clienteCnpj}</p>
-            </div>
-            <div class="page-header-right">
-              <span class="page-header-pill">Nº ${numero}</span>
-            </div>
-          </div>
-        `}
+        ${pageHeaderTemplateHtml}
       </header>
       <main class="page-content">
         <div class="page-stack stack-lg"></div>
       </main>
       <footer class="page-footer">
-        ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" />` : `
-          <div class="page-footer-inner">
-            <div class="page-footer-left">
-              <span class="page-footer-strong">GMP • Moinho Ypiranga</span>
-              <span>Av. Dr. Ulysses Guimarães, 4105 • Diadema/SP</span>
-            </div>
-            <div class="page-footer-right">
-              Página <span class="js-page-number"></span> de <span class="js-page-count"></span>
-            </div>
-          </div>
-        `}
+        ${pageFooterTemplateHtml}
       </footer>
     </section>
   </div>
