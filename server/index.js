@@ -11292,21 +11292,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>`;
     }).join('');
 
+    // ===== Variáveis técnicas (Item 4.x) - parsing robusto do template =====
+    // Objetivo: sempre transformar config (variáveis do admin) em uma lista real de chaves
+    // para que `${specRowsHtml}` seja montado no <tbody> da tabela.
     const normalizarFamiliaComparacao = (s) => String(s || '')
       .trim()
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/\s+/g, ' ');
-
-    const parseJsonMaybe = (v, fallback) => {
-      if (v == null) return fallback;
-      if (typeof v === 'object') return v;
-      if (typeof v !== 'string') return fallback;
-      const s = v.trim();
-      if (!s) return fallback;
-      try { return JSON.parse(s); } catch (_) { return fallback; }
-    };
 
     const normalizeVariavelKey = (item) => {
       if (item == null) return '';
@@ -11317,72 +11311,90 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       return '';
     };
 
-    const parseKeysArray = (raw) => {
+    const tryParseJson = (s) => {
+      if (typeof s !== 'string') return null;
+      const t = s.trim();
+      if (!t) return null;
+      if (t === '[object Object]') return null;
+      try { return JSON.parse(t); } catch (_) { return null; }
+    };
+
+    const toKeysArray = (raw) => {
       if (raw == null) return [];
-      // já é array
-      if (Array.isArray(raw)) return raw.map(normalizeVariavelKey).filter(Boolean);
+
+      if (Array.isArray(raw)) {
+        return raw.map(normalizeVariavelKey).filter(Boolean);
+      }
 
       if (typeof raw === 'string') {
-        const s = raw.trim();
-        if (!s) return [];
-
-        // tentar JSON
-        const parsed = parseJsonMaybe(s, null);
+        const parsed = tryParseJson(raw);
         if (parsed) {
           if (Array.isArray(parsed)) return parsed.map(normalizeVariavelKey).filter(Boolean);
           if (typeof parsed === 'object') {
-            // objeto { chave: true } ou { chave: 1 }
+            if (Array.isArray(parsed.selected)) return parsed.selected.map(normalizeVariavelKey).filter(Boolean);
+            if (Array.isArray(parsed.chaves)) return parsed.chaves.map(normalizeVariavelKey).filter(Boolean);
+            // mapa { chave:true }
             return Object.keys(parsed).filter((k) => parsed[k]).map(normalizeVariavelKey).filter(Boolean);
           }
         }
 
         // fallback: string com separadores (CSV/newline/etc)
-        return s
+        return raw
+          .trim()
           .replace(/^\[|\]$/g, '')
           .split(/[,\n;]+/g)
           .map((p) => p.replace(/^['"]|['"]$/g, '').trim())
+          .filter(Boolean)
+          .map(normalizeVariavelKey)
           .filter(Boolean);
       }
 
       if (typeof raw === 'object') {
-        // formatos comuns vindos do frontend
-        if (Array.isArray(raw.selected)) return parseKeysArray(raw.selected);
-        if (Array.isArray(raw.chaves)) return parseKeysArray(raw.chaves);
+        if (Array.isArray(raw.selected)) return raw.selected.map(normalizeVariavelKey).filter(Boolean);
+        if (Array.isArray(raw.chaves)) return raw.chaves.map(normalizeVariavelKey).filter(Boolean);
 
-        // array-like objeto do tipo { "0":"key1", "1":"key2" }
         const keys = Object.keys(raw);
-        if (keys.length > 0 && keys.every((k) => String(+k) === k)) {
-          const vals = Object.values(raw);
-          if (vals.every((v) => typeof v === 'string' || typeof v === 'number')) {
-            return vals.map(normalizeVariavelKey).filter(Boolean);
-          }
-        }
+        if (keys.length === 0) return [];
 
-        // mapa do tipo { key1:true, key2:true }
-        const anyTruthy = Object.keys(raw).some((k) => Boolean(raw[k]));
+        // mapa { chave:true }
+        const anyTruthy = keys.some((k) => Boolean(raw[k]));
         if (anyTruthy) {
-          return Object.keys(raw).filter((k) => raw[k]).map(normalizeVariavelKey).filter(Boolean);
+          return keys.filter((k) => Boolean(raw[k])).map(normalizeVariavelKey).filter(Boolean);
         }
 
-        // fallback: valores diretos
-        return Object.values(raw).map(normalizeVariavelKey).filter(Boolean);
+        // array-like { "0":"key1", "1":"key2" }
+        const isIndexMap = keys.every((k) => String(+k) === k);
+        if (isIndexMap) return Object.values(raw).map(normalizeVariavelKey).filter(Boolean);
+
+        // fallback: considerar as próprias chaves como lista
+        return keys.map(normalizeVariavelKey).filter(Boolean);
       }
 
       return [];
     };
 
-    const parsePorFamiliaMap = (raw) => {
-      const parsed = parseJsonMaybe(raw, null);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const toFamiliesMap = (raw) => {
+      if (raw == null) return {};
+
+      let obj = raw;
+      if (typeof raw === 'string') {
+        const parsed = tryParseJson(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        obj = parsed;
+      }
+
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+
       const out = {};
-      for (const [fam, val] of Object.entries(parsed)) {
-        out[fam] = parseKeysArray(val);
+      for (const [fam, val] of Object.entries(obj)) {
+        const keys = toKeysArray(val);
+        if (keys.length > 0) out[fam] = keys;
       }
       return out;
     };
 
-    const baseKeys = parseKeysArray(config.variaveis_proposta_tecnica);
-    const porFamiliaMap = parsePorFamiliaMap(config.variaveis_proposta_por_familia);
+    const baseKeys = toKeysArray(config.variaveis_proposta_tecnica);
+    const porFamiliaMap = toFamiliesMap(config.variaveis_proposta_por_familia);
 
     const extrairCodigoFamiliaParens = (s) => {
       const m = String(s || '').match(/\(([^)]+)\)/);
@@ -11399,7 +11411,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       const famNorm = normalizarFamiliaComparacao(familia);
       if (!famNorm) return baseKeys;
 
-      const keysMap = Object.keys(porFamiliaMap);
+      const keysMap = Object.keys(porFamiliaMap || {});
+      if (keysMap.length === 0) return baseKeys;
 
       // 1) match exato (nome da família)
       let keyMatch = keysMap.find((k) => normalizarFamiliaComparacao(k) === famNorm) || null;
@@ -11423,10 +11436,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         }) || null;
       }
 
-      if (!keyMatch) return baseKeys;
-
-      const candidate = Array.isArray(porFamiliaMap[keyMatch]) ? porFamiliaMap[keyMatch] : [];
-      return candidate.length > 0 ? candidate : baseKeys;
+      const candidate = keyMatch ? porFamiliaMap[keyMatch] : [];
+      return Array.isArray(candidate) && candidate.length > 0 ? candidate : baseKeys;
     };
 
     // 4.0 DESCRITIVO DOS EQUIPAMENTOS: 4.1 / 4.2 / ...
@@ -11491,7 +11502,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       };
 
       const variaveisLabelsRaw = config.variaveis_proposta_labels || {};
-      const variaveisLabels = parseJsonMaybe(variaveisLabelsRaw, (variaveisLabelsRaw && typeof variaveisLabelsRaw === 'object') ? variaveisLabelsRaw : {});
+      let variaveisLabels = {};
+      if (typeof variaveisLabelsRaw === 'string') {
+        const parsed = tryParseJson(variaveisLabelsRaw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) variaveisLabels = parsed;
+      } else if (variaveisLabelsRaw && typeof variaveisLabelsRaw === 'object') {
+        variaveisLabels = variaveisLabelsRaw;
+      }
       const variaveisList = getVariaveisListForFamilia(it.familia_produto || it.produto_familia || it.familia || '');
       // Sempre respeitar a seleção do admin (por família). Se não houver lista, não imprime specs extras.
       const specRowsHtml = (Array.isArray(variaveisList) && variaveisList.length > 0)
