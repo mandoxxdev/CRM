@@ -7735,10 +7735,20 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     }
     let chaves = [];
     if (templateConfig && templateConfig.variaveis_proposta_tecnica != null) {
-      if (typeof templateConfig.variaveis_proposta_tecnica === 'string') {
-        try { chaves = JSON.parse(templateConfig.variaveis_proposta_tecnica); } catch (_) {}
-      } else if (Array.isArray(templateConfig.variaveis_proposta_tecnica)) {
-        chaves = templateConfig.variaveis_proposta_tecnica;
+      const raw = templateConfig.variaveis_proposta_tecnica;
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) chaves = parsed;
+          else if (parsed && typeof parsed === 'object') chaves = Object.keys(parsed).filter((k) => parsed[k]);
+        } catch (_) {}
+      } else if (Array.isArray(raw)) {
+        chaves = raw;
+      } else if (raw && typeof raw === 'object') {
+        // formatos comuns vindos do frontend (ex: { selected: [...] } ou { chave:true })
+        if (Array.isArray(raw.selected)) chaves = raw.selected;
+        else if (Array.isArray(raw.chaves)) chaves = raw.chaves;
+        else chaves = Object.keys(raw).filter((k) => raw[k]);
       }
     }
     if (!Array.isArray(chaves)) chaves = [];
@@ -8033,8 +8043,12 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
   // Verificar se já existe configuração para esta família
   const queryFamilia = familia ? 'WHERE familia = ?' : 'WHERE familia IS NULL OR familia = \'Geral\'';
   const paramsFamilia = familia ? [familia] : [];
-  const variaveisPorFamiliaStr = (variaveis_proposta_por_familia && typeof variaveis_proposta_por_familia === 'object')
-    ? JSON.stringify(variaveis_proposta_por_familia) : '{}';
+  const variaveisPorFamiliaStr =
+    variaveis_proposta_por_familia == null
+      ? '{}'
+      : (typeof variaveis_proposta_por_familia === 'string'
+          ? variaveis_proposta_por_familia
+          : JSON.stringify(variaveis_proposta_por_familia));
 
   db.get(`SELECT * FROM proposta_template_config ${queryFamilia} ORDER BY id DESC LIMIT 1`, paramsFamilia, (err, existing) => {
     if (err) {
@@ -8043,7 +8057,12 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
 
     if (existing) {
       // Atualizar
-      const variaveisPropostaStr = Array.isArray(variaveis_proposta_tecnica) ? JSON.stringify(variaveis_proposta_tecnica) : (variaveis_proposta_tecnica || null);
+      const variaveisPropostaStr =
+        variaveis_proposta_tecnica == null
+          ? '[]'
+          : (typeof variaveis_proposta_tecnica === 'string'
+              ? variaveis_proposta_tecnica
+              : JSON.stringify(variaveis_proposta_tecnica));
       const marginTopPrimeira = margin_impressao_top_primeira != null ? Number(margin_impressao_top_primeira) : 20;
       const marginTopOutras = margin_impressao_top_outras != null ? Number(margin_impressao_top_outras) : 50;
       const marginBottom = margin_impressao_bottom != null ? Number(margin_impressao_bottom) : 45;
@@ -8099,7 +8118,12 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
       );
     } else {
       // Criar nova
-      const variaveisPropostaStr = Array.isArray(variaveis_proposta_tecnica) ? JSON.stringify(variaveis_proposta_tecnica) : (variaveis_proposta_tecnica || null);
+      const variaveisPropostaStr =
+        variaveis_proposta_tecnica == null
+          ? '[]'
+          : (typeof variaveis_proposta_tecnica === 'string'
+              ? variaveis_proposta_tecnica
+              : JSON.stringify(variaveis_proposta_tecnica));
       const marginTopPrimeira = margin_impressao_top_primeira != null ? Number(margin_impressao_top_primeira) : 20;
       const marginTopOutras = margin_impressao_top_outras != null ? Number(margin_impressao_top_outras) : 50;
       const marginBottom = margin_impressao_bottom != null ? Number(margin_impressao_bottom) : 45;
@@ -10226,7 +10250,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         if (!container || !source) return;
         var headerImg = (container.getAttribute('data-header-img') || '').replace(/&amp;/g, '&');
         var footerImg = (container.getAttribute('data-footer-img') || '').replace(/&amp;/g, '&');
-        var maxContentHeightPx = 750;
+        var maxContentHeightPx = 750; // fallback
         var nodes = [];
         var i;
         var childList = source.children && source.children.length >= 0
@@ -10252,6 +10276,13 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           return content;
         }
         var currentContent = createPage();
+        // Recalcular limite com base na altura real do layout (header/footer + padding do CSS).
+        // Isso evita texto "invadindo" o rodapé quando as alturas em mm mudam.
+        var measuredMax = 0;
+        try {
+          measuredMax = Math.floor(currentContent.getBoundingClientRect().height);
+        } catch (_) {}
+        if (measuredMax > 0) maxContentHeightPx = Math.max(0, measuredMax - 2);
         for (i = 0; i < nodes.length; i++) {
           var node = nodes[i];
           currentContent.appendChild(node);
@@ -11602,11 +11633,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>Para agendamento da montagem, a CONTRATANTE deverá solicitar, quando os equipamentos já estiverem em sua sede.</p>
         <p>Para agendamento de startup, a CONTRATANTE deverá solicitar, após finalizar e deixar conectado e instalado, toda a infraestrutura de alimentação dos equipamentos, como elétrica, hidráulica, pneumática, e outras que se fizerem necessárias.</p>
         <p>As operações de translado dos técnicos, montagem e startup dos equipamentos, deverão ocorrer de segunda-feira a sexta-feira, exceto feriados, dentro do horário comercial (das 8h ás 12h e das 13h ás 17h).</p>
-        <p>Operações realizadas após o horário comercial, feriados e finais de semana, quando não acordadas previamente e formalmente via e-mail, estão sujeitas a cobranças adicionais, da CONTRATADA para a CONTRANTE, conforme tabela “hora-homem” da CONTRATADA.</p>
-        <p>Todas e quaisquer áreas, instalações, equipamentos e ferramentas que porventura forem cedidos a CONTRATADA pela CONTRANTE, serão por ela mantidos como se seus fosse, de modo a restituí-los, terminada sua utilização, no estado que os receberá.</p>
+        <p>Operações realizadas após o horário comercial, feriados e finais de semana, quando não acordadas previamente e formalmente via e-mail, estão sujeitas a cobranças adicionais, da CONTRATADA para a CONTRATANTE, conforme tabela “hora-homem” da CONTRATADA.</p>
+        <p>Todas e quaisquer áreas, instalações, equipamentos e ferramentas que porventura forem cedidos a CONTRATADA pela CONTRATANTE, serão por ela mantidos como se seus fosse, de modo a restituí-los, terminada sua utilização, no estado que os receberá.</p>
         <p>A CONTRATADA deverá manter no local de trabalho, montagem e startup dos equipamentos, somente pessoal especializado e contratado com base na legislação trabalhista brasileira e/ou “terceiros” com contrato de prestação de serviços, ás suas exclusivas expensas e responsabilidade, todo o pessoal necessário, direta ou indiretamente, a execução do objeto do presente instrumento, de acordo com as normas trabalhistas e previdenciárias vigentes, sendo os mesmos de total responsabilidade da CONTRATADA, inclusive encargos sociais e exames médicos.</p>
         <p>A CONTRATANTE será responsável pelas despesas de translado (rodoviário e aéreo), estadia e alimentação (café da manhã, almoço e janta) dos técnicos de montagem e startup.</p>
-        <p>Para casos de operações de montagem e startup, fora do estado em que se encontra a sede da CONTRATADA, o translado aplicado é o aéreo, realizado por aeronaves, como avião, e as despesas de deslocamento dos técnicos entre a sede da CONTRATADA e CONTRATANTE até o aeroporto, e vice-versa, compõem as despesas de translado que é de responsabilidade da CONTRANTE.</p>
+        <p>Para casos de operações de montagem e startup, fora do estado em que se encontra a sede da CONTRATADA, o translado aplicado é o aéreo, realizado por aeronaves, como avião, e as despesas de deslocamento dos técnicos entre a sede da CONTRATADA e CONTRATANTE até o aeroporto, e vice-versa, compõem as despesas de translado que é de responsabilidade da CONTRATANTE.</p>
         <p>A CONTRATANTE será responsável pelas despesas de transporte (ida e volta) das ferramentas dos técnicos da CONTRATADA, e também, quando necessário, das despesas relacionadas com locação de andaimes, plataformas elevatória, pórticos e serviços de movimentações, como munck, guindaste, empilhadeira e outros que se fizerem necessárias.</p>
         <p>Quando aplicável, a CONTRATANTE será responsável pelo retorno de materiais utilizados na execução dos trabalhos, como vigas, tubos, chapas, e outros, para sede da CONTRATADA.</p>
         <p>Em casos que as operações de montagem acontecerá em áreas classificadas com risco de explosão e/ou espaço confinado, a CONTRATANTE ficará responsável por locar e disponibilizar para a CONTRATADA, os equipamentos de segurança, como tripé, detector de gases, exaustor/insuflador, kit de polias, conjunto de ar mandado, e outros que se fizerem necessários.</p>
@@ -11993,7 +12024,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       --line-strong: rgba(26,77,122,0.75);
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: 'Century Gothic', 'CenturyGothic', Arial, Calibri, Helvetica, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; }
+    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: 'Century Gothic', 'CenturyGothic', Arial, Calibri, Helvetica, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-synthesis: none; }
     img { max-width: 100%; height: auto; display: block; }
 
     h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
