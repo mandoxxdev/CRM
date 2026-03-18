@@ -11080,60 +11080,232 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </div>`;
 
+    // A partir daqui: “proposta multinacional (EPC / supply agreement)”
+    // Equipamentos e descritivos vêm dos itens/produtos puxados no momento da proposta (itensArray + produtos).
+    const itensListaHtml = (itens || []).map((it, idx) => {
+      const nome = esc(it.produto_nome || it.descricao || `Equipamento ${idx + 1}`);
+      const codigo = esc(it.codigo_produto || it.produto_codigo || '');
+      const qtd = esc(Number(it.quantidade) || 1);
+      const und = esc(it.unidade || 'UN');
+      const resumoTec = esc(it.descritivo_tecnico || it.descricao_resumida || it.produto_descricao || '');
+      return `
+        <div class="equip-item avoid-break">
+          <div class="equip-head">
+            <div class="equip-title">${idx + 1}. ${nome}${codigo ? ` <span class="muted">(Cód. ${codigo})</span>` : ''}</div>
+            <div class="equip-qty">${qtd} ${und}</div>
+          </div>
+          ${resumoTec ? `<p class="equip-desc">${resumoTec}</p>` : ``}
+        </div>`;
+    }).join('');
+
     const blocksHtml = `
+      <!-- PARTE 1 – APRESENTAÇÃO COMERCIAL -->
       <section class="block stack-md avoid-break">
-        <h2>Dados do cliente</h2>
-        <div class="grid-2 stack-sm">
-          <div class="kv"><div class="k">Cliente</div><div class="v">${clienteNome}</div></div>
-          <div class="kv"><div class="k">CNPJ</div><div class="v">${clienteCnpj}</div></div>
-          <div class="kv"><div class="k">Contato</div><div class="v">${esc(proposta.cliente_contato || '—')}</div></div>
-          <div class="kv"><div class="k">E-mail</div><div class="v">${esc(proposta.cliente_email || '—')}</div></div>
-          <div class="kv"><div class="k">Telefone</div><div class="v">${esc(proposta.cliente_telefone || '—')}</div></div>
-          <div class="kv"><div class="k">Responsável</div><div class="v">${responsavelNome}</div></div>
-        </div>
-      </section>
-
-      <section class="block stack-md allow-break">
-        <h2>Escopo e itens</h2>
-        <div class="table-wrap allow-break">
-          <table class="table allow-break" data-split-table="true">
-            <thead>
-              <tr>
-                <th class="col-idx">#</th>
-                <th class="col-desc">Descrição</th>
-                <th class="col-qtd">Qtd</th>
-                <th class="col-und">Un</th>
-                <th class="col-money">Valor unit.</th>
-                <th class="col-money">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itensRows || `<tr><td colspan="6" class="muted">Nenhum item cadastrado.</td></tr>`}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="block stack-md avoid-break">
-        <h2>Totais</h2>
-        <div class="grid-2 stack-sm">
-          <div class="kv"><div class="k">Subtotal</div><div class="v">${esc(moedaBRL(totais.subtotal))}</div></div>
-          <div class="kv"><div class="k">ICMS</div><div class="v">${esc(moedaBRL(totais.icms))}</div></div>
-          <div class="kv"><div class="k">IPI</div><div class="v">${esc(moedaBRL(totais.ipi))}</div></div>
-          <div class="kv"><div class="k">Total</div><div class="v"><strong>${esc(moedaBRL(totais.total))}</strong></div></div>
-          <div class="kv"><div class="k">Emissão</div><div class="v">${dataEmissao || '—'}</div></div>
-          <div class="kv"><div class="k">Validade</div><div class="v">${dataValidade || '—'}</div></div>
-        </div>
-      </section>
-
-      <section class="block stack-md allow-break">
-        <h2>Condições comerciais</h2>
+        <h2>1. Carta de apresentação</h2>
         <div class="stack-sm">
-          <p>${esc(proposta.condicoes_pagamento || '—')}</p>
-          <p><strong>Prazo de entrega:</strong> ${esc(proposta.prazo_entrega || '—')}</p>
-          <p><strong>Garantia:</strong> ${esc(proposta.garantia || '—')}</p>
-          <p><strong>Observações:</strong> ${esc(proposta.observacoes || '—')}</p>
+          <p>Prezados Senhores,</p>
+          <p>A GMP apresenta a presente Proposta Comercial para fornecimento de equipamentos industriais e sistemas correlatos destinados ao projeto <strong>${esc(proposta.titulo || '—')}</strong>, conforme requisitos técnicos e comerciais aqui estabelecidos.</p>
+          <p>Esta proposta foi estruturada em padrão corporativo multinacional, contemplando a apresentação comercial e o conjunto de cláusulas contratuais integrais aplicáveis ao fornecimento, com foco em previsibilidade, governança de interfaces e rastreabilidade documental.</p>
+          <p>Atenciosamente,<br/><strong>${responsavelNome}</strong></p>
         </div>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>2. Descrição do projeto</h2>
+        <div class="stack-sm">
+          <p>${esc(proposta.descricao || 'Descrição do projeto conforme dados informados na proposta.')}</p>
+          <div class="grid-2 stack-sm">
+            <div class="kv"><div class="k">Cliente</div><div class="v">${clienteNome}</div></div>
+            <div class="kv"><div class="k">CNPJ</div><div class="v">${clienteCnpj}</div></div>
+            <div class="kv"><div class="k">Contato</div><div class="v">${esc(proposta.cliente_contato || '—')}</div></div>
+            <div class="kv"><div class="k">E-mail</div><div class="v">${esc(proposta.cliente_email || '—')}</div></div>
+            <div class="kv"><div class="k">Telefone</div><div class="v">${esc(proposta.cliente_telefone || '—')}</div></div>
+            <div class="kv"><div class="k">Responsável GMP</div><div class="v">${responsavelNome}</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>3. Escopo de fornecimento (incluído e não incluído)</h2>
+        <div class="stack-sm">
+          <h3>Incluído</h3>
+          <ul>
+            <li>Engenharia do fornecimento, documentação técnica e desenhos aplicáveis.</li>
+            <li>Fabricação/suprimento dos equipamentos listados nesta proposta.</li>
+            <li>Inspeções e testes internos, e FAT quando aplicável e acordado.</li>
+            <li>Embalagem e preparação para transporte conforme modal.</li>
+          </ul>
+          <h3>Não incluído</h3>
+          <ul>
+            <li>Obras civis, fundações, bases e infraestrutura de instalação.</li>
+            <li>Interligações de campo (tubulação/cabos) salvo quando explicitamente contratadas.</li>
+            <li>Utilidades e consumíveis no site, logística interna e içamento.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>4. Lista de equipamentos</h2>
+        <div class="stack-sm">
+          ${itensListaHtml || `<p class="muted">Nenhum equipamento selecionado nesta proposta.</p>`}
+        </div>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>5. Descrição técnica resumida</h2>
+        <div class="stack-sm">
+          <p>Os equipamentos serão fornecidos conforme especificações e descritivos técnicos selecionados na proposta, com foco em robustez, manutenibilidade e aderência às interfaces do projeto.</p>
+          <p class="muted">Observação: descritivos detalhados podem ser complementados por memorial técnico e desenhos aprovados durante a engenharia do fornecimento.</p>
+        </div>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>6. Diferenciais técnicos</h2>
+        <ul>
+          <li>Engenharia aplicada e validação de interfaces.</li>
+          <li>Rastreabilidade documental e entregáveis corporativos.</li>
+          <li>Qualidade de fabricação com inspeções e testes conforme escopo.</li>
+          <li>Padronização para manutenção e expansão futura.</li>
+        </ul>
+      </section>
+
+      <section class="block stack-md avoid-break">
+        <h2>7. Cronograma de execução</h2>
+        <div class="stack-sm">
+          <p><strong>Prazo de entrega:</strong> ${esc(proposta.prazo_entrega || '—')}</p>
+          <ul>
+            <li>T0: aprovação formal do pedido + confirmação do pagamento inicial compensado</li>
+            <li>T0 + [X1]: engenharia e aprovação de documentos</li>
+            <li>T0 + [X2]: suprimentos e fabricação</li>
+            <li>T0 + [X3]: inspeções e testes / FAT (quando aplicável)</li>
+            <li>T0 + [X]: entrega conforme condição acordada</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="block stack-md avoid-break">
+        <h2>8. Condições comerciais</h2>
+        <div class="stack-sm">
+          <p><strong>Condições de pagamento:</strong> ${esc(proposta.condicoes_pagamento || '—')}</p>
+          <p><strong>Subtotal:</strong> ${esc(moedaBRL(totais.subtotal))}</p>
+          <p><strong>ICMS:</strong> ${esc(moedaBRL(totais.icms))} • <strong>IPI:</strong> ${esc(moedaBRL(totais.ipi))}</p>
+          <p><strong>Total:</strong> <strong>${esc(moedaBRL(totais.total))}</strong></p>
+        </div>
+      </section>
+
+      <section class="block stack-md avoid-break">
+        <h2>9. Validade da proposta</h2>
+        <p>Esta proposta é válida até <strong>${dataValidade || '—'}</strong>, sujeita a revisão em caso de alteração de escopo, condições de entrega, tributos aplicáveis ou indisponibilidade de componentes críticos após o período de validade.</p>
+      </section>
+
+      <!-- PARTE 2 – CLÁUSULAS CONTRATUAIS -->
+      <section class="block stack-md allow-break">
+        <h2>PARTE 2 – Cláusulas contratuais</h2>
+        <p class="muted">As cláusulas a seguir compõem o instrumento de fornecimento (supply agreement), aplicáveis ao escopo definido nesta proposta.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 1 – Objeto</h2>
+        <p>O presente instrumento tem por objeto o fornecimento, pela CONTRATADA, dos equipamentos, sistemas e/ou serviços descritos na presente proposta comercial, conforme especificações técnicas, quantidades e condições aqui estabelecidas.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 2 – Preço e condições de pagamento</h2>
+        <p>O valor total do fornecimento é o indicado na proposta comercial.</p>
+        <p>O pagamento deverá ser realizado conforme as condições acordadas, sendo condição essencial para o início da execução contratual a compensação do pagamento inicial.</p>
+        <p>Em caso de atraso no pagamento por parte da CONTRATANTE, a CONTRATADA poderá suspender o fornecimento, sem prejuízo da cobrança de eventuais encargos financeiros.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 3 – Prazo de entrega</h2>
+        <p>O prazo de entrega será de até [X] dias úteis, contados a partir da aprovação formal do pedido e da confirmação do pagamento inicial.</p>
+        <p>Caso o prazo seja impactado por atrasos imputáveis à CONTRATANTE, incluindo, mas não se limitando à falta de informações técnicas, aprovações, infraestrutura ou pagamentos, o prazo será automaticamente prorrogado.</p>
+        <p>O prazo também poderá ser prorrogado em casos de força maior, nos termos da legislação aplicável.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 4 – Penalidades</h2>
+        <p>Em caso de atraso imputável exclusivamente à CONTRATADA, poderá ser aplicada penalidade equivalente a 0,5% do valor do contrato por semana de atraso, limitada ao máximo de 5% do valor total do fornecimento.</p>
+        <p>Não serão aplicáveis penalidades quando o atraso decorrer de fatores externos, atos da CONTRATANTE ou força maior.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 5 – Obrigações da CONTRATANTE</h2>
+        <p>São obrigações da CONTRATANTE:</p>
+        <ul>
+          <li>Fornecer todas as informações técnicas necessárias à execução do projeto.</li>
+          <li>Garantir acesso às instalações quando aplicável.</li>
+          <li>Disponibilizar infraestrutura adequada (energia, área, utilidades).</li>
+          <li>Cumprir os prazos de pagamento acordados.</li>
+          <li>Aprovar documentos técnicos dentro dos prazos estabelecidos.</li>
+        </ul>
+        <p>O descumprimento dessas obrigações poderá impactar prazos e custos.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 6 – Obrigações da CONTRATADA</h2>
+        <p>São obrigações da CONTRATADA:</p>
+        <ul>
+          <li>Fornecer os equipamentos conforme especificações técnicas.</li>
+          <li>Cumprir os prazos acordados, salvo exceções previstas.</li>
+          <li>Garantir a qualidade dos equipamentos fornecidos.</li>
+          <li>Fornecer documentação técnica básica.</li>
+        </ul>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 7 – Garantia</h2>
+        <p>A CONTRATADA garante os equipamentos pelo prazo de 12 meses a partir da entrega ou start-up, o que ocorrer primeiro.</p>
+        <p>A garantia cobre defeitos de fabricação, não abrangendo: mau uso, operação inadequada, modificações não autorizadas e desgaste natural.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 8 – Limitação de responsabilidade</h2>
+        <p>A responsabilidade da CONTRATADA estará limitada ao valor total do contrato.</p>
+        <p>Em nenhuma hipótese a CONTRATADA será responsável por lucros cessantes, perdas indiretas ou danos consequenciais.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 9 – Instalação e comissionamento</h2>
+        <p>Quando aplicável, a instalação será realizada conforme escopo definido.</p>
+        <p>A CONTRATANTE deverá garantir condições adequadas para execução segura dos trabalhos.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 10 – Aceitação (FAT / SAT)</h2>
+        <p>Os equipamentos poderão ser submetidos a testes de aceitação em fábrica (FAT) e/ou em campo (SAT), conforme acordado.</p>
+        <p>A aprovação nesses testes caracterizará a aceitação do fornecimento.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 11 – Alterações de escopo</h2>
+        <p>Qualquer alteração de escopo deverá ser formalizada por escrito e poderá implicar em revisão de prazos e valores.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 12 – Propriedade intelectual</h2>
+        <p>Todos os projetos, desenhos e documentos permanecem de propriedade da CONTRATADA, sendo vedada sua reprodução ou utilização sem autorização.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 13 – Rescisão</h2>
+        <p>O contrato poderá ser rescindido em caso de descumprimento de obrigações por qualquer das partes.</p>
+        <p>Em caso de rescisão por parte da CONTRATANTE, os valores já pagos não serão reembolsáveis.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 14 – Força maior</h2>
+        <p>Nenhuma das partes será responsabilizada por atrasos decorrentes de eventos de força maior, incluindo, mas não se limitando a desastres naturais, greves e restrições governamentais.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 15 – Jurisdição</h2>
+        <p>Fica eleito o foro competente conforme definido entre as partes para dirimir quaisquer controvérsias.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
+        <h2>Cláusula 16 – Confidencialidade</h2>
+        <p>As partes comprometem-se a manter confidenciais todas as informações técnicas e comerciais relacionadas a este contrato.</p>
       </section>
 
       <section class="block stack-md avoid-break">
@@ -11142,12 +11314,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <div class="sig">
             <div class="sig-line"></div>
             <div class="sig-name">${responsavelNome}</div>
-            <div class="sig-role">GMP • Responsável</div>
+            <div class="sig-role">GMP • CONTRATADA</div>
           </div>
           <div class="sig">
             <div class="sig-line"></div>
             <div class="sig-name">${clienteNome}</div>
-            <div class="sig-role">Cliente</div>
+            <div class="sig-role">CONTRATANTE</div>
           </div>
         </div>
       </section>
