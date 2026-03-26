@@ -59,6 +59,7 @@ import EngenhariaProjetosHome from './components/engenhariaProjetos/EngenhariaPr
 import CadastroMateriaisEscritorio from './components/engenhariaProjetos/CadastroMateriaisEscritorio';
 import SolicitacaoMaterialEscritorioCesta from './components/engenhariaProjetos/SolicitacaoMaterialEscritorioCesta';
 import MinhasSolicitacoesCompra from './components/MinhasSolicitacoesCompra';
+import VeiculosManutencao from './components/VeiculosManutencao';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
@@ -208,6 +209,7 @@ function AppRoutes() {
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="maquinas-vendidas" element={<MaquinasVendidas />} />
         <Route path="custos-viagens" element={<CustosViagens />} />
+        <Route path="veiculos" element={<VeiculosManutencao />} />
         <Route path="usuarios/novo" element={<UsuarioForm />} />
         <Route path="usuarios/editar/:id" element={<UsuarioForm />} />
       </Route>

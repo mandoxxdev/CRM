@@ -31,6 +31,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       rota: '/comercial'
     },
     {
+      id: 'frota',
+      nome: 'FROTA',
+      descricao: 'Manutenção e vistoria de veículos',
+      icon: FiTool,
+      modulo: 'comercial',
+      rota: '/comercial/veiculos'
+    },
+    {
       id: 'compras',
       nome: 'COMPRAS',
       descricao: 'Gestão de fornecedores, pedidos e cotações',
