@@ -13,7 +13,8 @@ import {
   X,
   LogOut,
   User,
-  Shield
+  Shield,
+  Car
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -39,6 +40,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/oportunidades', label: 'Oportunidades', icon: TrendingUp },
     { path: '/calendario', label: 'Calendário', icon: CalendarDays },
     { path: '/atividades', label: 'Atividades', icon: Calendar },
+    { path: '/veiculos', label: 'Veículos', icon: Car },
     ...(isAdmin ? [{ path: '/usuarios', label: 'Usuários', icon: Shield }] : []),
   ];
 

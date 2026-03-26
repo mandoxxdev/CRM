@@ -17,6 +17,7 @@ import NovaVenda from './pages/NovaVenda';
 import Calendario from './pages/Calendario';
 import TesteBanco from './pages/TesteBanco';
 import Usuarios from './pages/Usuarios';
+import Veiculos from './pages/Veiculos';
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
                   <Route path="/vendas/:id" element={<VendaDetail />} />
                   <Route path="/calendario" element={<Calendario />} />
                   <Route path="/usuarios" element={<Usuarios />} />
+                  <Route path="/veiculos" element={<Veiculos />} />
                   <Route path="/teste-banco" element={<TesteBanco />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

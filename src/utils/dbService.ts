@@ -5,6 +5,12 @@ export { documentoService } from './services/documentoService';
 export { contratoService } from './services/contratoService';
 export { propostaService } from './services/propostaService';
 export { equipamentoService } from './services/equipamentoService';
+export {
+  veiculoService,
+  vistoriaVeiculoService,
+  itemManutencaoVeiculoService,
+  registroManutencaoVeiculoService,
+} from './services/veiculoService';
 export { posVendaService } from './services/posVendaService';
 export { financeiroService } from './services/financeiroService';
 export { calendarioService } from './services/calendarioService';

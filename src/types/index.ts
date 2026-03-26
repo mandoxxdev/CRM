@@ -205,6 +205,72 @@ export interface Equipamento {
   dataAtualizacao: string;
 }
 
+// ============ MANUTENÇÃO E VISTORIA DE VEÍCULOS ============
+export interface Veiculo {
+  id: string;
+  placa: string;
+  modelo: string;
+  marca: string;
+  ano?: number;
+  cor?: string;
+  kmAtual: number;
+  status: 'disponivel' | 'em_uso' | 'em_manutencao' | 'inativo';
+  observacoes?: string;
+  dataCriacao: string;
+  dataAtualizacao: string;
+}
+
+export interface VistoriaVeiculo {
+  id: string;
+  veiculoId: string;
+  retiradoPorNome: string;
+  retiradoPorDocumento: string;
+  retiradoPorSetor?: string;
+  finalidadeUso?: string;
+  kmSaida: number;
+  kmRetorno?: number;
+  dataSaida: string;
+  dataRetorno?: string;
+  fotoAntesUrl?: string;
+  fotoDepoisUrl?: string;
+  manutencoesPrevias?: string;
+  avariasAntes?: string;
+  avariasDepois?: string;
+  observacoes?: string;
+  status: 'aberta' | 'finalizada';
+  dataCriacao: string;
+  dataAtualizacao: string;
+}
+
+export interface ItemManutencaoVeiculo {
+  id: string;
+  nome: string;
+  categoria?: string;
+  ativo: boolean;
+  podeTrocar: boolean;
+  podeArrumar: boolean;
+  observacoes?: string;
+  dataCriacao: string;
+  dataAtualizacao: string;
+}
+
+export interface RegistroManutencaoVeiculo {
+  id: string;
+  veiculoId: string;
+  itemManutencaoId: string;
+  tipo: 'troca' | 'reparo';
+  prevista: boolean;
+  descricao?: string;
+  numeroNotaFiscal?: string;
+  anexoNotaFiscalUrl?: string;
+  valorPago?: number;
+  inicioEm: string;
+  fimEm: string;
+  duracaoHoras: number;
+  dataCriacao: string;
+  dataAtualizacao: string;
+}
+
 // ============ CONTROLE DE HORAS DE FABRICAÇÃO ============
 export interface OrdemFabricacao {
   id: string;

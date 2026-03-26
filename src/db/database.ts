@@ -2,6 +2,7 @@ import Dexie, { Table } from 'dexie';
 import type {
   Cliente, Contato, Lead, Oportunidade, Proposta, Contrato,
   Projeto, FaseProjeto, DocumentoTecnico, Equipamento,
+  Veiculo, VistoriaVeiculo, ItemManutencaoVeiculo, RegistroManutencaoVeiculo,
   OrdemFabricacao, EstruturaAnaliticaEquipamento, RegistroHora,
   ParcelaFinanceira, Chamado, SLA, Atividade, Produto, Usuario, Reuniao, Venda
 } from '../types';
@@ -28,6 +29,10 @@ export class CRMDatabase extends Dexie {
   
   // Equipamentos
   equipamentos!: Table<Equipamento, string>;
+  veiculos!: Table<Veiculo, string>;
+  vistoriasVeiculo!: Table<VistoriaVeiculo, string>;
+  itensManutencaoVeiculo!: Table<ItemManutencaoVeiculo, string>;
+  registrosManutencaoVeiculo!: Table<RegistroManutencaoVeiculo, string>;
   
   // Produção
   ordensFabricacao!: Table<OrdemFabricacao, string>;
@@ -51,7 +56,7 @@ export class CRMDatabase extends Dexie {
   constructor() {
     super('CRMGMPDatabase');
     
-    this.version(2).stores({
+    this.version(5).stores({
       // Base
       clientes: 'id, nome, cnpj, segmento, pais, dataCriacao',
       contatos: 'id, clienteId, nome, email, dataCriacao',
@@ -73,6 +78,10 @@ export class CRMDatabase extends Dexie {
       
       // Equipamentos
       equipamentos: 'id, clienteId, projetoId, numeroSerie, modelo, tipo, status, dataCriacao',
+      veiculos: 'id, placa, modelo, marca, status, dataCriacao',
+      vistoriasVeiculo: 'id, veiculoId, status, dataSaida, dataRetorno, retiradoPorNome, dataCriacao',
+      itensManutencaoVeiculo: 'id, nome, categoria, ativo, dataCriacao',
+      registrosManutencaoVeiculo: 'id, veiculoId, itemManutencaoId, tipo, prevista, numeroNotaFiscal, valorPago, inicioEm, fimEm, duracaoHoras, dataCriacao',
       
       // Produção
       ordensFabricacao: 'id, numero, equipamentoId, projetoId, status, dataCriacao',
