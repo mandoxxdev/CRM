@@ -131,6 +131,7 @@ const Layout = () => {
   // Detectar qual módulo está ativo
   const getActiveModule = () => {
     const path = location.pathname;
+    if (path.startsWith('/frota')) return 'frota';
     if (path.startsWith('/compras')) return 'compras';
     if (path.startsWith('/financeiro')) return 'financeiro';
     if (path.startsWith('/fabrica')) return 'operacional';
@@ -184,6 +185,12 @@ const Layout = () => {
     { path: '/fabrica/equipamentos', icon: FiPackage, label: 'Equipamentos' },
   ];
 
+  // Menu do módulo Frota
+  const frotaMenuItems = [
+    { path: '/frota', icon: FiHome, label: 'Dashboard Frota' },
+    { path: '/frota/veiculos', icon: FiTruck, label: 'Veículos e Manutenção' },
+  ];
+
   // Menu do módulo Admin
   const adminMenuItems = [
     { path: '/admin/usuarios', icon: FiUsers, label: 'Usuários' },
@@ -217,6 +224,8 @@ const Layout = () => {
         return financeiroMenuItems;
       case 'operacional':
         return operacionalMenuItems;
+      case 'frota':
+        return frotaMenuItems;
       case 'admin':
         return adminMenuItems;
       case 'engenharia':

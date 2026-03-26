@@ -36,7 +36,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       descricao: 'Manutenção e vistoria de veículos',
       icon: FiTool,
       modulo: 'comercial',
-      rota: '/comercial/veiculos'
+      rota: '/frota'
     },
     {
       id: 'compras',

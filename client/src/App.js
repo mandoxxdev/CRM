@@ -75,6 +75,7 @@ const PrivateRoute = ({ children }) => {
   const isProtectedModuleRoute = () => {
     const path = location.pathname;
     return path.startsWith('/comercial') ||
+           path.startsWith('/frota') ||
            path.startsWith('/compras') || 
            path.startsWith('/financeiro') || 
            path.startsWith('/fabrica') || 
@@ -209,9 +210,21 @@ function AppRoutes() {
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="maquinas-vendidas" element={<MaquinasVendidas />} />
         <Route path="custos-viagens" element={<CustosViagens />} />
-        <Route path="veiculos" element={<VeiculosManutencao />} />
         <Route path="usuarios/novo" element={<UsuarioForm />} />
         <Route path="usuarios/editar/:id" element={<UsuarioForm />} />
+      </Route>
+      <Route
+        path="/frota"
+        element={
+          <PrivateRoute>
+            <ProtectedModuleRoute modulo="comercial" nomeModulo="Frota">
+              <Layout />
+            </ProtectedModuleRoute>
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<VeiculosManutencao />} />
+        <Route path="veiculos" element={<VeiculosManutencao />} />
       </Route>
       <Route
         path="/compras"
