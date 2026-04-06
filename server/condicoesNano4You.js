@@ -21,6 +21,7 @@ function getCondicoesGeraisNano4YouHTML(proposta, itens, totais, config, esc) {
   }).join('');
 
   return `<!-- 5. CONDIÇÕES GERAIS DE FORNECIMENTO (igual ao PDF Nano4You - todas as tratativas) -->
+      <div class="condicoes-gerais-intro" style="page-break-inside: avoid !important; break-inside: avoid !important;">
       <div class="section">
         <div class="section-title">5. CONDIÇÕES GERAIS DE FORNECIMENTO</div>
       </div>
@@ -47,6 +48,7 @@ function getCondicoesGeraisNano4YouHTML(proposta, itens, totais, config, esc) {
         <div class="texto-corpo">
           <p contenteditable="true">A formalização da entrega se dará, através do comunicado de liberação do pedido, o qual será enviado via e-mail, endereçado para o contato que consta nesta proposta técnica comercial e/ou via carta registrada.</p>
         </div>
+      </div>
       </div>
       
       <div class="section">

@@ -9801,6 +9801,12 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         break-inside: avoid !important;
         break-before: avoid !important;
       }
+
+      /* Regra solicitada: item 5 e 5.1/5.2/5.3 sempre na mesma página */
+      .condicoes-gerais-intro {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
       
       /* Bloco de texto: se não couber inteiro, pula todo para a próxima página */
       .texto-corpo {
