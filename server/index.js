@@ -11654,27 +11654,27 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
       ${equipDescritivoHtml || `<section class="block stack-md allow-break"><p class="muted">Nenhum equipamento selecionado nesta proposta.</p></section>`}
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md avoid-break five-intro-group">
         <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
-      </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.1 PRAZO DE ENTREGA</h3>
-        <p>O prazo para entrega dos itens apresentados nesta proposta comercial, é dentro de 90 dias úteis, a partir da data da aprovação formal do pedido (via e-mail) e compensação do pagamento referente a entrada.</p>
-        <p>O prazo pode prolongar, em casos de atraso no envio de informações e aprovação das documentações, por parte da CONTRATANTE.</p>
-        <p>Caso ocorra atraso na entrega dos equipamentos por motivos cuja responsabilidade não possa ser atribuída à CONTRATADA, forças maiores como fenômenos naturais, atos governamentais, acidentes ou outros motivos abrangidos pelo artigo 1058 do Código Civil, que a impossibilite de obter os insumos necessários à fabricação, impossibilitando está de cumprir o prazo de entrega, este será prorrogado pelo período necessário para a normalização da produção.</p>
-      </section>
+        <section class="block stack-md allow-break">
+          <h3>5.1 PRAZO DE ENTREGA</h3>
+          <p>O prazo para entrega dos itens apresentados nesta proposta comercial, é dentro de 90 dias úteis, a partir da data da aprovação formal do pedido (via e-mail) e compensação do pagamento referente a entrada.</p>
+          <p>O prazo pode prolongar, em casos de atraso no envio de informações e aprovação das documentações, por parte da CONTRATANTE.</p>
+          <p>Caso ocorra atraso na entrega dos equipamentos por motivos cuja responsabilidade não possa ser atribuída à CONTRATADA, forças maiores como fenômenos naturais, atos governamentais, acidentes ou outros motivos abrangidos pelo artigo 1058 do Código Civil, que a impossibilite de obter os insumos necessários à fabricação, impossibilitando está de cumprir o prazo de entrega, este será prorrogado pelo período necessário para a normalização da produção.</p>
+        </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.2 TRANSPORTE E EMBALAGEM</h3>
-        <p>A CONTRATADA deverá promover a liberação do(s) EQUIPAMENTO(S), na modalidade EXW (Ex Works), conforme previsto na relação de ICOTERMS editada pela Câmara Internacional de Comércio, diretamente na fábrica, estabelecida à Av. Dr. Ulysses Guimarães, nº 4105, Vila Nogueira, Diadema, São Paulo – Brasil, CEP 09990-080.</p>
-        <p>O(s) EQUIPAMENTO(S) serão embalado(s) com plástico bolha.</p>
-        <p>Caso a CONTRATANTE necessite de outro tipo de embalagem, a mesma deverá comunicar a CONTRATADA previamente via e-mail, para que ela possa atualizar a proposta com o custo e novo modelo da embalagem.</p>
-      </section>
+        <section class="block stack-md allow-break">
+          <h3>5.2 TRANSPORTE E EMBALAGEM</h3>
+          <p>A CONTRATADA deverá promover a liberação do(s) EQUIPAMENTO(S), na modalidade EXW (Ex Works), conforme previsto na relação de ICOTERMS editada pela Câmara Internacional de Comércio, diretamente na fábrica, estabelecida à Av. Dr. Ulysses Guimarães, nº 4105, Vila Nogueira, Diadema, São Paulo – Brasil, CEP 09990-080.</p>
+          <p>O(s) EQUIPAMENTO(S) serão embalado(s) com plástico bolha.</p>
+          <p>Caso a CONTRATANTE necessite de outro tipo de embalagem, a mesma deverá comunicar a CONTRATADA previamente via e-mail, para que ela possa atualizar a proposta com o custo e novo modelo da embalagem.</p>
+        </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.3 LIBERAÇÃO DO PEDIDO</h3>
-        <p>A formalização da entrega se dará, através do comunicado de liberação do pedido, o qual será enviado via e-mail, endereçado para o contato que consta nesta proposta técnica comercial e/ou via carta registrada.</p>
+        <section class="block stack-md allow-break">
+          <h3>5.3 LIBERAÇÃO DO PEDIDO</h3>
+          <p>A formalização da entrega se dará, através do comunicado de liberação do pedido, o qual será enviado via e-mail, endereçado para o contato que consta nesta proposta técnica comercial e/ou via carta registrada.</p>
+        </section>
       </section>
 
       <section class="block stack-md allow-break">
