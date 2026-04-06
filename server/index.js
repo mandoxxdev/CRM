@@ -9807,6 +9807,34 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
+
+      .five-18-19-group,
+      .five-20-21-group {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      .five-23-preco-group {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      .finame-impostos-group {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      /* Compacta apenas a tabela FINAME para caber com impostos/classificações */
+      .finame-compact .table-caption {
+        margin: 4px 0 4px 0 !important;
+      }
+
+      .finame-compact table th,
+      .finame-compact table td {
+        font-size: 10px !important;
+        line-height: 1.2 !important;
+        padding: 4px 6px !important;
+      }
       
       /* Bloco de texto: se não couber inteiro, pula todo para a próxima página */
       .texto-corpo {
@@ -11764,7 +11792,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </section>
       </section>
 
-      <section class="block stack-md avoid-break five-8-9-10-11-group">
+      <section class="block stack-md avoid-break five-8-ate-14-group">
         <section class="block stack-md allow-break">
           <h3>5.8 ALTERAÇÃO DE PEDIDO</h3>
           <p>Caso a CONTRATANTE solicite alterações no escopo de fornecimento, a CONTRATADA apresentará a CONTRATANTE, os impactos, valores e prazos para realização da alteração.</p>
@@ -11785,42 +11813,44 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <h3>5.11 ATRASO DE FATURAMENTO</h3>
           <p>Ocorrendo atraso de faturamento por razões de responsabilidade do CONTRATANTE, como falta de documentos para aprovação do crédito, identificação de transportadora, não pagamento de antecipações/parcelas constantes nesta proposta técnica comercial, atraso de inspeção, diligenciamento e liberação de financiamento, a CONTRATADA cobrará o preço da mercadoria e/ou serviço, com base na lista de preço vigente na data do faturamento.</p>
         </section>
+        <section class="block stack-md allow-break">
+          <h3>5.12 TAXA DE ARMAZENAGEM</h3>
+          <p>Será cobrada uma taxa de armazenagem de 1% ao mês do valor do fornecimento, caso as mercadorias não sejam retiradas em até 30 dias após a data de faturamento, calculada pro-rata diem a partir do 31º dia, limitada a 10% do valor do faturamento.</p>
+        </section>
+
+        <section class="block stack-md allow-break">
+          <h3>5.13 DANOS OU PREJUÍZOS</h3>
+          <p>A responsabilidade civil da CONTRATADA está limitada ao produto fornecido, não se responsabilizando por danos indiretos ou emergentes, tais como lucros cessantes, perdas de receitas, produtividade ou de dados, reclamações, paralizações, despesas, danos pessoais.</p>
+        </section>
+
+        <section class="block stack-md allow-break">
+          <h3>5.14 RESPONSABILIDADE FINANCEIRA</h3>
+          <p>A CONTRATANTE poderá optar em proceder o pagamento das parcelas supracitadas através de financiamento junto ao BANCO, porém, desde que respeitados os prazos de pagamento desta proposta técnica comercial e sem qualquer participação da CONTRATADA, junto as instituições financeiras para liberação desses valores.</p>
+        </section>
       </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.12 TAXA DE ARMAZENAGEM</h3>
-        <p>Será cobrada uma taxa de armazenagem de 1% ao mês do valor do fornecimento, caso as mercadorias não sejam retiradas em até 30 dias após a data de faturamento, calculada pro-rata diem a partir do 31º dia, limitada a 10% do valor do faturamento.</p>
+      <section class="block stack-md avoid-break five-15-16-17-group">
+        <section class="block stack-md allow-break">
+          <h3>5.15 CONSIDERAÇÕES CONSTRUTIVAS</h3>
+          <p>Os equipamentos e serviços ora ofertados nesta proposta técnica comercial, são padronizados pela CONTRATADA. Caso a CONTRATANTE tenha preferência ou necessidade que seja utilizado marca ou modelo especifico de qualquer componente ou material, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta comercial.</p>
+          <p>A CONTRATADA se resguarda do direito de utilizar o melhor aproveitamento dos materiais, durante o processo de fabricação e montagem de seus equipamentos, podendo aparecer soldas de complementos de materiais em pontos distintos.</p>
+          <p>Caso a CONTRATANTE não concorde com o aproveitamento de material, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta comercial.</p>
+          <p>Fica entendido que todas as informações foram apresentadas ao CONTRATANTE nesta proposta técnica comercial, e foram suficientes para o entendimento e aceite do produto e/ou serviço que será fornecido, desta forma, qualquer informação e/ou característica que não foi apresentada previamente neste documento, seguirá o padrão do projeto e/ou serviço da CONTRATADA.</p>
+        </section>
+
+        <section class="block stack-md allow-break">
+          <h3>5.16 VALIDADE DA PROPOSTA</h3>
+          <p>Esta proposta técnica comercial é válida por 15 (quinze) dias corridos, contados da data de emissão, informada na página inicial (capa).</p>
+        </section>
+
+        <section class="block stack-md allow-break">
+          <h3>5.17 REAJUSTE DE PREÇO</h3>
+          <p>Havendo alterações na legislação tributária vigente na época, a CONTRATADA se resguarda ao direito de atualizar os preços apresentados, de acordo com a nova tributação, com prévia aprovação do CONTRATANTE.</p>
+          <p>Para vendas fora do território nacional (BRASIL), os preços apresentados nesta proposta técnica comercial, poderão ser reajustado pela taxa do Dólar Americano, valor comercial de venda, até a data do faturamento, utilizando como taxa base USD 1,00 = VALOR DA COTAÇÃO NA DATA DA PROPOSTA.</p>
+        </section>
       </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.13 DANOS OU PREJUÍZOS</h3>
-        <p>A responsabilidade civil da CONTRATADA está limitada ao produto fornecido, não se responsabilizando por danos indiretos ou emergentes, tais como lucros cessantes, perdas de receitas, produtividade ou de dados, reclamações, paralizações, despesas, danos pessoais.</p>
-      </section>
-
-      <section class="block stack-md allow-break">
-        <h3>5.14 RESPONSABILIDADE FINANCEIRA</h3>
-        <p>A CONTRATANTE poderá optar em proceder o pagamento das parcelas supracitadas através de financiamento junto ao BANCO, porém, desde que respeitados os prazos de pagamento desta proposta técnica comercial e sem qualquer participação da CONTRATADA, junto as instituições financeiras para liberação desses valores.</p>
-      </section>
-
-      <section class="block stack-md allow-break">
-        <h3>5.15 CONSIDERAÇÕES CONSTRUTIVAS</h3>
-        <p>Os equipamentos e serviços ora ofertados nesta proposta técnica comercial, são padronizados pela CONTRATADA. Caso a CONTRATANTE tenha preferência ou necessidade que seja utilizado marca ou modelo especifico de qualquer componente ou material, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta comercial.</p>
-        <p>A CONTRATADA se resguarda do direito de utilizar o melhor aproveitamento dos materiais, durante o processo de fabricação e montagem de seus equipamentos, podendo aparecer soldas de complementos de materiais em pontos distintos.</p>
-        <p>Caso a CONTRATANTE não concorde com o aproveitamento de material, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta comercial.</p>
-        <p>Fica entendido que todas as informações foram apresentadas ao CONTRATANTE nesta proposta técnica comercial, e foram suficientes para o entendimento e aceite do produto e/ou serviço que será fornecido, desta forma, qualquer informação e/ou característica que não foi apresentada previamente neste documento, seguirá o padrão do projeto e/ou serviço da CONTRATADA.</p>
-      </section>
-
-      <section class="block stack-md allow-break">
-        <h3>5.16 VALIDADE DA PROPOSTA</h3>
-        <p>Esta proposta técnica comercial é válida por 15 (quinze) dias corridos, contados da data de emissão, informada na página inicial (capa).</p>
-      </section>
-
-      <section class="block stack-md allow-break">
-        <h3>5.17 REAJUSTE DE PREÇO</h3>
-        <p>Havendo alterações na legislação tributária vigente na época, a CONTRATADA se resguarda ao direito de atualizar os preços apresentados, de acordo com a nova tributação, com prévia aprovação do CONTRATANTE.</p>
-        <p>Para vendas fora do território nacional (BRASIL), os preços apresentados nesta proposta técnica comercial, poderão ser reajustado pela taxa do Dólar Americano, valor comercial de venda, até a data do faturamento, utilizando como taxa base USD 1,00 = VALOR DA COTAÇÃO NA DATA DA PROPOSTA.</p>
-      </section>
-
+      <section class="block stack-md avoid-break five-18-19-group">
       <section class="block stack-md allow-break">
         <h3>5.18 DOCUMENTAÇÃO PARTE DO ESCOPO</h3>
         <p>Os documentos abaixo relacionados, serão fornecidos em arquivos, formatos e cronograma padrão da CONTRATATADA. Caso a CONTRATANTE necessite de documentos não relacionados abaixo ou padrões específicos, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta.</p>
@@ -11843,7 +11873,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <p>4) Distrato: As partes poderão, a qualquer tempo, mediante comunicação escrita enviada com, no mínimo, 30 (trinta) dias de antecedência, extinguir o presente contrato sem aplicação de qualquer ônus, desde que esse distrato seja de comum acordo.</p>
         </div>
       </section>
+      </section>
 
+      <section class="block stack-md avoid-break five-20-21-group">
       <section class="block stack-md allow-break">
         <h3>5.20 DISPOSIÇÕES ADICIONAIS</h3>
         <p><strong>MODIFICAÇÃO DO CONTRATO:</strong> Toda e qualquer obrigação não mencionada no presente instrumento de contrato, bem como toda e qualquer alteração do ora pactuado, somente surtirá efeitos entre as Partes, quando realizada, por escrito, na forma de termo de aditivo ou alteração contratual.</p>
@@ -11858,6 +11890,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       <section class="block stack-md allow-break">
         <h3>5.21 FORO</h3>
         <p>As partes elegem o Foro da Comarca de Diadema - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>
+      </section>
       </section>
 
       <section class="block stack-md allow-break">
@@ -11875,72 +11908,75 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>
-        <p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>
+      <section class="block stack-md avoid-break five-23-preco-group">
+        <section class="block stack-md allow-break">
+          <h3>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>
+          <p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>
+        </section>
+
+        <section class="block stack-md allow-break">
+          <div class="table-caption">Tabela de Preços</div>
+          <table class="table" data-split-table="true">
+            <thead>
+              <tr>
+                <th class="col-center">ITEM</th>
+                <th>DESCRIÇÃO</th>
+                <th class="col-right">QUANT.</th>
+                <th class="col-right">PREÇO UNITÁRIO</th>
+                <th class="col-right">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tabelaPrecosRows || `<tr><td colspan="5" class="muted">Nenhum item cadastrado.</td></tr>`}
+              <tr>
+                <td class="col-center" colspan="4"><strong>TOTAL DA PROPOSTA</strong></td>
+                <td class="col-right"><strong>${esc(moedaBRL(totais.total))}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="block stack-md allow-break">
+          <p><strong>CONDIÇÃO DE PAGAMENTO:</strong> Primeira Parcela/Entrada – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p>
+          <p>Segunda Parcela/Liberação – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p>
+          <p>Terceira Parcela/Saldo – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p>
+          <p>Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>
+        </section>
       </section>
 
-      <section class="block stack-md allow-break">
-        <div class="table-caption">Tabela de Preços</div>
-        <table class="table" data-split-table="true">
-          <thead>
-            <tr>
-              <th class="col-center">ITEM</th>
-              <th>DESCRIÇÃO</th>
-              <th class="col-right">QUANT.</th>
-              <th class="col-right">PREÇO UNITÁRIO</th>
-              <th class="col-right">TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tabelaPrecosRows || `<tr><td colspan="5" class="muted">Nenhum item cadastrado.</td></tr>`}
-            <tr>
-              <td class="col-center" colspan="4"><strong>TOTAL DA PROPOSTA</strong></td>
-              <td class="col-right"><strong>${esc(moedaBRL(totais.total))}</strong></td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
+      <section class="block stack-md avoid-break finame-impostos-group">
+        <section class="block stack-md allow-break finame-compact">
+          <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
+          <table class="table" data-split-table="true">
+            <thead>
+              <tr>
+                <th class="col-center">ITEM</th>
+                <th>EQUIPAMENTO</th>
+                <th class="col-center">REF. FINAME</th>
+                <th class="col-center">REF. CARTÃO BNDES</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="col-center">1</td><td>Masseira Bimix</td><td class="col-center">04051088</td><td class="col-center">*********</td></tr>
+              <tr><td class="col-center">2</td><td>Masseira Trimix</td><td class="col-center">03452459</td><td class="col-center">MASSEIRA</td></tr>
+              <tr><td class="col-center">3</td><td>Masseira Helicoidal Vertical</td><td class="col-center">03451446</td><td class="col-center">MASSEIRA VH</td></tr>
+              <tr><td class="col-center">4</td><td>Tanque Dispersor</td><td class="col-center">03452683</td><td class="col-center">TANQUE DISP</td></tr>
+              <tr><td class="col-center">5</td><td>Tanque de Completagem/Agitador</td><td class="col-center">04056078</td><td class="col-center">*********</td></tr>
+              <tr><td class="col-center">6</td><td>Moinho Vertical</td><td class="col-center">03464319</td><td class="col-center">MOINHO VERTI</td></tr>
+              <tr><td class="col-center">7</td><td>Dispersor Hidropneumático</td><td class="col-center">04051259</td><td class="col-center">DISPERSOR HI</td></tr>
+              <tr><td class="col-center">8</td><td>Tachos</td><td class="col-center">03465385</td><td class="col-center">TACHO/TANQU</td></tr>
+              <tr><td class="col-center">9</td><td>Tanque de Armazenamento</td><td class="col-center">03452690</td><td class="col-center">TANQUE ARMAZ</td></tr>
+              <tr><td class="col-center">10</td><td>Moinho de Laboratório</td><td class="col-center">04056053</td><td class="col-center">*********</td></tr>
+              <tr><td class="col-center">11</td><td>Dispersor de Laboratório</td><td class="col-center">04056231</td><td class="col-center">*********</td></tr>
+              <tr><td class="col-center">12</td><td>Envasadora</td><td class="col-center">03451453</td><td class="col-center">ENVASADORA</td></tr>
+            </tbody>
+          </table>
+        </section>
 
-      <section class="block stack-md allow-break">
-        <p><strong>CONDIÇÃO DE PAGAMENTO:</strong> Primeira Parcela/Entrada – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p>
-        <p>Segunda Parcela/Liberação – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p>
-        <p>Terceira Parcela/Saldo – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p>
-        <p>Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>
-      </section>
-
-      <section class="block stack-md allow-break">
-        <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
-        <table class="table" data-split-table="true">
-          <thead>
-            <tr>
-              <th class="col-center">ITEM</th>
-              <th>EQUIPAMENTO</th>
-              <th class="col-center">REF. FINAME</th>
-              <th class="col-center">REF. CARTÃO BNDES</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td class="col-center">1</td><td>Masseira Bimix</td><td class="col-center">04051088</td><td class="col-center">*********</td></tr>
-            <tr><td class="col-center">2</td><td>Masseira Trimix</td><td class="col-center">03452459</td><td class="col-center">MASSEIRA</td></tr>
-            <tr><td class="col-center">3</td><td>Masseira Helicoidal Vertical</td><td class="col-center">03451446</td><td class="col-center">MASSEIRA VH</td></tr>
-            <tr><td class="col-center">4</td><td>Tanque Dispersor</td><td class="col-center">03452683</td><td class="col-center">TANQUE DISP</td></tr>
-            <tr><td class="col-center">5</td><td>Tanque de Completagem/Agitador</td><td class="col-center">04056078</td><td class="col-center">*********</td></tr>
-            <tr><td class="col-center">6</td><td>Moinho Vertical</td><td class="col-center">03464319</td><td class="col-center">MOINHO VERTI</td></tr>
-            <tr><td class="col-center">7</td><td>Dispersor Hidropneumático</td><td class="col-center">04051259</td><td class="col-center">DISPERSOR HI</td></tr>
-            <tr><td class="col-center">8</td><td>Tachos</td><td class="col-center">03465385</td><td class="col-center">TACHO/TANQU</td></tr>
-            <tr><td class="col-center">9</td><td>Tanque de Armazenamento</td><td class="col-center">03452690</td><td class="col-center">TANQUE ARMAZ</td></tr>
-            <tr><td class="col-center">10</td><td>Moinho de Laboratório</td><td class="col-center">04056053</td><td class="col-center">*********</td></tr>
-            <tr><td class="col-center">11</td><td>Dispersor de Laboratório</td><td class="col-center">04056231</td><td class="col-center">*********</td></tr>
-            <tr><td class="col-center">12</td><td>Envasadora</td><td class="col-center">03451453</td><td class="col-center">ENVASADORA</td></tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="block stack-md allow-break">
-        <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
-        <div class="table-caption">Tabela de Classificação Fiscal</div>
-        <table class="table" data-split-table="true">
+        <section class="block stack-md allow-break">
+          <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
+          <div class="table-caption">Tabela de Classificação Fiscal</div>
+          <table class="table" data-split-table="true">
           <thead>
             <tr>
               <th class="col-center">NCM</th>
@@ -11987,17 +12023,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <td class="col-center">3,00%</td>
             </tr>
           </tbody>
-        </table>
-        <div class="stack-sm">
-          <p>Texto complementar abaixo das tabelas:</p>
-          <ul>
-            <li>Região 1: São Paulo (SP)</li>
-            <li>Região 2: Minas Gerais (MG), Paraná (PR), Rio de Janeiro (RJ), Rio Grande do Sul (RS) e Santa Catarina (SC)</li>
-            <li>Região 3: Acre (AC), Alagoas (AL), Amapá (AP), Amazonas (AM), Bahia (BA), Ceará (CE), Distrito Federal (DF), Espírito Santo (ES), Goiás (GO), Maranhã (MA), Mato Grosso (MT), Mato Grosso do Sul (MS), Pará (PA), Paraíba (PB), Pernambuco (PE), Piauí (PI), Rio Grande do Norte (RN), Rondônia (RO), Roraima (RR), Sergipe (SE) e Tocantins (TO).</li>
-            <li>Nota: Redução tributária aplicada nos produtos classificados com NCM 8474.39.00, Inciso II, Artigo 12, Anexo II do RICMS/SP.</li>
-            <li>Para outros produtos, os impostos e alíquotas deverão ser consultados caso a caso.</li>
-          </ul>
-        </div>
+          </table>
+          <div class="stack-sm">
+            <p>Texto complementar abaixo das tabelas:</p>
+            <ul>
+              <li>Região 1: São Paulo (SP)</li>
+              <li>Região 2: Minas Gerais (MG), Paraná (PR), Rio de Janeiro (RJ), Rio Grande do Sul (RS) e Santa Catarina (SC)</li>
+              <li>Região 3: Acre (AC), Alagoas (AL), Amapá (AP), Amazonas (AM), Bahia (BA), Ceará (CE), Distrito Federal (DF), Espírito Santo (ES), Goiás (GO), Maranhã (MA), Mato Grosso (MT), Mato Grosso do Sul (MS), Pará (PA), Paraíba (PB), Pernambuco (PE), Piauí (PI), Rio Grande do Norte (RN), Rondônia (RO), Roraima (RR), Sergipe (SE) e Tocantins (TO).</li>
+              <li>Nota: Redução tributária aplicada nos produtos classificados com NCM 8474.39.00, Inciso II, Artigo 12, Anexo II do RICMS/SP.</li>
+              <li>Para outros produtos, os impostos e alíquotas deverão ser consultados caso a caso.</li>
+            </ul>
+          </div>
+        </section>
       </section>
       </section>
 
