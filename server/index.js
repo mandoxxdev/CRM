@@ -11745,21 +11745,23 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.6 OBRIGAÇÕES DA CONTRATANTE</h3>
-        <p>A CONTRATANTE deverá disponibilizar e fornecer informações e documentos, pertinentes ao produto processado e local de instalação dos equipamentos.</p>
-        <p>A CONTRATANTE deverá analisar, conferir e aprovar documentos e projetos junto a CONTRATADA, dentro do prazo de 5 (cinco) dias úteis, contados da data de envio do documento e/ou projeto.</p>
-        <p>A CONTRATANTE deverá efetuar o pagamento na forma e condições estabelecidas no item “PREÇO E CONDIÇÃO DE PAGAMENTO”.</p>
-        <p>Reembolsar a CONTRATADA, de eventuais custos adicionais, originados por ato de responsabilidade da CONTRATANTE.</p>
-      </section>
+      <section class="block stack-md avoid-break five-6-7-group">
+        <section class="block stack-md allow-break">
+          <h3>5.6 OBRIGAÇÕES DA CONTRATANTE</h3>
+          <p>A CONTRATANTE deverá disponibilizar e fornecer informações e documentos, pertinentes ao produto processado e local de instalação dos equipamentos.</p>
+          <p>A CONTRATANTE deverá analisar, conferir e aprovar documentos e projetos junto a CONTRATADA, dentro do prazo de 5 (cinco) dias úteis, contados da data de envio do documento e/ou projeto.</p>
+          <p>A CONTRATANTE deverá efetuar o pagamento na forma e condições estabelecidas no item “PREÇO E CONDIÇÃO DE PAGAMENTO”.</p>
+          <p>Reembolsar a CONTRATADA, de eventuais custos adicionais, originados por ato de responsabilidade da CONTRATANTE.</p>
+        </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.7 OBRIGAÇÕES DA CONTRATADA</h3>
-        <p>A CONTRATADA deverá oferecer mão-de-obra especializada e cumprir todos os deveres e obrigações dispostos no ESCOPO DE FORNECIMENTO e CONDIÇÕES GERAIS desta proposta técnica comercial.</p>
-        <p>É dever da CONTRATADA proibir o uso do nome ou logotipo da CONTRATANTE, devendo proibir seu pessoal de utilizar o logo da CONTRATANTE em suas vestimentas, o que inclui o uso de bonés, cordões de porte de crachá, camisetas e quaisquer outras peças do vestuário ou acessórios.</p>
-        <p>Da mesma forma, a CONTRATANTE se compromete a orientar seus colaboradores no intuito de não cederem quaisquer tipos de peças, trajes e/ou uniforme que seja, ao pessoal da CONTRATADA.</p>
-        <p>Os serviços especificados serão executados pela CONTRATADA, através de seus empregados, os quais nenhuma relação de emprego ou de trabalho terão com a CONTRATANTE, sendo de responsabilidade exclusiva da CONTRATADA todos os encargos trabalhistas, previdenciários e tributários, enunciativamente assim indicados: salários, vantagens adicionais de qualquer espécie, inclusive de insalubridade/periculosidade eventualmente devido, seguro de acidente do trabalho, Previdência Social, FGTS, indenizações e reparações trabalhistas, taxas e impostos, bem como quaisquer outros encargos relativos a serviços e empregados.</p>
-        <p>É de inteira responsabilidade da CONTRATADA o fornecimento de todas as ferramentas e maquinários necessários à fabricação dos equipamentos, além dos Equipamentos de Proteção Individual (EPI), sendo responsável ainda pelo treinamento e fiscalização do efetivo uso dos EPI’s, respondendo exclusivamente em caso de eventual acidente de trabalho com seus prepostos e funcionários.</p>
+        <section class="block stack-md allow-break">
+          <h3>5.7 OBRIGAÇÕES DA CONTRATADA</h3>
+          <p>A CONTRATADA deverá oferecer mão-de-obra especializada e cumprir todos os deveres e obrigações dispostos no ESCOPO DE FORNECIMENTO e CONDIÇÕES GERAIS desta proposta técnica comercial.</p>
+          <p>É dever da CONTRATADA proibir o uso do nome ou logotipo da CONTRATANTE, devendo proibir seu pessoal de utilizar o logo da CONTRATANTE em suas vestimentas, o que inclui o uso de bonés, cordões de porte de crachá, camisetas e quaisquer outras peças do vestuário ou acessórios.</p>
+          <p>Da mesma forma, a CONTRATANTE se compromete a orientar seus colaboradores no intuito de não cederem quaisquer tipos de peças, trajes e/ou uniforme que seja, ao pessoal da CONTRATADA.</p>
+          <p>Os serviços especificados serão executados pela CONTRATADA, através de seus empregados, os quais nenhuma relação de emprego ou de trabalho terão com a CONTRATANTE, sendo de responsabilidade exclusiva da CONTRATADA todos os encargos trabalhistas, previdenciários e tributários, enunciativamente assim indicados: salários, vantagens adicionais de qualquer espécie, inclusive de insalubridade/periculosidade eventualmente devido, seguro de acidente do trabalho, Previdência Social, FGTS, indenizações e reparações trabalhistas, taxas e impostos, bem como quaisquer outros encargos relativos a serviços e empregados.</p>
+          <p>É de inteira responsabilidade da CONTRATADA o fornecimento de todas as ferramentas e maquinários necessários à fabricação dos equipamentos, além dos Equipamentos de Proteção Individual (EPI), sendo responsável ainda pelo treinamento e fiscalização do efetivo uso dos EPI’s, respondendo exclusivamente em caso de eventual acidente de trabalho com seus prepostos e funcionários.</p>
+        </section>
       </section>
 
       <section class="block stack-md allow-break">
