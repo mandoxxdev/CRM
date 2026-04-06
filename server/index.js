@@ -11764,25 +11764,27 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </section>
       </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.8 ALTERAÇÃO DE PEDIDO</h3>
-        <p>Caso a CONTRATANTE solicite alterações no escopo de fornecimento, a CONTRATADA apresentará a CONTRATANTE, os impactos, valores e prazos para realização da alteração.</p>
-        <p>A CONTRATANTE deverá responder a CONTRATADA, com a aprovação ou declínio da alteração, dentro de 5 (cinco) dias úteis, contados da apresentação da proposta de alteração da CONTRATADA para a CONTRATANTE.</p>
-      </section>
+      <section class="block stack-md avoid-break five-8-9-10-11-group">
+        <section class="block stack-md allow-break">
+          <h3>5.8 ALTERAÇÃO DE PEDIDO</h3>
+          <p>Caso a CONTRATANTE solicite alterações no escopo de fornecimento, a CONTRATADA apresentará a CONTRATANTE, os impactos, valores e prazos para realização da alteração.</p>
+          <p>A CONTRATANTE deverá responder a CONTRATADA, com a aprovação ou declínio da alteração, dentro de 5 (cinco) dias úteis, contados da apresentação da proposta de alteração da CONTRATADA para a CONTRATANTE.</p>
+        </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.9 DEVOLUÇÃO OU TROCA DE MERCADORIA</h3>
-        <p>Não serão aceitas. Apenas em casos excepcionais serão aceitas, se houver prévia autorização da CONTRATADA e a CONTRATANTE arcará com todas as despesas envolvidas.</p>
-      </section>
+        <section class="block stack-md allow-break">
+          <h3>5.9 DEVOLUÇÃO OU TROCA DE MERCADORIA</h3>
+          <p>Não serão aceitas. Apenas em casos excepcionais serão aceitas, se houver prévia autorização da CONTRATADA e a CONTRATANTE arcará com todas as despesas envolvidas.</p>
+        </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.10 CANCELAMENTO DE PEDIDO</h3>
-        <p>Não serão aceitas. Visto que os produtos são produzidos sob encomenda e necessitam de horas de engenharia, projeto e desenvolvimento e as peças/serviços oriundas dele atendem exclusivamente ao CONTRATANTE.</p>
-      </section>
+        <section class="block stack-md allow-break">
+          <h3>5.10 CANCELAMENTO DE PEDIDO</h3>
+          <p>Não serão aceitas. Visto que os produtos são produzidos sob encomenda e necessitam de horas de engenharia, projeto e desenvolvimento e as peças/serviços oriundas dele atendem exclusivamente ao CONTRATANTE.</p>
+        </section>
 
-      <section class="block stack-md allow-break">
-        <h3>5.11 ATRASO DE FATURAMENTO</h3>
-        <p>Ocorrendo atraso de faturamento por razões de responsabilidade do CONTRATANTE, como falta de documentos para aprovação do crédito, identificação de transportadora, não pagamento de antecipações/parcelas constantes nesta proposta técnica comercial, atraso de inspeção, diligenciamento e liberação de financiamento, a CONTRATADA cobrará o preço da mercadoria e/ou serviço, com base na lista de preço vigente na data do faturamento.</p>
+        <section class="block stack-md allow-break">
+          <h3>5.11 ATRASO DE FATURAMENTO</h3>
+          <p>Ocorrendo atraso de faturamento por razões de responsabilidade do CONTRATANTE, como falta de documentos para aprovação do crédito, identificação de transportadora, não pagamento de antecipações/parcelas constantes nesta proposta técnica comercial, atraso de inspeção, diligenciamento e liberação de financiamento, a CONTRATADA cobrará o preço da mercadoria e/ou serviço, com base na lista de preço vigente na data do faturamento.</p>
+        </section>
       </section>
 
       <section class="block stack-md allow-break">
