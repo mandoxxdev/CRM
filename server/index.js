@@ -9819,6 +9819,11 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         break-inside: avoid !important;
       }
 
+      .five-22-separate-page {
+        page-break-before: always !important;
+        break-before: page !important;
+      }
+
       .finame-impostos-group {
         page-break-inside: auto !important;
         break-inside: auto !important;
@@ -11913,7 +11918,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>As partes elegem o Foro da Comarca de Diadema - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>
       </section>
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break five-22-separate-page">
         <h3>5.22 EXCLUSO DO FORNECIMENTO</h3>
         <p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p>
         <div class="list-num">
@@ -11964,8 +11969,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </section>
       </section>
 
-      <section class="block stack-md allow-break finame-impostos-group">
-        <section class="block stack-md allow-break finame-compact">
+      <section class="block stack-md allow-break finame-compact">
           <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
           <table class="table">
             <thead>
@@ -11991,9 +11995,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <tr><td class="col-center">12</td><td>Envasadora</td><td class="col-center">03451453</td><td class="col-center">ENVASADORA</td></tr>
             </tbody>
           </table>
-        </section>
+      </section>
 
-        <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break">
           <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
           <div class="table-caption">Tabela de Classificação Fiscal</div>
           <table class="table">
@@ -12054,8 +12058,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <li>Para outros produtos, os impostos e alíquotas deverão ser consultados caso a caso.</li>
             </ul>
           </div>
-        </section>
-      </section>
       </section>
 
       <section class="block stack-md allow-break">
