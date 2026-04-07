@@ -9820,8 +9820,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
       }
 
       .finame-impostos-group {
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
+        page-break-inside: auto !important;
+        break-inside: auto !important;
       }
 
       /* Compacta apenas a tabela FINAME para caber com impostos/classificações */
@@ -10380,7 +10380,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             if (!contentEl) continue;
             var hasElementChild = !!contentEl.querySelector(':scope > *');
             var hasText = String(contentEl.textContent || '').trim().length > 0;
-            if (!hasElementChild && !hasText) {
+            var hasRenderable = !!contentEl.querySelector('table, img, svg, canvas, ul, ol, p, h1, h2, h3, h4, h5, h6');
+            // "Conteúdo útil": texto visível ou elementos renderizáveis.
+            // Evita manter página com apenas wrappers vazios.
+            if ((!hasElementChild && !hasText) || (!hasText && !hasRenderable)) {
               container.removeChild(pageEl);
             }
           }
@@ -11961,7 +11964,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </section>
       </section>
 
-      <section class="block stack-md avoid-break finame-impostos-group">
+      <section class="block stack-md allow-break finame-impostos-group">
         <section class="block stack-md allow-break finame-compact">
           <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
           <table class="table">
@@ -12664,6 +12667,17 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             addNode(node);
           }
         }
+        // Limpeza final: remove páginas geradas sem conteúdo útil
+        Array.from(doc.querySelectorAll('.proposal-page[data-generated="1"]')).forEach((p) => {
+          const stackEl = p.querySelector('.page-stack');
+          if (!stackEl) return;
+          const hasText = String(stackEl.textContent || '').trim().length > 0;
+          const hasRenderable = !!stackEl.querySelector('table, img, svg, canvas, ul, ol, p, h1, h2, h3, h4, h5, h6');
+          if (!hasText && !hasRenderable) {
+            p.remove();
+          }
+        });
+
         const pages = Array.from(doc.querySelectorAll('.proposal-page')).filter(p => p.style.display !== 'none');
         const total = pages.length;
         pages.forEach((p, idx) => {
