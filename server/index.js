@@ -11917,6 +11917,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <h3>5.21 FORO</h3>
         <p>As partes elegem o Foro da Comarca de Diadema - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>
       </section>
+      </section>
 
       <section class="block stack-md allow-break five-22-separate-page">
         <h3>5.22 EXCLUSO DO FORNECIMENTO</h3>
