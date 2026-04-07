@@ -10360,6 +10360,10 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           if (isItem55Block(node)) effectiveMax = Math.max(0, maxContentHeightPx - safety55Px);
           currentContent.appendChild(node);
           while (currentContent.scrollHeight > effectiveMax && currentContent.lastChild) {
+            // Evita página totalmente em branco:
+            // se o bloco sozinho já excede a altura, não cria nova página
+            // em loop (mantém o bloco na página atual).
+            if (currentContent.childElementCount <= 1) break;
             var last = currentContent.lastChild;
             currentContent.removeChild(last);
             currentContent = createPage();
@@ -10367,6 +10371,20 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             if (currentContent.scrollHeight > effectiveMax) break;
           }
         }
+        // Limpeza final: remove páginas sem conteúdo real (evita "páginas em branco")
+        try {
+          var pages = Array.from(container.querySelectorAll('.pdf-page'));
+          for (var p = pages.length - 1; p >= 0; p--) {
+            var pageEl = pages[p];
+            var contentEl = pageEl.querySelector('.page-content');
+            if (!contentEl) continue;
+            var hasElementChild = !!contentEl.querySelector(':scope > *');
+            var hasText = String(contentEl.textContent || '').trim().length > 0;
+            if (!hasElementChild && !hasText) {
+              container.removeChild(pageEl);
+            }
+          }
+        } catch (_) {}
         source.remove();
         container.classList.add('paginated');
       }
