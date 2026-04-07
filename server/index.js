@@ -11891,7 +11891,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <h3>5.21 FORO</h3>
         <p>As partes elegem o Foro da Comarca de Diadema - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>
       </section>
-      </section>
 
       <section class="block stack-md allow-break">
         <h3>5.22 EXCLUSO DO FORNECIMENTO</h3>
@@ -11916,7 +11915,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
         <section class="block stack-md allow-break">
           <div class="table-caption">Tabela de Preços</div>
-          <table class="table" data-split-table="true">
+          <table class="table">
             <thead>
               <tr>
                 <th class="col-center">ITEM</th>
@@ -11947,7 +11946,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       <section class="block stack-md avoid-break finame-impostos-group">
         <section class="block stack-md allow-break finame-compact">
           <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
-          <table class="table" data-split-table="true">
+          <table class="table">
             <thead>
               <tr>
                 <th class="col-center">ITEM</th>
@@ -11976,7 +11975,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <section class="block stack-md allow-break">
           <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
           <div class="table-caption">Tabela de Classificação Fiscal</div>
-          <table class="table" data-split-table="true">
+          <table class="table">
           <thead>
             <tr>
               <th class="col-center">NCM</th>
@@ -11991,7 +11990,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </table>
 
         <div class="table-caption">Tabela de Impostos e Alíquotas</div>
-        <table class="table" data-split-table="true">
+        <table class="table">
           <thead>
             <tr>
               <th class="col-center">NCM</th>
@@ -12513,7 +12512,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             parts.push(current);
           }
         }
-        return parts;
+        // Remove partes vazias para evitar que o "primeiro bloco real"
+        // seja tratado como continuação (i > 0) e perca foto/título.
+        const nonEmptyParts = parts.filter((tbl) => {
+          const bodyRows = tbl.querySelectorAll('tbody > tr');
+          return bodyRows && bodyRows.length > 0;
+        });
+        return nonEmptyParts.length ? nonEmptyParts : [tableEl];
       }
       function paginateProposalContent() {
         const doc = document.getElementById('proposalDocument');
