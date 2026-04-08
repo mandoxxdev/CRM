@@ -12150,7 +12150,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       --line-strong: rgba(26,77,122,0.75);
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Arial, Helvetica, Calibri, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-synthesis: none; }
+    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Verdana, Tahoma, 'Trebuchet MS', Arial, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-synthesis: none; }
     img { max-width: 100%; height: auto; display: block; }
 
     h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
@@ -12165,6 +12165,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .proposal-document { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
     /* Proteção contra transformação automática de caixa no motor de PDF */
     .proposal-document, .proposal-document * {
+      font-family: Verdana, Tahoma, 'Trebuchet MS', Arial, sans-serif !important;
       font-variant: normal !important;
       font-variant-caps: normal !important;
       font-feature-settings: "smcp" 0, "c2sc" 0, "liga" 1;
