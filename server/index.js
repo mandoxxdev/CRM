@@ -12150,7 +12150,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       --line-strong: rgba(26,77,122,0.75);
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: 'Century Gothic', 'CenturyGothic', Arial, Calibri, Helvetica, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-synthesis: none; }
+    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Arial, Helvetica, Calibri, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-synthesis: none; }
     img { max-width: 100%; height: auto; display: block; }
 
     h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
@@ -12163,6 +12163,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     ul, ol { padding-left: 16px; margin-bottom: 6px; }
 
     .proposal-document { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
+    /* Proteção contra transformação automática de caixa no motor de PDF */
+    .proposal-document, .proposal-document * {
+      font-variant: normal !important;
+      font-variant-caps: normal !important;
+      font-feature-settings: "smcp" 0, "c2sc" 0, "liga" 1;
+      text-transform: none !important;
+      letter-spacing: normal !important;
+    }
     /* Cada section é uma página A4 independente (altura fixa) */
     .proposal-page { width: 210mm; height: 297mm; min-height: 297mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; page-break-after: always; break-after: page; }
     /* Header/footers com altura fixa para repetir corretamente em todas as páginas */
