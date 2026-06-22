@@ -144,23 +144,23 @@ a.btn-danger:hover svg {
   fill: #f87171 !important;
 }
 
-/* Scrollbar moderna */
+/* Scrollbar glass */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--gmp-bg);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--gmp-border);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--gmp-text-light);
+  background: rgba(255, 255, 255, 0.26);
 }
 
 /* ========== BOTÃO PREMIUM GLOBAL (Baseado no botão Nova Solicitação) ========== */
