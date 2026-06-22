@@ -5,13 +5,29 @@ import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
-  FiPackage, FiSliders, FiMapPin, FiSettings, FiAlertOctagon,
+  FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw
 } from 'react-icons/fi';
 import './Almoxarifado.css';
 
 const ICONES = ['📦', '🔧', '🪛', '⚙️', '🛡️', '🧰', '🪝', '💡', '🔩', '🪜', '🧪', '🏗️', '🔌', '🧲', '📋'];
 const CORES = ['#4facfe', '#00f2fe', '#43e97b', '#f9a825', '#ef5350', '#ab47bc', '#26c6da', '#ff7043', '#78909c', '#5c6bc0'];
+
+const buildLocalizacaoPath = (loc, allLocs = []) => {
+  if (!loc) return '';
+  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
+  const parts = [];
+  if (loc.setor) parts.push(loc.setor);
+  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
+  if (loc.subgrupo) parts.push(loc.subgrupo);
+  else if (loc.descricao && !parent) parts.push(loc.descricao);
+  return parts.join(' / ');
+};
+
+const formatLocalizacaoPath = (loc, allLocs = []) => {
+  const path = buildLocalizacaoPath(loc, allLocs);
+  return path || '—';
+};
 
 const TABS = [
   { id: 'tipos', label: 'Tipos de Material', icon: FiPackage },
@@ -23,19 +39,8 @@ const TABS = [
 const ConfiguracoesAlmoxarifado = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [tab, setTab] = useState('tipos');
-
-  if (!isAdmin) {
-    return (
-      <div className="almox-page">
-        <div className="almox-empty" style={{ padding: 60 }}>
-          <FiAlertOctagon size={48} style={{ opacity: 0.3, display: 'block', margin: '0 auto 16px' }} />
-          <p style={{ fontWeight: 700, fontSize: '1.1rem' }}>Acesso Restrito</p>
-          <p style={{ color: 'var(--gmp-text-light)', marginTop: 8 }}>Somente administradores podem acessar as configurações do almoxarifado.</p>
-        </div>
-      </div>
-    );
-  }
+  const visibleTabs = isAdmin ? TABS : TABS.filter(t => t.id === 'estoques');
+  const [tab, setTab] = useState(isAdmin ? 'tipos' : 'estoques');
 
   return (
     <div className="almox-page">
@@ -44,16 +49,22 @@ const ConfiguracoesAlmoxarifado = () => {
           <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <FiSettings size={22} style={{ color: '#4facfe' }} /> Configurações do Almoxarifado
           </h1>
-          <p>Gerencie tipos de material, estoques mínimos, localizações e configurações gerais</p>
+          <p>
+            {isAdmin
+              ? 'Gerencie tipos de material, estoques mínimos, localizações e configurações gerais'
+              : 'Defina estoque mínimo, máximo, ponto de pedido e prazo de reposição por material'}
+          </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(79,172,254,0.1)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#4facfe' }}>
-          <FiShield size={14} /> Somente Administradores
-        </div>
+        {isAdmin && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(79,172,254,0.1)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#4facfe' }}>
+            <FiShield size={14} /> Somente Administradores
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--gmp-border)', marginBottom: 24 }}>
-        {TABS.map(t => {
+        {visibleTabs.map(t => {
           const Icon = t.icon;
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -321,8 +332,8 @@ const TabEstoquesMinimos = () => {
               <tr>
                 <th>Material</th>
                 <th>Saldo Atual</th>
-                <th>Mín.</th>
-                <th>Máx.</th>
+                <th>Estoque mín.</th>
+                <th>Estoque máx.</th>
                 <th>Ponto Pedido</th>
                 <th>Prazo Repos. (dias)</th>
                 <th>Status</th>
@@ -371,7 +382,7 @@ const TabLocalizacoes = () => {
   const [tiposLoc, setTiposLoc] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ codigo: '', descricao: '', setor: '', tipo: 'Almoxarifado', pos_x: '', pos_y: '', largura: 120, altura: 80 });
+  const [form, setForm] = useState({ codigo: '', descricao: '', setor: '', subgrupo: '', parent_id: '', tipo: 'Almoxarifado', pos_x: '', pos_y: '', largura: 120, altura: 80 });
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPosicao, setShowPosicao] = useState(false);
@@ -390,12 +401,14 @@ const TabLocalizacoes = () => {
   };
 
   const resetForm = () => {
-    setForm({ codigo: '', descricao: '', setor: '', tipo: 'Almoxarifado', pos_x: '', pos_y: '', largura: 120, altura: 80 });
+    setForm({ codigo: '', descricao: '', setor: '', subgrupo: '', parent_id: '', tipo: 'Almoxarifado', pos_x: '', pos_y: '', largura: 120, altura: 80 });
     setEditando(null); setShowForm(false); setShowPosicao(false);
   };
   const handleEditar = (loc) => {
     setForm({
       ...loc,
+      subgrupo: loc.subgrupo || '',
+      parent_id: loc.parent_id ? String(loc.parent_id) : '',
       tipo: loc.tipo || 'Almoxarifado',
       pos_x: loc.pos_x ?? '',
       pos_y: loc.pos_y ?? '',
@@ -406,10 +419,17 @@ const TabLocalizacoes = () => {
     setShowForm(true);
     setShowPosicao(loc.pos_x != null || loc.pos_y != null);
   };
+  const parentOptions = localizacoes.filter(l => {
+    if (editando && l.id === editando) return false;
+    if (form.setor && l.setor !== form.setor) return false;
+    return true;
+  });
   const buildPayload = () => ({
     codigo: form.codigo,
     descricao: form.descricao,
     setor: form.setor,
+    subgrupo: form.subgrupo?.trim() || null,
+    parent_id: form.parent_id ? parseInt(form.parent_id, 10) : null,
     tipo: form.tipo || 'Almoxarifado',
     pos_x: form.pos_x !== '' && form.pos_x != null ? parseFloat(form.pos_x) : null,
     pos_y: form.pos_y !== '' && form.pos_y != null ? parseFloat(form.pos_y) : null,
@@ -449,15 +469,32 @@ const TabLocalizacoes = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
             <div className="almox-field">
               <label className="almox-label">Código<span className="required">*</span></label>
-              <input className="almox-input" value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))} placeholder="A1-01" />
+              <input className="almox-input" value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))} placeholder="A-01" />
             </div>
             <div className="almox-field">
               <label className="almox-label">Descrição</label>
-              <input className="almox-input" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Prateleira A, corredor 1" />
+              <input className="almox-input" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Prateleira A" />
             </div>
             <div className="almox-field">
               <label className="almox-label">Setor</label>
-              <input className="almox-input" value={form.setor} onChange={e => setForm(f => ({ ...f, setor: e.target.value }))} placeholder="EPI, Ferramentas..." />
+              <input className="almox-input" value={form.setor} onChange={e => setForm(f => ({ ...f, setor: e.target.value, parent_id: '' }))} placeholder="Corredor A" />
+            </div>
+            <div className="almox-field">
+              <label className="almox-label">Subgrupo</label>
+              <input className="almox-input" value={form.subgrupo} onChange={e => setForm(f => ({ ...f, subgrupo: e.target.value }))} placeholder="Ex: A1, A2, 2.1" />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+            <div className="almox-field">
+              <label className="almox-label">Localização pai</label>
+              <select className="almox-select" value={form.parent_id} onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}>
+                <option value="">Nenhuma (nível raiz no setor)</option>
+                {parentOptions.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.codigo} — {l.subgrupo || l.descricao || l.setor || 'Sem descrição'}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="almox-field">
               <label className="almox-label">Tipo de área</label>
@@ -468,6 +505,11 @@ const TabLocalizacoes = () => {
               </select>
             </div>
           </div>
+          {(form.setor || form.subgrupo || form.parent_id) && (
+            <p style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', margin: '0 0 16px', padding: '8px 12px', background: 'var(--gmp-bg)', borderRadius: 8, border: '1px solid var(--gmp-border)' }}>
+              Caminho: <strong>{formatLocalizacaoPath({ ...form, parent_id: form.parent_id ? parseInt(form.parent_id, 10) : null }, localizacoes)}</strong>
+            </p>
+          )}
           <button type="button" className="btn-almox-secondary" style={{ marginBottom: showPosicao ? 14 : 16, fontSize: '0.8rem', padding: '6px 12px' }}
             onClick={() => setShowPosicao(v => !v)}>
             {showPosicao ? 'Ocultar posição no mapa' : 'Definir posição no mapa (opcional)'}
@@ -497,12 +539,14 @@ const TabLocalizacoes = () => {
       ) : (
         <div className="almox-table-container">
           <table className="almox-table">
-            <thead><tr><th>Código</th><th>Descrição</th><th>Tipo</th><th>Setor</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Descrição</th><th>Subgrupo</th><th>Caminho</th><th>Tipo</th><th>Setor</th><th></th></tr></thead>
             <tbody>
               {localizacoes.map(loc => (
                 <tr key={loc.id}>
                   <td><span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe' }}>{loc.codigo}</span></td>
                   <td>{loc.descricao || '—'}</td>
+                  <td>{loc.subgrupo ? <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 600 }}>{loc.subgrupo}</span> : '—'}</td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatLocalizacaoPath(loc, localizacoes)}</td>
                   <td><span style={{ fontSize: '0.8rem', background: 'rgba(79,172,254,0.1)', color: '#4facfe', padding: '2px 10px', borderRadius: 6 }}>{loc.tipo || 'Almoxarifado'}</span></td>
                   <td>{loc.setor ? <span style={{ fontSize: '0.8rem', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: '2px 10px' }}>{loc.setor}</span> : '—'}</td>
                   <td>

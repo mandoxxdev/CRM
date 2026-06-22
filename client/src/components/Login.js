@@ -107,11 +107,11 @@ const Login = () => {
       <div className="login-box">
         <div className="login-header">
           <div className="logo-container">
-            <img src="/logo.png" alt="GMP INDUSTRIAIS" className="login-logo" />
+            <img src="/logo.png" alt="Orion" className="login-logo" />
           </div>
           <div className="login-header-content">
-            <h1>GMP INDUSTRIAIS</h1>
-            <h2>CRM - Sistema de Gestão</h2>
+            <h1>ORION</h1>
+            <h2>Sistema de Gestão Industrial</h2>
             <p className="login-subtitle">Acesse sua conta para continuar</p>
           </div>
         </div>
@@ -172,7 +172,7 @@ const Login = () => {
           </button>
         </form>
         <div className="login-footer">
-          <p>© 2026 GMP INDUSTRIAIS - Todos os direitos reservados</p>
+          <p>© 2026 Orion — GMP Industriais. Todos os direitos reservados.</p>
         </div>
       </div>
     </div>

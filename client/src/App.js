@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
-import SplashScreen from './components/SplashScreen';
+import OrionIntro from './components/OrionIntro';
 import Onboarding from './components/Onboarding';
 import Clientes from './components/Clientes';
 import ClienteForm from './components/ClienteForm';
@@ -450,7 +450,13 @@ function AppRoutes() {
 }
 
 function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  const [showIntro, setShowIntro] = useState(() => {
+    try {
+      return sessionStorage.getItem('orion_intro_seen') !== 'true';
+    } catch {
+      return true;
+    }
+  });
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
@@ -461,8 +467,13 @@ function App() {
     }
   }, []);
 
-  const handleSplashComplete = () => {
-    setShowSplash(false);
+  const handleIntroComplete = () => {
+    try {
+      sessionStorage.setItem('orion_intro_seen', 'true');
+    } catch {
+      // sessionStorage indisponível
+    }
+    setShowIntro(false);
     // Mostrar onboarding apenas se não foi completado
     const onboardingCompleted = localStorage.getItem('onboarding_completed');
     if (onboardingCompleted !== 'true') {
@@ -480,8 +491,8 @@ function App() {
     <Router>
       <AuthProvider>
         <ThemeProvider>
-          {showSplash ? (
-            <SplashScreen onComplete={handleSplashComplete} />
+          {showIntro ? (
+            <OrionIntro onComplete={handleIntroComplete} />
           ) : (
             <>
               {showOnboarding && (

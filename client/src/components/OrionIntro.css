@@ -1,0 +1,289 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap');
+
+body.orion-intro-active {
+  overflow: hidden !important;
+}
+
+.orion-intro {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 9999999;
+  background: #030818;
+  overflow: hidden;
+  animation: orionFadeIn 0.8s ease-out;
+  isolation: isolate;
+}
+
+.orion-intro--fade-out {
+  animation: orionFadeOut 0.65s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes orionFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes orionFadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+.orion-intro__canvas {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.orion-intro__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 45%,
+    transparent 30%,
+    rgba(3, 8, 24, 0.55) 70%,
+    rgba(3, 8, 24, 0.92) 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+.orion-intro__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 2rem 3.5rem;
+  pointer-events: none;
+}
+
+.orion-intro__brand {
+  text-align: center;
+  margin-bottom: auto;
+  padding-top: 18vh;
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1) 0.1s,
+    transform 1s cubic-bezier(0.16, 1, 0.3, 1) 0.1s;
+}
+
+.orion-intro__brand--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.orion-intro__title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: clamp(3.5rem, 10vw, 6.5rem);
+  font-weight: 300;
+  letter-spacing: 0.45em;
+  margin: 0 0 0.5rem 0;
+  padding-left: 0.45em;
+  background: linear-gradient(135deg, #e8f2ff 0%, #d4a853 45%, #5eb8ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(0 0 30px rgba(94, 184, 255, 0.25));
+}
+
+.orion-intro__subtitle {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: clamp(0.75rem, 2vw, 0.9rem);
+  font-weight: 300;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(200, 220, 255, 0.55);
+  margin: 0;
+}
+
+.orion-intro__progress {
+  width: min(280px, 70vw);
+  margin-bottom: 1.5rem;
+}
+
+.orion-intro__progress-track {
+  height: 2px;
+  background: rgba(94, 184, 255, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.orion-intro__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5eb8ff, #d4a853);
+  border-radius: 2px;
+  box-shadow: 0 0 12px rgba(94, 184, 255, 0.5);
+  transition: width 0.05s linear;
+}
+
+.orion-intro__skip {
+  position: absolute;
+  bottom: 2rem;
+  right: 2rem;
+  pointer-events: all;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(220, 235, 255, 0.7);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.55rem 1.25rem;
+  border-radius: 100px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background 0.25s, color 0.25s, border-color 0.25s, transform 0.2s;
+}
+
+.orion-intro__skip:hover {
+  background: rgba(94, 184, 255, 0.12);
+  border-color: rgba(94, 184, 255, 0.35);
+  color: #e8f2ff;
+  transform: translateY(-1px);
+}
+
+.orion-intro__skip:active {
+  transform: translateY(0);
+}
+
+/* CSS/SVG fallback when WebGL unavailable */
+.orion-intro__fallback {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 30%, #0a1535 0%, #030818 70%);
+  overflow: hidden;
+}
+
+.orion-fallback__stars {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 30% 65%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 55% 15%, rgba(200, 220, 255, 0.8), transparent),
+    radial-gradient(1px 1px at 75% 40%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1px 1px at 90% 75%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 20% 85%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 45% 50%, rgba(212, 168, 83, 0.6), transparent),
+    radial-gradient(1px 1px at 65% 88%, rgba(255, 255, 255, 0.45), transparent);
+  animation: orionStarsTwinkle 4s ease-in-out infinite alternate;
+}
+
+@keyframes orionStarsTwinkle {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+.orion-fallback__bird {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: min(320px, 60vw);
+  transform: translate(-50%, -50%);
+  animation: orionBirdFlyIn 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+    orionBirdHover 3s ease-in-out 1.4s infinite;
+}
+
+@keyframes orionBirdFlyIn {
+  from {
+    opacity: 0;
+    transform: translate(calc(-50% - 80px), -50%) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes orionBirdHover {
+  0%, 100% { transform: translate(-50%, calc(-50% - 4px)); }
+  50% { transform: translate(-50%, calc(-50% + 4px)); }
+}
+
+.orion-fallback__wing--left {
+  transform-origin: 88px 55px;
+  animation: orionWingFlapLeft 0.35s ease-in-out infinite alternate;
+}
+
+.orion-fallback__wing--right {
+  transform-origin: 88px 55px;
+  animation: orionWingFlapRight 0.35s ease-in-out infinite alternate;
+}
+
+@keyframes orionWingFlapLeft {
+  from { transform: rotate(-8deg); }
+  to { transform: rotate(18deg); }
+}
+
+@keyframes orionWingFlapRight {
+  from { transform: rotate(8deg); }
+  to { transform: rotate(-18deg); }
+}
+
+.orion-fallback__constellation {
+  position: absolute;
+  top: 22%;
+  right: 18%;
+  width: 80px;
+  height: 100px;
+  opacity: 0.5;
+}
+
+.orion-fallback__constellation span {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #c8dcff;
+  box-shadow: 0 0 6px rgba(200, 220, 255, 0.6);
+}
+
+.orion-fallback__constellation span:nth-child(1) { top: 0; left: 10px; }
+.orion-fallback__constellation span:nth-child(2) { top: 8px; right: 0; }
+.orion-fallback__constellation span:nth-child(3) { top: 45px; left: 0; }
+.orion-fallback__constellation span:nth-child(4) { top: 42px; left: 35px; }
+.orion-fallback__constellation span:nth-child(5) { top: 40px; right: 5px; }
+.orion-fallback__constellation span:nth-child(6) { bottom: 10px; left: 15px; }
+.orion-fallback__constellation span:nth-child(7) { bottom: 0; right: 0; width: 5px; height: 5px; }
+
+@media (max-width: 768px) {
+  .orion-intro__overlay {
+    padding: 0 1.25rem 2.5rem;
+  }
+
+  .orion-intro__brand {
+    padding-top: 14vh;
+  }
+
+  .orion-intro__title {
+    letter-spacing: 0.3em;
+    padding-left: 0.3em;
+  }
+
+  .orion-intro__subtitle {
+    letter-spacing: 0.2em;
+  }
+
+  .orion-intro__skip {
+    bottom: 1.25rem;
+    right: 1.25rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+  }
+}

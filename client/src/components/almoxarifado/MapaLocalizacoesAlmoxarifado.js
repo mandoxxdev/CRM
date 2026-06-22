@@ -12,6 +12,10 @@ import './Almoxarifado.css';
 const MAP_W = 1100;
 const MAP_H = 720;
 const PAD = 28;
+const GRID_CELL_W = 120;
+const GRID_CELL_H = 80;
+const SECTOR_INNER_PAD = 12;
+const SECTOR_LABEL_H = 28;
 
 const TIPO_ICONES = {
   Almoxarifado: '🏢',
@@ -59,6 +63,17 @@ function tamanhoTipo(tipo) {
   return TIPO_TAMANHOS[tipo] || TIPO_TAMANHOS.default;
 }
 
+function buildLocalizacaoPath(loc, allLocs = []) {
+  if (!loc) return '';
+  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
+  const parts = [];
+  if (loc.setor) parts.push(loc.setor);
+  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
+  if (loc.subgrupo) parts.push(loc.subgrupo);
+  else if (loc.descricao && !parent) parts.push(loc.descricao);
+  return parts.join(' / ');
+}
+
 function statusLocalizacao(loc) {
   if (loc.itens_criticos > 0) return 'critico';
   if (loc.itens_baixo_minimo > 0) return 'baixo';
@@ -73,64 +88,164 @@ function corStatus(status) {
   return '#94a3b8';
 }
 
-function computeLayout(locations) {
-  const comCoords = locations.filter(l => l.pos_x != null && l.pos_y != null);
-  if (comCoords.length === locations.length && locations.length > 0) {
-    return locations.map(loc => ({
-      ...loc,
-      layoutX: loc.pos_x,
-      layoutY: loc.pos_y,
-      layoutW: loc.largura || tamanhoTipo(loc.tipo).w,
-      layoutH: loc.altura || tamanhoTipo(loc.tipo).h,
-      autoLayout: false,
-    }));
-  }
-
-  const sectors = {};
+function computeSectors(locations) {
+  const grouped = {};
   locations.forEach(loc => {
     const s = loc.setor || 'Geral';
-    if (!sectors[s]) sectors[s] = [];
-    sectors[s].push(loc);
+    if (!grouped[s]) grouped[s] = [];
+    grouped[s].push(loc);
   });
-
-  const sectorNames = Object.keys(sectors).sort();
+  const sectorNames = Object.keys(grouped).sort();
   const cols = Math.max(1, Math.ceil(Math.sqrt(sectorNames.length)));
   const rows = Math.ceil(sectorNames.length / cols);
   const sectorW = (MAP_W - PAD * 2) / cols;
   const sectorH = (MAP_H - PAD * 2 - 20) / rows;
-  const result = [];
-
+  const result = {};
   sectorNames.forEach((name, si) => {
     const col = si % cols;
     const row = Math.floor(si / cols);
-    const sx = PAD + col * sectorW;
-    const sy = PAD + row * sectorH;
-    const locs = sectors[name];
-    const locCols = Math.max(1, Math.ceil(Math.sqrt(locs.length)));
-    const locRows = Math.ceil(locs.length / locCols);
-    const innerW = sectorW - 20;
-    const innerH = sectorH - 44;
-    const cellW = innerW / locCols;
-    const cellH = innerH / locRows;
+    result[name] = {
+      x: PAD + col * sectorW,
+      y: PAD + row * sectorH,
+      w: sectorW,
+      h: sectorH,
+    };
+  });
+  return result;
+}
+
+function getSectorGrid(sector) {
+  const originX = sector.x + SECTOR_INNER_PAD;
+  const originY = sector.y + SECTOR_LABEL_H;
+  const innerW = sector.w - SECTOR_INNER_PAD * 2;
+  const innerH = sector.h - SECTOR_LABEL_H - SECTOR_INNER_PAD;
+  const cols = Math.max(1, Math.floor(innerW / GRID_CELL_W));
+  const rows = Math.max(1, Math.floor(innerH / GRID_CELL_H));
+  return { originX, originY, cols, rows };
+}
+
+function cellToPosition(col, row, grid) {
+  return {
+    x: grid.originX + col * GRID_CELL_W,
+    y: grid.originY + row * GRID_CELL_H,
+  };
+}
+
+function positionToCell(x, y, grid) {
+  const col = Math.round((x - grid.originX) / GRID_CELL_W);
+  const row = Math.round((y - grid.originY) / GRID_CELL_H);
+  return {
+    col: Math.max(0, Math.min(grid.cols - 1, col)),
+    row: Math.max(0, Math.min(grid.rows - 1, row)),
+  };
+}
+
+function getOccupiedCells(sectorName, layout, posicoesEdit, excludeId, sectorsMap) {
+  const sector = sectorsMap[sectorName];
+  if (!sector) return new Set();
+  const grid = getSectorGrid(sector);
+  const occupied = new Set();
+  layout.forEach(loc => {
+    if (loc.id === excludeId) return;
+    if ((loc.setor || 'Geral') !== sectorName) return;
+    const edit = posicoesEdit[loc.id];
+    const x = edit ? edit.x : loc.layoutX;
+    const y = edit ? edit.y : loc.layoutY;
+    const { col, row } = positionToCell(x, y, grid);
+    occupied.add(`${col},${row}`);
+  });
+  return occupied;
+}
+
+function findNearestFreeCell(targetCol, targetRow, grid, occupied) {
+  const key = `${targetCol},${targetRow}`;
+  if (!occupied.has(key)) return { col: targetCol, row: targetRow };
+  const maxDist = grid.cols + grid.rows;
+  for (let dist = 1; dist <= maxDist; dist++) {
+    for (let dc = -dist; dc <= dist; dc++) {
+      for (let dr = -dist; dr <= dist; dr++) {
+        if (Math.abs(dc) + Math.abs(dr) !== dist) continue;
+        const c = targetCol + dc;
+        const r = targetRow + dr;
+        if (c >= 0 && c < grid.cols && r >= 0 && r < grid.rows && !occupied.has(`${c},${r}`)) {
+          return { col: c, row: r };
+        }
+      }
+    }
+  }
+  return { col: targetCol, row: targetRow };
+}
+
+function snapToSectorGrid(rawX, rawY, sectorName, sectorsMap, layout, posicoesEdit, excludeId) {
+  const sector = sectorsMap[sectorName];
+  if (!sector) {
+    return {
+      x: Math.max(0, Math.min(MAP_W - GRID_CELL_W, Math.round(rawX / GRID_CELL_W) * GRID_CELL_W)),
+      y: Math.max(0, Math.min(MAP_H - GRID_CELL_H, Math.round(rawY / GRID_CELL_H) * GRID_CELL_H)),
+      col: null,
+      row: null,
+    };
+  }
+  const grid = getSectorGrid(sector);
+  const { col, row } = positionToCell(rawX, rawY, grid);
+  const occupied = getOccupiedCells(sectorName, layout, posicoesEdit, excludeId, sectorsMap);
+  const free = findNearestFreeCell(col, row, grid, occupied);
+  const { x, y } = cellToPosition(free.col, free.row, grid);
+  return { x, y, col: free.col, row: free.row, grid };
+}
+
+function computeLayout(locations) {
+  const sectorsMap = computeSectors(locations);
+  const grouped = {};
+  locations.forEach(loc => {
+    const s = loc.setor || 'Geral';
+    if (!grouped[s]) grouped[s] = [];
+    grouped[s].push(loc);
+  });
+
+  const result = [];
+  Object.keys(grouped).sort().forEach(name => {
+    const sec = sectorsMap[name];
+    const grid = getSectorGrid(sec);
+    const locs = grouped[name];
+    const occupied = new Set();
 
     locs.forEach((loc, li) => {
-      const lc = li % locCols;
-      const lr = Math.floor(li / locCols);
       const size = tamanhoTipo(loc.tipo);
-      const w = Math.min(size.w, cellW - 10);
-      const h = Math.min(size.h, cellH - 10);
+      const w = loc.largura || size.w;
+      const h = loc.altura || size.h;
       const hasPos = loc.pos_x != null && loc.pos_y != null;
+
+      let layoutX;
+      let layoutY;
+      if (hasPos) {
+        const { col, row } = positionToCell(loc.pos_x, loc.pos_y, grid);
+        const free = findNearestFreeCell(col, row, grid, occupied);
+        occupied.add(`${free.col},${free.row}`);
+        const pos = cellToPosition(free.col, free.row, grid);
+        layoutX = pos.x;
+        layoutY = pos.y;
+      } else {
+        const col = li % grid.cols;
+        const row = Math.min(Math.floor(li / grid.cols), grid.rows - 1);
+        const free = findNearestFreeCell(col, row, grid, occupied);
+        occupied.add(`${free.col},${free.row}`);
+        const pos = cellToPosition(free.col, free.row, grid);
+        layoutX = pos.x;
+        layoutY = pos.y;
+      }
+
       result.push({
         ...loc,
         sectorName: name,
-        sectorX: sx,
-        sectorY: sy,
-        sectorW,
-        sectorH,
-        layoutX: hasPos ? loc.pos_x : sx + 12 + lc * cellW + (cellW - w) / 2,
-        layoutY: hasPos ? loc.pos_y : sy + 36 + lr * cellH + (cellH - h) / 2,
-        layoutW: loc.largura || w,
-        layoutH: loc.altura || h,
+        sectorX: sec.x,
+        sectorY: sec.y,
+        sectorW: sec.w,
+        sectorH: sec.h,
+        layoutX,
+        layoutY,
+        layoutW: w,
+        layoutH: h,
         autoLayout: !hasPos,
       });
     });
@@ -155,6 +270,8 @@ const MapaLocalizacoesAlmoxarifado = () => {
   const [posicoesEdit, setPosicoesEdit] = useState({});
   const [salvando, setSalvando] = useState(false);
   const [arrastando, setArrastando] = useState(null);
+  const [celulaAlvo, setCelulaAlvo] = useState(null);
+  const posicoesEditRef = useRef({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -189,7 +306,14 @@ const MapaLocalizacoesAlmoxarifado = () => {
 
   const layout = useMemo(() => computeLayout(filtradas), [filtradas]);
 
+  const sectorsMap = useMemo(() => computeSectors(filtradas), [filtradas]);
+
+  useEffect(() => {
+    posicoesEditRef.current = posicoesEdit;
+  }, [posicoesEdit]);
+
   const sectorsVisiveis = useMemo(() => {
+    if (modoEdicao) return Object.entries(sectorsMap);
     const map = {};
     layout.forEach(l => {
       if (l.sectorName && l.autoLayout) {
@@ -199,7 +323,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
       }
     });
     return Object.entries(map);
-  }, [layout]);
+  }, [layout, sectorsMap, modoEdicao]);
 
   const getPos = (loc) => {
     const edit = posicoesEdit[loc.id];
@@ -224,24 +348,77 @@ const MapaLocalizacoesAlmoxarifado = () => {
     e.preventDefault();
     const pos = getPos(loc);
     const pt = svgPoint(e.clientX, e.clientY);
-    setArrastando({ id: loc.id, offsetX: pt.x - pos.x, offsetY: pt.y - pos.y, w: pos.w, h: pos.h });
+    setArrastando({
+      id: loc.id,
+      setor: loc.setor || 'Geral',
+      offsetX: pt.x - pos.x,
+      offsetY: pt.y - pos.y,
+      w: pos.w,
+      h: pos.h,
+    });
   };
 
   const onDragMove = useCallback((e) => {
     if (!arrastando) return;
     const pt = svgPoint(e.clientX, e.clientY);
+    const rawX = pt.x - arrastando.offsetX;
+    const rawY = pt.y - arrastando.offsetY;
+    const snapped = snapToSectorGrid(
+      rawX,
+      rawY,
+      arrastando.setor,
+      sectorsMap,
+      layout,
+      posicoesEditRef.current,
+      arrastando.id,
+    );
+    setCelulaAlvo({
+      sectorName: arrastando.setor,
+      col: snapped.col,
+      row: snapped.row,
+      x: snapped.x,
+      y: snapped.y,
+      w: arrastando.w,
+      h: arrastando.h,
+    });
     setPosicoesEdit(prev => ({
       ...prev,
       [arrastando.id]: {
-        x: Math.max(0, Math.min(MAP_W - arrastando.w, pt.x - arrastando.offsetX)),
-        y: Math.max(0, Math.min(MAP_H - arrastando.h, pt.y - arrastando.offsetY)),
+        x: snapped.x,
+        y: snapped.y,
         w: arrastando.w,
         h: arrastando.h,
       },
     }));
-  }, [arrastando]);
+  }, [arrastando, layout, sectorsMap]);
 
-  const onDragEnd = () => setArrastando(null);
+  const onDragEnd = useCallback(() => {
+    if (arrastando) {
+      const pt = posicoesEditRef.current[arrastando.id];
+      if (pt) {
+        const snapped = snapToSectorGrid(
+          pt.x,
+          pt.y,
+          arrastando.setor,
+          sectorsMap,
+          layout,
+          posicoesEditRef.current,
+          arrastando.id,
+        );
+        setPosicoesEdit(prev => ({
+          ...prev,
+          [arrastando.id]: {
+            x: snapped.x,
+            y: snapped.y,
+            w: arrastando.w,
+            h: arrastando.h,
+          },
+        }));
+      }
+    }
+    setArrastando(null);
+    setCelulaAlvo(null);
+  }, [arrastando, layout, sectorsMap]);
 
   useEffect(() => {
     if (!arrastando) return;
@@ -251,7 +428,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
       window.removeEventListener('mousemove', onDragMove);
       window.removeEventListener('mouseup', onDragEnd);
     };
-  }, [arrastando, onDragMove]);
+  }, [arrastando, onDragMove, onDragEnd]);
 
   const salvarPosicoes = async () => {
     const entries = Object.entries(posicoesEdit);
@@ -316,7 +493,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
                   <button className="btn-almox-primary" onClick={salvarPosicoes} disabled={salvando}>
                     <FiSave size={14} /> {salvando ? 'Salvando...' : 'Salvar Posições'}
                   </button>
-                  <button className="btn-almox-secondary" onClick={() => { setModoEdicao(false); setPosicoesEdit({}); }}>
+                  <button className="btn-almox-secondary" onClick={() => { setModoEdicao(false); setPosicoesEdit({}); setCelulaAlvo(null); }}>
                     <FiX size={14} /> Cancelar
                   </button>
                 </>
@@ -376,8 +553,8 @@ const MapaLocalizacoesAlmoxarifado = () => {
           </button>
         )}
         {modoEdicao && (
-          <span style={{ fontSize: '0.8rem', color: '#4facfe', fontWeight: 600, marginLeft: 'auto' }}>
-            <FiMove size={12} /> Arraste as áreas para reposicionar
+          <span className="almox-mapa-edit-hint">
+            <FiMove size={12} /> Arraste para encaixar na grade
           </span>
         )}
       </div>
@@ -396,13 +573,17 @@ const MapaLocalizacoesAlmoxarifado = () => {
             <svg
               ref={svgRef}
               viewBox={`0 0 ${MAP_W} ${MAP_H}`}
-              className="almox-mapa-svg"
+              className={`almox-mapa-svg${modoEdicao ? ' almox-mapa-svg--edit' : ''}`}
               role="img"
               aria-label="Mapa de áreas do almoxarifado"
             >
               <defs>
-                <pattern id="almox-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(79,172,254,0.08)" strokeWidth="1" />
+                <pattern id="almox-grid" width={GRID_CELL_W} height={GRID_CELL_H} patternUnits="userSpaceOnUse">
+                  <path d={`M ${GRID_CELL_W} 0 L 0 0 0 ${GRID_CELL_H}`} fill="none" stroke="rgba(79,172,254,0.08)" strokeWidth="1" />
+                </pattern>
+                <pattern id="almox-grid-edit" width={GRID_CELL_W} height={GRID_CELL_H} patternUnits="userSpaceOnUse">
+                  <circle cx="2" cy="2" r="1.5" fill="rgba(79,172,254,0.35)" />
+                  <path d={`M ${GRID_CELL_W} 0 L 0 0 0 ${GRID_CELL_H}`} fill="none" stroke="rgba(79,172,254,0.18)" strokeWidth="1" />
                 </pattern>
                 <filter id="almox-shadow" x="-10%" y="-10%" width="120%" height="120%">
                   <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
@@ -410,17 +591,50 @@ const MapaLocalizacoesAlmoxarifado = () => {
               </defs>
 
               <rect x="0" y="0" width={MAP_W} height={MAP_H} fill="var(--gmp-bg)" rx="12" />
-              <rect x="8" y="8" width={MAP_W - 16} height={MAP_H - 16} fill="url(#almox-grid)" rx="10" />
+              <rect x="8" y="8" width={MAP_W - 16} height={MAP_H - 16}
+                fill={modoEdicao ? 'url(#almox-grid-edit)' : 'url(#almox-grid)'} rx="10" />
               <rect x="8" y="8" width={MAP_W - 16} height={MAP_H - 16} fill="none"
                 stroke="rgba(79,172,254,0.25)" strokeWidth="2" rx="10" strokeDasharray="8 4" />
 
               {sectorsVisiveis.map(([name, sec]) => (
                 <g key={`sector-${name}`}>
                   <rect x={sec.x + 4} y={sec.y + 4} width={sec.w - 8} height={sec.h - 8}
-                    fill="rgba(79,172,254,0.04)" stroke="rgba(79,172,254,0.15)" strokeWidth="1" rx="8" />
+                    fill={modoEdicao ? 'rgba(79,172,254,0.06)' : 'rgba(79,172,254,0.04)'}
+                    stroke={modoEdicao ? 'rgba(79,172,254,0.35)' : 'rgba(79,172,254,0.15)'}
+                    strokeWidth={modoEdicao ? 1.5 : 1} rx="8" />
                   <text x={sec.x + 14} y={sec.y + 22} className="almox-mapa-sector-label">{name}</text>
+                  {modoEdicao && (() => {
+                    const grid = getSectorGrid(sec);
+                    const lines = [];
+                    for (let c = 0; c <= grid.cols; c++) {
+                      const x = grid.originX + c * GRID_CELL_W;
+                      lines.push(
+                        <line key={`v-${c}`} x1={x} y1={grid.originY} x2={x} y2={grid.originY + grid.rows * GRID_CELL_H}
+                          className="almox-mapa-grid-line" />
+                      );
+                    }
+                    for (let r = 0; r <= grid.rows; r++) {
+                      const y = grid.originY + r * GRID_CELL_H;
+                      lines.push(
+                        <line key={`h-${r}`} x1={grid.originX} y1={y} x2={grid.originX + grid.cols * GRID_CELL_W} y2={y}
+                          className="almox-mapa-grid-line" />
+                      );
+                    }
+                    return <g className="almox-mapa-sector-grid">{lines}</g>;
+                  })()}
                 </g>
               ))}
+
+              {modoEdicao && celulaAlvo && (
+                <rect
+                  x={celulaAlvo.x}
+                  y={celulaAlvo.y}
+                  width={celulaAlvo.w}
+                  height={celulaAlvo.h}
+                  rx="8"
+                  className="almox-mapa-drop-target"
+                />
+              )}
 
               {layout.map(loc => {
                 const pos = getPos(loc);
@@ -431,18 +645,21 @@ const MapaLocalizacoesAlmoxarifado = () => {
                 const isHover = hoverId === loc.id;
                 const isSel = selecionada?.id === loc.id;
                 const icone = TIPO_ICONES[tipo] || '📍';
+                const pathLabel = buildLocalizacaoPath(loc, filtradas);
+                const subLabel = loc.subgrupo || (pathLabel && pathLabel !== loc.setor ? pathLabel.split(' / ').slice(-1)[0] : null);
 
                 return (
                   <g
                     key={loc.id}
                     transform={`translate(${pos.x}, ${pos.y})`}
-                    style={{ cursor: modoEdicao ? 'grab' : 'pointer' }}
+                    style={{ cursor: modoEdicao ? (arrastando?.id === loc.id ? 'grabbing' : 'grab') : 'pointer' }}
                     onMouseDown={e => onDragStart(e, loc)}
                     onMouseEnter={() => setHoverId(loc.id)}
                     onMouseLeave={() => setHoverId(null)}
                     onClick={() => !arrastando && setSelecionada(loc)}
                     filter="url(#almox-shadow)"
                   >
+                    <title>{pathLabel ? `${loc.codigo} — ${pathLabel}` : loc.codigo}</title>
                     <rect
                       width={pos.w}
                       height={pos.h}
@@ -458,7 +675,12 @@ const MapaLocalizacoesAlmoxarifado = () => {
                     <text x={pos.w / 2} y={pos.h * 0.62} textAnchor="middle" className="almox-mapa-zone-code">
                       {loc.codigo}
                     </text>
-                    <text x={pos.w / 2} y={pos.h * 0.82} textAnchor="middle" className="almox-mapa-zone-count">
+                    {subLabel && (
+                      <text x={pos.w / 2} y={pos.h * 0.74} textAnchor="middle" className="almox-mapa-zone-sub">
+                        {subLabel}
+                      </text>
+                    )}
+                    <text x={pos.w / 2} y={pos.h * (subLabel ? 0.88 : 0.82)} textAnchor="middle" className="almox-mapa-zone-count">
                       {loc.qtd_itens > 0 ? `${loc.qtd_itens} item(ns)` : 'Vazio'}
                     </text>
                   </g>
@@ -502,6 +724,8 @@ const MapaLocalizacoesAlmoxarifado = () => {
               <dl className="almox-mapa-detail-list">
                 <dt>Tipo</dt><dd>{selecionada.tipo || 'Almoxarifado'}</dd>
                 <dt>Setor</dt><dd>{selecionada.setor || '—'}</dd>
+                {selecionada.subgrupo && <><dt>Subgrupo</dt><dd>{selecionada.subgrupo}</dd></>}
+                <dt>Caminho</dt><dd style={{ fontSize: '0.8rem' }}>{buildLocalizacaoPath(selecionada, localizacoes) || '—'}</dd>
                 <dt>Itens distintos</dt><dd>{selecionada.qtd_itens || 0}</dd>
                 <dt>Quantidade total</dt><dd>{Number(selecionada.quantidade_total || 0).toLocaleString('pt-BR')}</dd>
                 <dt>Reservado</dt><dd>{Number(selecionada.quantidade_reservada || 0).toLocaleString('pt-BR')}</dd>

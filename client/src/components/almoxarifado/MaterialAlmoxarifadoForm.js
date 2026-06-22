@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
@@ -12,6 +12,23 @@ const CATEGORIAS = [
 
 const UNIDADES = ['UN', 'KG', 'G', 'L', 'ML', 'M', 'CM', 'M²', 'M³', 'CX', 'PC', 'PAR', 'ROLO', 'BALDE', 'TAMBOR', 'SACO'];
 
+const buildLocalizacaoPath = (loc, allLocs = []) => {
+  if (!loc) return '';
+  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
+  const parts = [];
+  if (loc.setor) parts.push(loc.setor);
+  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
+  if (loc.subgrupo) parts.push(loc.subgrupo);
+  else if (loc.descricao && !parent) parts.push(loc.descricao);
+  return parts.join(' / ');
+};
+
+const formatLocalizacaoLabel = (loc, allLocs = []) => {
+  if (!loc) return '';
+  const path = buildLocalizacaoPath(loc, allLocs);
+  return path ? `${loc.codigo} — ${path}` : loc.codigo;
+};
+
 const MaterialAlmoxarifadoForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -20,6 +37,10 @@ const MaterialAlmoxarifadoForm = () => {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [localizacoes, setLocalizacoes] = useState([]);
+  const [loadingLocalizacoes, setLoadingLocalizacoes] = useState(true);
+  const [localizacaoInativa, setLocalizacaoInativa] = useState(null);
+  const [materialLocInfo, setMaterialLocInfo] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [savedId, setSavedId] = useState(null);
@@ -30,7 +51,7 @@ const MaterialAlmoxarifadoForm = () => {
     descricao: '',
     categoria: 'CONSUMÍVEL',
     unidade: 'UN',
-    localizacao: '',
+    localizacao_padrao_id: '',
     quantidade_atual: '',
     quantidade_minima: '',
     quantidade_maxima: '',
@@ -43,12 +64,57 @@ const MaterialAlmoxarifadoForm = () => {
   });
 
   useEffect(() => {
+    loadLocalizacoes();
     if (isEdit) {
       loadMaterial();
     } else {
       loadProximoCodigo();
     }
   }, [id]);
+
+  const loadLocalizacoes = async () => {
+    setLoadingLocalizacoes(true);
+    try {
+      const res = await api.get('/almoxarifado/localizacoes');
+      setLocalizacoes(res.data || []);
+    } catch {
+      toast.error('Erro ao carregar localizações');
+    } finally {
+      setLoadingLocalizacoes(false);
+    }
+  };
+
+  const localizacoesOptions = useMemo(() => {
+    const options = [...localizacoes];
+    if (localizacaoInativa && !options.some(l => l.id === localizacaoInativa.id)) {
+      options.push(localizacaoInativa);
+    }
+    return options.sort((a, b) => {
+      const setorCmp = (a.setor || '').localeCompare(b.setor || '', 'pt-BR');
+      if (setorCmp !== 0) return setorCmp;
+      const parentCmp = (a.parent_id || 0) - (b.parent_id || 0);
+      if (parentCmp !== 0) return parentCmp;
+      const subCmp = (a.subgrupo || '').localeCompare(b.subgrupo || '', 'pt-BR');
+      if (subCmp !== 0) return subCmp;
+      return (a.codigo || '').localeCompare(b.codigo || '', 'pt-BR');
+    });
+  }, [localizacoes, localizacaoInativa]);
+
+  useEffect(() => {
+    if (!materialLocInfo || loadingLocalizacoes) return;
+    const found = localizacoes.some(l => l.id === materialLocInfo.id);
+    if (!found) {
+      setLocalizacaoInativa({
+        id: materialLocInfo.id,
+        codigo: materialLocInfo.label?.split(' — ')[0] || `LOC-${materialLocInfo.id}`,
+        descricao: materialLocInfo.label,
+        setor: null,
+        ativo: 0,
+      });
+    } else {
+      setLocalizacaoInativa(null);
+    }
+  }, [materialLocInfo, localizacoes, loadingLocalizacoes]);
 
   const loadMaterial = async () => {
     setLoading(true);
@@ -61,7 +127,7 @@ const MaterialAlmoxarifadoForm = () => {
         descricao: m.descricao || '',
         categoria: m.categoria || 'CONSUMÍVEL',
         unidade: m.unidade || 'UN',
-        localizacao: m.localizacao || '',
+        localizacao_padrao_id: m.localizacao_padrao_id ? String(m.localizacao_padrao_id) : '',
         quantidade_atual: m.quantidade_atual ?? '',
         quantidade_minima: m.quantidade_minima ?? '',
         quantidade_maxima: m.quantidade_maxima ?? '',
@@ -72,6 +138,12 @@ const MaterialAlmoxarifadoForm = () => {
         especificacoes: m.especificacoes || '',
         observacoes: m.observacoes || ''
       });
+      if (m.localizacao_padrao_id) {
+        setMaterialLocInfo({ id: m.localizacao_padrao_id, label: m.localizacao });
+      } else {
+        setMaterialLocInfo(null);
+        setLocalizacaoInativa(null);
+      }
       if (m.foto) setFotoPreview(m.foto);
       setSavedId(m.id);
     } catch {
@@ -101,12 +173,20 @@ const MaterialAlmoxarifadoForm = () => {
     }
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        localizacao_padrao_id: form.localizacao_padrao_id
+          ? parseInt(form.localizacao_padrao_id, 10)
+          : null,
+      };
+      delete payload.localizacao;
+
       let res;
       if (isEdit) {
-        res = await api.put(`/almoxarifado/materiais/${id}`, form);
+        res = await api.put(`/almoxarifado/materiais/${id}`, payload);
         toast.success('Material atualizado!');
       } else {
-        res = await api.post('/almoxarifado/materiais', form);
+        res = await api.post('/almoxarifado/materiais', payload);
         toast.success('Material cadastrado!');
         setSavedId(res.data.id);
       }
@@ -191,8 +271,37 @@ const MaterialAlmoxarifadoForm = () => {
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Localização no estoque</label>
-                  <input className="almox-input" value={form.localizacao} onChange={e => set('localizacao', e.target.value)}
-                    placeholder="Ex: Prateleira A1, Gaveta 3B..." />
+                  {loadingLocalizacoes ? (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '10px 0' }}>
+                      Carregando localizações...
+                    </div>
+                  ) : localizacoes.length === 0 && !localizacaoInativa ? (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
+                      Nenhuma localização cadastrada — cadastre em{' '}
+                      <Link to="/almoxarifado/configuracoes" style={{ color: '#4facfe' }}>Configurações</Link>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        className="almox-form-select"
+                        value={form.localizacao_padrao_id}
+                        onChange={e => set('localizacao_padrao_id', e.target.value)}
+                      >
+                        <option value="">Selecione uma localização...</option>
+                        {localizacoesOptions.map(loc => (
+                          <option key={loc.id} value={String(loc.id)}>
+                            {formatLocalizacaoLabel(loc, localizacoesOptions)}
+                            {loc.ativo === 0 ? ' (inativa)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {localizacaoInativa && localizacaoInativa.ativo === 0 && form.localizacao_padrao_id === String(localizacaoInativa.id) && (
+                        <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                          Localização atual está inativa — selecione outra ou mantenha.
+                        </small>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Nome do Material<span className="required">*</span></label>
@@ -229,6 +338,9 @@ const MaterialAlmoxarifadoForm = () => {
             {/* Estoque */}
             <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
               <div className="almox-section-title">Controle de Estoque</div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', margin: '0 0 16px' }}>
+                O estoque mínimo gera alertas no dashboard e na lista quando o saldo ficar baixo.
+              </p>
               <div className="almox-form-grid almox-form-grid-3">
                 <div className="almox-field">
                   <label className="almox-label">{isEdit ? 'Quantidade Atual' : 'Saldo Inicial'}</label>

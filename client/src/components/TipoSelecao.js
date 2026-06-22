@@ -1,15 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import {
-  FiBriefcase, FiShoppingCart, FiDollarSign, FiUsers,
-  FiSettings, FiBarChart2, FiPackage, FiTarget,
-  FiLock, FiCheckCircle, FiShield, FiTool, FiSliders, FiArchive
+  FiBriefcase, FiShoppingCart, FiDollarSign,
+  FiSettings, FiPackage, FiTarget,
+  FiLock, FiShield, FiTool, FiSliders, FiArchive,
+  FiSearch, FiPlay, FiX
 } from 'react-icons/fi';
 import SplashScreen from './SplashScreen';
-import AnimatedBackground from './AnimatedBackground';
 import './TipoSelecao.css';
+
+const RECENT_MODULES_KEY = 'gmp_modulos_recentes';
+
+const getSaudacao = () => {
+  const hora = new Date().getHours();
+  if (hora < 12) return 'Bom dia';
+  if (hora < 18) return 'Boa tarde';
+  return 'Boa noite';
+};
+
+const getPrimeiroNome = (nome) => {
+  if (!nome) return '';
+  return nome.trim().split(/\s+/)[0];
+};
 
 const TipoSelecao = ({ onClose, forceShow = false }) => {
   const [modulosDisponiveis, setModulosDisponiveis] = useState([]);
@@ -17,94 +31,115 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   const [showSplash, setShowSplash] = useState(false);
   const [splashModule, setSplashModule] = useState(null);
   const [rotaDestino, setRotaDestino] = useState(null);
+  const [busca, setBusca] = useState('');
+  const [recentesIds, setRecentesIds] = useState([]);
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Todos os módulos disponíveis no sistema
   const todosModulos = [
     {
       id: 'comercial',
-      nome: 'COMERCIAL',
-      descricao: 'Gestão de vendas, propostas e oportunidades',
+      nome: 'Comercial',
+      descricao: 'Vendas, propostas e oportunidades',
       icon: FiTarget,
       modulo: 'comercial',
-      rota: '/comercial'
+      rota: '/comercial',
+      gradient: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%)'
     },
     {
       id: 'frota',
-      nome: 'FROTA',
+      nome: 'Frota',
       descricao: 'Manutenção e vistoria de veículos',
       icon: FiTool,
       modulo: 'comercial',
-      rota: '/frota'
+      rota: '/frota',
+      gradient: 'linear-gradient(135deg, #6b21a8 0%, #9333ea 50%, #c084fc 100%)'
     },
     {
       id: 'compras',
-      nome: 'COMPRAS',
-      descricao: 'Gestão de fornecedores, pedidos e cotações',
+      nome: 'Compras',
+      descricao: 'Fornecedores, pedidos e cotações',
       icon: FiShoppingCart,
       modulo: 'compras',
-      rota: '/compras'
+      rota: '/compras',
+      gradient: 'linear-gradient(135deg, #b45309 0%, #f59e0b 50%, #fbbf24 100%)'
     },
     {
       id: 'financeiro',
-      nome: 'FINANCEIRO',
-      descricao: 'Contas a pagar/receber, fluxo de caixa e bancos',
+      nome: 'Financeiro',
+      descricao: 'Contas, fluxo de caixa e bancos',
       icon: FiDollarSign,
       modulo: 'financeiro',
-      rota: '/financeiro'
+      rota: '/financeiro',
+      gradient: 'linear-gradient(135deg, #15803d 0%, #22c55e 50%, #4ade80 100%)'
     },
     {
       id: 'operacional',
-      nome: 'OPERACIONAL',
-      descricao: 'Controle de fábrica, OS e produção',
-      icon: FiTool,
+      nome: 'Operacional',
+      descricao: 'Fábrica, OS e produção',
+      icon: FiPackage,
       modulo: 'operacional',
-      rota: '/fabrica'
+      rota: '/fabrica',
+      gradient: 'linear-gradient(135deg, #c2410c 0%, #f97316 50%, #fb923c 100%)'
     },
     {
       id: 'administrativo',
-      nome: 'ADMINISTRATIVO',
-      descricao: 'Configurações e gestão do sistema',
+      nome: 'Administrativo',
+      descricao: 'Configurações do sistema',
       icon: FiSettings,
       modulo: 'administrativo',
-      rota: '/configuracoes'
+      rota: '/configuracoes',
+      gradient: 'linear-gradient(135deg, #334155 0%, #64748b 50%, #94a3b8 100%)'
     },
     {
       id: 'engenharia',
-      nome: 'CÁLCULOS DE ENGENHARIA',
-      descricao: 'Cálculos técnicos: tampo, pressão e dimensionamento',
+      nome: 'Cálculos de Engenharia',
+      descricao: 'Tampo, pressão e dimensionamento',
       icon: FiSliders,
       modulo: 'engenharia',
-      rota: '/engenharia'
+      rota: '/engenharia',
+      gradient: 'linear-gradient(135deg, #0e7490 0%, #06b6d4 50%, #22d3ee 100%)'
     },
     {
       id: 'engenharia_projetos',
-      nome: 'ENGENHARIA / PROJETOS',
-      descricao: 'Solicitações, cadastros e rotinas (cesta de compras)',
+      nome: 'Engenharia / Projetos',
+      descricao: 'Solicitações e cadastros',
       icon: FiBriefcase,
       modulo: 'engenharia_projetos',
-      rota: '/engenharia-projetos'
+      rota: '/engenharia-projetos',
+      gradient: 'linear-gradient(135deg, #4338ca 0%, #6366f1 50%, #818cf8 100%)'
     },
     {
       id: 'almoxarifado',
-      nome: 'ALMOXARIFADO',
-      descricao: 'Controle de materiais, estoque, movimentações e conferências',
+      nome: 'Almoxarifado',
+      descricao: 'Materiais, estoque e conferências',
       icon: FiArchive,
       modulo: 'almoxarifado',
-      rota: '/almoxarifado'
+      rota: '/almoxarifado',
+      gradient: 'linear-gradient(135deg, #3f6212 0%, #65a30d 50%, #a3e635 100%)'
     },
     {
       id: 'admin',
-      nome: 'ADMIN',
-      descricao: 'Gestão de usuários e permissões',
+      nome: 'Admin',
+      descricao: 'Usuários e permissões',
       icon: FiShield,
       modulo: 'admin',
-      rota: '/admin'
+      rota: '/admin',
+      gradient: 'linear-gradient(135deg, #991b1b 0%, #dc2626 50%, #f87171 100%)'
     }
   ];
 
-  // Ao abrir explicitamente "Selecionar Módulo" (forceShow), limpar rota pendente para não redirecionar depois
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(RECENT_MODULES_KEY) || '[]');
+      if (Array.isArray(stored)) {
+        setRecentesIds(stored);
+      }
+    } catch {
+      setRecentesIds([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (forceShow) {
       sessionStorage.removeItem('rotaDestinoModulo');
@@ -112,8 +147,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     }
   }, [forceShow]);
 
-  // Verificar se há rota pendente no sessionStorage (fallback caso componente seja desmontado)
-  // Não redirecionar quando forceShow: usuário abriu a tela de seleção de propósito
   useEffect(() => {
     if (forceShow) return;
     const verificarRotaPendente = () => {
@@ -132,7 +165,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     const carregarModulosPermitidos = async () => {
       if (!user?.id) {
         setLoading(false);
-        // Se não houver usuário, definir pelo menos comercial como disponível
         const modulosComStatus = todosModulos.map(mod => ({
           ...mod,
           disponivel: mod.modulo === 'comercial'
@@ -141,15 +173,12 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         return;
       }
 
-      // Verificar se é admin ANTES de fazer qualquer chamada à API
-      // Verificação case-insensitive para garantir compatibilidade
       const userRole = String(user.role || '').toLowerCase();
       const isAdmin = userRole === 'admin';
-      
+
       try {
         setLoading(true);
-        
-        // Se for admin, dar acesso a todos os módulos imediatamente
+
         if (isAdmin) {
           const modulosComStatus = todosModulos.map(mod => ({
             ...mod,
@@ -160,26 +189,21 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
           return;
         }
 
-        // Para usuários não-admin, buscar permissões
         const response = await api.get(`/usuarios/${user.id}/grupos`);
         const { permissoes } = response.data;
 
-        // Extrair módulos únicos que o usuário tem permissão
         const modulosPermitidos = new Set();
-        
+
         if (permissoes && permissoes.length > 0) {
-          // Verificar permissões do usuário
           permissoes.forEach(perm => {
             if (perm.permissao === 1) {
               modulosPermitidos.add(perm.modulo);
             }
           });
         } else {
-          // Se não tem permissões específicas, apenas comercial por padrão
           modulosPermitidos.add('comercial');
         }
 
-        // Marcar quais módulos estão disponíveis
         const modulosComStatus = todosModulos.map(mod => ({
           ...mod,
           disponivel: modulosPermitidos.has(mod.modulo)
@@ -188,7 +212,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         setModulosDisponiveis(modulosComStatus);
       } catch (error) {
         console.error('Erro ao carregar módulos:', error);
-        // Em caso de erro, verificar se é admin para dar acesso total
         const userRoleError = String(user.role || '').toLowerCase();
         if (userRoleError === 'admin') {
           const modulosComStatus = todosModulos.map(mod => ({
@@ -197,7 +220,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
           }));
           setModulosDisponiveis(modulosComStatus);
         } else {
-          // Se não for admin e houver erro, apenas comercial disponível
           const modulosComStatus = todosModulos.map(mod => ({
             ...mod,
             disponivel: mod.modulo === 'comercial'
@@ -213,7 +235,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       carregarModulosPermitidos();
     } else {
       setLoading(false);
-      // Se não houver usuário, definir pelo menos comercial como disponível
       const modulosComStatus = todosModulos.map(mod => ({
         ...mod,
         disponivel: mod.modulo === 'comercial'
@@ -223,155 +244,227 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  const salvarModuloRecente = (moduleId) => {
+    try {
+      const updated = [moduleId, ...recentesIds.filter(id => id !== moduleId)].slice(0, 4);
+      localStorage.setItem(RECENT_MODULES_KEY, JSON.stringify(updated));
+      setRecentesIds(updated);
+    } catch (error) {
+      console.error('Erro ao salvar módulo recente:', error);
+    }
+  };
+
   const handleModuloClick = (modulo) => {
     if (modulo.disponivel && modulo.rota) {
-      console.log('Clicou no módulo:', modulo.modulo, 'Rota:', modulo.rota);
-      
-      // Marcar que o usuário já viu os módulos ANTES de mostrar splash
       if (!forceShow) {
         sessionStorage.setItem('modulosVisualizados', 'true');
       }
-      
-      // Salvar a rota no sessionStorage para garantir navegação mesmo se componente desmontar
+
+      salvarModuloRecente(modulo.id);
+
       sessionStorage.setItem('rotaDestinoModulo', modulo.rota);
       sessionStorage.setItem('moduloDestino', modulo.modulo);
-      
-      // Salvar a rota de destino antes de mostrar o splash
+
       setRotaDestino(modulo.rota);
       setSplashModule(modulo.modulo);
       setShowSplash(true);
-      
-      // NÃO fechar modal ainda - deixar splash controlar quando completar
     }
   };
 
   const handleSplashComplete = () => {
-    // Tentar pegar rota do estado primeiro, senão do sessionStorage
     const rota = rotaDestino || sessionStorage.getItem('rotaDestinoModulo');
-    const modulo = splashModule || sessionStorage.getItem('moduloDestino');
-    
-    console.log('Splash completo. Navegando para:', rota, 'Módulo:', modulo);
-    
-    // Limpar sessionStorage
+
     sessionStorage.removeItem('rotaDestinoModulo');
     sessionStorage.removeItem('moduloDestino');
-    
-    // Limpar estados
+
     setShowSplash(false);
     setRotaDestino(null);
     setSplashModule(null);
-    
-    // Fechar modal se existir
+
     if (onClose) {
       onClose();
     }
-    
-    // Navegar imediatamente
+
     if (rota) {
-      console.log('Executando navegação para:', rota);
-      // Usar replace: true para não criar histórico e evitar voltar
       navigate(rota, { replace: true });
-    } else {
-      console.error('Nenhuma rota encontrada para navegar!');
     }
   };
 
-  // Se estiver mostrando splash, renderizar apenas o splash
-  if (showSplash && splashModule) {
-    console.log('Renderizando SplashScreen para módulo:', splashModule);
+  const filtrarPorBusca = (lista) => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return lista;
+    return lista.filter(mod =>
+      mod.nome.toLowerCase().includes(termo) ||
+      mod.descricao.toLowerCase().includes(termo)
+    );
+  };
+
+  const modulosAcessiveis = useMemo(
+    () => filtrarPorBusca(modulosDisponiveis.filter(m => m.disponivel)),
+    [modulosDisponiveis, busca]
+  );
+
+  const modulosBloqueados = useMemo(
+    () => filtrarPorBusca(modulosDisponiveis.filter(m => !m.disponivel)),
+    [modulosDisponiveis, busca]
+  );
+
+  const modulosRecentes = useMemo(() => {
+    if (!busca.trim()) {
+      return recentesIds
+        .map(id => modulosDisponiveis.find(m => m.id === id && m.disponivel))
+        .filter(Boolean);
+    }
+    return [];
+  }, [recentesIds, modulosDisponiveis, busca]);
+
+  const renderModuloCard = (modulo, compact = false) => {
+    const Icon = modulo.icon;
+    const isDisponivel = modulo.disponivel;
+
     return (
-      <SplashScreen 
-        onComplete={() => {
-          console.log('Callback do SplashScreen chamado!');
-          handleSplashComplete();
-        }} 
-        module={splashModule} 
+      <button
+        key={modulo.id}
+        type="button"
+        className={`modulo-card ${isDisponivel ? 'modulo-card--ativo' : 'modulo-card--bloqueado'} ${compact ? 'modulo-card--compact' : ''}`}
+        style={{ '--modulo-gradient': modulo.gradient }}
+        onClick={() => handleModuloClick(modulo)}
+        disabled={!isDisponivel}
+        aria-label={`${modulo.nome}${isDisponivel ? '' : ' — sem acesso'}`}
+      >
+        <div className="modulo-card__bg" aria-hidden="true" />
+        <div className="modulo-card__icon-wrap" aria-hidden="true">
+          <Icon className="modulo-card__icon" />
+        </div>
+        {!isDisponivel && (
+          <span className="modulo-card__lock" aria-hidden="true">
+            <FiLock />
+          </span>
+        )}
+        {isDisponivel && (
+          <span className="modulo-card__play" aria-hidden="true">
+            <FiPlay />
+          </span>
+        )}
+        <div className="modulo-card__info">
+          <h3 className="modulo-card__nome">{modulo.nome}</h3>
+          {!compact && <p className="modulo-card__desc">{modulo.descricao}</p>}
+        </div>
+      </button>
+    );
+  };
+
+  if (showSplash && splashModule) {
+    return (
+      <SplashScreen
+        onComplete={handleSplashComplete}
+        module={splashModule}
       />
     );
   }
 
-  // Se não houver usuário, mostrar mensagem de carregamento
   if (!user) {
     return (
-      <div className="tipo-selecao-container">
+      <div className="tipo-selecao">
         <div className="tipo-selecao-loading">
-          <div className="loading-spinner"></div>
+          <div className="tipo-selecao-spinner" />
           <p>Carregando...</p>
         </div>
       </div>
     );
   }
 
+  const primeiroNome = getPrimeiroNome(user.nome);
+  const isAdmin = String(user.role || '').toLowerCase() === 'admin';
+
   return (
-    <div className="tipo-selecao-container">
-      <AnimatedBackground nodeCount={120} connectionDistance={220} />
-      <div className="tipo-selecao-background">
-        <div className="tipo-selecao-content">
-          <div className="tipo-selecao-header">
-            <h1>Selecione o módulo</h1>
-            <p>Escolha abaixo o módulo que deseja acessar</p>
-            {user?.role && String(user.role).toLowerCase() === 'admin' && (
-              <span className="tipo-selecao-badge-admin">Acesso total (Administrador)</span>
+    <div className="tipo-selecao">
+      <div className="tipo-selecao__inner">
+        <header className="tipo-selecao__header">
+          <div className="tipo-selecao__brand">
+            <span className="tipo-selecao__logo">GMP</span>
+            {isAdmin && (
+              <span className="tipo-selecao__admin-badge">Administrador</span>
             )}
           </div>
 
-          {loading ? (
-            <div className="tipo-selecao-loading">
-              <div className="loading-spinner"></div>
-              <p>Carregando módulos...</p>
-            </div>
-          ) : (
-            <>
-              <div className="tipo-selecao-grid">
-                {Array.isArray(modulosDisponiveis) && modulosDisponiveis.length > 0 ? (
-                  modulosDisponiveis.map((modulo) => {
-                    const Icon = modulo.icon;
-                    const isDisponivel = modulo.disponivel;
-                    
-                    return (
-                      <div
-                        key={modulo.id}
-                        className={`tipo-card ${isDisponivel ? 'disponivel' : 'bloqueado'} ${isDisponivel ? 'clickable' : ''}`}
-                        onClick={() => handleModuloClick(modulo)}
-                      >
-                        {!isDisponivel && (
-                          <div className="tipo-card-lock">
-                            <FiLock />
-                          </div>
-                        )}
-                        {isDisponivel && (
-                          <div className="tipo-card-check-icon">
-                            <FiCheckCircle />
-                          </div>
-                        )}
-                        <div className={`tipo-card-icon ${isDisponivel ? 'ativo' : ''}`}>
-                          <Icon className="tipo-card-icon-svg" />
-                        </div>
-                        <div className="tipo-card-content">
-                          <h3>{modulo.nome}</h3>
-                          <p>{modulo.descricao}</p>
-                          {isDisponivel ? (
-                            <span className="tipo-card-disponivel">Acesso permitido</span>
-                          ) : (
-                            <span className="tipo-card-indisponivel">Sem acesso</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--gmp-text-light)' }}>
-                    <p>Nenhum módulo disponível.</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+          <div className="tipo-selecao__greeting">
+            <h1>
+              {getSaudacao()}
+              {primeiroNome ? `, ${primeiroNome}` : ''}
+            </h1>
+            <p>Escolha o módulo que deseja acessar</p>
+          </div>
+
+          <div className="tipo-selecao__search-wrap">
+            <FiSearch className="tipo-selecao__search-icon" aria-hidden="true" />
+            <input
+              type="search"
+              className="tipo-selecao__search"
+              placeholder="Buscar módulos..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              aria-label="Buscar módulos"
+            />
+            {busca && (
+              <button
+                type="button"
+                className="tipo-selecao__search-clear"
+                onClick={() => setBusca('')}
+                aria-label="Limpar busca"
+              >
+                <FiX />
+              </button>
+            )}
+          </div>
+        </header>
+
+        {loading ? (
+          <div className="tipo-selecao-loading">
+            <div className="tipo-selecao-spinner" />
+            <p>Carregando módulos...</p>
+          </div>
+        ) : (
+          <div className="tipo-selecao__sections">
+            {modulosRecentes.length > 0 && (
+              <section className="tipo-selecao__section">
+                <h2 className="tipo-selecao__section-title">Acessados recentemente</h2>
+                <div className="modulo-grid modulo-grid--recent">
+                  {modulosRecentes.map(mod => renderModuloCard(mod, true))}
+                </div>
+              </section>
+            )}
+
+            <section className="tipo-selecao__section">
+              <h2 className="tipo-selecao__section-title">
+                {busca.trim() ? 'Resultados' : 'Seus módulos'}
+              </h2>
+              {modulosAcessiveis.length > 0 ? (
+                <div className="modulo-grid">
+                  {modulosAcessiveis.map(mod => renderModuloCard(mod))}
+                </div>
+              ) : (
+                <p className="tipo-selecao__empty">
+                  {busca.trim()
+                    ? 'Nenhum módulo encontrado para esta busca.'
+                    : 'Nenhum módulo disponível para o seu perfil.'}
+                </p>
+              )}
+            </section>
+
+            {modulosBloqueados.length > 0 && (
+              <section className="tipo-selecao__section tipo-selecao__section--bloqueados">
+                <h2 className="tipo-selecao__section-title">Sem acesso</h2>
+                <div className="modulo-grid">
+                  {modulosBloqueados.map(mod => renderModuloCard(mod))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default TipoSelecao;
-

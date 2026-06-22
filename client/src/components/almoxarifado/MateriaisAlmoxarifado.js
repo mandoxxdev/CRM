@@ -216,11 +216,9 @@ const MateriaisAlmoxarifado = () => {
                         <span style={{ fontWeight: 600 }}>{m.quantidade_atual}</span>
                         <span style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem' }}>{m.unidade}</span>
                       </div>
-                      {m.quantidade_minima > 0 && (
-                        <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
-                          Mín: {m.quantidade_minima} · Máx: {m.quantidade_maxima || '—'}
-                        </div>
-                      )}
+                      <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                        Mín: {m.quantidade_minima > 0 ? m.quantidade_minima : '—'} · Máx: {m.quantidade_maxima > 0 ? m.quantidade_maxima : '—'}
+                      </div>
                     </td>
                     <td>
                       <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{m.localizacao || '—'}</span>

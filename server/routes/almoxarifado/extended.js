@@ -71,7 +71,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
           GROUP BY localizacao_padrao_id
         ) m ON m.loc_id = l.id
         WHERE l.ativo = 1
-        ORDER BY l.setor, l.codigo
+        ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo
       `);
       res.json(rows);
     } catch (e) { handleError(res, e); }

@@ -772,6 +772,39 @@
   border-radius: 10px;
 }
 
+.almox-mapa-svg--edit {
+  outline: 2px solid rgba(79, 172, 254, 0.2);
+  outline-offset: -2px;
+}
+
+.almox-mapa-edit-hint {
+  font-size: 0.8rem;
+  color: #4facfe;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.almox-mapa-grid-line {
+  stroke: rgba(79, 172, 254, 0.22);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.almox-mapa-drop-target {
+  fill: rgba(79, 172, 254, 0.15);
+  stroke: #4facfe;
+  stroke-width: 2;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+  animation: almox-drop-pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes almox-drop-pulse {
+  from { fill: rgba(79, 172, 254, 0.1); }
+  to { fill: rgba(79, 172, 254, 0.22); }
+}
+
 .almox-mapa-sector-label {
   font-size: 11px;
   font-weight: 700;
@@ -785,6 +818,11 @@
   font-size: 11px;
   font-weight: 700;
   fill: var(--gmp-text, #1e293b);
+}
+.almox-mapa-zone-sub {
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--gmp-text-light, #64748b);
 }
 .almox-mapa-zone-count {
   font-size: 9px;

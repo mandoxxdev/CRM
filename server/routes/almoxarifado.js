@@ -114,6 +114,55 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // MATERIAIS — CRUD
   // ════════════════════════════════════════════════════════════════════════════
 
+  function buildLocalizacaoPath(loc, parent) {
+    if (!loc) return '';
+    const parts = [];
+    if (loc.setor) parts.push(loc.setor);
+    if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
+    if (loc.subgrupo) parts.push(loc.subgrupo);
+    else if (loc.descricao && !parent) parts.push(loc.descricao);
+    return parts.join(' / ');
+  }
+
+  function formatLocalizacaoLabel(loc, parent) {
+    if (!loc) return null;
+    const path = buildLocalizacaoPath(loc, parent);
+    return path ? `${loc.codigo} — ${path}` : loc.codigo;
+  }
+
+  function resolveLocalizacaoFromFk(localizacaoPadraoId, callback) {
+    const id = localizacaoPadraoId ? parseInt(localizacaoPadraoId, 10) : null;
+    if (!id) return callback(null, null, null);
+    db.get(
+      `SELECT l.id, l.codigo, l.descricao, l.setor, l.subgrupo, l.parent_id,
+              p.codigo as parent_codigo, p.descricao as parent_descricao, p.subgrupo as parent_subgrupo
+       FROM localizacoes_almoxarifado l
+       LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
+       WHERE l.id = ?`,
+      [id],
+      (err, row) => {
+        if (err) return callback(err);
+        if (!row) return callback(null, id, null);
+        const parent = row.parent_id ? {
+          codigo: row.parent_codigo,
+          descricao: row.parent_descricao,
+          subgrupo: row.parent_subgrupo,
+        } : null;
+        callback(null, id, formatLocalizacaoLabel(row, parent));
+      }
+    );
+  }
+
+  function checkSubgrupoDuplicado(dbConn, { subgrupo, setor, parent_id, excludeId }, callback) {
+    if (!subgrupo || !String(subgrupo).trim()) return callback(null, false);
+    dbConn.get(
+      `SELECT id FROM localizacoes_almoxarifado
+       WHERE ativo = 1 AND subgrupo = ? AND setor IS ? AND parent_id IS ? AND id != ?`,
+      [String(subgrupo).trim(), setor || null, parent_id || null, excludeId || 0],
+      (err, row) => callback(err, !!row)
+    );
+  }
+
   // GET /api/almoxarifado/materiais — listar
   app.get('/api/almoxarifado/materiais', authenticateToken, (req, res) => {
     const { search, categoria, status } = req.query;
@@ -216,7 +265,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // POST /api/almoxarifado/materiais — criar
   app.post('/api/almoxarifado/materiais', authenticateToken, (req, res) => {
     const {
-      codigo, nome, descricao, categoria, unidade, localizacao,
+      codigo, nome, descricao, categoria, unidade,
       quantidade_atual, quantidade_minima, quantidade_maxima,
       custo_unitario, fornecedor_principal, codigo_fornecedor,
       ncm, especificacoes, observacoes,
@@ -226,80 +275,88 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
 
     if (!codigo || !nome) return res.status(400).json({ error: 'Código e nome são obrigatórios' });
 
-    db.run(`INSERT INTO materiais_almoxarifado
-      (codigo, nome, descricao, categoria, unidade, localizacao, quantidade_atual,
-       quantidade_minima, quantidade_maxima, custo_unitario, fornecedor_principal,
-       codigo_fornecedor, ncm, especificacoes, observacoes,
-       descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
-       fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
-       localizacao || null, quantidade_atual || 0, quantidade_minima || 0,
-       quantidade_maxima || 0, custo_unitario || 0, fornecedor_principal || null,
-       codigo_fornecedor || null, ncm || null, especificacoes || null, observacoes || null,
-       descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
-       localizacao_padrao_id || null, fornecedor_id || null, tipo_material || null,
-       material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0],
-      function (err) {
-        if (err) {
-          if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-          return res.status(500).json({ error: err.message });
-        }
-        const id = this.lastID;
+    resolveLocalizacaoFromFk(localizacao_padrao_id, (errLoc, locId, locText) => {
+      if (errLoc) return res.status(500).json({ error: errLoc.message });
 
-        // Registrar movimentação inicial se quantidade > 0
-        if ((quantidade_atual || 0) > 0) {
-          db.run(`INSERT INTO movimentacoes_almoxarifado
-            (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, usuario_id, usuario_nome)
-            VALUES (?, 'ENTRADA', ?, 0, ?, 'Saldo inicial de cadastro', ?, ?)`,
-            [id, quantidade_atual, quantidade_atual, req.user.id, req.user.nome || req.user.email]);
-        }
+      db.run(`INSERT INTO materiais_almoxarifado
+        (codigo, nome, descricao, categoria, unidade, localizacao, quantidade_atual,
+         quantidade_minima, quantidade_maxima, custo_unitario, fornecedor_principal,
+         codigo_fornecedor, ncm, especificacoes, observacoes,
+         descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
+         fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
+         locText, quantidade_atual || 0, quantidade_minima || 0,
+         quantidade_maxima || 0, custo_unitario || 0, fornecedor_principal || null,
+         codigo_fornecedor || null, ncm || null, especificacoes || null, observacoes || null,
+         descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
+         locId, fornecedor_id || null, tipo_material || null,
+         material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0],
+        function (err) {
+          if (err) {
+            if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+            return res.status(500).json({ error: err.message });
+          }
+          const id = this.lastID;
 
-        db.get(`SELECT * FROM materiais_almoxarifado WHERE id = ?`, [id], (err2, row) => {
-          res.status(201).json(row);
-        });
-      }
-    );
+          // Registrar movimentação inicial se quantidade > 0
+          if ((quantidade_atual || 0) > 0) {
+            db.run(`INSERT INTO movimentacoes_almoxarifado
+              (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, usuario_id, usuario_nome)
+              VALUES (?, 'ENTRADA', ?, 0, ?, 'Saldo inicial de cadastro', ?, ?)`,
+              [id, quantidade_atual, quantidade_atual, req.user.id, req.user.nome || req.user.email]);
+          }
+
+          db.get(`SELECT * FROM materiais_almoxarifado WHERE id = ?`, [id], (err2, row) => {
+            res.status(201).json(row);
+          });
+        }
+      );
+    });
   });
 
   // PUT /api/almoxarifado/materiais/:id — atualizar
   app.put('/api/almoxarifado/materiais/:id', authenticateToken, (req, res) => {
     const {
-      codigo, nome, descricao, categoria, unidade, localizacao,
+      codigo, nome, descricao, categoria, unidade,
       quantidade_minima, quantidade_maxima, custo_unitario,
       fornecedor_principal, codigo_fornecedor, ncm, especificacoes, observacoes, ativo,
       descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
       fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado,
     } = req.body;
 
-    db.run(`UPDATE materiais_almoxarifado SET
-      codigo = ?, nome = ?, descricao = ?, categoria = ?, unidade = ?, localizacao = ?,
-      quantidade_minima = ?, quantidade_maxima = ?, custo_unitario = ?,
-      fornecedor_principal = ?, codigo_fornecedor = ?, ncm = ?, especificacoes = ?,
-      observacoes = ?, ativo = ?,
-      descricao_tecnica = ?, categoria_id = ?, subcategoria_id = ?, localizacao_padrao_id = ?,
-      fornecedor_id = ?, tipo_material = ?, material_critico = ?, controle_lote = ?, controle_certificado = ?,
-      updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`,
-      [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
-       localizacao || null, quantidade_minima || 0, quantidade_maxima || 0,
-       custo_unitario || 0, fornecedor_principal || null, codigo_fornecedor || null,
-       ncm || null, especificacoes || null, observacoes || null,
-       ativo !== undefined ? ativo : 1,
-       descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
-       localizacao_padrao_id || null, fornecedor_id || null, tipo_material || null,
-       material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0,
-       req.params.id],
-      function (err) {
-        if (err) {
-          if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-          return res.status(500).json({ error: err.message });
+    resolveLocalizacaoFromFk(localizacao_padrao_id, (errLoc, locId, locText) => {
+      if (errLoc) return res.status(500).json({ error: errLoc.message });
+
+      db.run(`UPDATE materiais_almoxarifado SET
+        codigo = ?, nome = ?, descricao = ?, categoria = ?, unidade = ?, localizacao = ?,
+        quantidade_minima = ?, quantidade_maxima = ?, custo_unitario = ?,
+        fornecedor_principal = ?, codigo_fornecedor = ?, ncm = ?, especificacoes = ?,
+        observacoes = ?, ativo = ?,
+        descricao_tecnica = ?, categoria_id = ?, subcategoria_id = ?, localizacao_padrao_id = ?,
+        fornecedor_id = ?, tipo_material = ?, material_critico = ?, controle_lote = ?, controle_certificado = ?,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`,
+        [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
+         locText, quantidade_minima || 0, quantidade_maxima || 0,
+         custo_unitario || 0, fornecedor_principal || null, codigo_fornecedor || null,
+         ncm || null, especificacoes || null, observacoes || null,
+         ativo !== undefined ? ativo : 1,
+         descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
+         locId, fornecedor_id || null, tipo_material || null,
+         material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0,
+         req.params.id],
+        function (err) {
+          if (err) {
+            if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+            return res.status(500).json({ error: err.message });
+          }
+          db.get(`SELECT * FROM materiais_almoxarifado WHERE id = ?`, [req.params.id], (err2, row) => {
+            res.json(row);
+          });
         }
-        db.get(`SELECT * FROM materiais_almoxarifado WHERE id = ?`, [req.params.id], (err2, row) => {
-          res.json(row);
-        });
-      }
-    );
+      );
+    });
   });
 
   // DELETE /api/almoxarifado/materiais/:id — inativar
@@ -770,6 +827,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_y REAL`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN altura REAL DEFAULT 80`, () => {});
+  db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN subgrupo TEXT`, () => {});
 
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -824,7 +882,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/almoxarifado/localizacoes', authenticateToken, (req, res) => {
-    db.all(`SELECT * FROM localizacoes_almoxarifado WHERE ativo = 1 ORDER BY setor, codigo`, [], (err, rows) => {
+    db.all(`SELECT * FROM localizacoes_almoxarifado WHERE ativo = 1
+            ORDER BY setor, parent_id, subgrupo, codigo`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
     });
@@ -832,31 +891,46 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
 
   app.post('/api/almoxarifado/localizacoes', authenticateToken, (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
-    const { codigo, descricao, setor, tipo, parent_id, pos_x, pos_y, largura, altura } = req.body;
+    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura } = req.body;
     if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
-    db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, tipo, parent_id, pos_x, pos_y, largura, altura) VALUES (?,?,?,?,?,?,?,?,?)`,
-      [codigo, descricao || null, setor || null, tipo || 'Almoxarifado', parent_id || null,
-       pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80],
-      function (err) {
-        if (err) {
-          if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-          return res.status(500).json({ error: err.message });
-        }
-        db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => res.status(201).json(r));
-      });
+    const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
+    const parentVal = parent_id ? parseInt(parent_id, 10) : null;
+    checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal }, (dupErr, isDup) => {
+      if (dupErr) return res.status(500).json({ error: dupErr.message });
+      if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
+      db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+         pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80],
+        function (err) {
+          if (err) {
+            if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+            return res.status(500).json({ error: err.message });
+          }
+          db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => res.status(201).json(r));
+        });
+    });
   });
 
   app.put('/api/almoxarifado/localizacoes/:id', authenticateToken, (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
-    const { codigo, descricao, setor, tipo, parent_id, pos_x, pos_y, largura, altura, ativo } = req.body;
-    db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, ativo=? WHERE id=?`,
-      [codigo, descricao || null, setor || null, tipo || 'Almoxarifado', parent_id || null,
-       pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80,
-       ativo !== undefined ? ativo : 1, req.params.id],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
-      });
+    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo } = req.body;
+    const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
+    const parentVal = parent_id ? parseInt(parent_id, 10) : null;
+    if (parentVal && parseInt(req.params.id, 10) === parentVal) {
+      return res.status(400).json({ error: 'Uma localização não pode ser pai de si mesma' });
+    }
+    checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal, excludeId: req.params.id }, (dupErr, isDup) => {
+      if (dupErr) return res.status(500).json({ error: dupErr.message });
+      if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
+      db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, ativo=? WHERE id=?`,
+        [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+         pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80,
+         ativo !== undefined ? ativo : 1, req.params.id],
+        function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
+        });
+    });
   });
 
   app.delete('/api/almoxarifado/localizacoes/:id', authenticateToken, (req, res) => {
@@ -900,7 +974,6 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
 
   // PUT /api/almoxarifado/configuracoes/estoques-minimos — atualização em lote
   app.put('/api/almoxarifado/configuracoes/estoques-minimos', authenticateToken, (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { materiais } = req.body; // [{ id, quantidade_minima, quantidade_maxima, ponto_pedido, prazo_reposicao_dias }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array de materiais' });
 

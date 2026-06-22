@@ -104,6 +104,7 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_y REAL');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN altura REAL DEFAULT 80');
+  await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN subgrupo TEXT');
 
   // ── Estoque por localização/lote ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS estoque_saldo_almoxarifado (
