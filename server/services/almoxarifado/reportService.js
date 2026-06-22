@@ -69,6 +69,18 @@ async function relatorioInventarioDivergencias(db) {
     ORDER BY c.created_at DESC`);
 }
 
+async function relatorioMateriaisMaisConsumidos(db, dataInicio, dataFim) {
+  let sql = `SELECT ma.id as material_id, ma.nome, ma.codigo, ma.unidade, SUM(m.quantidade) as total_consumido
+    FROM movimentacoes_almoxarifado m
+    JOIN materiais_almoxarifado ma ON m.material_id = ma.id
+    WHERE m.tipo IN ('SAIDA','SAIDA_PRODUCAO','SAIDA_MONTAGEM','SAIDA_ASSISTENCIA') AND m.cancelado = 0`;
+  const params = [];
+  if (dataInicio) { sql += ' AND DATE(m.created_at) >= ?'; params.push(dataInicio); }
+  if (dataFim) { sql += ' AND DATE(m.created_at) <= ?'; params.push(dataFim); }
+  sql += ' GROUP BY ma.id ORDER BY total_consumido DESC LIMIT 10';
+  return dbAll(db, sql, params);
+}
+
 async function relatorioConsumoPeriodo(db, dataInicio, dataFim, projetoId, clienteId) {
   let sql = `SELECT ma.categoria, ma.nome, SUM(m.quantidade) as total, m.projeto_id, m.cliente_id
     FROM movimentacoes_almoxarifado m
@@ -105,7 +117,8 @@ async function relatorioSolicitacoesCompraPendentes(db) {
 
 module.exports = {
   relatorioEstoqueAtual, relatorioAbaixoMinimo, relatorioReservadoPorOS,
-  relatorioConsumoPorOS, relatorioRecebimentosPendentes, relatorioMateriaisBloqueados,
-  relatorioHistoricoMovimentacoes, relatorioInventarioDivergencias, relatorioConsumoPeriodo,
-  relatorioFerramentasEmprestadas, relatorioEPIPorColaborador, relatorioSolicitacoesCompraPendentes,
+  relatorioConsumoPorOS, relatorioMateriaisMaisConsumidos, relatorioRecebimentosPendentes,
+  relatorioMateriaisBloqueados, relatorioHistoricoMovimentacoes, relatorioInventarioDivergencias,
+  relatorioConsumoPeriodo, relatorioFerramentasEmprestadas, relatorioEPIPorColaborador,
+  relatorioSolicitacoesCompraPendentes,
 };

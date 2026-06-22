@@ -217,6 +217,7 @@ const Layout = () => {
     { path: '/almoxarifado/requisicoes', icon: FiCheckCircle, label: 'Requisições' },
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência de Estoque' },
+    { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
     { path: '/almoxarifado/configuracoes', icon: FiSettings, label: 'Configurações' },
   ];
 

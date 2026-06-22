@@ -3,7 +3,7 @@
  */
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission } = require('../../services/almoxarifado/permissions');
-const { dbAll, dbGet } = require('../../services/almoxarifado/db');
+const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const returnService = require('../../services/almoxarifado/returnService');
@@ -39,6 +39,57 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     try {
       const rows = await dbAll(db, 'SELECT * FROM unidades_medida_almoxarifado WHERE ativo = 1 ORDER BY sigla');
       res.json(rows);
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Mapa de localizações ──
+  app.get('/api/almoxarifado/mapa/localizacoes', auth, async (req, res) => {
+    try {
+      const rows = await dbAll(db, `
+        SELECT l.*,
+          COALESCE(s.qtd_itens, 0) as qtd_itens,
+          COALESCE(s.quantidade_total, 0) as quantidade_total,
+          COALESCE(s.quantidade_reservada, 0) as quantidade_reservada,
+          COALESCE(m.itens_baixo_minimo, 0) as itens_baixo_minimo,
+          COALESCE(m.itens_criticos, 0) as itens_criticos
+        FROM localizacoes_almoxarifado l
+        LEFT JOIN (
+          SELECT localizacao_id,
+            COUNT(DISTINCT material_id) as qtd_itens,
+            SUM(quantidade) as quantidade_total,
+            SUM(COALESCE(quantidade_reservada, 0)) as quantidade_reservada
+          FROM estoque_saldo_almoxarifado
+          WHERE quantidade > 0
+          GROUP BY localizacao_id
+        ) s ON s.localizacao_id = l.id
+        LEFT JOIN (
+          SELECT localizacao_padrao_id as loc_id,
+            SUM(CASE WHEN quantidade_atual > 0 AND quantidade_minima > 0 AND quantidade_atual <= quantidade_minima THEN 1 ELSE 0 END) as itens_baixo_minimo,
+            SUM(CASE WHEN quantidade_atual <= 0 AND quantidade_minima > 0 THEN 1 ELSE 0 END) as itens_criticos
+          FROM materiais_almoxarifado
+          WHERE ativo = 1 AND localizacao_padrao_id IS NOT NULL
+          GROUP BY localizacao_padrao_id
+        ) m ON m.loc_id = l.id
+        WHERE l.ativo = 1
+        ORDER BY l.setor, l.codigo
+      `);
+      res.json(rows);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/mapa/localizacoes/posicoes', auth, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    const { posicoes } = req.body;
+    if (!Array.isArray(posicoes) || posicoes.length === 0) {
+      return res.status(400).json({ error: 'Lista de posições obrigatória' });
+    }
+    try {
+      for (const p of posicoes) {
+        if (!p.id) continue;
+        await dbRun(db, `UPDATE localizacoes_almoxarifado SET pos_x=?, pos_y=?, largura=?, altura=? WHERE id=?`,
+          [p.pos_x, p.pos_y, p.largura ?? 120, p.altura ?? 80, p.id]);
+      }
+      res.json({ success: true, atualizados: posicoes.length });
     } catch (e) { handleError(res, e); }
   });
 
@@ -249,6 +300,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     'abaixo-minimo': reportService.relatorioAbaixoMinimo,
     'reservado-os': (db, q) => reportService.relatorioReservadoPorOS(db, q.os_id),
     'consumo-os': (db, q) => reportService.relatorioConsumoPorOS(db, q.os_id, q.data_inicio, q.data_fim),
+    'materiais-mais-consumidos': (db, q) => reportService.relatorioMateriaisMaisConsumidos(db, q.data_inicio, q.data_fim),
     'recebimentos-pendentes': reportService.relatorioRecebimentosPendentes,
     'materiais-bloqueados': reportService.relatorioMateriaisBloqueados,
     'historico-movimentacoes': (db, q) => reportService.relatorioHistoricoMovimentacoes(db, q),

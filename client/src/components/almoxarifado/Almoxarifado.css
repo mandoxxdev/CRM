@@ -741,6 +741,147 @@
 .almox-count-divergencia.pos { color: var(--gmp-success); }
 .almox-count-divergencia.zero { color: var(--gmp-text-light); }
 
+/* ── Mapa de Áreas ── */
+.almox-mapa-page { max-width: 1600px; }
+
+.almox-mapa-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .almox-mapa-layout { grid-template-columns: 1fr; }
+}
+
+.almox-mapa-canvas-wrap {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 14px;
+  padding: 12px;
+  overflow: auto;
+  min-height: 400px;
+}
+
+.almox-mapa-svg {
+  width: 100%;
+  height: auto;
+  min-height: 480px;
+  display: block;
+  border-radius: 10px;
+}
+
+.almox-mapa-sector-label {
+  font-size: 11px;
+  font-weight: 700;
+  fill: rgba(79, 172, 254, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.almox-mapa-zone-icon { font-size: 18px; }
+.almox-mapa-zone-code {
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--gmp-text, #1e293b);
+}
+.almox-mapa-zone-count {
+  font-size: 9px;
+  fill: var(--gmp-text-light, #64748b);
+}
+
+.almox-mapa-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.almox-mapa-legend,
+.almox-mapa-detail {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.almox-mapa-legend h3,
+.almox-mapa-detail h3 {
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gmp-text);
+}
+
+.almox-mapa-legend-section { margin-bottom: 14px; }
+.almox-mapa-legend-section:last-child { margin-bottom: 0; }
+
+.almox-mapa-legend-title {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gmp-text-light);
+  margin-bottom: 8px;
+}
+
+.almox-mapa-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--gmp-text);
+  padding: 3px 0;
+}
+
+.almox-mapa-legend-bar {
+  width: 20px;
+  height: 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.almox-mapa-detail-desc {
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
+  margin: 0 0 14px;
+}
+
+.almox-mapa-detail-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.almox-mapa-detail-list dt {
+  color: var(--gmp-text-light);
+  font-weight: 500;
+}
+
+.almox-mapa-detail-list dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--gmp-text);
+}
+
+.almox-mapa-detail-empty {
+  text-align: center;
+  color: var(--gmp-text-light);
+  font-size: 0.85rem;
+  padding: 32px 16px;
+}
+
+.almox-badge-vazio {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
 /* ── Empty state ── */
 .almox-empty {
   text-align: center;

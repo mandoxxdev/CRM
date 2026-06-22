@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
@@ -367,27 +368,61 @@ const TabEstoquesMinimos = () => {
 /* ===================== TAB LOCALIZAÇÕES ===================== */
 const TabLocalizacoes = () => {
   const [localizacoes, setLocalizacoes] = useState([]);
+  const [tiposLoc, setTiposLoc] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ codigo: '', descricao: '', setor: '' });
+  const [form, setForm] = useState({ codigo: '', descricao: '', setor: '', tipo: 'Almoxarifado', pos_x: '', pos_y: '', largura: 120, altura: 80 });
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showPosicao, setShowPosicao] = useState(false);
 
-  useEffect(() => { loadLocs(); }, []);
+  useEffect(() => { loadLocs(); loadTipos(); }, []);
+  const loadTipos = async () => {
+    try {
+      const r = await api.get('/almoxarifado/meta/tipos-material');
+      setTiposLoc(r.data.localizacoes_tipos || []);
+    } catch { /* ignore */ }
+  };
   const loadLocs = async () => {
     setLoading(true);
     try { const r = await api.get('/almoxarifado/localizacoes'); setLocalizacoes(r.data); }
     catch { toast.error('Erro ao carregar localizações'); } finally { setLoading(false); }
   };
 
-  const resetForm = () => { setForm({ codigo: '', descricao: '', setor: '' }); setEditando(null); setShowForm(false); };
-  const handleEditar = (loc) => { setForm(loc); setEditando(loc.id); setShowForm(true); };
+  const resetForm = () => {
+    setForm({ codigo: '', descricao: '', setor: '', tipo: 'Almoxarifado', pos_x: '', pos_y: '', largura: 120, altura: 80 });
+    setEditando(null); setShowForm(false); setShowPosicao(false);
+  };
+  const handleEditar = (loc) => {
+    setForm({
+      ...loc,
+      tipo: loc.tipo || 'Almoxarifado',
+      pos_x: loc.pos_x ?? '',
+      pos_y: loc.pos_y ?? '',
+      largura: loc.largura ?? 120,
+      altura: loc.altura ?? 80,
+    });
+    setEditando(loc.id);
+    setShowForm(true);
+    setShowPosicao(loc.pos_x != null || loc.pos_y != null);
+  };
+  const buildPayload = () => ({
+    codigo: form.codigo,
+    descricao: form.descricao,
+    setor: form.setor,
+    tipo: form.tipo || 'Almoxarifado',
+    pos_x: form.pos_x !== '' && form.pos_x != null ? parseFloat(form.pos_x) : null,
+    pos_y: form.pos_y !== '' && form.pos_y != null ? parseFloat(form.pos_y) : null,
+    largura: parseFloat(form.largura) || 120,
+    altura: parseFloat(form.altura) || 80,
+  });
   const handleSalvar = async () => {
     if (!form.codigo.trim()) { toast.error('Código é obrigatório'); return; }
     setSaving(true);
     try {
-      if (editando) { await api.put(`/almoxarifado/localizacoes/${editando}`, form); toast.success('Atualizado!'); }
-      else { await api.post('/almoxarifado/localizacoes', form); toast.success('Criado!'); }
+      const payload = buildPayload();
+      if (editando) { await api.put(`/almoxarifado/localizacoes/${editando}`, payload); toast.success('Atualizado!'); }
+      else { await api.post('/almoxarifado/localizacoes', payload); toast.success('Criado!'); }
       resetForm(); loadLocs();
     } catch (err) { toast.error(err.response?.data?.error || 'Erro'); } finally { setSaving(false); }
   };
@@ -399,14 +434,19 @@ const TabLocalizacoes = () => {
 
   return (
     <div>
-      {!showForm && (
-        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
-          <FiPlus size={14} /> Nova Localização
-        </button>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        {!showForm && (
+          <button className="btn-almox-primary" onClick={() => setShowForm(true)}>
+            <FiPlus size={14} /> Nova Localização
+          </button>
+        )}
+        <Link to="/almoxarifado/mapa" className="btn-almox-secondary" style={{ marginLeft: showForm ? 0 : 'auto' }}>
+          <FiMapPin size={14} /> Ver Mapa de Áreas
+        </Link>
+      </div>
       {showForm && (
         <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 20, marginBottom: 24 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
             <div className="almox-field">
               <label className="almox-label">Código<span className="required">*</span></label>
               <input className="almox-input" value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))} placeholder="A1-01" />
@@ -419,7 +459,33 @@ const TabLocalizacoes = () => {
               <label className="almox-label">Setor</label>
               <input className="almox-input" value={form.setor} onChange={e => setForm(f => ({ ...f, setor: e.target.value }))} placeholder="EPI, Ferramentas..." />
             </div>
+            <div className="almox-field">
+              <label className="almox-label">Tipo de área</label>
+              <select className="almox-select" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
+                {(tiposLoc.length ? tiposLoc : ['Almoxarifado', 'Rua', 'Prateleira', 'Gaveta', 'Box', 'Área externa']).map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
           </div>
+          <button type="button" className="btn-almox-secondary" style={{ marginBottom: showPosicao ? 14 : 16, fontSize: '0.8rem', padding: '6px 12px' }}
+            onClick={() => setShowPosicao(v => !v)}>
+            {showPosicao ? 'Ocultar posição no mapa' : 'Definir posição no mapa (opcional)'}
+          </button>
+          {showPosicao && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 16 }}>
+              {['pos_x', 'pos_y', 'largura', 'altura'].map(campo => (
+                <div key={campo} className="almox-field">
+                  <label className="almox-label">{campo === 'pos_x' ? 'Posição X' : campo === 'pos_y' ? 'Posição Y' : campo === 'largura' ? 'Largura' : 'Altura'}</label>
+                  <input className="almox-input" type="number" min="0"
+                    value={form[campo]} onChange={e => setForm(f => ({ ...f, [campo]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+          )}
+          <p style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', margin: '0 0 16px' }}>
+            Deixe posição em branco para layout automático no mapa, ou use o editor visual em Mapa de Áreas.
+          </p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}><FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar'}</button>
             <button className="btn-almox-secondary" onClick={resetForm}>Cancelar</button>
@@ -431,12 +497,13 @@ const TabLocalizacoes = () => {
       ) : (
         <div className="almox-table-container">
           <table className="almox-table">
-            <thead><tr><th>Código</th><th>Descrição</th><th>Setor</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Descrição</th><th>Tipo</th><th>Setor</th><th></th></tr></thead>
             <tbody>
               {localizacoes.map(loc => (
                 <tr key={loc.id}>
                   <td><span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe' }}>{loc.codigo}</span></td>
                   <td>{loc.descricao || '—'}</td>
+                  <td><span style={{ fontSize: '0.8rem', background: 'rgba(79,172,254,0.1)', color: '#4facfe', padding: '2px 10px', borderRadius: 6 }}>{loc.tipo || 'Almoxarifado'}</span></td>
                   <td>{loc.setor ? <span style={{ fontSize: '0.8rem', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: '2px 10px' }}>{loc.setor}</span> : '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>

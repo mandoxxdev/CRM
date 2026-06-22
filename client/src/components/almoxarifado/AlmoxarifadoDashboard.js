@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon } from 'react-icons/fi';
+import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers } from 'react-icons/fi';
 import './Almoxarifado.css';
 
 const STATUS_REQ = {
@@ -10,13 +10,46 @@ const STATUS_REQ = {
   EM_SEPARACAO: 'Em Separação',
 };
 
+const getPeriodDates = (days) => {
+  const fim = new Date();
+  const inicio = new Date();
+  inicio.setDate(inicio.getDate() - days);
+  return {
+    data_inicio: inicio.toISOString().slice(0, 10),
+    data_fim: fim.toISOString().slice(0, 10),
+  };
+};
+
+const aggregateConsumoPorOS = (rows) => {
+  const map = {};
+  (rows || []).forEach((r) => {
+    const key = r.os_id != null && r.os_id !== '' ? String(r.os_id) : 'Sem O.S.';
+    map[key] = (map[key] || 0) + (r.total_consumido || 0);
+  });
+  return Object.entries(map)
+    .map(([os_id, total]) => ({ os_id, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+};
+
 const AlmoxarifadoDashboard = () => {
   const [stats, setStats] = useState(null);
   const [requisicoes, setRequisicoes] = useState(null);
+  const [consumoOs, setConsumoOs] = useState([]);
+  const [materiaisConsumidos, setMateriaisConsumidos] = useState([]);
+  const [periodoDias, setPeriodoDias] = useState(30);
   const [loading, setLoading] = useState(true);
+  const relatoriosCarregados = useRef(false);
 
-  useEffect(() => {
-    loadDashboard();
+  const loadRelatorios = useCallback(async (dias) => {
+    const { data_inicio, data_fim } = getPeriodDates(dias);
+    const params = { data_inicio, data_fim };
+    const [consumoRes, materiaisRes] = await Promise.all([
+      api.get('/almoxarifado/relatorios/consumo-os', { params }).catch(() => ({ data: [] })),
+      api.get('/almoxarifado/relatorios/materiais-mais-consumidos', { params }).catch(() => ({ data: [] })),
+    ]);
+    setConsumoOs(aggregateConsumoPorOS(consumoRes.data));
+    setMateriaisConsumidos(materiaisRes.data || []);
   }, []);
 
   const loadDashboard = async () => {
@@ -28,12 +61,24 @@ const AlmoxarifadoDashboard = () => {
       ]);
       setStats(dashRes.data);
       setRequisicoes(reqRes.data);
+      await loadRelatorios(periodoDias);
+      relatoriosCarregados.current = true;
     } catch (err) {
       console.error('Erro ao carregar dashboard do almoxarifado:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!relatoriosCarregados.current) return;
+    loadRelatorios(periodoDias);
+  }, [periodoDias, loadRelatorios]);
 
   const formatCurrency = (v) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -129,7 +174,7 @@ const AlmoxarifadoDashboard = () => {
               <div className="almox-kpi-icon warning"><FiClock /></div>
               <div className="almox-kpi-info">
                 <div className="almox-kpi-value">{requisicoes.requisicoesPendentes}</div>
-                <div className="almox-kpi-label">Req. Pendentes</div>
+                <div className="almox-kpi-label">Pendentes de aprovação</div>
               </div>
             </div>
             <div className="almox-kpi-card">
@@ -137,6 +182,20 @@ const AlmoxarifadoDashboard = () => {
               <div className="almox-kpi-info">
                 <div className="almox-kpi-value">{requisicoes.requisicoesUrgentes}</div>
                 <div className="almox-kpi-label">Req. Urgentes</div>
+              </div>
+            </div>
+            <div className="almox-kpi-card">
+              <div className="almox-kpi-icon primary"><FiFileText /></div>
+              <div className="almox-kpi-info">
+                <div className="almox-kpi-value">{requisicoes.requisicoesEmitidas}</div>
+                <div className="almox-kpi-label">Requisições emitidas</div>
+              </div>
+            </div>
+            <div className="almox-kpi-card">
+              <div className="almox-kpi-icon success"><FiCheckCircle /></div>
+              <div className="almox-kpi-info">
+                <div className="almox-kpi-value">{requisicoes.requisicoesEncerradas}</div>
+                <div className="almox-kpi-label">Requisições encerradas</div>
               </div>
             </div>
           </>
@@ -247,6 +306,92 @@ const AlmoxarifadoDashboard = () => {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        </div>
+
+        {/* Consumo por O.S. */}
+        <div className="almox-dash-card">
+          <div className="almox-dash-card-header">
+            <h3><FiLayers size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />Consumo por O.S.</h3>
+            <select
+              className="almox-select"
+              value={periodoDias}
+              onChange={(e) => setPeriodoDias(Number(e.target.value))}
+            >
+              <option value={30}>Últimos 30 dias</option>
+              <option value={90}>Últimos 90 dias</option>
+            </select>
+          </div>
+          <div className="almox-dash-card-body">
+            {consumoOs.length === 0 ? (
+              <div className="almox-empty">
+                <p>Nenhum consumo vinculado a O.S. no período</p>
+              </div>
+            ) : (
+              <div className="almox-table-container" style={{ border: 'none', borderRadius: 0 }}>
+                <table className="almox-table">
+                  <thead>
+                    <tr>
+                      <th>O.S.</th>
+                      <th style={{ textAlign: 'right' }}>Qtd. consumida</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consumoOs.map((row) => (
+                      <tr key={row.os_id}>
+                        <td style={{ fontFamily: 'monospace', color: '#4facfe' }}>{row.os_id}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{Number(row.total).toLocaleString('pt-BR')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Materiais mais consumidos */}
+        <div className="almox-dash-card">
+          <div className="almox-dash-card-header">
+            <h3>📊 Materiais mais consumidos</h3>
+            <select
+              className="almox-select"
+              value={periodoDias}
+              onChange={(e) => setPeriodoDias(Number(e.target.value))}
+            >
+              <option value={30}>Últimos 30 dias</option>
+              <option value={90}>Últimos 90 dias</option>
+            </select>
+          </div>
+          <div className="almox-dash-card-body">
+            {materiaisConsumidos.length === 0 ? (
+              <div className="almox-empty">
+                <p>Nenhum consumo registrado no período</p>
+              </div>
+            ) : (
+              <div className="almox-table-container" style={{ border: 'none', borderRadius: 0 }}>
+                <table className="almox-table">
+                  <thead>
+                    <tr>
+                      <th>Material</th>
+                      <th>Código</th>
+                      <th style={{ textAlign: 'right' }}>Qtd.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {materiaisConsumidos.map((m) => (
+                      <tr key={m.material_id}>
+                        <td>{m.nome}</td>
+                        <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem' }}>{m.codigo}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                          {Number(m.total_consumido).toLocaleString('pt-BR')} {m.unidade}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
