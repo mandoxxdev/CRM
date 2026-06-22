@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
-    "seed-variaveis": "node scripts/seed-variaveis-from-excel.js"
+    "seed-variaveis": "node scripts/seed-variaveis-from-excel.js",
+    "test:almoxarifado": "node tests/almoxarifado.test.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",
