@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
@@ -256,6 +256,7 @@ function computeLayout(locations) {
 
 const MapaLocalizacoesAlmoxarifado = () => {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const isAdmin = user?.role === 'admin';
   const svgRef = useRef(null);
 
@@ -290,6 +291,16 @@ const MapaLocalizacoesAlmoxarifado = () => {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    const locId = searchParams.get('loc');
+    if (!locId || localizacoes.length === 0) return;
+    const loc = localizacoes.find(l => String(l.id) === locId);
+    if (loc) {
+      setSelecionada(loc);
+      if (loc.setor) setFiltroSetor(loc.setor);
+    }
+  }, [localizacoes, searchParams]);
 
   const setores = useMemo(() => {
     const s = new Set(localizacoes.map(l => l.setor).filter(Boolean));

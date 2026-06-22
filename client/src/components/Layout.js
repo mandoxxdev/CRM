@@ -213,11 +213,10 @@ const Layout = () => {
   const almoxarifadoMenuItems = [
     { path: '/almoxarifado', icon: FiArchive, label: 'Dashboard' },
     { path: '/almoxarifado/materiais', icon: FiList, label: 'Materiais' },
-    { path: '/almoxarifado/materiais/novo', icon: FiPackage, label: 'Novo Material' },
-    { path: '/almoxarifado/configuracoes?tab=familias', icon: FiLayers, label: 'Famílias' },
     { path: '/almoxarifado/requisicoes', icon: FiCheckCircle, label: 'Requisições' },
+    { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimentos' },
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
-    { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência de Estoque' },
+    { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
     { path: '/almoxarifado/configuracoes', icon: FiSettings, label: 'Configurações' },
   ];

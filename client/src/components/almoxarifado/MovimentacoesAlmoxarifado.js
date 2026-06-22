@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiRefreshCw, FiArrowUp, FiArrowDown } from 'react-icons/fi';
@@ -13,6 +14,8 @@ const TIPOS = [
 ];
 
 const MovimentacoesAlmoxarifado = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +38,18 @@ const MovimentacoesAlmoxarifado = () => {
     loadMateriais();
     loadMovimentacoes();
   }, []);
+
+  useEffect(() => {
+    if (location.pathname.endsWith('/novo')) {
+      setShowModal(true);
+    }
+    const params = new URLSearchParams(location.search);
+    const matId = params.get('material_id');
+    if (matId) {
+      setForm(f => ({ ...f, material_id: matId }));
+      setShowModal(true);
+    }
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     const t = setTimeout(loadMovimentacoes, 300);
@@ -83,6 +98,9 @@ const MovimentacoesAlmoxarifado = () => {
       });
       toast.success('Movimentação registrada!');
       setShowModal(false);
+      if (location.pathname.endsWith('/novo')) {
+        navigate('/almoxarifado/movimentacoes', { replace: true });
+      }
       loadMovimentacoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao registrar movimentação');
@@ -198,11 +216,17 @@ const MovimentacoesAlmoxarifado = () => {
 
       {/* Modal nova movimentação */}
       {showModal && (
-        <div className="almox-modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="almox-modal-overlay" onClick={() => {
+          setShowModal(false);
+          if (location.pathname.endsWith('/novo')) navigate('/almoxarifado/movimentacoes', { replace: true });
+        }}>
           <div className="almox-modal" onClick={e => e.stopPropagation()}>
             <div className="almox-modal-header">
               <h2>📦 Registrar Movimentação</h2>
-              <button className="almox-modal-close" onClick={() => setShowModal(false)}>✕</button>
+              <button className="almox-modal-close" onClick={() => {
+                setShowModal(false);
+                if (location.pathname.endsWith('/novo')) navigate('/almoxarifado/movimentacoes', { replace: true });
+              }}>✕</button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="almox-modal-body">

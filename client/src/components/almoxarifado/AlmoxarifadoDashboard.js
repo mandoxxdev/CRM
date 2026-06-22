@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers } from 'react-icons/fi';
+import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers, FiClipboard, FiMap, FiSettings, FiTruck } from 'react-icons/fi';
 import './Almoxarifado.css';
 
 const STATUS_REQ = {
@@ -131,6 +131,42 @@ const AlmoxarifadoDashboard = () => {
         </div>
       </div>
 
+      {/* Ações rápidas */}
+      <div className="almox-quick-actions">
+        <Link to="/almoxarifado/materiais/novo" className="almox-quick-action">
+          <span className="almox-quick-action-icon"><FiPackage /></span>
+          <span className="almox-quick-action-label">Novo Material</span>
+        </Link>
+        <Link to="/almoxarifado/requisicoes/nova" className="almox-quick-action">
+          <span className="almox-quick-action-icon"><FiClipboard /></span>
+          <span className="almox-quick-action-label">Nova Requisição</span>
+        </Link>
+        <Link to="/almoxarifado/recebimentos" className="almox-quick-action">
+          <span className="almox-quick-action-icon"><FiTruck /></span>
+          <span className="almox-quick-action-label">Recebimentos</span>
+        </Link>
+        <Link to="/almoxarifado/movimentacoes/novo" className="almox-quick-action">
+          <span className="almox-quick-action-icon"><FiActivity /></span>
+          <span className="almox-quick-action-label">Movimentação</span>
+        </Link>
+        <Link to="/almoxarifado/requisicoes?status=PENDENTE" className="almox-quick-action">
+          <span className="almox-quick-action-icon"><FiClock /></span>
+          <span className="almox-quick-action-label">Pendentes</span>
+        </Link>
+        <Link to="/almoxarifado/materiais?status=critico" className="almox-quick-action">
+          <span className="almox-quick-action-icon"><FiAlertTriangle /></span>
+          <span className="almox-quick-action-label">Estoque Crítico</span>
+        </Link>
+        <Link to="/almoxarifado/mapa" className="almox-quick-action">
+          <span className="almox-quick-action-icon"><FiMap /></span>
+          <span className="almox-quick-action-label">Mapa de Áreas</span>
+        </Link>
+        <Link to="/almoxarifado/configuracoes" className="almox-quick-action">
+          <span className="almox-quick-action-icon"><FiSettings /></span>
+          <span className="almox-quick-action-label">Configurações</span>
+        </Link>
+      </div>
+
       {/* KPIs */}
       <div className="almox-kpis">
         <div className="almox-kpi-card">
@@ -256,7 +292,7 @@ const AlmoxarifadoDashboard = () => {
                 </div>
               ) : (
                 requisicoes.abertas.map(r => (
-                  <Link key={r.id} to="/almoxarifado/requisicoes" className="almox-mov-item" style={{ textDecoration: 'none' }}>
+                  <Link key={r.id} to={`/almoxarifado/requisicoes?id=${r.id}`} className="almox-mov-item" style={{ textDecoration: 'none' }}>
                     <span className={`almox-badge almox-badge-${r.status === 'PENDENTE' ? 'aberto' : 'ajuste'}`}>
                       {STATUS_REQ[r.status] || r.status}
                     </span>

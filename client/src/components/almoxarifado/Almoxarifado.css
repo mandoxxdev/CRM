@@ -1155,3 +1155,209 @@
   margin-top: 24px;
   flex-wrap: wrap;
 }
+
+/* ── Breadcrumb ── */
+.almox-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
+  flex-wrap: wrap;
+}
+
+.almox-breadcrumb a {
+  color: #4facfe;
+  text-decoration: none;
+}
+
+.almox-breadcrumb a:hover { text-decoration: underline; }
+
+.almox-breadcrumb-home {
+  display: flex;
+  align-items: center;
+  color: var(--gmp-text-light) !important;
+}
+
+.almox-breadcrumb-sep { opacity: 0.4; flex-shrink: 0; }
+
+.almox-breadcrumb-current {
+  color: var(--gmp-text);
+  font-weight: 600;
+}
+
+/* ── Flow steps ── */
+.almox-flow-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+.almox-flow-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  opacity: 0.45;
+}
+
+.almox-flow-step.active { opacity: 1; }
+.almox-flow-step.done { opacity: 0.75; }
+
+.almox-flow-step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--gmp-bg);
+  border: 2px solid var(--gmp-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.almox-flow-step.active .almox-flow-step-num {
+  background: #4facfe;
+  border-color: #4facfe;
+  color: #fff;
+}
+
+.almox-flow-step.done .almox-flow-step-num {
+  background: var(--gmp-success);
+  border-color: var(--gmp-success);
+  color: #fff;
+}
+
+.almox-flow-step-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gmp-text);
+}
+
+.almox-flow-connector {
+  width: 24px;
+  height: 2px;
+  background: var(--gmp-border);
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+.almox-flow-connector.done { background: var(--gmp-success); }
+
+/* ── Hint banner ── */
+.almox-hint-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(79, 172, 254, 0.08);
+  border: 1px solid rgba(79, 172, 254, 0.2);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+  color: var(--gmp-text);
+  line-height: 1.5;
+}
+
+.almox-hint-banner a { color: #4facfe; font-weight: 600; }
+
+/* ── Quick actions grid (dashboard) ── */
+.almox-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.almox-quick-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--gmp-text);
+  transition: transform 0.15s, border-color 0.15s;
+  text-align: center;
+}
+
+.almox-quick-action:hover {
+  transform: translateY(-2px);
+  border-color: #4facfe;
+}
+
+.almox-quick-action-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: rgba(79, 172, 254, 0.12);
+  color: #4facfe;
+}
+
+.almox-quick-action-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* ── Detail panel ── */
+.almox-detail-panel {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  overflow: hidden;
+  height: fit-content;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.almox-detail-panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gmp-border);
+  background: var(--gmp-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* ── Search results dropdown ── */
+.almox-search-results {
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.almox-search-result-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  background: var(--gmp-bg);
+  border: none;
+  border-bottom: 1px solid var(--gmp-border);
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--gmp-text);
+}
+
+.almox-search-result-item:last-child { border-bottom: none; }
+.almox-search-result-item:hover { background: rgba(79, 172, 254, 0.08); }

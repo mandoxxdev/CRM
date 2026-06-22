@@ -841,6 +841,35 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
+  db.run(`CREATE TABLE IF NOT EXISTS setores_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT UNIQUE NOT NULL,
+    codigo_prefixo TEXT NOT NULL,
+    tipo TEXT NOT NULL DEFAULT 'area',
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, () => {
+    db.get('SELECT COUNT(*) as c FROM setores_almoxarifado', [], (err, r) => {
+      if (!err && r.c === 0) {
+        const setores = [
+          ['Bancada', 'GAV', 'bancada', 1],
+          ['Corredor A', 'A', 'corredor', 2],
+          ['Corredor B', 'B', 'corredor', 3],
+          ['Corredor C', 'C', 'corredor', 4],
+          ['Área de Segurança', 'EPI', 'area', 5],
+          ['Área de Ferramentas', 'FERR', 'area', 6],
+          ['Área Externa', 'EXT', 'area', 7],
+          ['Almoxarifado Principal', 'ALM', 'area', 8],
+        ];
+        setores.forEach(([nome, prefixo, tipo, ordem]) => {
+          db.run('INSERT INTO setores_almoxarifado (nome, codigo_prefixo, tipo, ordem) VALUES (?,?,?,?)',
+            [nome, prefixo, tipo, ordem]);
+        });
+      }
+    });
+  });
+
   db.run(`CREATE TABLE IF NOT EXISTS configuracoes_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chave TEXT UNIQUE NOT NULL,
@@ -1046,6 +1075,122 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true });
+    });
+  });
+
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SETORES E ÁREAS
+  // ════════════════════════════════════════════════════════════════════════════
+
+  app.get('/api/almoxarifado/setores', authenticateToken, (req, res) => {
+    const { all } = req.query;
+    let sql = `SELECT s.*,
+                 (SELECT COUNT(*) FROM localizacoes_almoxarifado l
+                  WHERE l.ativo = 1 AND l.setor = s.nome) as qtd_localizacoes
+               FROM setores_almoxarifado s WHERE 1=1`;
+    if (all !== '1') sql += ' AND s.ativo = 1';
+    sql += ' ORDER BY s.ordem ASC, s.nome ASC';
+
+    db.all(sql, [], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  });
+
+  app.post('/api/almoxarifado/setores', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    const { nome, codigo_prefixo, tipo, ordem } = req.body;
+    if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+    if (!codigo_prefixo?.trim()) return res.status(400).json({ error: 'Prefixo do código é obrigatório' });
+    const tipoVal = ['corredor', 'area', 'bancada'].includes(tipo) ? tipo : 'area';
+    const prefixo = String(codigo_prefixo).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!prefixo) return res.status(400).json({ error: 'Prefixo do código inválido' });
+
+    db.run(`INSERT INTO setores_almoxarifado (nome, codigo_prefixo, tipo, ordem) VALUES (?,?,?,?)`,
+      [nome.trim(), prefixo, tipoVal, parseInt(ordem, 10) || 0],
+      function (err) {
+        if (err) {
+          if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Já existe um setor com este nome' });
+          return res.status(500).json({ error: err.message });
+        }
+        db.get(`SELECT s.*,
+                  (SELECT COUNT(*) FROM localizacoes_almoxarifado l
+                   WHERE l.ativo = 1 AND l.setor = s.nome) as qtd_localizacoes
+                FROM setores_almoxarifado s WHERE s.id = ?`,
+          [this.lastID], (e, r) => res.status(201).json(r));
+      });
+  });
+
+  app.put('/api/almoxarifado/setores/:id', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    const { nome, codigo_prefixo, tipo, ordem, ativo } = req.body;
+    if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+    if (!codigo_prefixo?.trim()) return res.status(400).json({ error: 'Prefixo do código é obrigatório' });
+    const tipoVal = ['corredor', 'area', 'bancada'].includes(tipo) ? tipo : 'area';
+    const prefixo = String(codigo_prefixo).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!prefixo) return res.status(400).json({ error: 'Prefixo do código inválido' });
+
+    db.get('SELECT nome FROM setores_almoxarifado WHERE id = ?', [req.params.id], (err, atual) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!atual) return res.status(404).json({ error: 'Setor não encontrado' });
+
+      const updateSetor = () => {
+        db.run(`UPDATE setores_almoxarifado SET nome=?, codigo_prefixo=?, tipo=?, ordem=?, ativo=? WHERE id=?`,
+          [nome.trim(), prefixo, tipoVal, parseInt(ordem, 10) || 0, ativo !== undefined ? (ativo ? 1 : 0) : 1, req.params.id],
+          function (upErr) {
+            if (upErr) {
+              if (upErr.message.includes('UNIQUE')) return res.status(400).json({ error: 'Já existe um setor com este nome' });
+              return res.status(500).json({ error: upErr.message });
+            }
+            if (atual.nome !== nome.trim()) {
+              db.run('UPDATE localizacoes_almoxarifado SET setor = ? WHERE setor = ? AND ativo = 1',
+                [nome.trim(), atual.nome], () => {});
+            }
+            db.get(`SELECT s.*,
+                      (SELECT COUNT(*) FROM localizacoes_almoxarifado l
+                       WHERE l.ativo = 1 AND l.setor = s.nome) as qtd_localizacoes
+                    FROM setores_almoxarifado s WHERE s.id = ?`,
+              [req.params.id], (e, r) => res.json(r));
+          });
+      };
+
+      if (ativo === 0 || ativo === false) {
+        db.get(`SELECT COUNT(*) as c FROM localizacoes_almoxarifado WHERE ativo = 1 AND setor = ?`,
+          [atual.nome], (cErr, row) => {
+            if (cErr) return res.status(500).json({ error: cErr.message });
+            if (row.c > 0) {
+              return res.status(400).json({
+                error: `Não é possível inativar: ${row.c} localização(ões) ativa(s) usam este setor`,
+              });
+            }
+            updateSetor();
+          });
+      } else {
+        updateSetor();
+      }
+    });
+  });
+
+  app.delete('/api/almoxarifado/setores/:id', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    db.get('SELECT nome FROM setores_almoxarifado WHERE id = ?', [req.params.id], (err, setor) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!setor) return res.status(404).json({ error: 'Setor não encontrado' });
+
+      db.get(`SELECT COUNT(*) as c FROM localizacoes_almoxarifado WHERE ativo = 1 AND setor = ?`,
+        [setor.nome], (cErr, row) => {
+          if (cErr) return res.status(500).json({ error: cErr.message });
+          if (row.c > 0) {
+            return res.status(400).json({
+              error: `Não é possível excluir: ${row.c} localização(ões) ativa(s) usam este setor`,
+            });
+          }
+          db.run('UPDATE setores_almoxarifado SET ativo = 0 WHERE id = ?', [req.params.id], function (delErr) {
+            if (delErr) return res.status(500).json({ error: delErr.message });
+            res.json({ success: true });
+          });
+        });
     });
   });
 
@@ -1275,6 +1420,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
 
       db.all(`SELECT ir.*, ma.nome as material_nome, ma.codigo as material_codigo,
                      ma.unidade, ma.quantidade_atual as saldo_atual, ma.foto,
+                     ma.localizacao, ma.localizacao_padrao_id,
                      tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura
               FROM itens_requisicao_almoxarifado ir
               JOIN materiais_almoxarifado ma ON ir.material_id = ma.id

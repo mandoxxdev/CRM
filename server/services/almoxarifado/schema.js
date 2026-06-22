@@ -48,6 +48,17 @@ const FAMILIAS_SEED = [
   ['VAL', 'Válvulas', 'Válvulas pneumáticas e hidráulicas'],
 ];
 
+const SETORES_ALMOX_SEED = [
+  ['Bancada', 'GAV', 'bancada', 1],
+  ['Corredor A', 'A', 'corredor', 2],
+  ['Corredor B', 'B', 'corredor', 3],
+  ['Corredor C', 'C', 'corredor', 4],
+  ['Área de Segurança', 'EPI', 'area', 5],
+  ['Área de Ferramentas', 'FERR', 'area', 6],
+  ['Área Externa', 'EXT', 'area', 7],
+  ['Almoxarifado Principal', 'ALM', 'area', 8],
+];
+
 async function safeAlter(db, sql) {
   try { await dbRun(db, sql); } catch (e) { /* duplicate column */ }
 }
@@ -134,6 +145,26 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN altura REAL DEFAULT 80');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN subgrupo TEXT');
+
+  // ── Setores e áreas do almoxarifado ──
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS setores_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT UNIQUE NOT NULL,
+    codigo_prefixo TEXT NOT NULL,
+    tipo TEXT NOT NULL DEFAULT 'area',
+    ordem INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const setorCount = await dbGet(db, 'SELECT COUNT(*) as c FROM setores_almoxarifado');
+  if (setorCount.c === 0) {
+    for (const [nome, prefixo, tipo, ordem] of SETORES_ALMOX_SEED) {
+      await dbRun(db,
+        'INSERT INTO setores_almoxarifado (nome, codigo_prefixo, tipo, ordem) VALUES (?,?,?,?)',
+        [nome, prefixo, tipo, ordem]);
+    }
+  }
 
   // ── Estoque por localização/lote ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS estoque_saldo_almoxarifado (
@@ -409,6 +440,7 @@ module.exports = {
   initSchema,
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
+  SETORES_ALMOX_SEED,
   TIPOS_MATERIAL_ENUM,
   TIPOS_LOCALIZACAO,
   UNIDADES_SEED,

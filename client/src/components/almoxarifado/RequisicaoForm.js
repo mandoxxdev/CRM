@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
@@ -10,6 +10,7 @@ const DEPARTAMENTOS = ['Produção', 'Manutenção', 'Qualidade', 'Engenharia', 
 
 const RequisicaoForm = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
   const [materiais, setMateriais] = useState([]);
@@ -47,6 +48,27 @@ const RequisicaoForm = () => {
       setMateriais(res.data);
     } catch { /* silently fail */ }
   };
+
+  useEffect(() => {
+    const preId = searchParams.get('material_id');
+    if (!preId || materiais.length === 0) return;
+    const mat = materiais.find(m => String(m.id) === preId);
+    if (mat) {
+      setItens(prev => {
+        if (prev.find(i => i.material_id === mat.id)) return prev;
+        return [...prev, {
+          material_id: mat.id,
+          material_nome: mat.nome,
+          material_codigo: mat.codigo,
+          unidade: mat.unidade,
+          saldo_atual: mat.quantidade_atual,
+          tipo_icone: mat.tipo_icone || '',
+          quantidade: 1,
+          observacoes: '',
+        }];
+      });
+    }
+  }, [materiais, searchParams]);
 
   const adicionarItem = (material) => {
     if (itens.find(i => i.material_id === material.id)) {

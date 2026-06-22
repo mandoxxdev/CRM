@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { SkeletonTable } from '../SkeletonLoader';
+import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
-  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter
+  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap
 } from 'react-icons/fi';
 import './Almoxarifado.css';
 
@@ -28,12 +29,13 @@ const URGENCIA_INFO = {
 const RequisicoesList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = user?.role === 'admin';
 
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtroStatus, setFiltroStatus] = useState('');
-  const [filtroMinha, setFiltroMinha] = useState(false);
+  const [filtroStatus, setFiltroStatus] = useState(searchParams.get('status') || '');
+  const [filtroMinha, setFiltroMinha] = useState(searchParams.get('minha') === '1');
   const [detalhe, setDetalhe] = useState(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
   const [showRejeitar, setShowRejeitar] = useState(false);
@@ -45,6 +47,21 @@ const RequisicoesList = () => {
   useEffect(() => {
     loadRequisicoes();
   }, [filtroStatus, filtroMinha]);
+
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) abrirDetalhe(parseInt(id, 10));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('id')]);
+
+  useEffect(() => {
+    const params = {};
+    if (filtroStatus) params.status = filtroStatus;
+    if (filtroMinha) params.minha = '1';
+    if (detalhe?.id) params.id = String(detalhe.id);
+    setSearchParams(params, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtroStatus, filtroMinha, detalhe?.id]);
 
   const loadRequisicoes = async () => {
     setLoading(true);
@@ -77,12 +94,17 @@ const RequisicoesList = () => {
     }
   };
 
-  const handleAprovar = async (id) => {
+  const handleAprovar = async (id, iniciarSeparacao = false) => {
     setSaving(true);
     try {
       await api.put(`/almoxarifado/requisicoes/${id}/aprovar`);
-      toast.success('Requisição aprovada!');
-      setDetalhe(null);
+      if (iniciarSeparacao) {
+        await api.put(`/almoxarifado/requisicoes/${id}/separacao`);
+        toast.success('Requisição aprovada e movida para separação!');
+      } else {
+        toast.success('Requisição aprovada! Inicie a separação quando estiver pronto.');
+      }
+      abrirDetalhe(id);
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao aprovar');
@@ -171,20 +193,23 @@ const RequisicoesList = () => {
 
   return (
     <div className="almox-page">
-      <div className="almox-header">
-        <div>
-          <h1>Requisições de Material</h1>
-          <p>{requisicoes.length} requisição{requisicoes.length !== 1 ? 'ões' : ''}</p>
-        </div>
-        <div className="almox-header-actions">
-          <button className="btn-almox-secondary" onClick={loadRequisicoes}>
-            <FiRefreshCw size={13} />
-          </button>
-          <button className="btn-almox-primary" onClick={() => navigate('/almoxarifado/requisicoes/nova')}>
-            <FiPlus size={14} /> Nova Requisição
-          </button>
-        </div>
-      </div>
+      <AlmoxPageHeader
+        title="Requisições de Material"
+        subtitle={`${requisicoes.length} requisição${requisicoes.length !== 1 ? 'ões' : ''}`}
+        breadcrumbs={[{ label: 'Requisições' }]}
+        flowSteps={REQUISICAO_FLOW}
+        currentStep={detalhe ? getRequisicaoStepIndex(detalhe.status) : undefined}
+        actions={
+          <>
+            <button className="btn-almox-secondary" onClick={loadRequisicoes}>
+              <FiRefreshCw size={13} />
+            </button>
+            <button className="btn-almox-primary" onClick={() => navigate('/almoxarifado/requisicoes/nova')}>
+              <FiPlus size={14} /> Nova Requisição
+            </button>
+          </>
+        }
+      />
 
       {/* Filtros */}
       <div className="almox-filters">
@@ -304,7 +329,17 @@ const RequisicoesList = () => {
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                         {item.material_codigo} · Saldo: {item.saldo_atual} {item.unidade}
+                        {item.localizacao && (
+                          <span> · 📍 {item.localizacao}</span>
+                        )}
                       </div>
+                      {item.localizacao_padrao_id && (
+                        <Link to={`/almoxarifado/mapa?loc=${item.localizacao_padrao_id}`}
+                          style={{ fontSize: '0.7rem', color: '#4facfe', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 2 }}
+                          onClick={e => e.stopPropagation()}>
+                          <FiMap size={10} /> Ver no mapa
+                        </Link>
+                      )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{item.quantidade_solicitada} {item.unidade}</div>
@@ -321,21 +356,28 @@ const RequisicoesList = () => {
                 {/* Ações */}
                 {detalhe.status === 'PENDENTE' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
-                    <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleAprovar(detalhe.id)} disabled={saving}>
-                      <FiCheck size={14} /> Aprovar
+                    <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
+                      onClick={() => handleAprovar(detalhe.id, true)} disabled={saving}>
+                      <FiCheck size={14} /> Aprovar e Separar
                     </button>
-                    <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowRejeitar(true)}>
+                    <button className="btn-almox-secondary" style={{ flex: 1, justifyContent: 'center', minWidth: 120 }}
+                      onClick={() => handleAprovar(detalhe.id, false)} disabled={saving}>
+                      <FiCheck size={14} /> Só Aprovar
+                    </button>
+                    <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center', minWidth: 100 }}
+                      onClick={() => setShowRejeitar(true)}>
                       <FiX size={14} /> Rejeitar
                     </button>
                   </div>
                 )}
                 {detalhe.status === 'APROVADO' && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
-                    <button className="btn-almox-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => handleSeparacao(detalhe.id)} disabled={saving}>
+                  <div style={{ marginTop: 20 }}>
+                    <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
+                      Próximo passo: separe os materiais nas localizações indicadas e confirme a entrega.
+                    </div>
+                    <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
+                      onClick={() => handleSeparacao(detalhe.id)} disabled={saving}>
                       <FiPackage size={14} /> Iniciar Separação
-                    </button>
-                    <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowEntregar(true)}>
-                      <FiTruck size={14} /> Entregar
                     </button>
                   </div>
                 )}

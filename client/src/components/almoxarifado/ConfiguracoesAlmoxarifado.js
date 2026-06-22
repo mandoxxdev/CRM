@@ -7,7 +7,7 @@ import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
-  FiLayers, FiChevronDown, FiChevronRight
+  FiLayers, FiChevronDown, FiChevronRight, FiGrid
 } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import './Almoxarifado.css';
@@ -32,31 +32,41 @@ const formatLocalizacaoPath = (loc, allLocs = []) => {
 };
 
 /* ── Localização: setores, auto-código e wizard ── */
-const SETORES_PREDEFINIDOS = [
-  'Bancada', 'Corredor A', 'Corredor B', 'Corredor C',
-  'Área de Segurança', 'Área de Ferramentas', 'Área Externa', 'Almoxarifado Principal',
+const SETOR_TIPOS = [
+  { value: 'corredor', label: 'Corredor' },
+  { value: 'area', label: 'Área' },
+  { value: 'bancada', label: 'Bancada' },
 ];
 
-const SETOR_PREFIX_MAP = {
-  'Corredor A': 'A',
-  'Corredor B': 'B',
-  'Corredor C': 'C',
-  'Bancada': 'GAV',
-  'Área de Segurança': 'EPI',
-  'Área de Ferramentas': 'FERR',
-  'Área Externa': 'EXT',
-  'Almoxarifado Principal': 'ALM',
+const setorTipoLabel = (tipo) => SETOR_TIPOS.find(t => t.value === tipo)?.label || 'Área';
+
+const setorIcon = (tipo) => {
+  if (tipo === 'corredor') return '🚶';
+  if (tipo === 'bancada') return '🛠️';
+  return '📍';
 };
 
-const TIPOS_AREA_RAIZ = ['Prateleira', 'Gaveta', 'Box', 'Rua', 'Almoxarifado', 'Área externa'];
-
-const getSetoresOptions = (localizacoes) => {
+const buildSetoresOptions = (setoresConfig, localizacoes) => {
+  const configMap = new Map(
+    (setoresConfig || []).filter(s => s.ativo).map(s => [s.nome, s])
+  );
   const fromDb = [...new Set(localizacoes.map(l => l.setor).filter(Boolean))];
-  return [...new Set([...SETORES_PREDEFINIDOS, ...fromDb])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const allNames = [...new Set([...configMap.keys(), ...fromDb])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return allNames.map(nome => {
+    const cfg = configMap.get(nome);
+    return {
+      nome,
+      tipo: cfg?.tipo || null,
+      codigo_prefixo: cfg?.codigo_prefixo || null,
+      icon: setorIcon(cfg?.tipo),
+      legado: !cfg,
+    };
+  });
 };
 
-const getSetorPrefix = (setor) => {
-  if (SETOR_PREFIX_MAP[setor]) return SETOR_PREFIX_MAP[setor];
+const getSetorPrefix = (setor, setoresConfig = []) => {
+  const cfg = setoresConfig.find(s => s.nome === setor);
+  if (cfg?.codigo_prefixo) return cfg.codigo_prefixo;
   const parts = String(setor || '').split(/\s+/);
   if (parts[0] === 'Corredor' && parts[1]) return parts[1].toUpperCase();
   const clean = String(setor || '').replace(/[^A-Za-z0-9]/g, '');
@@ -74,18 +84,19 @@ const getCodigoPrefix = (codigo) => {
   return String(codigo || '').replace(/\d+$/, '') || 'X';
 };
 
-const generateNextCodigo = (localizacoes, { setor, parent_id, tipo }) => {
+const TIPOS_AREA_RAIZ = ['Prateleira', 'Gaveta', 'Box', 'Rua', 'Almoxarifado', 'Área externa'];
+
+const generateNextCodigo = (localizacoes, { setor, parent_id, tipo }, setoresConfig = []) => {
   const parentId = parent_id ? parseInt(parent_id, 10) : null;
   if (parentId) {
     const parent = localizacoes.find(l => l.id === parentId);
-    const prefix = parent ? getCodigoPrefix(parent.codigo) : getSetorPrefix(setor);
+    const prefix = parent ? getCodigoPrefix(parent.codigo) : getSetorPrefix(setor, setoresConfig);
     const siblings = localizacoes.filter(l => l.parent_id === parentId);
     const nums = siblings.map(s => parseCodigoNumber(s.codigo));
     const base = nums.length ? Math.max(...nums) : (parseCodigoNumber(parent?.codigo) || 0);
     return `${prefix}-${String(base + 1).padStart(2, '0')}`;
   }
-  let prefix = getSetorPrefix(setor);
-  if (tipo === 'Gaveta' && setor === 'Bancada') prefix = 'GAV';
+  const prefix = getSetorPrefix(setor, setoresConfig);
   const roots = localizacoes.filter(l => !l.parent_id && l.setor === setor);
   const nums = roots.map(r => parseCodigoNumber(r.codigo)).filter(n => n > 0);
   const maxNum = nums.length ? Math.max(...nums) : 0;
@@ -164,6 +175,7 @@ const TABS = [
   { id: 'tipos', label: 'Tipos de Material', icon: FiPackage },
   { id: 'familias', label: 'Famílias', icon: FiLayers },
   { id: 'estoques', label: 'Estoques Mínimos', icon: FiSliders },
+  { id: 'setores', label: 'Setores e Áreas', icon: FiGrid },
   { id: 'localizacoes', label: 'Localizações', icon: FiMapPin },
   { id: 'geral', label: 'Configurações Gerais', icon: FiSettings },
 ];
@@ -187,7 +199,7 @@ const ConfiguracoesAlmoxarifado = () => {
           </h1>
           <p>
             {isAdmin
-              ? 'Gerencie tipos de material, famílias, estoques mínimos, localizações e configurações gerais'
+              ? 'Gerencie tipos de material, famílias, estoques mínimos, setores, localizações e configurações gerais'
               : 'Defina estoque mínimo, máximo, ponto de pedido e prazo de reposição por material'}
           </p>
         </div>
@@ -221,6 +233,7 @@ const ConfiguracoesAlmoxarifado = () => {
       {tab === 'tipos' && <TabTiposMaterial />}
       {tab === 'familias' && <TabFamilias />}
       {tab === 'estoques' && <TabEstoquesMinimos />}
+      {tab === 'setores' && <TabSetores />}
       {tab === 'localizacoes' && <TabLocalizacoes />}
       {tab === 'geral' && <TabConfiguracoes />}
     </div>
@@ -731,6 +744,202 @@ const TabEstoquesMinimos = () => {
   );
 };
 
+/* ===================== TAB SETORES E ÁREAS ===================== */
+const SETOR_FORM_INITIAL = { nome: '', codigo_prefixo: '', tipo: 'corredor', ordem: 0 };
+
+const TabSetores = () => {
+  const [setores, setSetores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState(SETOR_FORM_INITIAL);
+
+  useEffect(() => { loadSetores(); }, []);
+
+  const loadSetores = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/almoxarifado/setores?all=1');
+      setSetores(res.data);
+    } catch { toast.error('Erro ao carregar setores'); }
+    finally { setLoading(false); }
+  };
+
+  const resetForm = () => {
+    setForm(SETOR_FORM_INITIAL);
+    setEditando(null);
+    setShowForm(false);
+  };
+
+  const handleEditar = (setor) => {
+    setForm({
+      nome: setor.nome,
+      codigo_prefixo: setor.codigo_prefixo,
+      tipo: setor.tipo || 'area',
+      ordem: setor.ordem || 0,
+    });
+    setEditando(setor.id);
+    setShowForm(true);
+  };
+
+  const suggestPrefixo = (nome, tipo) => {
+    const parts = String(nome || '').trim().split(/\s+/);
+    if (tipo === 'corredor' && parts[0] === 'Corredor' && parts[1]) return parts[1].toUpperCase();
+    if (tipo === 'bancada') return 'GAV';
+    const clean = String(nome || '').replace(/[^A-Za-z0-9]/g, '');
+    return (clean.slice(0, 3) || '').toUpperCase();
+  };
+
+  const handleSalvar = async () => {
+    if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
+    if (!form.codigo_prefixo.trim()) { toast.error('Prefixo do código é obrigatório'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        nome: form.nome.trim(),
+        codigo_prefixo: form.codigo_prefixo.trim().toUpperCase(),
+        tipo: form.tipo,
+        ordem: parseInt(form.ordem, 10) || 0,
+      };
+      if (editando) {
+        await api.put(`/almoxarifado/setores/${editando}`, payload);
+        toast.success('Setor atualizado!');
+      } else {
+        await api.post('/almoxarifado/setores', payload);
+        toast.success('Setor criado!');
+      }
+      resetForm();
+      loadSetores();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar');
+    } finally { setSaving(false); }
+  };
+
+  const handleInativar = async (setor) => {
+    if (setor.qtd_localizacoes > 0) {
+      toast.error(`Não é possível excluir: ${setor.qtd_localizacoes} localização(ões) usam este setor`);
+      return;
+    }
+    if (!window.confirm(`Inativar o setor "${setor.nome}"?`)) return;
+    try {
+      await api.delete(`/almoxarifado/setores/${setor.id}`);
+      toast.success('Setor inativado');
+      loadSetores();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao inativar'); }
+  };
+
+  return (
+    <div>
+      <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 20, maxWidth: 720 }}>
+        Defina os corredores, bancadas e áreas disponíveis no cadastro guiado de localizações.
+        O <strong>prefixo do código</strong> é usado na geração automática (ex.: Corredor D com prefixo &quot;D&quot; gera códigos D-01, D-02…).
+      </p>
+
+      {!showForm && (
+        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
+          <FiPlus size={14} /> Novo Setor ou Área
+        </button>
+      )}
+
+      {showForm && (
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18, color: 'var(--gmp-text)' }}>
+            {editando ? '✏️ Editar Setor' : '➕ Novo Setor ou Área'}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="almox-field">
+              <label className="almox-label">Nome<span className="required">*</span></label>
+              <input className="almox-input" value={form.nome}
+                onChange={e => {
+                  const nome = e.target.value;
+                  setForm(f => ({
+                    ...f,
+                    nome,
+                    codigo_prefixo: f.codigo_prefixo || suggestPrefixo(nome, f.tipo),
+                  }));
+                }}
+                placeholder="Ex: Corredor D, Área de Solda..." />
+            </div>
+            <div className="almox-field">
+              <label className="almox-label">Prefixo do código<span className="required">*</span></label>
+              <input className="almox-input" value={form.codigo_prefixo}
+                onChange={e => setForm(f => ({ ...f, codigo_prefixo: e.target.value.toUpperCase() }))}
+                placeholder="Ex: D, EPI, GAV" style={{ fontFamily: 'monospace' }} />
+              <span style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)' }}>Usado em códigos como {form.codigo_prefixo || 'X'}-01</span>
+            </div>
+            <div className="almox-field">
+              <label className="almox-label">Tipo</label>
+              <select className="almox-select" value={form.tipo}
+                onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
+                {SETOR_TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div className="almox-field">
+              <label className="almox-label">Ordem de exibição</label>
+              <input className="almox-input" type="number" min="0" value={form.ordem}
+                onChange={e => setForm(f => ({ ...f, ordem: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
+              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button className="btn-almox-secondary" onClick={resetForm}><FiX size={14} /> Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
+      ) : (
+        <div className="almox-table-container">
+          <table className="almox-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Prefixo</th>
+                <th>Tipo</th>
+                <th>Ordem</th>
+                <th>Localizações</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'right' }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {setores.map(s => (
+                <tr key={s.id} style={{ opacity: s.ativo ? 1 : 0.55 }}>
+                  <td style={{ fontWeight: 600 }}>{s.nome}</td>
+                  <td><span style={{ fontFamily: 'monospace', color: '#4facfe', fontWeight: 700 }}>{s.codigo_prefixo}</span></td>
+                  <td><span style={{ fontSize: '0.8rem' }}>{setorIcon(s.tipo)} {setorTipoLabel(s.tipo)}</span></td>
+                  <td>{s.ordem}</td>
+                  <td>{s.qtd_localizacoes || 0}</td>
+                  <td>
+                    <span className={`almox-badge almox-badge-${s.ativo ? 'ok' : 'critico'}`}>
+                      {s.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button className="almox-btn-icon" onClick={() => handleEditar(s)} title="Editar"><FiEdit2 size={13} /></button>
+                      {s.ativo && (
+                        <button className="almox-btn-icon danger" onClick={() => handleInativar(s)} title="Inativar"
+                          disabled={s.qtd_localizacoes > 0}>
+                          <FiTrash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ===================== TAB LOCALIZAÇÕES ===================== */
 const WIZARD_INITIAL = {
   setor: '',
@@ -748,6 +957,7 @@ const WIZARD_INITIAL = {
 
 const TabLocalizacoes = () => {
   const [localizacoes, setLocalizacoes] = useState([]);
+  const [setoresConfig, setSetoresConfig] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -767,8 +977,14 @@ const TabLocalizacoes = () => {
   const [moverData, setMoverData] = useState({ setor: '', estruturaTipo: '', parent_id: '', subgrupo: '', codigo: '' });
   const [moverError, setMoverError] = useState('');
 
-  useEffect(() => { loadLocs(); loadTipos(); }, []);
+  useEffect(() => { loadLocs(); loadTipos(); loadSetores(); }, []);
 
+  const loadSetores = async () => {
+    try {
+      const r = await api.get('/almoxarifado/setores');
+      setSetoresConfig(r.data);
+    } catch { /* fallback: setores legados das localizações */ }
+  };
   const loadTipos = async () => {
     try {
       const r = await api.get('/almoxarifado/meta/tipos-material');
@@ -784,7 +1000,7 @@ const TabLocalizacoes = () => {
   const tiposAreaRaiz = TIPOS_AREA_RAIZ.filter(t =>
     !tiposLoc.length || tiposLoc.includes(t) || TIPOS_AREA_RAIZ.includes(t)
   );
-  const setoresOptions = getSetoresOptions(localizacoes);
+  const setoresOptions = buildSetoresOptions(setoresConfig, localizacoes);
 
   const parentOptionsForSetor = (setor, excludeId) => localizacoes.filter(l => {
     if (excludeId && l.id === excludeId) return false;
@@ -822,7 +1038,7 @@ const TabLocalizacoes = () => {
       setor: data.setor,
       parent_id: parentId,
       tipo: data.tipo,
-    });
+    }, setoresConfig);
     const descricao = data.descricao?.trim() || suggestDescricao({
       setor: data.setor,
       tipo: data.tipo,
@@ -970,7 +1186,7 @@ const TabLocalizacoes = () => {
     const locsExcl = localizacoes.filter(l => l.id !== loc.id);
     const subgrupoOpts = isChild && data.parent_id ? generateSubgrupoOptions(locsExcl, data.parent_id) : [];
     const subgrupo = isChild ? (data.subgrupo || subgrupoOpts[0] || loc.subgrupo || '') : null;
-    const codigo = generateNextCodigo(locsExcl, { setor: data.setor, parent_id: parentId, tipo: loc.tipo });
+    const codigo = generateNextCodigo(locsExcl, { setor: data.setor, parent_id: parentId, tipo: loc.tipo }, setoresConfig);
     return { subgrupo, codigo, parentId };
   };
 
@@ -1046,15 +1262,19 @@ const TabLocalizacoes = () => {
           {wizardStep === 1 && (
             <div className="almox-wizard-step">
               <h4>Onde fica?</h4>
-              <p className="almox-wizard-hint">Selecione o setor ou corredor. Não é possível digitar livremente.</p>
+              <p className="almox-wizard-hint">
+                Selecione o setor ou corredor. Não é possível digitar livremente.
+                {' '}Precisa de mais corredores? Cadastre em <strong>Setores e Áreas</strong>.
+              </p>
               <div className="almox-wizard-setor-grid">
                 {setoresOptions.map(s => (
                   <RadioCard
-                    key={s}
-                    selected={wizard.setor === s}
-                    onClick={() => setWizard(w => ({ ...w, setor: s, parent_id: '', estruturaTipo: '' }))}
-                    title={s}
-                    icon="📍"
+                    key={s.nome}
+                    selected={wizard.setor === s.nome}
+                    onClick={() => setWizard(w => ({ ...w, setor: s.nome, parent_id: '', estruturaTipo: '' }))}
+                    title={s.nome}
+                    subtitle={s.codigo_prefixo ? `Códigos ${s.codigo_prefixo}-01…` : (s.legado ? 'Setor legado' : setorTipoLabel(s.tipo))}
+                    icon={s.icon}
                   />
                 ))}
               </div>
@@ -1275,11 +1495,12 @@ const TabLocalizacoes = () => {
               <div className="almox-wizard-setor-grid">
                 {setoresOptions.map(s => (
                   <RadioCard
-                    key={s}
-                    selected={moverData.setor === s}
-                    onClick={() => setMoverData(d => ({ ...d, setor: s, parent_id: '', estruturaTipo: '' }))}
-                    title={s}
-                    icon="📍"
+                    key={s.nome}
+                    selected={moverData.setor === s.nome}
+                    onClick={() => setMoverData(d => ({ ...d, setor: s.nome, parent_id: '', estruturaTipo: '' }))}
+                    title={s.nome}
+                    subtitle={s.codigo_prefixo ? `Códigos ${s.codigo_prefixo}-01…` : setorTipoLabel(s.tipo)}
+                    icon={s.icon}
                   />
                 ))}
               </div>

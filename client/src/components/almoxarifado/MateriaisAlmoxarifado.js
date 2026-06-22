@@ -5,8 +5,9 @@ import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiImage, FiPackage,
-  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw
+  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard
 } from 'react-icons/fi';
+import AlmoxPageHeader from './AlmoxPageHeader';
 import './Almoxarifado.css';
 
 const CATEGORIAS = [
@@ -128,20 +129,21 @@ const MateriaisAlmoxarifado = () => {
 
   return (
     <div className="almox-page">
-      <div className="almox-header">
-        <div>
-          <h1>Materiais do Almoxarifado</h1>
-          <p>{materiais.length} {materiais.length === 1 ? 'material' : 'materiais'}</p>
-        </div>
-        <div className="almox-header-actions">
-          <button className="btn-almox-secondary" onClick={loadMateriais}>
-            <FiRefreshCw size={13} /> Atualizar
-          </button>
-          <Link to="/almoxarifado/materiais/novo" className="btn-almox-primary">
-            <FiPlus size={14} /> Novo Material
-          </Link>
-        </div>
-      </div>
+      <AlmoxPageHeader
+        title="Materiais do Almoxarifado"
+        subtitle={`${materiais.length} ${materiais.length === 1 ? 'material' : 'materiais'}`}
+        breadcrumbs={[{ label: 'Materiais' }]}
+        actions={
+          <>
+            <button className="btn-almox-secondary" onClick={loadMateriais}>
+              <FiRefreshCw size={13} /> Atualizar
+            </button>
+            <Link to="/almoxarifado/materiais/novo" className="btn-almox-primary">
+              <FiPlus size={14} /> Novo Material
+            </Link>
+          </>
+        }
+      />
 
       {/* Filtros */}
       <div className="almox-filters">
@@ -256,6 +258,16 @@ const MateriaisAlmoxarifado = () => {
                     </td>
                     <td>
                       <div className="almox-actions">
+                        <button className="almox-btn-icon primary" title="Requisitar"
+                          onClick={() => navigate(`/almoxarifado/requisicoes/nova?material_id=${m.id}`)}>
+                          <FiClipboard />
+                        </button>
+                        {m.localizacao_padrao_id && (
+                          <button className="almox-btn-icon primary" title="Ver no mapa"
+                            onClick={() => navigate(`/almoxarifado/mapa?loc=${m.localizacao_padrao_id}`)}>
+                            <FiMap />
+                          </button>
+                        )}
                         <button className="almox-btn-icon success" title="Entrada" onClick={() => openMovModal(m, 'ENTRADA')}>
                           <FiArrowUp />
                         </button>
