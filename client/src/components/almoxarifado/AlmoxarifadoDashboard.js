@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw } from 'react-icons/fi';
+import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon } from 'react-icons/fi';
 import './Almoxarifado.css';
+
+const STATUS_REQ = {
+  PENDENTE: 'Pendente',
+  APROVADO: 'Aprovado',
+  EM_SEPARACAO: 'Em Separação',
+};
 
 const AlmoxarifadoDashboard = () => {
   const [stats, setStats] = useState(null);
+  const [requisicoes, setRequisicoes] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,8 +22,12 @@ const AlmoxarifadoDashboard = () => {
   const loadDashboard = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/almoxarifado/dashboard');
-      setStats(res.data);
+      const [dashRes, reqRes] = await Promise.all([
+        api.get('/almoxarifado/dashboard'),
+        api.get('/almoxarifado/dashboard/requisicoes').catch(() => ({ data: null })),
+      ]);
+      setStats(dashRes.data);
+      setRequisicoes(reqRes.data);
     } catch (err) {
       console.error('Erro ao carregar dashboard do almoxarifado:', err);
     } finally {
@@ -69,6 +80,9 @@ const AlmoxarifadoDashboard = () => {
           <Link to="/almoxarifado/materiais/novo" className="btn-almox-primary">
             <FiPackage size={14} /> Novo Material
           </Link>
+          <Link to="/almoxarifado/requisicoes/nova" className="btn-almox-primary">
+            <FiClock size={14} /> Nova Requisição
+          </Link>
         </div>
       </div>
 
@@ -109,6 +123,24 @@ const AlmoxarifadoDashboard = () => {
             <div className="almox-kpi-label">Movimentações Hoje</div>
           </div>
         </div>
+        {requisicoes && (
+          <>
+            <div className="almox-kpi-card">
+              <div className="almox-kpi-icon warning"><FiClock /></div>
+              <div className="almox-kpi-info">
+                <div className="almox-kpi-value">{requisicoes.requisicoesPendentes}</div>
+                <div className="almox-kpi-label">Req. Pendentes</div>
+              </div>
+            </div>
+            <div className="almox-kpi-card">
+              <div className="almox-kpi-icon danger"><FiAlertOctagon /></div>
+              <div className="almox-kpi-info">
+                <div className="almox-kpi-value">{requisicoes.requisicoesUrgentes}</div>
+                <div className="almox-kpi-label">Req. Urgentes</div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Grid principal */}
@@ -148,6 +180,44 @@ const AlmoxarifadoDashboard = () => {
             )}
           </div>
         </div>
+
+        {/* Requisições abertas */}
+        {requisicoes && (
+          <div className="almox-dash-card">
+            <div className="almox-dash-card-header">
+              <h3>📋 Requisições Abertas</h3>
+              <Link to="/almoxarifado/requisicoes" style={{ fontSize: '0.8rem', color: '#4facfe', display: 'flex', alignItems: 'center', gap: 4 }}>
+                Ver todas <FiArrowRight size={12} />
+              </Link>
+            </div>
+            <div className="almox-dash-card-body">
+              {(!requisicoes.abertas || requisicoes.abertas.length === 0) ? (
+                <div className="almox-empty">
+                  <p>Nenhuma requisição pendente de atendimento</p>
+                </div>
+              ) : (
+                requisicoes.abertas.map(r => (
+                  <Link key={r.id} to="/almoxarifado/requisicoes" className="almox-mov-item" style={{ textDecoration: 'none' }}>
+                    <span className={`almox-badge almox-badge-${r.status === 'PENDENTE' ? 'aberto' : 'ajuste'}`}>
+                      {STATUS_REQ[r.status] || r.status}
+                    </span>
+                    <div className="almox-mov-info">
+                      <div className="almox-mov-nome" style={{ fontFamily: 'monospace', color: '#4facfe' }}>{r.numero}</div>
+                      <div className="almox-mov-meta">
+                        {r.solicitante_nome}
+                        {r.urgencia !== 'NORMAL' && ` · ${r.urgencia}`}
+                        {' · '}{r.total_itens} item(ns)
+                      </div>
+                    </div>
+                    <div className="almox-mov-qtd" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                      {new Date(r.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Últimas movimentações */}
         <div className="almox-dash-card">

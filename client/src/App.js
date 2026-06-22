@@ -65,6 +65,9 @@ import MateriaisAlmoxarifado from './components/almoxarifado/MateriaisAlmoxarifa
 import MaterialAlmoxarifadoForm from './components/almoxarifado/MaterialAlmoxarifadoForm';
 import MovimentacoesAlmoxarifado from './components/almoxarifado/MovimentacoesAlmoxarifado';
 import ConferenciaEstoque from './components/almoxarifado/ConferenciaEstoque';
+import RequisicoesList from './components/almoxarifado/RequisicoesList';
+import RequisicaoForm from './components/almoxarifado/RequisicaoForm';
+import ConfiguracoesAlmoxarifado from './components/almoxarifado/ConfiguracoesAlmoxarifado';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
@@ -410,6 +413,9 @@ function AppRoutes() {
         <Route path="movimentacoes" element={<MovimentacoesAlmoxarifado />} />
         <Route path="movimentacoes/novo" element={<MovimentacoesAlmoxarifado />} />
         <Route path="conferencias" element={<ConferenciaEstoque />} />
+        <Route path="requisicoes" element={<RequisicoesList />} />
+        <Route path="requisicoes/nova" element={<RequisicaoForm />} />
+        <Route path="configuracoes" element={<ConfiguracoesAlmoxarifado />} />
       </Route>
       <Route
         path="/configuracoes"

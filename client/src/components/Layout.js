@@ -214,8 +214,10 @@ const Layout = () => {
     { path: '/almoxarifado', icon: FiArchive, label: 'Dashboard' },
     { path: '/almoxarifado/materiais', icon: FiList, label: 'Materiais' },
     { path: '/almoxarifado/materiais/novo', icon: FiPackage, label: 'Novo Material' },
+    { path: '/almoxarifado/requisicoes', icon: FiCheckCircle, label: 'Requisições' },
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência de Estoque' },
+    { path: '/almoxarifado/configuracoes', icon: FiSettings, label: 'Configurações' },
   ];
 
   // Menu do módulo Engenharia / Projetos (separado)
