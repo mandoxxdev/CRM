@@ -1,120 +1,121 @@
 /* ============================================
-   DESIGN TOKENS - GMP INDUSTRIAIS
-   Sistema Glassmorphism Dark
+   DESIGN TOKENS — GMP INDUSTRIAIS
+   Light (padrão) + Dark estilo Spotify
    ============================================ */
 
 :root {
-  /* ========== CORES PRIMÁRIAS — Electric Blue ========== */
-  --gmp-primary-50:  rgba(79, 172, 254, 0.08);
-  --gmp-primary-100: rgba(79, 172, 254, 0.15);
-  --gmp-primary-200: rgba(79, 172, 254, 0.25);
-  --gmp-primary-300: rgba(79, 172, 254, 0.40);
-  --gmp-primary-400: #93c5fd;
+  /* ── Primária — Electric Blue ── */
+  --gmp-primary-50:  #EFF6FF;
+  --gmp-primary-100: #DBEAFE;
+  --gmp-primary-200: #BFDBFE;
+  --gmp-primary-300: #93C5FD;
+  --gmp-primary-400: #60A5FA;
   --gmp-primary-500: #4facfe;
-  --gmp-primary-600: #3b82f6;
-  --gmp-primary-700: #2563eb;
-  --gmp-primary-800: #1d4ed8;
-  --gmp-primary-900: #1e40af;
+  --gmp-primary-600: #3B82F6;
+  --gmp-primary-700: #2563EB;
+  --gmp-primary-800: #1D4ED8;
+  --gmp-primary-900: #1E40AF;
 
   --gmp-primary:       #4facfe;
   --gmp-primary-dark:  #3b82f6;
   --gmp-primary-light: #93c5fd;
-  --gmp-secondary:     #0d1b3e;
-  --gmp-accent:        #00f2fe;
+  --gmp-secondary:     #F6F6F6;
+  --gmp-accent:        #4facfe;
 
-  /* ========== CORES SEMÂNTICAS ========== */
-  --gmp-success-50:  rgba(67, 233, 123, 0.08);
-  --gmp-success-100: rgba(67, 233, 123, 0.15);
-  --gmp-success-500: #43e97b;
-  --gmp-success-600: #10b981;
-  --gmp-success-700: #059669;
-  --gmp-success:       #43e97b;
-  --gmp-success-light: #6ee7b7;
-  --gmp-success-dark:  #10b981;
+  /* ── Semânticas ── */
+  --gmp-success:       #1AA34A;
+  --gmp-success-light: #22c55e;
+  --gmp-success-dark:  #166534;
 
-  --gmp-warning-50:  rgba(249, 202, 36, 0.08);
-  --gmp-warning-100: rgba(249, 202, 36, 0.15);
-  --gmp-warning-500: #f9ca24;
-  --gmp-warning-600: #d97706;
-  --gmp-warning-700: #b45309;
-  --gmp-warning:       #f9ca24;
-  --gmp-warning-light: #fbbf24;
-  --gmp-warning-dark:  #d97706;
+  --gmp-warning:       #E59800;
+  --gmp-warning-light: #FACC15;
+  --gmp-warning-dark:  #B45309;
 
-  --gmp-error-50:  rgba(255, 107, 107, 0.08);
-  --gmp-error-100: rgba(255, 107, 107, 0.15);
-  --gmp-error-500: #ff6b6b;
-  --gmp-error-600: #ef4444;
-  --gmp-error-700: #dc2626;
-  --gmp-error:       #ff6b6b;
-  --gmp-error-light: #f87171;
-  --gmp-error-dark:  #ef4444;
+  --gmp-error:         #E5193A;
+  --gmp-error-light:   #F87171;
+  --gmp-error-dark:    #B91C1C;
 
-  --gmp-info-50:  rgba(79, 172, 254, 0.08);
-  --gmp-info-100: rgba(79, 172, 254, 0.15);
-  --gmp-info-500: #4facfe;
-  --gmp-info-600: #3b82f6;
-  --gmp-info-700: #2563eb;
-  --gmp-info:       #4facfe;
-  --gmp-info-light: #93c5fd;
-  --gmp-info-dark:  #3b82f6;
+  --gmp-info:          #4facfe;
+  --gmp-info-light:    #93c5fd;
+  --gmp-info-dark:     #3b82f6;
 
-  /* ========== ESCALA CINZA — Glass Scale ========== */
-  --gmp-gray-50:  rgba(255, 255, 255, 0.03);
-  --gmp-gray-100: rgba(255, 255, 255, 0.06);
-  --gmp-gray-200: rgba(255, 255, 255, 0.10);
-  --gmp-gray-300: rgba(255, 255, 255, 0.16);
-  --gmp-gray-400: rgba(255, 255, 255, 0.32);
-  --gmp-gray-500: rgba(255, 255, 255, 0.50);
-  --gmp-gray-600: rgba(255, 255, 255, 0.65);
-  --gmp-gray-700: rgba(255, 255, 255, 0.78);
-  --gmp-gray-800: rgba(255, 255, 255, 0.88);
-  --gmp-gray-900: #e2e8f0;
+  /* Aliases para compatibilidade */
+  --gmp-success-50:  rgba(26, 163, 74, 0.08);
+  --gmp-success-100: rgba(26, 163, 74, 0.15);
+  --gmp-success-500: #1AA34A;
+  --gmp-warning-50:  rgba(229, 152, 0, 0.08);
+  --gmp-warning-100: rgba(229, 152, 0, 0.15);
+  --gmp-warning-500: #E59800;
+  --gmp-error-50:    rgba(229, 25, 58, 0.08);
+  --gmp-error-100:   rgba(229, 25, 58, 0.15);
+  --gmp-error-500:   #E5193A;
+  --gmp-info-50:     rgba(79, 172, 254, 0.08);
+  --gmp-info-100:    rgba(79, 172, 254, 0.15);
+  --gmp-info-500:    #4facfe;
 
-  /* ========== SUPERFÍCIES GLASS ========== */
-  --gmp-bg:           #060b1a;
-  --gmp-surface:      rgba(255, 255, 255, 0.05);
-  --gmp-surface-hover:rgba(255, 255, 255, 0.08);
-  --gmp-text:         #e2e8f0;
-  --gmp-text-light:   rgba(226, 232, 240, 0.60);
-  --gmp-border:       rgba(255, 255, 255, 0.10);
-  --gmp-shadow:       rgba(0, 0, 0, 0.40);
+  /* ── LIGHT THEME — Superfícies ── */
+  --gmp-bg:            #FFFFFF;
+  --gmp-surface:       #F6F6F6;
+  --gmp-surface-hover: #EFEFEF;
+  --gmp-text:          #121212;
+  --gmp-text-light:    #6A6A6A;
+  --gmp-border:        rgba(0, 0, 0, 0.10);
+  --gmp-shadow:        rgba(0, 0, 0, 0.08);
 
-  /* ========== GLASS TOKENS ========== */
-  --glass-bg:           rgba(255, 255, 255, 0.05);
-  --glass-bg-md:        rgba(255, 255, 255, 0.08);
-  --glass-bg-strong:    rgba(255, 255, 255, 0.12);
-  --glass-bg-sidebar:   rgba(10, 18, 50, 0.75);
-  --glass-border:       rgba(255, 255, 255, 0.10);
-  --glass-border-hover: rgba(255, 255, 255, 0.22);
-  --glass-blur:         blur(20px);
-  --glass-blur-strong:  blur(40px);
-  --glass-shadow:       0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.10);
-  --glass-shadow-hover: 0 16px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.16);
-  --glass-glow-primary: 0 0 40px rgba(79, 172, 254, 0.20);
-  --glass-glow-accent:  0 0 40px rgba(0, 242, 254, 0.15);
+  /* ── LIGHT THEME — Glass tokens → sólidos claros ── */
+  --glass-bg:           #FFFFFF;
+  --glass-bg-md:        #F6F6F6;
+  --glass-bg-strong:    #EFEFEF;
+  --glass-bg-sidebar:   #F6F6F6;
+  --glass-border:       rgba(0, 0, 0, 0.09);
+  --glass-border-hover: rgba(0, 0, 0, 0.18);
+  --glass-blur:         blur(0px);
+  --glass-blur-strong:  blur(0px);
+  --glass-shadow:       0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --glass-shadow-hover: 0 6px 20px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06);
+  --glass-glow-primary: 0 0 20px rgba(79,172,254,0.15);
+  --glass-glow-accent:  0 0 20px rgba(79,172,254,0.10);
 
-  /* ========== ELEVAÇÕES GLASS ========== */
+  /* ── LIGHT THEME — Sidebar (sobrescreve o branco hardcoded do Layout.css) ── */
+  --sidebar-text:         rgba(0, 0, 0, 0.65);
+  --sidebar-text-hover:   #121212;
+  --sidebar-text-active:  #4facfe;
+  --sidebar-text-muted:   rgba(0, 0, 0, 0.38);
+  --sidebar-bg:           #F6F6F6;
+  --sidebar-border:       rgba(0, 0, 0, 0.09);
+
+  /* ── LIGHT THEME — Escala cinza real ── */
+  --gmp-gray-50:  #FAFAFA;
+  --gmp-gray-100: #F5F5F5;
+  --gmp-gray-200: #EEEEEE;
+  --gmp-gray-300: #E0E0E0;
+  --gmp-gray-400: #BDBDBD;
+  --gmp-gray-500: #9E9E9E;
+  --gmp-gray-600: #757575;
+  --gmp-gray-700: #616161;
+  --gmp-gray-800: #424242;
+  --gmp-gray-900: #212121;
+
+  /* ── LIGHT THEME — Elevações ── */
   --elevation-0: none;
-  --elevation-1: 0 2px  8px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06);
-  --elevation-2: 0 4px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
-  --elevation-3: 0 8px 32px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.10);
-  --elevation-4: 0 16px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12);
-  --elevation-5: 0 24px 64px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.14);
-  --elevation-6: 0 32px 80px rgba(0,0,0,0.60), inset 0 1px 0 rgba(255,255,255,0.18);
+  --elevation-1: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+  --elevation-2: 0 2px 6px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.05);
+  --elevation-3: 0 4px 12px rgba(0,0,0,0.11), 0 2px 4px rgba(0,0,0,0.05);
+  --elevation-4: 0 8px 24px rgba(0,0,0,0.13), 0 4px 8px rgba(0,0,0,0.07);
+  --elevation-5: 0 16px 40px rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.07);
+  --elevation-6: 0 24px 64px rgba(0,0,0,0.18), 0 12px 24px rgba(0,0,0,0.08);
 
-  /* Sombras coloridas com glow */
-  --shadow-primary: 0 8px 30px rgba(79,172,254,0.35), 0 2px 10px rgba(79,172,254,0.20);
-  --shadow-success: 0 8px 30px rgba(67,233,123,0.35), 0 2px 10px rgba(67,233,123,0.20);
-  --shadow-error:   0 8px 30px rgba(255,107,107,0.35), 0 2px 10px rgba(255,107,107,0.20);
-  --shadow-warning: 0 8px 30px rgba(249,202, 36,0.35), 0 2px 10px rgba(249,202, 36,0.20);
+  --shadow-primary: 0 4px 14px rgba(79,172,254,0.25), 0 2px 6px rgba(79,172,254,0.12);
+  --shadow-success: 0 4px 14px rgba(26,163,74,0.25),  0 2px 6px rgba(26,163,74,0.12);
+  --shadow-error:   0 4px 14px rgba(229,25,58,0.25),  0 2px 6px rgba(229,25,58,0.12);
+  --shadow-warning: 0 4px 14px rgba(229,152,0,0.25),  0 2px 6px rgba(229,152,0,0.12);
 
   --shadow-sm: var(--elevation-1);
   --shadow-md: var(--elevation-3);
   --shadow-lg: var(--elevation-4);
   --shadow-xl: var(--elevation-5);
 
-  /* ========== BORDAS ========== */
+  /* ── Bordas ── */
   --radius-xs:   4px;
   --radius-sm:   8px;
   --radius-md:   12px;
@@ -124,7 +125,7 @@
   --radius-full: 9999px;
   --border-radius: var(--radius-md);
 
-  /* ========== ESPAÇAMENTOS ========== */
+  /* ── Espaçamentos ── */
   --space-0:  0;
   --space-1:  4px;
   --space-2:  8px;
@@ -143,13 +144,13 @@
   --spacing-lg: var(--space-6);
   --spacing-xl: var(--space-8);
 
-  /* ========== TRANSIÇÕES ========== */
+  /* ── Transições ── */
   --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base:   200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow:   300ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-bounce: 500ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
-  /* ========== Z-INDEX ========== */
+  /* ── Z-index ── */
   --z-dropdown:       1000;
   --z-sticky:         1020;
   --z-fixed:          1030;
@@ -158,7 +159,7 @@
   --z-popover:        1060;
   --z-tooltip:        1070;
 
-  /* ========== BREAKPOINTS ========== */
+  /* ── Breakpoints ── */
   --breakpoint-sm:  640px;
   --breakpoint-md:  768px;
   --breakpoint-lg:  1024px;
@@ -166,36 +167,73 @@
   --breakpoint-2xl: 1536px;
 }
 
-/* ========== DARK MODE — Deeper Glass ========== */
+/* ================================================
+   DARK THEME — Spotify-inspired
+   Superfícies sólidas escuras, sem blur pesado
+   ================================================ */
 [data-theme="dark"] {
-  --gmp-bg:           #030812;
-  --gmp-surface:      rgba(255, 255, 255, 0.04);
-  --gmp-surface-hover:rgba(255, 255, 255, 0.07);
-  --gmp-text:         #f1f5f9;
-  --gmp-text-light:   rgba(241, 245, 249, 0.50);
-  --gmp-border:       rgba(255, 255, 255, 0.08);
-  --gmp-shadow:       rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
 
-  --gmp-primary:       #4facfe;
-  --gmp-primary-dark:  #3b82f6;
-  --gmp-primary-light: #93c5fd;
-  --gmp-secondary:     #030812;
+  /* Superfícies */
+  --gmp-bg:            #121212;
+  --gmp-surface:       #181818;
+  --gmp-surface-hover: #282828;
+  --gmp-text:          #FFFFFF;
+  --gmp-text-light:    #B3B3B3;
+  --gmp-border:        rgba(255, 255, 255, 0.10);
+  --gmp-shadow:        rgba(0, 0, 0, 0.50);
+  --gmp-secondary:     #000000;
 
-  --glass-bg:           rgba(255, 255, 255, 0.04);
-  --glass-bg-md:        rgba(255, 255, 255, 0.07);
-  --glass-bg-strong:    rgba(255, 255, 255, 0.10);
-  --glass-bg-sidebar:   rgba(3, 8, 18, 0.82);
-  --glass-border:       rgba(255, 255, 255, 0.08);
-  --glass-border-hover: rgba(255, 255, 255, 0.18);
+  /* Glass tokens → sólidos escuros Spotify */
+  --glass-bg:           #181818;
+  --glass-bg-md:        #242424;
+  --glass-bg-strong:    #282828;
+  --glass-bg-sidebar:   #000000;
+  --glass-border:       rgba(255, 255, 255, 0.10);
+  --glass-border-hover: rgba(255, 255, 255, 0.22);
+  --glass-blur:         blur(0px);
+  --glass-blur-strong:  blur(0px);
+  --glass-shadow:       0 4px 16px rgba(0,0,0,0.50);
+  --glass-shadow-hover: 0 8px 32px rgba(0,0,0,0.65);
+  --glass-glow-primary: 0 0 30px rgba(79,172,254,0.22);
+  --glass-glow-accent:  0 0 30px rgba(79,172,254,0.15);
 
-  --gmp-gray-50:  rgba(255, 255, 255, 0.02);
-  --gmp-gray-100: rgba(255, 255, 255, 0.05);
-  --gmp-gray-200: rgba(255, 255, 255, 0.08);
-  --gmp-gray-300: rgba(255, 255, 255, 0.13);
-  --gmp-gray-400: rgba(255, 255, 255, 0.28);
-  --gmp-gray-500: rgba(255, 255, 255, 0.45);
-  --gmp-gray-600: rgba(255, 255, 255, 0.60);
-  --gmp-gray-700: rgba(255, 255, 255, 0.75);
-  --gmp-gray-800: rgba(255, 255, 255, 0.87);
-  --gmp-gray-900: #f1f5f9;
+  /* Sidebar dark */
+  --sidebar-text:         rgba(255, 255, 255, 0.70);
+  --sidebar-text-hover:   #FFFFFF;
+  --sidebar-text-active:  #FFFFFF;
+  --sidebar-text-muted:   rgba(255, 255, 255, 0.40);
+  --sidebar-bg:           #000000;
+  --sidebar-border:       rgba(255, 255, 255, 0.08);
+
+  /* Escala cinza dark */
+  --gmp-gray-50:  #1A1A1A;
+  --gmp-gray-100: #242424;
+  --gmp-gray-200: #2E2E2E;
+  --gmp-gray-300: #3E3E3E;
+  --gmp-gray-400: #535353;
+  --gmp-gray-500: #727272;
+  --gmp-gray-600: #A7A7A7;
+  --gmp-gray-700: #B3B3B3;
+  --gmp-gray-800: #E0E0E0;
+  --gmp-gray-900: #FFFFFF;
+
+  /* Elevações dark */
+  --elevation-0: none;
+  --elevation-1: 0 2px 8px rgba(0,0,0,0.40);
+  --elevation-2: 0 4px 12px rgba(0,0,0,0.45);
+  --elevation-3: 0 8px 24px rgba(0,0,0,0.50);
+  --elevation-4: 0 16px 40px rgba(0,0,0,0.55);
+  --elevation-5: 0 24px 56px rgba(0,0,0,0.60);
+  --elevation-6: 0 32px 72px rgba(0,0,0,0.65);
+
+  --shadow-primary: 0 4px 20px rgba(79,172,254,0.30), 0 2px 8px rgba(79,172,254,0.15);
+  --shadow-success: 0 4px 20px rgba(26,163,74,0.30),  0 2px 8px rgba(26,163,74,0.15);
+  --shadow-error:   0 4px 20px rgba(229,25,58,0.30),  0 2px 8px rgba(229,25,58,0.15);
+  --shadow-warning: 0 4px 20px rgba(229,152,0,0.30),  0 2px 8px rgba(229,152,0,0.15);
+
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-3);
+  --shadow-lg: var(--elevation-4);
+  --shadow-xl: var(--elevation-5);
 }

@@ -5,7 +5,7 @@ import api from '../services/api';
 import {
   FiBriefcase, FiShoppingCart, FiDollarSign, FiUsers,
   FiSettings, FiBarChart2, FiPackage, FiTarget,
-  FiLock, FiCheckCircle, FiShield, FiTool, FiSliders
+  FiLock, FiCheckCircle, FiShield, FiTool, FiSliders, FiArchive
 } from 'react-icons/fi';
 import SplashScreen from './SplashScreen';
 import AnimatedBackground from './AnimatedBackground';
@@ -85,6 +85,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiBriefcase,
       modulo: 'engenharia_projetos',
       rota: '/engenharia-projetos'
+    },
+    {
+      id: 'almoxarifado',
+      nome: 'ALMOXARIFADO',
+      descricao: 'Controle de materiais, estoque, movimentações e conferências',
+      icon: FiArchive,
+      modulo: 'almoxarifado',
+      rota: '/almoxarifado'
     },
     {
       id: 'admin',

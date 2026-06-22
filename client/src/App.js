@@ -60,11 +60,17 @@ import CadastroMateriaisEscritorio from './components/engenhariaProjetos/Cadastr
 import SolicitacaoMaterialEscritorioCesta from './components/engenhariaProjetos/SolicitacaoMaterialEscritorioCesta';
 import MinhasSolicitacoesCompra from './components/MinhasSolicitacoesCompra';
 import VeiculosManutencao from './components/VeiculosManutencao';
+import AlmoxarifadoDashboard from './components/almoxarifado/AlmoxarifadoDashboard';
+import MateriaisAlmoxarifado from './components/almoxarifado/MateriaisAlmoxarifado';
+import MaterialAlmoxarifadoForm from './components/almoxarifado/MaterialAlmoxarifadoForm';
+import MovimentacoesAlmoxarifado from './components/almoxarifado/MovimentacoesAlmoxarifado';
+import ConferenciaEstoque from './components/almoxarifado/ConferenciaEstoque';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
+import './styles/glass-override.css';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -78,9 +84,10 @@ const PrivateRoute = ({ children }) => {
            path.startsWith('/frota') ||
            path.startsWith('/compras') || 
            path.startsWith('/financeiro') || 
-           path.startsWith('/fabrica') || 
+           path.startsWith('/fabrica') ||
+           path.startsWith('/almoxarifado') ||
            path.startsWith('/engenharia') ||
-           path.startsWith('/configuracoes') || 
+           path.startsWith('/configuracoes') ||
            path.startsWith('/admin');
   };
 
@@ -387,6 +394,22 @@ function AppRoutes() {
         <Route path="solicitacao-material-escritorio" element={<SolicitacaoMaterialEscritorioCesta />} />
         <Route path="cadastro-materiais-escritorio" element={<CadastroMateriaisEscritorio />} />
         <Route path="minhas-solicitacoes" element={<MinhasSolicitacoesCompra />} />
+      </Route>
+      <Route
+        path="/almoxarifado"
+        element={
+          <PrivateRoute>
+            <Layout />
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<AlmoxarifadoDashboard />} />
+        <Route path="materiais" element={<MateriaisAlmoxarifado />} />
+        <Route path="materiais/novo" element={<MaterialAlmoxarifadoForm />} />
+        <Route path="materiais/editar/:id" element={<MaterialAlmoxarifadoForm />} />
+        <Route path="movimentacoes" element={<MovimentacoesAlmoxarifado />} />
+        <Route path="movimentacoes/novo" element={<MovimentacoesAlmoxarifado />} />
+        <Route path="conferencias" element={<ConferenciaEstoque />} />
       </Route>
       <Route
         path="/configuracoes"

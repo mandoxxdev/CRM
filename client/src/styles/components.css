@@ -119,12 +119,10 @@
 .btn-icon { padding: 12px; width: 44px; height: 44px; }
 
 
-/* ========== CARDS GLASSMORPHISM ========== */
+/* ========== CARDS ========== */
 .card-premium {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--glass-shadow);
   transition: all var(--transition-slow);
@@ -132,45 +130,31 @@
   position: relative;
 }
 
-/* Linha de luz no topo */
-.card-premium::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.20), transparent);
-  pointer-events: none;
-}
-
 .card-premium:hover {
-  background: var(--glass-bg-md);
+  background: var(--gmp-surface-hover, var(--gmp-surface));
   border-color: var(--glass-border-hover);
-  box-shadow: var(--glass-shadow-hover), var(--glass-glow-primary);
-  transform: translateY(-4px);
+  box-shadow: var(--glass-shadow-hover);
+  transform: translateY(-3px);
 }
 
 .card-header {
   padding: var(--space-6);
-  border-bottom: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--gmp-border);
+  background: var(--gmp-bg);
 }
 
 .card-body   { padding: var(--space-6); }
 
 .card-footer {
   padding: var(--space-6);
-  border-top: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--gmp-border);
+  background: var(--gmp-bg);
 }
 
 /* Alias glass */
 .card-glass {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
   box-shadow: var(--glass-shadow);
 }
 
@@ -352,29 +336,30 @@
 }
 
 
-/* ========== DARK MODE (mais fundo ainda) ========== */
+/* ========== DARK MODE ========== */
 [data-theme="dark"] .card-premium,
 [data-theme="dark"] .glass-card,
 [data-theme="dark"] .card-glass {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
 }
 
 [data-theme="dark"] .card-header,
 [data-theme="dark"] .card-footer {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--gmp-bg);
+  border-color: var(--gmp-border);
 }
 
 [data-theme="dark"] .input-premium,
 [data-theme="dark"] .select-premium,
 [data-theme="dark"] .textarea-premium {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
   color: var(--gmp-text);
 }
 
 [data-theme="dark"] .btn-secondary {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
   color: var(--gmp-text);
 }

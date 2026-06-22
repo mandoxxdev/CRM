@@ -5,7 +5,8 @@ import api from '../services/api';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
-  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard
+  FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
+  FiArchive, FiActivity, FiList
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -138,6 +139,7 @@ const Layout = () => {
     if (path.startsWith('/admin')) return 'admin';
     if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
     if (path.startsWith('/engenharia')) return 'engenharia';
+    if (path.startsWith('/almoxarifado')) return 'almoxarifado';
     if (path.startsWith('/comercial')) return 'crm';
     return 'crm'; // Default para CRM
   };
@@ -207,6 +209,15 @@ const Layout = () => {
     { path: '/engenharia/selecao-agitadores', icon: FiLayers, label: 'Seleção de Agitadores' },
   ];
 
+  // Menu do módulo Almoxarifado
+  const almoxarifadoMenuItems = [
+    { path: '/almoxarifado', icon: FiArchive, label: 'Dashboard' },
+    { path: '/almoxarifado/materiais', icon: FiList, label: 'Materiais' },
+    { path: '/almoxarifado/materiais/novo', icon: FiPackage, label: 'Novo Material' },
+    { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
+    { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência de Estoque' },
+  ];
+
   // Menu do módulo Engenharia / Projetos (separado)
   const engenhariaProjetosMenuItems = [
     { path: '/engenharia-projetos', icon: FiBriefcase, label: 'Início' },
@@ -232,6 +243,8 @@ const Layout = () => {
         return engenhariaMenuItems;
       case 'engenharia_projetos':
         return engenhariaProjetosMenuItems;
+      case 'almoxarifado':
+        return almoxarifadoMenuItems;
       default:
         return crmMenuItems;
     }

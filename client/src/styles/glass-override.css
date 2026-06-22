@@ -1,0 +1,437 @@
+/* ================================================================
+   GLASS OVERRIDE — Fix de visibilidade universal
+   Funciona nos dois temas: claro (Spotify light) e escuro (Spotify dark)
+   Todas as regras usam var(--gmp-*) que mudam automaticamente com o tema
+   ================================================================ */
+
+/* ── 1. Body e raiz ── */
+body {
+  background: var(--gmp-bg) !important;
+  color: var(--gmp-text) !important;
+}
+
+/* ── 2. Headings ── */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--gmp-text) !important;
+}
+
+/* ── 3. Labels e textos de formulário ── */
+label,
+.form-label,
+.field-label,
+.input-label,
+.filter-label,
+.form-section h2,
+.form-header h1,
+.form-group label,
+.form-row label {
+  color: var(--gmp-text) !important;
+}
+
+/* ── 4. Texto secundário ── */
+.text-muted,
+.help-text,
+.hint,
+small,
+.small,
+figcaption {
+  color: var(--gmp-text-light) !important;
+}
+
+/* ── 5. Parágrafos genéricos ── */
+p:not([class*="badge"]):not([class*="status"]):not([class*="pill"]):not([class*="tag"]) {
+  color: var(--gmp-text);
+}
+
+/* ── 6. Tabelas ── */
+table th {
+  color: var(--gmp-text-light) !important;
+  background: var(--gmp-surface) !important;
+  border-color: var(--gmp-border) !important;
+}
+table td {
+  color: var(--gmp-text) !important;
+  border-color: var(--gmp-border) !important;
+}
+table tr:hover td {
+  background: var(--gmp-surface) !important;
+}
+table thead {
+  background: var(--gmp-surface) !important;
+}
+table tbody tr {
+  border-bottom: 1px solid var(--gmp-border);
+}
+
+/* ── 7. Formulários ── */
+.form,
+.form-container,
+.form-card,
+.form-box,
+.form-wrapper,
+.cliente-form .form,
+.proposta-form,
+.produto-form,
+.projeto-form,
+.usuario-form {
+  background: var(--gmp-surface) !important;
+  border: 1px solid var(--gmp-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  color: var(--gmp-text) !important;
+}
+
+.form-section {
+  background: var(--gmp-surface) !important;
+  border-bottom-color: var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+}
+
+/* ── 8. Inputs, selects, textareas ── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+select,
+textarea {
+  background: var(--gmp-bg) !important;
+  color: var(--gmp-text) !important;
+  border-color: var(--gmp-border) !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(79, 172, 254, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.12) !important;
+  background: var(--gmp-surface) !important;
+  outline: none !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--gmp-text-light) !important;
+  opacity: 1 !important;
+}
+
+select option {
+  background: var(--gmp-surface) !important;
+  color: var(--gmp-text) !important;
+}
+
+/* ── 9. Modais ── */
+.modal,
+.modal-container,
+.modal-content,
+.modal-box,
+[class*="modal-content"],
+[class*="-modal"] {
+  background: var(--gmp-surface) !important;
+  border: 1px solid var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+  box-shadow: var(--elevation-6) !important;
+}
+
+.modal-header,
+.modal-footer {
+  background: var(--gmp-bg) !important;
+  border-color: var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+}
+
+.modal-overlay,
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.55) !important;
+}
+
+/* ── 10. Cards genéricos ── */
+.card,
+.card-container,
+[class*="-card"]:not([class*="badge"]):not([class*="kpi"]):not([class*="btn"]):not([class*="status"]):not([class*="nav"]) {
+  background: var(--gmp-surface) !important;
+  border-color: var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* ── 11. Calendário ── */
+.calendario,
+.rbc-calendar,
+.rbc-month-view,
+.rbc-agenda-view,
+.rbc-time-view,
+.rbc-header,
+.rbc-day-bg,
+.rbc-toolbar,
+.rbc-month-row,
+.rbc-date-cell,
+.rbc-off-range-bg,
+[class*="calendario-"]:not([class*="btn"]) {
+  background: var(--gmp-bg) !important;
+  color: var(--gmp-text) !important;
+  border-color: var(--gmp-border) !important;
+}
+.rbc-today              { background: rgba(79, 172, 254, 0.08) !important; }
+.rbc-event              { background: rgba(79, 172, 254, 0.20) !important; border-color: rgba(79, 172, 254, 0.40) !important; }
+.rbc-toolbar button     { color: var(--gmp-text) !important; border-color: var(--gmp-border) !important; background: var(--gmp-surface) !important; }
+.rbc-toolbar button.rbc-active { background: rgba(79, 172, 254, 0.15) !important; border-color: rgba(79, 172, 254, 0.40) !important; }
+
+/* ── 12. Chat ── */
+[class*="chat-"],
+[class*="-chat"] {
+  background: var(--gmp-bg) !important;
+  border-color: var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+}
+
+/* ── 13. MES / Fábrica ── */
+.mes-dashboard,
+.mes-card,
+.mes-header,
+[class*="mes-"] {
+  background: var(--gmp-bg) !important;
+  border-color: var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+}
+
+/* ── 14. Dropdowns ── */
+.dropdown,
+.dropdown-menu,
+.select-dropdown,
+.options-list,
+.autocomplete-dropdown,
+[class*="dropdown-menu"],
+[class*="-dropdown"]:not([class*="btn"]) {
+  background: var(--gmp-surface) !important;
+  border: 1px solid var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+  box-shadow: var(--elevation-4) !important;
+}
+.dropdown-item,
+.dropdown-option,
+[class*="dropdown-item"] {
+  color: var(--gmp-text) !important;
+}
+.dropdown-item:hover,
+.dropdown-option:hover {
+  background: var(--gmp-surface-hover, var(--gmp-surface)) !important;
+}
+
+/* ── 15. Containers de página ── */
+.page-container,
+.content-container,
+.content-wrapper,
+.section-container,
+.data-container,
+.list-container,
+.table-container {
+  background: transparent !important;
+  color: var(--gmp-text) !important;
+}
+
+/* ── 16. Divisores ── */
+hr,
+.divider,
+.separator {
+  border-color: var(--gmp-border) !important;
+  background: var(--gmp-border) !important;
+}
+
+/* ── 17. Alertas ── */
+.alert-success  { background: rgba(26,163,74,0.10) !important;  border-color: rgba(26,163,74,0.25) !important;  color: var(--gmp-success) !important; }
+.alert-warning  { background: rgba(229,152,0,0.10) !important;  border-color: rgba(229,152,0,0.25) !important;  color: var(--gmp-warning) !important; }
+.alert-danger,
+.alert-error    { background: rgba(229,25,58,0.10) !important;  border-color: rgba(229,25,58,0.25) !important;  color: var(--gmp-error)   !important; }
+.alert-info     { background: rgba(79,172,254,0.10) !important; border-color: rgba(79,172,254,0.25) !important; color: var(--gmp-info, #4facfe) !important; }
+
+/* ── 18. Scrollbar ── */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--gmp-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gmp-text-light); }
+
+/* ── 19. Links genéricos ── */
+a:not([class*="btn"]):not([class*="nav-"]):not([class*="-link"]) {
+  color: #4facfe;
+}
+a:not([class*="btn"]):not([class*="nav-"]):not([class*="-link"]):hover {
+  color: var(--gmp-primary-light, #93c5fd);
+}
+
+/* ── 20. Drawers / painéis laterais ── */
+.panel,
+.drawer,
+.slide-panel,
+[class*="-panel"]:not([class*="nav"]):not([class*="glass"]) {
+  background: var(--gmp-surface) !important;
+  border-color: var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+}
+
+/* ── 21. Badges semânticos — preservar cores ── */
+[class*="badge-success"],  .status-ativo,    .status-pago      { color: var(--gmp-success) !important; }
+[class*="badge-warning"],  .status-pendente                    { color: var(--gmp-warning) !important; }
+[class*="badge-error"],    .status-cancelado, .status-vencido  { color: var(--gmp-error)   !important; }
+[class*="badge-info"],     .status-analise                     { color: var(--gmp-primary) !important; }
+
+/* ── 22. Paginação ── */
+.pagination button,
+.page-btn,
+[class*="page-btn"],
+[class*="pagination"] button {
+  background: var(--gmp-surface) !important;
+  border-color: var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+}
+.pagination button.active,
+[class*="pagination"] button.active {
+  background: rgba(79, 172, 254, 0.15) !important;
+  border-color: rgba(79, 172, 254, 0.40) !important;
+  color: #4facfe !important;
+}
+
+/* ── 23. Toasts ── */
+.toast,
+[class*="toast-"] {
+  background: var(--gmp-surface) !important;
+  border: 1px solid var(--gmp-border) !important;
+  color: var(--gmp-text) !important;
+  box-shadow: var(--elevation-4) !important;
+}
+
+/* =================================================================
+   SIDEBAR — Overrides para tema claro
+   Layout.css tem white hardcoded; aqui corrigimos via :root selector
+   ================================================================= */
+:root:not([data-theme="dark"]) .sidebar {
+  color: var(--sidebar-text) !important;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.07) !important;
+}
+
+:root:not([data-theme="dark"]) .sidebar-header {
+  border-bottom-color: var(--gmp-border) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root:not([data-theme="dark"]) .sidebar-header h2 {
+  color: var(--gmp-text) !important;
+}
+
+/* Logo — não inverter no tema claro */
+:root:not([data-theme="dark"]) .logo-image {
+  filter: none !important;
+}
+
+/* Nav items light */
+:root:not([data-theme="dark"]) .nav-item {
+  color: var(--sidebar-text) !important;
+}
+:root:not([data-theme="dark"]) .nav-item:hover {
+  color: var(--sidebar-text-hover) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+:root:not([data-theme="dark"]) .nav-item.active {
+  color: var(--gmp-primary) !important;
+  background: rgba(79, 172, 254, 0.08) !important;
+  border-color: rgba(79, 172, 254, 0.20) !important;
+  border-left-color: #4facfe !important;
+  box-shadow: none !important;
+}
+:root:not([data-theme="dark"]) .nav-item-button {
+  color: var(--sidebar-text) !important;
+}
+:root:not([data-theme="dark"]) .nav-item-button:hover {
+  color: var(--sidebar-text-hover) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+:root:not([data-theme="dark"]) .nav-item-module-selector {
+  color: var(--gmp-primary) !important;
+}
+
+/* Sidebar footer light */
+:root:not([data-theme="dark"]) .sidebar-footer {
+  border-top-color: var(--gmp-border) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+:root:not([data-theme="dark"]) .user-name {
+  color: var(--gmp-text) !important;
+}
+:root:not([data-theme="dark"]) .user-role {
+  color: var(--gmp-text-light) !important;
+}
+:root:not([data-theme="dark"]) .logout-button {
+  color: var(--gmp-error) !important;
+  background: rgba(229,25,58,0.06) !important;
+  border-color: rgba(229,25,58,0.15) !important;
+}
+:root:not([data-theme="dark"]) .logout-button:hover {
+  background: rgba(229,25,58,0.12) !important;
+  border-color: rgba(229,25,58,0.28) !important;
+  color: var(--gmp-error) !important;
+}
+
+/* Theme toggle light */
+:root:not([data-theme="dark"]) .theme-toggle {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: var(--gmp-text) !important;
+}
+:root:not([data-theme="dark"]) .theme-toggle:hover {
+  background: rgba(0, 0, 0, 0.10) !important;
+}
+:root:not([data-theme="dark"]) .toggle-sidebar {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+:root:not([data-theme="dark"]) .sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.14) !important;
+}
+
+/* =================================================================
+   HEADER PRINCIPAL — tema claro
+   ================================================================= */
+:root:not([data-theme="dark"]) .main-header {
+  background: #FFFFFF !important;
+  border-bottom-color: rgba(0, 0, 0, 0.09) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: var(--gmp-text) !important;
+}
+
+/* =================================================================
+   ORBS de fundo — ocultar no tema claro
+   ================================================================= */
+:root:not([data-theme="dark"]) .layout::before,
+:root:not([data-theme="dark"]) .layout::after {
+  display: none !important;
+}
+
+/* Badge de versão no tema claro */
+:root:not([data-theme="dark"]) .orion-version-badge {
+  color: rgba(0, 0, 0, 0.65) !important;
+  background: rgba(79, 172, 254, 0.08) !important;
+  border-color: rgba(79, 172, 254, 0.18) !important;
+}
+
+/* =================================================================
+   DARK MODE — garantias extras de visibilidade
+   ================================================================= */
+[data-theme="dark"] body {
+  background: #121212 !important;
+}
+
+[data-theme="dark"] .main-header {
+  background: #121212 !important;
+  border-bottom-color: rgba(255,255,255,0.10) !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-theme="dark"] table th {
+  background: #181818 !important;
+}
+[data-theme="dark"] table tr:hover td {
+  background: #242424 !important;
+}
+[data-theme="dark"] select option {
+  background: #282828 !important;
+  color: #FFFFFF !important;
+}

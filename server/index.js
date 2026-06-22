@@ -22454,6 +22454,9 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
+// ── Módulo Almoxarifado ──────────────────────────────────────────────────────
+require('./routes/almoxarifado')(app, db, authenticateToken, PERSISTENT_DATA_DIR);
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor CRM GMP INDUSTRIAIS rodando na porta ${PORT}`);
   console.log(`📊 API disponível em http://localhost:${PORT}/api`);

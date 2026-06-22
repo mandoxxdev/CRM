@@ -2,19 +2,15 @@
 
 /* ----- Superfície base glass ----- */
 .glass {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
   box-shadow: var(--glass-shadow);
 }
 
 /* ----- Glass Card ----- */
 .glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
   box-shadow: var(--glass-shadow);
   border-radius: var(--radius-lg);
   transition: all var(--transition-slow);
@@ -22,57 +18,38 @@
   overflow: hidden;
 }
 
-.glass-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
-  pointer-events: none;
-}
-
 .glass-card:hover {
-  background: var(--glass-bg-md);
+  background: var(--gmp-surface-hover, var(--gmp-surface));
   border-color: var(--glass-border-hover);
-  box-shadow: var(--glass-shadow-hover), var(--glass-glow-primary);
-  transform: translateY(-4px);
+  box-shadow: var(--glass-shadow-hover);
+  transform: translateY(-3px);
 }
 
 /* ----- Glass Surface (uso geral) ----- */
 .glass-surface {
-  background: var(--glass-bg-md);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  box-shadow: var(--elevation-2);
 }
 
 /* ----- Glass Panel (sidebars, drawers) ----- */
 .glass-panel {
   background: var(--glass-bg-sidebar);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-right: 1px solid var(--glass-border);
+  border-right: 1px solid var(--gmp-border);
 }
 
 /* ----- Glass Header ----- */
 .glass-header {
-  background: rgba(6, 11, 26, 0.80);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  background: var(--gmp-bg);
   border-bottom: 1px solid var(--glass-border);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--elevation-2);
 }
 
 /* ----- Glass Modal ----- */
 .glass-modal {
-  background: rgba(6, 11, 26, 0.88);
-  backdrop-filter: blur(32px) saturate(180%);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  background: var(--gmp-surface);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 24px 80px rgba(0,0,0,0.70), inset 0 1px 0 rgba(255,255,255,0.12);
+  box-shadow: var(--elevation-6);
 }
 
 /* ----- Glass Button ----- */
@@ -143,11 +120,9 @@
 
 /* ----- Glass Tooltip ----- */
 .glass-tooltip {
-  background: rgba(10, 18, 50, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.40);
+  box-shadow: var(--elevation-3);
   color: var(--gmp-text);
 }
 
