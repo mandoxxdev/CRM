@@ -1160,8 +1160,8 @@ const TabLocalizacoes = () => {
                 </div>
                 <dl className="almox-wizard-confirm-dl">
                   <dt>Código</dt><dd style={{ fontFamily: 'monospace', color: '#4facfe' }}>{preview.codigo}</dd>
-                  <dt>Setor</dt><dd>{preview.setor}</dt>
-                  <dt>Tipo</dt><dd>{preview.tipo}</dt>
+                  <dt>Setor</dt><dd>{preview.setor}</dd>
+                  <dt>Tipo</dt><dd>{preview.tipo}</dd>
                   {preview.subgrupo && <><dt>Subgrupo</dt><dd>{preview.subgrupo}</dd></>}
                   <dt>Descrição</dt><dd>{preview.descricao || '—'}</dd>
                 </dl>
