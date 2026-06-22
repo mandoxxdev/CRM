@@ -1,13 +1,28 @@
-/* ── Spotify-inspired module selection ── */
+/* ── ORION module hub — Spotify browse style ── */
 
 .tipo-selecao {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: #121212;
+  background-color: #121212;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 10% 0%, rgba(80, 50, 180, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 90% 10%, rgba(29, 185, 84, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(30, 64, 175, 0.12) 0%, transparent 55%);
   overflow-y: auto;
   overflow-x: hidden;
   animation: tipoFadeIn 0.35s ease;
+}
+
+.tipo-selecao::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  z-index: 0;
 }
 
 @keyframes tipoFadeIn {
@@ -16,9 +31,11 @@
 }
 
 .tipo-selecao__inner {
+  position: relative;
+  z-index: 1;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem 2.5rem 3rem;
+  padding: 2rem 2.5rem 3.5rem;
   animation: tipoSlideUp 0.45s ease;
 }
 
@@ -42,49 +59,59 @@
 .tipo-selecao__brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
   margin-bottom: 2rem;
 }
 
-.tipo-selecao__logo {
-  display: inline-flex;
+.tipo-selecao__orion-mark {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: #1db954;
-  color: #000;
-  font-size: 0.75rem;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  border-radius: 50%;
+  gap: 0.55rem;
+}
+
+.tipo-selecao__constellation {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.tipo-selecao__wordmark {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: #ffffff;
+  line-height: 1;
 }
 
 .tipo-selecao__admin-badge {
-  padding: 0.3rem 0.75rem;
-  background: rgba(29, 185, 84, 0.15);
-  color: #1ed760;
+  padding: 0.25rem 0.7rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .tipo-selecao__greeting h1 {
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: clamp(2.25rem, 5.5vw, 3.75rem);
   font-weight: 800;
   color: #ffffff;
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.5rem;
   letter-spacing: -0.03em;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 
 .tipo-selecao__greeting p {
-  font-size: 1rem;
+  font-size: 1.05rem;
   color: #b3b3b3;
   margin: 0 0 1.75rem;
+  font-weight: 400;
 }
 
-/* ── Search bar (Spotify pill) ── */
+/* ── Search bar ── */
 
 .tipo-selecao__search-wrap {
   position: relative;
@@ -103,22 +130,23 @@
 
 .tipo-selecao__search {
   width: 100%;
-  padding: 0.75rem 2.5rem 0.75rem 2.75rem;
-  background: #ffffff;
-  border: none;
+  padding: 0.8rem 2.5rem 0.8rem 2.75rem;
+  background: #282828;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   font-size: 0.95rem;
-  color: #121212;
+  color: #ffffff;
   outline: none;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .tipo-selecao__search::placeholder {
-  color: #6b7280;
+  color: #727272;
 }
 
 .tipo-selecao__search:focus {
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
 .tipo-selecao__search-clear {
@@ -126,7 +154,7 @@
   right: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  background: #e5e5e5;
+  background: rgba(255, 255, 255, 0.15);
   border: none;
   border-radius: 50%;
   width: 24px;
@@ -134,14 +162,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #121212;
+  color: #ffffff;
   cursor: pointer;
   font-size: 0.85rem;
   transition: background 0.15s ease;
 }
 
 .tipo-selecao__search-clear:hover {
-  background: #d4d4d4;
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* ── Sections ── */
@@ -174,116 +202,140 @@
 
 /* ── Module grid ── */
 
-.modulo-grid {
+.orion-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1.25rem;
 }
 
-.modulo-grid--recent {
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+/* ── Horizontal recent scroll ── */
+
+.orion-scroll {
+  display: flex;
   gap: 1rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.5rem;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #404040 transparent;
 }
 
-/* ── Module card ── */
+.orion-scroll::-webkit-scrollbar {
+  height: 6px;
+}
 
-.modulo-card {
+.orion-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.orion-scroll::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+
+/* ── Module tile (scoped — avoids Permissoes.css .modulo-card conflict) ── */
+
+.tipo-selecao .orion-tile {
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  align-items: flex-start;
   aspect-ratio: 1 / 1;
-  padding: 1rem;
+  padding: 1rem 1.1rem;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   overflow: hidden;
   text-align: left;
-  background: #181818;
+  background: var(--tile-gradient);
+  flex-shrink: 0;
   transition: transform 0.25s cubic-bezier(0.3, 0, 0, 1),
-              box-shadow 0.25s ease,
-              background 0.25s ease;
+              box-shadow 0.25s ease;
 }
 
-.modulo-card--compact {
-  aspect-ratio: 1.6 / 1;
-  min-height: 100px;
+.tipo-selecao .orion-tile--compact {
+  aspect-ratio: unset;
+  width: 180px;
+  min-width: 180px;
+  height: 100px;
+  scroll-snap-align: start;
 }
 
-.modulo-card__bg {
-  position: absolute;
-  inset: 0;
-  background: var(--modulo-gradient);
-  transition: transform 0.35s cubic-bezier(0.3, 0, 0, 1);
-}
-
-.modulo-card--ativo:hover .modulo-card__bg {
+.tipo-selecao .orion-tile--ativo:hover {
   transform: scale(1.04);
-}
-
-.modulo-card--ativo:hover {
-  transform: scale(1.04);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 14px 48px rgba(0, 0, 0, 0.6);
   z-index: 2;
 }
 
-.modulo-card--ativo:active {
+.tipo-selecao .orion-tile--ativo:active {
   transform: scale(1.02);
 }
 
-.modulo-card--bloqueado {
+.tipo-selecao .orion-tile--bloqueado {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 0.4;
+  filter: grayscale(0.5) brightness(0.7);
 }
 
-.modulo-card--bloqueado .modulo-card__bg {
-  filter: grayscale(0.6) brightness(0.6);
-}
-
-.modulo-card--bloqueado:hover {
+.tipo-selecao .orion-tile--bloqueado:hover {
   transform: none;
   box-shadow: none;
 }
 
-/* Decorative icon (large, rotated — Spotify style) */
-.modulo-card__icon-wrap {
+/* Large decorative icon — corner, rotated, semi-transparent */
+.tipo-selecao .orion-tile__icon-wrap {
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: 48px;
-  height: 48px;
+  top: -0.25rem;
+  right: -0.25rem;
+  width: 80px;
+  height: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transform: rotate(12deg);
-  opacity: 0.85;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transform: rotate(25deg);
+  pointer-events: none;
+  transition: transform 0.35s cubic-bezier(0.3, 0, 0, 1);
 }
 
-.modulo-card--compact .modulo-card__icon-wrap {
-  width: 36px;
-  height: 36px;
+.tipo-selecao .orion-tile--compact .orion-tile__icon-wrap {
+  width: 56px;
+  height: 56px;
 }
 
-.modulo-card__icon {
-  font-size: 2.5rem;
-  color: rgba(255, 255, 255, 0.9);
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+.tipo-selecao .orion-tile__icon {
+  font-size: 4.5rem;
+  color: rgba(255, 255, 255, 0.22);
+  stroke-width: 1;
 }
 
-.modulo-card--compact .modulo-card__icon {
-  font-size: 1.75rem;
+.tipo-selecao .orion-tile--compact .orion-tile__icon {
+  font-size: 3rem;
 }
 
-.modulo-card--ativo:hover .modulo-card__icon-wrap {
-  transform: rotate(0deg) scale(1.05);
-  opacity: 1;
+.tipo-selecao .orion-tile--ativo:hover .orion-tile__icon-wrap {
+  transform: rotate(12deg) scale(1.06);
+}
+
+/* Subtle darkening overlay for text legibility */
+.tipo-selecao .orion-tile__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.1) 45%,
+    transparent 70%
+  );
+  pointer-events: none;
 }
 
 /* Play button on hover */
-.modulo-card__play {
+.tipo-selecao .orion-tile__play {
   position: absolute;
-  bottom: 3.5rem;
+  bottom: 0.85rem;
   right: 0.85rem;
   width: 44px;
   height: 44px;
@@ -292,82 +344,72 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #000;
-  font-size: 1.1rem;
+  color: #000000;
+  font-size: 1.15rem;
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(6px);
   transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.3, 0, 0, 1),
-              box-shadow 0.25s ease;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+              box-shadow 0.25s ease, background 0.15s ease;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
   z-index: 3;
 }
 
-.modulo-card--compact .modulo-card__play {
-  bottom: 2.5rem;
+.tipo-selecao .orion-tile--compact .orion-tile__play {
   width: 36px;
   height: 36px;
   font-size: 0.95rem;
 }
 
-.modulo-card__play svg {
+.tipo-selecao .orion-tile__play svg {
   margin-left: 2px;
 }
 
-.modulo-card--ativo:hover .modulo-card__play {
+.tipo-selecao .orion-tile--ativo:hover .orion-tile__play {
   opacity: 1;
   transform: translateY(0);
 }
 
-.modulo-card--ativo:hover .modulo-card__play:hover {
+.tipo-selecao .orion-tile--ativo .orion-tile__play:hover {
   transform: scale(1.08);
   background: #1ed760;
 }
 
 /* Lock icon */
-.modulo-card__lock {
+.tipo-selecao .orion-tile__lock {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
   width: 28px;
   height: 28px;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.45);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #b3b3b3;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 0.85rem;
   z-index: 3;
 }
 
-/* Card text */
-.modulo-card__info {
+/* Card text — bottom-left, white bold */
+.tipo-selecao .orion-tile__info {
   position: relative;
   z-index: 2;
+  align-self: flex-start;
+  margin-top: auto;
 }
 
-.modulo-card__nome {
+.tipo-selecao .orion-tile__nome {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 700;
   color: #ffffff;
-  line-height: 1.25;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  line-height: 1.2;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 
-.modulo-card--compact .modulo-card__nome {
-  font-size: 0.9rem;
-}
-
-.modulo-card__desc {
-  margin: 0.3rem 0 0;
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.tipo-selecao .orion-tile--compact .orion-tile__nome {
+  font-size: 0.88rem;
 }
 
 /* ── Loading ── */
@@ -403,8 +445,8 @@
 /* ── Responsive ── */
 
 @media (max-width: 1024px) {
-  .modulo-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  .orion-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   }
 }
 
@@ -414,20 +456,22 @@
   }
 
   .tipo-selecao__greeting h1 {
-    font-size: 1.75rem;
+    font-size: 1.85rem;
   }
 
   .tipo-selecao__search-wrap {
     max-width: 100%;
   }
 
-  .modulo-grid {
+  .orion-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.85rem;
   }
 
-  .modulo-grid--recent {
-    grid-template-columns: repeat(2, 1fr);
+  .tipo-selecao .orion-tile--compact {
+    width: 150px;
+    min-width: 150px;
+    height: 88px;
   }
 
   .tipo-selecao__section-title {
@@ -436,15 +480,11 @@
 }
 
 @media (max-width: 400px) {
-  .modulo-grid {
+  .orion-grid {
     grid-template-columns: 1fr 1fr;
   }
 
-  .modulo-card__nome {
-    font-size: 0.9rem;
-  }
-
-  .modulo-card__desc {
-    display: none;
+  .tipo-selecao .orion-tile__nome {
+    font-size: 0.88rem;
   }
 }

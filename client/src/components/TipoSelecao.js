@@ -13,6 +13,27 @@ import './TipoSelecao.css';
 
 const RECENT_MODULES_KEY = 'gmp_modulos_recentes';
 
+const OrionConstellation = () => (
+  <svg
+    className="tipo-selecao__constellation"
+    viewBox="0 0 28 28"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <circle cx="4" cy="20" r="1.5" fill="#5eb8ff" opacity="0.9" />
+    <circle cx="10" cy="14" r="1.5" fill="#ffffff" opacity="0.85" />
+    <circle cx="16" cy="10" r="2" fill="#d4a853" />
+    <circle cx="22" cy="6" r="1.5" fill="#5eb8ff" opacity="0.8" />
+    <circle cx="20" cy="16" r="1.2" fill="#ffffff" opacity="0.6" />
+    <circle cx="8" cy="8" r="1" fill="#ffffff" opacity="0.5" />
+    <line x1="4" y1="20" x2="10" y2="14" stroke="#5eb8ff" strokeWidth="0.6" opacity="0.4" />
+    <line x1="10" y1="14" x2="16" y2="10" stroke="#ffffff" strokeWidth="0.6" opacity="0.35" />
+    <line x1="16" y1="10" x2="22" y2="6" stroke="#d4a853" strokeWidth="0.6" opacity="0.4" />
+    <line x1="16" y1="10" x2="20" y2="16" stroke="#ffffff" strokeWidth="0.5" opacity="0.25" />
+  </svg>
+);
+
 const getSaudacao = () => {
   const hora = new Date().getHours();
   if (hora < 12) return 'Bom dia';
@@ -44,7 +65,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiTarget,
       modulo: 'comercial',
       rota: '/comercial',
-      gradient: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%)'
+      gradient: 'linear-gradient(135deg, #6d28d9 0%, #be185d 100%)'
     },
     {
       id: 'frota',
@@ -53,7 +74,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiTool,
       modulo: 'comercial',
       rota: '/frota',
-      gradient: 'linear-gradient(135deg, #6b21a8 0%, #9333ea 50%, #c084fc 100%)'
+      gradient: 'linear-gradient(135deg, #ea580c 0%, #b91c1c 100%)'
     },
     {
       id: 'compras',
@@ -62,7 +83,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiShoppingCart,
       modulo: 'compras',
       rota: '/compras',
-      gradient: 'linear-gradient(135deg, #b45309 0%, #f59e0b 50%, #fbbf24 100%)'
+      gradient: 'linear-gradient(135deg, #0f766e 0%, #0891b2 100%)'
     },
     {
       id: 'financeiro',
@@ -71,7 +92,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiDollarSign,
       modulo: 'financeiro',
       rota: '/financeiro',
-      gradient: 'linear-gradient(135deg, #15803d 0%, #22c55e 50%, #4ade80 100%)'
+      gradient: 'linear-gradient(135deg, #047857 0%, #10b981 100%)'
     },
     {
       id: 'operacional',
@@ -80,7 +101,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiPackage,
       modulo: 'operacional',
       rota: '/fabrica',
-      gradient: 'linear-gradient(135deg, #c2410c 0%, #f97316 50%, #fb923c 100%)'
+      gradient: 'linear-gradient(135deg, #1e40af 0%, #4338ca 100%)'
     },
     {
       id: 'administrativo',
@@ -89,7 +110,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiSettings,
       modulo: 'administrativo',
       rota: '/configuracoes',
-      gradient: 'linear-gradient(135deg, #334155 0%, #64748b 50%, #94a3b8 100%)'
+      gradient: 'linear-gradient(135deg, #334155 0%, #6d28d9 100%)'
     },
     {
       id: 'engenharia',
@@ -98,7 +119,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiSliders,
       modulo: 'engenharia',
       rota: '/engenharia',
-      gradient: 'linear-gradient(135deg, #0e7490 0%, #06b6d4 50%, #22d3ee 100%)'
+      gradient: 'linear-gradient(135deg, #b45309 0%, #ea580c 100%)'
     },
     {
       id: 'engenharia_projetos',
@@ -107,7 +128,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiBriefcase,
       modulo: 'engenharia_projetos',
       rota: '/engenharia-projetos',
-      gradient: 'linear-gradient(135deg, #4338ca 0%, #6366f1 50%, #818cf8 100%)'
+      gradient: 'linear-gradient(135deg, #3730a3 0%, #6366f1 100%)'
     },
     {
       id: 'almoxarifado',
@@ -116,7 +137,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiArchive,
       modulo: 'almoxarifado',
       rota: '/almoxarifado',
-      gradient: 'linear-gradient(135deg, #3f6212 0%, #65a30d 50%, #a3e635 100%)'
+      gradient: 'linear-gradient(135deg, #78350f 0%, #a16207 100%)'
     },
     {
       id: 'admin',
@@ -125,7 +146,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       icon: FiShield,
       modulo: 'admin',
       rota: '/admin',
-      gradient: 'linear-gradient(135deg, #991b1b 0%, #dc2626 50%, #f87171 100%)'
+      gradient: 'linear-gradient(135deg, #450a0a 0%, #991b1b 100%)'
     }
   ];
 
@@ -326,29 +347,28 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       <button
         key={modulo.id}
         type="button"
-        className={`modulo-card ${isDisponivel ? 'modulo-card--ativo' : 'modulo-card--bloqueado'} ${compact ? 'modulo-card--compact' : ''}`}
-        style={{ '--modulo-gradient': modulo.gradient }}
+        className={`orion-tile ${isDisponivel ? 'orion-tile--ativo' : 'orion-tile--bloqueado'} ${compact ? 'orion-tile--compact' : ''}`}
+        style={{ '--tile-gradient': modulo.gradient }}
         onClick={() => handleModuloClick(modulo)}
         disabled={!isDisponivel}
         aria-label={`${modulo.nome}${isDisponivel ? '' : ' — sem acesso'}`}
       >
-        <div className="modulo-card__bg" aria-hidden="true" />
-        <div className="modulo-card__icon-wrap" aria-hidden="true">
-          <Icon className="modulo-card__icon" />
+        <div className="orion-tile__shade" aria-hidden="true" />
+        <div className="orion-tile__icon-wrap" aria-hidden="true">
+          <Icon className="orion-tile__icon" />
         </div>
         {!isDisponivel && (
-          <span className="modulo-card__lock" aria-hidden="true">
+          <span className="orion-tile__lock" aria-hidden="true">
             <FiLock />
           </span>
         )}
         {isDisponivel && (
-          <span className="modulo-card__play" aria-hidden="true">
+          <span className="orion-tile__play" aria-hidden="true">
             <FiPlay />
           </span>
         )}
-        <div className="modulo-card__info">
-          <h3 className="modulo-card__nome">{modulo.nome}</h3>
-          {!compact && <p className="modulo-card__desc">{modulo.descricao}</p>}
+        <div className="orion-tile__info">
+          <h3 className="orion-tile__nome">{modulo.nome}</h3>
         </div>
       </button>
     );
@@ -382,7 +402,10 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       <div className="tipo-selecao__inner">
         <header className="tipo-selecao__header">
           <div className="tipo-selecao__brand">
-            <span className="tipo-selecao__logo">GMP</span>
+            <div className="tipo-selecao__orion-mark">
+              <OrionConstellation />
+              <span className="tipo-selecao__wordmark">ORION</span>
+            </div>
             {isAdmin && (
               <span className="tipo-selecao__admin-badge">Administrador</span>
             )}
@@ -393,7 +416,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
               {getSaudacao()}
               {primeiroNome ? `, ${primeiroNome}` : ''}
             </h1>
-            <p>Escolha o módulo que deseja acessar</p>
+            <p>O que vamos fazer hoje?</p>
           </div>
 
           <div className="tipo-selecao__search-wrap">
@@ -429,7 +452,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
             {modulosRecentes.length > 0 && (
               <section className="tipo-selecao__section">
                 <h2 className="tipo-selecao__section-title">Acessados recentemente</h2>
-                <div className="modulo-grid modulo-grid--recent">
+                <div className="orion-scroll">
                   {modulosRecentes.map(mod => renderModuloCard(mod, true))}
                 </div>
               </section>
@@ -440,7 +463,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
                 {busca.trim() ? 'Resultados' : 'Seus módulos'}
               </h2>
               {modulosAcessiveis.length > 0 ? (
-                <div className="modulo-grid">
+                <div className="orion-grid">
                   {modulosAcessiveis.map(mod => renderModuloCard(mod))}
                 </div>
               ) : (
@@ -455,7 +478,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
             {modulosBloqueados.length > 0 && (
               <section className="tipo-selecao__section tipo-selecao__section--bloqueados">
                 <h2 className="tipo-selecao__section-title">Sem acesso</h2>
-                <div className="modulo-grid">
+                <div className="orion-grid">
                   {modulosBloqueados.map(mod => renderModuloCard(mod))}
                 </div>
               </section>

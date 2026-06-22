@@ -16,9 +16,11 @@ const CATEGORIAS = [
 
 const MateriaisAlmoxarifado = () => {
   const [materiais, setMateriais] = useState([]);
+  const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoria, setCategoria] = useState('');
+  const [familiaFilter, setFamiliaFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showMovModal, setShowMovModal] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
@@ -32,13 +34,23 @@ const MateriaisAlmoxarifado = () => {
 
   useEffect(() => {
     const s = searchParams.get('status');
+    const f = searchParams.get('familia_id');
     if (s) setStatusFilter(s);
+    if (f) setFamiliaFilter(f);
+    loadFamilias();
   }, []);
+
+  const loadFamilias = async () => {
+    try {
+      const res = await api.get('/almoxarifado/familias');
+      setFamilias(res.data || []);
+    } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     const t = setTimeout(loadMateriais, 300);
     return () => clearTimeout(t);
-  }, [search, categoria, statusFilter]);
+  }, [search, categoria, familiaFilter, statusFilter]);
 
   const loadMateriais = async () => {
     setLoading(true);
@@ -46,6 +58,7 @@ const MateriaisAlmoxarifado = () => {
       const params = {};
       if (search) params.search = search;
       if (categoria) params.categoria = categoria;
+      if (familiaFilter) params.familia_id = familiaFilter;
       if (statusFilter) params.status = statusFilter;
       const res = await api.get('/almoxarifado/materiais', { params });
       setMateriais(res.data);
@@ -145,14 +158,18 @@ const MateriaisAlmoxarifado = () => {
           <option value="">Todas categorias</option>
           {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <select className="almox-select" value={familiaFilter} onChange={e => setFamiliaFilter(e.target.value)}>
+          <option value="">Todas famílias</option>
+          {familias.map(f => <option key={f.id} value={f.id}>{f.codigo} — {f.nome}</option>)}
+        </select>
         <select className="almox-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">Todos status</option>
           <option value="ok">OK</option>
           <option value="critico">Crítico</option>
           <option value="zerado">Zerado</option>
         </select>
-        {(search || categoria || statusFilter) && (
-          <button className="btn-almox-secondary" onClick={() => { setSearch(''); setCategoria(''); setStatusFilter(''); }}>
+        {(search || categoria || familiaFilter || statusFilter) && (
+          <button className="btn-almox-secondary" onClick={() => { setSearch(''); setCategoria(''); setFamiliaFilter(''); setStatusFilter(''); }}>
             Limpar filtros
           </button>
         )}
@@ -174,6 +191,7 @@ const MateriaisAlmoxarifado = () => {
                 <th>Foto</th>
                 <th>Código</th>
                 <th>Material</th>
+                <th>Família</th>
                 <th>Categoria</th>
                 <th>Quantidade</th>
                 <th>Localização</th>
@@ -203,6 +221,13 @@ const MateriaisAlmoxarifado = () => {
                       <div style={{ fontWeight: 600, color: 'var(--gmp-text)' }}>{m.nome}</div>
                       {m.fornecedor_principal && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{m.fornecedor_principal}</div>
+                      )}
+                    </td>
+                    <td>
+                      {m.familia_nome ? (
+                        <span style={{ fontSize: '0.8rem', color: '#4facfe', fontWeight: 600 }}>{m.familia_nome}</span>
+                      ) : (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>—</span>
                       )}
                     </td>
                     <td>

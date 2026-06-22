@@ -42,6 +42,12 @@ const TIPOS_MOVIMENTO = [
   'ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO',
 ];
 
+const FAMILIAS_SEED = [
+  ['PAR', 'Parafusos e Porcas', 'Elementos de fixação — parafusos, porcas e arruelas'],
+  ['ROL', 'Rolamentos', 'Rolamentos e mancais'],
+  ['VAL', 'Válvulas', 'Válvulas pneumáticas e hidráulicas'],
+];
+
 async function safeAlter(db, sql) {
   try { await dbRun(db, sql); } catch (e) { /* duplicate column */ }
 }
@@ -63,6 +69,29 @@ async function initSchema(db) {
       await dbRun(db, 'INSERT INTO categorias_material_almoxarifado (nome) VALUES (?)', [nome]);
     }
   }
+
+  // ── Famílias de material ──
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS familias_material_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    categoria_id INTEGER,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (categoria_id) REFERENCES categorias_material_almoxarifado(id)
+  )`);
+
+  const famCount = await dbGet(db, 'SELECT COUNT(*) as c FROM familias_material_almoxarifado');
+  if (famCount.c === 0) {
+    for (const [codigo, nome, descricao] of FAMILIAS_SEED) {
+      await dbRun(db,
+        'INSERT INTO familias_material_almoxarifado (codigo, nome, descricao) VALUES (?,?,?)',
+        [codigo, nome, descricao]);
+    }
+  }
+
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN familia_id INTEGER REFERENCES familias_material_almoxarifado(id)');
 
   // ── Unidades de medida ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS unidades_medida_almoxarifado (
@@ -379,6 +408,7 @@ async function initSchema(db) {
 module.exports = {
   initSchema,
   CATEGORIAS_SEED,
+  FAMILIAS_SEED,
   TIPOS_MATERIAL_ENUM,
   TIPOS_LOCALIZACAO,
   UNIDADES_SEED,

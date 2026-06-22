@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
@@ -32,12 +32,15 @@ const formatLocalizacaoLabel = (loc, allLocs = []) => {
 const MaterialAlmoxarifadoForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isEdit = !!id;
   const fileInputRef = useRef();
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localizacoes, setLocalizacoes] = useState([]);
+  const [familias, setFamilias] = useState([]);
+  const [loadingFamilias, setLoadingFamilias] = useState(true);
   const [loadingLocalizacoes, setLoadingLocalizacoes] = useState(true);
   const [localizacaoInativa, setLocalizacaoInativa] = useState(null);
   const [materialLocInfo, setMaterialLocInfo] = useState(null);
@@ -51,6 +54,7 @@ const MaterialAlmoxarifadoForm = () => {
     descricao: '',
     categoria: 'CONSUMÍVEL',
     unidade: 'UN',
+    familia_id: searchParams.get('familia_id') || '',
     localizacao_padrao_id: '',
     quantidade_atual: '',
     quantidade_minima: '',
@@ -65,12 +69,27 @@ const MaterialAlmoxarifadoForm = () => {
 
   useEffect(() => {
     loadLocalizacoes();
+    loadFamilias();
     if (isEdit) {
       loadMaterial();
+    } else if (searchParams.get('familia_id')) {
+      loadProximoCodigo(searchParams.get('familia_id'));
     } else {
       loadProximoCodigo();
     }
   }, [id]);
+
+  const loadFamilias = async () => {
+    setLoadingFamilias(true);
+    try {
+      const res = await api.get('/almoxarifado/familias');
+      setFamilias(res.data || []);
+    } catch {
+      toast.error('Erro ao carregar famílias');
+    } finally {
+      setLoadingFamilias(false);
+    }
+  };
 
   const loadLocalizacoes = async () => {
     setLoadingLocalizacoes(true);
@@ -127,6 +146,7 @@ const MaterialAlmoxarifadoForm = () => {
         descricao: m.descricao || '',
         categoria: m.categoria || 'CONSUMÍVEL',
         unidade: m.unidade || 'UN',
+        familia_id: m.familia_id ? String(m.familia_id) : '',
         localizacao_padrao_id: m.localizacao_padrao_id ? String(m.localizacao_padrao_id) : '',
         quantidade_atual: m.quantidade_atual ?? '',
         quantidade_minima: m.quantidade_minima ?? '',
@@ -154,12 +174,20 @@ const MaterialAlmoxarifadoForm = () => {
     }
   };
 
-  const loadProximoCodigo = async () => {
+  const loadProximoCodigo = async (familiaId) => {
     try {
-      const res = await api.get('/almoxarifado/proximo-codigo');
+      const params = familiaId ? { familia_id: familiaId } : {};
+      const res = await api.get('/almoxarifado/proximo-codigo', { params });
       setForm(f => ({ ...f, codigo: res.data.codigo }));
     } catch {
       /* silently fail */
+    }
+  };
+
+  const handleFamiliaChange = (familiaId) => {
+    set('familia_id', familiaId);
+    if (!isEdit && familiaId) {
+      loadProximoCodigo(familiaId);
     }
   };
 
@@ -171,10 +199,15 @@ const MaterialAlmoxarifadoForm = () => {
       toast.error('Código e nome são obrigatórios');
       return;
     }
+    if (!isEdit && !form.familia_id) {
+      toast.error('Selecione a família do material');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         ...form,
+        familia_id: form.familia_id ? parseInt(form.familia_id, 10) : null,
         localizacao_padrao_id: form.localizacao_padrao_id
           ? parseInt(form.localizacao_padrao_id, 10)
           : null,
@@ -264,10 +297,46 @@ const MaterialAlmoxarifadoForm = () => {
             <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
               <div className="almox-section-title">Identificação</div>
               <div className="almox-form-grid">
+                <div className="almox-field almox-form-full">
+                  <label className="almox-label">Família<span className="required">*</span></label>
+                  {loadingFamilias ? (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '10px 0' }}>Carregando famílias...</div>
+                  ) : familias.length === 0 ? (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
+                      Nenhuma família cadastrada — cadastre em{' '}
+                      <Link to="/almoxarifado/configuracoes?tab=familias" style={{ color: '#4facfe' }}>Configurações → Famílias</Link>
+                    </div>
+                  ) : (
+                    <select
+                      className="almox-form-select"
+                      value={form.familia_id}
+                      onChange={e => handleFamiliaChange(e.target.value)}
+                      required={!isEdit}
+                      disabled={isEdit && !!form.familia_id}
+                    >
+                      <option value="">Selecione a família...</option>
+                      {familias.map(fam => (
+                        <option key={fam.id} value={String(fam.id)}>
+                          {fam.codigo} — {fam.nome}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {isEdit && form.familia_id && (
+                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      A família não pode ser alterada após o cadastro.
+                    </small>
+                  )}
+                </div>
                 <div className="almox-field">
                   <label className="almox-label">Código<span className="required">*</span></label>
                   <input className="almox-input" value={form.codigo} onChange={e => set('codigo', e.target.value)}
-                    placeholder="ALM-001" required style={{ fontFamily: 'monospace' }} />
+                    placeholder="PAR-001" required style={{ fontFamily: 'monospace' }} />
+                  {!isEdit && form.familia_id && (
+                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Código gerado com prefixo da família
+                    </small>
+                  )}
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Localização no estoque</label>
