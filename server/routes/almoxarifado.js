@@ -8,7 +8,7 @@ const fs = require('fs');
 const multer = require('multer');
 const alertService = require('../services/almoxarifado/alertService');
 
-module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
+module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
   // ── Diretório de fotos ──────────────────────────────────────────────────────
   const uploadsAlmoxDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'almoxarifado');
@@ -110,6 +110,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // Servir fotos — acessível via /uploads/almoxarifado/<arquivo>
   app.use('/uploads/almoxarifado', require('express').static(uploadsAlmoxDir));
 
+  const almoxMiddleware = checkModulePermission
+    ? [authenticateToken, checkModulePermission('almoxarifado')]
+    : [authenticateToken];
+  app.use('/api/almoxarifado', ...almoxMiddleware);
+
 
   // ════════════════════════════════════════════════════════════════════════════
   // MATERIAIS — CRUD
@@ -165,7 +170,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   }
 
   // GET /api/almoxarifado/materiais — listar
-  app.get('/api/almoxarifado/materiais', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/materiais',(req, res) => {
     const { search, categoria, status, familia_id } = req.query;
 
     let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
@@ -204,7 +209,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // GET /api/almoxarifado/materiais/dashboard — stats para o dashboard
-  app.get('/api/almoxarifado/dashboard', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/dashboard',(req, res) => {
     const stats = {};
 
     db.get(`SELECT COUNT(*) as total FROM materiais_almoxarifado WHERE ativo = 1`, [], (err, row) => {
@@ -262,7 +267,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // GET /api/almoxarifado/materiais/:id — detalhe
-  app.get('/api/almoxarifado/materiais/:id', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/materiais/:id',(req, res) => {
     db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
             FROM materiais_almoxarifado m
             LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
@@ -284,7 +289,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   }
 
   // POST /api/almoxarifado/materiais — criar
-  app.post('/api/almoxarifado/materiais', authenticateToken, (req, res) => {
+  app.post('/api/almoxarifado/materiais',(req, res) => {
     const {
       codigo, nome, descricao, categoria, unidade,
       quantidade_atual, quantidade_minima, quantidade_maxima,
@@ -348,7 +353,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/materiais/:id — atualizar
-  app.put('/api/almoxarifado/materiais/:id', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/materiais/:id',(req, res) => {
     const {
       codigo, nome, descricao, categoria, unidade,
       quantidade_minima, quantidade_maxima, custo_unitario,
@@ -416,7 +421,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // DELETE /api/almoxarifado/materiais/:id — inativar
-  app.delete('/api/almoxarifado/materiais/:id', authenticateToken, (req, res) => {
+  app.delete('/api/almoxarifado/materiais/:id',(req, res) => {
     db.run(`UPDATE materiais_almoxarifado SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
@@ -425,7 +430,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // POST /api/almoxarifado/materiais/:id/foto — upload de foto
-  app.post('/api/almoxarifado/materiais/:id/foto', authenticateToken, uploadAlmox.single('foto'), (req, res) => {
+  app.post('/api/almoxarifado/materiais/:id/foto',uploadAlmox.single('foto'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Nenhuma foto enviada' });
 
     const fotoPath = `/uploads/almoxarifado/${req.file.filename}`;
@@ -446,7 +451,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // POST /api/almoxarifado/materiais/gerar-codigo — gera próximo código
-  app.get('/api/almoxarifado/proximo-codigo', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/proximo-codigo',(req, res) => {
     const { familia_id } = req.query;
 
     if (familia_id) {
@@ -496,7 +501,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // ════════════════════════════════════════════════════════════════════════════
 
   // GET /api/almoxarifado/movimentacoes — listar
-  app.get('/api/almoxarifado/movimentacoes', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/movimentacoes',(req, res) => {
     const { material_id, tipo, data_inicio, data_fim, limit } = req.query;
 
     let sql = `SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo, ma.unidade
@@ -520,7 +525,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // POST /api/almoxarifado/movimentacoes — registrar movimento
-  app.post('/api/almoxarifado/movimentacoes', authenticateToken, (req, res) => {
+  app.post('/api/almoxarifado/movimentacoes',(req, res) => {
     const { material_id, tipo, quantidade, motivo, referencia, observacoes } = req.body;
 
     if (!material_id || !tipo || !quantidade) {
@@ -582,7 +587,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // GET /api/almoxarifado/movimentacoes/:id/historico — histórico de um material
-  app.get('/api/almoxarifado/materiais/:id/historico', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/materiais/:id/historico',(req, res) => {
     db.all(`SELECT m.*, ma.nome as material_nome, ma.unidade
             FROM movimentacoes_almoxarifado m
             JOIN materiais_almoxarifado ma ON m.material_id = ma.id
@@ -600,7 +605,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // ════════════════════════════════════════════════════════════════════════════
 
   // GET /api/almoxarifado/conferencias — listar
-  app.get('/api/almoxarifado/conferencias', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/conferencias',(req, res) => {
     db.all(`SELECT * FROM conferencias_almoxarifado ORDER BY created_at DESC`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
@@ -608,7 +613,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // GET /api/almoxarifado/conferencias/:id — detalhe com itens
-  app.get('/api/almoxarifado/conferencias/:id', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/conferencias/:id',(req, res) => {
     db.get(`SELECT * FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id], (err, conf) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
@@ -627,7 +632,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // POST /api/almoxarifado/conferencias — criar nova conferência
-  app.post('/api/almoxarifado/conferencias', authenticateToken, (req, res) => {
+  app.post('/api/almoxarifado/conferencias',(req, res) => {
     const { observacoes, categoria } = req.body;
 
     // Gerar número único
@@ -671,7 +676,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/conferencias/:id/item — registrar contagem de um item
-  app.put('/api/almoxarifado/conferencias/:id/item/:itemId', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/conferencias/:id/item/:itemId',(req, res) => {
     const { quantidade_contada, observacoes } = req.body;
 
     db.get(`SELECT ic.*, ma.quantidade_atual
@@ -696,7 +701,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/conferencias/:id/concluir — concluir e aplicar ajustes
-  app.put('/api/almoxarifado/conferencias/:id/concluir', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/conferencias/:id/concluir',(req, res) => {
     const { aplicar_ajustes } = req.body;
 
     db.get(`SELECT * FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id], (err, conf) => {
@@ -747,7 +752,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // DELETE /api/almoxarifado/conferencias/:id — cancelar conferência
-  app.put('/api/almoxarifado/conferencias/:id/cancelar', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/conferencias/:id/cancelar',(req, res) => {
     db.run(`UPDATE conferencias_almoxarifado SET status = 'CANCELADO' WHERE id = ? AND status = 'ABERTO'`,
       [req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
@@ -762,7 +767,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // ════════════════════════════════════════════════════════════════════════════
 
   // GET /api/almoxarifado/relatorio/posicao-estoque
-  app.get('/api/almoxarifado/relatorio/posicao-estoque', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/relatorio/posicao-estoque',(req, res) => {
     db.all(`SELECT *, (quantidade_atual * custo_unitario) as valor_total
             FROM materiais_almoxarifado
             WHERE ativo = 1
@@ -773,7 +778,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // GET /api/almoxarifado/relatorio/movimentacoes-periodo
-  app.get('/api/almoxarifado/relatorio/movimentacoes-periodo', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/relatorio/movimentacoes-periodo',(req, res) => {
     const { data_inicio, data_fim } = req.query;
     db.all(`SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo, ma.unidade, ma.categoria
             FROM movimentacoes_almoxarifado m
@@ -1020,14 +1025,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // TIPOS DE MATERIAL
   // ════════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/almoxarifado/tipos-material', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/tipos-material',(req, res) => {
     db.all(`SELECT * FROM tipos_material_almoxarifado WHERE ativo = 1 ORDER BY nome`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
     });
   });
 
-  app.post('/api/almoxarifado/tipos-material', authenticateToken, (req, res) => {
+  app.post('/api/almoxarifado/tipos-material',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obrigatório' });
@@ -1041,7 +1046,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
       });
   });
 
-  app.put('/api/almoxarifado/tipos-material/:id', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/tipos-material/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado, ativo } = req.body;
     db.run(`UPDATE tipos_material_almoxarifado SET nome=?, descricao=?, icone=?, cor=?, requer_assinatura=?, requer_termo=?, is_epi=?, is_controlado=?, ativo=? WHERE id=?`,
@@ -1054,7 +1059,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
       });
   });
 
-  app.delete('/api/almoxarifado/tipos-material/:id', authenticateToken, (req, res) => {
+  app.delete('/api/almoxarifado/tipos-material/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     db.run(`UPDATE tipos_material_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -1067,7 +1072,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // LOCALIZAÇÕES
   // ════════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/almoxarifado/localizacoes', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/localizacoes',(req, res) => {
     db.all(`SELECT * FROM localizacoes_almoxarifado WHERE ativo = 1
             ORDER BY setor, parent_id, subgrupo, codigo`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -1075,7 +1080,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
-  app.post('/api/almoxarifado/localizacoes', authenticateToken, (req, res) => {
+  app.post('/api/almoxarifado/localizacoes',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura } = req.body;
     if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
@@ -1097,7 +1102,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
-  app.put('/api/almoxarifado/localizacoes/:id', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo } = req.body;
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
@@ -1119,7 +1124,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
-  app.delete('/api/almoxarifado/localizacoes/:id', authenticateToken, (req, res) => {
+  app.delete('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
       if (err) return res.status(500).json({ error: err.message });
@@ -1132,7 +1137,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // SETORES E ÁREAS
   // ════════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/almoxarifado/setores', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/setores',(req, res) => {
     const { all } = req.query;
     let sql = `SELECT s.*,
                  (SELECT COUNT(*) FROM localizacoes_almoxarifado l
@@ -1147,7 +1152,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
-  app.post('/api/almoxarifado/setores', authenticateToken, (req, res) => {
+  app.post('/api/almoxarifado/setores',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { nome, codigo_prefixo, tipo, ordem } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -1171,7 +1176,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
       });
   });
 
-  app.put('/api/almoxarifado/setores/:id', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/setores/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { nome, codigo_prefixo, tipo, ordem, ativo } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -1221,7 +1226,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
-  app.delete('/api/almoxarifado/setores/:id', authenticateToken, (req, res) => {
+  app.delete('/api/almoxarifado/setores/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     db.get('SELECT nome FROM setores_almoxarifado WHERE id = ?', [req.params.id], (err, setor) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -1266,7 +1271,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     tryCodigo(0);
   }
 
-  app.get('/api/almoxarifado/familias', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/familias',(req, res) => {
     const { ativo } = req.query;
     let sql = `SELECT f.*,
                  (SELECT COUNT(*) FROM materiais_almoxarifado m WHERE m.familia_id = f.id AND m.ativo = 1) as qtd_itens
@@ -1282,7 +1287,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
-  app.get('/api/almoxarifado/familias/:id', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/familias/:id',(req, res) => {
     db.get(`SELECT f.*,
               (SELECT COUNT(*) FROM materiais_almoxarifado m WHERE m.familia_id = f.id AND m.ativo = 1) as qtd_itens
             FROM familias_material_almoxarifado f WHERE f.id = ?`, [req.params.id], (err, row) => {
@@ -1292,7 +1297,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
-  app.get('/api/almoxarifado/familias/:id/itens', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/familias/:id/itens',(req, res) => {
     db.all(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
             FROM materiais_almoxarifado m
             LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
@@ -1304,7 +1309,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
       });
   });
 
-  app.post('/api/almoxarifado/familias', authenticateToken, (req, res) => {
+  app.post('/api/almoxarifado/familias',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { nome, descricao, categoria_id, codigo } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -1332,7 +1337,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     }
   });
 
-  app.put('/api/almoxarifado/familias/:id', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/familias/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { nome, descricao, categoria_id, ativo } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -1345,7 +1350,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
       });
   });
 
-  app.delete('/api/almoxarifado/familias/:id', authenticateToken, (req, res) => {
+  app.delete('/api/almoxarifado/familias/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     db.get('SELECT COUNT(*) as c FROM materiais_almoxarifado WHERE familia_id = ? AND ativo = 1', [req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -1364,7 +1369,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // CONFIGURAÇÕES (admin only)
   // ════════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/almoxarifado/configuracoes', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/configuracoes',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
     db.all(`SELECT * FROM configuracoes_almoxarifado ORDER BY chave`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -1374,7 +1379,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     });
   });
 
-  app.put('/api/almoxarifado/configuracoes', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/configuracoes',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const configs = req.body; // { chave: valor, ... }
     const promises = Object.entries(configs).map(([chave, valor]) =>
@@ -1391,7 +1396,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
       .catch(e => res.status(500).json({ error: e.message }));
   });
 
-  app.get('/api/almoxarifado/configuracoes/alertas-estoque', authenticateToken, async (req, res) => {
+  app.get('/api/almoxarifado/configuracoes/alertas-estoque',async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
     try {
       const settings = await alertService.getAlertSettingsForApi(db);
@@ -1401,7 +1406,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     }
   });
 
-  app.put('/api/almoxarifado/configuracoes/alertas-estoque', authenticateToken, async (req, res) => {
+  app.put('/api/almoxarifado/configuracoes/alertas-estoque',async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     try {
       const payload = req.body || {};
@@ -1451,11 +1456,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     }
   });
 
-  app.post('/api/almoxarifado/alertas-estoque/testar', authenticateToken, async (req, res) => {
+  app.post('/api/almoxarifado/alertas-estoque/testar',async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     try {
       const materialTeste = {
-        id: 0,
         codigo: 'TESTE-ALM',
         nome: 'Material de teste - Alertas',
         localizacao: 'Almoxarifado / Testes',
@@ -1470,7 +1474,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     }
   });
 
-  app.post('/api/almoxarifado/alertas-estoque/verificar', authenticateToken, async (req, res) => {
+  app.post('/api/almoxarifado/alertas-estoque/verificar',async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     try {
       const forceSend = !!req.body?.forceSend;
@@ -1482,7 +1486,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/configuracoes/estoques-minimos — atualização em lote
-  app.put('/api/almoxarifado/configuracoes/estoques-minimos', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/configuracoes/estoques-minimos',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
     const { materiais } = req.body; // [{ id, quantidade_minima, quantidade_maxima, ponto_pedido, prazo_reposicao_dias }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array de materiais' });
@@ -1504,7 +1508,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/configuracoes/tipos-material — associar tipo a material em lote
-  app.put('/api/almoxarifado/configuracoes/tipos-material', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/configuracoes/tipos-material',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
     const { materiais } = req.body; // [{ id, tipo_material_id }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array' });
@@ -1533,7 +1537,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   };
 
   // GET /api/almoxarifado/requisicoes — listar (com filtros)
-  app.get('/api/almoxarifado/requisicoes', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/requisicoes',(req, res) => {
     const { status, urgencia, minha, departamento } = req.query;
     let sql = `SELECT r.*,
                  (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens
@@ -1554,7 +1558,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // GET /api/almoxarifado/requisicoes/:id — detalhe com itens
-  app.get('/api/almoxarifado/requisicoes/:id', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/requisicoes/:id',(req, res) => {
     db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ?`, [req.params.id], (err, req_row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!req_row) return res.status(404).json({ error: 'Requisição não encontrada' });
@@ -1575,7 +1579,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // POST /api/almoxarifado/requisicoes — criar requisição
-  app.post('/api/almoxarifado/requisicoes', authenticateToken, (req, res) => {
+  app.post('/api/almoxarifado/requisicoes',(req, res) => {
     const { departamento, os_referencia, urgencia, observacoes, justificativa_urgencia, itens } = req.body;
     if (!itens || itens.length === 0) return res.status(400).json({ error: 'Inclua ao menos um item' });
 
@@ -1618,7 +1622,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/aprovar — aprovar
-  app.put('/api/almoxarifado/requisicoes/:id/aprovar', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/requisicoes/:id/aprovar',(req, res) => {
     db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
             WHERE id=? AND status='PENDENTE'`,
       [req.user.id, req.user.nome || req.user.email, req.params.id],
@@ -1630,7 +1634,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/rejeitar — rejeitar
-  app.put('/api/almoxarifado/requisicoes/:id/rejeitar', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/requisicoes/:id/rejeitar',(req, res) => {
     const { motivo } = req.body;
     db.run(`UPDATE requisicoes_almoxarifado SET status='REJEITADO', rejeicao_motivo=?, aprovador_id=?, aprovador_nome=?, updated_at=CURRENT_TIMESTAMP
             WHERE id=? AND status='PENDENTE'`,
@@ -1643,7 +1647,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/separacao — em separação
-  app.put('/api/almoxarifado/requisicoes/:id/separacao', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/requisicoes/:id/separacao',(req, res) => {
     db.run(`UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='APROVADO'`,
       [req.params.id],
       function (err) {
@@ -1654,7 +1658,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/entregar — entregar e baixar estoque
-  app.put('/api/almoxarifado/requisicoes/:id/entregar', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/requisicoes/:id/entregar',(req, res) => {
     const { itens_atendidos } = req.body; // [{ item_id, quantidade_atendida }]
 
     db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ?`, [req.params.id], (err, req_row) => {
@@ -1714,7 +1718,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/cancelar — cancelar
-  app.put('/api/almoxarifado/requisicoes/:id/cancelar', authenticateToken, (req, res) => {
+  app.put('/api/almoxarifado/requisicoes/:id/cancelar',(req, res) => {
     const { motivo } = req.body;
     db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ?`, [req.params.id], (err, r) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -1735,7 +1739,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // GET /api/almoxarifado/dashboard atualizado com requisições
-  app.get('/api/almoxarifado/dashboard/requisicoes', authenticateToken, (req, res) => {
+  app.get('/api/almoxarifado/dashboard/requisicoes',(req, res) => {
     db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'PENDENTE'`, [], (err, pendente) => {
       if (err) return res.status(500).json({ error: err.message });
       db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'URGENTE' OR urgencia IN ('URGENTE','CRITICO') AND status NOT IN ('ENTREGUE','CANCELADO','REJEITADO')`, [], (err2, urgentes) => {
@@ -1765,7 +1769,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   });
 
   // ── Rotas estendidas v3 (serviços, reservas, recebimentos, relatórios) ──
-  require('./almoxarifado/extended')(app, db, authenticateToken);
-
-  console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
+  // Aguarda fila de CREATE TABLE do módulo antes do initSchema (evita race no SQLite).
+  db.run('SELECT 1', [], () => {
+    require('./almoxarifado/extended')(app, db, authenticateToken);
+    console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
+  });
 };

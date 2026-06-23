@@ -18,8 +18,22 @@ function handleError(res, err) {
   res.status(status).json({ error: err.message });
 }
 
+async function runInitSchemaWithRetry(db, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await initSchema(db);
+      return;
+    } catch (e) {
+      console.error(`Erro schema almoxarifado v3 (tentativa ${attempt}/${retries}):`, e.message);
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
+  }
+}
+
 module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
-  initSchema(db).catch(e => console.error('Erro schema almoxarifado v3:', e));
+  runInitSchemaWithRetry(db).catch((e) => console.error('Falha definitiva schema almoxarifado v3:', e.message));
 
   const auth = authenticateToken;
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   FiZap, FiTrendingUp, FiShoppingCart, FiDollarSign, 
-  FiBriefcase, FiSettings, FiTarget, FiTool, FiX, FiShield
+  FiBriefcase, FiSettings, FiTarget, FiTool, FiX, FiShield, FiArchive, FiSliders
 } from 'react-icons/fi';
 import AnimatedBackground from './AnimatedBackground';
 import './SplashScreen.css';
@@ -63,6 +63,30 @@ const moduleConfigs = {
     loadingText: 'Carregando módulo de administração...',
     gradientColors: ['rgba(33, 150, 243, 0.15)', 'rgba(63, 81, 181, 0.1)', 'rgba(33, 150, 243, 0.15)'],
     accentColor: '#2196f3'
+  },
+  engenharia: {
+    icon: FiSliders,
+    title: 'CÁLCULOS DE ENGENHARIA',
+    subtitle: 'Tampo, pressão e dimensionamento',
+    loadingText: 'Carregando módulo de engenharia...',
+    gradientColors: ['rgba(180, 83, 9, 0.15)', 'rgba(234, 88, 12, 0.1)', 'rgba(180, 83, 9, 0.15)'],
+    accentColor: '#ea580c'
+  },
+  engenharia_projetos: {
+    icon: FiBriefcase,
+    title: 'ENGENHARIA / PROJETOS',
+    subtitle: 'Solicitações e cadastros',
+    loadingText: 'Carregando módulo de projetos...',
+    gradientColors: ['rgba(55, 48, 163, 0.15)', 'rgba(99, 102, 241, 0.1)', 'rgba(55, 48, 163, 0.15)'],
+    accentColor: '#6366f1'
+  },
+  almoxarifado: {
+    icon: FiArchive,
+    title: 'ALMOXARIFADO',
+    subtitle: 'Materiais, estoque, requisições e conferências',
+    loadingText: 'Carregando módulo de almoxarifado...',
+    gradientColors: ['rgba(120, 53, 15, 0.15)', 'rgba(161, 98, 7, 0.1)', 'rgba(120, 53, 15, 0.15)'],
+    accentColor: '#a16207'
   }
 };
 

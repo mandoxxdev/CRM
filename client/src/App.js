@@ -404,7 +404,9 @@ function AppRoutes() {
         path="/almoxarifado"
         element={
           <PrivateRoute>
-            <Layout />
+            <ProtectedModuleRoute modulo="almoxarifado" nomeModulo="Almoxarifado">
+              <Layout />
+            </ProtectedModuleRoute>
           </PrivateRoute>
         }
       >

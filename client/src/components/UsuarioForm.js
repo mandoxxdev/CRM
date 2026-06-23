@@ -36,6 +36,7 @@ const UsuarioForm = () => {
     { value: 'operacional', label: 'Operacional', descricao: 'Gestão de projetos e atividades' },
     { value: 'engenharia', label: 'Engenharia', descricao: 'Cálculos e utilitários de engenharia' },
     { value: 'engenharia_projetos', label: 'Engenharia / Projetos', descricao: 'Solicitações (cesta), cadastro e OS (projetos)' },
+    { value: 'almoxarifado', label: 'Almoxarifado', descricao: 'Materiais, estoque, requisições e conferências' },
     { value: 'relatorios', label: 'Relatórios', descricao: 'Análises e relatórios executivos' },
     { value: 'administrativo', label: 'Administrativo', descricao: 'Configurações e gestão do sistema' },
     { value: 'admin', label: 'Admin', descricao: 'Gestão de usuários e permissões' },

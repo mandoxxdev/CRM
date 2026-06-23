@@ -22,6 +22,8 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
     if (path.startsWith('/admin')) return 'admin';
     if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
     if (path.startsWith('/engenharia')) return 'engenharia';
+    if (path.startsWith('/almoxarifado')) return 'almoxarifado';
+    if (path.startsWith('/frota')) return 'comercial';
     if (path.startsWith('/comercial') || path.startsWith('/comercial/clientes') || path.startsWith('/comercial/oportunidades') ||
         path.startsWith('/comercial/propostas') || path.startsWith('/comercial/produtos') || path.startsWith('/comercial/projetos') ||
         path.startsWith('/comercial/atividades') || path.startsWith('/comercial/maquinas-vendidas') ||
@@ -269,6 +271,9 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
       'compras': 'Compras',
       'financeiro': 'Financeiro',
       'operacional': 'Operacional',
+      'engenharia': 'Cálculos de Engenharia',
+      'engenharia_projetos': 'Engenharia / Projetos',
+      'almoxarifado': 'Almoxarifado',
       'administrativo': 'Administrativo',
       'admin': 'Administração'
     };

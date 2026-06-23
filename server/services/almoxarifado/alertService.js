@@ -190,16 +190,21 @@ function postJson(urlString, payload, extraHeaders = {}) {
 }
 
 async function registrarHistorico(db, materialId, canal, destinatario, status, erro = null, teste = false) {
-  await dbRun(db, `INSERT INTO alertas_estoque_historico_almoxarifado
-    (material_id, canal, destinatario, status, erro, teste)
-    VALUES (?, ?, ?, ?, ?, ?)`, [
-    materialId,
-    canal,
-    destinatario,
-    status,
-    erro || null,
-    teste ? 1 : 0,
-  ]);
+  const resolvedMaterialId = teste || !materialId ? null : materialId;
+  try {
+    await dbRun(db, `INSERT INTO alertas_estoque_historico_almoxarifado
+      (material_id, canal, destinatario, status, erro, teste)
+      VALUES (?, ?, ?, ?, ?, ?)`, [
+      resolvedMaterialId,
+      canal,
+      destinatario,
+      status,
+      erro || null,
+      teste ? 1 : 0,
+    ]);
+  } catch (err) {
+    console.warn('[almoxarifado-alertas] Falha ao registrar histórico de alerta:', err.message);
+  }
 }
 
 async function enviarEmail(db, destinatarios, assunto, html, text) {
@@ -317,7 +322,7 @@ async function processarAlertaMaterial(db, material, opts = {}) {
   }
 
   const houveEnvio = (resultado.email.enviados + resultado.whatsapp.enviados) > 0;
-  if (houveEnvio) await markAlertSent(db, material.id);
+  if (houveEnvio && !teste) await markAlertSent(db, material.id);
   return { ...resultado, enviado: houveEnvio };
 }
 

@@ -133,7 +133,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     {
       id: 'almoxarifado',
       nome: 'Almoxarifado',
-      descricao: 'Materiais, estoque e conferências',
+      descricao: 'Materiais, estoque, requisições e conferências',
       icon: FiArchive,
       modulo: 'almoxarifado',
       rota: '/almoxarifado',
@@ -368,7 +368,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
           </span>
         )}
         <div className="orion-tile__info">
-          <h3 className="orion-tile__nome">{modulo.nome}</h3>
+          <h3 className="orion-tile__title orion-tile__nome">{modulo.nome}</h3>
         </div>
       </button>
     );

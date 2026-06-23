@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background-color: var(--gmp-bg);
+  background-color: #f0f2f5;
   color: var(--gmp-text);
   overflow-y: auto;
   overflow-x: hidden;
@@ -12,34 +12,64 @@
 }
 
 [data-theme="light"] .tipo-selecao {
-  background-color: var(--gmp-gray-100);
+  background-color: #f0f2f5;
   background-image:
-    radial-gradient(ellipse 80% 60% at 10% 0%, rgba(79, 172, 254, 0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 90% 10%, rgba(26, 163, 74, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(37, 99, 235, 0.07) 0%, transparent 55%);
+    radial-gradient(ellipse 90% 70% at 5% 8%, rgba(99, 179, 237, 0.24) 0%, transparent 58%),
+    radial-gradient(ellipse 80% 60% at 95% 12%, rgba(52, 211, 153, 0.20) 0%, transparent 52%),
+    radial-gradient(ellipse 75% 55% at 78% 88%, rgba(167, 139, 250, 0.22) 0%, transparent 55%),
+    radial-gradient(ellipse 65% 50% at 18% 82%, rgba(59, 130, 246, 0.18) 0%, transparent 52%),
+    radial-gradient(ellipse 55% 45% at 50% 45%, rgba(14, 165, 233, 0.10) 0%, transparent 62%);
 }
 
 [data-theme="dark"] .tipo-selecao {
   background-color: var(--gmp-bg);
   background-image:
-    radial-gradient(ellipse 80% 60% at 10% 0%, rgba(80, 50, 180, 0.18) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 90% 10%, rgba(29, 185, 84, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(30, 64, 175, 0.12) 0%, transparent 55%);
+    radial-gradient(ellipse 90% 70% at 8% 4%, rgba(120, 80, 220, 0.24) 0%, transparent 58%),
+    radial-gradient(ellipse 78% 58% at 92% 10%, rgba(29, 185, 84, 0.14) 0%, transparent 52%),
+    radial-gradient(ellipse 68% 52% at 50% 100%, rgba(30, 64, 175, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 38% at 72% 38%, rgba(94, 184, 255, 0.08) 0%, transparent 52%),
+    radial-gradient(ellipse 40% 35% at 25% 60%, rgba(190, 24, 93, 0.06) 0%, transparent 50%);
 }
 
+/* Subtle film-grain noise */
 .tipo-selecao::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.035;
+  opacity: 0.04;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
   z-index: 0;
 }
 
 [data-theme="light"] .tipo-selecao::before {
-  opacity: 0.02;
+  opacity: 0.035;
+}
+
+[data-theme="dark"] .tipo-selecao::before {
+  opacity: 0.05;
+}
+
+/* Faint grid-dot mesh */
+.tipo-selecao::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.07) 0.6px, transparent 0.6px);
+  background-size: 22px 22px;
+  opacity: 0.45;
+}
+
+[data-theme="light"] .tipo-selecao::after {
+  opacity: 0.4;
+}
+
+[data-theme="dark"] .tipo-selecao::after {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0.6px, transparent 0.6px);
+  opacity: 0.3;
 }
 
 @keyframes tipoFadeIn {
@@ -301,6 +331,7 @@
   overflow: hidden;
   text-align: left;
   background: var(--tile-gradient);
+  color: #ffffff;
   flex-shrink: 0;
   transition: transform 0.25s cubic-bezier(0.3, 0, 0, 1),
               box-shadow 0.25s ease;
@@ -445,7 +476,7 @@
   z-index: 3;
 }
 
-/* Card text — bottom-left, white bold */
+/* Card text — bottom-left, always white bold on gradients (both themes) */
 .tipo-selecao .orion-tile__info {
   position: relative;
   z-index: 2;
@@ -453,16 +484,23 @@
   margin-top: auto;
 }
 
-.tipo-selecao .orion-tile__nome {
+.tipo-selecao .orion-tile .orion-tile__title,
+.tipo-selecao .orion-tile .orion-tile__nome,
+.tipo-selecao .orion-tile h3 {
   margin: 0;
   font-size: 1.05rem;
-  font-weight: 700;
-  color: #ffffff;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
   line-height: 1.2;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-.tipo-selecao .orion-tile--compact .orion-tile__nome {
+.tipo-selecao .orion-tile--compact .orion-tile__title,
+.tipo-selecao .orion-tile--compact .orion-tile__nome,
+.tipo-selecao .orion-tile--compact h3 {
   font-size: 0.88rem;
 }
 
@@ -547,7 +585,9 @@
     grid-template-columns: 1fr 1fr;
   }
 
-  .tipo-selecao .orion-tile__nome {
+  .tipo-selecao .orion-tile .orion-tile__title,
+  .tipo-selecao .orion-tile .orion-tile__nome,
+  .tipo-selecao .orion-tile h3 {
     font-size: 0.88rem;
   }
 }

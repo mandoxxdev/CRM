@@ -1859,12 +1859,19 @@ function executeMigrations(callback) {
         }
       });
 
-      // Índices (performance) - seguro rodar múltiplas vezes
-      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_setor_ativo_nome ON usuarios(setor, ativo, nome)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_departamento_ativo_nome ON usuarios(departamento, ativo, nome)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_vendedor ON usuarios(flag_vendedor)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_compras ON usuarios(flag_compras)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_ti ON usuarios(flag_ti)`);
+      // Índices (performance) - seguro rodar múltiplas vezes; erros não devem derrubar o processo
+      const safeCreateIndex = (sql, label) => {
+        db.run(sql, (idxErr) => {
+          if (idxErr && !String(idxErr.message || '').includes('already exists')) {
+            console.warn(`⚠️ Índice ${label} não criado (aguardando coluna):`, idxErr.message);
+          }
+        });
+      };
+      safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_setor_ativo_nome ON usuarios(setor, ativo, nome)`, 'setor_ativo_nome');
+      safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_departamento_ativo_nome ON usuarios(departamento, ativo, nome)`, 'departamento_ativo_nome');
+      safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_vendedor ON usuarios(flag_vendedor)`, 'flag_vendedor');
+      safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_compras ON usuarios(flag_compras)`, 'flag_compras');
+      safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_ti ON usuarios(flag_ti)`, 'flag_ti');
     }
   });
 
@@ -3120,7 +3127,7 @@ app.get('/api/usuarios/filtrar', authenticateToken, (req, res) => {
 
 // Lista usuários com acesso a um módulo (para filtros de responsável por módulo).
 // Só retorna quem tem permissão explícita ao módulo (direta ou via grupo) e, se não for admin, mesmo setor.
-// Módulos: comercial, compras, financeiro, operacional, administrativo, admin, engenharia, engenharia_projetos
+// Módulos: comercial, compras, financeiro, operacional, administrativo, admin, engenharia, engenharia_projetos, almoxarifado
 app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
   const { modulo } = req.params;
   db.get(
@@ -22455,7 +22462,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // ── Módulo Almoxarifado ──────────────────────────────────────────────────────
-require('./routes/almoxarifado')(app, db, authenticateToken, PERSISTENT_DATA_DIR);
+require('./routes/almoxarifado')(app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor CRM GMP INDUSTRIAIS rodando na porta ${PORT}`);

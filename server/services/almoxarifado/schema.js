@@ -63,7 +63,195 @@ async function safeAlter(db, sql) {
   try { await dbRun(db, sql); } catch (e) { /* duplicate column */ }
 }
 
+/** Base tables from almoxarifado.js — ensure they exist before v3 migrations (avoids startup race). */
+async function ensureBaseTables(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS materiais_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    categoria TEXT DEFAULT 'OUTROS',
+    unidade TEXT DEFAULT 'UN',
+    foto TEXT,
+    localizacao TEXT,
+    quantidade_atual REAL DEFAULT 0,
+    quantidade_minima REAL DEFAULT 0,
+    quantidade_maxima REAL DEFAULT 0,
+    custo_unitario REAL DEFAULT 0,
+    fornecedor_principal TEXT,
+    codigo_fornecedor TEXT,
+    ncm TEXT,
+    especificacoes TEXT,
+    observacoes TEXT,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS movimentacoes_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    quantidade REAL NOT NULL,
+    saldo_anterior REAL NOT NULL,
+    saldo_posterior REAL NOT NULL,
+    motivo TEXT,
+    referencia TEXT,
+    observacoes TEXT,
+    usuario_id INTEGER,
+    usuario_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS conferencias_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE NOT NULL,
+    status TEXT DEFAULT 'ABERTO',
+    responsavel_id INTEGER,
+    responsavel_nome TEXT,
+    data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
+    data_fim DATETIME,
+    observacoes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_conferencia_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conferencia_id INTEGER NOT NULL,
+    material_id INTEGER NOT NULL,
+    quantidade_sistema REAL NOT NULL,
+    quantidade_contada REAL,
+    divergencia REAL,
+    ajustado INTEGER DEFAULT 0,
+    observacoes TEXT,
+    FOREIGN KEY (conferencia_id) REFERENCES conferencias_almoxarifado(id),
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS configuracoes_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chave TEXT UNIQUE NOT NULL,
+    valor TEXT,
+    descricao TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_by TEXT
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS tipos_material_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    icone TEXT DEFAULT '📦',
+    cor TEXT DEFAULT '#4facfe',
+    requer_assinatura INTEGER DEFAULT 0,
+    requer_termo INTEGER DEFAULT 0,
+    is_epi INTEGER DEFAULT 0,
+    is_controlado INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS localizacoes_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    descricao TEXT,
+    setor TEXT,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS requisicoes_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE NOT NULL,
+    solicitante_id INTEGER NOT NULL,
+    solicitante_nome TEXT NOT NULL,
+    departamento TEXT,
+    os_referencia TEXT,
+    urgencia TEXT DEFAULT 'NORMAL',
+    status TEXT DEFAULT 'PENDENTE',
+    observacoes TEXT,
+    justificativa_urgencia TEXT,
+    aprovador_id INTEGER,
+    aprovador_nome TEXT,
+    data_aprovacao DATETIME,
+    data_entrega DATETIME,
+    rejeicao_motivo TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_requisicao_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL,
+    material_id INTEGER NOT NULL,
+    quantidade_solicitada REAL NOT NULL,
+    quantidade_atendida REAL DEFAULT 0,
+    observacoes TEXT,
+    FOREIGN KEY (requisicao_id) REFERENCES requisicoes_almoxarifado(id),
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+}
+
+const MIGRATION_HISTORICO_NULLABLE = 'alertas_historico_nullable_material';
+
+async function migrateHistoricoNullableMaterial(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const applied = await dbGet(db,
+    'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_HISTORICO_NULLABLE]);
+  if (applied) return;
+
+  const tableRow = await dbGet(db,
+    `SELECT name FROM sqlite_master WHERE type='table' AND name='alertas_estoque_historico_almoxarifado'`);
+  if (!tableRow) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_HISTORICO_NULLABLE]);
+    return;
+  }
+
+  const histMaterialCol = await dbGet(db,
+    `SELECT "notnull" as nn FROM pragma_table_info('alertas_estoque_historico_almoxarifado') WHERE name = 'material_id'`);
+  if (!histMaterialCol || histMaterialCol.nn !== 1) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_HISTORICO_NULLABLE]);
+    return;
+  }
+
+  await dbRun(db, 'PRAGMA foreign_keys=OFF');
+  try {
+    await dbRun(db, `CREATE TABLE alertas_estoque_historico_almoxarifado_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      material_id INTEGER,
+      canal TEXT NOT NULL,
+      destinatario TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ENVIADO',
+      erro TEXT,
+      teste INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+    )`);
+    await dbRun(db, `INSERT INTO alertas_estoque_historico_almoxarifado_new
+      (id, material_id, canal, destinatario, status, erro, teste, created_at)
+      SELECT id, material_id, canal, destinatario, status, erro, teste, created_at
+      FROM alertas_estoque_historico_almoxarifado`);
+    await dbRun(db, 'DROP TABLE alertas_estoque_historico_almoxarifado');
+    await dbRun(db, 'ALTER TABLE alertas_estoque_historico_almoxarifado_new RENAME TO alertas_estoque_historico_almoxarifado');
+    await dbRun(db, 'INSERT INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_HISTORICO_NULLABLE]);
+    console.log('✅ Migração alertas_estoque_historico (material_id nullable) aplicada');
+  } finally {
+    await dbRun(db, 'PRAGMA foreign_keys=ON');
+  }
+}
+
 async function initSchema(db) {
+  await ensureBaseTables(db);
+
   // ── Categorias ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS categorias_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -418,6 +606,8 @@ async function initSchema(db) {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
+
+  await migrateHistoricoNullableMaterial(db);
 
   // ── Perfis de usuário no almoxarifado ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS perfil_almoxarifado_usuario (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -36,32 +36,63 @@ const RequisicoesList = () => {
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState(searchParams.get('status') || '');
   const [filtroMinha, setFiltroMinha] = useState(searchParams.get('minha') === '1');
+  const [selectedId, setSelectedId] = useState(() => {
+    const id = searchParams.get('id');
+    return id ? parseInt(id, 10) || null : null;
+  });
   const [detalhe, setDetalhe] = useState(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
+  const loadedDetalheIdRef = useRef(null);
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
   const [showRejeitar, setShowRejeitar] = useState(false);
   const [motivoRejeicao, setMotivoRejeicao] = useState('');
   const [showEntregar, setShowEntregar] = useState(false);
   const [quantidadesEntrega, setQuantidadesEntrega] = useState({});
   const [saving, setSaving] = useState(false);
 
+  const buildSearchParams = useCallback((id) => {
+    const params = {};
+    if (filtroStatus) params.status = filtroStatus;
+    if (filtroMinha) params.minha = '1';
+    if (id) params.id = String(id);
+    return params;
+  }, [filtroStatus, filtroMinha]);
+
+  const syncSearchParams = useCallback((id) => {
+    const params = buildSearchParams(id);
+    const next = new URLSearchParams(params).toString();
+    if (next !== searchParams.toString()) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [buildSearchParams, searchParams, setSearchParams]);
+
   useEffect(() => {
     loadRequisicoes();
   }, [filtroStatus, filtroMinha]);
 
+  // Deep-link / browser back-forward: open panel when ?id= changes externally
   useEffect(() => {
-    const id = searchParams.get('id');
-    if (id) abrirDetalhe(parseInt(id, 10));
+    const urlId = searchParams.get('id');
+    if (!urlId) {
+      if (loadedDetalheIdRef.current != null) {
+        setSelectedId(null);
+        setDetalhe(null);
+        loadedDetalheIdRef.current = null;
+      }
+      return;
+    }
+    const numId = parseInt(urlId, 10);
+    if (!numId) return;
+    abrirDetalhe(numId, { fromUrl: true, force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams.get('id')]);
+  }, [searchParams]);
 
+  // Sync filter params in URL, preserving open requisition id
   useEffect(() => {
-    const params = {};
-    if (filtroStatus) params.status = filtroStatus;
-    if (filtroMinha) params.minha = '1';
-    if (detalhe?.id) params.id = String(detalhe.id);
-    setSearchParams(params, { replace: true });
+    syncSearchParams(selectedIdRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroStatus, filtroMinha, detalhe?.id]);
+  }, [filtroStatus, filtroMinha]);
 
   const loadRequisicoes = async () => {
     setLoading(true);
@@ -78,20 +109,40 @@ const RequisicoesList = () => {
     }
   };
 
-  const abrirDetalhe = async (id) => {
+  const abrirDetalhe = async (id, { fromUrl = false, force = false } = {}) => {
+    if (!id) return;
+    if (!force && loadedDetalheIdRef.current === id && detalhe) return;
+
+    setSelectedId(id);
     setLoadingDetalhe(true);
-    setDetalhe(null);
+    if (loadedDetalheIdRef.current !== id) {
+      setDetalhe(null);
+    }
+
     try {
       const res = await api.get(`/almoxarifado/requisicoes/${id}`);
       setDetalhe(res.data);
+      loadedDetalheIdRef.current = id;
       const qtds = {};
       res.data.itens.forEach(i => { qtds[i.id] = i.quantidade_solicitada; });
       setQuantidadesEntrega(qtds);
+      if (!fromUrl) syncSearchParams(id);
     } catch {
       toast.error('Erro ao carregar detalhe');
+      setSelectedId(null);
+      setDetalhe(null);
+      loadedDetalheIdRef.current = null;
+      if (!fromUrl) syncSearchParams(null);
     } finally {
       setLoadingDetalhe(false);
     }
+  };
+
+  const fecharDetalhe = () => {
+    setSelectedId(null);
+    setDetalhe(null);
+    loadedDetalheIdRef.current = null;
+    syncSearchParams(null);
   };
 
   const handleAprovar = async (id, iniciarSeparacao = false) => {
@@ -104,7 +155,7 @@ const RequisicoesList = () => {
       } else {
         toast.success('Requisição aprovada! Inicie a separação quando estiver pronto.');
       }
-      abrirDetalhe(id);
+      abrirDetalhe(id, { force: true });
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao aprovar');
@@ -119,7 +170,7 @@ const RequisicoesList = () => {
       await api.put(`/almoxarifado/requisicoes/${detalhe.id}/rejeitar`, { motivo: motivoRejeicao });
       toast.success('Requisição rejeitada');
       setShowRejeitar(false);
-      setDetalhe(null);
+      fecharDetalhe();
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao rejeitar');
@@ -133,7 +184,7 @@ const RequisicoesList = () => {
     try {
       await api.put(`/almoxarifado/requisicoes/${id}/separacao`);
       toast.success('Movida para separação!');
-      abrirDetalhe(id);
+      abrirDetalhe(id, { force: true });
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro');
@@ -152,7 +203,7 @@ const RequisicoesList = () => {
       await api.put(`/almoxarifado/requisicoes/${detalhe.id}/entregar`, { itens_atendidos });
       toast.success('Requisição entregue! Estoque baixado.');
       setShowEntregar(false);
-      setDetalhe(null);
+      fecharDetalhe();
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao entregar');
@@ -166,7 +217,7 @@ const RequisicoesList = () => {
     try {
       await api.put(`/almoxarifado/requisicoes/${id}/cancelar`);
       toast.success('Requisição cancelada');
-      setDetalhe(null);
+      fecharDetalhe();
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao cancelar');
@@ -228,7 +279,7 @@ const RequisicoesList = () => {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: detalhe ? '1fr 420px' : '1fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '1fr 420px' : '1fr', gap: 20 }}>
         {/* Tabela */}
         <div className="almox-table-container">
           {loading ? <SkeletonTable rows={8} columns={6} /> : requisicoes.length === 0 ? (
@@ -248,8 +299,8 @@ const RequisicoesList = () => {
               </thead>
               <tbody>
                 {requisicoes.map(r => (
-                  <tr key={r.id} style={{ cursor: 'pointer', background: detalhe?.id === r.id ? 'rgba(79,172,254,0.06)' : '' }}
-                    onClick={() => abrirDetalhe(r.id)}>
+                  <tr key={r.id} style={{ cursor: 'pointer', background: selectedId === r.id ? 'rgba(79,172,254,0.06)' : '' }}
+                    onClick={() => abrirDetalhe(r.id, { force: true })}>
                     <td>
                       <div style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4facfe' }}>{r.numero}</div>
                     </td>
@@ -270,17 +321,17 @@ const RequisicoesList = () => {
         </div>
 
         {/* Painel de detalhe */}
-        {detalhe && (
+        {selectedId && (
           <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, overflow: 'hidden', height: 'fit-content', maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--gmp-border)', background: 'var(--gmp-bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'sticky', top: 0, zIndex: 2 }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '1rem', color: '#4facfe', fontFamily: 'monospace' }}>{detalhe.numero}</div>
-                <StatusBadge status={detalhe.status} />
+                <div style={{ fontWeight: 700, fontSize: '1rem', color: '#4facfe', fontFamily: 'monospace' }}>{detalhe?.numero || '...'}</div>
+                {detalhe && <StatusBadge status={detalhe.status} />}
               </div>
-              <button className="almox-modal-close" onClick={() => setDetalhe(null)}>✕</button>
+              <button className="almox-modal-close" onClick={fecharDetalhe}>✕</button>
             </div>
 
-            {loadingDetalhe ? (
+            {loadingDetalhe || !detalhe ? (
               <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
             ) : (
               <div style={{ padding: 20 }}>
