@@ -50,6 +50,88 @@ async function getOrCreateSaldo(db, materialId, localizacaoId, lote = null) {
   return saldo;
 }
 
+/** Sincroniza saldo na localização padrão quando só materiais_almoxarifado tem quantidade. */
+async function syncSaldoLocalizacaoPadrao(db, materialId) {
+  const material = await getMaterial(db, materialId);
+  if (!material.localizacao_padrao_id) return;
+
+  const saldosPositivos = await dbAll(db,
+    'SELECT COALESCE(SUM(quantidade), 0) as total FROM estoque_saldo_almoxarifado WHERE material_id = ? AND quantidade > 0',
+    [materialId]);
+  const totalSaldo = saldosPositivos[0]?.total || 0;
+  const materialQty = material.quantidade_atual || 0;
+
+  if (totalSaldo > 0) return;
+
+  const saldo = await getOrCreateSaldo(db, materialId, material.localizacao_padrao_id);
+  await dbRun(db,
+    'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [materialQty, saldo.id]);
+}
+
+function resolveLocalizacaoEntrada(material, destinoId) {
+  return destinoId || material.localizacao_padrao_id || null;
+}
+
+function resolveLocalizacaoSaida(material, origemId) {
+  return origemId || material.localizacao_padrao_id || null;
+}
+
+const MAPA_LOCALIZACOES_SQL = `
+  SELECT l.*,
+    COALESCE(s.qtd_itens, 0) as qtd_itens,
+    COALESCE(s.quantidade_total, 0) as quantidade_total,
+    COALESCE(s.quantidade_reservada, 0) as quantidade_reservada,
+    COALESCE(m.itens_baixo_minimo, 0) as itens_baixo_minimo,
+    COALESCE(m.itens_criticos, 0) as itens_criticos
+  FROM localizacoes_almoxarifado l
+  LEFT JOIN (
+    SELECT loc_id,
+      COUNT(DISTINCT material_id) as qtd_itens,
+      SUM(qty) as quantidade_total,
+      SUM(reservado) as quantidade_reservada
+    FROM (
+      SELECT localizacao_id as loc_id, material_id, quantidade as qty,
+        COALESCE(quantidade_reservada, 0) as reservado
+      FROM estoque_saldo_almoxarifado
+      WHERE localizacao_id IS NOT NULL AND quantidade > 0
+      UNION ALL
+      SELECT m.localizacao_padrao_id, m.id, m.quantidade_atual, 0
+      FROM materiais_almoxarifado m
+      WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NOT NULL AND m.quantidade_atual > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM estoque_saldo_almoxarifado s
+          WHERE s.material_id = m.id AND s.quantidade > 0
+        )
+    ) combined
+    GROUP BY loc_id
+  ) s ON s.loc_id = l.id
+  LEFT JOIN (
+    SELECT loc_id,
+      SUM(CASE WHEN qty > 0 AND qty_min > 0 AND qty <= qty_min THEN 1 ELSE 0 END) as itens_baixo_minimo,
+      SUM(CASE WHEN qty <= 0 AND qty_min > 0 THEN 1 ELSE 0 END) as itens_criticos
+    FROM (
+      SELECT m.localizacao_padrao_id as loc_id,
+        COALESCE((
+          SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s
+          WHERE s.material_id = m.id AND s.localizacao_id = m.localizacao_padrao_id AND s.quantidade > 0
+        ),
+        CASE WHEN NOT EXISTS (
+          SELECT 1 FROM estoque_saldo_almoxarifado s2 WHERE s2.material_id = m.id AND s2.quantidade > 0
+        ) THEN m.quantidade_atual ELSE 0 END) as qty,
+        m.quantidade_minima as qty_min
+      FROM materiais_almoxarifado m
+      WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NOT NULL
+    ) mat_loc
+    GROUP BY loc_id
+  ) m ON m.loc_id = l.id
+  WHERE l.ativo = 1
+  ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo`;
+
+async function consultarMapaLocalizacoes(db) {
+  return dbAll(db, MAPA_LOCALIZACOES_SQL);
+}
+
 async function registrarMovimentacao(db, user, params) {
   const {
     material_id, tipo, quantidade, motivo, referencia, observacoes,
@@ -126,13 +208,16 @@ async function registrarMovimentacao(db, user, params) {
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [saldoPosterior, material_id]);
 
-    if (localizacao_destino_id && tiposEntrada.includes(tipo)) {
-      const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, lote);
+    const locEntrada = tiposEntrada.includes(tipo) ? resolveLocalizacaoEntrada(material, localizacao_destino_id) : null;
+    const locSaida = tiposSaida.includes(tipo) ? resolveLocalizacaoSaida(material, localizacao_origem_id) : null;
+
+    if (locEntrada) {
+      const saldo = await getOrCreateSaldo(db, material_id, locEntrada, lote);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
-    if (localizacao_origem_id && tiposSaida.includes(tipo)) {
-      const saldo = await getOrCreateSaldo(db, material_id, localizacao_origem_id, lote);
+    if (locSaida) {
+      const saldo = await getOrCreateSaldo(db, material_id, locSaida, lote);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
@@ -283,6 +368,7 @@ module.exports = {
   getMaterial,
   getSaldoDisponivel,
   syncMaterialTotals,
+  syncSaldoLocalizacaoPadrao,
   getOrCreateSaldo,
   registrarMovimentacao,
   cancelarMovimentacao,
@@ -290,4 +376,5 @@ module.exports = {
   liberarReserva,
   consultarEstoque,
   consultarSaldosPorLocalizacao,
+  consultarMapaLocalizacoes,
 };

@@ -75,10 +75,11 @@ function buildLocalizacaoPath(loc, allLocs = []) {
 }
 
 function statusLocalizacao(loc) {
+  const qty = Number(loc.quantidade_total || 0);
+  if (qty <= 0) return loc.itens_criticos > 0 ? 'critico' : 'vazio';
   if (loc.itens_criticos > 0) return 'critico';
   if (loc.itens_baixo_minimo > 0) return 'baixo';
-  if (loc.qtd_itens > 0) return 'ok';
-  return 'vazio';
+  return 'ok';
 }
 
 function corStatus(status) {

@@ -27,6 +27,7 @@ function getActiveModuleFromPath(path) {
   if (path.startsWith('/compras')) return 'compras';
   if (path.startsWith('/financeiro')) return 'financeiro';
   if (path.startsWith('/fabrica')) return 'operacional';
+  if (path.startsWith('/configuracoes')) return 'administrativo';
   if (path.startsWith('/admin')) return 'admin';
   if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
   if (path.startsWith('/engenharia')) return 'engenharia';
@@ -203,6 +204,8 @@ const Layout = () => {
     { path: '/comercial/aprovacoes', icon: FiCheckCircle, label: 'Aprovações' },
     { path: '/comercial/ordens-servico', icon: FiTool, label: 'Ordens de Serviço' },
     { path: '/comercial/atividades', icon: FiCalendar, label: 'Atividades' },
+    { path: '/comercial/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/comercial/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/comercial/relatorios', icon: FiBarChart2, label: 'Relatórios' },
     { path: '/comercial/maquinas-vendidas', icon: FiMap, label: 'Máquinas Vendidas' },
     { path: '/comercial/custos-viagens', icon: FiDollarSign, label: 'Custos de Viagens' },
@@ -215,6 +218,8 @@ const Layout = () => {
     { path: '/compras/fornecedores-homologados', icon: FiPackage, label: 'Fornecedores homologados' },
     { path: '/compras/pedidos', icon: FiShoppingCart, label: 'Pedidos de Compra' },
     { path: '/compras/cotacoes', icon: FiFileText2, label: 'Cotações' },
+    { path: '/compras/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/compras/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
 
   // Menu do módulo Financeiro (estilo Painel Financeiro / FinanceHub)
@@ -225,6 +230,8 @@ const Layout = () => {
     { path: '/financeiro/fluxo-caixa', icon: FiBarChart2, label: 'Fluxo de Caixa' },
     { path: '/financeiro/relatorios', icon: FiBarChart2, label: 'Relatórios' },
     { path: '/financeiro/bancos', icon: FiCreditCard, label: 'Conciliação Bancária' },
+    { path: '/financeiro/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/financeiro/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
 
   // Menu do módulo Operacional (Fábrica)
@@ -232,24 +239,32 @@ const Layout = () => {
     { path: '/fabrica/ordens-servico', icon: FiFileText2, label: 'Ordens de Serviço' },
     { path: '/fabrica/producao', icon: FiBriefcase, label: 'Produção' },
     { path: '/fabrica/equipamentos', icon: FiPackage, label: 'Equipamentos' },
+    { path: '/fabrica/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/fabrica/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
 
   // Menu do módulo Frota
   const frotaMenuItems = [
     { path: '/frota', icon: FiHome, label: 'Dashboard Frota' },
     { path: '/frota/veiculos', icon: FiTruck, label: 'Veículos e Manutenção' },
+    { path: '/frota/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/frota/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
 
   // Menu do módulo Admin
   const adminMenuItems = [
     { path: '/admin/usuarios', icon: FiUsers, label: 'Usuários' },
     { path: '/admin/permissoes', icon: FiShield, label: 'Permissões' },
+    { path: '/admin/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/admin/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
 
   // Menu do módulo Cálculos de Engenharia
   const engenhariaMenuItems = [
     { path: '/engenharia', icon: FiSliders, label: 'Início' },
-    { path: '/engenharia/solicitacao-material-escritorio', icon: FiClipboard, label: 'Material escritório' },
+    { path: '/engenharia/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/engenharia/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
+    { path: '/engenharia/solicitacao-material-escritorio', icon: FiShoppingCart, label: 'Material escritório' },
     { path: '/engenharia/calculo-tampo', icon: FiCircle, label: 'Cálculo de Tampo' },
     { path: '/engenharia/calculo-volume', icon: FiDroplet, label: 'Cálculo de Volume' },
     { path: '/engenharia/calculo-motor-impelidor', icon: FiZap, label: 'Motor + Impelidor' },
@@ -260,7 +275,9 @@ const Layout = () => {
   const almoxarifadoMenuItems = [
     { path: '/almoxarifado', icon: FiArchive, label: 'Dashboard' },
     { path: '/almoxarifado/materiais', icon: FiList, label: 'Materiais' },
-    { path: '/almoxarifado/requisicoes', icon: FiCheckCircle, label: 'Requisições' },
+    { path: '/almoxarifado/requisicoes', icon: FiCheckCircle, label: 'Requisições (almox.)' },
+    { path: '/almoxarifado/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/almoxarifado/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimentos' },
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
@@ -271,9 +288,18 @@ const Layout = () => {
   // Menu do módulo Engenharia / Projetos (separado)
   const engenhariaProjetosMenuItems = [
     { path: '/engenharia-projetos', icon: FiBriefcase, label: 'Início' },
+    { path: '/engenharia-projetos/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/engenharia-projetos/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/engenharia-projetos/solicitacao-material-escritorio', icon: FiShoppingCart, label: 'Solicitação (cesta)' },
     { path: '/engenharia-projetos/cadastro-materiais-escritorio', icon: FiPackage, label: 'Cadastro materiais' },
     { path: '/engenharia-projetos/minhas-solicitacoes', icon: FiCheckCircle, label: 'Minhas solicitações' },
+  ];
+
+  // Menu do módulo Administrativo
+  const administrativoMenuItems = [
+    { path: '/configuracoes', icon: FiSettings, label: 'Configurações' },
+    { path: '/configuracoes/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
+    { path: '/configuracoes/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
 
   // Selecionar menu baseado no módulo ativo
@@ -289,6 +315,8 @@ const Layout = () => {
         return frotaMenuItems;
       case 'admin':
         return adminMenuItems;
+      case 'administrativo':
+        return administrativoMenuItems;
       case 'engenharia':
         return engenhariaMenuItems;
       case 'engenharia_projetos':

@@ -8,6 +8,7 @@ const fs = require('fs');
 const multer = require('multer');
 const alertService = require('../services/almoxarifado/alertService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const stockService = require('../services/almoxarifado/stockService');
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
@@ -171,42 +172,53 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   }
 
   // GET /api/almoxarifado/materiais — listar
-  app.get('/api/almoxarifado/materiais',(req, res) => {
-    const { search, categoria, status, familia_id } = req.query;
+  app.get('/api/almoxarifado/materiais', async (req, res) => {
+    const { search, categoria, status, familia_id, setor } = req.query;
 
-    let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
-               FROM materiais_almoxarifado m
-               LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
-               WHERE 1=1`;
-    const params = [];
+    try {
+      const sectorMaterialService = require('../services/almoxarifado/sectorMaterialService');
+      await sectorMaterialService.ensureSetoresRequisicao(db);
+      const filterClause = setor
+        ? await sectorMaterialService.buildMaterialFilterClause(db, setor)
+        : null;
 
-    if (search) {
-      sql += ` AND (m.nome LIKE ? OR m.codigo LIKE ? OR m.descricao LIKE ? OR m.fornecedor_principal LIKE ?)`;
-      const s = `%${search}%`;
-      params.push(s, s, s, s);
-    }
-    if (categoria) {
-      sql += ` AND m.categoria = ?`;
-      params.push(categoria);
-    }
-    if (familia_id) {
-      sql += ` AND m.familia_id = ?`;
-      params.push(parseInt(familia_id, 10));
-    }
-    if (status === 'critico') {
-      sql += ` AND m.quantidade_atual <= m.quantidade_minima AND m.quantidade_minima > 0`;
-    } else if (status === 'ok') {
-      sql += ` AND m.quantidade_atual > m.quantidade_minima`;
-    } else if (status === 'zerado') {
-      sql += ` AND m.quantidade_atual = 0`;
-    }
+      let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
+                 FROM materiais_almoxarifado m
+                 LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
+                 WHERE 1=1`;
+      const params = [];
 
-    sql += ` AND m.ativo = 1 ORDER BY f.nome ASC, m.nome ASC`;
+      if (filterClause) sql += ` AND ${filterClause}`;
+      if (search) {
+        sql += ` AND (m.nome LIKE ? OR m.codigo LIKE ? OR m.descricao LIKE ? OR m.fornecedor_principal LIKE ?)`;
+        const s = `%${search}%`;
+        params.push(s, s, s, s);
+      }
+      if (categoria) {
+        sql += ` AND m.categoria = ?`;
+        params.push(categoria);
+      }
+      if (familia_id) {
+        sql += ` AND m.familia_id = ?`;
+        params.push(parseInt(familia_id, 10));
+      }
+      if (status === 'critico') {
+        sql += ` AND m.quantidade_atual <= m.quantidade_minima AND m.quantidade_minima > 0`;
+      } else if (status === 'ok') {
+        sql += ` AND m.quantidade_atual > m.quantidade_minima`;
+      } else if (status === 'zerado') {
+        sql += ` AND m.quantidade_atual = 0`;
+      }
 
-    db.all(sql, params, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
-    });
+      sql += ` AND m.ativo = 1 ORDER BY f.nome ASC, m.nome ASC`;
+
+      db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // GET /api/almoxarifado/materiais/dashboard — stats para o dashboard
@@ -341,11 +353,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                 [id, quantidade_atual, quantidade_atual, req.user.id, req.user.nome || req.user.email]);
             }
 
+            stockService.syncSaldoLocalizacaoPadrao(db, id).catch((e) => {
+              console.warn('[almoxarifado] Falha ao sincronizar saldo por localização:', e.message);
+            }).finally(() => {
             db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
                     FROM materiais_almoxarifado m
                     LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
                     WHERE m.id = ?`, [id], (err2, row) => {
               res.status(201).json(row);
+            });
             });
           }
         );
@@ -398,8 +414,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                     LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
                     WHERE m.id = ?`, [req.params.id], (err2, row) => {
               if (err2) return res.status(500).json({ error: err2.message });
-              alertService.verificarAlertaPorMaterialId(db, Number(req.params.id)).catch(() => null);
-              res.json(row);
+              const materialId = Number(req.params.id);
+              Promise.all([
+                stockService.syncSaldoLocalizacaoPadrao(db, materialId).catch(() => null),
+                alertService.verificarAlertaPorMaterialId(db, materialId).catch(() => null),
+              ]).finally(() => res.json(row));
             });
           }
         );
@@ -567,22 +586,26 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
          req.user.id, req.user.nome || req.user.email],
         function (err2) {
           if (err2) return res.status(500).json({ error: err2.message });
+          const movId = this.lastID;
 
           // Atualizar saldo do material
           db.run(`UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
             [saldoPosterior, material_id], (err3) => {
               if (err3) return res.status(500).json({ error: err3.message });
-              alertService.verificarAlertaPorMaterialId(db, material_id)
-                .catch((alertErr) => {
+              Promise.all([
+                stockService.syncSaldoLocalizacaoPadrao(db, material_id).catch((e) => {
+                  console.warn('[almoxarifado] Falha ao sincronizar saldo por localização:', e.message);
+                }),
+                alertService.verificarAlertaPorMaterialId(db, material_id).catch((alertErr) => {
                   console.warn('[almoxarifado-alertas] Falha no pós-movimentação:', alertErr.message);
-                })
-                .finally(() => {
+                }),
+              ]).finally(() => {
                   res.status(201).json({
-                    id: this.lastID, material_id, tipo, quantidade,
+                    id: movId, material_id, tipo, quantidade,
                     saldo_anterior: saldoAnterior, saldo_posterior: saldoPosterior,
                     motivo, referencia, observacoes
                   });
-                });
+              });
             });
         }
       );
@@ -1599,18 +1622,35 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // POST /api/almoxarifado/requisicoes — criar requisição
-  app.post('/api/almoxarifado/requisicoes',(req, res) => {
-    const { departamento, os_referencia, urgencia, observacoes, justificativa_urgencia, itens } = req.body;
+  app.post('/api/almoxarifado/requisicoes', async (req, res) => {
+    const {
+      departamento, setor, os_referencia, urgencia, observacoes,
+      justificativa_urgencia, itens, modulo_origem,
+    } = req.body;
     if (!itens || itens.length === 0) return res.status(400).json({ error: 'Inclua ao menos um item' });
+
+    const setorFinal = departamento || setor;
+    try {
+      const sectorMaterialService = require('../services/almoxarifado/sectorMaterialService');
+      if (setorFinal) {
+        await sectorMaterialService.validateMateriaisParaSetor(
+          db, setorFinal, itens.map((i) => i.material_id)
+        );
+      }
+    } catch (e) {
+      return res.status(e.status || 500).json({ error: e.message });
+    }
 
     const numero = gerarNumeroReq();
 
     db.run(`INSERT INTO requisicoes_almoxarifado
-            (numero, solicitante_id, solicitante_nome, departamento, os_referencia, urgencia, observacoes, justificativa_urgencia, status)
-            VALUES (?,?,?,?,?,?,?,?,'PENDENTE')`,
+            (numero, solicitante_id, solicitante_nome, departamento, setor, os_referencia,
+             urgencia, observacoes, justificativa_urgencia, modulo_origem, status)
+            VALUES (?,?,?,?,?,?,?,?,?,?,'PENDENTE')`,
       [numero, req.user.id, req.user.nome || req.user.email,
-       departamento || null, os_referencia || null,
-       urgencia || 'NORMAL', observacoes || null, justificativa_urgencia || null],
+       setorFinal || null, setorFinal || null, os_referencia || null,
+       urgencia || 'NORMAL', observacoes || null, justificativa_urgencia || null,
+       modulo_origem || null],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
         const reqId = this.lastID;

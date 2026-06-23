@@ -11,7 +11,7 @@ const scrapService = require('../../services/almoxarifado/scrapService');
 const toolService = require('../../services/almoxarifado/toolService');
 const clientMaterialService = require('../../services/almoxarifado/clientMaterialService');
 const reportService = require('../../services/almoxarifado/reportService');
-const purchaseService = require('../../services/almoxarifado/purchaseService');
+const sectorMaterialService = require('../../services/almoxarifado/sectorMaterialService');
 
 function handleError(res, err) {
   const status = err.status || 500;
@@ -59,35 +59,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   // ── Mapa de localizações ──
   app.get('/api/almoxarifado/mapa/localizacoes', auth, async (req, res) => {
     try {
-      const rows = await dbAll(db, `
-        SELECT l.*,
-          COALESCE(s.qtd_itens, 0) as qtd_itens,
-          COALESCE(s.quantidade_total, 0) as quantidade_total,
-          COALESCE(s.quantidade_reservada, 0) as quantidade_reservada,
-          COALESCE(m.itens_baixo_minimo, 0) as itens_baixo_minimo,
-          COALESCE(m.itens_criticos, 0) as itens_criticos
-        FROM localizacoes_almoxarifado l
-        LEFT JOIN (
-          SELECT localizacao_id,
-            COUNT(DISTINCT material_id) as qtd_itens,
-            SUM(quantidade) as quantidade_total,
-            SUM(COALESCE(quantidade_reservada, 0)) as quantidade_reservada
-          FROM estoque_saldo_almoxarifado
-          WHERE quantidade > 0
-          GROUP BY localizacao_id
-        ) s ON s.localizacao_id = l.id
-        LEFT JOIN (
-          SELECT localizacao_padrao_id as loc_id,
-            SUM(CASE WHEN quantidade_atual > 0 AND quantidade_minima > 0 AND quantidade_atual <= quantidade_minima THEN 1 ELSE 0 END) as itens_baixo_minimo,
-            SUM(CASE WHEN quantidade_atual <= 0 AND quantidade_minima > 0 THEN 1 ELSE 0 END) as itens_criticos
-          FROM materiais_almoxarifado
-          WHERE ativo = 1 AND localizacao_padrao_id IS NOT NULL
-          GROUP BY localizacao_padrao_id
-        ) m ON m.loc_id = l.id
-        WHERE l.ativo = 1
-        ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo
-      `);
-      res.json(rows);
+      res.json(await stockService.consultarMapaLocalizacoes(db));
     } catch (e) { handleError(res, e); }
   });
 
@@ -332,6 +304,30 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
       const fn = reports[req.params.tipo];
       if (!fn) return res.status(404).json({ error: 'Relatório não encontrado' });
       res.json(await fn(db, req.query));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Setores requisitantes e materiais permitidos ──
+  app.get('/api/almoxarifado/setores-requisicao', auth, async (req, res) => {
+    try {
+      await sectorMaterialService.ensureSetoresRequisicao(db);
+      res.json(await sectorMaterialService.listSetores(db));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/setores-requisicao/:id/permissoes', auth, async (req, res) => {
+    try {
+      res.json(await sectorMaterialService.getPermissoesSetor(db, req.params.id));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/setores-requisicao/:id/permissoes', auth, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    const { permissoes } = req.body;
+    if (!Array.isArray(permissoes)) return res.status(400).json({ error: 'Envie um array de permissões' });
+    try {
+      const rows = await sectorMaterialService.salvarPermissoesSetor(db, req.params.id, permissoes);
+      res.json(rows);
     } catch (e) { handleError(res, e); }
   });
 

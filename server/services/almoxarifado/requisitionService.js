@@ -29,7 +29,12 @@ function maxSeparar(item, estoque) {
 
 function maxEntregar(item, estoque) {
   const pendente = pendenteEntrega(item);
+  if (pendente <= 0) return 0;
   const separadoDisponivel = Math.max(0, getSeparado(item) - getEntregue(item));
+  // Segunda rodada após entrega parcial: separado já foi consumido, mas pendente permanece
+  if (getEntregue(item) > 0 && separadoDisponivel < pendente) {
+    return Math.min(pendente, num(estoque));
+  }
   return Math.min(pendente, separadoDisponivel, num(estoque));
 }
 
@@ -146,6 +151,7 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
 
     const entregueAtual = getEntregue(item);
     const novaEntregue = entregueAtual + qtyEntregar;
+    const novaSeparada = Math.max(getSeparado(item), novaEntregue);
     const saldoAnterior = estoque;
     const saldoPosterior = saldoAnterior - qtyEntregar;
 
@@ -159,8 +165,8 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
         `Requisição ${reqRow.numero}`, reqRow.os_referencia || reqRow.numero,
         user.id, user.nome || user.email, requisicaoId]);
     await dbRun(db,
-      'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue=?, quantidade_atendida=? WHERE id=?',
-      [novaEntregue, novaEntregue, item.id]);
+      'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue=?, quantidade_atendida=?, quantidade_separada=? WHERE id=?',
+      [novaEntregue, novaEntregue, novaSeparada, item.id]);
 
     entregas.push({ item_id: item.id, quantidade: qtyEntregar });
   }

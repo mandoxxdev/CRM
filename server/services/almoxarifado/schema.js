@@ -618,11 +618,15 @@ async function initSchema(db) {
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // ── Setores requisitantes e permissões de material ──
+  const { ensureSetoresRequisicao } = require('./sectorMaterialService');
+  await ensureSetoresRequisicao(db);
+
   // ── Extend requisições ──
   const reqCols = [
     'projeto_id INTEGER', 'cliente_id INTEGER', 'equipamento TEXT',
     'prioridade TEXT DEFAULT \'NORMAL\'', 'data_necessidade DATE', 'setor TEXT',
-    'justificativa TEXT',
+    'justificativa TEXT', 'modulo_origem TEXT',
   ];
   for (const col of reqCols) await safeAlter(db, `ALTER TABLE requisicoes_almoxarifado ADD COLUMN ${col}`);
 

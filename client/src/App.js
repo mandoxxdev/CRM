@@ -67,6 +67,9 @@ import MovimentacoesAlmoxarifado from './components/almoxarifado/MovimentacoesAl
 import ConferenciaEstoque from './components/almoxarifado/ConferenciaEstoque';
 import RequisicoesList from './components/almoxarifado/RequisicoesList';
 import RequisicaoForm from './components/almoxarifado/RequisicaoForm';
+import { RequisicoesMaterialNovaPage, RequisicoesMaterialListaPage } from './components/almoxarifado/RequisicoesMaterialPages';
+import { RequisicoesMaterialProvider } from './components/almoxarifado/RequisicoesMaterialContext';
+import { MODULOS_REQUISICAO } from './config/requisicoesMaterialConfig';
 import ConfiguracoesAlmoxarifado from './components/almoxarifado/ConfiguracoesAlmoxarifado';
 import MapaLocalizacoesAlmoxarifado from './components/almoxarifado/MapaLocalizacoesAlmoxarifado';
 import RecebimentosAlmoxarifado from './components/almoxarifado/RecebimentosAlmoxarifado';
@@ -234,6 +237,8 @@ function AppRoutes() {
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="maquinas-vendidas" element={<MaquinasVendidas />} />
         <Route path="custos-viagens" element={<CustosViagens />} />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="comercial" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="comercial" />} />
         <Route path="usuarios/novo" element={<UsuarioForm />} />
         <Route path="usuarios/editar/:id" element={<UsuarioForm />} />
       </Route>
@@ -249,6 +254,8 @@ function AppRoutes() {
       >
         <Route index element={<VeiculosManutencao />} />
         <Route path="veiculos" element={<VeiculosManutencao />} />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="frota" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="frota" />} />
       </Route>
       <Route
         path="/compras"
@@ -300,6 +307,8 @@ function AppRoutes() {
             <ItensFornecedor />
           </ProtectedModuleRoute>
         } />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="compras" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="compras" />} />
       </Route>
       <Route
         path="/financeiro"
@@ -346,6 +355,8 @@ function AppRoutes() {
             <Financeiro />
           </ProtectedModuleRoute>
         } />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="financeiro" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="financeiro" />} />
       </Route>
       <Route
         path="/fabrica"
@@ -366,6 +377,8 @@ function AppRoutes() {
         <Route path="presenca" element={<ControlePresenca />} />
         <Route path="horas-extras" element={<HorasExtras />} />
         <Route path="equipamentos" element={<Equipamentos />} />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="operacional" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="operacional" />} />
         {/* Rotas MES - Placeholder para futuras implementações */}
         <Route path="producao/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Módulo de Produção (MES)</h2><p>Em desenvolvimento...</p></div>} />
         <Route path="planejamento/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Planejamento (APS/MRP)</h2><p>Em desenvolvimento...</p></div>} />
@@ -396,6 +409,8 @@ function AppRoutes() {
         <Route path="calculo-motor-impelidor" element={<CalculoMotorImpelidor />} />
         <Route path="selecao-agitadores" element={<SelecaoAgitadores />} />
         <Route path="calculo-plataformas" element={<CalculoPlataformas />} />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="engenharia" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="engenharia" />} />
       </Route>
       <Route
         path="/engenharia-projetos"
@@ -411,6 +426,8 @@ function AppRoutes() {
         <Route path="solicitacao-material-escritorio" element={<SolicitacaoMaterialEscritorioCesta />} />
         <Route path="cadastro-materiais-escritorio" element={<CadastroMateriaisEscritorio />} />
         <Route path="minhas-solicitacoes" element={<MinhasSolicitacoesCompra />} />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="engenharia_projetos" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="engenharia_projetos" />} />
       </Route>
       <Route
         path="/almoxarifado"
@@ -429,8 +446,18 @@ function AppRoutes() {
         <Route path="movimentacoes" element={<MovimentacoesAlmoxarifado />} />
         <Route path="movimentacoes/novo" element={<MovimentacoesAlmoxarifado />} />
         <Route path="conferencias" element={<ConferenciaEstoque />} />
-        <Route path="requisicoes" element={<RequisicoesList />} />
-        <Route path="requisicoes/nova" element={<RequisicaoForm />} />
+        <Route path="requisicoes" element={
+          <RequisicoesMaterialProvider override={MODULOS_REQUISICAO.almoxarifado}>
+            <RequisicoesList />
+          </RequisicoesMaterialProvider>
+        } />
+        <Route path="requisicoes/nova" element={
+          <RequisicoesMaterialProvider override={MODULOS_REQUISICAO.almoxarifado}>
+            <RequisicaoForm />
+          </RequisicoesMaterialProvider>
+        } />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="almoxarifado" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="almoxarifado" />} />
         <Route path="recebimentos" element={<RecebimentosAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
         <Route path="configuracoes" element={<ConfiguracoesAlmoxarifado />} />
@@ -446,6 +473,8 @@ function AppRoutes() {
         }
       >
         <Route index element={<Configuracoes />} />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="administrativo" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="administrativo" />} />
       </Route>
       <Route
         path="/admin"
@@ -460,6 +489,8 @@ function AppRoutes() {
         <Route index element={<Admin />} />
         <Route path="usuarios/novo" element={<UsuarioForm />} />
         <Route path="usuarios/editar/:id" element={<UsuarioForm />} />
+        <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="admin" />} />
+        <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="admin" />} />
       </Route>
     </Routes>
   );

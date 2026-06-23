@@ -4,7 +4,7 @@ import {
   FiBarChart2, FiClipboard, FiUsers, FiActivity, FiClock, 
   FiTrendingUp, FiTool, FiSettings, FiShield, FiFileText,
   FiLayers, FiTarget, FiAlertTriangle, FiDatabase, FiGrid,
-  FiCheckCircle, FiPackage, FiZap, FiMonitor, FiMenu, FiX
+  FiCheckCircle, FiPackage, FiZap, FiMonitor, FiMenu, FiX, FiList
 } from 'react-icons/fi';
 import './MESLayout.css';
 
@@ -139,6 +139,8 @@ const MESLayout = () => {
     { id: 'presenca', label: 'Presença', icon: FiClock, path: '/fabrica/presenca' },
     { id: 'horas-extras', label: 'Horas Extras', icon: FiTrendingUp, path: '/fabrica/horas-extras' },
     { id: 'equipamentos', label: 'Equipamentos', icon: FiTool, path: '/fabrica/equipamentos' },
+    { id: 'requisicoes-nova', label: 'Solicitar Material', icon: FiClipboard, path: '/fabrica/requisicoes-material/nova' },
+    { id: 'requisicoes-lista', label: 'Minhas Requisições', icon: FiList, path: '/fabrica/requisicoes-material' },
     { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/fabrica/configuracoes' }
   ];
 

@@ -7,7 +7,7 @@ import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
-  FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle
+  FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers
 } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import './Almoxarifado.css';
@@ -174,6 +174,7 @@ const RadioCard = ({ selected, onClick, title, subtitle, icon }) => (
 const TABS = [
   { id: 'tipos', label: 'Tipos de Material', icon: FiPackage },
   { id: 'familias', label: 'Famílias', icon: FiLayers },
+  { id: 'materiais-setor', label: 'Materiais por Setor', icon: FiUsers },
   { id: 'estoques', label: 'Estoques Mínimos', icon: FiSliders },
   { id: 'setores', label: 'Setores e Áreas', icon: FiGrid },
   { id: 'localizacoes', label: 'Localizações', icon: FiMapPin },
@@ -245,6 +246,7 @@ const ConfiguracoesAlmoxarifado = () => {
 
       {tab === 'tipos' && <TabTiposMaterial />}
       {tab === 'familias' && <TabFamilias />}
+      {tab === 'materiais-setor' && <TabMateriaisPorSetor />}
       {tab === 'estoques' && <TabEstoquesMinimos />}
       {tab === 'setores' && <TabSetores />}
       {tab === 'localizacoes' && <TabLocalizacoes />}
@@ -1991,6 +1993,152 @@ const TabConfiguracoes = () => {
       <button className="btn-almox-primary" style={{ marginTop: 24 }} onClick={handleSalvar} disabled={saving}>
         <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Configurações'}
       </button>
+    </div>
+  );
+};
+
+/* ===================== TAB MATERIAIS POR SETOR ===================== */
+const TabMateriaisPorSetor = () => {
+  const [setores, setSetores] = useState([]);
+  const [familias, setFamilias] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [setorAtivo, setSetorAtivo] = useState(null);
+  const [permissoes, setPermissoes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selFamilias, setSelFamilias] = useState(new Set());
+  const [selCategorias, setSelCategorias] = useState(new Set());
+
+  useEffect(() => { loadBase(); }, []);
+
+  const loadBase = async () => {
+    setLoading(true);
+    try {
+      const [setRes, famRes, catRes] = await Promise.all([
+        api.get('/almoxarifado/setores-requisicao'),
+        api.get('/almoxarifado/familias'),
+        api.get('/almoxarifado/categorias'),
+      ]);
+      setSetores(setRes.data);
+      setFamilias(famRes.data);
+      setCategorias(catRes.data);
+      if (setRes.data.length) {
+        selecionarSetor(setRes.data[0]);
+      }
+    } catch {
+      toast.error('Erro ao carregar setores');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selecionarSetor = async (setor) => {
+    setSetorAtivo(setor);
+    try {
+      const res = await api.get(`/almoxarifado/setores-requisicao/${setor.id}/permissoes`);
+      setPermissoes(res.data);
+      setSelFamilias(new Set(res.data.filter(p => p.familia_id).map(p => p.familia_id)));
+      setSelCategorias(new Set(res.data.filter(p => p.categoria_id).map(p => p.categoria_id)));
+    } catch {
+      toast.error('Erro ao carregar permissões do setor');
+    }
+  };
+
+  const toggleFamilia = (id) => {
+    setSelFamilias(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleCategoria = (id) => {
+    setSelCategorias(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSalvar = async () => {
+    if (!setorAtivo) return;
+    setSaving(true);
+    try {
+      const payload = [
+        ...[...selFamilias].map(familia_id => ({ familia_id, categoria_id: null, material_id: null })),
+        ...[...selCategorias].map(categoria_id => ({ familia_id: null, categoria_id, material_id: null })),
+      ];
+      await api.put(`/almoxarifado/setores-requisicao/${setorAtivo.id}/permissoes`, { permissoes: payload });
+      toast.success(`Permissões de ${setorAtivo.nome} salvas!`);
+      selecionarSetor(setorAtivo);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 24 }}>
+      <div style={{ border: '1px solid var(--gmp-border)', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', background: 'var(--gmp-bg)', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase' }}>
+          Setores
+        </div>
+        {setores.map(s => (
+          <button key={s.id} type="button" onClick={() => selecionarSetor(s)}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '10px 16px', border: 'none',
+              borderBottom: '1px solid var(--gmp-border)', cursor: 'pointer',
+              background: setorAtivo?.id === s.id ? 'rgba(79,172,254,0.1)' : 'transparent',
+              color: setorAtivo?.id === s.id ? '#4facfe' : 'var(--gmp-text)', fontWeight: setorAtivo?.id === s.id ? 700 : 500,
+            }}>
+            {s.nome}
+            <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>{s.qtd_permissoes || 0} regra(s)</div>
+          </button>
+        ))}
+      </div>
+
+      {setorAtivo && (
+        <div>
+          <h3 style={{ margin: '0 0 8px' }}>{setorAtivo.nome}</h3>
+          <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem', marginBottom: 20 }}>
+            Selecione famílias e categorias que este setor pode requisitar. Sem regras = todos os materiais liberados.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <div style={{ border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 16 }}>
+              <div className="almox-section-title">Famílias permitidas</div>
+              <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                {familias.map(f => (
+                  <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <input type="checkbox" checked={selFamilias.has(f.id)} onChange={() => toggleFamilia(f.id)} />
+                    <span>{f.codigo} — {f.nome}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div style={{ border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 16 }}>
+              <div className="almox-section-title">Categorias permitidas</div>
+              <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                {categorias.map(c => (
+                  <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <input type="checkbox" checked={selCategorias.has(c.id)} onChange={() => toggleCategoria(c.id)} />
+                    <span>{c.nome}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <button className="btn-almox-primary" style={{ marginTop: 20 }} onClick={handleSalvar} disabled={saving}>
+            <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar permissões do setor'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
+import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2
@@ -33,9 +34,14 @@ const maxQtdEntrega = (item) => {
   const separadoDisponivel = Math.max(0, getSeparado(item) - entregue);
   const pendente = getPendente(item);
   const estoque = Number(item.saldo_atual) || 0;
+  if (pendente <= 0) return 0;
+  if (entregue > 0 && separadoDisponivel < pendente) {
+    return Math.min(pendente, estoque);
+  }
   return Math.min(pendente, separadoDisponivel, estoque);
 };
 const temEntregavel = (itens) => (itens || []).some((i) => maxQtdEntrega(i) > 0);
+const totalPendente = (itens) => (itens || []).reduce((s, i) => s + getPendente(i), 0);
 const temPendenteComEstoque = (itens) => temEntregavel(itens);
 
 const URGENCIA_INFO = {
@@ -47,13 +53,21 @@ const URGENCIA_INFO = {
 const RequisicoesList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const ctx = useRequisicoesMaterialContext();
+  const warehouseMode = !!ctx.warehouseMode;
+  const apiPrefix = warehouseMode ? '/almoxarifado/requisicoes' : '/requisicoes-material';
+  const novaPath = warehouseMode
+    ? '/almoxarifado/requisicoes/nova'
+    : `${ctx.basePath}/requisicoes-material/nova`;
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = user?.role === 'admin';
 
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState(searchParams.get('status') || '');
-  const [filtroMinha, setFiltroMinha] = useState(searchParams.get('minha') === '1');
+  const [filtroMinha, setFiltroMinha] = useState(
+    warehouseMode ? searchParams.get('minha') === '1' : true
+  );
   const [selectedId, setSelectedId] = useState(() => {
     const id = searchParams.get('id');
     return id ? parseInt(id, 10) || null : null;
@@ -122,8 +136,13 @@ const RequisicoesList = () => {
     try {
       const params = {};
       if (filtroStatus) params.status = filtroStatus;
-      if (filtroMinha) params.minha = '1';
-      const res = await api.get('/almoxarifado/requisicoes', { params });
+      if (warehouseMode) {
+        if (filtroMinha) params.minha = '1';
+      } else {
+        params.minha = filtroMinha ? '1' : undefined;
+        if (!filtroMinha && ctx.setor) params.setor = ctx.setor;
+      }
+      const res = await api.get(apiPrefix, { params });
       setRequisicoes(res.data);
     } catch {
       toast.error('Erro ao carregar requisições');
@@ -143,7 +162,7 @@ const RequisicoesList = () => {
     }
 
     try {
-      const res = await api.get(`/almoxarifado/requisicoes/${id}`);
+      const res = await api.get(`${apiPrefix}/${id}`);
       setDetalhe(res.data);
       loadedDetalheIdRef.current = id;
       const qtdsEntrega = {};
@@ -339,12 +358,16 @@ const RequisicoesList = () => {
 
   const handleCompletarEntrega = () => {
     if (!detalhe) return;
+    if (temEntregavel(detalhe.itens)) {
+      abrirModalEntrega();
+      return;
+    }
     const precisaSeparar = detalhe.itens.some((i) => maxQtdSeparacao(i) > 0 && getPendente(i) > 0);
     if (precisaSeparar) {
       setEntregaAposSeparar(true);
       abrirModalSeparacao();
     } else {
-      abrirModalEntrega();
+      toast.error('Aguardando reposição de estoque para itens pendentes.');
     }
   };
 
@@ -356,7 +379,10 @@ const RequisicoesList = () => {
   const handleCancelar = async (id) => {
     if (!window.confirm('Cancelar esta requisição?')) return;
     try {
-      await api.put(`/almoxarifado/requisicoes/${id}/cancelar`);
+      const url = warehouseMode
+        ? `/almoxarifado/requisicoes/${id}/cancelar`
+        : `/requisicoes-material/${id}/cancelar`;
+      await api.put(url);
       toast.success('Requisição cancelada');
       fecharDetalhe();
       loadRequisicoes();
@@ -411,17 +437,19 @@ const RequisicoesList = () => {
   return (
     <div className="almox-page">
       <AlmoxPageHeader
-        title="Requisições de Material"
-        subtitle={`${requisicoes.length} requisição${requisicoes.length !== 1 ? 'ões' : ''}`}
-        breadcrumbs={[{ label: 'Requisições' }]}
-        flowSteps={REQUISICAO_FLOW}
-        currentStep={detalhe ? getRequisicaoStepIndex(detalhe.status) : undefined}
+        title={warehouseMode ? 'Requisições de Material' : 'Minhas Requisições de Material'}
+        subtitle={warehouseMode
+          ? `${requisicoes.length} requisição${requisicoes.length !== 1 ? 'ões' : ''}`
+          : `Setor: ${ctx.setor} · ${requisicoes.length} registro${requisicoes.length !== 1 ? 's' : ''}`}
+        breadcrumbs={[{ label: warehouseMode ? 'Requisições' : 'Minhas Requisições' }]}
+        flowSteps={warehouseMode ? REQUISICAO_FLOW : undefined}
+        currentStep={warehouseMode && detalhe ? getRequisicaoStepIndex(detalhe.status) : undefined}
         actions={
           <>
             <button className="btn-almox-secondary" onClick={loadRequisicoes}>
               <FiRefreshCw size={13} />
             </button>
-            <button className="btn-almox-primary" onClick={() => navigate('/almoxarifado/requisicoes/nova')}>
+            <button className="btn-almox-primary" onClick={() => navigate(novaPath)}>
               <FiPlus size={14} /> Nova Requisição
             </button>
           </>
@@ -436,7 +464,7 @@ const RequisicoesList = () => {
         </select>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>
           <input type="checkbox" checked={filtroMinha} onChange={e => setFiltroMinha(e.target.checked)} />
-          Apenas minhas
+          {warehouseMode ? 'Apenas minhas' : 'Somente minhas solicitações'}
         </label>
         {(filtroStatus || filtroMinha) && (
           <button className="btn-almox-secondary" onClick={() => { setFiltroStatus(''); setFiltroMinha(false); }}>
@@ -572,15 +600,15 @@ const RequisicoesList = () => {
                           ⚠ Saldo insuficiente para quantidade total — entrega parcial disponível
                         </div>
                       )}
-                      {getPendente(item) > 0 && maxQtdEntrega(item) <= 0 && (
+                      {getPendente(item) > 0 && maxQtdEntrega(item) <= 0 && getEntregue(item) > 0 && Number(item.saldo_atual) < getPendente(item) && (
                         <div style={{ fontSize: '0.7rem', color: 'var(--gmp-error)', marginTop: 4 }}>⚠ Sem estoque para entrega</div>
                       )}
                     </div>
                   </div>
                 ))}
 
-                {/* Ações */}
-                {detalhe.status === 'PENDENTE' && (
+                {/* Ações — somente almoxarifado (aprovação/separação/entrega) */}
+                {warehouseMode && detalhe.status === 'PENDENTE' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
                     <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
                       onClick={() => handleAprovar(detalhe.id, true)} disabled={saving}>
@@ -596,7 +624,7 @@ const RequisicoesList = () => {
                     </button>
                   </div>
                 )}
-                {detalhe.status === 'APROVADO' && (
+                {warehouseMode && detalhe.status === 'APROVADO' && (
                   <div style={{ marginTop: 20 }}>
                     <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
                       Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.
@@ -607,7 +635,7 @@ const RequisicoesList = () => {
                     </button>
                   </div>
                 )}
-                {detalhe.status === 'EM_SEPARACAO' && (
+                {warehouseMode && detalhe.status === 'EM_SEPARACAO' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
                     <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
                       onClick={abrirModalSeparacao}>
@@ -625,23 +653,29 @@ const RequisicoesList = () => {
                     )}
                   </div>
                 )}
-                {detalhe.status === 'PARCIALMENTE_ATENDIDA' && (
-                  <div style={{ marginTop: 20 }}>
-                    <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem', borderColor: 'var(--gmp-warning)' }}>
-                      Atendimento parcial — itens pendentes aguardam estoque para conclusão.
-                    </div>
-                    {temPendenteComEstoque(detalhe.itens) ? (
-                      <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                        onClick={handleCompletarEntrega}>
-                        <FiTruck size={14} /> Completar Entrega
-                      </button>
-                    ) : (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
-                        Aguardando reposição de estoque para itens pendentes.
+                {warehouseMode && detalhe.status === 'PARCIALMENTE_ATENDIDA' && (() => {
+                  const pendentes = totalPendente(detalhe.itens);
+                  const podeEntregar = temPendenteComEstoque(detalhe.itens);
+                  return (
+                    <div style={{ marginTop: 20 }}>
+                      <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem', borderColor: 'var(--gmp-warning)' }}>
+                        {podeEntregar
+                          ? `Atendimento parcial — ${pendentes} unidade${pendentes !== 1 ? 's' : ''} pendente${pendentes !== 1 ? 's' : ''} pronta${pendentes !== 1 ? 's' : ''} para entrega.`
+                          : 'Atendimento parcial — itens pendentes aguardam reposição de estoque.'}
                       </div>
-                    )}
-                  </div>
-                )}
+                      {podeEntregar ? (
+                        <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
+                          onClick={handleCompletarEntrega} disabled={saving}>
+                          <FiTruck size={14} /> Completar Entrega ({pendentes} pendente{pendentes !== 1 ? 's' : ''})
+                        </button>
+                      ) : (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
+                          Aguardando reposição de estoque para itens pendentes.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {['PENDENTE', 'APROVADO'].includes(detalhe.status) && (
                   detalhe.solicitante_id === user?.id || isAdmin
                 ) && (
@@ -650,7 +684,7 @@ const RequisicoesList = () => {
                     Cancelar Requisição
                   </button>
                 )}
-                {isAdmin && (
+                {isAdmin && warehouseMode && (
                   <button className="btn-almox-danger" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
                     onClick={() => { setJustificativaExclusao(''); setShowExcluir(true); }}>
                     <FiTrash2 size={14} /> Excluir Requisição

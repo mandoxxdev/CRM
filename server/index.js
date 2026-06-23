@@ -22039,6 +22039,9 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
+// ── Requisições de material (cross-módulo — qualquer usuário autenticado) ───
+require('./routes/requisicoesMaterial')(app, db, authenticateToken);
+
 // ── Módulo Almoxarifado ──────────────────────────────────────────────────────
 require('./routes/almoxarifado')(app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission);
 

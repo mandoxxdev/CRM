@@ -51,7 +51,7 @@ async function setupDb() {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   await dbRun(db, `CREATE TABLE configuracoes_almoxarifado (chave TEXT UNIQUE, valor TEXT, descricao TEXT)`);
-  await dbRun(db, `CREATE TABLE localizacoes_almoxarifado (id INTEGER PRIMARY KEY AUTOINCREMENT, codigo TEXT, descricao TEXT, tipo TEXT, ativo INTEGER DEFAULT 1)`);
+  await dbRun(db, `CREATE TABLE localizacoes_almoxarifado (id INTEGER PRIMARY KEY AUTOINCREMENT, codigo TEXT, descricao TEXT, tipo TEXT, setor TEXT, parent_id INTEGER, subgrupo TEXT, ativo INTEGER DEFAULT 1)`);
   await dbRun(db, `CREATE TABLE conferencias_almoxarifado (id INTEGER PRIMARY KEY, numero TEXT, status TEXT)`);
   await dbRun(db, `CREATE TABLE itens_conferencia_almoxarifado (id INTEGER PRIMARY KEY, conferencia_id INTEGER, material_id INTEGER, quantidade_sistema REAL, divergencia REAL)`);
   await dbRun(db, `CREATE TABLE tipos_material_almoxarifado (id INTEGER PRIMARY KEY, nome TEXT)`);
@@ -318,6 +318,38 @@ async function run() {
     assert.strictEqual(req.status, 'PARCIALMENTE_ATENDIDA');
   });
 
+  await test('Requisição — segunda rodada entrega direta após reposição (REQ-45657788)', async () => {
+    const matId = await criarMaterial(db, 'T-REQ-07', 0);
+    const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+      (numero, solicitante_id, solicitante_nome, status) VALUES ('REQ-TEST-07', 1, 'Teste', 'PARCIALMENTE_ATENDIDA')`);
+    const itemRes = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)
+      VALUES (?, ?, 10, 8, 8, 8)`, [reqRes.lastID, matId]);
+
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 15 WHERE id = ?', [matId]);
+
+    const itemRow = await dbGet(db, 'SELECT * FROM itens_requisicao_almoxarifado WHERE id = ?', [itemRes.lastID]);
+    assert.strictEqual(requisitionService.maxEntregar(itemRow, 15), 2);
+
+    const result = await requisitionService.entregarRequisicao(db, reqRes.lastID, [{
+      item_id: itemRes.lastID,
+      quantidade_atendida: 2,
+    }], userAlmox);
+
+    const req = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqRes.lastID]);
+    const item = await dbGet(db,
+      'SELECT quantidade_entregue, quantidade_separada FROM itens_requisicao_almoxarifado WHERE id = ?',
+      [itemRes.lastID]);
+    const mat = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matId]);
+
+    assert.strictEqual(result.parcial, false);
+    assert.strictEqual(result.status, 'ENTREGUE');
+    assert.strictEqual(req.status, 'ENTREGUE');
+    assert.strictEqual(item.quantidade_entregue, 10);
+    assert.strictEqual(item.quantidade_separada, 10);
+    assert.strictEqual(mat.quantidade_atual, 13);
+  });
+
   await test('Requisição — admin exclui com estorno de estoque', async () => {
     const matId = await criarMaterial(db, 'T-REQ-06', 5);
     const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
@@ -374,6 +406,43 @@ async function run() {
     const matAbaixo = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [id]);
     const r2 = await alertService.avaliarCruzamentoMinimo(db, matAbaixo);
     assert.strictEqual(r2.deveAlertar, true);
+  });
+
+  await test('Mapa — material com localizacao_padrao_id aparece na localização', async () => {
+    const locRes = await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES ('C-01', 'Corredor C', 1)`);
+    const locId = locRes.lastID;
+    await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, quantidade_atual, localizacao_padrao_id, ativo)
+      VALUES ('MAP-1', 'Item Mapa', 5, ?, 1)`, [locId]);
+
+    const mapa = await stockService.consultarMapaLocalizacoes(db);
+    const loc = mapa.find((l) => l.id === locId);
+    assert.ok(loc, 'localização C-01 deve existir no mapa');
+    assert.strictEqual(loc.qtd_itens, 1);
+    assert.strictEqual(loc.quantidade_total, 5);
+  });
+
+  await test('syncSaldoLocalizacaoPadrao — cria saldo na localização padrão', async () => {
+    const locRes = await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES ('D-01', 'Depósito', 1)`);
+    const matId = await criarMaterial(db, 'MAP-2', 12);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [locRes.lastID, matId]);
+
+    await stockService.syncSaldoLocalizacaoPadrao(db, matId);
+    const saldo = await dbGet(db,
+      'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ?',
+      [matId, locRes.lastID]);
+    assert.strictEqual(saldo.quantidade, 12);
+  });
+
+  await test('Movimentação ENTRADA — atualiza saldo na localização padrão', async () => {
+    const locRes = await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES ('E-01', 'Estante', 1)`);
+    const matId = await criarMaterial(db, 'MAP-3', 0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [locRes.lastID, matId]);
+
+    await stockService.registrarMovimentacao(db, userAlmox, { material_id: matId, tipo: 'ENTRADA', quantidade: 7, motivo: 'Teste mapa' });
+    const saldo = await dbGet(db,
+      'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ?',
+      [matId, locRes.lastID]);
+    assert.strictEqual(saldo.quantidade, 7);
   });
 
   console.log(`\n📊 Resultado: ${passed} passou, ${failed} falhou\n`);

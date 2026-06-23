@@ -3,23 +3,29 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
+import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { FiPlus, FiTrash2, FiArrowLeft, FiSend, FiSearch, FiPackage, FiAlertTriangle } from 'react-icons/fi';
 import './Almoxarifado.css';
-
-const DEPARTAMENTOS = ['Produção', 'Manutenção', 'Qualidade', 'Engenharia', 'Logística', 'Administrativo', 'P&D', 'Segurança'];
 
 const RequisicaoForm = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const ctx = useRequisicoesMaterialContext();
+  const warehouseMode = !!ctx.warehouseMode;
+  const setorFixo = searchParams.get('setor') || ctx.setor || '';
+  const setorReadOnly = !warehouseMode && !!setorFixo;
+  const listPath = `${ctx.basePath}/requisicoes-material`;
+  const apiPrefix = warehouseMode ? '/almoxarifado/requisicoes' : '/requisicoes-material';
 
+  const [setores, setSetores] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [busca, setBusca] = useState('');
   const [resultados, setResultados] = useState([]);
   const [showBusca, setShowBusca] = useState(false);
 
   const [form, setForm] = useState({
-    departamento: '',
+    departamento: setorFixo,
     os_referencia: '',
     urgencia: 'NORMAL',
     observacoes: '',
@@ -31,7 +37,14 @@ const RequisicaoForm = () => {
 
   useEffect(() => {
     loadMateriais();
-  }, []);
+    if (warehouseMode) loadSetores();
+  }, [setorFixo, warehouseMode]);
+
+  useEffect(() => {
+    if (setorFixo) {
+      setForm((f) => ({ ...f, departamento: setorFixo }));
+    }
+  }, [setorFixo]);
 
   useEffect(() => {
     if (busca.length < 2) { setResultados([]); return; }
@@ -42,11 +55,25 @@ const RequisicaoForm = () => {
     setResultados(filtered);
   }, [busca, materiais]);
 
+  const loadSetores = async () => {
+    try {
+      const res = await api.get('/almoxarifado/setores-requisicao');
+      setSetores(res.data);
+    } catch { /* optional */ }
+  };
+
   const loadMateriais = async () => {
     try {
-      const res = await api.get('/almoxarifado/materiais');
+      const setor = setorFixo || form.departamento;
+      const url = warehouseMode
+        ? '/almoxarifado/materiais'
+        : '/requisicoes-material/materiais';
+      const params = setor ? { setor } : {};
+      const res = await api.get(url, { params });
       setMateriais(res.data);
-    } catch { /* silently fail */ }
+    } catch {
+      toast.error('Erro ao carregar materiais disponíveis');
+    }
   };
 
   useEffect(() => {
@@ -102,6 +129,7 @@ const RequisicaoForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.departamento) { toast.error('Setor é obrigatório'); return; }
     if (itens.length === 0) { toast.error('Adicione ao menos um material'); return; }
     if (form.urgencia !== 'NORMAL' && !form.justificativa_urgencia) {
       toast.error('Justifique a urgência para requisições urgentes/críticas');
@@ -109,16 +137,19 @@ const RequisicaoForm = () => {
     }
     setSaving(true);
     try {
-      const res = await api.post('/almoxarifado/requisicoes', {
+      const payload = {
         ...form,
+        setor: form.departamento,
+        modulo_origem: ctx.moduloOrigem,
         itens: itens.map(i => ({
           material_id: i.material_id,
           quantidade: parseFloat(i.quantidade),
           observacoes: i.observacoes
         }))
-      });
-      toast.success(`Requisição ${res.data.numero} criada! ${res.data.aprovacao === 'automatica' ? '(Aprovação automática)' : 'Aguardando aprovação.'}`);
-      navigate('/almoxarifado/requisicoes');
+      };
+      const res = await api.post(apiPrefix, payload);
+      toast.success(`Requisição ${res.data.numero} criada! ${res.data.aprovacao === 'automatica' ? '(Aprovação automática)' : 'Aguardando aprovação do almoxarifado.'}`);
+      navigate(listPath);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao criar requisição');
     } finally {
@@ -134,9 +165,13 @@ const RequisicaoForm = () => {
       <div className="almox-header">
         <div>
           <h1>Nova Requisição de Material</h1>
-          <p>Solicite materiais do almoxarifado para a fábrica</p>
+          <p>
+            {warehouseMode
+              ? 'Solicite materiais do almoxarifado'
+              : `Solicitação do setor ${setorFixo || form.departamento || '—'}`}
+          </p>
         </div>
-        <button className="btn-almox-secondary" onClick={() => navigate('/almoxarifado/requisicoes')}>
+        <button className="btn-almox-secondary" onClick={() => navigate(listPath)}>
           <FiArrowLeft size={14} /> Voltar
         </button>
       </div>
@@ -144,19 +179,27 @@ const RequisicaoForm = () => {
       <form onSubmit={handleSubmit}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, alignItems: 'start' }}>
 
-          {/* Coluna principal */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {/* Dados da requisição */}
             <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
               <div className="almox-section-title">Dados da Requisição</div>
               <div className="almox-form-grid">
                 <div className="almox-field">
-                  <label className="almox-label">Departamento / Setor</label>
-                  <select className="almox-form-select" value={form.departamento} onChange={e => setForm(f => ({ ...f, departamento: e.target.value }))}>
-                    <option value="">Selecionar...</option>
-                    {DEPARTAMENTOS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  <label className="almox-label">Setor Requisitante</label>
+                  {setorReadOnly ? (
+                    <input className="almox-input" value={form.departamento} readOnly
+                      style={{ background: 'var(--gmp-bg)', cursor: 'not-allowed' }} />
+                  ) : (
+                    <select className="almox-form-select" value={form.departamento}
+                      onChange={e => {
+                        setForm(f => ({ ...f, departamento: e.target.value }));
+                      }}>
+                      <option value="">Selecionar...</option>
+                      {(setores.length ? setores : [{ nome: form.departamento }]).map(s => (
+                        <option key={s.id || s.nome} value={s.nome}>{s.nome}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">OS / Referência</label>
@@ -188,7 +231,6 @@ const RequisicaoForm = () => {
               </div>
             </div>
 
-            {/* Itens */}
             <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 24 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div className="almox-section-title" style={{ margin: 0 }}>
@@ -200,7 +242,12 @@ const RequisicaoForm = () => {
                 </button>
               </div>
 
-              {/* Busca */}
+              {!warehouseMode && setorFixo && (
+                <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
+                  Exibindo apenas materiais permitidos para o setor <strong>{setorFixo}</strong>.
+                </div>
+              )}
+
               {showBusca && (
                 <div style={{ marginBottom: 16, position: 'relative' }}>
                   <div className="almox-search-wrapper">
@@ -230,7 +277,7 @@ const RequisicaoForm = () => {
                   )}
                   {busca.length >= 2 && resultados.length === 0 && (
                     <div style={{ padding: '10px 16px', color: 'var(--gmp-text-light)', fontSize: '0.875rem', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8, marginTop: 4 }}>
-                      Nenhum material encontrado para "{busca}"
+                      Nenhum material encontrado para &quot;{busca}&quot;
                     </div>
                   )}
                   <button type="button" onClick={() => { setShowBusca(false); setBusca(''); }}
@@ -253,7 +300,7 @@ const RequisicaoForm = () => {
                       {itensSemSaldo.length} item(ns) com saldo insuficiente. A requisição será registrada mas pode não ser atendida integralmente.
                     </div>
                   )}
-                  {itens.map((item, idx) => (
+                  {itens.map((item) => (
                     <div key={item.material_id} style={{ padding: '14px 0', borderBottom: '1px solid var(--gmp-border)', display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 14, alignItems: 'start' }}>
                       <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
                         {item.tipo_icone || <FiPackage size={16} />}
@@ -284,13 +331,13 @@ const RequisicaoForm = () => {
             </div>
           </div>
 
-          {/* Resumo lateral */}
           <div style={{ position: 'sticky', top: 80, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 20 }}>
               <div className="almox-section-title" style={{ marginTop: 0 }}>Resumo</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[
                   ['Solicitante', user?.nome || '—'],
+                  ['Setor', form.departamento || '—'],
                   ['Total de itens', totalItens],
                   ['Urgência', form.urgencia],
                   ['OS / Ref.', form.os_referencia || '—'],
@@ -314,7 +361,7 @@ const RequisicaoForm = () => {
               <FiSend size={14} /> {saving ? 'Enviando...' : 'Enviar Requisição'}
             </button>
             <button type="button" className="btn-almox-secondary" style={{ justifyContent: 'center' }}
-              onClick={() => navigate('/almoxarifado/requisicoes')}>
+              onClick={() => navigate(listPath)}>
               Cancelar
             </button>
           </div>
