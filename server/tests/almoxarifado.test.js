@@ -11,8 +11,11 @@ const returnService = require('../services/almoxarifado/returnService');
 const clientMaterialService = require('../services/almoxarifado/clientMaterialService');
 const receiptService = require('../services/almoxarifado/receiptService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const sectorMaterialService = require('../services/almoxarifado/sectorMaterialService');
 const { can, PERFIS } = require('../services/almoxarifado/permissions');
 const alertService = require('../services/almoxarifado/alertService');
+const reminderService = require('../services/almoxarifado/requisitionReminderService');
+const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 
 const userAdmin = { id: 1, nome: 'Admin Test', role: 'admin' };
 const userAlmox = { id: 2, nome: 'Almox Test', role: 'user', perfil_almoxarifado: PERFIS.ALMOXARIFE };
@@ -62,10 +65,47 @@ async function setupDb() {
   return db;
 }
 
-async function criarMaterial(db, codigo, qtd = 100) {
-  const r = await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, quantidade_atual, quantidade_minima) VALUES (?,?,?,?)`,
-    [codigo, `Material ${codigo}`, qtd, 10]);
+async function criarMaterial(db, codigo, qtd = 100, custo = 0) {
+  const r = await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, quantidade_atual, quantidade_minima, custo_unitario) VALUES (?,?,?,?,?)`,
+    [codigo, `Material ${codigo}`, qtd, 10, custo]);
   return r.lastID;
+}
+
+async function setupLiberacaoValor(db, { limite = 500, aprovadorIds = [10] } = {}) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY, nome TEXT, email TEXT, ativo INTEGER DEFAULT 1
+  )`);
+  await dbRun(db, `INSERT OR IGNORE INTO usuarios (id, nome, email) VALUES (10, 'Aprovador Valor', 'aprovador@test.com')`);
+  await dbRun(db, `INSERT OR IGNORE INTO usuarios (id, nome, email) VALUES (1, 'Solicitante', 'sol@test.com')`);
+  await dbRun(db, `INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES ('liberacao_valor_ativo', '1')`);
+  await dbRun(db, `INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES ('liberacao_valor_limite', ?)`, [String(limite)]);
+  await dbRun(db, `INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES ('liberacao_valor_aprovadores', ?)`, [JSON.stringify(aprovadorIds)]);
+}
+
+async function criarRequisicaoComItens(db, { numero, status = 'PENDENTE', itens = [] }) {
+  const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+    (numero, solicitante_id, solicitante_nome, status) VALUES (?, 1, 'Teste', ?)`, [numero, status]);
+  for (const item of itens) {
+    await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada) VALUES (?, ?, ?)`,
+      [reqRes.lastID, item.material_id, item.qty]);
+  }
+  return reqRes.lastID;
+}
+
+async function criarRequisicaoPendente(db, { numero, updatedOffset = '-25 hours', ultimoLembreteOffset = null } = {}) {
+  const matId = await criarMaterial(db, `RM-${Date.now()}-${Math.random()}`, 50);
+  const n = numero || `REQ-L-${Date.now()}`;
+  const ultimoSql = ultimoLembreteOffset
+    ? `datetime('now', '${ultimoLembreteOffset}')`
+    : 'NULL';
+  const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+    (numero, solicitante_id, solicitante_nome, setor, status, updated_at, ultimo_lembrete_enviado)
+    VALUES (?,?,?,?, 'PENDENTE', datetime('now', ?), ${ultimoSql})`,
+    [n, 1, 'Solicitante Test', 'Produção', updatedOffset]);
+  await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada)
+    VALUES (?,?,5)`, [reqRes.lastID, matId]);
+  return dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [reqRes.lastID]);
 }
 
 async function run() {
@@ -195,6 +235,41 @@ async function run() {
     await receiptService.aprovarRecebimento(db, userAlmox, rec.id);
     const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [id]);
     assert.strictEqual(m.quantidade_atual, 25);
+  });
+
+  await test('Workflow NF — almoxarifado até contas a pagar', async () => {
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS contas_pagar (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, descricao TEXT, fornecedor TEXT, valor REAL,
+      data_vencimento DATE, status TEXT DEFAULT 'pendente', categoria TEXT, observacoes TEXT
+    )`);
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS fornecedores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, razao_social TEXT, cnpj TEXT, status TEXT DEFAULT 'ativo'
+    )`);
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS pedidos_compra (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER, valor_total REAL DEFAULT 0
+    )`);
+    const forn = await dbRun(db, `INSERT INTO fornecedores (razao_social, cnpj) VALUES ('Forn Test', '12.345.678/0001-90')`);
+    const ped = await dbRun(db, `INSERT INTO pedidos_compra (numero, fornecedor_id, valor_total) VALUES ('PC-001', ?, 500)`, [forn.lastID]);
+    const matId = await criarMaterial(db, 'T-NF-01', 0);
+    await dbRun(db, `INSERT INTO itens_pedido_compra (pedido_id, material_id, quantidade, valor_unitario) VALUES (?,?,10,50)`, [ped.lastID, matId]);
+
+    const rec = await receiptService.criarRecebimento(db, userAlmox, {
+      tipo_recebimento: 'PEDIDO_COMPRA', pedido_compra_id: ped.lastID,
+    });
+    await receiptService.avancarWorkflow(db, userAlmox, rec.id, 'iniciar_conferencia');
+    await receiptService.avancarWorkflow(db, userAlmox, rec.id, 'finalizar_conferencia');
+    await receiptService.avancarWorkflow(db, userAlmox, rec.id, 'encaminhar_compras');
+    await receiptService.avancarWorkflow(db, userAlmox, rec.id, 'finalizar_compras');
+    await receiptService.salvarDadosFiscal(db, userAlmox, rec.id, {
+      nota_fiscal: '9999', data_emissao_nf: '2026-01-15', data_entrada_nf: '2026-01-16',
+      valor_total_nota: 500, fornecedor_cnpj: '12.345.678/0001-90',
+    });
+    const result = await receiptService.processarNota(db, userAlmox, rec.id);
+    assert.ok(result.contas_pagar_id);
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matId]);
+    assert.strictEqual(m.quantidade_atual, 10);
+    const cp = await dbGet(db, 'SELECT * FROM contas_pagar WHERE id = ?', [result.contas_pagar_id]);
+    assert.strictEqual(cp.valor, 500);
   });
 
   await test('Requisição — bloqueia separação acima do estoque', async () => {
@@ -443,6 +518,195 @@ async function run() {
       'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ?',
       [matId, locRes.lastID]);
     assert.strictEqual(saldo.quantidade, 7);
+  });
+
+  await test('Filtro por setor — sem permissões retorna todos os materiais', async () => {
+    const id = await criarMaterial(db, 'SEC-1', 10);
+    const clause = await sectorMaterialService.buildMaterialFilterClause(db, 'Compras');
+    assert.strictEqual(clause, null);
+    const rows = await dbAll(db, `SELECT id FROM materiais_almoxarifado m WHERE m.ativo = 1${clause ? ` AND ${clause}` : ''}`);
+    assert.ok(rows.some((r) => r.id === id));
+  });
+
+  await test('Filtro por setor — permissões sem match liberam todos (retrocompat)', async () => {
+    const id = await criarMaterial(db, 'SEC-2', 10);
+    const clause = await sectorMaterialService.buildMaterialFilterClause(db, 'Engenharia');
+    assert.strictEqual(clause, null);
+    const rows = await dbAll(db, 'SELECT id FROM materiais_almoxarifado m WHERE m.ativo = 1');
+    assert.ok(rows.some((r) => r.id === id));
+  });
+
+  await test('resolveSetor encontra setor por modulo_origem', async () => {
+    const setor = await sectorMaterialService.resolveSetor(db, 'engenharia_projetos');
+    assert.strictEqual(setor?.nome, 'Engenharia / Projetos');
+  });
+
+  await test('Lembrete requisição — recente não é elegível', async () => {
+    await criarRequisicaoPendente(db, { updatedOffset: '-2 hours' });
+    const elegiveis = await reminderService.buscarRequisicoesElegiveis(db, 24);
+    assert.strictEqual(elegiveis.length, 0);
+  });
+
+  await test('Lembrete requisição — antiga sem resposta é elegível', async () => {
+    const req = await criarRequisicaoPendente(db, { numero: 'REQ-OLD-1', updatedOffset: '-30 hours' });
+    const elegiveis = await reminderService.buscarRequisicoesElegiveis(db, 24);
+    assert.ok(elegiveis.some((r) => r.id === req.id));
+  });
+
+  await test('Lembrete requisição — não reenvia antes do intervalo', async () => {
+    const req = await criarRequisicaoPendente(db, {
+      numero: 'REQ-RECENT-REM',
+      updatedOffset: '-30 hours',
+      ultimoLembreteOffset: '-2 hours',
+    });
+    const elegiveis = await reminderService.buscarRequisicoesElegiveis(db, 24);
+    assert.ok(!elegiveis.some((r) => r.id === req.id));
+  });
+
+  await test('Lembrete requisição — desativado não processa', async () => {
+    await dbRun(db, `INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES ('requisicoes_lembrete_ativo', '0')`);
+    await criarRequisicaoPendente(db, { numero: 'REQ-OFF-1', updatedOffset: '-48 hours' });
+    const resultado = await reminderService.processarLembretesPendentes(db);
+    assert.strictEqual(resultado.ativo, false);
+    assert.strictEqual(resultado.processados, 0);
+    await dbRun(db, `INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES ('requisicoes_lembrete_ativo', '1')`);
+  });
+
+  await test('Lembrete requisição — assunto do e-mail', async () => {
+    const req = {
+      numero: 'REQ-999',
+      solicitante_nome: 'João',
+      setor: 'Caldeiraria',
+      urgencia: 'URGENTE',
+      os_referencia: 'OS-42',
+      updated_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    };
+    const msg = reminderService.buildMensagemLembrete(req, [{
+      material_nome: 'Parafuso M8',
+      material_codigo: 'PAR-08',
+      quantidade_solicitada: 10,
+      unidade: 'UN',
+    }], 2, 'https://systemgmp.online');
+    assert.ok(msg.assunto.includes('REQ-999'));
+    assert.ok(msg.assunto.includes('2 dias'));
+    assert.ok(msg.html.includes('Parafuso M8'));
+  });
+
+  await test('Lembrete requisição — processa sem SMTP (sem envio)', async () => {
+    await dbRun(db, `INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES ('alertas_estoque_emails', '["almox@test.com"]')`);
+    const req = await criarRequisicaoPendente(db, { numero: 'REQ-NO-SMTP', updatedOffset: '-26 hours' });
+    const resultado = await reminderService.processarLembretesPendentes(db);
+    assert.ok(resultado.processados >= 1);
+    const item = resultado.resultados.find((r) => r.requisicao_id === req.id);
+    assert.ok(item);
+    assert.strictEqual(item.enviado, false);
+    const logs = await dbAll(db, 'SELECT * FROM requisicao_lembretes_log WHERE requisicao_id = ?', [req.id]);
+    assert.ok(logs.length >= 1);
+  });
+
+  await test('Liberação por valor — calcula valor total dos itens', async () => {
+    await setupLiberacaoValor(db);
+    const matId = await criarMaterial(db, 'T-VAL-01', 10, 100);
+    const reqId = await criarRequisicaoComItens(db, {
+      numero: 'REQ-VAL-01',
+      itens: [{ material_id: matId, qty: 3 }],
+    });
+    const total = await valueApprovalService.calcularValorTotal(db, reqId);
+    assert.strictEqual(total, 300);
+  });
+
+  await test('Liberação por valor — abaixo do limite não exige aprovação', async () => {
+    await setupLiberacaoValor(db, { limite: 500 });
+    const matId = await criarMaterial(db, 'T-VAL-02', 10, 50);
+    const reqId = await criarRequisicaoComItens(db, {
+      numero: 'REQ-VAL-02',
+      itens: [{ material_id: matId, qty: 5 }],
+    });
+    const result = await valueApprovalService.aplicarAvaliacaoNaCriacao(db, reqId);
+    assert.strictEqual(result.status, 'PENDENTE');
+    assert.strictEqual(result.requer_aprovacao_valor, false);
+    const req = await dbGet(db, 'SELECT status, valor_total FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+    assert.strictEqual(req.status, 'PENDENTE');
+    assert.strictEqual(req.valor_total, 250);
+  });
+
+  await test('Liberação por valor — acima do limite fica aguardando aprovação', async () => {
+    await setupLiberacaoValor(db, { limite: 500 });
+    const matId = await criarMaterial(db, 'T-VAL-03', 10, 200);
+    const reqId = await criarRequisicaoComItens(db, {
+      numero: 'REQ-VAL-03',
+      itens: [{ material_id: matId, qty: 4 }],
+    });
+    const result = await valueApprovalService.aplicarAvaliacaoNaCriacao(db, reqId);
+    assert.strictEqual(result.status, valueApprovalService.STATUS_AGUARDANDO);
+    assert.strictEqual(result.requer_aprovacao_valor, true);
+    const req = await dbGet(db, 'SELECT status, valor_total, requer_aprovacao_valor FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+    assert.strictEqual(req.status, 'AGUARDANDO_APROVACAO_VALOR');
+    assert.strictEqual(req.valor_total, 800);
+    assert.strictEqual(req.requer_aprovacao_valor, 1);
+  });
+
+  await test('Liberação por valor — bloqueia separação sem aprovação', async () => {
+    await setupLiberacaoValor(db, { limite: 100 });
+    const matId = await criarMaterial(db, 'T-VAL-04', 10, 50);
+    const reqId = await criarRequisicaoComItens(db, {
+      numero: 'REQ-VAL-04',
+      status: 'APROVADO',
+      itens: [{ material_id: matId, qty: 5 }],
+    });
+    await dbRun(db, `UPDATE requisicoes_almoxarifado SET valor_total=250, requer_aprovacao_valor=1 WHERE id=?`, [reqId]);
+    let bloqueado = false;
+    try {
+      await requisitionService.separarRequisicao(db, reqId, []);
+    } catch (e) {
+      bloqueado = e.status === 403 && e.code === 'AGUARDANDO_APROVACAO_VALOR';
+    }
+    assert.strictEqual(bloqueado, true);
+  });
+
+  await test('Liberação por valor — aprovador libera requisição', async () => {
+    await setupLiberacaoValor(db, { limite: 100 });
+    const matId = await criarMaterial(db, 'T-VAL-05', 10, 50);
+    const reqId = await criarRequisicaoComItens(db, {
+      numero: 'REQ-VAL-05',
+      status: 'AGUARDANDO_APROVACAO_VALOR',
+      itens: [{ material_id: matId, qty: 5 }],
+    });
+    await dbRun(db, `UPDATE requisicoes_almoxarifado SET valor_total=250, requer_aprovacao_valor=1 WHERE id=?`, [reqId]);
+    const aprovador = { id: 10, nome: 'Aprovador Valor', role: 'user' };
+    const result = await valueApprovalService.aprovarValor(db, reqId, aprovador);
+    assert.strictEqual(result.status, 'APROVADO');
+    const req = await dbGet(db, 'SELECT status, aprovador_valor_id, data_aprovacao_valor FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+    assert.strictEqual(req.status, 'APROVADO');
+    assert.strictEqual(req.aprovador_valor_id, 10);
+    assert.ok(req.data_aprovacao_valor);
+  });
+
+  await test('Liberação por valor — reprovação com motivo', async () => {
+    await setupLiberacaoValor(db, { limite: 100 });
+    const matId = await criarMaterial(db, 'T-VAL-06', 10, 50);
+    const reqId = await criarRequisicaoComItens(db, {
+      numero: 'REQ-VAL-06',
+      status: 'AGUARDANDO_APROVACAO_VALOR',
+      itens: [{ material_id: matId, qty: 5 }],
+    });
+    await dbRun(db, `UPDATE requisicoes_almoxarifado SET valor_total=250, requer_aprovacao_valor=1 WHERE id=?`, [reqId]);
+    const aprovador = { id: 10, nome: 'Aprovador Valor', role: 'user' };
+    const result = await valueApprovalService.rejeitarValor(db, reqId, aprovador, 'Valor não justificado');
+    assert.strictEqual(result.status, 'REJEITADO');
+    const req = await dbGet(db, 'SELECT status, rejeicao_valor_motivo FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+    assert.strictEqual(req.status, 'REJEITADO');
+    assert.strictEqual(req.rejeicao_valor_motivo, 'Valor não justificado');
+  });
+
+  await test('Liberação por valor — isAprovadorValor respeita configuração', async () => {
+    await setupLiberacaoValor(db, { aprovadorIds: [10] });
+    const sim = await valueApprovalService.isAprovadorValor(db, { id: 10, role: 'user' });
+    const nao = await valueApprovalService.isAprovadorValor(db, { id: 99, role: 'user' });
+    const admin = await valueApprovalService.isAprovadorValor(db, { id: 99, role: 'admin' });
+    assert.strictEqual(sim, true);
+    assert.strictEqual(nao, false);
+    assert.strictEqual(admin, true);
   });
 
   console.log(`\n📊 Resultado: ${passed} passou, ${failed} falhou\n`);

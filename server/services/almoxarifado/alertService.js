@@ -131,10 +131,13 @@ async function getWhatsappConfig(db) {
 }
 
 async function getAlertSettingsForApi(db) {
-  const [settings, smtp, whatsapp] = await Promise.all([
+  const [settings, smtp, whatsapp, requisicoesEmails, requisicoesNotificar, comprasEmails] = await Promise.all([
     getAlertSettings(db),
     getSmtpConfig(db),
     getWhatsappConfig(db),
+    getConfigValue(db, 'requisicoes_notificar_emails'),
+    getConfigValue(db, 'requisicoes_notificar_email'),
+    getConfigValue(db, 'compras_notificar_emails'),
   ]);
 
   const smtpPassDb = await getConfigValue(db, SMTP_CONFIG_KEYS.pass);
@@ -142,6 +145,11 @@ async function getAlertSettingsForApi(db) {
 
   return {
     ...settings,
+    requisicoesEmails: parseList(requisicoesEmails),
+    requisicoesNotificarEmail: requisicoesNotificar === undefined || requisicoesNotificar === null || requisicoesNotificar === ''
+      ? null
+      : parseBool(requisicoesNotificar, true),
+    comprasEmails: parseList(comprasEmails),
     smtpHost: smtp.host || '',
     smtpPort: smtp.port,
     smtpUser: smtp.user || '',
@@ -402,7 +410,7 @@ async function registrarHistorico(db, materialId, canal, destinatario, status, e
   }
 }
 
-async function enviarEmail(db, destinatarios, assunto, html, text) {
+async function enviarEmail(db, destinatarios, assunto, html, text, options = {}) {
   if (!destinatarios.length) return { enviados: 0, erros: [] };
   const smtp = await getSmtpConfig(db);
   if (!smtp.host || !smtp.from) {
@@ -417,14 +425,20 @@ async function enviarEmail(db, destinatarios, assunto, html, text) {
     auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
   });
 
+  const ccList = Array.isArray(options.cc)
+    ? options.cc.map((v) => String(v).trim()).filter(Boolean)
+    : [];
+
   try {
-    await transporter.sendMail({
+    const mailOptions = {
       from: smtp.from,
       to: destinatarios.join(','),
       subject: assunto,
       html,
       text,
-    });
+    };
+    if (ccList.length) mailOptions.cc = ccList.join(',');
+    await transporter.sendMail(mailOptions);
     return { enviados: destinatarios.length, erros: [] };
   } catch (err) {
     return { enviados: 0, erros: [err.message] };
@@ -602,6 +616,9 @@ module.exports = {
   getAlertSettingsForApi,
   getSmtpConfig,
   getWhatsappConfig,
+  getConfigValue,
+  enviarEmail,
+  escapeHtml,
   shouldUpdateSecret,
   PASSWORD_MASK,
   SMTP_CONFIG_KEYS,
@@ -609,6 +626,7 @@ module.exports = {
   APP_URL_CONFIG_KEY,
   DEFAULT_APP_URL,
   resolveAppBaseUrl,
+  formatDateTimePtBr,
   verificarAlertasEstoque,
   verificarAlertaPorMaterialId,
   processarAlertaMaterial,

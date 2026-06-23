@@ -1,12 +1,16 @@
 /**
  * Configuração de requisições de material por módulo/setor
  */
+/** Módulos que usam catálogo em cesta (escritório/admin) em vez do formulário industrial */
+export const MODULOS_CESTA = ['administrativo', 'admin', 'comercial'];
+
 export const MODULOS_REQUISICAO = {
   comercial: {
     setor: 'Comercial',
     moduloOrigem: 'comercial',
     basePath: '/comercial',
     label: 'Comercial',
+    useCesta: true,
   },
   compras: {
     setor: 'Compras',
@@ -50,12 +54,14 @@ export const MODULOS_REQUISICAO = {
     moduloOrigem: 'administrativo',
     basePath: '/configuracoes',
     label: 'Administrativo',
+    useCesta: true,
   },
   admin: {
     setor: 'Administrativo',
     moduloOrigem: 'admin',
     basePath: '/admin',
     label: 'Administração',
+    useCesta: true,
   },
   frota: {
     setor: 'Manutenção',
@@ -87,4 +93,9 @@ export function getModuloFromPath(pathname) {
 export function getRequisicaoConfig(pathname) {
   const modulo = getModuloFromPath(pathname);
   return modulo ? MODULOS_REQUISICAO[modulo] : null;
+}
+
+export function usesCestaFlow(moduloKey) {
+  if (!moduloKey) return false;
+  return MODULOS_CESTA.includes(moduloKey) || !!MODULOS_REQUISICAO[moduloKey]?.useCesta;
 }

@@ -181,6 +181,36 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     } catch (e) { handleError(res, e); }
   });
 
+  app.post('/api/almoxarifado/recebimentos/:id/workflow', auth, requirePermission('receber_material'), async (req, res) => {
+    try {
+      res.json(await receiptService.avancarWorkflow(db, req.user, req.params.id, req.body.acao));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/recebimentos/:id/fiscal', auth, requirePermission('receber_material'), async (req, res) => {
+    try {
+      res.json(await receiptService.salvarDadosFiscal(db, req.user, req.params.id, req.body));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/recebimentos/:id/processar', auth, requirePermission('receber_material'), async (req, res) => {
+    try {
+      res.json(await receiptService.processarNota(db, req.user, req.params.id, req.body));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/recebimentos-aux/pedidos-compra', auth, async (req, res) => {
+    try {
+      res.json(await receiptService.listarPedidosCompraAux(db, req.query));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/recebimentos-aux/fornecedores', auth, async (req, res) => {
+    try {
+      res.json(await receiptService.listarFornecedoresAux(db, req.query));
+    } catch (e) { handleError(res, e); }
+  });
+
   // ── Devoluções ──
   app.get('/api/almoxarifado/devolucoes', auth, async (req, res) => {
     try { res.json(await returnService.listarDevolucoes(db, req.query)); }
@@ -327,6 +357,19 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     if (!Array.isArray(permissoes)) return res.status(400).json({ error: 'Envie um array de permissões' });
     try {
       const rows = await sectorMaterialService.salvarPermissoesSetor(db, req.params.id, permissoes);
+      res.json(rows);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/setores-requisicao/:id/permissoes/bulk-tipo', auth, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    const { tipo_uso } = req.body;
+    if (!['administrativo', 'industrial'].includes(tipo_uso)) {
+      return res.status(400).json({ error: 'tipo_uso deve ser administrativo ou industrial' });
+    }
+    try {
+      await sectorMaterialService.ensureSetoresRequisicao(db);
+      const rows = await sectorMaterialService.bulkAssignFamiliasPorTipo(db, req.params.id, tipo_uso);
       res.json(rows);
     } catch (e) { handleError(res, e); }
   });

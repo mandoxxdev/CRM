@@ -66,6 +66,7 @@ export const REQUISICAO_FLOW = [
 export const getRequisicaoStepIndex = (status) => {
   const map = {
     PENDENTE: 1,
+    AGUARDANDO_APROVACAO_VALOR: 1,
     APROVADO: 2,
     EM_SEPARACAO: 3,
     PARCIALMENTE_ATENDIDA: 3,

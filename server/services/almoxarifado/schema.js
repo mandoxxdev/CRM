@@ -276,6 +276,7 @@ async function initSchema(db) {
     nome TEXT NOT NULL,
     descricao TEXT,
     categoria_id INTEGER,
+    tipo_uso TEXT DEFAULT 'ambos',
     ativo INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (categoria_id) REFERENCES categorias_material_almoxarifado(id)
@@ -462,6 +463,57 @@ async function initSchema(db) {
     FOREIGN KEY (recebimento_item_id) REFERENCES recebimentos_material_itens_almoxarifado(id)
   )`);
 
+  const recebCols = [
+    "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'",
+    'fornecedor_cnpj TEXT',
+    'pedido_compra_numero TEXT',
+    'nota_serie TEXT',
+    'data_emissao_nf DATE',
+    'data_entrada_nf DATE',
+    'cfop_nota TEXT',
+    'cfop_entrada TEXT',
+    'chave_nfe TEXT',
+    'base_icms REAL DEFAULT 0',
+    'valor_icms REAL DEFAULT 0',
+    'valor_produtos REAL DEFAULT 0',
+    'frete REAL DEFAULT 0',
+    'desconto REAL DEFAULT 0',
+    'outras_despesas REAL DEFAULT 0',
+    'valor_ipi REAL DEFAULT 0',
+    'valor_total_nota REAL DEFAULT 0',
+    'compras_responsavel_id INTEGER',
+    'compras_responsavel_nome TEXT',
+    'compras_data DATETIME',
+    'faturamento_responsavel_id INTEGER',
+    'faturamento_responsavel_nome TEXT',
+    'faturamento_data DATETIME',
+    'contas_pagar_id INTEGER',
+    'etapa_atual TEXT DEFAULT \'ALMOXARIFADO\'',
+  ];
+  for (const col of recebCols) await safeAlter(db, `ALTER TABLE recebimentos_material_almoxarifado ADD COLUMN ${col}`);
+
+  const recebItemCols = [
+    'valor_unitario REAL DEFAULT 0',
+    'valor_total REAL DEFAULT 0',
+    'valor_icms REAL DEFAULT 0',
+    'valor_ipi REAL DEFAULT 0',
+    'reducao_icms_percent REAL DEFAULT 0',
+  ];
+  for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_pedido_compra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id INTEGER NOT NULL,
+    material_id INTEGER,
+    codigo TEXT,
+    descricao TEXT,
+    quantidade REAL NOT NULL DEFAULT 1,
+    valor_unitario REAL DEFAULT 0,
+    unidade TEXT DEFAULT 'UN',
+    FOREIGN KEY (pedido_id) REFERENCES pedidos_compra(id),
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
   // ── Devoluções ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS devolucoes_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -631,6 +683,26 @@ async function initSchema(db) {
   for (const col of reqCols) await safeAlter(db, `ALTER TABLE requisicoes_almoxarifado ADD COLUMN ${col}`);
 
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN ativo INTEGER DEFAULT 1');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN ultimo_lembrete_enviado DATETIME');
+
+  // ── Liberação por valor ──
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN valor_total REAL DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN requer_aprovacao_valor INTEGER DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN aprovador_valor_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN aprovador_valor_nome TEXT');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN data_aprovacao_valor DATETIME');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN rejeicao_valor_motivo TEXT');
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS requisicao_lembretes_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL,
+    destinatario TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ENVIADO',
+    erro TEXT,
+    dias_aguardando INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (requisicao_id) REFERENCES requisicoes_almoxarifado(id)
+  )`);
 
   // ── Atendimento parcial por item ──
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0');
@@ -667,6 +739,14 @@ async function initSchema(db) {
     ['alertas_smtp_secure', '0', 'Usar TLS/SSL no SMTP dos alertas (1=sim)'],
     ['alertas_whatsapp_webhook_url', '', 'URL do webhook WhatsApp para alertas de estoque'],
     ['alertas_whatsapp_api_key', '', 'Token/chave API opcional do webhook WhatsApp'],
+    ['requisicoes_notificar_email', '1', 'Habilita notificação por e-mail de novas requisições de material'],
+    ['requisicoes_notificar_emails', '[]', 'Lista de e-mails para notificação de requisições (vazio = usa alertas_estoque_emails)'],
+    ['compras_notificar_emails', '[]', 'E-mails do setor de Compras para solicitações automáticas de compra (itens sem estoque)'],
+    ['requisicoes_lembrete_ativo', '1', 'Habilita lembretes diários por e-mail para requisições pendentes'],
+    ['requisicoes_lembrete_intervalo_horas', '24', 'Intervalo mínimo entre lembretes da mesma requisição (horas)'],
+    ['liberacao_valor_ativo', '0', 'Habilita aprovação de alto valor em requisições de material'],
+    ['liberacao_valor_limite', '500', 'Valor máximo (R$) para liberação automática sem aprovação extra'],
+    ['liberacao_valor_aprovadores', '[]', 'IDs dos usuários aprovadores de alto valor (JSON)'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);

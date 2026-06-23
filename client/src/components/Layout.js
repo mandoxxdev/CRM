@@ -220,6 +220,7 @@ const Layout = () => {
     { path: '/compras/cotacoes', icon: FiFileText2, label: 'Cotações' },
     { path: '/compras/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/compras/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
+    { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimento NF/Material' },
   ];
 
   // Menu do módulo Financeiro (estilo Painel Financeiro / FinanceHub)
@@ -232,6 +233,7 @@ const Layout = () => {
     { path: '/financeiro/bancos', icon: FiCreditCard, label: 'Conciliação Bancária' },
     { path: '/financeiro/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/financeiro/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
+    { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Entrada de NF' },
   ];
 
   // Menu do módulo Operacional (Fábrica)

@@ -2,6 +2,7 @@
  * Requisições de material — atendimento parcial com validação de estoque
  */
 const { dbRun, dbGet, dbAll } = require('./db');
+const valueApprovalService = require('./requisitionValueApprovalService');
 
 function num(v) {
   return Number(v) || 0;
@@ -61,7 +62,8 @@ function todosItensCompletos(itens) {
 }
 
 async function carregarItensRequisicao(db, requisicaoId) {
-  return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo
+  return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo,
+      COALESCE(ma.custo_medio, ma.custo_unitario, 0) as custo_unitario
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
     WHERE ir.requisicao_id = ?`, [requisicaoId]);
@@ -79,6 +81,8 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
     err.status = 400;
     throw err;
   }
+
+  await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
 
@@ -109,7 +113,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
   }
 
   await dbRun(db,
-    `UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+    `UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
     [requisicaoId]);
 
   return { success: true, status: 'EM_SEPARACAO' };
@@ -127,6 +131,8 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
     err.status = 400;
     throw err;
   }
+
+  await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
   const entregas = [];
@@ -183,11 +189,11 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
 
   if (completo) {
     await dbRun(db,
-      `UPDATE requisicoes_almoxarifado SET status=?, data_entrega=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE requisicoes_almoxarifado SET status=?, data_entrega=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
       [novoStatus, requisicaoId]);
   } else {
     await dbRun(db,
-      `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
       [novoStatus, requisicaoId]);
   }
 
@@ -240,7 +246,7 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
   const motivo = justificativa?.trim() || 'Excluída pelo administrador';
   await dbRun(db,
     `UPDATE requisicoes_almoxarifado
-     SET ativo=0, status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP
+     SET ativo=0, status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
      WHERE id=?`,
     [motivo, requisicaoId]);
 

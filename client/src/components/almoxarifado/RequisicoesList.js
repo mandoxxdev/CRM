@@ -8,13 +8,14 @@ import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './Almo
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
-  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2
+  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign
 } from 'react-icons/fi';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
   PENDENTE:              { label: 'Pendente',              cls: 'almox-badge-aberto',    icon: FiClock },
   APROVADO:              { label: 'Aprovado',              cls: 'almox-badge-ok',        icon: FiCheck },
+  AGUARDANDO_APROVACAO_VALOR: { label: 'Aguard. Aprov. Valor', cls: 'almox-badge-baixo', icon: FiDollarSign },
   EM_SEPARACAO:          { label: 'Em Separação',          cls: 'almox-badge-ajuste',    icon: FiPackage },
   PARCIALMENTE_ATENDIDA: { label: 'Parcialmente Atendida', cls: 'almox-badge-baixo',     icon: FiTruck },
   ENTREGUE:              { label: 'Entregue',              cls: 'almox-badge-concluido', icon: FiCheckCircle },
@@ -50,6 +51,8 @@ const URGENCIA_INFO = {
   CRITICO: { label: 'Crítico',  cor: 'var(--gmp-error)' },
 };
 
+const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 const RequisicoesList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -65,6 +68,10 @@ const RequisicoesList = () => {
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState(searchParams.get('status') || '');
+  const [filtroAprovacoesValor, setFiltroAprovacoesValor] = useState(
+    searchParams.get('aprovacoes_valor') === '1'
+  );
+  const [souAprovadorValor, setSouAprovadorValor] = useState(false);
   const [filtroMinha, setFiltroMinha] = useState(
     warehouseMode ? searchParams.get('minha') === '1' : true
   );
@@ -78,7 +85,9 @@ const RequisicoesList = () => {
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
   const [showRejeitar, setShowRejeitar] = useState(false);
+  const [showRejeitarValor, setShowRejeitarValor] = useState(false);
   const [motivoRejeicao, setMotivoRejeicao] = useState('');
+  const [motivoRejeicaoValor, setMotivoRejeicaoValor] = useState('');
   const [showEntregar, setShowEntregar] = useState(false);
   const [showSeparar, setShowSeparar] = useState(false);
   const [showExcluir, setShowExcluir] = useState(false);
@@ -90,11 +99,16 @@ const RequisicoesList = () => {
 
   const buildSearchParams = useCallback((id) => {
     const params = {};
-    if (filtroStatus) params.status = filtroStatus;
+    if (filtroAprovacoesValor) {
+      params.aprovacoes_valor = '1';
+      params.status = 'AGUARDANDO_APROVACAO_VALOR';
+    } else if (filtroStatus) {
+      params.status = filtroStatus;
+    }
     if (filtroMinha) params.minha = '1';
     if (id) params.id = String(id);
     return params;
-  }, [filtroStatus, filtroMinha]);
+  }, [filtroStatus, filtroMinha, filtroAprovacoesValor]);
 
   const syncSearchParams = useCallback((id) => {
     const params = buildSearchParams(id);
@@ -106,7 +120,15 @@ const RequisicoesList = () => {
 
   useEffect(() => {
     loadRequisicoes();
-  }, [filtroStatus, filtroMinha]);
+  }, [filtroStatus, filtroMinha, filtroAprovacoesValor]);
+
+  useEffect(() => {
+    if (warehouseMode) {
+      api.get('/almoxarifado/configuracoes/liberacao-valor')
+        .then((res) => setSouAprovadorValor(!!res.data?.souAprovador))
+        .catch(() => setSouAprovadorValor(false));
+    }
+  }, [warehouseMode]);
 
   // Deep-link / browser back-forward: open panel when ?id= changes externally
   useEffect(() => {
@@ -129,13 +151,18 @@ const RequisicoesList = () => {
   useEffect(() => {
     syncSearchParams(selectedIdRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroStatus, filtroMinha]);
+  }, [filtroStatus, filtroMinha, filtroAprovacoesValor]);
 
   const loadRequisicoes = async () => {
     setLoading(true);
     try {
       const params = {};
-      if (filtroStatus) params.status = filtroStatus;
+      if (filtroAprovacoesValor) {
+        params.aprovacoes_valor = '1';
+        params.status = 'AGUARDANDO_APROVACAO_VALOR';
+      } else if (filtroStatus) {
+        params.status = filtroStatus;
+      }
       if (warehouseMode) {
         if (filtroMinha) params.minha = '1';
       } else {
@@ -224,6 +251,35 @@ const RequisicoesList = () => {
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao rejeitar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAprovarValor = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${detalhe.id}/aprovar-valor`);
+      toast.success('Liberação por valor aprovada! O almoxarifado pode prosseguir.');
+      abrirDetalhe(detalhe.id, { force: true });
+      loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao aprovar liberação');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRejeitarValor = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${detalhe.id}/rejeitar-valor`, { motivo: motivoRejeicaoValor });
+      toast.success('Liberação por valor reprovada');
+      setShowRejeitarValor(false);
+      fecharDetalhe();
+      loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao reprovar');
     } finally {
       setSaving(false);
     }
@@ -458,7 +514,20 @@ const RequisicoesList = () => {
 
       {/* Filtros */}
       <div className="almox-filters">
-        <select className="almox-select" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
+        {warehouseMode && (souAprovadorValor || isAdmin) && (
+          <button
+            className={filtroAprovacoesValor ? 'btn-almox-primary' : 'btn-almox-secondary'}
+            onClick={() => {
+              setFiltroAprovacoesValor((v) => !v);
+              if (!filtroAprovacoesValor) setFiltroStatus('');
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <FiDollarSign size={13} /> Aprovações de valor
+          </button>
+        )}
+        <select className="almox-select" value={filtroStatus} disabled={filtroAprovacoesValor}
+          onChange={e => { setFiltroStatus(e.target.value); setFiltroAprovacoesValor(false); }}>
           <option value="">Todos os status</option>
           {Object.entries(STATUS_INFO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
@@ -466,8 +535,8 @@ const RequisicoesList = () => {
           <input type="checkbox" checked={filtroMinha} onChange={e => setFiltroMinha(e.target.checked)} />
           {warehouseMode ? 'Apenas minhas' : 'Somente minhas solicitações'}
         </label>
-        {(filtroStatus || filtroMinha) && (
-          <button className="btn-almox-secondary" onClick={() => { setFiltroStatus(''); setFiltroMinha(false); }}>
+        {(filtroStatus || filtroMinha || filtroAprovacoesValor) && (
+          <button className="btn-almox-secondary" onClick={() => { setFiltroStatus(''); setFiltroMinha(false); setFiltroAprovacoesValor(false); }}>
             <FiFilter size={13} /> Limpar
           </button>
         )}
@@ -487,6 +556,7 @@ const RequisicoesList = () => {
                   <th>Urgência</th>
                   <th>OS / Ref.</th>
                   <th>Itens</th>
+                  {warehouseMode && <th>Valor</th>}
                   <th>Status</th>
                   <th>Data</th>
                 </tr>
@@ -505,6 +575,11 @@ const RequisicoesList = () => {
                     <td><UrgenciaBadge urgencia={r.urgencia} /></td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{r.os_referencia || '—'}</td>
                     <td style={{ fontWeight: 700 }}>{r.total_itens}</td>
+                    {warehouseMode && (
+                      <td style={{ fontSize: '0.8rem', fontWeight: 600, color: r.requer_aprovacao_valor ? 'var(--gmp-warning)' : 'var(--gmp-text)' }}>
+                        {formatMoeda(r.valor_total)}
+                      </td>
+                    )}
                     <td><StatusBadge status={r.status} /></td>
                     <td style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', whiteSpace: 'nowrap' }}>{formatDate(r.created_at)}</td>
                   </tr>
@@ -537,7 +612,9 @@ const RequisicoesList = () => {
                     ['OS / Referência', detalhe.os_referencia || '—'],
                     ['Urgência', URGENCIA_INFO[detalhe.urgencia]?.label || detalhe.urgencia],
                     ['Data', formatDate(detalhe.created_at)],
+                    ...(detalhe.valor_total != null ? [['Valor Total', formatMoeda(detalhe.valor_total)]] : []),
                     ['Aprovador', detalhe.aprovador_nome || '—'],
+                    ...(detalhe.aprovador_valor_nome ? [['Aprov. Valor', detalhe.aprovador_valor_nome]] : []),
                   ].map(([k, v]) => (
                     <div key={k}>
                       <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', textTransform: 'uppercase', fontWeight: 600 }}>{k}</div>
@@ -553,6 +630,13 @@ const RequisicoesList = () => {
                 {detalhe.rejeicao_motivo && (
                   <div style={{ background: 'rgba(229,25,58,0.06)', border: '1px solid rgba(229,25,58,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: '0.85rem', color: 'var(--gmp-error)' }}>
                     ❌ Motivo: {detalhe.rejeicao_motivo}
+                  </div>
+                )}
+                {detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (
+                  <div style={{ background: 'rgba(229,152,0,0.08)', border: '1px solid rgba(229,152,0,0.25)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: '0.85rem', color: 'var(--gmp-warning)' }}>
+                    <FiDollarSign size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    Valor total de <strong>{formatMoeda(detalhe.valor_total)}</strong> excede o limite de liberação automática.
+                    Aguardando aprovação de alto valor.
                   </div>
                 )}
 
@@ -606,6 +690,25 @@ const RequisicoesList = () => {
                     </div>
                   </div>
                 ))}
+
+                {/* Ações — aprovação de valor */}
+                {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
+                    <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
+                      onClick={handleAprovarValor} disabled={saving}>
+                      <FiCheck size={14} /> Aprovar Liberação
+                    </button>
+                    <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center', minWidth: 100 }}
+                      onClick={() => setShowRejeitarValor(true)}>
+                      <FiX size={14} /> Reprovar
+                    </button>
+                  </div>
+                )}
+                {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && !souAprovadorValor && !isAdmin && (
+                  <div className="almox-hint-banner" style={{ marginTop: 20, fontSize: '0.8rem' }}>
+                    Esta requisição aguarda aprovação de um aprovador de alto valor configurado.
+                  </div>
+                )}
 
                 {/* Ações — somente almoxarifado (aprovação/separação/entrega) */}
                 {warehouseMode && detalhe.status === 'PENDENTE' && (
@@ -695,6 +798,32 @@ const RequisicoesList = () => {
           </div>
         )}
       </div>
+
+      {/* Modal rejeitar valor */}
+      {showRejeitarValor && (
+        <div className="almox-modal-overlay" onClick={() => setShowRejeitarValor(false)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>❌ Reprovar Liberação por Valor</h2>
+              <button className="almox-modal-close" onClick={() => setShowRejeitarValor(false)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <div className="almox-field">
+                <label className="almox-label">Justificativa da reprovação</label>
+                <textarea className="almox-textarea" rows={3} value={motivoRejeicaoValor}
+                  onChange={e => setMotivoRejeicaoValor(e.target.value)}
+                  placeholder="Informe o motivo para o solicitante..." />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setShowRejeitarValor(false)}>Cancelar</button>
+              <button className="btn-almox-danger" onClick={handleRejeitarValor} disabled={saving}>
+                {saving ? 'Reprovando...' : 'Confirmar Reprovação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal rejeitar */}
       {showRejeitar && (

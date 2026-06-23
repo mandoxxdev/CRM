@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { FiPlus, FiTrash2, FiArrowLeft, FiSend, FiSearch, FiPackage, FiAlertTriangle } from 'react-icons/fi';
+import { DisponibilidadeBadge } from '../../utils/disponibilidadeEstoque';
 import './Almoxarifado.css';
 
 const RequisicaoForm = () => {
@@ -34,11 +35,35 @@ const RequisicaoForm = () => {
 
   const [itens, setItens] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [materiaisLoading, setMateriaisLoading] = useState(true);
+  const [materiaisError, setMateriaisError] = useState(null);
+
+  const refreshDisponibilidade = useCallback(async (itensAtuais) => {
+    if (warehouseMode || !itensAtuais.length) return itensAtuais;
+    try {
+      const res = await api.post('/requisicoes-material/disponibilidade', {
+        itens: itensAtuais.map((i) => ({ material_id: i.material_id, quantidade: i.quantidade })),
+      });
+      const map = new Map((res.data || []).map((r) => [r.material_id, r]));
+      return itensAtuais.map((i) => {
+        const st = map.get(i.material_id);
+        if (!st) return i;
+        return {
+          ...i,
+          disponibilidade: st.disponibilidade,
+          saldo_suficiente: st.saldo_suficiente,
+          disponibilidade_label: st.disponibilidade_label,
+        };
+      });
+    } catch {
+      return itensAtuais;
+    }
+  }, [warehouseMode]);
 
   useEffect(() => {
     loadMateriais();
     if (warehouseMode) loadSetores();
-  }, [setorFixo, warehouseMode]);
+  }, [setorFixo, warehouseMode, form.departamento]);
 
   useEffect(() => {
     if (setorFixo) {
@@ -55,6 +80,22 @@ const RequisicaoForm = () => {
     setResultados(filtered);
   }, [busca, materiais]);
 
+  useEffect(() => {
+    if (warehouseMode || itens.length === 0) return undefined;
+    let cancelled = false;
+    const snapshot = itens;
+    refreshDisponibilidade(snapshot).then((updated) => {
+      if (cancelled) return;
+      const changed = updated.some((u, idx) => (
+        u.disponibilidade !== snapshot[idx]?.disponibilidade
+        || u.saldo_suficiente !== snapshot[idx]?.saldo_suficiente
+      ));
+      if (changed) setItens(updated);
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itens.map((i) => `${i.material_id}:${i.quantidade}`).join('|'), warehouseMode]);
+
   const loadSetores = async () => {
     try {
       const res = await api.get('/almoxarifado/setores-requisicao');
@@ -63,16 +104,30 @@ const RequisicaoForm = () => {
   };
 
   const loadMateriais = async () => {
+    const setor = setorFixo || form.departamento;
+    if (!warehouseMode && !setor && !ctx.moduloOrigem) {
+      setMateriais([]);
+      setMateriaisLoading(false);
+      return;
+    }
+    setMateriaisLoading(true);
+    setMateriaisError(null);
     try {
-      const setor = setorFixo || form.departamento;
       const url = warehouseMode
         ? '/almoxarifado/materiais'
         : '/requisicoes-material/materiais';
-      const params = setor ? { setor } : {};
+      const params = {};
+      if (setor) params.setor = setor;
+      else if (ctx.moduloOrigem) params.modulo = ctx.moduloOrigem;
       const res = await api.get(url, { params });
-      setMateriais(res.data);
-    } catch {
-      toast.error('Erro ao carregar materiais disponíveis');
+      setMateriais(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      setMateriais([]);
+      const msg = err.response?.data?.error || 'Erro ao carregar materiais disponíveis';
+      setMateriaisError(msg);
+      toast.error(msg);
+    } finally {
+      setMateriaisLoading(false);
     }
   };
 
@@ -83,19 +138,31 @@ const RequisicaoForm = () => {
     if (mat) {
       setItens(prev => {
         if (prev.find(i => i.material_id === mat.id)) return prev;
-        return [...prev, {
-          material_id: mat.id,
-          material_nome: mat.nome,
-          material_codigo: mat.codigo,
-          unidade: mat.unidade,
-          saldo_atual: mat.quantidade_atual,
-          tipo_icone: mat.tipo_icone || '',
-          quantidade: 1,
-          observacoes: '',
-        }];
+        return [...prev, buildItemFromMaterial(mat)];
       });
     }
   }, [materiais, searchParams]);
+
+  const buildItemFromMaterial = (material) => {
+    const base = {
+      material_id: material.id,
+      material_nome: material.nome,
+      material_codigo: material.codigo,
+      unidade: material.unidade,
+      tipo_icone: material.tipo_icone || '',
+      quantidade: 1,
+      observacoes: '',
+    };
+    if (warehouseMode) {
+      return { ...base, saldo_atual: material.quantidade_atual };
+    }
+    return {
+      ...base,
+      disponibilidade: material.disponibilidade,
+      saldo_suficiente: material.saldo_suficiente,
+      disponibilidade_label: material.disponibilidade_label,
+    };
+  };
 
   const adicionarItem = (material) => {
     if (itens.find(i => i.material_id === material.id)) {
@@ -104,16 +171,7 @@ const RequisicaoForm = () => {
       setBusca('');
       return;
     }
-    setItens(prev => [...prev, {
-      material_id: material.id,
-      material_nome: material.nome,
-      material_codigo: material.codigo,
-      unidade: material.unidade,
-      saldo_atual: material.quantidade_atual,
-      tipo_icone: material.tipo_icone || '',
-      quantidade: 1,
-      observacoes: '',
-    }]);
+    setItens(prev => [...prev, buildItemFromMaterial(material)]);
     setBusca('');
     setResultados([]);
     setShowBusca(false);
@@ -158,7 +216,9 @@ const RequisicaoForm = () => {
   };
 
   const totalItens = itens.length;
-  const itensSemSaldo = itens.filter(i => i.saldo_atual < i.quantidade);
+  const itensSemEstoque = warehouseMode
+    ? itens.filter(i => i.saldo_atual < i.quantidade)
+    : itens.filter(i => i.disponibilidade && i.disponibilidade !== 'em_estoque');
 
   return (
     <div className="almox-page">
@@ -244,7 +304,21 @@ const RequisicaoForm = () => {
 
               {!warehouseMode && setorFixo && (
                 <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
-                  Exibindo apenas materiais permitidos para o setor <strong>{setorFixo}</strong>.
+                  Materiais do almoxarifado para o setor <strong>{setorFixo}</strong>
+                  {materiaisLoading ? ' (carregando...)' : ''}.
+                  A disponibilidade é exibida por status, sem quantidade exata em estoque.
+                </div>
+              )}
+
+              {materiaisError && (
+                <div style={{ marginBottom: 12, padding: '10px 14px', fontSize: '0.8rem', color: 'var(--gmp-error)', background: 'rgba(229,25,58,0.08)', border: '1px solid rgba(229,25,58,0.25)', borderRadius: 8 }}>
+                  {materiaisError}
+                </div>
+              )}
+
+              {!materiaisLoading && !materiaisError && materiais.length === 0 && (
+                <div style={{ marginBottom: 12, padding: '10px 14px', fontSize: '0.8rem', color: 'var(--gmp-text-light)', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
+                  Nenhum material ativo cadastrado no almoxarifado. Solicite o cadastro ao almoxarife antes de abrir a requisição.
                 </div>
               )}
 
@@ -268,7 +342,14 @@ const RequisicaoForm = () => {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{m.nome}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{m.codigo} · Saldo: {m.quantidade_atual} {m.unidade}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {m.codigo}
+                              {warehouseMode ? (
+                                <span>· Saldo: {m.quantidade_atual} {m.unidade}</span>
+                              ) : (
+                                <DisponibilidadeBadge disponibilidade={m.disponibilidade} />
+                              )}
+                            </div>
                           </div>
                           <FiPlus size={14} style={{ color: '#4facfe' }} />
                         </div>
@@ -277,7 +358,11 @@ const RequisicaoForm = () => {
                   )}
                   {busca.length >= 2 && resultados.length === 0 && (
                     <div style={{ padding: '10px 16px', color: 'var(--gmp-text-light)', fontSize: '0.875rem', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8, marginTop: 4 }}>
-                      Nenhum material encontrado para &quot;{busca}&quot;
+                      {materiaisLoading
+                        ? 'Carregando materiais...'
+                        : materiais.length === 0
+                          ? 'Nenhum material disponível para requisição neste setor.'
+                          : `Nenhum material encontrado para "${busca}"`}
                     </div>
                   )}
                   <button type="button" onClick={() => { setShowBusca(false); setBusca(''); }}
@@ -294,10 +379,14 @@ const RequisicaoForm = () => {
                 </div>
               ) : (
                 <>
-                  {itensSemSaldo.length > 0 && (
+                  {itensSemEstoque.length > 0 && (
                     <div style={{ background: 'rgba(229,152,0,0.08)', border: '1px solid rgba(229,152,0,0.25)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: '0.8rem', color: 'var(--gmp-warning)', display: 'flex', gap: 8, alignItems: 'center' }}>
                       <FiAlertTriangle size={14} />
-                      {itensSemSaldo.length} item(ns) com saldo insuficiente. A requisição será registrada mas pode não ser atendida integralmente.
+                      {warehouseMode ? (
+                        <span>{itensSemEstoque.length} item(ns) com saldo insuficiente. A requisição será registrada mas pode não ser atendida integralmente.</span>
+                      ) : (
+                        <span>{itensSemEstoque.length} item(ns) com disponibilidade parcial ou sem estoque. O setor de Compras será notificado automaticamente ao enviar.</span>
+                      )}
                     </div>
                   )}
                   {itens.map((item) => (
@@ -307,9 +396,16 @@ const RequisicaoForm = () => {
                       </div>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{item.material_nome}</div>
-                        <div style={{ fontSize: '0.75rem', color: item.saldo_atual < item.quantidade ? 'var(--gmp-warning)' : 'var(--gmp-text-light)' }}>
-                          {item.material_codigo} · Saldo: {item.saldo_atual} {item.unidade}
-                          {item.saldo_atual < item.quantidade && ' ⚠ Insuficiente'}
+                        <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          {item.material_codigo}
+                          {warehouseMode ? (
+                            <span style={{ color: item.saldo_atual < item.quantidade ? 'var(--gmp-warning)' : 'inherit' }}>
+                              · Saldo: {item.saldo_atual} {item.unidade}
+                              {item.saldo_atual < item.quantidade && ' ⚠ Insuficiente'}
+                            </span>
+                          ) : (
+                            <DisponibilidadeBadge disponibilidade={item.disponibilidade} />
+                          )}
                         </div>
                         <input className="almox-input" style={{ marginTop: 6, fontSize: '0.8rem', padding: '4px 8px' }}
                           value={item.observacoes} onChange={e => atualizarItem(item.material_id, 'observacoes', e.target.value)}

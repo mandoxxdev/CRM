@@ -7,7 +7,11 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const alertService = require('../services/almoxarifado/alertService');
+const requisitionNotificationService = require('../services/almoxarifado/requisitionNotificationService');
+const purchaseNotifyService = require('../services/almoxarifado/requisitionPurchaseNotifyService');
+const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 const stockService = require('../services/almoxarifado/stockService');
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
@@ -949,6 +953,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       ['alertas_smtp_secure', '0', 'Usar TLS/SSL no SMTP dos alertas (1=sim)'],
       ['alertas_whatsapp_webhook_url', '', 'URL do webhook WhatsApp para alertas de estoque'],
       ['alertas_whatsapp_api_key', '', 'Token/chave API opcional do webhook WhatsApp'],
+      ['requisicoes_notificar_email', '1', 'Habilita notificação por e-mail de novas requisições de material'],
+      ['requisicoes_notificar_emails', '[]', 'Lista de e-mails para notificação de requisições (vazio = usa alertas_estoque_emails)'],
+      ['compras_notificar_emails', '[]', 'E-mails do setor de Compras para solicitações automáticas de compra (itens sem estoque)'],
+      ['requisicoes_lembrete_ativo', '1', 'Habilita lembretes diários por e-mail para requisições pendentes'],
+      ['requisicoes_lembrete_intervalo_horas', '24', 'Intervalo mínimo entre lembretes da mesma requisição (horas)'],
+      ['liberacao_valor_ativo', '0', 'Habilita aprovação de alto valor em requisições de material'],
+      ['liberacao_valor_limite', '500', 'Valor máximo (R$) para liberação automática sem aprovação extra'],
+      ['liberacao_valor_aprovadores', '[]', 'IDs dos usuários aprovadores de alto valor (JSON)'],
     ];
     defaultsAlertas.forEach(([chave, valor, descricao]) => {
       db.run(`INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)`, [chave, valor, descricao]);
@@ -1020,6 +1032,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   db.run(`ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0`, () => {});
   db.run(`ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0`, () => {});
   db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN ativo INTEGER DEFAULT 1`, () => {});
+  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN ultimo_lembrete_enviado DATETIME`, () => {});
+  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN valor_total REAL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN requer_aprovacao_valor INTEGER DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN aprovador_valor_id INTEGER`, () => {});
+  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN aprovador_valor_nome TEXT`, () => {});
+  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN data_aprovacao_valor DATETIME`, () => {});
+  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN rejeicao_valor_motivo TEXT`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_x REAL`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_y REAL`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120`, () => {});
@@ -1342,13 +1361,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.post('/api/almoxarifado/familias',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
-    const { nome, descricao, categoria_id, codigo } = req.body;
+    const { nome, descricao, categoria_id, codigo, tipo_uso } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+    const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
 
     const insertFamilia = (codigoVal) => {
-      db.run(`INSERT INTO familias_material_almoxarifado (codigo, nome, descricao, categoria_id)
-              VALUES (?,?,?,?)`,
-        [codigoVal, nome.trim(), descricao || null, categoria_id || null],
+      db.run(`INSERT INTO familias_material_almoxarifado (codigo, nome, descricao, categoria_id, tipo_uso)
+              VALUES (?,?,?,?,?)`,
+        [codigoVal, nome.trim(), descricao || null, categoria_id || null, tipoUsoVal],
         function (err) {
           if (err) {
             if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
@@ -1370,11 +1390,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.put('/api/almoxarifado/familias/:id',(req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
-    const { nome, descricao, categoria_id, ativo } = req.body;
+    const { nome, descricao, categoria_id, ativo, tipo_uso } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+    const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
 
-    db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, ativo=? WHERE id=?`,
-      [nome.trim(), descricao || null, categoria_id || null, ativo !== undefined ? ativo : 1, req.params.id],
+    db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=? WHERE id=?`,
+      [nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, ativo !== undefined ? ativo : 1, req.params.id],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
         db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [req.params.id], (e, r) => res.json(r));
@@ -1430,8 +1451,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/configuracoes/alertas-estoque',async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
     try {
-      const settings = await alertService.getAlertSettingsForApi(db);
-      res.json(settings);
+      const [settings, reminder] = await Promise.all([
+        alertService.getAlertSettingsForApi(db),
+        requisitionReminderService.getReminderSettingsForApi(db),
+      ]);
+      res.json({ ...settings, ...reminder });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -1456,6 +1480,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const smtpSecure = payload.smtpSecure ? '1' : '0';
       const whatsappWebhookUrl = String(payload.whatsappWebhookUrl || '').trim();
       const appUrl = String(payload.appUrl || '').trim();
+      const requisicoesEmails = Array.isArray(payload.requisicoesEmails)
+        ? payload.requisicoesEmails.map((v) => String(v).trim()).filter(Boolean)
+        : [];
+      const comprasEmails = Array.isArray(payload.comprasEmails)
+        ? payload.comprasEmails.map((v) => String(v).trim()).filter(Boolean)
+        : [];
+      const requisicoesNotificarEmail = payload.requisicoesNotificarEmail === false ? '0' : '1';
+      const requisicoesLembreteAtivo = payload.requisicoesLembreteAtivo === false ? '0' : '1';
+      const requisicoesLembreteIntervaloHoras = Number(payload.requisicoesLembreteIntervaloHoras) > 0
+        ? String(Math.floor(Number(payload.requisicoesLembreteIntervaloHoras)))
+        : '24';
       const updatedBy = req.user.nome || req.user.email;
       const upserts = [
         ['alertas_estoque_emails', JSON.stringify(emails)],
@@ -1471,6 +1506,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         [alertService.SMTP_CONFIG_KEYS.from, smtpFrom],
         [alertService.SMTP_CONFIG_KEYS.secure, smtpSecure],
         [alertService.WHATSAPP_CONFIG_KEYS.webhookUrl, whatsappWebhookUrl],
+        ['requisicoes_notificar_emails', JSON.stringify(requisicoesEmails)],
+        ['requisicoes_notificar_email', requisicoesNotificarEmail],
+        ['compras_notificar_emails', JSON.stringify(comprasEmails)],
+        [requisitionReminderService.CONFIG_KEYS.ativo, requisicoesLembreteAtivo],
+        [requisitionReminderService.CONFIG_KEYS.intervaloHoras, requisicoesLembreteIntervaloHoras],
       ];
       if (alertService.shouldUpdateSecret(payload.smtpPass)) {
         upserts.push([alertService.SMTP_CONFIG_KEYS.pass, String(payload.smtpPass)]);
@@ -1515,6 +1555,26 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const forceSend = !!req.body?.forceSend;
       const results = await alertService.verificarAlertasEstoque(db, { forceSend });
       res.json({ success: true, total: results.length, enviados: results.filter(r => r?.enviado).length, results });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET/PUT /api/almoxarifado/configuracoes/liberacao-valor
+  app.get('/api/almoxarifado/configuracoes/liberacao-valor', async (req, res) => {
+    try {
+      const config = await valueApprovalService.getConfigForApi(db, req.user);
+      res.json(config);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/almoxarifado/configuracoes/liberacao-valor', async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    try {
+      const saved = await valueApprovalService.saveConfig(db, req.body, req.user.nome || req.user.email);
+      res.json(saved);
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -1586,6 +1646,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
     if (minha === '1') { sql += ` AND r.solicitante_id = ?`; params.push(req.user.id); }
     if (status) { sql += ` AND r.status = ?`; params.push(status); }
+    if (req.query.aprovacoes_valor === '1') { sql += ` AND r.status = 'AGUARDANDO_APROVACAO_VALOR'`; }
     if (urgencia) { sql += ` AND r.urgencia = ?`; params.push(urgencia); }
     if (departamento) { sql += ` AND r.departamento LIKE ?`; params.push(`%${departamento}%`); }
 
@@ -1595,6 +1656,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
     });
+  });
+
+  // GET /api/almoxarifado/requisicoes/aprovacoes-valor — pendentes de aprovação por valor
+  app.get('/api/almoxarifado/requisicoes/aprovacoes-valor', async (req, res) => {
+    try {
+      const souAprovador = await valueApprovalService.isAprovadorValor(db, req.user);
+      if (!souAprovador) return res.status(403).json({ error: 'Sem permissão para ver aprovações de valor' });
+      const rows = await valueApprovalService.listarAguardandoAprovacao(db);
+      res.json(rows);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // GET /api/almoxarifado/requisicoes/:id — detalhe com itens
@@ -1664,16 +1737,65 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           })
         );
 
-        Promise.all(insertsItens).then(() => {
+        Promise.all(insertsItens).then(async () => {
+          const reqData = {
+            id: reqId,
+            numero,
+            setor: setorFinal,
+            departamento: setorFinal,
+            os_referencia: os_referencia || null,
+            solicitante_nome: req.user.nome || req.user.email,
+            observacoes: observacoes || null,
+          };
+          const itensParaNotificar = itens.map((i) => ({
+            material_id: i.material_id,
+            quantidade_solicitada: i.quantidade,
+          }));
+          requisitionNotificationService.notificarNovaRequisicao(db, reqData).catch((err) => {
+            console.warn('[almoxarifado/requisicoes] Falha ao notificar por e-mail:', err.message);
+          });
+          purchaseNotifyService.notifyComprasItensSemEstoque(
+            db,
+            reqData,
+            itensParaNotificar,
+            req.user.email,
+          ).catch((err) => {
+            console.warn('[almoxarifado/requisicoes] Falha ao notificar Compras:', err.message);
+          });
+
+          let avaliacaoValor;
+          try {
+            avaliacaoValor = await valueApprovalService.aplicarAvaliacaoNaCriacao(db, reqId);
+          } catch (valErr) {
+            console.warn('[almoxarifado/requisicoes] Falha na avaliação de valor:', valErr.message);
+            avaliacaoValor = { status: 'PENDENTE' };
+          }
+
+          if (avaliacaoValor.status === valueApprovalService.STATUS_AGUARDANDO) {
+            return res.status(201).json({
+              id: reqId,
+              numero,
+              status: avaliacaoValor.status,
+              valor_total: avaliacaoValor.valor_total,
+              requer_aprovacao_valor: true,
+            });
+          }
+
           // Verificar aprovação automática
           db.get(`SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`, [], (e, cfg) => {
             if (!e && cfg && cfg.valor === '1' && urgencia !== 'CRITICO') {
-              db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP WHERE id=?`,
+              db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
                 [reqId], () => {
-                  res.status(201).json({ id: reqId, numero, status: 'APROVADO', aprovacao: 'automatica' });
+                  res.status(201).json({
+                    id: reqId, numero, status: 'APROVADO', aprovacao: 'automatica',
+                    valor_total: avaliacaoValor.valor_total,
+                  });
                 });
             } else {
-              res.status(201).json({ id: reqId, numero, status: 'PENDENTE' });
+              res.status(201).json({
+                id: reqId, numero, status: 'PENDENTE',
+                valor_total: avaliacaoValor.valor_total,
+              });
             }
           });
         }).catch(e => res.status(500).json({ error: e.message }));
@@ -1683,7 +1805,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // PUT /api/almoxarifado/requisicoes/:id/aprovar — aprovar
   app.put('/api/almoxarifado/requisicoes/:id/aprovar',(req, res) => {
-    db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+    db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
             WHERE id=? AND status='PENDENTE'`,
       [req.user.id, req.user.nome || req.user.email, req.params.id],
       function (err) {
@@ -1696,7 +1818,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // PUT /api/almoxarifado/requisicoes/:id/rejeitar — rejeitar
   app.put('/api/almoxarifado/requisicoes/:id/rejeitar',(req, res) => {
     const { motivo } = req.body;
-    db.run(`UPDATE requisicoes_almoxarifado SET status='REJEITADO', rejeicao_motivo=?, aprovador_id=?, aprovador_nome=?, updated_at=CURRENT_TIMESTAMP
+    db.run(`UPDATE requisicoes_almoxarifado SET status='REJEITADO', rejeicao_motivo=?, aprovador_id=?, aprovador_nome=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
             WHERE id=? AND status='PENDENTE'`,
       [motivo || null, req.user.id, req.user.nome || req.user.email, req.params.id],
       function (err) {
@@ -1704,6 +1826,26 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (this.changes === 0) return res.status(400).json({ error: 'Apenas requisições pendentes podem ser rejeitadas' });
         res.json({ success: true });
       });
+  });
+
+  // PUT /api/almoxarifado/requisicoes/:id/aprovar-valor — aprovar liberação por valor
+  app.put('/api/almoxarifado/requisicoes/:id/aprovar-valor', async (req, res) => {
+    try {
+      const result = await valueApprovalService.aprovarValor(db, req.params.id, req.user);
+      res.json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // PUT /api/almoxarifado/requisicoes/:id/rejeitar-valor — reprovar liberação por valor
+  app.put('/api/almoxarifado/requisicoes/:id/rejeitar-valor', async (req, res) => {
+    try {
+      const result = await valueApprovalService.rejeitarValor(db, req.params.id, req.user, req.body?.motivo);
+      res.json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   const handleSeparacao = (req, res) => {
@@ -1738,7 +1880,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (!['PENDENTE', 'APROVADO'].includes(r.status)) {
         return res.status(400).json({ error: 'Não é possível cancelar neste status' });
       }
-      db.run(`UPDATE requisicoes_almoxarifado SET status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      db.run(`UPDATE requisicoes_almoxarifado SET status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
         [motivo || null, req.params.id],
         function (err2) {
           if (err2) return res.status(500).json({ error: err2.message });
@@ -1756,6 +1898,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     requisitionService.excluirRequisicao(db, req.params.id, req.user, justificativa, alertService)
       .then((result) => res.json(result))
       .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+  });
+
+  // POST /api/almoxarifado/requisicoes/processar-lembretes — processar lembretes pendentes (cron/admin)
+  app.post('/api/almoxarifado/requisicoes/processar-lembretes', async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    try {
+      const resultado = await requisitionReminderService.processarLembretesPendentes(db);
+      res.json({ success: true, ...resultado });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // GET /api/almoxarifado/dashboard atualizado com requisições
@@ -1794,4 +1947,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     require('./almoxarifado/extended')(app, db, authenticateToken);
     console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
   });
+
+  const REMINDER_INTERVAL_MS = 60 * 60 * 1000;
+  const runReminderJob = () => {
+    requisitionReminderService.processarLembretesPendentes(db).catch((err) => {
+      console.warn('[almoxarifado-lembretes] Erro no job periódico:', err.message);
+    });
+  };
+  setTimeout(runReminderJob, 30 * 1000);
+  setInterval(runReminderJob, REMINDER_INTERVAL_MS);
 };

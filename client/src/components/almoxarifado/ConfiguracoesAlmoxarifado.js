@@ -7,7 +7,7 @@ import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
-  FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers
+  FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers, FiClipboard, FiShoppingCart, FiDollarSign
 } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import './Almoxarifado.css';
@@ -179,6 +179,7 @@ const TABS = [
   { id: 'setores', label: 'Setores e Áreas', icon: FiGrid },
   { id: 'localizacoes', label: 'Localizações', icon: FiMapPin },
   { id: 'alertas', label: 'Alertas de Estoque', icon: FiBell },
+  { id: 'liberacao-valor', label: 'Liberação por Valor', icon: FiDollarSign },
   { id: 'geral', label: 'Configurações Gerais', icon: FiSettings },
 ];
 
@@ -251,6 +252,7 @@ const ConfiguracoesAlmoxarifado = () => {
       {tab === 'setores' && <TabSetores />}
       {tab === 'localizacoes' && <TabLocalizacoes />}
       {tab === 'alertas' && <TabAlertasEstoque />}
+      {tab === 'liberacao-valor' && <TabLiberacaoValor />}
       {tab === 'geral' && <TabConfiguracoes />}
     </div>
   );
@@ -429,7 +431,7 @@ const TabFamilias = () => {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ nome: '', descricao: '', codigo: '' });
+  const [form, setForm] = useState({ nome: '', descricao: '', codigo: '', tipo_uso: 'ambos' });
   const [expandidas, setExpandidas] = useState({});
   const [itensPorFamilia, setItensPorFamilia] = useState({});
   const [loadingItens, setLoadingItens] = useState({});
@@ -461,13 +463,18 @@ const TabFamilias = () => {
   };
 
   const resetForm = () => {
-    setForm({ nome: '', descricao: '', codigo: '' });
+    setForm({ nome: '', descricao: '', codigo: '', tipo_uso: 'ambos' });
     setEditando(null);
     setShowForm(false);
   };
 
   const handleEditar = (fam) => {
-    setForm({ nome: fam.nome, descricao: fam.descricao || '', codigo: fam.codigo });
+    setForm({
+      nome: fam.nome,
+      descricao: fam.descricao || '',
+      codigo: fam.codigo,
+      tipo_uso: fam.tipo_uso || 'ambos',
+    });
     setEditando(fam.id);
     setShowForm(true);
   };
@@ -480,6 +487,7 @@ const TabFamilias = () => {
         await api.put(`/almoxarifado/familias/${editando}`, {
           nome: form.nome,
           descricao: form.descricao,
+          tipo_uso: form.tipo_uso,
         });
         toast.success('Família atualizada!');
       } else {
@@ -539,6 +547,15 @@ const TabFamilias = () => {
                 <input className="almox-input" value={form.codigo} readOnly style={{ fontFamily: 'monospace', opacity: 0.7 }} />
               </div>
             )}
+            <div className="almox-field">
+              <label className="almox-label">Tipo de uso<span className="required">*</span></label>
+              <select className="almox-form-select" value={form.tipo_uso}
+                onChange={e => setForm(f => ({ ...f, tipo_uso: e.target.value }))}>
+                <option value="administrativo">Administrativo (escritório, EPI, consumíveis)</option>
+                <option value="industrial">Industrial (fábrica, manutenção)</option>
+                <option value="ambos">Ambos</option>
+              </select>
+            </div>
             <div className="almox-field" style={{ gridColumn: '1 / -1' }}>
               <label className="almox-label">Descrição</label>
               <input className="almox-input" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
@@ -580,6 +597,15 @@ const TabFamilias = () => {
                       <span style={{ fontSize: '0.75rem', background: 'rgba(79,172,254,0.1)', color: '#4facfe', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>
                         {fam.qtd_itens || 0} {fam.qtd_itens === 1 ? 'item' : 'itens'}
                       </span>
+                      {fam.tipo_uso && fam.tipo_uso !== 'ambos' && (
+                        <span style={{
+                          fontSize: '0.7rem', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
+                          background: fam.tipo_uso === 'administrativo' ? 'rgba(46,204,113,0.12)' : 'rgba(229,152,0,0.12)',
+                          color: fam.tipo_uso === 'administrativo' ? '#27ae60' : '#e59800',
+                        }}>
+                          {fam.tipo_uso === 'administrativo' ? 'ADM' : 'IND'}
+                        </span>
+                      )}
                     </div>
                     {fam.descricao && <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>{fam.descricao}</div>}
                   </div>
@@ -1645,11 +1671,18 @@ const TabAlertasEstoque = () => {
   const [saving, setSaving] = useState(false);
   const [testando, setTestando] = useState(false);
   const [novoEmail, setNovoEmail] = useState('');
+  const [novoEmailRequisicao, setNovoEmailRequisicao] = useState('');
+  const [novoEmailCompras, setNovoEmailCompras] = useState('');
   const [novoWhatsapp, setNovoWhatsapp] = useState('');
   const [config, setConfig] = useState({
     notificarEmail: true,
     notificarWhatsapp: false,
     emails: [],
+    requisicoesEmails: [],
+    comprasEmails: [],
+    requisicoesNotificarEmail: true,
+    requisicoesLembreteAtivo: true,
+    requisicoesLembreteIntervaloHoras: 24,
     whatsappNumeros: [],
     intervaloVerificacaoHoras: 4,
     debounceSegundos: 60,
@@ -1680,6 +1713,11 @@ const TabAlertasEstoque = () => {
         notificarEmail: !!res.data.notificarEmail,
         notificarWhatsapp: !!res.data.notificarWhatsapp,
         emails: Array.isArray(res.data.emails) ? res.data.emails : [],
+        requisicoesEmails: Array.isArray(res.data.requisicoesEmails) ? res.data.requisicoesEmails : [],
+        comprasEmails: Array.isArray(res.data.comprasEmails) ? res.data.comprasEmails : [],
+        requisicoesNotificarEmail: res.data.requisicoesNotificarEmail !== false,
+        requisicoesLembreteAtivo: res.data.requisicoesLembreteAtivo !== false,
+        requisicoesLembreteIntervaloHoras: res.data.requisicoesLembreteIntervaloHoras || 24,
         whatsappNumeros: Array.isArray(res.data.whatsappNumeros) ? res.data.whatsappNumeros : [],
         intervaloVerificacaoHoras: res.data.intervaloVerificacaoHoras || 4,
         debounceSegundos: res.data.debounceSegundos ?? 60,
@@ -1711,6 +1749,36 @@ const TabAlertasEstoque = () => {
     }
     setConfig(c => ({ ...c, emails: [...c.emails, val] }));
     setNovoEmail('');
+  };
+
+  const addEmailRequisicao = () => {
+    const val = novoEmailRequisicao.trim().toLowerCase();
+    if (!val) return;
+    if (!val.includes('@')) {
+      toast.error('Informe um e-mail válido');
+      return;
+    }
+    if (config.requisicoesEmails.includes(val)) {
+      toast.info('E-mail já adicionado');
+      return;
+    }
+    setConfig(c => ({ ...c, requisicoesEmails: [...c.requisicoesEmails, val] }));
+    setNovoEmailRequisicao('');
+  };
+
+  const addEmailCompras = () => {
+    const val = novoEmailCompras.trim().toLowerCase();
+    if (!val) return;
+    if (!val.includes('@')) {
+      toast.error('Informe um e-mail válido');
+      return;
+    }
+    if (config.comprasEmails.includes(val)) {
+      toast.info('E-mail já adicionado');
+      return;
+    }
+    setConfig(c => ({ ...c, comprasEmails: [...c.comprasEmails, val] }));
+    setNovoEmailCompras('');
   };
 
   const addWhatsapp = () => {
@@ -1895,6 +1963,89 @@ const TabAlertasEstoque = () => {
       </div>
 
       <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 6 }}>
+          <FiClipboard size={16} style={{ color: '#4facfe' }} /> E-mails para notificação de requisições
+        </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
+          Destinatários avisados quando uma requisição de material é enviada (cesta ou formulário).
+          Se a lista estiver vazia, o sistema usa os e-mails de alertas de estoque acima.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, maxWidth: 420 }}>
+          <span style={{ fontWeight: 600 }}>Notificar novas requisições por e-mail</span>
+          <input type="checkbox" checked={config.requisicoesNotificarEmail}
+            onChange={e => setConfig(c => ({ ...c, requisicoesNotificarEmail: e.target.checked }))} />
+        </label>
+        <div style={{ display: 'flex', gap: 8, maxWidth: 520 }}>
+          <input className="almox-input" value={novoEmailRequisicao}
+            onChange={e => setNovoEmailRequisicao(e.target.value)} placeholder="almoxarifado@empresa.com.br" />
+          <button className="btn-almox-secondary" type="button" onClick={addEmailRequisicao}>
+            <FiPlus size={14} /> Adicionar
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+          {config.requisicoesEmails.map(email => (
+            <span key={email} style={{ fontSize: '0.78rem', border: '1px solid var(--gmp-border)', borderRadius: 20, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {email}
+              <button type="button" className="almox-btn-icon danger" onClick={() => removeItem('requisicoesEmails', email)}><FiX size={12} /></button>
+            </span>
+          ))}
+          {!config.requisicoesEmails.length ? (
+            <span style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)' }}>Nenhum e-mail específico — usando lista de alertas de estoque</span>
+          ) : null}
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 6 }}>
+          <FiBell size={16} style={{ color: '#f59e0b' }} /> Lembretes de requisições pendentes
+        </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
+          Envia e-mail diário quando uma requisição permanece com status <strong>PENDENTE</strong> sem aprovação ou rejeição.
+          Usa os mesmos destinatários configurados acima (ou alertas de estoque). O envio para quando o status muda.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, maxWidth: 420 }}>
+          <span style={{ fontWeight: 600 }}>Ativar lembretes diários</span>
+          <input type="checkbox" checked={config.requisicoesLembreteAtivo}
+            onChange={e => setConfig(c => ({ ...c, requisicoesLembreteAtivo: e.target.checked }))} />
+        </label>
+        <div className="almox-field" style={{ maxWidth: 280 }}>
+          <label className="almox-label">Intervalo entre lembretes (horas)</label>
+          <input className="almox-input" type="number" min="1" value={config.requisicoesLembreteIntervaloHoras}
+            onChange={e => setConfig(c => ({ ...c, requisicoesLembreteIntervaloHoras: Number(e.target.value || 24) }))} />
+          <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>Padrão: 24h (um lembrete por dia)</span>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 6 }}>
+          <FiShoppingCart size={16} style={{ color: '#ff6b00' }} /> E-mails do setor de Compras
+        </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
+          Destinatários notificados automaticamente quando uma requisição é enviada com itens
+          <strong> parcialmente ou totalmente sem estoque</strong>. O solicitante recebe cópia (CC).
+          Lista separada dos alertas de estoque mínimo e das notificações ao almoxarifado.
+        </p>
+        <div style={{ display: 'flex', gap: 8, maxWidth: 520 }}>
+          <input className="almox-input" value={novoEmailCompras}
+            onChange={e => setNovoEmailCompras(e.target.value)} placeholder="compras@empresa.com.br" />
+          <button className="btn-almox-secondary" type="button" onClick={addEmailCompras}>
+            <FiPlus size={14} /> Adicionar
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+          {config.comprasEmails.map(email => (
+            <span key={email} style={{ fontSize: '0.78rem', border: '1px solid var(--gmp-border)', borderRadius: 20, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {email}
+              <button type="button" className="almox-btn-icon danger" onClick={() => removeItem('comprasEmails', email)}><FiX size={12} /></button>
+            </span>
+          ))}
+          {!config.comprasEmails.length ? (
+            <span style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)' }}>Nenhum e-mail configurado — solicitações de compra automáticas desativadas</span>
+          ) : null}
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Frequência e disparo</div>
         <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
           O alerta é enviado <strong>cada vez</strong> que o saldo cruza de acima para no/abaixo do mínimo
@@ -1923,6 +2074,138 @@ const TabAlertasEstoque = () => {
           <FiSend size={14} /> {testando ? 'Enviando teste...' : 'Testar notificação'}
         </button>
       </div>
+    </div>
+  );
+};
+
+/* ===================== TAB LIBERAÇÃO POR VALOR ===================== */
+const TabLiberacaoValor = () => {
+  const [config, setConfig] = useState({ ativo: false, limite: 500, aprovadorIds: [] });
+  const [usuarios, setUsuarios] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [buscaUsuario, setBuscaUsuario] = useState('');
+
+  useEffect(() => { loadData(); }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [cfgRes, usrRes] = await Promise.all([
+        api.get('/almoxarifado/configuracoes/liberacao-valor'),
+        api.get('/usuarios'),
+      ]);
+      setConfig({
+        ativo: !!cfgRes.data.ativo,
+        limite: cfgRes.data.limite ?? 500,
+        aprovadorIds: cfgRes.data.aprovadorIds || [],
+      });
+      setUsuarios((usrRes.data || []).filter((u) => u.ativo !== 0));
+    } catch {
+      toast.error('Erro ao carregar configurações de liberação por valor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleAprovador = (id) => {
+    setConfig((c) => {
+      const ids = new Set(c.aprovadorIds);
+      if (ids.has(id)) ids.delete(id);
+      else ids.add(id);
+      return { ...c, aprovadorIds: [...ids] };
+    });
+  };
+
+  const handleSalvar = async () => {
+    setSaving(true);
+    try {
+      await api.put('/almoxarifado/configuracoes/liberacao-valor', {
+        ativo: config.ativo,
+        limite: config.limite,
+        aprovadorIds: config.aprovadorIds,
+      });
+      toast.success('Configurações de liberação por valor salvas!');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const usuariosFiltrados = usuarios.filter((u) => {
+    if (!buscaUsuario.trim()) return true;
+    const q = buscaUsuario.toLowerCase();
+    return (u.nome || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+  });
+
+  if (loading) return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem', marginBottom: 20 }}>
+        Requisições cujo valor total exceder o limite configurado exigirão aprovação de um aprovador autorizado
+        antes da separação ou entrega. O valor é calculado com base no custo unitário (ou custo médio) dos materiais.
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>Habilitar liberação por valor</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 2 }}>
+              Quando ativo, requisições acima do limite ficam aguardando aprovação de alto valor
+            </div>
+          </div>
+          <label className="switch" style={{ flexShrink: 0 }}>
+            <input type="checkbox" checked={config.ativo}
+              onChange={(e) => setConfig((c) => ({ ...c, ativo: e.target.checked }))} />
+            <span className="slider" />
+          </label>
+        </div>
+
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>Valor máximo liberação automática (R$)</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 2 }}>
+              Abaixo deste valor o almoxarife pode liberar sem aprovação extra
+            </div>
+          </div>
+          <input className="almox-input" type="number" min="0" step="0.01" style={{ width: 140 }}
+            value={config.limite}
+            onChange={(e) => setConfig((c) => ({ ...c, limite: e.target.value }))} />
+        </div>
+
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 10, padding: '14px 18px' }}>
+          <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 4 }}>Aprovadores de alto valor</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginBottom: 12 }}>
+            Usuários que podem aprovar ou reprovar liberação de requisições acima do limite
+          </div>
+          <input className="almox-input" placeholder="Buscar usuário..." value={buscaUsuario}
+            onChange={(e) => setBuscaUsuario(e.target.value)} style={{ marginBottom: 10, width: '100%' }} />
+          <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {usuariosFiltrados.map((u) => (
+              <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', background: config.aprovadorIds.includes(u.id) ? 'rgba(79,172,254,0.08)' : 'transparent' }}>
+                <input type="checkbox" checked={config.aprovadorIds.includes(u.id)}
+                  onChange={() => toggleAprovador(u.id)} />
+                <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{u.nome}</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{u.email}</span>
+              </label>
+            ))}
+            {usuariosFiltrados.length === 0 && (
+              <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: 8 }}>Nenhum usuário encontrado</div>
+            )}
+          </div>
+          {config.aprovadorIds.length > 0 && (
+            <div style={{ marginTop: 10, fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+              {config.aprovadorIds.length} aprovador(es) selecionado(s)
+            </div>
+          )}
+        </div>
+      </div>
+
+      <button className="btn-almox-primary" style={{ marginTop: 24 }} onClick={handleSalvar} disabled={saving}>
+        <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Configurações'}
+      </button>
     </div>
   );
 };
@@ -1998,6 +2281,12 @@ const TabConfiguracoes = () => {
 };
 
 /* ===================== TAB MATERIAIS POR SETOR ===================== */
+const TIPO_USO_LABELS = {
+  administrativo: { label: 'ADM', color: '#27ae60', bg: 'rgba(46,204,113,0.12)' },
+  industrial: { label: 'IND', color: '#e59800', bg: 'rgba(229,152,0,0.12)' },
+  ambos: { label: 'AMB', color: '#4facfe', bg: 'rgba(79,172,254,0.1)' },
+};
+
 const TabMateriaisPorSetor = () => {
   const [setores, setSetores] = useState([]);
   const [familias, setFamilias] = useState([]);
@@ -2006,6 +2295,8 @@ const TabMateriaisPorSetor = () => {
   const [permissoes, setPermissoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState('todos');
   const [selFamilias, setSelFamilias] = useState(new Set());
   const [selCategorias, setSelCategorias] = useState(new Set());
 
@@ -2071,12 +2362,42 @@ const TabMateriaisPorSetor = () => {
       await api.put(`/almoxarifado/setores-requisicao/${setorAtivo.id}/permissoes`, { permissoes: payload });
       toast.success(`Permissões de ${setorAtivo.nome} salvas!`);
       selecionarSetor(setorAtivo);
+      const setRes = await api.get('/almoxarifado/setores-requisicao');
+      setSetores(setRes.data);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao salvar');
     } finally {
       setSaving(false);
     }
   };
+
+  const handleBulkTipo = async (tipoUso) => {
+    if (!setorAtivo) return;
+    setBulkLoading(true);
+    try {
+      const res = await api.post(`/almoxarifado/setores-requisicao/${setorAtivo.id}/permissoes/bulk-tipo`, { tipo_uso: tipoUso });
+      setPermissoes(res.data);
+      setSelFamilias(new Set(res.data.filter(p => p.familia_id).map(p => p.familia_id)));
+      toast.success(`Famílias ${tipoUso === 'administrativo' ? 'administrativas' : 'industriais'} atribuídas!`);
+      const setRes = await api.get('/almoxarifado/setores-requisicao');
+      setSetores(setRes.data);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro na atribuição em lote');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const familiasFiltradas = familias.filter((f) => {
+    if (filtroTipo === 'todos') return true;
+    return f.tipo_uso === filtroTipo || f.tipo_uso === 'ambos';
+  });
+
+  const tipoSetorLabel = setorAtivo?.tipo_setor === 'administrativo'
+    ? 'Administrativo'
+    : setorAtivo?.tipo_setor === 'industrial'
+      ? 'Industrial / Fábrica'
+      : 'Geral (almoxarifado/compras)';
 
   if (loading) {
     return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
@@ -2105,20 +2426,49 @@ const TabMateriaisPorSetor = () => {
       {setorAtivo && (
         <div>
           <h3 style={{ margin: '0 0 8px' }}>{setorAtivo.nome}</h3>
-          <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem', marginBottom: 20 }}>
-            Selecione famílias e categorias que este setor pode requisitar. Sem regras = todos os materiais liberados.
+          <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem', marginBottom: 12 }}>
+            Tipo do setor: <strong>{tipoSetorLabel}</strong>.
+            Atribua famílias e categorias que este setor pode requisitar.
+            Setores administrativos nunca veem materiais industriais (e vice-versa), mesmo sem regras explícitas.
           </p>
+          <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem', marginBottom: 20 }}>
+            Sem regras atribuídas aqui, o setor <strong>não verá materiais</strong> (lista vazia).
+            O almoxarifado continua vendo todos os materiais na lista completa.
+          </p>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.8rem' }}
+              disabled={bulkLoading} onClick={() => handleBulkTipo('administrativo')}>
+              + Todas famílias ADM
+            </button>
+            <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.8rem' }}
+              disabled={bulkLoading} onClick={() => handleBulkTipo('industrial')}>
+              + Todas famílias IND
+            </button>
+            <select className="almox-form-select" style={{ width: 'auto', fontSize: '0.8rem' }}
+              value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
+              <option value="todos">Filtrar famílias: todas</option>
+              <option value="administrativo">Só administrativas</option>
+              <option value="industrial">Só industriais</option>
+            </select>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             <div style={{ border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 16 }}>
               <div className="almox-section-title">Famílias permitidas</div>
               <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-                {familias.map(f => (
-                  <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer', fontSize: '0.875rem' }}>
-                    <input type="checkbox" checked={selFamilias.has(f.id)} onChange={() => toggleFamilia(f.id)} />
-                    <span>{f.codigo} — {f.nome}</span>
-                  </label>
-                ))}
+                {familiasFiltradas.map(f => {
+                  const tipo = TIPO_USO_LABELS[f.tipo_uso] || TIPO_USO_LABELS.ambos;
+                  return (
+                    <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <input type="checkbox" checked={selFamilias.has(f.id)} onChange={() => toggleFamilia(f.id)} />
+                      <span style={{ flex: 1 }}>{f.codigo} — {f.nome}</span>
+                      <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: 10, fontWeight: 700, background: tipo.bg, color: tipo.color }}>
+                        {tipo.label}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
             <div style={{ border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 16 }}>
