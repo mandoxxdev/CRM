@@ -917,6 +917,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       ['alertas_estoque_whatsapp_numeros', '[]', 'Lista de números WhatsApp para notificação de estoque mínimo'],
       ['alertas_estoque_intervalo_verificacao_horas', '4', 'Intervalo sugerido de verificação de alertas (horas)'],
       ['alertas_estoque_debounce_segundos', '60', 'Debounce anti-duplicata na mesma operação (segundos; 0=desligado)'],
+      ['alertas_app_url', 'https://systemgmp.online', 'URL base do sistema para links nos alertas (e-mail e WhatsApp)'],
       ['alertas_smtp_host', '', 'Servidor SMTP para alertas de estoque'],
       ['alertas_smtp_port', '587', 'Porta SMTP para alertas de estoque'],
       ['alertas_smtp_user', '', 'Usuário SMTP para alertas de estoque'],
@@ -995,6 +996,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN parent_id INTEGER`, () => {});
   db.run(`ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0`, () => {});
   db.run(`ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN ativo INTEGER DEFAULT 1`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_x REAL`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_y REAL`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120`, () => {});
@@ -1430,6 +1432,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const smtpFrom = String(payload.smtpFrom || '').trim();
       const smtpSecure = payload.smtpSecure ? '1' : '0';
       const whatsappWebhookUrl = String(payload.whatsappWebhookUrl || '').trim();
+      const appUrl = String(payload.appUrl || '').trim();
       const updatedBy = req.user.nome || req.user.email;
       const upserts = [
         ['alertas_estoque_emails', JSON.stringify(emails)],
@@ -1438,6 +1441,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         ['alertas_estoque_notificar_whatsapp', notificarWhatsapp],
         ['alertas_estoque_intervalo_verificacao_horas', intervaloVerificacaoHoras],
         ['alertas_estoque_debounce_segundos', debounceSegundos],
+        [alertService.APP_URL_CONFIG_KEY, appUrl || alertService.DEFAULT_APP_URL],
         [alertService.SMTP_CONFIG_KEYS.host, smtpHost],
         [alertService.SMTP_CONFIG_KEYS.port, smtpPort],
         [alertService.SMTP_CONFIG_KEYS.user, smtpUser],
@@ -1554,7 +1558,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const { status, urgencia, minha, departamento } = req.query;
     let sql = `SELECT r.*,
                  (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens
-               FROM requisicoes_almoxarifado r WHERE 1=1`;
+               FROM requisicoes_almoxarifado r WHERE COALESCE(r.ativo, 1) = 1`;
     const params = [];
 
     if (minha === '1') { sql += ` AND r.solicitante_id = ?`; params.push(req.user.id); }
@@ -1572,7 +1576,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // GET /api/almoxarifado/requisicoes/:id — detalhe com itens
   app.get('/api/almoxarifado/requisicoes/:id',(req, res) => {
-    db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ?`, [req.params.id], (err, req_row) => {
+    db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1`, [req.params.id], (err, req_row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!req_row) return res.status(404).json({ error: 'Requisição não encontrada' });
 
@@ -1701,6 +1705,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           res.json({ success: true });
         });
     });
+  });
+
+  // DELETE /api/almoxarifado/requisicoes/:id — exclusão administrativa (soft delete + estorno)
+  app.delete('/api/almoxarifado/requisicoes/:id', (req, res) => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Apenas administradores podem excluir requisições' });
+    }
+    const justificativa = req.body?.justificativa || req.query?.justificativa;
+    requisitionService.excluirRequisicao(db, req.params.id, req.user, justificativa, alertService)
+      .then((result) => res.json(result))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
   });
 
   // GET /api/almoxarifado/dashboard atualizado com requisições

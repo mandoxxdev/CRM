@@ -1651,6 +1651,7 @@ const TabAlertasEstoque = () => {
     whatsappNumeros: [],
     intervaloVerificacaoHoras: 4,
     debounceSegundos: 60,
+    appUrl: 'https://systemgmp.online',
     smtpHost: '',
     smtpPort: 587,
     smtpUser: '',
@@ -1680,6 +1681,7 @@ const TabAlertasEstoque = () => {
         whatsappNumeros: Array.isArray(res.data.whatsappNumeros) ? res.data.whatsappNumeros : [],
         intervaloVerificacaoHoras: res.data.intervaloVerificacaoHoras || 4,
         debounceSegundos: res.data.debounceSegundos ?? 60,
+        appUrl: res.data.appUrl || 'https://systemgmp.online',
         smtpHost: res.data.smtpHost || '',
         smtpPort: res.data.smtpPort || 587,
         smtpUser: res.data.smtpUser || '',
@@ -1758,6 +1760,22 @@ const TabAlertasEstoque = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
+      <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>URL do sistema</div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
+          Endereço usado no botão &quot;Acessar Almoxarifado&quot; dos e-mails e no link das mensagens WhatsApp.
+        </p>
+        <div className="almox-field">
+          <label className="almox-label">URL base</label>
+          <input className="almox-input" value={config.appUrl}
+            onChange={e => setConfig(c => ({ ...c, appUrl: e.target.value }))}
+            placeholder="https://systemgmp.online" />
+          <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+            O link do almoxarifado será {config.appUrl ? `${config.appUrl.replace(/\/$/, '')}/almoxarifado` : 'https://systemgmp.online/almoxarifado'}
+          </span>
+        </div>
+      </div>
+
       <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 6 }}>
           <FiMail size={16} style={{ color: '#4facfe' }} /> Configuração de E-mail (SMTP)

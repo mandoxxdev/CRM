@@ -6,7 +6,7 @@ import {
   FiBriefcase, FiShoppingCart, FiDollarSign,
   FiSettings, FiPackage, FiTarget,
   FiLock, FiShield, FiTool, FiSliders, FiArchive,
-  FiSearch, FiPlay, FiX, FiMessageCircle
+  FiSearch, FiPlay, FiX
 } from 'react-icons/fi';
 import SplashScreen from './SplashScreen';
 import './TipoSelecao.css';
@@ -58,16 +58,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   const { user } = useAuth();
 
   const todosModulos = [
-    {
-      id: 'chat',
-      nome: 'Chat Interno',
-      descricao: 'Mensagens e conversas da equipe',
-      icon: FiMessageCircle,
-      modulo: 'chat',
-      rota: '/chat',
-      sempreDisponivel: true,
-      gradient: 'linear-gradient(135deg, #128C7E 0%, #075E54 100%)'
-    },
     {
       id: 'comercial',
       nome: 'Comercial',

@@ -359,8 +359,9 @@ const ChatPage = () => {
         loadConversas();
       } catch (e) {
         setInput(legenda);
-        console.error(e);
-        alert('Não foi possível enviar a imagem');
+        console.error('[chat] enviar imagem:', e);
+        const detail = e.response?.data?.error;
+        alert(detail || 'Não foi possível enviar a imagem');
       } finally {
         setSending(false);
       }

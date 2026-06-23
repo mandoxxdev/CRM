@@ -146,7 +146,14 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
     authenticateToken,
     (req, res, next) => {
       uploadImagem.single('imagem')(req, res, (err) => {
-        if (err) return res.status(400).json({ error: err.message || 'Erro no upload' });
+        if (err) {
+          console.error('[chat] upload imagem (multer):', err);
+          const message =
+            err.code === 'LIMIT_FILE_SIZE'
+              ? 'Imagem muito grande. Máximo 10MB.'
+              : err.message || 'Erro no upload';
+          return res.status(400).json({ error: message });
+        }
         next();
       });
     },
@@ -167,6 +174,7 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
         await emitMessage(mensagem.conversa_id, mensagem);
         res.json({ mensagem });
       } catch (e) {
+        console.error('[chat] send image:', e);
         res.status(400).json({ error: e.message || 'Erro ao enviar imagem' });
       }
     }

@@ -7,6 +7,7 @@ const { dbGet, dbAll, dbRun } = require('./db');
 const DEFAULT_INTERVAL_HOURS = 4;
 /** Debounce curto (segundos) só para evitar duplo disparo na mesma movimentação; 0 = desligado */
 const DEFAULT_DEBOUNCE_SECONDS = 60;
+const DEFAULT_APP_URL = 'https://systemgmp.online';
 const ESTADO_ACIMA = 'ACIMA';
 const ESTADO_ABAIXO = 'ABAIXO';
 const PASSWORD_MASK = '********';
@@ -24,6 +25,8 @@ const WHATSAPP_CONFIG_KEYS = {
   webhookUrl: 'alertas_whatsapp_webhook_url',
   apiKey: 'alertas_whatsapp_api_key',
 };
+
+const APP_URL_CONFIG_KEY = 'alertas_app_url';
 
 function parseBool(value, fallback = false) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -46,14 +49,33 @@ async function getConfigValue(db, chave) {
   return row?.valor;
 }
 
+function normalizeBaseUrl(url) {
+  if (url === undefined || url === null) return null;
+  let base = String(url).trim();
+  if (!base) return null;
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+  return base.replace(/\/$/, '');
+}
+
+function resolveAppBaseUrl(dbValue) {
+  const fromDb = normalizeBaseUrl(dbValue);
+  if (fromDb) return fromDb;
+  const fromEnv = normalizeBaseUrl(
+    process.env.APP_URL || process.env.CLIENT_URL || process.env.BASE_URL || '',
+  );
+  if (fromEnv) return fromEnv;
+  return DEFAULT_APP_URL;
+}
+
 async function getAlertSettings(db) {
-  const [emails, whatsapps, notificarEmail, notificarWhatsapp, intervaloHoras, debounceSegundos] = await Promise.all([
+  const [emails, whatsapps, notificarEmail, notificarWhatsapp, intervaloHoras, debounceSegundos, appUrlDb] = await Promise.all([
     getConfigValue(db, 'alertas_estoque_emails'),
     getConfigValue(db, 'alertas_estoque_whatsapp_numeros'),
     getConfigValue(db, 'alertas_estoque_notificar_email'),
     getConfigValue(db, 'alertas_estoque_notificar_whatsapp'),
     getConfigValue(db, 'alertas_estoque_intervalo_verificacao_horas'),
     getConfigValue(db, 'alertas_estoque_debounce_segundos'),
+    getConfigValue(db, APP_URL_CONFIG_KEY),
   ]);
 
   const debounceParsed = debounceSegundos !== undefined && debounceSegundos !== null && debounceSegundos !== ''
@@ -67,6 +89,7 @@ async function getAlertSettings(db) {
     notificarWhatsapp: parseBool(notificarWhatsapp, false),
     intervaloVerificacaoHoras: Number(intervaloHoras) > 0 ? Number(intervaloHoras) : DEFAULT_INTERVAL_HOURS,
     debounceSegundos: Number.isFinite(debounceParsed) && debounceParsed >= 0 ? debounceParsed : DEFAULT_DEBOUNCE_SECONDS,
+    appUrl: resolveAppBaseUrl(appUrlDb),
   };
 }
 
@@ -142,25 +165,190 @@ function isMaterialCritico(material) {
     && Number(material.quantidade_atual) <= Number(material.quantidade_minima);
 }
 
-function buildMensagem(material, isTeste = false) {
+function escapeHtml(value) {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatDateTimePtBr(date = new Date()) {
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function getAppAlmoxarifadoUrl(appBaseUrl) {
+  const base = resolveAppBaseUrl(appBaseUrl);
+  return `${base}/almoxarifado`;
+}
+
+function buildMensagem(material, isTeste = false, appBaseUrl = null) {
   const prefix = isTeste ? '[TESTE] ' : '';
   const assunto = `${prefix}Alerta de estoque mínimo - ${material.nome}`;
-  const text = `${prefix}Material em estoque mínimo:
-Código: ${material.codigo}
+  const geradoEm = formatDateTimePtBr();
+  const unidade = material.unidade ? ` ${material.unidade}` : '';
+  const localizacao = material.localizacao || 'Não informada';
+  const saldoAtual = Number(material.quantidade_atual);
+  const estoqueMinimo = Number(material.quantidade_minima);
+  const abaixoMinimo = saldoAtual <= estoqueMinimo;
+  const appUrl = getAppAlmoxarifadoUrl(appBaseUrl);
+
+  const text = `${prefix}⚠ ALERTA DE ESTOQUE MÍNIMO — ORION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Material: ${material.nome}
-Saldo atual: ${material.quantidade_atual} ${material.unidade || ''}
-Estoque mínimo: ${material.quantidade_minima} ${material.unidade || ''}
-Localização: ${material.localizacao || 'Não informada'}
-Data: ${new Date().toLocaleString('pt-BR')}`;
-  const html = `<div style="font-family:Arial,sans-serif;line-height:1.5;">
-    <h3 style="margin-bottom:8px;">${prefix}Alerta de estoque mínimo</h3>
-    <p><strong>Material:</strong> ${material.nome} (${material.codigo})</p>
-    <p><strong>Saldo atual:</strong> ${material.quantidade_atual} ${material.unidade || ''}</p>
-    <p><strong>Estoque mínimo:</strong> ${material.quantidade_minima} ${material.unidade || ''}</p>
-    <p><strong>Localização:</strong> ${material.localizacao || 'Não informada'}</p>
-    <p style="color:#666;">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
-  </div>`;
-  const whatsapp = `${prefix}*Alerta de estoque mínimo*\nMaterial: ${material.nome} (${material.codigo})\nSaldo atual: ${material.quantidade_atual} ${material.unidade || ''}\nMínimo: ${material.quantidade_minima} ${material.unidade || ''}\nLocalização: ${material.localizacao || 'Não informada'}`;
+Código: ${material.codigo}
+Saldo atual: ${material.quantidade_atual}${unidade}${abaixoMinimo ? ' (ABAIXO DO MÍNIMO)' : ''}
+Estoque mínimo: ${material.quantidade_minima}${unidade}
+Localização: ${localizacao}
+
+${appUrl ? `Acessar Almoxarifado: ${appUrl}\n\n` : ''}Gerado em ${geradoEm}
+GMP Industriais — Orion`;
+
+  const testeBadgeHtml = isTeste
+    ? `<tr>
+        <td style="padding:10px 24px;background-color:#fef3c7;border-bottom:1px solid #fcd34d;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;color:#92400e;text-align:center;">
+          MODO TESTE — este alerta não indica uma condição real de estoque
+        </td>
+      </tr>`
+    : '';
+
+  const ctaHtml = appUrl
+    ? `<tr>
+        <td align="center" style="padding:0 24px 28px 24px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td align="center" style="border-radius:6px;background-color:#ff6b00;">
+                <a href="${escapeHtml(appUrl)}" target="_blank" style="display:inline-block;padding:12px 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:6px;">
+                  Acessar Almoxarifado
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>`
+    : '';
+
+  const saldoColor = abaixoMinimo ? '#dc2626' : '#111827';
+  const saldoBg = abaixoMinimo ? '#fef2f2' : '#ffffff';
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(assunto)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f5f7;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding:20px 24px;background-color:#0a1929;background-image:linear-gradient(135deg,#0a1929 0%,#1a365d 100%);">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="font-family:Arial,Helvetica,sans-serif;">
+                    <div style="font-size:22px;font-weight:bold;color:#ffffff;letter-spacing:2px;line-height:1.2;">ORION</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:4px;">Sistema de Gestão Industrial</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px;">GMP Industriais</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          ${testeBadgeHtml}
+
+          <!-- Alert banner -->
+          <tr>
+            <td style="padding:14px 24px;background-color:#fff7ed;border-bottom:3px solid #ea580c;font-family:Arial,Helvetica,sans-serif;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="font-size:15px;font-weight:bold;color:#c2410c;line-height:1.4;">
+                    ⚠️ Estoque abaixo do mínimo
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Card body -->
+          <tr>
+            <td style="padding:24px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+                <tr>
+                  <td colspan="2" style="padding:14px 16px;background-color:#f9fafb;border-bottom:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;">
+                    <div style="font-size:11px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Material</div>
+                    <div style="font-size:16px;font-weight:bold;color:#111827;line-height:1.3;">${escapeHtml(material.nome)}</div>
+                    <div style="font-size:13px;color:#6b7280;margin-top:4px;">Código: <span style="font-family:Consolas,Monaco,monospace;color:#374151;">${escapeHtml(material.codigo)}</span></div>
+                  </td>
+                </tr>
+                <tr>
+                  <td width="50%" style="padding:14px 16px;border-bottom:1px solid #e5e7eb;border-right:1px solid #e5e7eb;background-color:${saldoBg};font-family:Arial,Helvetica,sans-serif;vertical-align:top;">
+                    <div style="font-size:11px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Saldo atual</div>
+                    <div style="font-size:20px;font-weight:bold;color:${saldoColor};line-height:1.2;">${escapeHtml(material.quantidade_atual)}${escapeHtml(unidade)}</div>
+                    ${abaixoMinimo ? '<div style="font-size:11px;font-weight:bold;color:#dc2626;margin-top:4px;">Abaixo do mínimo</div>' : ''}
+                  </td>
+                  <td width="50%" style="padding:14px 16px;border-bottom:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;vertical-align:top;">
+                    <div style="font-size:11px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Estoque mínimo</div>
+                    <div style="font-size:20px;font-weight:bold;color:#111827;line-height:1.2;">${escapeHtml(material.quantidade_minima)}${escapeHtml(unidade)}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="2" style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;">
+                    <div style="font-size:11px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Localização</div>
+                    <div style="font-size:14px;color:#374151;line-height:1.4;">${escapeHtml(localizacao)}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          ${ctaHtml}
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 24px 24px 24px;border-top:1px solid #e5e7eb;background-color:#f9fafb;font-family:Arial,Helvetica,sans-serif;text-align:center;">
+              <div style="font-size:12px;color:#6b7280;line-height:1.6;">
+                Gerado em ${escapeHtml(geradoEm)}
+              </div>
+              <div style="font-size:12px;color:#9ca3af;margin-top:4px;">
+                GMP Industriais — Orion
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const whatsapp = `${prefix}⚠️ *ALERTA DE ESTOQUE MÍNIMO*
+━━━━━━━━━━━━━━━━━━
+📦 *${material.nome}*
+🔖 Código: ${material.codigo}
+
+📉 Saldo atual: *${material.quantidade_atual}${unidade}*
+📊 Estoque mínimo: ${material.quantidade_minima}${unidade}
+📍 Localização: ${localizacao}
+
+${appUrl ? `🔗 ${appUrl}\n\n` : ''}_GMP Industriais — Orion_
+_${geradoEm}_`;
+
   return { assunto, text, html, whatsapp };
 }
 
@@ -355,7 +543,7 @@ async function processarAlertaMaterial(db, material, opts = {}) {
     }
   }
 
-  const msg = buildMensagem(material, teste);
+  const msg = buildMensagem(material, teste, settings.appUrl);
   const resultado = {
     material_id: material.id,
     material_nome: material.nome,
@@ -418,6 +606,9 @@ module.exports = {
   PASSWORD_MASK,
   SMTP_CONFIG_KEYS,
   WHATSAPP_CONFIG_KEYS,
+  APP_URL_CONFIG_KEY,
+  DEFAULT_APP_URL,
+  resolveAppBaseUrl,
   verificarAlertasEstoque,
   verificarAlertaPorMaterialId,
   processarAlertaMaterial,

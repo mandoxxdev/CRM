@@ -7,7 +7,7 @@ import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
-  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap
+  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2
 } from 'react-icons/fi';
 import './Almoxarifado.css';
 
@@ -30,12 +30,13 @@ const maxQtdSeparacao = (item) => Math.min(
 );
 const maxQtdEntrega = (item) => {
   const entregue = getEntregue(item);
-  const separado = getSeparado(item);
+  const separadoDisponivel = Math.max(0, getSeparado(item) - entregue);
   const pendente = getPendente(item);
-  const disponivelSeparado = separado > entregue ? separado - entregue : pendente;
-  return Math.min(pendente, disponivelSeparado, Number(item.saldo_atual) || 0);
+  const estoque = Number(item.saldo_atual) || 0;
+  return Math.min(pendente, separadoDisponivel, estoque);
 };
-const temPendenteComEstoque = (itens) => (itens || []).some((i) => getPendente(i) > 0 && Number(i.saldo_atual) > 0);
+const temEntregavel = (itens) => (itens || []).some((i) => maxQtdEntrega(i) > 0);
+const temPendenteComEstoque = (itens) => temEntregavel(itens);
 
 const URGENCIA_INFO = {
   NORMAL:  { label: 'Normal',   cor: 'var(--gmp-text-light)' },
@@ -66,6 +67,8 @@ const RequisicoesList = () => {
   const [motivoRejeicao, setMotivoRejeicao] = useState('');
   const [showEntregar, setShowEntregar] = useState(false);
   const [showSeparar, setShowSeparar] = useState(false);
+  const [showExcluir, setShowExcluir] = useState(false);
+  const [justificativaExclusao, setJustificativaExclusao] = useState('');
   const [quantidadesEntrega, setQuantidadesEntrega] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
@@ -241,12 +244,97 @@ const RequisicoesList = () => {
     }
   };
 
+  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega) => {
+    if (!fonte?.itens) return [];
+    return fonte.itens
+      .map((i) => ({
+        item_id: Number(i.id),
+        quantidade_atendida: parseFloat(qtdMap[i.id] ?? qtdMap[String(i.id)] ?? 0) || 0,
+      }))
+      .filter((i) => i.item_id && i.quantidade_atendida > 0);
+  };
+
+  const entregarItens = async (itens_atendidos, reqId = detalhe?.id) => {
+    if (!reqId) {
+      toast.error('Requisição não carregada');
+      return;
+    }
+    if (!itens_atendidos?.length) {
+      console.error('[RequisicoesList] entregarItens: nenhuma quantidade informada', { reqId, detalhe });
+      toast.error('Informe ao menos uma quantidade maior que zero para entregar');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.put(`/almoxarifado/requisicoes/${reqId}/entregar`, { itens_atendidos });
+      setShowEntregar(false);
+      if (res.data?.parcial) {
+        toast.success('Entrega parcial registrada. Saldo pendente permanece em aberto.');
+        abrirDetalhe(reqId, { force: true });
+      } else {
+        toast.success('Requisição entregue por completo! Estoque baixado.');
+        fecharDetalhe();
+      }
+      loadRequisicoes();
+    } catch (err) {
+      console.error('[RequisicoesList] Erro ao entregar requisição', err?.response?.data || err);
+      toast.error(err.response?.data?.error || 'Erro ao entregar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const abrirModalEntrega = (fonte = detalhe) => {
-    if (!fonte) return;
+    if (!fonte) {
+      toast.error('Requisição não carregada');
+      return;
+    }
     const qtds = {};
-    fonte.itens.forEach((i) => { qtds[i.id] = maxQtdEntrega(i); });
+    fonte.itens.forEach((i) => {
+      const qtd = maxQtdEntrega(i);
+      if (qtd > 0) qtds[i.id] = qtd;
+    });
+    if (Object.keys(qtds).length === 0) {
+      console.error('[RequisicoesList] abrirModalEntrega: nenhum item entregável', fonte);
+      toast.error('Nenhum item disponível para entrega. Verifique separação e estoque.');
+      return;
+    }
     setQuantidadesEntrega(qtds);
     setShowEntregar(true);
+  };
+
+  const handleConfirmarEntrega = async ({ direto = false } = {}) => {
+    if (!detalhe) {
+      toast.error('Requisição não carregada');
+      return;
+    }
+    const qtds = {};
+    detalhe.itens.forEach((i) => {
+      const qtd = maxQtdEntrega(i);
+      if (qtd > 0) qtds[i.id] = qtd;
+    });
+    const itens_atendidos = montarItensEntrega(detalhe, qtds);
+    if (!itens_atendidos.length) {
+      console.error('[RequisicoesList] handleConfirmarEntrega: nenhum item entregável', {
+        reqId: detalhe.id,
+        itens: detalhe.itens.map((i) => ({
+          id: i.id,
+          solicitado: i.quantidade_solicitada,
+          separado: getSeparado(i),
+          entregue: getEntregue(i),
+          saldo: i.saldo_atual,
+          max: maxQtdEntrega(i),
+        })),
+      });
+      toast.error('Nenhum item disponível para entrega. Separe os materiais ou aguarde reposição de estoque.');
+      return;
+    }
+    setQuantidadesEntrega(qtds);
+    if (direto) {
+      await entregarItens(itens_atendidos);
+    } else {
+      setShowEntregar(true);
+    }
   };
 
   const handleCompletarEntrega = () => {
@@ -261,30 +349,8 @@ const RequisicoesList = () => {
   };
 
   const handleEntregar = async () => {
-    setSaving(true);
-    try {
-      const itens_atendidos = detalhe.itens
-        .map((i) => ({
-          item_id: i.id,
-          quantidade_atendida: parseFloat(quantidadesEntrega[i.id] || 0),
-        }))
-        .filter((i) => i.quantidade_atendida > 0);
-
-      const res = await api.put(`/almoxarifado/requisicoes/${detalhe.id}/entregar`, { itens_atendidos });
-      setShowEntregar(false);
-      if (res.data?.parcial) {
-        toast.success('Entrega parcial registrada. Saldo pendente permanece em aberto.');
-        abrirDetalhe(detalhe.id, { force: true });
-      } else {
-        toast.success('Requisição entregue por completo! Estoque baixado.');
-        fecharDetalhe();
-      }
-      loadRequisicoes();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao entregar');
-    } finally {
-      setSaving(false);
-    }
+    const itens_atendidos = montarItensEntrega(detalhe);
+    await entregarItens(itens_atendidos);
   };
 
   const handleCancelar = async (id) => {
@@ -296,6 +362,31 @@ const RequisicoesList = () => {
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao cancelar');
+    }
+  };
+
+  const handleExcluir = async () => {
+    if (!detalhe || !justificativaExclusao.trim()) {
+      toast.error('Informe a justificativa da exclusão');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.delete(`/almoxarifado/requisicoes/${detalhe.id}`, {
+        data: { justificativa: justificativaExclusao.trim() },
+      });
+      const estornados = res.data?.estornos?.length || 0;
+      toast.success(estornados > 0
+        ? `Requisição excluída. Estoque estornado em ${estornados} item(ns).`
+        : 'Requisição excluída.');
+      setShowExcluir(false);
+      setJustificativaExclusao('');
+      fecharDetalhe();
+      loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao excluir requisição');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -476,8 +567,13 @@ const RequisicoesList = () => {
                           <div style={{ color: 'var(--gmp-warning)' }}>Pendente: <strong>{getPendente(item)}</strong></div>
                         )}
                       </div>
-                      {getPendente(item) > 0 && Number(item.saldo_atual) < getPendente(item) && (
-                        <div style={{ fontSize: '0.7rem', color: 'var(--gmp-error)', marginTop: 4 }}>⚠ Saldo insuficiente</div>
+                      {getPendente(item) > 0 && Number(item.saldo_atual) < getPendente(item) && maxQtdEntrega(item) > 0 && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--gmp-warning)', marginTop: 4 }}>
+                          ⚠ Saldo insuficiente para quantidade total — entrega parcial disponível
+                        </div>
+                      )}
+                      {getPendente(item) > 0 && maxQtdEntrega(item) <= 0 && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--gmp-error)', marginTop: 4 }}>⚠ Sem estoque para entrega</div>
                       )}
                     </div>
                   </div>
@@ -517,10 +613,16 @@ const RequisicoesList = () => {
                       onClick={abrirModalSeparacao}>
                       <FiPackage size={14} /> Ajustar Separação
                     </button>
-                    <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                      onClick={abrirModalEntrega}>
-                      <FiTruck size={14} /> Confirmar Entrega e Baixar Estoque
-                    </button>
+                    {temEntregavel(detalhe.itens) ? (
+                      <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={() => handleConfirmarEntrega({ direto: true })} disabled={saving}>
+                        <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
+                      </button>
+                    ) : (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
+                        Nenhuma quantidade separada disponível para entrega no momento.
+                      </div>
+                    )}
                   </div>
                 )}
                 {detalhe.status === 'PARCIALMENTE_ATENDIDA' && (
@@ -546,6 +648,12 @@ const RequisicoesList = () => {
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
                     onClick={() => handleCancelar(detalhe.id)}>
                     Cancelar Requisição
+                  </button>
+                )}
+                {isAdmin && (
+                  <button className="btn-almox-danger" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => { setJustificativaExclusao(''); setShowExcluir(true); }}>
+                    <FiTrash2 size={14} /> Excluir Requisição
                   </button>
                 )}
               </div>
@@ -635,13 +743,27 @@ const RequisicoesList = () => {
               <p style={{ color: 'var(--gmp-text-light)', marginBottom: 16, fontSize: '0.875rem' }}>
                 Informe a quantidade a entregar nesta rodada. O estoque será baixado apenas do que for confirmado.
               </p>
-              {detalhe.itens.filter(i => maxQtdEntrega(i) > 0).map(item => (
+              {detalhe.itens.filter(i => maxQtdEntrega(i) > 0).map(item => {
+                const qtdEntregar = parseFloat(quantidadesEntrega[item.id] || 0) || 0;
+                const permanecePendente = Math.max(0, getPendente(item) - qtdEntregar);
+                const saldoInsuficienteTotal = getPendente(item) > Number(item.saldo_atual);
+                return (
                 <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--gmp-border)' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{item.material_nome}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
-                      Solicitado: {item.quantidade_solicitada} · Entregue: {getEntregue(item)} · Pendente: {getPendente(item)} · Saldo: {item.saldo_atual}
+                      Solicitado: {item.quantidade_solicitada} · Separado: {getSeparado(item)} · Entregue: {getEntregue(item)} · Pendente: {getPendente(item)} · Saldo: {item.saldo_atual}
                     </div>
+                    {saldoInsuficienteTotal && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--gmp-warning)', marginTop: 4 }}>
+                        Saldo insuficiente para quantidade total — será entregue o máximo disponível
+                      </div>
+                    )}
+                    {qtdEntregar > 0 && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--gmp-success)', marginTop: 4, fontWeight: 600 }}>
+                        Será entregue: {qtdEntregar} {item.unidade} | Permanecerá pendente: {permanecePendente} {item.unidade}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
@@ -651,7 +773,7 @@ const RequisicoesList = () => {
                     <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', textAlign: 'right', marginTop: 2 }}>{item.unidade}</div>
                   </div>
                 </div>
-              ))}
+              );})}
               {detalhe.itens.every(i => maxQtdEntrega(i) <= 0) && (
                 <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.85rem' }}>Nenhum item disponível para entrega no momento.</p>
               )}
@@ -660,6 +782,41 @@ const RequisicoesList = () => {
               <button className="btn-almox-secondary" onClick={() => setShowEntregar(false)}>Cancelar</button>
               <button className="btn-almox-primary" onClick={handleEntregar} disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0)}>
                 {saving ? 'Confirmando...' : '✅ Confirmar Entrega'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal excluir (admin) */}
+      {showExcluir && detalhe && (
+        <div className="almox-modal-overlay" onClick={() => setShowExcluir(false)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>🗑 Excluir Requisição</h2>
+              <button className="almox-modal-close" onClick={() => setShowExcluir(false)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ color: 'var(--gmp-text-light)', marginBottom: 12, fontSize: '0.875rem' }}>
+                Esta ação remove a requisição <strong>{detalhe.numero}</strong> do sistema.
+                {detalhe.itens.some((i) => getEntregue(i) > 0) && (
+                  <span style={{ display: 'block', marginTop: 8, color: 'var(--gmp-warning)' }}>
+                    Itens já entregues terão o estoque estornado automaticamente.
+                  </span>
+                )}
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Justificativa da exclusão *</label>
+                <textarea className="almox-textarea" rows={3} value={justificativaExclusao}
+                  onChange={e => setJustificativaExclusao(e.target.value)}
+                  placeholder="Informe o motivo da exclusão..." />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setShowExcluir(false)}>Cancelar</button>
+              <button className="btn-almox-danger" onClick={handleExcluir}
+                disabled={saving || !justificativaExclusao.trim()}>
+                {saving ? 'Excluindo...' : 'Confirmar Exclusão'}
               </button>
             </div>
           </div>

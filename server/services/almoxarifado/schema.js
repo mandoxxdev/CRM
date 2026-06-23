@@ -626,6 +626,8 @@ async function initSchema(db) {
   ];
   for (const col of reqCols) await safeAlter(db, `ALTER TABLE requisicoes_almoxarifado ADD COLUMN ${col}`);
 
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN ativo INTEGER DEFAULT 1');
+
   // ── Atendimento parcial por item ──
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0');
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0');
@@ -652,6 +654,7 @@ async function initSchema(db) {
     ['alertas_estoque_whatsapp_numeros', '[]', 'Lista de números WhatsApp para notificação de estoque mínimo'],
     ['alertas_estoque_intervalo_verificacao_horas', '4', 'Intervalo sugerido de verificação de alertas (horas)'],
     ['alertas_estoque_debounce_segundos', '60', 'Debounce anti-duplicata na mesma operação (segundos; 0=desligado)'],
+    ['alertas_app_url', 'https://systemgmp.online', 'URL base do sistema para links nos alertas (e-mail e WhatsApp)'],
     ['alertas_smtp_host', '', 'Servidor SMTP para alertas de estoque'],
     ['alertas_smtp_port', '587', 'Porta SMTP para alertas de estoque'],
     ['alertas_smtp_user', '', 'Usuário SMTP para alertas de estoque'],

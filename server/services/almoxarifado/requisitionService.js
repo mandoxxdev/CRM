@@ -28,23 +28,26 @@ function maxSeparar(item, estoque) {
 }
 
 function maxEntregar(item, estoque) {
-  const entregue = getEntregue(item);
-  const separado = getSeparado(item);
   const pendente = pendenteEntrega(item);
-  const disponivelSeparado = separado > entregue ? separado - entregue : pendente;
-  return Math.min(pendente, disponivelSeparado, num(estoque));
+  const separadoDisponivel = Math.max(0, getSeparado(item) - getEntregue(item));
+  return Math.min(pendente, separadoDisponivel, num(estoque));
 }
 
 function normalizarItem(item) {
   const entregue = getEntregue(item);
   const separado = getSeparado(item);
   const solicitado = num(item.quantidade_solicitada);
+  const estoque = num(item.saldo_atual ?? item.quantidade_atual);
+  const pendente = Math.max(0, solicitado - entregue);
+  const entregavel = maxEntregar(item, estoque);
   return {
     ...item,
     quantidade_entregue: entregue,
     quantidade_separada: separado,
     quantidade_atendida: entregue,
-    quantidade_pendente: Math.max(0, solicitado - entregue),
+    quantidade_pendente: pendente,
+    quantidade_entregavel: entregavel,
+    saldo_atual: item.saldo_atual ?? estoque,
   };
 }
 
@@ -66,8 +69,8 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
     err.status = 404;
     throw err;
   }
-  if (!['APROVADO', 'PARCIALMENTE_ATENDIDA'].includes(reqRow.status)) {
-    const err = new Error('Requisição deve estar aprovada ou parcialmente atendida para separar');
+  if (!['APROVADO', 'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA'].includes(reqRow.status)) {
+    const err = new Error('Requisição deve estar aprovada, em separação ou parcialmente atendida para separar');
     err.status = 400;
     throw err;
   }
@@ -75,7 +78,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
   const itens = await carregarItensRequisicao(db, requisicaoId);
 
   for (const entrada of itensSeparados) {
-    const item = itens.find((i) => i.id === entrada.item_id);
+    const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
     if (!item) continue;
 
     const qty = num(entrada.quantidade_separada);
@@ -124,7 +127,7 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
   const entregas = [];
 
   for (const item of itens) {
-    const entrada = itensAtendidos?.find((ia) => ia.item_id === item.id);
+    const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     const qtyEntregar = entrada ? num(entrada.quantidade_atendida) : 0;
     if (qtyEntregar <= 0) continue;
 
@@ -193,6 +196,56 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
   return { success: true, status: novoStatus, parcial: !completo, entregas };
 }
 
+async function excluirRequisicao(db, requisicaoId, user, justificativa, alertService) {
+  const reqRow = await dbGet(db,
+    'SELECT * FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1',
+    [requisicaoId]);
+  if (!reqRow) {
+    const err = new Error('Requisição não encontrada');
+    err.status = 404;
+    throw err;
+  }
+
+  const itens = await carregarItensRequisicao(db, requisicaoId);
+  const estornos = [];
+
+  for (const item of itens) {
+    const qtyEstorno = getEntregue(item);
+    if (qtyEstorno <= 0) continue;
+
+    const mat = await dbGet(db, 'SELECT quantidade_atual, unidade FROM materiais_almoxarifado WHERE id = ?',
+      [item.material_id]);
+    const saldoAnterior = num(mat?.quantidade_atual);
+    const saldoPosterior = saldoAnterior + qtyEstorno;
+
+    await dbRun(db,
+      'UPDATE materiais_almoxarifado SET quantidade_atual=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [saldoPosterior, item.material_id]);
+    await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
+      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, usuario_id, usuario_nome, requisicao_id)
+      VALUES (?, 'ENTRADA', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [item.material_id, qtyEstorno, saldoAnterior, saldoPosterior,
+        `Estorno exclusão requisição ${reqRow.numero}`,
+        reqRow.os_referencia || reqRow.numero,
+        user.id, user.nome || user.email, requisicaoId]);
+    estornos.push({ material_id: item.material_id, quantidade: qtyEstorno });
+  }
+
+  const motivo = justificativa?.trim() || 'Excluída pelo administrador';
+  await dbRun(db,
+    `UPDATE requisicoes_almoxarifado
+     SET ativo=0, status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP
+     WHERE id=?`,
+    [motivo, requisicaoId]);
+
+  if (alertService && estornos.length > 0) {
+    const materialIds = [...new Set(estornos.map((e) => e.material_id))];
+    await Promise.all(materialIds.map((id) => alertService.verificarAlertaPorMaterialId(db, id).catch(() => null)));
+  }
+
+  return { success: true, estornos };
+}
+
 module.exports = {
   num,
   getEntregue,
@@ -206,4 +259,5 @@ module.exports = {
   carregarItensRequisicao,
   separarRequisicao,
   entregarRequisicao,
+  excluirRequisicao,
 };

@@ -291,6 +291,57 @@ async function run() {
     assert.strictEqual(item.quantidade_entregue, 3);
   });
 
+  await test('Requisição — entrega parcial quando estoque < pendente', async () => {
+    const matId = await criarMaterial(db, 'T-REQ-05', 8);
+    const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+      (numero, solicitante_id, solicitante_nome, status) VALUES ('REQ-TEST-05', 1, 'Teste', 'EM_SEPARACAO')`);
+    const itemRes = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada, quantidade_separada) VALUES (?, ?, 10, 8)`,
+      [reqRes.lastID, matId]);
+
+    const result = await requisitionService.entregarRequisicao(db, reqRes.lastID, [{
+      item_id: itemRes.lastID,
+      quantidade_atendida: 8,
+    }], userAlmox);
+
+    const item = await dbGet(db,
+      'SELECT quantidade_entregue, quantidade_atendida, quantidade_solicitada FROM itens_requisicao_almoxarifado WHERE id = ?',
+      [itemRes.lastID]);
+    const mat = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matId]);
+    const req = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqRes.lastID]);
+
+    assert.strictEqual(result.parcial, true);
+    assert.strictEqual(result.status, 'PARCIALMENTE_ATENDIDA');
+    assert.strictEqual(item.quantidade_entregue, 8);
+    assert.strictEqual(requisitionService.pendenteEntrega(item), 2);
+    assert.strictEqual(mat.quantidade_atual, 0);
+    assert.strictEqual(req.status, 'PARCIALMENTE_ATENDIDA');
+  });
+
+  await test('Requisição — admin exclui com estorno de estoque', async () => {
+    const matId = await criarMaterial(db, 'T-REQ-06', 5);
+    const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+      (numero, solicitante_id, solicitante_nome, status, ativo) VALUES ('REQ-TEST-06', 1, 'Teste', 'PARCIALMENTE_ATENDIDA', 1)`);
+    const itemRes = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)
+      VALUES (?, ?, 10, 8, 3, 3)`, [reqRes.lastID, matId]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 2 WHERE id = ?', [matId]);
+
+    const result = await requisitionService.excluirRequisicao(db, reqRes.lastID, userAdmin, 'Teste exclusão');
+    const req = await dbGet(db, 'SELECT status, ativo FROM requisicoes_almoxarifado WHERE id = ?', [reqRes.lastID]);
+    const mat = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matId]);
+    const movs = await dbAll(db,
+      'SELECT tipo, quantidade FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND tipo = ?',
+      [reqRes.lastID, 'ENTRADA']);
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.estornos.length, 1);
+    assert.strictEqual(req.ativo, 0);
+    assert.strictEqual(req.status, 'CANCELADO');
+    assert.strictEqual(mat.quantidade_atual, 5);
+    assert.strictEqual(movs[0].quantidade, 3);
+  });
+
   await test('Alerta estoque — dispara ao cruzar mínimo', async () => {
     const id = await criarMaterial(db, 'T-ALERT-1', 20);
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_minima = 10 WHERE id = ?', [id]);
