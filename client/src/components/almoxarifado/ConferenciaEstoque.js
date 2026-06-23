@@ -204,7 +204,7 @@ const ConferenciaEstoque = () => {
                             className="almox-count-input"
                             type="number"
                             min="0"
-                            step="0.01"
+                            step="1"
                             value={contagens[item.id] || ''}
                             onChange={e => setContagens(c => ({ ...c, [item.id]: e.target.value }))}
                             onBlur={() => handleSalvarContagem(item.id)}

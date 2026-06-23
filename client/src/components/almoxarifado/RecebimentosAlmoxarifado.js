@@ -331,7 +331,7 @@ const RecebimentosAlmoxarifado = () => {
                         <strong>{item.material_nome}</strong>
                         <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>{item.material_codigo}</div>
                       </div>
-                      <input className="almox-count-input" type="number" min="0.01" step="0.01" required
+                      <input className="almox-count-input" type="number" min="1" step="1" required
                         value={item.quantidade}
                         onChange={e => setForm(f => ({
                           ...f,

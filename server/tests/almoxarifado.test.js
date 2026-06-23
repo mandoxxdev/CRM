@@ -10,7 +10,9 @@ const stockService = require('../services/almoxarifado/stockService');
 const returnService = require('../services/almoxarifado/returnService');
 const clientMaterialService = require('../services/almoxarifado/clientMaterialService');
 const receiptService = require('../services/almoxarifado/receiptService');
+const requisitionService = require('../services/almoxarifado/requisitionService');
 const { can, PERFIS } = require('../services/almoxarifado/permissions');
+const alertService = require('../services/almoxarifado/alertService');
 
 const userAdmin = { id: 1, nome: 'Admin Test', role: 'admin' };
 const userAlmox = { id: 2, nome: 'Almox Test', role: 'user', perfil_almoxarifado: PERFIS.ALMOXARIFE };
@@ -52,7 +54,6 @@ async function setupDb() {
   await dbRun(db, `CREATE TABLE localizacoes_almoxarifado (id INTEGER PRIMARY KEY AUTOINCREMENT, codigo TEXT, descricao TEXT, tipo TEXT, ativo INTEGER DEFAULT 1)`);
   await dbRun(db, `CREATE TABLE conferencias_almoxarifado (id INTEGER PRIMARY KEY, numero TEXT, status TEXT)`);
   await dbRun(db, `CREATE TABLE itens_conferencia_almoxarifado (id INTEGER PRIMARY KEY, conferencia_id INTEGER, material_id INTEGER, quantidade_sistema REAL, divergencia REAL)`);
-  await dbRun(db, `CREATE TABLE requisicoes_almoxarifado (id INTEGER PRIMARY KEY, numero TEXT, status TEXT)`);
   await dbRun(db, `CREATE TABLE tipos_material_almoxarifado (id INTEGER PRIMARY KEY, nome TEXT)`);
   await dbRun(db, `CREATE TABLE clientes (id INTEGER PRIMARY KEY, razao_social TEXT)`);
   await initSchema(db);
@@ -194,6 +195,134 @@ async function run() {
     await receiptService.aprovarRecebimento(db, userAlmox, rec.id);
     const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [id]);
     assert.strictEqual(m.quantidade_atual, 25);
+  });
+
+  await test('Requisição — bloqueia separação acima do estoque', async () => {
+    const matId = await criarMaterial(db, 'T-REQ-01', 2);
+    const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+      (numero, solicitante_id, solicitante_nome, status) VALUES ('REQ-TEST-01', 1, 'Teste', 'APROVADO')`);
+    const itemRes = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada) VALUES (?, ?, 3)`, [reqRes.lastID, matId]);
+
+    let erro = false;
+    try {
+      await requisitionService.separarRequisicao(db, reqRes.lastID, [{
+        item_id: itemRes.lastID,
+        quantidade_separada: 3,
+      }]);
+    } catch (e) {
+      erro = e.status === 400 && /não é possível separar 3/i.test(e.message);
+    }
+    assert.strictEqual(erro, true);
+  });
+
+  await test('Requisição — entrega parcial baixa só o entregue', async () => {
+    const matId = await criarMaterial(db, 'T-REQ-02', 2);
+    const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+      (numero, solicitante_id, solicitante_nome, status) VALUES ('REQ-TEST-02', 1, 'Teste', 'EM_SEPARACAO')`);
+    const itemRes = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada, quantidade_separada) VALUES (?, ?, 3, 2)`,
+      [reqRes.lastID, matId]);
+
+    const result = await requisitionService.entregarRequisicao(db, reqRes.lastID, [{
+      item_id: itemRes.lastID,
+      quantidade_atendida: 2,
+    }], userAlmox);
+
+    const item = await dbGet(db, 'SELECT quantidade_entregue, quantidade_atendida FROM itens_requisicao_almoxarifado WHERE id = ?',
+      [itemRes.lastID]);
+    const mat = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matId]);
+    const req = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqRes.lastID]);
+
+    assert.strictEqual(result.parcial, true);
+    assert.strictEqual(result.status, 'PARCIALMENTE_ATENDIDA');
+    assert.strictEqual(item.quantidade_entregue, 2);
+    assert.strictEqual(item.quantidade_atendida, 2);
+    assert.strictEqual(mat.quantidade_atual, 0);
+    assert.strictEqual(req.status, 'PARCIALMENTE_ATENDIDA');
+  });
+
+  await test('Requisição — bloqueia entrega acima do estoque', async () => {
+    const matId = await criarMaterial(db, 'T-REQ-03', 1);
+    const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+      (numero, solicitante_id, solicitante_nome, status) VALUES ('REQ-TEST-03', 1, 'Teste', 'EM_SEPARACAO')`);
+    const itemRes = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada, quantidade_separada) VALUES (?, ?, 3, 3)`,
+      [reqRes.lastID, matId]);
+
+    let erro = false;
+    try {
+      await requisitionService.entregarRequisicao(db, reqRes.lastID, [{
+        item_id: itemRes.lastID,
+        quantidade_atendida: 2,
+      }], userAlmox);
+    } catch (e) {
+      erro = e.status === 400 && /não é possível entregar 2/i.test(e.message);
+    }
+    assert.strictEqual(erro, true);
+  });
+
+  await test('Requisição — segunda rodada completa atendimento', async () => {
+    const matId = await criarMaterial(db, 'T-REQ-04', 0);
+    const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+      (numero, solicitante_id, solicitante_nome, status) VALUES ('REQ-TEST-04', 1, 'Teste', 'PARCIALMENTE_ATENDIDA')`);
+    const itemRes = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)
+      VALUES (?, ?, 3, 2, 2, 2)`, [reqRes.lastID, matId]);
+
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 1 WHERE id = ?', [matId]);
+    await requisitionService.separarRequisicao(db, reqRes.lastID, [{
+      item_id: itemRes.lastID,
+      quantidade_separada: 1,
+    }]);
+
+    const result = await requisitionService.entregarRequisicao(db, reqRes.lastID, [{
+      item_id: itemRes.lastID,
+      quantidade_atendida: 1,
+    }], userAlmox);
+
+    const req = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqRes.lastID]);
+    const item = await dbGet(db, 'SELECT quantidade_entregue FROM itens_requisicao_almoxarifado WHERE id = ?',
+      [itemRes.lastID]);
+
+    assert.strictEqual(result.parcial, false);
+    assert.strictEqual(result.status, 'ENTREGUE');
+    assert.strictEqual(req.status, 'ENTREGUE');
+    assert.strictEqual(item.quantidade_entregue, 3);
+  });
+
+  await test('Alerta estoque — dispara ao cruzar mínimo', async () => {
+    const id = await criarMaterial(db, 'T-ALERT-1', 20);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_minima = 10 WHERE id = ?', [id]);
+    const matAcima = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [id]);
+    const r1 = await alertService.avaliarCruzamentoMinimo(db, matAcima);
+    assert.strictEqual(r1.deveAlertar, false);
+
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 8 WHERE id = ?', [id]);
+    const matAbaixo = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [id]);
+    const r2 = await alertService.avaliarCruzamentoMinimo(db, matAbaixo);
+    assert.strictEqual(r2.deveAlertar, true);
+
+    await alertService.marcarAlertaEnviado(db, id);
+    const r3 = await alertService.avaliarCruzamentoMinimo(db, matAbaixo);
+    assert.strictEqual(r3.deveAlertar, false);
+    assert.ok(r3.motivo.includes('abaixo do mínimo'));
+  });
+
+  await test('Alerta estoque — novo alerta após reposição', async () => {
+    const id = await criarMaterial(db, 'T-ALERT-2', 5);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_minima = 10 WHERE id = ?', [id]);
+    await alertService.marcarAlertaEnviado(db, id);
+
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 15 WHERE id = ?', [id]);
+    const matReposto = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [id]);
+    const r1 = await alertService.avaliarCruzamentoMinimo(db, matReposto);
+    assert.strictEqual(r1.deveAlertar, false);
+
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 9 WHERE id = ?', [id]);
+    const matAbaixo = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [id]);
+    const r2 = await alertService.avaliarCruzamentoMinimo(db, matAbaixo);
+    assert.strictEqual(r2.deveAlertar, true);
   });
 
   console.log(`\n📊 Resultado: ${passed} passou, ${failed} falhou\n`);

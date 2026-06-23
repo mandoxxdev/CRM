@@ -255,7 +255,7 @@ const MovimentacoesAlmoxarifado = () => {
                       {form.tipo === 'AJUSTE' ? 'Novo Saldo' : 'Quantidade'}
                       <span className="required">*</span>
                     </label>
-                    <input className="almox-input" type="number" min="0.01" step="0.01"
+                    <input className="almox-input" type="number" min="0" step="1"
                       value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
                       placeholder="0" required />
                     {selectedMaterial && form.tipo === 'SAIDA' && (

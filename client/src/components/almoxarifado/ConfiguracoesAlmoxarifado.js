@@ -738,7 +738,7 @@ const TabEstoquesMinimos = () => {
                     </td>
                     {['quantidade_minima', 'quantidade_maxima', 'ponto_pedido', 'prazo_reposicao_dias'].map(campo => (
                       <td key={campo}>
-                        <input className="almox-count-input" type="number" min="0" step={campo === 'prazo_reposicao_dias' ? '1' : '0.01'}
+                        <input className="almox-count-input" type="number" min="0" step="1"
                           value={getVal(mat, campo)} onChange={e => handleChange(mat.id, campo, e.target.value)} />
                       </td>
                     ))}
@@ -1650,7 +1650,7 @@ const TabAlertasEstoque = () => {
     emails: [],
     whatsappNumeros: [],
     intervaloVerificacaoHoras: 4,
-    cooldownHoras: 24,
+    debounceSegundos: 60,
     smtpHost: '',
     smtpPort: 587,
     smtpUser: '',
@@ -1679,7 +1679,7 @@ const TabAlertasEstoque = () => {
         emails: Array.isArray(res.data.emails) ? res.data.emails : [],
         whatsappNumeros: Array.isArray(res.data.whatsappNumeros) ? res.data.whatsappNumeros : [],
         intervaloVerificacaoHoras: res.data.intervaloVerificacaoHoras || 4,
-        cooldownHoras: res.data.cooldownHoras || 24,
+        debounceSegundos: res.data.debounceSegundos ?? 60,
         smtpHost: res.data.smtpHost || '',
         smtpPort: res.data.smtpPort || 587,
         smtpUser: res.data.smtpUser || '',
@@ -1875,7 +1875,11 @@ const TabAlertasEstoque = () => {
       </div>
 
       <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Frequência e antispam</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Frequência e disparo</div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
+          O alerta é enviado <strong>cada vez</strong> que o saldo cruza de acima para no/abaixo do mínimo
+          (reposição e nova saída geram novo alerta). Não há limite diário por material.
+        </p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div className="almox-field">
             <label className="almox-label">Intervalo de verificação (horas)</label>
@@ -1883,9 +1887,10 @@ const TabAlertasEstoque = () => {
               onChange={e => setConfig(c => ({ ...c, intervaloVerificacaoHoras: Number(e.target.value || 1) }))} />
           </div>
           <div className="almox-field">
-            <label className="almox-label">Cooldown por material (horas)</label>
-            <input className="almox-input" type="number" min="1" value={config.cooldownHoras}
-              onChange={e => setConfig(c => ({ ...c, cooldownHoras: Number(e.target.value || 1) }))} />
+            <label className="almox-label">Debounce anti-duplicata (segundos)</label>
+            <input className="almox-input" type="number" min="0" max="3600" value={config.debounceSegundos}
+              onChange={e => setConfig(c => ({ ...c, debounceSegundos: Number(e.target.value || 0) }))} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>0 = desligado. Máx. 60s recomendado.</span>
           </div>
         </div>
       </div>

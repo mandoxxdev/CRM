@@ -428,19 +428,19 @@ const MaterialAlmoxarifadoForm = () => {
               <div className="almox-form-grid almox-form-grid-3">
                 <div className="almox-field">
                   <label className="almox-label">{isEdit ? 'Quantidade Atual' : 'Saldo Inicial'}</label>
-                  <input className="almox-input" type="number" min="0" step="0.01"
+                  <input className="almox-input" type="number" min="0" step="1"
                     value={form.quantidade_atual} onChange={e => set('quantidade_atual', e.target.value)}
                     placeholder="0" disabled={isEdit} title={isEdit ? 'Use Movimentações para alterar o saldo' : ''} />
                   {isEdit && <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>Use "Movimentações" para ajustar</small>}
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Estoque Mínimo</label>
-                  <input className="almox-input" type="number" min="0" step="0.01"
+                  <input className="almox-input" type="number" min="0" step="1"
                     value={form.quantidade_minima} onChange={e => set('quantidade_minima', e.target.value)} placeholder="0" />
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Estoque Máximo</label>
-                  <input className="almox-input" type="number" min="0" step="0.01"
+                  <input className="almox-input" type="number" min="0" step="1"
                     value={form.quantidade_maxima} onChange={e => set('quantidade_maxima', e.target.value)} placeholder="0" />
                 </div>
               </div>

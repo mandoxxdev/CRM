@@ -591,9 +591,11 @@ async function initSchema(db) {
   // ── Alertas de estoque mínimo ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (
     material_id INTEGER PRIMARY KEY,
+    estado_estoque TEXT DEFAULT 'ACIMA',
     ultimo_alerta_enviado DATETIME,
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
+  await safeAlter(db, "ALTER TABLE alertas_estoque_material_almoxarifado ADD COLUMN estado_estoque TEXT DEFAULT 'ACIMA'");
 
   await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_historico_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -624,6 +626,13 @@ async function initSchema(db) {
   ];
   for (const col of reqCols) await safeAlter(db, `ALTER TABLE requisicoes_almoxarifado ADD COLUMN ${col}`);
 
+  // ── Atendimento parcial por item ──
+  await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0');
+  await dbRun(db, `UPDATE itens_requisicao_almoxarifado
+    SET quantidade_entregue = quantidade_atendida
+    WHERE COALESCE(quantidade_entregue, 0) = 0 AND COALESCE(quantidade_atendida, 0) > 0`);
+
   // ── Extend conferências (inventário) ──
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN tipo TEXT DEFAULT \'GERAL\'');
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN projeto_id INTEGER');
@@ -642,7 +651,7 @@ async function initSchema(db) {
     ['alertas_estoque_emails', '[]', 'Lista de e-mails para notificação de estoque mínimo'],
     ['alertas_estoque_whatsapp_numeros', '[]', 'Lista de números WhatsApp para notificação de estoque mínimo'],
     ['alertas_estoque_intervalo_verificacao_horas', '4', 'Intervalo sugerido de verificação de alertas (horas)'],
-    ['alertas_estoque_cooldown_horas', '24', 'Cooldown por material para evitar spam (horas)'],
+    ['alertas_estoque_debounce_segundos', '60', 'Debounce anti-duplicata na mesma operação (segundos; 0=desligado)'],
     ['alertas_smtp_host', '', 'Servidor SMTP para alertas de estoque'],
     ['alertas_smtp_port', '587', 'Porta SMTP para alertas de estoque'],
     ['alertas_smtp_user', '', 'Usuário SMTP para alertas de estoque'],

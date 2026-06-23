@@ -9,6 +9,7 @@ const STATUS_REQ = {
   PENDENTE: 'Pendente',
   APROVADO: 'Aprovado',
   EM_SEPARACAO: 'Em Separação',
+  PARCIALMENTE_ATENDIDA: 'Parcialmente Atendida',
 };
 
 const getPeriodDates = (days) => {

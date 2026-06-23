@@ -319,7 +319,7 @@ const MateriaisAlmoxarifado = () => {
                   </div>
                   <div className="almox-field almox-form-full">
                     <label className="almox-label">Quantidade<span className="required">*</span></label>
-                    <input className="almox-input" type="number" min="0.01" step="0.01"
+                    <input className="almox-input" type="number" min="0" step="1"
                       value={movQtd} onChange={e => setMovQtd(e.target.value)} placeholder="0" required />
                   </div>
                   <div className="almox-field">

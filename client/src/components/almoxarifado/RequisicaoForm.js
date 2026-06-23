@@ -269,7 +269,7 @@ const RequisicaoForm = () => {
                           placeholder="Obs. deste item (opcional)" />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                        <input className="almox-count-input" type="number" min="0.01" step="0.01"
+                        <input className="almox-count-input" type="number" min="1" step="1"
                           value={item.quantidade}
                           onChange={e => atualizarItem(item.material_id, 'quantidade', e.target.value)} />
                         <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>{item.unidade}</div>

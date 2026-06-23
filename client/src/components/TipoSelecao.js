@@ -6,7 +6,7 @@ import {
   FiBriefcase, FiShoppingCart, FiDollarSign,
   FiSettings, FiPackage, FiTarget,
   FiLock, FiShield, FiTool, FiSliders, FiArchive,
-  FiSearch, FiPlay, FiX
+  FiSearch, FiPlay, FiX, FiMessageCircle
 } from 'react-icons/fi';
 import SplashScreen from './SplashScreen';
 import './TipoSelecao.css';
@@ -58,6 +58,16 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   const { user } = useAuth();
 
   const todosModulos = [
+    {
+      id: 'chat',
+      nome: 'Chat Interno',
+      descricao: 'Mensagens e conversas da equipe',
+      icon: FiMessageCircle,
+      modulo: 'chat',
+      rota: '/chat',
+      sempreDisponivel: true,
+      gradient: 'linear-gradient(135deg, #128C7E 0%, #075E54 100%)'
+    },
     {
       id: 'comercial',
       nome: 'Comercial',
@@ -188,7 +198,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         setLoading(false);
         const modulosComStatus = todosModulos.map(mod => ({
           ...mod,
-          disponivel: mod.modulo === 'comercial'
+          disponivel: mod.sempreDisponivel || mod.modulo === 'comercial'
         }));
         setModulosDisponiveis(modulosComStatus);
         return;
@@ -227,7 +237,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
 
         const modulosComStatus = todosModulos.map(mod => ({
           ...mod,
-          disponivel: modulosPermitidos.has(mod.modulo)
+          disponivel: mod.sempreDisponivel || modulosPermitidos.has(mod.modulo)
         }));
 
         setModulosDisponiveis(modulosComStatus);
@@ -243,7 +253,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         } else {
           const modulosComStatus = todosModulos.map(mod => ({
             ...mod,
-            disponivel: mod.modulo === 'comercial'
+            disponivel: mod.sempreDisponivel || mod.modulo === 'comercial'
           }));
           setModulosDisponiveis(modulosComStatus);
         }

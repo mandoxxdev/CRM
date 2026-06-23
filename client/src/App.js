@@ -70,6 +70,7 @@ import RequisicaoForm from './components/almoxarifado/RequisicaoForm';
 import ConfiguracoesAlmoxarifado from './components/almoxarifado/ConfiguracoesAlmoxarifado';
 import MapaLocalizacoesAlmoxarifado from './components/almoxarifado/MapaLocalizacoesAlmoxarifado';
 import RecebimentosAlmoxarifado from './components/almoxarifado/RecebimentosAlmoxarifado';
+import ChatPage from './components/chat/ChatPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
@@ -86,6 +87,7 @@ const PrivateRoute = ({ children }) => {
   const isProtectedModuleRoute = () => {
     const path = location.pathname;
     return path.startsWith('/comercial') ||
+           path.startsWith('/chat') ||
            path.startsWith('/frota') ||
            path.startsWith('/compras') || 
            path.startsWith('/financeiro') || 
@@ -186,6 +188,16 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
+      <Route
+        path="/chat"
+        element={
+          <PrivateRoute>
+            <Layout />
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<ChatPage />} />
+      </Route>
       <Route
         path="/comercial"
         element={

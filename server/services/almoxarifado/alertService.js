@@ -4,8 +4,11 @@ const https = require('https');
 const { URL } = require('url');
 const { dbGet, dbAll, dbRun } = require('./db');
 
-const DEFAULT_COOLDOWN_HOURS = 24;
 const DEFAULT_INTERVAL_HOURS = 4;
+/** Debounce curto (segundos) só para evitar duplo disparo na mesma movimentação; 0 = desligado */
+const DEFAULT_DEBOUNCE_SECONDS = 60;
+const ESTADO_ACIMA = 'ACIMA';
+const ESTADO_ABAIXO = 'ABAIXO';
 const PASSWORD_MASK = '********';
 
 const SMTP_CONFIG_KEYS = {
@@ -44,14 +47,18 @@ async function getConfigValue(db, chave) {
 }
 
 async function getAlertSettings(db) {
-  const [emails, whatsapps, notificarEmail, notificarWhatsapp, intervaloHoras, cooldownHoras] = await Promise.all([
+  const [emails, whatsapps, notificarEmail, notificarWhatsapp, intervaloHoras, debounceSegundos] = await Promise.all([
     getConfigValue(db, 'alertas_estoque_emails'),
     getConfigValue(db, 'alertas_estoque_whatsapp_numeros'),
     getConfigValue(db, 'alertas_estoque_notificar_email'),
     getConfigValue(db, 'alertas_estoque_notificar_whatsapp'),
     getConfigValue(db, 'alertas_estoque_intervalo_verificacao_horas'),
-    getConfigValue(db, 'alertas_estoque_cooldown_horas'),
+    getConfigValue(db, 'alertas_estoque_debounce_segundos'),
   ]);
+
+  const debounceParsed = debounceSegundos !== undefined && debounceSegundos !== null && debounceSegundos !== ''
+    ? Number(debounceSegundos)
+    : DEFAULT_DEBOUNCE_SECONDS;
 
   return {
     emails: parseList(emails),
@@ -59,7 +66,7 @@ async function getAlertSettings(db) {
     notificarEmail: parseBool(notificarEmail, true),
     notificarWhatsapp: parseBool(notificarWhatsapp, false),
     intervaloVerificacaoHoras: Number(intervaloHoras) > 0 ? Number(intervaloHoras) : DEFAULT_INTERVAL_HOURS,
-    cooldownHoras: Number(cooldownHoras) > 0 ? Number(cooldownHoras) : DEFAULT_COOLDOWN_HOURS,
+    debounceSegundos: Number.isFinite(debounceParsed) && debounceParsed >= 0 ? debounceParsed : DEFAULT_DEBOUNCE_SECONDS,
   };
 }
 
@@ -263,32 +270,89 @@ async function enviarWhatsapp(db, destinatarios, mensagem, metadata) {
   return { enviados, erros };
 }
 
-async function shouldSkipByCooldown(db, materialId, cooldownHours, forceSend = false) {
-  if (forceSend) return false;
-  const row = await dbGet(db, 'SELECT ultimo_alerta_enviado FROM alertas_estoque_material_almoxarifado WHERE material_id = ?', [materialId]);
+/**
+ * Avalia se o material cruzou a borda do estoque mínimo (de acima para no/abaixo).
+ * Reposição acima do mínimo reseta o estado para permitir novo alerta na próxima queda.
+ */
+async function avaliarCruzamentoMinimo(db, material) {
+  const qtd = Number(material.quantidade_atual);
+  const min = Number(material.quantidade_minima);
+
+  if (min <= 0) {
+    return { deveAlertar: false, motivo: 'sem estoque mínimo configurado' };
+  }
+
+  const acimaMinimo = qtd > min;
+  const row = await dbGet(db,
+    'SELECT estado_estoque FROM alertas_estoque_material_almoxarifado WHERE material_id = ?',
+    [material.id]);
+  const estadoAnterior = row?.estado_estoque || ESTADO_ACIMA;
+
+  if (acimaMinimo) {
+    if (estadoAnterior !== ESTADO_ACIMA) {
+      await dbRun(db, `INSERT INTO alertas_estoque_material_almoxarifado (material_id, estado_estoque)
+        VALUES (?, ?)
+        ON CONFLICT(material_id) DO UPDATE SET estado_estoque = ?`,
+      [material.id, ESTADO_ACIMA, ESTADO_ACIMA]);
+    }
+    return { deveAlertar: false, motivo: 'estoque acima do mínimo' };
+  }
+
+  if (estadoAnterior === ESTADO_ABAIXO) {
+    return { deveAlertar: false, motivo: 'já alertado neste período abaixo do mínimo' };
+  }
+
+  return { deveAlertar: true, motivo: null };
+}
+
+/** Debounce curto contra duplo envio na mesma operação (não limita alertas ao longo do dia). */
+async function shouldSkipByDebounce(db, materialId, debounceSeconds, forceSend = false) {
+  if (forceSend || debounceSeconds <= 0) return false;
+  const row = await dbGet(db,
+    'SELECT ultimo_alerta_enviado FROM alertas_estoque_material_almoxarifado WHERE material_id = ?',
+    [materialId]);
   if (!row?.ultimo_alerta_enviado) return false;
   const ultimo = new Date(row.ultimo_alerta_enviado).getTime();
   if (Number.isNaN(ultimo)) return false;
-  const diffHours = (Date.now() - ultimo) / (1000 * 60 * 60);
-  return diffHours < cooldownHours;
+  const diffSeconds = (Date.now() - ultimo) / 1000;
+  return diffSeconds < debounceSeconds;
 }
 
-async function markAlertSent(db, materialId) {
-  await dbRun(db, `INSERT INTO alertas_estoque_material_almoxarifado (material_id, ultimo_alerta_enviado)
-    VALUES (?, CURRENT_TIMESTAMP)
-    ON CONFLICT(material_id) DO UPDATE SET ultimo_alerta_enviado = CURRENT_TIMESTAMP`, [materialId]);
+async function marcarAlertaEnviado(db, materialId) {
+  await dbRun(db, `INSERT INTO alertas_estoque_material_almoxarifado (material_id, estado_estoque, ultimo_alerta_enviado)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(material_id) DO UPDATE SET
+      estado_estoque = ?,
+      ultimo_alerta_enviado = CURRENT_TIMESTAMP`,
+  [materialId, ESTADO_ABAIXO, ESTADO_ABAIXO]);
+}
+
+/** Sincroniza estado ACIMA para materiais repostos (verificação periódica). */
+async function sincronizarEstadoAcimaMinimo(db) {
+  await dbRun(db, `UPDATE alertas_estoque_material_almoxarifado
+    SET estado_estoque = ?
+    WHERE material_id IN (
+      SELECT m.id FROM materiais_almoxarifado m
+      WHERE m.ativo = 1 AND m.quantidade_minima > 0 AND m.quantidade_atual > m.quantidade_minima
+    ) AND estado_estoque = ?`, [ESTADO_ACIMA, ESTADO_ABAIXO]);
 }
 
 async function processarAlertaMaterial(db, material, opts = {}) {
   const { forceSend = false, teste = false } = opts;
-  if (!isMaterialCritico(material) && !teste) {
-    return { material_id: material.id, enviado: false, motivo: 'material fora da condição de mínimo' };
+
+  if (!teste) {
+    const cruzamento = await avaliarCruzamentoMinimo(db, material);
+    if (!cruzamento.deveAlertar) {
+      return { material_id: material.id, enviado: false, motivo: cruzamento.motivo };
+    }
   }
 
   const settings = await getAlertSettings(db);
-  const skipByCooldown = await shouldSkipByCooldown(db, material.id, settings.cooldownHoras, forceSend || teste);
-  if (skipByCooldown) {
-    return { material_id: material.id, enviado: false, motivo: 'cooldown ativo' };
+  if (!teste) {
+    const skipDebounce = await shouldSkipByDebounce(db, material.id, settings.debounceSegundos, forceSend);
+    if (skipDebounce) {
+      return { material_id: material.id, enviado: false, motivo: 'debounce ativo (envio duplicado recente)' };
+    }
   }
 
   const msg = buildMensagem(material, teste);
@@ -322,11 +386,12 @@ async function processarAlertaMaterial(db, material, opts = {}) {
   }
 
   const houveEnvio = (resultado.email.enviados + resultado.whatsapp.enviados) > 0;
-  if (houveEnvio && !teste) await markAlertSent(db, material.id);
+  if (houveEnvio && !teste) await marcarAlertaEnviado(db, material.id);
   return { ...resultado, enviado: houveEnvio };
 }
 
 async function verificarAlertasEstoque(db, opts = {}) {
+  await sincronizarEstadoAcimaMinimo(db);
   const materiais = await dbAll(db, `SELECT id, codigo, nome, localizacao, unidade, quantidade_atual, quantidade_minima
     FROM materiais_almoxarifado
     WHERE ativo = 1 AND quantidade_minima > 0 AND quantidade_atual <= quantidade_minima`);
@@ -356,4 +421,6 @@ module.exports = {
   verificarAlertasEstoque,
   verificarAlertaPorMaterialId,
   processarAlertaMaterial,
+  avaliarCruzamentoMinimo,
+  marcarAlertaEnviado,
 };

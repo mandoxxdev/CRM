@@ -6,7 +6,7 @@ import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
-  FiArchive, FiActivity, FiList
+  FiArchive, FiActivity, FiList, FiMessageCircle
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -18,6 +18,22 @@ import HelpSearch from './HelpSearch';
 import ModuleSplash from './ModuleSplash';
 import PreferenciasMenu from './PreferenciasMenu';
 import './Layout.css';
+import '../components/chat/Chat.css';
+
+const CHAT_MENU_ITEM = { path: '/chat', icon: FiMessageCircle, label: 'Chat', global: true };
+
+function getActiveModuleFromPath(path) {
+  if (path.startsWith('/frota')) return 'frota';
+  if (path.startsWith('/compras')) return 'compras';
+  if (path.startsWith('/financeiro')) return 'financeiro';
+  if (path.startsWith('/fabrica')) return 'operacional';
+  if (path.startsWith('/admin')) return 'admin';
+  if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
+  if (path.startsWith('/engenharia')) return 'engenharia';
+  if (path.startsWith('/almoxarifado')) return 'almoxarifado';
+  if (path.startsWith('/comercial')) return 'crm';
+  return 'crm';
+}
 
 const Layout = () => {
   // No mobile, sidebar começa fechada. No desktop, sempre aberta
@@ -47,6 +63,7 @@ const Layout = () => {
   const [animatedBackgroundEnabled, setAnimatedBackgroundEnabled] = useState(
     localStorage.getItem('animatedBackground') !== 'false'
   );
+  const [chatUnread, setChatUnread] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -91,6 +108,38 @@ const Layout = () => {
     }
   }, [user?.id]);
 
+  const loadChatUnread = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const response = await api.get('/chat/nao-lidas');
+      setChatUnread(response.data.total || 0);
+    } catch {
+      /* chat module may not be ready yet */
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadChatUnread();
+    const interval = setInterval(loadChatUnread, 30000);
+    const onUnreadChanged = () => loadChatUnread();
+    window.addEventListener('chat-unread-changed', onUnreadChanged);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('chat-unread-changed', onUnreadChanged);
+    };
+  }, [loadChatUnread]);
+
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.startsWith('/chat')) return;
+    const module = getActiveModuleFromPath(path);
+    try {
+      sessionStorage.setItem('orion_active_module', module);
+    } catch {
+      /* ignore */
+    }
+  }, [location.pathname]);
+
   // Escutar mudanças na preferência do fundo animado
   useEffect(() => {
     const handleAnimatedBackgroundChange = () => {
@@ -129,19 +178,17 @@ const Layout = () => {
     navigate('/login');
   };
 
-  // Detectar qual módulo está ativo
+  // Detectar qual módulo está ativo (menu lateral)
   const getActiveModule = () => {
     const path = location.pathname;
-    if (path.startsWith('/frota')) return 'frota';
-    if (path.startsWith('/compras')) return 'compras';
-    if (path.startsWith('/financeiro')) return 'financeiro';
-    if (path.startsWith('/fabrica')) return 'operacional';
-    if (path.startsWith('/admin')) return 'admin';
-    if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
-    if (path.startsWith('/engenharia')) return 'engenharia';
-    if (path.startsWith('/almoxarifado')) return 'almoxarifado';
-    if (path.startsWith('/comercial')) return 'crm';
-    return 'crm'; // Default para CRM
+    if (path.startsWith('/chat')) {
+      try {
+        return sessionStorage.getItem('orion_active_module') || 'crm';
+      } catch {
+        return 'crm';
+      }
+    }
+    return getActiveModuleFromPath(path);
   };
 
   const activeModule = getActiveModule();
@@ -253,7 +300,7 @@ const Layout = () => {
     }
   };
 
-  const menuItems = getMenuItems();
+  const menuItems = [...getMenuItems(), CHAT_MENU_ITEM];
 
   return (
     <div className="layout">
@@ -293,6 +340,8 @@ const Layout = () => {
             // Se for o Dashboard, só ativo quando está exatamente em /comercial
             if (item.path === '/comercial') {
               isActive = location.pathname === '/comercial';
+            } else if (item.path === '/chat') {
+              isActive = location.pathname === '/chat';
             } else {
               // Para outras rotas, verificar se começa com o path
               // Ex: /comercial/produtos ou /comercial/produtos/novo devem ativar "Produtos"
@@ -308,6 +357,9 @@ const Layout = () => {
               >
                 <Icon />
                 {sidebarOpen && <span>{item.label}</span>}
+                {item.path === '/chat' && chatUnread > 0 && sidebarOpen && (
+                  <span className="chat-nav-badge">{chatUnread > 99 ? '99+' : chatUnread}</span>
+                )}
               </Link>
             );
           })}

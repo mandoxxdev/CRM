@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const alertService = require('../services/almoxarifado/alertService');
+const requisitionService = require('../services/almoxarifado/requisitionService');
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
@@ -396,6 +397,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                     FROM materiais_almoxarifado m
                     LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
                     WHERE m.id = ?`, [req.params.id], (err2, row) => {
+              if (err2) return res.status(500).json({ error: err2.message });
+              alertService.verificarAlertaPorMaterialId(db, Number(req.params.id)).catch(() => null);
               res.json(row);
             });
           }
@@ -913,7 +916,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       ['alertas_estoque_emails', '[]', 'Lista de e-mails para notificação de estoque mínimo'],
       ['alertas_estoque_whatsapp_numeros', '[]', 'Lista de números WhatsApp para notificação de estoque mínimo'],
       ['alertas_estoque_intervalo_verificacao_horas', '4', 'Intervalo sugerido de verificação de alertas (horas)'],
-      ['alertas_estoque_cooldown_horas', '24', 'Cooldown por material para evitar spam (horas)'],
+      ['alertas_estoque_debounce_segundos', '60', 'Debounce anti-duplicata na mesma operação (segundos; 0=desligado)'],
       ['alertas_smtp_host', '', 'Servidor SMTP para alertas de estoque'],
       ['alertas_smtp_port', '587', 'Porta SMTP para alertas de estoque'],
       ['alertas_smtp_user', '', 'Usuário SMTP para alertas de estoque'],
@@ -930,6 +933,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   db.run(`CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (
     material_id INTEGER PRIMARY KEY,
+    estado_estoque TEXT DEFAULT 'ACIMA',
     ultimo_alerta_enviado DATETIME,
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`, () => {});
@@ -989,6 +993,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   db.run(`ALTER TABLE materiais_almoxarifado ADD COLUMN prazo_reposicao_dias INTEGER DEFAULT 0`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN tipo TEXT DEFAULT 'Almoxarifado'`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN parent_id INTEGER`, () => {});
+  db.run(`ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0`, () => {});
+  db.run(`ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_x REAL`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_y REAL`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120`, () => {});
@@ -1415,7 +1421,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const notificarEmail = payload.notificarEmail ? '1' : '0';
       const notificarWhatsapp = payload.notificarWhatsapp ? '1' : '0';
       const intervaloVerificacaoHoras = Number(payload.intervaloVerificacaoHoras) > 0 ? String(Number(payload.intervaloVerificacaoHoras)) : '4';
-      const cooldownHoras = Number(payload.cooldownHoras) > 0 ? String(Number(payload.cooldownHoras)) : '24';
+      const debounceSegundos = Number(payload.debounceSegundos) >= 0
+        ? String(Math.min(3600, Math.floor(Number(payload.debounceSegundos))))
+        : '60';
       const smtpHost = String(payload.smtpHost || '').trim();
       const smtpPort = Number(payload.smtpPort) > 0 ? String(Number(payload.smtpPort)) : '587';
       const smtpUser = String(payload.smtpUser || '').trim();
@@ -1429,7 +1437,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         ['alertas_estoque_notificar_email', notificarEmail],
         ['alertas_estoque_notificar_whatsapp', notificarWhatsapp],
         ['alertas_estoque_intervalo_verificacao_horas', intervaloVerificacaoHoras],
-        ['alertas_estoque_cooldown_horas', cooldownHoras],
+        ['alertas_estoque_debounce_segundos', debounceSegundos],
         [alertService.SMTP_CONFIG_KEYS.host, smtpHost],
         [alertService.SMTP_CONFIG_KEYS.port, smtpPort],
         [alertService.SMTP_CONFIG_KEYS.user, smtpUser],
@@ -1503,7 +1511,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       })
     );
     Promise.all(promises)
-      .then(() => res.json({ success: true, updated: materiais.length }))
+      .then(() => {
+        const ids = materiais.map(m => m.id).filter(Boolean);
+        Promise.all(ids.map(id => alertService.verificarAlertaPorMaterialId(db, id).catch(() => null)))
+          .catch(() => null);
+        res.json({ success: true, updated: materiais.length });
+      })
       .catch(e => res.status(500).json({ error: e.message }));
   });
 
@@ -1573,7 +1586,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               WHERE ir.requisicao_id = ?`,
         [req.params.id], (err2, itens) => {
           if (err2) return res.status(500).json({ error: err2.message });
-          res.json({ ...req_row, itens });
+          res.json({
+            ...req_row,
+            itens: (itens || []).map(requisitionService.normalizarItem),
+          });
         });
     });
   });
@@ -1646,75 +1662,24 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       });
   });
 
-  // PUT /api/almoxarifado/requisicoes/:id/separacao — em separação
-  app.put('/api/almoxarifado/requisicoes/:id/separacao',(req, res) => {
-    db.run(`UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='APROVADO'`,
-      [req.params.id],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(400).json({ error: 'Requisição deve estar aprovada' });
-        res.json({ success: true });
-      });
-  });
+  const handleSeparacao = (req, res) => {
+    const { itens_separados } = req.body || {};
+    requisitionService.separarRequisicao(db, req.params.id, itens_separados || [])
+      .then((result) => res.json(result))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+  };
 
-  // PUT /api/almoxarifado/requisicoes/:id/entregar — entregar e baixar estoque
-  app.put('/api/almoxarifado/requisicoes/:id/entregar',(req, res) => {
-    const { itens_atendidos } = req.body; // [{ item_id, quantidade_atendida }]
+  // PUT /api/almoxarifado/requisicoes/:id/separacao — iniciar separação (com quantidades opcionais)
+  app.put('/api/almoxarifado/requisicoes/:id/separacao', handleSeparacao);
+  // Alias conforme especificação
+  app.put('/api/almoxarifado/requisicoes/:id/separar', handleSeparacao);
 
-    db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ?`, [req.params.id], (err, req_row) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (!req_row) return res.status(404).json({ error: 'Requisição não encontrada' });
-      if (!['APROVADO', 'EM_SEPARACAO'].includes(req_row.status)) {
-        return res.status(400).json({ error: 'Requisição deve estar aprovada ou em separação' });
-      }
-
-      db.all(`SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome
-              FROM itens_requisicao_almoxarifado ir
-              JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
-              WHERE ir.requisicao_id = ?`, [req.params.id], (err2, itens) => {
-        if (err2) return res.status(500).json({ error: err2.message });
-
-        const ops = itens.map(item => {
-          const atendido = itens_atendidos
-            ? (itens_atendidos.find(ia => ia.item_id === item.id)?.quantidade_atendida ?? item.quantidade_solicitada)
-            : item.quantidade_solicitada;
-          const qtdReal = Math.min(atendido, item.quantidade_atual); // não pode exceder saldo
-
-          return new Promise((resolve, reject) => {
-            if (qtdReal <= 0) return resolve();
-            const saldoAnterior = item.quantidade_atual;
-            const saldoPosterior = saldoAnterior - qtdReal;
-
-            db.run(`UPDATE materiais_almoxarifado SET quantidade_atual=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-              [saldoPosterior, item.material_id], (e) => {
-                if (e) return reject(e);
-                db.run(`INSERT INTO movimentacoes_almoxarifado
-                  (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, usuario_id, usuario_nome)
-                  VALUES (?, 'SAIDA', ?, ?, ?, ?, ?, ?, ?)`,
-                  [item.material_id, qtdReal, saldoAnterior, saldoPosterior,
-                   `Requisição ${req_row.numero}`, req_row.os_referencia || req_row.numero,
-                   req.user.id, req.user.nome || req.user.email],
-                  (e2) => {
-                    if (e2) return reject(e2);
-                    db.run(`UPDATE itens_requisicao_almoxarifado SET quantidade_atendida=? WHERE id=?`,
-                      [qtdReal, item.id], resolve);
-                  });
-              });
-          });
-        });
-
-        Promise.all(ops).then(() => {
-          db.run(`UPDATE requisicoes_almoxarifado SET status='ENTREGUE', data_entrega=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-            [req.params.id], (e) => {
-              if (e) return res.status(500).json({ error: e.message });
-              Promise.all(itens.map(item => alertService.verificarAlertaPorMaterialId(db, item.material_id).catch(() => null)))
-                .finally(() => {
-                  res.json({ success: true });
-                });
-            });
-        }).catch(e => res.status(500).json({ error: e.message }));
-      });
-    });
+  // PUT /api/almoxarifado/requisicoes/:id/entregar — entrega parcial ou total e baixa estoque
+  app.put('/api/almoxarifado/requisicoes/:id/entregar', (req, res) => {
+    const { itens_atendidos } = req.body;
+    requisitionService.entregarRequisicao(db, req.params.id, itens_atendidos, req.user, alertService)
+      .then((result) => res.json(result))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/cancelar — cancelar
@@ -1750,7 +1715,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             if (err4) return res.status(500).json({ error: err4.message });
             db.all(`SELECT r.*, (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens
                     FROM requisicoes_almoxarifado r
-                    WHERE r.status IN ('PENDENTE','APROVADO','EM_SEPARACAO')
+                    WHERE r.status IN ('PENDENTE','APROVADO','EM_SEPARACAO','PARCIALMENTE_ATENDIDA')
                     ORDER BY CASE r.urgencia WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at ASC
                     LIMIT 5`, [], (err5, abertas) => {
               if (err5) return res.status(500).json({ error: err5.message });
