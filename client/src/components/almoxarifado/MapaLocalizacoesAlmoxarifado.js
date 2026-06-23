@@ -515,9 +515,11 @@ const MapaLocalizacoesAlmoxarifado = () => {
               )}
             </>
           )}
-          <Link to="/almoxarifado/configuracoes" className="btn-almox-secondary">
-            <FiSettings size={14} /> Localizações
-          </Link>
+          {isAdmin && (
+            <Link to="/almoxarifado/configuracoes" className="btn-almox-secondary">
+              <FiSettings size={14} /> Localizações
+            </Link>
+          )}
         </div>
       </div>
 
@@ -576,9 +578,11 @@ const MapaLocalizacoesAlmoxarifado = () => {
             <div className="almox-empty">
               <FiMap size={48} style={{ opacity: 0.25, display: 'block', margin: '0 auto 16px' }} />
               <p>Nenhuma localização cadastrada ou compatível com os filtros.</p>
-              <Link to="/almoxarifado/configuracoes" className="btn-almox-primary" style={{ marginTop: 16, display: 'inline-flex' }}>
-                Cadastrar localizações
-              </Link>
+              {isAdmin && (
+                <Link to="/almoxarifado/configuracoes" className="btn-almox-primary" style={{ marginTop: 16, display: 'inline-flex' }}>
+                  Cadastrar localizações
+                </Link>
+              )}
             </div>
           ) : (
             <svg

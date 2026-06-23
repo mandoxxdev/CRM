@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
@@ -30,6 +31,8 @@ const formatLocalizacaoLabel = (loc, allLocs = []) => {
 };
 
 const MaterialAlmoxarifadoForm = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -303,8 +306,14 @@ const MaterialAlmoxarifadoForm = () => {
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '10px 0' }}>Carregando famílias...</div>
                   ) : familias.length === 0 ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
-                      Nenhuma família cadastrada — cadastre em{' '}
-                      <Link to="/almoxarifado/configuracoes?tab=familias" style={{ color: '#4facfe' }}>Configurações → Famílias</Link>
+                      Nenhuma família cadastrada
+                      {isAdmin ? (
+                        <> — cadastre em{' '}
+                          <Link to="/almoxarifado/configuracoes?tab=familias" style={{ color: '#4facfe' }}>Configurações → Famílias</Link>
+                        </>
+                      ) : (
+                        <> — solicite a um administrador</>
+                      )}
                     </div>
                   ) : (
                     <select
@@ -346,8 +355,14 @@ const MaterialAlmoxarifadoForm = () => {
                     </div>
                   ) : localizacoes.length === 0 && !localizacaoInativa ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
-                      Nenhuma localização cadastrada — cadastre em{' '}
-                      <Link to="/almoxarifado/configuracoes" style={{ color: '#4facfe' }}>Configurações</Link>
+                      Nenhuma localização cadastrada
+                      {isAdmin ? (
+                        <> — cadastre em{' '}
+                          <Link to="/almoxarifado/configuracoes" style={{ color: '#4facfe' }}>Configurações</Link>
+                        </>
+                      ) : (
+                        <> — solicite a um administrador</>
+                      )}
                     </div>
                   ) : (
                     <>

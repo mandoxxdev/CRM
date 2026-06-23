@@ -400,6 +400,25 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
 
+  // ── Alertas de estoque mínimo ──
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (
+    material_id INTEGER PRIMARY KEY,
+    ultimo_alerta_enviado DATETIME,
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_historico_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER,
+    canal TEXT NOT NULL,
+    destinatario TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ENVIADO',
+    erro TEXT,
+    teste INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
   // ── Perfis de usuário no almoxarifado ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS perfil_almoxarifado_usuario (
     usuario_id INTEGER PRIMARY KEY,
@@ -428,6 +447,20 @@ async function initSchema(db) {
     ['inspecao_material_critico', '1', 'Exigir inspeção para materiais críticos no recebimento'],
     ['permite_saldo_negativo_global', '0', 'Permitir saldo negativo (global)'],
     ['perfil_padrao', 'PRODUCAO', 'Perfil padrão para novos usuários no almoxarifado'],
+    ['alertas_estoque_notificar_email', '1', 'Habilita alertas de estoque mínimo por e-mail'],
+    ['alertas_estoque_notificar_whatsapp', '0', 'Habilita alertas de estoque mínimo por WhatsApp'],
+    ['alertas_estoque_emails', '[]', 'Lista de e-mails para notificação de estoque mínimo'],
+    ['alertas_estoque_whatsapp_numeros', '[]', 'Lista de números WhatsApp para notificação de estoque mínimo'],
+    ['alertas_estoque_intervalo_verificacao_horas', '4', 'Intervalo sugerido de verificação de alertas (horas)'],
+    ['alertas_estoque_cooldown_horas', '24', 'Cooldown por material para evitar spam (horas)'],
+    ['alertas_smtp_host', '', 'Servidor SMTP para alertas de estoque'],
+    ['alertas_smtp_port', '587', 'Porta SMTP para alertas de estoque'],
+    ['alertas_smtp_user', '', 'Usuário SMTP para alertas de estoque'],
+    ['alertas_smtp_pass', '', 'Senha SMTP para alertas de estoque'],
+    ['alertas_smtp_from', '', 'E-mail remetente dos alertas de estoque'],
+    ['alertas_smtp_secure', '0', 'Usar TLS/SSL no SMTP dos alertas (1=sim)'],
+    ['alertas_whatsapp_webhook_url', '', 'URL do webhook WhatsApp para alertas de estoque'],
+    ['alertas_whatsapp_api_key', '', 'Token/chave API opcional do webhook WhatsApp'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);

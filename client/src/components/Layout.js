@@ -218,7 +218,7 @@ const Layout = () => {
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
-    { path: '/almoxarifado/configuracoes', icon: FiSettings, label: 'Configurações' },
+    { path: '/almoxarifado/configuracoes', icon: FiSettings, label: 'Configurações', adminOnly: true },
   ];
 
   // Menu do módulo Engenharia / Projetos (separado)

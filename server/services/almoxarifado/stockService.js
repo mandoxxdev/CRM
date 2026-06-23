@@ -1,6 +1,7 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const { can } = require('./permissions');
+const alertService = require('./alertService');
 
 async function getConfig(db, chave) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
@@ -157,6 +158,12 @@ async function registrarMovimentacao(db, user, params) {
     dados_novos: { material_id, tipo, quantidade, saldo_posterior: saldoPosterior },
     justificativa,
   });
+
+  try {
+    await alertService.verificarAlertaPorMaterialId(db, material_id);
+  } catch (alertErr) {
+    console.warn('[almoxarifado-alertas] Falha ao verificar alerta pós-movimentação:', alertErr.message);
+  }
 
   return { id: result.lastID, saldo_anterior: saldoAnterior, saldo_posterior: saldoPosterior };
 }

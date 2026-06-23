@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers, FiClipboard, FiMap, FiSettings, FiTruck } from 'react-icons/fi';
 import './Almoxarifado.css';
@@ -33,6 +34,8 @@ const aggregateConsumoPorOS = (rows) => {
 };
 
 const AlmoxarifadoDashboard = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [stats, setStats] = useState(null);
   const [requisicoes, setRequisicoes] = useState(null);
   const [consumoOs, setConsumoOs] = useState([]);
@@ -161,10 +164,12 @@ const AlmoxarifadoDashboard = () => {
           <span className="almox-quick-action-icon"><FiMap /></span>
           <span className="almox-quick-action-label">Mapa de Áreas</span>
         </Link>
-        <Link to="/almoxarifado/configuracoes" className="almox-quick-action">
-          <span className="almox-quick-action-icon"><FiSettings /></span>
-          <span className="almox-quick-action-label">Configurações</span>
-        </Link>
+        {isAdmin && (
+          <Link to="/almoxarifado/configuracoes" className="almox-quick-action">
+            <span className="almox-quick-action-icon"><FiSettings /></span>
+            <span className="almox-quick-action-label">Configurações</span>
+          </Link>
+        )}
       </div>
 
       {/* KPIs */}

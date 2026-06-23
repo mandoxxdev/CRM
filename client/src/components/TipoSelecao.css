@@ -1,17 +1,30 @@
-/* ── ORION module hub — Spotify browse style ── */
+/* ── ORION module hub — theme-aware (light + Spotify dark) ── */
 
 .tipo-selecao {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background-color: #121212;
+  background-color: var(--gmp-bg);
+  color: var(--gmp-text);
+  overflow-y: auto;
+  overflow-x: hidden;
+  animation: tipoFadeIn 0.35s ease;
+}
+
+[data-theme="light"] .tipo-selecao {
+  background-color: var(--gmp-gray-100);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 10% 0%, rgba(79, 172, 254, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 90% 10%, rgba(26, 163, 74, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(37, 99, 235, 0.07) 0%, transparent 55%);
+}
+
+[data-theme="dark"] .tipo-selecao {
+  background-color: var(--gmp-bg);
   background-image:
     radial-gradient(ellipse 80% 60% at 10% 0%, rgba(80, 50, 180, 0.18) 0%, transparent 55%),
     radial-gradient(ellipse 70% 50% at 90% 10%, rgba(29, 185, 84, 0.08) 0%, transparent 50%),
     radial-gradient(ellipse 60% 40% at 50% 100%, rgba(30, 64, 175, 0.12) 0%, transparent 55%);
-  overflow-y: auto;
-  overflow-x: hidden;
-  animation: tipoFadeIn 0.35s ease;
 }
 
 .tipo-selecao::before {
@@ -23,6 +36,10 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
   z-index: 0;
+}
+
+[data-theme="light"] .tipo-selecao::before {
+  opacity: 0.02;
 }
 
 @keyframes tipoFadeIn {
@@ -59,8 +76,27 @@
 .tipo-selecao__brand {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.85rem;
   margin-bottom: 2rem;
+}
+
+.tipo-selecao__gmp-logo {
+  height: 36px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .tipo-selecao__gmp-logo {
+  filter: brightness(0) invert(1);
+}
+
+.tipo-selecao__brand-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--gmp-border);
+  flex-shrink: 0;
 }
 
 .tipo-selecao__orion-mark {
@@ -79,15 +115,15 @@
   font-size: 1.15rem;
   font-weight: 800;
   letter-spacing: 0.22em;
-  color: #ffffff;
+  color: var(--gmp-text);
   line-height: 1;
 }
 
 .tipo-selecao__admin-badge {
   padding: 0.25rem 0.7rem;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--gmp-surface-hover);
+  color: var(--gmp-text-light);
+  border: 1px solid var(--gmp-border);
   border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 600;
@@ -98,7 +134,7 @@
 .tipo-selecao__greeting h1 {
   font-size: clamp(2.25rem, 5.5vw, 3.75rem);
   font-weight: 800;
-  color: #ffffff;
+  color: var(--gmp-text);
   margin: 0 0 0.5rem;
   letter-spacing: -0.03em;
   line-height: 1.05;
@@ -106,7 +142,7 @@
 
 .tipo-selecao__greeting p {
   font-size: 1.05rem;
-  color: #b3b3b3;
+  color: var(--gmp-text-light);
   margin: 0 0 1.75rem;
   font-weight: 400;
 }
@@ -123,7 +159,7 @@
   left: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #b3b3b3;
+  color: var(--gmp-text-light);
   font-size: 1.1rem;
   pointer-events: none;
 }
@@ -131,20 +167,25 @@
 .tipo-selecao__search {
   width: 100%;
   padding: 0.8rem 2.5rem 0.8rem 2.75rem;
-  background: #282828;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--gmp-surface-hover);
+  border: 1px solid var(--gmp-border);
   border-radius: 999px;
   font-size: 0.95rem;
-  color: #ffffff;
+  color: var(--gmp-text);
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .tipo-selecao__search::placeholder {
-  color: #727272;
+  color: var(--gmp-gray-500);
 }
 
 .tipo-selecao__search:focus {
+  border-color: var(--gmp-primary);
+  box-shadow: 0 0 0 2px rgba(79, 172, 254, 0.15);
+}
+
+[data-theme="dark"] .tipo-selecao__search:focus {
   border-color: rgba(255, 255, 255, 0.25);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
@@ -154,7 +195,7 @@
   right: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--gmp-border);
   border: none;
   border-radius: 50%;
   width: 24px;
@@ -162,13 +203,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+  color: var(--gmp-text);
   cursor: pointer;
   font-size: 0.85rem;
   transition: background 0.15s ease;
 }
 
 .tipo-selecao__search-clear:hover {
+  background: var(--gmp-gray-400);
+}
+
+[data-theme="dark"] .tipo-selecao__search-clear {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .tipo-selecao__search-clear:hover {
   background: rgba(255, 255, 255, 0.25);
 }
 
@@ -183,18 +233,18 @@
 .tipo-selecao__section-title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--gmp-text);
   margin: 0 0 1.25rem;
   letter-spacing: -0.02em;
 }
 
 .tipo-selecao__section--bloqueados .tipo-selecao__section-title {
-  color: #727272;
+  color: var(--gmp-gray-500);
   font-size: 1.15rem;
 }
 
 .tipo-selecao__empty {
-  color: #b3b3b3;
+  color: var(--gmp-text-light);
   font-size: 0.95rem;
   margin: 0;
   padding: 2rem 0;
@@ -219,7 +269,7 @@
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: #404040 transparent;
+  scrollbar-color: var(--gmp-gray-400) transparent;
 }
 
 .orion-scroll::-webkit-scrollbar {
@@ -231,7 +281,7 @@
 }
 
 .orion-scroll::-webkit-scrollbar-thumb {
-  background: #404040;
+  background: var(--gmp-gray-400);
   border-radius: 3px;
 }
 
@@ -268,6 +318,10 @@
   transform: scale(1.04);
   box-shadow: 0 14px 48px rgba(0, 0, 0, 0.6);
   z-index: 2;
+}
+
+[data-theme="light"] .tipo-selecao .orion-tile--ativo:hover {
+  box-shadow: 0 14px 48px rgba(0, 0, 0, 0.18);
 }
 
 .tipo-selecao .orion-tile--ativo:active {
@@ -426,7 +480,7 @@
 .tipo-selecao-spinner {
   width: 44px;
   height: 44px;
-  border: 3px solid #282828;
+  border: 3px solid var(--gmp-surface-hover);
   border-top-color: #1db954;
   border-radius: 50%;
   animation: tipoSpin 0.8s linear infinite;
@@ -437,7 +491,7 @@
 }
 
 .tipo-selecao-loading p {
-  color: #b3b3b3;
+  color: var(--gmp-text-light);
   font-size: 0.95rem;
   margin: 0;
 }
@@ -453,6 +507,15 @@
 @media (max-width: 768px) {
   .tipo-selecao__inner {
     padding: 1.5rem 1.25rem 2.5rem;
+  }
+
+  .tipo-selecao__gmp-logo {
+    height: 30px;
+    max-width: 96px;
+  }
+
+  .tipo-selecao__brand-divider {
+    height: 22px;
   }
 
   .tipo-selecao__greeting h1 {

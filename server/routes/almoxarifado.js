@@ -6,6 +6,7 @@
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const alertService = require('../services/almoxarifado/alertService');
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
 
@@ -563,11 +564,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
           db.run(`UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
             [saldoPosterior, material_id], (err3) => {
               if (err3) return res.status(500).json({ error: err3.message });
-              res.status(201).json({
-                id: this.lastID, material_id, tipo, quantidade,
-                saldo_anterior: saldoAnterior, saldo_posterior: saldoPosterior,
-                motivo, referencia, observacoes
-              });
+              alertService.verificarAlertaPorMaterialId(db, material_id)
+                .catch((alertErr) => {
+                  console.warn('[almoxarifado-alertas] Falha no pós-movimentação:', alertErr.message);
+                })
+                .finally(() => {
+                  res.status(201).json({
+                    id: this.lastID, material_id, tipo, quantidade,
+                    saldo_anterior: saldoAnterior, saldo_posterior: saldoPosterior,
+                    motivo, referencia, observacoes
+                  });
+                });
             });
         }
       );
@@ -728,7 +735,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
             db.run(`UPDATE conferencias_almoxarifado SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP WHERE id = ?`,
               [req.params.id], (e) => {
                 if (e) return res.status(500).json({ error: e.message });
-                res.json({ success: true, ajustesAplicados: ajustes.length });
+                const materialIds = [...new Set(ajustes.map(a => a.material_id))];
+                Promise.all(materialIds.map(mid => alertService.verificarAlertaPorMaterialId(db, mid).catch(() => null)))
+                  .finally(() => {
+                    res.json({ success: true, ajustesAplicados: ajustes.length });
+                  });
               });
           }).catch(e => res.status(500).json({ error: e.message }));
         });
@@ -890,7 +901,45 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
     defaults.forEach(([chave, valor, descricao]) => {
       db.run(`INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)`, [chave, valor, descricao]);
     });
+
+    const defaultsAlertas = [
+      ['alertas_estoque_notificar_email', '1', 'Habilita alertas de estoque mínimo por e-mail'],
+      ['alertas_estoque_notificar_whatsapp', '0', 'Habilita alertas de estoque mínimo por WhatsApp'],
+      ['alertas_estoque_emails', '[]', 'Lista de e-mails para notificação de estoque mínimo'],
+      ['alertas_estoque_whatsapp_numeros', '[]', 'Lista de números WhatsApp para notificação de estoque mínimo'],
+      ['alertas_estoque_intervalo_verificacao_horas', '4', 'Intervalo sugerido de verificação de alertas (horas)'],
+      ['alertas_estoque_cooldown_horas', '24', 'Cooldown por material para evitar spam (horas)'],
+      ['alertas_smtp_host', '', 'Servidor SMTP para alertas de estoque'],
+      ['alertas_smtp_port', '587', 'Porta SMTP para alertas de estoque'],
+      ['alertas_smtp_user', '', 'Usuário SMTP para alertas de estoque'],
+      ['alertas_smtp_pass', '', 'Senha SMTP para alertas de estoque'],
+      ['alertas_smtp_from', '', 'E-mail remetente dos alertas de estoque'],
+      ['alertas_smtp_secure', '0', 'Usar TLS/SSL no SMTP dos alertas (1=sim)'],
+      ['alertas_whatsapp_webhook_url', '', 'URL do webhook WhatsApp para alertas de estoque'],
+      ['alertas_whatsapp_api_key', '', 'Token/chave API opcional do webhook WhatsApp'],
+    ];
+    defaultsAlertas.forEach(([chave, valor, descricao]) => {
+      db.run(`INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)`, [chave, valor, descricao]);
+    });
   });
+
+  db.run(`CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (
+    material_id INTEGER PRIMARY KEY,
+    ultimo_alerta_enviado DATETIME,
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`, () => {});
+
+  db.run(`CREATE TABLE IF NOT EXISTS alertas_estoque_historico_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER,
+    canal TEXT NOT NULL,
+    destinatario TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ENVIADO',
+    erro TEXT,
+    teste INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`, () => {});
 
   db.run(`CREATE TABLE IF NOT EXISTS requisicoes_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1316,6 +1365,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/almoxarifado/configuracoes', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
     db.all(`SELECT * FROM configuracoes_almoxarifado ORDER BY chave`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       const obj = {};
@@ -1341,8 +1391,99 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
       .catch(e => res.status(500).json({ error: e.message }));
   });
 
+  app.get('/api/almoxarifado/configuracoes/alertas-estoque', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
+    try {
+      const settings = await alertService.getAlertSettingsForApi(db);
+      res.json(settings);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/almoxarifado/configuracoes/alertas-estoque', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    try {
+      const payload = req.body || {};
+      const emails = Array.isArray(payload.emails) ? payload.emails.map(v => String(v).trim()).filter(Boolean) : [];
+      const whatsappNumeros = Array.isArray(payload.whatsappNumeros) ? payload.whatsappNumeros.map(v => String(v).trim()).filter(Boolean) : [];
+      const notificarEmail = payload.notificarEmail ? '1' : '0';
+      const notificarWhatsapp = payload.notificarWhatsapp ? '1' : '0';
+      const intervaloVerificacaoHoras = Number(payload.intervaloVerificacaoHoras) > 0 ? String(Number(payload.intervaloVerificacaoHoras)) : '4';
+      const cooldownHoras = Number(payload.cooldownHoras) > 0 ? String(Number(payload.cooldownHoras)) : '24';
+      const smtpHost = String(payload.smtpHost || '').trim();
+      const smtpPort = Number(payload.smtpPort) > 0 ? String(Number(payload.smtpPort)) : '587';
+      const smtpUser = String(payload.smtpUser || '').trim();
+      const smtpFrom = String(payload.smtpFrom || '').trim();
+      const smtpSecure = payload.smtpSecure ? '1' : '0';
+      const whatsappWebhookUrl = String(payload.whatsappWebhookUrl || '').trim();
+      const updatedBy = req.user.nome || req.user.email;
+      const upserts = [
+        ['alertas_estoque_emails', JSON.stringify(emails)],
+        ['alertas_estoque_whatsapp_numeros', JSON.stringify(whatsappNumeros)],
+        ['alertas_estoque_notificar_email', notificarEmail],
+        ['alertas_estoque_notificar_whatsapp', notificarWhatsapp],
+        ['alertas_estoque_intervalo_verificacao_horas', intervaloVerificacaoHoras],
+        ['alertas_estoque_cooldown_horas', cooldownHoras],
+        [alertService.SMTP_CONFIG_KEYS.host, smtpHost],
+        [alertService.SMTP_CONFIG_KEYS.port, smtpPort],
+        [alertService.SMTP_CONFIG_KEYS.user, smtpUser],
+        [alertService.SMTP_CONFIG_KEYS.from, smtpFrom],
+        [alertService.SMTP_CONFIG_KEYS.secure, smtpSecure],
+        [alertService.WHATSAPP_CONFIG_KEYS.webhookUrl, whatsappWebhookUrl],
+      ];
+      if (alertService.shouldUpdateSecret(payload.smtpPass)) {
+        upserts.push([alertService.SMTP_CONFIG_KEYS.pass, String(payload.smtpPass)]);
+      }
+      if (alertService.shouldUpdateSecret(payload.whatsappApiKey)) {
+        upserts.push([alertService.WHATSAPP_CONFIG_KEYS.apiKey, String(payload.whatsappApiKey)]);
+      }
+      const promises = upserts.map(([chave, valor]) => new Promise((resolve, reject) => {
+        db.run(`INSERT INTO configuracoes_almoxarifado (chave, valor, updated_at, updated_by)
+                VALUES (?, ?, CURRENT_TIMESTAMP, ?)
+                ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor, updated_at=CURRENT_TIMESTAMP, updated_by=excluded.updated_by`,
+        [chave, valor, updatedBy], (err) => (err ? reject(err) : resolve()));
+      }));
+      await Promise.all(promises);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/almoxarifado/alertas-estoque/testar', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    try {
+      const materialTeste = {
+        id: 0,
+        codigo: 'TESTE-ALM',
+        nome: 'Material de teste - Alertas',
+        localizacao: 'Almoxarifado / Testes',
+        unidade: 'UN',
+        quantidade_atual: 1,
+        quantidade_minima: 5,
+      };
+      const result = await alertService.processarAlertaMaterial(db, materialTeste, { forceSend: true, teste: true });
+      res.json({ success: true, result });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/almoxarifado/alertas-estoque/verificar', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    try {
+      const forceSend = !!req.body?.forceSend;
+      const results = await alertService.verificarAlertasEstoque(db, { forceSend });
+      res.json({ success: true, total: results.length, enviados: results.filter(r => r?.enviado).length, results });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // PUT /api/almoxarifado/configuracoes/estoques-minimos — atualização em lote
   app.put('/api/almoxarifado/configuracoes/estoques-minimos', authenticateToken, (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
     const { materiais } = req.body; // [{ id, quantidade_minima, quantidade_maxima, ponto_pedido, prazo_reposicao_dias }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array de materiais' });
 
@@ -1562,7 +1703,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR) {
           db.run(`UPDATE requisicoes_almoxarifado SET status='ENTREGUE', data_entrega=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
             [req.params.id], (e) => {
               if (e) return res.status(500).json({ error: e.message });
-              res.json({ success: true });
+              Promise.all(itens.map(item => alertService.verificarAlertaPorMaterialId(db, item.material_id).catch(() => null)))
+                .finally(() => {
+                  res.json({ success: true });
+                });
             });
         }).catch(e => res.status(500).json({ error: e.message }));
       });

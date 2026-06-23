@@ -7,7 +7,7 @@ import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
-  FiLayers, FiChevronDown, FiChevronRight, FiGrid
+  FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle
 } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import './Almoxarifado.css';
@@ -177,6 +177,7 @@ const TABS = [
   { id: 'estoques', label: 'Estoques Mínimos', icon: FiSliders },
   { id: 'setores', label: 'Setores e Áreas', icon: FiGrid },
   { id: 'localizacoes', label: 'Localizações', icon: FiMapPin },
+  { id: 'alertas', label: 'Alertas de Estoque', icon: FiBell },
   { id: 'geral', label: 'Configurações Gerais', icon: FiSettings },
 ];
 
@@ -184,11 +185,27 @@ const ConfiguracoesAlmoxarifado = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const isAdmin = user?.role === 'admin';
-  const visibleTabs = isAdmin ? TABS : TABS.filter(t => t.id === 'estoques');
   const initialTab = searchParams.get('tab');
   const [tab, setTab] = useState(
-    initialTab && visibleTabs.some(t => t.id === initialTab) ? initialTab : (isAdmin ? 'tipos' : 'estoques')
+    initialTab && TABS.some(t => t.id === initialTab) ? initialTab : 'tipos'
   );
+
+  if (!isAdmin) {
+    return (
+      <div className="almox-page">
+        <div className="almox-empty" style={{ padding: 60, textAlign: 'center' }}>
+          <FiShield size={48} style={{ color: '#4facfe', opacity: 0.5, display: 'block', margin: '0 auto 16px' }} />
+          <h2 style={{ margin: '0 0 8px', fontSize: '1.1rem' }}>Acesso restrito — apenas administradores</h2>
+          <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.9rem', maxWidth: 420, margin: '0 auto' }}>
+            As configurações do almoxarifado são exclusivas para administradores do sistema.
+          </p>
+          <Link to="/almoxarifado" className="btn-almox-secondary" style={{ marginTop: 24, display: 'inline-flex' }}>
+            <FiArrowLeft size={14} /> Voltar ao Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="almox-page">
@@ -198,21 +215,17 @@ const ConfiguracoesAlmoxarifado = () => {
             <FiSettings size={22} style={{ color: '#4facfe' }} /> Configurações do Almoxarifado
           </h1>
           <p>
-            {isAdmin
-              ? 'Gerencie tipos de material, famílias, estoques mínimos, setores, localizações e configurações gerais'
-              : 'Defina estoque mínimo, máximo, ponto de pedido e prazo de reposição por material'}
+            Gerencie tipos de material, famílias, estoques mínimos, setores, localizações e configurações gerais
           </p>
         </div>
-        {isAdmin && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(79,172,254,0.1)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#4facfe' }}>
-            <FiShield size={14} /> Somente Administradores
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(79,172,254,0.1)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '6px 12px', fontSize: '0.8rem', color: '#4facfe' }}>
+          <FiShield size={14} /> Somente Administradores
+        </div>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--gmp-border)', marginBottom: 24 }}>
-        {visibleTabs.map(t => {
+        {TABS.map(t => {
           const Icon = t.icon;
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -235,6 +248,7 @@ const ConfiguracoesAlmoxarifado = () => {
       {tab === 'estoques' && <TabEstoquesMinimos />}
       {tab === 'setores' && <TabSetores />}
       {tab === 'localizacoes' && <TabLocalizacoes />}
+      {tab === 'alertas' && <TabAlertasEstoque />}
       {tab === 'geral' && <TabConfiguracoes />}
     </div>
   );
@@ -1619,6 +1633,271 @@ const TabLocalizacoes = () => {
           </table>
         </div>
       )}
+    </div>
+  );
+};
+
+/* ===================== TAB CONFIGURAÇÕES GERAIS ===================== */
+const TabAlertasEstoque = () => {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testando, setTestando] = useState(false);
+  const [novoEmail, setNovoEmail] = useState('');
+  const [novoWhatsapp, setNovoWhatsapp] = useState('');
+  const [config, setConfig] = useState({
+    notificarEmail: true,
+    notificarWhatsapp: false,
+    emails: [],
+    whatsappNumeros: [],
+    intervaloVerificacaoHoras: 4,
+    cooldownHoras: 24,
+    smtpHost: '',
+    smtpPort: 587,
+    smtpUser: '',
+    smtpPass: '',
+    smtpFrom: '',
+    smtpSecure: false,
+    whatsappWebhookUrl: '',
+    whatsappApiKey: '',
+  });
+  const [smtpPassConfigured, setSmtpPassConfigured] = useState(false);
+  const [whatsappApiKeyConfigured, setWhatsappApiKeyConfigured] = useState(false);
+
+  useEffect(() => { loadConfig(); }, []);
+
+  const loadConfig = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/almoxarifado/configuracoes/alertas-estoque');
+      const smtpPassMasked = res.data.smtpPass === '********';
+      const apiKeyMasked = res.data.whatsappApiKey === '********';
+      setSmtpPassConfigured(smtpPassMasked);
+      setWhatsappApiKeyConfigured(apiKeyMasked);
+      setConfig({
+        notificarEmail: !!res.data.notificarEmail,
+        notificarWhatsapp: !!res.data.notificarWhatsapp,
+        emails: Array.isArray(res.data.emails) ? res.data.emails : [],
+        whatsappNumeros: Array.isArray(res.data.whatsappNumeros) ? res.data.whatsappNumeros : [],
+        intervaloVerificacaoHoras: res.data.intervaloVerificacaoHoras || 4,
+        cooldownHoras: res.data.cooldownHoras || 24,
+        smtpHost: res.data.smtpHost || '',
+        smtpPort: res.data.smtpPort || 587,
+        smtpUser: res.data.smtpUser || '',
+        smtpPass: '',
+        smtpFrom: res.data.smtpFrom || '',
+        smtpSecure: !!res.data.smtpSecure,
+        whatsappWebhookUrl: res.data.whatsappWebhookUrl || '',
+        whatsappApiKey: '',
+      });
+    } catch {
+      toast.error('Erro ao carregar configurações de alerta');
+    } finally { setLoading(false); }
+  };
+
+  const addEmail = () => {
+    const val = novoEmail.trim().toLowerCase();
+    if (!val) return;
+    if (!val.includes('@')) {
+      toast.error('Informe um e-mail válido');
+      return;
+    }
+    if (config.emails.includes(val)) {
+      toast.info('E-mail já adicionado');
+      return;
+    }
+    setConfig(c => ({ ...c, emails: [...c.emails, val] }));
+    setNovoEmail('');
+  };
+
+  const addWhatsapp = () => {
+    const val = novoWhatsapp.trim();
+    if (!val) return;
+    if (!/^\+?\d{10,15}$/.test(val.replace(/\s+/g, ''))) {
+      toast.error('Use formato +55DDDNUMERO');
+      return;
+    }
+    if (config.whatsappNumeros.includes(val)) {
+      toast.info('Número já adicionado');
+      return;
+    }
+    setConfig(c => ({ ...c, whatsappNumeros: [...c.whatsappNumeros, val] }));
+    setNovoWhatsapp('');
+  };
+
+  const removeItem = (campo, valor) => {
+    setConfig(c => ({ ...c, [campo]: c[campo].filter(v => v !== valor) }));
+  };
+
+  const salvar = async () => {
+    setSaving(true);
+    try {
+      const payload = { ...config };
+      if (!payload.smtpPass) delete payload.smtpPass;
+      if (!payload.whatsappApiKey) delete payload.whatsappApiKey;
+      await api.put('/almoxarifado/configuracoes/alertas-estoque', payload);
+      toast.success('Alertas de estoque salvos!');
+      await loadConfig();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar alertas');
+    } finally { setSaving(false); }
+  };
+
+  const testarNotificacao = async () => {
+    setTestando(true);
+    try {
+      const res = await api.post('/almoxarifado/alertas-estoque/testar');
+      const enviadosEmail = res.data?.result?.email?.enviados || 0;
+      const enviadosWhatsapp = res.data?.result?.whatsapp?.enviados || 0;
+      toast.success(`Teste executado. E-mail: ${enviadosEmail}, WhatsApp: ${enviadosWhatsapp}`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao testar notificação');
+    } finally { setTestando(false); }
+  };
+
+  if (loading) return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
+      <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 6 }}>
+          <FiMail size={16} style={{ color: '#4facfe' }} /> Configuração de E-mail (SMTP)
+        </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
+          Configure o servidor de envio dos alertas. Exemplos: Gmail (<code>smtp.gmail.com</code>, porta 587, TLS ativo),
+          Outlook/Office 365 (<code>smtp.office365.com</code>, porta 587, TLS ativo) ou Locaweb (<code>smtp.locaweb.com.br</code>, porta 587).
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="almox-field">
+            <label className="almox-label">Servidor SMTP (host)</label>
+            <input className="almox-input" value={config.smtpHost}
+              onChange={e => setConfig(c => ({ ...c, smtpHost: e.target.value }))}
+              placeholder="smtp.gmail.com" />
+          </div>
+          <div className="almox-field">
+            <label className="almox-label">Porta</label>
+            <input className="almox-input" type="number" min="1" value={config.smtpPort}
+              onChange={e => setConfig(c => ({ ...c, smtpPort: Number(e.target.value || 587) }))} />
+          </div>
+          <div className="almox-field">
+            <label className="almox-label">Usuário</label>
+            <input className="almox-input" value={config.smtpUser}
+              onChange={e => setConfig(c => ({ ...c, smtpUser: e.target.value }))}
+              placeholder="seu-email@empresa.com.br" />
+          </div>
+          <div className="almox-field">
+            <label className="almox-label">Senha</label>
+            <input className="almox-input" type="password" value={config.smtpPass}
+              onChange={e => setConfig(c => ({ ...c, smtpPass: e.target.value }))}
+              placeholder={smtpPassConfigured ? 'Senha configurada — deixe em branco para manter' : 'Senha do e-mail ou app password'} />
+          </div>
+          <div className="almox-field">
+            <label className="almox-label">E-mail remetente (from)</label>
+            <input className="almox-input" type="email" value={config.smtpFrom}
+              onChange={e => setConfig(c => ({ ...c, smtpFrom: e.target.value }))}
+              placeholder="alertas@empresa.com.br" />
+          </div>
+          <div className="almox-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', paddingBottom: 10 }}>
+              <input type="checkbox" checked={config.smtpSecure}
+                onChange={e => setConfig(c => ({ ...c, smtpSecure: e.target.checked }))} />
+              <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>Usar TLS/SSL</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 6 }}>
+          <FiMessageCircle size={16} style={{ color: '#25D366' }} /> Configuração WhatsApp
+        </div>
+        <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
+          Informe a URL do webhook da sua integração (ex.: Evolution API, gateway interno).
+          O sistema envia POST com <code>{'{ to, message, source }'}</code>. Token opcional para autenticação no header.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="almox-field" style={{ gridColumn: '1 / -1' }}>
+            <label className="almox-label">URL do Webhook</label>
+            <input className="almox-input" value={config.whatsappWebhookUrl}
+              onChange={e => setConfig(c => ({ ...c, whatsappWebhookUrl: e.target.value }))}
+              placeholder="https://api.seudominio.com/whatsapp/send" />
+          </div>
+          <div className="almox-field" style={{ gridColumn: '1 / -1' }}>
+            <label className="almox-label">Token / Chave API <span style={{ fontWeight: 400, color: 'var(--gmp-text-light)' }}>(opcional)</span></label>
+            <input className="almox-input" type="password" value={config.whatsappApiKey}
+              onChange={e => setConfig(c => ({ ...c, whatsappApiKey: e.target.value }))}
+              placeholder={whatsappApiKeyConfigured ? 'Token configurado — deixe em branco para manter' : 'Bearer token ou API key'} />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontWeight: 700 }}>Canais de notificação</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontWeight: 600 }}>Notificar por e-mail</span>
+              <input type="checkbox" checked={config.notificarEmail} onChange={e => setConfig(c => ({ ...c, notificarEmail: e.target.checked }))} />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="almox-input" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} placeholder="email@empresa.com.br" />
+              <button className="btn-almox-secondary" type="button" onClick={addEmail}><FiPlus size={14} /> Adicionar</button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {config.emails.map(email => (
+                <span key={email} style={{ fontSize: '0.78rem', border: '1px solid var(--gmp-border)', borderRadius: 20, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {email}
+                  <button type="button" className="almox-btn-icon danger" onClick={() => removeItem('emails', email)}><FiX size={12} /></button>
+                </span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontWeight: 600 }}>Notificar por WhatsApp</span>
+              <input type="checkbox" checked={config.notificarWhatsapp} onChange={e => setConfig(c => ({ ...c, notificarWhatsapp: e.target.checked }))} />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="almox-input" value={novoWhatsapp} onChange={e => setNovoWhatsapp(e.target.value)} placeholder="+55DDDNUMERO" />
+              <button className="btn-almox-secondary" type="button" onClick={addWhatsapp}><FiPlus size={14} /> Adicionar</button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {config.whatsappNumeros.map(numero => (
+                <span key={numero} style={{ fontSize: '0.78rem', border: '1px solid var(--gmp-border)', borderRadius: 20, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {numero}
+                  <button type="button" className="almox-btn-icon danger" onClick={() => removeItem('whatsappNumeros', numero)}><FiX size={12} /></button>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 18 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Frequência e antispam</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="almox-field">
+            <label className="almox-label">Intervalo de verificação (horas)</label>
+            <input className="almox-input" type="number" min="1" value={config.intervaloVerificacaoHoras}
+              onChange={e => setConfig(c => ({ ...c, intervaloVerificacaoHoras: Number(e.target.value || 1) }))} />
+          </div>
+          <div className="almox-field">
+            <label className="almox-label">Cooldown por material (horas)</label>
+            <input className="almox-input" type="number" min="1" value={config.cooldownHoras}
+              onChange={e => setConfig(c => ({ ...c, cooldownHoras: Number(e.target.value || 1) }))} />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button className="btn-almox-primary" onClick={salvar} disabled={saving}>
+          <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Alertas'}
+        </button>
+        <button className="btn-almox-secondary" onClick={testarNotificacao} disabled={testando}>
+          <FiSend size={14} /> {testando ? 'Enviando teste...' : 'Testar notificação'}
+        </button>
+      </div>
     </div>
   );
 };
