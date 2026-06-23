@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
 import './Almoxarifado.css';
@@ -167,7 +168,7 @@ const MaterialAlmoxarifadoForm = () => {
         setMaterialLocInfo(null);
         setLocalizacaoInativa(null);
       }
-      if (m.foto) setFotoPreview(m.foto);
+      if (m.foto) setFotoPreview(resolveMaterialPhotoUrl(m.foto));
       setSavedId(m.id);
     } catch {
       toast.error('Erro ao carregar material');
@@ -248,7 +249,7 @@ const MaterialAlmoxarifadoForm = () => {
       const res = await api.post(`/almoxarifado/materiais/${materialId}/foto`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      setFotoPreview(res.data.foto_url);
+      setFotoPreview(resolveMaterialPhotoUrl(res.data.foto_url));
     } catch {
       toast.error('Foto não pôde ser salva, mas o material foi criado');
     } finally {

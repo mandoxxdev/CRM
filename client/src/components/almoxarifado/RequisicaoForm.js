@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
+import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
@@ -338,7 +339,7 @@ const RequisicaoForm = () => {
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--gmp-bg)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                           <div className="almox-foto-placeholder" style={{ width: 32, height: 32, fontSize: 14 }}>
-                            {m.foto ? <img src={m.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }} /> : <FiPackage />}
+                            {m.foto ? <img src={resolveMaterialPhotoUrl(m.foto)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }} /> : <FiPackage />}
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{m.nome}</div>

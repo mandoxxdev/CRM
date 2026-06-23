@@ -3,12 +3,17 @@ import { RequisicoesMaterialProvider } from './RequisicoesMaterialContext';
 import RequisicaoForm from './RequisicaoForm';
 import RequisicaoMaterialCesta from './RequisicaoMaterialCesta';
 import RequisicoesList from './RequisicoesList';
-import { MODULOS_REQUISICAO, usesCestaFlow } from '../../config/requisicoesMaterialConfig';
+import { buildModuloRequisicaoConfig, usesCestaFlow } from '../../config/requisicoesMaterialConfig';
+import { useModulosTipoConfig } from '../../hooks/useModulosTipoConfig';
 
 export function RequisicoesMaterialNovaPage({ moduloKey }) {
-  const config = { ...MODULOS_REQUISICAO[moduloKey] };
-  if (moduloKey === 'almoxarifado') config.warehouseMode = false;
-  const CestaOuForm = usesCestaFlow(moduloKey) ? RequisicaoMaterialCesta : RequisicaoForm;
+  const { tipoOverrides, loading } = useModulosTipoConfig();
+  let config = buildModuloRequisicaoConfig(moduloKey, tipoOverrides);
+  if (moduloKey === 'almoxarifado' && config) config = { ...config, warehouseMode: false };
+  const CestaOuForm = !loading && usesCestaFlow(moduloKey, tipoOverrides)
+    ? RequisicaoMaterialCesta
+    : RequisicaoForm;
+
   return (
     <RequisicoesMaterialProvider override={config}>
       <CestaOuForm />
@@ -17,8 +22,10 @@ export function RequisicoesMaterialNovaPage({ moduloKey }) {
 }
 
 export function RequisicoesMaterialListaPage({ moduloKey }) {
-  const config = { ...MODULOS_REQUISICAO[moduloKey] };
-  if (moduloKey === 'almoxarifado') config.warehouseMode = false;
+  const { tipoOverrides } = useModulosTipoConfig();
+  let config = buildModuloRequisicaoConfig(moduloKey, tipoOverrides);
+  if (moduloKey === 'almoxarifado' && config) config = { ...config, warehouseMode: false };
+
   return (
     <RequisicoesMaterialProvider override={config}>
       <RequisicoesList />

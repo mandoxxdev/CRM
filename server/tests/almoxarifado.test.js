@@ -520,19 +520,25 @@ async function run() {
     assert.strictEqual(saldo.quantidade, 7);
   });
 
-  await test('Filtro por setor — sem permissões retorna todos os materiais', async () => {
+  await test('Filtro por setor — Compras retorna materiais administrativos', async () => {
+    const famAdm = await dbRun(db,
+      "INSERT INTO familias_material_almoxarifado (codigo, nome, tipo_uso, ativo) VALUES ('ADM-T','Admin Test','administrativo',1)");
     const id = await criarMaterial(db, 'SEC-1', 10);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET familia_id = ? WHERE id = ?', [famAdm.lastID, id]);
     const clause = await sectorMaterialService.buildMaterialFilterClause(db, 'Compras');
-    assert.strictEqual(clause, null);
-    const rows = await dbAll(db, `SELECT id FROM materiais_almoxarifado m WHERE m.ativo = 1${clause ? ` AND ${clause}` : ''}`);
+    assert.ok(clause && clause.includes('administrativo'));
+    const rows = await dbAll(db, `SELECT id FROM materiais_almoxarifado m WHERE m.ativo = 1 AND ${clause}`);
     assert.ok(rows.some((r) => r.id === id));
   });
 
-  await test('Filtro por setor — permissões sem match liberam todos (retrocompat)', async () => {
+  await test('Filtro por setor — Engenharia usa filtro administrativo', async () => {
+    const famAdm = await dbRun(db,
+      "INSERT INTO familias_material_almoxarifado (codigo, nome, tipo_uso, ativo) VALUES ('ENG-T','Eng Test','administrativo',1)");
     const id = await criarMaterial(db, 'SEC-2', 10);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET familia_id = ? WHERE id = ?', [famAdm.lastID, id]);
     const clause = await sectorMaterialService.buildMaterialFilterClause(db, 'Engenharia');
-    assert.strictEqual(clause, null);
-    const rows = await dbAll(db, 'SELECT id FROM materiais_almoxarifado m WHERE m.ativo = 1');
+    assert.ok(clause && clause.includes('administrativo'));
+    const rows = await dbAll(db, `SELECT id FROM materiais_almoxarifado m WHERE m.ativo = 1 AND ${clause}`);
     assert.ok(rows.some((r) => r.id === id));
   });
 

@@ -9,15 +9,23 @@ const TIPO_USO = {
   AMBOS: 'ambos',
 };
 
+/** Setores de chão de fábrica — demais setores são administrativos */
+const SETORES_INDUSTRIAIS = new Set([
+  'Produção',
+  'Fábrica',
+  'Operacional',
+  'Manutenção',
+]);
+
 const SETORES_MODULO_SEED = [
-  ['Engenharia', 'ENG', 'engenharia', 'industrial', 1],
-  ['Engenharia / Projetos', 'ENGP', 'engenharia_projetos', 'industrial', 2],
+  ['Engenharia', 'ENG', 'engenharia', 'administrativo', 1],
+  ['Engenharia / Projetos', 'ENGP', 'engenharia_projetos', 'administrativo', 2],
   ['Produção', 'PROD', 'operacional', 'industrial', 3],
   ['Comercial', 'COM', 'comercial', 'administrativo', 4],
-  ['Compras', 'COMP', 'compras', 'ambos', 5],
+  ['Compras', 'COMP', 'compras', 'administrativo', 5],
   ['Financeiro', 'FIN', 'financeiro', 'administrativo', 6],
   ['Administrativo', 'ADM', 'administrativo', 'administrativo', 7],
-  ['Almoxarifado', 'ALM', 'almoxarifado', 'ambos', 8],
+  ['Almoxarifado', 'ALM', 'almoxarifado', 'administrativo', 8],
   ['Manutenção', 'MAN', 'frota', 'industrial', 9],
   ['Caldeiraria', 'CALD', null, 'industrial', 10],
   ['Usinagem', 'USIN', null, 'industrial', 11],
@@ -103,14 +111,21 @@ async function ensureSetoresRequisicao(db) {
     }
     await seedPermissoesPadrao(db);
   } else {
-    for (const [nome, codigo, modulo, tipoSetor, ordem] of SETORES_MODULO_SEED) {
+    for (const [nome, codigo, modulo, , ordem] of SETORES_MODULO_SEED) {
+      const tipoSetor = getTipoSetor(nome);
       await dbRun(db,
         `UPDATE setores_requisicao_almoxarifado
-         SET tipo_setor = COALESCE(tipo_setor, ?), modulo_origem = COALESCE(modulo_origem, ?), ordem = ?
+         SET tipo_setor = ?, modulo_origem = COALESCE(modulo_origem, ?), ordem = ?
          WHERE nome = ?`,
         [tipoSetor, modulo, ordem, nome]);
     }
   }
+}
+
+function getTipoSetor(setorNome) {
+  if (!setorNome) return TIPO_USO.ADMINISTRATIVO;
+  if (SETORES_INDUSTRIAIS.has(setorNome)) return TIPO_USO.INDUSTRIAL;
+  return TIPO_USO.ADMINISTRATIVO;
 }
 
 async function findCategoriaId(db, nome) {
@@ -151,15 +166,8 @@ async function addPermissao(db, setorNome, { familiaCodigo, categoriaNome, mater
 
 async function seedPermissoesPadrao(db) {
   const defaults = [
-    { setor: 'Administrativo', categorias: ['EPIs', 'Solda e consumíveis'] },
     { setor: 'Produção', familias: ['PAR'], categorias: ['Chapas', 'Elementos de fixação', 'Materiais de montagem'] },
-    { setor: 'Engenharia', familias: ['ROL', 'VAL'], categorias: ['Automação', 'Sensores e instrumentos', 'Componentes usinados'] },
-    { setor: 'Engenharia / Projetos', familias: ['ROL', 'VAL'], categorias: ['Automação', 'Componentes usinados'] },
-    { setor: 'Comercial', categorias: ['Solda e consumíveis', 'EPIs'] },
     { setor: 'Manutenção', categorias: ['Pneumática', 'Hidráulica', 'Elétrica', 'Ferramentas'] },
-    { setor: 'Compras', categorias: [] },
-    { setor: 'Financeiro', categorias: ['Solda e consumíveis'] },
-    { setor: 'Almoxarifado', categorias: [] },
   ];
 
   for (const cfg of defaults) {
@@ -201,16 +209,41 @@ function buildTipoUsoDenyClause(tipoSetor) {
     ? TIPO_USO.INDUSTRIAL
     : TIPO_USO.ADMINISTRATIVO;
 
+  const legacyClause = tipoSetor === TIPO_USO.ADMINISTRATIVO
+    ? `OR (m.familia_id IS NULL AND m.categoria_id IS NULL)`
+    : '';
+
   return `(
-    NOT EXISTS (
-      SELECT 1 FROM familias_material_almoxarifado f2
-      WHERE f2.id = m.familia_id AND f2.tipo_uso = '${denied}'
+    (
+      NOT EXISTS (
+        SELECT 1 FROM familias_material_almoxarifado f2
+        WHERE f2.id = m.familia_id AND f2.tipo_uso = '${denied}'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM categorias_material_almoxarifado c2
+        WHERE c2.id = m.categoria_id AND c2.tipo_uso = '${denied}'
+      )
     )
-    AND NOT EXISTS (
-      SELECT 1 FROM categorias_material_almoxarifado c2
-      WHERE c2.id = m.categoria_id AND c2.tipo_uso = '${denied}'
-    )
+    ${legacyClause}
   )`;
+}
+
+function buildTipoUsoAllowClause(tipoSetor) {
+  if (!tipoSetor || tipoSetor === TIPO_USO.AMBOS) return null;
+
+  const allowed = tipoSetor === TIPO_USO.ADMINISTRATIVO
+    ? [TIPO_USO.ADMINISTRATIVO, TIPO_USO.AMBOS]
+    : [TIPO_USO.INDUSTRIAL, TIPO_USO.AMBOS];
+  const allowedList = allowed.map((a) => `'${a}'`).join(',');
+
+  const parts = [
+    `EXISTS (SELECT 1 FROM familias_material_almoxarifado f WHERE f.id = m.familia_id AND f.tipo_uso IN (${allowedList}))`,
+    `EXISTS (SELECT 1 FROM categorias_material_almoxarifado c WHERE c.id = m.categoria_id AND c.tipo_uso IN (${allowedList}))`,
+  ];
+  if (tipoSetor === TIPO_USO.ADMINISTRATIVO) {
+    parts.push('(m.familia_id IS NULL AND m.categoria_id IS NULL)');
+  }
+  return `(${parts.join(' OR ')})`;
 }
 
 function buildExplicitPermClause(perms) {
@@ -239,20 +272,12 @@ async function buildMaterialFilterClause(db, setorNome, { bypassAlmoxarifado = t
 
   if (bypassAlmoxarifado && setor.nome === 'Almoxarifado') return null;
 
-  const perms = await dbAll(db, 'SELECT * FROM setor_material_permitido WHERE setor_id = ?', [setor.id]);
-  const globalRules = await hasGlobalPermissoes(db);
-  const tipoDeny = buildTipoUsoDenyClause(setor.tipo_setor);
-  const explicit = buildExplicitPermClause(perms);
+  const tipoSetor = setor.tipo_setor || getTipoSetor(setor.nome);
+  return buildTipoUsoAllowClause(tipoSetor) || null;
+}
 
-  if (explicit) {
-    return combineClauses([tipoDeny, explicit]);
-  }
-
-  if (globalRules) {
-    return '1=0';
-  }
-
-  return tipoDeny || null;
+async function resolveSetor(db, moduloOrigem) {
+  return getSetorByModulo(db, moduloOrigem);
 }
 
 async function validateMateriaisParaSetor(db, setorNome, materialIds) {
@@ -336,19 +361,23 @@ async function bulkAssignFamiliasPorTipo(db, setorId, tipoUso) {
 
 module.exports = {
   TIPO_USO,
+  SETORES_INDUSTRIAIS,
   SETORES_MODULO_SEED,
   CATEGORIAS_TIPO_USO,
   FAMILIAS_TIPO_USO,
   ensureSetoresRequisicao,
   ensureTipoUsoColumns,
   seedPermissoesPadrao,
+  getTipoSetor,
   getSetorByNome,
   getSetorByModulo,
+  resolveSetor,
   hasGlobalPermissoes,
   listSetores,
   getPermissoesSetor,
   buildMaterialFilterClause,
   buildTipoUsoDenyClause,
+  buildTipoUsoAllowClause,
   validateMateriaisParaSetor,
   salvarPermissoesSetor,
   bulkAssignFamiliasPorTipo,

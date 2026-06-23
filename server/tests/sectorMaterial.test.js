@@ -65,7 +65,7 @@ async function run() {
     assert.ok(!ids.includes(matChapa));
   });
 
-  await test('Administrativo vê EPIs permitidos por regra', async () => {
+  await test('Administrativo vê EPIs por tipo_uso administrativo', async () => {
     const rows = await materiaisFiltrados(db, 'Administrativo');
     const ids = rows.map((r) => r.id);
     assert.ok(ids.includes(matEpi));
@@ -78,13 +78,32 @@ async function run() {
     assert.ok(ids.includes(matParafuso) || ids.includes(matChapa));
   });
 
-  await test('Setor sem regras retorna lista vazia quando há regras globais', async () => {
+  await test('Comercial vê materiais administrativos sem whitelist explícita', async () => {
+    const setorComercial = await dbGet(db, "SELECT id FROM setores_requisicao_almoxarifado WHERE nome = 'Comercial'");
+    await dbRun(db, 'DELETE FROM setor_material_permitido WHERE setor_id = ?', [setorComercial.id]);
+    const rows = await materiaisFiltrados(db, 'Comercial');
+    const ids = rows.map((r) => r.id);
+    assert.ok(ids.includes(matEpi), 'Comercial deve ver EPI administrativo');
+    assert.ok(!ids.includes(matParafuso), 'Comercial não deve ver parafuso industrial');
+    assert.ok(!ids.includes(matChapa), 'Comercial não deve ver chapa industrial');
+  });
+
+  await test('Compras vê materiais administrativos mesmo com regras globais', async () => {
     const setorCompras = await dbGet(db, "SELECT id FROM setores_requisicao_almoxarifado WHERE nome = 'Compras'");
     await dbRun(db, 'DELETE FROM setor_material_permitido WHERE setor_id = ?', [setorCompras.id]);
     const global = await sectorMaterialService.hasGlobalPermissoes(db);
     assert.strictEqual(global, true);
     const rows = await materiaisFiltrados(db, 'Compras');
-    assert.strictEqual(rows.length, 0);
+    const ids = rows.map((r) => r.id);
+    assert.ok(ids.includes(matEpi));
+    assert.ok(!ids.includes(matParafuso));
+  });
+
+  await test('getTipoSetor — Produção é industrial, Comercial é administrativo', async () => {
+    assert.strictEqual(sectorMaterialService.getTipoSetor('Produção'), 'industrial');
+    assert.strictEqual(sectorMaterialService.getTipoSetor('Comercial'), 'administrativo');
+    assert.strictEqual(sectorMaterialService.getTipoSetor('Engenharia'), 'administrativo');
+    assert.strictEqual(sectorMaterialService.getTipoSetor('Manutenção'), 'industrial');
   });
 
   await test('Almoxarifado sem filtro na listagem completa', async () => {
@@ -118,6 +137,14 @@ async function run() {
     assert.strictEqual(rows.length, 1);
     assert.strictEqual(rows[0].nome, 'Caneta');
     db2.close();
+  });
+
+  await test('Material legado sem família/categoria visível para setores administrativos', async () => {
+    const matLegado = await criarMaterial(db, { codigo: 'LEG-001', nome: 'Material Legado' });
+    const rowsAdm = await materiaisFiltrados(db, 'Comercial');
+    assert.ok(rowsAdm.some((r) => r.id === matLegado));
+    const rowsProd = await materiaisFiltrados(db, 'Produção');
+    assert.ok(!rowsProd.some((r) => r.id === matLegado));
   });
 
   console.log(`\n📊 Resultado: ${passed} passou, ${failed} falhou\n`);

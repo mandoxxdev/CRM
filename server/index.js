@@ -22039,6 +22039,14 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
+// ── Tipo de módulo (administrativo / industrial) ─────────────────────────────
+require('./routes/modulosTipoConfig')(app, db, authenticateToken);
+if (db) {
+  const { ensureModulosTipoConfig } = require('./services/modulosTipoConfigService');
+  ensureModulosTipoConfig(db).catch((err) =>
+    console.error('❌ Erro ao inicializar modulos_tipo_config:', err));
+}
+
 // ── Requisições de material (cross-módulo — qualquer usuário autenticado) ───
 require('./routes/requisicoesMaterial')(app, db, authenticateToken);
 

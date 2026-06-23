@@ -13,6 +13,12 @@ const requisitionReminderService = require('../services/almoxarifado/requisition
 const requisitionService = require('../services/almoxarifado/requisitionService');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 const stockService = require('../services/almoxarifado/stockService');
+const {
+  materialPhotoFilename,
+  materialPhotoUrl,
+  enrichMaterialRow,
+  enrichMaterialRows,
+} = require('../services/almoxarifado/materialPhoto');
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
@@ -113,7 +119,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     else console.log('✅ Tabela itens_conferencia_almoxarifado verificada');
   });
 
-  // Servir fotos — acessível via /uploads/almoxarifado/<arquivo>
+  // Servir fotos — padrão /api/uploads/almoxarifado (compatível com proxy /api)
+  app.use('/api/uploads/almoxarifado', require('express').static(uploadsAlmoxDir));
   app.use('/uploads/almoxarifado', require('express').static(uploadsAlmoxDir));
 
   const almoxMiddleware = checkModulePermission
@@ -218,7 +225,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
       db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        res.json(enrichMaterialRows(rows));
       });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -291,7 +298,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             WHERE m.id = ?`, [req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(404).json({ error: 'Material não encontrado' });
-      res.json(row);
+      res.json(enrichMaterialRow(row));
     });
   });
 
@@ -459,20 +466,23 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.post('/api/almoxarifado/materiais/:id/foto',uploadAlmox.single('foto'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Nenhuma foto enviada' });
 
-    const fotoPath = `/uploads/almoxarifado/${req.file.filename}`;
+    const filename = req.file.filename;
 
     // Remover foto antiga
     db.get(`SELECT foto FROM materiais_almoxarifado WHERE id = ?`, [req.params.id], (err, row) => {
       if (row && row.foto) {
-        const oldPath = path.join(uploadsAlmoxDir, path.basename(row.foto));
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        const oldFilename = materialPhotoFilename(row.foto);
+        if (oldFilename) {
+          const oldPath = path.join(uploadsAlmoxDir, oldFilename);
+          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
       }
     });
 
     db.run(`UPDATE materiais_almoxarifado SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [fotoPath, req.params.id], function (err) {
+      [filename, req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ foto_url: fotoPath });
+        res.json({ foto: filename, foto_url: materialPhotoUrl(filename) });
       });
   });
 
@@ -656,7 +666,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               ORDER BY ma.nome`,
         [req.params.id], (err2, itens) => {
           if (err2) return res.status(500).json({ error: err2.message });
-          res.json({ ...conf, itens });
+          res.json({ ...conf, itens: enrichMaterialRows(itens) });
         });
     });
   });
@@ -1688,7 +1698,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           if (err2) return res.status(500).json({ error: err2.message });
           res.json({
             ...req_row,
-            itens: (itens || []).map(requisitionService.normalizarItem),
+            itens: enrichMaterialRows(
+              (itens || []).map(requisitionService.normalizarItem),
+            ),
           });
         });
     });

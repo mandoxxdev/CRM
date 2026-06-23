@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { toast } from 'react-toastify';
+import { useModulosTipoConfig } from '../hooks/useModulosTipoConfig';
 import {
   FiBriefcase, FiShoppingCart, FiDollarSign,
   FiSettings, FiPackage, FiTarget,
@@ -54,8 +56,12 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   const [rotaDestino, setRotaDestino] = useState(null);
   const [busca, setBusca] = useState('');
   const [recentesIds, setRecentesIds] = useState([]);
+  const [tipoModalModulo, setTipoModalModulo] = useState(null);
+  const [tipoModalValor, setTipoModalValor] = useState('administrativo');
+  const [salvandoTipo, setSalvandoTipo] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { tipoOverrides, updateModuloTipo } = useModulosTipoConfig();
 
   const todosModulos = [
     {
@@ -339,9 +345,40 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     return [];
   }, [recentesIds, modulosDisponiveis, busca]);
 
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
+
+  const handleGearClick = (e, modulo) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const current = tipoOverrides[modulo.id] || 'administrativo';
+    setTipoModalValor(current);
+    setTipoModalModulo(modulo);
+  };
+
+  const handleSalvarTipoModulo = async () => {
+    if (!tipoModalModulo) return;
+    setSalvandoTipo(true);
+    try {
+      await updateModuloTipo(tipoModalModulo.id, tipoModalValor);
+      toast.success(`Tipo do módulo "${tipoModalModulo.nome}" atualizado`);
+      setTipoModalModulo(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar tipo do módulo');
+    } finally {
+      setSalvandoTipo(false);
+    }
+  };
+
+  const getTipoBadge = (moduloId) => {
+    const tipo = tipoOverrides[moduloId];
+    if (!tipo) return null;
+    return tipo === 'industrial' ? 'FAB' : 'ADM';
+  };
+
   const renderModuloCard = (modulo, compact = false) => {
     const Icon = modulo.icon;
     const isDisponivel = modulo.disponivel;
+    const badge = getTipoBadge(modulo.id);
 
     return (
       <button
@@ -354,6 +391,24 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         aria-label={`${modulo.nome}${isDisponivel ? '' : ' — sem acesso'}`}
       >
         <div className="orion-tile__shade" aria-hidden="true" />
+        {isAdmin && (
+          <span
+            role="button"
+            tabIndex={0}
+            className="orion-tile__gear"
+            onClick={(e) => handleGearClick(e, modulo)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleGearClick(e, modulo);
+              }
+            }}
+            aria-label={`Configurar tipo do módulo ${modulo.nome}`}
+            title="Tipo do módulo"
+          >
+            <FiSettings />
+          </span>
+        )}
         <div className="orion-tile__icon-wrap" aria-hidden="true">
           <Icon className="orion-tile__icon" />
         </div>
@@ -368,7 +423,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
           </span>
         )}
         <div className="orion-tile__info">
-          <h3 className="orion-tile__title orion-tile__nome">{modulo.nome}</h3>
+          <h3 className="orion-tile__title orion-tile__nome">
+            {modulo.nome}
+            {badge && (
+              <span className={`orion-tile__tipo-pill orion-tile__tipo-pill--${badge.toLowerCase()}`}>
+                {badge}
+              </span>
+            )}
+          </h3>
         </div>
       </button>
     );
@@ -395,7 +457,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   }
 
   const primeiroNome = getPrimeiroNome(user.nome);
-  const isAdmin = String(user.role || '').toLowerCase() === 'admin';
 
   return (
     <div className="tipo-selecao">
@@ -492,6 +553,78 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
           </div>
         )}
       </div>
+
+      {tipoModalModulo && (
+        <div
+          className="tipo-modulo-modal-overlay"
+          onClick={() => !salvandoTipo && setTipoModalModulo(null)}
+          role="presentation"
+        >
+          <div
+            className="tipo-modulo-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="tipo-modulo-modal-title"
+          >
+            <div className="tipo-modulo-modal__header">
+              <h2 id="tipo-modulo-modal-title">Tipo do módulo</h2>
+              <button
+                type="button"
+                className="tipo-modulo-modal__close"
+                onClick={() => setTipoModalModulo(null)}
+                aria-label="Fechar"
+                disabled={salvandoTipo}
+              >
+                <FiX />
+              </button>
+            </div>
+            <p className="tipo-modulo-modal__modulo">{tipoModalModulo.nome}</p>
+            <fieldset className="tipo-modulo-modal__options">
+              <legend className="sr-only">Selecione o tipo</legend>
+              <label className="tipo-modulo-modal__option">
+                <input
+                  type="radio"
+                  name="tipo_setor"
+                  value="administrativo"
+                  checked={tipoModalValor === 'administrativo'}
+                  onChange={() => setTipoModalValor('administrativo')}
+                  disabled={salvandoTipo}
+                />
+                <span>Administrativo</span>
+              </label>
+              <label className="tipo-modulo-modal__option">
+                <input
+                  type="radio"
+                  name="tipo_setor"
+                  value="industrial"
+                  checked={tipoModalValor === 'industrial'}
+                  onChange={() => setTipoModalValor('industrial')}
+                  disabled={salvandoTipo}
+                />
+                <span>Fábrica (Produção)</span>
+              </label>
+            </fieldset>
+            <div className="tipo-modulo-modal__actions">
+              <button
+                type="button"
+                className="tipo-modulo-modal__btn tipo-modulo-modal__btn--cancel"
+                onClick={() => setTipoModalModulo(null)}
+                disabled={salvandoTipo}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="tipo-modulo-modal__btn tipo-modulo-modal__btn--save"
+                onClick={handleSalvarTipoModulo}
+                disabled={salvandoTipo}
+              >
+                {salvandoTipo ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

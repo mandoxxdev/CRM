@@ -22,6 +22,8 @@ const {
 
 } = require('../services/almoxarifado/stockAvailabilityService');
 
+const { enrichMaterialRow } = require('../services/almoxarifado/materialPhoto');
+
 
 
 function gerarNumeroReq() {
@@ -118,9 +120,7 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
       let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
 
-                        tm.icone as tipo_icone,
-
-                        CASE WHEN m.foto IS NOT NULL AND m.foto != '' THEN m.foto ELSE NULL END as foto_url
+                        tm.icone as tipo_icone
 
                  FROM materiais_almoxarifado m
 
@@ -154,7 +154,9 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
         if (err) return res.status(500).json({ error: err.message });
 
-        const sanitized = (rows || []).map((row) => sanitizeMaterialForSector(row, qtyPadrao));
+        const sanitized = (rows || []).map((row) =>
+          enrichMaterialRow(sanitizeMaterialForSector(row, qtyPadrao)),
+        );
 
         res.json(sanitized);
 

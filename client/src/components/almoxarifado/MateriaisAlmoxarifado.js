@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
+import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
@@ -209,7 +210,7 @@ const MateriaisAlmoxarifado = () => {
                   <tr key={m.id}>
                     <td>
                       {m.foto ? (
-                        <img src={m.foto} alt={m.nome} className="almox-foto-thumb" />
+                        <img src={resolveMaterialPhotoUrl(m.foto)} alt={m.nome} className="almox-foto-thumb" />
                       ) : (
                         <div className="almox-foto-placeholder"><FiImage /></div>
                       )}

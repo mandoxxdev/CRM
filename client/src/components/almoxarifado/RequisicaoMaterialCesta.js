@@ -3,15 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FiArrowLeft, FiMinus, FiPlus, FiShoppingCart, FiTrash2 } from 'react-icons/fi';
 import api from '../../services/api';
+import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { DisponibilidadeBadge } from '../../utils/disponibilidadeEstoque';
 import '../engenhariaProjetos/SolicitacaoMaterialEscritorioCesta.css';
 
 function mapFotoUrl(material) {
   if (!material) return null;
-  if (material.foto_url) return material.foto_url;
-  if (material.foto) return material.foto;
-  return null;
+  return resolveMaterialPhotoUrl(material.foto_url || material.foto);
 }
 
 export default function RequisicaoMaterialCesta() {
@@ -179,6 +178,10 @@ export default function RequisicaoMaterialCesta() {
   }, [materiais, q]);
 
   const titulo = `Solicitação de material — ${ctx.label || setor}`;
+  const isAdminSetor = ctx.tipoSetor !== 'industrial';
+  const emptyCatalogMsg = isAdminSetor
+    ? 'Nenhum material administrativo cadastrado. Verifique família com tipo Administrativo.'
+    : 'Nenhum material industrial cadastrado. Verifique família com tipo Industrial.';
 
   return (
     <div className="engc">
@@ -246,7 +249,7 @@ export default function RequisicaoMaterialCesta() {
                   </div>
                 );
               })}
-              {!filtered.length ? <div className="engc-empty">Nenhum material encontrado.</div> : null}
+              {!filtered.length ? <div className="engc-empty">{emptyCatalogMsg}</div> : null}
             </div>
           )}
         </section>

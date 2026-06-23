@@ -504,6 +504,207 @@
   font-size: 0.88rem;
 }
 
+/* Gear icon — admin only */
+.tipo-selecao .orion-tile__gear {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.8rem;
+  cursor: pointer;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.tipo-selecao .orion-tile:hover .orion-tile__gear,
+.tipo-selecao .orion-tile__gear:focus {
+  opacity: 1;
+}
+
+.tipo-selecao .orion-tile__gear:hover {
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+}
+
+.tipo-selecao .orion-tile--compact .orion-tile__gear {
+  width: 22px;
+  height: 22px;
+  font-size: 0.7rem;
+  top: 0.45rem;
+  right: 0.45rem;
+  opacity: 0.85;
+}
+
+/* Tipo pill badge */
+.tipo-selecao .orion-tile__tipo-pill {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.tipo-selecao .orion-tile__tipo-pill--fab {
+  background: rgba(29, 185, 84, 0.35);
+}
+
+.tipo-selecao .orion-tile__tipo-pill--adm {
+  background: rgba(99, 179, 237, 0.35);
+}
+
+/* ── Tipo módulo modal ── */
+
+.tipo-modulo-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: tipoFadeIn 0.2s ease;
+}
+
+.tipo-modulo-modal {
+  width: 100%;
+  max-width: 360px;
+  background: var(--gmp-surface, #ffffff);
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.tipo-modulo-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.tipo-modulo-modal__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gmp-text);
+}
+
+.tipo-modulo-modal__close {
+  background: none;
+  border: none;
+  color: var(--gmp-text-light);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tipo-modulo-modal__close:hover {
+  background: var(--gmp-surface-hover);
+  color: var(--gmp-text);
+}
+
+.tipo-modulo-modal__modulo {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--gmp-text-light);
+}
+
+.tipo-modulo-modal__options {
+  border: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.tipo-modulo-modal__option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--gmp-text);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.tipo-modulo-modal__option:has(input:checked) {
+  border-color: #1db954;
+  background: rgba(29, 185, 84, 0.08);
+}
+
+.tipo-modulo-modal__option input {
+  accent-color: #1db954;
+}
+
+.tipo-modulo-modal__actions {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: flex-end;
+}
+
+.tipo-modulo-modal__btn {
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.tipo-modulo-modal__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tipo-modulo-modal__btn--cancel {
+  background: var(--gmp-surface-hover);
+  color: var(--gmp-text);
+}
+
+.tipo-modulo-modal__btn--save {
+  background: #1db954;
+  color: #000000;
+}
+
+.tipo-modulo-modal__btn--save:hover:not(:disabled) {
+  background: #1ed760;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ── Loading ── */
 
 .tipo-selecao-loading {

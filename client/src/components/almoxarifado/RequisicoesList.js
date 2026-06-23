@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
+import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { SkeletonTable } from '../SkeletonLoader';
@@ -647,7 +648,7 @@ const RequisicoesList = () => {
                 {detalhe.itens.map(item => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--gmp-border)' }}>
                     {item.foto ? (
-                      <img src={item.foto} alt={item.material_nome} className="almox-foto-thumb" />
+                      <img src={resolveMaterialPhotoUrl(item.foto)} alt={item.material_nome} className="almox-foto-thumb" />
                     ) : (
                       <div className="almox-foto-placeholder"><FiPackage size={16} /></div>
                     )}

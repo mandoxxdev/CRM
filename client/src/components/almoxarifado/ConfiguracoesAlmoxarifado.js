@@ -2394,10 +2394,10 @@ const TabMateriaisPorSetor = () => {
   });
 
   const tipoSetorLabel = setorAtivo?.tipo_setor === 'administrativo'
-    ? 'Administrativo'
+    ? 'Administrativo (escritório)'
     : setorAtivo?.tipo_setor === 'industrial'
-      ? 'Industrial / Fábrica'
-      : 'Geral (almoxarifado/compras)';
+      ? 'Industrial / Fábrica (Produção, Manutenção)'
+      : 'Geral';
 
   if (loading) {
     return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
@@ -2428,11 +2428,11 @@ const TabMateriaisPorSetor = () => {
           <h3 style={{ margin: '0 0 8px' }}>{setorAtivo.nome}</h3>
           <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem', marginBottom: 12 }}>
             Tipo do setor: <strong>{tipoSetorLabel}</strong>.
-            Atribua famílias e categorias que este setor pode requisitar.
-            Setores administrativos nunca veem materiais industriais (e vice-versa), mesmo sem regras explícitas.
+            <strong> Produção e Manutenção</strong> são industriais; <strong>todos os demais setores</strong> (Comercial, Compras, Financeiro, Engenharia, etc.) são administrativos.
+            O catálogo de cada setor filtra automaticamente por <em>tipo de uso</em> da família/categoria (Administrativo, Industrial ou Ambos).
           </p>
           <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem', marginBottom: 20 }}>
-            Sem regras atribuídas aqui, o setor <strong>não verá materiais</strong> (lista vazia).
+            As regras abaixo são opcionais para refinamento. Sem regras, o setor vê todos os materiais compatíveis com seu tipo (ADM ou IND).
             O almoxarifado continua vendo todos os materiais na lista completa.
           </p>
 
