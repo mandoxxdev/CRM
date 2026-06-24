@@ -365,6 +365,24 @@
   margin-top: 0.35rem;
 }
 
+.usuarios .ghost-user-hint {
+  margin: 0.5rem 0 0;
+}
+
+.usuarios .ghost-user-hint a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--gmp-primary);
+  text-decoration: none;
+}
+
+.usuarios .ghost-user-hint a:hover {
+  text-decoration: underline;
+}
+
 
 
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { canConfigureAlmox } from '../../utils/systemPermissions';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
@@ -33,7 +35,7 @@ const formatLocalizacaoLabel = (loc, allLocs = []) => {
 
 const MaterialAlmoxarifadoForm = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = canConfigureAlmox(getEffectiveUser(user));
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

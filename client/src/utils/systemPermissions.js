@@ -49,7 +49,6 @@ export function hasAlmoxAdminPerfil(user) {
 export function canConfigureAlmox(user) {
   return (
     isSuperAdmin(user)
-    || isSystemAdmin(user)
     || isModuleAdmin(user, 'almoxarifado')
     || hasAlmoxAdminPerfil(user)
   );
@@ -62,23 +61,31 @@ export function hasFrotaAdminPerfil(user) {
 export function canConfigureFrota(user) {
   return (
     isSuperAdmin(user)
-    || isSystemAdmin(user)
     || isModuleAdmin(user, 'frota')
     || hasFrotaAdminPerfil(user)
   );
 }
 
+export function canConfigureOperacional(user) {
+  return isSuperAdmin(user) || isModuleAdmin(user, 'operacional');
+}
+
 export function mergeUserPermissions(authUser, extra = {}) {
-  if (!authUser) return null;
+  if (!authUser && !extra?.id) return null;
+  const base = authUser || {};
+  const rawSuperadmin = extra.is_superadmin !== undefined
+    ? extra.is_superadmin
+    : base.is_superadmin;
   return {
-    ...authUser,
-    role: extra.role ?? authUser.role,
-    is_superadmin: extra.is_superadmin ?? authUser.is_superadmin,
+    ...base,
+    ...extra,
+    role: extra.role ?? base.role,
+    is_superadmin: isTruthyFlag(rawSuperadmin) ? 1 : 0,
     admin_modulos: extra.admin_modulos !== undefined
       ? parseAdminModulos(extra.admin_modulos)
-      : parseAdminModulos(authUser.admin_modulos),
-    perfil_almoxarifado: extra.perfil_almoxarifado ?? authUser.perfil_almoxarifado ?? null,
-    perfil_frota: extra.perfil_frota ?? authUser.perfil_frota ?? null,
+      : parseAdminModulos(base.admin_modulos),
+    perfil_almoxarifado: extra.perfil_almoxarifado ?? base.perfil_almoxarifado ?? null,
+    perfil_frota: extra.perfil_frota ?? base.perfil_frota ?? null,
   };
 }
 

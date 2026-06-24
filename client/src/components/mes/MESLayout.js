@@ -2,6 +2,9 @@ import React, { useState, Suspense } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import ErrorBoundary from '../ErrorBoundary';
 import { RouteLoading } from '../LazyPage';
+import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { canConfigureOperacional } from '../../utils/systemPermissions';
 import { 
   FiBarChart2, FiClipboard, FiUsers, FiActivity, FiClock, 
   FiTrendingUp, FiTool, FiSettings, FiShield, FiFileText,
@@ -14,6 +17,8 @@ const MESLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { user } = useAuth();
+  const canConfigureMes = canConfigureOperacional(getEffectiveUser(user));
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: FiBarChart2, path: '/fabrica/dashboard' },
@@ -143,7 +148,7 @@ const MESLayout = () => {
     { id: 'equipamentos', label: 'Equipamentos', icon: FiTool, path: '/fabrica/equipamentos' },
     { id: 'requisicoes-nova', label: 'Solicitar Material', icon: FiClipboard, path: '/fabrica/requisicoes-material/nova' },
     { id: 'requisicoes-lista', label: 'Minhas Requisições', icon: FiList, path: '/fabrica/requisicoes-material' },
-    { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/fabrica/configuracoes' }
+    { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/fabrica/configuracoes', adminOnly: true }
   ];
 
   const [expandedItems, setExpandedItems] = useState([]);
@@ -186,7 +191,9 @@ const MESLayout = () => {
             <FiGrid />
             {sidebarOpen && <span>Selecionar Módulo</span>}
           </div>
-          {menuItems.map(item => (
+          {menuItems.map(item => {
+            if (item.adminOnly && !canConfigureMes) return null;
+            return (
             <div key={item.id} className="mes-nav-item">
               <div
                 className={`mes-nav-link ${isActive(item.path) ? 'active' : ''}`}
@@ -220,7 +227,8 @@ const MESLayout = () => {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </nav>
       </aside>
 

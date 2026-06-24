@@ -15,8 +15,10 @@ const UsuarioForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user: currentUser, refreshUser } = useAuth();
-  const actorIsSuperAdmin = isSuperAdmin(currentUser);
-  const actorCanManageUsers = isSystemAdmin(currentUser);
+  const [actorUser, setActorUser] = useState(null);
+  const effectiveActor = actorUser ?? currentUser;
+  const actorIsSuperAdmin = isSuperAdmin(effectiveActor);
+  const actorCanManageUsers = isSystemAdmin(effectiveActor);
   const [loading, setLoading] = useState(false);
   const [loadingGrupos, setLoadingGrupos] = useState(false);
   const [grupos, setGrupos] = useState([]);
@@ -146,6 +148,17 @@ const UsuarioForm = () => {
       setLoadingGrupos(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fresh = await refreshUser();
+      if (!cancelled) {
+        setActorUser(fresh || currentUser);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [refreshUser]);
 
   useEffect(() => {
     if (id) {
@@ -385,37 +398,58 @@ const UsuarioForm = () => {
               </select>
               <p className="field-hint">Administradores do sistema podem gerenciar usuários, mas não excluí-los.</p>
             </div>
-            {actorIsSuperAdmin && (
-              <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <label className="checkbox-label" style={{ marginBottom: 0 }}>
+          </div>
+
+          {actorCanManageUsers && !actorIsSuperAdmin && actorUser !== null && (
+            <div className="superadmin-info-banner" role="status">
+              <FiShield />
+              <p>
+                Para usuários fantasmas, você precisa ser <strong>Super Administrador</strong> (não apenas Administrador do Sistema).
+              </p>
+            </div>
+          )}
+
+          {actorIsSuperAdmin && (
+            <div className="superadmin-privileges-box">
+              <div className="superadmin-privileges-header">
+                <FiShield />
+                <div>
+                  <h3>Privilégios de Super Administrador</h3>
+                  <p>Opções visíveis apenas para quem é Super Administrador do sistema.</p>
+                </div>
+              </div>
+              <div className="superadmin-privileges-options">
+                <label className="superadmin-option">
                   <input
                     type="checkbox"
                     name="is_superadmin"
                     checked={formData.is_superadmin === 1}
                     onChange={handleChange}
                   />
-                  <span><FiStar /> Super Administrador</span>
+                  <span className="superadmin-option-label">
+                    <FiStar /> Super Administrador
+                  </span>
+                  <span className="superadmin-option-hint">
+                    Acesso total, incluindo exclusão de usuários e concessão de Super Admin.
+                  </span>
                 </label>
-                <p className="field-hint">Acesso total, incluindo exclusão de usuários e concessão de Super Admin.</p>
-              </div>
-            )}
-            {actorIsSuperAdmin && (
-              <div className="form-group ghost-user-field">
-                <label className="checkbox-label">
+                <label className="superadmin-option ghost-user-option">
                   <input
                     type="checkbox"
                     name="is_oculto"
                     checked={formData.is_oculto === 1}
                     onChange={handleChange}
                   />
-                  <span><FiEyeOff /> Usuário oculto (fantasma)</span>
+                  <span className="superadmin-option-label">
+                    <FiEyeOff /> Usuário oculto (fantasma)
+                  </span>
+                  <span className="superadmin-option-hint ghost-hint">
+                    Este usuário só aparece para Super Administradores. Fica oculto em listas, buscas, dropdowns e chat para todos os demais.
+                  </span>
                 </label>
-                <p className="field-hint field-hint-warning">
-                  Visível apenas para Super Administradores. Não aparece em listas, buscas, dropdowns ou chat para outros usuários.
-                </p>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="form-section">

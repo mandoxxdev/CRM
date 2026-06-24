@@ -1,6 +1,7 @@
 /**
  * Extended API routes for almoxarifado v3
  */
+const { canConfigureAlmox } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
@@ -64,7 +65,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   });
 
   app.put('/api/almoxarifado/mapa/localizacoes/posicoes', auth, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (!canConfigureAlmox(req.user)) {
+      return res.status(403).json({ error: 'Acesso restrito — administrador do Almoxarifado ou Super Administrador' });
+    }
     const { posicoes } = req.body;
     if (!Array.isArray(posicoes) || posicoes.length === 0) {
       return res.status(400).json({ error: 'Lista de posições obrigatória' });

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { canConfigureAlmox } from '../../utils/systemPermissions';
+import { getEffectiveUser } from '../../services/permissionsCache';
 import api from '../../services/api';
 import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers, FiClipboard, FiMap, FiSettings, FiTruck } from 'react-icons/fi';
 import './Almoxarifado.css';
@@ -48,7 +49,7 @@ const EMPTY_STATS = {
 
 const AlmoxarifadoDashboard = () => {
   const { user } = useAuth();
-  const isAdmin = canConfigureAlmox(user);
+  const isAdmin = canConfigureAlmox(getEffectiveUser(user));
   const [stats, setStats] = useState(EMPTY_STATS);
   const [requisicoes, setRequisicoes] = useState(null);
   const [consumoOs, setConsumoOs] = useState([]);

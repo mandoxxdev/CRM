@@ -76,7 +76,6 @@ function hasAlmoxAdminPerfil(user) {
 function canConfigureAlmox(user) {
   return (
     isSuperAdmin(user)
-    || isSystemAdmin(user)
     || isModuleAdmin(user, 'almoxarifado')
     || hasAlmoxAdminPerfil(user)
   );
@@ -89,10 +88,13 @@ function hasFrotaAdminPerfil(user) {
 function canConfigureFrota(user) {
   return (
     isSuperAdmin(user)
-    || isSystemAdmin(user)
     || isModuleAdmin(user, 'frota')
     || hasFrotaAdminPerfil(user)
   );
+}
+
+function canConfigureOperacional(user) {
+  return isSuperAdmin(user) || isModuleAdmin(user, 'operacional');
 }
 
 function bypassModuleRestrictions(user) {
@@ -320,6 +322,7 @@ module.exports = {
   hasAlmoxAdminPerfil,
   canConfigureFrota,
   hasFrotaAdminPerfil,
+  canConfigureOperacional,
   bypassModuleRestrictions,
   requireManageUsers,
   requireDeleteUsers,

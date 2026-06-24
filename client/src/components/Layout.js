@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { canConfigureAlmox, canConfigureFrota, isSystemAdmin } from '../utils/systemPermissions';
+import { canConfigureAlmox, canConfigureFrota, isModuleAdmin } from '../utils/systemPermissions';
 import api from '../services/api';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser } from '../services/permissionsCache';
 import {
@@ -186,7 +186,7 @@ const Layout = () => {
     if (activeModule === 'frota') {
       return canConfigureFrota(effectiveUser);
     }
-    return isSystemAdmin(effectiveUser);
+    return isModuleAdmin(effectiveUser, activeModule);
   };
 
   // Fechar sidebar ao clicar em um item no mobile (memoizado)

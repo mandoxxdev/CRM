@@ -11,22 +11,36 @@ import './Usuarios.css';
 import './Loading.css';
 
 const Usuarios = () => {
-  const { user: currentUser } = useAuth();
-  const podeExcluir = canDeleteUsers(currentUser);
-  const actorIsSuperAdmin = isSuperAdmin(currentUser);
+  const { user: currentUser, loading: authLoading, refreshUser } = useAuth();
+  const [actorUser, setActorUser] = useState(null);
+  const effectiveActor = actorUser ?? currentUser;
+  const podeExcluir = canDeleteUsers(effectiveActor);
+  const actorIsSuperAdmin = isSuperAdmin(effectiveActor);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fresh = await refreshUser();
+      if (!cancelled) {
+        setActorUser(fresh || currentUser);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [refreshUser]);
+
+  useEffect(() => {
+    if (authLoading) return;
     loadUsuarios();
-  }, []);
+  }, [authLoading, effectiveActor?.id, effectiveActor?.is_superadmin]);
 
   const loadUsuarios = async () => {
     setLoading(true);
     try {
       const response = await api.get('/usuarios');
-      const visiveis = filterVisibleUsers(response.data || [], currentUser);
+      const visiveis = filterVisibleUsers(response.data || [], effectiveActor);
       const usuariosFiltrados = visiveis.filter(
         usuario => usuario.nome.toLowerCase() !== 'administrator'
       );
@@ -105,6 +119,13 @@ const Usuarios = () => {
         <div>
           <h1>Usuários</h1>
           <p>Gestão de usuários do sistema</p>
+          {actorIsSuperAdmin && (
+            <p className="ghost-user-hint">
+              <Link to="/admin/usuarios/novo">
+                <FiEyeOff /> Criar usuário fantasma →
+              </Link>
+            </p>
+          )}
         </div>
         <div className="header-actions">
           <button onClick={handleExportExcel} className="btn-secondary" title="Exportar para Excel (Ctrl+E)">

@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { canConfigureAlmox } from '../../utils/systemPermissions';
 import {
   FiMap, FiRefreshCw, FiFilter, FiMove, FiSave, FiX,
   FiPackage, FiAlertTriangle, FiSettings, FiInfo
@@ -258,7 +260,7 @@ function computeLayout(locations) {
 const MapaLocalizacoesAlmoxarifado = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = canConfigureAlmox(getEffectiveUser(user));
   const svgRef = useRef(null);
 
   const [localizacoes, setLocalizacoes] = useState([]);
