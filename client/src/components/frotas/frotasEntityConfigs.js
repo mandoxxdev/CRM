@@ -18,7 +18,13 @@ export const ENTITY_CONFIGS = {
       { key: 'modelo', label: 'Modelo' },
       { key: 'tipo_nome', label: 'Tipo', format: (r) => r.tipo_nome || r.tipo_texto || '-' },
       { key: 'setor_responsavel', label: 'Setor' },
-      { key: 'km_atual', label: 'KM', format: (r) => (r.km_atual != null ? `${Number(r.km_atual).toLocaleString('pt-BR')} km` : '-') },
+      { key: 'motorista_nome', label: 'Condutor' },
+      { key: 'km_atual', label: 'KM/Horímetro', format: (r) => {
+        if (r.tipo_medicao === 'horimetro') {
+          return r.horimetro_atual != null ? `${Number(r.horimetro_atual).toLocaleString('pt-BR')} h` : '-';
+        }
+        return r.km_atual != null ? `${Number(r.km_atual).toLocaleString('pt-BR')} km` : '-';
+      }},
       { key: 'status', label: 'Status', badge: true },
     ],
     filters: [
@@ -27,22 +33,30 @@ export const ENTITY_CONFIGS = {
         { value: 'ativo', label: 'Ativo' },
         { value: 'manutencao', label: 'Manutenção' },
         { value: 'inativo', label: 'Inativo' },
+        { value: 'vendido', label: 'Vendido' },
       ]},
     ],
     getDefaultForm: (meta) => ({
       placa: '', modelo: '', marca: '', ano: '', tipo_id: '', status: 'ativo',
-      km_atual: 0, combustivel: 'diesel', setor_responsavel: '', cor: '', chassi: '', renavam: '', observacoes: '',
+      km_atual: 0, horimetro_atual: 0, tipo_medicao: 'km', consumo_medio_esperado: '',
+      combustivel: 'diesel', setor_responsavel: '', centro_custo: '', motorista_id: '',
+      cor: '', chassi: '', renavam: '', observacoes: '',
     }),
     formFields: (meta, form, setForm) => [
-      { key: 'placa', label: 'Placa *', required: true },
+      { key: 'placa', label: 'Placa / Identificação *', required: true },
       { key: 'marca', label: 'Marca' },
       { key: 'modelo', label: 'Modelo' },
       { key: 'ano', label: 'Ano', type: 'number' },
       { key: 'tipo_id', label: 'Tipo', type: 'select', options: (meta?.tipos || []).map((t) => ({ value: t.id, label: t.nome })) },
       { key: 'status', label: 'Status', type: 'select', options: (meta?.statusVeiculo || []).map((s) => ({ value: s, label: s })) },
+      { key: 'tipo_medicao', label: 'Medição', type: 'select', options: (meta?.tiposMedicao || ['km', 'horimetro']).map((m) => ({ value: m, label: m === 'horimetro' ? 'Horímetro' : 'Quilometragem' })) },
       { key: 'combustivel', label: 'Combustível', type: 'select', options: (meta?.combustiveis || []).map((c) => ({ value: c, label: c })) },
       { key: 'km_atual', label: 'KM Atual', type: 'number' },
-      { key: 'setor_responsavel', label: 'Setor Responsável', type: 'select', options: (meta?.setores || []).map((s) => ({ value: s, label: s })) },
+      { key: 'horimetro_atual', label: 'Horímetro Atual', type: 'number' },
+      { key: 'consumo_medio_esperado', label: 'Consumo esperado (km/L)', type: 'number' },
+      { key: 'motorista_id', label: 'Condutor responsável', type: 'select', options: [{ value: '', label: '—' }, ...(meta?.motoristas || []).map((m) => ({ value: m.id, label: m.nome }))] },
+      { key: 'setor_responsavel', label: 'Setor', type: 'select', options: (meta?.setores || []).map((s) => ({ value: s, label: s })) },
+      { key: 'centro_custo', label: 'Centro de custo', type: 'select', options: (meta?.centrosCusto || []).map((c) => ({ value: c, label: c })) },
       { key: 'cor', label: 'Cor' },
       { key: 'chassi', label: 'Chassi' },
       { key: 'renavam', label: 'RENAVAM' },
@@ -118,7 +132,7 @@ export const ENTITY_CONFIGS = {
     getDefaultForm: () => ({
       veiculo_id: '', tipo: 'preventiva', descricao: '', oficina: '', custo: 0,
       km_manutencao: '', data_manutencao: new Date().toISOString().slice(0, 10),
-      proxima_revisao_km: '', proxima_revisao_data: '', status: 'concluida', observacoes: '',
+      proxima_revisao_km: '', proxima_revisao_data: '', status: 'concluida', requisicao_almox_id: '', observacoes: '',
     }),
     formFields: (meta, form, setForm, veiculos) => [
       { key: 'veiculo_id', label: 'Veículo *', type: 'select', required: true, options: (veiculos || []).map((v) => ({ value: v.id, label: `${v.placa} — ${v.modelo || v.marca || ''}` })) },
@@ -132,6 +146,7 @@ export const ENTITY_CONFIGS = {
       { key: 'proxima_revisao_data', label: 'Próxima revisão (data)', type: 'date' },
       { key: 'status', label: 'Status', type: 'select', options: ['agendada','em_andamento','concluida'].map((s) => ({ value: s, label: s.replace('_', ' ') })) },
       { key: 'pecas_descricao', label: 'Peças utilizadas', type: 'textarea', full: true },
+      { key: 'requisicao_almox_id', label: 'Nº requisição almoxarifado (opcional)', type: 'number' },
       { key: 'observacoes', label: 'Observações', type: 'textarea', full: true },
     ],
   },

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import {
   FiTruck, FiAlertTriangle, FiDollarSign, FiActivity, FiRefreshCw,
-  FiUsers, FiTool, FiDroplet, FiFileText, FiMap, FiClipboard, FiBarChart2,
+  FiUsers, FiTool, FiDroplet, FiFileText, FiMap, FiClipboard, FiBarChart2, FiList,
 } from 'react-icons/fi';
 import FrotasPageHeader from './FrotasPageHeader';
 import './Frotas.css';
@@ -18,6 +18,7 @@ const QUICK_LINKS = [
   { to: '/frota/checklists', icon: FiClipboard, label: 'Checklist Diário' },
   { to: '/frota/multas', icon: FiAlertTriangle, label: 'Multas' },
   { to: '/frota/relatorios', icon: FiBarChart2, label: 'Relatórios' },
+  { to: '/frota/requisicoes-material/nova', icon: FiList, label: 'Solicitar Material' },
 ];
 
 const FrotasDashboard = () => {
@@ -99,6 +100,27 @@ const FrotasDashboard = () => {
         <div className="frotas-kpi-card">
           <div className="frotas-kpi-icon danger"><FiAlertTriangle /></div>
           <div>
+            <div className="frotas-kpi-value">{data?.manutencoesVencidas ?? 0}</div>
+            <div className="frotas-kpi-label">Manutenção vencida</div>
+          </div>
+        </div>
+        <div className="frotas-kpi-card">
+          <div className="frotas-kpi-icon warning"><FiTool /></div>
+          <div>
+            <div className="frotas-kpi-value">{data?.osAbertas ?? 0}</div>
+            <div className="frotas-kpi-label">OS em aberto</div>
+          </div>
+        </div>
+        <div className="frotas-kpi-card">
+          <div className="frotas-kpi-icon info"><FiDroplet /></div>
+          <div>
+            <div className="frotas-kpi-value">{fmt(data?.custoCombustivelMes)}</div>
+            <div className="frotas-kpi-label">Combustível no mês</div>
+          </div>
+        </div>
+        <div className="frotas-kpi-card">
+          <div className="frotas-kpi-icon danger"><FiAlertTriangle /></div>
+          <div>
             <div className="frotas-kpi-value">{data?.alertasCount ?? 0}</div>
             <div className="frotas-kpi-label">Alertas ativos</div>
           </div>
@@ -113,8 +135,8 @@ const FrotasDashboard = () => {
         <div className="frotas-kpi-card">
           <div className="frotas-kpi-icon success"><FiMap /></div>
           <div>
-            <div className="frotas-kpi-value">{data?.viagensAbertas ?? 0}</div>
-            <div className="frotas-kpi-label">Viagens em aberto</div>
+            <div className="frotas-kpi-value">{data?.totalVeiculos ?? 0}</div>
+            <div className="frotas-kpi-label">Total de veículos</div>
           </div>
         </div>
         <div className="frotas-kpi-card">

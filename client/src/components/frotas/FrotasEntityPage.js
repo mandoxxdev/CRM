@@ -96,7 +96,7 @@ const FrotasEntityPage = ({ entityKey }) => {
       Object.keys(payload).forEach((k) => {
         if (payload[k] === '') payload[k] = null;
       });
-      ['veiculo_id', 'motorista_id', 'tipo_id', 'ano', 'alerta_dias_antes', 'pontos'].forEach((k) => {
+      ['veiculo_id', 'motorista_id', 'tipo_id', 'ano', 'alerta_dias_antes', 'pontos', 'requisicao_almox_id', 'consumo_medio_esperado', 'horimetro_atual'].forEach((k) => {
         if (payload[k] != null && payload[k] !== '') payload[k] = Number(payload[k]);
       });
       ['pneus_ok', 'oleo_ok', 'luzes_ok', 'freios_ok', 'extintor_ok', 'documentos_ok', 'limpeza_ok'].forEach((k) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
-import { FiBarChart2, FiRefreshCw } from 'react-icons/fi';
+import { FiBarChart2, FiRefreshCw, FiPrinter } from 'react-icons/fi';
 import FrotasPageHeader from './FrotasPageHeader';
 import './Frotas.css';
 
@@ -44,9 +44,14 @@ const FrotasRelatorios = () => {
         subtitle="Custos por veículo e consumo médio de combustível"
         breadcrumbs={[{ label: 'Relatórios' }]}
         actions={(
-          <button type="button" className="frotas-btn frotas-btn-secondary" onClick={load}>
-            <FiRefreshCw /> Atualizar
-          </button>
+          <>
+            <button type="button" className="frotas-btn frotas-btn-secondary" onClick={() => window.print()}>
+              <FiPrinter /> Imprimir
+            </button>
+            <button type="button" className="frotas-btn frotas-btn-secondary" onClick={load}>
+              <FiRefreshCw /> Atualizar
+            </button>
+          </>
         )}
       />
 

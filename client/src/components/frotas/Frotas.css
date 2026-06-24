@@ -483,3 +483,13 @@
   .frotas-search { max-width: none; }
   .frotas-kpis { grid-template-columns: 1fr 1fr; }
 }
+
+@media print {
+  .frotas-header-actions,
+  .frotas-toolbar,
+  .frotas-breadcrumb,
+  .sidebar,
+  .frotas-quick-links { display: none !important; }
+  .frotas-page { padding: 0; max-width: none; }
+  .frotas-table { font-size: 11px; }
+}

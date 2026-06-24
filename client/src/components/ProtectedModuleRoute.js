@@ -35,7 +35,7 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
     if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
     if (path.startsWith('/engenharia')) return 'engenharia';
     if (path.startsWith('/almoxarifado')) return 'almoxarifado';
-    if (path.startsWith('/frota')) return 'comercial';
+    if (path.startsWith('/frota')) return 'frota';
     if (path.startsWith('/comercial')) return 'comercial';
     return null;
   };
@@ -237,6 +237,7 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
       engenharia: 'Cálculos de Engenharia',
       engenharia_projetos: 'Engenharia / Projetos',
       almoxarifado: 'Almoxarifado',
+      frota: 'Frota',
       administrativo: 'Administrativo',
       admin: 'Administração',
     };

@@ -94,40 +94,40 @@ export const CadastroMateriaisEscritorio = page(() => import('../components/enge
 export const SolicitacaoMaterialEscritorioCesta = page(() => import('../components/engenhariaProjetos/SolicitacaoMaterialEscritorioCesta'), 'engenharia_projetos');
 export const MinhasSolicitacoesCompra = page(() => import('../components/MinhasSolicitacoesCompra'), 'engenharia_projetos');
 export const VeiculosManutencao = page(() => import('../components/VeiculosManutencao'), 'comercial');
-export const FrotasDashboard = page(() => import('../components/frotas/FrotasDashboard'), 'comercial');
+export const FrotasDashboard = page(() => import('../components/frotas/FrotasDashboard'), 'frota');
 export const FrotasVeiculos = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasVeiculos })),
-  'comercial'
+  'frota'
 );
 export const FrotasMotoristas = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasMotoristas })),
-  'comercial'
+  'frota'
 );
 export const FrotasManutencoes = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasManutencoes })),
-  'comercial'
+  'frota'
 );
 export const FrotasAbastecimentos = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasAbastecimentos })),
-  'comercial'
+  'frota'
 );
 export const FrotasMultas = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasMultas })),
-  'comercial'
+  'frota'
 );
 export const FrotasDocumentos = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasDocumentos })),
-  'comercial'
+  'frota'
 );
 export const FrotasViagens = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasViagens })),
-  'comercial'
+  'frota'
 );
 export const FrotasChecklists = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasChecklists })),
-  'comercial'
+  'frota'
 );
-export const FrotasRelatorios = page(() => import('../components/frotas/FrotasRelatorios'), 'comercial');
+export const FrotasRelatorios = page(() => import('../components/frotas/FrotasRelatorios'), 'frota');
 export const AlmoxarifadoDashboard = page(() => import('../components/almoxarifado/AlmoxarifadoDashboard'), 'almoxarifado');
 export const MateriaisAlmoxarifado = page(() => import('../components/almoxarifado/MateriaisAlmoxarifado'), 'almoxarifado');
 export const MaterialAlmoxarifadoForm = page(() => import('../components/almoxarifado/MaterialAlmoxarifadoForm'), 'almoxarifado');

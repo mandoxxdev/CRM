@@ -4,9 +4,11 @@
 
 const { dbRun, dbGet, dbAll } = require('./db');
 
-const VEICULO_JOIN = `SELECT v.*, t.nome as tipo_nome, t.categoria as tipo_categoria
+const VEICULO_JOIN = `SELECT v.*, t.nome as tipo_nome, t.categoria as tipo_categoria,
+  mot.nome as motorista_nome
   FROM frotas_veiculos v
-  LEFT JOIN frotas_tipos_veiculo t ON v.tipo_id = t.id`;
+  LEFT JOIN frotas_tipos_veiculo t ON v.tipo_id = t.id
+  LEFT JOIN frotas_motoristas mot ON v.motorista_id = mot.id`;
 
 function normalizePlaca(placa) {
   return String(placa || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -31,18 +33,32 @@ function buildSearchWhere(fields, search) {
 
 async function updateKmVeiculoSeMaior(db, veiculoId, km) {
   if (km == null || Number.isNaN(Number(km))) return;
-  const v = await dbGet(db, 'SELECT km_atual FROM frotas_veiculos WHERE id = ?', [veiculoId]);
+  const v = await dbGet(db, 'SELECT km_atual, horimetro_atual, tipo_medicao FROM frotas_veiculos WHERE id = ?', [veiculoId]);
   if (!v) return;
   const novoKm = Math.max(Number(v.km_atual) || 0, Number(km));
   await dbRun(db, 'UPDATE frotas_veiculos SET km_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [novoKm, veiculoId]);
+}
+
+async function updateHorimetroVeiculoSeMaior(db, veiculoId, horimetro) {
+  if (horimetro == null || Number.isNaN(Number(horimetro))) return;
+  const v = await dbGet(db, 'SELECT horimetro_atual FROM frotas_veiculos WHERE id = ?', [veiculoId]);
+  if (!v) return;
+  const novo = Math.max(Number(v.horimetro_atual) || 0, Number(horimetro));
+  await dbRun(db, 'UPDATE frotas_veiculos SET horimetro_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [novo, veiculoId]);
 }
 
 // ── Meta ─────────────────────────────────────────────────────────────────────
 
 async function getMeta(db) {
   const tipos = await dbAll(db, 'SELECT * FROM frotas_tipos_veiculo WHERE ativo = 1 ORDER BY nome');
-  const { SETORES_GMP, STATUS_VEICULO, TIPOS_COMBUSTIVEL, TIPOS_MANUTENCAO, TIPOS_DOCUMENTO, STATUS_VIAGEM } = require('./schema');
-  return { tipos, setores: SETORES_GMP, statusVeiculo: STATUS_VEICULO, combustiveis: TIPOS_COMBUSTIVEL, tiposManutencao: TIPOS_MANUTENCAO, tiposDocumento: TIPOS_DOCUMENTO, statusViagem: STATUS_VIAGEM };
+  const motoristas = await dbAll(db, "SELECT id, nome FROM frotas_motoristas WHERE ativo = 1 AND status = 'ativo' ORDER BY nome");
+  const { SETORES_GMP, CENTROS_CUSTO_GMP, STATUS_VEICULO, TIPOS_COMBUSTIVEL, TIPOS_MANUTENCAO, TIPOS_DOCUMENTO, TIPOS_MEDICAO, STATUS_VIAGEM } = require('./schema');
+  return {
+    tipos, motoristas, setores: SETORES_GMP, centrosCusto: CENTROS_CUSTO_GMP,
+    statusVeiculo: STATUS_VEICULO, combustiveis: TIPOS_COMBUSTIVEL,
+    tiposManutencao: TIPOS_MANUTENCAO, tiposDocumento: TIPOS_DOCUMENTO,
+    tiposMedicao: TIPOS_MEDICAO, statusViagem: STATUS_VIAGEM,
+  };
 }
 
 // ── Veículos ─────────────────────────────────────────────────────────────────
@@ -80,11 +96,15 @@ async function createVeiculo(db, userOrData, maybeData) {
     throw err;
   }
   const r = await dbRun(db, `INSERT INTO frotas_veiculos
-    (placa, modelo, marca, ano, tipo_id, tipo_texto, status, km_atual, combustivel, setor_responsavel, cor, chassi, renavam, observacoes)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+    (placa, modelo, marca, ano, tipo_id, tipo_texto, status, km_atual, horimetro_atual, tipo_medicao,
+     combustivel, consumo_medio_esperado, setor_responsavel, centro_custo, motorista_id,
+     cor, chassi, renavam, observacoes)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     placa, data.modelo || null, data.marca || null, data.ano || null,
     data.tipo_id || null, data.tipo_texto || null, data.status || 'ativo',
-    Number(data.km_atual) || 0, data.combustivel || 'diesel', data.setor_responsavel || null,
+    Number(data.km_atual) || 0, Number(data.horimetro_atual) || 0, data.tipo_medicao || 'km',
+    data.combustivel || 'diesel', data.consumo_medio_esperado != null ? Number(data.consumo_medio_esperado) : null,
+    data.setor_responsavel || null, data.centro_custo || null, data.motorista_id || null,
     data.cor || null, data.chassi || null, data.renavam || null, data.observacoes || null,
   ]);
   return getVeiculo(db, r.lastID);
@@ -107,13 +127,19 @@ async function updateVeiculo(db, id, data) {
     }
   }
   await dbRun(db, `UPDATE frotas_veiculos SET
-    placa=?, modelo=?, marca=?, ano=?, tipo_id=?, tipo_texto=?, status=?, km_atual=?,
-    combustivel=?, setor_responsavel=?, cor=?, chassi=?, renavam=?, observacoes=?,
+    placa=?, modelo=?, marca=?, ano=?, tipo_id=?, tipo_texto=?, status=?, km_atual=?, horimetro_atual=?,
+    tipo_medicao=?, combustivel=?, consumo_medio_esperado=?, setor_responsavel=?, centro_custo=?,
+    motorista_id=?, cor=?, chassi=?, renavam=?, observacoes=?,
     updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
     placa, data.modelo ?? current.modelo, data.marca ?? current.marca, data.ano ?? current.ano,
     data.tipo_id ?? current.tipo_id, data.tipo_texto ?? current.tipo_texto,
     data.status ?? current.status, data.km_atual != null ? Number(data.km_atual) : current.km_atual,
-    data.combustivel ?? current.combustivel, data.setor_responsavel ?? current.setor_responsavel,
+    data.horimetro_atual != null ? Number(data.horimetro_atual) : current.horimetro_atual,
+    data.tipo_medicao ?? current.tipo_medicao ?? 'km',
+    data.combustivel ?? current.combustivel,
+    data.consumo_medio_esperado != null ? Number(data.consumo_medio_esperado) : current.consumo_medio_esperado,
+    data.setor_responsavel ?? current.setor_responsavel, data.centro_custo ?? current.centro_custo,
+    data.motorista_id ?? current.motorista_id,
     data.cor ?? current.cor, data.chassi ?? current.chassi, data.renavam ?? current.renavam,
     data.observacoes ?? current.observacoes, id,
   ]);
@@ -217,14 +243,15 @@ async function createManutencao(db, user, data) {
   }
   const r = await dbRun(db, `INSERT INTO frotas_manutencoes
     (veiculo_id, tipo, descricao, oficina, custo, pecas_descricao, km_manutencao, data_manutencao,
-     proxima_revisao_km, proxima_revisao_data, status, usuario_id, usuario_nome, observacoes)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     proxima_revisao_km, proxima_revisao_data, status, usuario_id, usuario_nome, observacoes, requisicao_almox_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     data.veiculo_id, data.tipo || 'preventiva', data.descricao, data.oficina || null,
     Number(data.custo) || 0, data.pecas_descricao || null, data.km_manutencao != null ? Number(data.km_manutencao) : null,
     data.data_manutencao || new Date().toISOString().slice(0, 10),
     data.proxima_revisao_km != null ? Number(data.proxima_revisao_km) : null,
     data.proxima_revisao_data || null, data.status || 'concluida',
     user?.id || null, user?.nome || user?.name || null, data.observacoes || null,
+    data.requisicao_almox_id || null,
   ]);
   if (data.km_manutencao != null) {
     await updateKmVeiculoSeMaior(db, data.veiculo_id, data.km_manutencao);
@@ -244,7 +271,8 @@ async function updateManutencao(db, id, data) {
   }
   await dbRun(db, `UPDATE frotas_manutencoes SET
     veiculo_id=?, tipo=?, descricao=?, oficina=?, custo=?, pecas_descricao=?, km_manutencao=?,
-    data_manutencao=?, proxima_revisao_km=?, proxima_revisao_data=?, status=?, observacoes=?
+    data_manutencao=?, proxima_revisao_km=?, proxima_revisao_data=?, status=?, observacoes=?,
+    requisicao_almox_id=?
     WHERE id=?`, [
     data.veiculo_id ?? current.veiculo_id, data.tipo ?? current.tipo, data.descricao ?? current.descricao,
     data.oficina ?? current.oficina, data.custo != null ? Number(data.custo) : current.custo,
@@ -253,7 +281,8 @@ async function updateManutencao(db, id, data) {
     data.data_manutencao ?? current.data_manutencao,
     data.proxima_revisao_km != null ? Number(data.proxima_revisao_km) : current.proxima_revisao_km,
     data.proxima_revisao_data ?? current.proxima_revisao_data, data.status ?? current.status,
-    data.observacoes ?? current.observacoes, id,
+    data.observacoes ?? current.observacoes,
+    data.requisicao_almox_id ?? current.requisicao_almox_id, id,
   ]);
   return dbGet(db, 'SELECT * FROM frotas_manutencoes WHERE id = ?', [id]);
 }
@@ -679,6 +708,25 @@ async function getAlertas(db) {
     });
   });
 
+  const consumoAnomalo = await dbAll(db, `SELECT v.id as veiculo_id, v.placa, v.consumo_medio_esperado,
+    AVG(a.consumo_medio) as consumo_recente
+    FROM frotas_abastecimentos a
+    JOIN frotas_veiculos v ON a.veiculo_id = v.id
+    WHERE a.consumo_medio IS NOT NULL AND v.ativo = 1
+    AND a.data_abastecimento >= date('now', '-60 days')
+    GROUP BY v.id
+    HAVING v.consumo_medio_esperado IS NOT NULL AND consumo_recente < v.consumo_medio_esperado * 0.7`);
+  consumoAnomalo.forEach((c) => {
+    alertas.push({
+      tipo: 'consumo',
+      severidade: 'medio',
+      titulo: `Consumo baixo — ${c.placa}`,
+      descricao: `Média recente ${Number(c.consumo_recente).toFixed(1)} km/L${c.consumo_medio_esperado ? ` (esperado ${c.consumo_medio_esperado} km/L)` : ''}`,
+      referencia_id: c.veiculo_id,
+      veiculo_id: c.veiculo_id,
+    });
+  });
+
   return alertas.sort((a, b) => {
     const order = { critico: 0, alto: 1, medio: 2 };
     return (order[a.severidade] ?? 3) - (order[b.severidade] ?? 3);
@@ -697,6 +745,19 @@ async function getDashboard(db) {
     COALESCE((SELECT SUM(valor) FROM frotas_documentos), 0) as documentos`);
 
   const custoTotal = (custos?.manutencao || 0) + (custos?.combustivel || 0) + (custos?.multas || 0) + (custos?.documentos || 0);
+
+  const combustivelMes = await dbGet(db,
+    `SELECT COALESCE(SUM(valor_total), 0) as total FROM frotas_abastecimentos
+     WHERE strftime('%Y-%m', data_abastecimento) = strftime('%Y-%m', 'now')`);
+
+  const osAbertas = await dbGet(db,
+    "SELECT COUNT(*) as total FROM frotas_manutencoes WHERE status IN ('agendada','em_andamento')");
+
+  const manutencoesVencidas = await dbGet(db, `SELECT COUNT(DISTINCT m.veiculo_id) as total
+    FROM frotas_manutencoes m
+    JOIN frotas_veiculos v ON m.veiculo_id = v.id
+    WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) < date('now'))
+       OR (m.proxima_revisao_km IS NOT NULL AND v.km_atual >= m.proxima_revisao_km)`);
 
   const alertas = await getAlertas(db);
 
@@ -718,6 +779,9 @@ async function getDashboard(db) {
     custoMultas: custos?.multas || 0,
     custoDocumentos: custos?.documentos || 0,
     custoTotal,
+    custoCombustivelMes: combustivelMes?.total || 0,
+    osAbertas: osAbertas?.total || 0,
+    manutencoesVencidas: manutencoesVencidas?.total || 0,
     alertasCount: alertas.length,
     alertas: alertas.slice(0, 15),
     viagensAbertas: viagensAbertas?.total || 0,

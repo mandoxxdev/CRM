@@ -256,26 +256,26 @@ function AppRoutes() {
         path="/frota"
         element={
           <PrivateRoute>
-            <ProtectedModuleRoute modulo="comercial" nomeModulo="Frota">
-              <Suspense fallback={<ModuleLoading module="comercial" />}>
+            <ProtectedModuleRoute modulo="frota" nomeModulo="Frota">
+              <Suspense fallback={<ModuleLoading module="frota" />}>
                 <Layout />
               </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
       >
-        <Route index element={<LazyPage component={FrotasDashboard} module="comercial" compact />} />
-        <Route path="veiculos" element={<LazyPage component={FrotasVeiculos} module="comercial" compact />} />
-        <Route path="motoristas" element={<LazyPage component={FrotasMotoristas} module="comercial" compact />} />
-        <Route path="manutencoes" element={<LazyPage component={FrotasManutencoes} module="comercial" compact />} />
-        <Route path="abastecimentos" element={<LazyPage component={FrotasAbastecimentos} module="comercial" compact />} />
-        <Route path="multas" element={<LazyPage component={FrotasMultas} module="comercial" compact />} />
-        <Route path="documentos" element={<LazyPage component={FrotasDocumentos} module="comercial" compact />} />
-        <Route path="viagens" element={<LazyPage component={FrotasViagens} module="comercial" compact />} />
-        <Route path="checklists" element={<LazyPage component={FrotasChecklists} module="comercial" compact />} />
-        <Route path="relatorios" element={<LazyPage component={FrotasRelatorios} module="comercial" compact />} />
-        <Route path="requisicoes-material" element={<LazyPage component={RequisicoesMaterialListaPage} module="comercial" compact moduloKey="frota" />} />
-        <Route path="requisicoes-material/nova" element={<LazyPage component={RequisicoesMaterialNovaPage} module="comercial" compact moduloKey="frota" />} />
+        <Route index element={<LazyPage component={FrotasDashboard} module="frota" compact />} />
+        <Route path="veiculos" element={<LazyPage component={FrotasVeiculos} module="frota" compact />} />
+        <Route path="motoristas" element={<LazyPage component={FrotasMotoristas} module="frota" compact />} />
+        <Route path="manutencoes" element={<LazyPage component={FrotasManutencoes} module="frota" compact />} />
+        <Route path="abastecimentos" element={<LazyPage component={FrotasAbastecimentos} module="frota" compact />} />
+        <Route path="multas" element={<LazyPage component={FrotasMultas} module="frota" compact />} />
+        <Route path="documentos" element={<LazyPage component={FrotasDocumentos} module="frota" compact />} />
+        <Route path="viagens" element={<LazyPage component={FrotasViagens} module="frota" compact />} />
+        <Route path="checklists" element={<LazyPage component={FrotasChecklists} module="frota" compact />} />
+        <Route path="relatorios" element={<LazyPage component={FrotasRelatorios} module="frota" compact />} />
+        <Route path="requisicoes-material" element={<LazyPage component={RequisicoesMaterialListaPage} module="frota" compact moduloKey="frota" />} />
+        <Route path="requisicoes-material/nova" element={<LazyPage component={RequisicoesMaterialNovaPage} module="frota" compact moduloKey="frota" />} />
       </Route>
       <Route
         path="/compras"

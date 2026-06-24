@@ -79,7 +79,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       nome: 'Frota',
       descricao: 'Gestão completa de veículos, manutenções e custos',
       icon: FiTool,
-      modulo: 'comercial',
+      modulo: 'frota',
       rota: '/frota',
       gradient: 'linear-gradient(135deg, #ea580c 0%, #b91c1c 100%)'
     },

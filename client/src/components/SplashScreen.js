@@ -87,6 +87,14 @@ const moduleConfigs = {
     loadingText: 'Carregando módulo de almoxarifado...',
     gradientColors: ['rgba(120, 53, 15, 0.15)', 'rgba(161, 98, 7, 0.1)', 'rgba(120, 53, 15, 0.15)'],
     accentColor: '#a16207'
+  },
+  frota: {
+    icon: FiTool,
+    title: 'GESTÃO DE FROTA',
+    subtitle: 'Veículos, manutenções, combustível e documentação',
+    loadingText: 'Carregando módulo de frota...',
+    gradientColors: ['rgba(234, 88, 12, 0.15)', 'rgba(185, 28, 28, 0.1)', 'rgba(234, 88, 12, 0.15)'],
+    accentColor: '#ea580c'
   }
 };
 

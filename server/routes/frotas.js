@@ -32,7 +32,7 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
   runInitSchemaWithRetry(db).catch((e) => console.error('Falha definitiva schema frotas:', e.message));
 
   const auth = authenticateToken;
-  const mod = checkModulePermission('comercial');
+  const mod = checkModulePermission('frota');
 
   const crudRoutes = (base, listFn, createFn, updateFn, deleteFn, opts = {}) => {
     app.get(`/api/frotas/${base}`, auth, mod, async (req, res) => {

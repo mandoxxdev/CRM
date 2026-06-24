@@ -14,6 +14,13 @@ const TIPOS_VEICULO_SEED = [
   ['Moto', 'leve'],
   ['Ônibus / Micro-ônibus', 'pesado'],
   ['Reboque / Carreta', 'pesado'],
+  ['Máquina industrial', 'industrial'],
+];
+
+const TIPOS_MEDICAO = ['km', 'horimetro'];
+const CENTROS_CUSTO_GMP = [
+  'CC-Produção', 'CC-Caldeiraria', 'CC-Usinagem', 'CC-Montagem', 'CC-Expedição',
+  'CC-Assistência', 'CC-Comercial', 'CC-Administrativo', 'CC-Manutenção', 'CC-Frota',
 ];
 
 const SETORES_GMP = [
@@ -207,6 +214,12 @@ async function initSchema(db) {
   )`);
 
   await safeAlter(db, 'ALTER TABLE frotas_veiculos ADD COLUMN foto TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_veiculos ADD COLUMN motorista_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE frotas_veiculos ADD COLUMN centro_custo TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_veiculos ADD COLUMN horimetro_atual REAL DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE frotas_veiculos ADD COLUMN tipo_medicao TEXT DEFAULT \'km\'');
+  await safeAlter(db, 'ALTER TABLE frotas_veiculos ADD COLUMN consumo_medio_esperado REAL');
+  await safeAlter(db, 'ALTER TABLE frotas_manutencoes ADD COLUMN requisicao_almox_id INTEGER');
   await safeAlter(db, 'ALTER TABLE frotas_motoristas ADD COLUMN perfil_frota TEXT');
 
   for (const [nome, categoria] of TIPOS_VEICULO_SEED) {
@@ -220,9 +233,11 @@ module.exports = {
   initSchema,
   TIPOS_VEICULO_SEED,
   SETORES_GMP,
+  CENTROS_CUSTO_GMP,
   STATUS_VEICULO,
   TIPOS_COMBUSTIVEL,
   TIPOS_MANUTENCAO,
   TIPOS_DOCUMENTO,
+  TIPOS_MEDICAO,
   STATUS_VIAGEM,
 };
