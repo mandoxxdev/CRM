@@ -134,8 +134,17 @@ function requireAlmoxAdmin(req, res, next) {
 }
 
 function enrichUserFromDb(db) {
+  const CACHE_TTL_MS = 30000;
+  const cache = new Map();
+
   return (req, res, next) => {
     if (!req.user?.id) return next();
+
+    const cached = cache.get(req.user.id);
+    if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+      Object.assign(req.user, cached.data);
+      return next();
+    }
 
     db.get(
       'SELECT id, nome, email, role, is_superadmin, admin_modulos FROM usuarios WHERE id = ? AND ativo = 1',
@@ -149,9 +158,28 @@ function enrichUserFromDb(db) {
         req.user.is_superadmin = row.is_superadmin;
         req.user.admin_modulos = parseAdminModulos(row.admin_modulos);
 
+        const storeCache = () => {
+          cache.set(req.user.id, {
+            at: Date.now(),
+            data: {
+              nome: req.user.nome,
+              email: req.user.email,
+              role: req.user.role,
+              is_superadmin: req.user.is_superadmin,
+              admin_modulos: req.user.admin_modulos,
+              perfil_almoxarifado: req.user.perfil_almoxarifado,
+              perfil_frota: req.user.perfil_frota,
+            },
+          });
+        };
+
         if (isModuleAdmin(req.user, 'almoxarifado')) {
           req.user.perfil_almoxarifado = 'ADMINISTRADOR';
-          return finishFrotaProfile(db, req, next);
+          finishFrotaProfile(db, req, () => {
+            storeCache();
+            next();
+          });
+          return;
         }
 
         db.get(
@@ -161,7 +189,10 @@ function enrichUserFromDb(db) {
             if (!err2 && perfilRow?.perfil) {
               req.user.perfil_almoxarifado = perfilRow.perfil;
             }
-            finishFrotaProfile(db, req, next);
+            finishFrotaProfile(db, req, () => {
+              storeCache();
+              next();
+            });
           }
         );
       }

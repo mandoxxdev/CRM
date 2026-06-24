@@ -1,4 +1,12 @@
 require('dotenv').config();
+const {
+  configureSqlite,
+  wrapDatabase,
+  installProcessGuards,
+  getDbHealthStats,
+  isSqliteBusy,
+} = require('./services/sqliteConcurrency');
+installProcessGuards();
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -166,12 +174,51 @@ app.use('/api', (req, res, next) => {
 });
 
 // Rota de health check (antes de todas as outras rotas)
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    message: 'Servidor CRM GMP está rodando!',
+function buildHealthPayload(cb) {
+  const base = {
     timestamp: new Date().toISOString(),
-    port: PORT
+    port: PORT,
+    db_ready: dbReady,
+    sqlite: getDbHealthStats(),
+  };
+  if (!db) {
+    return cb(null, { status: 'degraded', message: 'Banco não inicializado', ...base });
+  }
+  db.get('SELECT 1 AS ok', [], (err) => {
+    if (err) {
+      const busy = isSqliteBusy(err);
+      return cb(null, {
+        status: busy ? 'degraded' : 'error',
+        message: busy ? 'Banco temporariamente ocupado' : 'Banco indisponível',
+        db_error: err.message,
+        ...base,
+      });
+    }
+    cb(null, {
+      status: dbReady ? 'ok' : 'starting',
+      message: dbReady ? 'Servidor CRM GMP está rodando!' : 'Servidor iniciando — banco em inicialização',
+      ...base,
+    });
+  });
+}
+
+app.get('/health', (req, res) => {
+  buildHealthPayload((err, payload) => {
+    if (err) {
+      return res.status(500).json({ status: 'error', message: err.message });
+    }
+    const code = payload.status === 'error' ? 503 : 200;
+    res.status(code).json(payload);
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  buildHealthPayload((err, payload) => {
+    if (err) {
+      return res.status(500).json({ status: 'error', message: err.message });
+    }
+    const code = payload.status === 'error' ? 503 : 200;
+    res.status(code).json(payload);
   });
 });
 
@@ -751,6 +798,10 @@ if (!fs.existsSync(dbDir)) {
 }
 
 console.log(`📁 Caminho do banco de dados: ${dbPath}`);
+if (/OneDrive/i.test(dbPath)) {
+  console.warn('⚠️  AVISO: O banco SQLite está em pasta OneDrive. Sincronização em nuvem pode causar corrupção e SQLITE_BUSY com múltiplos usuários.');
+  console.warn('   Recomendado: mover para server/data fora do OneDrive ou usar volume persistente no servidor (Coolify/Docker).');
+}
 
 let db = null;
 let dbReady = false; // Flag para indicar se o banco está totalmente pronto
@@ -781,23 +832,9 @@ try {
         if (dbReadyFallback) clearTimeout(dbReadyFallback);
       };
 
-      // Configurar SQLite para melhor performance com requisições simultâneas
-      db.configure('busyTimeout', 10000); // 10 segundos de timeout
-      
-      // Habilitar WAL mode para melhor concorrência (fora do serialize para não bloquear)
-      db.run('PRAGMA journal_mode = WAL;', (err) => {
-        if (err) {
-          console.warn('⚠️ Aviso: Não foi possível habilitar WAL mode:', err.message);
-        } else {
-          console.log('✅ WAL mode habilitado para melhor concorrência');
-        }
-      });
-      
-      // Configurar outras otimizações
-      db.run('PRAGMA synchronous = NORMAL;');
-      db.run('PRAGMA cache_size = 10000;');
-      db.run('PRAGMA foreign_keys = ON;');
-      
+      configureSqlite(db);
+      wrapDatabase(db);
+
       // Inicializar banco após configurações
       initializeDatabase(clearFallback);
     }
@@ -1646,8 +1683,8 @@ function initializeDatabase(onReadyCallback) {
             if (typeof initChatModule === 'function') initChatModule();
             console.log('✅ Banco de dados totalmente inicializado e pronto para uso');
             console.log('   - WAL mode: Habilitado para melhor concorrência');
-            console.log('   - Busy timeout: 10 segundos');
-            console.log('   - Cache size: 10000 páginas');
+            console.log('   - Busy timeout: 30 segundos (com retry automático)');
+            console.log('   - Writes serializados via fila interna');
           }
         });
       });
@@ -1720,16 +1757,21 @@ function inicializarConfiguracoesPadrao(callback) {
 // Migrations
 function executeMigrations(callback) {
   console.log('🔄 Executando migrações...');
-  
-  // Usar timeout para garantir que todas as operações assíncronas sejam concluídas
-  // As migrações são principalmente ALTER TABLE que são rápidas
-  setTimeout(() => {
-    if (callback) {
-      console.log('✅ Migrações concluídas');
-      callback();
-    }
-  }, 2000); // 2 segundos deve ser suficiente para todas as migrações
-  
+
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(safetyTimer);
+    console.log('✅ Migrações concluídas');
+    if (callback) callback();
+  };
+  const safetyTimer = setTimeout(() => {
+    console.warn('⚠️ Migrações: timeout de segurança (20s) — liberando API');
+    finish();
+  }, 20000);
+
+  db.serialize(() => {
   // Adicionar coluna ativo na tabela grupos_permissoes se não existir
   db.run(`ALTER TABLE grupos_permissoes ADD COLUMN ativo INTEGER DEFAULT 1`, (err) => {
     if (err && !err.message.includes('duplicate column')) {
@@ -2222,6 +2264,9 @@ function executeMigrations(callback) {
       }
     }
   });
+
+  db.run('SELECT 1', finish);
+  }); // db.serialize
 }
 
 // Helper function para executar queries com retry automático em caso de lock
@@ -3356,49 +3401,59 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
 
 app.get('/api/usuarios', authenticateToken, (req, res) => {
   const ghostSql = ghostUserAnd(req.user);
-  db.all(`SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto, created_at FROM usuarios WHERE 1=1${ghostSql} ORDER BY nome`, [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    
-    // Para cada usuário, buscar seus grupos
-    if (!rows || rows.length === 0) {
-      return res.json([]);
-    }
-    
-    const usuariosComGrupos = [];
-    let processados = 0;
-    
-    rows.forEach((usuario, index) => {
+  db.all(
+    `SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto, created_at
+     FROM usuarios WHERE 1=1${ghostSql} ORDER BY nome`,
+    [],
+    (err, rows) => {
+      if (err) {
+        if (isSqliteBusy(err)) {
+          return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
+        }
+        return res.status(500).json({ error: err.message });
+      }
+
+      if (!rows || rows.length === 0) {
+        return res.json([]);
+      }
+
+      const userIds = rows.map((u) => u.id);
+      const placeholders = userIds.map(() => '?').join(',');
+
       db.all(
-        `SELECT gp.id, gp.nome, gp.ativo
-         FROM grupos_permissoes gp
-         INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
-         WHERE ug.usuario_id = ? AND gp.ativo = 1
+        `SELECT ug.usuario_id, gp.id, gp.nome, gp.ativo
+         FROM usuarios_grupos ug
+         INNER JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+         WHERE ug.usuario_id IN (${placeholders})
          ORDER BY gp.nome`,
-        [usuario.id],
-        (err, grupos) => {
-          if (err) {
-            console.error(`Erro ao buscar grupos do usuário ${usuario.id}:`, err);
-            usuariosComGrupos.push({ ...usuario, grupos: [] });
-          } else {
-            usuariosComGrupos.push({
-              ...usuario,
-              is_superadmin: !!usuario.is_superadmin,
-              is_oculto: !!usuario.is_oculto,
-              admin_modulos: parseAdminModulos(usuario.admin_modulos),
-              grupos: grupos || [],
-            });
+        userIds,
+        (errGrupos, grupoRows) => {
+          if (errGrupos) {
+            if (isSqliteBusy(errGrupos)) {
+              return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
+            }
+            return res.status(500).json({ error: errGrupos.message });
           }
-          
-          processados++;
-          if (processados === rows.length) {
-            res.json(usuariosComGrupos);
-          }
+
+          const gruposPorUsuario = {};
+          (grupoRows || []).forEach((g) => {
+            if (!gruposPorUsuario[g.usuario_id]) gruposPorUsuario[g.usuario_id] = [];
+            gruposPorUsuario[g.usuario_id].push({ id: g.id, nome: g.nome, ativo: g.ativo });
+          });
+
+          const usuariosComGrupos = rows.map((usuario) => ({
+            ...usuario,
+            is_superadmin: !!usuario.is_superadmin,
+            is_oculto: !!usuario.is_oculto,
+            admin_modulos: parseAdminModulos(usuario.admin_modulos),
+            grupos: gruposPorUsuario[usuario.id] || [],
+          }));
+
+          res.json(usuariosComGrupos);
         }
       );
-    });
-  });
+    }
+  );
 });
 
 app.get('/api/usuarios/:id', authenticateToken, (req, res) => {
