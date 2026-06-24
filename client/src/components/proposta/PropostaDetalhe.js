@@ -3,9 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { FiArrowLeft, FiEye, FiDownload, FiEdit, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiClock, FiTrash2 } from 'react-icons/fi';
+import { formatDateBR, formatDateTimeBR, isPropostaInativa } from '../../utils/formatDate';
 import './PropostaDetalhe.css';
 
 const STATUS = { rascunho: 'Rascunho', enviada: 'Enviada', visualizada: 'Visualizada', aceita: 'Aceita', rejeitada: 'Rejeitada', expirada: 'Expirada' };
@@ -39,7 +38,7 @@ export default function PropostaDetalhe() {
 
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
   const status = proposta?.status || 'rascunho';
-  const inativa = proposta?.ativo === 0;
+  const inativa = isPropostaInativa(proposta);
   const podeInativar = !inativa && (isAdmin || status === 'rascunho');
 
   const confirmInativar = () => {
@@ -124,10 +123,10 @@ export default function PropostaDetalhe() {
             <dt>Cliente</dt><dd>{proposta.cliente_nome || proposta.cliente_nome_fantasia || proposta.cliente_id || '—'}</dd>
             <dt>Valor</dt><dd>{formatMoney(proposta.valor_total)}</dd>
             <dt>Tipo</dt><dd>{TIPOS[proposta.tipo_proposta] || '—'}</dd>
-            <dt>Validade</dt><dd>{proposta.validade ? format(new Date(proposta.validade), 'dd/MM/yyyy', { locale: ptBR }) : '—'}</dd>
-            <dt>Expira em</dt><dd>{proposta.expira_em ? format(new Date(proposta.expira_em), 'dd/MM/yyyy', { locale: ptBR }) : '—'}</dd>
-            <dt>Enviada em</dt><dd>{proposta.enviada_em ? format(new Date(proposta.enviada_em), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '—'}</dd>
-            <dt>Criada em</dt><dd>{proposta.created_at ? format(new Date(proposta.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '—'}</dd>
+            <dt>Validade</dt><dd>{formatDateBR(proposta.validade)}</dd>
+            <dt>Expira em</dt><dd>{formatDateBR(proposta.expira_em)}</dd>
+            <dt>Enviada em</dt><dd>{formatDateTimeBR(proposta.enviada_em)}</dd>
+            <dt>Criada em</dt><dd>{formatDateTimeBR(proposta.created_at)}</dd>
           </dl>
         </section>
         <section className="proposta-detalhe-card">
@@ -136,7 +135,7 @@ export default function PropostaDetalhe() {
             <ul className="proposta-detalhe-timeline">
               {historico.map((h, i) => (
                 <li key={i}>
-                  <span className="data">{h.created_at ? format(new Date(h.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '—'}</span>
+                  <span className="data">{formatDateTimeBR(h.created_at)}</span>
                   <span className="status">{STATUS[h.status_anterior] || h.status_anterior} → {STATUS[h.status_novo] || h.status_novo}</span>
                   {h.usuario_nome && <span className="user">{h.usuario_nome}</span>}
                   {h.observacao && <span className="obs">{h.observacao}</span>}

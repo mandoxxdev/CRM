@@ -3,9 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiZap } from 'react-icons/fi';
+import { formatDateBR, formatDateTimeBR, normalizePropostasResponse, isPropostaInativa } from '../../utils/formatDate';
 import GerarPropostaModal from './GerarPropostaModal';
 import './PropostasList.css';
 
@@ -52,7 +51,7 @@ export default function PropostasList() {
       if (filterResponsavel) params.responsavel_id = filterResponsavel;
       if (isAdmin && showInativas) params.incluir_inativas = 'true';
       const { data } = await api.get('/propostas', { params });
-      setList(Array.isArray(data) ? data : []);
+      setList(normalizePropostasResponse(data));
     } catch (e) {
       toast.error('Erro ao carregar propostas.');
       setList([]);
@@ -129,12 +128,12 @@ export default function PropostasList() {
   const isRascunho = (s) => s === 'rascunho';
   const podeAceitarRejeitar = (s) => s === 'enviada' || s === 'visualizada';
   const podeNovaRevisao = (s) => ['enviada', 'visualizada', 'aceita', 'rejeitada', 'cancelada', 'expirada'].includes(s);
-  const isInativa = (p) => p?.ativo === 0;
-  const podeExcluir = (p) => isAdmin || isRascunho(p.status);
+  const isInativa = isPropostaInativa;
+  const podeExcluir = (p) => isAdmin || isRascunho(p?.status);
   const confirmExcluir = (p) => {
     const numero = p?.numero_proposta || `#${p?.id}`;
     const st = STATUS[p?.status] || p?.status || '—';
-    const inativar = !isRascunho(p.status);
+    const inativar = !isRascunho(p?.status);
     return window.confirm(
       inativar
         ? `Inativar a proposta ${numero}?\n\nStatus atual: ${st}\n\nA proposta ficará oculta da listagem, mas os vínculos no sistema serão preservados.`
@@ -213,8 +212,8 @@ export default function PropostasList() {
             <tbody>
               {list.length === 0 ? (
                 <tr><td colSpan="9" className="propostas-list-empty">Nenhuma proposta encontrada.</td></tr>
-              ) : list.map(p => (
-                <tr key={p.id} className={isInativa(p) ? 'propostas-list-row-inativa' : ''}>
+              ) : list.map((p, index) => (
+                <tr key={p.id ?? `proposta-${index}`} className={isInativa(p) ? 'propostas-list-row-inativa' : ''}>
                   <td>
                     <Link to={`/comercial/propostas/detalhe/${p.id}`} className="link-num">{p.numero_proposta || '—'}</Link>
                     {isInativa(p) && <span className="badge badge-inativa">Inativa</span>}
@@ -223,9 +222,9 @@ export default function PropostasList() {
                   <td>{p.cliente_nome || p.cliente_nome_fantasia || '—'}</td>
                   <td>{TIPOS[p.tipo_proposta] || '—'}</td>
                   <td>{formatMoney(p.valor_total)}</td>
-                  <td>{p.validade ? format(new Date(p.validade), 'dd/MM/yyyy', { locale: ptBR }) : '—'}</td>
-                  <td><span className="badge" data-status={p.status}>{STATUS[p.status] || p.status}</span></td>
-                  <td>{p.enviada_em ? format(new Date(p.enviada_em), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '—'}</td>
+                  <td>{formatDateBR(p.validade)}</td>
+                  <td><span className="badge" data-status={p.status}>{STATUS[p.status] || p.status || '—'}</span></td>
+                  <td>{formatDateTimeBR(p.enviada_em)}</td>
                   <td>
                     <div className="propostas-list-cell-actions">
                       <button type="button" title="Ver proposta" onClick={() => abrirPreview(p.id)}><FiEye /></button>

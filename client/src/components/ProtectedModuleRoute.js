@@ -8,6 +8,7 @@ import {
 } from '../services/permissionsCache';
 import AcessoNegado from './AcessoNegado';
 import SplashScreen from './SplashScreen';
+import { RouteLoading } from './LazyPage';
 
 const lastModuleSplashRef = { module: null, at: 0 };
 const activeModuleSessionRef = { current: null };
@@ -212,37 +213,22 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
       return null;
     }
 
-    const preloadChildren = temAcesso === true;
-
     return (
-      <>
-        <SplashScreen
-          key={modParaSplash}
-          module={modParaSplash}
-          onComplete={handleSplashComplete}
-          showError={!loading && !temAcesso}
-          ready={!loading && temAcesso !== null}
-        />
-        {preloadChildren && (
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              width: 0,
-              height: 0,
-              overflow: 'hidden',
-              visibility: 'hidden',
-              pointerEvents: 'none',
-            }}
-          >
-            {children}
-          </div>
-        )}
-      </>
+      <SplashScreen
+        key={modParaSplash}
+        module={modParaSplash}
+        onComplete={handleSplashComplete}
+        showError={!loading && temAcesso === false}
+        ready={!loading && temAcesso !== null}
+      />
     );
   }
 
-  if (!temAcesso) {
+  if (temAcesso === null) {
+    return <RouteLoading module={moduloDetectado || 'sistema'} />;
+  }
+
+  if (temAcesso === false) {
     const nomesModulos = {
       comercial: 'Comercial',
       compras: 'Compras',

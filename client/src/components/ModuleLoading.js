@@ -3,6 +3,7 @@ import './ModuleLoading.css';
 
 const MODULE_LABELS = {
   comercial: 'Comercial',
+  frota: 'Frota',
   compras: 'Compras',
   financeiro: 'Financeiro',
   operacional: 'Operacional',
