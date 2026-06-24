@@ -52,7 +52,7 @@ export function hasModuleAccess(permissoes, modulo, userRole) {
     return permissoes.some((perm) => perm.modulo === modulo && perm.permissao === 1);
   }
 
-  return modulo === 'comercial';
+  return modulo === 'comercial' || modulo === 'frota';
 }
 
 export function invalidatePermissionsCache(userId) {

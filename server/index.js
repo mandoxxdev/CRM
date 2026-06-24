@@ -22051,9 +22051,45 @@ app.use('/api', (err, req, res, next) => {
 // Servir arquivos estáticos do React em produção
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '../client/build');
+
+  let appBundleVersion = null;
+  try {
+    const manifestPath = path.join(clientBuildPath, 'asset-manifest.json');
+    if (fs.existsSync(manifestPath)) {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      appBundleVersion = manifest.files?.['main.js'] || null;
+    }
+  } catch (err) {
+    console.warn('⚠️  Não foi possível ler asset-manifest.json:', err.message);
+  }
+
+  app.get('/api/app-version', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.json({ version: appBundleVersion });
+  });
   
   // Verificar se a pasta build existe
   if (fs.existsSync(clientBuildPath)) {
+    const isHashedAsset = (filePath) => /\.[a-f0-9]{8,}\.(js|css|map)$/i.test(filePath);
+
+    // Cache: index.html/sw.js sempre fresh; chunks com hash podem ficar em cache longo
+    app.use((req, res, next) => {
+      const p = req.path;
+      if (
+        p === '/' ||
+        p === '/index.html' ||
+        p === '/sw.js' ||
+        p === '/asset-manifest.json' ||
+        p.endsWith('.html')
+      ) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+      } else if (isHashedAsset(p)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+      next();
+    });
+
     // Garantir MIME type correto para CSS/JS (evita "Refused to apply style" quando proxy serve como text/plain)
     app.use('/static', (req, res, next) => {
       if (req.path.endsWith('.css')) {
@@ -22064,7 +22100,7 @@ if (process.env.NODE_ENV === 'production') {
       next();
     });
     // Servir arquivos estáticos
-    app.use(express.static(clientBuildPath));
+    app.use(express.static(clientBuildPath, { etag: true, lastModified: true, maxAge: 0 }));
     
     // Rota catch-all: serve o index.html para todas as rotas não-API
     app.get('*', (req, res, next) => {
@@ -22077,7 +22113,9 @@ if (process.env.NODE_ENV === 'production') {
         return next();
       }
       
-      // Servir index.html para rotas do React
+      // Servir index.html para rotas do React (nunca cachear)
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
       res.sendFile(path.join(clientBuildPath, 'index.html'), (err) => {
         if (err) {
           res.status(500).send('Erro ao carregar a aplicação');
@@ -22086,6 +22124,9 @@ if (process.env.NODE_ENV === 'production') {
     });
     
     console.log(`📦 Servindo arquivos estáticos de: ${clientBuildPath}`);
+    if (appBundleVersion) {
+      console.log(`📦 Bundle: ${appBundleVersion}`);
+    }
   } else {
     console.warn(`⚠️  Pasta de build não encontrada: ${clientBuildPath}`);
     console.warn(`   Execute 'npm run build' no diretório client/ antes de iniciar em produção`);

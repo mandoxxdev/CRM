@@ -17,7 +17,9 @@ import AnimatedBackground from './AnimatedBackground';
 import HelpGuide from './HelpGuide';
 import HelpSearch from './HelpSearch';
 import ModuleSplash from './ModuleSplash';
+import ErrorBoundary from './ErrorBoundary';
 import { RouteLoading } from './LazyPage';
+import { prefetchRoute } from '../routes/lazyModules';
 import PreferenciasMenu from './PreferenciasMenu';
 import './Layout.css';
 import '../components/chat/Chat.css';
@@ -395,6 +397,8 @@ const Layout = () => {
                 to={item.path}
                 className={`nav-item ${isActive ? 'active' : ''}`}
                 onClick={handleNavClick}
+                onMouseEnter={() => prefetchRoute(item.path)}
+                onFocus={() => prefetchRoute(item.path)}
               >
                 <Icon />
                 {sidebarOpen && <span>{item.label}</span>}
@@ -449,9 +453,11 @@ const Layout = () => {
           />
         )}
         <ModuleSplash>
-          <Suspense fallback={<RouteLoading module={activeModule === 'crm' ? 'comercial' : activeModule} />}>
-            <Outlet />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<RouteLoading module={activeModule === 'crm' ? 'comercial' : activeModule} />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </ModuleSplash>
       </div>
       <BuscaGlobal isOpen={buscaGlobalOpen} onClose={() => setBuscaGlobalOpen(false)} />

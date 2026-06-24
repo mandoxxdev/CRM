@@ -15,6 +15,8 @@ ENV CI=false
 ENV GENERATE_SOURCEMAP=false
 ENV DISABLE_ESLINT_PLUGIN=true
 ENV NODE_OPTIONS="--max-old-space-size=2048"
+ARG BUILD_ID
+ENV REACT_APP_BUILD_ID=${BUILD_ID}
 RUN npm run build
 
 # --- Estagio 2: runtime ---

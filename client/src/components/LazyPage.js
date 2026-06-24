@@ -6,14 +6,22 @@ export function RouteLoading({ module = 'sistema' }) {
   return <ModuleLoading module={module} inline />;
 }
 
+/**
+ * Renders a code-split route component.
+ * - compact routes rely on Layout's Outlet Suspense (single boundary for tab navigation).
+ * - non-compact routes (login, etc.) get their own Suspense fallback.
+ */
 export function LazyPage({ component: Component, module = 'sistema', compact = false, ...props }) {
-  const fallback = compact
-    ? <RouteLoading module={module} />
-    : <ModuleLoading module={module} />;
+  const element = <Component {...props} />;
 
+  if (compact) {
+    return element;
+  }
+
+  const fallback = <ModuleLoading module={module} />;
   return (
     <Suspense fallback={fallback}>
-      <Component {...props} />
+      {element}
     </Suspense>
   );
 }

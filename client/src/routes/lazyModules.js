@@ -1,156 +1,138 @@
-import React, { lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import ModuleLoading from '../components/ModuleLoading';
+import { lazyImportWithRecovery } from '../utils/chunkLoadRecovery';
 
 function lazyWithRetry(factory) {
-  return lazy(() =>
-    factory().catch((err) => {
-      const key = 'chunk_reload';
-      if (!sessionStorage.getItem(key)) {
-        sessionStorage.setItem(key, '1');
-        window.location.reload();
-        return new Promise(() => {});
-      }
-      sessionStorage.removeItem(key);
-      throw err;
-    })
-  );
+  return lazy(() => lazyImportWithRecovery(factory));
 }
 
-/** Lazy route with its own Suspense boundary (required for tab navigation after code-splitting). */
-function lazyModule(factory, module = 'sistema', { compact = true } = {}) {
+/** Code-split page — Suspense boundary is provided by Layout (Outlet) or parent shell. */
+function lazyPage(factory) {
+  return lazyWithRetry(factory);
+}
+
+/** Shell layout/login — includes Suspense for the initial chunk load. */
+function lazyShell(factory, module = 'sistema') {
   const LazyComp = lazyWithRetry(factory);
-  function ModuleRoute(props) {
-    const fallback = compact
-      ? <ModuleLoading module={module} inline />
-      : <ModuleLoading module={module} />;
+  function ShellRoute(props) {
     return (
-      <Suspense fallback={fallback}>
+      <Suspense fallback={<ModuleLoading module={module} />}>
         <LazyComp {...props} />
       </Suspense>
     );
   }
-  ModuleRoute.displayName = `LazyModule(${module})`;
-  return ModuleRoute;
+  ShellRoute.displayName = 'LazyShell';
+  return ShellRoute;
 }
 
-const page = (factory, module) => lazyModule(factory, module, { compact: true });
-const shell = (factory, module = 'sistema') => lazyModule(factory, module, { compact: false });
+const page = (factory) => lazyPage(factory);
+const shell = (factory, module = 'sistema') => lazyShell(factory, module);
 
 export const Login = shell(() => import('../components/Login'));
-export const Dashboard = page(() => import('../components/Dashboard'), 'comercial');
+export const Dashboard = page(() => import('../components/Dashboard'));
 export const OrionIntro = shell(() => import('../components/OrionIntro'));
 export const Onboarding = shell(() => import('../components/Onboarding'));
-export const Clientes = page(() => import('../components/Clientes'), 'comercial');
-export const ClienteForm = page(() => import('../components/ClienteForm'), 'comercial');
-export const Projetos = page(() => import('../components/Projetos'), 'comercial');
-export const ProjetoForm = page(() => import('../components/ProjetoForm'), 'comercial');
-export const PropostasList = page(() => import('../components/proposta/PropostasList'), 'comercial');
-export const PropostaForm = page(() => import('../components/proposta/PropostaForm'), 'comercial');
-export const PropostaDetalhe = page(() => import('../components/proposta/PropostaDetalhe'), 'comercial');
-export const Aprovacoes = page(() => import('../components/Aprovacoes'), 'comercial');
-export const ConfigTemplateProposta = page(() => import('../components/ConfigTemplateProposta'), 'comercial');
-export const EditorTemplateProposta = page(() => import('../components/EditorTemplateProposta'), 'comercial');
-export const ProdutosPage = page(() => import('../components/ProdutosPage'), 'comercial');
-export const FamiliasDoGrupo = page(() => import('../components/FamiliasDoGrupo'), 'comercial');
-export const ProdutosPorFamilia = page(() => import('../components/ProdutosPorFamilia'), 'comercial');
-export const ProdutoForm = page(() => import('../components/ProdutoForm'), 'comercial');
-export const Atividades = page(() => import('../components/Atividades'), 'comercial');
-export const Relatorios = page(() => import('../components/Relatorios'), 'comercial');
-export const MaquinasVendidas = page(() => import('../components/MaquinasVendidas'), 'comercial');
-export const CustosViagens = page(() => import('../components/CustosViagens'), 'comercial');
-export const OrdensServicoComercial = page(() => import('../components/OrdensServicoComercial'), 'comercial');
-export const OSComercialForm = page(() => import('../components/OSComercialForm'), 'comercial');
-export const Compras = page(() => import('../components/Compras'), 'compras');
-export const ComprasSolicitacoesCompra = page(() => import('../components/ComprasSolicitacoesCompra'), 'compras');
-export const GruposFornecedores = page(() => import('../components/GruposFornecedores'), 'compras');
-export const FornecedoresDoGrupo = page(() => import('../components/FornecedoresDoGrupo'), 'compras');
-export const ItensFornecedor = page(() => import('../components/ItensFornecedor'), 'compras');
-export const Financeiro = page(() => import('../components/Financeiro'), 'financeiro');
+export const Clientes = page(() => import('../components/Clientes'));
+export const ClienteForm = page(() => import('../components/ClienteForm'));
+export const Projetos = page(() => import('../components/Projetos'));
+export const ProjetoForm = page(() => import('../components/ProjetoForm'));
+export const PropostasList = page(() => import('../components/proposta/PropostasList'));
+export const PropostaForm = page(() => import('../components/proposta/PropostaForm'));
+export const PropostaDetalhe = page(() => import('../components/proposta/PropostaDetalhe'));
+export const Aprovacoes = page(() => import('../components/Aprovacoes'));
+export const ConfigTemplateProposta = page(() => import('../components/ConfigTemplateProposta'));
+export const EditorTemplateProposta = page(() => import('../components/EditorTemplateProposta'));
+export const ProdutosPage = page(() => import('../components/ProdutosPage'));
+export const FamiliasDoGrupo = page(() => import('../components/FamiliasDoGrupo'));
+export const ProdutosPorFamilia = page(() => import('../components/ProdutosPorFamilia'));
+export const ProdutoForm = page(() => import('../components/ProdutoForm'));
+export const Atividades = page(() => import('../components/Atividades'));
+export const Relatorios = page(() => import('../components/Relatorios'));
+export const MaquinasVendidas = page(() => import('../components/MaquinasVendidas'));
+export const CustosViagens = page(() => import('../components/CustosViagens'));
+export const OrdensServicoComercial = page(() => import('../components/OrdensServicoComercial'));
+export const OSComercialForm = page(() => import('../components/OSComercialForm'));
+export const Compras = page(() => import('../components/Compras'));
+export const ComprasSolicitacoesCompra = page(() => import('../components/ComprasSolicitacoesCompra'));
+export const GruposFornecedores = page(() => import('../components/GruposFornecedores'));
+export const FornecedoresDoGrupo = page(() => import('../components/FornecedoresDoGrupo'));
+export const ItensFornecedor = page(() => import('../components/ItensFornecedor'));
+export const Financeiro = page(() => import('../components/Financeiro'));
 export const Fabrica = shell(() => import('../components/Fabrica'), 'operacional');
-export const DashboardMES = page(() => import('../components/mes/DashboardMES'), 'operacional');
-export const OrdensServico = page(() => import('../components/operacional/OrdensServico'), 'operacional');
-export const OSFormPage = page(() => import('../components/operacional/OSFormPage'), 'operacional');
-export const Colaboradores = page(() => import('../components/operacional/Colaboradores'), 'operacional');
-export const AtividadesColaboradores = page(() => import('../components/operacional/AtividadesColaboradores'), 'operacional');
-export const ControlePresenca = page(() => import('../components/operacional/ControlePresenca'), 'operacional');
-export const HorasExtras = page(() => import('../components/operacional/HorasExtras'), 'operacional');
-export const Equipamentos = page(() => import('../components/operacional/Equipamentos'), 'operacional');
-export const Configuracoes = page(() => import('../components/Configuracoes'), 'administrativo');
-export const Permissoes = page(() => import('../components/Permissoes'), 'admin');
-export const Usuarios = page(() => import('../components/Usuarios'), 'admin');
-export const UsuarioForm = page(() => import('../components/UsuarioForm'), 'admin');
-export const Admin = page(() => import('../components/Admin'), 'admin');
-export const Layout = shell(() => import('../components/Layout'));
-export const CalculosEngenharia = page(() => import('../components/CalculosEngenharia'), 'engenharia');
-export const CalculoTampo = page(() => import('../components/CalculoTampo'), 'engenharia');
-export const CalculoVolume = page(() => import('../components/CalculoVolume'), 'engenharia');
-export const CalculoMotorImpelidor = page(() => import('../components/CalculoMotorImpelidor'), 'engenharia');
-export const SelecaoAgitadores = page(() => import('../components/SelecaoAgitadores'), 'engenharia');
-export const CalculoPlataformas = page(() => import('../components/CalculoPlataformas'), 'engenharia');
+export const DashboardMES = page(() => import('../components/mes/DashboardMES'));
+export const OrdensServico = page(() => import('../components/operacional/OrdensServico'));
+export const OSFormPage = page(() => import('../components/operacional/OSFormPage'));
+export const Colaboradores = page(() => import('../components/operacional/Colaboradores'));
+export const AtividadesColaboradores = page(() => import('../components/operacional/AtividadesColaboradores'));
+export const ControlePresenca = page(() => import('../components/operacional/ControlePresenca'));
+export const HorasExtras = page(() => import('../components/operacional/HorasExtras'));
+export const Equipamentos = page(() => import('../components/operacional/Equipamentos'));
+export const Configuracoes = page(() => import('../components/Configuracoes'));
+export const Permissoes = page(() => import('../components/Permissoes'));
+export const Usuarios = page(() => import('../components/Usuarios'));
+export const UsuarioForm = page(() => import('../components/UsuarioForm'));
+export const Admin = page(() => import('../components/Admin'));
+export const Layout = shell(() => import('../components/Layout'), 'sistema');
+export const CalculosEngenharia = page(() => import('../components/CalculosEngenharia'));
+export const CalculoTampo = page(() => import('../components/CalculoTampo'));
+export const CalculoVolume = page(() => import('../components/CalculoVolume'));
+export const CalculoMotorImpelidor = page(() => import('../components/CalculoMotorImpelidor'));
+export const SelecaoAgitadores = page(() => import('../components/SelecaoAgitadores'));
+export const CalculoPlataformas = page(() => import('../components/CalculoPlataformas'));
 export const TipoSelecao = shell(() => import('../components/TipoSelecao'));
-export const SolicitacaoMaterialEscritorio = page(() => import('../components/engenharia/SolicitacaoMaterialEscritorio'), 'engenharia');
-export const EngenhariaProjetosHome = page(() => import('../components/engenhariaProjetos/EngenhariaProjetosHome'), 'engenharia_projetos');
-export const CadastroMateriaisEscritorio = page(() => import('../components/engenhariaProjetos/CadastroMateriaisEscritorio'), 'engenharia_projetos');
-export const SolicitacaoMaterialEscritorioCesta = page(() => import('../components/engenhariaProjetos/SolicitacaoMaterialEscritorioCesta'), 'engenharia_projetos');
-export const MinhasSolicitacoesCompra = page(() => import('../components/MinhasSolicitacoesCompra'), 'engenharia_projetos');
-export const VeiculosManutencao = page(() => import('../components/VeiculosManutencao'), 'comercial');
-export const FrotasDashboard = page(() => import('../components/frotas/FrotasDashboard'), 'frota');
+export const SolicitacaoMaterialEscritorio = page(() => import('../components/engenharia/SolicitacaoMaterialEscritorio'));
+export const EngenhariaProjetosHome = page(() => import('../components/engenhariaProjetos/EngenhariaProjetosHome'));
+export const CadastroMateriaisEscritorio = page(() => import('../components/engenhariaProjetos/CadastroMateriaisEscritorio'));
+export const SolicitacaoMaterialEscritorioCesta = page(() => import('../components/engenhariaProjetos/SolicitacaoMaterialEscritorioCesta'));
+export const MinhasSolicitacoesCompra = page(() => import('../components/MinhasSolicitacoesCompra'));
+export const VeiculosManutencao = page(() => import('../components/VeiculosManutencao'));
+export const FrotasDashboard = page(() => import('../components/frotas/FrotasDashboard'));
 export const FrotasVeiculos = page(
-  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasVeiculos })),
-  'frota'
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasVeiculos }))
 );
 export const FrotasMotoristas = page(
-  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasMotoristas })),
-  'frota'
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasMotoristas }))
 );
 export const FrotasManutencoes = page(
-  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasManutencoes })),
-  'frota'
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasManutencoes }))
 );
 export const FrotasAbastecimentos = page(
-  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasAbastecimentos })),
-  'frota'
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasAbastecimentos }))
 );
 export const FrotasMultas = page(
-  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasMultas })),
-  'frota'
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasMultas }))
 );
 export const FrotasDocumentos = page(
-  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasDocumentos })),
-  'frota'
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasDocumentos }))
 );
 export const FrotasViagens = page(
-  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasViagens })),
-  'frota'
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasViagens }))
 );
 export const FrotasChecklists = page(
-  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasChecklists })),
-  'frota'
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasChecklists }))
 );
-export const FrotasRelatorios = page(() => import('../components/frotas/FrotasRelatorios'), 'frota');
-export const AlmoxarifadoDashboard = page(() => import('../components/almoxarifado/AlmoxarifadoDashboard'), 'almoxarifado');
-export const MateriaisAlmoxarifado = page(() => import('../components/almoxarifado/MateriaisAlmoxarifado'), 'almoxarifado');
-export const MaterialAlmoxarifadoForm = page(() => import('../components/almoxarifado/MaterialAlmoxarifadoForm'), 'almoxarifado');
-export const MovimentacoesAlmoxarifado = page(() => import('../components/almoxarifado/MovimentacoesAlmoxarifado'), 'almoxarifado');
-export const ConferenciaEstoque = page(() => import('../components/almoxarifado/ConferenciaEstoque'), 'almoxarifado');
-export const RequisicoesList = page(() => import('../components/almoxarifado/RequisicoesList'), 'almoxarifado');
-export const RequisicaoForm = page(() => import('../components/almoxarifado/RequisicaoForm'), 'almoxarifado');
+export const FrotasRelatorios = page(() => import('../components/frotas/FrotasRelatorios'));
+export const AlmoxarifadoDashboard = page(() => import('../components/almoxarifado/AlmoxarifadoDashboard'));
+export const MateriaisAlmoxarifado = page(() => import('../components/almoxarifado/MateriaisAlmoxarifado'));
+export const MaterialAlmoxarifadoForm = page(() => import('../components/almoxarifado/MaterialAlmoxarifadoForm'));
+export const MovimentacoesAlmoxarifado = page(() => import('../components/almoxarifado/MovimentacoesAlmoxarifado'));
+export const ConferenciaEstoque = page(() => import('../components/almoxarifado/ConferenciaEstoque'));
+export const RequisicoesList = page(() => import('../components/almoxarifado/RequisicoesList'));
+export const RequisicaoForm = page(() => import('../components/almoxarifado/RequisicaoForm'));
 export const RequisicoesMaterialNovaPage = page(
   () => import('../components/almoxarifado/RequisicoesMaterialPages').then((m) => ({
     default: m.RequisicoesMaterialNovaPage,
-  })),
-  'sistema'
+  }))
 );
 export const RequisicoesMaterialListaPage = page(
   () => import('../components/almoxarifado/RequisicoesMaterialPages').then((m) => ({
     default: m.RequisicoesMaterialListaPage,
-  })),
-  'sistema'
+  }))
 );
-export const ConfiguracoesAlmoxarifado = page(() => import('../components/almoxarifado/ConfiguracoesAlmoxarifado'), 'almoxarifado');
-export const MapaLocalizacoesAlmoxarifado = page(() => import('../components/almoxarifado/MapaLocalizacoesAlmoxarifado'), 'almoxarifado');
-export const RecebimentosAlmoxarifado = page(() => import('../components/almoxarifado/RecebimentosAlmoxarifado'), 'almoxarifado');
-export const ChatPage = page(() => import('../components/chat/ChatPage'), 'comercial');
+export const ConfiguracoesAlmoxarifado = page(() => import('../components/almoxarifado/ConfiguracoesAlmoxarifado'));
+export const MapaLocalizacoesAlmoxarifado = page(() => import('../components/almoxarifado/MapaLocalizacoesAlmoxarifado'));
+export const RecebimentosAlmoxarifado = page(() => import('../components/almoxarifado/RecebimentosAlmoxarifado'));
+export const ChatPage = page(() => import('../components/chat/ChatPage'));
 
 /** Warm-up do chunk principal de cada módulo (hover na seleção). */
 export const MODULE_PREFETCH = {
@@ -166,16 +148,53 @@ export const MODULE_PREFETCH = {
   admin: () => import('../components/Admin'),
 };
 
+/** Prefetch de páginas frequentes por rota (hover no menu lateral). */
+export const ROUTE_PREFETCH = {
+  '/comercial': () => import('../components/Dashboard'),
+  '/comercial/clientes': () => import('../components/Clientes'),
+  '/comercial/projetos': () => import('../components/Projetos'),
+  '/comercial/produtos': () => import('../components/ProdutosPage'),
+  '/comercial/propostas': () => import('../components/proposta/PropostasList'),
+  '/comercial/aprovacoes': () => import('../components/Aprovacoes'),
+  '/comercial/ordens-servico': () => import('../components/OrdensServicoComercial'),
+  '/comercial/atividades': () => import('../components/Atividades'),
+  '/comercial/relatorios': () => import('../components/Relatorios'),
+  '/comercial/maquinas-vendidas': () => import('../components/MaquinasVendidas'),
+  '/comercial/custos-viagens': () => import('../components/CustosViagens'),
+  '/chat': () => import('../components/chat/ChatPage'),
+  '/frota': () => import('../components/frotas/FrotasDashboard'),
+  '/frota/veiculos': () => import('../components/frotas/FrotasEntityPage'),
+  '/compras/solicitacoes': () => import('../components/ComprasSolicitacoesCompra'),
+  '/compras/fornecedores': () => import('../components/GruposFornecedores'),
+  '/financeiro/dashboard': () => import('../components/Financeiro'),
+  '/fabrica/ordens-servico': () => import('../components/operacional/OrdensServico'),
+  '/engenharia': () => import('../components/CalculosEngenharia'),
+  '/engenharia-projetos': () => import('../components/engenhariaProjetos/EngenhariaProjetosHome'),
+  '/almoxarifado': () => import('../components/almoxarifado/AlmoxarifadoDashboard'),
+  '/configuracoes': () => import('../components/Configuracoes'),
+  '/admin/usuarios': () => import('../components/Admin'),
+};
+
 export function prefetchModule(moduloKey) {
   const loader = MODULE_PREFETCH[moduloKey];
   if (loader) {
-    loader();
+    loader().catch(() => {});
+  }
+}
+
+export function prefetchRoute(path) {
+  if (!path) return;
+  const normalized = path.split('?')[0];
+  const loader = ROUTE_PREFETCH[normalized];
+  if (loader) {
+    loader().catch(() => {});
   }
 }
 
 export function prefetchModuleByRoute(rota) {
   if (!rota) return;
   const path = rota.split('?')[0];
+  prefetchRoute(path);
   if (path.startsWith('/comercial')) return prefetchModule('comercial');
   if (path.startsWith('/frota')) return prefetchModule('frota');
   if (path.startsWith('/compras')) return prefetchModule('compras');

@@ -326,3 +326,44 @@ Se não encontrar "Source Providers", procure por:
 - No Coolify, aumente a memoria do build (se disponivel) ou use um servidor com pelo menos **4 GB RAM** livres para o build.
 - Confirme **Build Pack = Dockerfile** (nao Nixpacks).
 - Variaveis ja usadas no build: `CI=false`, `DISABLE_ESLINT_PLUGIN=true`, `NODE_OPTIONS=--max-old-space-size=2048`.
+
+---
+
+### Erro: tela branca / "Atualização disponível" / ChunkLoadError após deploy
+
+**Sintoma:** No deploy (systemgmp.online) a navegação entre abas quebra com tela branca ou mensagem "Atualização disponível". Local funciona.
+
+**Causa:** Após um novo deploy, o navegador (ou Service Worker antigo) pode servir `index.html` ou chunks de uma versão anterior, gerando `ChunkLoadError`.
+
+**O que o projeto faz agora:**
+- Service Worker **somente para push** (sem cache de HTML/JS/CSS).
+- `index.html`, `sw.js` e `asset-manifest.json` com `Cache-Control: no-store`.
+- Chunks com hash (`*.abc12345.js`) com cache longo e `immutable`.
+- Recuperação automática: limpa caches do SW e recarrega até 3x antes de mostrar a tela de atualização.
+
+**Após publicar esta correção — faça no Coolify:**
+
+1. **Redeploy completo** (Rebuild, não apenas Restart).
+2. Confirme **Build Pack = Dockerfile** (o `client/build` vem do estágio `client-builder`).
+3. Nos usuários com problema, peça **uma vez**:
+   - Ctrl+Shift+R (hard refresh), ou
+   - DevTools → Application → Service Workers → Unregister, depois recarregar.
+4. Se usar **proxy/CDN** na frente do Coolify, desative cache para `/`, `/index.html`, `/sw.js` e `/static/*` sem hash — ou invalide o cache após cada deploy.
+
+**Verificar se o deploy está correto:**
+
+```bash
+# Deve retornar JSON com hash do main.js atual
+curl -s https://systemgmp.online/api/app-version
+
+# index.html não deve ter cache agressivo
+curl -sI https://systemgmp.online/ | grep -i cache-control
+```
+
+**Build argument opcional** (Coolify → Build → Build Arguments):
+
+```
+BUILD_ID=2026-06-24
+```
+
+Isso grava `REACT_APP_BUILD_ID` no bundle para rastrear versões.

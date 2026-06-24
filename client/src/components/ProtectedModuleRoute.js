@@ -19,68 +19,47 @@ export function resetModuleSplashSession() {
   activeModuleSessionRef.current = null;
 }
 
+function getModuloFromPath(path) {
+  if (path.startsWith('/compras')) return 'compras';
+  if (path.startsWith('/financeiro')) return 'financeiro';
+  if (path.startsWith('/fabrica')) return 'operacional';
+  if (path.startsWith('/configuracoes')) return 'administrativo';
+  if (path.startsWith('/admin')) return 'admin';
+  if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
+  if (path.startsWith('/engenharia')) return 'engenharia';
+  if (path.startsWith('/almoxarifado')) return 'almoxarifado';
+  if (path.startsWith('/frota')) return 'frota';
+  if (path.startsWith('/comercial')) return 'comercial';
+  return null;
+}
+
+function resolveAccessSync(user, mod) {
+  if (!mod) return true;
+  if (!user?.id) return false;
+  const userRole = String(user.role || '').toLowerCase();
+  if (userRole === 'admin') return true;
+  const cached = getCachedUserPermissions(user.id);
+  if (cached) {
+    return hasModuleAccess(cached.permissoes, mod, userRole);
+  }
+  return null;
+}
+
 const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
   const { user } = useAuth();
   const location = useLocation();
-  const [temAcesso, setTemAcesso] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [showError, setShowError] = useState(false);
-
-  const getModuloFromPath = (path) => {
-    if (path.startsWith('/compras')) return 'compras';
-    if (path.startsWith('/financeiro')) return 'financeiro';
-    if (path.startsWith('/fabrica')) return 'operacional';
-    if (path.startsWith('/configuracoes')) return 'administrativo';
-    if (path.startsWith('/admin')) return 'admin';
-    if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
-    if (path.startsWith('/engenharia')) return 'engenharia';
-    if (path.startsWith('/almoxarifado')) return 'almoxarifado';
-    if (path.startsWith('/frota')) return 'frota';
-    if (path.startsWith('/comercial')) return 'comercial';
-    return null;
-  };
-
   const moduloDetectado = modulo || getModuloFromPath(location.pathname);
-  const previousModuleRef = useRef(null);
+  const sessionActive = activeModuleSessionRef.current === moduloDetectado;
 
+  const [temAcesso, setTemAcesso] = useState(() => resolveAccessSync(user, moduloDetectado));
+  const [loading, setLoading] = useState(() => resolveAccessSync(user, moduloDetectado) === null);
+  const [showError, setShowError] = useState(false);
   const [splashComplete, setSplashComplete] = useState(() => {
     if (!moduloDetectado) return true;
-    return activeModuleSessionRef.current === moduloDetectado;
+    return sessionActive || lastModuleSplashRef.module === moduloDetectado;
   });
 
-  useEffect(() => {
-    try {
-      sessionStorage.removeItem('orion_skip_module_splash');
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    const mod = moduloDetectado;
-    if (!mod) return;
-
-    const mudouModulo = previousModuleRef.current !== mod;
-    previousModuleRef.current = mod;
-
-    setShowError(false);
-
-    const alreadyInModule = activeModuleSessionRef.current === mod;
-    const recentSplash =
-      lastModuleSplashRef.module === mod &&
-      Date.now() - lastModuleSplashRef.at < 4000;
-
-    if (alreadyInModule || recentSplash) {
-      setSplashComplete(true);
-      return;
-    }
-
-    if (mudouModulo) {
-      setSplashComplete(false);
-      setLoading(true);
-      setTemAcesso(null);
-    }
-  }, [location.pathname, moduloDetectado]);
+  const enteredModuleRef = useRef(moduloDetectado);
 
   useEffect(() => {
     const modFromPath = getModuloFromPath(location.pathname);
@@ -88,6 +67,33 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
       activeModuleSessionRef.current = null;
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    const mod = moduloDetectado;
+    if (!mod) {
+      setSplashComplete(true);
+      return;
+    }
+
+    const isSubRouteWithinModule =
+      enteredModuleRef.current === mod && activeModuleSessionRef.current === mod;
+
+    if (isSubRouteWithinModule || activeModuleSessionRef.current === mod || lastModuleSplashRef.module === mod) {
+      setSplashComplete(true);
+      setShowError(false);
+      return;
+    }
+
+    if (enteredModuleRef.current !== mod) {
+      enteredModuleRef.current = mod;
+      setSplashComplete(false);
+      setLoading(true);
+      const cachedAccess = resolveAccessSync(user, mod);
+      if (cachedAccess === null) {
+        setTemAcesso(null);
+      }
+    }
+  }, [location.pathname, moduloDetectado, user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,7 +105,15 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
         if (!cancelled) {
           setTemAcesso(true);
           setLoading(false);
-          setSplashComplete(true);
+        }
+        return;
+      }
+
+      const syncAccess = resolveAccessSync(user, mod);
+      if (syncAccess !== null) {
+        if (!cancelled) {
+          setTemAcesso(syncAccess);
+          setLoading(false);
         }
         return;
       }
@@ -112,30 +126,11 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
         return;
       }
 
-      const userRole = String(user.role || '').toLowerCase();
-      if (userRole === 'admin') {
-        if (!cancelled) {
-          setTemAcesso(true);
-          setLoading(false);
-        }
-        return;
-      }
-
-      const cached = getCachedUserPermissions(user.id);
-      if (cached) {
-        const permitido = hasModuleAccess(cached.permissoes, mod, userRole);
-        if (!cancelled) {
-          setTemAcesso(permitido);
-          setLoading(false);
-        }
-        return;
-      }
-
       try {
         const { permissoes } = await fetchUserPermissions(user.id);
         if (!cancelled) {
-          const permitido = hasModuleAccess(permissoes, mod, userRole);
-          setTemAcesso(permitido);
+          const userRole = String(user.role || '').toLowerCase();
+          setTemAcesso(hasModuleAccess(permissoes, mod, userRole));
           setLoading(false);
         }
       } catch (error) {
@@ -183,7 +178,7 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
       document.body.style.overflow = '';
       document.body.classList.remove('splash-active');
     };
-  }, [loading, splashComplete, moduloDetectado, temAcesso]);
+  }, [splashComplete, moduloDetectado]);
 
   const handleSplashComplete = () => {
     if (moduloDetectado) {
@@ -208,23 +203,41 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
 
   if (shouldShowSplash) {
     const modParaSplash = moduloDetectado || modulo || getModuloFromPath(location.pathname);
-
     if (!modParaSplash) {
       return null;
     }
 
+    const preloadChildren = temAcesso === true;
+
     return (
-      <SplashScreen
-        key={modParaSplash}
-        module={modParaSplash}
-        onComplete={handleSplashComplete}
-        showError={!loading && temAcesso === false}
-        ready={!loading && temAcesso !== null}
-      />
+      <>
+        <SplashScreen
+          key={modParaSplash}
+          module={modParaSplash}
+          onComplete={handleSplashComplete}
+          showError={!loading && temAcesso === false}
+          ready={!loading && temAcesso !== null}
+        />
+        {preloadChildren && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              width: 0,
+              height: 0,
+              overflow: 'hidden',
+              visibility: 'hidden',
+              pointerEvents: 'none',
+            }}
+          >
+            {children}
+          </div>
+        )}
+      </>
     );
   }
 
-  if (temAcesso === null) {
+  if (temAcesso === null && loading && !sessionActive) {
     return <RouteLoading module={moduloDetectado || 'sistema'} />;
   }
 

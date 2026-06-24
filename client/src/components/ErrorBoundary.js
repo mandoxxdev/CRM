@@ -1,46 +1,36 @@
 import React from 'react';
+import ModuleLoading from './ModuleLoading';
+import { attemptChunkRecovery, isChunkLoadError } from '../utils/chunkLoadRecovery';
 import './ErrorBoundary.css';
 
-const CHUNK_RELOAD_KEY = 'chunk_reload_boundary';
-
-function isChunkLoadError(error) {
-  const msg = error?.message || String(error);
-  return (
-    msg.includes('Loading chunk') ||
-    msg.includes('Failed to fetch dynamically imported module') ||
-    msg.includes('ChunkLoadError')
-  );
-}
-
 class ErrorBoundaryClass extends React.Component {
-  state = { hasError: false, error: null, isChunkError: false };
+  state = { hasError: false, error: null, isChunkError: false, isRecoveringChunk: false };
 
   static getDerivedStateFromError(error) {
-    return {
-      hasError: true,
-      error,
-      isChunkError: isChunkLoadError(error),
-    };
+    if (isChunkLoadError(error)) {
+      return { hasError: false, error, isChunkError: true, isRecoveringChunk: true };
+    }
+    return { hasError: true, error, isChunkError: false, isRecoveringChunk: false };
   }
 
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary:', error, errorInfo);
 
     if (isChunkLoadError(error)) {
-      try {
-        if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
-          sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
-          window.location.reload();
+      attemptChunkRecovery().then((action) => {
+        if (action === 'reload') {
           return;
         }
-        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
-      } catch {
-        window.location.reload();
-      }
+        this.setState({ hasError: true, isRecoveringChunk: false });
+      });
     }
   }
 
   render() {
+    if (this.state.isRecoveringChunk && !this.state.hasError) {
+      return <ModuleLoading module="sistema" inline />;
+    }
+
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;
@@ -48,32 +38,45 @@ class ErrorBoundaryClass extends React.Component {
 
       if (this.state.isChunkError) {
         return (
-          <div className="error-boundary">
-            <h1>Atualização disponível</h1>
-            <p>
-              Uma nova versão do sistema foi publicada. Atualize a página para carregar os
-              arquivos mais recentes.
-            </p>
-            <div className="error-boundary-actions">
-              <button type="button" onClick={() => window.location.reload()}>
-                Atualizar página
-              </button>
+          <div className="error-boundary error-boundary--orion">
+            <div className="error-boundary__panel">
+              <img src="/orion-logo.png" alt="Orion" className="error-boundary__logo" />
+              <h1>Atualização disponível</h1>
+              <p>
+                Uma nova versão do sistema foi publicada. Atualize a página para carregar os
+                arquivos mais recentes.
+              </p>
+              <div className="error-boundary-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('_cb', String(Date.now()));
+                    window.location.replace(url.toString());
+                  }}
+                >
+                  Atualizar página
+                </button>
+              </div>
             </div>
           </div>
         );
       }
 
       return (
-        <div className="error-boundary">
-          <h1>Algo deu errado</h1>
-          <p>Ocorreu um erro inesperado. Tente voltar à tela inicial ou atualizar a página.</p>
-          <div className="error-boundary-actions">
-            <button type="button" onClick={() => { window.location.href = '/'; }}>
-              Ir para tela inicial
-            </button>
-            <button type="button" onClick={() => window.location.reload()}>
-              Atualizar página (F5)
-            </button>
+        <div className="error-boundary error-boundary--orion">
+          <div className="error-boundary__panel">
+            <img src="/orion-logo.png" alt="Orion" className="error-boundary__logo" />
+            <h1>Algo deu errado</h1>
+            <p>Ocorreu um erro inesperado. Tente voltar à tela inicial ou atualizar a página.</p>
+            <div className="error-boundary-actions">
+              <button type="button" onClick={() => { window.location.href = '/'; }}>
+                Ir para tela inicial
+              </button>
+              <button type="button" className="error-boundary-actions__secondary" onClick={() => window.location.reload()}>
+                Atualizar página
+              </button>
+            </div>
           </div>
         </div>
       );
