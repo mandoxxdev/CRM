@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -23,6 +24,8 @@ const TIPOS = { comercial: 'Comercial', tecnica: 'Técnica', orcamento: 'Orçame
 
 export default function PropostasList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const [list, setList] = useState([]);
   const [oportunidades, setOportunidades] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -33,6 +36,7 @@ export default function PropostasList() {
   const [filterOportunidade, setFilterOportunidade] = useState('');
   const [filterResponsavel, setFilterResponsavel] = useState('');
   const [showAutomatica, setShowAutomatica] = useState(false);
+  const [showInativas, setShowInativas] = useState(false);
   const [rejeitarId, setRejeitarId] = useState(null);
   const [rejeitarMotivo, setRejeitarMotivo] = useState('');
   const [pdfId, setPdfId] = useState(null);
@@ -46,6 +50,7 @@ export default function PropostasList() {
       if (filterTipo) params.tipo_proposta = filterTipo;
       if (filterOportunidade) params.oportunidade_id = filterOportunidade;
       if (filterResponsavel) params.responsavel_id = filterResponsavel;
+      if (isAdmin && showInativas) params.incluir_inativas = 'true';
       const { data } = await api.get('/propostas', { params });
       setList(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -54,7 +59,7 @@ export default function PropostasList() {
     } finally {
       setLoading(false);
     }
-  }, [search, filterStatus, filterTipo, filterOportunidade, filterResponsavel]);
+  }, [search, filterStatus, filterTipo, filterOportunidade, filterResponsavel, isAdmin, showInativas]);
 
   useEffect(() => {
     load();
@@ -112,7 +117,7 @@ export default function PropostasList() {
         return;
       } else if (acaoNome === 'excluir') {
         await api.delete(`/propostas/${id}`);
-        toast.success('Proposta excluída.');
+        toast.success('Proposta inativada.');
       }
       if (acaoNome !== 'clone') toast.success('Ação concluída.');
       load();
@@ -124,13 +129,16 @@ export default function PropostasList() {
   const isRascunho = (s) => s === 'rascunho';
   const podeAceitarRejeitar = (s) => s === 'enviada' || s === 'visualizada';
   const podeNovaRevisao = (s) => ['enviada', 'visualizada', 'aceita', 'rejeitada', 'cancelada', 'expirada'].includes(s);
+  const isInativa = (p) => p?.ativo === 0;
+  const podeExcluir = (p) => isAdmin || isRascunho(p.status);
   const confirmExcluir = (p) => {
     const numero = p?.numero_proposta || `#${p?.id}`;
     const st = STATUS[p?.status] || p?.status || '—';
+    const inativar = !isRascunho(p.status);
     return window.confirm(
-      `Tem certeza que deseja excluir a proposta ${numero}?\n\n` +
-      `Status atual: ${st}\n\n` +
-      `Esta ação não pode ser desfeita.`
+      inativar
+        ? `Inativar a proposta ${numero}?\n\nStatus atual: ${st}\n\nA proposta ficará oculta da listagem, mas os vínculos no sistema serão preservados.`
+        : `Tem certeza que deseja inativar a proposta ${numero}?\n\nStatus atual: ${st}`
     );
   };
 
@@ -172,6 +180,16 @@ export default function PropostasList() {
           <option value="">Responsável</option>
           {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
         </select>
+        {isAdmin && (
+          <label className="propostas-list-toggle-inativas">
+            <input
+              type="checkbox"
+              checked={showInativas}
+              onChange={(e) => setShowInativas(e.target.checked)}
+            />
+            Mostrar inativas
+          </label>
+        )}
       </div>
 
       <div className="propostas-list-table-wrap">
@@ -196,8 +214,11 @@ export default function PropostasList() {
               {list.length === 0 ? (
                 <tr><td colSpan="9" className="propostas-list-empty">Nenhuma proposta encontrada.</td></tr>
               ) : list.map(p => (
-                <tr key={p.id}>
-                  <td><Link to={`/comercial/propostas/detalhe/${p.id}`} className="link-num">{p.numero_proposta || '—'}</Link></td>
+                <tr key={p.id} className={isInativa(p) ? 'propostas-list-row-inativa' : ''}>
+                  <td>
+                    <Link to={`/comercial/propostas/detalhe/${p.id}`} className="link-num">{p.numero_proposta || '—'}</Link>
+                    {isInativa(p) && <span className="badge badge-inativa">Inativa</span>}
+                  </td>
                   <td>{p.titulo || '—'}</td>
                   <td>{p.cliente_nome || p.cliente_nome_fantasia || '—'}</td>
                   <td>{TIPOS[p.tipo_proposta] || '—'}</td>
@@ -219,13 +240,15 @@ export default function PropostasList() {
                       {podeNovaRevisao(p.status) && <button type="button" title="Nova revisão" onClick={() => acao('nova-revisao', p.id)}><FiRotateCcw /></button>}
                       <button type="button" title="Clonar" onClick={() => acao('clone', p.id)}><FiCopy /></button>
                       {isRascunho(p.status) && <Link to={`/comercial/propostas/editar/${p.id}`} title="Editar"><FiEdit /></Link>}
-                      <button
-                        type="button"
-                        title="Excluir"
-                        onClick={() => confirmExcluir(p) && acao('excluir', p.id)}
-                      >
-                        <FiTrash2 />
-                      </button>
+                      {podeExcluir(p) && !isInativa(p) && (
+                        <button
+                          type="button"
+                          title={isRascunho(p.status) ? 'Inativar' : 'Inativar (admin)'}
+                          onClick={() => confirmExcluir(p) && acao('excluir', p.id)}
+                        >
+                          <FiTrash2 />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

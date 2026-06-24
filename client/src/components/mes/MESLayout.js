@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
+import { RouteLoading } from '../LazyPage';
 import { 
   FiBarChart2, FiClipboard, FiUsers, FiActivity, FiClock, 
   FiTrendingUp, FiTool, FiSettings, FiShield, FiFileText,
@@ -223,7 +224,9 @@ const MESLayout = () => {
       </aside>
 
       <main className="mes-main">
-        <Outlet />
+        <Suspense fallback={<RouteLoading module="operacional" />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

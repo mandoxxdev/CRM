@@ -43,6 +43,19 @@ const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'gmp-industriais-secret-key-2024';
 
+// Soft-delete de propostas: registros legados sem coluna ativo continuam visíveis
+const SQL_PROPOSTA_ATIVA = '(ativo IS NULL OR ativo = 1)';
+const sqlPropostaAtivaAlias = (alias) => `(${alias}.ativo IS NULL OR ${alias}.ativo = 1)`;
+
+function isAdminUser(user) {
+  return String(user?.role || '').toLowerCase() === 'admin';
+}
+
+function podeInativarProposta(user, proposta) {
+  if (isAdminUser(user)) return true;
+  return proposta.status === 'rascunho';
+}
+
 // Rate Limiting simples (em memória)
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutos
@@ -1914,7 +1927,12 @@ function executeMigrations(callback) {
         { nome: 'idioma', tipo: 'TEXT' },
         { nome: 'moeda', tipo: 'TEXT' },
         { nome: 'incoterm', tipo: 'TEXT' },
-        { nome: 'unidade_negocio', tipo: 'TEXT' }
+        { nome: 'unidade_negocio', tipo: 'TEXT' },
+        { nome: 'probabilidade', tipo: 'INTEGER DEFAULT 50' },
+        { nome: 'data_fechamento', tipo: 'DATE' },
+        { nome: 'ativo', tipo: 'INTEGER DEFAULT 1' },
+        { nome: 'inativada_em', tipo: 'DATETIME' },
+        { nome: 'inativada_por', tipo: 'INTEGER' }
       ];
       
       // Histórico de status (auditoria enterprise - Salesforce-like)
@@ -4461,7 +4479,12 @@ app.delete('/api/projetos/:id', authenticateToken, (req, res) => {
 
 // ========== ROTAS DE PROPOSTAS ==========
 app.get('/api/propostas', authenticateToken, (req, res) => {
-  const { cliente_id, status, created_by, responsavel_id, oportunidade_id, tipo_proposta, search } = req.query;
+  const { cliente_id, status, created_by, responsavel_id, oportunidade_id, tipo_proposta, search, incluir_inativas } = req.query;
+  const showInactive = incluir_inativas === 'true' || incluir_inativas === '1';
+  if (showInactive && !isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Apenas administradores podem visualizar propostas inativas.' });
+  }
+
   let query = `SELECT pr.*, c.razao_social as cliente_nome, c.nome_fantasia as cliente_nome_fantasia,
                u1.nome as created_by_nome, u2.nome as responsavel_nome
                FROM propostas pr
@@ -4470,6 +4493,10 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
                LEFT JOIN usuarios u2 ON pr.responsavel_id = u2.id
                WHERE 1=1`;
   const params = [];
+
+  if (!showInactive) {
+    query += ` AND ${sqlPropostaAtivaAlias('pr')}`;
+  }
 
   if (cliente_id) {
     query += ' AND pr.cliente_id = ?';
@@ -4523,6 +4550,21 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
   });
 });
 
+// Opções para cadastro de propostas (status, motivos, origens — alimentam gráficos do dashboard)
+app.get('/api/propostas/opcoes/comercial', authenticateToken, (req, res) => {
+  res.json({
+    status: [
+      { value: 'rascunho', label: 'Rascunho' },
+      { value: 'enviada', label: 'Enviada' },
+      { value: 'aprovada', label: 'Aprovada (ganha)' },
+      { value: 'rejeitada', label: 'Perdida / Rejeitada' }
+    ],
+    origens_busca: ['Google', 'LinkedIn', 'Facebook', 'Instagram', 'Indicação', 'Feira/Evento', 'Site Próprio', 'Outros'],
+    motivos_nao_venda: ['Preço Alto', 'Prazo Inadequado', 'Não Atende Necessidade', 'Concorrência', 'Orçamento Cancelado', 'Outros'],
+    regioes_busca: ['Norte', 'Nordeste', 'Centro-Oeste', 'Sudeste', 'Sul']
+  });
+});
+
 app.get('/api/propostas/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   
@@ -4537,6 +4579,9 @@ app.get('/api/propostas/:id', authenticateToken, (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     if (!proposta) {
+      return res.status(404).json({ error: 'Proposta não encontrada' });
+    }
+    if (proposta.ativo === 0 && !isAdminUser(req.user)) {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
 
@@ -4820,12 +4865,12 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
     checkComplete();
   });
 
-  db.get('SELECT COUNT(*) as total FROM propostas WHERE status = ?', ['aprovada'], (err, row) => {
+  db.get(`SELECT COUNT(*) as total FROM propostas WHERE status = ? AND ${SQL_PROPOSTA_ATIVA}`, ['aprovada'], (err, row) => {
     if (!err) dados.kpis.propostasAprovadas = row?.total || 0;
     checkComplete();
   });
 
-  db.get('SELECT SUM(valor_total) as total FROM propostas WHERE status = ?', ['aprovada'], (err, row) => {
+  db.get(`SELECT SUM(valor_total) as total FROM propostas WHERE status = ? AND ${SQL_PROPOSTA_ATIVA}`, ['aprovada'], (err, row) => {
     if (!err) dados.kpis.faturamentoTotal = row?.total || 0;
     checkComplete();
   });
@@ -4846,6 +4891,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       COUNT(CASE WHEN status = 'aprovada' THEN 1 END) * 100.0 / COUNT(*) as taxa
     FROM propostas
     WHERE status IN ('aprovada', 'rejeitada', 'enviada')
+      AND ${SQL_PROPOSTA_ATIVA}
   `, [], (err, row) => {
     if (!err) dados.kpis.taxaConversao = row?.taxa || 0;
     checkComplete();
@@ -4859,6 +4905,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       SUM(CASE WHEN status = 'aprovada' THEN valor_total ELSE 0 END) as valor_aprovado
     FROM propostas
     WHERE created_at >= date('now', '-6 months')
+      AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY mes
     ORDER BY mes
   `, [], (err, rows) => {
@@ -4870,6 +4917,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
   db.all(`
     SELECT status, COUNT(*) as total, SUM(valor_total) as valor_total
     FROM propostas
+    WHERE ${SQL_PROPOSTA_ATIVA}
     GROUP BY status
   `, [], (err, rows) => {
     if (!err) dados.graficos.propostasPorStatus = rows || [];
@@ -4884,7 +4932,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       COUNT(p.id) as total_propostas,
       SUM(CASE WHEN p.status = 'aprovada' THEN p.valor_total ELSE 0 END) as valor_total
     FROM clientes c
-    LEFT JOIN propostas p ON c.id = p.cliente_id
+    LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.status = 'ativo'
     GROUP BY c.id
     ORDER BY valor_total DESC
@@ -4902,7 +4950,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       COUNT(p.id) as total_propostas,
       SUM(CASE WHEN p.status = 'aprovada' THEN p.valor_total ELSE 0 END) as valor_total
     FROM clientes c
-    LEFT JOIN propostas p ON c.id = p.cliente_id
+    LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.estado IS NOT NULL AND c.status = 'ativo'
     GROUP BY c.estado
     ORDER BY valor_total DESC
@@ -4921,7 +4969,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       MAX(p.created_at) as ultima_proposta,
       COUNT(p.id) as total_propostas_historico
     FROM clientes c
-    LEFT JOIN propostas p ON c.id = p.cliente_id
+    LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.status = 'ativo'
     GROUP BY c.id
     HAVING ultima_proposta IS NULL OR date(ultima_proposta) < date('now', '-90 days')
@@ -4958,6 +5006,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       COUNT(CASE WHEN status = 'aprovada' THEN 1 END) * 100.0 / COUNT(*) as taxa_conversao
     FROM propostas
     WHERE origem_busca IS NOT NULL
+      AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY origem_busca
     ORDER BY valor_aprovado DESC
   `, [], (err, rows) => {
@@ -4974,6 +5023,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       COUNT(CASE WHEN status = 'aprovada' THEN 1 END) * 100.0 / COUNT(*) as taxa_conversao
     FROM propostas
     WHERE familia_produto IS NOT NULL
+      AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY familia_produto
     ORDER BY valor_aprovado DESC
   `, [], (err, rows) => {
@@ -4988,6 +5038,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       COUNT(*) as total
     FROM propostas
     WHERE motivo_nao_venda IS NOT NULL AND motivo_nao_venda != ''
+      AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY motivo_nao_venda
     ORDER BY total DESC
   `, [], (err, rows) => {
@@ -5004,7 +5055,7 @@ app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
       COUNT(p.id) as total_propostas,
       SUM(CASE WHEN p.status = 'aprovada' THEN p.valor_total ELSE 0 END) as valor_total
     FROM clientes c
-    LEFT JOIN propostas p ON c.id = p.cliente_id
+    LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.status = 'ativo' AND c.cidade IS NOT NULL AND c.estado IS NOT NULL
     GROUP BY c.cidade, c.estado
     ORDER BY total_clientes DESC
@@ -5781,6 +5832,7 @@ app.get('/api/mapa/maquinas-vendidas', authenticateToken, (req, res) => {
     FROM propostas p
     INNER JOIN clientes c ON p.cliente_id = c.id
     WHERE p.status = 'aprovada'
+      AND ${sqlPropostaAtivaAlias('p')}
       AND c.status = 'ativo'
       AND c.cidade IS NOT NULL 
       AND c.estado IS NOT NULL
@@ -5883,7 +5935,7 @@ app.get('/api/relatorios/visitas-tecnicas', authenticateToken, (req, res) => {
       MAX(p.created_at) as ultima_proposta_data,
       COUNT(DISTINCT CASE WHEN p.created_at >= date('now', '-90 days') THEN p.id END) as propostas_ultimos_90_dias
     FROM clientes c
-    LEFT JOIN propostas p ON c.id = p.cliente_id
+    LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.status = 'ativo'
     GROUP BY c.id
     HAVING total_propostas > 0
@@ -6319,7 +6371,8 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
       lembrete_data, lembrete_mensagem, margem_desconto, itens,
       cliente_contato, cliente_telefone, cliente_email,
       oportunidade_id, tipo_proposta, expira_em,
-      idioma, moeda, incoterm, unidade_negocio
+      idioma, moeda, incoterm, unidade_negocio,
+      probabilidade, data_fechamento
     } = req.body;
     
     // Usar variável mutável para status
@@ -6336,6 +6389,16 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
   if (!titulo) {
     return res.status(400).json({ error: 'Título é obrigatório' });
   }
+
+  if (status === 'rejeitada' && (!motivo_nao_venda || !String(motivo_nao_venda).trim())) {
+    return res.status(400).json({ error: 'Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada.' });
+  }
+
+  let dataFechamentoFinal = data_fechamento || null;
+  if (!dataFechamentoFinal && (status === 'aprovada' || status === 'rejeitada')) {
+    dataFechamentoFinal = new Date().toISOString().split('T')[0];
+  }
+  const probabilidadeFinal = probabilidade != null && probabilidade !== '' ? parseInt(probabilidade, 10) : 50;
 
   // Validar e normalizar projeto_id (deve ser NULL se vazio, 0 ou inválido)
   let projetoIdFinal = null;
@@ -6425,15 +6488,16 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
           responsavel_id, created_by, motivo_nao_venda, origem_busca, familia_produto,
           lembrete_data, lembrete_mensagem, margem_desconto, revisao,
           cliente_contato, cliente_telefone, cliente_email, oportunidade_id, tipo_proposta, expira_em,
-          idioma, moeda, incoterm, unidade_negocio)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          idioma, moeda, incoterm, unidade_negocio, probabilidade, data_fechamento)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [clienteIdNum, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
           validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status || 'rascunho',
-          responsavelIdNum, createdByIdNum, motivo_nao_venda || null, origem_busca || null,
+          responsavelIdNum, createdByIdNum, status === 'rejeitada' ? (motivo_nao_venda || null) : null, origem_busca || null,
           familia_produto || null, lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, 0,
           cliente_contato || null, cliente_telefone || null, cliente_email || null,
           oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null,
-          idioma || null, moeda || null, incoterm || null, unidade_negocio || null],
+          idioma || null, moeda || null, incoterm || null, unidade_negocio || null,
+          isNaN(probabilidadeFinal) ? 50 : probabilidadeFinal, dataFechamentoFinal],
         function(err) {
           if (err) {
             console.error('❌ Erro ao inserir proposta:', err);
@@ -6578,8 +6642,19 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     cliente_contato, cliente_telefone, cliente_email,
     oportunidade_id, tipo_proposta, expira_em,
       idioma, moeda, incoterm, unidade_negocio,
-      html_rendered
+      html_rendered,
+      probabilidade, data_fechamento
   } = req.body;
+
+  if (status === 'rejeitada' && (!motivo_nao_venda || !String(motivo_nao_venda).trim())) {
+    return res.status(400).json({ error: 'Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada.' });
+  }
+
+  let dataFechamentoFinal = data_fechamento || null;
+  if (!dataFechamentoFinal && (status === 'aprovada' || status === 'rejeitada')) {
+    dataFechamentoFinal = new Date().toISOString().split('T')[0];
+  }
+  const probabilidadeFinal = probabilidade != null && probabilidade !== '' ? parseInt(probabilidade, 10) : null;
 
   // Buscar proposta atual completa para comparação
   db.get(`SELECT * FROM propostas WHERE id = ?`, [id], (err, propostaAtual) => {
@@ -6779,15 +6854,17 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               lembrete_data = ?, lembrete_mensagem = ?, margem_desconto = ?, revisao = ?,
               cliente_contato = ?, cliente_telefone = ?, cliente_email = ?,
               oportunidade_id = ?, tipo_proposta = ?, expira_em = ?,
-              idioma = ?, moeda = ?, incoterm = ?, unidade_negocio = ?, html_rendered = ?, updated_at = CURRENT_TIMESTAMP
+              idioma = ?, moeda = ?, incoterm = ?, unidade_negocio = ?, html_rendered = ?,
+              probabilidade = COALESCE(?, probabilidade), data_fechamento = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
             [clienteIdFinal, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
               validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status,
-              responsavelIdFinal, motivo_nao_venda || null, origem_busca || null, familia_produto || null,
+              responsavelIdFinal, status === 'rejeitada' ? (motivo_nao_venda || null) : null, origem_busca || null, familia_produto || null,
               lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, novaRevisao,
               cliente_contato || null, cliente_telefone || null, cliente_email || null,
               oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null,
-              idioma || null, moeda || null, incoterm || null, unidade_negocio || null, html_rendered || null, id],
+              idioma || null, moeda || null, incoterm || null, unidade_negocio || null, html_rendered || null,
+              probabilidadeFinal, dataFechamentoFinal, id],
             (err) => {
               if (err) {
                 // Tratar erro de UNIQUE constraint especificamente
@@ -6907,77 +6984,37 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
 
 app.delete('/api/propostas/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  
-  console.log(`🗑️ Iniciando exclusão da proposta ${id}`);
-  
-  // Deletar custos de viagem relacionados primeiro (não tem CASCADE)
-  db.run('DELETE FROM custos_viagens WHERE proposta_id = ? OR proposta_aprovacao_id = ?', [id, id], (err) => {
-    if (err) {
-      console.error('❌ Erro ao deletar custos de viagem:', err);
-      // Continuar mesmo se houver erro (pode não ter custos)
-    } else {
-      console.log('✅ Custos de viagem deletados');
-    }
-    
-    // Deletar atividades relacionadas (não tem CASCADE)
-    db.run('DELETE FROM atividades WHERE proposta_id = ?', [id], (err) => {
-      if (err) {
-        console.error('❌ Erro ao deletar atividades:', err);
-        // Continuar mesmo se houver erro (pode não ter atividades)
-      } else {
-        console.log('✅ Atividades relacionadas deletadas');
-      }
-      
-      // Deletar aprovações relacionadas (tem CASCADE, mas vamos garantir)
-      db.run('DELETE FROM aprovacoes WHERE proposta_id = ?', [id], (err) => {
-        if (err) {
-          console.error('❌ Erro ao deletar aprovações:', err);
-        } else {
-          console.log('✅ Aprovações relacionadas deletadas');
-        }
-        
-        // Deletar follow-ups (tem CASCADE, mas vamos garantir)
-        db.run('DELETE FROM proposta_followups WHERE proposta_id = ?', [id], (err) => {
-          if (err) {
-            console.error('❌ Erro ao deletar follow-ups:', err);
-          } else {
-            console.log('✅ Follow-ups deletados');
-          }
-          
-          // Deletar histórico de status (auditoria)
-          db.run('DELETE FROM proposta_status_history WHERE proposta_id = ?', [id], (err) => {
-            if (err) console.error('❌ Erro ao deletar status_history:', err);
-          });
-          // Deletar revisões (tem CASCADE, mas vamos garantir)
-          db.run('DELETE FROM proposta_revisoes WHERE proposta_id = ?', [id], (err) => {
-            if (err) {
-              console.error('❌ Erro ao deletar revisões:', err);
-            } else {
-              console.log('✅ Revisões deletadas');
-            }
-            
-            // Deletar itens (tem CASCADE, mas vamos garantir)
-            db.run('DELETE FROM proposta_itens WHERE proposta_id = ?', [id], (err) => {
-              if (err) {
-                console.error('❌ Erro ao deletar itens:', err);
-                return res.status(500).json({ error: err.message });
-              }
-              console.log('✅ Itens deletados');
 
-              // Deletar proposta
-              db.run('DELETE FROM propostas WHERE id = ?', [id], (err) => {
-                if (err) {
-                  console.error('❌ Erro ao deletar proposta:', err);
-                  return res.status(500).json({ error: err.message });
-                }
-                console.log('✅ Proposta deletada com sucesso');
-                res.json({ message: 'Proposta excluída com sucesso' });
-              });
-            });
-          });
-        });
+  db.get('SELECT id, status, ativo FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (!proposta) {
+      return res.status(404).json({ error: 'Proposta não encontrada' });
+    }
+    if (proposta.ativo === 0) {
+      return res.status(404).json({ error: 'Proposta já está inativa' });
+    }
+    if (!podeInativarProposta(req.user, proposta)) {
+      return res.status(403).json({
+        error: 'Não é possível inativar propostas aprovadas ou em andamento. Apenas rascunhos podem ser excluídos por usuários não administradores.'
       });
-    });
+    }
+
+    db.run(
+      `UPDATE propostas
+       SET ativo = 0, inativada_em = CURRENT_TIMESTAMP, inativada_por = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [req.user.id, id],
+      function (updateErr) {
+        if (updateErr) {
+          console.error('❌ Erro ao inativar proposta:', updateErr);
+          return res.status(500).json({ error: updateErr.message });
+        }
+        console.log(`✅ Proposta ${id} inativada (soft delete) por usuário ${req.user.id}`);
+        res.json({ message: 'Proposta inativada com sucesso', soft_delete: true });
+      }
+    );
   });
 });
 
@@ -15360,7 +15397,7 @@ app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateT
       SUM(CASE WHEN p.status = 'aprovada' THEN p.valor_total ELSE 0 END) as valor_total_aprovado,
       MAX(p.created_at) as ultima_proposta_data
     FROM clientes c
-    LEFT JOIN propostas p ON c.id = p.cliente_id
+    LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.id = ?
     GROUP BY c.id
   `, [cliente_id], (err, cliente) => {
@@ -16233,12 +16270,12 @@ app.get('/api/dashboard', authenticateToken, (req, res) => {
             stats.projetosPorStatus = rows || [];
 
             // Propostas por status
-            db.all('SELECT status, COUNT(*) as total FROM propostas GROUP BY status', [], (err, rows) => {
+            db.all(`SELECT status, COUNT(*) as total FROM propostas WHERE ${SQL_PROPOSTA_ATIVA} GROUP BY status`, [], (err, rows) => {
               if (err) return res.status(500).json({ error: err.message });
               stats.propostasPorStatus = rows || [];
 
               // Valor total de propostas aprovadas
-              db.get('SELECT SUM(valor_total) as total FROM propostas WHERE status = ?', ['aprovada'], (err, row) => {
+              db.get(`SELECT SUM(valor_total) as total FROM propostas WHERE status = ? AND ${SQL_PROPOSTA_ATIVA}`, ['aprovada'], (err, row) => {
                 if (err) return res.status(500).json({ error: err.message });
                 stats.valorTotalPropostasAprovadas = row.total || 0;
 
@@ -16282,7 +16319,7 @@ app.get('/api/dashboard/historico', authenticateToken, (req, res) => {
       UNION ALL
       SELECT created_at, id, 'projeto' as tipo, NULL as status FROM projetos
       UNION ALL
-      SELECT created_at, id, 'proposta' as tipo, status FROM propostas
+      SELECT created_at, id, 'proposta' as tipo, status FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}
     )
     WHERE created_at >= date('now', '-12 months')
     GROUP BY mes
@@ -16325,7 +16362,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT c.estado as uf, COUNT(*) as total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
-    WHERE c.estado IS NOT NULL
+    WHERE c.estado IS NOT NULL AND ${sqlPropostaAtivaAlias('p')}
     GROUP BY c.estado
     ORDER BY total DESC
   `, [], (err, rows) => {
@@ -16335,9 +16372,9 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
 
   // 2. Volume de busca por região
   db.all(`
-    SELECT regiao_busca, COUNT(*) as total
+    SELECT regiao_busca as regiao, COUNT(*) as total
     FROM proposta_itens
-    WHERE regiao_busca IS NOT NULL
+    WHERE regiao_busca IS NOT NULL AND regiao_busca != ''
     GROUP BY regiao_busca
     ORDER BY total DESC
   `, [], (err, rows) => {
@@ -16350,7 +16387,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT c.razao_social, COUNT(*) as total_compras, SUM(p.valor_total) as valor_total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
-    WHERE p.status = 'aprovada'
+    WHERE p.status = 'aprovada' AND ${sqlPropostaAtivaAlias('p')}
     GROUP BY c.id
     ORDER BY total_compras DESC
     LIMIT 10
@@ -16364,6 +16401,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT c.razao_social, COUNT(*) as total_propostas
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
+    WHERE ${sqlPropostaAtivaAlias('p')}
     GROUP BY c.id
     ORDER BY total_propostas DESC
     LIMIT 10
@@ -16377,7 +16415,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT c.estado as regiao, COUNT(*) as total_compras, SUM(p.valor_total) as valor_total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
-    WHERE p.status = 'aprovada' AND c.estado IS NOT NULL
+    WHERE p.status = 'aprovada' AND c.estado IS NOT NULL AND ${sqlPropostaAtivaAlias('p')}
     GROUP BY c.estado
     ORDER BY total_compras DESC
     LIMIT 10
@@ -16391,6 +16429,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT origem_busca, COUNT(*) as total
     FROM propostas
     WHERE origem_busca IS NOT NULL
+      AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY origem_busca
     ORDER BY total DESC
   `, [], (err, rows) => {
@@ -16406,6 +16445,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
            ROUND(SUM(CASE WHEN status = 'aprovada' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) as taxa_conversao
     FROM propostas
     WHERE familia_produto IS NOT NULL
+      AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY familia_produto
     ORDER BY taxa_conversao DESC
   `, [], (err, rows) => {
@@ -16417,7 +16457,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
   db.all(`
     SELECT c.segmento, COUNT(DISTINCT c.id) as total_clientes, COUNT(p.id) as total_propostas
     FROM clientes c
-    LEFT JOIN propostas p ON c.id = p.cliente_id
+    LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.segmento IS NOT NULL
     GROUP BY c.segmento
     ORDER BY total_clientes DESC
@@ -16430,7 +16470,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
   db.all(`
     SELECT motivo_nao_venda, COUNT(*) as total
     FROM propostas
-    WHERE motivo_nao_venda IS NOT NULL
+    WHERE motivo_nao_venda IS NOT NULL AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY motivo_nao_venda
     ORDER BY total DESC
   `, [], (err, rows) => {
@@ -16961,6 +17001,7 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
       COUNT(*) as quantidade,
       SUM(valor_total) as valor_total
     FROM propostas
+    WHERE ${SQL_PROPOSTA_ATIVA}
     GROUP BY status
     ORDER BY 
       CASE status
@@ -16989,6 +17030,7 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
       SUM(valor_total) as valor_total
     FROM propostas
     WHERE status IN ('rascunho', 'enviada', 'aprovada', 'rejeitada')
+      AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY status
   `, [], (err, rows) => {
     if (!err) {
@@ -17010,6 +17052,7 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
       AVG(julianday('now') - julianday(created_at)) as tempo_medio_dias
     FROM propostas
     WHERE status IN ('enviada', 'aprovada', 'rejeitada')
+      AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY status
   `, [], (err, rows) => {
     if (!err) {
@@ -17032,6 +17075,7 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
       p.valor_total,
       p.validade,
       p.created_at,
+      p.probabilidade,
       c.razao_social as cliente_nome,
       u.nome as responsavel_nome,
       julianday(p.validade) - julianday('now') as dias_restantes
@@ -17039,6 +17083,7 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
     LEFT JOIN clientes c ON p.cliente_id = c.id
     LEFT JOIN usuarios u ON p.responsavel_id = u.id
     WHERE p.status = 'enviada' 
+      AND ${sqlPropostaAtivaAlias('p')}
       AND p.validade IS NOT NULL
       AND julianday(p.validade) >= julianday('now')
     ORDER BY p.validade ASC
@@ -17054,7 +17099,9 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
         dias_restantes: Math.round(row.dias_restantes || 0),
         cliente_nome: row.cliente_nome,
         responsavel_nome: row.responsavel_nome,
-        probabilidade: row.dias_restantes <= 7 ? 80 : row.dias_restantes <= 15 ? 60 : 40
+        probabilidade: row.probabilidade != null && row.probabilidade !== ''
+          ? Number(row.probabilidade)
+          : (row.dias_restantes <= 7 ? 80 : row.dias_restantes <= 15 ? 60 : 40)
       }));
     }
     checkComplete();
@@ -17063,10 +17110,15 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
   // 5. Tempo médio de fechamento (criação até aprovação)
   db.get(`
     SELECT 
-      AVG(julianday(updated_at) - julianday(created_at)) as tempo_medio_dias
+      AVG(
+        CASE 
+          WHEN data_fechamento IS NOT NULL THEN julianday(data_fechamento) - julianday(created_at)
+          ELSE julianday(updated_at) - julianday(created_at)
+        END
+      ) as tempo_medio_dias
     FROM propostas
     WHERE status = 'aprovada'
-      AND updated_at IS NOT NULL
+      AND ${SQL_PROPOSTA_ATIVA}
   `, [], (err, row) => {
     if (!err && row) {
       dados.analisePipeline.tempoMedioFechamento = Math.round(row.tempo_medio_dias || 0);
@@ -17080,6 +17132,7 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
       SUM(valor_total) as valor_total
     FROM propostas
     WHERE status IN ('rascunho', 'enviada', 'aprovada')
+      AND ${SQL_PROPOSTA_ATIVA}
   `, [], (err, row) => {
     if (!err && row) {
       dados.pipeline.valorTotal = row.valor_total || 0;
@@ -22052,6 +22105,9 @@ require('./routes/requisicoesMaterial')(app, db, authenticateToken);
 
 // ── Módulo Almoxarifado ──────────────────────────────────────────────────────
 require('./routes/almoxarifado')(app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission);
+
+// ── Módulo Frotas ────────────────────────────────────────────────────────────
+require('./routes/frotas')(app, db, authenticateToken, checkModulePermission);
 
 // ── Módulo Chat Interno ──────────────────────────────────────────────────────
 let chatSocket = null;

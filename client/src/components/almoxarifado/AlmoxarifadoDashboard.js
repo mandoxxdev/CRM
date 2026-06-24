@@ -34,15 +34,27 @@ const aggregateConsumoPorOS = (rows) => {
     .slice(0, 10);
 };
 
+const EMPTY_STATS = {
+  totalMateriais: 0,
+  materiaisCriticos: 0,
+  materiaisZerados: 0,
+  valorTotalEstoque: 0,
+  movimentacoesHoje: 0,
+  listaMateriaisCriticos: [],
+  ultimasMovimentacoes: [],
+  graficoMovimentacoes: [],
+};
+
 const AlmoxarifadoDashboard = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [requisicoes, setRequisicoes] = useState(null);
   const [consumoOs, setConsumoOs] = useState([]);
   const [materiaisConsumidos, setMateriaisConsumidos] = useState([]);
   const [periodoDias, setPeriodoDias] = useState(30);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const relatoriosCarregados = useRef(false);
 
   const loadRelatorios = useCallback(async (dias) => {
@@ -58,17 +70,27 @@ const AlmoxarifadoDashboard = () => {
 
   const loadDashboard = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [dashRes, reqRes] = await Promise.all([
         api.get('/almoxarifado/dashboard'),
         api.get('/almoxarifado/dashboard/requisicoes').catch(() => ({ data: null })),
       ]);
-      setStats(dashRes.data);
+      setStats({ ...EMPTY_STATS, ...(dashRes.data || {}) });
       setRequisicoes(reqRes.data);
       await loadRelatorios(periodoDias);
       relatoriosCarregados.current = true;
     } catch (err) {
       console.error('Erro ao carregar dashboard do almoxarifado:', err);
+      setStats(EMPTY_STATS);
+      const status = err.response?.status;
+      if (status === 403) {
+        setLoadError('Sem permissão para acessar o módulo Almoxarifado. Peça a um administrador para habilitar o módulo no seu grupo de usuários.');
+      } else if (!err.response) {
+        setLoadError('Não foi possível conectar ao servidor. Verifique se o backend está rodando (npm run dev na pasta server).');
+      } else {
+        setLoadError(err.response?.data?.error || 'Não foi possível carregar os dados do almoxarifado. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
@@ -110,10 +132,41 @@ const AlmoxarifadoDashboard = () => {
     );
   }
 
-  if (!stats) return null;
-
   return (
     <div className="almox-page">
+      {loadError && (
+        <div
+          style={{
+            marginBottom: 20,
+            padding: '14px 18px',
+            borderRadius: 10,
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            background: 'rgba(239, 68, 68, 0.08)',
+            color: 'var(--gmp-text)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <FiAlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <strong style={{ display: 'block', marginBottom: 4 }}>Dados indisponíveis no momento</strong>
+              <span style={{ fontSize: '0.9rem', color: 'var(--gmp-text-light)' }}>{loadError}</span>
+              {isAdmin && (
+                <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                  Admin: confira se o servidor foi reiniciado após atualização e se as tabelas do almoxarifado foram criadas.
+                </p>
+              )}
+            </div>
+          </div>
+          <button type="button" className="btn-almox-secondary" onClick={loadDashboard}>
+            <FiRefreshCw size={14} /> Tentar novamente
+          </button>
+        </div>
+      )}
       <div className="almox-header">
         <div>
           <h1>Almoxarifado</h1>
@@ -336,7 +389,7 @@ const AlmoxarifadoDashboard = () => {
             ) : (
               stats.ultimasMovimentacoes.map(m => (
                 <div key={m.id} className="almox-mov-item">
-                  <span className={`almox-badge almox-badge-${m.tipo.toLowerCase()}`}>{tipoLabel(m.tipo)}</span>
+                  <span className={`almox-badge almox-badge-${String(m.tipo || 'ajuste').toLowerCase()}`}>{tipoLabel(m.tipo)}</span>
                   <div className="almox-mov-info">
                     <div className="almox-mov-nome">{m.material_nome}</div>
                     <div className="almox-mov-meta">

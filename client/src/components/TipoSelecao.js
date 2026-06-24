@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
 import { toast } from 'react-toastify';
 import { useModulosTipoConfig } from '../hooks/useModulosTipoConfig';
 import {
@@ -10,8 +9,13 @@ import {
   FiLock, FiShield, FiTool, FiSliders, FiArchive,
   FiSearch, FiPlay, FiX
 } from 'react-icons/fi';
-import SplashScreen from './SplashScreen';
+import { prefetchModule, prefetchModuleByRoute } from '../routes/lazyModules';
+import {
+  fetchUserPermissions,
+  getCachedUserPermissions,
+} from '../services/permissionsCache';
 import './TipoSelecao.css';
+import { resetModuleSplashSession } from './ProtectedModuleRoute';
 
 const RECENT_MODULES_KEY = 'gmp_modulos_recentes';
 
@@ -51,9 +55,6 @@ const getPrimeiroNome = (nome) => {
 const TipoSelecao = ({ onClose, forceShow = false }) => {
   const [modulosDisponiveis, setModulosDisponiveis] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showSplash, setShowSplash] = useState(false);
-  const [splashModule, setSplashModule] = useState(null);
-  const [rotaDestino, setRotaDestino] = useState(null);
   const [busca, setBusca] = useState('');
   const [recentesIds, setRecentesIds] = useState([]);
   const [tipoModalModulo, setTipoModalModulo] = useState(null);
@@ -76,7 +77,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     {
       id: 'frota',
       nome: 'Frota',
-      descricao: 'Manutenção e vistoria de veículos',
+      descricao: 'Gestão completa de veículos, manutenções e custos',
       icon: FiTool,
       modulo: 'comercial',
       rota: '/frota',
@@ -157,6 +158,15 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   ];
 
   useEffect(() => {
+    resetModuleSplashSession();
+    try {
+      sessionStorage.removeItem('orion_skip_module_splash');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(RECENT_MODULES_KEY) || '[]');
       if (Array.isArray(stored)) {
@@ -166,6 +176,12 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       setRecentesIds([]);
     }
   }, []);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchUserPermissions(user.id).catch(() => {});
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (forceShow) {
@@ -178,15 +194,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     if (forceShow) return;
     const verificarRotaPendente = () => {
       const rotaPendente = sessionStorage.getItem('rotaDestinoModulo');
-      if (rotaPendente && !showSplash) {
+      if (rotaPendente) {
         sessionStorage.removeItem('rotaDestinoModulo');
         sessionStorage.removeItem('moduloDestino');
         navigate(rotaPendente, { replace: true });
       }
     };
-    const timer = setTimeout(verificarRotaPendente, 1000);
-    return () => clearTimeout(timer);
-  }, [forceShow, showSplash, navigate]);
+    verificarRotaPendente();
+  }, [forceShow, navigate]);
 
   useEffect(() => {
     const carregarModulosPermitidos = async () => {
@@ -216,8 +231,10 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
           return;
         }
 
-        const response = await api.get(`/usuarios/${user.id}/grupos`);
-        const { permissoes } = response.data;
+        const cached = getCachedUserPermissions(user.id);
+        const permissoes = cached
+          ? cached.permissoes
+          : (await fetchUserPermissions(user.id)).permissoes;
 
         const modulosPermitidos = new Set();
 
@@ -281,6 +298,12 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     }
   };
 
+  const handleModuloHover = (modulo) => {
+    if (!modulo?.disponivel) return;
+    prefetchModule(modulo.modulo);
+    prefetchModuleByRoute(modulo.rota);
+  };
+
   const handleModuloClick = (modulo) => {
     if (modulo.disponivel && modulo.rota) {
       if (!forceShow) {
@@ -288,32 +311,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       }
 
       salvarModuloRecente(modulo.id);
+      prefetchModule(modulo.modulo);
+      prefetchModuleByRoute(modulo.rota);
 
-      sessionStorage.setItem('rotaDestinoModulo', modulo.rota);
-      sessionStorage.setItem('moduloDestino', modulo.modulo);
+      if (onClose) {
+        onClose();
+      }
 
-      setRotaDestino(modulo.rota);
-      setSplashModule(modulo.modulo);
-      setShowSplash(true);
-    }
-  };
-
-  const handleSplashComplete = () => {
-    const rota = rotaDestino || sessionStorage.getItem('rotaDestinoModulo');
-
-    sessionStorage.removeItem('rotaDestinoModulo');
-    sessionStorage.removeItem('moduloDestino');
-
-    setShowSplash(false);
-    setRotaDestino(null);
-    setSplashModule(null);
-
-    if (onClose) {
-      onClose();
-    }
-
-    if (rota) {
-      navigate(rota, { replace: true });
+      navigate(modulo.rota, { replace: true });
     }
   };
 
@@ -387,6 +392,8 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         className={`orion-tile ${isDisponivel ? 'orion-tile--ativo' : 'orion-tile--bloqueado'} ${compact ? 'orion-tile--compact' : ''}`}
         style={{ '--tile-gradient': modulo.gradient }}
         onClick={() => handleModuloClick(modulo)}
+        onMouseEnter={() => handleModuloHover(modulo)}
+        onFocus={() => handleModuloHover(modulo)}
         disabled={!isDisponivel}
         aria-label={`${modulo.nome}${isDisponivel ? '' : ' — sem acesso'}`}
       >
@@ -435,15 +442,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       </button>
     );
   };
-
-  if (showSplash && splashModule) {
-    return (
-      <SplashScreen
-        onComplete={handleSplashComplete}
-        module={splashModule}
-      />
-    );
-  }
 
   if (!user) {
     return (

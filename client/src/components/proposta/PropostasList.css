@@ -9,6 +9,11 @@
 .propostas-list-search { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 200px; padding: 0.5rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; }
 .propostas-list-search input { border: none; background: none; outline: none; width: 100%; }
 .propostas-list-filters select { padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 8px; min-width: 140px; }
+.propostas-list-toggle-inativas { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; color: #475569; cursor: pointer; user-select: none; }
+.propostas-list-toggle-inativas input { cursor: pointer; }
+.propostas-list-row-inativa { opacity: 0.65; background: #f8fafc; }
+.propostas-list-row-inativa:hover { background: #f1f5f9; }
+.propostas-list .badge-inativa { margin-left: 0.5rem; background: #94a3b8; color: #fff; }
 .propostas-list-table-wrap { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: auto; }
 .propostas-list-loading, .propostas-list-empty { padding: 2rem; text-align: center; color: #64748b; }
 .propostas-list-table { width: 100%; border-collapse: collapse; }

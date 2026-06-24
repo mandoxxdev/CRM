@@ -88,8 +88,13 @@ const MaterialAlmoxarifadoForm = () => {
     try {
       const res = await api.get('/almoxarifado/familias');
       setFamilias(res.data || []);
-    } catch {
-      toast.error('Erro ao carregar famílias');
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 403) {
+        toast.error('Sem permissão no módulo Almoxarifado. Solicite acesso a um administrador.');
+      } else {
+        toast.error('Erro ao carregar famílias. Reinicie o servidor e tente novamente.');
+      }
     } finally {
       setLoadingFamilias(false);
     }

@@ -57,21 +57,38 @@ async function safeAlter(db, sql) {
   }
 }
 
-async function ensureTipoUsoColumns(db) {
-  await safeAlter(db, `ALTER TABLE familias_material_almoxarifado ADD COLUMN tipo_uso TEXT DEFAULT 'ambos'`);
-  await safeAlter(db, `ALTER TABLE categorias_material_almoxarifado ADD COLUMN tipo_uso TEXT DEFAULT 'industrial'`);
-  await safeAlter(db, `ALTER TABLE setores_requisicao_almoxarifado ADD COLUMN tipo_setor TEXT DEFAULT 'industrial'`);
+async function tableExists(db, name) {
+  const row = await dbGet(
+    db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+    [name]
+  );
+  return Boolean(row);
+}
 
-  for (const [codigo, tipo] of Object.entries(FAMILIAS_TIPO_USO)) {
-    await dbRun(db,
-      `UPDATE familias_material_almoxarifado SET tipo_uso = ? WHERE codigo = ? AND (tipo_uso IS NULL OR tipo_uso = 'ambos')`,
-      [tipo, codigo]);
+async function ensureTipoUsoColumns(db) {
+  if (await tableExists(db, 'familias_material_almoxarifado')) {
+    await safeAlter(db, `ALTER TABLE familias_material_almoxarifado ADD COLUMN tipo_uso TEXT DEFAULT 'ambos'`);
+
+    for (const [codigo, tipo] of Object.entries(FAMILIAS_TIPO_USO)) {
+      await dbRun(db,
+        `UPDATE familias_material_almoxarifado SET tipo_uso = ? WHERE codigo = ? AND (tipo_uso IS NULL OR tipo_uso = 'ambos')`,
+        [tipo, codigo]);
+    }
   }
 
-  for (const [nome, tipo] of Object.entries(CATEGORIAS_TIPO_USO)) {
-    await dbRun(db,
-      `UPDATE categorias_material_almoxarifado SET tipo_uso = ? WHERE nome = ?`,
-      [tipo, nome]);
+  if (await tableExists(db, 'categorias_material_almoxarifado')) {
+    await safeAlter(db, `ALTER TABLE categorias_material_almoxarifado ADD COLUMN tipo_uso TEXT DEFAULT 'industrial'`);
+
+    for (const [nome, tipo] of Object.entries(CATEGORIAS_TIPO_USO)) {
+      await dbRun(db,
+        `UPDATE categorias_material_almoxarifado SET tipo_uso = ? WHERE nome = ?`,
+        [tipo, nome]);
+    }
+  }
+
+  if (await tableExists(db, 'setores_requisicao_almoxarifado')) {
+    await safeAlter(db, `ALTER TABLE setores_requisicao_almoxarifado ADD COLUMN tipo_setor TEXT DEFAULT 'industrial'`);
   }
 }
 

@@ -60,11 +60,15 @@ const ModuleSplash = ({ children }) => {
   // Verificar se a rota é protegida (ProtectedModuleRoute cuida do splash)
   const isProtectedRoute = (path) => {
     return path.startsWith('/comercial') ||
-           path.startsWith('/compras') || 
-           path.startsWith('/financeiro') || 
-           path.startsWith('/fabrica') || 
-           path.startsWith('/configuracoes') || 
-           path.startsWith('/admin');
+           path.startsWith('/compras') ||
+           path.startsWith('/financeiro') ||
+           path.startsWith('/fabrica') ||
+           path.startsWith('/configuracoes') ||
+           path.startsWith('/admin') ||
+           path.startsWith('/almoxarifado') ||
+           path.startsWith('/engenharia') ||
+           path.startsWith('/frota') ||
+           path.startsWith('/chat');
   };
 
   // Verificar se é a tela inicial (seleção de módulos)

@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { fetchUserPermissions, getCachedUserPermissions } from '../services/permissionsCache';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
-  FiArchive, FiActivity, FiList, FiMessageCircle
+  FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -16,6 +17,7 @@ import AnimatedBackground from './AnimatedBackground';
 import HelpGuide from './HelpGuide';
 import HelpSearch from './HelpSearch';
 import ModuleSplash from './ModuleSplash';
+import { RouteLoading } from './LazyPage';
 import PreferenciasMenu from './PreferenciasMenu';
 import './Layout.css';
 import '../components/chat/Chat.css';
@@ -159,8 +161,9 @@ const Layout = () => {
 
   const loadUserGrupos = async () => {
     try {
-      const response = await api.get(`/usuarios/${user.id}/grupos`);
-      setUserGrupos(response.data.grupos || []);
+      const cached = getCachedUserPermissions(user.id);
+      const data = cached || await fetchUserPermissions(user.id);
+      setUserGrupos(data.grupos || []);
     } catch (error) {
       console.error('Erro ao carregar grupos do usuário:', error);
       setUserGrupos([]);
@@ -248,7 +251,15 @@ const Layout = () => {
   // Menu do módulo Frota
   const frotaMenuItems = [
     { path: '/frota', icon: FiHome, label: 'Dashboard Frota' },
-    { path: '/frota/veiculos', icon: FiTruck, label: 'Veículos e Manutenção' },
+    { path: '/frota/veiculos', icon: FiTruck, label: 'Veículos' },
+    { path: '/frota/motoristas', icon: FiUsers, label: 'Motoristas' },
+    { path: '/frota/manutencoes', icon: FiTool, label: 'Manutenções' },
+    { path: '/frota/abastecimentos', icon: FiDroplet, label: 'Abastecimentos' },
+    { path: '/frota/documentos', icon: FiFileText, label: 'Documentos' },
+    { path: '/frota/viagens', icon: FiMap, label: 'Viagens' },
+    { path: '/frota/checklists', icon: FiClipboard, label: 'Checklist Diário' },
+    { path: '/frota/multas', icon: FiAlertTriangle, label: 'Multas' },
+    { path: '/frota/relatorios', icon: FiBarChart2, label: 'Relatórios' },
     { path: '/frota/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/frota/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
@@ -438,7 +449,9 @@ const Layout = () => {
           />
         )}
         <ModuleSplash>
-          <Outlet />
+          <Suspense fallback={<RouteLoading module={activeModule === 'crm' ? 'comercial' : activeModule} />}>
+            <Outlet />
+          </Suspense>
         </ModuleSplash>
       </div>
       <BuscaGlobal isOpen={buscaGlobalOpen} onClose={() => setBuscaGlobalOpen(false)} />

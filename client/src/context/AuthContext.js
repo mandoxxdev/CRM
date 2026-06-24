@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import { invalidatePermissionsCache } from '../services/permissionsCache';
 
 const AuthContext = createContext();
 
@@ -64,6 +65,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    if (user?.id) {
+      invalidatePermissionsCache(user.id);
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     sessionStorage.removeItem('token');

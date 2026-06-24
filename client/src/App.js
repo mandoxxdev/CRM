@@ -1,85 +1,97 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import OrionIntro from './components/OrionIntro';
-import Onboarding from './components/Onboarding';
-import Clientes from './components/Clientes';
-import ClienteForm from './components/ClienteForm';
-import Projetos from './components/Projetos';
-import ProjetoForm from './components/ProjetoForm';
-import PropostasList from './components/proposta/PropostasList';
-import PropostaForm from './components/proposta/PropostaForm';
-import PropostaDetalhe from './components/proposta/PropostaDetalhe';
-import Aprovacoes from './components/Aprovacoes';
-import ConfigTemplateProposta from './components/ConfigTemplateProposta';
-import EditorTemplateProposta from './components/EditorTemplateProposta';
-import ProdutosPage from './components/ProdutosPage';
-import FamiliasDoGrupo from './components/FamiliasDoGrupo';
-import ProdutosPorFamilia from './components/ProdutosPorFamilia';
-import ProdutoForm from './components/ProdutoForm';
-import Atividades from './components/Atividades';
-import Relatorios from './components/Relatorios';
-import MaquinasVendidas from './components/MaquinasVendidas';
-import CustosViagens from './components/CustosViagens';
-import OrdensServicoComercial from './components/OrdensServicoComercial';
-import OSComercialForm from './components/OSComercialForm';
-import Compras from './components/Compras';
-import ComprasSolicitacoesCompra from './components/ComprasSolicitacoesCompra';
-import GruposFornecedores from './components/GruposFornecedores';
-import FornecedoresDoGrupo from './components/FornecedoresDoGrupo';
-import ItensFornecedor from './components/ItensFornecedor';
-import Financeiro from './components/Financeiro';
-import Fabrica from './components/Fabrica';
-import DashboardMES from './components/mes/DashboardMES';
-import OrdensServico from './components/operacional/OrdensServico';
-import OSFormPage from './components/operacional/OSFormPage';
-import Colaboradores from './components/operacional/Colaboradores';
-import AtividadesColaboradores from './components/operacional/AtividadesColaboradores';
-import ControlePresenca from './components/operacional/ControlePresenca';
-import HorasExtras from './components/operacional/HorasExtras';
-import Equipamentos from './components/operacional/Equipamentos';
-import Configuracoes from './components/Configuracoes';
-import Permissoes from './components/Permissoes';
-import Usuarios from './components/Usuarios';
-import UsuarioForm from './components/UsuarioForm';
-import Admin from './components/Admin';
-import Layout from './components/Layout';
-import CalculosEngenharia from './components/CalculosEngenharia';
-import CalculoTampo from './components/CalculoTampo';
-import CalculoVolume from './components/CalculoVolume';
-import CalculoMotorImpelidor from './components/CalculoMotorImpelidor';
-import SelecaoAgitadores from './components/SelecaoAgitadores';
-import CalculoPlataformas from './components/CalculoPlataformas';
-import TipoSelecao from './components/TipoSelecao';
 import ProtectedModuleRoute from './components/ProtectedModuleRoute';
 import ErrorBoundary from './components/ErrorBoundary';
-import SolicitacaoMaterialEscritorio from './components/engenharia/SolicitacaoMaterialEscritorio';
-import EngenhariaProjetosHome from './components/engenhariaProjetos/EngenhariaProjetosHome';
-import CadastroMateriaisEscritorio from './components/engenhariaProjetos/CadastroMateriaisEscritorio';
-import SolicitacaoMaterialEscritorioCesta from './components/engenhariaProjetos/SolicitacaoMaterialEscritorioCesta';
-import MinhasSolicitacoesCompra from './components/MinhasSolicitacoesCompra';
-import VeiculosManutencao from './components/VeiculosManutencao';
-import AlmoxarifadoDashboard from './components/almoxarifado/AlmoxarifadoDashboard';
-import MateriaisAlmoxarifado from './components/almoxarifado/MateriaisAlmoxarifado';
-import MaterialAlmoxarifadoForm from './components/almoxarifado/MaterialAlmoxarifadoForm';
-import MovimentacoesAlmoxarifado from './components/almoxarifado/MovimentacoesAlmoxarifado';
-import ConferenciaEstoque from './components/almoxarifado/ConferenciaEstoque';
-import RequisicoesList from './components/almoxarifado/RequisicoesList';
-import RequisicaoForm from './components/almoxarifado/RequisicaoForm';
-import { RequisicoesMaterialNovaPage, RequisicoesMaterialListaPage } from './components/almoxarifado/RequisicoesMaterialPages';
+import ModuleLoading from './components/ModuleLoading';
+import { LazyPage } from './components/LazyPage';
 import { RequisicoesMaterialProvider } from './components/almoxarifado/RequisicoesMaterialContext';
 import { MODULOS_REQUISICAO } from './config/requisicoesMaterialConfig';
-import ConfiguracoesAlmoxarifado from './components/almoxarifado/ConfiguracoesAlmoxarifado';
-import MapaLocalizacoesAlmoxarifado from './components/almoxarifado/MapaLocalizacoesAlmoxarifado';
-import RecebimentosAlmoxarifado from './components/almoxarifado/RecebimentosAlmoxarifado';
-import ChatPage from './components/chat/ChatPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import './styles/glass-override.css';
+import {
+  Login,
+  Dashboard,
+  OrionIntro,
+  Onboarding,
+  Clientes,
+  ClienteForm,
+  Projetos,
+  ProjetoForm,
+  PropostasList,
+  PropostaForm,
+  PropostaDetalhe,
+  Aprovacoes,
+  ConfigTemplateProposta,
+  EditorTemplateProposta,
+  ProdutosPage,
+  FamiliasDoGrupo,
+  ProdutosPorFamilia,
+  ProdutoForm,
+  Atividades,
+  Relatorios,
+  MaquinasVendidas,
+  CustosViagens,
+  OrdensServicoComercial,
+  OSComercialForm,
+  Compras,
+  ComprasSolicitacoesCompra,
+  GruposFornecedores,
+  FornecedoresDoGrupo,
+  ItensFornecedor,
+  Financeiro,
+  Fabrica,
+  DashboardMES,
+  OrdensServico,
+  OSFormPage,
+  Colaboradores,
+  AtividadesColaboradores,
+  ControlePresenca,
+  HorasExtras,
+  Equipamentos,
+  Configuracoes,
+  UsuarioForm,
+  Admin,
+  Layout,
+  CalculosEngenharia,
+  CalculoTampo,
+  CalculoVolume,
+  CalculoMotorImpelidor,
+  SelecaoAgitadores,
+  CalculoPlataformas,
+  TipoSelecao,
+  SolicitacaoMaterialEscritorio,
+  EngenhariaProjetosHome,
+  CadastroMateriaisEscritorio,
+  SolicitacaoMaterialEscritorioCesta,
+  MinhasSolicitacoesCompra,
+  FrotasDashboard,
+  FrotasVeiculos,
+  FrotasMotoristas,
+  FrotasManutencoes,
+  FrotasAbastecimentos,
+  FrotasMultas,
+  FrotasDocumentos,
+  FrotasViagens,
+  FrotasChecklists,
+  FrotasRelatorios,
+  AlmoxarifadoDashboard,
+  MateriaisAlmoxarifado,
+  MaterialAlmoxarifadoForm,
+  MovimentacoesAlmoxarifado,
+  ConferenciaEstoque,
+  RequisicoesList,
+  RequisicaoForm,
+  RequisicoesMaterialNovaPage,
+  RequisicoesMaterialListaPage,
+  ConfiguracoesAlmoxarifado,
+  MapaLocalizacoesAlmoxarifado,
+  RecebimentosAlmoxarifado,
+  ChatPage,
+} from './routes/lazyModules';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -124,12 +136,7 @@ const PrivateRoute = ({ children }) => {
 
 
   if (loading) {
-    return (
-      <div className="loading">
-        <div className="loading-spinner"></div>
-        <p>Carregando...</p>
-      </div>
-    );
+    return <ModuleLoading module="sistema" compact />;
   }
 
   if (!user) {
@@ -139,29 +146,31 @@ const PrivateRoute = ({ children }) => {
   // Se estiver na rota raiz, sempre mostrar tela de seleção de módulos
   if (location.pathname === '/' && user) {
     return (
-      <TipoSelecao 
-        onClose={() => {
-          // Não fazer nada ao fechar - usuário deve selecionar um módulo
-        }}
-        forceShow={true}
-      />
+      <Suspense fallback={<ModuleLoading module="sistema" />}>
+        <TipoSelecao
+          onClose={() => {}}
+          forceShow={true}
+        />
+      </Suspense>
     );
   }
 
   // Se não visualizou os módulos e não está na raiz, mostrar tela de seleção
   if (showTipoSelecao) {
     return (
-      <TipoSelecao 
-        onClose={() => {
-          try {
-            sessionStorage.setItem('modulosVisualizados', 'true');
-          } catch (error) {
-            console.error('Erro ao salvar módulos visualizados:', error);
-          }
-          setShowTipoSelecao(false);
-        }}
-        forceShow={false}
-      />
+      <Suspense fallback={<ModuleLoading module="sistema" />}>
+        <TipoSelecao
+          onClose={() => {
+            try {
+              sessionStorage.setItem('modulosVisualizados', 'true');
+            } catch (error) {
+              console.error('Erro ao salvar módulos visualizados:', error);
+            }
+            setShowTipoSelecao(false);
+          }}
+          forceShow={false}
+        />
+      </Suspense>
     );
   }
 
@@ -171,23 +180,20 @@ const PrivateRoute = ({ children }) => {
   }
 
   // Fallback caso children não esteja disponível
-  return (
-    <div className="loading">
-      <div className="loading-spinner"></div>
-      <p>Carregando...</p>
-    </div>
-  );
+  return <ModuleLoading module="sistema" compact />;
 };
 
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<LazyPage component={Login} module="sistema" />} />
       <Route
         path="/"
         element={
           <PrivateRoute>
-            <TipoSelecao forceShow={true} />
+            <Suspense fallback={<ModuleLoading module="sistema" />}>
+              <TipoSelecao forceShow={true} />
+            </Suspense>
           </PrivateRoute>
         }
       />
@@ -195,18 +201,22 @@ function AppRoutes() {
         path="/chat"
         element={
           <PrivateRoute>
-            <Layout />
+            <Suspense fallback={<ModuleLoading module="comercial" />}>
+              <Layout />
+            </Suspense>
           </PrivateRoute>
         }
       >
-        <Route index element={<ChatPage />} />
+        <Route index element={<LazyPage component={ChatPage} module="comercial" compact />} />
       </Route>
       <Route
         path="/comercial"
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="comercial" nomeModulo="Comercial">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="comercial" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -247,13 +257,23 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="comercial" nomeModulo="Frota">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="comercial" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
       >
-        <Route index element={<VeiculosManutencao />} />
-        <Route path="veiculos" element={<VeiculosManutencao />} />
+        <Route index element={<FrotasDashboard />} />
+        <Route path="veiculos" element={<FrotasVeiculos />} />
+        <Route path="motoristas" element={<FrotasMotoristas />} />
+        <Route path="manutencoes" element={<FrotasManutencoes />} />
+        <Route path="abastecimentos" element={<FrotasAbastecimentos />} />
+        <Route path="multas" element={<FrotasMultas />} />
+        <Route path="documentos" element={<FrotasDocumentos />} />
+        <Route path="viagens" element={<FrotasViagens />} />
+        <Route path="checklists" element={<FrotasChecklists />} />
+        <Route path="relatorios" element={<FrotasRelatorios />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="frota" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="frota" />} />
       </Route>
@@ -262,7 +282,9 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="compras" nomeModulo="Compras">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="compras" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -315,7 +337,9 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="financeiro" nomeModulo="Financeiro">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="financeiro" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -363,7 +387,9 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="operacional" nomeModulo="Operacional">
-              <Fabrica />
+              <Suspense fallback={<ModuleLoading module="operacional" />}>
+                <Fabrica />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -397,7 +423,9 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="engenharia" nomeModulo="Cálculos de Engenharia">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="engenharia" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -417,7 +445,9 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="engenharia_projetos" nomeModulo="Engenharia / Projetos">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="engenharia_projetos" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -434,7 +464,9 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="almoxarifado" nomeModulo="Almoxarifado">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="almoxarifado" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -467,7 +499,9 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="administrativo" nomeModulo="Administrativo">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="administrativo" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -481,7 +515,9 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <ProtectedModuleRoute modulo="admin" nomeModulo="Administração">
-              <Layout />
+              <Suspense fallback={<ModuleLoading module="admin" />}>
+                <Layout />
+              </Suspense>
             </ProtectedModuleRoute>
           </PrivateRoute>
         }
@@ -539,15 +575,19 @@ function App() {
       <AuthProvider>
         <ThemeProvider>
           {showIntro ? (
-            <OrionIntro onComplete={handleIntroComplete} />
+            <Suspense fallback={<ModuleLoading module="sistema" />}>
+              <OrionIntro onComplete={handleIntroComplete} />
+            </Suspense>
           ) : (
             <>
               {showOnboarding && (
-                <Onboarding 
-                  isOpen={showOnboarding} 
-                  onClose={() => setShowOnboarding(false)}
-                  onComplete={handleOnboardingComplete}
-                />
+                <Suspense fallback={null}>
+                  <Onboarding
+                    isOpen={showOnboarding}
+                    onClose={() => setShowOnboarding(false)}
+                    onComplete={handleOnboardingComplete}
+                  />
+                </Suspense>
               )}
               <ErrorBoundary>
               <AppRoutes />

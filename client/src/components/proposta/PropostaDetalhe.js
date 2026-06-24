@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FiArrowLeft, FiEye, FiDownload, FiEdit, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiClock } from 'react-icons/fi';
+import { FiArrowLeft, FiEye, FiDownload, FiEdit, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiClock, FiTrash2 } from 'react-icons/fi';
 import './PropostaDetalhe.css';
 
 const STATUS = { rascunho: 'Rascunho', enviada: 'Enviada', visualizada: 'Visualizada', aceita: 'Aceita', rejeitada: 'Rejeitada', expirada: 'Expirada' };
@@ -13,6 +14,8 @@ const TIPOS = { comercial: 'Comercial', tecnica: 'Técnica', orcamento: 'Orçame
 export default function PropostaDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const [proposta, setProposta] = useState(null);
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +39,17 @@ export default function PropostaDetalhe() {
 
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
   const status = proposta?.status || 'rascunho';
+  const inativa = proposta?.ativo === 0;
+  const podeInativar = !inativa && (isAdmin || status === 'rascunho');
+
+  const confirmInativar = () => {
+    const numero = proposta?.numero_proposta || id;
+    const st = STATUS[status] || status;
+    const msg = status === 'rascunho'
+      ? `Inativar a proposta ${numero}?`
+      : `Inativar a proposta ${numero}?\n\nStatus atual: ${st}\n\nA proposta ficará oculta da listagem, mas os vínculos no sistema serão preservados.`;
+    return window.confirm(msg);
+  };
 
   const acao = async (nome, extra) => {
     try {
@@ -50,6 +64,11 @@ export default function PropostaDetalhe() {
         const { data } = await api.post(`/propostas/${id}/clone`);
         toast.success('Proposta clonada.');
         navigate(`/comercial/propostas/editar/${data.id}`);
+        return;
+      } else if (nome === 'inativar') {
+        await api.delete(`/propostas/${id}`);
+        toast.success('Proposta inativada.');
+        navigate('/comercial/propostas');
         return;
       }
       toast.success('Ação concluída.');
@@ -87,12 +106,13 @@ export default function PropostaDetalhe() {
   if (loading || !proposta) return <div className="proposta-detalhe"><p className="proposta-detalhe-loading">Carregando...</p></div>;
 
   return (
-    <div className="proposta-detalhe">
+    <div className={`proposta-detalhe${inativa ? ' proposta-detalhe-inativa' : ''}`}>
       <header className="proposta-detalhe-header">
         <Link to="/comercial/propostas" className="proposta-detalhe-back"><FiArrowLeft /> Voltar</Link>
         <div className="proposta-detalhe-title-row">
           <h1>Proposta {proposta.numero_proposta || id}</h1>
           <span className="proposta-detalhe-badge" data-status={status}>{STATUS[status] || status}</span>
+          {inativa && <span className="proposta-detalhe-badge badge-inativa">Inativa</span>}
         </div>
         <p className="proposta-detalhe-subtitle">{proposta.titulo || '—'}</p>
       </header>
@@ -141,7 +161,12 @@ export default function PropostaDetalhe() {
           <button type="button" className="btn btn-sec" onClick={() => acao('nova-revisao')}><FiRotateCcw /> Nova revisão</button>
         )}
         <button type="button" className="btn btn-sec" onClick={() => acao('clone')}><FiCopy /> Clonar</button>
-        {status === 'rascunho' && <Link to={`/comercial/propostas/editar/${id}`} className="btn btn-pri"><FiEdit /> Editar</Link>}
+        {status === 'rascunho' && !inativa && <Link to={`/comercial/propostas/editar/${id}`} className="btn btn-pri"><FiEdit /> Editar</Link>}
+        {podeInativar && (
+          <button type="button" className="btn btn-sec btn-inativar" onClick={() => confirmInativar() && acao('inativar')}>
+            <FiTrash2 /> Inativar
+          </button>
+        )}
       </div>
 
       {rejeitar && (

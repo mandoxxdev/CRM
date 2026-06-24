@@ -24,3 +24,12 @@
 .proposta-form-table .btn-remove { background: none; border: none; cursor: pointer; color: #64748b; padding: 0.25rem; }
 .proposta-form-table .btn-remove:hover { color: #dc2626; }
 .proposta-form-total { margin: 0.5rem 0 0 0; padding-top: 0.5rem; border-top: 1px solid #e2e8f0; }
+.proposta-form-section-dashboard { border-color: #bfdbfe; background: linear-gradient(180deg, #f8fafc 0%, #fff 100%); }
+.proposta-form-section-desc { margin: -0.5rem 0 1rem 0; font-size: 0.85rem; color: #64748b; }
+.proposta-form-hint { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: #94a3b8; }
+.proposta-form-field-required label { color: #b45309; }
+.proposta-form-item-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+.proposta-form-table .input-text { min-width: 160px; padding: 0.35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.85rem; }
+.proposta-form-table .input-text-sm { width: 72px; padding: 0.35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.85rem; }
+.proposta-form-table .input-select-sm { min-width: 110px; padding: 0.35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.8rem; }
+.proposta-form-table tr.item-manual td:first-child { border-left: 3px solid #0066cc; }

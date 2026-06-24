@@ -12,6 +12,9 @@
 .proposta-detalhe-badge[data-status="aceita"] { background: #22c55e; }
 .proposta-detalhe-badge[data-status="rejeitada"] { background: #ef4444; }
 .proposta-detalhe-badge[data-status="expirada"] { background: #f59e0b; }
+.proposta-detalhe-badge.badge-inativa { background: #94a3b8; }
+.proposta-detalhe-inativa { opacity: 0.9; }
+.proposta-detalhe .btn-inativar { color: #b91c1c; border-color: #fecaca; }
 .proposta-detalhe-subtitle { margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; }
 .proposta-detalhe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.5rem; }
 @media (max-width: 700px) { .proposta-detalhe-grid { grid-template-columns: 1fr; } }

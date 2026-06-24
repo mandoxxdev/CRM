@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   FiZap, FiTrendingUp, FiShoppingCart, FiDollarSign, 
   FiBriefcase, FiSettings, FiTarget, FiTool, FiX, FiShield, FiArchive, FiSliders
@@ -90,10 +90,27 @@ const moduleConfigs = {
   }
 };
 
-const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => {
+const SPLASH_MIN_MS = 900;
+const SPLASH_MAX_MS = 2000;
+
+const SplashScreen = ({
+  onComplete,
+  module = 'sistema',
+  showError = false,
+  ready = false,
+  minDuration = SPLASH_MIN_MS,
+  maxDuration = SPLASH_MAX_MS,
+}) => {
   const [progress, setProgress] = useState(0);
   const [fadeOut, setFadeOut] = useState(false);
   const [errorVisible, setErrorVisible] = useState(false);
+  const readyRef = useRef(ready);
+  const completedRef = useRef(false);
+  const progressRef = useRef(0);
+
+  useEffect(() => {
+    readyRef.current = ready;
+  }, [ready]);
   
   // Obter configuração do módulo ou usar padrão
   const config = moduleConfigs[module] || moduleConfigs.sistema;
@@ -139,44 +156,49 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
     }
   }, [showError, progress, errorVisible, onComplete]);
 
+  const finishSplash = useCallback(() => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    setProgress(100);
+    setTimeout(() => {
+      setFadeOut(true);
+      setTimeout(() => {
+        onComplete();
+      }, 320);
+    }, 120);
+  }, [onComplete]);
+
   useEffect(() => {
-    // Se já mostrou erro, não fazer nada
     if (errorVisible) {
-      return;
+      return undefined;
     }
 
-    // Carregamento de 5 segundos com progresso sincronizado
-    const duration = 5000; // 5 segundos
     const startTime = performance.now();
-    const updateInterval = 16; // ~60fps para animação suave
-    
+    const updateInterval = 16;
+    progressRef.current = 0;
+
     const interval = setInterval(() => {
       const elapsed = performance.now() - startTime;
-      const newProgress = Math.min(Math.max(0, (elapsed / duration) * 100), 100);
-      
-      // Atualizar progresso com valor arredondado para 2 casas decimais
-      setProgress(Math.round(newProgress * 100) / 100);
-      
-      if (newProgress >= 100) {
+      const timeProgress = Math.min((elapsed / maxDuration) * 100, 100);
+      const targetProgress = readyRef.current
+        ? Math.min(95, (elapsed / minDuration) * 95)
+        : Math.min(90, timeProgress);
+      const easedProgress = Math.max(progressRef.current, targetProgress);
+      progressRef.current = easedProgress;
+
+      setProgress(Math.round(easedProgress * 100) / 100);
+
+      const canFinish = elapsed >= minDuration && (readyRef.current || elapsed >= maxDuration);
+      if (canFinish) {
         clearInterval(interval);
-        // Garantir que fique em 100% antes de fechar
-        setProgress(100);
-        
-        // Se não deve mostrar erro, fechar normalmente
         if (!showError) {
-          setTimeout(() => {
-            setFadeOut(true);
-            setTimeout(() => {
-              onComplete();
-            }, 600);
-          }, 300);
+          finishSplash();
         }
-        // Se deve mostrar erro, o useEffect acima vai tratar
       }
     }, updateInterval);
 
     return () => clearInterval(interval);
-  }, [onComplete, showError, errorVisible]);
+  }, [showError, errorVisible, minDuration, maxDuration, finishSplash]);
 
   // Se fadeOut, não renderizar nada
   if (fadeOut) {
@@ -190,7 +212,7 @@ const SplashScreen = ({ onComplete, module = 'sistema', showError = false }) => 
     >
       {/* Fundo animado do software - COM MUITO MAIS LINHAS */}
       <div className="splash-background-wrapper">
-        <AnimatedBackground nodeCount={150} connectionDistance={250} />
+        <AnimatedBackground nodeCount={48} connectionDistance={180} />
         <div 
           className="splash-background-overlay"
           style={{
