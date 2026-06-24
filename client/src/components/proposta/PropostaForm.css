@@ -1,40 +1,295 @@
-.proposta-form { padding: 1.5rem; max-width: 1000px; margin: 0 auto; }
-.proposta-form-loading { padding: 2rem; text-align: center; color: #64748b; }
-.proposta-form-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
-.proposta-form-header h1 { margin: 0; font-size: 1.35rem; }
-.proposta-form-header-actions { display: flex; gap: 0.75rem; }
-.proposta-form .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.9rem; border: none; cursor: pointer; text-decoration: none; }
-.proposta-form .btn-sec { background: #f1f5f9; color: #1e293b; border: 1px solid #e2e8f0; }
-.proposta-form .btn-pri { background: #0066cc; color: #fff; }
-.proposta-form-alert { padding: 0.75rem 1rem; margin-bottom: 1rem; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; color: #92400e; font-size: 0.9rem; }
-.proposta-form-form { display: flex; flex-direction: column; gap: 1.5rem; }
-.proposta-form-section { padding: 1rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
-.proposta-form-section h2 { margin: 0 0 1rem 0; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-.proposta-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-.proposta-form-field { margin-bottom: 1rem; }
-.proposta-form-field.full { grid-column: 1 / -1; }
-.proposta-form-field label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.25rem; }
-.proposta-form-field input, .proposta-form-field select, .proposta-form-field textarea { width: 100%; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; }
-.proposta-form-empty { margin: 0; color: #64748b; }
-.proposta-form-table-wrap { margin-top: 0.75rem; overflow: auto; }
-.proposta-form-table { width: 100%; border-collapse: collapse; }
-.proposta-form-table th, .proposta-form-table td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
-.proposta-form-table th { background: #f8fafc; font-size: 0.8rem; }
-.proposta-form-table .input-num { width: 80px; padding: 0.35rem; }
-.proposta-form-table .btn-remove { background: none; border: none; cursor: pointer; color: #64748b; padding: 0.25rem; }
-.proposta-form-table .btn-remove:hover { color: #dc2626; }
-.proposta-form-total { margin: 0.5rem 0 0 0; padding-top: 0.5rem; border-top: 1px solid #e2e8f0; }
-.proposta-form-section-dashboard { border-color: #bfdbfe; background: linear-gradient(180deg, #f8fafc 0%, #fff 100%); }
-.proposta-form-section-desc { margin: -0.5rem 0 1rem 0; font-size: 0.85rem; color: #64748b; }
-.proposta-form-hint { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: #94a3b8; }
-.proposta-form-field-required label { color: #b45309; }
-.proposta-form-item-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
-.proposta-form-table .input-text { min-width: 160px; padding: 0.35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.85rem; }
-.proposta-form-table .input-text-sm { width: 72px; padding: 0.35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.85rem; }
-.proposta-form-table .input-select-sm { min-width: 110px; padding: 0.35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.8rem; }
-.proposta-form-table tr.item-manual td:first-child { border-left: 3px solid #0066cc; }
-.proposta-form-pdf-anexo { display: flex; flex-direction: column; gap: 0.75rem; }
-.proposta-form-pdf-info { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
-.proposta-form-pdf-info span { flex: 1; min-width: 160px; }
-.proposta-form-pdf-upload { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 8px; cursor: pointer; font-size: 0.9rem; width: fit-content; }
-.proposta-form-pdf-upload:hover { background: #e2e8f0; }
+.proposta-form {
+  padding: var(--spacing-xl);
+  max-width: 1000px;
+  margin: 0 auto;
+  color: var(--gmp-text);
+}
+
+.proposta-form-loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--gmp-text-light);
+}
+
+.proposta-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: var(--spacing-md);
+  border-bottom: 2px solid var(--gmp-border);
+}
+
+.proposta-form-header h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  color: var(--gmp-text);
+}
+
+.proposta-form-header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.proposta-form .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.proposta-form .btn-sec {
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  border: 1px solid var(--gmp-border);
+}
+
+.proposta-form .btn-sec:hover {
+  border-color: var(--gmp-primary);
+  color: var(--gmp-primary);
+}
+
+.proposta-form .btn-pri {
+  background: linear-gradient(135deg, var(--gmp-primary) 0%, var(--gmp-primary-dark) 100%);
+  color: #fff;
+}
+
+.proposta-form-alert {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: var(--radius-sm);
+  color: var(--gmp-warning-dark);
+  font-size: 0.9rem;
+}
+
+[data-theme="dark"] .proposta-form-alert {
+  color: var(--gmp-warning-light);
+}
+
+.proposta-form-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.proposta-form-section {
+  padding: 1rem;
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: var(--radius-lg);
+}
+
+.proposta-form-section h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--gmp-text);
+}
+
+.proposta-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.proposta-form-field {
+  margin-bottom: 1rem;
+}
+
+.proposta-form-field.full {
+  grid-column: 1 / -1;
+}
+
+.proposta-form-field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  color: var(--gmp-text);
+}
+
+.proposta-form-field input,
+.proposta-form-field select,
+.proposta-form-field textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--gmp-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+}
+
+.proposta-form-field input:focus,
+.proposta-form-field select:focus,
+.proposta-form-field textarea:focus {
+  outline: none;
+  border-color: var(--gmp-primary);
+}
+
+.proposta-form-empty {
+  margin: 0;
+  color: var(--gmp-text-light);
+}
+
+.proposta-form-table-wrap {
+  margin-top: 0.75rem;
+  overflow: auto;
+}
+
+.proposta-form-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.proposta-form-table th,
+.proposta-form-table td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--gmp-border);
+  color: var(--gmp-text);
+}
+
+.proposta-form-table th {
+  background: linear-gradient(135deg, var(--gmp-primary) 0%, var(--gmp-primary-dark) 100%);
+  font-size: 0.8rem;
+  color: #fff;
+}
+
+.proposta-form-table .input-num {
+  width: 80px;
+  padding: 0.35rem;
+}
+
+.proposta-form-table .btn-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--gmp-text-light);
+  padding: 0.25rem;
+}
+
+.proposta-form-table .btn-remove:hover {
+  color: var(--gmp-error);
+}
+
+.proposta-form-total {
+  margin: 0.5rem 0 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--gmp-border);
+  color: var(--gmp-text);
+}
+
+.proposta-form-section-dashboard {
+  border-color: rgba(79, 172, 254, 0.3);
+  background: var(--gmp-surface);
+}
+
+[data-theme="dark"] .proposta-form-section-dashboard {
+  background: var(--gmp-surface-hover);
+}
+
+.proposta-form-section-desc {
+  margin: -0.5rem 0 1rem 0;
+  font-size: 0.85rem;
+  color: var(--gmp-text-light);
+}
+
+.proposta-form-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--gmp-text-light);
+}
+
+.proposta-form-field-required label {
+  color: var(--gmp-warning);
+}
+
+.proposta-form-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.proposta-form-table .input-text,
+.proposta-form-table .input-text-sm,
+.proposta-form-table .input-select-sm {
+  padding: 0.35rem;
+  border: 1px solid var(--gmp-border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+}
+
+.proposta-form-table .input-text {
+  min-width: 160px;
+}
+
+.proposta-form-table .input-text-sm {
+  width: 72px;
+}
+
+.proposta-form-table .input-select-sm {
+  min-width: 110px;
+  font-size: 0.8rem;
+}
+
+.proposta-form-table tr.item-manual td:first-child {
+  border-left: 3px solid var(--gmp-primary);
+}
+
+.proposta-form-pdf-anexo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.proposta-form-pdf-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--gmp-text);
+}
+
+.proposta-form-pdf-info span {
+  flex: 1;
+  min-width: 160px;
+}
+
+.proposta-form-pdf-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--gmp-surface-hover);
+  border: 1px dashed var(--gmp-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  width: fit-content;
+  color: var(--gmp-text);
+}
+
+.proposta-form-pdf-upload:hover {
+  background: var(--gmp-surface);
+  border-color: var(--gmp-primary);
+  color: var(--gmp-primary);
+}

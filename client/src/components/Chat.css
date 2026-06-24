@@ -89,7 +89,7 @@
 .chat-search input:focus {
   outline: none;
   border-color: var(--gmp-primary);
-  background: white;
+  background: var(--gmp-bg);
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 
@@ -277,7 +277,7 @@
 }
 
 .chat-mensagem-content {
-  background: white;
+  background: var(--gmp-bg);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-lg);
   box-shadow: var(--elevation-1);
@@ -415,7 +415,7 @@
 .chat-input:focus {
   outline: none;
   border-color: var(--gmp-primary);
-  background: white;
+  background: var(--gmp-bg);
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 
@@ -589,7 +589,7 @@
 .chat-form-group textarea:focus {
   outline: none;
   border-color: var(--gmp-primary);
-  background: white;
+  background: var(--gmp-bg);
   box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
 }
 

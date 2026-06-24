@@ -46,7 +46,7 @@
   --card-shadow-hover: 0 20px 45px rgba(0, 0, 0, 0.12);
 
   position: relative;
-  background: #ffffff;
+  background: var(--gmp-bg);
   border-radius: var(--card-radius);
   overflow: visible;
   box-shadow: var(--card-shadow);
@@ -188,7 +188,7 @@
 }
 
 .btn-icon-card:hover {
-  background: #ffffff;
+  background: var(--gmp-bg);
   color: var(--card-accent);
   transform: scale(1.08);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);

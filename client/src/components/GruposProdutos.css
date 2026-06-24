@@ -53,7 +53,7 @@
   --card-shadow-hover: 0 20px 45px rgba(0, 0, 0, 0.12);
 
   position: relative;
-  background: #ffffff;
+  background: var(--gmp-bg);
   border-radius: var(--card-radius);
   overflow: visible;
   box-shadow: var(--card-shadow);
@@ -144,7 +144,7 @@
 }
 
 .btn-icon-grupo:hover {
-  background: #fff;
+  background: var(--gmp-bg);
   transform: scale(1.08);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
@@ -153,7 +153,7 @@
   width: 100%;
   padding: 20px 20px 24px;
   text-align: center;
-  background: #ffffff;
+  background: var(--gmp-bg);
   border-radius: 0 0 var(--card-radius) var(--card-radius);
   display: flex;
   flex-direction: column;

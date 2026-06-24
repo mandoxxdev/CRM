@@ -164,7 +164,7 @@
   align-items: flex-start;
   gap: 12px;
   padding: 16px;
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 10px;
   border: 1px solid #f0f0f0;
   transition: all 0.2s ease;
@@ -291,7 +291,7 @@
 }
 
 .item-card {
-  background: white;
+  background: var(--gmp-bg);
   border: 2px solid #e0e0e0;
   border-radius: 8px;
   padding: 20px;
@@ -389,7 +389,7 @@
 }
 
 .item-planilha-container {
-  background: white;
+  background: var(--gmp-bg);
   border: 2px solid #333;
   border-radius: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -459,7 +459,7 @@
 .especificacoes-tecnicas-table {
   margin: 0;
   padding: 0;
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 0;
   border: none;
   width: 100%;
@@ -518,7 +518,7 @@
 }
 
 .especificacoes-tecnicas-table table tbody tr:nth-child(odd) {
-  background: #ffffff;
+  background: var(--gmp-bg);
 }
 
 .especificacoes-tecnicas-table table td {
@@ -588,7 +588,7 @@
   font-size: 14px;
   font-family: inherit;
   outline: none;
-  background: #fff;
+  background: var(--gmp-bg);
 }
 
 .spec-input:focus {
@@ -662,7 +662,7 @@
 }
 
 .btn-secondary {
-  background: white;
+  background: var(--gmp-bg);
   color: #555;
   border: 1px solid #e0e0e0;
 }

@@ -181,7 +181,7 @@
 
 /* Card por variável – fundo suave, hover e estado preenchido */
 .produto-form-variavel-card {
-  background: #fff;
+  background: var(--gmp-bg);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 12px;
   padding: 1rem 1.15rem;
@@ -273,14 +273,14 @@
 
 .produto-form-variavel-field input:hover {
   border-color: rgba(0, 82, 163, 0.25);
-  background: #fff;
+  background: var(--gmp-bg);
 }
 
 .produto-form-variavel-field input:focus {
   outline: none;
   border-color: var(--gmp-primary);
   box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.12);
-  background: #fff;
+  background: var(--gmp-bg);
 }
 
 .produto-form-variavel-field input::placeholder {
@@ -306,7 +306,7 @@
 
 .produto-form-variavel-select:hover {
   border-color: rgba(0, 82, 163, 0.25);
-  background-color: #fff;
+  background-color: var(--gmp-bg);
 }
 
 .produto-form-variavel-select-premium {
@@ -318,7 +318,7 @@
   outline: none;
   border-color: var(--gmp-primary);
   box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.12);
-  background-color: #fff;
+  background-color: var(--gmp-bg);
 }
 
 /* Vista frontal mesmo tamanho que na proposta (320x240) */

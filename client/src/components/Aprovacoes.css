@@ -323,7 +323,7 @@
   display: flex;
   align-items: center;
   gap: 15px;
-  background: var(--gmp-surface-secondary, linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%));
+  background: var(--gmp-surface-secondary);
   padding: 12px 20px;
   border-radius: 12px;
   border: 2px solid var(--gmp-border, #e9ecef);

@@ -397,7 +397,7 @@
 .modal-familia-variaveis-list.premium::-webkit-scrollbar-thumb {
   background: #94a3b8;
   border-radius: 10px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--gmp-border);
 }
 
 .modal-familia-variaveis-list.premium::-webkit-scrollbar-thumb:hover {
@@ -691,7 +691,7 @@
 
 .vista-marcador-handle {
   position: absolute;
-  background: #fff;
+  background: var(--gmp-bg);
   border: 1.5px solid #16a34a;
   border-radius: 6px;
   cursor: pointer;
@@ -1628,7 +1628,7 @@
 .bolinhas-premium-btn-adicionar:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-  background: #fff;
+  background: var(--gmp-bg);
 }
 
 .bolinhas-premium-btn-cancelar {
@@ -1714,7 +1714,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: #fff;
+  background: var(--gmp-bg);
   transition: box-shadow 0.25s ease;
 }
 .bolinhas-premium-vista-inner:hover {
@@ -1773,7 +1773,7 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--gmp-bg);
   border-left: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.06);
   overflow: hidden;
@@ -1876,7 +1876,7 @@
 
 .bolinhas-premium-card:hover {
   border-color: rgba(255, 107, 53, 0.25);
-  background: #fff;
+  background: var(--gmp-bg);
   box-shadow: 0 4px 16px rgba(255, 107, 53, 0.08);
 }
 
@@ -1989,7 +1989,7 @@
   border-radius: 12px;
   font-size: 0.9375rem;
   font-weight: 500;
-  background: #fff;
+  background: var(--gmp-bg);
   color: #0f172a;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -2008,7 +2008,7 @@
   padding: 12px 16px;
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 12px;
-  background: #fff;
+  background: var(--gmp-bg);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .bolinhas-premium-variavel-search:focus-within {

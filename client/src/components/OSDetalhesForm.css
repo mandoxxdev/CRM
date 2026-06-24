@@ -1,11 +1,11 @@
 .os-detalhes-page {
   padding: 30px;
   min-height: 100vh;
-  background: #f8fafc;
+  background: var(--gmp-bg-subtle);
 }
 
 .os-detalhes-container-page {
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 12px;
   width: 100%;
   max-width: 1400px;

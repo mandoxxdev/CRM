@@ -27,7 +27,7 @@
   border: 1px solid var(--gmp-border);
   border-radius: var(--radius-sm);
   font-size: 14px;
-  background: white;
+  background: var(--gmp-bg);
   cursor: pointer;
   min-width: 200px;
 }
@@ -44,7 +44,7 @@
 }
 
 .projeto-card {
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 10px;
   padding: 25px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);

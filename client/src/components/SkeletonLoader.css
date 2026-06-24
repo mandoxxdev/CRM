@@ -3,7 +3,7 @@
 .skeleton-list-item,
 .skeleton-table,
 .skeleton-chart {
-  background: var(--skeleton-bg, #f8fafc);
+  background: var(--skeleton-bg);
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1rem;
@@ -37,7 +37,7 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--skeleton-shimmer, linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%));
+  background: var(--skeleton-shimmer);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -51,7 +51,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--skeleton-shimmer, linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%));
+  background: var(--skeleton-shimmer);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
   flex-shrink: 0;
@@ -72,7 +72,7 @@
 .skeleton-line {
   height: 12px;
   border-radius: 6px;
-  background: var(--skeleton-shimmer, linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%));
+  background: var(--skeleton-shimmer);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }
@@ -128,7 +128,7 @@
 .skeleton-table-header-cell {
   height: 16px;
   border-radius: 4px;
-  background: var(--skeleton-shimmer, linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%));
+  background: var(--skeleton-shimmer);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
 }

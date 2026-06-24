@@ -60,15 +60,15 @@
   width: min(520px, 100%);
   padding: 1.5rem;
   border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--gmp-border);
+  background: var(--gmp-surface);
   backdrop-filter: blur(12px);
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--elevation-4);
 }
 
 [data-theme='dark'] .module-loading__panel {
-  background: rgba(15, 23, 42, 0.82);
-  border-color: rgba(148, 163, 184, 0.18);
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
 }
 
 .module-loading__brand {
@@ -107,7 +107,7 @@
 .module-loading__skeleton-bar {
   height: 10px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+  background: var(--skeleton-shimmer);
   background-size: 200% 100%;
   animation: module-loading-shimmer 1.4s ease-in-out infinite;
 }
@@ -130,7 +130,7 @@
 .module-loading__skeleton-card {
   height: 54px;
   border-radius: 12px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+  background: var(--skeleton-shimmer);
   background-size: 200% 100%;
   animation: module-loading-shimmer 1.4s ease-in-out infinite;
 }

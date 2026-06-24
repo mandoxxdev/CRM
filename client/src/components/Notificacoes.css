@@ -63,7 +63,7 @@
   position: fixed;
   width: 450px;
   max-height: 600px;
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 10px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   z-index: 10001 !important;

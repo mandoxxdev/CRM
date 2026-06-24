@@ -456,7 +456,7 @@
 }
 
 .produtos-modal-content {
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 10px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   max-width: 800px;
@@ -516,7 +516,7 @@
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
-  background: white;
+  background: var(--gmp-bg);
 }
 
 .produto-item:hover {
@@ -1218,7 +1218,7 @@
 .modal-aprovacao-necessaria {
   max-width: 600px;
   width: 90%;
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: slideUp 0.3s ease-out;

@@ -299,8 +299,8 @@
 }
 
 .select-premium option {
-  background: #0d1b3e;
-  color: #e2e8f0;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
 }
 
 

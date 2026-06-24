@@ -57,10 +57,18 @@
   --gmp-bg:            #FFFFFF;
   --gmp-surface:       #F6F6F6;
   --gmp-surface-hover: #EFEFEF;
+  --gmp-surface-secondary: #FAFAFA;
+  --gmp-bg-subtle:     #F8FAFC;
+  --gmp-card-bg:       #FFFFFF;
   --gmp-text:          #121212;
   --gmp-text-light:    #6A6A6A;
   --gmp-border:        rgba(0, 0, 0, 0.10);
   --gmp-shadow:        rgba(0, 0, 0, 0.08);
+
+  /* Skeleton / loading */
+  --skeleton-bg:       #F8FAFC;
+  --skeleton-border:   #E2E8F0;
+  --skeleton-shimmer:    linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
 
   /* ── LIGHT THEME — Glass tokens → sólidos claros ── */
   --glass-bg:           #FFFFFF;
@@ -178,11 +186,19 @@
   --gmp-bg:            #121212;
   --gmp-surface:       #181818;
   --gmp-surface-hover: #282828;
+  --gmp-surface-secondary: #1A1A1A;
+  --gmp-bg-subtle:     #1A1A1A;
+  --gmp-card-bg:       #181818;
   --gmp-text:          #FFFFFF;
   --gmp-text-light:    #B3B3B3;
   --gmp-border:        rgba(255, 255, 255, 0.10);
   --gmp-shadow:        rgba(0, 0, 0, 0.50);
   --gmp-secondary:     #000000;
+
+  /* Skeleton / loading */
+  --skeleton-bg:       #242424;
+  --skeleton-border:   rgba(255, 255, 255, 0.10);
+  --skeleton-shimmer:    linear-gradient(90deg, #2E2E2E 25%, #3E3E3E 50%, #2E2E2E 75%);
 
   /* Glass tokens → sólidos escuros Spotify */
   --glass-bg:           #181818;

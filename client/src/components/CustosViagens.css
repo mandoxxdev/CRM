@@ -538,7 +538,7 @@
 .filtros-avancados {
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 2px solid #e2e8f0;
+  border-top: 2px solid var(--gmp-border);
 }
 
 .filtros-actions {
@@ -547,7 +547,7 @@
   align-items: center;
   margin-top: 1.5rem;
   padding-top: 1.5rem;
-  border-top: 2px solid #e2e8f0;
+  border-top: 2px solid var(--gmp-border);
 }
 
 .resultados-info {
@@ -975,7 +975,7 @@
 .form-group select,
 .form-group textarea {
   padding: 0.75rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--gmp-border);
   border-radius: 8px;
   font-size: 0.95rem;
   color: #1e293b !important;
@@ -1031,7 +1031,7 @@
   justify-content: flex-end;
   gap: 1rem;
   padding-top: 1.5rem;
-  border-top: 2px solid #e2e8f0;
+  border-top: 2px solid var(--gmp-border);
   margin-top: 1.5rem;
 }
 
@@ -1067,7 +1067,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
@@ -1762,7 +1762,7 @@
 }
 
 .detalhes-custos {
-  background: white;
+  background: var(--gmp-bg);
   padding: 1rem;
   border-radius: 8px;
   margin-top: 1rem;
@@ -1777,7 +1777,7 @@
 .detalhes-custos li {
   padding: 0.5rem 0;
   color: #475569;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--gmp-border);
 }
 
 .detalhes-custos li:last-child {
@@ -2161,8 +2161,8 @@
 
 .btn-filtros-avancados {
   padding: 0.875rem 1.25rem;
-  background: #f1f5f9;
-  border: 2px solid #e2e8f0;
+  background: var(--gmp-gray-100);
+  border: 2px solid var(--gmp-border);
   border-radius: 8px;
   font-size: 0.95rem;
   font-weight: 500;
@@ -2215,7 +2215,7 @@
 .filtro-avancado-item input {
   width: 100%;
   padding: 0.75rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--gmp-border);
   border-radius: 8px;
   font-size: 0.95rem;
   transition: all 0.3s ease;
@@ -2619,7 +2619,7 @@
   border: 1px solid var(--gmp-border);
   border-radius: 8px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gmp-border);
 }
 
 .comprovante-info {

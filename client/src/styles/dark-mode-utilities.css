@@ -1,0 +1,20 @@
+/* ============================================
+   DARK-MODE UTILITIES — shared form/select fixes
+   Import after design-tokens.css
+   ============================================ */
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+select,
+textarea {
+  color-scheme: light dark;
+}
+
+[data-theme="dark"] select option {
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+}
+
+[data-theme="dark"] .select-premium option {
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+}

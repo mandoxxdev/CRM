@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 // Design System Premium - Ordem de importação importante
 import './styles/design-tokens.css';
+import './styles/dark-mode-utilities.css';
 import './styles/typography.css';
 import './styles/components.css';
 import './styles/animations.css';

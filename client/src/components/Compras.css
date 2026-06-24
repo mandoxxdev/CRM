@@ -206,7 +206,7 @@
 
 /* Modal visualização planilha – tabela fiel ao arquivo + busca */
 .modal-planilha-container .modal-planilha-body {
-  background: #fff;
+  background: var(--gmp-bg);
 }
 
 .modal-planilha-container .modal-planilha-body .data-table {
@@ -215,24 +215,25 @@
 }
 
 .modal-planilha-container .modal-planilha-body .data-table thead tr {
-  background: #f1f5f9;
+  background: var(--gmp-bg-subtle);
 }
 
 .modal-planilha-container .modal-planilha-body .data-table thead th {
   padding: 10px 12px;
   font-size: 0.75rem;
-  color: #475569;
-  border-bottom: 1px solid #e2e8f0;
+  color: var(--gmp-text-light);
+  border-bottom: 1px solid var(--gmp-border);
 }
 
 .modal-planilha-container .modal-planilha-body .data-table tbody tr:nth-child(even) {
-  background: #f8fafc;
+  background: var(--gmp-bg-subtle);
 }
 
 .modal-planilha-container .modal-planilha-body .data-table tbody td {
   padding: 8px 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--gmp-border);
   vertical-align: top;
+  color: var(--gmp-text);
 }
 
 .modal-planilha-container .planilha-busca {
@@ -245,10 +246,12 @@
 
 .modal-planilha-container .planilha-busca input {
   flex: 1;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--gmp-border);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 0.875rem;
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
 }
 
 .modal-planilha-container .planilha-busca input:focus {
@@ -270,24 +273,25 @@
 }
 
 .planilha-inline-wrap .planilha-inline-table thead tr {
-  background: #f1f5f9;
+  background: var(--gmp-bg-subtle);
 }
 
 .planilha-inline-wrap .planilha-inline-table thead th {
   padding: 10px 12px;
   font-size: 0.75rem;
-  color: #475569;
-  border-bottom: 1px solid #e2e8f0;
+  color: var(--gmp-text-light);
+  border-bottom: 1px solid var(--gmp-border);
 }
 
 .planilha-inline-wrap .planilha-inline-table tbody tr:nth-child(even) {
-  background: #f8fafc;
+  background: var(--gmp-bg-subtle);
 }
 
 .planilha-inline-wrap .planilha-inline-table tbody td {
   padding: 8px 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--gmp-border);
   vertical-align: top;
+  color: var(--gmp-text);
 }
 
 /* Responsive */

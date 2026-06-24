@@ -10,7 +10,7 @@
 }
 
 .stat-card {
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -130,7 +130,7 @@
 }
 
 .colaborador-card {
-  background: white;
+  background: var(--gmp-bg);
   border-radius: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
