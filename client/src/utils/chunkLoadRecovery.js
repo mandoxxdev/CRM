@@ -1,18 +1,21 @@
 const CHUNK_RELOAD_KEY = 'orion_chunk_reload';
 const CHUNK_RELOAD_COUNT_KEY = 'orion_chunk_reload_count';
 const MAX_PRODUCTION_RELOADS = 3;
-const RECOVERY_LOCK_KEY = 'orion_chunk_recovery_lock';
 
 let recoveryPromise = null;
 
 export function isChunkLoadError(error) {
-  const msg = error?.message || String(error);
+  if (!error) return false;
+  if (error.name === 'ChunkLoadError') return true;
+
+  const msg = error.message || String(error);
   return (
     msg.includes('Loading chunk') ||
     msg.includes('Failed to fetch dynamically imported module') ||
     msg.includes('ChunkLoadError') ||
     msg.includes('Importing a module script failed') ||
-    msg.includes('error loading dynamically imported module')
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('Unexpected token \'<\'') // server returned HTML instead of JS
   );
 }
 
@@ -20,7 +23,6 @@ export function clearChunkReloadFlag() {
   try {
     sessionStorage.removeItem(CHUNK_RELOAD_KEY);
     sessionStorage.removeItem(CHUNK_RELOAD_COUNT_KEY);
-    sessionStorage.removeItem(RECOVERY_LOCK_KEY);
   } catch {
     /* ignore */
   }
@@ -55,9 +57,10 @@ async function prepareHardReload() {
 }
 
 function hardReload() {
-  const url = new URL(window.location.href);
-  url.searchParams.set('_cb', String(Date.now()));
-  window.location.replace(url.toString());
+  const target = new URL(window.location.href);
+  target.searchParams.set('_cb', String(Date.now()));
+  // Reload from origin root so index.html script tags resolve /static/js/* correctly
+  window.location.replace(`${window.location.origin}${target.pathname}${target.search}${target.hash}`);
 }
 
 function getReloadCount() {
@@ -69,7 +72,7 @@ function getReloadCount() {
 }
 
 /**
- * Attempt automatic recovery for stale/missing chunks (single flight — avoids race with ErrorBoundary).
+ * Attempt automatic recovery for stale/missing chunks (single flight).
  * @returns {Promise<'reload' | 'show-prompt'>}
  */
 export async function attemptChunkRecovery() {
@@ -79,16 +82,6 @@ export async function attemptChunkRecovery() {
 
   recoveryPromise = (async () => {
     const isDev = process.env.NODE_ENV === 'development';
-
-    try {
-      if (sessionStorage.getItem(RECOVERY_LOCK_KEY)) {
-        return 'show-prompt';
-      }
-      sessionStorage.setItem(RECOVERY_LOCK_KEY, '1');
-    } catch {
-      /* continue */
-    }
-
     const reloadCount = getReloadCount();
     const maxReloads = isDev ? 99 : MAX_PRODUCTION_RELOADS;
 
@@ -103,12 +96,6 @@ export async function attemptChunkRecovery() {
       await prepareHardReload();
       hardReload();
       return 'reload';
-    }
-
-    try {
-      sessionStorage.removeItem(RECOVERY_LOCK_KEY);
-    } catch {
-      /* ignore */
     }
 
     return 'show-prompt';

@@ -335,7 +335,11 @@ Se não encontrar "Source Providers", procure por:
 
 **Causa:** Após um novo deploy, o navegador (ou Service Worker antigo) pode servir `index.html` ou chunks de uma versão anterior, gerando `ChunkLoadError`.
 
+**Causa adicional (rotas aninhadas):** Com `homepage: "."`, os chunks eram carregados como `./static/js/...` relativo à URL (`/comercial/produtos` → `/comercial/static/js/...`). O servidor devolvia `index.html` no lugar do `.js`, gerando erro de chunk em todas as telas exceto as já em cache via navegação client-side.
+
 **O que o projeto faz agora:**
+- `homepage` removido + `__webpack_public_path__ = '/'` força URLs absolutas `/static/js/*`.
+- `<base href="/" />` no `index.html`.
 - Service Worker **somente para push** (sem cache de HTML/JS/CSS).
 - `index.html`, `sw.js` e `asset-manifest.json` com `Cache-Control: no-store`.
 - Chunks com hash (`*.abc12345.js`) com cache longo e `immutable`.

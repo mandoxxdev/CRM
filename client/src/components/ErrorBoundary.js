@@ -4,10 +4,16 @@ import { attemptChunkRecovery, isChunkLoadError } from '../utils/chunkLoadRecove
 import './ErrorBoundary.css';
 
 class ErrorBoundaryClass extends React.Component {
-  state = { hasError: false, error: null, isChunkError: false, isRecoveringChunk: false };
+  state = {
+    hasError: false,
+    error: null,
+    isChunkError: false,
+    isRecoveringChunk: false,
+  };
 
   static getDerivedStateFromError(error) {
-    if (isChunkLoadError(error)) {
+    const chunkError = isChunkLoadError(error);
+    if (chunkError) {
       return { hasError: false, error, isChunkError: true, isRecoveringChunk: true };
     }
     return { hasError: true, error, isChunkError: false, isRecoveringChunk: false };
@@ -16,14 +22,16 @@ class ErrorBoundaryClass extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary:', error, errorInfo);
 
-    if (isChunkLoadError(error)) {
-      attemptChunkRecovery().then((action) => {
-        if (action === 'reload') {
-          return;
-        }
-        this.setState({ hasError: true, isRecoveringChunk: false });
-      });
+    if (!isChunkLoadError(error)) {
+      return;
     }
+
+    attemptChunkRecovery().then((action) => {
+      if (action === 'reload') {
+        return;
+      }
+      this.setState({ hasError: true, isChunkError: true, isRecoveringChunk: false });
+    });
   }
 
   render() {
@@ -52,7 +60,7 @@ class ErrorBoundaryClass extends React.Component {
                   onClick={() => {
                     const url = new URL(window.location.href);
                     url.searchParams.set('_cb', String(Date.now()));
-                    window.location.replace(url.toString());
+                    window.location.replace(`${window.location.origin}${url.pathname}${url.search}${url.hash}`);
                   }}
                 >
                   Atualizar página
@@ -63,12 +71,17 @@ class ErrorBoundaryClass extends React.Component {
         );
       }
 
+      const detail = this.state.error?.message || 'Erro desconhecido';
+
       return (
         <div className="error-boundary error-boundary--orion">
           <div className="error-boundary__panel">
             <img src="/orion-logo.png" alt="Orion" className="error-boundary__logo" />
             <h1>Algo deu errado</h1>
-            <p>Ocorreu um erro inesperado. Tente voltar à tela inicial ou atualizar a página.</p>
+            <p>Ocorreu um erro inesperado nesta tela. Tente voltar à tela inicial ou atualizar a página.</p>
+            {process.env.NODE_ENV === 'development' && (
+              <pre className="error-boundary__detail">{detail}</pre>
+            )}
             <div className="error-boundary-actions">
               <button type="button" onClick={() => { window.location.href = '/'; }}>
                 Ir para tela inicial

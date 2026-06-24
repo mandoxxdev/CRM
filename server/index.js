@@ -22104,6 +22104,11 @@ if (process.env.NODE_ENV === 'production') {
     
     // Rota catch-all: serve o index.html para todas as rotas não-API
     app.get('*', (req, res, next) => {
+      // Paths like /comercial/static/js/foo.js must 404 — never serve index.html as JS
+      if (/\/static\/(js|css)\//.test(req.path)) {
+        return res.status(404).type('text/plain').send('Not found');
+      }
+
       // Ignorar rotas da API
       if (req.path.startsWith('/api') || 
           req.path.startsWith('/health') ||
