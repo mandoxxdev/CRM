@@ -238,7 +238,7 @@ export default function PropostasList() {
                       )}
                       {podeNovaRevisao(p.status) && <button type="button" title="Nova revisão" onClick={() => acao('nova-revisao', p.id)}><FiRotateCcw /></button>}
                       <button type="button" title="Clonar" onClick={() => acao('clone', p.id)}><FiCopy /></button>
-                      {isRascunho(p.status) && <Link to={`/comercial/propostas/editar/${p.id}`} title="Editar"><FiEdit /></Link>}
+                      {!isInativa(p) && <Link to={`/comercial/propostas/editar/${p.id}`} title="Editar"><FiEdit /></Link>}
                       {podeExcluir(p) && !isInativa(p) && (
                         <button
                           type="button"

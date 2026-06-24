@@ -302,6 +302,12 @@ if (!fs.existsSync(uploadsOSDir)) {
   fs.mkdirSync(uploadsOSDir, { recursive: true });
 }
 
+// Diretório para PDF da proposta enviada ao cliente
+const uploadsPropostasPdfDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'propostas');
+if (!fs.existsSync(uploadsPropostasPdfDir)) {
+  fs.mkdirSync(uploadsPropostasPdfDir, { recursive: true });
+}
+
 // Configurar multer para upload de arquivos (limite 40MB)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -325,6 +331,34 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     // Aceitar qualquer tipo de arquivo
     cb(null, true);
+  }
+});
+
+// Upload de PDF da proposta enviada ao cliente
+const storagePropostaPdf = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsPropostasPdfDir);
+  },
+  filename: (req, file, cb) => {
+    const propostaId = req.params.id;
+    const timestamp = Date.now();
+    const ext = (path.extname(file.originalname) || '.pdf').toLowerCase();
+    const name = path.basename(file.originalname, ext);
+    const filename = `proposta_${propostaId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
+    cb(null, filename);
+  }
+});
+
+const uploadPropostaPdf = multer({
+  storage: storagePropostaPdf,
+  limits: {
+    fileSize: 20 * 1024 * 1024 // 20MB
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = (path.extname(file.originalname) || '').toLowerCase();
+    const isPdf = ext === '.pdf' || file.mimetype === 'application/pdf';
+    if (isPdf) return cb(null, true);
+    cb(new Error('Apenas arquivos PDF são permitidos para o anexo da proposta.'));
   }
 });
 
@@ -1932,7 +1966,9 @@ function executeMigrations(callback) {
         { nome: 'data_fechamento', tipo: 'DATE' },
         { nome: 'ativo', tipo: 'INTEGER DEFAULT 1' },
         { nome: 'inativada_em', tipo: 'DATETIME' },
-        { nome: 'inativada_por', tipo: 'INTEGER' }
+        { nome: 'inativada_por', tipo: 'INTEGER' },
+        { nome: 'pdf_proposta_cliente', tipo: 'TEXT' },
+        { nome: 'pdf_proposta_nome', tipo: 'TEXT' }
       ];
       
       // Histórico de status (auditoria enterprise - Salesforce-like)
@@ -6664,13 +6700,6 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     
     if (!propostaAtual) {
       return res.status(404).json({ error: 'Proposta não encontrada' });
-    }
-    
-    // Regra enterprise: só editar proposta em rascunho (Salesforce-like)
-    if (propostaAtual.status && propostaAtual.status !== 'rascunho') {
-      return res.status(400).json({
-        error: 'Só é possível editar proposta em rascunho. Use "Nova revisão" para criar uma nova versão editável.'
-      });
     }
     
     // VALIDAÇÃO: Se desconto > 5% e status não for rascunho, verificar se há aprovação aprovada
@@ -16942,6 +16971,114 @@ app.delete('/api/propostas/:id/cotacao', authenticateToken, (req, res) => {
       
       res.json({ success: true, message: 'Cotação removida com sucesso' });
     });
+  });
+});
+
+// Upload de PDF da proposta enviada ao cliente
+app.post('/api/propostas/:id/pdf-anexo', authenticateToken, uploadPropostaPdf.single('arquivo'), (req, res) => {
+  const { id } = req.params;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nenhum arquivo PDF enviado' });
+  }
+
+  db.get('SELECT * FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (!proposta) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Proposta não encontrada' });
+    }
+
+    if (proposta.pdf_proposta_cliente) {
+      const oldFilePath = path.join(uploadsPropostasPdfDir, proposta.pdf_proposta_cliente);
+      if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
+    }
+
+    const filename = req.file.filename;
+    const originalName = req.file.originalname || filename;
+
+    db.run(
+      'UPDATE propostas SET pdf_proposta_cliente = ?, pdf_proposta_nome = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [filename, originalName, id],
+      (err2) => {
+        if (err2) {
+          if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+          return res.status(500).json({ error: err2.message });
+        }
+
+        res.json({
+          success: true,
+          message: 'PDF da proposta anexado com sucesso',
+          filename,
+          originalName,
+          size: req.file.size
+        });
+      }
+    );
+  });
+});
+
+// Download/visualização do PDF anexado da proposta
+app.get('/api/propostas/:id/pdf-anexo', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const inline = req.query.inline === '1' || req.query.inline === 'true';
+
+  db.get('SELECT pdf_proposta_cliente, pdf_proposta_nome FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (!proposta || !proposta.pdf_proposta_cliente) {
+      return res.status(404).json({ error: 'PDF da proposta não encontrado' });
+    }
+
+    const filePath = path.join(uploadsPropostasPdfDir, proposta.pdf_proposta_cliente);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Arquivo não encontrado no servidor' });
+    }
+
+    const downloadName = proposta.pdf_proposta_nome || proposta.pdf_proposta_cliente;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="${downloadName.replace(/"/g, '')}"`
+    );
+    res.sendFile(filePath, (err2) => {
+      if (err2 && !res.headersSent) {
+        res.status(500).json({ error: 'Erro ao enviar arquivo PDF' });
+      }
+    });
+  });
+});
+
+// Remover PDF anexado da proposta
+app.delete('/api/propostas/:id/pdf-anexo', authenticateToken, (req, res) => {
+  const { id } = req.params;
+
+  db.get('SELECT pdf_proposta_cliente FROM propostas WHERE id = ?', [id], (err, proposta) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (!proposta || !proposta.pdf_proposta_cliente) {
+      return res.status(404).json({ error: 'PDF da proposta não encontrado' });
+    }
+
+    const filePath = path.join(uploadsPropostasPdfDir, proposta.pdf_proposta_cliente);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    db.run(
+      'UPDATE propostas SET pdf_proposta_cliente = NULL, pdf_proposta_nome = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [id],
+      (err2) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ success: true, message: 'PDF da proposta removido com sucesso' });
+      }
+    );
   });
 });
 

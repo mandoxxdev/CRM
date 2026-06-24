@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import { FiArrowLeft, FiEye, FiDownload, FiEdit, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiClock, FiTrash2 } from 'react-icons/fi';
+import { FiArrowLeft, FiEye, FiDownload, FiEdit, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiClock, FiTrash2, FiFileText, FiUpload } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, isPropostaInativa } from '../../utils/formatDate';
 import './PropostaDetalhe.css';
 
@@ -21,6 +21,7 @@ export default function PropostaDetalhe() {
   const [rejeitar, setRejeitar] = useState(false);
   const [rejeitarMotivo, setRejeitarMotivo] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -84,7 +85,7 @@ export default function PropostaDetalhe() {
     }).catch(() => toast.error('Erro ao abrir proposta.'));
   };
 
-  const baixarPdf = async () => {
+  const baixarPdfGerado = async () => {
     setPdfLoading(true);
     try {
       const { data } = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
@@ -99,6 +100,67 @@ export default function PropostaDetalhe() {
       toast.error(e.response?.data?.error || 'Erro ao gerar PDF.');
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  const baixarPdfAnexo = async () => {
+    try {
+      const { data } = await api.get(`/propostas/${id}/pdf-anexo`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = proposta?.pdf_proposta_nome || `proposta-${proposta?.numero_proposta || id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('PDF anexado baixado.');
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erro ao baixar PDF anexado.');
+    }
+  };
+
+  const visualizarPdfAnexo = async () => {
+    try {
+      const { data } = await api.get(`/propostas/${id}/pdf-anexo`, { params: { inline: '1' }, responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erro ao visualizar PDF anexado.');
+    }
+  };
+
+  const handleUploadPdf = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Selecione um arquivo PDF.');
+      e.target.value = '';
+      return;
+    }
+    setUploadingPdf(true);
+    try {
+      const formData = new FormData();
+      formData.append('arquivo', file);
+      await api.post(`/propostas/${id}/pdf-anexo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success('PDF anexado com sucesso.');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao anexar PDF.');
+    } finally {
+      setUploadingPdf(false);
+      e.target.value = '';
+    }
+  };
+
+  const removerPdfAnexo = async () => {
+    if (!window.confirm('Remover o PDF anexado desta proposta?')) return;
+    try {
+      await api.delete(`/propostas/${id}/pdf-anexo`);
+      toast.success('PDF removido.');
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erro ao remover PDF.');
     }
   };
 
@@ -144,11 +206,32 @@ export default function PropostaDetalhe() {
             </ul>
           )}
         </section>
+        <section className="proposta-detalhe-card">
+          <h2><FiFileText /> PDF enviado ao cliente</h2>
+          {proposta.pdf_proposta_cliente ? (
+            <div className="proposta-detalhe-pdf-anexo">
+              <p>{proposta.pdf_proposta_nome || proposta.pdf_proposta_cliente}</p>
+              <div className="proposta-detalhe-pdf-btns">
+                <button type="button" className="btn btn-sec" onClick={visualizarPdfAnexo}><FiEye /> Visualizar</button>
+                <button type="button" className="btn btn-sec" onClick={baixarPdfAnexo}><FiDownload /> Baixar</button>
+                <button type="button" className="btn btn-sec" onClick={removerPdfAnexo}><FiTrash2 /> Remover</button>
+              </div>
+            </div>
+          ) : (
+            <p className="proposta-detalhe-empty">Nenhum PDF anexado.</p>
+          )}
+          {!inativa && (
+            <label className="proposta-detalhe-pdf-upload">
+              <FiUpload /> {uploadingPdf ? 'Enviando...' : (proposta.pdf_proposta_cliente ? 'Substituir PDF' : 'Anexar PDF')}
+              <input type="file" accept="application/pdf,.pdf" onChange={handleUploadPdf} disabled={uploadingPdf} hidden />
+            </label>
+          )}
+        </section>
       </div>
 
       <div className="proposta-detalhe-actions">
         <button type="button" className="btn btn-sec" onClick={abrirPreview}><FiEye /> Ver proposta</button>
-        <button type="button" className="btn btn-pri" onClick={baixarPdf} disabled={pdfLoading}><FiDownload /> {pdfLoading ? 'Gerando...' : 'PDF'}</button>
+        <button type="button" className="btn btn-pri" onClick={baixarPdfGerado} disabled={pdfLoading}><FiDownload /> {pdfLoading ? 'Gerando...' : 'PDF gerado'}</button>
         {status === 'rascunho' && <button type="button" className="btn btn-sec" onClick={() => acao('enviar')}><FiSend /> Enviar</button>}
         {(status === 'enviada' || status === 'visualizada') && (
           <>
@@ -160,7 +243,7 @@ export default function PropostaDetalhe() {
           <button type="button" className="btn btn-sec" onClick={() => acao('nova-revisao')}><FiRotateCcw /> Nova revisão</button>
         )}
         <button type="button" className="btn btn-sec" onClick={() => acao('clone')}><FiCopy /> Clonar</button>
-        {status === 'rascunho' && !inativa && <Link to={`/comercial/propostas/editar/${id}`} className="btn btn-pri"><FiEdit /> Editar</Link>}
+        {!inativa && <Link to={`/comercial/propostas/editar/${id}`} className="btn btn-pri"><FiEdit /> Editar</Link>}
         {podeInativar && (
           <button type="button" className="btn btn-sec btn-inativar" onClick={() => confirmInativar() && acao('inativar')}>
             <FiTrash2 /> Inativar
