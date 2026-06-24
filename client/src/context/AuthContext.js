@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import api from '../services/api';
-import { invalidatePermissionsCache } from '../services/permissionsCache';
+import { invalidatePermissionsCache, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { mergeUserPermissions } from '../utils/systemPermissions';
 
 const AuthContext = createContext();
@@ -33,6 +33,7 @@ export const AuthProvider = ({ children }) => {
     setUser(normalized);
     localStorage.setItem('user', JSON.stringify(normalized));
     invalidatePermissionsCache(normalized.id);
+    seedPermissionsFromAuthUser(normalized);
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -61,6 +62,7 @@ export const AuthProvider = ({ children }) => {
             try {
               const freshUser = await refreshUserFromServer(token, parsedUser);
               setUser(freshUser);
+              seedPermissionsFromAuthUser(freshUser);
             } catch (refreshError) {
               console.warn('Não foi possível atualizar permissões do usuário:', refreshError);
               setUser(mergeUserPermissions(parsedUser, {}));
@@ -100,6 +102,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(finalUser));
       setUser(finalUser);
       invalidatePermissionsCache(finalUser?.id);
+      seedPermissionsFromAuthUser(finalUser);
 
       return { success: true };
     } catch (error) {

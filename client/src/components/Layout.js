@@ -3,7 +3,8 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { canConfigureAlmox, canConfigureFrota, isModuleAdmin } from '../utils/systemPermissions';
 import api from '../services/api';
-import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser } from '../services/permissionsCache';
+import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
+import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
@@ -165,6 +166,13 @@ const Layout = () => {
 
   const loadUserGrupos = async () => {
     try {
+      if (bypassModuleRestrictions(user) || isSystemAdmin(user)) {
+        seedPermissionsFromAuthUser(user);
+        const cached = getCachedUserPermissions(user.id);
+        setUserGrupos(cached?.grupos || []);
+        setPermissionsReady(true);
+        return;
+      }
       const cached = getCachedUserPermissions(user.id);
       const data = cached || await fetchUserPermissions(user.id);
       setUserGrupos(data.grupos || []);

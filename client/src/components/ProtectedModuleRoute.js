@@ -5,8 +5,9 @@ import {
   fetchUserPermissions,
   getCachedUserPermissions,
   hasModuleAccess,
+  seedPermissionsFromAuthUser,
 } from '../services/permissionsCache';
-import { bypassModuleRestrictions } from '../utils/systemPermissions';
+import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
 import AcessoNegado from './AcessoNegado';
 import SplashScreen from './SplashScreen';
 import { RouteLoading } from './LazyPage';
@@ -36,8 +37,9 @@ function getModuloFromPath(path) {
 
 function resolveAccessSync(user, mod) {
   if (!mod) return true;
-  if (!user?.id) return false;
+  if (!user?.id) return null;
   if (bypassModuleRestrictions(user)) return true;
+  if (mod === 'admin' && isSystemAdmin(user)) return true;
   const cached = getCachedUserPermissions(user.id);
   if (cached) {
     return hasModuleAccess(cached.permissoes, mod, user);
@@ -46,7 +48,7 @@ function resolveAccessSync(user, mod) {
 }
 
 const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const moduloDetectado = modulo || getModuloFromPath(location.pathname);
   const sessionActive = activeModuleSessionRef.current === moduloDetectado;
@@ -109,11 +111,9 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
         return;
       }
 
-      const syncAccess = resolveAccessSync(user, mod);
-      if (syncAccess !== null) {
+      if (authLoading) {
         if (!cancelled) {
-          setTemAcesso(syncAccess);
-          setLoading(false);
+          setLoading(true);
         }
         return;
       }
@@ -126,8 +126,26 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
         return;
       }
 
+      if (bypassModuleRestrictions(user) || (mod === 'admin' && isSystemAdmin(user))) {
+        seedPermissionsFromAuthUser(user);
+        if (!cancelled) {
+          setTemAcesso(true);
+          setLoading(false);
+        }
+        return;
+      }
+
+      const syncAccess = resolveAccessSync(user, mod);
+      if (syncAccess !== null) {
+        if (!cancelled) {
+          setTemAcesso(syncAccess);
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
-        const { permissoes } = await fetchUserPermissions(user.id);
+        const { permissoes } = await fetchUserPermissions(user.id, { timeoutMs: 10000 });
         if (!cancelled) {
           setTemAcesso(hasModuleAccess(permissoes, mod, user));
           setLoading(false);
@@ -146,7 +164,7 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
     return () => {
       cancelled = true;
     };
-  }, [user, moduloDetectado]);
+  }, [user, moduloDetectado, authLoading]);
 
   useEffect(() => {
     const shouldShowSplash = Boolean(moduloDetectado) && !splashComplete;
@@ -206,32 +224,15 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
       return null;
     }
 
-    const preloadChildren = temAcesso === true;
-
     return (
       <>
         <SplashScreen
           key={modParaSplash}
           module={modParaSplash}
           onComplete={handleSplashComplete}
-          showError={!loading && temAcesso === false}
-          ready={!loading && temAcesso !== null}
+          showError={!loading && !authLoading && temAcesso === false}
+          ready={!authLoading && !loading && temAcesso !== null}
         />
-        {preloadChildren && (
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              width: 0,
-              height: 0,
-              overflow: 'hidden',
-              visibility: 'hidden',
-              pointerEvents: 'none',
-            }}
-          >
-            {children}
-          </div>
-        )}
       </>
     );
   }

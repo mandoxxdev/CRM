@@ -3401,11 +3401,20 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
 
 app.get('/api/usuarios', authenticateToken, (req, res) => {
   const ghostSql = ghostUserAnd(req.user);
-  db.all(
-    `SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto, created_at
-     FROM usuarios WHERE 1=1${ghostSql} ORDER BY nome`,
-    [],
-    (err, rows) => {
+  const limitRaw = parseInt(req.query.limit, 10);
+  const offsetRaw = parseInt(req.query.offset, 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 0;
+  const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
+
+  let sql = `SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto, created_at
+     FROM usuarios WHERE 1=1${ghostSql} ORDER BY nome`;
+  const sqlParams = [];
+  if (limit > 0) {
+    sql += ' LIMIT ? OFFSET ?';
+    sqlParams.push(limit, offset);
+  }
+
+  db.all(sql, sqlParams, (err, rows) => {
       if (err) {
         if (isSqliteBusy(err)) {
           return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
@@ -3477,120 +3486,78 @@ app.get('/api/usuarios/:id', authenticateToken, (req, res) => {
   });
 });
 
-// Obter grupos e permissões de um usuário
+// Obter grupos e permissões de um usuário (otimizado: 2 queries em vez de 4+ aninhadas)
 app.get('/api/usuarios/:id/grupos', authenticateToken, (req, res) => {
   const { id } = req.params;
 
+  const sendBusy = (err) => {
+    if (isSqliteBusy(err)) {
+      return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
+    }
+    return res.status(500).json({ error: err.message });
+  };
+
   db.get('SELECT id, is_oculto FROM usuarios WHERE id = ?', [id], (ghostErr, target) => {
-    if (ghostErr) return res.status(500).json({ error: ghostErr.message });
+    if (ghostErr) return sendBusy(ghostErr);
     if (!target) return res.status(404).json({ error: 'Usuário não encontrado' });
     if (shouldHideGhostUsers(req.user) && isGhostUser(target)) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
 
-  const respondWithPermissions = (grupos, permissoes, usuario) => {
-    res.json({ grupos, permissoes, usuario });
-  };
+    getUsuarioModuleContext(db, id, (ctxErr, usuario) => {
+      if (ctxErr) return sendBusy(ctxErr);
 
-  getUsuarioModuleContext(db, id, (ctxErr, usuario) => {
-    if (ctxErr) {
-      return res.status(500).json({ error: ctxErr.message });
-    }
+      db.all(
+        `SELECT gp.id, gp.nome, gp.descricao, gp.ativo,
+                p.id AS perm_id, p.modulo, p.acao, p.permissao, p.grupo_id
+         FROM grupos_permissoes gp
+         INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
+         LEFT JOIN permissoes p ON p.grupo_id = gp.id
+         WHERE ug.usuario_id = ? AND gp.ativo = 1
+         ORDER BY gp.nome, p.modulo, p.acao`,
+        [id],
+        (errGrupoPerms, joinedRows) => {
+          if (errGrupoPerms) return sendBusy(errGrupoPerms);
 
-    // Buscar grupos do usuário
-    db.all(
-    `SELECT 
-      gp.id,
-      gp.nome,
-      gp.descricao,
-      gp.ativo
-    FROM grupos_permissoes gp
-    INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
-    WHERE ug.usuario_id = ? AND gp.ativo = 1
-    ORDER BY gp.nome`,
-    [id],
-    (err, grupos) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      
-      // Buscar permissões dos grupos
-      let permissoesGrupos = [];
-      if (grupos.length > 0) {
-        const grupoIds = grupos.map(g => g.id);
-        const placeholders = grupoIds.map(() => '?').join(',');
-        
-        db.all(
-          `SELECT 
-            p.id,
-            p.grupo_id,
-            p.modulo,
-            p.acao,
-            p.permissao,
-            gp.nome as grupo_nome
-          FROM permissoes p
-          INNER JOIN grupos_permissoes gp ON p.grupo_id = gp.id
-          WHERE p.grupo_id IN (${placeholders})
-          ORDER BY p.modulo, p.acao`,
-          grupoIds,
-          (err, permissoesGruposResult) => {
-            if (err) {
-              return res.status(500).json({ error: err.message });
+          const gruposMap = new Map();
+          const permissoesGrupos = [];
+          (joinedRows || []).forEach((row) => {
+            if (!gruposMap.has(row.id)) {
+              gruposMap.set(row.id, {
+                id: row.id,
+                nome: row.nome,
+                descricao: row.descricao,
+                ativo: row.ativo,
+              });
             }
-            permissoesGrupos = permissoesGruposResult || [];
-            
-            // Buscar permissões diretas do usuário (onde usuario_id não é NULL e grupo_id é NULL)
-            db.all(
-              `SELECT 
-                p.id,
-                p.usuario_id,
-                p.grupo_id,
-                p.modulo,
-                p.acao,
-                p.permissao,
-                NULL as grupo_nome
-              FROM permissoes p
-              WHERE p.usuario_id = ? AND p.grupo_id IS NULL
-              ORDER BY p.modulo, p.acao`,
-              [id],
-              (err, permissoesDiretas) => {
-                if (err) {
-                  return res.status(500).json({ error: err.message });
-                }
-                
-                // Combinar permissões de grupos e permissões diretas
-                const todasPermissoes = [...permissoesGrupos, ...(permissoesDiretas || [])];
-                respondWithPermissions(grupos, todasPermissoes, usuario);
-              }
-            );
-          }
-        );
-      } else {
-        // Se não tem grupos, buscar apenas permissões diretas
-        db.all(
-          `SELECT 
-            p.id,
-            p.usuario_id,
-            p.grupo_id,
-            p.modulo,
-            p.acao,
-            p.permissao,
-            NULL as grupo_nome
-          FROM permissoes p
-          WHERE p.usuario_id = ? AND p.grupo_id IS NULL
-          ORDER BY p.modulo, p.acao`,
-          [id],
-          (err, permissoesDiretas) => {
-            if (err) {
-              return res.status(500).json({ error: err.message });
+            if (row.perm_id) {
+              permissoesGrupos.push({
+                id: row.perm_id,
+                grupo_id: row.grupo_id,
+                modulo: row.modulo,
+                acao: row.acao,
+                permissao: row.permissao,
+                grupo_nome: row.nome,
+              });
             }
-            respondWithPermissions([], permissoesDiretas || [], usuario);
-          }
-        );
-      }
-    }
-    );
-  });
+          });
+
+          db.all(
+            `SELECT p.id, p.usuario_id, p.grupo_id, p.modulo, p.acao, p.permissao, NULL as grupo_nome
+             FROM permissoes p
+             WHERE p.usuario_id = ? AND p.grupo_id IS NULL
+             ORDER BY p.modulo, p.acao`,
+            [id],
+            (errDiretas, permissoesDiretas) => {
+              if (errDiretas) return sendBusy(errDiretas);
+              const grupos = Array.from(gruposMap.values());
+              const todasPermissoes = [...permissoesGrupos, ...(permissoesDiretas || [])];
+              res.json({ grupos, permissoes: todasPermissoes, usuario });
+            }
+          );
+        }
+      );
+    });
   });
 });
 

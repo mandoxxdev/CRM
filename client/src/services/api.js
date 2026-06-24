@@ -35,6 +35,7 @@ function getApiBaseURL() {
 
 const api = axios.create({
   baseURL: getApiBaseURL(),
+  timeout: parseInt(process.env.REACT_APP_API_TIMEOUT_MS || '30000', 10),
 });
 
 // Interceptor para adicionar token em todas as requisições (localStorage, sessionStorage ou header global)

@@ -10,10 +10,9 @@ import { SkeletonTable } from './SkeletonLoader';
 import './Usuarios.css';
 import './Loading.css';
 
-const Usuarios = () => {
-  const { user: currentUser, loading: authLoading, refreshUser } = useAuth();
-  const [actorUser, setActorUser] = useState(null);
-  const effectiveActor = actorUser ?? currentUser;
+const Usuarios = ({ deferMs = 200 }) => {
+  const { user: currentUser, loading: authLoading } = useAuth();
+  const effectiveActor = currentUser;
   const podeExcluir = canDeleteUsers(effectiveActor);
   const actorIsSuperAdmin = isSuperAdmin(effectiveActor);
   const [usuarios, setUsuarios] = useState([]);
@@ -21,25 +20,26 @@ const Usuarios = () => {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const fresh = await refreshUser();
-      if (!cancelled) {
-        setActorUser(fresh || currentUser);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [refreshUser]);
-
-  useEffect(() => {
     if (authLoading) return;
-    loadUsuarios();
-  }, [authLoading, effectiveActor?.id, effectiveActor?.is_superadmin]);
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) loadUsuarios();
+    }, deferMs);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [authLoading, effectiveActor?.id, effectiveActor?.is_superadmin, deferMs]);
 
   const loadUsuarios = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/usuarios');
+      const response = await api.get('/usuarios', {
+        params: { limit: 200, offset: 0 },
+        timeout: 25000,
+      });
       const visiveis = filterVisibleUsers(response.data || [], effectiveActor);
       const usuariosFiltrados = visiveis.filter(
         usuario => usuario.nome.toLowerCase() !== 'administrator'
