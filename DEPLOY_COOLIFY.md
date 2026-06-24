@@ -313,3 +313,16 @@ Se não encontrar "Source Providers", procure por:
 ---
 
 **Boa sorte com o deploy! 🚀**
+
+### Erro: falha no passo Docker `RUN cd client && npm run build`
+
+**Sintoma:** Build para no passo 9/11; log do Coolify pode mostrar apenas `RuntimeException` em `ExecuteRemoteCommand.php`.
+
+**Causa comum:** falta de RAM no servidor de build (OOM) ao compilar o React com Chromium e todas as dependencias na mesma imagem.
+
+**O que o projeto faz:** o `Dockerfile` usa **build multi-stage**: o client compila no estagio `client-builder` (sem Chromium), e a imagem final so copia `client/build`.
+
+**Se ainda falhar:**
+- No Coolify, aumente a memoria do build (se disponivel) ou use um servidor com pelo menos **4 GB RAM** livres para o build.
+- Confirme **Build Pack = Dockerfile** (nao Nixpacks).
+- Variaveis ja usadas no build: `CI=false`, `DISABLE_ESLINT_PLUGIN=true`, `NODE_OPTIONS=--max-old-space-size=2048`.

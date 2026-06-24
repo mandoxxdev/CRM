@@ -1,11 +1,28 @@
 # Dockerfile customizado para Coolify
-# Build do client DENTRO do Docker com pouca memória (1.5GB) para não estourar no Coolify.
+# Build do client em estagio separado (sem Chromium) para reduzir RAM no npm run build.
 
+# --- Estagio 1: build do React (so client; menos memoria que build na imagem final) ---
+FROM node:20-alpine AS client-builder
+
+WORKDIR /app/client
+
+COPY client/package*.json ./
+RUN rm -f package-lock.json && npm install --legacy-peer-deps
+
+COPY client/ ./
+
+ENV CI=false
+ENV GENERATE_SOURCEMAP=false
+ENV DISABLE_ESLINT_PLUGIN=true
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+RUN npm run build
+
+# --- Estagio 2: runtime ---
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Chromium para Puppeteer (PDF de propostas e OS) — Alpine usa apk, não apt
+# Chromium para Puppeteer (PDF de propostas e OS) - Alpine usa apk, nao apt
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -14,7 +31,6 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-freefont
 
-# Usar Chromium do sistema; evita download do Puppeteer e erro ENOENT no container
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
@@ -29,22 +45,15 @@ RUN rm -f package-lock.json server/package-lock.json client/package-lock.json &&
 
 COPY . .
 
-ENV CI=false
-ENV GENERATE_SOURCEMAP=false
-ENV DISABLE_ESLINT_PLUGIN=true
-ENV NODE_OPTIONS="--max-old-space-size=1536"
-RUN cd client && npm run build && cd ..
+# Artefato do estagio de build (client/build esta no .dockerignore; nao vem do COPY acima)
+COPY --from=client-builder /app/client/build ./client/build
 
-# Expor porta
 EXPOSE 3000
 
-# Variáveis de ambiente
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Garantir permissões para criar banco de dados
 RUN mkdir -p /app/server && chmod -R 777 /app/server || true
 
-# Comando para iniciar
 WORKDIR /app/server
 CMD ["node", "index.js"]
