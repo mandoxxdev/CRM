@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
+import { canConfigureAlmox } from '../../utils/systemPermissions';
 import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
   FiPackage, FiSliders, FiMapPin, FiSettings,
@@ -186,7 +187,7 @@ const TABS = [
 const ConfiguracoesAlmoxarifado = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = canConfigureAlmox(user);
   const initialTab = searchParams.get('tab');
   const [tab, setTab] = useState(
     initialTab && TABS.some(t => t.id === initialTab) ? initialTab : 'tipos'
@@ -197,9 +198,9 @@ const ConfiguracoesAlmoxarifado = () => {
       <div className="almox-page">
         <div className="almox-empty" style={{ padding: 60, textAlign: 'center' }}>
           <FiShield size={48} style={{ color: '#4facfe', opacity: 0.5, display: 'block', margin: '0 auto 16px' }} />
-          <h2 style={{ margin: '0 0 8px', fontSize: '1.1rem' }}>Acesso restrito — apenas administradores</h2>
+          <h2 style={{ margin: '0 0 8px', fontSize: '1.1rem' }}>Acesso restrito — administrador do Almoxarifado</h2>
           <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.9rem', maxWidth: 420, margin: '0 auto' }}>
-            As configurações do almoxarifado são exclusivas para administradores do sistema.
+            As configurações do almoxarifado são exclusivas para administradores do módulo ou Super Administradores.
           </p>
           <Link to="/almoxarifado" className="btn-almox-secondary" style={{ marginTop: 24, display: 'inline-flex' }}>
             <FiArrowLeft size={14} /> Voltar ao Dashboard

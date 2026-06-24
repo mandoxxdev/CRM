@@ -21,6 +21,9 @@ const ACAO_PERFIS = {
 
 function getPerfilFromUser(user) {
   if (!user) return PERFIS.CONSULTA;
+  const { isSuperAdmin, isModuleAdmin } = require('../systemPermissions');
+  if (isSuperAdmin(user)) return PERFIS.ADMIN_FROTA;
+  if (isModuleAdmin(user, 'frota')) return PERFIS.ADMIN_FROTA;
   if (user.role === 'admin') return PERFIS.ADMIN_FROTA;
   if (user.perfil_frota) return user.perfil_frota;
   return PERFIS.MOTORISTA;

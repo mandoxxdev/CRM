@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { canDeleteUsers, parseAdminModulos } from '../utils/systemPermissions';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload, FiStar } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
 import './Usuarios.css';
 import './Loading.css';
 
 const Usuarios = () => {
+  const { user: currentUser } = useAuth();
+  const podeExcluir = canDeleteUsers(currentUser);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -68,7 +72,13 @@ const Usuarios = () => {
         'Nome': usuario.nome,
         'Email': usuario.email,
         'Grupos': usuario.grupos?.map(g => g.nome).join(', ') || 'Sem grupo',
-        'Perfil': usuario.role === 'admin' ? 'Administrador' : 'Usuário',
+        'Perfil': usuario.is_superadmin
+          ? 'Super Administrador'
+          : usuario.role === 'admin'
+            ? 'Administrador'
+            : parseAdminModulos(usuario.admin_modulos).length > 0
+              ? `Usuário (+ admin: ${parseAdminModulos(usuario.admin_modulos).join(', ')})`
+              : 'Usuário',
         'Status': usuario.ativo ? 'Ativo' : 'Inativo',
         'Cadastrado em': usuario.created_at ? new Date(usuario.created_at).toLocaleDateString('pt-BR') : ''
       }));
@@ -175,11 +185,17 @@ const Usuarios = () => {
                     )}
                   </td>
                   <td>
-                    <span className={`role-badge ${usuario.role === 'admin' ? 'admin' : 'user'}`}>
-                      {usuario.role === 'admin' ? (
+                    <span className={`role-badge ${usuario.is_superadmin ? 'admin' : usuario.role === 'admin' ? 'admin' : 'user'}`}>
+                      {usuario.is_superadmin ? (
+                        <>
+                          <FiStar /> Super Administrador
+                        </>
+                      ) : usuario.role === 'admin' ? (
                         <>
                           <FiShield /> Administrador
                         </>
+                      ) : parseAdminModulos(usuario.admin_modulos).length > 0 ? (
+                        <>Admin módulo: {parseAdminModulos(usuario.admin_modulos).join(', ')}</>
                       ) : (
                         'Usuário'
                       )}
@@ -198,7 +214,7 @@ const Usuarios = () => {
                       <Link to={`/admin/usuarios/editar/${usuario.id}`} className="btn-icon" title="Editar">
                         <FiEdit />
                       </Link>
-                      {usuario.role !== 'admin' && usuario.email !== 'admin@gmp.com.br' && (
+                      {podeExcluir && usuario.email !== 'admin@gmp.com.br' && (
                         <button
                           onClick={() => handleDelete(usuario.id)}
                           className="btn-icon btn-danger"

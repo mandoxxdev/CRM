@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { canConfigureAlmox, isSystemAdmin } from '../utils/systemPermissions';
 import api from '../services/api';
 import { fetchUserPermissions, getCachedUserPermissions } from '../services/permissionsCache';
 import {
@@ -371,10 +372,11 @@ const Layout = () => {
             {sidebarOpen && <span>Selecionar Módulo</span>}
           </button>
           {menuItems.map((item) => {
-            // Verificar se é rota admin e se usuário é admin
-            // Se não houver role definido, mostrar para todos (compatibilidade)
-            if (item.adminOnly && user?.role && user?.role !== 'admin') {
-              return null;
+            if (item.adminOnly) {
+              const allowed = activeModule === 'almoxarifado'
+                ? canConfigureAlmox(user)
+                : isSystemAdmin(user);
+              if (!allowed) return null;
             }
             const Icon = item.icon;
             // Verificar se a rota está ativa

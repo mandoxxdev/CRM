@@ -19,6 +19,15 @@ const {
   enrichMaterialRow,
   enrichMaterialRows,
 } = require('../services/almoxarifado/materialPhoto');
+const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
+
+function denyUnlessAlmoxAdmin(req, res) {
+  if (!canConfigureAlmox(req.user)) {
+    res.status(403).json({ error: 'Acesso restrito — administrador do Almoxarifado ou Super Administrador' });
+    return true;
+  }
+  return false;
+}
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
@@ -1093,7 +1102,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.post('/api/almoxarifado/tipos-material',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obrigatório' });
     db.run(`INSERT INTO tipos_material_almoxarifado (nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado)
@@ -1107,7 +1116,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.put('/api/almoxarifado/tipos-material/:id',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado, ativo } = req.body;
     db.run(`UPDATE tipos_material_almoxarifado SET nome=?, descricao=?, icone=?, cor=?, requer_assinatura=?, requer_termo=?, is_epi=?, is_controlado=?, ativo=? WHERE id=?`,
       [nome, descricao || null, icone || '📦', cor || '#4facfe',
@@ -1120,7 +1129,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.delete('/api/almoxarifado/tipos-material/:id',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     db.run(`UPDATE tipos_material_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true });
@@ -1141,7 +1150,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.post('/api/almoxarifado/localizacoes',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura } = req.body;
     if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
@@ -1163,7 +1172,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.put('/api/almoxarifado/localizacoes/:id',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo } = req.body;
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
@@ -1185,7 +1194,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.delete('/api/almoxarifado/localizacoes/:id',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true });
@@ -1213,7 +1222,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.post('/api/almoxarifado/setores',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { nome, codigo_prefixo, tipo, ordem } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     if (!codigo_prefixo?.trim()) return res.status(400).json({ error: 'Prefixo do código é obrigatório' });
@@ -1237,7 +1246,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.put('/api/almoxarifado/setores/:id',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { nome, codigo_prefixo, tipo, ordem, ativo } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     if (!codigo_prefixo?.trim()) return res.status(400).json({ error: 'Prefixo do código é obrigatório' });
@@ -1287,7 +1296,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.delete('/api/almoxarifado/setores/:id',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     db.get('SELECT nome FROM setores_almoxarifado WHERE id = ?', [req.params.id], (err, setor) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!setor) return res.status(404).json({ error: 'Setor não encontrado' });
@@ -1370,7 +1379,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.post('/api/almoxarifado/familias',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { nome, descricao, categoria_id, codigo, tipo_uso } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
@@ -1399,7 +1408,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.put('/api/almoxarifado/familias/:id',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { nome, descricao, categoria_id, ativo, tipo_uso } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
@@ -1413,7 +1422,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.delete('/api/almoxarifado/familias/:id',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     db.get('SELECT COUNT(*) as c FROM materiais_almoxarifado WHERE familia_id = ? AND ativo = 1', [req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (row.c > 0) {
@@ -1432,7 +1441,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/almoxarifado/configuracoes',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     db.all(`SELECT * FROM configuracoes_almoxarifado ORDER BY chave`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       const obj = {};
@@ -1442,7 +1451,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.put('/api/almoxarifado/configuracoes',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const configs = req.body; // { chave: valor, ... }
     const promises = Object.entries(configs).map(([chave, valor]) =>
       new Promise((resolve, reject) => {
@@ -1459,7 +1468,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.get('/api/almoxarifado/configuracoes/alertas-estoque',async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const [settings, reminder] = await Promise.all([
         alertService.getAlertSettingsForApi(db),
@@ -1472,7 +1481,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.put('/api/almoxarifado/configuracoes/alertas-estoque',async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const payload = req.body || {};
       const emails = Array.isArray(payload.emails) ? payload.emails.map(v => String(v).trim()).filter(Boolean) : [];
@@ -1542,7 +1551,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.post('/api/almoxarifado/alertas-estoque/testar',async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const materialTeste = {
         codigo: 'TESTE-ALM',
@@ -1560,7 +1569,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.post('/api/almoxarifado/alertas-estoque/verificar',async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const forceSend = !!req.body?.forceSend;
       const results = await alertService.verificarAlertasEstoque(db, { forceSend });
@@ -1581,7 +1590,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.put('/api/almoxarifado/configuracoes/liberacao-valor', async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const saved = await valueApprovalService.saveConfig(db, req.body, req.user.nome || req.user.email);
       res.json(saved);
@@ -1592,7 +1601,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // PUT /api/almoxarifado/configuracoes/estoques-minimos — atualização em lote
   app.put('/api/almoxarifado/configuracoes/estoques-minimos',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Acesso restrito — apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { materiais } = req.body; // [{ id, quantidade_minima, quantidade_maxima, ponto_pedido, prazo_reposicao_dias }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array de materiais' });
 
@@ -1619,7 +1628,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // PUT /api/almoxarifado/configuracoes/tipos-material — associar tipo a material em lote
   app.put('/api/almoxarifado/configuracoes/tipos-material',(req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     const { materiais } = req.body; // [{ id, tipo_material_id }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array' });
 
@@ -1886,7 +1895,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ?`, [req.params.id], (err, r) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!r) return res.status(404).json({ error: 'Não encontrada' });
-      if (r.solicitante_id !== req.user.id && req.user.role !== 'admin') {
+      if (r.solicitante_id !== req.user.id && !isSystemAdmin(req.user)) {
         return res.status(403).json({ error: 'Sem permissão' });
       }
       if (!['PENDENTE', 'APROVADO'].includes(r.status)) {
@@ -1903,8 +1912,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // DELETE /api/almoxarifado/requisicoes/:id — exclusão administrativa (soft delete + estorno)
   app.delete('/api/almoxarifado/requisicoes/:id', (req, res) => {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Apenas administradores podem excluir requisições' });
+    if (!canDeleteAlmoxRequisicao(req.user)) {
+      return res.status(403).json({ error: 'Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições' });
     }
     const justificativa = req.body?.justificativa || req.query?.justificativa;
     requisitionService.excluirRequisicao(db, req.params.id, req.user, justificativa, alertService)
@@ -1914,7 +1923,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // POST /api/almoxarifado/requisicoes/processar-lembretes — processar lembretes pendentes (cron/admin)
   app.post('/api/almoxarifado/requisicoes/processar-lembretes', async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const resultado = await requisitionReminderService.processarLembretesPendentes(db);
       res.json({ success: true, ...resultado });

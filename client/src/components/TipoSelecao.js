@@ -16,6 +16,7 @@ import {
 } from '../services/permissionsCache';
 import './TipoSelecao.css';
 import { resetModuleSplashSession } from './ProtectedModuleRoute';
+import { bypassModuleRestrictions } from '../utils/systemPermissions';
 
 const RECENT_MODULES_KEY = 'gmp_modulos_recentes';
 
@@ -215,13 +216,12 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         return;
       }
 
-      const userRole = String(user.role || '').toLowerCase();
-      const isAdmin = userRole === 'admin';
+      const hasFullAccess = bypassModuleRestrictions(user);
 
       try {
         setLoading(true);
 
-        if (isAdmin) {
+        if (hasFullAccess) {
           const modulosComStatus = todosModulos.map(mod => ({
             ...mod,
             disponivel: true
@@ -256,8 +256,8 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         setModulosDisponiveis(modulosComStatus);
       } catch (error) {
         console.error('Erro ao carregar módulos:', error);
-        const userRoleError = String(user.role || '').toLowerCase();
-        if (userRoleError === 'admin') {
+        const hasFullAccessError = bypassModuleRestrictions(user);
+        if (hasFullAccessError) {
           const modulosComStatus = todosModulos.map(mod => ({
             ...mod,
             disponivel: true

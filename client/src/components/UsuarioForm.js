@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
-import { FiUsers, FiShield, FiCheck, FiX } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
+import {
+  isSuperAdmin,
+  isSystemAdmin,
+  parseAdminModulos,
+} from '../utils/systemPermissions';
+import { FiUsers, FiShield, FiCheck, FiX, FiStar } from 'react-icons/fi';
 import './UsuarioForm.css';
 
 const UsuarioForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
+  const actorIsSuperAdmin = isSuperAdmin(currentUser);
+  const actorCanManageUsers = isSystemAdmin(currentUser);
   const [loading, setLoading] = useState(false);
   const [loadingGrupos, setLoadingGrupos] = useState(false);
   const [grupos, setGrupos] = useState([]);
@@ -25,9 +34,11 @@ const UsuarioForm = () => {
     flag_vendedor: 0,
     flag_compras: 0,
     flag_ti: 0,
+    is_superadmin: 0,
   });
 
   const [modulosSelecionados, setModulosSelecionados] = useState([]);
+  const [modulosAdmin, setModulosAdmin] = useState([]);
 
   const todosModulos = [
     { value: 'comercial', label: 'Comercial', descricao: 'Gestão de vendas, propostas e oportunidades' },
@@ -77,10 +88,12 @@ const UsuarioForm = () => {
         flag_vendedor: response.data.flag_vendedor ? 1 : 0,
         flag_compras: response.data.flag_compras ? 1 : 0,
         flag_ti: response.data.flag_ti ? 1 : 0,
+        is_superadmin: response.data.is_superadmin ? 1 : 0,
       };
       
       console.log('📝 Dados do usuário a serem definidos:', usuarioData);
       setFormData(usuarioData);
+      setModulosAdmin(parseAdminModulos(response.data.admin_modulos));
       
       // Carregar módulos permitidos do usuário
       if (id) {
@@ -141,14 +154,20 @@ const UsuarioForm = () => {
   }, [id]);
 
   useEffect(() => {
-    // Se for admin, selecionar todos os módulos automaticamente
-    if (formData.role === 'admin') {
+    if (!actorCanManageUsers) {
+      navigate('/admin');
+    }
+  }, [actorCanManageUsers, navigate]);
+
+  useEffect(() => {
+    // Se for admin ou superadmin, selecionar todos os módulos automaticamente
+    if (formData.role === 'admin' || formData.is_superadmin === 1) {
       setModulosSelecionados(todosModulos.map(m => m.value));
-    } else if (id && modulosSelecionados.length === todosModulos.length && formData.role !== 'admin') {
+    } else if (id && modulosSelecionados.length === todosModulos.length && formData.role !== 'admin' && formData.is_superadmin !== 1) {
       // Se não é mais admin, limpar seleção
       setModulosSelecionados([]);
     }
-  }, [formData.role]);
+  }, [formData.role, formData.is_superadmin]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -192,7 +211,12 @@ const UsuarioForm = () => {
         flag_vendedor: formData.flag_vendedor ? 1 : 0,
         flag_compras: formData.flag_compras ? 1 : 0,
         flag_ti: formData.flag_ti ? 1 : 0,
+        admin_modulos: modulosAdmin,
       };
+
+      if (actorIsSuperAdmin) {
+        dataToSend.is_superadmin = formData.is_superadmin ? 1 : 0;
+      }
       
       console.log('📤 Dados a serem enviados:', dataToSend);
       console.log('📦 Módulos selecionados:', modulosSelecionados);
@@ -227,8 +251,8 @@ const UsuarioForm = () => {
 
       // Salvar permissões de módulos (apenas se não for admin)
       if (userId) {
-        if (formData.role === 'admin') {
-          console.log('ℹ️ Usuário é admin, não precisa salvar módulos (tem acesso a todos)');
+        if (formData.role === 'admin' || formData.is_superadmin === 1) {
+          console.log('ℹ️ Usuário é admin/superadmin, não precisa salvar módulos (tem acesso a todos)');
         } else {
           try {
             console.log(`🗑️ Removendo permissões antigas do usuário ${userId}...`);
@@ -348,9 +372,24 @@ const UsuarioForm = () => {
                 required
               >
                 <option value="usuario">Usuário</option>
-                <option value="admin">Administrador</option>
+                <option value="admin">Administrador do Sistema</option>
               </select>
+              <p className="field-hint">Administradores do sistema podem gerenciar usuários, mas não excluí-los.</p>
             </div>
+            {actorIsSuperAdmin && (
+              <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <label className="checkbox-label" style={{ marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    name="is_superadmin"
+                    checked={formData.is_superadmin === 1}
+                    onChange={handleChange}
+                  />
+                  <span><FiStar /> Super Administrador</span>
+                </label>
+                <p className="field-hint">Acesso total, incluindo exclusão de usuários e concessão de Super Admin.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -449,11 +488,16 @@ const UsuarioForm = () => {
 
         <div className="form-section">
           <h2>Módulos de Acesso</h2>
-          <p className="section-description">Selecione os módulos que este usuário terá acesso. Administradores têm acesso a todos os módulos automaticamente.</p>
+          <p className="section-description">
+            Selecione os módulos de acesso e, separadamente, em quais o usuário será administrador do módulo
+            (configurações e ações privilegiadas dentro do módulo).
+          </p>
           <div className="modulos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
             {todosModulos && todosModulos.length > 0 ? todosModulos.map(modulo => {
               const isSelected = modulosSelecionados.includes(modulo.value);
-              const isDisabled = formData.role === 'admin';
+              const isModAdmin = modulosAdmin.includes(modulo.value);
+              const isDisabled = formData.role === 'admin' || formData.is_superadmin === 1;
+              const canSetModuleAdmin = modulo.value !== 'admin' && !isDisabled;
               
               return (
                 <div
@@ -463,6 +507,7 @@ const UsuarioForm = () => {
                     if (!isDisabled) {
                       if (isSelected) {
                         setModulosSelecionados(prev => prev.filter(m => m !== modulo.value));
+                        setModulosAdmin(prev => prev.filter(m => m !== modulo.value));
                       } else {
                         setModulosSelecionados(prev => [...prev, modulo.value]);
                       }
@@ -478,6 +523,7 @@ const UsuarioForm = () => {
                         if (!isDisabled) {
                           if (isSelected) {
                             setModulosSelecionados(prev => prev.filter(m => m !== modulo.value));
+                            setModulosAdmin(prev => prev.filter(m => m !== modulo.value));
                           } else {
                             setModulosSelecionados(prev => [...prev, modulo.value]);
                           }
@@ -489,16 +535,40 @@ const UsuarioForm = () => {
                       <p>{modulo.descricao}</p>
                     </div>
                   </div>
+                  {canSetModuleAdmin && (
+                    <label
+                      className="checkbox-label modulo-admin-toggle"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isModAdmin}
+                        disabled={!isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            if (!isSelected) {
+                              setModulosSelecionados(prev => [...prev, modulo.value]);
+                            }
+                            setModulosAdmin(prev => [...prev, modulo.value]);
+                          } else {
+                            setModulosAdmin(prev => prev.filter(m => m !== modulo.value));
+                          }
+                        }}
+                      />
+                      <span>Administrador do módulo</span>
+                    </label>
+                  )}
                   {isDisabled && (
-                    <span className="modulo-admin-badge">Acesso total (Admin)</span>
+                    <span className="modulo-admin-badge">Acesso total (Admin / Super Admin)</span>
                   )}
                 </div>
               );
             }) : <p style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Nenhum módulo disponível</p>}
           </div>
-          {formData.role === 'admin' && (
+          {(formData.role === 'admin' || formData.is_superadmin === 1) && (
             <p className="admin-note">
-              <FiShield /> Usuários administradores têm acesso automático a todos os módulos.
+              <FiShield /> Administradores e Super Administradores têm acesso automático a todos os módulos.
             </p>
           )}
         </div>

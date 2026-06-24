@@ -23,6 +23,9 @@ const {
 } = require('../services/almoxarifado/stockAvailabilityService');
 
 const { enrichMaterialRow } = require('../services/almoxarifado/materialPhoto');
+const requisitionService = require('../services/almoxarifado/requisitionService');
+const alertService = require('../services/almoxarifado/alertService');
+const { canDeleteAlmoxRequisicao } = require('../services/systemPermissions');
 
 
 
@@ -520,6 +523,19 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
     );
 
+  });
+
+
+
+  // DELETE /api/requisicoes-material/:id — exclusão administrativa (soft delete + estorno)
+  app.delete('/api/requisicoes-material/:id', (req, res) => {
+    if (!canDeleteAlmoxRequisicao(req.user)) {
+      return res.status(403).json({ error: 'Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições' });
+    }
+    const justificativa = req.body?.justificativa || req.query?.justificativa;
+    requisitionService.excluirRequisicao(db, req.params.id, req.user, justificativa, alertService)
+      .then((result) => res.json(result))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
   });
 
 };

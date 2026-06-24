@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { isSystemAdmin } from '../utils/systemPermissions';
 import Usuarios from './Usuarios';
 import Permissoes from './Permissoes';
 import Logs from './Logs';
@@ -14,7 +15,7 @@ const Admin = () => {
 
   useEffect(() => {
     // Verificar se o usuário é admin
-    if (user && user.role !== 'admin') {
+    if (user && !isSystemAdmin(user)) {
       navigate('/');
     }
   }, [user, navigate]);

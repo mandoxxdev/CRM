@@ -4,6 +4,7 @@ import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
+import { canDeleteAlmoxRequisicao } from '../../utils/systemPermissions';
 import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
@@ -64,7 +65,7 @@ const RequisicoesList = () => {
     ? '/almoxarifado/requisicoes/nova'
     : `${ctx.basePath}/requisicoes-material/nova`;
   const [searchParams, setSearchParams] = useSearchParams();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = canDeleteAlmoxRequisicao(user);
 
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +93,7 @@ const RequisicoesList = () => {
   const [showEntregar, setShowEntregar] = useState(false);
   const [showSeparar, setShowSeparar] = useState(false);
   const [showExcluir, setShowExcluir] = useState(false);
+  const [excluirTarget, setExcluirTarget] = useState(null);
   const [justificativaExclusao, setJustificativaExclusao] = useState('');
   const [quantidadesEntrega, setQuantidadesEntrega] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
@@ -449,13 +451,17 @@ const RequisicoesList = () => {
   };
 
   const handleExcluir = async () => {
-    if (!detalhe || !justificativaExclusao.trim()) {
+    const targetId = excluirTarget?.id;
+    if (!targetId || !justificativaExclusao.trim()) {
       toast.error('Informe a justificativa da exclusão');
       return;
     }
     setSaving(true);
     try {
-      const res = await api.delete(`/almoxarifado/requisicoes/${detalhe.id}`, {
+      const deleteUrl = warehouseMode
+        ? `/almoxarifado/requisicoes/${targetId}`
+        : `/requisicoes-material/${targetId}`;
+      const res = await api.delete(deleteUrl, {
         data: { justificativa: justificativaExclusao.trim() },
       });
       const estornados = res.data?.estornos?.length || 0;
@@ -463,14 +469,25 @@ const RequisicoesList = () => {
         ? `Requisição excluída. Estoque estornado em ${estornados} item(ns).`
         : 'Requisição excluída.');
       setShowExcluir(false);
+      setExcluirTarget(null);
       setJustificativaExclusao('');
-      fecharDetalhe();
+      if (selectedId === targetId) fecharDetalhe();
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao excluir requisição');
     } finally {
       setSaving(false);
     }
+  };
+
+  const abrirExcluirModal = (requisicao, { temEntregue = false } = {}) => {
+    setExcluirTarget({
+      id: requisicao.id,
+      numero: requisicao.numero,
+      temEntregue,
+    });
+    setJustificativaExclusao('');
+    setShowExcluir(true);
   };
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -560,6 +577,7 @@ const RequisicoesList = () => {
                   {warehouseMode && <th>Valor</th>}
                   <th>Status</th>
                   <th>Data</th>
+                  {isAdmin && <th style={{ width: 56 }}>Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -583,6 +601,19 @@ const RequisicoesList = () => {
                     )}
                     <td><StatusBadge status={r.status} /></td>
                     <td style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', whiteSpace: 'nowrap' }}>{formatDate(r.created_at)}</td>
+                    {isAdmin && (
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="btn-almox-danger"
+                          title="Excluir requisição"
+                          style={{ padding: '4px 8px', minWidth: 0 }}
+                          onClick={() => abrirExcluirModal(r)}
+                        >
+                          <FiTrash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -788,9 +819,11 @@ const RequisicoesList = () => {
                     Cancelar Requisição
                   </button>
                 )}
-                {isAdmin && warehouseMode && (
+                {isAdmin && (
                   <button className="btn-almox-danger" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-                    onClick={() => { setJustificativaExclusao(''); setShowExcluir(true); }}>
+                    onClick={() => abrirExcluirModal(detalhe, {
+                      temEntregue: detalhe.itens.some((i) => getEntregue(i) > 0),
+                    })}>
                     <FiTrash2 size={14} /> Excluir Requisição
                   </button>
                 )}
@@ -953,17 +986,17 @@ const RequisicoesList = () => {
       )}
 
       {/* Modal excluir (admin) */}
-      {showExcluir && detalhe && (
-        <div className="almox-modal-overlay" onClick={() => setShowExcluir(false)}>
+      {showExcluir && excluirTarget && (
+        <div className="almox-modal-overlay" onClick={() => { setShowExcluir(false); setExcluirTarget(null); }}>
           <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
             <div className="almox-modal-header">
               <h2>🗑 Excluir Requisição</h2>
-              <button className="almox-modal-close" onClick={() => setShowExcluir(false)}>✕</button>
+              <button className="almox-modal-close" onClick={() => { setShowExcluir(false); setExcluirTarget(null); }}>✕</button>
             </div>
             <div className="almox-modal-body">
               <p style={{ color: 'var(--gmp-text-light)', marginBottom: 12, fontSize: '0.875rem' }}>
-                Esta ação remove a requisição <strong>{detalhe.numero}</strong> do sistema.
-                {detalhe.itens.some((i) => getEntregue(i) > 0) && (
+                Esta ação remove a requisição <strong>{excluirTarget.numero}</strong> do sistema.
+                {excluirTarget.temEntregue && (
                   <span style={{ display: 'block', marginTop: 8, color: 'var(--gmp-warning)' }}>
                     Itens já entregues terão o estoque estornado automaticamente.
                   </span>
@@ -977,7 +1010,7 @@ const RequisicoesList = () => {
               </div>
             </div>
             <div className="almox-modal-footer">
-              <button className="btn-almox-secondary" onClick={() => setShowExcluir(false)}>Cancelar</button>
+              <button className="btn-almox-secondary" onClick={() => { setShowExcluir(false); setExcluirTarget(null); }}>Cancelar</button>
               <button className="btn-almox-danger" onClick={handleExcluir}
                 disabled={saving || !justificativaExclusao.trim()}>
                 {saving ? 'Excluindo...' : 'Confirmar Exclusão'}

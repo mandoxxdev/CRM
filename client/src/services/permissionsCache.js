@@ -1,4 +1,5 @@
 import api from './api';
+import { bypassModuleRestrictions } from '../utils/systemPermissions';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = new Map();
@@ -43,8 +44,9 @@ export function getCachedUserPermissions(userId) {
   return null;
 }
 
-export function hasModuleAccess(permissoes, modulo, userRole) {
-  const role = String(userRole || '').toLowerCase();
+export function hasModuleAccess(permissoes, modulo, user) {
+  if (bypassModuleRestrictions(user)) return true;
+  const role = String(user?.role || user || '').toLowerCase();
   if (role === 'admin') return true;
   if (!modulo) return true;
 

@@ -14,6 +14,21 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const propostaEngine = require('./propostaCompositionEngine');
+const systemPermissions = require('./services/systemPermissions');
+const {
+  parseAdminModulos,
+  serializeAdminModulos,
+  isSuperAdmin,
+  isSystemAdmin,
+  canManageUsers,
+  canDeleteUsers,
+  bypassModuleRestrictions,
+  requireManageUsers,
+  requireDeleteUsers,
+  enrichUserFromDb,
+  syncModuleAdminProfiles,
+  sanitizeSuperAdminPayload,
+} = systemPermissions;
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
 function getPuppeteerLaunchOptions() {
@@ -1576,8 +1591,8 @@ function initializeDatabase(onReadyCallback) {
     if (!row) {
       const hashedPassword = bcrypt.hashSync('admin123', 10);
       db.run(
-        'INSERT INTO usuarios (nome, email, senha, cargo, role) VALUES (?, ?, ?, ?, ?)',
-        ['Administrador', 'admin@gmp.com.br', hashedPassword, 'Administrador', 'admin'],
+        'INSERT INTO usuarios (nome, email, senha, cargo, role, is_superadmin) VALUES (?, ?, ?, ?, ?, ?)',
+        ['Administrador', 'admin@gmp.com.br', hashedPassword, 'Administrador', 'admin', 1],
         (err) => {
           if (err) {
             console.error('Erro ao criar usuário admin:', err);
@@ -1894,7 +1909,9 @@ function executeMigrations(callback) {
         { nome: 'departamento', tipo: 'TEXT' },
         { nome: 'flag_vendedor', tipo: 'INTEGER DEFAULT 0' },
         { nome: 'flag_compras', tipo: 'INTEGER DEFAULT 0' },
-        { nome: 'flag_ti', tipo: 'INTEGER DEFAULT 0' }
+        { nome: 'flag_ti', tipo: 'INTEGER DEFAULT 0' },
+        { nome: 'is_superadmin', tipo: 'INTEGER DEFAULT 0' },
+        { nome: 'admin_modulos', tipo: 'TEXT DEFAULT \'[]\'' },
       ];
 
       colunasUsersFiltro.forEach((coluna) => {
@@ -1922,6 +1939,24 @@ function executeMigrations(callback) {
       safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_vendedor ON usuarios(flag_vendedor)`, 'flag_vendedor');
       safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_compras ON usuarios(flag_compras)`, 'flag_compras');
       safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_ti ON usuarios(flag_ti)`, 'flag_ti');
+      safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_is_superadmin ON usuarios(is_superadmin)`, 'is_superadmin');
+
+      // Super admin padrão: admin@gmp.com.br
+      db.run(
+        `UPDATE usuarios SET is_superadmin = 1 WHERE email = 'admin@gmp.com.br' AND COALESCE(is_superadmin, 0) = 0`,
+        (superErr) => {
+          if (!superErr) console.log('✅ Super administrador padrão verificado (admin@gmp.com.br)');
+        }
+      );
+
+      // Tabela de perfil Frota por usuário (padrão alinhado ao almoxarifado)
+      db.run(`CREATE TABLE IF NOT EXISTS perfil_frota_usuario (
+        usuario_id INTEGER PRIMARY KEY,
+        perfil TEXT NOT NULL DEFAULT 'MOTORISTA',
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`, (tblErr) => {
+        if (tblErr) console.warn('⚠️ perfil_frota_usuario:', tblErr.message);
+      });
     }
   });
 
@@ -2284,14 +2319,14 @@ function authenticateToken(req, res, next) {
       return res.status(401).json({ error: 'Token inválido ou expirado' });
     }
     req.user = user;
-    next();
+    enrichUserFromDb(db)(req, res, next);
   });
 }
 
 // Middleware para verificar permissões de módulo (considera grupo E permissões diretas do usuário)
 function checkModulePermission(requiredModule) {
   return (req, res, next) => {
-    if (req.user.role === 'admin') {
+    if (bypassModuleRestrictions(req.user)) {
       return next();
     }
 
@@ -2367,7 +2402,7 @@ function checkAnyModulePermission(requiredModules) {
   if (mods.length === 0) return checkModulePermission('comercial');
 
   return (req, res, next) => {
-    if (req.user.role === 'admin') {
+    if (bypassModuleRestrictions(req.user)) {
       return next();
     }
 
@@ -2587,7 +2622,7 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, is_superadmin: user.is_superadmin || 0 },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -2600,6 +2635,8 @@ app.post('/api/auth/login', (req, res) => {
         email: user.email,
         cargo: user.cargo,
         role: user.role,
+        is_superadmin: !!user.is_superadmin,
+        admin_modulos: parseAdminModulos(user.admin_modulos),
         setor: user.setor || null,
         departamento: user.departamento || null,
         flag_vendedor: !!user.flag_vendedor,
@@ -3229,7 +3266,7 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
 });
 
 app.get('/api/usuarios', authenticateToken, (req, res) => {
-  db.all('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, created_at FROM usuarios ORDER BY nome', [], (err, rows) => {
+  db.all('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, created_at FROM usuarios ORDER BY nome', [], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -3255,7 +3292,12 @@ app.get('/api/usuarios', authenticateToken, (req, res) => {
             console.error(`Erro ao buscar grupos do usuário ${usuario.id}:`, err);
             usuariosComGrupos.push({ ...usuario, grupos: [] });
           } else {
-            usuariosComGrupos.push({ ...usuario, grupos: grupos || [] });
+            usuariosComGrupos.push({
+              ...usuario,
+              is_superadmin: !!usuario.is_superadmin,
+              admin_modulos: parseAdminModulos(usuario.admin_modulos),
+              grupos: grupos || [],
+            });
           }
           
           processados++;
@@ -3270,14 +3312,18 @@ app.get('/api/usuarios', authenticateToken, (req, res) => {
 
 app.get('/api/usuarios/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  db.get('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, pode_aprovar_descontos, created_at FROM usuarios WHERE id = ?', [id], (err, row) => {
+  db.get('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, pode_aprovar_descontos, is_superadmin, admin_modulos, created_at FROM usuarios WHERE id = ?', [id], (err, row) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
     if (!row) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
-    res.json(row);
+    res.json({
+      ...row,
+      is_superadmin: !!row.is_superadmin,
+      admin_modulos: parseAdminModulos(row.admin_modulos),
+    });
   });
 });
 
@@ -3380,8 +3426,9 @@ app.get('/api/usuarios/:id/grupos', authenticateToken, (req, res) => {
   );
 });
 
-app.post('/api/usuarios', authenticateToken, (req, res) => {
+app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
+  const sanitized = sanitizeSuperAdminPayload(req.user, req.body);
   const {
     nome,
     email,
@@ -3394,8 +3441,10 @@ app.post('/api/usuarios', authenticateToken, (req, res) => {
     departamento,
     flag_vendedor,
     flag_compras,
-    flag_ti
-  } = req.body;
+    flag_ti,
+    is_superadmin,
+    admin_modulos,
+  } = sanitized;
 
   if (!nome || !email || !senha) {
     return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
@@ -3408,7 +3457,7 @@ app.post('/api/usuarios', authenticateToken, (req, res) => {
   const hashedPassword = bcrypt.hashSync(senha, 10);
 
   db.run(
-    'INSERT INTO usuarios (nome, email, senha, cargo, role, ativo, pode_aprovar_descontos, setor, departamento, flag_vendedor, flag_compras, flag_ti) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO usuarios (nome, email, senha, cargo, role, ativo, pode_aprovar_descontos, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       nome,
       email,
@@ -3421,7 +3470,9 @@ app.post('/api/usuarios', authenticateToken, (req, res) => {
       departamento || null,
       flag_vendedor ? 1 : 0,
       flag_compras ? 1 : 0,
-      flag_ti ? 1 : 0
+      flag_ti ? 1 : 0,
+      is_superadmin !== undefined ? is_superadmin : 0,
+      admin_modulos || '[]',
     ],
     function(err) {
       if (err) {
@@ -3430,27 +3481,35 @@ app.post('/api/usuarios', authenticateToken, (req, res) => {
         }
         return res.status(500).json({ error: err.message });
       }
-      res.json({
-        id: this.lastID,
-        nome,
-        email,
-        cargo,
-        role: role || 'usuario',
-        ativo: ativo !== undefined ? ativo : 1,
-        pode_aprovar_descontos: pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0,
-        setor: setor || null,
-        departamento: departamento || null,
-        flag_vendedor: flag_vendedor ? 1 : 0,
-        flag_compras: flag_compras ? 1 : 0,
-        flag_ti: flag_ti ? 1 : 0
-      });
+      const newId = this.lastID;
+      syncModuleAdminProfiles(db, newId, admin_modulos || '[]')
+        .catch((syncErr) => console.warn('Sync perfis módulo:', syncErr.message))
+        .finally(() => {
+          res.json({
+            id: newId,
+            nome,
+            email,
+            cargo,
+            role: role || 'usuario',
+            ativo: ativo !== undefined ? ativo : 1,
+            pode_aprovar_descontos: pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0,
+            setor: setor || null,
+            departamento: departamento || null,
+            flag_vendedor: flag_vendedor ? 1 : 0,
+            flag_compras: flag_compras ? 1 : 0,
+            flag_ti: flag_ti ? 1 : 0,
+            is_superadmin: !!is_superadmin,
+            admin_modulos: parseAdminModulos(admin_modulos),
+          });
+        });
     }
   );
 });
 
-app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
+app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) => {
   const { id } = req.params;
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
+  const sanitized = sanitizeSuperAdminPayload(req.user, req.body);
   const {
     nome,
     email,
@@ -3463,8 +3522,10 @@ app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
     departamento,
     flag_vendedor,
     flag_compras,
-    flag_ti
-  } = req.body;
+    flag_ti,
+    is_superadmin,
+    admin_modulos,
+  } = sanitized;
 
   if (senha && senha.length < 6) {
     return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
@@ -3479,10 +3540,21 @@ app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Email já cadastrado para outro usuário' });
     }
 
+    const finishUpdate = (err) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      syncModuleAdminProfiles(db, id, admin_modulos || '[]')
+        .catch((syncErr) => console.warn('Sync perfis módulo:', syncErr.message))
+        .finally(() => {
+          res.json({ message: 'Usuário atualizado com sucesso' });
+        });
+    };
+
     if (senha) {
       const hashedPassword = bcrypt.hashSync(senha, 10);
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, senha = ? WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), senha = ? WHERE id = ?',
         [
           nome,
           email,
@@ -3495,19 +3567,16 @@ app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
           flag_vendedor ? 1 : 0,
           flag_compras ? 1 : 0,
           flag_ti ? 1 : 0,
+          is_superadmin !== undefined ? is_superadmin : null,
+          admin_modulos !== undefined ? admin_modulos : null,
           hashedPassword,
           id
         ],
-        (err) => {
-          if (err) {
-            return res.status(500).json({ error: err.message });
-          }
-          res.json({ message: 'Usuário atualizado com sucesso' });
-        }
+        finishUpdate
       );
     } else {
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ? WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos) WHERE id = ?',
         [
           nome,
           email,
@@ -3520,24 +3589,25 @@ app.put('/api/usuarios/:id', authenticateToken, (req, res) => {
           flag_vendedor ? 1 : 0,
           flag_compras ? 1 : 0,
           flag_ti ? 1 : 0,
+          is_superadmin !== undefined ? is_superadmin : null,
+          admin_modulos !== undefined ? admin_modulos : null,
           id
         ],
-        (err) => {
-          if (err) {
-            return res.status(500).json({ error: err.message });
-          }
-          res.json({ message: 'Usuário atualizado com sucesso' });
-        }
+        finishUpdate
       );
     }
   });
 });
 
-app.delete('/api/usuarios/:id', authenticateToken, (req, res) => {
+app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, (req, res) => {
   const { id } = req.params;
+
+  if (String(req.user.id) === String(id)) {
+    return res.status(403).json({ error: 'Não é possível desativar o próprio usuário' });
+  }
   
   // Verificar se é o usuário admin padrão ou administrator
-  db.get('SELECT email, nome FROM usuarios WHERE id = ?', [id], (err, user) => {
+  db.get('SELECT email, nome, is_superadmin FROM usuarios WHERE id = ?', [id], (err, user) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -3545,9 +3615,9 @@ app.delete('/api/usuarios/:id', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
     
-    // Não permitir deletar o usuário admin padrão ou administrator
-    if (user.email === 'admin@gmp.com.br' || user.nome.toLowerCase() === 'administrator' || user.nome.toLowerCase() === 'administrador') {
-      return res.status(403).json({ error: 'Não é possível desativar o usuário administrador padrão' });
+    // Não permitir desativar o super admin padrão
+    if (user.email === 'admin@gmp.com.br') {
+      return res.status(403).json({ error: 'Não é possível desativar o Super Administrador padrão' });
     }
     
     db.run('UPDATE usuarios SET ativo = 0 WHERE id = ?', [id], (err) => {

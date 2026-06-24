@@ -6,6 +6,7 @@ import {
   getCachedUserPermissions,
   hasModuleAccess,
 } from '../services/permissionsCache';
+import { bypassModuleRestrictions } from '../utils/systemPermissions';
 import AcessoNegado from './AcessoNegado';
 import SplashScreen from './SplashScreen';
 import { RouteLoading } from './LazyPage';
@@ -36,11 +37,10 @@ function getModuloFromPath(path) {
 function resolveAccessSync(user, mod) {
   if (!mod) return true;
   if (!user?.id) return false;
-  const userRole = String(user.role || '').toLowerCase();
-  if (userRole === 'admin') return true;
+  if (bypassModuleRestrictions(user)) return true;
   const cached = getCachedUserPermissions(user.id);
   if (cached) {
-    return hasModuleAccess(cached.permissoes, mod, userRole);
+    return hasModuleAccess(cached.permissoes, mod, user);
   }
   return null;
 }
@@ -129,8 +129,7 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
       try {
         const { permissoes } = await fetchUserPermissions(user.id);
         if (!cancelled) {
-          const userRole = String(user.role || '').toLowerCase();
-          setTemAcesso(hasModuleAccess(permissoes, mod, userRole));
+          setTemAcesso(hasModuleAccess(permissoes, mod, user));
           setLoading(false);
         }
       } catch (error) {
