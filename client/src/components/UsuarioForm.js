@@ -7,13 +7,14 @@ import {
   isSystemAdmin,
   parseAdminModulos,
 } from '../utils/systemPermissions';
-import { FiUsers, FiShield, FiCheck, FiX, FiStar } from 'react-icons/fi';
+import { invalidatePermissionsCache } from '../services/permissionsCache';
+import { FiUsers, FiShield, FiCheck, FiX, FiStar, FiEyeOff } from 'react-icons/fi';
 import './UsuarioForm.css';
 
 const UsuarioForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshUser } = useAuth();
   const actorIsSuperAdmin = isSuperAdmin(currentUser);
   const actorCanManageUsers = isSystemAdmin(currentUser);
   const [loading, setLoading] = useState(false);
@@ -35,6 +36,7 @@ const UsuarioForm = () => {
     flag_compras: 0,
     flag_ti: 0,
     is_superadmin: 0,
+    is_oculto: 0,
   });
 
   const [modulosSelecionados, setModulosSelecionados] = useState([]);
@@ -89,6 +91,7 @@ const UsuarioForm = () => {
         flag_compras: response.data.flag_compras ? 1 : 0,
         flag_ti: response.data.flag_ti ? 1 : 0,
         is_superadmin: response.data.is_superadmin ? 1 : 0,
+        is_oculto: response.data.is_oculto ? 1 : 0,
       };
       
       console.log('📝 Dados do usuário a serem definidos:', usuarioData);
@@ -216,6 +219,7 @@ const UsuarioForm = () => {
 
       if (actorIsSuperAdmin) {
         dataToSend.is_superadmin = formData.is_superadmin ? 1 : 0;
+        dataToSend.is_oculto = formData.is_oculto ? 1 : 0;
       }
       
       console.log('📤 Dados a serem enviados:', dataToSend);
@@ -300,7 +304,12 @@ const UsuarioForm = () => {
         pode_aprovar_descontos: formData.pode_aprovar_descontos,
         modulos: modulosSelecionados.length > 0 ? modulosSelecionados : 'nenhum (admin ou não selecionado)'
       });
-      
+
+      if (String(userId) === String(currentUser?.id)) {
+        invalidatePermissionsCache(currentUser.id);
+        await refreshUser();
+      }
+
       navigate('/admin');
     } catch (error) {
       console.error('Erro completo:', error);
@@ -388,6 +397,22 @@ const UsuarioForm = () => {
                   <span><FiStar /> Super Administrador</span>
                 </label>
                 <p className="field-hint">Acesso total, incluindo exclusão de usuários e concessão de Super Admin.</p>
+              </div>
+            )}
+            {actorIsSuperAdmin && (
+              <div className="form-group ghost-user-field">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    name="is_oculto"
+                    checked={formData.is_oculto === 1}
+                    onChange={handleChange}
+                  />
+                  <span><FiEyeOff /> Usuário oculto (fantasma)</span>
+                </label>
+                <p className="field-hint field-hint-warning">
+                  Visível apenas para Super Administradores. Não aparece em listas, buscas, dropdowns ou chat para outros usuários.
+                </p>
               </div>
             )}
           </div>

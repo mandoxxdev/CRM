@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { canConfigureAlmox, isSystemAdmin } from '../utils/systemPermissions';
+import { canConfigureAlmox, canConfigureFrota, isSystemAdmin } from '../utils/systemPermissions';
 import api from '../services/api';
-import { fetchUserPermissions, getCachedUserPermissions } from '../services/permissionsCache';
+import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser } from '../services/permissionsCache';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
@@ -62,6 +62,7 @@ const Layout = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   const [userGrupos, setUserGrupos] = useState([]);
+  const [permissionsReady, setPermissionsReady] = useState(false);
   const [buscaGlobalOpen, setBuscaGlobalOpen] = useState(false);
   const [reportBuilderOpen, setReportBuilderOpen] = useState(false);
   const [workflowEngineOpen, setWorkflowEngineOpen] = useState(false);
@@ -167,10 +168,25 @@ const Layout = () => {
       const cached = getCachedUserPermissions(user.id);
       const data = cached || await fetchUserPermissions(user.id);
       setUserGrupos(data.grupos || []);
+      setPermissionsReady(true);
     } catch (error) {
       console.error('Erro ao carregar grupos do usuário:', error);
       setUserGrupos([]);
+      setPermissionsReady(true);
     }
+  };
+
+  const effectiveUser = getEffectiveUser(user);
+
+  const canSeeAdminOnlyItem = (item) => {
+    if (!item.adminOnly) return true;
+    if (activeModule === 'almoxarifado') {
+      return canConfigureAlmox(effectiveUser);
+    }
+    if (activeModule === 'frota') {
+      return canConfigureFrota(effectiveUser);
+    }
+    return isSystemAdmin(effectiveUser);
   };
 
   // Fechar sidebar ao clicar em um item no mobile (memoizado)
@@ -373,10 +389,8 @@ const Layout = () => {
           </button>
           {menuItems.map((item) => {
             if (item.adminOnly) {
-              const allowed = activeModule === 'almoxarifado'
-                ? canConfigureAlmox(user)
-                : isSystemAdmin(user);
-              if (!allowed) return null;
+              if (!permissionsReady) return null;
+              if (!canSeeAdminOnlyItem(item)) return null;
             }
             const Icon = item.icon;
             // Verificar se a rota está ativa

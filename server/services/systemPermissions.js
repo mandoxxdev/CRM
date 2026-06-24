@@ -69,8 +69,30 @@ function canDeleteAlmoxRequisicao(user) {
   return isSuperAdmin(user) || isModuleAdmin(user, 'almoxarifado') || String(user?.role || '').toLowerCase() === 'admin';
 }
 
+function hasAlmoxAdminPerfil(user) {
+  return String(user?.perfil_almoxarifado || '').toUpperCase() === 'ADMINISTRADOR';
+}
+
 function canConfigureAlmox(user) {
-  return isSuperAdmin(user) || isModuleAdmin(user, 'almoxarifado') || String(user?.role || '').toLowerCase() === 'admin';
+  return (
+    isSuperAdmin(user)
+    || isSystemAdmin(user)
+    || isModuleAdmin(user, 'almoxarifado')
+    || hasAlmoxAdminPerfil(user)
+  );
+}
+
+function hasFrotaAdminPerfil(user) {
+  return String(user?.perfil_frota || '').toUpperCase() === 'ADMIN_FROTA';
+}
+
+function canConfigureFrota(user) {
+  return (
+    isSuperAdmin(user)
+    || isSystemAdmin(user)
+    || isModuleAdmin(user, 'frota')
+    || hasFrotaAdminPerfil(user)
+  );
 }
 
 function bypassModuleRestrictions(user) {
@@ -196,8 +218,37 @@ function syncModuleAdminProfiles(db, userId, adminModulos) {
   });
 }
 
-function sanitizeSuperAdminPayload(actor, body) {
+function isGhostUser(user) {
+  return isTruthyFlag(user?.is_oculto);
+}
+
+function shouldHideGhostUsers(actor) {
+  return !isSuperAdmin(actor);
+}
+
+/** SQL fragment: AND COALESCE(alias.is_oculto, 0) = 0 — empty for superadmin */
+function ghostUserAnd(actor, sqlAlias = '') {
+  if (!shouldHideGhostUsers(actor)) return '';
+  const prefix = sqlAlias ? `${sqlAlias}.` : '';
+  return ` AND COALESCE(${prefix}is_oculto, 0) = 0`;
+}
+
+function ghostUserFilter(actor, sqlAlias = '') {
+  return { sql: ghostUserAnd(actor, sqlAlias), params: [] };
+}
+
+function sanitizeGhostUserPayload(actor, body) {
   const data = { ...body };
+  if (!isSuperAdmin(actor)) {
+    delete data.is_oculto;
+  } else if (data.is_oculto !== undefined) {
+    data.is_oculto = isTruthyFlag(data.is_oculto) ? 1 : 0;
+  }
+  return data;
+}
+
+function sanitizeSuperAdminPayload(actor, body) {
+  const data = sanitizeGhostUserPayload(actor, body);
   if (!canGrantSuperAdmin(actor)) {
     delete data.is_superadmin;
   } else {
@@ -210,6 +261,45 @@ function sanitizeSuperAdminPayload(actor, body) {
   return data;
 }
 
+function countActiveSuperAdmins(db, excludeUserId = null) {
+  return new Promise((resolve, reject) => {
+    let sql = 'SELECT COUNT(*) as cnt FROM usuarios WHERE COALESCE(is_superadmin, 0) = 1 AND COALESCE(ativo, 1) = 1';
+    const params = [];
+    if (excludeUserId != null) {
+      sql += ' AND id != ?';
+      params.push(excludeUserId);
+    }
+    db.get(sql, params, (err, row) => {
+      if (err) return reject(err);
+      resolve(Number(row?.cnt) || 0);
+    });
+  });
+}
+
+function wouldRemoveLastSuperAdmin(db, targetUserId, { demote = false, deactivate = false } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!demote && !deactivate) return resolve(false);
+
+    db.get(
+      'SELECT id, is_superadmin, ativo FROM usuarios WHERE id = ?',
+      [targetUserId],
+      (err, target) => {
+        if (err) return reject(err);
+        if (!target) return resolve(false);
+
+        const targetIsSuper = isTruthyFlag(target.is_superadmin);
+        const targetIsActive = target.ativo !== 0 && target.ativo !== false;
+
+        if (!targetIsSuper || !targetIsActive) return resolve(false);
+
+        countActiveSuperAdmins(db, targetUserId)
+          .then((others) => resolve(others === 0))
+          .catch(reject);
+      }
+    );
+  });
+}
+
 module.exports = {
   MODULE_ADMIN_KEYS,
   parseAdminModulos,
@@ -220,8 +310,16 @@ module.exports = {
   canDeleteUsers,
   canGrantSuperAdmin,
   isModuleAdmin,
+  isGhostUser,
+  shouldHideGhostUsers,
+  ghostUserAnd,
+  ghostUserFilter,
+  sanitizeGhostUserPayload,
   canDeleteAlmoxRequisicao,
   canConfigureAlmox,
+  hasAlmoxAdminPerfil,
+  canConfigureFrota,
+  hasFrotaAdminPerfil,
   bypassModuleRestrictions,
   requireManageUsers,
   requireDeleteUsers,
@@ -231,4 +329,7 @@ module.exports = {
   enrichUserFromDb,
   syncModuleAdminProfiles,
   sanitizeSuperAdminPayload,
+  isTruthyFlag,
+  countActiveSuperAdmins,
+  wouldRemoveLastSuperAdmin,
 };

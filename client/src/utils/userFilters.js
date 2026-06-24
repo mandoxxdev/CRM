@@ -1,4 +1,5 @@
 import api from '../services/api';
+import { filterVisibleUsers } from './systemPermissions';
 
 /**
  * Filtro premium de usuários (dropdowns/listas/pesquisas) com:
@@ -17,6 +18,7 @@ export async function fetchUsersFiltered({
   setor = '', // só admin consegue efetivamente filtrar por setor; para outros será ignorado
   limit = 50,
   offset = 0,
+  actor = null,
 } = {}) {
   if (!flag) {
     throw new Error('Parâmetro obrigatório: flag (ex: vendedor, compras, ti)');
@@ -35,6 +37,9 @@ export async function fetchUsersFiltered({
   if (setor) params.setor = setor;
 
   const { data } = await api.get('/usuarios/filtrar', { params });
+  if (actor && Array.isArray(data?.items)) {
+    data.items = filterVisibleUsers(data.items, actor);
+  }
   return data;
 }
 

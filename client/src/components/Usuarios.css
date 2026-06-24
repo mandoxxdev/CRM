@@ -327,6 +327,44 @@
   }
 }
 
+.usuarios tr.usuario-fantasma {
+  background: rgba(108, 117, 125, 0.06);
+}
+
+.usuarios .user-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.usuarios .user-avatar.ghost {
+  background: rgba(108, 117, 125, 0.15);
+  color: #6c757d;
+  border: 1px dashed rgba(108, 117, 125, 0.4);
+}
+
+.usuarios .ghost-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(108, 117, 125, 0.12);
+  color: #5a6268;
+  border: 1px dashed rgba(108, 117, 125, 0.35);
+}
+
+.ghost-user-field .field-hint-warning {
+  color: #b45309;
+  font-size: 0.85rem;
+  margin-top: 0.35rem;
+}
+
 
 
 

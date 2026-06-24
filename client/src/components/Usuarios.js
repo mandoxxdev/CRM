@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { canDeleteUsers, parseAdminModulos } from '../utils/systemPermissions';
+import { canDeleteUsers, parseAdminModulos, filterVisibleUsers, isSuperAdmin } from '../utils/systemPermissions';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload, FiStar } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload, FiStar, FiEyeOff } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
 import './Usuarios.css';
@@ -13,6 +13,7 @@ import './Loading.css';
 const Usuarios = () => {
   const { user: currentUser } = useAuth();
   const podeExcluir = canDeleteUsers(currentUser);
+  const actorIsSuperAdmin = isSuperAdmin(currentUser);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -25,10 +26,9 @@ const Usuarios = () => {
     setLoading(true);
     try {
       const response = await api.get('/usuarios');
-      // Filtrar usuário "administrator" da lista
-      const usuariosFiltrados = (response.data || []).filter(
-        usuario => usuario.nome.toLowerCase() !== 'administrator' && 
-                   usuario.email !== 'admin@gmp.com.br'
+      const visiveis = filterVisibleUsers(response.data || [], currentUser);
+      const usuariosFiltrados = visiveis.filter(
+        usuario => usuario.nome.toLowerCase() !== 'administrator'
       );
       setUsuarios(usuariosFiltrados);
     } catch (error) {
@@ -54,10 +54,18 @@ const Usuarios = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Tem certeza que deseja desativar este usuário?')) {
+  const handleDelete = async (usuario) => {
+    const isSelf = String(usuario.id) === String(currentUser?.id);
+    if (isSelf) return;
+
+    let confirmMsg = `Tem certeza que deseja desativar o usuário "${usuario.nome}"?`;
+    if (usuario.is_superadmin) {
+      confirmMsg = `O usuário "${usuario.nome}" é Super Administrador. Tem certeza que deseja desativá-lo?`;
+    }
+
+    if (window.confirm(confirmMsg)) {
       try {
-        await api.delete(`/usuarios/${id}`);
+        await api.delete(`/usuarios/${usuario.id}`);
         toast.success('Usuário desativado com sucesso!');
         loadUsuarios();
       } catch (error) {
@@ -161,13 +169,18 @@ const Usuarios = () => {
                   usuario.email.toLowerCase().includes(search.toLowerCase())
                 )
                 .map(usuario => (
-                <tr key={usuario.id}>
+                <tr key={usuario.id} className={usuario.is_oculto ? 'usuario-fantasma' : ''}>
                   <td>
                     <div className="user-cell">
-                      <div className="user-avatar">
-                        <FiUser />
+                      <div className={`user-avatar${usuario.is_oculto ? ' ghost' : ''}`}>
+                        {usuario.is_oculto ? <FiEyeOff /> : <FiUser />}
                       </div>
                       <span>{usuario.nome}</span>
+                      {actorIsSuperAdmin && usuario.is_oculto && (
+                        <span className="ghost-badge" title="Usuário fantasma — visível apenas para Super Admin">
+                          <FiEyeOff /> Fantasma
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td>{usuario.email}</td>
@@ -214,9 +227,9 @@ const Usuarios = () => {
                       <Link to={`/admin/usuarios/editar/${usuario.id}`} className="btn-icon" title="Editar">
                         <FiEdit />
                       </Link>
-                      {podeExcluir && usuario.email !== 'admin@gmp.com.br' && (
+                      {podeExcluir && String(usuario.id) !== String(currentUser?.id) && (
                         <button
-                          onClick={() => handleDelete(usuario.id)}
+                          onClick={() => handleDelete(usuario)}
                           className="btn-icon btn-danger"
                           title="Desativar"
                         >

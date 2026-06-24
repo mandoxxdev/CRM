@@ -28,6 +28,11 @@ const {
   enrichUserFromDb,
   syncModuleAdminProfiles,
   sanitizeSuperAdminPayload,
+  isTruthyFlag,
+  wouldRemoveLastSuperAdmin,
+  ghostUserAnd,
+  isGhostUser,
+  shouldHideGhostUsers,
 } = systemPermissions;
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
@@ -1912,6 +1917,7 @@ function executeMigrations(callback) {
         { nome: 'flag_ti', tipo: 'INTEGER DEFAULT 0' },
         { nome: 'is_superadmin', tipo: 'INTEGER DEFAULT 0' },
         { nome: 'admin_modulos', tipo: 'TEXT DEFAULT \'[]\'' },
+        { nome: 'is_oculto', tipo: 'INTEGER DEFAULT 0' },
       ];
 
       colunasUsersFiltro.forEach((coluna) => {
@@ -1940,6 +1946,7 @@ function executeMigrations(callback) {
       safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_compras ON usuarios(flag_compras)`, 'flag_compras');
       safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_flag_ti ON usuarios(flag_ti)`, 'flag_ti');
       safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_is_superadmin ON usuarios(is_superadmin)`, 'is_superadmin');
+      safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_is_oculto ON usuarios(is_oculto)`, 'is_oculto');
 
       // Super admin padrão: admin@gmp.com.br
       db.run(
@@ -2605,6 +2612,82 @@ function normalizarFamiliaComparacao(str) {
 }
 
 // ========== ROTAS DE AUTENTICAÇÃO ==========
+
+function getUsuarioModuleContext(db, userId, callback) {
+  db.get(
+    'SELECT role, is_superadmin, admin_modulos FROM usuarios WHERE id = ? AND ativo = 1',
+    [userId],
+    (err, row) => {
+      if (err) return callback(err);
+      if (!row) return callback(null, null);
+
+      const usuario = {
+        role: row.role,
+        is_superadmin: isTruthyFlag(row.is_superadmin),
+        admin_modulos: parseAdminModulos(row.admin_modulos),
+        perfil_almoxarifado: null,
+        perfil_frota: null,
+      };
+
+      if (usuario.admin_modulos.includes('almoxarifado')) {
+        usuario.perfil_almoxarifado = 'ADMINISTRADOR';
+      }
+      if (usuario.admin_modulos.includes('frota')) {
+        usuario.perfil_frota = 'ADMIN_FROTA';
+      }
+
+      const finish = () => callback(null, usuario);
+
+      if (usuario.perfil_almoxarifado && usuario.perfil_frota) {
+        return finish();
+      }
+
+      db.get(
+        'SELECT perfil FROM perfil_almoxarifado_usuario WHERE usuario_id = ?',
+        [userId],
+        (err2, almoxRow) => {
+          if (!usuario.perfil_almoxarifado && almoxRow?.perfil) {
+            usuario.perfil_almoxarifado = almoxRow.perfil;
+          }
+          db.get(
+            'SELECT perfil FROM perfil_frota_usuario WHERE usuario_id = ?',
+            [userId],
+            (err3, frotaRow) => {
+              if (!usuario.perfil_frota && frotaRow?.perfil) {
+                usuario.perfil_frota = frotaRow.perfil;
+              }
+              finish();
+            }
+          );
+        }
+      );
+    }
+  );
+}
+
+function buildAuthUserPayload(db, user, callback) {
+  getUsuarioModuleContext(db, user.id, (err, moduleContext) => {
+    if (err) return callback(err);
+
+    callback(null, {
+      id: user.id,
+      nome: user.nome,
+      email: user.email,
+      cargo: user.cargo,
+      role: user.role,
+      is_superadmin: isTruthyFlag(user.is_superadmin),
+      admin_modulos: parseAdminModulos(user.admin_modulos),
+      setor: user.setor || null,
+      departamento: user.departamento || null,
+      flag_vendedor: !!user.flag_vendedor,
+      flag_compras: !!user.flag_compras,
+      flag_ti: !!user.flag_ti,
+      perfil_almoxarifado: moduleContext?.perfil_almoxarifado || null,
+      perfil_frota: moduleContext?.perfil_frota || null,
+    });
+  });
+}
+
 app.post('/api/auth/login', (req, res) => {
   const { email, senha } = req.body;
 
@@ -2627,22 +2710,22 @@ app.post('/api/auth/login', (req, res) => {
       { expiresIn: '24h' }
     );
 
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        nome: user.nome,
-        email: user.email,
-        cargo: user.cargo,
-        role: user.role,
-        is_superadmin: !!user.is_superadmin,
-        admin_modulos: parseAdminModulos(user.admin_modulos),
-        setor: user.setor || null,
-        departamento: user.departamento || null,
-        flag_vendedor: !!user.flag_vendedor,
-        flag_compras: !!user.flag_compras,
-        flag_ti: !!user.flag_ti
+    buildAuthUserPayload(db, user, (payloadErr, userPayload) => {
+      if (payloadErr) {
+        return res.status(500).json({ error: payloadErr.message });
       }
+      res.json({ token, user: userPayload });
+    });
+  });
+});
+
+app.get('/api/auth/me', authenticateToken, (req, res) => {
+  db.get('SELECT * FROM usuarios WHERE id = ? AND ativo = 1', [req.user.id], (err, user) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+    buildAuthUserPayload(db, user, (payloadErr, userPayload) => {
+      if (payloadErr) return res.status(500).json({ error: payloadErr.message });
+      res.json({ user: userPayload });
     });
   });
 });
@@ -3067,6 +3150,7 @@ app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
         FROM usuarios u
         WHERE u.ativo = 1
         ${setorCond.sql}
+        ${ghostUserAnd(req.user, 'u')}
         AND (
           u.role = 'admin'
           OR EXISTS (
@@ -3150,6 +3234,10 @@ app.get('/api/usuarios/filtrar', authenticateToken, (req, res) => {
 
       // Regra 3: apenas usuários com a flag solicitada
       where.push(`u.${flagColumn} = 1`);
+
+      // Usuários fantasmas invisíveis para não-superadmin
+      const ghostCond = ghostUserAnd(req.user, 'u').replace(/^ AND /, '');
+      if (ghostCond) where.push(ghostCond);
 
       // Regra 4: isolamento por setor (não-admin)
       if (!isAdmin) {
@@ -3240,6 +3328,7 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
         FROM usuarios u
         WHERE u.ativo = 1
         ${setorCond.sql}
+        ${ghostUserAnd(req.user, 'u')}
         AND (
           u.role = 'admin'
           OR EXISTS (
@@ -3266,7 +3355,8 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
 });
 
 app.get('/api/usuarios', authenticateToken, (req, res) => {
-  db.all('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, created_at FROM usuarios ORDER BY nome', [], (err, rows) => {
+  const ghostSql = ghostUserAnd(req.user);
+  db.all(`SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto, created_at FROM usuarios WHERE 1=1${ghostSql} ORDER BY nome`, [], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -3295,6 +3385,7 @@ app.get('/api/usuarios', authenticateToken, (req, res) => {
             usuariosComGrupos.push({
               ...usuario,
               is_superadmin: !!usuario.is_superadmin,
+              is_oculto: !!usuario.is_oculto,
               admin_modulos: parseAdminModulos(usuario.admin_modulos),
               grupos: grupos || [],
             });
@@ -3312,16 +3403,20 @@ app.get('/api/usuarios', authenticateToken, (req, res) => {
 
 app.get('/api/usuarios/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  db.get('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, pode_aprovar_descontos, is_superadmin, admin_modulos, created_at FROM usuarios WHERE id = ?', [id], (err, row) => {
+  db.get('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, pode_aprovar_descontos, is_superadmin, admin_modulos, is_oculto, created_at FROM usuarios WHERE id = ?', [id], (err, row) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
     if (!row) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
+    if (shouldHideGhostUsers(req.user) && isGhostUser(row)) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
     res.json({
       ...row,
       is_superadmin: !!row.is_superadmin,
+      is_oculto: !!row.is_oculto,
       admin_modulos: parseAdminModulos(row.admin_modulos),
     });
   });
@@ -3330,9 +3425,25 @@ app.get('/api/usuarios/:id', authenticateToken, (req, res) => {
 // Obter grupos e permissões de um usuário
 app.get('/api/usuarios/:id/grupos', authenticateToken, (req, res) => {
   const { id } = req.params;
-  
-  // Buscar grupos do usuário
-  db.all(
+
+  db.get('SELECT id, is_oculto FROM usuarios WHERE id = ?', [id], (ghostErr, target) => {
+    if (ghostErr) return res.status(500).json({ error: ghostErr.message });
+    if (!target) return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (shouldHideGhostUsers(req.user) && isGhostUser(target)) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+  const respondWithPermissions = (grupos, permissoes, usuario) => {
+    res.json({ grupos, permissoes, usuario });
+  };
+
+  getUsuarioModuleContext(db, id, (ctxErr, usuario) => {
+    if (ctxErr) {
+      return res.status(500).json({ error: ctxErr.message });
+    }
+
+    // Buscar grupos do usuário
+    db.all(
     `SELECT 
       gp.id,
       gp.nome,
@@ -3394,7 +3505,7 @@ app.get('/api/usuarios/:id/grupos', authenticateToken, (req, res) => {
                 
                 // Combinar permissões de grupos e permissões diretas
                 const todasPermissoes = [...permissoesGrupos, ...(permissoesDiretas || [])];
-                res.json({ grupos, permissoes: todasPermissoes });
+                respondWithPermissions(grupos, todasPermissoes, usuario);
               }
             );
           }
@@ -3418,12 +3529,14 @@ app.get('/api/usuarios/:id/grupos', authenticateToken, (req, res) => {
             if (err) {
               return res.status(500).json({ error: err.message });
             }
-            res.json({ grupos: [], permissoes: permissoesDiretas || [] });
+            respondWithPermissions([], permissoesDiretas || [], usuario);
           }
         );
       }
     }
-  );
+    );
+  });
+  });
 });
 
 app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
@@ -3444,6 +3557,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
     flag_ti,
     is_superadmin,
     admin_modulos,
+    is_oculto,
   } = sanitized;
 
   if (!nome || !email || !senha) {
@@ -3457,7 +3571,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   const hashedPassword = bcrypt.hashSync(senha, 10);
 
   db.run(
-    'INSERT INTO usuarios (nome, email, senha, cargo, role, ativo, pode_aprovar_descontos, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO usuarios (nome, email, senha, cargo, role, ativo, pode_aprovar_descontos, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       nome,
       email,
@@ -3473,6 +3587,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
       flag_ti ? 1 : 0,
       is_superadmin !== undefined ? is_superadmin : 0,
       admin_modulos || '[]',
+      is_oculto !== undefined ? is_oculto : 0,
     ],
     function(err) {
       if (err) {
@@ -3499,6 +3614,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
             flag_compras: flag_compras ? 1 : 0,
             flag_ti: flag_ti ? 1 : 0,
             is_superadmin: !!is_superadmin,
+            is_oculto: !!is_oculto,
             admin_modulos: parseAdminModulos(admin_modulos),
           });
         });
@@ -3508,6 +3624,14 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
 
 app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) => {
   const { id } = req.params;
+
+  db.get('SELECT id, is_oculto FROM usuarios WHERE id = ?', [id], (lookupErr, existing) => {
+    if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+    if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (shouldHideGhostUsers(req.user) && isGhostUser(existing)) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
   const sanitized = sanitizeSuperAdminPayload(req.user, req.body);
   const {
@@ -3525,14 +3649,19 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     flag_ti,
     is_superadmin,
     admin_modulos,
+    is_oculto,
   } = sanitized;
 
   if (senha && senha.length < 6) {
     return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
   }
 
-  // Verificar se o email já existe em outro usuário
-  db.get('SELECT id FROM usuarios WHERE email = ? AND id != ?', [email, id], (err, existingUser) => {
+  const removingSuper = is_superadmin !== undefined && !isTruthyFlag(is_superadmin);
+  const deactivating = ativo !== undefined && !isTruthyFlag(ativo);
+
+  const proceedWithUpdate = () => {
+    // Verificar se o email já existe em outro usuário
+    db.get('SELECT id FROM usuarios WHERE email = ? AND id != ?', [email, id], (err, existingUser) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -3554,7 +3683,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     if (senha) {
       const hashedPassword = bcrypt.hashSync(senha, 10);
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), senha = ? WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), is_oculto = COALESCE(?, is_oculto), senha = ? WHERE id = ?',
         [
           nome,
           email,
@@ -3569,6 +3698,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
           flag_ti ? 1 : 0,
           is_superadmin !== undefined ? is_superadmin : null,
           admin_modulos !== undefined ? admin_modulos : null,
+          is_oculto !== undefined ? is_oculto : null,
           hashedPassword,
           id
         ],
@@ -3576,7 +3706,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
       );
     } else {
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos) WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), is_oculto = COALESCE(?, is_oculto) WHERE id = ?',
         [
           nome,
           email,
@@ -3591,11 +3721,29 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
           flag_ti ? 1 : 0,
           is_superadmin !== undefined ? is_superadmin : null,
           admin_modulos !== undefined ? admin_modulos : null,
+          is_oculto !== undefined ? is_oculto : null,
           id
         ],
         finishUpdate
       );
     }
+    });
+  };
+
+  if (removingSuper || deactivating) {
+    wouldRemoveLastSuperAdmin(db, id, { demote: removingSuper, deactivate: deactivating })
+      .then((blocked) => {
+        if (blocked) {
+          return res.status(403).json({
+            error: 'Não é possível remover ou desativar o último Super Administrador ativo do sistema',
+          });
+        }
+        proceedWithUpdate();
+      })
+      .catch((e) => res.status(500).json({ error: e.message }));
+  } else {
+    proceedWithUpdate();
+  }
   });
 });
 
@@ -3605,28 +3753,32 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, (req, res
   if (String(req.user.id) === String(id)) {
     return res.status(403).json({ error: 'Não é possível desativar o próprio usuário' });
   }
-  
-  // Verificar se é o usuário admin padrão ou administrator
-  db.get('SELECT email, nome, is_superadmin FROM usuarios WHERE id = ?', [id], (err, user) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    if (!user) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
-    }
-    
-    // Não permitir desativar o super admin padrão
-    if (user.email === 'admin@gmp.com.br') {
-      return res.status(403).json({ error: 'Não é possível desativar o Super Administrador padrão' });
-    }
-    
-    db.run('UPDATE usuarios SET ativo = 0 WHERE id = ?', [id], (err) => {
-      if (err) {
-        return res.status(500).json({ error: err.message });
+
+  wouldRemoveLastSuperAdmin(db, id, { deactivate: true })
+    .then((blocked) => {
+      if (blocked) {
+        return res.status(403).json({
+          error: 'Não é possível desativar o último Super Administrador ativo do sistema',
+        });
       }
-      res.json({ message: 'Usuário desativado com sucesso' });
-    });
-  });
+
+      db.get('SELECT id FROM usuarios WHERE id = ?', [id], (err, user) => {
+        if (err) {
+          return res.status(500).json({ error: err.message });
+        }
+        if (!user) {
+          return res.status(404).json({ error: 'Usuário não encontrado' });
+        }
+
+        db.run('UPDATE usuarios SET ativo = 0 WHERE id = ?', [id], (err) => {
+          if (err) {
+            return res.status(500).json({ error: err.message });
+          }
+          res.json({ message: 'Usuário desativado com sucesso' });
+        });
+      });
+    })
+    .catch((e) => res.status(500).json({ error: e.message }));
 });
 
 // ========== ROTAS DE CLIENTES ==========
@@ -13862,7 +14014,7 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
 
   // Buscar usuário que pode aprovar descontos
   db.get(
-    'SELECT id, nome FROM usuarios WHERE pode_aprovar_descontos = 1 AND ativo = 1 LIMIT 1',
+    'SELECT id, nome FROM usuarios WHERE pode_aprovar_descontos = 1 AND ativo = 1 AND COALESCE(is_oculto, 0) = 0 LIMIT 1',
     [],
     (err, aprovador) => {
       if (err) {
@@ -18158,9 +18310,10 @@ app.get('/api/permissoes/grupos/:id/usuarios', authenticateToken, (req, res) => 
 
   const { id } = req.params;
   db.all(
-    `SELECT u.* FROM usuarios u
+    `SELECT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.is_oculto, u.created_at
+     FROM usuarios u
      INNER JOIN usuarios_grupos ug ON u.id = ug.usuario_id
-     WHERE ug.grupo_id = ?`,
+     WHERE ug.grupo_id = ?${ghostUserAnd(req.user, 'u')}`,
     [id],
     (err, rows) => {
       if (err) {
@@ -18178,6 +18331,14 @@ app.post('/api/permissoes/grupos/:id/usuarios', authenticateToken, (req, res) =>
 
   const { id } = req.params;
   const { usuario_id } = req.body;
+
+  db.get('SELECT id, is_oculto FROM usuarios WHERE id = ?', [usuario_id], (ghostErr, target) => {
+    if (ghostErr) return res.status(500).json({ error: ghostErr.message });
+    if (!target) return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (shouldHideGhostUsers(req.user) && isGhostUser(target)) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
   db.run(
     'INSERT OR IGNORE INTO usuarios_grupos (usuario_id, grupo_id) VALUES (?, ?)',
     [usuario_id, id],
@@ -18188,6 +18349,7 @@ app.post('/api/permissoes/grupos/:id/usuarios', authenticateToken, (req, res) =>
       res.json({ message: 'Usuário adicionado ao grupo com sucesso' });
     }
   );
+  });
 });
 
 app.delete('/api/permissoes/grupos/:id/usuarios/:usuario_id', authenticateToken, (req, res) => {

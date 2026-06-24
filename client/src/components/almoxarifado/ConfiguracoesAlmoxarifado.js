@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
-import { canConfigureAlmox } from '../../utils/systemPermissions';
+import { canConfigureAlmox, filterVisibleUsers } from '../../utils/systemPermissions';
+import { getEffectiveUser } from '../../services/permissionsCache';
 import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
   FiPackage, FiSliders, FiMapPin, FiSettings,
@@ -187,7 +188,7 @@ const TABS = [
 const ConfiguracoesAlmoxarifado = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
-  const isAdmin = canConfigureAlmox(user);
+  const isAdmin = canConfigureAlmox(getEffectiveUser(user));
   const initialTab = searchParams.get('tab');
   const [tab, setTab] = useState(
     initialTab && TABS.some(t => t.id === initialTab) ? initialTab : 'tipos'
@@ -2081,6 +2082,7 @@ const TabAlertasEstoque = () => {
 
 /* ===================== TAB LIBERAÇÃO POR VALOR ===================== */
 const TabLiberacaoValor = () => {
+  const { user } = useAuth();
   const [config, setConfig] = useState({ ativo: false, limite: 500, aprovadorIds: [] });
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2101,7 +2103,7 @@ const TabLiberacaoValor = () => {
         limite: cfgRes.data.limite ?? 500,
         aprovadorIds: cfgRes.data.aprovadorIds || [],
       });
-      setUsuarios((usrRes.data || []).filter((u) => u.ativo !== 0));
+      setUsuarios(filterVisibleUsers(usrRes.data || [], user).filter((u) => u.ativo !== 0));
     } catch {
       toast.error('Erro ao carregar configurações de liberação por valor');
     } finally {

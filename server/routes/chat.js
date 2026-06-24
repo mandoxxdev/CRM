@@ -68,7 +68,7 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
 
   app.get('/api/chat/usuarios', authenticateToken, async (req, res) => {
     try {
-      const usuarios = await chatService.listChatUsers(db, req.user.id, req.query.search);
+      const usuarios = await chatService.listChatUsers(db, req.user.id, req.query.search, req.user);
       res.json({ usuarios });
     } catch (e) {
       res.status(500).json({ error: 'Erro ao listar usuários' });
@@ -80,7 +80,8 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
       const conversaId = await chatService.createDirectConversation(
         db,
         req.user.id,
-        Number(req.body.usuario_id)
+        Number(req.body.usuario_id),
+        req.user
       );
       res.json({ conversa_id: conversaId });
     } catch (e) {
@@ -94,7 +95,8 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
         db,
         req.user.id,
         req.body.nome,
-        req.body.membros || req.body.participantes
+        req.body.membros || req.body.participantes,
+        req.user
       );
       res.json({ conversa_id: conversaId });
     } catch (e) {

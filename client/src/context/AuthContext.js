@@ -1,6 +1,7 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { invalidatePermissionsCache } from '../services/permissionsCache';
+import { mergeUserPermissions } from '../utils/systemPermissions';
 
 const AuthContext = createContext();
 
@@ -12,9 +13,25 @@ export const useAuth = () => {
   return context;
 };
 
+async function refreshUserFromServer(token, currentUser) {
+  const response = await axios.get('/api/auth/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const freshUser = mergeUserPermissions(currentUser, response.data?.user || {});
+  localStorage.setItem('user', JSON.stringify(freshUser));
+  return freshUser;
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const applyFreshUser = useCallback((freshUser) => {
+    if (!freshUser) return;
+    setUser(freshUser);
+    localStorage.setItem('user', JSON.stringify(freshUser));
+    invalidatePermissionsCache(freshUser.id);
+  }, []);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -27,9 +44,14 @@ export const AuthProvider = ({ children }) => {
             const parsedUser = JSON.parse(userData);
             setUser(parsedUser);
             axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+            try {
+              const freshUser = await refreshUserFromServer(token, parsedUser);
+              setUser(freshUser);
+            } catch (refreshError) {
+              console.warn('Não foi possível atualizar permissões do usuário:', refreshError);
+            }
           } catch (error) {
             console.error('Erro ao parsear userData:', error);
-            // Limpar dados inválidos
             localStorage.removeItem('token');
             localStorage.removeItem('user');
           }
@@ -47,13 +69,14 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, senha) => {
     try {
       const response = await axios.post('/api/auth/login', { email, senha });
-      const { token, user } = response.data;
+      const { token, user: loggedUser } = response.data;
 
       localStorage.setItem('token', token);
       sessionStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('user', JSON.stringify(loggedUser));
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
+      setUser(loggedUser);
+      invalidatePermissionsCache(loggedUser?.id);
 
       return { success: true };
     } catch (error) {
@@ -76,12 +99,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, applyFreshUser }}>
       {children}
     </AuthContext.Provider>
   );
 };
-
-
-
 

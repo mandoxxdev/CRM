@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ProtectedModuleRoute from './components/ProtectedModuleRoute';
+import ProtectedAlmoxConfigRoute from './components/ProtectedAlmoxConfigRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import ModuleLoading from './components/ModuleLoading';
 import { RequisicoesMaterialProvider } from './components/almoxarifado/RequisicoesMaterialContext';
@@ -437,7 +438,7 @@ function AppRoutes() {
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="almoxarifado" />} />
         <Route path="recebimentos" element={<RecebimentosAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
-        <Route path="configuracoes" element={<ConfiguracoesAlmoxarifado />} />
+        <Route path="configuracoes" element={<ProtectedAlmoxConfigRoute><ConfiguracoesAlmoxarifado /></ProtectedAlmoxConfigRoute>} />
       </Route>
       <Route
         path="/configuracoes"

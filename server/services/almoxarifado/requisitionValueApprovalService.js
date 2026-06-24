@@ -51,7 +51,7 @@ async function getAprovadoresDetalhes(db) {
   if (!aprovadorIds.length) return [];
   const placeholders = aprovadorIds.map(() => '?').join(',');
   const rows = await dbAll(db,
-    `SELECT id, nome, email FROM usuarios WHERE id IN (${placeholders}) AND COALESCE(ativo, 1) = 1`,
+    `SELECT id, nome, email FROM usuarios WHERE id IN (${placeholders}) AND COALESCE(ativo, 1) = 1 AND COALESCE(is_oculto, 0) = 0`,
     aprovadorIds);
   const byId = new Map(rows.map((r) => [r.id, r]));
   return aprovadorIds.map((id) => byId.get(id)).filter(Boolean);

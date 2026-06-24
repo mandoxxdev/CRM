@@ -143,10 +143,14 @@ async function findDirectConversation(db, userId, otherUserId) {
   return row?.id || null;
 }
 
-async function createDirectConversation(db, userId, otherUserId) {
+async function createDirectConversation(db, userId, otherUserId, actor = null) {
   if (userId === otherUserId) throw new Error('Não é possível iniciar conversa consigo mesmo');
-  const other = await dbGet(db, 'SELECT id, ativo FROM usuarios WHERE id = ?', [otherUserId]);
+  const other = await dbGet(db, 'SELECT id, ativo, is_oculto FROM usuarios WHERE id = ?', [otherUserId]);
   if (!other || other.ativo === 0) throw new Error('Usuário não encontrado');
+  const { shouldHideGhostUsers, isTruthyFlag } = require('../systemPermissions');
+  if (isTruthyFlag(other.is_oculto) && shouldHideGhostUsers(actor || {})) {
+    throw new Error('Usuário não encontrado');
+  }
 
   const existing = await findDirectConversation(db, userId, otherUserId);
   if (existing) return existing;
@@ -161,7 +165,7 @@ async function createDirectConversation(db, userId, otherUserId) {
   return lastID;
 }
 
-async function createGroupConversation(db, userId, nome, memberIds) {
+async function createGroupConversation(db, userId, nome, memberIds, actor = null) {
   const cleanName = sanitizeMessageContent(nome).slice(0, 120);
   if (!cleanName) throw new Error('Nome do grupo é obrigatório');
 
@@ -169,9 +173,11 @@ async function createGroupConversation(db, userId, nome, memberIds) {
   if (uniqueMembers.length < 2) throw new Error('O grupo precisa de pelo menos 2 participantes');
 
   const placeholders = uniqueMembers.map(() => '?').join(',');
+  const { ghostUserAnd } = require('../systemPermissions');
+  const ghostSql = ghostUserAnd(actor || {}, '');
   const validUsers = await dbAll(
     db,
-    `SELECT id FROM usuarios WHERE id IN (${placeholders}) AND ativo = 1`,
+    `SELECT id FROM usuarios WHERE id IN (${placeholders}) AND ativo = 1${ghostSql}`,
     uniqueMembers
   );
   if (validUsers.length !== uniqueMembers.length) throw new Error('Um ou mais usuários são inválidos');
@@ -335,20 +341,22 @@ async function markAsRead(db, conversaId, userId) {
   return { conversa_id: conversaId, usuario_id: userId };
 }
 
-async function listChatUsers(db, userId, search = '') {
+async function listChatUsers(db, userId, search = '', actor = null) {
+  const { ghostUserAnd } = require('../systemPermissions');
+  const ghostSql = ghostUserAnd(actor || {}, '');
   const term = `%${search || ''}%`;
   if (search) {
     return dbAll(
       db,
       `SELECT id, nome, email, cargo FROM usuarios
-       WHERE id != ? AND ativo = 1 AND (nome LIKE ? OR email LIKE ?)
+       WHERE id != ? AND ativo = 1${ghostSql} AND (nome LIKE ? OR email LIKE ?)
        ORDER BY nome COLLATE NOCASE LIMIT 30`,
       [userId, term, term]
     );
   }
   return dbAll(
     db,
-    `SELECT id, nome, email, cargo FROM usuarios WHERE id != ? AND ativo = 1 ORDER BY nome COLLATE NOCASE`,
+    `SELECT id, nome, email, cargo FROM usuarios WHERE id != ? AND ativo = 1${ghostSql} ORDER BY nome COLLATE NOCASE`,
     [userId]
   );
 }

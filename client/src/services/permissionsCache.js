@@ -1,5 +1,5 @@
 import api from './api';
-import { bypassModuleRestrictions } from '../utils/systemPermissions';
+import { bypassModuleRestrictions, mergeUserPermissions } from '../utils/systemPermissions';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = new Map();
@@ -7,7 +7,7 @@ const inflight = new Map();
 
 export async function fetchUserPermissions(userId) {
   if (!userId) {
-    return { permissoes: [], grupos: [] };
+    return { permissoes: [], grupos: [], usuario: null };
   }
 
   const cached = cache.get(userId);
@@ -22,7 +22,7 @@ export async function fetchUserPermissions(userId) {
   const promise = api
     .get(`/usuarios/${userId}/grupos`)
     .then((response) => {
-      const data = response.data || { permissoes: [], grupos: [] };
+      const data = response.data || { permissoes: [], grupos: [], usuario: null };
       cache.set(userId, { data, ts: Date.now() });
       inflight.delete(userId);
       return data;
@@ -42,6 +42,15 @@ export function getCachedUserPermissions(userId) {
     return cached.data;
   }
   return null;
+}
+
+export function getEffectiveUser(authUser) {
+  if (!authUser?.id) return authUser;
+  const cached = getCachedUserPermissions(authUser.id);
+  if (cached?.usuario) {
+    return mergeUserPermissions(authUser, cached.usuario);
+  }
+  return authUser;
 }
 
 export function hasModuleAccess(permissoes, modulo, user) {

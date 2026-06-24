@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { filterVisibleUsers } from '../utils/systemPermissions';
 import { FiShield, FiUser, FiUsers, FiSave, FiPlus, FiTrash2, FiEdit, FiX, FiCheck, FiXCircle, FiCheckCircle } from 'react-icons/fi';
 import './Permissoes.css';
 
 const Permissoes = () => {
+  const { user: currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grupos'); // 'grupos' ou 'usuarios'
   const [usuarios, setUsuarios] = useState([]);
@@ -58,7 +61,7 @@ const Permissoes = () => {
         api.get('/usuarios'),
         api.get('/permissoes/grupos')
       ]);
-      setUsuarios(usuariosRes.data || []);
+      setUsuarios(filterVisibleUsers(usuariosRes.data || [], currentUser));
       setGrupos(gruposRes.data || []);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -81,7 +84,7 @@ const Permissoes = () => {
   const loadUsuariosGrupo = async (grupoId) => {
     try {
       const response = await api.get(`/permissoes/grupos/${grupoId}/usuarios`);
-      setUsuariosGrupo(response.data || []);
+      setUsuariosGrupo(filterVisibleUsers(response.data || [], currentUser));
     } catch (error) {
       console.error('Erro ao carregar usuários do grupo:', error);
       setUsuariosGrupo([]);
