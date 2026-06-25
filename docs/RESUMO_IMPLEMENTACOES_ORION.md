@@ -463,7 +463,7 @@ O código usa `PERSISTENT_DATA_DIR = server/data` e `database.sqlite` dentro des
 ```env
 NODE_ENV=production
 PORT=3000
-JWT_SECRET=<chave-segura>
+JWT_SECRET=
 ```
 
 Opcional: `APP_URL=https://systemgmp.online` para links em e-mails.
@@ -473,7 +473,7 @@ Opcional: `APP_URL=https://systemgmp.online` para links em e-mails.
 2. Container inicia com `node index.js` em `/app/server`
 3. Migrations do almoxarifado rodam automaticamente na subida
 4. Se o banco não existir, é criado em `data/database.sqlite`
-5. Usuário padrão (se seed ativo): `admin@gmp.com.br` / `admin123` — **alterar senha em produção**
+5. Usuário padrão (se seed ativo): configure via variáveis de ambiente (`SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`) — **alterar senha em produção**
 
 ### Atualização sem perder dados
 - Garantir volume persistente **antes** do primeiro deploy em produção

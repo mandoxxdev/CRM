@@ -70,9 +70,7 @@ Sistema completo de CRM (Customer Relationship Management) desenvolvido com Reac
 
 ## 🔐 Login
 
-**Usuário Administrador:**
-- Email: `matheus@gmp.ind.br`
-- Senha: `597676`
+Consulte o administrador do sistema para credenciais de acesso.
 
 > ⚠️ **Importante:** Apenas o administrador pode cadastrar novos usuários.
 
@@ -179,7 +177,7 @@ npm install
 cd ../server
 cp .env.example .env
 ```
-Edite o arquivo `.env` e configure o `JWT_SECRET` (em produção, use uma chave segura).
+Edite o arquivo `.env` e configure `JWT_SECRET` via variáveis de ambiente (obrigatório em produção).
 
 ## 🚀 Executando o Projeto
 
@@ -222,13 +220,11 @@ cd server
 npm start
 ```
 
-## 🔐 Credenciais Padrão
+## 🔐 Credenciais de Acesso
 
-**Usuário Administrador:**
-- Email: `admin@gmp.com.br`
-- Senha: `admin123`
+Consulte o administrador do sistema para credenciais de acesso.
 
-⚠️ **IMPORTANTE:** Altere a senha padrão após o primeiro acesso em produção!
+⚠️ **IMPORTANTE:** Altere a senha após o primeiro acesso em produção!
 
 ## 📁 Estrutura do Projeto
 

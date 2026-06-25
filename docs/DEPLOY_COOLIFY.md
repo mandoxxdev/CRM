@@ -137,18 +137,22 @@ Após resolver a autenticação, configure o projeto:
 
 ### 1. Variáveis de Ambiente
 
-No Coolify, adicione estas variáveis de ambiente:
+**Não é necessário configurar variáveis no Coolify.** O servidor gera e persiste segredos automaticamente em `server/data/.runtime-secrets.json` (volume persistente).
+
+Opcionalmente, você pode sobrescrever via env:
 
 ```env
 NODE_ENV=production
 PORT=3000
-JWT_SECRET=sua-chave-secreta-super-segura-aqui
+# JWT_SECRET=          # opcional — gerado automaticamente se omitido
+# SEED_ADMIN_EMAIL=    # opcional — padrão admin@gmp.com.br
+# SEED_ADMIN_PASSWORD= # opcional — gerado automaticamente se omitido
 ```
 
-**Para gerar uma JWT_SECRET segura:**
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+Na primeira inicialização com banco vazio, o log do container mostrará:
+`Admin inicial criado - credenciais em server/data/.runtime-secrets.json`
+
+Monte volume persistente em `/app/server/data` para preservar banco, uploads e segredos entre deploys.
 
 ### 2. Forçar Uso do Dockerfile (IMPORTANTE!)
 
@@ -202,7 +206,7 @@ Configure a porta: `3000`
 
 - [ ] Autenticação GitHub configurada (SSH ou PAT)
 - [ ] URL do repositório correta
-- [ ] Variáveis de ambiente configuradas
+- [ ] Volume persistente em `/app/server/data` (recomendado)
 - [ ] Build command configurado
 - [ ] Start command configurado
 - [ ] Porta configurada
@@ -254,7 +258,7 @@ Se não encontrar "Source Providers", procure por:
 
 - Verifique os logs da aplicação
 - Verifique se a porta está correta
-- Verifique se as variáveis de ambiente estão configuradas
+- Verifique se o volume `/app/server/data` está montado (banco e segredos)
 
 ### Erro: "Cannot find module 'ajv/dist/compile/codegen'" ou "undefined variable 'nodejs-22_x'"
 

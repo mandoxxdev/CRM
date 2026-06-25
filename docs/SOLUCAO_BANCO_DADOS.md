@@ -12,7 +12,7 @@ O banco de dados SQLite não está sendo criado ou não está acessível no ambi
 2. Clique em **Logs** ou **Show Logs**
 3. Procure por mensagens como:
    - `✅ Conectado ao banco de dados SQLite`
-   - `✅ Usuário admin criado: admin@gmp.com.br / admin123`
+   - `✅ Usuário admin padrão criado`
    - `❌ Erro ao conectar ao banco de dados`
    - `⚠️ Pasta de build não encontrada`
 
@@ -59,18 +59,13 @@ No Coolify, verifique se estas variáveis estão configuradas:
 2. Verifique:
    - `NODE_ENV=production` ✅
    - `PORT=3000` ✅
-   - `JWT_SECRET` (opcional, mas recomendado)
+   - `JWT_SECRET` (configure via variáveis de ambiente)
 
 ### Solução 4: Usuário Admin Padrão
 
-O sistema cria automaticamente um usuário admin:
+O sistema pode criar automaticamente um usuário admin quando `SEED_ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD` estão configurados via variáveis de ambiente.
 
-- **Email:** `admin@gmp.com.br`
-- **Senha:** `admin123`
-
-**Tente fazer login com essas credenciais!**
-
-Se não funcionar, o banco não foi criado corretamente.
+Consulte o administrador do sistema para credenciais de acesso.
 
 ### Solução 5: Verificar Permissões no Dockerfile
 
@@ -106,7 +101,7 @@ Execute estes comandos no terminal do Coolify (se disponível) ou verifique os l
 - [ ] Logs mostram "✅ Usuário admin criado"
 - [ ] Volume persistente configurado (se disponível)
 - [ ] Variáveis de ambiente configuradas
-- [ ] Tentou login com `admin@gmp.com.br` / `admin123`
+- [ ] Tentou login com credenciais fornecidas pelo administrador
 
 ## 🚨 Se Nada Funcionar
 

@@ -56,9 +56,7 @@ Abra seu navegador e acesse:
 
 ### 6️⃣ Fazer Login
 
-Use as credenciais padrão:
-- **Email:** `admin@gmp.com.br`
-- **Senha:** `admin123`
+Consulte o administrador do sistema para credenciais de acesso.
 
 ---
 

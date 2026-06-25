@@ -43,8 +43,8 @@ Crie um arquivo `.env` no diretório `server/` com as seguintes variáveis:
 # Porta do servidor (a Hostinger geralmente usa 3000 ou fornece uma porta específica)
 PORT=3000
 
-# Secret para JWT (GERE UMA CHAVE SEGURA - use um gerador online)
-JWT_SECRET=sua-chave-secreta-super-segura-aqui-2024
+# Secret para JWT (obrigatório — configure via variáveis de ambiente)
+JWT_SECRET=
 
 # URL da API (substitua pelo seu domínio)
 API_URL=https://seudominio.com
@@ -68,7 +68,7 @@ NODE_ENV=production
 Use um cliente FTP como FileZilla:
 - Host: ftp.seudominio.com
 - Usuário: seu-usuario-ftp
-- Senha: sua-senha-ftp
+- Senha: (fornecida pelo provedor de hospedagem)
 - Porta: 21 (FTP) ou 22 (SFTP)
 
 ### 4. Estrutura de Pastas no Servidor

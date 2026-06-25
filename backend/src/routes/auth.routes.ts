@@ -25,7 +25,10 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ erro: 'Email ou senha incorretos' });
     }
 
-    const secret = process.env.JWT_SECRET || 'seu-secret-super-seguro';
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      return res.status(500).json({ error: 'JWT_SECRET não configurado' });
+    }
     const token = jwt.sign(
       {
         id: usuario.id,

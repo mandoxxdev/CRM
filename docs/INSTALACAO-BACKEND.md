@@ -18,7 +18,7 @@ cp .env.example .env
 Edite `.env`:
 ```
 DATABASE_URL="sua-url-do-supabase"
-JWT_SECRET="seu-secret-aqui"
+JWT_SECRET=
 ```
 
 ### 3. Executar Migrações

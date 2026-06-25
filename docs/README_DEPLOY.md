@@ -37,7 +37,7 @@ Após o build, você terá:
 Use FileZilla ou similar:
 - **Host:** ftp.seudominio.com
 - **Usuário:** (fornecido pela Hostinger)
-- **Senha:** (fornecido pela Hostinger)
+- **Senha:** (fornecida pelo provedor de hospedagem)
 - **Porta:** 21 (FTP) ou 22 (SFTP)
 
 ## ⚙️ Configuração no Servidor
@@ -65,7 +65,7 @@ nano .env
 Cole o seguinte conteúdo (ajuste conforme necessário):
 ```env
 PORT=3000
-JWT_SECRET=sua-chave-secreta-super-segura-aqui-2024
+JWT_SECRET=
 API_URL=https://seudominio.com
 NODE_ENV=production
 ```

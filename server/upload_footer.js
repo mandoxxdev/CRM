@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const { getAdminCredentialsForUpload } = require('./services/runtimeSecrets');
 
 // Configurações
 const API_URL = process.env.API_URL || 'http://localhost:5000';
+const DATA_DIR = path.join(__dirname, 'data');
 const IMAGE_PATH = process.argv[2] || path.join(__dirname, 'rodape.jpg');
 
 // Verificar se a imagem existe
@@ -19,7 +21,15 @@ async function uploadFooterImage() {
     console.log('📤 Iniciando upload da imagem de rodapé...');
     console.log('📁 Arquivo:', IMAGE_PATH);
 
-    // Primeiro, fazer login para obter o token
+    const creds = getAdminCredentialsForUpload(DATA_DIR);
+    const adminEmail = creds && creds.email;
+    const adminPassword = creds && creds.password;
+    if (!adminEmail || !adminPassword) {
+      console.error('❌ Credenciais admin não encontradas.');
+      console.error('   Configure ADMIN_EMAIL/ADMIN_PASSWORD ou use server/data/.runtime-secrets.json');
+      process.exit(1);
+    }
+
     let token;
     try {
       const loginResponse = await fetch(`${API_URL}/api/auth/login`, {
@@ -28,8 +38,8 @@ async function uploadFooterImage() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          email: 'admin@gmp.com.br',
-          password: 'admin123'
+          email: adminEmail,
+          password: adminPassword
         })
       });
 
@@ -43,7 +53,7 @@ async function uploadFooterImage() {
       console.log('✅ Autenticação realizada com sucesso');
     } catch (loginError) {
       console.error('❌ Erro ao fazer login:', loginError.message);
-      console.log('\n💡 Dica: Certifique-se de que o servidor está rodando e as credenciais estão corretas');
+      console.log('\n💡 Dica: credenciais em server/data/.runtime-secrets.json ou ADMIN_EMAIL/ADMIN_PASSWORD');
       process.exit(1);
     }
 

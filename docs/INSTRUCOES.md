@@ -26,9 +26,7 @@ Isso iniciará:
 ## Primeiro Acesso
 
 1. Acesse: `http://localhost:3000`
-2. Faça login com:
-   - **Email:** `admin@gmp.com.br`
-   - **Senha:** `admin123`
+2. Faça login com as credenciais fornecidas pelo administrador do sistema.
 
 ## Estrutura de Pastas
 

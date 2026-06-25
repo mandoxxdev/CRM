@@ -69,7 +69,7 @@
 7. Configure variáveis de ambiente:
    ```
    PORT=3000
-   JWT_SECRET=sua-chave-secreta-aqui
+   JWT_SECRET=
    NODE_ENV=production
    ```
 8. **PRONTO!** 🎉 Seu app está no ar!

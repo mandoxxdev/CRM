@@ -28,7 +28,7 @@ npm install
 Crie arquivo `.env`:
 ```env
 DATABASE_URL="sua-url-do-banco"
-JWT_SECRET="seu-secret-super-seguro-mude-isso"
+JWT_SECRET=
 PORT=3000
 ```
 
@@ -66,10 +66,10 @@ Deve retornar: `{"status":"ok",...}`
 ```bash
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"matheus@gmp.ind.br","senha":"597676"}'
+  -d '{"email":"<seu-email>","senha":"<sua-senha>"}'
 ```
 
-Deve retornar token e dados do usuário.
+Use credenciais configuradas via seed (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` nas variáveis de ambiente).
 
 ---
 

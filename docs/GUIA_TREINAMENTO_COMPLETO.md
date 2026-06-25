@@ -61,11 +61,9 @@ O sistema é dividido em **5 módulos principais**:
 1. Abra o navegador e acesse a URL do sistema
 2. Você verá a tela de login
 
-**Credenciais Padrão:**
-- **Email:** `admin@gmp.com.br`
-- **Senha:** `admin123`
+**Credenciais de acesso:** Consulte o administrador do sistema para credenciais de acesso.
 
-**⚠️ IMPORTANTE:** Após o primeiro login, altere a senha padrão!
+**⚠️ IMPORTANTE:** Após o primeiro login, altere a senha!
 
 ### 2.2 Primeiro Acesso - Onboarding
 

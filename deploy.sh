@@ -24,7 +24,7 @@ cp .htaccess deploy/
 echo "⚙️  Criando arquivo .env de exemplo..."
 cat > deploy/server/.env.example << EOF
 PORT=3000
-JWT_SECRET=altere-esta-chave-por-uma-chave-segura-aleatoria
+JWT_SECRET=
 API_URL=https://seudominio.com
 NODE_ENV=production
 EOF

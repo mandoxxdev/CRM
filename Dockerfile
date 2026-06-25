@@ -55,7 +55,9 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-RUN mkdir -p /app/server && chmod -R 777 /app/server || true
+RUN mkdir -p /app/server/data /app/server/data/uploads && chmod -R 777 /app/server/data || true
+
+VOLUME ["/app/server/data"]
 
 WORKDIR /app/server
 CMD ["node", "index.js"]

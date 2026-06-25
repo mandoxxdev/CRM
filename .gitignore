@@ -21,6 +21,10 @@ build/
 .env.production.local
 server/.env
 
+# Runtime secrets (gerados automaticamente no primeiro deploy)
+server/data/.runtime-secrets.json
+.runtime-secrets.json
+
 # Database
 *.sqlite
 *.sqlite-shm

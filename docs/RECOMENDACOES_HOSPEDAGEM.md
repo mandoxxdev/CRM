@@ -158,7 +158,7 @@ Por quê?
 5. **Configurar variáveis de ambiente:**
    ```
    PORT=3000
-   JWT_SECRET=sua-chave-secreta
+   JWT_SECRET=
    NODE_ENV=production
    ```
 6. **Deploy automático!** 🎉

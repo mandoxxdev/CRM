@@ -68,19 +68,23 @@ export const usuarioService = {
     await db.usuarios.delete(id);
   },
   
-  // Criar usuário administrador padrão
+  // Criar usuário administrador padrão (somente se variáveis de ambiente estiverem configuradas)
   inicializarUsuariosPadrao: async (): Promise<void> => {
+    const seedEmail = import.meta.env.VITE_SEED_ADMIN_EMAIL;
+    const seedPassword = import.meta.env.VITE_SEED_ADMIN_PASSWORD;
+
+    if (!seedEmail || !seedPassword) {
+      return;
+    }
+
     const usuarios = await db.usuarios.toArray();
-    
-    // Verificar se o administrador já existe
-    const adminExiste = usuarios.find(u => u.email === 'matheus@gmp.ind.br');
-    
+    const adminExiste = usuarios.find(u => u.email === seedEmail);
+
     if (!adminExiste) {
-      // Criar administrador padrão
       await usuarioService.create({
-        nome: 'Matheus Honrado',
-        email: 'matheus@gmp.ind.br',
-        senha: '597676',
+        nome: 'Administrador',
+        email: seedEmail,
+        senha: seedPassword,
         perfil: 'Diretoria',
         ativo: true,
       });
