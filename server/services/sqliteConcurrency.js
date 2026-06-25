@@ -205,6 +205,19 @@ function installProcessGuards() {
   });
 }
 
+/** Express helper: 503 + Retry-After on SQLITE_BUSY instead of 500/crash. */
+function respondDbError(res, err, context = 'database') {
+  if (isSqliteBusy(err)) {
+    return res.status(503).json({
+      error: 'Banco temporariamente ocupado. Tente novamente em alguns segundos.',
+      code: 'SQLITE_BUSY',
+      retryAfter: 3,
+      context,
+    });
+  }
+  return res.status(500).json({ error: err?.message || 'Erro interno do banco de dados' });
+}
+
 module.exports = {
   BUSY_TIMEOUT_MS,
   MAX_RETRIES,
@@ -213,4 +226,5 @@ module.exports = {
   wrapDatabase,
   installProcessGuards,
   getDbHealthStats,
+  respondDbError,
 };

@@ -1,5 +1,35 @@
 import api from '../services/api';
-import { filterVisibleUsers } from './systemPermissions';
+import { filterVisibleUsers, isSuperAdmin } from './systemPermissions';
+
+const COMERCIAL_CACHE_TTL_MS = 60 * 1000;
+
+const comercialCache = new Map();
+const comercialInflight = new Map();
+
+/** Known dev/test ghost names — client backup if DB is_oculto not yet set */
+const KNOWN_GHOST_NAME_PATTERNS = [
+  /^andre\s*dev$/i,
+  /^andredev$/i,
+];
+
+function isKnownGhostName(nome) {
+  const n = String(nome || '').trim();
+  if (!n) return false;
+  return KNOWN_GHOST_NAME_PATTERNS.some((re) => re.test(n));
+}
+
+function comercialCacheKey(actor) {
+  const superKey = isSuperAdmin(actor) ? 'super' : 'user';
+  return `${superKey}:${actor?.id || 'anon'}`;
+}
+
+function filterComercialResponsaveis(list, actor) {
+  let filtered = filterVisibleUsers(list, actor);
+  if (!isSuperAdmin(actor)) {
+    filtered = filtered.filter((u) => !isKnownGhostName(u?.nome));
+  }
+  return filtered;
+}
 
 /**
  * Filtro premium de usuários (dropdowns/listas/pesquisas) com:
@@ -44,11 +74,40 @@ export async function fetchUsersFiltered({
 }
 
 /** Comercial responsáveis/vendedores — ONLY /usuarios/comercial (server ghost filter + client backup) */
-export async function fetchComercialResponsaveis(actor) {
+export async function fetchComercialResponsaveis(actor, { force = false } = {}) {
   if (!actor?.id) return [];
-  const { data } = await api.get('/usuarios/comercial');
-  const list = Array.isArray(data) ? data : [];
-  return filterVisibleUsers(list, actor);
+
+  const key = comercialCacheKey(actor);
+  if (!force) {
+    const hit = comercialCache.get(key);
+    if (hit && Date.now() - hit.at < COMERCIAL_CACHE_TTL_MS) {
+      return hit.list;
+    }
+    if (comercialInflight.has(key)) {
+      return comercialInflight.get(key);
+    }
+  }
+
+  const promise = api.get('/usuarios/comercial')
+    .then(({ data }) => {
+      const list = Array.isArray(data) ? data : [];
+      const filtered = filterComercialResponsaveis(list, actor);
+      comercialCache.set(key, { at: Date.now(), list: filtered });
+      comercialInflight.delete(key);
+      return filtered;
+    })
+    .catch((err) => {
+      comercialInflight.delete(key);
+      throw err;
+    });
+
+  comercialInflight.set(key, promise);
+  return promise;
+}
+
+export function invalidateComercialResponsaveisClientCache() {
+  comercialCache.clear();
+  comercialInflight.clear();
 }
 
 /** Usuários com acesso a um módulo (responsável, vendedor, etc.) — server + client ghost filter */

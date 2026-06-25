@@ -5,6 +5,7 @@ const {
   installProcessGuards,
   getDbHealthStats,
   isSqliteBusy,
+  respondDbError,
 } = require('./services/sqliteConcurrency');
 const { prepareDatabaseOnStartup, pruneOldBackups, fileSizeIfExists } = require('./services/dbRecovery');
 installProcessGuards();
@@ -23,6 +24,10 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const propostaEngine = require('./propostaCompositionEngine');
+const {
+  fetchComercialResponsaveis,
+  invalidateComercialResponsaveisCache,
+} = require('./services/comercialResponsaveisCache');
 const systemPermissions = require('./services/systemPermissions');
 const {
   parseAdminModulos,
@@ -2019,6 +2024,23 @@ function executeMigrations(callback) {
         }
       );
 
+      // Usuários fantasma conhecidos (dev/test) — visíveis apenas para superadmin
+      db.run(
+        `UPDATE usuarios SET is_oculto = 1
+         WHERE COALESCE(is_oculto, 0) = 0
+         AND (
+           LOWER(TRIM(nome)) IN ('andre dev', 'andredev')
+           OR LOWER(TRIM(nome)) LIKE 'andre dev%'
+           OR LOWER(TRIM(email)) LIKE '%andre%dev%'
+         )`,
+        (ghostErr) => {
+          if (!ghostErr) {
+            console.log('✅ Usuários fantasma de desenvolvimento verificados (is_oculto=1)');
+            invalidateComercialResponsaveisCache();
+          }
+        }
+      );
+
       // Tabela de perfil Frota por usuário (padrão alinhado ao almoxarifado)
       db.run(`CREATE TABLE IF NOT EXISTS perfil_frota_usuario (
         usuario_id INTEGER PRIMARY KEY,
@@ -3204,38 +3226,13 @@ app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
     `SELECT id, role, ativo, setor FROM usuarios WHERE id = ? LIMIT 1`,
     [req.user.id],
     (ctxErr, ctxUser) => {
-      if (ctxErr) return res.status(500).json({ error: ctxErr.message });
+      if (ctxErr) return respondDbError(res, ctxErr, 'usuarios/comercial:context');
       if (!ctxUser) return res.status(401).json({ error: 'Usuário não encontrado' });
       if (!ctxUser.ativo) return res.status(403).json({ error: 'Usuário inativo' });
 
-      const isAdmin = ctxUser.role === 'admin';
-      const setorCond = buildSetorCondition(isAdmin, ctxUser.setor);
-
-      const sql = `
-        SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.is_oculto, u.created_at
-        FROM usuarios u
-        WHERE u.ativo = 1
-        ${setorCond.sql}
-        ${ghostUserAnd(req.user, 'u')}
-        AND (
-          u.role = 'admin'
-          OR EXISTS (
-            SELECT 1 FROM permissoes p
-            WHERE p.usuario_id = u.id AND (p.grupo_id IS NULL OR p.grupo_id = 0)
-            AND p.modulo = 'comercial' AND p.permissao = 1
-          )
-          OR EXISTS (
-            SELECT 1 FROM usuarios_grupos ug
-            INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = 'comercial' AND p.permissao = 1
-            WHERE ug.usuario_id = u.id
-          )
-        )
-        ORDER BY u.nome`;
-
-      const params = setorCond.params;
-      db.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        return res.json(sanitizeUserRowsForActor(rows || [], req.user));
+      fetchComercialResponsaveis(db, req.user, ctxUser, (err, rows) => {
+        if (err) return respondDbError(res, err, 'usuarios/comercial');
+        return res.json(rows || []);
       });
     }
   );
@@ -3644,6 +3641,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
       syncModuleAdminProfiles(db, newId, admin_modulos || '[]')
         .catch((syncErr) => console.warn('Sync perfis módulo:', syncErr.message))
         .finally(() => {
+          invalidateComercialResponsaveisCache();
           res.json({
             id: newId,
             nome,
@@ -3720,6 +3718,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
       syncModuleAdminProfiles(db, id, admin_modulos || '[]')
         .catch((syncErr) => console.warn('Sync perfis módulo:', syncErr.message))
         .finally(() => {
+          invalidateComercialResponsaveisCache();
           res.json({ message: 'Usuário atualizado com sucesso' });
         });
     };
@@ -3818,6 +3817,7 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, (req, res
           if (err) {
             return res.status(500).json({ error: err.message });
           }
+          invalidateComercialResponsaveisCache();
           res.json({ message: 'Usuário desativado com sucesso' });
         });
       });
@@ -4788,7 +4788,7 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
   }
 
   let query = `SELECT pr.*, c.razao_social as cliente_nome, c.nome_fantasia as cliente_nome_fantasia,
-               u1.nome as created_by_nome, u2.nome as responsavel_nome
+               u1.nome as created_by_nome, u2.nome as responsavel_nome, u2.is_oculto as responsavel_is_oculto
                FROM propostas pr
                LEFT JOIN clientes c ON pr.cliente_id = c.id
                LEFT JOIN usuarios u1 ON pr.created_by = u1.id
@@ -4846,9 +4846,18 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
 
   db.all(query, params, (err, rows) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return respondDbError(res, err, 'propostas:list');
     }
-    res.json(rows || []);
+    const hideGhosts = shouldHideGhostUsers(req.user);
+    const sanitized = (rows || []).map((row) => {
+      const out = { ...row };
+      if (hideGhosts && isTruthyFlag(out.responsavel_is_oculto)) {
+        out.responsavel_nome = null;
+      }
+      delete out.responsavel_is_oculto;
+      return out;
+    });
+    res.json(sanitized);
   });
 });
 
