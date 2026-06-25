@@ -194,6 +194,10 @@ function installProcessGuards() {
       console.warn('[FATAL GUARD] SQLITE_BUSY uncaught — process kept alive');
       return;
     }
+    if (err && err.code === 'EADDRINUSE') {
+      console.error('[FATAL GUARD] Porta em uso — encerre instância duplicada');
+      process.exit(1);
+    }
     if (process.env.NODE_ENV === 'production') {
       console.error('[FATAL GUARD] Non-SQLite error logged; not calling process.exit');
       return;

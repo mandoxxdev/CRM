@@ -9,7 +9,8 @@
     "seed-variaveis": "node scripts/seed-variaveis-from-excel.js",
     "test:almoxarifado": "node tests/almoxarifado.test.js",
     "test:sqlite": "node tests/sqliteConcurrency.test.js",
-    "test:permissions": "node tests/permissionsCacheAdmin.test.js"
+    "test:permissions": "node tests/permissionsCacheAdmin.test.js",
+    "check-db": "node scripts/check-db.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",

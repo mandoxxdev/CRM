@@ -6,6 +6,7 @@ const {
   getDbHealthStats,
   isSqliteBusy,
 } = require('./services/sqliteConcurrency');
+const { prepareDatabaseOnStartup, pruneOldBackups, fileSizeIfExists } = require('./services/dbRecovery');
 installProcessGuards();
 const express = require('express');
 const http = require('http');
@@ -156,11 +157,11 @@ function checkDatabaseReady(req, res, next) {
   }
   
   if (!dbReady) {
-    console.warn('[DB READY WARNING] Requisição recebida enquanto dbReady=false. Permitindo continuar para evitar bloqueio permanente.');
-    // Em vez de bloquear o uso da API, vamos permitir que a requisição siga.
-    // O SQLite consegue lidar com operações enquanto migrations/seed rodam,
-    // e isso evita que um eventual problema na flag dbReady deixe o sistema travado.
-    return next();
+    return res.status(503).json({
+      error: 'Banco em inicialização. Aguarde alguns segundos e tente novamente.',
+      retryAfter: 3,
+      code: 'DB_STARTING',
+    });
   }
   
   next();
@@ -181,6 +182,8 @@ function buildHealthPayload(cb) {
     timestamp: new Date().toISOString(),
     port: PORT,
     db_ready: dbReady,
+    db_startup_failed: dbStartupFailed,
+    wal_bytes: fileSizeIfExists(dbPath + '-wal'),
     sqlite: getDbHealthStats(),
   };
   if (!db) {
@@ -807,6 +810,22 @@ if (/OneDrive/i.test(dbPath)) {
 
 let db = null;
 let dbReady = false; // Flag para indicar se o banco está totalmente pronto
+let dbStartupFailed = false;
+
+function beginDatabaseInitialization(onReadyCallback) {
+  prepareDatabaseOnStartup(db, dbPath)
+    .then(() => {
+      pruneOldBackups(dbPath, 10);
+      initializeDatabase(onReadyCallback);
+    })
+    .catch((prepErr) => {
+      console.error('❌ Falha na preparação do banco (integrity/WAL):', prepErr.message);
+      dbStartupFailed = true;
+      dbReady = false;
+      // Tentar inicializar mesmo assim para não deixar servidor morto — health reportará degraded
+      initializeDatabase(onReadyCallback);
+    });
+}
 
 try {
   db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
@@ -837,8 +856,8 @@ try {
       configureSqlite(db);
       wrapDatabase(db);
 
-      // Inicializar banco após configurações
-      initializeDatabase(clearFallback);
+      // Backup + integrity + WAL checkpoint antes de migrations (protege contra OneDrive/hard refresh)
+      beginDatabaseInitialization(clearFallback);
     }
   });
 } catch (error) {
@@ -22564,6 +22583,14 @@ function initChatModule() {
 }
 
 if (db) initChatModule();
+
+httpServer.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`❌ Porta ${PORT} já está em uso. Encerre o processo anterior ou defina PORT=5001`);
+    process.exit(1);
+  }
+  console.error('❌ Erro no servidor HTTP:', err);
+});
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor CRM GMP INDUSTRIAIS rodando na porta ${PORT}`);

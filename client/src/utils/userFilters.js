@@ -43,11 +43,20 @@ export async function fetchUsersFiltered({
   return data;
 }
 
+/** Comercial responsáveis/vendedores — ONLY /usuarios/comercial (server ghost filter + client backup) */
+export async function fetchComercialResponsaveis(actor) {
+  if (!actor?.id) return [];
+  const { data } = await api.get('/usuarios/comercial');
+  const list = Array.isArray(data) ? data : [];
+  return filterVisibleUsers(list, actor);
+}
+
 /** Usuários com acesso a um módulo (responsável, vendedor, etc.) — server + client ghost filter */
 export async function fetchModuleUsers(modulo, actor = null) {
+  if (!actor?.id) return [];
   const { data } = await api.get(`/usuarios/por-modulo/${modulo}`);
   const list = Array.isArray(data) ? data : [];
-  return actor ? filterVisibleUsers(list, actor) : list;
+  return filterVisibleUsers(list, actor);
 }
 
 /** Backup client-side filter for any user array from API */

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { getEffectiveUser } from '../services/permissionsCache';
-import { fetchModuleUsers } from '../utils/userFilters';
+import { useComercialResponsaveis } from '../hooks/useComercialResponsaveis';
 import { toast } from 'react-toastify';
 import { FiPlus, FiFilter, FiDownload, FiEdit, FiTrash2, FiCheckCircle, FiFileText, FiX, FiEye, FiSettings, FiSearch, FiInfo } from 'react-icons/fi';
 import { format } from 'date-fns';
@@ -14,10 +14,10 @@ import './Loading.css';
 
 const Propostas = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const effectiveUser = getEffectiveUser(user);
+  const { usuarios, loading: usuariosLoading, ready: usuariosReady } = useComercialResponsaveis(user, authLoading);
   const [propostas, setPropostas] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroUsuario, setFiltroUsuario] = useState('');
   const [search, setSearch] = useState('');
@@ -151,16 +151,6 @@ const Propostas = () => {
         aprovacoesMapTemp[propostaId] = temAprovacao;
       });
       setAprovacoesMap(aprovacoesMapTemp);
-
-      try {
-        const usuariosList = await fetchModuleUsers('comercial', effectiveUser);
-        if (loadDataRequestId.current !== currentId) return;
-        setUsuarios(usuariosList);
-      } catch (error) {
-        if (loadDataRequestId.current !== currentId) return;
-        console.warn('⚠️ Erro ao carregar usuários (não crítico):', error);
-        setUsuarios([]);
-      }
       } catch (error) {
         if (loadDataRequestId.current !== currentId) return;
         console.error('❌ Erro ao carregar dados:', error);
@@ -317,9 +307,10 @@ const Propostas = () => {
             value={filtroUsuario}
             onChange={(e) => setFiltroUsuario(e.target.value)}
             className="filter-select"
+            disabled={!usuariosReady || usuariosLoading}
           >
-            <option value="">Todos os responsáveis</option>
-            {usuarios.map(usuario => (
+            <option value="">{usuariosLoading ? 'Carregando responsáveis...' : 'Todos os responsáveis'}</option>
+            {usuariosReady && usuarios.map(usuario => (
               <option key={usuario.id} value={usuario.id}>
                 {usuario.nome}
               </option>

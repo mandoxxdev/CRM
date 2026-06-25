@@ -4,7 +4,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { canAccessAdministrativoConfig } from '../../utils/systemPermissions';
-import { fetchModuleUsers } from '../../utils/userFilters';
+import { useComercialResponsaveis } from '../../hooks/useComercialResponsaveis';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiZap } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, normalizePropostasResponse, isPropostaInativa } from '../../utils/formatDate';
@@ -26,13 +26,13 @@ const TIPOS = { comercial: 'Comercial', tecnica: 'Técnica', orcamento: 'Orçame
 
 export default function PropostasList() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const effectiveUser = getEffectiveUser(user);
   const canConfigTemplate = canAccessAdministrativoConfig(effectiveUser);
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
+  const { usuarios, loading: usuariosLoading, ready: usuariosReady } = useComercialResponsaveis(user, authLoading);
   const [list, setList] = useState([]);
   const [oportunidades, setOportunidades] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -71,8 +71,7 @@ export default function PropostasList() {
 
   useEffect(() => {
     api.get('/oportunidades', { params: { status: 'ativa' } }).then(r => setOportunidades(Array.isArray(r.data) ? r.data : [])).catch(() => setOportunidades([]));
-    fetchModuleUsers('comercial', effectiveUser).then(setUsuarios).catch(() => setUsuarios([]));
-  }, [effectiveUser]);
+  }, []);
 
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
 
@@ -182,9 +181,13 @@ export default function PropostasList() {
           <option value="">Oportunidade</option>
           {oportunidades.map(o => <option key={o.id} value={o.id}>{o.titulo || `#${o.id}`}</option>)}
         </select>
-        <select value={filterResponsavel} onChange={(e) => setFilterResponsavel(e.target.value)}>
-          <option value="">Responsável</option>
-          {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+        <select
+          value={filterResponsavel}
+          onChange={(e) => setFilterResponsavel(e.target.value)}
+          disabled={!usuariosReady || usuariosLoading}
+        >
+          <option value="">{usuariosLoading ? 'Carregando responsáveis...' : 'Responsável'}</option>
+          {usuariosReady && usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
         </select>
         {isAdmin && (
           <label className="propostas-list-toggle-inativas">

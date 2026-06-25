@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { getEffectiveUser } from '../services/permissionsCache';
-import { fetchModuleUsers } from '../utils/userFilters';
+import { fetchComercialResponsaveis } from '../utils/userFilters';
 import { FiPlus, FiEdit, FiFilter } from 'react-icons/fi';
 import { format } from 'date-fns';
 import './Projetos.css';
@@ -24,7 +24,7 @@ const Projetos = () => {
         // Carregar em paralelo para melhor performance
         const [projetosRes, usuariosList] = await Promise.all([
           api.get('/projetos', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} }),
-          fetchModuleUsers('comercial', effectiveUser),
+          fetchComercialResponsaveis(effectiveUser),
         ]);
         setProjetos(projetosRes.data);
         setUsuarios(usuariosList);

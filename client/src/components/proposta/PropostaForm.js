@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
-import { fetchModuleUsers } from '../../utils/userFilters';
+import { fetchComercialResponsaveis } from '../../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiSave, FiX, FiUser, FiFileText, FiEye, FiDownload, FiPlus, FiTrash2, FiBarChart2, FiUpload, FiPaperclip } from 'react-icons/fi';
 import SelecaoProdutosPremium from '../SelecaoProdutosPremium';
@@ -81,13 +81,14 @@ function produtoParaItem(p) {
 export default function PropostaForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const effectiveUser = getEffectiveUser(user);
   const isEdit = Boolean(id);
   const [form, setForm] = useState({ ...defaultForm });
   const [itens, setItens] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const [usuariosReady, setUsuariosReady] = useState(false);
   const [oportunidades, setOportunidades] = useState([]);
   const [familiasFromApi, setFamiliasFromApi] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -133,20 +134,33 @@ export default function PropostaForm() {
   useEffect(() => { recalcTotal(); }, [recalcTotal]);
 
   useEffect(() => {
+    if (authLoading || !user?.id) {
+      setUsuarios([]);
+      setUsuariosReady(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setUsuarios([]);
+    setUsuariosReady(false);
+
     Promise.all([
       api.get('/clientes', { params: { status: 'ativo' } }).catch(() => ({ data: [] })),
-      fetchModuleUsers('comercial', effectiveUser).catch(() => []),
+      fetchComercialResponsaveis(effectiveUser).catch(() => []),
       api.get('/oportunidades', { params: { status: 'ativa' } }).catch(() => ({ data: [] })),
       api.get('/familias').catch(() => ({ data: [] }))
     ]).then(([c, u, o, f]) => {
+      if (cancelled) return;
       setClientes(Array.isArray(c.data) ? c.data : []);
       setUsuarios(Array.isArray(u) ? u : []);
+      setUsuariosReady(true);
       setOportunidades(Array.isArray(o.data) ? o.data : []);
       setFamiliasFromApi(Array.isArray(f.data) ? f.data : []);
       const authUser = user || JSON.parse(localStorage.getItem('user') || '{}');
       if (!isEdit && authUser?.id) setForm((prev) => ({ ...prev, responsavel_id: String(authUser.id) }));
     });
-  }, [isEdit, effectiveUser, user]);
+
+    return () => { cancelled = true; };
+  }, [isEdit, authLoading, user?.id, effectiveUser?.id, effectiveUser?.is_superadmin]);
 
   useEffect(() => {
     if (!isEdit) { setLoadingData(false); return; }
@@ -476,9 +490,13 @@ export default function PropostaForm() {
             </div>
             <div className="proposta-form-field">
               <label>Responsável (vendedor)</label>
-              <select value={form.responsavel_id} onChange={(e) => handleResponsavelChange(e.target.value)}>
-                <option value="">—</option>
-                {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              <select
+                value={form.responsavel_id}
+                onChange={(e) => handleResponsavelChange(e.target.value)}
+                disabled={!usuariosReady}
+              >
+                <option value="">{usuariosReady ? '—' : 'Carregando responsáveis...'}</option>
+                {usuariosReady && usuarios.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
               </select>
             </div>
             <div className="proposta-form-field">

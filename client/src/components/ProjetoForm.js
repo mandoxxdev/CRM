@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { getEffectiveUser } from '../services/permissionsCache';
-import { fetchModuleUsers } from '../utils/userFilters';
+import { fetchComercialResponsaveis } from '../utils/userFilters';
 import './ProjetoForm.css';
 
 const ProjetoForm = () => {
@@ -58,7 +58,7 @@ const ProjetoForm = () => {
 
   const loadUsuarios = async () => {
     try {
-      const list = await fetchModuleUsers('comercial', effectiveUser);
+      const list = await fetchComercialResponsaveis(effectiveUser);
       setUsuarios(list);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);

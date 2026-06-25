@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { getEffectiveUser } from '../services/permissionsCache';
-import { fetchModuleUsers } from '../utils/userFilters';
+import { fetchComercialResponsaveis } from '../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiFilter, FiX, FiAlertCircle, FiClock, FiCalendar, FiList, FiSearch } from 'react-icons/fi';
 import { format } from 'date-fns';
@@ -46,7 +46,7 @@ const Atividades = () => {
         const params = filtroUsuario === 'todos' ? { todos: true } : filtroUsuario ? { responsavel_id: filtroUsuario } : {};
         const [atividadesRes, usuariosList, clientesRes] = await Promise.all([
           api.get('/atividades', { params }),
-          fetchModuleUsers('comercial', effectiveUser),
+          fetchComercialResponsaveis(effectiveUser),
           api.get('/clientes')
         ]);
         // Ordenar atividades: lembretes vencidos primeiro, depois por data

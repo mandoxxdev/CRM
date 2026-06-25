@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { getEffectiveUser } from '../services/permissionsCache';
-import { fetchModuleUsers } from '../utils/userFilters';
+import { fetchComercialResponsaveis } from '../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiPlus, FiTrash2, FiPackage, FiX, FiCheck, FiClock, FiList, FiMessageSquare, FiSend, FiPaperclip, FiDownload, FiFile, FiAlertCircle, FiDollarSign, FiFileText, FiShoppingCart, FiSettings } from 'react-icons/fi';
 import PreviewPropostaEditavel from './PreviewPropostaEditavel';
@@ -221,7 +221,7 @@ const PropostaForm = () => {
 
   const loadUsuarios = async () => {
     try {
-      const list = await fetchModuleUsers('comercial', effectiveUser);
+      const list = await fetchComercialResponsaveis(effectiveUser);
       setUsuarios(list);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);

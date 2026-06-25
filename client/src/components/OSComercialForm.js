@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { getEffectiveUser } from '../services/permissionsCache';
-import { fetchModuleUsers } from '../utils/userFilters';
+import { fetchComercialResponsaveis } from '../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiX, FiSave, FiEye } from 'react-icons/fi';
 import PreviewOSEditavel from './PreviewOSEditavel';
@@ -205,7 +205,7 @@ const OSComercialForm = ({ proposta: propostaProp, onClose }) => {
 
   const loadUsuarios = async () => {
     try {
-      const list = await fetchModuleUsers('comercial', effectiveUser);
+      const list = await fetchComercialResponsaveis(effectiveUser);
       setUsuarios(list);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
