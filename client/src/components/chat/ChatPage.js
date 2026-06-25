@@ -7,6 +7,8 @@ import { format, isToday, isYesterday, parseISO, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { applyVisibleUsersFilter } from '../../utils/userFilters';
 import {
   connectChatSocket, joinConversa, leaveConversa, emitTyping, resolveMediaUrl
 } from '../../services/chatSocket';
@@ -162,6 +164,7 @@ function NewChatModal({ users, onClose, onSelect, loading }) {
 
 const ChatPage = () => {
   const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
   const [conversas, setConversas] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [mensagens, setMensagens] = useState([]);
@@ -211,11 +214,11 @@ const ChatPage = () => {
   const loadUsuarios = useCallback(async () => {
     try {
       const res = await api.get('/chat/usuarios');
-      setUsuarios(res.data.usuarios || []);
+      setUsuarios(applyVisibleUsersFilter(res.data.usuarios || [], effectiveUser));
     } catch (e) {
       console.error(e);
     }
-  }, []);
+  }, [effectiveUser]);
 
   const loadMensagens = useCallback(async (conversaId) => {
     setLoadingMsg(true);

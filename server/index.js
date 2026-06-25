@@ -41,6 +41,8 @@ const {
   ghostUserAnd,
   isGhostUser,
   shouldHideGhostUsers,
+  sanitizeUserRowsForActor,
+  requireAdministrativoConfig,
 } = systemPermissions;
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
@@ -3191,7 +3193,7 @@ app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
       const setorCond = buildSetorCondition(isAdmin, ctxUser.setor);
 
       const sql = `
-        SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.created_at
+        SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.is_oculto, u.created_at
         FROM usuarios u
         WHERE u.ativo = 1
         ${setorCond.sql}
@@ -3214,7 +3216,7 @@ app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
       const params = setorCond.params;
       db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        return res.json(rows || []);
+        return res.json(sanitizeUserRowsForActor(rows || [], req.user));
       });
     }
   );
@@ -3332,7 +3334,7 @@ app.get('/api/usuarios/filtrar', authenticateToken, (req, res) => {
         SELECT
           u.id, u.nome, u.email, u.cargo, u.role, u.ativo,
           u.setor, u.departamento,
-          u.flag_vendedor, u.flag_compras, u.flag_ti
+          u.flag_vendedor, u.flag_compras, u.flag_ti, u.is_oculto
         FROM usuarios u
         ${whereSql}
         ORDER BY u.nome
@@ -3340,12 +3342,13 @@ app.get('/api/usuarios/filtrar', authenticateToken, (req, res) => {
 
       db.all(sql, [...params, limit, offset], (listErr, rows) => {
         if (listErr) return res.status(500).json({ error: listErr.message });
+        const visible = sanitizeUserRowsForActor(rows || [], req.user);
         return res.json({
           flag: rawFlag,
           limit,
           offset,
-          count: (rows || []).length,
-          items: rows || []
+          count: visible.length,
+          items: visible
         });
       });
     }
@@ -3369,7 +3372,7 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
       const setorCond = buildSetorCondition(isAdmin, ctxUser.setor);
 
       const sql = `
-        SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.created_at
+        SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.is_oculto, u.created_at
         FROM usuarios u
         WHERE u.ativo = 1
         ${setorCond.sql}
@@ -3393,7 +3396,7 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
 
       db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        return res.json(rows || []);
+        return res.json(sanitizeUserRowsForActor(rows || [], req.user));
       });
     }
   );
@@ -3450,13 +3453,13 @@ app.get('/api/usuarios', authenticateToken, (req, res) => {
             gruposPorUsuario[g.usuario_id].push({ id: g.id, nome: g.nome, ativo: g.ativo });
           });
 
-          const usuariosComGrupos = rows.map((usuario) => ({
+          const usuariosComGrupos = sanitizeUserRowsForActor(rows.map((usuario) => ({
             ...usuario,
             is_superadmin: !!usuario.is_superadmin,
             is_oculto: !!usuario.is_oculto,
             admin_modulos: parseAdminModulos(usuario.admin_modulos),
             grupos: gruposPorUsuario[usuario.id] || [],
-          }));
+          })), req.user);
 
           res.json(usuariosComGrupos);
         }
@@ -17524,7 +17527,7 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
 
 // ========== ROTAS DE CONFIGURAÇÕES ==========
 // Obter todas as configurações
-app.get('/api/configuracoes', authenticateToken, (req, res) => {
+app.get('/api/configuracoes', authenticateToken, requireAdministrativoConfig, (req, res) => {
   db.all('SELECT * FROM configuracoes ORDER BY categoria, chave', [], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
@@ -17967,7 +17970,7 @@ app.post('/api/compras/solicitacoes-compra/:id/decisao', authenticateToken, chec
 });
 
 // Obter configuração específica
-app.get('/api/configuracoes/:chave', authenticateToken, (req, res) => {
+app.get('/api/configuracoes/:chave', authenticateToken, requireAdministrativoConfig, (req, res) => {
   const { chave } = req.params;
   db.get('SELECT * FROM configuracoes WHERE chave = ?', [chave], (err, row) => {
     if (err) {
@@ -17993,14 +17996,9 @@ app.get('/api/configuracoes/:chave', authenticateToken, (req, res) => {
 });
 
 // Atualizar configuração
-app.put('/api/configuracoes/:chave', authenticateToken, (req, res) => {
+app.put('/api/configuracoes/:chave', authenticateToken, requireAdministrativoConfig, (req, res) => {
   const { chave } = req.params;
   const { valor, tipo, categoria, descricao } = req.body;
-  
-  // Verificar se é admin
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Apenas administradores podem alterar configurações' });
-  }
 
   let valorFinal = valor;
   if (tipo === 'json') {
@@ -18341,7 +18339,7 @@ app.get('/api/permissoes/grupos/:id/usuarios', authenticateToken, (req, res) => 
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      res.json(rows);
+      res.json(sanitizeUserRowsForActor(rows || [], req.user));
     }
   );
 });

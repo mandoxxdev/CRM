@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getEffectiveUser } from '../services/permissionsCache';
+import { fetchModuleUsers } from '../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiPlus, FiFilter, FiDownload, FiEdit, FiTrash2, FiCheckCircle, FiFileText, FiX, FiEye, FiSettings, FiSearch, FiInfo } from 'react-icons/fi';
 import { format } from 'date-fns';
@@ -11,6 +14,8 @@ import './Loading.css';
 
 const Propostas = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
   const [propostas, setPropostas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -148,9 +153,9 @@ const Propostas = () => {
       setAprovacoesMap(aprovacoesMapTemp);
 
       try {
-        const usuariosRes = await api.get('/usuarios/por-modulo/comercial');
+        const usuariosList = await fetchModuleUsers('comercial', effectiveUser);
         if (loadDataRequestId.current !== currentId) return;
-        setUsuarios(usuariosRes.data || []);
+        setUsuarios(usuariosList);
       } catch (error) {
         if (loadDataRequestId.current !== currentId) return;
         console.warn('⚠️ Erro ao carregar usuários (não crítico):', error);

@@ -8,7 +8,7 @@ import { filterVisibleUsers } from './systemPermissions';
  * - filtros adicionais (ativo, departamento, busca) e paginação
  *
  * Uso típico (dropdown de vendedores):
- *   const { items } = await fetchUsersFiltered({ flag: 'vendedor', q: 'mat', ativo: 1, limit: 25 });
+ *   const { items } = await fetchUsersFiltered({ flag: 'vendedor', q: 'mat', ativo: 1, limit: 25, actor });
  */
 export async function fetchUsersFiltered({
   flag,
@@ -43,3 +43,14 @@ export async function fetchUsersFiltered({
   return data;
 }
 
+/** Usuários com acesso a um módulo (responsável, vendedor, etc.) — server + client ghost filter */
+export async function fetchModuleUsers(modulo, actor = null) {
+  const { data } = await api.get(`/usuarios/por-modulo/${modulo}`);
+  const list = Array.isArray(data) ? data : [];
+  return actor ? filterVisibleUsers(list, actor) : list;
+}
+
+/** Backup client-side filter for any user array from API */
+export function applyVisibleUsersFilter(users, actor) {
+  return filterVisibleUsers(users, actor);
+}

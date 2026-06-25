@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { canConfigureAlmox, canConfigureFrota, isModuleAdmin } from '../utils/systemPermissions';
+import { canConfigureModule, canAccessAdministrativoConfig } from '../utils/systemPermissions';
 import api from '../services/api';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
@@ -188,13 +188,10 @@ const Layout = () => {
 
   const canSeeAdminOnlyItem = (item) => {
     if (!item.adminOnly) return true;
-    if (activeModule === 'almoxarifado') {
-      return canConfigureAlmox(effectiveUser);
+    if (activeModule === 'administrativo') {
+      return canAccessAdministrativoConfig(effectiveUser);
     }
-    if (activeModule === 'frota') {
-      return canConfigureFrota(effectiveUser);
-    }
-    return isModuleAdmin(effectiveUser, activeModule);
+    return canConfigureModule(effectiveUser, activeModule);
   };
 
   // Fechar sidebar ao clicar em um item no mobile (memoizado)
@@ -337,7 +334,7 @@ const Layout = () => {
 
   // Menu do módulo Administrativo
   const administrativoMenuItems = [
-    { path: '/configuracoes', icon: FiSettings, label: 'Configurações' },
+    { path: '/configuracoes', icon: FiSettings, label: 'Configurações', adminOnly: true },
     { path: '/configuracoes/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/configuracoes/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];

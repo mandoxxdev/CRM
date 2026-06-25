@@ -342,23 +342,26 @@ async function markAsRead(db, conversaId, userId) {
 }
 
 async function listChatUsers(db, userId, search = '', actor = null) {
-  const { ghostUserAnd } = require('../systemPermissions');
+  const { ghostUserAnd, filterGhostUsersFromRows } = require('../systemPermissions');
   const ghostSql = ghostUserAnd(actor || {}, '');
   const term = `%${search || ''}%`;
+  let rows;
   if (search) {
-    return dbAll(
+    rows = await dbAll(
       db,
-      `SELECT id, nome, email, cargo FROM usuarios
+      `SELECT id, nome, email, cargo, is_oculto FROM usuarios
        WHERE id != ? AND ativo = 1${ghostSql} AND (nome LIKE ? OR email LIKE ?)
        ORDER BY nome COLLATE NOCASE LIMIT 30`,
       [userId, term, term]
     );
+  } else {
+    rows = await dbAll(
+      db,
+      `SELECT id, nome, email, cargo, is_oculto FROM usuarios WHERE id != ? AND ativo = 1${ghostSql} ORDER BY nome COLLATE NOCASE`,
+      [userId]
+    );
   }
-  return dbAll(
-    db,
-    `SELECT id, nome, email, cargo FROM usuarios WHERE id != ? AND ativo = 1${ghostSql} ORDER BY nome COLLATE NOCASE`,
-    [userId]
-  );
+  return filterGhostUsersFromRows(rows, actor || {}).map(({ is_oculto, ...rest }) => rest);
 }
 
 module.exports = {

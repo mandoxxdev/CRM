@@ -2,11 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { FiMessageCircle, FiX, FiSend, FiPaperclip, FiUsers, FiPlus, FiSearch, FiImage, FiFile } from 'react-icons/fi';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { getEffectiveUser } from '../services/permissionsCache';
+import { applyVisibleUsersFilter } from '../utils/userFilters';
 import { registerServiceWorker, requestNotificationPermission, notifyNewMessage } from '../utils/pushNotifications';
 import './Chat.css';
 
 const Chat = ({ isOpen, onClose }) => {
   const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
   const [conversas, setConversas] = useState([]);
   const [conversaSelecionada, setConversaSelecionada] = useState(null);
   const [mensagens, setMensagens] = useState([]);
@@ -207,7 +210,8 @@ const Chat = ({ isOpen, onClose }) => {
   const buscarUsuarios = async (search) => {
     try {
       const response = await api.get('/chat/usuarios', { params: { search } });
-      setUsuariosDisponiveis(response.data.filter(u => u.id !== user.id));
+      const list = applyVisibleUsersFilter(response.data?.usuarios || [], effectiveUser);
+      setUsuariosDisponiveis(list.filter(u => u.id !== user.id));
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
     }

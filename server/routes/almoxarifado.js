@@ -1440,7 +1440,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // CONFIGURAÇÕES (admin only)
   // ════════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/almoxarifado/configuracoes',(req, res) => {
+  app.get('/api/almoxarifado/configuracoes', authenticateToken, (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     db.all(`SELECT * FROM configuracoes_almoxarifado ORDER BY chave`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -1450,7 +1450,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
-  app.put('/api/almoxarifado/configuracoes',(req, res) => {
+  app.put('/api/almoxarifado/configuracoes', authenticateToken, (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const configs = req.body; // { chave: valor, ... }
     const promises = Object.entries(configs).map(([chave, valor]) =>
@@ -1467,7 +1467,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       .catch(e => res.status(500).json({ error: e.message }));
   });
 
-  app.get('/api/almoxarifado/configuracoes/alertas-estoque',async (req, res) => {
+  app.get('/api/almoxarifado/configuracoes/alertas-estoque', authenticateToken, async (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const [settings, reminder] = await Promise.all([
@@ -1480,7 +1480,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   });
 
-  app.put('/api/almoxarifado/configuracoes/alertas-estoque',async (req, res) => {
+  app.put('/api/almoxarifado/configuracoes/alertas-estoque', authenticateToken, async (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const payload = req.body || {};
@@ -1580,7 +1580,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // GET/PUT /api/almoxarifado/configuracoes/liberacao-valor
-  app.get('/api/almoxarifado/configuracoes/liberacao-valor', async (req, res) => {
+  app.get('/api/almoxarifado/configuracoes/liberacao-valor', authenticateToken, async (req, res) => {
     try {
       const config = await valueApprovalService.getConfigForApi(db, req.user);
       res.json(config);
@@ -1589,7 +1589,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   });
 
-  app.put('/api/almoxarifado/configuracoes/liberacao-valor', async (req, res) => {
+  app.put('/api/almoxarifado/configuracoes/liberacao-valor', authenticateToken, async (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const saved = await valueApprovalService.saveConfig(db, req.body, req.user.nome || req.user.email);
@@ -1600,7 +1600,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/configuracoes/estoques-minimos — atualização em lote
-  app.put('/api/almoxarifado/configuracoes/estoques-minimos',(req, res) => {
+  app.put('/api/almoxarifado/configuracoes/estoques-minimos', authenticateToken, (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { materiais } = req.body; // [{ id, quantidade_minima, quantidade_maxima, ponto_pedido, prazo_reposicao_dias }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array de materiais' });
@@ -1627,7 +1627,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/configuracoes/tipos-material — associar tipo a material em lote
-  app.put('/api/almoxarifado/configuracoes/tipos-material',(req, res) => {
+  app.put('/api/almoxarifado/configuracoes/tipos-material', authenticateToken, (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { materiais } = req.body; // [{ id, tipo_material_id }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array' });

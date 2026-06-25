@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { canAccessAdministrativoConfig } from '../../utils/systemPermissions';
+import { fetchModuleUsers } from '../../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiZap } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, normalizePropostasResponse, isPropostaInativa } from '../../utils/formatDate';
@@ -24,6 +27,8 @@ const TIPOS = { comercial: 'Comercial', tecnica: 'Técnica', orcamento: 'Orçame
 export default function PropostasList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
+  const canConfigTemplate = canAccessAdministrativoConfig(effectiveUser);
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
   const [list, setList] = useState([]);
   const [oportunidades, setOportunidades] = useState([]);
@@ -66,8 +71,8 @@ export default function PropostasList() {
 
   useEffect(() => {
     api.get('/oportunidades', { params: { status: 'ativa' } }).then(r => setOportunidades(Array.isArray(r.data) ? r.data : [])).catch(() => setOportunidades([]));
-    api.get('/usuarios/por-modulo/comercial').then(r => setUsuarios(Array.isArray(r.data) ? r.data : [])).catch(() => setUsuarios([]));
-  }, []);
+    fetchModuleUsers('comercial', effectiveUser).then(setUsuarios).catch(() => setUsuarios([]));
+  }, [effectiveUser]);
 
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
 
@@ -146,9 +151,11 @@ export default function PropostasList() {
       <header className="propostas-list-header">
         <h1>Propostas</h1>
         <div className="propostas-list-actions">
-          <Link to="/configuracoes" state={{ tab: 'template-proposta' }} className="btn btn-sec">
-            <FiSettings /> Config. template
-          </Link>
+          {canConfigTemplate && (
+            <Link to="/configuracoes" state={{ tab: 'template-proposta' }} className="btn btn-sec">
+              <FiSettings /> Config. template
+            </Link>
+          )}
           <button type="button" className="btn btn-sec" onClick={() => setShowAutomatica(true)}>
             <FiZap /> Proposta automática
           </button>

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { getEffectiveUser } from '../services/permissionsCache';
+import { fetchModuleUsers } from '../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiFilter, FiX, FiAlertCircle, FiClock, FiCalendar, FiList, FiSearch } from 'react-icons/fi';
 import { format } from 'date-fns';
@@ -12,6 +14,7 @@ import './Loading.css';
 const Atividades = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
   const [atividades, setAtividades] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -41,9 +44,9 @@ const Atividades = () => {
         // Se filtroUsuario estiver vazio, não enviar parâmetro (backend mostrará apenas do usuário logado)
         // Se filtroUsuario tiver um ID, enviar responsavel_id
         const params = filtroUsuario === 'todos' ? { todos: true } : filtroUsuario ? { responsavel_id: filtroUsuario } : {};
-        const [atividadesRes, usuariosRes, clientesRes] = await Promise.all([
+        const [atividadesRes, usuariosList, clientesRes] = await Promise.all([
           api.get('/atividades', { params }),
-          api.get('/usuarios/por-modulo/comercial'),
+          fetchModuleUsers('comercial', effectiveUser),
           api.get('/clientes')
         ]);
         // Ordenar atividades: lembretes vencidos primeiro, depois por data
@@ -68,7 +71,7 @@ const Atividades = () => {
         });
         
         setAtividades(atividadesOrdenadas);
-        setUsuarios(usuariosRes.data || []);
+        setUsuarios(usuariosList);
         setClientes(clientesRes.data || []);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -77,7 +80,7 @@ const Atividades = () => {
       }
     };
     loadData();
-  }, [filtroUsuario]);
+  }, [filtroUsuario, effectiveUser]);
 
   // Calcular estatísticas de lembretes
   const estatisticasLembretes = useMemo(() => {

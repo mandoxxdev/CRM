@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { getEffectiveUser } from '../services/permissionsCache';
+import { fetchModuleUsers } from '../utils/userFilters';
 import { FiPlus, FiEdit, FiFilter } from 'react-icons/fi';
 import { format } from 'date-fns';
 import './Projetos.css';
@@ -13,18 +15,19 @@ const Projetos = () => {
   const [loading, setLoading] = useState(true);
   const [filtroUsuario, setFiltroUsuario] = useState('');
   const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
         // Carregar em paralelo para melhor performance
-        const [projetosRes, usuariosRes] = await Promise.all([
+        const [projetosRes, usuariosList] = await Promise.all([
           api.get('/projetos', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} }),
-          api.get('/usuarios/por-modulo/comercial')
+          fetchModuleUsers('comercial', effectiveUser),
         ]);
         setProjetos(projetosRes.data);
-        setUsuarios(usuariosRes.data || []);
+        setUsuarios(usuariosList);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
       } finally {
@@ -32,7 +35,7 @@ const Projetos = () => {
       }
     };
     loadData();
-  }, [filtroUsuario]);
+  }, [filtroUsuario, effectiveUser]);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {

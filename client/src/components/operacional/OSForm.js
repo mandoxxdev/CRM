@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { fetchModuleUsers } from '../../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiX, FiSave, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import './Operacional.css';
 import './OSForm.css';
 
 const OSForm = ({ os, onClose }) => {
+  const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
   const [activeSection, setActiveSection] = useState('basico');
   const [formData, setFormData] = useState({
     // Básico
@@ -233,8 +238,8 @@ const OSForm = ({ os, onClose }) => {
 
   const loadUsuarios = async () => {
     try {
-      const response = await api.get('/usuarios/por-modulo/operacional');
-      setUsuarios(response.data || []);
+      const list = await fetchModuleUsers('operacional', effectiveUser);
+      setUsuarios(list);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }

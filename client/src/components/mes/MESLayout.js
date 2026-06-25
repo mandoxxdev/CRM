@@ -4,7 +4,7 @@ import ErrorBoundary from '../ErrorBoundary';
 import { RouteLoading } from '../LazyPage';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
-import { canConfigureOperacional } from '../../utils/systemPermissions';
+import { canConfigureModule } from '../../utils/systemPermissions';
 import { 
   FiBarChart2, FiClipboard, FiUsers, FiActivity, FiClock, 
   FiTrendingUp, FiTool, FiSettings, FiShield, FiFileText,
@@ -18,7 +18,7 @@ const MESLayout = () => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user } = useAuth();
-  const canConfigureMes = canConfigureOperacional(getEffectiveUser(user));
+  const canConfigureMes = canConfigureModule(getEffectiveUser(user), 'operacional');
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: FiBarChart2, path: '/fabrica/dashboard' },

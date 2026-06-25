@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ProtectedModuleRoute from './components/ProtectedModuleRoute';
+import ProtectedModuleConfigRoute from './components/ProtectedModuleConfigRoute';
 import ProtectedAlmoxConfigRoute from './components/ProtectedAlmoxConfigRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import ModuleLoading from './components/ModuleLoading';
@@ -368,7 +369,11 @@ function AppRoutes() {
         <Route path="formulacoes/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Controle de Formulações</h2><p>Em desenvolvimento...</p></div>} />
         <Route path="alarmistica/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Alarmística</h2><p>Em desenvolvimento...</p></div>} />
         <Route path="logs/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Logs e Histórico</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="configuracoes" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Configurações MES</h2><p>Em desenvolvimento...</p></div>} />
+        <Route path="configuracoes" element={
+          <ProtectedModuleConfigRoute module="operacional" redirectTo="/fabrica/dashboard">
+            <div style={{ padding: '40px', textAlign: 'center' }}><h2>Configurações MES</h2><p>Em desenvolvimento...</p></div>
+          </ProtectedModuleConfigRoute>
+        } />
       </Route>
       <Route
         path="/engenharia"
@@ -450,7 +455,11 @@ function AppRoutes() {
           </PrivateRoute>
         }
       >
-        <Route index element={<Configuracoes />} />
+        <Route index element={
+          <ProtectedModuleConfigRoute administrativoConfig redirectTo="/">
+            <Configuracoes />
+          </ProtectedModuleConfigRoute>
+        } />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="administrativo" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="administrativo" />} />
       </Route>

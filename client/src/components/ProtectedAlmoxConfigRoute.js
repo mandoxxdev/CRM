@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { canConfigureAlmox } from '../utils/systemPermissions';
+import { canConfigureModule } from '../utils/systemPermissions';
 import { getEffectiveUser } from '../services/permissionsCache';
 import { RouteLoading } from './LazyPage';
 
@@ -12,7 +12,7 @@ const ProtectedAlmoxConfigRoute = ({ children }) => {
     return <RouteLoading module="almoxarifado" />;
   }
 
-  if (!canConfigureAlmox(getEffectiveUser(user))) {
+  if (!canConfigureModule(getEffectiveUser(user), 'almoxarifado')) {
     return <Navigate to="/almoxarifado" replace />;
   }
 

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { getEffectiveUser } from '../services/permissionsCache';
+import { fetchModuleUsers } from '../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiPlus, FiTrash2, FiPackage, FiX, FiCheck, FiClock, FiList, FiMessageSquare, FiSend, FiPaperclip, FiDownload, FiFile, FiAlertCircle, FiDollarSign, FiFileText, FiShoppingCart, FiSettings } from 'react-icons/fi';
 import PreviewPropostaEditavel from './PreviewPropostaEditavel';
@@ -12,6 +14,7 @@ const PropostaForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
   const [loading, setLoading] = useState(false);
   const [clientes, setClientes] = useState([]);
   const [projetos, setProjetos] = useState([]);
@@ -218,8 +221,8 @@ const PropostaForm = () => {
 
   const loadUsuarios = async () => {
     try {
-      const response = await api.get('/usuarios/por-modulo/comercial');
-      setUsuarios(response.data || []);
+      const list = await fetchModuleUsers('comercial', effectiveUser);
+      setUsuarios(list);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
     }

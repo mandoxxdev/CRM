@@ -46,12 +46,21 @@ export function hasAlmoxAdminPerfil(user) {
   return String(user?.perfil_almoxarifado || '').toUpperCase() === 'ADMINISTRADOR';
 }
 
+export function canConfigureModule(user, module) {
+  if (!module) return false;
+  if (isSuperAdmin(user)) return true;
+  if (isModuleAdmin(user, module)) return true;
+  if (module === 'almoxarifado' && hasAlmoxAdminPerfil(user)) return true;
+  if (module === 'frota' && hasFrotaAdminPerfil(user)) return true;
+  return false;
+}
+
+export function canAccessAdministrativoConfig(user) {
+  return canConfigureModule(user, 'administrativo') || canConfigureModule(user, 'comercial');
+}
+
 export function canConfigureAlmox(user) {
-  return (
-    isSuperAdmin(user)
-    || isModuleAdmin(user, 'almoxarifado')
-    || hasAlmoxAdminPerfil(user)
-  );
+  return canConfigureModule(user, 'almoxarifado');
 }
 
 export function hasFrotaAdminPerfil(user) {
@@ -59,15 +68,11 @@ export function hasFrotaAdminPerfil(user) {
 }
 
 export function canConfigureFrota(user) {
-  return (
-    isSuperAdmin(user)
-    || isModuleAdmin(user, 'frota')
-    || hasFrotaAdminPerfil(user)
-  );
+  return canConfigureModule(user, 'frota');
 }
 
 export function canConfigureOperacional(user) {
-  return isSuperAdmin(user) || isModuleAdmin(user, 'operacional');
+  return canConfigureModule(user, 'operacional');
 }
 
 export function mergeUserPermissions(authUser, extra = {}) {

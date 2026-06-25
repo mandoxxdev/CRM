@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { fetchModuleUsers } from '../../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiSave, FiX, FiUser, FiFileText, FiEye, FiDownload, FiPlus, FiTrash2, FiBarChart2, FiUpload, FiPaperclip } from 'react-icons/fi';
 import SelecaoProdutosPremium from '../SelecaoProdutosPremium';
@@ -78,6 +81,8 @@ function produtoParaItem(p) {
 export default function PropostaForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const effectiveUser = getEffectiveUser(user);
   const isEdit = Boolean(id);
   const [form, setForm] = useState({ ...defaultForm });
   const [itens, setItens] = useState([]);
@@ -130,18 +135,18 @@ export default function PropostaForm() {
   useEffect(() => {
     Promise.all([
       api.get('/clientes', { params: { status: 'ativo' } }).catch(() => ({ data: [] })),
-      api.get('/usuarios/por-modulo/comercial').catch(() => ({ data: [] })),
+      fetchModuleUsers('comercial', effectiveUser).catch(() => []),
       api.get('/oportunidades', { params: { status: 'ativa' } }).catch(() => ({ data: [] })),
       api.get('/familias').catch(() => ({ data: [] }))
     ]).then(([c, u, o, f]) => {
       setClientes(Array.isArray(c.data) ? c.data : []);
-      setUsuarios(Array.isArray(u.data) ? u.data : []);
+      setUsuarios(Array.isArray(u) ? u : []);
       setOportunidades(Array.isArray(o.data) ? o.data : []);
       setFamiliasFromApi(Array.isArray(f.data) ? f.data : []);
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (!isEdit && user?.id) setForm((prev) => ({ ...prev, responsavel_id: String(user.id) }));
+      const authUser = user || JSON.parse(localStorage.getItem('user') || '{}');
+      if (!isEdit && authUser?.id) setForm((prev) => ({ ...prev, responsavel_id: String(authUser.id) }));
     });
-  }, [isEdit]);
+  }, [isEdit, effectiveUser, user]);
 
   useEffect(() => {
     if (!isEdit) { setLoadingData(false); return; }

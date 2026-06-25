@@ -73,12 +73,21 @@ function hasAlmoxAdminPerfil(user) {
   return String(user?.perfil_almoxarifado || '').toUpperCase() === 'ADMINISTRADOR';
 }
 
+function canConfigureModule(user, module) {
+  if (!module) return false;
+  if (isSuperAdmin(user)) return true;
+  if (isModuleAdmin(user, module)) return true;
+  if (module === 'almoxarifado' && hasAlmoxAdminPerfil(user)) return true;
+  if (module === 'frota' && hasFrotaAdminPerfil(user)) return true;
+  return false;
+}
+
+function canAccessAdministrativoConfig(user) {
+  return canConfigureModule(user, 'administrativo') || canConfigureModule(user, 'comercial');
+}
+
 function canConfigureAlmox(user) {
-  return (
-    isSuperAdmin(user)
-    || isModuleAdmin(user, 'almoxarifado')
-    || hasAlmoxAdminPerfil(user)
-  );
+  return canConfigureModule(user, 'almoxarifado');
 }
 
 function hasFrotaAdminPerfil(user) {
@@ -86,15 +95,11 @@ function hasFrotaAdminPerfil(user) {
 }
 
 function canConfigureFrota(user) {
-  return (
-    isSuperAdmin(user)
-    || isModuleAdmin(user, 'frota')
-    || hasFrotaAdminPerfil(user)
-  );
+  return canConfigureModule(user, 'frota');
 }
 
 function canConfigureOperacional(user) {
-  return isSuperAdmin(user) || isModuleAdmin(user, 'operacional');
+  return canConfigureModule(user, 'operacional');
 }
 
 function bypassModuleRestrictions(user) {
@@ -118,7 +123,7 @@ function requireSuperAdmin(req, res, next) {
 
 function requireModuleAdmin(module) {
   return (req, res, next) => {
-    if (isModuleAdmin(req.user, module) || String(req.user?.role || '').toLowerCase() === 'admin') {
+    if (isModuleAdmin(req.user, module)) {
       return next();
     }
     return res.status(403).json({
@@ -126,6 +131,23 @@ function requireModuleAdmin(module) {
       modulo: module,
     });
   };
+}
+
+function requireConfigureModule(module) {
+  return (req, res, next) => {
+    if (canConfigureModule(req.user, module)) return next();
+    return res.status(403).json({
+      error: 'Acesso restrito — administrador do módulo ou Super Administrador',
+      modulo: module,
+    });
+  };
+}
+
+function requireAdministrativoConfig(req, res, next) {
+  if (canAccessAdministrativoConfig(req.user)) return next();
+  return res.status(403).json({
+    error: 'Acesso restrito — administrador do módulo Administrativo/Comercial ou Super Administrador',
+  });
 }
 
 function requireAlmoxAdmin(req, res, next) {
@@ -270,6 +292,18 @@ function ghostUserFilter(actor, sqlAlias = '') {
   return { sql: ghostUserAnd(actor, sqlAlias), params: [] };
 }
 
+/** Belt-and-suspenders post-query filter for user listings */
+function filterGhostUsersFromRows(rows, actor) {
+  if (!shouldHideGhostUsers(actor)) return rows || [];
+  return (rows || []).filter((u) => !isGhostUser(u));
+}
+
+function sanitizeUserRowsForActor(rows, actor) {
+  const filtered = filterGhostUsersFromRows(rows, actor);
+  if (isSuperAdmin(actor)) return filtered;
+  return filtered.map(({ is_oculto, ...rest }) => rest);
+}
+
 function sanitizeGhostUserPayload(actor, body) {
   const data = { ...body };
   if (!isSuperAdmin(actor)) {
@@ -347,8 +381,12 @@ module.exports = {
   shouldHideGhostUsers,
   ghostUserAnd,
   ghostUserFilter,
+  filterGhostUsersFromRows,
+  sanitizeUserRowsForActor,
   sanitizeGhostUserPayload,
   canDeleteAlmoxRequisicao,
+  canConfigureModule,
+  canAccessAdministrativoConfig,
   canConfigureAlmox,
   hasAlmoxAdminPerfil,
   canConfigureFrota,
@@ -359,6 +397,8 @@ module.exports = {
   requireDeleteUsers,
   requireSuperAdmin,
   requireModuleAdmin,
+  requireConfigureModule,
+  requireAdministrativoConfig,
   requireAlmoxAdmin,
   enrichUserFromDb,
   syncModuleAdminProfiles,
