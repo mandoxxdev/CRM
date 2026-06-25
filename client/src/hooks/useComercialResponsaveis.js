@@ -4,7 +4,7 @@ import { fetchComercialResponsaveis } from '../utils/userFilters';
 
 /**
  * Loads comercial responsáveis from /api/usuarios/comercial only.
- * Does not expose options until server list is loaded and ghost-filter confirmed.
+ * Does not expose options until server list is loaded.
  * Shared 60s client cache + inflight dedupe prevent SQLITE_BUSY bursts.
  */
 export function useComercialResponsaveis(authUser, authLoading = false) {

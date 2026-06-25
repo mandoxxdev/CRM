@@ -1,11 +1,6 @@
 /**
  * In-memory cache for GET /api/usuarios/comercial — reduces SQLITE_BUSY under dropdown load.
  */
-const {
-  ghostUserAnd,
-  shouldHideGhostUsers,
-  sanitizeUserRowsForActor,
-} = require('./systemPermissions');
 
 const CACHE_TTL_MS = parseInt(process.env.COMERCIAL_RESPONSAVEIS_CACHE_MS || '60000', 10);
 
@@ -20,22 +15,18 @@ function buildSetorCondition(isAdmin, setorParam) {
   };
 }
 
-function cacheKey(actor, isAdmin, setor) {
-  const ghostMode = shouldHideGhostUsers(actor) ? 'hide' : 'show';
+function cacheKey(isAdmin, setor) {
   const setorKey = isAdmin ? '__admin__' : String(setor || '').toLowerCase().trim();
-  return `${ghostMode}|${setorKey}`;
+  return setorKey;
 }
 
-/** HARD ghost filter: COALESCE(is_oculto,0)=0 unless actor is superadmin (via ghostUserAnd). */
-function buildComercialSql(actor, isAdmin, setor) {
+function buildComercialSql(isAdmin, setor) {
   const setorCond = buildSetorCondition(isAdmin, setor);
-  const ghostSql = ghostUserAnd(actor, 'u');
   const sql = `
-    SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.is_oculto, u.created_at
+    SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.created_at
     FROM usuarios u
     WHERE u.ativo = 1
     ${setorCond.sql}
-    ${ghostSql}
     AND (
       u.role = 'admin'
       OR EXISTS (
@@ -59,18 +50,18 @@ function invalidateComercialResponsaveisCache() {
 
 function fetchComercialResponsaveis(db, actor, ctxUser, callback) {
   const isAdmin = ctxUser.role === 'admin';
-  const key = cacheKey(actor, isAdmin, ctxUser.setor);
+  const key = cacheKey(isAdmin, ctxUser.setor);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
-    return callback(null, sanitizeUserRowsForActor(hit.rows, actor));
+    return callback(null, hit.rows);
   }
 
-  const { sql, params } = buildComercialSql(actor, isAdmin, ctxUser.setor);
+  const { sql, params } = buildComercialSql(isAdmin, ctxUser.setor);
   db.all(sql, params, (err, rows) => {
     if (err) return callback(err);
     const raw = rows || [];
     cache.set(key, { at: Date.now(), rows: raw });
-    callback(null, sanitizeUserRowsForActor(raw, actor));
+    callback(null, raw);
   });
 }
 

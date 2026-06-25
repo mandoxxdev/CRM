@@ -273,44 +273,38 @@ function syncModuleAdminProfiles(db, userId, adminModulos) {
   });
 }
 
-function isGhostUser(user) {
-  return isTruthyFlag(user?.is_oculto);
+/** Ghost user feature disabled — always false */
+function isGhostUser() {
+  return false;
 }
 
-function shouldHideGhostUsers(actor) {
-  return !isSuperAdmin(actor);
+/** Ghost user feature disabled — always false */
+function shouldHideGhostUsers() {
+  return false;
 }
 
-/** SQL fragment: AND COALESCE(alias.is_oculto, 0) = 0 — empty for superadmin */
-function ghostUserAnd(actor, sqlAlias = '') {
-  if (!shouldHideGhostUsers(actor)) return '';
-  const prefix = sqlAlias ? `${sqlAlias}.` : '';
-  return ` AND COALESCE(${prefix}is_oculto, 0) = 0`;
+/** Ghost user feature disabled — no-op */
+function ghostUserAnd() {
+  return '';
 }
 
-function ghostUserFilter(actor, sqlAlias = '') {
-  return { sql: ghostUserAnd(actor, sqlAlias), params: [] };
+function ghostUserFilter() {
+  return { sql: '', params: [] };
 }
 
-/** Belt-and-suspenders post-query filter for user listings */
-function filterGhostUsersFromRows(rows, actor) {
-  if (!shouldHideGhostUsers(actor)) return rows || [];
-  return (rows || []).filter((u) => !isGhostUser(u));
+/** Ghost user feature disabled — no-op */
+function filterGhostUsersFromRows(rows) {
+  return rows || [];
 }
 
-function sanitizeUserRowsForActor(rows, actor) {
-  const filtered = filterGhostUsersFromRows(rows, actor);
-  if (isSuperAdmin(actor)) return filtered;
-  return filtered.map(({ is_oculto, ...rest }) => rest);
+/** Ghost user feature disabled — no-op */
+function sanitizeUserRowsForActor(rows) {
+  return rows || [];
 }
 
 function sanitizeGhostUserPayload(actor, body) {
   const data = { ...body };
-  if (!isSuperAdmin(actor)) {
-    delete data.is_oculto;
-  } else if (data.is_oculto !== undefined) {
-    data.is_oculto = isTruthyFlag(data.is_oculto) ? 1 : 0;
-  }
+  delete data.is_oculto;
   return data;
 }
 

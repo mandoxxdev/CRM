@@ -8,7 +8,7 @@ import {
   parseAdminModulos,
 } from '../utils/systemPermissions';
 import { invalidatePermissionsCache } from '../services/permissionsCache';
-import { FiUsers, FiShield, FiCheck, FiX, FiStar, FiEyeOff } from 'react-icons/fi';
+import { FiUsers, FiShield, FiCheck, FiX, FiStar } from 'react-icons/fi';
 import './UsuarioForm.css';
 
 const UsuarioForm = () => {
@@ -38,7 +38,6 @@ const UsuarioForm = () => {
     flag_compras: 0,
     flag_ti: 0,
     is_superadmin: 0,
-    is_oculto: 0,
   });
 
   const [modulosSelecionados, setModulosSelecionados] = useState([]);
@@ -93,7 +92,6 @@ const UsuarioForm = () => {
         flag_compras: response.data.flag_compras ? 1 : 0,
         flag_ti: response.data.flag_ti ? 1 : 0,
         is_superadmin: response.data.is_superadmin ? 1 : 0,
-        is_oculto: response.data.is_oculto ? 1 : 0,
       };
       
       console.log('📝 Dados do usuário a serem definidos:', usuarioData);
@@ -232,7 +230,6 @@ const UsuarioForm = () => {
 
       if (actorIsSuperAdmin) {
         dataToSend.is_superadmin = formData.is_superadmin ? 1 : 0;
-        dataToSend.is_oculto = formData.is_oculto ? 1 : 0;
       }
       
       console.log('📤 Dados a serem enviados:', dataToSend);
@@ -400,15 +397,6 @@ const UsuarioForm = () => {
             </div>
           </div>
 
-          {actorCanManageUsers && !actorIsSuperAdmin && actorUser !== null && (
-            <div className="superadmin-info-banner" role="status">
-              <FiShield />
-              <p>
-                Para usuários fantasmas, você precisa ser <strong>Super Administrador</strong> (não apenas Administrador do Sistema).
-              </p>
-            </div>
-          )}
-
           {actorIsSuperAdmin && (
             <div className="superadmin-privileges-box">
               <div className="superadmin-privileges-header">
@@ -431,20 +419,6 @@ const UsuarioForm = () => {
                   </span>
                   <span className="superadmin-option-hint">
                     Acesso total, incluindo exclusão de usuários e concessão de Super Admin.
-                  </span>
-                </label>
-                <label className="superadmin-option ghost-user-option">
-                  <input
-                    type="checkbox"
-                    name="is_oculto"
-                    checked={formData.is_oculto === 1}
-                    onChange={handleChange}
-                  />
-                  <span className="superadmin-option-label">
-                    <FiEyeOff /> Usuário oculto (fantasma)
-                  </span>
-                  <span className="superadmin-option-hint ghost-hint">
-                    Este usuário só aparece para Super Administradores. Fica oculto em listas, buscas, dropdowns e chat para todos os demais.
                   </span>
                 </label>
               </div>

@@ -98,12 +98,17 @@ export function bypassModuleRestrictions(user) {
   return isSuperAdmin(user) || String(user?.role || '').toLowerCase() === 'admin';
 }
 
-export function isGhostUser(user) {
-  return isTruthyFlag(user?.is_oculto);
+/** Ghost user feature disabled — always false */
+export function isGhostUser() {
+  return false;
 }
 
-/** Backup client-side filter — server is source of truth */
-export function filterVisibleUsers(users, actor) {
-  if (isSuperAdmin(actor)) return users || [];
-  return (users || []).filter((u) => !isGhostUser(u));
+/** Ghost user feature disabled — always false */
+export function shouldHideGhostUsers() {
+  return false;
+}
+
+/** Ghost user feature disabled — no-op, returns all users */
+export function filterVisibleUsers(users) {
+  return users || [];
 }

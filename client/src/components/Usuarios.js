@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { canDeleteUsers, parseAdminModulos, filterVisibleUsers, isSuperAdmin } from '../utils/systemPermissions';
+import { canDeleteUsers, parseAdminModulos } from '../utils/systemPermissions';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload, FiStar, FiEyeOff } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload, FiStar } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
 import './Usuarios.css';
@@ -14,7 +14,6 @@ const Usuarios = ({ deferMs = 200 }) => {
   const { user: currentUser, loading: authLoading } = useAuth();
   const effectiveActor = currentUser;
   const podeExcluir = canDeleteUsers(effectiveActor);
-  const actorIsSuperAdmin = isSuperAdmin(effectiveActor);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -40,8 +39,7 @@ const Usuarios = ({ deferMs = 200 }) => {
         params: { limit: 200, offset: 0 },
         timeout: 25000,
       });
-      const visiveis = filterVisibleUsers(response.data || [], effectiveActor);
-      const usuariosFiltrados = visiveis.filter(
+      const usuariosFiltrados = (response.data || []).filter(
         usuario => usuario.nome.toLowerCase() !== 'administrator'
       );
       setUsuarios(usuariosFiltrados);
@@ -119,13 +117,6 @@ const Usuarios = ({ deferMs = 200 }) => {
         <div>
           <h1>Usuários</h1>
           <p>Gestão de usuários do sistema</p>
-          {actorIsSuperAdmin && (
-            <p className="ghost-user-hint">
-              <Link to="/admin/usuarios/novo">
-                <FiEyeOff /> Criar usuário fantasma →
-              </Link>
-            </p>
-          )}
         </div>
         <div className="header-actions">
           <button onClick={handleExportExcel} className="btn-secondary" title="Exportar para Excel (Ctrl+E)">
@@ -190,18 +181,13 @@ const Usuarios = ({ deferMs = 200 }) => {
                   usuario.email.toLowerCase().includes(search.toLowerCase())
                 )
                 .map(usuario => (
-                <tr key={usuario.id} className={usuario.is_oculto ? 'usuario-fantasma' : ''}>
+                <tr key={usuario.id}>
                   <td>
                     <div className="user-cell">
-                      <div className={`user-avatar${usuario.is_oculto ? ' ghost' : ''}`}>
-                        {usuario.is_oculto ? <FiEyeOff /> : <FiUser />}
+                      <div className="user-avatar">
+                        <FiUser />
                       </div>
                       <span>{usuario.nome}</span>
-                      {actorIsSuperAdmin && usuario.is_oculto && (
-                        <span className="ghost-badge" title="Usuário fantasma — visível apenas para Super Admin">
-                          <FiEyeOff /> Fantasma
-                        </span>
-                      )}
                     </div>
                   </td>
                   <td>{usuario.email}</td>
