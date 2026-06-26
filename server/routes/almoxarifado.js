@@ -1158,16 +1158,44 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal }, (dupErr, isDup) => {
       if (dupErr) return res.status(500).json({ error: dupErr.message });
       if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
-      db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
-         pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80],
-        function (err) {
-          if (err) {
-            if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-            return res.status(500).json({ error: err.message });
-          }
-          db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => res.status(201).json(r));
-        });
+
+      // O código tem constraint UNIQUE, mas a exclusão é "soft" (ativo = 0): a linha
+      // permanece e continua ocupando o código. Para não bloquear a recriação de um
+      // código que foi excluído, reativamos/reescrevemos a linha inativa existente.
+      db.get(`SELECT id, ativo FROM localizacoes_almoxarifado WHERE codigo = ?`, [codigo], (selErr, existente) => {
+        if (selErr) return res.status(500).json({ error: selErr.message });
+
+        // Já existe uma localização ATIVA com este código → realmente duplicado.
+        if (existente && existente.ativo) {
+          return res.status(400).json({ error: 'Código já existe' });
+        }
+
+        // Existe uma localização EXCLUÍDA com este código → reativa e atualiza os dados.
+        if (existente) {
+          db.run(`UPDATE localizacoes_almoxarifado
+                  SET descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, ativo=1
+                  WHERE id=?`,
+            [descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+             pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, existente.id],
+            function (updErr) {
+              if (updErr) return res.status(500).json({ error: updErr.message });
+              db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [existente.id], (e, r) => res.status(201).json(r));
+            });
+          return;
+        }
+
+        // Código livre → insere normalmente.
+        db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+           pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80],
+          function (err) {
+            if (err) {
+              if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+              return res.status(500).json({ error: err.message });
+            }
+            db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => res.status(201).json(r));
+          });
+      });
     });
   });
 
