@@ -197,9 +197,29 @@
 .tipo-selecao__greeting p {
   font-size: 1.05rem;
   color: var(--gmp-text-light);
-  margin: 0 0 1.75rem;
+  margin: 0 0 1rem;
   font-weight: 400;
 }
+
+/* Selo grande de nível de acesso (abaixo da saudação) */
+.tipo-selecao__access-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 1.75rem;
+  padding: 9px 22px;
+  border-radius: 999px;
+  font-size: clamp(0.85rem, 1.4vw, 1rem);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14);
+}
+.tipo-selecao__access-tier.tier-basic { background: linear-gradient(135deg, #94a3b8, #64748b); }
+.tipo-selecao__access-tier.tier-standard { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.tipo-selecao__access-tier.tier-premium { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.tipo-selecao__access-tier.tier-full { background: linear-gradient(135deg, #a855f7, #ec4899); }
 
 /* ── Search bar ── */
 

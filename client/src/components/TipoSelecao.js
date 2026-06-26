@@ -18,6 +18,7 @@ import './TipoSelecao.css';
 import FloatingBallsBackground from './FloatingBallsBackground';
 import { resetModuleSplashSession } from './ProtectedModuleRoute';
 import { bypassModuleRestrictions } from '../utils/systemPermissions';
+import { nivelAcessoUsuario } from '../constants/modulosMeta';
 
 const RECENT_MODULES_KEY = 'gmp_modulos_recentes';
 
@@ -493,6 +494,14 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
               {primeiroNome ? `, ${primeiroNome}` : ''}
             </h1>
             <p>O que vamos fazer hoje?</p>
+            {(() => {
+              const nivel = nivelAcessoUsuario(user);
+              return (
+                <span className={`tipo-selecao__access-tier tier-${nivel.tier}`}>
+                  {nivel.label}
+                </span>
+              );
+            })()}
           </div>
 
           <div className="tipo-selecao__search-wrap">
