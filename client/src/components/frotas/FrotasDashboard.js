@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../services/api';
+import { fetchFrotasDashboard } from '../../utils/frotasApi';
 import {
   FiTruck, FiAlertTriangle, FiDollarSign, FiActivity, FiRefreshCw,
   FiUsers, FiTool, FiDroplet, FiFileText, FiMap, FiClipboard, FiBarChart2, FiList,
@@ -26,12 +26,12 @@ const FrotasDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/frotas/dashboard');
-      setData(res.data);
+      const data = await fetchFrotasDashboard({ force });
+      setData(data);
     } catch (err) {
       console.error(err);
       const status = err.response?.status;
@@ -66,7 +66,7 @@ const FrotasDashboard = () => {
         title="Gestão de Frota"
         subtitle="Controle de veículos, manutenções, combustível e documentação — GMP Industriais"
         actions={(
-          <button type="button" className="frotas-btn frotas-btn-secondary" onClick={load}>
+          <button type="button" className="frotas-btn frotas-btn-secondary" onClick={() => load(true)}>
             <FiRefreshCw /> Atualizar
           </button>
         )}

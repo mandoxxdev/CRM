@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
+import { fetchFrotasMeta } from '../../utils/frotasApi';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiX, FiCheck } from 'react-icons/fi';
 import FrotasPageHeader from './FrotasPageHeader';
@@ -21,11 +22,11 @@ const FrotasEntityPage = ({ entityKey }) => {
   const [saving, setSaving] = useState(false);
 
   const loadAux = useCallback(async () => {
-    const promises = [api.get('/frotas/meta').catch(() => ({ data: null }))];
+    const promises = [fetchFrotasMeta().catch(() => null)];
     if (config.needsVeiculos) promises.push(api.get('/frotas/veiculos').catch(() => ({ data: [] })));
     if (config.needsMotoristas) promises.push(api.get('/frotas/motoristas').catch(() => ({ data: [] })));
     const results = await Promise.all(promises);
-    setMeta(results[0].data);
+    setMeta(results[0]);
     let idx = 1;
     if (config.needsVeiculos) { setVeiculos(results[idx]?.data || []); idx += 1; }
     if (config.needsMotoristas) { setMotoristas(results[idx]?.data || []); }

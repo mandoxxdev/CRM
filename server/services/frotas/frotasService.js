@@ -734,58 +734,54 @@ async function getAlertas(db) {
 }
 
 async function getDashboard(db) {
-  const veiculos = await dbAll(db, "SELECT status, COUNT(*) as total FROM frotas_veiculos WHERE ativo = 1 GROUP BY status");
-  const statusMap = { ativo: 0, manutencao: 0, inativo: 0, vendido: 0 };
-  veiculos.forEach((r) => { statusMap[r.status] = r.total; });
-
-  const custos = await dbGet(db, `SELECT
-    COALESCE((SELECT SUM(custo) FROM frotas_manutencoes), 0) as manutencao,
-    COALESCE((SELECT SUM(valor_total) FROM frotas_abastecimentos), 0) as combustivel,
-    COALESCE((SELECT SUM(valor) FROM frotas_multas WHERE status_pagamento != 'contestado'), 0) as multas,
-    COALESCE((SELECT SUM(valor) FROM frotas_documentos), 0) as documentos`);
+  const [veiculoStats, custos, counters, manutencoesVencidas, alertas, ultimosAbastecimentos] = await Promise.all([
+    dbGet(db, `SELECT
+      SUM(CASE WHEN status = 'ativo' THEN 1 ELSE 0 END) as veiculosAtivos,
+      SUM(CASE WHEN status = 'manutencao' THEN 1 ELSE 0 END) as veiculosManutencao,
+      SUM(CASE WHEN status = 'inativo' THEN 1 ELSE 0 END) as veiculosInativos,
+      SUM(CASE WHEN status = 'vendido' THEN 1 ELSE 0 END) as veiculosVendidos,
+      COUNT(*) as totalVeiculos
+      FROM frotas_veiculos WHERE ativo = 1`),
+    dbGet(db, `SELECT
+      COALESCE((SELECT SUM(custo) FROM frotas_manutencoes), 0) as manutencao,
+      COALESCE((SELECT SUM(valor_total) FROM frotas_abastecimentos), 0) as combustivel,
+      COALESCE((SELECT SUM(valor) FROM frotas_multas WHERE status_pagamento != 'contestado'), 0) as multas,
+      COALESCE((SELECT SUM(valor) FROM frotas_documentos), 0) as documentos`),
+    dbGet(db, `SELECT
+      (SELECT COALESCE(SUM(valor_total), 0) FROM frotas_abastecimentos
+        WHERE strftime('%Y-%m', data_abastecimento) = strftime('%Y-%m', 'now')) as custoCombustivelMes,
+      (SELECT COUNT(*) FROM frotas_manutencoes WHERE status IN ('agendada','em_andamento')) as osAbertas,
+      (SELECT COUNT(*) FROM frotas_viagens WHERE status IN ('solicitada','aprovada','em_andamento')) as viagensAbertas,
+      (SELECT COUNT(*) FROM frotas_checklists WHERE date(data_checklist) = date('now')) as checklistsHoje`),
+    dbGet(db, `SELECT COUNT(DISTINCT m.veiculo_id) as total
+      FROM frotas_manutencoes m
+      JOIN frotas_veiculos v ON m.veiculo_id = v.id
+      WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) < date('now'))
+         OR (m.proxima_revisao_km IS NOT NULL AND v.km_atual >= m.proxima_revisao_km)`),
+    getAlertas(db),
+    dbAll(db, `SELECT a.*, v.placa FROM frotas_abastecimentos a
+      JOIN frotas_veiculos v ON a.veiculo_id = v.id ORDER BY a.data_abastecimento DESC LIMIT 5`),
+  ]);
 
   const custoTotal = (custos?.manutencao || 0) + (custos?.combustivel || 0) + (custos?.multas || 0) + (custos?.documentos || 0);
 
-  const combustivelMes = await dbGet(db,
-    `SELECT COALESCE(SUM(valor_total), 0) as total FROM frotas_abastecimentos
-     WHERE strftime('%Y-%m', data_abastecimento) = strftime('%Y-%m', 'now')`);
-
-  const osAbertas = await dbGet(db,
-    "SELECT COUNT(*) as total FROM frotas_manutencoes WHERE status IN ('agendada','em_andamento')");
-
-  const manutencoesVencidas = await dbGet(db, `SELECT COUNT(DISTINCT m.veiculo_id) as total
-    FROM frotas_manutencoes m
-    JOIN frotas_veiculos v ON m.veiculo_id = v.id
-    WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) < date('now'))
-       OR (m.proxima_revisao_km IS NOT NULL AND v.km_atual >= m.proxima_revisao_km)`);
-
-  const alertas = await getAlertas(db);
-
-  const viagensAbertas = await dbGet(db,
-    "SELECT COUNT(*) as total FROM frotas_viagens WHERE status IN ('solicitada','aprovada','em_andamento')");
-  const checklistsHoje = await dbGet(db,
-    "SELECT COUNT(*) as total FROM frotas_checklists WHERE date(data_checklist) = date('now')");
-
-  const ultimosAbastecimentos = await dbAll(db, `SELECT a.*, v.placa FROM frotas_abastecimentos a
-    JOIN frotas_veiculos v ON a.veiculo_id = v.id ORDER BY a.data_abastecimento DESC LIMIT 5`);
-
   return {
-    veiculosAtivos: statusMap.ativo || 0,
-    veiculosManutencao: statusMap.manutencao || 0,
-    veiculosInativos: statusMap.inativo || 0,
-    totalVeiculos: Object.values(statusMap).reduce((a, b) => a + b, 0),
+    veiculosAtivos: veiculoStats?.veiculosAtivos || 0,
+    veiculosManutencao: veiculoStats?.veiculosManutencao || 0,
+    veiculosInativos: veiculoStats?.veiculosInativos || 0,
+    totalVeiculos: veiculoStats?.totalVeiculos || 0,
     custoManutencao: custos?.manutencao || 0,
     custoCombustivel: custos?.combustivel || 0,
     custoMultas: custos?.multas || 0,
     custoDocumentos: custos?.documentos || 0,
     custoTotal,
-    custoCombustivelMes: combustivelMes?.total || 0,
-    osAbertas: osAbertas?.total || 0,
+    custoCombustivelMes: counters?.custoCombustivelMes || 0,
+    osAbertas: counters?.osAbertas || 0,
     manutencoesVencidas: manutencoesVencidas?.total || 0,
     alertasCount: alertas.length,
     alertas: alertas.slice(0, 15),
-    viagensAbertas: viagensAbertas?.total || 0,
-    checklistsHoje: checklistsHoje?.total || 0,
+    viagensAbertas: counters?.viagensAbertas || 0,
+    checklistsHoje: counters?.checklistsHoje || 0,
     ultimosAbastecimentos,
   };
 }
@@ -793,36 +789,45 @@ async function getDashboard(db) {
 // ── Relatórios ───────────────────────────────────────────────────────────────
 
 async function relatorioCustosPorVeiculo(db, { data_inicio, data_fim } = {}) {
-  const veiculos = await listVeiculos(db, {});
-  const results = [];
-  for (const v of veiculos) {
-    let manSql = 'SELECT COALESCE(SUM(custo), 0) as total FROM frotas_manutencoes WHERE veiculo_id = ?';
-    let absSql = 'SELECT COALESCE(SUM(valor_total), 0) as total FROM frotas_abastecimentos WHERE veiculo_id = ?';
-    const manParams = [v.id];
-    const absParams = [v.id];
-    if (data_inicio && data_fim) {
-      manSql += ' AND date(data_manutencao) BETWEEN date(?) AND date(?)';
-      absSql += ' AND date(data_abastecimento) BETWEEN date(?) AND date(?)';
-      manParams.push(data_inicio, data_fim);
-      absParams.push(data_inicio, data_fim);
-    }
-    const man = await dbGet(db, manSql, manParams);
-    const abs = await dbGet(db, absSql, absParams);
-    const mul = await dbGet(db, 'SELECT COALESCE(SUM(valor), 0) as total FROM frotas_multas WHERE veiculo_id = ?', [v.id]);
-    results.push({
-      id: v.id,
-      placa: v.placa,
-      modelo: v.modelo,
-      marca: v.marca,
-      setor_responsavel: v.setor_responsavel,
-      custo_manutencao: man?.total || 0,
-      custo_combustivel: abs?.total || 0,
-      custo_multas: mul?.total || 0,
-      custo_total: (man?.total || 0) + (abs?.total || 0) + (mul?.total || 0),
-      km_atual: v.km_atual,
-    });
-  }
-  return results;
+  const dateFilterMan = data_inicio && data_fim
+    ? ' AND date(data_manutencao) BETWEEN date(?) AND date(?)'
+    : '';
+  const dateFilterAbs = data_inicio && data_fim
+    ? ' AND date(data_abastecimento) BETWEEN date(?) AND date(?)'
+    : '';
+  const dateParams = data_inicio && data_fim ? [data_inicio, data_fim] : [];
+
+  const rows = await dbAll(db, `SELECT
+      v.id, v.placa, v.modelo, v.marca, v.setor_responsavel, v.km_atual,
+      COALESCE(man.total, 0) as custo_manutencao,
+      COALESCE(abs.total, 0) as custo_combustivel,
+      COALESCE(mul.total, 0) as custo_multas
+    FROM frotas_veiculos v
+    LEFT JOIN (
+      SELECT veiculo_id, SUM(custo) as total FROM frotas_manutencoes WHERE 1=1${dateFilterMan} GROUP BY veiculo_id
+    ) man ON man.veiculo_id = v.id
+    LEFT JOIN (
+      SELECT veiculo_id, SUM(valor_total) as total FROM frotas_abastecimentos WHERE 1=1${dateFilterAbs} GROUP BY veiculo_id
+    ) abs ON abs.veiculo_id = v.id
+    LEFT JOIN (
+      SELECT veiculo_id, SUM(valor) as total FROM frotas_multas GROUP BY veiculo_id
+    ) mul ON mul.veiculo_id = v.id
+    WHERE v.ativo = 1
+    ORDER BY v.placa`,
+  [...dateParams, ...dateParams]);
+
+  return rows.map((r) => ({
+    id: r.id,
+    placa: r.placa,
+    modelo: r.modelo,
+    marca: r.marca,
+    setor_responsavel: r.setor_responsavel,
+    custo_manutencao: r.custo_manutencao || 0,
+    custo_combustivel: r.custo_combustivel || 0,
+    custo_multas: r.custo_multas || 0,
+    custo_total: (r.custo_manutencao || 0) + (r.custo_combustivel || 0) + (r.custo_multas || 0),
+    km_atual: r.km_atual,
+  }));
 }
 
 async function relatorioConsumo(db, { veiculo_id } = {}) {
