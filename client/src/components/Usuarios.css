@@ -383,6 +383,71 @@
   text-decoration: underline;
 }
 
+/* ===== Modal de exclusão de usuário ===== */
+.usuarios .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.usuarios .modal-content {
+  background: var(--gmp-bg, #fff);
+  color: var(--gmp-text, #1f2937);
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.usuarios .modal-content h2 {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+}
+
+.usuarios .modal-content p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.usuarios .modal-content select {
+  border: 1px solid var(--gmp-border, #d1d5db);
+  border-radius: 8px;
+  background: var(--gmp-bg, #fff);
+  color: var(--gmp-text, #1f2937);
+}
+
+/* Botão de exclusão preenchido (CTA do modal) — sobrepõe o estilo de ícone transparente */
+.usuarios .modal-content .btn-danger {
+  background: #e74c3c !important;
+  color: #fff !important;
+  border: none;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.usuarios .modal-content .btn-danger:hover {
+  background: #c0392b !important;
+  color: #fff !important;
+}
+
+.usuarios .modal-content .btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+[data-theme="dark"] .usuarios .modal-content {
+  background: var(--gmp-bg-dark, #1f2937);
+  color: #e5e7eb;
+}
+
 
 
 

@@ -6,8 +6,11 @@ import './EditorClausulas.css';
 
 function htmlToText(html) {
   if (!html) return '';
+  // Parágrafos/divs viram linha em branco (\n\n) para que o servidor reconstrua cada <p>
+  // ao re-renderizar (ele separa parágrafos por linhas em branco). <br> e <li> ficam em
+  // linha simples. Sem isso, ao editar uma cláusula todos os parágrafos colapsavam num só.
   return String(html)
-    .replace(/<\/p>/gi, '\n').replace(/<br\s*\/?>/gi, '\n').replace(/<\/li>/gi, '\n').replace(/<\/div>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<\/li>/gi, '\n').replace(/<\/div>/gi, '\n\n')
     .replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
     .replace(/\n{3,}/g, '\n\n').trim();
 }

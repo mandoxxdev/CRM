@@ -3822,14 +3822,20 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
   });
 });
 
-app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, (req, res) => {
+// Inativar / reativar usuário (admins do sistema) — ação reversível, mantém o histórico.
+app.patch('/api/usuarios/:id/status', authenticateToken, requireManageUsers, (req, res) => {
   const { id } = req.params;
+  const ativo = isTruthyFlag(req.body?.ativo) ? 1 : 0;
 
-  if (String(req.user.id) === String(id)) {
+  if (ativo === 0 && String(req.user.id) === String(id)) {
     return res.status(403).json({ error: 'Não é possível desativar o próprio usuário' });
   }
 
-  wouldRemoveLastSuperAdmin(db, id, { deactivate: true })
+  const guard = ativo === 0
+    ? wouldRemoveLastSuperAdmin(db, id, { deactivate: true })
+    : Promise.resolve(false);
+
+  guard
     .then((blocked) => {
       if (blocked) {
         return res.status(403).json({
@@ -3839,22 +3845,124 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, (req, res
 
       db.get('SELECT id FROM usuarios WHERE id = ?', [id], (err, user) => {
         if (err) {
-          return res.status(500).json({ error: err.message });
+          return respondDbError(res, err, 'usuarios:status');
         }
         if (!user) {
           return res.status(404).json({ error: 'Usuário não encontrado' });
         }
 
-        db.run('UPDATE usuarios SET ativo = 0 WHERE id = ?', [id], (err) => {
+        db.run('UPDATE usuarios SET ativo = ? WHERE id = ?', [ativo, id], (err) => {
           if (err) {
-            return res.status(500).json({ error: err.message });
+            return respondDbError(res, err, 'usuarios:status');
           }
           invalidateComercialResponsaveisCache();
-          res.json({ message: 'Usuário desativado com sucesso' });
+          res.json({
+            message: ativo ? 'Usuário reativado com sucesso' : 'Usuário desativado com sucesso',
+            ativo,
+          });
         });
       });
     })
     .catch((e) => res.status(500).json({ error: e.message }));
+});
+
+// Excluir DEFINITIVAMENTE um usuário (apenas Super Administrador).
+// Os registros de negócio vinculados a ele (propostas, leads, atividades, etc.) são
+// transferidos para outro usuário (padrão: o próprio super admin que está excluindo);
+// dados pessoais do usuário (grupos, permissões, inscrições push, etc.) são removidos.
+app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (req, res) => {
+  const targetId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(targetId)) {
+    return res.status(400).json({ error: 'ID de usuário inválido' });
+  }
+
+  if (String(req.user.id) === String(targetId)) {
+    return res.status(403).json({ error: 'Não é possível excluir o próprio usuário' });
+  }
+
+  // Usuário que herdará os registros vinculados (default: o super admin que está excluindo).
+  const transferToId = parseInt(
+    req.body?.transferToId ?? req.query?.transferToId ?? req.user.id,
+    10
+  );
+  if (!Number.isInteger(transferToId) || transferToId === targetId) {
+    return res.status(400).json({ error: 'Usuário de destino dos registros é inválido' });
+  }
+
+  // Tabelas cujos registros pertencem ao próprio usuário → removidos junto com ele
+  // (não faz sentido transferir permissões/grupos/sessões para outra pessoa).
+  const PURGE_TABLES = new Set([
+    'usuarios_grupos',
+    'permissoes',
+    'push_subscriptions',
+    'mensagens_lidas',
+    'conversas_participantes',
+    'assinaturas_digitais',
+  ]);
+
+  try {
+    const target = await db.get('SELECT id FROM usuarios WHERE id = ?', [targetId]);
+    if (!target) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    const dest = await db.get('SELECT id, ativo FROM usuarios WHERE id = ?', [transferToId]);
+    if (!dest) {
+      return res.status(400).json({ error: 'Usuário de destino dos registros não encontrado' });
+    }
+
+    const blocked = await wouldRemoveLastSuperAdmin(db, targetId, { deactivate: true });
+    if (blocked) {
+      return res.status(403).json({
+        error: 'Não é possível excluir o último Super Administrador ativo do sistema',
+      });
+    }
+
+    // Descobre dinamicamente TODAS as colunas que referenciam usuarios(id).
+    // Como foreign_keys = ON, o DELETE final só funciona se nenhuma referência sobrar.
+    const tables = await db.all(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    );
+    const refs = [];
+    for (const t of tables) {
+      const fks = await db.all(`PRAGMA foreign_key_list("${t.name}")`);
+      for (const fk of fks) {
+        if (fk.table === 'usuarios') {
+          refs.push({ table: t.name, column: fk.from });
+        }
+      }
+    }
+
+    // Monta uma única transação atômica (ids são inteiros validados → seguro interpolar).
+    const stmts = ['BEGIN IMMEDIATE TRANSACTION;'];
+    let transferidos = 0;
+    for (const { table, column } of refs) {
+      if (PURGE_TABLES.has(table)) {
+        stmts.push(`DELETE FROM "${table}" WHERE "${column}" = ${targetId};`);
+      } else {
+        stmts.push(`UPDATE "${table}" SET "${column}" = ${transferToId} WHERE "${column}" = ${targetId};`);
+        transferidos += 1;
+      }
+    }
+    stmts.push(`DELETE FROM usuarios WHERE id = ${targetId};`);
+    stmts.push('COMMIT;');
+
+    await db.exec(stmts.join('\n'));
+    invalidateComercialResponsaveisCache();
+
+    res.json({
+      message: 'Usuário excluído com sucesso',
+      transferidoPara: transferToId,
+      colunasTransferidas: transferidos,
+    });
+  } catch (e) {
+    try {
+      await db.exec('ROLLBACK;');
+    } catch (_) {
+      /* transação pode já ter sido desfeita pelo SQLite */
+    }
+    return respondDbError(res, e, 'usuarios:excluir');
+  }
 });
 
 // ========== ROTAS DE CLIENTES ==========
@@ -12426,7 +12534,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <div class="sig-email">matheus@gmp.ind.br</div>
             </div>
           </div>`;
-        const clausulasRenderizadas = templateConfig.clausulas_custom.map(c => {
+        const renderClausulaCustom = (c) => {
           const raw = c.conteudo || '';
           // If content has no HTML tags, treat as plain text: wrap each paragraph in <p>
           const html = /<[a-z][\s\S]*>/i.test(raw)
@@ -12436,13 +12544,21 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <h3>${esc(c.titulo)}</h3>
             <div class="stack-sm">${html}</div>
           </section>`;
-        }).join('');
+        };
+        const [primeiraClausula, ...demaisClausulas] = templateConfig.clausulas_custom;
+        // IMPORTANTE: apenas o título + a 1ª cláusula ficam dentro do grupo "avoid-break"
+        // (para o título "5. CONDIÇÕES GERAIS" não ficar órfão no fim da página). As demais
+        // cláusulas são seções IRMÃS com "allow-break", igual ao layout das cláusulas padrão.
+        // Se todas ficassem dentro de um único bloco "avoid-break", a paginação trataria o
+        // conjunto como um elemento gigante indivisível e o "overflow: hidden" da página
+        // cortaria as cláusulas no meio (ex.: parava na 5.4).
         return `
           <section class="block stack-md avoid-break five-intro-group">
             <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
-            ${clausulasRenderizadas}
-            <section class="block stack-md allow-break">${assinaturasHtml}</section>
-          </section>`;
+            ${primeiraClausula ? renderClausulaCustom(primeiraClausula) : ''}
+          </section>
+          ${demaisClausulas.map(renderClausulaCustom).join('')}
+          <section class="block stack-md allow-break">${assinaturasHtml}</section>`;
       }
       return null;
     })();

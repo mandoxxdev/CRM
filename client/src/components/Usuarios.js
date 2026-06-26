@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { canDeleteUsers, parseAdminModulos } from '../utils/systemPermissions';
+import { canDeleteUsers, canManageUsers, parseAdminModulos } from '../utils/systemPermissions';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload, FiStar } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload, FiStar, FiUserX, FiUserCheck } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
 import { SkeletonTable } from './SkeletonLoader';
 import './Usuarios.css';
@@ -13,10 +13,14 @@ import './Loading.css';
 const Usuarios = ({ deferMs = 200 }) => {
   const { user: currentUser, loading: authLoading } = useAuth();
   const effectiveActor = currentUser;
-  const podeExcluir = canDeleteUsers(effectiveActor);
+  const podeGerenciar = canManageUsers(effectiveActor); // inativar / reativar
+  const podeExcluir = canDeleteUsers(effectiveActor); // apagar definitivamente (super admin)
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [excluindo, setExcluindo] = useState(null); // { usuario } | null — controla o modal
+  const [transferToId, setTransferToId] = useState('');
+  const [processando, setProcessando] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -66,23 +70,56 @@ const Usuarios = ({ deferMs = 200 }) => {
     }
   };
 
-  const handleDelete = async (usuario) => {
+  // Inativar / reativar (ação reversível) — disponível para administradores.
+  const handleToggleAtivo = async (usuario) => {
     const isSelf = String(usuario.id) === String(currentUser?.id);
     if (isSelf) return;
 
-    let confirmMsg = `Tem certeza que deseja desativar o usuário "${usuario.nome}"?`;
-    if (usuario.is_superadmin) {
+    const novoAtivo = usuario.ativo ? 0 : 1;
+    const acao = novoAtivo ? 'reativar' : 'desativar';
+
+    let confirmMsg = `Tem certeza que deseja ${acao} o usuário "${usuario.nome}"?`;
+    if (!novoAtivo && usuario.is_superadmin) {
       confirmMsg = `O usuário "${usuario.nome}" é Super Administrador. Tem certeza que deseja desativá-lo?`;
     }
 
     if (window.confirm(confirmMsg)) {
       try {
-        await api.delete(`/usuarios/${usuario.id}`);
-        toast.success('Usuário desativado com sucesso!');
+        await api.patch(`/usuarios/${usuario.id}/status`, { ativo: novoAtivo });
+        toast.success(`Usuário ${novoAtivo ? 'reativado' : 'desativado'} com sucesso!`);
         loadUsuarios();
       } catch (error) {
-        toast.error(error.response?.data?.error || 'Erro ao desativar usuário');
+        toast.error(error.response?.data?.error || `Erro ao ${acao} usuário`);
       }
+    }
+  };
+
+  // Abre o modal de exclusão definitiva (apenas super admin).
+  const abrirExclusao = (usuario) => {
+    if (String(usuario.id) === String(currentUser?.id)) return;
+    // Destino padrão dos registros: o próprio super admin que está excluindo.
+    setTransferToId(String(currentUser?.id || ''));
+    setExcluindo(usuario);
+  };
+
+  const confirmarExclusao = async () => {
+    if (!excluindo) return;
+    if (!transferToId || String(transferToId) === String(excluindo.id)) {
+      toast.error('Escolha um usuário válido para herdar os registros.');
+      return;
+    }
+    setProcessando(true);
+    try {
+      await api.delete(`/usuarios/${excluindo.id}`, {
+        data: { transferToId: Number(transferToId) },
+      });
+      toast.success('Usuário excluído com sucesso!');
+      setExcluindo(null);
+      loadUsuarios();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Erro ao excluir usuário');
+    } finally {
+      setProcessando(false);
     }
   };
 
@@ -234,11 +271,20 @@ const Usuarios = ({ deferMs = 200 }) => {
                       <Link to={`/admin/usuarios/editar/${usuario.id}`} className="btn-icon" title="Editar">
                         <FiEdit />
                       </Link>
+                      {podeGerenciar && String(usuario.id) !== String(currentUser?.id) && (
+                        <button
+                          onClick={() => handleToggleAtivo(usuario)}
+                          className="btn-icon"
+                          title={usuario.ativo ? 'Inativar usuário' : 'Reativar usuário'}
+                        >
+                          {usuario.ativo ? <FiUserX /> : <FiUserCheck />}
+                        </button>
+                      )}
                       {podeExcluir && String(usuario.id) !== String(currentUser?.id) && (
                         <button
-                          onClick={() => handleDelete(usuario)}
+                          onClick={() => abrirExclusao(usuario)}
                           className="btn-icon btn-danger"
-                          title="Desativar"
+                          title="Excluir definitivamente"
                         >
                           <FiTrash2 />
                         </button>
@@ -251,6 +297,54 @@ const Usuarios = ({ deferMs = 200 }) => {
           </tbody>
         </table>
       </div>
+      )}
+
+      {excluindo && (
+        <div className="modal-overlay" onClick={() => !processando && setExcluindo(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Excluir usuário</h2>
+            <p>
+              Você está prestes a <strong>apagar definitivamente</strong> o usuário{' '}
+              <strong>"{excluindo.nome}"</strong>. Esta ação não pode ser desfeita.
+            </p>
+            <p>
+              Os registros de negócio vinculados a ele (propostas, leads, atividades, etc.)
+              serão transferidos para:
+            </p>
+            <select
+              value={transferToId}
+              onChange={(e) => setTransferToId(e.target.value)}
+              disabled={processando}
+              style={{ width: '100%', padding: '8px', margin: '8px 0' }}
+            >
+              <option value="">Selecione um usuário...</option>
+              {usuarios
+                .filter((u) => u.ativo && String(u.id) !== String(excluindo.id))
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome}
+                    {String(u.id) === String(currentUser?.id) ? ' (você)' : ''}
+                  </option>
+                ))}
+            </select>
+            <div className="action-buttons" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setExcluindo(null)}
+                disabled={processando}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-secondary btn-danger"
+                onClick={confirmarExclusao}
+                disabled={processando || !transferToId}
+              >
+                {processando ? 'Excluindo...' : 'Excluir definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
