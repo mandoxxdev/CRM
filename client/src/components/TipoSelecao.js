@@ -460,20 +460,28 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
     <div className="tipo-selecao">
       <div className="tipo-selecao__inner">
         <header className="tipo-selecao__header">
-          <div className="tipo-selecao__brand">
-            <img
-              src="/logo.png"
-              alt="GMP INDUSTRIAIS"
-              className="tipo-selecao__gmp-logo"
-            />
-            <span className="tipo-selecao__brand-divider" aria-hidden="true" />
-            <div className="tipo-selecao__orion-mark">
-              <OrionConstellation />
-              <span className="tipo-selecao__wordmark">ORION</span>
+          <div className="tipo-selecao__header-top">
+            <div className="tipo-selecao__brand">
+              <img
+                src="/logo.png"
+                alt="GMP INDUSTRIAIS"
+                className="tipo-selecao__gmp-logo"
+              />
+              <span className="tipo-selecao__brand-divider" aria-hidden="true" />
+              <div className="tipo-selecao__orion-mark">
+                <OrionConstellation />
+                <span className="tipo-selecao__wordmark">ORION</span>
+              </div>
+              {isAdmin && (
+                <span className="tipo-selecao__admin-badge">Administrador</span>
+              )}
             </div>
-            {isAdmin && (
-              <span className="tipo-selecao__admin-badge">Administrador</span>
-            )}
+            <img
+              src="/orion-bird-logo.png"
+              alt=""
+              className="tipo-selecao__bird-logo"
+              aria-hidden="true"
+            />
           </div>
 
           <div className="tipo-selecao__greeting">

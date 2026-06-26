@@ -103,11 +103,35 @@
   margin-bottom: 2.5rem;
 }
 
+.tipo-selecao__header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
 .tipo-selecao__brand {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  margin-bottom: 2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.tipo-selecao__bird-logo {
+  height: 52px;
+  width: auto;
+  max-width: 72px;
+  object-fit: contain;
+  flex-shrink: 0;
+  opacity: 0.92;
+  filter: drop-shadow(0 2px 10px rgba(59, 130, 246, 0.18));
+}
+
+[data-theme="dark"] .tipo-selecao__bird-logo {
+  filter: drop-shadow(0 2px 12px rgba(94, 184, 255, 0.22));
+  opacity: 0.88;
 }
 
 .tipo-selecao__gmp-logo {
@@ -748,6 +772,16 @@
     padding: 1.5rem 1.25rem 2.5rem;
   }
 
+  .tipo-selecao__header-top {
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .tipo-selecao__bird-logo {
+    height: 40px;
+    max-width: 56px;
+  }
+
   .tipo-selecao__gmp-logo {
     height: 30px;
     max-width: 96px;
@@ -782,6 +816,11 @@
 }
 
 @media (max-width: 400px) {
+  .tipo-selecao__bird-logo {
+    height: 32px;
+    max-width: 46px;
+  }
+
   .orion-grid {
     grid-template-columns: 1fr 1fr;
   }
