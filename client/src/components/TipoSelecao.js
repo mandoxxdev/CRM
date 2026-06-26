@@ -15,6 +15,7 @@ import {
   getCachedUserPermissions,
 } from '../services/permissionsCache';
 import './TipoSelecao.css';
+import FloatingBallsBackground from './FloatingBallsBackground';
 import { resetModuleSplashSession } from './ProtectedModuleRoute';
 import { bypassModuleRestrictions } from '../utils/systemPermissions';
 
@@ -446,6 +447,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   if (!user) {
     return (
       <div className="tipo-selecao">
+        <FloatingBallsBackground />
         <div className="tipo-selecao-loading">
           <div className="tipo-selecao-spinner" />
           <p>Carregando...</p>
@@ -458,6 +460,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
 
   return (
     <div className="tipo-selecao">
+      <FloatingBallsBackground />
       <div className="tipo-selecao__inner">
         <header className="tipo-selecao__header">
           <div className="tipo-selecao__header-top">

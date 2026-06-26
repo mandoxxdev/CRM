@@ -1,0 +1,90 @@
+.floating-balls-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+}
+
+.floating-balls-bg__ball {
+  position: absolute;
+  width: var(--ball-size);
+  height: var(--ball-size);
+  left: var(--ball-left);
+  top: var(--ball-top);
+  border-radius: 50%;
+  opacity: var(--ball-opacity);
+  filter: blur(var(--ball-blur));
+  transform: translate3d(-50%, -50%, 0);
+  background: radial-gradient(
+    circle at 30% 28%,
+    #ffffff 0%,
+    #fafafa 28%,
+    #ececec 58%,
+    #d8d8d8 100%
+  );
+  box-shadow:
+    inset -10px -14px 28px rgba(170, 170, 170, 0.32),
+    inset 8px 10px 20px rgba(255, 255, 255, 0.95),
+    0 6px 24px rgba(0, 0, 0, 0.045);
+  animation: floatingBallDrift var(--ball-duration) ease-in-out infinite alternate;
+  animation-delay: var(--ball-delay);
+  will-change: transform;
+}
+
+.floating-balls-bg__ball--back {
+  z-index: 1;
+}
+
+.floating-balls-bg__ball--mid {
+  z-index: 2;
+}
+
+.floating-balls-bg__ball--front {
+  z-index: 3;
+  box-shadow:
+    inset -12px -16px 32px rgba(160, 160, 160, 0.28),
+    inset 10px 12px 24px rgba(255, 255, 255, 1),
+    0 8px 32px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] .floating-balls-bg__ball {
+  background: radial-gradient(
+    circle at 30% 28%,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(240, 240, 240, 0.75) 28%,
+    rgba(210, 210, 210, 0.55) 58%,
+    rgba(180, 180, 180, 0.4) 100%
+  );
+  box-shadow:
+    inset -10px -14px 28px rgba(0, 0, 0, 0.18),
+    inset 8px 10px 20px rgba(255, 255, 255, 0.12),
+    0 6px 24px rgba(0, 0, 0, 0.12);
+  opacity: calc(var(--ball-opacity) * 0.45);
+}
+
+@keyframes floatingBallDrift {
+  0% {
+    transform: translate3d(-50%, -50%, 0) translate3d(0, 0, 0);
+  }
+  33% {
+    transform: translate3d(-50%, -50%, 0)
+      translate3d(calc(var(--ball-drift-x) * 0.45), calc(var(--ball-drift-y) * -0.55), 0);
+  }
+  66% {
+    transform: translate3d(-50%, -50%, 0)
+      translate3d(calc(var(--ball-drift-x) * -0.35), calc(var(--ball-drift-y) * 0.45), 0);
+  }
+  100% {
+    transform: translate3d(-50%, -50%, 0)
+      translate3d(var(--ball-drift-x), calc(var(--ball-drift-y) * -0.25), 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-balls-bg__ball {
+    animation: none;
+    will-change: auto;
+  }
+}
