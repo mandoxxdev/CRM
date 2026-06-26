@@ -72,7 +72,9 @@ export const ProducaoMES = page(() => import('../components/operacional/Producao
 export const Configuracoes = page(() => import('../components/Configuracoes'));
 export const Permissoes = page(() => import('../components/Permissoes'));
 export const Usuarios = page(() => import('../components/Usuarios'));
-export const MinhaConta = page(() => import('../components/MinhaConta'));
+// shell() (não page()) porque /minha-conta é uma rota standalone, sem o Layout/Outlet
+// que forneceria o boundary de Suspense — o shell já inclui o próprio Suspense.
+export const MinhaConta = shell(() => import('../components/MinhaConta'));
 export const UsuarioForm = page(() => import('../components/UsuarioForm'));
 export const Admin = page(() => import('../components/Admin'));
 export const Layout = shell(() => import('../components/Layout'), 'sistema');
