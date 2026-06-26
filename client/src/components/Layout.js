@@ -225,7 +225,6 @@ const Layout = () => {
   const crmMenuItems = [
     { path: '/comercial', icon: FiHome, label: 'Dashboard' },
     { path: '/comercial/clientes', icon: FiUsers, label: 'Clientes' },
-    { path: '/comercial/projetos', icon: FiBriefcase, label: 'Projetos' },
     { path: '/comercial/produtos', icon: FiPackage, label: 'Produtos' },
     { path: '/comercial/propostas', icon: FiFileText, label: 'Propostas' },
     { path: '/comercial/aprovacoes', icon: FiCheckCircle, label: 'Aprovações' },

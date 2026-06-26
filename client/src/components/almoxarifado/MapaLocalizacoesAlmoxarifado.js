@@ -492,7 +492,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
       <div className="almox-header">
         <div>
           <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <FiMap size={22} style={{ color: '#4facfe' }} /> Mapa de Áreas
+            <FiMap size={22} style={{ color: '#1ED760' }} /> Mapa de Áreas
           </h1>
           <p>Planta visual do almoxarifado com ocupação e alertas de estoque por localização</p>
         </div>
@@ -597,11 +597,11 @@ const MapaLocalizacoesAlmoxarifado = () => {
             >
               <defs>
                 <pattern id="almox-grid" width={GRID_CELL_W} height={GRID_CELL_H} patternUnits="userSpaceOnUse">
-                  <path d={`M ${GRID_CELL_W} 0 L 0 0 0 ${GRID_CELL_H}`} fill="none" stroke="rgba(79,172,254,0.08)" strokeWidth="1" />
+                  <path d={`M ${GRID_CELL_W} 0 L 0 0 0 ${GRID_CELL_H}`} fill="none" stroke="rgba(30,215,96,0.08)" strokeWidth="1" />
                 </pattern>
                 <pattern id="almox-grid-edit" width={GRID_CELL_W} height={GRID_CELL_H} patternUnits="userSpaceOnUse">
-                  <circle cx="2" cy="2" r="1.5" fill="rgba(79,172,254,0.35)" />
-                  <path d={`M ${GRID_CELL_W} 0 L 0 0 0 ${GRID_CELL_H}`} fill="none" stroke="rgba(79,172,254,0.18)" strokeWidth="1" />
+                  <circle cx="2" cy="2" r="1.5" fill="rgba(30,215,96,0.35)" />
+                  <path d={`M ${GRID_CELL_W} 0 L 0 0 0 ${GRID_CELL_H}`} fill="none" stroke="rgba(30,215,96,0.18)" strokeWidth="1" />
                 </pattern>
                 <filter id="almox-shadow" x="-10%" y="-10%" width="120%" height="120%">
                   <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
@@ -612,13 +612,13 @@ const MapaLocalizacoesAlmoxarifado = () => {
               <rect x="8" y="8" width={MAP_W - 16} height={MAP_H - 16}
                 fill={modoEdicao ? 'url(#almox-grid-edit)' : 'url(#almox-grid)'} rx="10" />
               <rect x="8" y="8" width={MAP_W - 16} height={MAP_H - 16} fill="none"
-                stroke="rgba(79,172,254,0.25)" strokeWidth="2" rx="10" strokeDasharray="8 4" />
+                stroke="rgba(30,215,96,0.25)" strokeWidth="2" rx="10" strokeDasharray="8 4" />
 
               {sectorsVisiveis.map(([name, sec]) => (
                 <g key={`sector-${name}`}>
                   <rect x={sec.x + 4} y={sec.y + 4} width={sec.w - 8} height={sec.h - 8}
-                    fill={modoEdicao ? 'rgba(79,172,254,0.06)' : 'rgba(79,172,254,0.04)'}
-                    stroke={modoEdicao ? 'rgba(79,172,254,0.35)' : 'rgba(79,172,254,0.15)'}
+                    fill={modoEdicao ? 'rgba(30,215,96,0.06)' : 'rgba(30,215,96,0.04)'}
+                    stroke={modoEdicao ? 'rgba(30,215,96,0.35)' : 'rgba(30,215,96,0.15)'}
                     strokeWidth={modoEdicao ? 1.5 : 1} rx="8" />
                   <text x={sec.x + 14} y={sec.y + 22} className="almox-mapa-sector-label">{name}</text>
                   {modoEdicao && (() => {
@@ -683,7 +683,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
                       height={pos.h}
                       rx="8"
                       fill={`${corTipo}22`}
-                      stroke={isSel ? '#4facfe' : isHover ? corSt : `${corTipo}88`}
+                      stroke={isSel ? '#1ED760' : isHover ? corSt : `${corTipo}88`}
                       strokeWidth={isSel ? 3 : isHover ? 2.5 : 1.5}
                     />
                     <rect x="0" y="0" width={pos.w} height="6" rx="8" fill={corSt} />

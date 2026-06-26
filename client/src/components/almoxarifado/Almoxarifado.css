@@ -1361,3 +1361,140 @@
 
 .almox-search-result-item:last-child { border-bottom: none; }
 .almox-search-result-item:hover { background: rgba(79, 172, 254, 0.08); }
+
+/* =========================================================
+   MAPA DE ÁREAS — Tema PREMIUM (inspirado no Spotify)
+   Escopo exclusivo em .almox-mapa-page. Redefinir as variáveis
+   --gmp-* aqui também recolore os fills var() inline do SVG.
+   ========================================================= */
+.almox-mapa-page {
+  --gmp-bg: #0d0d10;
+  --gmp-surface: #181818;
+  --gmp-border: rgba(255, 255, 255, 0.08);
+  --gmp-text: #ffffff;
+  --gmp-text-light: #a7a7a7;
+  --spotify-green: #1ed760;
+  --spotify-green-hover: #1fdf64;
+
+  max-width: 1600px;
+  padding: 30px 32px 36px;
+  border-radius: 20px;
+  color: #fff;
+  background:
+    radial-gradient(900px 380px at 12% -8%, rgba(30, 215, 96, 0.12), transparent 60%),
+    radial-gradient(700px 360px at 100% 0%, rgba(30, 215, 96, 0.05), transparent 55%),
+    linear-gradient(180deg, #1c1c1e 0%, #121214 35%, #0a0a0c 100%);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+}
+
+/* Cabeçalho */
+.almox-mapa-page .almox-header h1 {
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.almox-mapa-page .almox-header p { color: var(--gmp-text-light); }
+
+/* Botões — pílulas estilo Spotify */
+.almox-mapa-page .btn-almox-primary {
+  background: var(--spotify-green);
+  color: #000;
+  border: none;
+  border-radius: 500px;
+  font-weight: 700;
+  padding: 10px 22px;
+  box-shadow: 0 6px 18px rgba(30, 215, 96, 0.25);
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.almox-mapa-page .btn-almox-primary:hover:not(:disabled) {
+  background: var(--spotify-green-hover);
+  transform: scale(1.045);
+  box-shadow: 0 8px 24px rgba(30, 215, 96, 0.4);
+}
+.almox-mapa-page .btn-almox-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 500px;
+  font-weight: 600;
+  padding: 9px 18px;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.almox-mapa-page .btn-almox-secondary:hover {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.045);
+}
+
+/* KPIs — cards Spotify (elevação + hover claro) */
+.almox-mapa-page .almox-kpi-card {
+  background: linear-gradient(180deg, #1f1f22, #181819);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.almox-mapa-page .almox-kpi-card:hover {
+  transform: translateY(-4px);
+  background: linear-gradient(180deg, #2a2a2d, #202022);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.55);
+}
+.almox-mapa-page .almox-kpi-value { color: #fff; font-weight: 800; }
+.almox-mapa-page .almox-kpi-label { color: var(--gmp-text-light); }
+.almox-mapa-page .almox-kpi-icon {
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.almox-mapa-page .almox-kpi-icon.primary { background: linear-gradient(135deg, #1ed760, #11833c); color: #061; }
+.almox-mapa-page .almox-kpi-icon.success { background: linear-gradient(135deg, #1ed760, #169f48); color: #042; }
+.almox-mapa-page .almox-kpi-icon.warning { background: linear-gradient(135deg, #ffb23e, #e07c00); color: #3a1d00; }
+
+/* Filtros e selects */
+.almox-mapa-page .almox-filters { color: var(--gmp-text-light); }
+.almox-mapa-page .almox-select {
+  background: #2a2a2d;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+}
+.almox-mapa-page .almox-select:focus {
+  outline: none;
+  border-color: var(--spotify-green);
+  box-shadow: 0 0 0 3px rgba(30, 215, 96, 0.2);
+}
+
+/* Canvas do mapa */
+.almox-mapa-page .almox-mapa-canvas-wrap {
+  background: linear-gradient(180deg, #161618, #0e0e10);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Painéis laterais (legenda / detalhe) */
+.almox-mapa-page .almox-mapa-legend,
+.almox-mapa-page .almox-mapa-detail {
+  background: linear-gradient(180deg, #1f1f22, #18181a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
+}
+.almox-mapa-page .almox-mapa-legend h3,
+.almox-mapa-page .almox-mapa-detail h3,
+.almox-mapa-page .almox-mapa-detail-list dd { color: #fff; }
+.almox-mapa-page .almox-mapa-legend-title { color: var(--gmp-text-light); }
+.almox-mapa-page .almox-mapa-legend-item { color: #e7e7e7; }
+.almox-mapa-page .almox-mapa-detail-list dt,
+.almox-mapa-page .almox-mapa-detail-desc,
+.almox-mapa-page .almox-mapa-detail-empty { color: var(--gmp-text-light); }
+.almox-mapa-page .almox-empty { color: var(--gmp-text-light); }
+
+/* Accent estrutural em verde Spotify (substitui o azul nas classes do SVG/edição) */
+.almox-mapa-page .almox-mapa-edit-hint { color: var(--spotify-green); }
+.almox-mapa-page .almox-mapa-grid-line { stroke: rgba(30, 215, 96, 0.22); }
+.almox-mapa-page .almox-mapa-sector-label { fill: rgba(30, 215, 96, 0.78); }
+.almox-mapa-page .almox-mapa-drop-target { fill: rgba(30, 215, 96, 0.16); stroke: var(--spotify-green); }
+.almox-mapa-page .almox-mapa-svg--edit { outline-color: rgba(30, 215, 96, 0.28); }
+
+/* Loading no tema escuro */
+.almox-mapa-page .almox-loading { color: var(--gmp-text-light); }
