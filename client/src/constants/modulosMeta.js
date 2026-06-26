@@ -30,3 +30,17 @@ export function modulosDoUsuario(usuario) {
   const acesso = new Set(usuario.modulos || []);
   return MODULOS_ORDEM.filter((k) => acesso.has(k));
 }
+
+/**
+ * Nível de acesso pela quantidade de módulos:
+ *   admin/super admin → Full · 5+ (ou todos) → Premium · 3–4 → Standard · 0–2 → Basic
+ */
+export function nivelAcessoUsuario(usuario) {
+  if (usuario && (usuario.is_superadmin || usuario.role === 'admin')) {
+    return { tier: 'full', label: 'Full Access' };
+  }
+  const total = modulosDoUsuario(usuario).length;
+  if (total > 4) return { tier: 'premium', label: 'Premium Access' };
+  if (total >= 3) return { tier: 'standard', label: 'Standard Access' };
+  return { tier: 'basic', label: 'Basic Access' };
+}

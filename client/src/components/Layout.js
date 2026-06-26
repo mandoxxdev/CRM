@@ -5,7 +5,7 @@ import { canConfigureModule, canAccessAdministrativoConfig } from '../utils/syst
 import api from '../services/api';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
-import { MODULOS_META, modulosDoUsuario } from '../constants/modulosMeta';
+import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario } from '../constants/modulosMeta';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
@@ -443,16 +443,14 @@ const Layout = () => {
               <div className="user-info-text">
                 <div className="user-name">{user?.nome}</div>
                 <div className="user-role">
-                  {userGrupos.length > 0 ? (
-                    userGrupos.map((grupo, index) => (
-                      <span key={grupo.id}>
-                        {grupo.nome}
-                        {index < userGrupos.length - 1 && ', '}
+                  {(() => {
+                    const nivel = nivelAcessoUsuario(user);
+                    return (
+                      <span className={`user-access-tier tier-${nivel.tier}`}>
+                        {nivel.label}
                       </span>
-                    ))
-                  ) : (
-                    <span>Sem grupo</span>
-                  )}
+                    );
+                  })()}
                 </div>
                 {(() => {
                   const mods = modulosDoUsuario(user);
