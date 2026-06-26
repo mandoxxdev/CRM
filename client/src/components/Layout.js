@@ -5,6 +5,7 @@ import { canConfigureModule, canAccessAdministrativoConfig } from '../utils/syst
 import api from '../services/api';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
+import { MODULOS_META, modulosDoUsuario } from '../constants/modulosMeta';
 import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
@@ -453,6 +454,29 @@ const Layout = () => {
                     <span>Sem grupo</span>
                   )}
                 </div>
+                {(() => {
+                  const mods = modulosDoUsuario(user);
+                  if (mods.length === 0) return null;
+                  return (
+                    <div className="user-modulos-badges">
+                      {mods.map((key) => {
+                        const meta = MODULOS_META[key];
+                        if (!meta) return null;
+                        const Icon = meta.icon;
+                        return (
+                          <span
+                            key={key}
+                            className="modulo-badge"
+                            style={{ background: meta.gradient }}
+                            title={meta.nome}
+                          >
+                            <Icon />
+                          </span>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

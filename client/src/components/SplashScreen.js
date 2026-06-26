@@ -119,7 +119,16 @@ const SplashScreen = ({
   useEffect(() => {
     readyRef.current = ready;
   }, [ready]);
-  
+
+  // Acesso negado: levar a barra a 100% para disparar a exibição do X vermelho.
+  // Sem isto a animação travava em 95% (cap do estado "ready") e o erro nunca aparecia.
+  useEffect(() => {
+    if (showError) {
+      progressRef.current = 100;
+      setProgress(100);
+    }
+  }, [showError]);
+
   // Obter configuração do módulo ou usar padrão
   const config = moduleConfigs[module] || moduleConfigs.sistema;
   const IconComponent = config.icon;

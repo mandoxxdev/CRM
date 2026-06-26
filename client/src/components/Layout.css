@@ -415,6 +415,33 @@
 .sidebar.closed .account-button span { display: none; }
 .sidebar.closed .account-button { justify-content: center; }
 
+/* Badges dos módulos que o usuário acessa (rodapé, abaixo do nome) */
+.user-modulos-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.user-modulos-badges .modulo-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s ease;
+}
+.user-modulos-badges .modulo-badge:hover {
+  transform: translateY(-1px) scale(1.08);
+}
+.user-modulos-badges .modulo-badge svg {
+  width: 13px;
+  height: 13px;
+}
+.sidebar.closed .user-modulos-badges { display: none; }
+
 /* ============================================
    CONTEÚDO PRINCIPAL
    ============================================ */

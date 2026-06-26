@@ -2848,25 +2848,43 @@ function buildAuthUserPayload(db, user, callback) {
   getUsuarioModuleContext(db, user.id, (err, moduleContext) => {
     if (err) return callback(err);
 
-    callback(null, {
-      id: user.id,
-      nome: user.nome,
-      email: user.email,
-      cargo: user.cargo,
-      role: user.role,
-      is_superadmin: isTruthyFlag(user.is_superadmin),
-      admin_modulos: parseAdminModulos(user.admin_modulos),
-      setor: user.setor || null,
-      departamento: user.departamento || null,
-      flag_vendedor: !!user.flag_vendedor,
-      flag_compras: !!user.flag_compras,
-      flag_ti: !!user.flag_ti,
-      foto_url: user.foto_url || null,
-      telefone: user.telefone || null,
-      pode_editar_conta: user.pode_editar_conta == null ? 1 : (isTruthyFlag(user.pode_editar_conta) ? 1 : 0),
-      perfil_almoxarifado: moduleContext?.perfil_almoxarifado || null,
-      perfil_frota: moduleContext?.perfil_frota || null,
-    });
+    // Módulos acessíveis (permissão direta + via grupo). Admin/superadmin resolvem para
+    // "todos" no frontend; aqui retornamos as permissões reais registradas.
+    db.all(
+      `SELECT modulo FROM permissoes
+         WHERE usuario_id = ? AND (grupo_id IS NULL OR grupo_id = 0) AND permissao = 1
+       UNION
+       SELECT p.modulo FROM usuarios_grupos ug
+         INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.permissao = 1
+         WHERE ug.usuario_id = ?`,
+      [user.id, user.id],
+      (errMods, modRows) => {
+        const modulos = errMods
+          ? []
+          : Array.from(new Set((modRows || []).map((r) => r.modulo).filter(Boolean)));
+
+        callback(null, {
+          id: user.id,
+          nome: user.nome,
+          email: user.email,
+          cargo: user.cargo,
+          role: user.role,
+          is_superadmin: isTruthyFlag(user.is_superadmin),
+          admin_modulos: parseAdminModulos(user.admin_modulos),
+          modulos,
+          setor: user.setor || null,
+          departamento: user.departamento || null,
+          flag_vendedor: !!user.flag_vendedor,
+          flag_compras: !!user.flag_compras,
+          flag_ti: !!user.flag_ti,
+          foto_url: user.foto_url || null,
+          telefone: user.telefone || null,
+          pode_editar_conta: user.pode_editar_conta == null ? 1 : (isTruthyFlag(user.pode_editar_conta) ? 1 : 0),
+          perfil_almoxarifado: moduleContext?.perfil_almoxarifado || null,
+          perfil_frota: moduleContext?.perfil_frota || null,
+        });
+      }
+    );
   });
 }
 
