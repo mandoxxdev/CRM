@@ -33,6 +33,9 @@ const maxQtdSeparacao = (item) => Math.min(
   Number(item.saldo_atual) || 0
 );
 const maxQtdEntrega = (item) => {
+  if (item.quantidade_entregavel != null) {
+    return Math.max(0, Number(item.quantidade_entregavel) || 0);
+  }
   const entregue = getEntregue(item);
   const separadoDisponivel = Math.max(0, getSeparado(item) - entregue);
   const pendente = getPendente(item);
@@ -84,6 +87,7 @@ const RequisicoesList = () => {
   const [detalhe, setDetalhe] = useState(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
   const loadedDetalheIdRef = useRef(null);
+  const detalheFetchSeqRef = useRef(0);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
   const [showRejeitar, setShowRejeitar] = useState(false);
@@ -156,6 +160,19 @@ const RequisicoesList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroStatus, filtroMinha, filtroAprovacoesValor]);
 
+  const aplicarDetalhe = useCallback((data, id) => {
+    setDetalhe(data);
+    loadedDetalheIdRef.current = id;
+    const qtdsEntrega = {};
+    const qtdsSeparacao = {};
+    (data.itens || []).forEach((i) => {
+      qtdsEntrega[i.id] = maxQtdEntrega(i);
+      qtdsSeparacao[i.id] = maxQtdSeparacao(i);
+    });
+    setQuantidadesEntrega(qtdsEntrega);
+    setQuantidadesSeparacao(qtdsSeparacao);
+  }, []);
+
   const loadRequisicoes = async () => {
     setLoading(true);
     try {
@@ -181,10 +198,11 @@ const RequisicoesList = () => {
     }
   };
 
-  const abrirDetalhe = async (id, { fromUrl = false, force = false } = {}) => {
-    if (!id) return;
-    if (!force && loadedDetalheIdRef.current === id && detalhe) return;
+  const abrirDetalhe = useCallback(async (id, { fromUrl = false, force = true } = {}) => {
+    if (!id) return null;
+    if (!force && loadedDetalheIdRef.current === id) return null;
 
+    const fetchSeq = ++detalheFetchSeqRef.current;
     setSelectedId(id);
     setLoadingDetalhe(true);
     if (loadedDetalheIdRef.current !== id) {
@@ -192,20 +210,17 @@ const RequisicoesList = () => {
     }
 
     try {
-      const res = await api.get(`${apiPrefix}/${id}`);
-      setDetalhe(res.data);
-      loadedDetalheIdRef.current = id;
-      const qtdsEntrega = {};
-      const qtdsSeparacao = {};
-      res.data.itens.forEach((i) => {
-        qtdsEntrega[i.id] = maxQtdEntrega(i);
-        qtdsSeparacao[i.id] = maxQtdSeparacao(i);
+      const res = await api.get(`${apiPrefix}/${id}`, {
+        params: { _t: Date.now() },
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
       });
-      setQuantidadesEntrega(qtdsEntrega);
-      setQuantidadesSeparacao(qtdsSeparacao);
+      if (fetchSeq !== detalheFetchSeqRef.current) return null;
+
+      aplicarDetalhe(res.data, id);
       if (!fromUrl) syncSearchParams(id);
       return res.data;
     } catch {
+      if (fetchSeq !== detalheFetchSeqRef.current) return null;
       toast.error('Erro ao carregar detalhe');
       setSelectedId(null);
       setDetalhe(null);
@@ -213,9 +228,34 @@ const RequisicoesList = () => {
       if (!fromUrl) syncSearchParams(null);
       return null;
     } finally {
-      setLoadingDetalhe(false);
+      if (fetchSeq === detalheFetchSeqRef.current) {
+        setLoadingDetalhe(false);
+      }
     }
-  };
+  }, [apiPrefix, aplicarDetalhe, syncSearchParams]);
+
+  const refreshAll = useCallback(async () => {
+    await loadRequisicoes();
+    const id = selectedIdRef.current;
+    if (id) await abrirDetalhe(id, { force: true });
+  }, [abrirDetalhe]);
+
+  useEffect(() => {
+    if (!warehouseMode || !selectedId) return undefined;
+
+    const refetchDetalhe = () => {
+      if (document.visibilityState === 'visible') {
+        abrirDetalhe(selectedIdRef.current, { force: true });
+      }
+    };
+
+    window.addEventListener('focus', refetchDetalhe);
+    document.addEventListener('visibilitychange', refetchDetalhe);
+    return () => {
+      window.removeEventListener('focus', refetchDetalhe);
+      document.removeEventListener('visibilitychange', refetchDetalhe);
+    };
+  }, [warehouseMode, selectedId, abrirDetalhe]);
 
   const fecharDetalhe = () => {
     setSelectedId(null);
@@ -234,9 +274,9 @@ const RequisicoesList = () => {
         toast.success('Requisição aprovada! Informe as quantidades a separar.');
       } else {
         toast.success('Requisição aprovada! Inicie a separação quando estiver pronto.');
-        abrirDetalhe(id, { force: true });
+        await abrirDetalhe(id, { force: true });
       }
-      loadRequisicoes();
+      await loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao aprovar');
     } finally {
@@ -264,8 +304,8 @@ const RequisicoesList = () => {
     try {
       await api.put(`/almoxarifado/requisicoes/${detalhe.id}/aprovar-valor`);
       toast.success('Liberação por valor aprovada! O almoxarifado pode prosseguir.');
-      abrirDetalhe(detalhe.id, { force: true });
-      loadRequisicoes();
+      await abrirDetalhe(detalhe.id, { force: true });
+      await loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao aprovar liberação');
     } finally {
@@ -313,7 +353,7 @@ const RequisicoesList = () => {
       const abrirEntrega = entregaAposSeparar;
       setEntregaAposSeparar(false);
       const updated = await abrirDetalhe(detalhe.id, { force: true });
-      loadRequisicoes();
+      await loadRequisicoes();
       if (abrirEntrega && updated) abrirModalEntrega(updated);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao separar');
@@ -348,12 +388,12 @@ const RequisicoesList = () => {
       setShowEntregar(false);
       if (res.data?.parcial) {
         toast.success('Entrega parcial registrada. Saldo pendente permanece em aberto.');
-        abrirDetalhe(reqId, { force: true });
+        await abrirDetalhe(reqId, { force: true });
       } else {
         toast.success('Requisição entregue por completo! Estoque baixado.');
         fecharDetalhe();
       }
-      loadRequisicoes();
+      await loadRequisicoes();
     } catch (err) {
       console.error('[RequisicoesList] Erro ao entregar requisição', err?.response?.data || err);
       toast.error(err.response?.data?.error || 'Erro ao entregar');
@@ -520,7 +560,7 @@ const RequisicoesList = () => {
         currentStep={warehouseMode && detalhe ? getRequisicaoStepIndex(detalhe.status) : undefined}
         actions={
           <>
-            <button className="btn-almox-secondary" onClick={loadRequisicoes}>
+            <button className="btn-almox-secondary" onClick={refreshAll} title="Atualizar lista e detalhe">
               <FiRefreshCw size={13} />
             </button>
             <button className="btn-almox-primary" onClick={() => navigate(novaPath)}>
@@ -629,7 +669,21 @@ const RequisicoesList = () => {
                 <div style={{ fontWeight: 700, fontSize: '1rem', color: '#4facfe', fontFamily: 'monospace' }}>{detalhe?.numero || '...'}</div>
                 {detalhe && <StatusBadge status={detalhe.status} />}
               </div>
-              <button className="almox-modal-close" onClick={fecharDetalhe}>✕</button>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                {detalhe && (
+                  <button
+                    type="button"
+                    className="btn-almox-secondary"
+                    title="Atualizar detalhe e saldos"
+                    style={{ padding: '4px 8px', minWidth: 0 }}
+                    onClick={() => abrirDetalhe(detalhe.id, { force: true })}
+                    disabled={loadingDetalhe}
+                  >
+                    <FiRefreshCw size={14} style={loadingDetalhe ? { animation: 'spin 1s linear infinite' } : undefined} />
+                  </button>
+                )}
+                <button className="almox-modal-close" onClick={fecharDetalhe}>✕</button>
+              </div>
             </div>
 
             {loadingDetalhe || !detalhe ? (

@@ -69,6 +69,15 @@ export const ControlePresenca = page(() => import('../components/operacional/Con
 export const HorasExtras = page(() => import('../components/operacional/HorasExtras'));
 export const Equipamentos = page(() => import('../components/operacional/Equipamentos'));
 export const ProducaoMES = page(() => import('../components/operacional/Producao'));
+export const ProducaoDashboard = page(() => import('../components/producao/ProducaoDashboard'));
+export const OrdensProducao = page(() => import('../components/producao/OrdensProducao'));
+export const OrdemProducaoFormPage = page(() => import('../components/producao/OrdemProducaoFormPage'));
+export const ApontamentosProducao = page(() => import('../components/producao/ApontamentosProducao'));
+export const MaquinasProducao = page(() => import('../components/producao/MaquinasProducao'));
+export const ParadasProducao = page(() => import('../components/producao/ParadasProducao'));
+export const RoteirosProducao = page(() => import('../components/producao/RoteirosProducao'));
+export const RelatoriosProducao = page(() => import('../components/producao/RelatoriosProducao'));
+export const ConfiguracoesProducao = page(() => import('../components/producao/ConfiguracoesProducao'));
 export const Configuracoes = page(() => import('../components/Configuracoes'));
 export const Permissoes = page(() => import('../components/Permissoes'));
 export const Usuarios = page(() => import('../components/Usuarios'));
@@ -172,6 +181,13 @@ export const ROUTE_PREFETCH = {
   '/compras/solicitacoes': () => import('../components/ComprasSolicitacoesCompra'),
   '/compras/fornecedores': () => import('../components/GruposFornecedores'),
   '/financeiro/dashboard': () => import('../components/Financeiro'),
+  '/fabrica': () => import('../components/producao/ProducaoDashboard'),
+  '/fabrica/ordens-producao': () => import('../components/producao/OrdensProducao'),
+  '/fabrica/apontamentos': () => import('../components/producao/ApontamentosProducao'),
+  '/fabrica/maquinas': () => import('../components/producao/MaquinasProducao'),
+  '/fabrica/paradas': () => import('../components/producao/ParadasProducao'),
+  '/fabrica/roteiros': () => import('../components/producao/RoteirosProducao'),
+  '/fabrica/relatorios': () => import('../components/producao/RelatoriosProducao'),
   '/fabrica/ordens-servico': () => import('../components/operacional/OrdensServico'),
   '/engenharia': () => import('../components/CalculosEngenharia'),
   '/engenharia-projetos': () => import('../components/engenhariaProjetos/EngenhariaProjetosHome'),

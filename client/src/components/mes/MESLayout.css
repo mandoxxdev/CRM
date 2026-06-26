@@ -98,6 +98,12 @@
   border-left: 3px solid #4fc3f7;
 }
 
+.mes-nav-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 10px 16px;
+}
+
 .mes-nav-module-selector {
   background: linear-gradient(135deg, rgba(255, 107, 53, 0.3) 0%, rgba(255, 107, 53, 0.15) 100%) !important;
   border: 1px solid rgba(255, 107, 53, 0.4) !important;

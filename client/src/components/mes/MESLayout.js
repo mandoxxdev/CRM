@@ -5,11 +5,10 @@ import { RouteLoading } from '../LazyPage';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { canConfigureModule } from '../../utils/systemPermissions';
-import { 
-  FiBarChart2, FiClipboard, FiUsers, FiActivity, FiClock, 
-  FiTrendingUp, FiTool, FiSettings, FiShield, FiFileText,
-  FiLayers, FiTarget, FiAlertTriangle, FiDatabase, FiGrid,
-  FiCheckCircle, FiPackage, FiZap, FiMonitor, FiMenu, FiX, FiList
+import {
+  FiBarChart2, FiClipboard, FiUsers, FiActivity, FiClock,
+  FiTrendingUp, FiTool, FiSettings, FiGrid, FiList,
+  FiLayers, FiTarget, FiAlertTriangle, FiZap, FiMenu, FiX,
 } from 'react-icons/fi';
 import './MESLayout.css';
 
@@ -22,148 +21,27 @@ const MESLayout = () => {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: FiBarChart2, path: '/fabrica/dashboard' },
-    { 
-      id: 'producao', 
-      label: 'Produção (MES)', 
-      icon: FiLayers, 
-      path: '/fabrica/producao',
-      submenu: [
-        { id: 'monitoramento', label: 'Monitoramento em Tempo Real', path: '/fabrica/producao/monitoramento' },
-        { id: 'eventos', label: 'Eventos de Processo', path: '/fabrica/producao/eventos' },
-        { id: 'status-ordens', label: 'Status das Ordens', path: '/fabrica/producao/status-ordens' },
-        { id: 'parametros', label: 'Parâmetros Críticos', path: '/fabrica/producao/parametros' },
-        { id: 'lotes', label: 'Gestão de Lotes', path: '/fabrica/producao/lotes' }
-      ]
-    },
-    { 
-      id: 'planejamento', 
-      label: 'Planejamento (APS/MRP)', 
-      icon: FiTarget, 
-      path: '/fabrica/planejamento',
-      submenu: [
-        { id: 'programacao', label: 'Programação de Produção', path: '/fabrica/planejamento/programacao' },
-        { id: 'materiais', label: 'Controle de Materiais', path: '/fabrica/planejamento/materiais' },
-        { id: 'necessidades', label: 'Necessidades de Componentes', path: '/fabrica/planejamento/necessidades' }
-      ]
-    },
-    { 
-      id: 'supervisao', 
-      label: 'Supervisão (SCADA/HMI)', 
-      icon: FiMonitor, 
-      path: '/fabrica/supervisao',
-      submenu: [
-        { id: 'visualizacao', label: 'Visualização de Linhas', path: '/fabrica/supervisao/visualizacao' },
-        { id: 'alarmes', label: 'Alarmes e Eventos', path: '/fabrica/supervisao/alarmes' },
-        { id: 'painel', label: 'Painel Gráfico', path: '/fabrica/supervisao/painel' }
-      ]
-    },
-    { 
-      id: 'qualidade', 
-      label: 'Controle de Qualidade', 
-      icon: FiCheckCircle, 
-      path: '/fabrica/qualidade',
-      submenu: [
-        { id: 'padroes', label: 'Padrões e Especificações', path: '/fabrica/qualidade/padroes' },
-        { id: 'inspecao', label: 'Inspeção de Materiais', path: '/fabrica/qualidade/inspecao' },
-        { id: 'resultados', label: 'Resultados e Alertas', path: '/fabrica/qualidade/resultados' },
-        { id: 'lims', label: 'Integração LIMS', path: '/fabrica/qualidade/lims' }
-      ]
-    },
-    { 
-      id: 'rastreabilidade', 
-      label: 'Rastreabilidade', 
-      icon: FiDatabase, 
-      path: '/fabrica/rastreabilidade',
-      submenu: [
-        { id: 'lotes', label: 'Gestão de Lotes', path: '/fabrica/rastreabilidade/lotes' },
-        { id: 'cadeia', label: 'Cadeia Completa', path: '/fabrica/rastreabilidade/cadeia' },
-        { id: 'relatorios', label: 'Relatórios de Auditoria', path: '/fabrica/rastreabilidade/relatorios' },
-        { id: 'recalls', label: 'Recalls', path: '/fabrica/rastreabilidade/recalls' }
-      ]
-    },
-    { 
-      id: 'manutencao', 
-      label: 'Manutenção (CMMS)', 
-      icon: FiTool, 
-      path: '/fabrica/manutencao',
-      submenu: [
-        { id: 'preventiva', label: 'Manutenção Preventiva', path: '/fabrica/manutencao/preventiva' },
-        { id: 'ordens', label: 'Ordens de Serviço', path: '/fabrica/manutencao/ordens' },
-        { id: 'indicadores', label: 'Indicadores de Falhas', path: '/fabrica/manutencao/indicadores' },
-        { id: 'historico', label: 'Histórico de Revisões', path: '/fabrica/manutencao/historico' }
-      ]
-    },
-    { 
-      id: 'seguranca', 
-      label: 'Segurança & Conformidade', 
-      icon: FiShield, 
-      path: '/fabrica/seguranca',
-      submenu: [
-        { id: 'acessos', label: 'Controle de Acessos', path: '/fabrica/seguranca/acessos' },
-        { id: 'auditoria', label: 'Registros de Auditoria', path: '/fabrica/seguranca/auditoria' },
-        { id: 'conformidade', label: 'Conformidade Regulatória', path: '/fabrica/seguranca/conformidade' },
-        { id: 'nao-conformidades', label: 'Não-Conformidades', path: '/fabrica/seguranca/nao-conformidades' }
-      ]
-    },
-    { 
-      id: 'formulacoes', 
-      label: 'Controle de Formulações', 
-      icon: FiPackage, 
-      path: '/fabrica/formulacoes',
-      submenu: [
-        { id: 'receitas', label: 'Gestão de Receitas', path: '/fabrica/formulacoes/receitas' },
-        { id: 'tolerancias', label: 'Tolerâncias e Variações', path: '/fabrica/formulacoes/tolerancias' },
-        { id: 'ingredientes', label: 'Ingredientes Críticos', path: '/fabrica/formulacoes/ingredientes' },
-        { id: 'versionamento', label: 'Versionamento', path: '/fabrica/formulacoes/versionamento' }
-      ]
-    },
-    { 
-      id: 'alarmistica', 
-      label: 'Alarmística', 
-      icon: FiAlertTriangle, 
-      path: '/fabrica/alarmistica',
-      submenu: [
-        { id: 'limites', label: 'Limites de Operação', path: '/fabrica/alarmistica/limites' },
-        { id: 'alarmes', label: 'Configuração de Alarmes', path: '/fabrica/alarmistica/alarmes' },
-        { id: 'stop', label: 'Stop Automático', path: '/fabrica/alarmistica/stop' }
-      ]
-    },
-    { 
-      id: 'logs', 
-      label: 'Logs e Histórico', 
-      icon: FiFileText, 
-      path: '/fabrica/logs',
-      submenu: [
-        { id: 'operacoes', label: 'Registros de Operações', path: '/fabrica/logs/operacoes' },
-        { id: 'intervencoes', label: 'Intervenções Humanas', path: '/fabrica/logs/intervencoes' },
-        { id: 'eventos', label: 'Eventos e Desvios', path: '/fabrica/logs/eventos' },
-        { id: 'historico', label: 'Histórico Completo', path: '/fabrica/logs/historico' }
-      ]
-    },
+    { id: 'ordens-producao', label: 'Ordens de Produção', icon: FiLayers, path: '/fabrica/ordens-producao' },
+    { id: 'apontamentos', label: 'Apontamentos', icon: FiActivity, path: '/fabrica/apontamentos' },
+    { id: 'maquinas', label: 'Máquinas', icon: FiTool, path: '/fabrica/maquinas' },
+    { id: 'paradas', label: 'Paradas / OEE', icon: FiAlertTriangle, path: '/fabrica/paradas' },
+    { id: 'roteiros', label: 'Roteiros', icon: FiTarget, path: '/fabrica/roteiros' },
+    { id: 'producao-kanban', label: 'Kanban OS (legado)', icon: FiClipboard, path: '/fabrica/producao-kanban' },
+    { id: 'relatorios', label: 'Relatórios', icon: FiBarChart2, path: '/fabrica/relatorios' },
+    { type: 'divider', id: 'div-operacional' },
     { id: 'ordens-servico', label: 'Ordens de Serviço', icon: FiClipboard, path: '/fabrica/ordens-servico' },
     { id: 'colaboradores', label: 'Colaboradores', icon: FiUsers, path: '/fabrica/colaboradores' },
     { id: 'atividades', label: 'Atividades', icon: FiActivity, path: '/fabrica/atividades' },
     { id: 'presenca', label: 'Presença', icon: FiClock, path: '/fabrica/presenca' },
     { id: 'horas-extras', label: 'Horas Extras', icon: FiTrendingUp, path: '/fabrica/horas-extras' },
     { id: 'equipamentos', label: 'Equipamentos', icon: FiTool, path: '/fabrica/equipamentos' },
+    { type: 'divider', id: 'div-materiais' },
     { id: 'requisicoes-nova', label: 'Solicitar Material', icon: FiClipboard, path: '/fabrica/requisicoes-material/nova' },
     { id: 'requisicoes-lista', label: 'Minhas Requisições', icon: FiList, path: '/fabrica/requisicoes-material' },
-    { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/fabrica/configuracoes', adminOnly: true }
+    { id: 'configuracoes', label: 'Configurações', icon: FiSettings, path: '/fabrica/configuracoes', adminOnly: true },
   ];
 
-  const [expandedItems, setExpandedItems] = useState([]);
-
-  const toggleSubmenu = (itemId) => {
-    setExpandedItems(prev => 
-      prev.includes(itemId) 
-        ? prev.filter(id => id !== itemId)
-        : [...prev, itemId]
-    );
-  };
-
-  const isActive = (path) => {
-    return location.pathname === path || location.pathname.startsWith(path + '/');
-  };
+  const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
   return (
     <div className="mes-layout">
@@ -171,11 +49,12 @@ const MESLayout = () => {
         <div className="mes-sidebar-header">
           <div className="mes-logo">
             <FiZap />
-            <span>MES GMP</span>
+            <span>Produção GMP</span>
           </div>
-          <button 
+          <button
             className="mes-sidebar-toggle"
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            type="button"
           >
             {sidebarOpen ? <FiX /> : <FiMenu />}
           </button>
@@ -184,49 +63,32 @@ const MESLayout = () => {
         <nav className="mes-nav">
           <div
             className="mes-nav-link mes-nav-module-selector"
-            onClick={() => {
-              window.location.href = '/';
-            }}
+            onClick={() => { window.location.href = '/'; }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && (window.location.href = '/')}
           >
             <FiGrid />
             {sidebarOpen && <span>Selecionar Módulo</span>}
           </div>
-          {menuItems.map(item => {
+          {menuItems.map((item) => {
+            if (item.type === 'divider') {
+              return sidebarOpen ? <div key={item.id} className="mes-nav-divider" /> : null;
+            }
             if (item.adminOnly && !canConfigureMes) return null;
             return (
-            <div key={item.id} className="mes-nav-item">
-              <div
-                className={`mes-nav-link ${isActive(item.path) ? 'active' : ''}`}
-                onClick={() => {
-                  if (item.submenu) {
-                    toggleSubmenu(item.id);
-                  } else {
-                    navigate(item.path);
-                  }
-                }}
-              >
-                <item.icon />
-                {sidebarOpen && <span>{item.label}</span>}
-                {item.submenu && sidebarOpen && (
-                  <span className="mes-nav-arrow">
-                    {expandedItems.includes(item.id) ? '▼' : '▶'}
-                  </span>
-                )}
-              </div>
-              {item.submenu && expandedItems.includes(item.id) && sidebarOpen && (
-                <div className="mes-submenu">
-                  {item.submenu.map(subItem => (
-                    <div
-                      key={subItem.id}
-                      className={`mes-submenu-item ${isActive(subItem.path) ? 'active' : ''}`}
-                      onClick={() => navigate(subItem.path)}
-                    >
-                      {subItem.label}
-                    </div>
-                  ))}
+              <div key={item.id} className="mes-nav-item">
+                <div
+                  className={`mes-nav-link ${isActive(item.path) ? 'active' : ''}`}
+                  onClick={() => navigate(item.path)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && navigate(item.path)}
+                >
+                  <item.icon />
+                  {sidebarOpen && <span>{item.label}</span>}
                 </div>
-              )}
-            </div>
+              </div>
             );
           })}
         </nav>

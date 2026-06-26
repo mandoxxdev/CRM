@@ -23342,6 +23342,9 @@ require('./routes/almoxarifado')(app, db, authenticateToken, PERSISTENT_DATA_DIR
 // ── Módulo Frotas ────────────────────────────────────────────────────────────
 require('./routes/frotas')(app, db, authenticateToken, checkModulePermission);
 
+// Módulo Produção (MES) — GMP Industriais
+require('./routes/producao')(app, db, authenticateToken, checkModulePermission);
+
 // ── Módulo Chat Interno ──────────────────────────────────────────────────────
 let chatSocket = null;
 let chatModuleRegistered = false;

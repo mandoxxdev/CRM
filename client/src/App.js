@@ -46,7 +46,6 @@ import {
   ItensFornecedor,
   Financeiro,
   Fabrica,
-  DashboardMES,
   OrdensServico,
   OSFormPage,
   Colaboradores,
@@ -55,6 +54,15 @@ import {
   HorasExtras,
   Equipamentos,
   ProducaoMES,
+  ProducaoDashboard,
+  OrdensProducao,
+  OrdemProducaoFormPage,
+  ApontamentosProducao,
+  MaquinasProducao,
+  ParadasProducao,
+  RoteirosProducao,
+  RelatoriosProducao,
+  ConfiguracoesProducao,
   Configuracoes,
   UsuarioForm,
   Admin,
@@ -360,8 +368,16 @@ function AppRoutes() {
           </PrivateRoute>
         }
       >
-        <Route index element={<DashboardMES />} />
-        <Route path="dashboard" element={<DashboardMES />} />
+        <Route index element={<ProducaoDashboard />} />
+        <Route path="dashboard" element={<ProducaoDashboard />} />
+        <Route path="ordens-producao" element={<OrdensProducao />} />
+        <Route path="ordens-producao/nova" element={<OrdemProducaoFormPage />} />
+        <Route path="ordens-producao/editar/:id" element={<OrdemProducaoFormPage />} />
+        <Route path="apontamentos" element={<ApontamentosProducao />} />
+        <Route path="maquinas" element={<MaquinasProducao />} />
+        <Route path="paradas" element={<ParadasProducao />} />
+        <Route path="roteiros" element={<RoteirosProducao />} />
+        <Route path="relatorios" element={<RelatoriosProducao />} />
         <Route path="ordens-servico" element={<OrdensServico />} />
         <Route path="ordens-servico/editar/:id" element={<OSFormPage />} />
         <Route path="colaboradores" element={<Colaboradores />} />
@@ -371,21 +387,11 @@ function AppRoutes() {
         <Route path="equipamentos" element={<Equipamentos />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="operacional" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="operacional" />} />
-        {/* Produção — Chão de fábrica (Kanban de apontamento) */}
-        <Route path="producao" element={<ProducaoMES />} />
-        {/* Rotas MES - Placeholder para futuras implementações */}
-        <Route path="planejamento/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Planejamento (APS/MRP)</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="supervisao/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Supervisão (SCADA/HMI)</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="qualidade/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Controle de Qualidade</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="rastreabilidade/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Rastreabilidade</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="manutencao/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Manutenção (CMMS)</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="seguranca/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Segurança & Conformidade</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="formulacoes/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Controle de Formulações</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="alarmistica/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Alarmística</h2><p>Em desenvolvimento...</p></div>} />
-        <Route path="logs/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Logs e Histórico</h2><p>Em desenvolvimento...</p></div>} />
+        <Route path="producao-kanban" element={<ProducaoMES />} />
+        <Route path="producao" element={<Navigate to="/fabrica/apontamentos" replace />} />
         <Route path="configuracoes" element={
           <ProtectedModuleConfigRoute module="operacional" redirectTo="/fabrica/dashboard">
-            <div style={{ padding: '40px', textAlign: 'center' }}><h2>Configurações MES</h2><p>Em desenvolvimento...</p></div>
+            <ConfiguracoesProducao />
           </ProtectedModuleConfigRoute>
         } />
       </Route>
