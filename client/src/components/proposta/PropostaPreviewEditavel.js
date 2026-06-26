@@ -1,0 +1,226 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { FiEdit2, FiEye, FiSave, FiClock, FiX } from 'react-icons/fi';
+import api from '../../services/api';
+import EditorClausulas from './EditorClausulas';
+import HistoricoEdicoes from './HistoricoEdicoes';
+import './PropostaPreviewEditavel.css';
+
+const CAMPOS_EDITAVEIS = [
+  { campo: 'cliente_nome', label: 'Nome/Razão Social', seletor: '[data-edit="cliente_nome"]' },
+  { campo: 'cliente_email', label: 'E-mail', seletor: '[data-edit="cliente_email"]' },
+  { campo: 'cliente_telefone', label: 'Telefone', seletor: '[data-edit="cliente_telefone"]' },
+  { campo: 'cliente_contato', label: 'Contato', seletor: '[data-edit="cliente_contato"]' },
+];
+
+export default function PropostaPreviewEditavel() {
+  const { id } = useParams();
+  const iframeRef = useRef(null);
+
+  const [html, setHtml] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [mostrarHistorico, setMostrarHistorico] = useState(false);
+  const [mostrarClausulas, setMostrarClausulas] = useState(false);
+  const [camposEditados, setCamposEditados] = useState({});
+  const [clausulas, setClausulas] = useState([]);
+  const [clausulasIsDefault, setClausulasIsDefault] = useState(true);
+  const [mudancasPendentes, setMudancasPendentes] = useState(false);
+  // Signals that the preview HTML needs a server reload (clause content changed)
+  const previewDesatualizadoRef = useRef(false);
+
+  const carregarPreview = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [htmlRes, customRes, clausulasRes] = await Promise.all([
+        api.get(`/propostas/${id}/premium`, { responseType: 'text' }),
+        api.get(`/propostas/${id}/customizacoes`),
+        api.get(`/propostas/${id}/clausulas`),
+      ]);
+      setHtml(htmlRes.data);
+      setClausulas(clausulasRes.data?.clausulas || []);
+      setClausulasIsDefault(clausulasRes.data?.isDefault ?? true);
+      setCamposEditados({});
+      setMudancasPendentes(false);
+      previewDesatualizadoRef.current = false;
+    } catch (e) {
+      toast.error('Erro ao carregar proposta.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    carregarPreview();
+  }, [carregarPreview]);
+
+  function injetarAtributosEdicao(doc) {
+    const tds = doc.querySelectorAll('td');
+    tds.forEach(td => {
+      const th = td.previousElementSibling;
+      if (!th) return;
+      const label = th.textContent?.trim().toLowerCase();
+      if (label === 'razão social' || label === 'empresa') td.setAttribute('data-edit', 'cliente_nome');
+      else if (label === 'e-mail') td.setAttribute('data-edit', 'cliente_email');
+      else if (label === 'telefone') td.setAttribute('data-edit', 'cliente_telefone');
+      else if (label === 'contato') td.setAttribute('data-edit', 'cliente_contato');
+    });
+  }
+
+  function ativarEdicao(ativo) {
+    setModoEdicao(ativo);
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    CAMPOS_EDITAVEIS.forEach(({ campo, seletor }) => {
+      const el = doc.querySelector(seletor);
+      if (!el) return;
+      el.contentEditable = ativo ? 'true' : 'false';
+      el.style.outline = ativo ? '2px dashed #f59e0b' : 'none';
+      el.style.background = ativo ? '#fffde7' : '';
+      el.style.borderRadius = ativo ? '3px' : '';
+      el.style.cursor = ativo ? 'text' : '';
+
+      if (ativo) {
+        el.oninput = () => {
+          setCamposEditados(prev => ({ ...prev, [campo]: el.textContent }));
+          setMudancasPendentes(true);
+        };
+      } else {
+        el.oninput = null;
+      }
+    });
+  }
+
+  async function salvar() {
+    if (!mudancasPendentes) return;
+    setSalvando(true);
+    try {
+      if (Object.keys(camposEditados).length > 0) {
+        await api.put(`/propostas/${id}/customizacoes`, camposEditados);
+      }
+      setMudancasPendentes(false);
+      toast.success('Alterações salvas com sucesso.');
+      carregarPreview();
+    } catch (e) {
+      toast.error('Erro ao salvar alterações.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  // Clause changes are already persisted by EditorClausulas on each blur.
+  // We only mark that the preview HTML is stale — the reload happens when the panel closes.
+  function handleClausulasAlteradas() {
+    previewDesatualizadoRef.current = true;
+  }
+
+  function fecharClausulas() {
+    setMostrarClausulas(false);
+    if (previewDesatualizadoRef.current) {
+      carregarPreview();
+    }
+  }
+
+  return (
+    <div className="ppe-container">
+      {/* Toolbar */}
+      <div className="ppe-toolbar">
+        <div className="ppe-toolbar-left">
+          <span className="ppe-titulo">Proposta #{id}</span>
+          {mudancasPendentes && <span className="ppe-badge-pendente">Alterações não salvas</span>}
+        </div>
+        <div className="ppe-toolbar-actions">
+          <button
+            className={`ppe-btn ${modoEdicao ? 'ppe-btn-ativo' : ''}`}
+            onClick={() => ativarEdicao(!modoEdicao)}
+            title={modoEdicao ? 'Sair do modo edição' : 'Entrar no modo edição'}
+          >
+            {modoEdicao ? <FiEye /> : <FiEdit2 />}
+            {modoEdicao ? 'Visualizando' : 'Editar campos'}
+          </button>
+          <button
+            className="ppe-btn"
+            onClick={() => setMostrarClausulas(true)}
+            title="Editar cláusulas"
+          >
+            <FiEdit2 /> Cláusulas
+          </button>
+          <button
+            className="ppe-btn"
+            onClick={() => setMostrarHistorico(true)}
+            title="Ver histórico de edições"
+          >
+            <FiClock /> Histórico
+          </button>
+          <button
+            className={`ppe-btn ppe-btn-salvar ${!mudancasPendentes ? 'ppe-btn-disabled' : ''}`}
+            onClick={salvar}
+            disabled={!mudancasPendentes || salvando}
+          >
+            <FiSave /> {salvando ? 'Salvando...' : 'Salvar alterações'}
+          </button>
+        </div>
+      </div>
+
+      {/* Preview */}
+      <div className="ppe-preview-wrapper">
+        {loading ? (
+          <div className="ppe-loading">Carregando proposta...</div>
+        ) : (
+          <iframe
+            ref={iframeRef}
+            className="ppe-iframe"
+            title="Preview da proposta"
+            srcDoc={html}
+            sandbox="allow-same-origin allow-scripts"
+            onLoad={() => {
+              const doc = iframeRef.current?.contentDocument;
+              if (doc) injetarAtributosEdicao(doc);
+              if (modoEdicao) ativarEdicao(true);
+            }}
+          />
+        )}
+      </div>
+
+      {/* Painel de cláusulas */}
+      {mostrarClausulas && (
+        <div className="ppe-painel-overlay">
+          <div className="ppe-painel">
+            <div className="ppe-painel-header">
+              <h2>Editor de Cláusulas</h2>
+              <button className="ppe-painel-fechar" onClick={fecharClausulas}>
+                <FiX />
+              </button>
+            </div>
+            <EditorClausulas
+              propostaId={id}
+              clausulas={clausulas}
+              isDefault={clausulasIsDefault}
+              onAlterado={handleClausulasAlteradas}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Painel de histórico */}
+      {mostrarHistorico && (
+        <div className="ppe-painel-overlay">
+          <div className="ppe-painel">
+            <div className="ppe-painel-header">
+              <h2>Histórico de Edições</h2>
+              <button className="ppe-painel-fechar" onClick={() => setMostrarHistorico(false)}>
+                <FiX />
+              </button>
+            </div>
+            <HistoricoEdicoes propostaId={id} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

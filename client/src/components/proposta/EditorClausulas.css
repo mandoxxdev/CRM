@@ -1,0 +1,300 @@
+/* ── Container raiz ── */
+.ec-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;          /* essencial: permite que filhos com overflow-y: auto funcionem dentro de flex */
+}
+
+.ec-acoes-topo {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* ── Lista com scroll próprio ── */
+.ec-lista {
+  flex: 1;
+  min-height: 0;           /* necessário para overflow-y funcionar dentro do flex */
+  overflow-y: auto;
+  padding: 12px 14px 48px; /* padding-bottom generoso para o último card aberto não ser cortado */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Card da cláusula ── */
+.ec-clausula {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ec-clausula--aberta {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+/* ── Cabeçalho clicável ── */
+.ec-clausula-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 10px;
+  background: #f8fafc;
+  border-radius: 7px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+  min-width: 0;             /* permite truncamento do título */
+}
+
+.ec-clausula-header:hover {
+  background: #f1f5f9;
+}
+
+.ec-clausula--aberta .ec-clausula-header {
+  background: #eff6ff;
+  border-radius: 7px 7px 0 0;
+  border-bottom: 1px solid #bfdbfe;
+}
+
+/* ── Botões de ordem (lado a lado) ── */
+.ec-ordem-btns {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.ec-ordem-btns button {
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  color: #475569;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+  flex-shrink: 0;
+}
+
+.ec-ordem-btns button:hover:not(:disabled) {
+  color: #1e40af;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.ec-ordem-btns button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ── Título (texto no header) ── */
+.ec-titulo-texto {
+  flex: 1;
+  min-width: 0;             /* permite truncamento */
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Ações lado direito do header ── */
+.ec-header-acoes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ec-btn-remover {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+  transition: color 0.12s, background 0.12s;
+}
+
+.ec-btn-remover:hover {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+.ec-chevron {
+  color: #94a3b8;
+  font-size: 15px;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.ec-chevron--aberto {
+  transform: rotate(90deg);
+}
+
+/* ── Painel de edição (accordion body) ── */
+.ec-clausula-corpo {
+  padding: 12px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ec-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.ec-label:first-child {
+  margin-top: 0;
+}
+
+.ec-titulo-input {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ec-titulo-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.ec-conteudo-input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #374151;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.6;
+  outline: none;
+  box-sizing: border-box;
+  background: #fff;
+  min-height: 90px;
+  overflow: hidden;         /* esconde scrollbar; altura cresce com o conteúdo */
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ec-conteudo-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.ec-clausula-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* ── Botões ── */
+.ec-btn-primario {
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.ec-btn-primario:hover:not(:disabled) { background: #1e40af; }
+.ec-btn-primario:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ec-btn-secundario {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  color: #374151;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ec-btn-secundario:hover { background: #e2e8f0; }
+
+.ec-btn-perigo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.ec-btn-perigo:hover:not(:disabled) { background: #fecaca; }
+.ec-btn-perigo:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Confirmação de reset ── */
+.ec-confirm {
+  margin: 0 14px 8px;
+  padding: 10px 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #92400e;
+  flex-shrink: 0;
+}
+
+.ec-confirm-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* ── Estado vazio ── */
+.ec-vazio {
+  text-align: center;
+  padding: 32px 20px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.ec-muted {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.ec-vazio button { margin-top: 14px; }

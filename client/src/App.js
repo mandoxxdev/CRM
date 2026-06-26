@@ -25,6 +25,7 @@ import {
   PropostasList,
   PropostaForm,
   PropostaDetalhe,
+  PropostaPreviewEditavel,
   Aprovacoes,
   ConfigTemplateProposta,
   EditorTemplateProposta,
@@ -221,6 +222,7 @@ function AppRoutes() {
         <Route path="projetos/editar/:id" element={<ProjetoForm />} />
         <Route path="propostas" element={<PropostasList />} />
         <Route path="propostas/detalhe/:id" element={<PropostaDetalhe />} />
+        <Route path="propostas/:id/preview-editavel" element={<PropostaPreviewEditavel />} />
         <Route path="propostas/nova" element={<PropostaForm />} />
         <Route path="propostas/editar/:id" element={<PropostaForm />} />
         <Route path="propostas/config-template" element={<ConfigTemplateProposta />} />

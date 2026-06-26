@@ -39,6 +39,7 @@ export const ProjetoForm = page(() => import('../components/ProjetoForm'));
 export const PropostasList = page(() => import('../components/proposta/PropostasList'));
 export const PropostaForm = page(() => import('../components/proposta/PropostaForm'));
 export const PropostaDetalhe = page(() => import('../components/proposta/PropostaDetalhe'));
+export const PropostaPreviewEditavel = page(() => import('../components/proposta/PropostaPreviewEditavel'));
 export const Aprovacoes = page(() => import('../components/Aprovacoes'));
 export const ConfigTemplateProposta = page(() => import('../components/ConfigTemplateProposta'));
 export const EditorTemplateProposta = page(() => import('../components/EditorTemplateProposta'));

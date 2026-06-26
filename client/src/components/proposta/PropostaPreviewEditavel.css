@@ -1,0 +1,167 @@
+.ppe-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f1f5f9;
+}
+
+/* Toolbar */
+.ppe-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  background: #1e293b;
+  color: #fff;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.ppe-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ppe-titulo {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.ppe-badge-pendente {
+  font-size: 11px;
+  background: #f59e0b;
+  color: #1e293b;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.ppe-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ppe-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ppe-btn:hover {
+  background: #334155;
+  color: #fff;
+  border-color: #475569;
+}
+
+.ppe-btn-ativo {
+  background: #1d4ed8;
+  color: #fff;
+  border-color: #1d4ed8;
+}
+
+.ppe-btn-salvar {
+  background: #15803d;
+  color: #fff;
+  border-color: #15803d;
+}
+
+.ppe-btn-salvar:hover {
+  background: #166534;
+  border-color: #166534;
+}
+
+.ppe-btn-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Preview */
+.ppe-preview-wrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.ppe-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+
+.ppe-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 15px;
+  color: #64748b;
+}
+
+/* Painel lateral */
+.ppe-painel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ppe-painel {
+  width: 620px;
+  max-width: 95vw;
+  height: 100%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;         /* clip lateral; scroll é feito pelo ec-lista interno */
+  min-height: 0;
+}
+
+.ppe-painel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.ppe-painel-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.ppe-painel-fechar {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.ppe-painel-fechar:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}

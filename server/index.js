@@ -23,6 +23,7 @@ const puppeteer = require('puppeteer');
 const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
+const { getClausulasDefault } = require('./clausulasDefault');
 const propostaEngine = require('./propostaCompositionEngine');
 const {
   fetchComercialResponsaveis,
@@ -1103,6 +1104,58 @@ function initializeDatabase(onReadyCallback) {
     FOREIGN KEY (proposta_id) REFERENCES propostas(id) ON DELETE CASCADE,
     FOREIGN KEY (criado_por) REFERENCES usuarios(id)
   )`);
+
+  // Customizações de campos editáveis por proposta
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_customizacoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposta_id INTEGER NOT NULL UNIQUE,
+    cliente_nome TEXT,
+    cliente_email TEXT,
+    cliente_telefone TEXT,
+    cliente_contato TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_by INTEGER,
+    FOREIGN KEY (proposta_id) REFERENCES propostas(id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES usuarios(id)
+  )`, (err) => {
+    if (err) console.error('❌ Erro ao criar tabela proposta_customizacoes:', err);
+    else console.log('✅ Tabela proposta_customizacoes criada/verificada');
+  });
+
+  // Cláusulas customizadas por proposta
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_clausulas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposta_id INTEGER NOT NULL,
+    ordem INTEGER NOT NULL DEFAULT 0,
+    titulo TEXT NOT NULL,
+    conteudo TEXT NOT NULL,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proposta_id) REFERENCES propostas(id) ON DELETE CASCADE
+  )`, (err) => {
+    if (err) console.error('❌ Erro ao criar tabela proposta_clausulas:', err);
+    else console.log('✅ Tabela proposta_clausulas criada/verificada');
+  });
+
+  // Log de auditoria de edições no preview editável
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_edicoes_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposta_id INTEGER NOT NULL,
+    usuario_id INTEGER,
+    usuario_nome TEXT,
+    tipo TEXT NOT NULL,
+    campo TEXT,
+    clausula_id INTEGER,
+    valor_anterior TEXT,
+    valor_novo TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proposta_id) REFERENCES propostas(id),
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+  )`, (err) => {
+    if (err) console.error('❌ Erro ao criar tabela proposta_edicoes_log:', err);
+    else console.log('✅ Tabela proposta_edicoes_log criada/verificada');
+  });
 
   // Oportunidades
   db.run(`CREATE TABLE IF NOT EXISTS oportunidades (
@@ -5113,6 +5166,278 @@ app.post('/api/propostas/:id/followups', authenticateToken, (req, res) => {
   });
 });
 
+// ========== ROTAS DE PREVIEW EDITÁVEL ==========
+
+// Função auxiliar: registra uma entrada no log de auditoria
+function registrarEdicaoLog(propostaId, usuarioId, usuarioNome, tipo, campo, clausulaId, valorAnterior, valorNovo) {
+  if (!db) return;
+  db.run(
+    `INSERT INTO proposta_edicoes_log (proposta_id, usuario_id, usuario_nome, tipo, campo, clausula_id, valor_anterior, valor_novo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [propostaId, usuarioId, usuarioNome, tipo, campo || null, clausulaId || null,
+     valorAnterior != null ? String(valorAnterior) : null,
+     valorNovo != null ? String(valorNovo) : null],
+    (err) => { if (err) console.error('Erro ao registrar log de edição:', err); }
+  );
+}
+
+// GET /api/propostas/:id/customizacoes
+app.get('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  db.get('SELECT * FROM proposta_customizacoes WHERE proposta_id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(row || {});
+  });
+});
+
+// PUT /api/propostas/:id/customizacoes
+app.put('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const { cliente_nome, cliente_email, cliente_telefone, cliente_contato } = req.body;
+  const usuarioId = req.user.id;
+
+  db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (err, u) => {
+    const usuarioNome = u?.nome || req.user.email || 'N/A';
+
+    db.get('SELECT * FROM proposta_customizacoes WHERE proposta_id = ?', [id], (err, anterior) => {
+      const campos = { cliente_nome, cliente_email, cliente_telefone, cliente_contato };
+      const camposAntes = anterior || {};
+
+      db.run(
+        `INSERT INTO proposta_customizacoes (proposta_id, cliente_nome, cliente_email, cliente_telefone, cliente_contato, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(proposta_id) DO UPDATE SET
+           cliente_nome = excluded.cliente_nome,
+           cliente_email = excluded.cliente_email,
+           cliente_telefone = excluded.cliente_telefone,
+           cliente_contato = excluded.cliente_contato,
+           updated_by = excluded.updated_by,
+           updated_at = excluded.updated_at`,
+        [id, cliente_nome || null, cliente_email || null, cliente_telefone || null, cliente_contato || null, usuarioId],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+
+          Object.keys(campos).forEach(campo => {
+            const antes = camposAntes[campo] ?? null;
+            const depois = campos[campo] ?? null;
+            if (antes !== depois) {
+              registrarEdicaoLog(id, usuarioId, usuarioNome, 'campo', campo, null, antes, depois);
+            }
+          });
+
+          res.json({ ok: true });
+        }
+      );
+    });
+  });
+});
+
+// GET /api/propostas/:id/clausulas
+app.get('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  db.all(
+    'SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC',
+    [id],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (rows && rows.length > 0) {
+        return res.json({ clausulas: rows, isDefault: false });
+      }
+      res.json({ clausulas: getClausulasDefault(), isDefault: true });
+    }
+  );
+});
+
+// POST /api/propostas/:id/clausulas/inicializar — copia defaults para a tabela
+app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const usuarioId = req.user.id;
+
+  db.get('SELECT COUNT(*) as total FROM proposta_clausulas WHERE proposta_id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (row && row.total > 0) return res.json({ ok: true, jaInicializado: true });
+
+    const defaults = getClausulasDefault();
+    const stmt = db.prepare(
+      'INSERT INTO proposta_clausulas (proposta_id, ordem, titulo, conteudo) VALUES (?, ?, ?, ?)'
+    );
+    defaults.forEach((c, i) => stmt.run([id, i, `${c.numero} ${c.titulo}`, c.conteudo]));
+    stmt.finalize((err) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+        registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausulas_inicializadas', null, null, null, `${defaults.length} cláusulas padrão copiadas`);
+      });
+
+      res.json({ ok: true });
+    });
+  });
+});
+
+// POST /api/propostas/:id/clausulas/resetar — volta para as cláusulas padrão
+app.post('/api/propostas/:id/clausulas/resetar', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const usuarioId = req.user.id;
+
+  db.run('DELETE FROM proposta_clausulas WHERE proposta_id = ?', [id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+      registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausulas_resetadas', null, null, 'cláusulas customizadas', 'padrão');
+    });
+
+    res.json({ ok: true });
+  });
+});
+
+// PUT /api/propostas/:id/clausulas/reordenar — deve vir ANTES de /:clausulaId
+app.put('/api/propostas/:id/clausulas/reordenar', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const { ordem } = req.body; // array de IDs na nova ordem: [3, 1, 2, ...]
+  const usuarioId = req.user.id;
+
+  if (!Array.isArray(ordem)) return res.status(400).json({ error: 'ordem deve ser um array de IDs' });
+
+  const stmt = db.prepare('UPDATE proposta_clausulas SET ordem = ? WHERE id = ? AND proposta_id = ?');
+  ordem.forEach((clausulaId, index) => stmt.run([index, clausulaId, id]));
+  stmt.finalize((err) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+      registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausula_reordenada', null, null, null, JSON.stringify(ordem));
+    });
+
+    res.json({ ok: true });
+  });
+});
+
+// POST /api/propostas/:id/clausulas — cria nova cláusula
+app.post('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const { titulo, conteudo } = req.body;
+  const usuarioId = req.user.id;
+
+  if (!titulo || !titulo.trim()) return res.status(400).json({ error: 'Título é obrigatório' });
+
+  db.get('SELECT MAX(ordem) as maxOrdem FROM proposta_clausulas WHERE proposta_id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const novaOrdem = (row?.maxOrdem ?? -1) + 1;
+
+    db.run(
+      'INSERT INTO proposta_clausulas (proposta_id, ordem, titulo, conteudo) VALUES (?, ?, ?, ?)',
+      [id, novaOrdem, titulo.trim(), conteudo || ''],
+      function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        const novoId = this.lastID;
+
+        db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+          registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausula_criada', 'titulo', novoId, null, titulo.trim());
+        });
+
+        res.status(201).json({
+          id: novoId,
+          proposta_id: Number(id),
+          ordem: novaOrdem,
+          titulo: titulo.trim(),
+          conteudo: conteudo || '',
+          ativo: 1,
+        });
+      }
+    );
+  });
+});
+
+// PUT /api/propostas/:id/clausulas/:clausulaId — edita cláusula
+app.put('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id, clausulaId } = req.params;
+  const { titulo, conteudo } = req.body;
+  const usuarioId = req.user.id;
+
+  db.get('SELECT * FROM proposta_clausulas WHERE id = ? AND proposta_id = ?', [clausulaId, id], (err, antes) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!antes) return res.status(404).json({ error: 'Cláusula não encontrada' });
+
+    const novoTitulo = titulo !== undefined ? titulo : antes.titulo;
+    const novoConteudo = conteudo !== undefined ? conteudo : antes.conteudo;
+
+    db.run(
+      `UPDATE proposta_clausulas SET titulo = ?, conteudo = ?, updated_at = datetime('now') WHERE id = ? AND proposta_id = ?`,
+      [novoTitulo, novoConteudo, clausulaId, id],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+          const nome = u?.nome || 'N/A';
+          if (titulo !== undefined && titulo !== antes.titulo) {
+            registrarEdicaoLog(id, usuarioId, nome, 'clausula_editada', 'titulo', clausulaId, antes.titulo, titulo);
+          }
+          if (conteudo !== undefined && conteudo !== antes.conteudo) {
+            registrarEdicaoLog(id, usuarioId, nome, 'clausula_editada', 'conteudo', clausulaId, antes.conteudo, conteudo);
+          }
+        });
+
+        res.json({ ok: true });
+      }
+    );
+  });
+});
+
+// DELETE /api/propostas/:id/clausulas/:clausulaId — remove cláusula (soft delete)
+app.delete('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id, clausulaId } = req.params;
+  const usuarioId = req.user.id;
+
+  db.get('SELECT titulo FROM proposta_clausulas WHERE id = ? AND proposta_id = ?', [clausulaId, id], (err, c) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!c) return res.status(404).json({ error: 'Cláusula não encontrada' });
+
+    db.run(
+      `UPDATE proposta_clausulas SET ativo = 0, updated_at = datetime('now') WHERE id = ? AND proposta_id = ?`,
+      [clausulaId, id],
+      (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+          registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausula_removida', 'titulo', clausulaId, c.titulo, null);
+        });
+
+        res.json({ ok: true });
+      }
+    );
+  });
+});
+
+// GET /api/propostas/:id/edicoes-log
+app.get('/api/propostas/:id/edicoes-log', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(50, parseInt(req.query.limit) || 20);
+  const offset = (page - 1) * limit;
+
+  db.get('SELECT COUNT(*) as total FROM proposta_edicoes_log WHERE proposta_id = ?', [id], (err, countRow) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    db.all(
+      `SELECT * FROM proposta_edicoes_log WHERE proposta_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [id, limit, offset],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ logs: rows || [], total: countRow?.total || 0, page, limit });
+      }
+    );
+  });
+});
+
 // ========== ROTAS DE RELATÓRIOS EXECUTIVOS ==========
 app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
   if (!db) {
@@ -7728,11 +8053,21 @@ app.get('/api/propostas/:id/premium', (req, res) => {
     if (!proposta) {
       return sendOnce(404, { error: 'Proposta não encontrada' });
     }
-    
+
+    // Aplicar customizações de campos editáveis (se existirem)
+    db.get('SELECT * FROM proposta_customizacoes WHERE proposta_id = ?', [id], (errC, custom) => {
+    if (errC) console.error('Erro ao buscar customizacoes para preview:', errC);
+    if (!errC && custom) {
+      if (custom.cliente_nome) proposta.razao_social = custom.cliente_nome;
+      if (custom.cliente_email) proposta.cliente_email = custom.cliente_email;
+      if (custom.cliente_telefone) proposta.cliente_telefone = custom.cliente_telefone;
+      if (custom.cliente_contato) proposta.cliente_contato = custom.cliente_contato;
+    }
+
     const requestBaseURL = (process.env.API_URL && process.env.API_URL.trim())
       ? process.env.API_URL.replace(/\/$/, '')
       : (req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000');
-    
+
     // Buscar itens da proposta com dados completos dos produtos (produto_imagem explícito para exibir foto do produto)
     db.all(`
       SELECT pi.*, pr.id as produto_id, pr.codigo as produto_codigo, pr.nome as produto_nome, pr.imagem as produto_imagem,
@@ -7838,6 +8173,13 @@ app.get('/api/propostas/:id/premium', (req, res) => {
           templateConfig.margin_impressao_lateral = templateConfig.margin_impressao_lateral != null ? Number(templateConfig.margin_impressao_lateral) : 20;
           templateConfig.margin_navegador_top = templateConfig.margin_navegador_top != null ? Number(templateConfig.margin_navegador_top) : 19;
           templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
+
+          // Aplicar cláusulas customizadas (se existirem para esta proposta)
+          db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (errCl, clausulas) => {
+          if (!errCl && clausulas && clausulas.length > 0) {
+            templateConfig.clausulas_custom = clausulas;
+          }
+
           const hasHeaderOrFooter = (templateConfig.header_image_url && String(templateConfig.header_image_url).trim()) || (templateConfig.footer_image_url && String(templateConfig.footer_image_url).trim());
           const tryMergeImages = (cb) => {
             if (hasHeaderOrFooter) return cb();
@@ -7945,12 +8287,14 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             runGerarSafe();
           });
         });
+        }); // fecha db.all clausulas
       });
       } catch (error) {
         console.error('Erro geral ao processar proposta:', error);
         sendOnce(500, { error: 'Erro ao gerar preview da proposta: ' + (error && error.message ? error.message : String(error)) });
       }
     });
+    }); // fecha db.get customizacoes
   });
   } catch (topError) {
     console.error('Erro no handler /api/propostas/:id/premium:', topError);
@@ -8168,6 +8512,26 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       }
     }
     
+    // Aplicar customizações de campos editáveis no PDF
+    const customizacoes = await new Promise((resolve) => {
+      db.get('SELECT * FROM proposta_customizacoes WHERE proposta_id = ?', [id], (err, row) => resolve(row || null));
+    });
+    if (customizacoes) {
+      if (customizacoes.cliente_nome) proposta.razao_social = customizacoes.cliente_nome;
+      if (customizacoes.cliente_email) proposta.cliente_email = customizacoes.cliente_email;
+      if (customizacoes.cliente_telefone) proposta.cliente_telefone = customizacoes.cliente_telefone;
+      if (customizacoes.cliente_contato) proposta.cliente_contato = customizacoes.cliente_contato;
+    }
+
+    // Aplicar cláusulas customizadas no PDF
+    const clausulasPdf = await new Promise((resolve) => {
+      db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (err, rows) => resolve(rows || []));
+    });
+    if (clausulasPdf.length > 0) {
+      templateConfig = templateConfig || {};
+      templateConfig.clausulas_custom = clausulasPdf;
+    }
+
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
     let html;
     const usouSnapshot = proposta.html_rendered && String(proposta.html_rendered).trim().length > 0;
@@ -11861,6 +12225,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     };
 
     // 4.0 DESCRITIVO DOS EQUIPAMENTOS: 4.1 / 4.2 / ...
+    // Verifica se pelo menos um item tem conteúdo técnico para exibir
+    const algumItemComDados = (itens || []).some(it =>
+      (it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '').trim() ||
+      (it.produto_imagem || it.produto_imagem_base64 || it.imagem || '').trim() ||
+      (it.especificacoes_tecnicas || it.produto_especificacoes || '').trim()
+    );
+
     const equipDescritivoHtml = (itens || []).map((it, idx) => {
       const n = idx + 1;
       const itemNo = `4.${n}`;
@@ -11901,7 +12272,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             : '';
         descritivoTec = esc(String(cand || '').trim());
       }
-      if (!descritivoTec) descritivoTec = '—';
+      if (!descritivoTec) descritivoTec = '<em style="color:var(--muted);font-style:italic;">Descrição técnica não cadastrada. Acesse o cadastro do produto para preenchê-la.</em>';
 
       const normKey = (s) => String(s || '')
         .trim()
@@ -11964,38 +12335,37 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           })();
 
       const fotoHtml = produtoImagem
-        ? `<img class="equip-photo-img" src="${produtoImagem}" alt="Foto do equipamento" onerror="this.style.display='none'; this.parentElement.querySelector('.equip-photo-fallback').style.display='block';" />`
+        ? `<div class="equip-photo-top">
+             <img class="equip-photo-img-top" src="${produtoImagem}" alt="Foto do equipamento"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+             <div class="equip-photo-fallback-top" style="display:none;">Foto não disponível</div>
+           </div>`
         : '';
 
       return `
         <section class="block stack-md allow-break">
           <h3>${itemNo} ${nome}</h3>
-          <div class="equip-descritivo">
-            <div class="equip-tech">
-              <table class="table" data-split-table="true">
-                <thead>
-                  <tr>
-                    <th colspan="2">Dados técnicos do produto</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><th>Equipamento</th><td>${nome}</td></tr>
-                  <tr><th>Código</th><td>${codigo}</td></tr>
-                  <tr><th>Quantidade</th><td>${qtd}</td></tr>
-                  <tr><th>Unidade</th><td>${und}</td></tr>
-                  <tr><th>Família</th><td>${familia}</td></tr>
-                  <tr><th>Modelo</th><td>${modelo}</td></tr>
-                  <tr><th>Categoria</th><td>${categoria}</td></tr>
-                  <tr><th>NCM</th><td>${ncm}</td></tr>
-                  <tr><th>Descritivo técnico</th><td>${descritivoTec}</td></tr>
-                  ${specRowsHtml}
-                </tbody>
-              </table>
-            </div>
-            <div class="equip-photo">
-              ${fotoHtml}
-              <div class="equip-photo-fallback" style="display:${produtoImagem ? 'none' : 'block'}">Foto não disponível</div>
-            </div>
+          ${fotoHtml}
+          <div class="equip-tech">
+            <table class="table" data-split-table="true">
+              <thead>
+                <tr>
+                  <th colspan="2">Dados técnicos do produto</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><th>Equipamento</th><td>${nome}</td></tr>
+                <tr><th>Código</th><td>${codigo}</td></tr>
+                <tr><th>Quantidade</th><td>${qtd}</td></tr>
+                <tr><th>Unidade</th><td>${und}</td></tr>
+                <tr><th>Família</th><td>${familia}</td></tr>
+                <tr><th>Modelo</th><td>${modelo}</td></tr>
+                <tr><th>Categoria</th><td>${categoria}</td></tr>
+                <tr><th>NCM</th><td>${ncm}</td></tr>
+                <tr><th>Descritivo técnico</th><td>${descritivoTec}</td></tr>
+                ${specRowsHtml}
+              </tbody>
+            </table>
           </div>
         </section>
       `;
@@ -12023,13 +12393,68 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </tr>`;
     }).join('');
 
+    const clausulasSection = (() => {
+      if (templateConfig && Array.isArray(templateConfig.clausulas_custom) && templateConfig.clausulas_custom.length > 0) {
+        const assinaturasHtml = `
+          <div class="signature-grid avoid-break">
+            <div class="sig-col">
+              <div class="sig-name">Junior Machado</div>
+              <div class="sig-role">Diretor Comercial</div>
+              <div class="sig-line">T +55 (11) 4513-9570</div>
+              <div class="sig-line">M +55 (11) 9.9351-5046</div>
+              <div class="sig-email">junior@gmp.ind.br</div>
+            </div>
+            <div class="sig-col">
+              <div class="sig-name">Bruno Machado</div>
+              <div class="sig-role">Gerente Comercial</div>
+              <div class="sig-line">T +55 (11) 4513-9570</div>
+              <div class="sig-line">M +55 (11) 9.9351-5543</div>
+              <div class="sig-email">bruno@gmp.ind.br</div>
+            </div>
+            <div class="sig-col">
+              <div class="sig-name">Alex Junior</div>
+              <div class="sig-role">Vendas Técnica</div>
+              <div class="sig-line">T +55 (11) 4513-9570</div>
+              <div class="sig-line">M +55 (11) 9.8908-5127</div>
+              <div class="sig-email">alexjunior@gmp.ind.br</div>
+            </div>
+            <div class="sig-col">
+              <div class="sig-name">Matheus Honrado</div>
+              <div class="sig-role">Depto. Comercial</div>
+              <div class="sig-line">T +55 (11) 4513-9570</div>
+              <div class="sig-line">M +55 (11) 9.3386-9232</div>
+              <div class="sig-email">matheus@gmp.ind.br</div>
+            </div>
+          </div>`;
+        const clausulasRenderizadas = templateConfig.clausulas_custom.map(c => {
+          const raw = c.conteudo || '';
+          // If content has no HTML tags, treat as plain text: wrap each paragraph in <p>
+          const html = /<[a-z][\s\S]*>/i.test(raw)
+            ? raw
+            : raw.split(/\n{2,}/).map(p => `<p>${esc(p.trim())}</p>`).join('') || '<p></p>';
+          return `<section class="block stack-md allow-break">
+            <h3>${esc(c.titulo)}</h3>
+            <div class="stack-sm">${html}</div>
+          </section>`;
+        }).join('');
+        return `
+          <section class="block stack-md avoid-break five-intro-group">
+            <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
+            ${clausulasRenderizadas}
+            <section class="block stack-md allow-break">${assinaturasHtml}</section>
+          </section>`;
+      }
+      return null;
+    })();
+
     const blocksHtml = `
       <section class="block stack-md allow-break">
         <h2>4.0 DESCRITIVO DOS EQUIPAMENTOS</h2>
+        ${(itens && itens.length > 0 && !algumItemComDados) ? `<p style="color:var(--muted);font-style:italic;font-size:10pt;margin-top:2mm;">As informações técnicas não estão cadastradas nos produtos desta proposta. Acesse o cadastro de produtos para preenchê-las.</p>` : ''}
       </section>
       ${equipDescritivoHtml || `<section class="block stack-md allow-break"><p class="muted">Nenhum equipamento selecionado nesta proposta.</p></section>`}
 
-      <section class="block stack-md avoid-break five-intro-group">
+      ${clausulasSection !== null ? clausulasSection : `<section class="block stack-md avoid-break five-intro-group">
         <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
 
         <section class="block stack-md allow-break">
@@ -12420,6 +12845,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </div>
         </div>
       </section>
+    `}
     `;
 
     const pageHeaderTemplateHtml = `
@@ -12443,7 +12869,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           Página <span class="js-page-number"></span> de <span class="js-page-count"></span>
         </div>
       </div>
-      ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" onerror="this.remove();" />` : ''}`;
+      ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" onerror="this.style.display='none';var fi=this.parentElement&&this.parentElement.querySelector('.page-footer-inner');if(fi)fi.style.display='';" />` : ''}`;
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -12530,11 +12956,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .col-center { text-align: center; }
     .tech-desc { margin-top: 4px; font-size: 10pt; line-height: 1.15; color: var(--muted); text-align: justify; }
 
-    .equip-descritivo { display: flex; gap: 12mm; align-items: flex-start; }
-    .equip-photo { flex: 0 0 60mm; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
-    .equip-photo-img { width: 100%; height: 70mm; object-fit: contain; border-radius: 6px; }
-    .equip-photo-fallback { font-size: 10pt; color: var(--muted); text-align: center; padding: 22mm 6mm; background: var(--blue-100); border-radius: 6px; }
-    .equip-tech { flex: 1 1 auto; min-width: 0; }
+    .equip-photo-top { text-align: center; margin-bottom: 6mm; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
+    .equip-photo-img-top { max-height: 90mm; max-width: 100%; object-fit: contain; border-radius: 6px; display: block; margin: 0 auto; }
+    .equip-photo-fallback-top { display: flex; align-items: center; justify-content: center; min-height: 30mm; font-size: 10pt; color: var(--muted); background: var(--blue-100); border-radius: 6px; }
+    .equip-tech { width: 100%; }
 
     /* Assinaturas/setor comercial (após “Atenciosamente,”) */
     .signature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10mm; align-items: start; margin-top: 8mm; }
@@ -12958,7 +13383,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               if (i > 0) {
                 const heading = partBlock.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6');
                 if (heading) heading.remove();
-                const equipPhoto = partBlock.querySelector('.equip-photo');
+                const equipPhoto = partBlock.querySelector('.equip-photo-top');
                 if (equipPhoto) equipPhoto.remove();
                 const thead = t && t.querySelector('thead');
                 if (thead) thead.remove();

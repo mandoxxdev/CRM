@@ -76,13 +76,7 @@ export default function PropostasList() {
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
 
   const abrirPreview = (id) => {
-    api.get(`/propostas/${id}/premium`, { responseType: 'text' }).then(({ data }) => {
-      const url = URL.createObjectURL(new Blob([data], { type: 'text/html;charset=utf-8' }));
-      window.open(url, '_blank');
-    }).catch((e) => {
-      const msg = e.response?.data?.error || e.message || 'Erro ao abrir proposta.';
-      toast.error(typeof msg === 'string' ? msg : 'Erro ao abrir proposta.');
-    });
+    window.open(`/comercial/propostas/${id}/preview-editavel`, '_blank');
   };
 
   const baixarPdf = async (id, numero) => {
