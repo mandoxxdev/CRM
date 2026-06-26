@@ -50,9 +50,16 @@ const getSaudacao = () => {
   return 'Boa noite';
 };
 
+// Nome + inicial do sobrenome, ex.: "Matheus H."
 const getPrimeiroNome = (nome) => {
   if (!nome) return '';
-  return nome.trim().split(/\s+/)[0];
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  const primeiro = partes[0] || '';
+  const sobrenome = partes[partes.length - 1];
+  if (partes.length > 1 && sobrenome) {
+    return `${primeiro} ${sobrenome[0].toUpperCase()}.`;
+  }
+  return primeiro;
 };
 
 const TipoSelecao = ({ onClose, forceShow = false }) => {
