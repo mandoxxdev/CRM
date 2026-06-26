@@ -38,6 +38,7 @@ const UsuarioForm = () => {
     flag_compras: 0,
     flag_ti: 0,
     is_superadmin: 0,
+    pode_editar_conta: 1,
   });
 
   const [modulosSelecionados, setModulosSelecionados] = useState([]);
@@ -92,6 +93,9 @@ const UsuarioForm = () => {
         flag_compras: response.data.flag_compras ? 1 : 0,
         flag_ti: response.data.flag_ti ? 1 : 0,
         is_superadmin: response.data.is_superadmin ? 1 : 0,
+        pode_editar_conta: response.data.pode_editar_conta !== undefined && response.data.pode_editar_conta !== null
+          ? (response.data.pode_editar_conta ? 1 : 0)
+          : 1,
       };
       
       console.log('📝 Dados do usuário a serem definidos:', usuarioData);
@@ -225,6 +229,7 @@ const UsuarioForm = () => {
         flag_vendedor: formData.flag_vendedor ? 1 : 0,
         flag_compras: formData.flag_compras ? 1 : 0,
         flag_ti: formData.flag_ti ? 1 : 0,
+        pode_editar_conta: formData.pode_editar_conta ? 1 : 0,
         admin_modulos: modulosAdmin,
       };
 
@@ -633,6 +638,18 @@ const UsuarioForm = () => {
                 <span>Pode aprovar descontos</span>
               </label>
               <p className="field-hint">Este usuário receberá notificações de solicitações de aprovação de desconto</p>
+            </div>
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="pode_editar_conta"
+                  checked={formData.pode_editar_conta === 1}
+                  onChange={handleChange}
+                />
+                <span>Pode editar a própria conta (Minha Conta)</span>
+              </label>
+              <p className="field-hint">Desmarque para remover o acesso deste usuário às configurações de conta (senha, dados pessoais e foto).</p>
             </div>
           </div>
         </div>

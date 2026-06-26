@@ -68,9 +68,11 @@ export const AtividadesColaboradores = page(() => import('../components/operacio
 export const ControlePresenca = page(() => import('../components/operacional/ControlePresenca'));
 export const HorasExtras = page(() => import('../components/operacional/HorasExtras'));
 export const Equipamentos = page(() => import('../components/operacional/Equipamentos'));
+export const ProducaoMES = page(() => import('../components/operacional/Producao'));
 export const Configuracoes = page(() => import('../components/Configuracoes'));
 export const Permissoes = page(() => import('../components/Permissoes'));
 export const Usuarios = page(() => import('../components/Usuarios'));
+export const MinhaConta = page(() => import('../components/MinhaConta'));
 export const UsuarioForm = page(() => import('../components/UsuarioForm'));
 export const Admin = page(() => import('../components/Admin'));
 export const Layout = shell(() => import('../components/Layout'), 'sistema');

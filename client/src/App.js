@@ -54,6 +54,7 @@ import {
   ControlePresenca,
   HorasExtras,
   Equipamentos,
+  ProducaoMES,
   Configuracoes,
   UsuarioForm,
   Admin,
@@ -93,6 +94,7 @@ import {
   MapaLocalizacoesAlmoxarifado,
   RecebimentosAlmoxarifado,
   ChatPage,
+  MinhaConta,
 } from './routes/lazyModules';
 
 const PrivateRoute = ({ children }) => {
@@ -203,6 +205,15 @@ function AppRoutes() {
       >
         <Route index element={<ChatPage />} />
       </Route>
+      {/* Minha Conta — acessível a qualquer usuário autenticado (página standalone) */}
+      <Route
+        path="/minha-conta"
+        element={
+          <PrivateRoute>
+            <MinhaConta />
+          </PrivateRoute>
+        }
+      />
       <Route
         path="/comercial"
         element={
@@ -360,8 +371,9 @@ function AppRoutes() {
         <Route path="equipamentos" element={<Equipamentos />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="operacional" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="operacional" />} />
+        {/* Produção — Chão de fábrica (Kanban de apontamento) */}
+        <Route path="producao" element={<ProducaoMES />} />
         {/* Rotas MES - Placeholder para futuras implementações */}
-        <Route path="producao/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Módulo de Produção (MES)</h2><p>Em desenvolvimento...</p></div>} />
         <Route path="planejamento/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Planejamento (APS/MRP)</h2><p>Em desenvolvimento...</p></div>} />
         <Route path="supervisao/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Supervisão (SCADA/HMI)</h2><p>Em desenvolvimento...</p></div>} />
         <Route path="qualidade/*" element={<div style={{ padding: '40px', textAlign: 'center' }}><h2>Controle de Qualidade</h2><p>Em desenvolvimento...</p></div>} />

@@ -322,6 +322,12 @@ if (!fs.existsSync(uploadsLogosDir)) {
   fs.mkdirSync(uploadsLogosDir, { recursive: true });
 }
 
+// Diretório para fotos de perfil dos usuários (avatares)
+const uploadsAvataresDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'avatares');
+if (!fs.existsSync(uploadsAvataresDir)) {
+  fs.mkdirSync(uploadsAvataresDir, { recursive: true });
+}
+
 // Diretório para uploads de chat (arquivos e imagens)
 const uploadsChatDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'chat');
 if (!fs.existsSync(uploadsChatDir)) {
@@ -654,6 +660,31 @@ const uploadLogo = multer({
     } else {
       cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP, SVG)'));
     }
+  }
+});
+
+// Storage específico para fotos de perfil (avatares)
+const storageAvatar = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsAvataresDir);
+  },
+  filename: (req, file, cb) => {
+    const userId = req.user?.id || 'x';
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    cb(null, `avatar_${userId}_${timestamp}${ext}`);
+  }
+});
+
+const uploadAvatar = multer({
+  storage: storageAvatar,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) return cb(null, true);
+    cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
   }
 });
 
@@ -2055,6 +2086,14 @@ function executeMigrations(callback) {
         { nome: 'is_superadmin', tipo: 'INTEGER DEFAULT 0' },
         { nome: 'admin_modulos', tipo: 'TEXT DEFAULT \'[]\'' },
         { nome: 'is_oculto', tipo: 'INTEGER DEFAULT 0' },
+        // Configurações de conta (perfil do próprio usuário)
+        { nome: 'telefone', tipo: 'TEXT' },
+        { nome: 'ramal', tipo: 'TEXT' },
+        { nome: 'data_nascimento', tipo: 'TEXT' },
+        { nome: 'bio', tipo: 'TEXT' },
+        { nome: 'foto_url', tipo: 'TEXT' },
+        // Acesso ao módulo "Minha Conta" (1 = liberado; o admin pode remover por usuário)
+        { nome: 'pode_editar_conta', tipo: 'INTEGER DEFAULT 1' },
       ];
 
       colunasUsersFiltro.forEach((coluna) => {
@@ -2822,6 +2861,9 @@ function buildAuthUserPayload(db, user, callback) {
       flag_vendedor: !!user.flag_vendedor,
       flag_compras: !!user.flag_compras,
       flag_ti: !!user.flag_ti,
+      foto_url: user.foto_url || null,
+      telefone: user.telefone || null,
+      pode_editar_conta: user.pode_editar_conta == null ? 1 : (isTruthyFlag(user.pode_editar_conta) ? 1 : 0),
       perfil_almoxarifado: moduleContext?.perfil_almoxarifado || null,
       perfil_frota: moduleContext?.perfil_frota || null,
     });
@@ -2867,6 +2909,94 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
       if (payloadErr) return res.status(500).json({ error: payloadErr.message });
       res.json({ user: userPayload });
     });
+  });
+});
+
+// ========== MÓDULO: MINHA CONTA (configurações do próprio usuário) ==========
+// Todo usuário autenticado pode editar a PRÓPRIA conta, a menos que o admin tenha
+// removido o acesso (usuarios.pode_editar_conta = 0). Admins/superadmins sempre podem.
+function requireContaAcesso(req, res, next) {
+  if (isSystemAdmin(req.user)) return next();
+  db.get('SELECT pode_editar_conta FROM usuarios WHERE id = ?', [req.user.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    const liberado = !row || row.pode_editar_conta == null || isTruthyFlag(row.pode_editar_conta);
+    if (!liberado) {
+      return res.status(403).json({ error: 'O acesso às configurações de conta foi desativado pelo administrador.' });
+    }
+    next();
+  });
+}
+
+// Perfil do próprio usuário
+app.get('/api/conta', authenticateToken, requireContaAcesso, (req, res) => {
+  db.get(`SELECT id, nome, email, cargo, setor, departamento, telefone, ramal,
+            data_nascimento, bio, foto_url, created_at
+          FROM usuarios WHERE id = ?`, [req.user.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Usuário não encontrado' });
+    res.json(row);
+  });
+});
+
+// Atualizar informações pessoais (não altera e-mail/cargo/setor — esses são geridos pelo admin)
+app.put('/api/conta', authenticateToken, requireContaAcesso, (req, res) => {
+  const { nome, telefone, ramal, data_nascimento, bio } = req.body || {};
+  if (nome !== undefined && !String(nome).trim()) {
+    return res.status(400).json({ error: 'O nome não pode ficar vazio' });
+  }
+  db.run(`UPDATE usuarios SET
+            nome = COALESCE(?, nome),
+            telefone = ?, ramal = ?, data_nascimento = ?, bio = ?
+          WHERE id = ?`,
+    [
+      nome !== undefined ? String(nome).trim() : null,
+      telefone ?? null, ramal ?? null, data_nascimento ?? null, bio ?? null,
+      req.user.id,
+    ],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ message: 'Informações atualizadas com sucesso' });
+    });
+});
+
+// Alterar a própria senha (exige a senha atual)
+app.put('/api/conta/senha', authenticateToken, requireContaAcesso, (req, res) => {
+  const { senha_atual, nova_senha } = req.body || {};
+  if (!senha_atual || !nova_senha) {
+    return res.status(400).json({ error: 'Informe a senha atual e a nova senha' });
+  }
+  if (String(nova_senha).length < 6) {
+    return res.status(400).json({ error: 'A nova senha deve ter pelo menos 6 caracteres' });
+  }
+  db.get('SELECT senha FROM usuarios WHERE id = ?', [req.user.id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (!bcrypt.compareSync(String(senha_atual), row.senha)) {
+      return res.status(400).json({ error: 'Senha atual incorreta' });
+    }
+    const hash = bcrypt.hashSync(String(nova_senha), 10);
+    db.run('UPDATE usuarios SET senha = ? WHERE id = ?', [hash, req.user.id], (e2) => {
+      if (e2) return res.status(500).json({ error: e2.message });
+      res.json({ message: 'Senha alterada com sucesso' });
+    });
+  });
+});
+
+// Enviar/atualizar a foto de perfil
+app.post('/api/conta/foto', authenticateToken, requireContaAcesso, uploadAvatar.single('foto'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  const filename = req.file.filename;
+  db.run('UPDATE usuarios SET foto_url = ? WHERE id = ?', [filename, req.user.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Foto atualizada com sucesso', foto_url: filename, url: `/api/uploads/avatares/${filename}` });
+  });
+});
+
+// Remover a foto de perfil
+app.delete('/api/conta/foto', authenticateToken, requireContaAcesso, (req, res) => {
+  db.run('UPDATE usuarios SET foto_url = NULL WHERE id = ?', [req.user.id], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ message: 'Foto removida com sucesso' });
   });
 });
 
@@ -3726,6 +3856,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     flag_ti,
     is_superadmin,
     admin_modulos,
+    pode_editar_conta,
   } = sanitized;
 
   if (senha && senha.length < 6) {
@@ -3760,7 +3891,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     if (senha) {
       const hashedPassword = bcrypt.hashSync(senha, 10);
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), is_oculto = 0, senha = ? WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0, senha = ? WHERE id = ?',
         [
           nome,
           email,
@@ -3775,6 +3906,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
           flag_ti ? 1 : 0,
           is_superadmin !== undefined ? is_superadmin : null,
           admin_modulos !== undefined ? admin_modulos : null,
+          pode_editar_conta !== undefined ? (pode_editar_conta ? 1 : 0) : null,
           hashedPassword,
           id
         ],
@@ -3782,7 +3914,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
       );
     } else {
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), is_oculto = 0 WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0 WHERE id = ?',
         [
           nome,
           email,
@@ -3797,6 +3929,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
           flag_ti ? 1 : 0,
           is_superadmin !== undefined ? is_superadmin : null,
           admin_modulos !== undefined ? admin_modulos : null,
+          pode_editar_conta !== undefined ? (pode_editar_conta ? 1 : 0) : null,
           id
         ],
         finishUpdate
@@ -3891,14 +4024,29 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
 
   // Tabelas cujos registros pertencem ao próprio usuário → removidos junto com ele
   // (não faz sentido transferir permissões/grupos/sessões para outra pessoa).
+  // Obs.: além desta lista, qualquer coluna que faça parte de um índice UNIQUE também é
+  // tratada como "remover" automaticamente (ver abaixo) — são tabelas de associação
+  // (participantes de chat, leituras, inscrições push) onde transferir violaria o UNIQUE.
   const PURGE_TABLES = new Set([
     'usuarios_grupos',
     'permissoes',
     'push_subscriptions',
     'mensagens_lidas',
     'conversas_participantes',
+    'chat_participantes',
     'assinaturas_digitais',
   ]);
+
+  // Verifica se a coluna participa de algum índice UNIQUE da tabela.
+  const colunaTemUnique = async (table, column) => {
+    const indices = await db.all(`PRAGMA index_list("${table}")`);
+    for (const idx of indices) {
+      if (!idx.unique) continue;
+      const cols = await db.all(`PRAGMA index_info("${idx.name}")`);
+      if (cols.some((ci) => ci.name === column)) return true;
+    }
+    return false;
+  };
 
   try {
     const target = await db.get('SELECT id FROM usuarios WHERE id = ?', [targetId]);
@@ -3937,7 +4085,10 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
     const stmts = ['BEGIN IMMEDIATE TRANSACTION;'];
     let transferidos = 0;
     for (const { table, column } of refs) {
-      if (PURGE_TABLES.has(table)) {
+      // Remove a linha quando a tabela é de dados pessoais OU quando a coluna faz parte de
+      // um índice UNIQUE (tabela de associação — transferir violaria a restrição UNIQUE).
+      const remover = PURGE_TABLES.has(table) || (await colunaTemUnique(table, column));
+      if (remover) {
         stmts.push(`DELETE FROM "${table}" WHERE "${column}" = ${targetId};`);
       } else {
         stmts.push(`UPDATE "${table}" SET "${column}" = ${transferToId} WHERE "${column}" = ${targetId};`);
@@ -17446,6 +17597,7 @@ app.use('/api/uploads/materiais-escritorio', express.static(uploadsMateriaisEscr
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE LOGOS ==========
 // Servir arquivos estáticos de logos
 app.use('/api/uploads/logos', express.static(uploadsLogosDir));
+app.use('/api/uploads/avatares', express.static(uploadsAvataresDir));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE CABEÇALHO ==========
 // Servir arquivos estáticos de imagens de cabeçalho
@@ -19553,6 +19705,9 @@ db.run(`CREATE TABLE IF NOT EXISTS status_fabricacao (
   FOREIGN KEY (item_id) REFERENCES os_itens(id) ON DELETE CASCADE,
   FOREIGN KEY (colaborador_id) REFERENCES colaboradores(id)
 )`);
+// Quantidade apontada em cada registro de fabricação (chão de fábrica) — coluna adicionada
+// posteriormente, por isso via ALTER (ignora erro caso já exista).
+db.run(`ALTER TABLE status_fabricacao ADD COLUMN quantidade REAL`, () => {});
 
 // Tabela de Atividades de Colaboradores (O que cada um está fazendo)
 db.run(`CREATE TABLE IF NOT EXISTS atividades_colaboradores (
@@ -22055,6 +22210,113 @@ app.post('/api/operacional/status-fabricacao', authenticateToken, checkModulePer
       }
       res.json({ id: this.lastID, message: 'Status de fabricação registrado com sucesso' });
     });
+});
+
+// ===================== PRODUÇÃO (Chão de fábrica / Kanban) =====================
+// Etapas padrão usadas quando ainda não há etapas cadastradas em etapas_fabricacao.
+const ETAPAS_PRODUCAO_PADRAO = ['Corte', 'Caldeiraria', 'Usinagem', 'Montagem', 'Pintura', 'Inspeção Final'];
+
+// Quadro Kanban: etapas (colunas), itens das OS ativas (cartões) e colaboradores (para o modal).
+app.get('/api/operacional/producao/kanban', authenticateToken, checkModulePermission('operacional'), (req, res) => {
+  // 1) Etapas (de etapas_fabricacao ativas, ordenadas; senão, padrão)
+  db.all(`SELECT nome FROM etapas_fabricacao WHERE ativo = 1 ORDER BY ordem ASC, id ASC`, [], (errEtapas, etapasRows) => {
+    const etapas = (!errEtapas && etapasRows && etapasRows.length > 0)
+      ? etapasRows.map(e => e.nome)
+      : ETAPAS_PRODUCAO_PADRAO;
+
+    // 2) Colaboradores para o apontamento
+    db.all(`SELECT id, nome FROM colaboradores ORDER BY nome ASC`, [], (errColab, colaboradores) => {
+      // 3) Itens das OS ativas (não concluídas/canceladas) com o último apontamento
+      db.all(`
+        SELECT
+          oi.id, oi.os_id, oi.descricao, oi.quantidade, oi.unidade,
+          oi.etapa_fabricacao, oi.status_item,
+          os.numero_os, os.prioridade, os.data_prevista, os.nome_equipamento,
+          COALESCE(cl.nome_fantasia, cl.razao_social) AS cliente,
+          sf.percentual_conclusao, sf.colaborador_id, c.nome AS colaborador_nome
+        FROM os_itens oi
+        INNER JOIN ordens_servico os ON oi.os_id = os.id
+        LEFT JOIN clientes cl ON os.cliente_id = cl.id
+        LEFT JOIN status_fabricacao sf ON sf.id = (
+          SELECT id FROM status_fabricacao s2
+          WHERE s2.item_id = oi.id
+          ORDER BY s2.created_at DESC, s2.id DESC LIMIT 1
+        )
+        LEFT JOIN colaboradores c ON sf.colaborador_id = c.id
+        WHERE os.status NOT IN ('concluida', 'cancelada', 'encerrada')
+        ORDER BY
+          CASE os.prioridade WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+          os.data_prevista ASC, oi.id ASC
+      `, [], (errItens, itens) => {
+        if (errItens) {
+          return res.status(500).json({ error: errItens.message });
+        }
+        res.json({
+          etapas,
+          colaboradores: colaboradores || [],
+          itens: (itens || []).map(it => ({
+            ...it,
+            percentual_conclusao: it.percentual_conclusao != null ? it.percentual_conclusao : 0,
+          })),
+        });
+      });
+    });
+  });
+});
+
+// Apontamento de produção: move o item para uma etapa e registra o evento (alimenta o MES).
+app.post('/api/operacional/producao/apontar', authenticateToken, checkModulePermission('operacional'), (req, res) => {
+  const { item_id, os_id, etapa, status, percentual_conclusao, colaborador_id, quantidade, observacoes } = req.body || {};
+
+  if (!item_id || !os_id || !etapa) {
+    return res.status(400).json({ error: 'item_id, os_id e etapa são obrigatórios' });
+  }
+
+  const etapaLower = String(etapa).toLowerCase();
+  const concluido = status === 'concluido' || etapaLower === 'concluído' || etapaLower === 'concluido';
+  const statusItem = concluido ? 'concluido' : 'em_andamento';
+  const pct = concluido ? 100 : (percentual_conclusao != null ? Math.max(0, Math.min(100, Number(percentual_conclusao))) : 0);
+  const agora = new Date().toISOString();
+
+  // 1) Registra o apontamento (log) em status_fabricacao
+  db.run(`INSERT INTO status_fabricacao
+      (os_id, item_id, etapa, status, percentual_conclusao, data_inicio, data_fim, colaborador_id, quantidade, observacoes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      os_id, item_id, etapa, statusItem, pct,
+      agora, concluido ? agora : null,
+      colaborador_id || null, quantidade != null ? Number(quantidade) : null, observacoes || null,
+    ],
+    function (errLog) {
+      if (errLog) {
+        return res.status(500).json({ error: errLog.message });
+      }
+      const apontamentoId = this.lastID;
+      // 2) Atualiza o item (etapa atual + status) — alimenta o Kanban e o dashboard MES
+      db.run(`UPDATE os_itens SET etapa_fabricacao = ?, status_item = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [etapa, statusItem, item_id],
+        function (errItem) {
+          if (errItem) {
+            return res.status(500).json({ error: errItem.message });
+          }
+          res.json({ id: apontamentoId, message: 'Apontamento registrado com sucesso', status_item: statusItem, percentual_conclusao: pct });
+        });
+    });
+});
+
+// Histórico de apontamentos de um item (para abrir no cartão)
+app.get('/api/operacional/producao/item/:itemId/historico', authenticateToken, checkModulePermission('operacional'), (req, res) => {
+  const { itemId } = req.params;
+  db.all(`SELECT sf.*, c.nome AS colaborador_nome
+    FROM status_fabricacao sf
+    LEFT JOIN colaboradores c ON sf.colaborador_id = c.id
+    WHERE sf.item_id = ?
+    ORDER BY sf.created_at DESC, sf.id DESC`, [itemId], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows || []);
+  });
 });
 
 // Atividades de Colaboradores (O que cada um está fazendo)

@@ -432,8 +432,15 @@ const Layout = () => {
         </nav>
         <div className="sidebar-footer">
           <div className="user-info">
+            {user?.foto_url && (
+              <img
+                className="user-avatar-mini"
+                src={`${api.defaults.baseURL}/uploads/avatares/${user.foto_url}`}
+                alt={user?.nome || 'Perfil'}
+              />
+            )}
             {sidebarOpen && (
-              <>
+              <div className="user-info-text">
                 <div className="user-name">{user?.nome}</div>
                 <div className="user-role">
                   {userGrupos.length > 0 ? (
@@ -447,9 +454,15 @@ const Layout = () => {
                     <span>Sem grupo</span>
                   )}
                 </div>
-              </>
+              </div>
             )}
           </div>
+          {(isSystemAdmin(user) || user?.pode_editar_conta !== 0) && (
+            <Link to="/minha-conta" className="account-button">
+              <FiSettings />
+              {sidebarOpen && <span>Minha Conta</span>}
+            </Link>
+          )}
           <button className="logout-button" onClick={handleLogout}>
             <FiLogOut />
             {sidebarOpen && <span>Sair</span>}
