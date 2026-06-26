@@ -3645,15 +3645,42 @@ app.get('/api/usuarios', authenticateToken, (req, res) => {
             gruposPorUsuario[g.usuario_id].push({ id: g.id, nome: g.nome, ativo: g.ativo });
           });
 
-          const usuariosComGrupos = rows.map((usuario) => ({
-            ...usuario,
-            is_superadmin: !!usuario.is_superadmin,
-            is_oculto: !!usuario.is_oculto,
-            admin_modulos: parseAdminModulos(usuario.admin_modulos),
-            grupos: gruposPorUsuario[usuario.id] || [],
-          }));
+          // Módulos acessíveis por usuário (permissão direta + via grupo) — usado para
+          // mostrar as badges de módulo ao lado do nome na lista de usuários.
+          const modulosSql = `
+            SELECT usuario_id, modulo FROM permissoes
+              WHERE usuario_id IN (${placeholders}) AND (grupo_id IS NULL OR grupo_id = 0) AND permissao = 1
+            UNION
+            SELECT ug.usuario_id, p.modulo FROM usuarios_grupos ug
+              INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.permissao = 1
+              WHERE ug.usuario_id IN (${placeholders})
+          `;
+          db.all(modulosSql, [...userIds, ...userIds], (errMods, modRows) => {
+            if (errMods) {
+              if (isSqliteBusy(errMods)) {
+                return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
+              }
+              return res.status(500).json({ error: errMods.message });
+            }
 
-          res.json(usuariosComGrupos);
+            const modulosPorUsuario = {};
+            (modRows || []).forEach((m) => {
+              if (!m.modulo) return;
+              if (!modulosPorUsuario[m.usuario_id]) modulosPorUsuario[m.usuario_id] = new Set();
+              modulosPorUsuario[m.usuario_id].add(m.modulo);
+            });
+
+            const usuariosComGrupos = rows.map((usuario) => ({
+              ...usuario,
+              is_superadmin: !!usuario.is_superadmin,
+              is_oculto: !!usuario.is_oculto,
+              admin_modulos: parseAdminModulos(usuario.admin_modulos),
+              grupos: gruposPorUsuario[usuario.id] || [],
+              modulos: Array.from(modulosPorUsuario[usuario.id] || []),
+            }));
+
+            res.json(usuariosComGrupos);
+          });
         }
       );
     }
@@ -23344,6 +23371,9 @@ require('./routes/frotas')(app, db, authenticateToken, checkModulePermission);
 
 // Módulo Produção (MES) — GMP Industriais
 require('./routes/producao')(app, db, authenticateToken, checkModulePermission);
+
+// Adaptador de WhatsApp (recebe {to,message} do alertService e envia via Z-API/Meta)
+require('./routes/whatsappGateway')(app);
 
 // ── Módulo Chat Interno ──────────────────────────────────────────────────────
 let chatSocket = null;

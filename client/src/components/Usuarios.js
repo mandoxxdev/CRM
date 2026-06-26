@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { canDeleteUsers, canManageUsers, parseAdminModulos } from '../utils/systemPermissions';
+import { MODULOS_META, modulosDoUsuario } from '../constants/modulosMeta';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiUser, FiShield, FiDownload, FiStar, FiUserX, FiUserCheck } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
@@ -224,7 +225,32 @@ const Usuarios = ({ deferMs = 200 }) => {
                       <div className="user-avatar">
                         <FiUser />
                       </div>
-                      <span>{usuario.nome}</span>
+                      <div className="user-cell-text">
+                        <span className="user-cell-nome">{usuario.nome}</span>
+                        {(() => {
+                          const mods = modulosDoUsuario(usuario);
+                          if (mods.length === 0) return null;
+                          return (
+                            <div className="user-modulos-badges">
+                              {mods.map((key) => {
+                                const meta = MODULOS_META[key];
+                                if (!meta) return null;
+                                const Icon = meta.icon;
+                                return (
+                                  <span
+                                    key={key}
+                                    className="modulo-badge"
+                                    style={{ background: meta.gradient }}
+                                    title={meta.nome}
+                                  >
+                                    <Icon />
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </td>
                   <td>{usuario.email}</td>

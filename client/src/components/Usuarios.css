@@ -338,6 +338,44 @@
   flex-wrap: wrap;
 }
 
+.usuarios .user-cell-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.usuarios .user-cell-nome {
+  font-weight: 600;
+}
+
+.usuarios .user-modulos-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.usuarios .modulo-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  transition: transform 0.12s ease;
+}
+
+.usuarios .modulo-badge:hover {
+  transform: translateY(-1px) scale(1.08);
+}
+
+.usuarios .modulo-badge svg {
+  width: 13px;
+  height: 13px;
+}
+
 .usuarios .user-avatar.ghost {
   background: rgba(108, 117, 125, 0.15);
   color: #6c757d;
