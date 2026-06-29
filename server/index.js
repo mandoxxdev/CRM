@@ -17409,11 +17409,12 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     taxaConversaoFamilia: [],
     rankClientesPorSegmento: [],
     motivoNaoVenda: [],
-    cotacoesComLembrete: []
+    cotacoesComLembrete: [],
+    topClientesPorValor: []
   };
 
   let completed = 0;
-  const total = 10;
+  const total = 11;
 
   const checkComplete = () => {
     completed++;
@@ -17472,6 +17473,23 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     LIMIT 10
   `, [], (err, rows) => {
     if (!err) dados.rankClientesPropostas = rows || [];
+    checkComplete();
+  });
+
+  // 4b. Top clientes por VALOR de propostas (cadastradas ou enviadas) — quem atacar
+  db.all(`
+    SELECT c.id, c.razao_social, c.nome_fantasia,
+           COUNT(*) as total_propostas,
+           SUM(COALESCE(p.valor_total, 0)) as valor_total
+    FROM propostas p
+    JOIN clientes c ON p.cliente_id = c.id
+    WHERE ${sqlPropostaAtivaAlias('p')}
+    GROUP BY c.id
+    HAVING valor_total > 0
+    ORDER BY valor_total DESC
+    LIMIT 10
+  `, [], (err, rows) => {
+    if (!err) dados.topClientesPorValor = rows || [];
     checkComplete();
   });
 

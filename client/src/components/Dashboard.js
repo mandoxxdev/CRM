@@ -922,6 +922,52 @@ const Dashboard = () => {
               </ResponsiveContainer>
             </div>
 
+            {/* 1b. Top Clientes por Valor de Propostas — quem priorizar */}
+            <div className="chart-card premium-chart-card" data-aos="fade-up">
+              <div className="chart-header">
+                <h3>Top Clientes por Valor de Propostas</h3>
+                <p>Maiores valores em propostas cadastradas/enviadas — quem priorizar</p>
+              </div>
+              {(dadosAvancados.topClientesPorValor || []).length === 0 ? (
+                <div className="dashboard-chart-empty" style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--gmp-text-light)' }}>
+                  Nenhuma proposta com valor cadastrada ainda.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <BarChart
+                    layout="vertical"
+                    data={(dadosAvancados.topClientesPorValor || []).map((c) => ({
+                      nome: (c.nome_fantasia || c.razao_social || '—').slice(0, 24),
+                      valor: Number(c.valor_total) || 0,
+                      propostas: c.total_propostas || 0,
+                    }))}
+                    margin={{ left: 8, right: 20, top: 8, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      tick={{ fontSize: isMobile ? 9 : 11 }}
+                      tickFormatter={(v) => (v >= 1000 ? `R$ ${(v / 1000).toFixed(0)}k` : `R$ ${v}`)}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="nome"
+                      width={isMobile ? 90 : 160}
+                      tick={{ fontSize: isMobile ? 9 : 11 }}
+                    />
+                    <RechartsTooltip
+                      formatter={(value, name) =>
+                        name === 'valor'
+                          ? [Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 'Valor total']
+                          : [value, 'Propostas']
+                      }
+                    />
+                    <Bar dataKey="valor" fill={GMP_COLORS.primary} radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
             {/* 2. Volume de Busca por Região */}
             <div 
               className="chart-card premium-chart-card chart-clickable" 
