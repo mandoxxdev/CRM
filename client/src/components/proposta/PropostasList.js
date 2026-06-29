@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
-import { canAccessAdministrativoConfig } from '../../utils/systemPermissions';
+import { canAccessAdministrativoConfig, isSuperAdmin } from '../../utils/systemPermissions';
 import { useComercialResponsaveis } from '../../hooks/useComercialResponsaveis';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiZap } from 'react-icons/fi';
@@ -30,6 +30,8 @@ export default function PropostasList() {
   const effectiveUser = getEffectiveUser(user);
   const canConfigTemplate = canAccessAdministrativoConfig(effectiveUser);
   const isAdmin = String(user?.role || '').toLowerCase() === 'admin';
+  const isSuper = isSuperAdmin(user);
+  const [renumerando, setRenumerando] = useState(false);
   const { usuarios, loading: usuariosLoading, ready: usuariosReady } = useComercialResponsaveis(user, authLoading);
   const [list, setList] = useState([]);
   const [oportunidades, setOportunidades] = useState([]);
@@ -64,6 +66,24 @@ export default function PropostasList() {
       setLoading(false);
     }
   }, [search, filterStatus, filterTipo, filterOportunidade, filterResponsavel, isAdmin, showInativas]);
+
+  const handleRenumerar = async () => {
+    if (!window.confirm(
+      'Renumerar TODAS as propostas ativas em ordem de criação?\n\n' +
+      'Isto reescreve o número (segmentos de sequência), inclusive das já enviadas. ' +
+      'A cópia que o cliente já recebeu mantém o número antigo. Deseja continuar?'
+    )) return;
+    setRenumerando(true);
+    try {
+      const { data } = await api.post('/propostas/renumerar');
+      toast.success(`Numeração corrigida: ${data.alteradas || 0} proposta(s) atualizada(s).`);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erro ao renumerar propostas.');
+    } finally {
+      setRenumerando(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -152,6 +172,11 @@ export default function PropostasList() {
           <button type="button" className="btn btn-sec" onClick={() => setShowAutomatica(true)}>
             <FiZap /> Proposta automática
           </button>
+          {isSuper && (
+            <button type="button" className="btn btn-sec" onClick={handleRenumerar} disabled={renumerando} title="Corrigir a numeração sequencial das propostas ativas">
+              <FiRotateCcw /> {renumerando ? 'Renumerando...' : 'Corrigir numeração'}
+            </button>
+          )}
           <Link to="/comercial/propostas/nova" className="btn btn-pri">
             <FiPlus /> Nova proposta
           </Link>

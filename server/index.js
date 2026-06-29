@@ -5259,6 +5259,60 @@ app.get('/api/propostas/gerar-numero/:cliente_id', authenticateToken, (req, res)
   });
 });
 
+// POST /api/propostas/renumerar — corrige a numeração sequencial das propostas ATIVAS
+// (apenas Super Admin). Reescreve só os 2 primeiros segmentos (geral-cliente), preservando
+// iniciais/ano/revisão. Números fora do padrão são ignorados. Transação em 2 fases para não
+// violar o índice UNIQUE de numero_proposta durante o processo.
+app.post('/api/propostas/renumerar', authenticateToken, async (req, res) => {
+  if (!isSuperAdmin(req.user)) {
+    return res.status(403).json({ error: 'Apenas Super Administradores podem renumerar propostas' });
+  }
+  try {
+    const ativas = await db.all(
+      `SELECT id, numero_proposta, cliente_id FROM propostas
+       WHERE ${SQL_PROPOSTA_ATIVA}
+       ORDER BY datetime(created_at) ASC, id ASC`,
+      []
+    );
+
+    const padrao = /^(\d{3})-(\d{2})-(.+)$/; // grupo 3 = "iniciais-ano-REVxx" (preservado)
+    let globalSeq = 0;
+    const clienteSeq = {};
+    const updates = [];
+    for (const p of ativas) {
+      const m = padrao.exec(String(p.numero_proposta || ''));
+      if (!m) continue; // fora do padrão → não mexe
+      globalSeq += 1;
+      const cid = p.cliente_id == null ? 'null' : String(p.cliente_id);
+      clienteSeq[cid] = (clienteSeq[cid] || 0) + 1;
+      const novo = `${String(globalSeq).padStart(3, '0')}-${String(clienteSeq[cid]).padStart(2, '0')}-${m[3]}`;
+      if (novo !== p.numero_proposta) updates.push({ id: p.id, novo });
+    }
+
+    if (updates.length === 0) {
+      return res.json({ success: true, alteradas: 0, total: ativas.length, message: 'Nenhuma proposta precisou ser renumerada.' });
+    }
+
+    // Fase 1: valores temporários únicos · Fase 2: valores finais (ambos distintos → sem colisão).
+    const stmts = ['BEGIN IMMEDIATE TRANSACTION;'];
+    for (const u of updates) {
+      stmts.push(`UPDATE propostas SET numero_proposta='__RENUM_${u.id}' WHERE id=${u.id};`);
+    }
+    for (const u of updates) {
+      const escaped = u.novo.replace(/'/g, "''");
+      stmts.push(`UPDATE propostas SET numero_proposta='${escaped}', updated_at=CURRENT_TIMESTAMP WHERE id=${u.id};`);
+    }
+    stmts.push('COMMIT;');
+    await db.exec(stmts.join('\n'));
+
+    res.json({ success: true, alteradas: updates.length, total: ativas.length });
+  } catch (e) {
+    try { await db.exec('ROLLBACK;'); } catch (_) { /* já desfeita */ }
+    console.error('❌ Erro ao renumerar propostas:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Endpoint para buscar histórico de revisões de uma proposta
 app.get('/api/propostas/:id/revisoes', authenticateToken, (req, res) => {
   const { id } = req.params;
