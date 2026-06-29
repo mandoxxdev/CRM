@@ -7115,7 +7115,7 @@ function gerarNumeroProposta(cliente_id, responsavel_id, revisao, callback) {
 
   // Primeiro, contar o total de TODAS as propostas (incluindo rascunhos)
   // IMPORTANTE: Contar TODAS, não apenas as enviadas, para ter o número sequencial correto do software
-  db.get(`SELECT COUNT(*) as total FROM propostas`, [], (err, totalResult) => {
+  db.get(`SELECT COUNT(*) as total FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}`, [], (err, totalResult) => {
     if (err) {
       return callback(err, null);
     }
@@ -7149,7 +7149,7 @@ function gerarNumeroProposta(cliente_id, responsavel_id, revisao, callback) {
       function continuarGeracao(qtdGeral, iniciais, rev) {
         // Contar quantas propostas TODAS já existem para esse cliente (incluindo rascunhos)
         // IMPORTANTE: Contar TODAS, não apenas as enviadas, para ter o número sequencial correto do cliente
-        db.get(`SELECT COUNT(*) as total FROM propostas WHERE cliente_id = ?`, [cliente_id], (err, countResult) => {
+        db.get(`SELECT COUNT(*) as total FROM propostas WHERE cliente_id = ? AND ${SQL_PROPOSTA_ATIVA}`, [cliente_id], (err, countResult) => {
           if (err) {
             return callback(err, null);
           }
@@ -7184,7 +7184,7 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
 
   // Primeiro, contar o total de TODAS as propostas (incluindo rascunhos)
   // IMPORTANTE: Contar TODAS, não apenas as enviadas, para ter o número sequencial correto do software
-  db.get(`SELECT COUNT(*) as total FROM propostas`, [], (err, totalResult) => {
+  db.get(`SELECT COUNT(*) as total FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}`, [], (err, totalResult) => {
     if (err) {
       return callback(err, null);
     }
@@ -7217,7 +7217,7 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
       function continuarGeracaoComVerificacao(qtdGeral, iniciais, rev, propostaIdAtual) {
         // Contar quantas propostas TODAS já existem para esse cliente (incluindo rascunhos)
         // IMPORTANTE: Contar TODAS, não apenas as enviadas, para ter o número sequencial correto do cliente
-        db.get(`SELECT COUNT(*) as total FROM propostas WHERE cliente_id = ?`, [cliente_id], (err, countResult) => {
+        db.get(`SELECT COUNT(*) as total FROM propostas WHERE cliente_id = ? AND ${SQL_PROPOSTA_ATIVA}`, [cliente_id], (err, countResult) => {
           if (err) {
             return callback(err, null);
           }

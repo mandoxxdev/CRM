@@ -467,26 +467,11 @@ export default function PropostaForm() {
               <input type="text" value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} required placeholder="Ex.: Proposta comercial" />
             </div>
             <div className="proposta-form-field">
-              <label>Validade</label>
-              <input type="date" value={form.validade} onChange={(e) => setForm((f) => ({ ...f, validade: e.target.value }))} />
-            </div>
-            <div className="proposta-form-field">
-              <label>Oportunidade</label>
-              <select value={form.oportunidade_id} onChange={(e) => setForm((f) => ({ ...f, oportunidade_id: e.target.value }))}>
-                <option value="">Nenhuma</option>
-                {oportunidades.map((o) => <option key={o.id} value={o.id}>{o.titulo || `#${o.id}`}</option>)}
-              </select>
-            </div>
-            <div className="proposta-form-field">
               <label>Tipo</label>
               <select value={form.tipo_proposta} onChange={(e) => setForm((f) => ({ ...f, tipo_proposta: e.target.value }))}>
                 <option value="">—</option>
                 {TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
-            </div>
-            <div className="proposta-form-field">
-              <label>Expira em</label>
-              <input type="date" value={form.expira_em} onChange={(e) => setForm((f) => ({ ...f, expira_em: e.target.value }))} />
             </div>
             <div className="proposta-form-field">
               <label>Responsável (vendedor)</label>
