@@ -14,7 +14,10 @@ import './Loading.css';
 const Atividades = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const effectiveUser = getEffectiveUser(user);
+  // useMemo evita criar uma referência nova a cada render (getEffectiveUser/mergeUserPermissions
+  // retornam objeto novo). Sem isto, o useEffect que depende de effectiveUser entrava em loop
+  // infinito, recarregando /atividades sem parar e travando o banco (SQLITE_BUSY).
+  const effectiveUser = useMemo(() => getEffectiveUser(user), [user]);
   const [atividades, setAtividades] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [clientes, setClientes] = useState([]);
