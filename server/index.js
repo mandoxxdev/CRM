@@ -7169,12 +7169,12 @@ function gerarNumeroProposta(cliente_id, responsavel_id, revisao, callback) {
 
   // Primeiro, contar o total de TODAS as propostas (incluindo rascunhos)
   // IMPORTANTE: Contar TODAS, não apenas as enviadas, para ter o número sequencial correto do software
-  db.get(`SELECT COUNT(*) as total FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}`, [], (err, totalResult) => {
+  db.get(`SELECT MAX(CAST(substr(numero_proposta, 1, 3) AS INTEGER)) as maxn FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}`, [], (err, totalResult) => {
     if (err) {
       return callback(err, null);
     }
     
-    const quantidadeGeral = ((totalResult?.total || 0) + 1).toString().padStart(3, '0');
+    const quantidadeGeral = ((totalResult?.maxn || 0) + 1).toString().padStart(3, '0');
     
     // Buscar dados do cliente
     db.get('SELECT razao_social, nome_fantasia FROM clientes WHERE id = ?', [cliente_id], (err, cliente) => {
@@ -7203,12 +7203,12 @@ function gerarNumeroProposta(cliente_id, responsavel_id, revisao, callback) {
       function continuarGeracao(qtdGeral, iniciais, rev) {
         // Contar quantas propostas TODAS já existem para esse cliente (incluindo rascunhos)
         // IMPORTANTE: Contar TODAS, não apenas as enviadas, para ter o número sequencial correto do cliente
-        db.get(`SELECT COUNT(*) as total FROM propostas WHERE cliente_id = ? AND ${SQL_PROPOSTA_ATIVA}`, [cliente_id], (err, countResult) => {
+        db.get(`SELECT MAX(CAST(substr(numero_proposta, 5, 2) AS INTEGER)) as maxn FROM propostas WHERE cliente_id = ? AND ${SQL_PROPOSTA_ATIVA}`, [cliente_id], (err, countResult) => {
           if (err) {
             return callback(err, null);
           }
           
-          const quantidadeCliente = ((countResult?.total || 0) + 1).toString().padStart(2, '0');
+          const quantidadeCliente = ((countResult?.maxn || 0) + 1).toString().padStart(2, '0');
           
           // Ano atual
           const ano = new Date().getFullYear().toString();
@@ -7238,12 +7238,12 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
 
   // Primeiro, contar o total de TODAS as propostas (incluindo rascunhos)
   // IMPORTANTE: Contar TODAS, não apenas as enviadas, para ter o número sequencial correto do software
-  db.get(`SELECT COUNT(*) as total FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}`, [], (err, totalResult) => {
+  db.get(`SELECT MAX(CAST(substr(numero_proposta, 1, 3) AS INTEGER)) as maxn FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}`, [], (err, totalResult) => {
     if (err) {
       return callback(err, null);
     }
     
-    const quantidadeGeral = ((totalResult?.total || 0) + 1).toString().padStart(3, '0');
+    const quantidadeGeral = ((totalResult?.maxn || 0) + 1).toString().padStart(3, '0');
     
     // Buscar dados do cliente
     db.get('SELECT razao_social, nome_fantasia FROM clientes WHERE id = ?', [cliente_id], (err, cliente) => {
@@ -7271,12 +7271,12 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
       function continuarGeracaoComVerificacao(qtdGeral, iniciais, rev, propostaIdAtual) {
         // Contar quantas propostas TODAS já existem para esse cliente (incluindo rascunhos)
         // IMPORTANTE: Contar TODAS, não apenas as enviadas, para ter o número sequencial correto do cliente
-        db.get(`SELECT COUNT(*) as total FROM propostas WHERE cliente_id = ? AND ${SQL_PROPOSTA_ATIVA}`, [cliente_id], (err, countResult) => {
+        db.get(`SELECT MAX(CAST(substr(numero_proposta, 5, 2) AS INTEGER)) as maxn FROM propostas WHERE cliente_id = ? AND ${SQL_PROPOSTA_ATIVA}`, [cliente_id], (err, countResult) => {
           if (err) {
             return callback(err, null);
           }
           
-          const quantidadeCliente = ((countResult?.total || 0) + 1).toString().padStart(2, '0');
+          const quantidadeCliente = ((countResult?.maxn || 0) + 1).toString().padStart(2, '0');
           const ano = new Date().getFullYear().toString();
           const revisaoFormatada = `REV${rev.toString().padStart(2, '0')}`;
           

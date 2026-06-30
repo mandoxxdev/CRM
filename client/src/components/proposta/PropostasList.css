@@ -228,11 +228,13 @@
   font-size: 0.75rem;
   font-weight: 600;
   color: #fff;
+  background: #64748b; /* fallback: garante contraste mesmo em status sem cor própria */
 }
 
 .propostas-list .badge[data-status="rascunho"] { background: #64748b; }
 .propostas-list .badge[data-status="em_revisao"] { background: #6366f1; }
 .propostas-list .badge[data-status="aprovada_internamente"] { background: #14b8a6; }
+.propostas-list .badge[data-status="aprovada"] { background: #16a34a; }
 .propostas-list .badge[data-status="enviada"] { background: #0ea5e9; }
 .propostas-list .badge[data-status="visualizada"] { background: #8b5cf6; }
 .propostas-list .badge[data-status="aceita"] { background: #22c55e; }
