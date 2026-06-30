@@ -127,3 +127,13 @@ Status: [ ] pendente | [x] concluído | [~] em andamento | [!] pendente de decis
 - [ ] Auditoria: verificar todos os tipos de alteração registrados corretamente
 - [ ] Reset: confirmar que apaga customizações e volta ao padrão
 - [ ] Permissões: perfis sem acesso não veem o histórico
+
+---
+
+## Fase 14 — Bugs de PDF e Paginação (ver `bug-pdf-paginacao.md`)
+
+- [x] **Fix 1**: Flatten de `clausulasSection` — cláusulas customizadas agora são blocos irmãos, não um único bloco gigante (commit `598cf75`, 26/06). Resolve truncamento do PDF e erro ao abrir pela lista.
+- [x] **Fix 2**: Corrigir `fits()` sem argumento no paginator V2 em `server/index.js` — corrigido para `fits(pageLimitPx)` nas duas ocorrências; `pageLimitPx` extraído como constante do primeiro `pageContent.clientHeight`
+- [x] **Fix 3**: Remover `isItem55Block` workaround (`server/index.js`) — removido junto com `safety55Px`, `footerEl` e `footerHeightPx`; `wouldOverflowIfAdd` simplificado; variável morta `isAvoid` também removida
+- [x] **Fix 4**: Botão "Download PDF" na toolbar de `PropostaPreviewEditavel.js` — botão adicionado chamando `GET /api/propostas/:id/pdf` com `responseType: 'blob'` e download via `<a>`; erro logado em `console.error`
+- [x] **Fix 5**: Cláusula 5.5 subdividida em 3 `<section allow-break>` independentes — heading+agendamento / responsabilidades CONTRATANTE / tabela Hora-Homem — para o paginator poder distribuir em páginas separadas

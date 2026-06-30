@@ -8933,7 +8933,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     await page.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
     await new Promise((r) => setTimeout(r, 450));
     
-    const pdfBuffer = await page.pdf({
+    const pdfResult = await page.pdf({
       format: 'A4',
       printBackground: true,
       preferCSSPageSize: true,
@@ -8941,10 +8941,12 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       margin: { top: '0', right: '0', bottom: '0', left: '0' },
       scale: 1.0
     });
-    
+    // Puppeteer >=22 retorna Uint8Array; converter para Buffer antes de res.end().
+    const pdfBuffer = Buffer.from(pdfResult);
+
     await browser.close();
     browser = null;
-    
+
     // Snapshot: gravar HTML/CSS (e checksum se a coluna existir) para reprodução futura
     if (!usouSnapshot && html) {
       const cssMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/);
@@ -8975,7 +8977,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="proposta-${(proposta.numero_proposta || id).replace(/[/\\]/g, '-')}.pdf"`);
-    res.send(pdfBuffer);
+    res.end(pdfBuffer);
     
   } catch (error) {
     if (browser) {
@@ -12865,6 +12867,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>Todas e quaisquer áreas, instalações, equipamentos e ferramentas que porventura forem cedidos a CONTRATADA pela CONTRATANTE, serão por ela mantidos como se seus fosse, de modo a restituí-los, terminada sua utilização, no estado que os receberá.</p>
         <p>A CONTRATADA deverá manter no local de trabalho, montagem e startup dos equipamentos, somente pessoal especializado e contratado com base na legislação trabalhista brasileira e/ou “terceiros” com contrato de prestação de serviços, ás suas exclusivas expensas e responsabilidade, todo o pessoal necessário, direta ou indiretamente, a execução do objeto do presente instrumento, de acordo com as normas trabalhistas e previdenciárias vigentes, sendo os mesmos de total responsabilidade da CONTRATADA, inclusive encargos sociais e exames médicos.</p>
         <p>A CONTRATANTE será responsável pelas despesas de translado (rodoviário e aéreo), estadia e alimentação (café da manhã, almoço e janta) dos técnicos de montagem e startup.</p>
+      </section>
+
+      <section class="block stack-md allow-break">
         <p>Para casos de operações de montagem e startup, fora do estado em que se encontra a sede da CONTRATADA, o translado aplicado é o aéreo, realizado por aeronaves, como avião, e as despesas de deslocamento dos técnicos entre a sede da CONTRATADA e CONTRATANTE até o aeroporto, e vice-versa, compõem as despesas de translado que é de responsabilidade da CONTRATANTE.</p>
         <p>A CONTRATANTE será responsável pelas despesas de transporte (ida e volta) das ferramentas dos técnicos da CONTRATADA, e também, quando necessário, das despesas relacionadas com locação de andaimes, plataformas elevatória, pórticos e serviços de movimentações, como munck, guindaste, empilhadeira e outros que se fizerem necessárias.</p>
         <p>Quando aplicável, a CONTRATANTE será responsável pelo retorno de materiais utilizados na execução dos trabalhos, como vigas, tubos, chapas, e outros, para sede da CONTRATADA.</p>
@@ -12883,23 +12888,25 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>Um atraso de até três horas, resulta no reagendamento dos trabalhos para o próximo dia útil, e as horas referentes ao dia de trabalho da equipe, serão cobradas da CONTRATANTE pela CONTRATADA, com base na tabela “hora-homem”.</p>
         <p>Concluídos as montagens e startup dos equipamentos, será emitido um relatório final de aprovação, que será devidamente assinado por dois funcionários de cada parte contratante, para todos os fins legais, sobretudo, contagem do início da Garantia dos equipamentos ora fornecidos.</p>
         <p>Caso os testes de desempenho e funcionamento não sejam satisfatórios, a CONTRATADA procederá aos reajustes sem qualquer custo adicional à CONTRATANTE, e uma vez concluídos os ajustes/reajustes serão imediatamente realizados nos novos testes, não se aplicando para tanto aos itens e serviços que ora não são de fornecimento da CONTRATADA.</p>
+      </section>
 
-        <div class="table-caption">Tabela Hora-Homem</div>
-        <table class="table">
+      <section class=”block stack-md allow-break”>
+        <div class=”table-caption”>Tabela Hora-Homem</div>
+        <table class=”table”>
           <thead>
             <tr>
               <th>PROFISSIONAL</th>
-              <th class="col-right">VALOR HORA NORMAL</th>
+              <th class=”col-right”>VALOR HORA NORMAL</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>Ajudante no geral</td><td class="col-right">R$ 120,00</td></tr>
-            <tr><td>Caldeireiro, Mecânico, Encanador, Eletricista, Soldador e Pintor</td><td class="col-right">R$ 200,00</td></tr>
-            <tr><td>Projetistas, Técnico de Automação e Técnico no geral</td><td class="col-right">R$ 280,00</td></tr>
-            <tr><td>Engenheiro e Inspetores no geral</td><td class="col-right">R$ 350,00</td></tr>
+            <tr><td>Ajudante no geral</td><td class=”col-right”>R$ 120,00</td></tr>
+            <tr><td>Caldeireiro, Mecânico, Encanador, Eletricista, Soldador e Pintor</td><td class=”col-right”>R$ 200,00</td></tr>
+            <tr><td>Projetistas, Técnico de Automação e Técnico no geral</td><td class=”col-right”>R$ 280,00</td></tr>
+            <tr><td>Engenheiro e Inspetores no geral</td><td class=”col-right”>R$ 350,00</td></tr>
           </tbody>
         </table>
-        <div class="stack-sm">
+        <div class=”stack-sm”>
           <p>Observações abaixo da tabela:</p>
           <ul>
             <li>Hora Normal: De segunda-feira a sexta-feira, exceto feriados, dentro do horário comercial.</li>
@@ -13691,26 +13698,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             pageContent = page.querySelector('.page-content');
           }
         };
-        const footerEl = page && page.querySelector ? page.querySelector('.page-footer') : null;
-        const footerHeightPx = footerEl && footerEl.getBoundingClientRect ? Math.floor(footerEl.getBoundingClientRect().height) : 0;
-        const safety55Px = Math.max(24, Math.floor((footerHeightPx > 0 ? footerHeightPx : 80) * 0.75));
-
-        function isItem55Block(blockEl) {
-          try {
-            if (!blockEl || !blockEl.querySelector) return false;
-            const h3 = blockEl.querySelector(':scope > h3');
-            const txt = (h3 && h3.textContent) ? h3.textContent.trim() : (blockEl.textContent || '').trim();
-            return txt.startsWith('5.5') || txt.includes('5.5 SUPERVIS') || txt.includes('5.5 SUPERVISÃO') || txt.includes('5.5 SUPERVISAO');
-          } catch (_) { return false; }
-        }
-
         const fits = (limitPx) => pageContent.scrollHeight <= limitPx;
         const addNode = (node) => { stack.appendChild(node); };
+        const pageLimitPx = pageContent.clientHeight;
 
         const wouldOverflowIfAdd = (node) => {
           addNode(node);
-          const limitPx = isItem55Block(node) ? Math.max(0, pageContent.clientHeight - safety55Px) : pageContent.clientHeight;
-          const overflow = !fits(limitPx);
+          const overflow = !fits(pageLimitPx);
           stack.removeChild(node);
           return overflow;
         };
@@ -13728,7 +13722,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
         for (const block of blocks) {
           ensurePage();
-          const isAvoid = block.classList.contains('avoid-break');
           const table = block.querySelector('table[data-split-table=\"true\"]');
           if (table) {
             const wrapper = block.cloneNode(true);
@@ -13756,7 +13749,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               }
 
               addNode(partBlock);
-              if (!fits()) {
+              if (!fits(pageLimitPx)) {
                 stack.removeChild(partBlock);
                 page = null;
                 ensurePage();
@@ -13784,7 +13777,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
           const node = block.cloneNode(true);
           addNode(node);
-          if (!fits()) {
+          if (!fits(pageLimitPx)) {
             stack.removeChild(node);
             page = null;
             ensurePage();

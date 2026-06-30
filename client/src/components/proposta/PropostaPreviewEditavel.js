@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FiEdit2, FiEye, FiSave, FiClock, FiX } from 'react-icons/fi';
+import { FiEdit2, FiSave, FiClock, FiX, FiDownload } from 'react-icons/fi';
 import api from '../../services/api';
 import EditorClausulas from './EditorClausulas';
 import HistoricoEdicoes from './HistoricoEdicoes';
@@ -20,7 +20,6 @@ export default function PropostaPreviewEditavel() {
 
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(true);
-  const [modoEdicao, setModoEdicao] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
   const [mostrarClausulas, setMostrarClausulas] = useState(false);
@@ -28,15 +27,15 @@ export default function PropostaPreviewEditavel() {
   const [clausulas, setClausulas] = useState([]);
   const [clausulasIsDefault, setClausulasIsDefault] = useState(true);
   const [mudancasPendentes, setMudancasPendentes] = useState(false);
+  const [baixandoPdf, setBaixandoPdf] = useState(false);
   // Signals that the preview HTML needs a server reload (clause content changed)
   const previewDesatualizadoRef = useRef(false);
 
   const carregarPreview = useCallback(async () => {
     setLoading(true);
     try {
-      const [htmlRes, customRes, clausulasRes] = await Promise.all([
-        api.get(`/propostas/${id}/premium`, { responseType: 'text' }),
-        api.get(`/propostas/${id}/customizacoes`),
+      const [htmlRes, clausulasRes] = await Promise.all([
+        api.get(`/propostas/${id}/premium?embed=1`, { responseType: 'text' }),
         api.get(`/propostas/${id}/clausulas`),
       ]);
       setHtml(htmlRes.data);
@@ -69,8 +68,7 @@ export default function PropostaPreviewEditavel() {
     });
   }
 
-  function ativarEdicao(ativo) {
-    setModoEdicao(ativo);
+  function ativarEdicao() {
     const iframe = iframeRef.current;
     if (!iframe) return;
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -79,20 +77,15 @@ export default function PropostaPreviewEditavel() {
     CAMPOS_EDITAVEIS.forEach(({ campo, seletor }) => {
       const el = doc.querySelector(seletor);
       if (!el) return;
-      el.contentEditable = ativo ? 'true' : 'false';
-      el.style.outline = ativo ? '2px dashed #f59e0b' : 'none';
-      el.style.background = ativo ? '#fffde7' : '';
-      el.style.borderRadius = ativo ? '3px' : '';
-      el.style.cursor = ativo ? 'text' : '';
-
-      if (ativo) {
-        el.oninput = () => {
-          setCamposEditados(prev => ({ ...prev, [campo]: el.textContent }));
-          setMudancasPendentes(true);
-        };
-      } else {
-        el.oninput = null;
-      }
+      el.contentEditable = 'true';
+      el.style.outline = '2px dashed #f59e0b';
+      el.style.background = '#fffde7';
+      el.style.borderRadius = '3px';
+      el.style.cursor = 'text';
+      el.oninput = () => {
+        setCamposEditados(prev => ({ ...prev, [campo]: el.textContent }));
+        setMudancasPendentes(true);
+      };
     });
   }
 
@@ -110,6 +103,26 @@ export default function PropostaPreviewEditavel() {
       toast.error('Erro ao salvar alterações.');
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function baixarPdf() {
+    setBaixandoPdf(true);
+    try {
+      const res = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `proposta-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    } catch (e) {
+      console.error('baixarPdf error:', e);
+      toast.error('Erro ao gerar PDF.');
+    } finally {
+      setBaixandoPdf(false);
     }
   }
 
@@ -136,14 +149,6 @@ export default function PropostaPreviewEditavel() {
         </div>
         <div className="ppe-toolbar-actions">
           <button
-            className={`ppe-btn ${modoEdicao ? 'ppe-btn-ativo' : ''}`}
-            onClick={() => ativarEdicao(!modoEdicao)}
-            title={modoEdicao ? 'Sair do modo edição' : 'Entrar no modo edição'}
-          >
-            {modoEdicao ? <FiEye /> : <FiEdit2 />}
-            {modoEdicao ? 'Visualizando' : 'Editar campos'}
-          </button>
-          <button
             className="ppe-btn"
             onClick={() => setMostrarClausulas(true)}
             title="Editar cláusulas"
@@ -156,6 +161,14 @@ export default function PropostaPreviewEditavel() {
             title="Ver histórico de edições"
           >
             <FiClock /> Histórico
+          </button>
+          <button
+            className="ppe-btn"
+            onClick={baixarPdf}
+            disabled={baixandoPdf}
+            title="Baixar PDF desta proposta"
+          >
+            <FiDownload /> {baixandoPdf ? 'Gerando...' : 'Baixar PDF'}
           </button>
           <button
             className={`ppe-btn ppe-btn-salvar ${!mudancasPendentes ? 'ppe-btn-disabled' : ''}`}
@@ -181,7 +194,7 @@ export default function PropostaPreviewEditavel() {
             onLoad={() => {
               const doc = iframeRef.current?.contentDocument;
               if (doc) injetarAtributosEdicao(doc);
-              if (modoEdicao) ativarEdicao(true);
+              ativarEdicao();
             }}
           />
         )}
