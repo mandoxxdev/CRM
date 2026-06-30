@@ -7295,7 +7295,7 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
             }
             
             // Se existe e não é a proposta atual, incrementar quantidade geral
-            const quantidadeGeralAjustada = ((totalResult?.total || 0) + 2).toString().padStart(3, '0');
+            const quantidadeGeralAjustada = ((totalResult?.maxn || 0) + 2).toString().padStart(3, '0');
             const numeroPropostaAjustado = `${quantidadeGeralAjustada}-${quantidadeCliente}-${iniciais}-${ano}-${revisaoFormatada}`;
             
             // Verificar novamente
@@ -7407,13 +7407,29 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
     status = 'rascunho';
   }
 
-  // Gerar número da proposta automaticamente se não fornecido
-  const processarProposta = (numeroGerado) => {
-    const numeroFinal = numero_proposta || numeroGerado;
-    
+  // Gerar número da proposta automaticamente se não fornecido.
+  // tentativa > 0 = estamos reprocessando após uma colisão de número (concorrência) →
+  // nesse caso usamos sempre o número recém-gerado, ignorando o que veio do formulário.
+  const MAX_TENTATIVAS_NUMERO = 25;
+  const processarProposta = (numeroGerado, tentativa = 0) => {
+    const numeroFinal = tentativa === 0 ? (numero_proposta || numeroGerado) : numeroGerado;
+
     if (!numeroFinal) {
       return res.status(400).json({ error: 'Não foi possível gerar o número da proposta. Cliente é obrigatório.' });
     }
+
+    // Em qualquer colisão de número, gera o próximo livre e tenta de novo (não erra pro usuário).
+    const tentarProximoNumero = () => {
+      if (tentativa >= MAX_TENTATIVAS_NUMERO) {
+        return res.status(500).json({ error: 'Não foi possível gerar um número único para a proposta. Tente novamente.' });
+      }
+      gerarNumeroPropostaComVerificacao(clienteIdNum, responsavelIdNum, 0, null, (err2, novoNumero) => {
+        if (err2 || !novoNumero) {
+          return res.status(500).json({ error: 'Não foi possível gerar um número único para a proposta. Tente novamente.' });
+        }
+        processarProposta(novoNumero, tentativa + 1);
+      });
+    };
 
     // Verificar se o número da proposta já existe antes de inserir
     db.get(`SELECT id FROM propostas WHERE numero_proposta = ?`, [numeroFinal], (err, existing) => {
@@ -7422,28 +7438,9 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
         return res.status(500).json({ error: 'Erro ao verificar número da proposta: ' + err.message });
       }
       if (existing) {
-        console.warn('⚠️ Número da proposta já existe:', numeroFinal, 'ID existente:', existing.id);
-        // Se o número foi fornecido manualmente e já existe, retornar erro
-        if (numero_proposta) {
-          return res.status(400).json({ 
-            error: `O número da proposta "${numeroFinal}" já está em uso. Por favor, remova o número da proposta e deixe o sistema gerar automaticamente, ou use outro número.`,
-            numero_existente: numeroFinal
-          });
-        }
-        // Se foi gerado automaticamente e já existe, tentar gerar um novo
-        console.log('🔄 Tentando gerar novo número da proposta...');
-        gerarNumeroPropostaComVerificacao(clienteIdNum, responsavelIdNum, 0, null, (err2, novoNumero) => {
-          if (err2 || !novoNumero) {
-            console.error('❌ Erro ao gerar novo número da proposta:', err2);
-            return res.status(500).json({ 
-              error: 'Não foi possível gerar um número único para a proposta. Tente novamente.' 
-            });
-          }
-          console.log('✅ Novo número gerado:', novoNumero);
-          // Recursivamente tentar salvar com o novo número
-          return processarProposta(novoNumero);
-        });
-        return;
+        // Número já em uso (inclusive o que veio do formulário) → pega o próximo livre e tenta de novo.
+        console.warn('⚠️ Número da proposta já existe:', numeroFinal, '— gerando o próximo livre...');
+        return tentarProximoNumero();
       }
 
       db.run(
@@ -7475,12 +7472,11 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
               status: status || 'rascunho',
               margem_desconto: margem_desconto || 0
             });
-            // Verificar se é erro de UNIQUE constraint
+            // Race de concorrência: outro usuário gravou esse número entre a checagem e o INSERT.
+            // Em vez de erro, gera o próximo número livre e tenta de novo.
             if (err.message && err.message.includes('UNIQUE constraint') && err.message.includes('numero_proposta')) {
-              console.error('❌ Erro: Número da proposta duplicado:', numeroFinal);
-              return res.status(400).json({ 
-                error: `O número da proposta "${numeroFinal}" já está em uso. Por favor, remova o número da proposta e deixe o sistema gerar automaticamente, ou use outro número.` 
-              });
+              console.warn('⚠️ Colisão de número no INSERT (concorrência):', numeroFinal, '— tentando o próximo...');
+              return tentarProximoNumero();
             }
             return res.status(500).json({ error: 'Erro ao salvar proposta: ' + err.message });
           }
