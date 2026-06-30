@@ -589,19 +589,31 @@ const Dashboard = () => {
               </div>
               <div className="summary-item premium-summary-item">
                 <div className="summary-icon" style={{ background: 'linear-gradient(135deg, #00c853 0%, #00a844 100%)' }}>
-                  <FiBriefcase />
+                  <FiBarChart2 />
                 </div>
                 <div className="summary-info">
-                  <span className="summary-label">Projetos Ativos</span>
-                  <span className="summary-value">{animatedStats.totalProjetos}</span>
-                  <span className={`summary-change ${variacaoProjetos.percentual >= 0 ? 'positive' : 'negative'}`}>
-                    {variacaoProjetos.percentual !== 0 && (
+                  <span className="summary-label">Propostas por Status</span>
+                  {(() => {
+                    const lista = safeStats.propostasPorStatus || [];
+                    const totalProps = lista.reduce((s, i) => s + (i.total || i.count || 0), 0);
+                    const labels = {
+                      rascunho: 'rascunho', em_revisao: 'em revisão', aprovada_internamente: 'aprov. interna',
+                      enviada: 'enviadas', visualizada: 'visualizadas', aceita: 'aceitas', aprovada: 'aprovadas',
+                      rejeitada: 'rejeitadas', cancelada: 'canceladas', expirada: 'expiradas',
+                    };
+                    const resumo = lista
+                      .filter((i) => (i.total || i.count || 0) > 0)
+                      .sort((a, b) => (b.total || b.count || 0) - (a.total || a.count || 0))
+                      .slice(0, 3)
+                      .map((i) => `${i.total || i.count || 0} ${labels[i.status] || i.status}`)
+                      .join(' · ');
+                    return (
                       <>
-                        {variacaoProjetos.percentual > 0 ? <FiArrowUp /> : <FiArrowDown />} {Math.abs(variacaoProjetos.percentual)}% • {variacaoProjetos.texto}
+                        <span className="summary-value">{totalProps}</span>
+                        <span className="summary-change positive">{resumo || 'Sem propostas ainda'}</span>
                       </>
-                    )}
-                    {variacaoProjetos.percentual === 0 && variacaoProjetos.texto}
-                  </span>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
