@@ -17294,6 +17294,158 @@ app.get('/api/custos-viagens/resumo', authenticateToken, (req, res) => {
   });
 });
 
+// ========== LISTA DE PREÇOS (Comercial) ==========
+// Tabelas criadas sob demanda (lazy) para não depender do bloco de init.
+let listaPrecosTablesReady = false;
+function ensureListaPrecosTables(cb) {
+  if (listaPrecosTablesReady) return cb();
+  db.run(`CREATE TABLE IF NOT EXISTS listas_precos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    arquivo_nome TEXT,
+    colunas TEXT,            -- JSON com os nomes das colunas (ordem)
+    total_itens INTEGER DEFAULT 0,
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (e1) => {
+    if (e1) return cb(e1);
+    db.run(`CREATE TABLE IF NOT EXISTS listas_precos_itens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lista_id INTEGER NOT NULL,
+      dados TEXT,             -- JSON da linha
+      busca TEXT,             -- texto concatenado (minúsculo) para pesquisa
+      FOREIGN KEY (lista_id) REFERENCES listas_precos(id) ON DELETE CASCADE
+    )`, (e2) => {
+      if (e2) return cb(e2);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_listas_precos_itens_lista ON listas_precos_itens(lista_id)`, () => {
+        listaPrecosTablesReady = true;
+        cb();
+      });
+    });
+  });
+}
+
+// Criar uma lista de preços a partir de uma planilha já parseada no navegador
+app.post('/api/comercial/listas-precos', authenticateToken, (req, res) => {
+  const { nome, arquivo_nome, colunas, itens } = req.body || {};
+  if (!nome || !Array.isArray(colunas) || !Array.isArray(itens)) {
+    return res.status(400).json({ error: 'Envie nome, colunas[] e itens[].' });
+  }
+  if (itens.length === 0) {
+    return res.status(400).json({ error: 'A planilha não tem linhas.' });
+  }
+  ensureListaPrecosTables((errTbl) => {
+    if (errTbl) return res.status(500).json({ error: errTbl.message });
+    db.run(
+      `INSERT INTO listas_precos (nome, arquivo_nome, colunas, total_itens, created_by) VALUES (?, ?, ?, ?, ?)`,
+      [String(nome).trim(), arquivo_nome || null, JSON.stringify(colunas), itens.length, req.user.id],
+      function (errIns) {
+        if (errIns) return res.status(500).json({ error: errIns.message });
+        const listaId = this.lastID;
+        const stmt = db.prepare(`INSERT INTO listas_precos_itens (lista_id, dados, busca) VALUES (?, ?, ?)`);
+        try {
+          for (const item of itens) {
+            const busca = colunas.map((c) => item?.[c]).filter((v) => v != null).join(' ').toLowerCase();
+            stmt.run(listaId, JSON.stringify(item || {}), busca);
+          }
+          stmt.finalize((errFin) => {
+            if (errFin) return res.status(500).json({ error: errFin.message });
+            res.status(201).json({ id: listaId, total_itens: itens.length });
+          });
+        } catch (e) {
+          res.status(500).json({ error: e.message });
+        }
+      }
+    );
+  });
+});
+
+// Listar as listas de preços cadastradas
+app.get('/api/comercial/listas-precos', authenticateToken, (req, res) => {
+  ensureListaPrecosTables((errTbl) => {
+    if (errTbl) return res.status(500).json({ error: errTbl.message });
+    db.all(
+      `SELECT lp.id, lp.nome, lp.arquivo_nome, lp.total_itens, lp.created_at, u.nome AS criado_por
+       FROM listas_precos lp
+       LEFT JOIN usuarios u ON lp.created_by = u.id
+       ORDER BY lp.created_at DESC`,
+      [],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+      }
+    );
+  });
+});
+
+// Detalhe (colunas) de uma lista
+app.get('/api/comercial/listas-precos/:id', authenticateToken, (req, res) => {
+  ensureListaPrecosTables((errTbl) => {
+    if (errTbl) return res.status(500).json({ error: errTbl.message });
+    db.get(`SELECT id, nome, arquivo_nome, colunas, total_itens, created_at FROM listas_precos WHERE id = ?`,
+      [req.params.id], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Lista não encontrada' });
+        let colunas = [];
+        try { colunas = JSON.parse(row.colunas || '[]'); } catch (_) { colunas = []; }
+        res.json({ ...row, colunas });
+      });
+  });
+});
+
+// Itens de uma lista, com busca e paginação
+app.get('/api/comercial/listas-precos/:id/itens', authenticateToken, (req, res) => {
+  ensureListaPrecosTables((errTbl) => {
+    if (errTbl) return res.status(500).json({ error: errTbl.message });
+    const { id } = req.params;
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+    const where = ['lista_id = ?'];
+    const params = [id];
+    if (q) {
+      // cada termo precisa aparecer (AND) — busca mais útil
+      q.split(/\s+/).filter(Boolean).forEach((termo) => {
+        where.push('busca LIKE ?');
+        params.push(`%${termo}%`);
+      });
+    }
+    const whereSql = where.join(' AND ');
+
+    db.get(`SELECT COUNT(*) AS total FROM listas_precos_itens WHERE ${whereSql}`, params, (errC, countRow) => {
+      if (errC) return res.status(500).json({ error: errC.message });
+      db.all(
+        `SELECT id, dados FROM listas_precos_itens WHERE ${whereSql} ORDER BY id LIMIT ? OFFSET ?`,
+        [...params, limit, offset],
+        (err, rows) => {
+          if (err) return res.status(500).json({ error: err.message });
+          const itens = (rows || []).map((r) => {
+            let dados = {};
+            try { dados = JSON.parse(r.dados || '{}'); } catch (_) { dados = {}; }
+            return { _id: r.id, ...dados };
+          });
+          res.json({ total: countRow?.total || 0, limit, offset, itens });
+        }
+      );
+    });
+  });
+});
+
+// Excluir uma lista (e seus itens)
+app.delete('/api/comercial/listas-precos/:id', authenticateToken, (req, res) => {
+  ensureListaPrecosTables((errTbl) => {
+    if (errTbl) return res.status(500).json({ error: errTbl.message });
+    db.run(`DELETE FROM listas_precos_itens WHERE lista_id = ?`, [req.params.id], (e1) => {
+      if (e1) return res.status(500).json({ error: e1.message });
+      db.run(`DELETE FROM listas_precos WHERE id = ?`, [req.params.id], function (e2) {
+        if (e2) return res.status(500).json({ error: e2.message });
+        res.json({ success: true });
+      });
+    });
+  });
+});
+
 // ========== ROTAS DE DASHBOARD ==========
 app.get('/api/dashboard', authenticateToken, (req, res) => {
   const stats = {};

@@ -1,0 +1,146 @@
+.lp-page {
+  padding: 24px;
+}
+
+.lp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.lp-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gmp-text, #1f2937);
+}
+.lp-header p { margin: 4px 0 0; color: var(--gmp-text-light, #6b7280); font-size: 0.9rem; }
+
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.lp-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.lp-btn-primary { background: var(--gmp-primary, #0066cc); color: #fff; border: none; }
+.lp-btn-danger {
+  background: transparent;
+  color: #e74c3c;
+  border: 1px solid rgba(231, 76, 60, 0.4);
+}
+.lp-btn-danger:hover { background: rgba(231, 76, 60, 0.1); }
+
+/* Toolbar (seletor + busca) */
+.lp-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.lp-select-wrap { display: flex; flex-direction: column; gap: 4px; }
+.lp-select-wrap label { font-size: 0.75rem; font-weight: 600; color: var(--gmp-text-light, #6b7280); }
+.lp-select-wrap select {
+  border: 1px solid var(--gmp-border, #d1d5db);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: var(--gmp-bg, #fff);
+  color: var(--gmp-text, #1f2937);
+  min-width: 220px;
+}
+.lp-search {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gmp-bg, #fff);
+  border: 1px solid var(--gmp-border, #d1d5db);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.lp-search svg { color: var(--gmp-text-light, #9ca3af); flex-shrink: 0; }
+.lp-search input { border: none; outline: none; background: transparent; width: 100%; color: var(--gmp-text, #1f2937); }
+
+/* Tabela */
+.lp-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--gmp-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--gmp-bg, #fff);
+  max-height: calc(100vh - 280px);
+}
+.lp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.lp-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--gmp-bg-secondary, #f3f4f6);
+  color: var(--gmp-text, #374151);
+  text-align: left;
+  font-weight: 700;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--gmp-border, #e5e7eb);
+  white-space: nowrap;
+}
+.lp-table tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--gmp-border, #f1f5f9);
+  color: var(--gmp-text, #1f2937);
+  white-space: nowrap;
+}
+.lp-table tbody tr:hover { background: rgba(0, 102, 204, 0.04); }
+.lp-msg { text-align: center; padding: 30px; color: var(--gmp-text-light, #9ca3af); }
+
+/* Rodapé / paginação */
+.lp-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.lp-total { color: var(--gmp-text-light, #6b7280); font-size: 0.85rem; }
+.lp-paginacao { display: flex; align-items: center; gap: 12px; }
+.lp-paginacao button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--gmp-bg-secondary, #f3f4f6);
+  border: 1px solid var(--gmp-border, #d1d5db);
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--gmp-text, #374151);
+}
+.lp-paginacao button:disabled { opacity: 0.5; cursor: not-allowed; }
+.lp-paginacao span { font-size: 0.85rem; color: var(--gmp-text-light, #6b7280); }
+
+/* Estado vazio */
+.lp-vazio {
+  text-align: center;
+  padding: 70px 24px;
+  color: var(--gmp-text-light, #6b7280);
+  border: 2px dashed var(--gmp-border, #e5e7eb);
+  border-radius: 14px;
+}
+.lp-vazio svg { color: var(--gmp-primary, #0066cc); opacity: 0.6; margin-bottom: 12px; }
+.lp-vazio h3 { margin: 0 0 6px; color: var(--gmp-text, #1f2937); }
+
+[data-theme="dark"] .lp-table-wrap,
+[data-theme="dark"] .lp-select-wrap select,
+[data-theme="dark"] .lp-search { background: var(--gmp-bg-dark, #1f2937); }

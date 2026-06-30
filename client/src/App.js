@@ -34,6 +34,7 @@ import {
   ProdutosPorFamilia,
   ProdutoForm,
   Atividades,
+  ListaPrecos,
   Relatorios,
   MaquinasVendidas,
   CustosViagens,
@@ -256,6 +257,7 @@ function AppRoutes() {
         <Route path="produtos/novo" element={<ProdutoForm />} />
         <Route path="produtos/editar/:id" element={<ProdutoForm />} />
         <Route path="atividades" element={<Atividades />} />
+        <Route path="lista-precos" element={<ListaPrecos />} />
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="maquinas-vendidas" element={<MaquinasVendidas />} />
         <Route path="custos-viagens" element={<CustosViagens />} />

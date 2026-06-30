@@ -48,6 +48,7 @@ export const FamiliasDoGrupo = page(() => import('../components/FamiliasDoGrupo'
 export const ProdutosPorFamilia = page(() => import('../components/ProdutosPorFamilia'));
 export const ProdutoForm = page(() => import('../components/ProdutoForm'));
 export const Atividades = page(() => import('../components/Atividades'));
+export const ListaPrecos = page(() => import('../components/ListaPrecos'));
 export const Relatorios = page(() => import('../components/Relatorios'));
 export const MaquinasVendidas = page(() => import('../components/MaquinasVendidas'));
 export const CustosViagens = page(() => import('../components/CustosViagens'));
