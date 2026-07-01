@@ -143,7 +143,7 @@ select option {
 /* ── 10. Cards genéricos ── */
 .card,
 .card-container,
-[class*="-card"]:not([class*="badge"]):not([class*="kpi"]):not([class*="btn"]):not([class*="status"]):not([class*="nav"]) {
+[class*="-card"]:not([class*="badge"]):not([class*="kpi"]):not([class*="btn"]):not([class*="status"]):not([class*="nav"]):not([class*="foto"]):not([class*="overlay"]):not([class*="img"]) {
   background: var(--gmp-surface) !important;
   border-color: var(--gmp-border) !important;
   color: var(--gmp-text) !important;
