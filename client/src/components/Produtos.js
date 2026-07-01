@@ -96,6 +96,14 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
     return parts.length ? parts.join(' • ') : null;
   };
 
+  // Monta a URL da foto do produto (imagem = nome de arquivo em /api/uploads/produtos)
+  const getImagemUrl = (img) => {
+    if (!img) return null;
+    if (img.startsWith('data:') || img.startsWith('http')) return img;
+    const base = api.defaults.baseURL || '/api';
+    return base.replace(/\/api\/?$/, '') + '/api/uploads/produtos/' + img;
+  };
+
   if (loading) {
     return (
       <div className="loading">
@@ -164,6 +172,7 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
         <table className="data-table">
           <thead>
             <tr>
+              <th>Foto</th>
               <th>Código</th>
               <th>Nome</th>
               <th>Família</th>
@@ -179,7 +188,7 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
           <tbody>
             {produtos.length === 0 ? (
               <tr>
-                <td colSpan="10" className="no-data">
+                <td colSpan="11" className="no-data">
                   Nenhum produto encontrado
                 </td>
               </tr>
@@ -194,6 +203,19 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
                 const descritivoTecnico = getDescritivoTecnico(produto);
                 return (
                 <tr key={produto.id}>
+                  <td className="produto-foto-cell">
+                    {getImagemUrl(produto.imagem) ? (
+                      <img
+                        src={getImagemUrl(produto.imagem)}
+                        alt={produto.nome}
+                        className="produto-thumb"
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="produto-thumb produto-thumb-vazia">—</div>
+                    )}
+                  </td>
                   <td><strong>{produto.codigo}</strong></td>
                   <td className="produto-nome-cell">
                     <div className="produto-nome-texto">{produto.nome}</div>

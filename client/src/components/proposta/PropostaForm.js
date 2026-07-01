@@ -523,6 +523,9 @@ export default function PropostaForm() {
               <label>Origem da busca (marketing)</label>
               <select value={form.origem_busca} onChange={(e) => setForm((f) => ({ ...f, origem_busca: e.target.value }))}>
                 <option value="">Selecione...</option>
+                {form.origem_busca && !ORIGENS_BUSCA.includes(form.origem_busca) && (
+                  <option value={form.origem_busca}>{form.origem_busca}</option>
+                )}
                 {ORIGENS_BUSCA.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
@@ -530,6 +533,9 @@ export default function PropostaForm() {
               <label>Família de produto / equipamento</label>
               <select value={form.familia_produto} onChange={(e) => setForm((f) => ({ ...f, familia_produto: e.target.value }))}>
                 <option value="">Selecione...</option>
+                {form.familia_produto && !familiasProduto.includes(form.familia_produto) && (
+                  <option value={form.familia_produto}>{form.familia_produto}</option>
+                )}
                 {familiasProduto.map((fam) => <option key={fam} value={fam}>{fam}</option>)}
               </select>
             </div>
