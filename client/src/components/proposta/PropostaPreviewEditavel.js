@@ -5,6 +5,13 @@ import { FiEdit2, FiSave, FiClock, FiX, FiDownload } from 'react-icons/fi';
 import api from '../../services/api';
 import EditorClausulas from './EditorClausulas';
 import HistoricoEdicoes from './HistoricoEdicoes';
+import {
+  lerClausulasDoSource,
+  sincronizarCampoParaSource,
+  moverClausulaNoSource,
+  removerClausulaDoSource,
+  adicionarClausulaAoSource,
+} from './clausulasInlineEditor';
 import './PropostaPreviewEditavel.css';
 
 const CAMPOS_EDITAVEIS = [
@@ -30,6 +37,8 @@ export default function PropostaPreviewEditavel() {
   const [baixandoPdf, setBaixandoPdf] = useState(false);
   // Signals that the preview HTML needs a server reload (clause content changed)
   const previewDesatualizadoRef = useRef(false);
+  const repaginacaoTimerRef = useRef(null);
+  const edicaoEmAndamentoRef = useRef(null); // { key, campo, cursorOffset }
 
   const carregarPreview = useCallback(async () => {
     setLoading(true);
@@ -87,6 +96,117 @@ export default function PropostaPreviewEditavel() {
         setMudancasPendentes(true);
       };
     });
+  }
+
+  function getCursorOffset(el) {
+    const sel = el.ownerDocument.defaultView.getSelection();
+    if (!sel || sel.rangeCount === 0) return 0;
+    const range = sel.getRangeAt(0);
+    const preRange = range.cloneRange();
+    preRange.selectNodeContents(el);
+    preRange.setEnd(range.endContainer, range.endOffset);
+    return preRange.toString().length;
+  }
+
+  function setCursorOffset(el, offset) {
+    const doc = el.ownerDocument;
+    const win = doc.defaultView;
+    const range = doc.createRange();
+    let restante = offset;
+    let node = null;
+    const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    while (walker.nextNode()) {
+      const len = walker.currentNode.textContent.length;
+      if (restante <= len) { node = walker.currentNode; break; }
+      restante -= len;
+    }
+    if (node) {
+      range.setStart(node, restante);
+      range.collapse(true);
+    } else {
+      range.selectNodeContents(el);
+      range.collapse(false);
+    }
+    const sel = win.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function injetarControlesClausula(doc, secao) {
+    const existente = secao.querySelector(':scope > .ppe-clausula-controles');
+    if (existente) existente.remove();
+    const key = secao.getAttribute('data-clausula-key');
+    const barra = doc.createElement('div');
+    barra.className = 'ppe-clausula-controles';
+    barra.setAttribute('contenteditable', 'false');
+    barra.style.cssText = 'display:flex;gap:4px;justify-content:flex-end;margin-bottom:2px;';
+    const botao = (texto, titulo, onClick) => {
+      const b = doc.createElement('button');
+      b.type = 'button';
+      b.textContent = texto;
+      b.title = titulo;
+      b.style.cssText = 'font-size:11px;padding:2px 6px;border:1px solid #f59e0b;background:#fffde7;border-radius:4px;cursor:pointer;';
+      b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); onClick(); };
+      return b;
+    };
+    barra.appendChild(botao('↑', 'Mover para cima', () => aplicarMudancaEstrutural(doc, () => moverClausulaNoSource(doc, key, -1))));
+    barra.appendChild(botao('↓', 'Mover para baixo', () => aplicarMudancaEstrutural(doc, () => moverClausulaNoSource(doc, key, 1))));
+    barra.appendChild(botao('+ cláusula', 'Adicionar cláusula depois desta', () => aplicarMudancaEstrutural(doc, () => adicionarClausulaAoSource(doc, key))));
+    barra.appendChild(botao('🗑', 'Remover cláusula', () => aplicarMudancaEstrutural(doc, () => removerClausulaDoSource(doc, key))));
+    secao.insertAdjacentElement('afterbegin', barra);
+  }
+
+  function ativarEdicaoClausulas(doc) {
+    const paginasGeradas = doc.querySelectorAll('.proposal-page[data-generated="1"] [data-clausula-campo]');
+    paginasGeradas.forEach((el) => {
+      el.contentEditable = 'true';
+      el.style.outline = '2px dashed #f59e0b';
+      el.style.background = '#fffde7';
+      el.style.borderRadius = '3px';
+      el.style.cursor = 'text';
+      el.oninput = () => {
+        const secao = el.closest('[data-clausula-key]');
+        if (!secao) return;
+        const key = secao.getAttribute('data-clausula-key');
+        const campo = el.getAttribute('data-clausula-campo');
+        const valor = campo === 'titulo' ? el.textContent : el.innerHTML;
+        sincronizarCampoParaSource(doc, key, campo, valor);
+        setMudancasPendentes(true);
+        const pagina = el.closest('.proposal-page');
+        if (pagina) pagina.style.overflow = 'visible';
+        edicaoEmAndamentoRef.current = { key, campo, cursorOffset: getCursorOffset(el) };
+        clearTimeout(repaginacaoTimerRef.current);
+        repaginacaoTimerRef.current = setTimeout(() => repaginarERestaurar(doc), 500);
+      };
+    });
+    doc.querySelectorAll('.proposal-page[data-generated="1"] [data-clausula-key]').forEach((secao) => {
+      injetarControlesClausula(doc, secao);
+    });
+  }
+
+  function repaginarERestaurar(doc) {
+    const win = doc.defaultView;
+    try { win.paginateProposalContent(); } catch (_) { /* preview segue com o layout anterior */ }
+    ativarEdicaoClausulas(doc);
+    const pendente = edicaoEmAndamentoRef.current;
+    if (pendente) {
+      const secao = doc.querySelector(`.proposal-page[data-generated="1"] [data-clausula-key="${pendente.key}"]`);
+      const alvo = secao && secao.querySelector(`[data-clausula-campo="${pendente.campo}"]`);
+      if (alvo) {
+        alvo.focus();
+        setCursorOffset(alvo, pendente.cursorOffset);
+      }
+    }
+  }
+
+  function aplicarMudancaEstrutural(doc, mutacao) {
+    clearTimeout(repaginacaoTimerRef.current);
+    edicaoEmAndamentoRef.current = null;
+    mutacao();
+    const win = doc.defaultView;
+    try { win.paginateProposalContent(); } catch (_) { /* preview segue com o layout anterior */ }
+    ativarEdicaoClausulas(doc);
+    setMudancasPendentes(true);
   }
 
   async function salvar() {
@@ -193,7 +313,10 @@ export default function PropostaPreviewEditavel() {
             sandbox="allow-same-origin allow-scripts"
             onLoad={() => {
               const doc = iframeRef.current?.contentDocument;
-              if (doc) injetarAtributosEdicao(doc);
+              if (doc) {
+                injetarAtributosEdicao(doc);
+                ativarEdicaoClausulas(doc);
+              }
               ativarEdicao();
             }}
           />
