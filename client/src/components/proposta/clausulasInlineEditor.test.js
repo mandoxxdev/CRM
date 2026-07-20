@@ -4,6 +4,7 @@ import {
   moverClausulaNoSource,
   removerClausulaDoSource,
   adicionarClausulaAoSource,
+  atualizarKeyNoSource,
   diffClausulas,
   htmlParaTexto,
 } from './clausulasInlineEditor';
@@ -162,6 +163,16 @@ test('diffClausulas identifica novas, alteradas, removidas e mudanca de ordem', 
   expect(diff.alteradas).toEqual([{ key: '2', titulo: '5.2 TRANSPORTE', conteudo: 'B alterado' }]);
   expect(diff.removidas).toEqual([]);
   expect(diff.ordemMudou).toBe(true);
+});
+
+test('atualizarKeyNoSource troca data-clausula-key da secao e retorna false para key inexistente', () => {
+  montarFixture(document, [
+    ['1', '5.1 PRAZO', '<p>A</p>'],
+    ['temp-123', '5.2 NOVA', '<p>B</p>'],
+  ]);
+  expect(atualizarKeyNoSource(document, 'temp-123', '42')).toBe(true);
+  expect(lerClausulasDoSource(document).map((c) => c.key)).toEqual(['1', '42']);
+  expect(atualizarKeyNoSource(document, 'temp-999', '43')).toBe(false);
 });
 
 test('diffClausulas detecta remocao quando uma key do snapshot nao esta mais na lista atual', () => {

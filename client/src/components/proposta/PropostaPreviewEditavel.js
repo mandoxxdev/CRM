@@ -11,6 +11,7 @@ import {
   moverClausulaNoSource,
   removerClausulaDoSource,
   adicionarClausulaAoSource,
+  atualizarKeyNoSource,
   diffClausulas,
   htmlParaTexto,
 } from './clausulasInlineEditor';
@@ -243,19 +244,20 @@ export default function PropostaPreviewEditavel() {
       });
 
       const diff = diffClausulas(frescas.map((c) => ({ id: c.id, titulo: c.titulo, conteudo: c.conteudo })), listaAtual);
-      await aplicarDiffClausulas(diff, listaAtual);
+      await aplicarDiffClausulas(diff, listaAtual, doc);
       return;
     }
 
     const diff = diffClausulas(snapshotOriginal.map((c) => ({ id: c.id, titulo: c.titulo, conteudo: c.conteudo })), listaAtual);
-    await aplicarDiffClausulas(diff, listaAtual);
+    await aplicarDiffClausulas(diff, listaAtual, doc);
   }
 
-  async function aplicarDiffClausulas(diff, listaAtual) {
+  async function aplicarDiffClausulas(diff, listaAtual, doc) {
     const idsPorTempKey = new Map();
     for (const nova of diff.novas) {
       const res = await api.post(`/propostas/${id}/clausulas`, { titulo: nova.titulo, conteudo: nova.conteudo });
       idsPorTempKey.set(nova.key, String(res.data.id));
+      atualizarKeyNoSource(doc, nova.key, String(res.data.id));
     }
     for (const alterada of diff.alteradas) {
       await api.put(`/propostas/${id}/clausulas/${alterada.key}`, { titulo: alterada.titulo, conteudo: alterada.conteudo });

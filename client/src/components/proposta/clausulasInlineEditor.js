@@ -63,6 +63,13 @@ export function lerClausulasDoSource(doc) {
   });
 }
 
+export function atualizarKeyNoSource(doc, chaveAntiga, chaveNova) {
+  const secao = buscarSecao(doc, chaveAntiga);
+  if (!secao) return false;
+  secao.setAttribute('data-clausula-key', chaveNova);
+  return true;
+}
+
 export function sincronizarCampoParaSource(doc, key, campo, valor) {
   const secao = buscarSecao(doc, key);
   if (!secao) return false;
