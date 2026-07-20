@@ -167,7 +167,19 @@ export default function PropostaPreviewEditavel() {
         if (!secao) return;
         const key = secao.getAttribute('data-clausula-key');
         const campo = el.getAttribute('data-clausula-campo');
-        const valor = campo === 'titulo' ? el.textContent : el.innerHTML;
+        // Uma cláusula grande pode ser dividida em vários fragmentos (todos com o mesmo
+        // data-clausula-key) pela paginação. Se sincronizássemos só o innerHTML do
+        // fragmento editado, sobrescreveríamos a cláusula inteira na fonte, perdendo os
+        // parágrafos que estão nos outros fragmentos. Por isso o conteúdo é remontado a
+        // partir de TODOS os fragmentos visíveis dessa key, na ordem do documento.
+        const valor = campo === 'titulo'
+          ? el.textContent
+          : Array.from(
+              doc.querySelectorAll('.proposal-page[data-generated="1"] [data-clausula-campo="conteudo"]')
+            ).filter((f) => {
+              const s = f.closest('[data-clausula-key]');
+              return s && s.getAttribute('data-clausula-key') === key;
+            }).map((f) => f.innerHTML).join('');
         sincronizarCampoParaSource(doc, key, campo, valor);
         setMudancasPendentes(true);
         const pagina = el.closest('.proposal-page');
