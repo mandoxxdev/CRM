@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FiEdit2, FiSave, FiClock, FiX, FiDownload } from 'react-icons/fi';
+import { FiSave, FiClock, FiX, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import api from '../../services/api';
-import EditorClausulas from './EditorClausulas';
 import HistoricoEdicoes from './HistoricoEdicoes';
 import {
   lerClausulasDoSource,
@@ -32,14 +31,11 @@ export default function PropostaPreviewEditavel() {
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
-  const [mostrarClausulas, setMostrarClausulas] = useState(false);
   const [camposEditados, setCamposEditados] = useState({});
   const [clausulas, setClausulas] = useState([]);
   const [clausulasIsDefault, setClausulasIsDefault] = useState(true);
   const [mudancasPendentes, setMudancasPendentes] = useState(false);
   const [baixandoPdf, setBaixandoPdf] = useState(false);
-  // Signals that the preview HTML needs a server reload (clause content changed)
-  const previewDesatualizadoRef = useRef(false);
   const repaginacaoTimerRef = useRef(null);
   const edicaoEmAndamentoRef = useRef(null); // { key, campo, cursorOffset }
 
@@ -55,7 +51,6 @@ export default function PropostaPreviewEditavel() {
       setClausulasIsDefault(clausulasRes.data?.isDefault ?? true);
       setCamposEditados({});
       setMudancasPendentes(false);
-      previewDesatualizadoRef.current = false;
     } catch (e) {
       toast.error('Erro ao carregar proposta.');
     } finally {
@@ -316,16 +311,14 @@ export default function PropostaPreviewEditavel() {
     }
   }
 
-  // Clause changes are already persisted by EditorClausulas on each blur.
-  // We only mark that the preview HTML is stale — the reload happens when the panel closes.
-  function handleClausulasAlteradas() {
-    previewDesatualizadoRef.current = true;
-  }
-
-  function fecharClausulas() {
-    setMostrarClausulas(false);
-    if (previewDesatualizadoRef.current) {
+  async function resetarClausulas() {
+    if (!window.confirm('Tem certeza? Todas as edições feitas nas cláusulas desta proposta serão perdidas.')) return;
+    try {
+      await api.post(`/propostas/${id}/clausulas/resetar`);
+      toast.success('Cláusulas voltaram ao padrão.');
       carregarPreview();
+    } catch (e) {
+      toast.error('Erro ao resetar cláusulas.');
     }
   }
 
@@ -340,10 +333,10 @@ export default function PropostaPreviewEditavel() {
         <div className="ppe-toolbar-actions">
           <button
             className="ppe-btn"
-            onClick={() => setMostrarClausulas(true)}
-            title="Editar cláusulas"
+            onClick={resetarClausulas}
+            title="Resetar cláusulas para o padrão"
           >
-            <FiEdit2 /> Cláusulas
+            <FiRefreshCw /> Resetar cláusulas
           </button>
           <button
             className="ppe-btn"
@@ -392,26 +385,6 @@ export default function PropostaPreviewEditavel() {
           />
         )}
       </div>
-
-      {/* Painel de cláusulas */}
-      {mostrarClausulas && (
-        <div className="ppe-painel-overlay">
-          <div className="ppe-painel">
-            <div className="ppe-painel-header">
-              <h2>Editor de Cláusulas</h2>
-              <button className="ppe-painel-fechar" onClick={fecharClausulas}>
-                <FiX />
-              </button>
-            </div>
-            <EditorClausulas
-              propostaId={id}
-              clausulas={clausulas}
-              isDefault={clausulasIsDefault}
-              onAlterado={handleClausulasAlteradas}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Painel de histórico */}
       {mostrarHistorico && (
