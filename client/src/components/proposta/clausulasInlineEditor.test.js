@@ -1,0 +1,166 @@
+import {
+  lerClausulasDoSource,
+  sincronizarCampoParaSource,
+  moverClausulaNoSource,
+  removerClausulaDoSource,
+  adicionarClausulaAoSource,
+  diffClausulas,
+  htmlParaTexto,
+} from './clausulasInlineEditor';
+
+// Fixture equivalente ao HTML gerado por clausulasSection (propostaPremiumV2.js, Task 1):
+// wrapper .five-intro-group contém a "primeira" cláusula; as demais são irmãs de #proposalSource.
+function montarFixture(doc, chaves) {
+  const root = doc.createElement('div');
+  root.id = 'proposalSource';
+  const wrapper = doc.createElement('section');
+  wrapper.className = 'block stack-md avoid-break five-intro-group';
+  const h2 = doc.createElement('h2');
+  h2.textContent = '5. CONDIÇÕES GERAIS DE FORNECIMENTO';
+  wrapper.appendChild(h2);
+  root.appendChild(wrapper);
+
+  function criarSecao(key, titulo, conteudoHtml) {
+    const secao = doc.createElement('section');
+    secao.className = 'block stack-md allow-break';
+    secao.setAttribute('data-clausula-key', key);
+    const h3 = doc.createElement('h3');
+    h3.setAttribute('data-clausula-campo', 'titulo');
+    h3.textContent = titulo;
+    const div = doc.createElement('div');
+    div.className = 'stack-sm';
+    div.setAttribute('data-clausula-campo', 'conteudo');
+    div.innerHTML = conteudoHtml;
+    secao.appendChild(h3);
+    secao.appendChild(div);
+    return secao;
+  }
+
+  chaves.forEach(([key, titulo, conteudo], idx) => {
+    const secao = criarSecao(key, titulo, conteudo);
+    if (idx === 0) wrapper.appendChild(secao);
+    else root.appendChild(secao);
+  });
+
+  doc.body.appendChild(root);
+  return root;
+}
+
+beforeEach(() => {
+  document.body.innerHTML = '';
+});
+
+test('lerClausulasDoSource lê as clausulas na ordem do documento, incluindo a que está no wrapper', () => {
+  montarFixture(document, [
+    ['1', '5.1 PRAZO', '<p>Texto 1.</p>'],
+    ['2', '5.2 TRANSPORTE', '<p>Texto 2.</p>'],
+  ]);
+  const lista = lerClausulasDoSource(document);
+  expect(lista).toEqual([
+    { key: '1', titulo: '5.1 PRAZO', conteudo: '<p>Texto 1.</p>' },
+    { key: '2', titulo: '5.2 TRANSPORTE', conteudo: '<p>Texto 2.</p>' },
+  ]);
+});
+
+test('sincronizarCampoParaSource atualiza titulo (textContent) e conteudo (innerHTML)', () => {
+  montarFixture(document, [['1', '5.1 PRAZO', '<p>Texto 1.</p>']]);
+  expect(sincronizarCampoParaSource(document, '1', 'titulo', '5.1 NOVO TITULO')).toBe(true);
+  expect(sincronizarCampoParaSource(document, '1', 'conteudo', '<p>Texto editado.</p>')).toBe(true);
+  const lista = lerClausulasDoSource(document);
+  expect(lista[0].titulo).toBe('5.1 NOVO TITULO');
+  expect(lista[0].conteudo).toBe('<p>Texto editado.</p>');
+});
+
+test('sincronizarCampoParaSource retorna false para key inexistente', () => {
+  montarFixture(document, [['1', '5.1 PRAZO', '<p>Texto 1.</p>']]);
+  expect(sincronizarCampoParaSource(document, '999', 'titulo', 'X')).toBe(false);
+});
+
+test('moverClausulaNoSource troca a ordem, inclusive quando envolve a clausula do wrapper', () => {
+  montarFixture(document, [
+    ['1', '5.1 PRAZO', '<p>A</p>'],
+    ['2', '5.2 TRANSPORTE', '<p>B</p>'],
+    ['3', '5.3 GARANTIA', '<p>C</p>'],
+  ]);
+  expect(moverClausulaNoSource(document, '2', -1)).toBe(true); // 2 sobe, vira primeira (entra no wrapper)
+  expect(lerClausulasDoSource(document).map((c) => c.key)).toEqual(['2', '1', '3']);
+  const wrapper = document.querySelector('.five-intro-group');
+  expect(wrapper.querySelector('[data-clausula-key]').getAttribute('data-clausula-key')).toBe('2');
+});
+
+test('moverClausulaNoSource não faz nada além dos limites da lista', () => {
+  montarFixture(document, [
+    ['1', '5.1 PRAZO', '<p>A</p>'],
+    ['2', '5.2 TRANSPORTE', '<p>B</p>'],
+  ]);
+  expect(moverClausulaNoSource(document, '1', -1)).toBe(false);
+  expect(moverClausulaNoSource(document, '2', 1)).toBe(false);
+  expect(lerClausulasDoSource(document).map((c) => c.key)).toEqual(['1', '2']);
+});
+
+test('removerClausulaDoSource remove, inclusive a clausula que está no wrapper (a próxima assume o lugar)', () => {
+  montarFixture(document, [
+    ['1', '5.1 PRAZO', '<p>A</p>'],
+    ['2', '5.2 TRANSPORTE', '<p>B</p>'],
+  ]);
+  expect(removerClausulaDoSource(document, '1')).toBe(true);
+  const lista = lerClausulasDoSource(document);
+  expect(lista.map((c) => c.key)).toEqual(['2']);
+  const wrapper = document.querySelector('.five-intro-group');
+  expect(wrapper.querySelector('[data-clausula-key]').getAttribute('data-clausula-key')).toBe('2');
+});
+
+test('removerClausulaDoSource retorna false para key inexistente', () => {
+  montarFixture(document, [['1', '5.1 PRAZO', '<p>A</p>']]);
+  expect(removerClausulaDoSource(document, '999')).toBe(false);
+});
+
+test('adicionarClausulaAoSource insere depois da key indicada, com key temp-*', () => {
+  montarFixture(document, [
+    ['1', '5.1 PRAZO', '<p>A</p>'],
+    ['2', '5.2 TRANSPORTE', '<p>B</p>'],
+  ]);
+  const novaKey = adicionarClausulaAoSource(document, '1');
+  expect(novaKey).toMatch(/^temp-\d+$/);
+  const chaves = lerClausulasDoSource(document).map((c) => c.key);
+  expect(chaves).toEqual(['1', novaKey, '2']);
+});
+
+test('adicionarClausulaAoSource sem apósKey adiciona no fim', () => {
+  montarFixture(document, [['1', '5.1 PRAZO', '<p>A</p>']]);
+  const novaKey = adicionarClausulaAoSource(document, null);
+  expect(lerClausulasDoSource(document).map((c) => c.key)).toEqual(['1', novaKey]);
+});
+
+test('htmlParaTexto converte paragrafos em texto separado por linha em branco', () => {
+  expect(htmlParaTexto('<p>Primeiro.</p><p>Segundo.</p>')).toBe('Primeiro.\n\nSegundo.');
+  expect(htmlParaTexto('')).toBe('');
+});
+
+test('diffClausulas identifica novas, alteradas, removidas e mudanca de ordem', () => {
+  const snapshot = [
+    { id: 1, titulo: '5.1 PRAZO', conteudo: 'A' },
+    { id: 2, titulo: '5.2 TRANSPORTE', conteudo: 'B' },
+  ];
+  const listaAtual = [
+    { key: '2', titulo: '5.2 TRANSPORTE', conteudo: 'B alterado' },
+    { key: '1', titulo: '5.1 PRAZO', conteudo: 'A' },
+    { key: 'temp-123', titulo: '5.3 NOVA', conteudo: 'C' },
+  ];
+  const diff = diffClausulas(snapshot, listaAtual);
+  expect(diff.novas).toEqual([{ key: 'temp-123', titulo: '5.3 NOVA', conteudo: 'C' }]);
+  expect(diff.alteradas).toEqual([{ key: '2', titulo: '5.2 TRANSPORTE', conteudo: 'B alterado' }]);
+  expect(diff.removidas).toEqual([]);
+  expect(diff.ordemMudou).toBe(true);
+});
+
+test('diffClausulas detecta remocao quando uma key do snapshot nao esta mais na lista atual', () => {
+  const snapshot = [
+    { id: 1, titulo: '5.1 PRAZO', conteudo: 'A' },
+    { id: 2, titulo: '5.2 TRANSPORTE', conteudo: 'B' },
+  ];
+  const listaAtual = [{ key: '1', titulo: '5.1 PRAZO', conteudo: 'A' }];
+  const diff = diffClausulas(snapshot, listaAtual);
+  expect(diff.removidas).toEqual([{ id: 2, titulo: '5.2 TRANSPORTE', conteudo: 'B' }]);
+  expect(diff.ordemMudou).toBe(false);
+});
