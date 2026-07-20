@@ -123,4 +123,10 @@ function getClausulasDefault() {
   ];
 }
 
-module.exports = { getClausulasDefault };
+function resolverClausulasParaPreview(clausulasAtivas, embedPreview) {
+  if (Array.isArray(clausulasAtivas) && clausulasAtivas.length > 0) return clausulasAtivas;
+  if (embedPreview) return getClausulasDefault();
+  return null;
+}
+
+module.exports = { getClausulasDefault, resolverClausulasParaPreview };

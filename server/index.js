@@ -23,7 +23,7 @@ const puppeteer = require('puppeteer');
 const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
-const { getClausulasDefault } = require('./clausulasDefault');
+const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
 const propostaEngine = require('./propostaCompositionEngine');
 const {
   fetchComercialResponsaveis,
@@ -8443,8 +8443,9 @@ app.get('/api/propostas/:id/premium', (req, res) => {
 
           // Aplicar cláusulas customizadas (se existirem para esta proposta)
           db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (errCl, clausulas) => {
-          if (!errCl && clausulas && clausulas.length > 0) {
-            templateConfig.clausulas_custom = clausulas;
+          const clausulasParaTemplate = resolverClausulasParaPreview(errCl ? [] : clausulas, omitPrintBar);
+          if (clausulasParaTemplate) {
+            templateConfig.clausulas_custom = clausulasParaTemplate;
           }
 
           const hasHeaderOrFooter = (templateConfig.header_image_url && String(templateConfig.header_image_url).trim()) || (templateConfig.footer_image_url && String(templateConfig.footer_image_url).trim());
