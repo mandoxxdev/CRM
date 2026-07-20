@@ -76,6 +76,7 @@ export function sincronizarCampoParaSource(doc, key, campo, valor) {
 export function moverClausulaNoSource(doc, key, direcao) {
   return comWrapperNormalizado(doc, () => {
     const source = getSource(doc);
+    if (!source) return false;
     const secoes = Array.from(source.querySelectorAll(CLAUSULA_SELECTOR));
     const idx = secoes.findIndex((el) => el.getAttribute('data-clausula-key') === key);
     const alvo = idx + direcao;
@@ -100,6 +101,7 @@ export function removerClausulaDoSource(doc, key) {
 export function adicionarClausulaAoSource(doc, apósKey) {
   return comWrapperNormalizado(doc, () => {
     const source = getSource(doc);
+    if (!source) return null;
     const key = `temp-${Date.now()}`;
     const secao = doc.createElement('section');
     secao.className = 'block stack-md allow-break';

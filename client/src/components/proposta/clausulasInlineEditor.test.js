@@ -132,6 +132,16 @@ test('adicionarClausulaAoSource sem apósKey adiciona no fim', () => {
   expect(lerClausulasDoSource(document).map((c) => c.key)).toEqual(['1', novaKey]);
 });
 
+test('moverClausulaNoSource retorna false sem throwing quando #proposalSource está ausente', () => {
+  // Não monta fixture, deixando document.body vazio (sem #proposalSource)
+  expect(moverClausulaNoSource(document, '1', -1)).toBe(false);
+});
+
+test('adicionarClausulaAoSource retorna null sem throwing quando #proposalSource está ausente', () => {
+  // Não monta fixture, deixando document.body vazio (sem #proposalSource)
+  expect(adicionarClausulaAoSource(document, null)).toBe(null);
+});
+
 test('htmlParaTexto converte paragrafos em texto separado por linha em branco', () => {
   expect(htmlParaTexto('<p>Primeiro.</p><p>Segundo.</p>')).toBe('Primeiro.\n\nSegundo.');
   expect(htmlParaTexto('')).toBe('');
