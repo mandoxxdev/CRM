@@ -193,6 +193,53 @@ Status: [ ] pendente | [x] concluído | [~] em andamento | [!] pendente de decis
 - [x] Novas imagens copiadas para `server/assets/proposta/`: `fabrica-gmp.jpeg`, `industria40.png`, `projetos.png`
 - [x] `node --check` sem erros em `index.js`, `paths.js` e `propostaPremiumV2.js`
 
+### Ajustes visuais e UX (sessão 16/07/2026 — continuação)
+
+- [x] `flex-shrink: 0` em `.proposal-page` — impede compressão abaixo de 297mm no browser
+- [x] `@media screen`: fundo cinza (`#d0d7de`), gap 16px e sombra entre páginas — separação visual clara entre pages no preview
+- [x] `@media print`: reverte gap/padding/shadow para PDF limpo
+- [x] `justify-content: flex-start` em `.cover-info-area` — elimina espaço em branco flutuante na capa
+- [x] `[data-edit] { display: inline-block; min-width: 60px; cursor: text }` — campos editáveis sempre clicáveis, mesmo vazios
+- [x] Email com fallback `—` quando vazio (era string vazia, ficava invisível e sem área de clique)
+
+### Fidelidade ao modelo DOCX (sessão 18/07/2026)
+
+Comparação sistemática do template com `PROPOSTA PARA DEV.docx` / `pp para dev.pdf` (paleta, fontes, header/footer, tabelas, estrutura).
+
+- [x] **Fase A — identidade visual:**
+  - [x] `--ink` e títulos em `#002060` (azul marinho do modelo — todo o texto do corpo)
+  - [x] Fonte `Century Gothic` (com fallbacks Trebuchet MS/Arial) em corpo e títulos
+  - [x] h2 em 14pt (era 13pt), como o estilo Título1 do modelo
+  - [x] Tabela FINAME com classe `.table-dark`: header `#002060` + texto branco + zebra `#F9F9F9`/`#EDEDED`
+  - [x] `th` genérico: centralizado, sem fundo, texto azul (como no modelo)
+  - [x] Header com tagline "Especialista em Misturas, Moagens..." (9pt no modelo)
+  - [x] Footer em 4 linhas centralizadas azuis: empresa/CNPJ/tel (bold), 5 sites em 2 linhas, endereço + Pág. X/Y
+- [x] **Fase B — estrutura:**
+  - [x] Página de SUMÁRIO estática (`#tocPage`) preenchida via JS pós-paginação com números de página reais (h2 `1.`–`5.` + h3 `4.x`/`5.x`); regex no script embutido precisa de `\\d` por estar dentro do template literal
+  - [x] Specs de equipamentos em 10pt + legenda laranja `#ED7D31` "IMAGEM ILUSTRATIVA" sob a foto do produto
+  - [x] Fix: `align-self: anchor-center` → `center` em `.cover-field-emissao`
+- [x] **Fase C — conteúdo (aprovado pelo usuário):**
+  - [x] Foro 5.21: Diadema → São Bernardo do Campo (template + `clausulasDefault.js`)
+  - [x] Garantia 5.4: incluído `matheus@gmp.ind.br` (template + `clausulasDefault.js`)
+  - [x] Redações das seções 1 e 2 alinhadas ao texto do modelo DOCX
+  - Tabela FINAME/BNDES permanece fixa (não dinâmica) por decisão do usuário
+- [x] Teste visual: render com dados mock via Puppeteer — screenshots de capa/apresentação/sumário/conteúdo/FINAME conferidos + PDF de 20 páginas gerado sem erro
+- [x] **Ajustes de fidelidade (mesma sessão, feedback do usuário):**
+  - [x] Header e footer padrão adicionados também na CAPA (no modelo aparecem em todas as páginas); `.cover-hero` limitado a 68mm para caber
+  - [x] Página de APRESENTAÇÃO refeita igual ao modelo: sem título, texto integral em largura total (1º parágrafo bold, 9 bullets, parágrafo final), 12pt, e imagem `projetos.png` (idêntica à image5 do DOCX) centralizada abaixo; removido o grid texto+fotos anterior (`fabrica-gmp.jpeg` deixou de ser usada)
+
+- [x] **Fix: header em branco no ambiente real.** Causa: `proposta_template_config` aponta para `header_1773852005478_CBC2.png` / `footer_1773852011922_Footer.png`, que não existem mais em `uploads/headers|footers` (os arquivos no disco são de uploads mais antigos). Quando `header_image_url` está setado, o template escondia o header padrão e a imagem 404ava — o `onerror` removia a `<img>` sem restaurar o header (o footer tinha restauração, o header não). Correções em `propostaPremiumV2.js`: (1) imagem de header/footer customizada só é usada se o arquivo existir no disco (embed base64, sem fallback HTTP); senão renderiza o header/footer padrão do modelo DOCX; (2) `onerror` do header agora restaura `.page-header-inner`. Os logos do header padrão são byte-idênticos aos do header do DOCX (image13/image14).
+
+- [x] **Header redesenhado (pedido do usuário):** logo Moinho Ypiranga à esquerda, logo GMP à direita, box central com borda arredondada contendo "PROPOSTA TÉCNICA COMERCIAL Nº {numero}" (dinâmico) + tagline em fonte normal 6.5pt. Header removido da CAPA (hero voltou aos 78mm do modelo); footer permanece em todas as páginas.
+
+- [x] Lista da APRESENTAÇÃO com checkmarks azuis (✓ via `li::before`, cor `--blue-900`) no lugar de bullets, como no PDF modelo. Atenção: `content: "\\2713"` precisa do escape duplo por estar dentro do template literal.
+- [x] Indentação de primeira linha nos parágrafos da APRESENTAÇÃO (`text-indent: 12.5mm`, equivalente ao `w:firstLine="709"` twips do DOCX); os itens com ✓ alinham no mesmo recuo (`ul { padding-left: 12.5mm }`). Título "APRESENTAÇÃO" (adição do usuário) mantido sem recuo via `text-indent:0` inline.
+
+- [x] Título da proposta (campo `titulo` do cadastro) na faixa azul da capa, em amarelo `#FFFF00` 12pt bold, abaixo de "PROPOSTA PARA FORNECIMENTO..." — equivale ao placeholder `**TITULO**` amarelo do modelo DOCX. Renderizado apenas quando `proposta.titulo` está preenchido (evita repetir o fallback genérico).
+
+- [x] Campos EMPRESA CONTRATANTE / CNPJ / Email da capa (`.cover-client-info`) agrupados (`gap: 30px` → `6px`) e fonte reduzida (`14.5pt` → `13pt`) — estavam com espaçamento maior que o do modelo.
+
 ### Pendente
 
-- [ ] Teste visual: browser preview + geração de PDF
+- [ ] Validação visual final pelo usuário no preview real (com dados de proposta reais)
+- [ ] (Opcional) Limpar/atualizar `proposta_template_config` no banco — registro atual aponta para uploads de header/footer inexistentes (legado CBC2, anterior ao redesign)

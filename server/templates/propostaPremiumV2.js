@@ -78,20 +78,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const moedaBRL = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 
-    // Header/Footer: sempre embedar em base64 para não depender de carregamento HTTP (evita sumir no 1o PDF).
+    // Header/Footer customizados: usar SOMENTE se o arquivo existir no disco (embed base64).
+    // Sem fallback HTTP: se a imagem configurada não existe mais (config antiga apontando para
+    // upload removido), renderiza o header/footer padrão do modelo DOCX em vez de espaço em branco.
     const headerImageURL = (config.header_image_url && String(config.header_image_url).trim())
-      ? (() => {
-          const f = String(config.header_image_url).trim();
-          const data = uploadToDataUrl(uploadsHeaderDir, f);
-          return data || `${baseURL}/api/uploads/headers/${encodeURIComponent(f)}?t=${ts}`;
-        })()
+      ? (uploadToDataUrl(uploadsHeaderDir, String(config.header_image_url).trim()) || null)
       : null;
     const footerImageURL = (config.footer_image_url && String(config.footer_image_url).trim())
-      ? (() => {
-          const f = String(config.footer_image_url).trim();
-          const data = uploadToDataUrl(uploadsFooterDir, f);
-          return data || `${baseURL}/api/uploads/footers/${encodeURIComponent(f)}?t=${ts}`;
-        })()
+      ? (uploadToDataUrl(uploadsFooterDir, String(config.footer_image_url).trim()) || null)
       : null;
 
     const propostaAssetsDir = path.join(__dirname, '..', 'assets', 'proposta');
@@ -99,8 +93,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const gmpLogoGrandeB64 = fileToDataUrl(path.join(propostaAssetsDir, 'logo-gmp-grande.png'));
     const myLogoB64 = fileToDataUrl(path.join(propostaAssetsDir, 'logo-moinho-ypiranga.png'));
     const dadosContratadaB64 = fileToDataUrl(path.join(propostaAssetsDir, 'dados-contratada.png'));
-    const fabricaGmpB64 = fileToDataUrl(path.join(propostaAssetsDir, 'fabrica-gmp.jpeg'));
     const industria40B64 = fileToDataUrl(path.join(propostaAssetsDir, 'industria40.png'));
+    const projetosB64 = fileToDataUrl(path.join(propostaAssetsDir, 'projetos.png'));
 
     const numero = esc(proposta.numero_proposta || 'N/A');
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
@@ -390,6 +384,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
              <img class="equip-photo-img-top" src="${produtoImagem}" alt="Foto do equipamento"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
              <div class="equip-photo-fallback-top" style="display:none;">Foto não disponível</div>
+             <div class="equip-photo-caption">IMAGEM ILUSTRATIVA</div>
            </div>`
         : '';
 
@@ -511,21 +506,21 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     const blocksHtml = `
       <section class="block stack-md allow-break">
-        <h2>DADOS DA CONTRATADA</h2>
+        <p class="cover-strip-titulo" style="text-align: center;">Tabela com Dados Cadastrais da <strong>CONTRATADA</strong></p>
         ${dadosContratadaB64
-          ? `<img src="${dadosContratadaB64}" alt="Tabela com Dados Cadastrais da CONTRATADA" style="max-width:100%;height:auto;display:block;" />`
+          ? `<img src="${dadosContratadaB64}" alt="Tabela com Dados Cadastrais da CONTRATADA" style="max-width:100%;height:auto;display:block; font-weight: bold;" />`
           : `<p class="muted">Tabela de dados cadastrais não disponível.</p>`}
       </section>
 
       <section class="block stack-md allow-break">
         <h2>1. OBJETIVO DA PROPOSTA</h2>
-        <p>Apresentar condições técnicas e comerciais, para fornecimento de equipamentos e/ou serviços industriais aos clientes do mercado nacional e internacional.</p>
+        <p>Apresentar condições técnicas e comerciais, para fornecimento de equipamentos e/ou serviços industriais.</p>
       </section>
 
       <section class="block stack-md allow-break">
         <h2>2. ELABORAÇÃO DA PROPOSTA</h2>
-        <p>A proposta apresentada a seguir, foi elaborada atendendo às solicitações e especificações informadas pelos clientes ou representantes e/ou agentes comerciais.</p>
-        <p>Deve-se atentar, que os itens oferecidos estão descriminados e especificados nesta proposta técnica comercial e não houve a verificação dos demais sistemas e máquinas existentes e/ou a serem fornecidos pela CONTRATANTE ou por terceiros, e sendo assim, estes últimos não fizeram parte do escopo desta proposta.</p>
+        <p>A proposta apresentada a seguir, foi elaborada atendendo às solicitações e especificações informadas pelo CONTRATANTE, através de reunião, ligação e/ou e-mail.</p>
+        <p>Deve-se atentar, que os itens oferecidos estão descriminados e especificados nesta proposta técnica comercial. Os parâmetros e dimensionamentos dos equipamentos e garantias relacionadas nesta proposta, estão baseadas nas condições e características do produtos, disponibilizadas pelo CONTRATANTE, conforme dados resumidos apresentados no decorrer desta proposta.</p>
         <p>Qualquer alteração, inclusão ou exclusão no escopo ofertado, deve ser solicitado, para revisão deste documento.</p>
       </section>
 
@@ -575,7 +570,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>A CONTRATADA garante aos equipamentos, devidamente previstos nesta proposta técnica comercial, contra defeitos de fabricação, pelo prazo de 12 (doze) meses, a contar da assinatura do "Termo de Entrega e Startup", se limitando a 14 (quatorze) meses, a contar da emissão de nota fiscal de venda e/ou remessa.</p>
         <p>A CONTRATADA se obriga, sob sua conta e risco, durante o prazo de vigência da garantia, a reparar, quando apresentarem defeitos ou falhas provenientes de projeto, desempenho ou qualidade dos serviços ora prestados, sem qualquer custo para a CONTRATANTE.</p>
         <p>A CONTRATATADA deverá, para efeitos do disposto "Prazo de Garantia" responder aos chamados técnicos dentro de 05 (cinco) dias úteis, dentro do horário comercial e disponibilidade da agenda dos técnicos, desde que a CONTRATANTE, solicite, preencha e retorne o documento "ABERTURA DE CHAMADO" por escrito para a CONTRATADA.</p>
-        <p>A CONTRATANTE deverá solicitar e realizar o chamado técnico através de correio eletrônico, endereçado para: alexjunior@gmp.ind.br, bruno@gmp.ind.br e junior@gmp.ind.br.</p>
+        <p>A CONTRATANTE deverá solicitar e realizar o chamado técnico através de correio eletrônico, endereçado para: alexjunior@gmp.ind.br, matheus@gmp.ind.br, bruno@gmp.ind.br e junior@gmp.ind.br.</p>
         <p>Não estão cobertos pela garantia contratual citada acima, defeitos gerados pela má utilização, utilização de sobrecarga, utilização do equipamento em aplicações diferentes do qual foi ofertado e dimensionado, tensão errada ou acidentes pertinentes de choque, batidas e outros que venham danificar ou quebrar, utilização de matéria inadequada, modificação e/ou alteração das suas características originais, consertos ou reformar feitas por empresa diversa da CONTRATADA.</p>
         <p>Não estão cobertos pela garantia contratual citada acima, desgaste naturais dos equipamentos e peças em função de sua utilização e contato direto com o produto, tais como rolamentos, buchas, hélices, etc.</p>
         <p>Não estão cobertos pela garantia contratual citada acima, despesas relacionadas com translado, estadia e alimentação do(s) técnico(s) e despesas com transportes, seguros e movimentações de peças e equipamentos.</p>
@@ -759,7 +754,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       <section class="block stack-md allow-break">
         <h3>5.21 FORO</h3>
-        <p>As partes elegem o Foro da Comarca de Diadema - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>
+        <p>As partes elegem o Foro da Comarca de São Bernardo do Campo - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>
       </section>
       </section>
 
@@ -816,7 +811,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       <section class="block stack-md allow-break finame-compact">
           <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
-          <table class="table">
+          <table class="table table-dark">
             <thead>
               <tr>
                 <th class="col-center">ITEM</th>
@@ -948,26 +943,27 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     const pageHeaderTemplateHtml = `
       <div class="page-header-inner" style="${headerImageURL ? 'display:none;' : ''}">
-        <div class="page-header-logo-gmp">
-          ${gmpLogoSmB64 ? `<img src="${gmpLogoSmB64}" alt="GMP INDUSTRIAIS" />` : `<span class="page-header-title">GMP</span>`}
-        </div>
         <div class="page-header-logo-my">
           ${myLogoB64 ? `<img src="${myLogoB64}" alt="MOINHO YPIRANGA" />` : `<span class="page-header-title">MOINHO YPIRANGA</span>`}
         </div>
-        <div class="page-header-right">
-          <p class="page-header-title">PROPOSTA TÉCNICA COMERCIAL</p>
-          <p class="page-header-number">Nº ${numero}</p>
+        <div class="page-header-center-box">
+          <p class="page-header-title">PROPOSTA TÉCNICA COMERCIAL Nº ${numero}</p>
+          <p class="page-header-tagline">Especialista em Misturas, Moagens, Dispersões, Dosagens, <br> Automações, Excelência Operacional, Projetos Conceituais,<br> Projetos Executivos, Instalações e Sistemas Turn-Keys.</p>
+        </div>
+        <div class="page-header-logo-gmp">
+          ${gmpLogoSmB64 ? `<img src="${gmpLogoSmB64}" alt="GMP INDUSTRIAIS" />` : `<span class="page-header-title">GMP</span>`}
         </div>
       </div>
-      ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" onerror="this.remove();" />` : ''}`;
+      ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" onerror="this.style.display='none';var hi=this.parentElement&&this.parentElement.querySelector('.page-header-inner');if(hi)hi.style.display='';" />` : ''}`;
 
     const pageFooterTemplateHtml = `
       <div class="page-footer-inner" style="${footerImageURL ? 'display:none;' : ''}">
-        <div class="page-footer-info">
-          MOINHO YPIRANGA | CNPJ: 13.273.368/0001-75 | T +55 (11) 4513-9570 | www.gmp.ind.br | www.moinhoypiranga.com | Av. Dr. Ulysses Guimarães, nº 4105, Vila Nogueira, Diadema, São Paulo – Brasil | CEP: 09990-080
-        </div>
-        <div class="page-footer-right">
-          Pág. <span class="js-page-number"></span>/<span class="js-page-count"></span>
+        <div class="page-footer-line1">MOINHO YPIRANGA | CNPJ: 13.273.368/0001-75 | T +55 (11) 4513-9570</div>
+        <div class="page-footer-line2">www.gmp.ind.br | www.moinhoypiranga.com | www.ultradispersoravacuo.com.br</div>
+        <div class="page-footer-line2">www.colorcell.com.br | www.transmicell.com.br</div>
+        <div class="page-footer-line3">
+          <span class="page-footer-addr">Av. Dr. Ulysses Guimarães, nº 4105, Vila Nogueira, Diadema, São Paulo – Brasil | CEP: 09990-080</span>
+          <span class="page-footer-right">Pág. <span class="js-page-number"></span>/<span class="js-page-count"></span></span>
         </div>
       </div>
       ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" onerror="this.style.display='none';var fi=this.parentElement&&this.parentElement.querySelector('.page-footer-inner');if(fi)fi.style.display='';" />` : ''}`;
@@ -980,10 +976,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
   <title>${titulo}</title>
   <style>
     :root{
-      --ink: #1a1a1a;
-      --muted: rgba(30,30,30,0.58);
-      --blue-900: #0b3a66;
-      --blue-700: #1a4d7a;
+      /* Paleta do modelo DOCX: texto integral em azul marinho #002060 */
+      --ink: #002060;
+      --muted: rgba(0,32,96,0.55);
+      --blue-900: #002060;
+      --blue-700: #17365D;
       --blue-100: #e8f2fb;
       --navy-950: #0a2a4f;
       --navy-900: #123a68;
@@ -997,7 +994,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       --line-strong: rgba(26,77,122,0.75);
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: Calibri, 'Segoe UI', Arial, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-synthesis: none; }
+    html, body { margin: 0; padding: 0; background: #f3f3f3; font-family: 'Century Gothic', CenturyGothic, 'Trebuchet MS', 'Segoe UI', Arial, sans-serif; color: var(--ink); font-size: 11pt; line-height: 1.15; text-transform: none; font-variant: normal; letter-spacing: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-synthesis: none; }
     img { max-width: 100%; height: auto; display: block; }
 
     h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
@@ -1018,22 +1015,22 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       text-transform: none !important;
       letter-spacing: normal !important;
     }
-    /* Tipografia DOCX: Arial nos títulos de seção, fundo prata no h2 */
+    /* Tipografia DOCX: Century Gothic nos títulos, azul marinho #002060 */
     .proposal-document h2,
-    .proposal-document h3 { font-family: Arial, Helvetica, sans-serif !important; }
+    .proposal-document h3 { font-family: 'Century Gothic', CenturyGothic, 'Trebuchet MS', Arial, sans-serif !important; }
     .proposal-document h2 {
       background: none !important;
       border: none !important;
       padding: 2px 0 !important;
       color: var(--blue-900) !important;
       text-transform: uppercase !important;
-      font-size: 13pt !important;
+      font-size: 14pt !important;
     }
     .proposal-document h3 { color: var(--blue-900) !important; }
     /* Cada section é uma página A4 independente (altura fixa) */
-    .proposal-page { width: 210mm; height: 297mm; min-height: 297mm; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; page-break-after: always; break-after: page; }
+    .proposal-page { width: 210mm; height: 297mm; min-height: 297mm; flex-shrink: 0; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; page-break-after: always; break-after: page; }
     /* Header/footers com altura fixa para repetir corretamente em todas as páginas */
-    .page-header { flex: 0 0 auto; width: 100%; height: 28mm; padding: 0; margin: 0; }
+    .page-header { flex: 0 0 auto; width: 100%; height: 39mm; padding: 0; margin: 0; }
     .page-content { flex: 1 1 auto; width: 100%; padding: 10mm 14mm 10mm 14mm; margin: 0; overflow: hidden; }
     .page-footer { flex: 0 0 auto; width: 100%; height: 20mm; padding: 0; margin: 0; }
 
@@ -1060,8 +1057,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       text-transform: none;
       font-variant: normal;
     }
-    th { text-align: left; background: var(--blue-100); font-weight: 700; color: var(--blue-900); }
+    th { text-align: center; background: #fff; font-weight: 700; color: var(--blue-900); }
     td { font-weight: 400; }
+    /* Variante do modelo DOCX: cabeçalho azul escuro + texto branco + zebra (tabela FINAME) */
+    .table-dark th { background: var(--blue-900); color: #fff; }
+    .table-dark tbody tr:nth-child(odd) td { background: #F9F9F9; }
+    .table-dark tbody tr:nth-child(even) td { background: #EDEDED; }
     .table-caption { font-weight: 700; margin: 6px 0 6px 0; color: var(--blue-900); }
     .col-right { text-align: right; white-space: nowrap; }
     .col-center { text-align: center; }
@@ -1102,9 +1103,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       z-index: 0;
     }
     .page-header-inner, .page-footer-inner { position: relative; z-index: 1; }
-    .page-footer-inner { height: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 14mm; font-size: 10pt; color: var(--muted); border-top: 1px solid var(--line); }
 
-    /* Cabeçalho: dual-logo GMP + Moinho Ypiranga */
+    /* Cabeçalho: logo Moinho à esquerda, GMP à direita, box central arredondado
+       com título (nº dinâmico) + tagline */
     .page-header-inner {
       height: 100%;
       display: grid;
@@ -1114,32 +1115,64 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       padding: 0 8mm;
       border-bottom: 2px solid var(--blue-900);
     }
-    .page-header-logo-gmp { display: flex; align-items: center; flex-shrink: 0; }
-    .page-header-logo-gmp img { height: 9mm; width: auto; object-fit: contain; }
-    .page-header-logo-my { display: flex; align-items: center; justify-content: center; }
-    .page-header-logo-my img { height: 11mm; width: auto; object-fit: contain; }
-    .page-header-right { text-align: right; flex-shrink: 0; }
-    .page-header-title { font-size: 7.5pt; font-weight: 700; color: var(--blue-900); margin: 0; line-height: 1.2; }
-    .page-header-number { font-size: 9pt; font-weight: 800; color: var(--blue-900); margin: 0; line-height: 1.2; }
+    .page-header-logo-my { display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; }
+    .page-header-logo-my img { height: 12mm; width: auto; object-fit: contain; }
+    .page-header-logo-gmp { display: flex; align-items: center; justify-content: flex-end; flex-shrink: 0; }
+    .page-header-logo-gmp img { height: 12mm; width: auto; object-fit: contain; }
+    .page-header-center-box {
+      border: 1.5px solid var(--blue-900);
+      border-radius: 10px;
+      padding: 3.5mm 4mm;
+      text-align: center;
+    }
+    .page-header-title { font-size: 11pt; font-weight: 700; color: var(--blue-900); margin: 0 0 1mm 0; line-height: 1.2; text-align: center; }
+    .page-header-tagline {
+      margin: 0;
+      text-align: center;
+      font-size: 9pt;
+      font-weight: 400;
+      color: var(--blue-900);
+      line-height: 1.25;
+    }
 
-    /* Rodapé: linha única com dados completos da empresa */
+    /* Rodapé: bloco centralizado azul em 4 linhas (modelo DOCX) */
     .page-footer-inner {
       height: 100%;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      gap: 0.8mm;
       padding: 0 8mm;
-      gap: 4mm;
       border-top: 1px solid var(--line);
+      text-align: center;
     }
-    .page-footer-info { font-size: 6.5pt; color: var(--muted); flex: 1; line-height: 1.3; }
-    .page-footer-right { text-align: right; white-space: nowrap; font-size: 8pt; font-weight: 700; color: var(--blue-900); flex-shrink: 0; }
+    .page-footer-line1 { font-size: 7.5pt; font-weight: 700; color: var(--blue-900); line-height: 1.25; }
+    .page-footer-line2 { font-size: 7pt; color: var(--blue-900); line-height: 1.25; }
+    .page-footer-line3 {
+      width: 100%;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 4mm;
+    }
+    .page-footer-addr { font-size: 6.5pt; color: var(--blue-700); line-height: 1.25; text-align: left; }
+    .page-footer-right {     
+      text-align: right;
+      white-space: nowrap;
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: var(--blue-900);
+      flex-shrink: 0;
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      }
 
     /* Capa — layout de página inteira sem header/footer padrão */
     .cover-page { display: flex; flex-direction: column; overflow: hidden; }
-    .cover-hero { display: flex;
-    width: 100%;
-    height: auto; }
+    /* Hero na proporção do modelo (78mm); capa sem header, com footer (conteúdo útil ≈ 277mm) */
+    .cover-hero { display: flex; width: 100%; height: 78mm; flex: 0 0 auto; }
     .cover-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .cover-logos-bar {
       flex: 0 0 auto;
@@ -1154,7 +1187,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       justify-content: center;
       padding: 4mm 10mm;
     }
-    .cover-logo-half img { height: 14mm; width: auto; object-fit: contain; }
+    .cover-logo-half img { height: 30mm; width: auto; object-fit: contain; }
     .cover-blue-strip {
       flex: 0 0 auto;
       background: var(--blue-900);
@@ -1168,17 +1201,23 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       margin: 0;
       text-align: center;
     }
+    /* Título da proposta (cadastro) em amarelo, como o placeholder **TITULO** do modelo DOCX */
+    .cover-blue-strip .cover-strip-titulo {
+      color: #FFFF00;
+      font-size: 12pt;
+      margin-top: 1.5mm;
+    }
     .cover-info-area {
       flex: 1 1 auto;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       padding: 8mm 20mm;
       text-align: center;
     }
     .cover-info-title {
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: 'Century Gothic', CenturyGothic, 'Trebuchet MS', Arial, sans-serif;
       font-size: 20pt;
       font-weight: 800;
       color: #1a1a1a;
@@ -1188,7 +1227,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       line-height: 1.2;
     }
     .cover-info-num {
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: 'Century Gothic', CenturyGothic, 'Trebuchet MS', Arial, sans-serif;
       font-size: 17pt;
       font-weight: 700;
       color: #1a1a1a;
@@ -1201,30 +1240,42 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       padding-top: 5mm;
       display: flex;
       flex-direction: column;
-      gap: 30px;
+      gap: 6px;
     }
-    .cover-client-info p { margin: 0 0 3px 0; font-size: 14.5pt; line-height: 1.5; color: #1a1a1a; }
+    .cover-client-info p { margin: 0; font-size: 13pt; line-height: 1.5; color: #1a1a1a; }
+    [data-edit] { display: inline-block; min-width: 60px; cursor: text; }
     .cover-field-contratante {}
     .cover-field-cnpj {}
     .cover-field-email {}
     .cover-field-emissao {
       padding-top: 80px;
-      align-self: anchor-center;
+      align-self: center;
     }
 
-    /* Página de Apresentação da empresa */
-    .pres-page-content { display: flex; flex-direction: column; height: 100%; }
-    .pres-content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; align-items: start; flex: 1 1 auto; }
-    .pres-photos { display: flex; flex-direction: column; gap: 4mm; height: 100%; }
-    .pres-photos img { width: 100%; flex: 1 1 auto; min-height: 0; object-fit: cover; border-radius: 4px; max-height: 88mm; }
-    .pres-text p { font-size: 10pt; margin-bottom: 3mm; }
-    .pres-text ul { padding-left: 14px; margin: 0; }
-    .pres-text li { font-size: 10pt; margin-bottom: 2px; }
+    /* Página de Apresentação da empresa (modelo DOCX: texto largura total + imagem centrada) */
+    .pres-page-content { display: flex; flex-direction: column; height: 100%; padding-top: 14mm; }
+    /* Indentação de primeira linha do modelo DOCX (w:firstLine=709 twips ≈ 12.5mm);
+       itens com check alinham no mesmo recuo */
+    .pres-text p { font-size: 12pt; margin-bottom: 4mm; line-height: 1.3; text-indent: 12.5mm; }
+    .pres-text ul { list-style: none; padding-left: 12.5mm; margin: 0 0 4mm 0; }
+    .pres-text li { font-size: 12pt; margin-bottom: 1.5mm; text-align: left; line-height: 1.3; position: relative; padding-left: 7mm; }
+    .pres-text li::before { content: "\\2713"; position: absolute; left: 0; color: var(--blue-900); font-weight: 700; }
+    .pres-image { margin-top: 8mm; text-align: center; }
+    .pres-image img { max-width: 145mm; width: 100%; height: auto; margin: 0 auto; }
 
-    /* Equipamentos: chave-valor sem tabela */
+    /* Equipamentos: chave-valor sem tabela (10pt como no modelo DOCX) */
     .equip-specs-kv { display: flex; flex-direction: column; margin-top: 3mm; }
-    .equip-specs-kv > p { margin: 0 0 3px 0; font-size: 11pt; }
-    .equip-descritivo { margin: 1mm 0 3mm 6mm; font-size: 10.5pt; line-height: 1.4; }
+    .equip-specs-kv > p { margin: 0 0 3px 0; font-size: 10pt; }
+    .equip-descritivo { margin: 1mm 0 3mm 6mm; font-size: 10pt; line-height: 1.4; }
+    .equip-photo-caption { color: #ED7D31; font-size: 7pt; font-weight: 700; text-align: center; margin-top: 2px; letter-spacing: 0.5px; }
+
+    /* Sumário (preenchido via JS após a paginação) */
+    .toc-list { display: flex; flex-direction: column; gap: 2mm; }
+    .toc-row { display: flex; align-items: baseline; gap: 2mm; font-size: 10.5pt; color: var(--ink); }
+    .toc-row.toc-sub { padding-left: 8mm; font-size: 10pt; }
+    .toc-title { flex-shrink: 0; max-width: 80%; }
+    .toc-dots { flex: 1 1 auto; border-bottom: 1.5px dotted rgba(0,32,96,0.55); min-width: 6mm; }
+    .toc-page { flex-shrink: 0; font-weight: 700; }
 
     .avoid-break { break-inside: avoid; page-break-inside: avoid; }
     .allow-break { break-inside: auto; page-break-inside: auto; }
@@ -1234,11 +1285,17 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .printbar-title { font-size: 12px; color: rgba(0,0,0,0.7); font-weight: 700; }
     .printbar-btn { border: 1px solid var(--line-strong); background: var(--blue-900); color: #fff; font-weight: 700; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
 
+    @media screen {
+      html, body { background: #d0d7de; }
+      .proposal-document { gap: 16px; padding: 16px 0; }
+      .proposal-page { box-shadow: 0 2px 12px rgba(0,0,0,0.18); }
+    }
+
     @page { size: A4; margin: 0; }
     @media print {
       html, body { width: 210mm; height: auto; background: #fff; }
       .printbar { display: none !important; }
-      .proposal-document { display: block; }
+      .proposal-document { display: block; gap: 0; padding: 0; }
       .proposal-page { margin: 0; box-shadow: none; break-after: page; page-break-after: always; }
     }
   </style>
@@ -1260,17 +1317,21 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </div>
       <div class="cover-blue-strip">
         <p>PROPOSTA PARA FORNECIMENTO DE EQUIPAMENTOS INDUSTRIAIS</p>
+        ${(proposta.titulo && String(proposta.titulo).trim()) ? `<p class="cover-strip-titulo">${esc(String(proposta.titulo).trim())}</p>` : ''}
       </div>
       <div class="cover-info-area">
         <p class="cover-info-title">PROPOSTA TÉCNICA COMERCIAL</p>
         <p class="cover-info-num">Nº ${numero}</p>
         <div class="cover-client-info">
-          <p class="cover-field-contratante"><strong>EMPRESA CONTRATANTE:</strong> <span data-edit="cliente_nome">${clienteNome}</span></p>
+          <p class="cover-field-contratante"><p style="font-weight: bold;">EMPRESA CONTRATANTE:</p> <span data-edit="cliente_nome">${clienteNome}</span></p>
           <p class="cover-field-cnpj"><strong>CNPJ:</strong> ${clienteCnpj}</p>
-          <p class="cover-field-email"><strong>Email:</strong> <span data-edit="cliente_email">${esc(proposta.cliente_email || '')}</span></p>
+          <p class="cover-field-email"><strong>Email:</strong> <span data-edit="cliente_email">${esc(proposta.cliente_email || '—')}</span></p>
           <p class="cover-field-emissao">Data de Emissão: <strong>${dataEmissao || '—'}</strong></p>
         </div>
       </div>
+      <footer class="page-footer">
+        ${pageFooterTemplateHtml}
+      </footer>
     </section>
 
     <section class="proposal-page">
@@ -1278,25 +1339,41 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         ${pageHeaderTemplateHtml}
       </header>
       <main class="page-content pres-page-content">
-        <h2 style="margin-bottom:4mm;">APRESENTAÇÃO</h2>
-        <div class="pres-content-grid">
-          <div class="pres-text">
-            <p>A <strong>MOINHO YPIRANGA</strong> é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Na contratação Turn-Key, assumimos o gerenciamento integral de todas as etapas:</p>
-            <ul>
-              <li>Planejamento e Cronograma</li>
-              <li>Projeto Básico, Conceitual e Executivo</li>
-              <li>Documentações (Cetesb, Conama, Anvisa, Bombeiro, Prefeitura)</li>
-              <li>Gerenciamento e execução da obra</li>
-              <li>Instalações elétrica, hidráulicas, pneumáticas, civil</li>
-              <li>Fabricação e desenvolvimento de máquinas e equipamentos</li>
-              <li>Produção e desenvolvimento de softwares e automações</li>
-            </ul>
-          </div>
-          <div class="pres-photos">
-            ${fabricaGmpB64 ? `<img src="${fabricaGmpB64}" alt="Fábrica GMP INDUSTRIAIS" />` : ''}
-            ${industria40B64 ? `<img src="${industria40B64}" alt="Indústria 4.0" />` : ''}
-          </div>
+        <div class="pres-text">
+          <p style="text-indent:0;"><strong>APRESENTAÇÃO</strong></p>
+          <br>
+          <p>A <strong>MOINHO YPIRANGA</strong> é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Somos uma das maiores empresas com foco e participação no desenvolvimento, fabricação e comercialização de equipamentos para produção de produtos químicos do MERCOSUL, destacando nossas competências no fornecimento de plantas em regime Turn-Key.</p>
+          <p>Neste regime Turn-Key, quando contratado, assumimos o gerenciamento integral de todas as etapas de implantação do empreendimento, entregando a planta totalmente construída e pronta para o funcionamento.</p>
+          <p>Na contratação Turn-Key, a trajetória do pedido segue:</p>
+          <ul>
+            <li>Planejamento;</li>
+            <li>Projeto Básico, Conceitual e Executivo;</li>
+            <li>Documentações do empreendimento;</li>
+            <li>Cetesb, Conama, Anvisa, Bombeiro, Prefeitura, outros sob consulta;</li>
+            <li>Cronograma;</li>
+            <li>Gerenciamento e execução da obra;</li>
+            <li>Instalações elétrica, hidráulicas, pneumáticas, civil, e outras;</li>
+            <li>Fabricação e desenvolvimento de máquinas e equipamentos;</li>
+            <li>Produção e desenvolvimento de softwares e automações;</li>
+          </ul>
+          <p>Todas as fases desse processo contam com o suporte de recursos tecnológicos adequados, com um moderno sistema de gestão de projetos, além de uma equipe técnica própria e altamente qualificada para atender às necessidades do cliente.</p>
         </div>
+        <div class="pres-image">
+          ${projetosB64 ? `<img src="${projetosB64}" alt="Projetos e instalações industriais" />` : ''}
+        </div>
+      </main>
+      <footer class="page-footer">
+        ${pageFooterTemplateHtml}
+      </footer>
+    </section>
+
+    <section class="proposal-page" id="tocPage">
+      <header class="page-header">
+        ${pageHeaderTemplateHtml}
+      </header>
+      <main class="page-content">
+        <h2 style="text-align:center;margin-bottom:6mm;">SUMÁRIO</h2>
+        <div class="toc-list" id="tocList"></div>
       </main>
       <footer class="page-footer">
         ${pageFooterTemplateHtml}
@@ -1487,6 +1564,34 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           p.querySelectorAll('.js-page-number').forEach(el => { el.textContent = String(n); });
           p.querySelectorAll('.js-page-count').forEach(el => { el.textContent = String(total); });
         });
+
+        // Sumário: coleta títulos numerados (h2 "1." ... / h3 "5.x") das páginas geradas
+        // e monta as linhas com o número real da página, como no modelo DOCX.
+        const tocList = document.getElementById('tocList');
+        if (tocList) {
+          tocList.innerHTML = '';
+          pages.forEach((p, idx) => {
+            if (p.id === 'tocPage') return;
+            p.querySelectorAll('h2, h3').forEach((h) => {
+              const txt = String(h.textContent || '').trim();
+              if (!/^\\d+(\\.\\d+)?[.\\s]/.test(txt)) return;
+              const row = document.createElement('div');
+              row.className = 'toc-row' + (h.tagName === 'H3' ? ' toc-sub' : '');
+              const title = document.createElement('span');
+              title.className = 'toc-title';
+              title.textContent = txt;
+              const dots = document.createElement('span');
+              dots.className = 'toc-dots';
+              const pageNo = document.createElement('span');
+              pageNo.className = 'toc-page';
+              pageNo.textContent = String(idx + 1);
+              row.appendChild(title);
+              row.appendChild(dots);
+              row.appendChild(pageNo);
+              tocList.appendChild(row);
+            });
+          });
+        }
       }
       window.paginateProposalContent = paginateProposalContent;
       const run = () => { try { paginateProposalContent(); } catch (_) {} };
