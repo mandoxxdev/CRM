@@ -239,7 +239,34 @@ Comparação sistemática do template com `PROPOSTA PARA DEV.docx` / `pp para de
 
 - [x] Campos EMPRESA CONTRATANTE / CNPJ / Email da capa (`.cover-client-info`) agrupados (`gap: 30px` → `6px`) e fonte reduzida (`14.5pt` → `13pt`) — estavam com espaçamento maior que o do modelo.
 
+### Edição inline das cláusulas (sessão 20/07/2026)
+
+Substituição do painel lateral `EditorClausulas` por edição direta no preview (spec: `edicao-inline-clausulas-design.md`, plano: `docs/superpowers/plans/2026-07-20-edicao-inline-clausulas.md`). Executado via subagentes com revisão por task.
+
+- [x] Template: atributos `data-clausula-key`/`data-clausula-campo` na seção 5 (cláusula persistida = id; default = `default-{numero}`)
+- [x] Rota `/premium?embed=1` sempre monta a seção 5 a partir de lista estruturada (`resolverClausulasParaPreview`: custom do banco ou `getClausulasDefault()`), nunca do HTML fixo
+- [x] Módulo `client/src/components/proposta/clausulasInlineEditor.js` — manipulação de `#proposalSource` (ler/sincronizar/mover/remover/adicionar/diff/renumerar), coberto por testes jsdom
+- [x] `PropostaPreviewEditavel.js`: campos da cláusula viram `contentEditable` no iframe, com controles ↑↓/+/🗑; repaginação debounced + restauração de cursor
+- [x] Salvamento unificado no botão "Salvar alterações" (diff contra snapshot → POST/PUT/DELETE/reordenar); relink de `default-`/`temp-` para id real; idempotente em retry após falha parcial
+- [x] Toolbar: botão "Cláusulas" removido, adicionado "Resetar cláusulas"
+- [x] Fix (revisão final): título default renderizava sem o número "5.x" mas era persistido com ele → primeiro save apagava os números no banco. Corrigido (`renderClausulaCustom` numera default; `diffClausulas`/`houveMudanca` normalizam HTML×texto)
+- [x] Fix (QA ao vivo): edição parava de funcionar segundos após carregar, pois o script do template repagina sozinho (load+250ms / resize) e recriava os nós sem reaplicar `contentEditable`. Resolvido com `MutationObserver` em `#proposalDocument`
+- [ ] Remover `EditorClausulas.js`/`.css` (código morto) — **gated**: só após validação manual do fluxo em uso real
+
+### Ajustes de layout e edição (sessão 20/07/2026)
+
+Cinco ajustes pedidos pelo usuário, executados via subagentes com revisão por task.
+
+- [x] **A — Fonte Century Gothic embutida** (`3c780d7`): `@font-face` base64 (4 pesos) no template a partir de `server/assets/fonts/`, para renderizar no PDF sem depender de instalação
+- [x] **B — Conteúdo não ultrapassa o rodapé** (`abaef82` + `90fed9c`): causa raiz confirmada por reprodução = blocos atômicos maiores que uma página cortados por `overflow:hidden` (hipótese flexbox refutada). Fix: `splitBlockByChildren` + `splitTextLeaf` paginam blocos grandes. Revisão pegou perda de dados ao editar cláusula dividida (mesmo `data-clausula-key` em vários fragmentos) → corrigido remontando o conteúdo de todos os fragmentos no `oninput`
+- [x] **C — Foto do equipamento à direita do descritivo** (`bba2c96`): `float:right` 35% largura / altura auto; `.equip-specs-kv` mudou de flex→block+clearfix (float não funciona em flex container); texto envolve e continua abaixo
+- [x] **D — Corpo da cláusula nova visível/clicável** (`7a3dcf5`): corpo criado vazio + `min-height` + placeholder CSS `::before` (nunca vira conteúdo salvo)
+- [x] **E — Renumeração automática das cláusulas** (`df293ac`): `renumerarClausulas(doc)` recalcula 5.1, 5.2... na fonte a cada add/remover/mover; sumário reflete na repaginação
+- Limitação conhecida (backlog, não bloqueia): em quebras extremas, `splitBlockByChildren` pode deixar o rótulo "Descritivo técnico:" órfão antes do bloco grande migrar de página
+
 ### Pendente
 
+- [ ] **Teste no Chrome (nova sessão, outra máquina)** — ver `teste-chrome-edicao-inline.md`
 - [ ] Validação visual final pelo usuário no preview real (com dados de proposta reais)
+- [ ] Remover `EditorClausulas.js`/`.css` após a validação manual confirmar o fluxo
 - [ ] (Opcional) Limpar/atualizar `proposta_template_config` no banco — registro atual aponta para uploads de header/footer inexistentes (legado CBC2, anterior ao redesign)
