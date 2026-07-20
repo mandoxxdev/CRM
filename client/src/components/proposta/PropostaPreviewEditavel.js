@@ -197,6 +197,24 @@ export default function PropostaPreviewEditavel() {
     }
   }
 
+  // O HTML gerado repagina sozinho, fora do controle do React: o próprio script
+  // embutido roda paginateProposalContent() de novo ~250ms após o load (para
+  // acomodar imagens que terminam de carregar tarde) e também em resize/beforeprint.
+  // Cada repaginação destrói e recria os nós .proposal-page[data-generated="1"],
+  // descartando contentEditable/listeners aplicados por ativarEdicaoClausulas — sem
+  // isso, a edição para de funcionar pouco depois do carregamento inicial, mesmo sem
+  // nenhuma edição do usuário. Um MutationObserver reaplica automaticamente sempre
+  // que essas páginas forem trocadas, não importa o que disparou a repaginação.
+  function observarRepaginacoesClausulas(doc) {
+    const container = doc.getElementById('proposalDocument');
+    const MutationObserverImpl = doc.defaultView && doc.defaultView.MutationObserver;
+    if (!container || !MutationObserverImpl) return;
+    const observer = new MutationObserverImpl(() => {
+      ativarEdicaoClausulas(doc);
+    });
+    observer.observe(container, { childList: true });
+  }
+
   function aplicarMudancaEstrutural(doc, mutacao) {
     clearTimeout(repaginacaoTimerRef.current);
     edicaoEmAndamentoRef.current = null;
@@ -379,6 +397,7 @@ export default function PropostaPreviewEditavel() {
               if (doc) {
                 injetarAtributosEdicao(doc);
                 ativarEdicaoClausulas(doc);
+                observarRepaginacoesClausulas(doc);
               }
               ativarEdicao();
             }}
