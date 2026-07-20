@@ -11,6 +11,8 @@ import {
   moverClausulaNoSource,
   removerClausulaDoSource,
   adicionarClausulaAoSource,
+  diffClausulas,
+  htmlParaTexto,
 } from './clausulasInlineEditor';
 import './PropostaPreviewEditavel.css';
 
@@ -209,10 +211,72 @@ export default function PropostaPreviewEditavel() {
     setMudancasPendentes(true);
   }
 
+  async function salvarClausulas(doc) {
+    const snapshotOriginal = clausulas; // carregado por carregarPreview() ao abrir a proposta
+    let listaAtual = lerClausulasDoSource(doc)
+      .map((c) => ({ ...c, titulo: (c.titulo || '').trim(), conteudo: htmlParaTexto(c.conteudo) }))
+      .filter((c) => c.titulo || c.conteudo); // titulo+conteudo vazios = remoção implícita
+
+    if (clausulasIsDefault) {
+      const houveMudanca = listaAtual.length !== snapshotOriginal.length
+        || listaAtual.some((c, i) => {
+          const original = snapshotOriginal[i];
+          if (!original) return true;
+          const tituloOriginal = `${original.numero} ${original.titulo}`;
+          return c.titulo !== tituloOriginal || c.conteudo !== original.conteudo;
+        });
+      if (!houveMudanca) return;
+
+      await api.post(`/propostas/${id}/clausulas/inicializar`);
+      const res = await api.get(`/propostas/${id}/clausulas`);
+      const frescas = res.data?.clausulas || [];
+
+      // As linhas recém-criadas preservam a mesma ordem de getClausulasDefault() (ordem = índice),
+      // que é a mesma ordem de snapshotOriginal — então relaciona por posição, não por texto
+      // (o usuário pode ter editado o título antes deste primeiro save).
+      const indicePorDefaultKey = new Map(snapshotOriginal.map((c, i) => [`default-${c.numero}`, i]));
+      listaAtual = listaAtual.map((c) => {
+        if (!c.key.startsWith('default-')) return c;
+        const indice = indicePorDefaultKey.get(c.key);
+        const fresca = indice != null ? frescas[indice] : null;
+        return fresca ? { ...c, key: String(fresca.id) } : c;
+      });
+
+      const diff = diffClausulas(frescas.map((c) => ({ id: c.id, titulo: c.titulo, conteudo: c.conteudo })), listaAtual);
+      await aplicarDiffClausulas(diff, listaAtual);
+      return;
+    }
+
+    const diff = diffClausulas(snapshotOriginal.map((c) => ({ id: c.id, titulo: c.titulo, conteudo: c.conteudo })), listaAtual);
+    await aplicarDiffClausulas(diff, listaAtual);
+  }
+
+  async function aplicarDiffClausulas(diff, listaAtual) {
+    for (const nova of diff.novas) {
+      await api.post(`/propostas/${id}/clausulas`, { titulo: nova.titulo, conteudo: nova.conteudo });
+    }
+    for (const alterada of diff.alteradas) {
+      await api.put(`/propostas/${id}/clausulas/${alterada.key}`, { titulo: alterada.titulo, conteudo: alterada.conteudo });
+    }
+    for (const removida of diff.removidas) {
+      await api.delete(`/propostas/${id}/clausulas/${removida.id}`);
+    }
+    if (diff.ordemMudou) {
+      const idsFinais = listaAtual.filter((c) => !c.key.startsWith('temp-')).map((c) => c.key);
+      if (idsFinais.length > 0) {
+        await api.put(`/propostas/${id}/clausulas/reordenar`, { ordem: idsFinais });
+      }
+    }
+  }
+
   async function salvar() {
     if (!mudancasPendentes) return;
     setSalvando(true);
     try {
+      const doc = iframeRef.current?.contentDocument;
+      if (doc) {
+        await salvarClausulas(doc);
+      }
       if (Object.keys(camposEditados).length > 0) {
         await api.put(`/propostas/${id}/customizacoes`, camposEditados);
       }
