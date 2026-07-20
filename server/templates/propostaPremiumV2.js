@@ -475,15 +475,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <div class="sig-email">matheus@gmp.ind.br</div>
             </div>
           </div>`;
-        const renderClausulaCustom = (c) => {
+        const clausulaKey = (c, idx) => (c.id != null ? String(c.id) : `default-${c.numero || idx}`);
+        const renderClausulaCustom = (c, idx) => {
           const raw = c.conteudo || '';
           // If content has no HTML tags, treat as plain text: wrap each paragraph in <p>
           const html = /<[a-z][\s\S]*>/i.test(raw)
             ? raw
             : raw.split(/\n{2,}/).map(p => `<p>${esc(p.trim())}</p>`).join('') || '<p></p>';
-          return `<section class="block stack-md allow-break">
-            <h3>${esc(c.titulo)}</h3>
-            <div class="stack-sm">${html}</div>
+          return `<section class="block stack-md allow-break" data-clausula-key="${esc(clausulaKey(c, idx))}">
+            <h3 data-clausula-campo="titulo">${esc(c.titulo)}</h3>
+            <div class="stack-sm" data-clausula-campo="conteudo">${html}</div>
           </section>`;
         };
         const [primeiraClausula, ...demaisClausulas] = templateConfig.clausulas_custom;
@@ -496,7 +497,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         return `
           <section class="block stack-md avoid-break five-intro-group">
             <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
-            ${primeiraClausula ? renderClausulaCustom(primeiraClausula) : ''}
+            ${primeiraClausula ? renderClausulaCustom(primeiraClausula, 0) : ''}
           </section>
           ${demaisClausulas.map(renderClausulaCustom).join('')}
           <section class="block stack-md allow-break">${assinaturasHtml}</section>`;
