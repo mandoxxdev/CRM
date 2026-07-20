@@ -138,7 +138,11 @@ export default function PropostaPreviewEditavel() {
     const barra = doc.createElement('div');
     barra.className = 'ppe-clausula-controles';
     barra.setAttribute('contenteditable', 'false');
-    barra.style.cssText = 'display:flex;gap:4px;justify-content:flex-end;margin-bottom:2px;';
+    // A barra fica FORA do fluxo. A paginação já fechou as páginas medindo o conteúdo
+    // sem ela; qualquer altura somada aqui empurra o fim da página para baixo do rodapé,
+    // que corta com overflow:hidden — a cláusula some sem nenhuma repaginação acontecer.
+    secao.style.position = 'relative';
+    barra.style.cssText = 'position:absolute;top:0;right:0;z-index:5;display:flex;gap:4px;justify-content:flex-end;';
     const botao = (texto, titulo, onClick) => {
       const b = doc.createElement('button');
       b.type = 'button';
@@ -171,6 +175,14 @@ export default function PropostaPreviewEditavel() {
         font-style: italic;
         pointer-events: none;
       }
+      /* Área clicável só para o corpo VAZIO. Como regra de folha de estilo (e não estilo
+         inline aplicado depois da paginação), já está valendo quando a paginação mede as
+         alturas — então não empurra conteúdo para debaixo do rodapé. */
+      [data-clausula-campo="conteudo"]:empty,
+      [data-clausula-campo="conteudo"] > p:only-child:empty {
+        display: block;
+        min-height: 3em;
+      }
     `;
     (doc.head || doc.documentElement).appendChild(style);
   }
@@ -184,9 +196,6 @@ export default function PropostaPreviewEditavel() {
       el.style.background = '#fffde7';
       el.style.borderRadius = '3px';
       el.style.cursor = 'text';
-      if (el.getAttribute('data-clausula-campo') === 'conteudo') {
-        el.style.minHeight = '3em';
-      }
       el.oninput = () => {
         const secao = el.closest('[data-clausula-key]');
         if (!secao) return;
