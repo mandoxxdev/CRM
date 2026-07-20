@@ -7,6 +7,7 @@ import {
   atualizarKeyNoSource,
   diffClausulas,
   htmlParaTexto,
+  renumerarClausulas,
 } from './clausulasInlineEditor';
 
 // Fixture equivalente ao HTML gerado por clausulasSection (propostaPremiumV2.js, Task 1):
@@ -205,4 +206,44 @@ test('diffClausulas detecta remocao quando uma key do snapshot nao esta mais na 
   const diff = diffClausulas(snapshot, listaAtual);
   expect(diff.removidas).toEqual([{ id: 2, titulo: '5.2 TRANSPORTE', conteudo: 'B' }]);
   expect(diff.ordemMudou).toBe(false);
+});
+
+test('renumerarClausulas renumera a lista ["5.4 GARANTIA", "5.9 FORO"] para ["5.1 GARANTIA", "5.2 FORO"]', () => {
+  montarFixture(document, [
+    ['1', '5.4 GARANTIA', '<p>Conteúdo 1</p>'],
+    ['2', '5.9 FORO', '<p>Conteúdo 2</p>'],
+  ]);
+  const resultado = renumerarClausulas(document);
+  expect(resultado).toBe(true);
+  const lista = lerClausulasDoSource(document);
+  expect(lista[0].titulo).toBe('5.1 GARANTIA');
+  expect(lista[1].titulo).toBe('5.2 FORO');
+});
+
+test('renumerarClausulas renumera uma cláusula sem prefixo numérico ("Nova Cláusula") na posição 2 para "5.3 Nova Cláusula"', () => {
+  montarFixture(document, [
+    ['1', '5.1 PRAZO', '<p>A</p>'],
+    ['2', '5.2 TRANSPORTE', '<p>B</p>'],
+    ['3', 'Nova Cláusula', '<p>C</p>'],
+  ]);
+  const resultado = renumerarClausulas(document);
+  expect(resultado).toBe(true);
+  const lista = lerClausulasDoSource(document);
+  expect(lista[2].titulo).toBe('5.3 Nova Cláusula');
+});
+
+test('renumerarClausulas preserva o texto após o número', () => {
+  montarFixture(document, [
+    ['1', '5.4 GARANTIA E RESPONSABILIDADE', '<p>X</p>'],
+    ['2', '5.9 FORO E JURISDIÇÃO', '<p>Y</p>'],
+  ]);
+  renumerarClausulas(document);
+  const lista = lerClausulasDoSource(document);
+  expect(lista[0].titulo).toBe('5.1 GARANTIA E RESPONSABILIDADE');
+  expect(lista[1].titulo).toBe('5.2 FORO E JURISDIÇÃO');
+});
+
+test('renumerarClausulas retorna false sem throwing quando #proposalSource está ausente', () => {
+  // Não monta fixture, deixando document.body vazio (sem #proposalSource)
+  expect(renumerarClausulas(document)).toBe(false);
 });

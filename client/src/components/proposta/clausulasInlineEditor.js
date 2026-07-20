@@ -161,3 +161,19 @@ export function diffClausulas(snapshotOriginal, listaAtual) {
 
   return { novas, alteradas, removidas, ordemMudou, ordemFinal: listaAtual.map((c) => c.key) };
 }
+
+export function renumerarClausulas(doc) {
+  const source = doc.querySelector('#proposalSource');
+  if (!source) return false;
+  const secoes = Array.from(source.querySelectorAll('[data-clausula-key]'));
+  secoes.forEach((secao, i) => {
+    const tituloEl = secao.querySelector('[data-clausula-campo="titulo"]');
+    if (!tituloEl) return;
+    const atual = tituloEl.textContent || '';
+    // remove um prefixo numérico existente do tipo "5.4 " / "12.3 " no começo
+    const semPrefixo = atual.replace(/^\s*\d+\.\d+\s*/, '').trimStart();
+    const novoTitulo = `5.${i + 1} ${semPrefixo}`.trimEnd();
+    if (tituloEl.textContent !== novoTitulo) tituloEl.textContent = novoTitulo;
+  });
+  return true;
+}

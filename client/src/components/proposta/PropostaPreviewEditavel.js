@@ -13,6 +13,7 @@ import {
   atualizarKeyNoSource,
   diffClausulas,
   htmlParaTexto,
+  renumerarClausulas,
 } from './clausulasInlineEditor';
 import './PropostaPreviewEditavel.css';
 
@@ -255,6 +256,7 @@ export default function PropostaPreviewEditavel() {
     clearTimeout(repaginacaoTimerRef.current);
     edicaoEmAndamentoRef.current = null;
     mutacao();
+    renumerarClausulas(doc);
     const win = doc.defaultView;
     try { win.paginateProposalContent(); } catch (_) { /* preview segue com o layout anterior */ }
     ativarEdicaoClausulas(doc);
