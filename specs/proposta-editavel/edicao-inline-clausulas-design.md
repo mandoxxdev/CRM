@@ -22,14 +22,22 @@ O usuário considera o painel lateral mais trabalhoso do que editar direto no te
 
 ## Restrição técnica identificada
 
-O HTML gerado usa um paginador client-side (`paginateProposalContent()`, já embutido no template) que distribui os blocos de conteúdo em `<div class="proposal-page">` de altura fixa (297mm) com `overflow: hidden` (`.proposal-page` e `.page-content`, `propostaPremiumV2.js` ~linhas 1031/1034). Editar texto diretamente dentro de uma página já paginada pode estourar a altura e cortar conteúdo visualmente até a página ser re-paginada.
+O HTML gerado usa um paginador client-side (`paginateProposalContent()`, já embutido no template) que **não edita as páginas visíveis in-place**: ele lê os blocos originais de um container oculto `#proposalSource` (`display:none`, contém o `blocksHtml` inteiro sem paginação) e, a cada chamada, **remove e recria do zero** todo `.proposal-page[data-generated="1"]`, clonando (`cloneNode`) os blocos de `#proposalSource` para dentro de páginas de altura fixa (297mm, `overflow: hidden` — `.proposal-page`/`.page-content`, `propostaPremiumV2.js` ~linhas 1031/1034/1442/1450). Duas consequências:
 
-**Solução adotada:** debounce (~500ms) chamando de novo `paginateProposalContent()` (exposta em `window` pelo próprio HTML gerado) a cada edição, para refluir o conteúdo pelas páginas quase em tempo real. Enquanto o debounce não dispara (durante a digitação), a página que contém o elemento em edição recebe `overflow: visible` temporariamente, garantindo que nada fique invisível no meio de uma frase; ao disparar a repaginação, volta ao `overflow: hidden` estrito. Se o usuário sair do modo edição ou salvar antes do debounce dispar, uma repaginação síncrona é forçada primeiro.
+1. Editar texto diretamente dentro de uma página já paginada pode estourar a altura e cortar conteúdo visualmente até a página ser re-paginada.
+2. Se simplesmente chamarmos `paginateProposalContent()` de novo depois de editar o texto **visível** (dentro das páginas geradas), a função reconstrói as páginas a partir de `#proposalSource`, que continua com o conteúdo **original, não editado** — a edição do usuário seria descartada na primeira repaginação.
+
+**Solução adotada:** `#proposalSource` é a fonte da verdade; as páginas visíveis são sempre uma projeção dela.
+- Os atributos `data-clausula-key` / `data-clausula-campo` (ver seção seguinte) são adicionados no HTML de `clausulasSection`, então existem tanto na cópia oculta (`#proposalSource`) quanto em cada clone visível dentro das páginas geradas (`cloneNode` preserva atributos) — cada elemento pode ser localizado em ambos os lugares pela mesma chave.
+- A cada edição de texto (`oninput` no elemento visível com `contentEditable`): localizar o elemento correspondente em `#proposalSource` via `source.querySelector('[data-clausula-key="{key}"] [data-clausula-campo="{campo}"]')` e copiar o texto editado (`innerText`) para lá — mantendo `#proposalSource` sempre sincronizado com o que o usuário digitou. Só then, com debounce (~500ms), chama `paginateProposalContent()` para refluir as páginas visíveis a partir da fonte já atualizada.
+- Ações estruturais (mover/remover/adicionar cláusula) são aplicadas diretamente nos filhos de `#proposalSource` (não nas páginas visíveis, que serão descartadas) e disparam `paginateProposalContent()` de forma síncrona (sem debounce) logo em seguida, já que são ações discretas (clique), não digitação contínua.
+- Enquanto o debounce de texto não dispara (durante a digitação), a página que contém o elemento em edição recebe `overflow: visible` temporariamente, garantindo que nada fique invisível no meio de uma frase; ao disparar a repaginação, as páginas são recriadas do zero (já com `overflow: hidden` padrão). Se o usuário sair do modo edição ou salvar antes do debounce disparar, uma repaginação síncrona é forçada primeiro.
+- Corolário: como a repaginação **recria** os nós das páginas visíveis, os `contentEditable`/estilos/listeners injetados nelas precisam ser reaplicados após cada `paginateProposalContent()` (dentro da própria função de ativação, chamada de novo ao final do debounce/da ação estrutural) — o foco do campo em edição deve ser restaurado manualmente após a repaginação disparada por `oninput` (guardar qual `data-clausula-key`/`data-clausula-campo` e a posição do cursor antes de repaginar, restaurar no elemento equivalente recriado).
 
 ## Mudanças por arquivo
 
 ### `server/templates/propostaPremiumV2.js`
-- `clausulasSection`: cada `<section>` de cláusula ganha `data-clausula-key="{id ou índice}"`; o `<h3>` ganha `data-clausula-campo="titulo"`; o `<div class="stack-sm">` de conteúdo ganha `data-clausula-campo="conteudo"`. Não muda o HTML renderizado para `/pdf` fora do modo edição (mesmas classes/estrutura visual).
+- `clausulasSection`: cada `<section>` de cláusula ganha `data-clausula-key="{c.id}"` quando a cláusula vem de `proposta_clausulas` (tem `id` numérico do banco), ou `data-clausula-key="default-{c.numero}"` quando vem de `getClausulasDefault()` (sem `id`, mas `numero` é único e estável, ex. `"5.4"`); o `<h3>` ganha `data-clausula-campo="titulo"`; o `<div class="stack-sm">` de conteúdo ganha `data-clausula-campo="conteudo"`. Não muda o HTML renderizado para `/pdf` fora do modo edição (mesmas classes/estrutura visual) — os atributos `data-*` são inertes em PDF.
 - Nenhuma outra mudança visual/estrutural nesta seção.
 
 ### `server/index.js`
@@ -37,17 +45,18 @@ O HTML gerado usa um paginador client-side (`paginateProposalContent()`, já emb
 - Endpoints de cláusulas existentes (`GET/POST/PUT/DELETE/reordenar/inicializar/resetar`) não mudam de contrato — só passam a ser chamados em lote pelo frontend.
 
 ### `client/src/components/proposta/PropostaPreviewEditavel.js`
-- Novo `ativarEdicaoClausulas(doc)`, chamado no `onLoad` do iframe (junto do `ativarEdicao()` existente):
-  - Para cada `[data-clausula-key]`: aplica `contentEditable` + mesmo estilo visual (borda amarela pontilhada) já usado nos campos de contato, nos elementos `[data-clausula-campo="titulo"]` e `[data-clausula-campo="conteudo"]`.
-  - Injeta, dentro do próprio `doc` do iframe, uma barra de controles por cláusula (↑, ↓, remover, adicionar nova depois desta) — manipulação direta do DOM do iframe (mesmo padrão já usado em `injetarAtributosEdicao`), sem overlay externo sincronizado por posição.
-  - Mantém `clausulasEditadasRef` (lista em memória: id-ou-temp-id, ordem, título, conteúdo) espelhando o estado atual da seção 5; toda edição/mover/remover/adicionar atualiza essa ref e seta `mudancasPendentes = true`.
-  - `oninput` dispara debounce (~500ms) chamando `doc.defaultView.paginateProposalContent()`; durante a digitação, a página ativa recebe `overflow: visible` (revertido quando a repaginação roda).
-- `salvar()`: antes do `PUT /customizacoes` atual, diffa `clausulasEditadasRef.current` contra o snapshot carregado em `clausulas` (estado já existente) e dispara, em sequência:
-  1. Se a proposta ainda estava em modo padrão (`clausulasIsDefault`) e há alguma mudança: `POST /clausulas/inicializar` primeiro.
-  2. `POST /clausulas` para cada cláusula nova (sem id).
-  3. `PUT /clausulas/:id` para cada cláusula alterada (título/conteúdo mudou).
-  4. `DELETE /clausulas/:id` para cada cláusula removida.
-  5. `PUT /clausulas/reordenar` se a ordem final mudou.
+- `#proposalSource` (dentro do iframe) é a fonte da verdade durante a edição — não é mantido nenhum espelho em estado React; a lista atual de cláusulas (ordem, título, conteúdo, id-ou-temp-id) é sempre lida diretamente do DOM em `#proposalSource [data-clausula-key]` no momento de salvar, evitando duplicar/desincronizar estado.
+- Novo `ativarEdicaoClausulas(doc)`, chamado no `onLoad` do iframe (junto do `ativarEdicao()` existente) **e de novo ao final de cada repaginação** (já que `paginateProposalContent()` recria os nós das páginas visíveis, descartando `contentEditable`/listeners anteriores):
+  - Para cada `[data-clausula-key]` **dentro das páginas visíveis** (`.proposal-page[data-generated="1"] [data-clausula-key]`, não em `#proposalSource`): aplica `contentEditable` + mesmo estilo visual (borda amarela pontilhada) já usado nos campos de contato, nos elementos `[data-clausula-campo="titulo"]` e `[data-clausula-campo="conteudo"]`.
+  - Injeta, junto de cada bloco de cláusula visível, uma barra de controles (↑, ↓, remover, adicionar nova depois desta) — manipulação direta do DOM do iframe (mesmo padrão já usado em `injetarAtributosEdicao`), sem overlay externo sincronizado por posição.
+  - `oninput` em `[data-clausula-campo]`: copia o `innerText` do elemento editado para o elemento correspondente em `#proposalSource` (mesma `data-clausula-key`/`data-clausula-campo`); marca `mudancasPendentes = true`; salva `{ key, campo, cursorOffset }` numa ref e dispara debounce (~500ms) que chama `paginateProposalContent()` e, na sequência, `ativarEdicaoClausulas(doc)` de novo, restaurando o foco/cursor no elemento recriado com a mesma `data-clausula-key`/`data-clausula-campo`. Enquanto o debounce não dispara, a página do elemento em edição recebe `overflow: visible` temporário.
+  - Botões estruturais (↑/↓/remover/adicionar) operam diretamente nos filhos de `#proposalSource` (mover/remover/inserir `<section data-clausula-key>`, gerando um `data-clausula-key` novo tipo `temp-{timestamp}` para cláusula nova) e chamam `paginateProposalContent()` + `ativarEdicaoClausulas(doc)` de forma síncrona (sem debounce) em seguida; marcam `mudancasPendentes = true`.
+- `salvar()`: antes do `PUT /customizacoes` atual, lê o estado atual direto do DOM (`Array.from(doc.querySelectorAll('#proposalSource [data-clausula-key]')).map(...)`), monta a lista final `{ key, titulo, conteudo }` na ordem em que aparecem, diffa contra o snapshot carregado em `clausulas` (estado já existente, carregado da API) e dispara, em sequência:
+  1. Se a proposta ainda estava em modo padrão (`clausulasIsDefault`) e há alguma mudança: `POST /clausulas/inicializar` primeiro, depois recarrega `clausulas` (agora com `id`s reais) antes de continuar o diff — chaves `default-{numero}` são casadas com a cláusula recém-inicializada de mesmo `numero` para descobrir o `id` real.
+  2. `POST /clausulas` para cada cláusula com key `temp-*` (nova, criada durante a edição).
+  3. `PUT /clausulas/:id` para cada cláusula existente (`id` numérico) cujo título/conteúdo mudou.
+  4. `DELETE /clausulas/:id` para cada cláusula que existia no snapshot original e não está mais presente no DOM.
+  5. `PUT /clausulas/reordenar` se a ordem final (por `id`) mudou.
   Cláusula com título e conteúdo vazios ao salvar é tratada como removida (não cria registro vazio).
   Erro em qualquer chamada do lote: mantém `mudancasPendentes = true`, toast de erro, estado local preservado para nova tentativa.
 - Toolbar: remove o botão "Cláusulas" (`FiEdit2`); adiciona botão "Resetar cláusulas" com confirmação (`window.confirm` ou modal simples), chamando `POST /clausulas/resetar` e recarregando o preview.
