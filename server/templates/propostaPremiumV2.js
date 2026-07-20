@@ -54,6 +54,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           : ext === 'webp' ? 'image/webp'
           : ext === 'gif' ? 'image/gif'
           : ext === 'svg' ? 'image/svg+xml'
+          : ext === 'ttf' ? 'font/ttf'
+          : ext === 'woff' ? 'font/woff'
+          : ext === 'woff2' ? 'font/woff2'
+          : ext === 'otf' ? 'font/otf'
           : 'image/jpeg';
         const buf = fs.readFileSync(absPath);
         return `data:${mime};base64,${buf.toString('base64')}`;
@@ -95,6 +99,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const dadosContratadaB64 = fileToDataUrl(path.join(propostaAssetsDir, 'dados-contratada.png'));
     const industria40B64 = fileToDataUrl(path.join(propostaAssetsDir, 'industria40.png'));
     const projetosB64 = fileToDataUrl(path.join(propostaAssetsDir, 'projetos.png'));
+
+    const fontsDir = path.join(__dirname, '..', 'assets', 'fonts');
+    const cgRegularB64 = fileToDataUrl(path.join(fontsDir, 'CenturyGothic.ttf'));
+    const cgBoldB64 = fileToDataUrl(path.join(fontsDir, 'CenturyGothic-Bold.ttf'));
+    const cgItalicB64 = fileToDataUrl(path.join(fontsDir, 'CenturyGothic-Italic.ttf'));
+    const cgBoldItalicB64 = fileToDataUrl(path.join(fontsDir, 'CenturyGothic-BoldItalic.ttf'));
 
     const numero = esc(proposta.numero_proposta || 'N/A');
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
@@ -976,6 +986,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${titulo}</title>
   <style>
+    ${cgRegularB64 ? `@font-face { font-family: 'Century Gothic'; font-style: normal; font-weight: 400; font-display: swap; src: url('${cgRegularB64}') format('truetype'); }` : ''}
+    ${cgBoldB64 ? `@font-face { font-family: 'Century Gothic'; font-style: normal; font-weight: 700; font-display: swap; src: url('${cgBoldB64}') format('truetype'); }` : ''}
+    ${cgItalicB64 ? `@font-face { font-family: 'Century Gothic'; font-style: italic; font-weight: 400; font-display: swap; src: url('${cgItalicB64}') format('truetype'); }` : ''}
+    ${cgBoldItalicB64 ? `@font-face { font-family: 'Century Gothic'; font-style: italic; font-weight: 700; font-display: swap; src: url('${cgBoldItalicB64}') format('truetype'); }` : ''}
     :root{
       /* Paleta do modelo DOCX: texto integral em azul marinho #002060 */
       --ink: #002060;
