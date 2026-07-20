@@ -58,3 +58,5 @@ deploy/
 
 # Nixpacks gerados automaticamente
 .nixpacks/
+
+.superpowers/
