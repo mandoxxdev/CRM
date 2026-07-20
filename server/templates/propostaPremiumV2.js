@@ -390,18 +390,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           })();
 
       const fotoHtml = produtoImagem
-        ? `<div class="equip-photo-top">
-             <img class="equip-photo-img-top" src="${produtoImagem}" alt="Foto do equipamento"
+        ? `<div class="equip-photo-float">
+             <img class="equip-photo-img-float" src="${produtoImagem}" alt="Foto do equipamento"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-             <div class="equip-photo-fallback-top" style="display:none;">Foto não disponível</div>
+             <div class="equip-photo-fallback-float" style="display:none;">Foto não disponível</div>
              <div class="equip-photo-caption">IMAGEM ILUSTRATIVA</div>
            </div>`
         : '';
 
       return `
         <h3>${itemNo} ${nome}</h3>
-        ${fotoHtml}
         <div class="equip-specs-kv">
+          ${fotoHtml}
           <p><strong>Equipamento:</strong> ${nome}</p>
           ${codigo !== '—' ? `<p><strong>Código:</strong> ${codigo}</p>` : ''}
           <p><strong>Quantidade:</strong> ${qtd} ${und}</p>
@@ -1083,9 +1083,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .col-center { text-align: center; }
     .tech-desc { margin-top: 4px; font-size: 10pt; line-height: 1.15; color: var(--muted); text-align: justify; }
 
-    .equip-photo-top { text-align: center; margin-bottom: 6mm; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
-    .equip-photo-img-top { max-height: 90mm; max-width: 100%; object-fit: contain; border-radius: 6px; display: block; margin: 0 auto; }
-    .equip-photo-fallback-top { display: flex; align-items: center; justify-content: center; min-height: 30mm; font-size: 10pt; color: var(--muted); background: var(--blue-100); border-radius: 6px; }
+    .equip-photo-float { float: right; width: 35%; margin: 0 0 4mm 6mm; text-align: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
+    .equip-photo-img-float { width: 100%; height: auto; object-fit: contain; border-radius: 6px; display: block; }
+    .equip-photo-fallback-float { display: flex; align-items: center; justify-content: center; min-height: 30mm; font-size: 10pt; color: var(--muted); background: var(--blue-100); border-radius: 6px; }
     .equip-tech { width: 100%; }
 
     /* Assinaturas/setor comercial (após "Atenciosamente,") */
@@ -1279,7 +1279,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .pres-image img { max-width: 145mm; width: 100%; height: auto; margin: 0 auto; }
 
     /* Equipamentos: chave-valor sem tabela (10pt como no modelo DOCX) */
-    .equip-specs-kv { display: flex; flex-direction: column; margin-top: 3mm; }
+    .equip-specs-kv { display: block; margin-top: 3mm; }
+    .equip-specs-kv::after { content: ""; display: block; clear: both; }
     .equip-specs-kv > p { margin: 0 0 3px 0; font-size: 10pt; }
     .equip-descritivo { margin: 1mm 0 3mm 6mm; font-size: 10pt; line-height: 1.4; }
     .equip-photo-caption { color: #ED7D31; font-size: 7pt; font-weight: 700; text-align: center; margin-top: 2px; letter-spacing: 0.5px; }
@@ -1689,7 +1690,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               if (i > 0) {
                 const heading = partBlock.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6');
                 if (heading) heading.remove();
-                const equipPhoto = partBlock.querySelector('.equip-photo-top');
+                const equipPhoto = partBlock.querySelector('.equip-photo-float');
                 if (equipPhoto) equipPhoto.remove();
                 const thead = t && t.querySelector('thead');
                 if (thead) thead.remove();
