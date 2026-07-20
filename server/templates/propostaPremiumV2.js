@@ -483,7 +483,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             ? raw
             : raw.split(/\n{2,}/).map(p => `<p>${esc(p.trim())}</p>`).join('') || '<p></p>';
           return `<section class="block stack-md allow-break" data-clausula-key="${esc(clausulaKey(c, idx))}">
-            <h3 data-clausula-campo="titulo">${esc(c.titulo)}</h3>
+            <h3 data-clausula-campo="titulo">${esc(c.numero ? `${c.numero} ${c.titulo}` : c.titulo)}</h3>
             <div class="stack-sm" data-clausula-campo="conteudo">${html}</div>
           </section>`;
         };

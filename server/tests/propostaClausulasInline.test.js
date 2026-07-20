@@ -70,5 +70,25 @@ test('primeira cláusula da lista também recebe os atributos (fica aninhada no 
   assert.ok(idxKey1 > idxWrapper && idxKey1 < html.indexOf('data-clausula-key="2"'), 'data-clausula-key="1" deveria aparecer dentro do wrapper five-intro-group, antes da key="2"');
 });
 
+test('cláusula default (sem id, com numero) renderiza título COM o número prefixado (bug crítico da revisão final)', () => {
+  const templateConfig = {
+    clausulas_custom: [
+      { numero: '5.4', titulo: 'GARANTIA', conteudo: 'Texto da garantia.' },
+    ],
+  };
+  const html = gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig, null, false, true);
+  assert.ok(html.includes('<h3 data-clausula-campo="titulo">5.4 GARANTIA</h3>'), 'esperava título numerado "5.4 GARANTIA" para casar com o formato persistido pelo /clausulas/inicializar');
+});
+
+test('cláusula persistida (com id, título já numerado) mantém o título inalterado, sem duplicar número', () => {
+  const templateConfig = {
+    clausulas_custom: [
+      { id: 42, titulo: '5.21 FORO', conteudo: 'Texto do foro.' },
+    ],
+  };
+  const html = gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig, null, false, true);
+  assert.ok(html.includes('<h3 data-clausula-campo="titulo">5.21 FORO</h3>'), 'esperava título "5.21 FORO" sem duplicação de número');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

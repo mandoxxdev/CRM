@@ -145,7 +145,7 @@ export function diffClausulas(snapshotOriginal, listaAtual) {
   const alteradas = listaAtual.filter((c) => {
     if (c.key.startsWith('temp-') || c.key.startsWith('default-')) return false;
     const original = porIdOriginal.get(c.key);
-    return !!original && (original.titulo !== c.titulo || original.conteudo !== c.conteudo);
+    return !!original && (original.titulo !== c.titulo || htmlParaTexto(original.conteudo) !== c.conteudo);
   });
   const removidas = snapshotOriginal.filter((c) => !keysAtuais.has(String(c.id)));
 

@@ -219,7 +219,7 @@ export default function PropostaPreviewEditavel() {
           const original = snapshotOriginal[i];
           if (!original) return true;
           const tituloOriginal = `${original.numero} ${original.titulo}`;
-          return c.titulo !== tituloOriginal || c.conteudo !== original.conteudo;
+          return c.titulo !== tituloOriginal || c.conteudo !== htmlParaTexto(original.conteudo);
         });
       if (!houveMudanca) return;
 

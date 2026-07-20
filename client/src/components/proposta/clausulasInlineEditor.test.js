@@ -165,6 +165,17 @@ test('diffClausulas identifica novas, alteradas, removidas e mudanca de ordem', 
   expect(diff.ordemMudou).toBe(true);
 });
 
+test('diffClausulas NAO marca como alterada quando o conteudo original (HTML cru) equivale ao texto atual (ja convertido)', () => {
+  const snapshot = [
+    { id: 1, titulo: '5.4 GARANTIA', conteudo: '<p>Texto A.</p><p>Texto B.</p>' },
+  ];
+  const listaAtual = [
+    { key: '1', titulo: '5.4 GARANTIA', conteudo: 'Texto A.\n\nTexto B.' },
+  ];
+  const diff = diffClausulas(snapshot, listaAtual);
+  expect(diff.alteradas).toEqual([]);
+});
+
 test('atualizarKeyNoSource troca data-clausula-key da secao e retorna false para key inexistente', () => {
   montarFixture(document, [
     ['1', '5.1 PRAZO', '<p>A</p>'],
