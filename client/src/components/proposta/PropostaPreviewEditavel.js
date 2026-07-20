@@ -252,8 +252,10 @@ export default function PropostaPreviewEditavel() {
   }
 
   async function aplicarDiffClausulas(diff, listaAtual) {
+    const idsPorTempKey = new Map();
     for (const nova of diff.novas) {
-      await api.post(`/propostas/${id}/clausulas`, { titulo: nova.titulo, conteudo: nova.conteudo });
+      const res = await api.post(`/propostas/${id}/clausulas`, { titulo: nova.titulo, conteudo: nova.conteudo });
+      idsPorTempKey.set(nova.key, String(res.data.id));
     }
     for (const alterada of diff.alteradas) {
       await api.put(`/propostas/${id}/clausulas/${alterada.key}`, { titulo: alterada.titulo, conteudo: alterada.conteudo });
@@ -261,8 +263,10 @@ export default function PropostaPreviewEditavel() {
     for (const removida of diff.removidas) {
       await api.delete(`/propostas/${id}/clausulas/${removida.id}`);
     }
-    if (diff.ordemMudou) {
-      const idsFinais = listaAtual.filter((c) => !c.key.startsWith('temp-')).map((c) => c.key);
+    if (diff.ordemMudou || idsPorTempKey.size > 0) {
+      const idsFinais = listaAtual
+        .map((c) => (c.key.startsWith('temp-') ? idsPorTempKey.get(c.key) : c.key))
+        .filter(Boolean);
       if (idsFinais.length > 0) {
         await api.put(`/propostas/${id}/clausulas/reordenar`, { ordem: idsFinais });
       }
