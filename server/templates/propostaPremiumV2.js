@@ -1449,6 +1449,146 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         });
         return nonEmptyParts.length ? nonEmptyParts : [tableEl];
       }
+      // Divide um bloco não-tabela (ex.: cláusula longa, descritivo técnico) que sozinho é
+      // maior que a área útil de uma página inteira. Heurística análoga ao splitTableByRows:
+      // procura, em TODA a subárvore do bloco (não só nos filhos diretos — cláusulas custom
+      // ficam envolvidas em wrappers "avoid-break" com 1-2 níveis extras de aninhamento), o
+      // elemento com mais filhos-elemento diretos — esse é o "container" que concentra os
+      // parágrafos/itens (ex.: a <div> de conteúdo de uma cláusula). Reconstrói a cadeia de
+      // ancestrais entre o bloco e o container em cada parte, preservando título/irmãos
+      // apenas na primeira parte. Se não houver container com múltiplos filhos para dividir
+      // (ex.: um único parágrafo gigantesco), retorna [blockEl] inalterado.
+      function splitBlockByChildren(blockEl, pageContentEl) {
+        let container = null;
+        let maxCount = 1; // precisa de pelo menos 2 filhos para valer a pena dividir
+        const stack = [blockEl];
+        while (stack.length) {
+          const el = stack.pop();
+          const kids = Array.from(el.children).filter(isElement);
+          if (kids.length > maxCount) { maxCount = kids.length; container = el; }
+          kids.forEach((k) => stack.push(k));
+        }
+        if (!container) return [blockEl];
+        const items = Array.from(container.children).filter(isElement);
+        if (items.length < 2) return [blockEl];
+
+        // Cadeia real (elementos originais do DOM) do bloco até o container, inclusive.
+        const fullChain = [];
+        {
+          let cur = container;
+          while (cur !== blockEl) { fullChain.unshift(cur); cur = cur.parentElement; }
+          fullChain.unshift(blockEl);
+        }
+
+        // Reconstrói a cadeia em cada parte (shallow clone por nível), preservando irmãos
+        // (ex.: título) apenas quando includeSideChildren=true (1ª parte de cada grupo).
+        const mkShell = (includeSideChildren) => {
+          const clones = fullChain.map((el, i) => (i === fullChain.length - 1 ? container.cloneNode(false) : el.cloneNode(false)));
+          for (let i = 0; i < fullChain.length - 1; i++) {
+            const originalEl = fullChain[i];
+            const nextPathEl = fullChain[i + 1];
+            Array.from(originalEl.children).filter(isElement).forEach((k) => {
+              if (k === nextPathEl) {
+                clones[i].appendChild(clones[i + 1]);
+              } else if (includeSideChildren) {
+                clones[i].appendChild(k.cloneNode(true));
+              }
+            });
+          }
+          return { shell: clones[0], container: clones[clones.length - 1] };
+        };
+
+        const parts = [];
+        let { shell: currentShell, container: currentContainer } = mkShell(true);
+        parts.push(currentShell);
+        for (const item of items) {
+          const clone = item.cloneNode(true);
+          currentContainer.appendChild(clone);
+          pageContentEl.appendChild(currentShell);
+          const overflow = pageContentEl.scrollHeight > pageContentEl.clientHeight;
+          pageContentEl.removeChild(currentShell);
+          // Só migra o item para uma nova parte se a parte atual já tinha outro conteúdo;
+          // se for o único item e mesmo assim não couber, mantém (evita parte vazia/loop).
+          if (overflow && currentContainer.children.length > 1) {
+            currentContainer.removeChild(clone);
+            const next = mkShell(false);
+            currentShell = next.shell;
+            currentContainer = next.container;
+            currentContainer.appendChild(clone);
+            parts.push(currentShell);
+          }
+        }
+        return parts;
+      }
+      // Fallback para quando splitBlockByChildren não encontra um container com múltiplos
+      // filhos-elemento para dividir — caso de texto "cru" sem tags (ex.: descritivo técnico
+      // de um equipamento, inserido como um único bloco de texto sem <p> internos). Acha a
+      // folha (elemento sem filhos-elemento) com mais texto na subárvore e divide seu
+      // conteúdo por palavras via busca binária, medindo overflow real no pageContentEl
+      // (mesma técnica de splitTableByRows/splitBlockByChildren).
+      function splitTextLeaf(blockEl, pageContentEl) {
+        let leaf = null, leafLen = 0;
+        const stack = [blockEl];
+        while (stack.length) {
+          const el = stack.pop();
+          const kids = Array.from(el.children).filter(isElement);
+          if (kids.length === 0) {
+            const len = (el.textContent || '').trim().length;
+            if (len > leafLen) { leafLen = len; leaf = el; }
+          } else {
+            kids.forEach((k) => stack.push(k));
+          }
+        }
+        if (!leaf || leafLen < 40) return [blockEl];
+
+        const fullChain = [];
+        {
+          let cur = leaf;
+          while (cur !== blockEl) { fullChain.unshift(cur); cur = cur.parentElement; }
+          fullChain.unshift(blockEl);
+        }
+        const words = (leaf.textContent || '').split(/(\s+)/); // tokens: preserva espaços
+
+        const mkShell = (includeSideChildren) => {
+          const clones = fullChain.map((el, i) => (i === fullChain.length - 1 ? leaf.cloneNode(false) : el.cloneNode(false)));
+          for (let i = 0; i < fullChain.length - 1; i++) {
+            const originalEl = fullChain[i];
+            const nextPathEl = fullChain[i + 1];
+            Array.from(originalEl.children).filter(isElement).forEach((k) => {
+              if (k === nextPathEl) {
+                clones[i].appendChild(clones[i + 1]);
+              } else if (includeSideChildren) {
+                clones[i].appendChild(k.cloneNode(true));
+              }
+            });
+          }
+          return { shell: clones[0], leaf: clones[clones.length - 1] };
+        };
+
+        const parts = [];
+        let wordIdx = 0;
+        let first = true;
+        let guard = 0;
+        while (wordIdx < words.length && guard++ < 10000) {
+          const { shell, leaf: leafClone } = mkShell(first);
+          let lo = wordIdx, hi = words.length, best = wordIdx;
+          while (lo <= hi) {
+            const mid = Math.floor((lo + hi) / 2);
+            leafClone.textContent = words.slice(wordIdx, mid).join('');
+            pageContentEl.appendChild(shell);
+            const fitsMid = pageContentEl.scrollHeight <= pageContentEl.clientHeight;
+            pageContentEl.removeChild(shell);
+            if (fitsMid) { best = mid; lo = mid + 1; } else { hi = mid - 1; }
+          }
+          // Garante progresso mínimo (evita loop infinito se nem 1 token couber sozinho).
+          if (best <= wordIdx) best = Math.min(wordIdx + 1, words.length);
+          leafClone.textContent = words.slice(wordIdx, best).join('');
+          parts.push(shell);
+          wordIdx = best;
+          first = false;
+        }
+        return parts.length > 1 ? parts : [blockEl];
+      }
       function paginateProposalContent() {
         const doc = document.getElementById('proposalDocument');
         const template = document.getElementById('proposalPageTemplate');
@@ -1495,6 +1635,36 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           while (next && next.tagName === 'BR') next = next.nextElementSibling;
           if (!next) return null;
           return { heading, next };
+        };
+
+        // Adiciona um bloco à página atual; se não couber nem sozinho numa página nova
+        // (bloco maior que a área útil inteira), tenta dividir seus filhos entre páginas
+        // (splitBlockByChildren) em vez de deixar "overflow:hidden" cortar e perder
+        // silenciosamente o conteúdo excedente. Recursivo: se uma das partes resultantes
+        // ainda for maior que uma página (ex.: sub-bloco aninhado), tenta dividir de novo.
+        const placeBlockOrSplit = (node) => {
+          ensurePage();
+          addNode(node);
+          if (fits(pageLimitPx)) return;
+          stack.removeChild(node);
+          page = null;
+          ensurePage();
+          addNode(node);
+          if (fits(pageLimitPx)) return;
+          stack.removeChild(node);
+          let parts = splitBlockByChildren(node, pageContent);
+          if (parts.length < 2) parts = splitTextLeaf(node, pageContent);
+          if (parts.length < 2) {
+            // Não há como dividir (ex.: um único parágrafo maior que a página): mantém o
+            // comportamento anterior — aceita o bloco atômico mesmo maior que a página.
+            ensurePage();
+            addNode(node);
+            return;
+          }
+          for (let i = 0; i < parts.length; i++) {
+            placeBlockOrSplit(parts[i]);
+            if (i < parts.length - 1) page = null;
+          }
         };
 
         for (const block of blocks) {
@@ -1553,13 +1723,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           }
 
           const node = block.cloneNode(true);
-          addNode(node);
-          if (!fits(pageLimitPx)) {
-            stack.removeChild(node);
-            page = null;
-            ensurePage();
-            addNode(node);
-          }
+          placeBlockOrSplit(node);
         }
         // Limpeza final: remove páginas geradas sem conteúdo útil
         Array.from(doc.querySelectorAll('.proposal-page[data-generated="1"]')).forEach((p) => {
