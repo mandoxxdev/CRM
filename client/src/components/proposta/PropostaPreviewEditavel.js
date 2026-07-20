@@ -154,7 +154,28 @@ export default function PropostaPreviewEditavel() {
     secao.insertAdjacentElement('afterbegin', barra);
   }
 
+  // Placeholder do corpo da cláusula é puramente visual (CSS ::before), então nunca
+  // entra no innerHTML/textContent lido por lerClausulasDoSource — uma cláusula nova
+  // sem digitação continua salvando como vazia. Injetado uma única vez por documento
+  // (checa o id antes de recriar), já que ativarEdicaoClausulas roda a cada repaginação.
+  function injetarEstiloPlaceholderClausula(doc) {
+    if (doc.getElementById('ppe-clausula-placeholder-style')) return;
+    const style = doc.createElement('style');
+    style.id = 'ppe-clausula-placeholder-style';
+    style.textContent = `
+      [data-clausula-campo="conteudo"]:empty::before,
+      [data-clausula-campo="conteudo"] > p:only-child:empty::before {
+        content: 'Clique para escrever o conteúdo da cláusula...';
+        color: #9ca3af;
+        font-style: italic;
+        pointer-events: none;
+      }
+    `;
+    (doc.head || doc.documentElement).appendChild(style);
+  }
+
   function ativarEdicaoClausulas(doc) {
+    injetarEstiloPlaceholderClausula(doc);
     const paginasGeradas = doc.querySelectorAll('.proposal-page[data-generated="1"] [data-clausula-campo]');
     paginasGeradas.forEach((el) => {
       el.contentEditable = 'true';
@@ -162,6 +183,9 @@ export default function PropostaPreviewEditavel() {
       el.style.background = '#fffde7';
       el.style.borderRadius = '3px';
       el.style.cursor = 'text';
+      if (el.getAttribute('data-clausula-campo') === 'conteudo') {
+        el.style.minHeight = '3em';
+      }
       el.oninput = () => {
         const secao = el.closest('[data-clausula-key]');
         if (!secao) return;

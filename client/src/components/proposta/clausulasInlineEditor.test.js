@@ -127,6 +127,16 @@ test('adicionarClausulaAoSource insere depois da key indicada, com key temp-*', 
   expect(chaves).toEqual(['1', novaKey, '2']);
 });
 
+test('adicionarClausulaAoSource cria corpo vazio (sem <p></p>) para o placeholder CSS funcionar, e isso lê/converte para texto vazio', () => {
+  montarFixture(document, [
+    ['1', '5.1 PRAZO', '<p>A</p>'],
+  ]);
+  const novaKey = adicionarClausulaAoSource(document, '1');
+  const nova = lerClausulasDoSource(document).find((c) => c.key === novaKey);
+  expect(nova.conteudo).toBe('');
+  expect(htmlParaTexto(nova.conteudo)).toBe('');
+});
+
 test('adicionarClausulaAoSource sem apósKey adiciona no fim', () => {
   montarFixture(document, [['1', '5.1 PRAZO', '<p>A</p>']]);
   const novaKey = adicionarClausulaAoSource(document, null);

@@ -119,7 +119,11 @@ export function adicionarClausulaAoSource(doc, apósKey) {
     const div = doc.createElement('div');
     div.className = 'stack-sm';
     div.setAttribute('data-clausula-campo', 'conteudo');
-    div.innerHTML = '<p></p>';
+    // Vazio de propósito (sem <p></p>): permite que a regra CSS
+    // [data-clausula-campo="conteudo"]:empty::before (ver ativarEdicaoClausulas em
+    // PropostaPreviewEditavel.js) mostre um placeholder indicando que dá pra escrever.
+    // Um <p></p> vazio faria o corpo colapsar para uma sliver quase invisível.
+    div.innerHTML = '';
     secao.appendChild(h3);
     secao.appendChild(div);
     const referencia = apósKey ? buscarSecao(doc, apósKey) : null;
