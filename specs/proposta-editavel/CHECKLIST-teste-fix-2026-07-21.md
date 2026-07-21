@@ -88,7 +88,8 @@ Extra: renumeração automática das cláusulas reserva o slot **5.23** (editáv
 - [x] Agrupar log de edição por item (1 entrada, com nome do produto + resumo antes/depois) (#7)
 - [x] Normalizar comparação numérica no diff (250000 == "250000" == 250000.0) (#7)
 - [x] Bônus: corrigida a **data** do histórico que mostrava sempre "—" (`criado_em` → `created_at`)
-- [ ] **Reteste no Chrome:** adicionar produto → aparece **uma** entrada "Produto adicionado: {nome}"; editar valor → **uma** entrada "Produto editado: {nome}" (sem duplicar); remover produto (🗑 na última coluna da tabela) → "Produto removido"; a data aparece correta
+- [x] **2ª causa raiz (add/remove não apareciam) — confirmada no banco e corrigida** (commit `19cb97a`): a proposta 288 tinha 3 itens com o **mesmo `codigo_produto`**. O diff usava um `Map` por chave que **colapsava duplicatas** → adicionar/remover uma duplicata não mudava o conjunto de chaves e não era detectado (só edição aparecia). Trocado por agrupamento por chave + pareamento por posição. 10/10 nos testes.
+- [ ] **Reteste no Chrome (após `git pull`):** adicionar produto → **uma** entrada "Produto adicionado: {nome}"; editar → "Produto editado: {nome}"; remover produto (🗑 vermelho na última coluna, role a tabela à direita) → "Produto removido"; a data aparece correta. Vale testar inclusive com produtos repetidos.
 
 > ✅ **Achado colateral — CORRIGIDO (commit `2fec8b4`):** ao salvar pelo formulário, o payload não envia `modelo`/`descritivo_tecnico`/`categoria`/`tag`/etc., e o INSERT gravava `null` → **salvar apagava esses dados dos itens**. Corrigido no backend: o re-INSERT agora **preserva** esses campos a partir do item existente (função `mesclarItensPreservandoCampos`, 4/4 no teste). Respeita o payload quando ele traz o campo.
 > - [ ] **Reteste no Chrome:** editar uma proposta que tenha itens com descritivo técnico → salvar → reabrir → o descritivo técnico (seção 4.x) **continua lá** (antes sumia).
