@@ -5029,14 +5029,35 @@ app.delete('/api/projetos/:id', authenticateToken, (req, res) => {
 });
 
 // ========== ROTAS DE PROPOSTAS ==========
-app.get('/api/propostas', authenticateToken, (req, res) => {
-  const { cliente_id, status, created_by, responsavel_id, oportunidade_id, tipo_proposta, search, incluir_inativas } = req.query;
-  const showInactive = incluir_inativas === 'true' || incluir_inativas === '1';
-  if (showInactive && !isAdminUser(req.user)) {
-    return res.status(403).json({ error: 'Apenas administradores podem visualizar propostas inativas.' });
-  }
+// Colunas "pesadas" da tabela propostas que NÃO devem trafegar na listagem.
+// São o documento renderizado inteiro (só usado no preview/detalhe via /:id).
+const HEAVY_PROPOSTA_COLS = new Set(['html_rendered', 'css_snapshot']);
+let _propostaListColsCache = null;
 
-  let query = `SELECT pr.*, c.razao_social as cliente_nome, c.nome_fantasia as cliente_nome_fantasia,
+function getPropostaListColumns(cb) {
+  if (_propostaListColsCache) return cb(null, _propostaListColsCache);
+  db.all('PRAGMA table_info(propostas)', (err, cols) => {
+    if (err) return cb(err);
+    _propostaListColsCache = cols
+      .map((c) => c.name)
+      .filter((name) => !HEAVY_PROPOSTA_COLS.has(name))
+      .map((name) => `pr.${name}`)
+      .join(', ');
+    cb(null, _propostaListColsCache);
+  });
+}
+
+app.get('/api/propostas', authenticateToken, (req, res) => {
+  getPropostaListColumns((colErr, prCols) => {
+    if (colErr) return respondDbError(res, colErr, 'propostas:list:cols');
+
+    const { cliente_id, status, created_by, responsavel_id, oportunidade_id, tipo_proposta, search, incluir_inativas } = req.query;
+    const showInactive = incluir_inativas === 'true' || incluir_inativas === '1';
+    if (showInactive && !isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Apenas administradores podem visualizar propostas inativas.' });
+    }
+
+    let query = `SELECT ${prCols}, c.razao_social as cliente_nome, c.nome_fantasia as cliente_nome_fantasia,
                u1.nome as created_by_nome, u2.nome as responsavel_nome
                FROM propostas pr
                LEFT JOIN clientes c ON pr.cliente_id = c.id
@@ -5093,11 +5114,12 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
 
   query += ' ORDER BY pr.created_at DESC';
 
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return respondDbError(res, err, 'propostas:list');
-    }
-    res.json(rows || []);
+    db.all(query, params, (err, rows) => {
+      if (err) {
+        return respondDbError(res, err, 'propostas:list');
+      }
+      res.json(rows || []);
+    });
   });
 });
 
