@@ -452,6 +452,138 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </tr>`;
     }).join('');
 
+    // Seção 5.23 FIXA (não editável): título + tabela de preços DINÂMICA + FINAME/BNDES + tabelas
+    // fiscais. Construída uma vez e injetada nos DOIS caminhos de render (custom/inline e hardcoded),
+    // sempre entre a 5.22 e a 5.24. Marcada com data-page-break="before" no elemento raiz (five-23-
+    // preco-group) para iniciar em página própria (ver paginateProposalContent).
+    const sec523PrecoHtml = `
+      <section class="block stack-md avoid-break five-23-preco-group" data-page-break="before">
+        <section class="block stack-md allow-break">
+          <h3>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>
+          <p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>
+        </section>
+
+        <section class="block stack-md allow-break">
+          <div class="table-caption">Tabela de Preços</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="col-center">ITEM</th>
+                <th>DESCRIÇÃO</th>
+                <th class="col-right">QUANT.</th>
+                <th class="col-right">PREÇO UNITÁRIO</th>
+                <th class="col-right">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tabelaPrecosRows || `<tr><td colspan="5" class="muted">Nenhum item cadastrado.</td></tr>`}
+              <tr>
+                <td class="col-center" colspan="4"><strong>TOTAL DA PROPOSTA</strong></td>
+                <td class="col-right"><strong>${esc(moedaBRL(totais.total))}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="block stack-md allow-break">
+          <p><strong>CONDIÇÃO DE PAGAMENTO:</strong> Primeira Parcela/Entrada – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p>
+          <p>Segunda Parcela/Liberação – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p>
+          <p>Terceira Parcela/Saldo – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p>
+          <p>Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>
+        </section>
+      </section>
+
+      <section class="block stack-md allow-break finame-compact">
+          <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
+          <table class="table table-dark">
+            <thead>
+              <tr>
+                <th class="col-center">ITEM</th>
+                <th>EQUIPAMENTO</th>
+                <th class="col-center">REF. FINAME</th>
+                <th class="col-center">REF. CARTÃO BNDES</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="col-center">1</td><td>Masseira Bimix</td><td class="col-center">04051088</td><td class="col-center">*********</td></tr>
+              <tr><td class="col-center">2</td><td>Masseira Trimix</td><td class="col-center">03452459</td><td class="col-center">MASSEIRA</td></tr>
+              <tr><td class="col-center">3</td><td>Masseira Helicoidal Vertical</td><td class="col-center">03451446</td><td class="col-center">MASSEIRA VH</td></tr>
+              <tr><td class="col-center">4</td><td>Tanque Dispersor</td><td class="col-center">03452683</td><td class="col-center">TANQUE DISP</td></tr>
+              <tr><td class="col-center">5</td><td>Tanque de Completagem/Agitador</td><td class="col-center">04056078</td><td class="col-center">*********</td></tr>
+              <tr><td class="col-center">6</td><td>Moinho Vertical</td><td class="col-center">03464319</td><td class="col-center">MOINHO VERTI</td></tr>
+              <tr><td class="col-center">7</td><td>Dispersor Hidropneumático</td><td class="col-center">04051259</td><td class="col-center">DISPERSOR HI</td></tr>
+              <tr><td class="col-center">8</td><td>Tachos</td><td class="col-center">03465385</td><td class="col-center">TACHO/TANQU</td></tr>
+              <tr><td class="col-center">9</td><td>Tanque de Armazenamento</td><td class="col-center">03452690</td><td class="col-center">TANQUE ARMAZ</td></tr>
+              <tr><td class="col-center">10</td><td>Moinho de Laboratório</td><td class="col-center">04056053</td><td class="col-center">*********</td></tr>
+              <tr><td class="col-center">11</td><td>Dispersor de Laboratório</td><td class="col-center">04056231</td><td class="col-center">*********</td></tr>
+              <tr><td class="col-center">12</td><td>Envasadora</td><td class="col-center">03451453</td><td class="col-center">ENVASADORA</td></tr>
+            </tbody>
+          </table>
+      </section>
+
+      <section class="block stack-md allow-break">
+          <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
+          <div class="table-caption">Tabela de Classificação Fiscal</div>
+          <table class="table">
+          <thead>
+            <tr>
+              <th class="col-center">NCM</th>
+              <th>IDENTIFICAÇÃO EQUIPAMENTOS MOINHO YPIRANGA</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="col-center">8474.39.00</td><td>Misturadores, masseiras, dispersores, moinhos, agitadores, hélices e impelidores</td></tr>
+            <tr><td class="col-center">7309.00.90</td><td>Tachos, moegas, silos, tanques e demais reservatórios metálicos.</td></tr>
+            <tr><td class="col-center">Nota</td><td>Para outros produtos, a classificação fiscal deverá ser consultada caso a caso.</td></tr>
+          </tbody>
+        </table>
+
+        <div class="table-caption">Tabela de Impostos e Alíquotas</div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="col-center">NCM</th>
+              <th class="col-center">REGIÃO 1</th>
+              <th class="col-center">REGIÃO 2</th>
+              <th class="col-center">REGIÃO 3</th>
+              <th class="col-center">IPI</th>
+              <th class="col-center">PIS</th>
+              <th class="col-center">COFINS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="col-center">8474.39.00</td>
+              <td class="col-center">18,00%</td>
+              <td class="col-center">12,00%</td>
+              <td class="col-center">7,00%</td>
+              <td class="col-center">0%</td>
+              <td class="col-center">0,65%</td>
+              <td class="col-center">3,00%</td>
+            </tr>
+            <tr>
+              <td class="col-center">7309.00.90</td>
+              <td class="col-center">12,00%</td>
+              <td class="col-center">12,00%</td>
+              <td class="col-center">7,00%</td>
+              <td class="col-center">0%</td>
+              <td class="col-center">0,65%</td>
+              <td class="col-center">3,00%</td>
+            </tr>
+          </tbody>
+          </table>
+          <div class="stack-sm">
+            <p>Texto complementar abaixo das tabelas:</p>
+            <ul>
+              <li>Região 1: São Paulo (SP)</li>
+              <li>Região 2: Minas Gerais (MG), Paraná (PR), Rio de Janeiro (RJ), Rio Grande do Sul (RS) e Santa Catarina (SC)</li>
+              <li>Região 3: Acre (AC), Alagoas (AL), Amapá (AP), Amazonas (AM), Bahia (BA), Ceará (CE), Distrito Federal (DF), Espírito Santo (ES), Goiás (GO), Maranhã (MA), Mato Grosso (MT), Mato Grosso do Sul (MS), Pará (PA), Paraíba (PB), Pernambuco (PE), Piauí (PI), Rio Grande do Norte (RN), Rondônia (RO), Roraima (RR), Sergipe (SE) e Tocantins (TO).</li>
+              <li>Nota: Redução tributária aplicada nos produtos classificados com NCM 8474.39.00, Inciso II, Artigo 12, Anexo II do RICMS/SP.</li>
+              <li>Para outros produtos, os impostos e alíquotas deverão ser consultados caso a caso.</li>
+            </ul>
+          </div>
+      </section>`;
+
     const clausulasSection = (() => {
       if (templateConfig && Array.isArray(templateConfig.clausulas_custom) && templateConfig.clausulas_custom.length > 0) {
         const assinaturasHtml = `
@@ -498,6 +630,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </section>`;
         };
         const [primeiraClausula, ...demaisClausulas] = templateConfig.clausulas_custom;
+        // A 5.24 (CONSIDERAÇÃO FINAL) é editável (vem de clausulas_custom), mas deve ser emitida
+        // DEPOIS da seção fixa 5.23. Separamos ela do restante para intercalar a 5.23 fixa.
+        const is524 = (c) => String(c && c.numero || '').trim() === '5.24';
+        const demaisSem524 = demaisClausulas.filter((c) => !is524(c));
+        const clausula524 = demaisClausulas.find(is524);
+        // A 5.24 inicia em página própria (data-page-break); ver Task A3.
+        const clausula524Html = clausula524
+          ? renderClausulaCustom(clausula524, demaisClausulas.indexOf(clausula524) + 1)
+              .replace('<section class="block stack-md allow-break"', '<section class="block stack-md allow-break" data-page-break="before"')
+          : '';
         // IMPORTANTE: apenas o título + a 1ª cláusula ficam dentro do grupo "avoid-break"
         // (para o título "5. CONDIÇÕES GERAIS" não ficar órfão no fim da página). As demais
         // cláusulas são seções IRMÃS com "allow-break", igual ao layout das cláusulas padrão.
@@ -505,11 +647,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         // conjunto como um elemento gigante indivisível e o "overflow: hidden" da página
         // cortaria as cláusulas no meio (ex.: parava na 5.4).
         return `
-          <section class="block stack-md avoid-break five-intro-group">
+          <section class="block stack-md avoid-break five-intro-group" data-page-break="before">
             <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
             ${primeiraClausula ? renderClausulaCustom(primeiraClausula, 0) : ''}
           </section>
-          ${demaisClausulas.map(renderClausulaCustom).join('')}
+          ${demaisSem524.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
+          ${sec523PrecoHtml}
+          ${clausula524Html}
           <section class="block stack-md allow-break">${assinaturasHtml}</section>`;
       }
       return null;
@@ -784,132 +928,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </section>
 
-      <section class="block stack-md avoid-break five-23-preco-group">
-        <section class="block stack-md allow-break">
-          <h3>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>
-          <p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>
-        </section>
-
-        <section class="block stack-md allow-break">
-          <div class="table-caption">Tabela de Preços</div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th class="col-center">ITEM</th>
-                <th>DESCRIÇÃO</th>
-                <th class="col-right">QUANT.</th>
-                <th class="col-right">PREÇO UNITÁRIO</th>
-                <th class="col-right">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${tabelaPrecosRows || `<tr><td colspan="5" class="muted">Nenhum item cadastrado.</td></tr>`}
-              <tr>
-                <td class="col-center" colspan="4"><strong>TOTAL DA PROPOSTA</strong></td>
-                <td class="col-right"><strong>${esc(moedaBRL(totais.total))}</strong></td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        <section class="block stack-md allow-break">
-          <p><strong>CONDIÇÃO DE PAGAMENTO:</strong> Primeira Parcela/Entrada – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p>
-          <p>Segunda Parcela/Liberação – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p>
-          <p>Terceira Parcela/Saldo – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p>
-          <p>Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>
-        </section>
-      </section>
-
-      <section class="block stack-md allow-break finame-compact">
-          <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
-          <table class="table table-dark">
-            <thead>
-              <tr>
-                <th class="col-center">ITEM</th>
-                <th>EQUIPAMENTO</th>
-                <th class="col-center">REF. FINAME</th>
-                <th class="col-center">REF. CARTÃO BNDES</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td class="col-center">1</td><td>Masseira Bimix</td><td class="col-center">04051088</td><td class="col-center">*********</td></tr>
-              <tr><td class="col-center">2</td><td>Masseira Trimix</td><td class="col-center">03452459</td><td class="col-center">MASSEIRA</td></tr>
-              <tr><td class="col-center">3</td><td>Masseira Helicoidal Vertical</td><td class="col-center">03451446</td><td class="col-center">MASSEIRA VH</td></tr>
-              <tr><td class="col-center">4</td><td>Tanque Dispersor</td><td class="col-center">03452683</td><td class="col-center">TANQUE DISP</td></tr>
-              <tr><td class="col-center">5</td><td>Tanque de Completagem/Agitador</td><td class="col-center">04056078</td><td class="col-center">*********</td></tr>
-              <tr><td class="col-center">6</td><td>Moinho Vertical</td><td class="col-center">03464319</td><td class="col-center">MOINHO VERTI</td></tr>
-              <tr><td class="col-center">7</td><td>Dispersor Hidropneumático</td><td class="col-center">04051259</td><td class="col-center">DISPERSOR HI</td></tr>
-              <tr><td class="col-center">8</td><td>Tachos</td><td class="col-center">03465385</td><td class="col-center">TACHO/TANQU</td></tr>
-              <tr><td class="col-center">9</td><td>Tanque de Armazenamento</td><td class="col-center">03452690</td><td class="col-center">TANQUE ARMAZ</td></tr>
-              <tr><td class="col-center">10</td><td>Moinho de Laboratório</td><td class="col-center">04056053</td><td class="col-center">*********</td></tr>
-              <tr><td class="col-center">11</td><td>Dispersor de Laboratório</td><td class="col-center">04056231</td><td class="col-center">*********</td></tr>
-              <tr><td class="col-center">12</td><td>Envasadora</td><td class="col-center">03451453</td><td class="col-center">ENVASADORA</td></tr>
-            </tbody>
-          </table>
-      </section>
-
-      <section class="block stack-md allow-break">
-          <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
-          <div class="table-caption">Tabela de Classificação Fiscal</div>
-          <table class="table">
-          <thead>
-            <tr>
-              <th class="col-center">NCM</th>
-              <th>IDENTIFICAÇÃO EQUIPAMENTOS MOINHO YPIRANGA</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td class="col-center">8474.39.00</td><td>Misturadores, masseiras, dispersores, moinhos, agitadores, hélices e impelidores</td></tr>
-            <tr><td class="col-center">7309.00.90</td><td>Tachos, moegas, silos, tanques e demais reservatórios metálicos.</td></tr>
-            <tr><td class="col-center">Nota</td><td>Para outros produtos, a classificação fiscal deverá ser consultada caso a caso.</td></tr>
-          </tbody>
-        </table>
-
-        <div class="table-caption">Tabela de Impostos e Alíquotas</div>
-        <table class="table">
-          <thead>
-            <tr>
-              <th class="col-center">NCM</th>
-              <th class="col-center">REGIÃO 1</th>
-              <th class="col-center">REGIÃO 2</th>
-              <th class="col-center">REGIÃO 3</th>
-              <th class="col-center">IPI</th>
-              <th class="col-center">PIS</th>
-              <th class="col-center">COFINS</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="col-center">8474.39.00</td>
-              <td class="col-center">18,00%</td>
-              <td class="col-center">12,00%</td>
-              <td class="col-center">7,00%</td>
-              <td class="col-center">0%</td>
-              <td class="col-center">0,65%</td>
-              <td class="col-center">3,00%</td>
-            </tr>
-            <tr>
-              <td class="col-center">7309.00.90</td>
-              <td class="col-center">12,00%</td>
-              <td class="col-center">12,00%</td>
-              <td class="col-center">7,00%</td>
-              <td class="col-center">0%</td>
-              <td class="col-center">0,65%</td>
-              <td class="col-center">3,00%</td>
-            </tr>
-          </tbody>
-          </table>
-          <div class="stack-sm">
-            <p>Texto complementar abaixo das tabelas:</p>
-            <ul>
-              <li>Região 1: São Paulo (SP)</li>
-              <li>Região 2: Minas Gerais (MG), Paraná (PR), Rio de Janeiro (RJ), Rio Grande do Sul (RS) e Santa Catarina (SC)</li>
-              <li>Região 3: Acre (AC), Alagoas (AL), Amapá (AP), Amazonas (AM), Bahia (BA), Ceará (CE), Distrito Federal (DF), Espírito Santo (ES), Goiás (GO), Maranhã (MA), Mato Grosso (MT), Mato Grosso do Sul (MS), Pará (PA), Paraíba (PB), Pernambuco (PE), Piauí (PI), Rio Grande do Norte (RN), Rondônia (RO), Roraima (RR), Sergipe (SE) e Tocantins (TO).</li>
-              <li>Nota: Redução tributária aplicada nos produtos classificados com NCM 8474.39.00, Inciso II, Artigo 12, Anexo II do RICMS/SP.</li>
-              <li>Para outros produtos, os impostos e alíquotas deverão ser consultados caso a caso.</li>
-            </ul>
-          </div>
-      </section>
+      ${sec523PrecoHtml}
 
       <section class="block stack-md allow-break">
         <h3>5.24 CONSIDERAÇÃO FINAL</h3>
