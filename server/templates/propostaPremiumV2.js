@@ -402,6 +402,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <h3>${itemNo} ${nome}</h3>
         <div class="equip-specs-kv">
           ${fotoHtml}
+          ${descritivoTec ? `<p><strong>Descritivo técnico:</strong></p><div class="equip-descritivo">${descritivoTec}</div>` : ''}
           <p><strong>Equipamento:</strong> ${nome}</p>
           ${codigo !== '—' ? `<p><strong>Código:</strong> ${codigo}</p>` : ''}
           <p><strong>Quantidade:</strong> ${qtd} ${und}</p>
@@ -410,7 +411,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${categoria !== '—' ? `<p><strong>Categoria:</strong> ${categoria}</p>` : ''}
           ${ncm !== '—' ? `<p><strong>NCM:</strong> ${ncm}</p>` : ''}
           ${specRowsHtml}
-          ${descritivoTec ? `<p><strong>Descritivo técnico:</strong></p><div class="equip-descritivo">${descritivoTec}</div>` : ''}
         </div>
       `;
     });
