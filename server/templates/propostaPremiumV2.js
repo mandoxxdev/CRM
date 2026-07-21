@@ -92,6 +92,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       ? (uploadToDataUrl(uploadsFooterDir, String(config.footer_image_url).trim()) || null)
       : null;
 
+    // Logo do cliente (capa): embed base64 a partir de uploads/logos, nunca via HTTP (PDF offline).
+    // Se o arquivo não existir no disco, degrada para null (não renderiza o bloco).
+    const clienteLogoB64 = (proposta.cliente_logo_url && String(proposta.cliente_logo_url).trim())
+      ? (uploadToDataUrl(uploadsLogosDir, String(proposta.cliente_logo_url).trim()) || null)
+      : null;
+
     const propostaAssetsDir = path.join(__dirname, '..', 'assets', 'proposta');
     const gmpLogoSmB64 = fileToDataUrl(path.join(propostaAssetsDir, 'logo-gmp.png'));
     const gmpLogoGrandeB64 = fileToDataUrl(path.join(propostaAssetsDir, 'logo-gmp-grande.png'));
@@ -1269,6 +1275,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       color: #1a1a1a;
       margin: 0 0 7mm 0;
     }
+    .cover-client-logo { text-align: center; margin: 0 0 4mm 0; }
+    .cover-client-logo img { max-height: 25mm; max-width: 60%; object-fit: contain; }
     .cover-client-info {
       text-align: left;
       width: 100%;
@@ -1360,6 +1368,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       <div class="cover-info-area">
         <p class="cover-info-title">PROPOSTA TÉCNICA COMERCIAL</p>
         <p class="cover-info-num">Nº ${numero}</p>
+        ${clienteLogoB64 ? `<div class="cover-client-logo"><img src="${clienteLogoB64}" alt="Logo do cliente" /></div>` : ''}
         <div class="cover-client-info">
           <p class="cover-field-contratante"><p style="font-weight: bold;">EMPRESA CONTRATANTE:</p> <span data-edit="cliente_nome">${clienteNome}</span></p>
           <p class="cover-field-cnpj"><strong>CNPJ:</strong> ${clienteCnpj}</p>
