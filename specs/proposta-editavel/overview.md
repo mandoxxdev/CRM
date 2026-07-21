@@ -4,7 +4,16 @@
 Permitir que o time comercial edite campos específicos da proposta diretamente na tela de visualização (preview), sem precisar voltar ao formulário principal. As edições persistem e refletem tanto no preview quanto no PDF baixado.
 
 ## Status atual
-**Feature implementada e funcional.** Pendências listadas em `tasks.md` (Fases 12 e 13).
+**Feature implementada e funcional.** Pendências listadas em `tasks.md` (Fases 12, 13 e teste visual da Fase 15).
+
+### Estrutura de arquivos relevante
+| Arquivo | Papel |
+|---|---|
+| `server/templates/propostaPremiumV2.js` | Gerador HTML da proposta V2 (capa, apresentação, paginador) — ver `template.md` |
+| `server/config/paths.js` | Constantes de diretórios de upload exportadas via `module.exports` |
+| `server/clausulasDefault.js` | Cláusulas padrão (copiadas por proposta ao inicializar) |
+| `server/propostaCompositionEngine.js` | Motor de substituição de placeholders |
+| `server/index.js` | Rotas, tabelas, V1 do template — importa de `templates/` e `config/` |
 
 ---
 

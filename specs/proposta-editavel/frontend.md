@@ -18,16 +18,16 @@ Fixa no topo, fundo escuro (`#1e293b`):
 [ Proposta #001-2026 ]  [ Editar campos ]  [ Cláusulas ]  [ Histórico ]  [ Salvar Alterações ]
 ```
 
-- **Editar campos**: toggle que ativa/desativa `contenteditable` nos campos de contato dentro do iframe
+- **Editar campos**: ~~toggle~~ — na implementação atual, `ativarEdicao()` é chamado automaticamente no `onLoad` do iframe; os campos de contato ficam sempre editáveis (borda amarela sempre visível)
 - **Cláusulas**: abre painel lateral com o `EditorClausulas`
 - **Histórico**: abre painel lateral com o `HistoricoEdicoes`
 - **Salvar Alterações**: envia as mudanças via `PUT /customizacoes` (desabilitado se nada mudou)
 
 ---
 
-## Campos Editáveis no Cabeçalho da Proposta
+## Campos Editáveis
 
-Injetados via atributos `data-edit` no DOM do iframe:
+Na **capa** (template V2), os atributos `data-edit` já estão no HTML gerado pelo servidor (em `<span>` dentro dos `<p>` da cover-client-info). Na **tabela de contratante** das páginas internas, são injetados via `injetarAtributosEdicao()` que lê `<th>/<td>` da tabela.
 
 | Campo | `data-edit` |
 |---|---|

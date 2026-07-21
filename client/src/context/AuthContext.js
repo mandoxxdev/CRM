@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import api from '../services/api';
 import { invalidatePermissionsCache, seedPermissionsFromAuthUser } from '../services/permissionsCache';
@@ -26,6 +26,11 @@ async function refreshUserFromServer(token, currentUser) {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const userRef = useRef(null);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const applyFreshUser = useCallback((freshUser) => {
     if (!freshUser) return;
@@ -40,14 +45,15 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     if (!token) return null;
     try {
-      const freshUser = await refreshUserFromServer(token, user || JSON.parse(localStorage.getItem('user') || '{}'));
+      const currentUser = userRef.current || JSON.parse(localStorage.getItem('user') || '{}');
+      const freshUser = await refreshUserFromServer(token, currentUser);
       setUser(freshUser);
       return freshUser;
     } catch (error) {
       console.warn('Não foi possível atualizar permissões do usuário:', error);
       return null;
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     const initializeAuth = async () => {
