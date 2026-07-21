@@ -160,7 +160,9 @@ const UsuarioForm = () => {
       }
     })();
     return () => { cancelled = true; };
-  }, [refreshUser]);
+    // Executar apenas na montagem — refreshUser é estável; evita loop de requisições
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (id) {
