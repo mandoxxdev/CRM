@@ -492,10 +492,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </section>
 
         <section class="block stack-md allow-break">
-          <p><strong>CONDIÇÃO DE PAGAMENTO:</strong> Primeira Parcela/Entrada – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p>
-          <p>Segunda Parcela/Liberação – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p>
-          <p>Terceira Parcela/Saldo – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p>
-          <p>Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>
+          <p><strong>CONDIÇÃO DE PAGAMENTO:</strong></p>
+          <p style="text-indent: 12.5mm; line-height: 26px;"><strong>Primeira Parcela/Entrada:</strong> – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p>
+          <p style="text-indent: 12.5mm; line-height: 26px;"><strong>Segunda Parcela/Liberação:</strong> – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p>
+          <p style="text-indent: 12.5mm; line-height: 26px;"><strong>Terceira Parcela/Saldo:</strong> – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p>
+          <p style="text-indent: 12.5mm; line-height: 26px;">Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>
         </section>
       </section>
 
