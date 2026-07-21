@@ -7673,16 +7673,6 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
         const itensNovos = (itens && Array.isArray(itens)) ? itens : [];
         const itensMudaram = compararItens(itensAtuais || [], itensNovos);
 
-        // Auditoria: registrar inclusão/edição/remoção de itens no log de histórico
-        const usuarioIdAuditoriaItens = req.user.id;
-        db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioIdAuditoriaItens], (_, uAuditoriaItens) => {
-          const usuarioNomeAuditoriaItens = uAuditoriaItens?.nome || req.user.email || 'N/A';
-          const diffItens = diffItensParaLog(itensAtuais || [], itensNovos);
-          diffItens.adicionados.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_adicionado', 'item', null, null, nomeDe(it)));
-          diffItens.removidos.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_removido', 'item', null, nomeDe(it), null));
-          diffItens.editados.forEach((e) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_editado', e.campo, null, e.antes == null ? null : String(e.antes), e.depois == null ? null : String(e.depois)));
-        });
-        
         // Só incrementar revisão se itens ou valor total mudaram
         const deveIncrementarRevisao = itensMudaram || valorTotalMudou;
         const novaRevisao = deveIncrementarRevisao ? revisaoAtual + 1 : revisaoAtual;
@@ -7806,7 +7796,19 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                 stmt.finalize();
               }
 
-              res.json({ 
+              // Auditoria: registrar inclusão/edição/remoção de itens no log de
+              // histórico — só APÓS o update + reinserção dos itens terem sido
+              // persistidos com sucesso (evita logar mudanças de um save que falhou).
+              const usuarioIdAuditoriaItens = req.user.id;
+              db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioIdAuditoriaItens], (_, uAuditoriaItens) => {
+                const usuarioNomeAuditoriaItens = uAuditoriaItens?.nome || req.user.email || 'N/A';
+                const diffItens = diffItensParaLog(itensAtuais || [], itensNovos);
+                diffItens.adicionados.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_adicionado', 'item', null, null, nomeDe(it)));
+                diffItens.removidos.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_removido', 'item', null, nomeDe(it), null));
+                diffItens.editados.forEach((e) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_editado', e.campo, null, e.antes == null ? null : String(e.antes), e.depois == null ? null : String(e.depois)));
+              });
+
+              res.json({
                 message: 'Proposta atualizada com sucesso',
                 numero_proposta: numeroFinal,
                 revisao: novaRevisao
