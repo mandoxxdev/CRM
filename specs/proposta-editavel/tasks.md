@@ -264,9 +264,21 @@ Cinco ajustes pedidos pelo usuário, executados via subagentes com revisão por 
 - [x] **E — Renumeração automática das cláusulas** (`df293ac`): `renumerarClausulas(doc)` recalcula 5.1, 5.2... na fonte a cada add/remover/mover; sumário reflete na repaginação
 - Limitação conhecida (backlog, não bloqueia): em quebras extremas, `splitBlockByChildren` pode deixar o rótulo "Descritivo técnico:" órfão antes do bloco grande migrar de página
 
-### Pendente
+### QA no Chrome + 2 fixes (sessão 20-21/07/2026)
 
-- [ ] **Teste no Chrome (nova sessão, outra máquina)** — ver `teste-chrome-edicao-inline.md`
-- [ ] Validação visual final pelo usuário no preview real (com dados de proposta reais)
-- [ ] Remover `EditorClausulas.js`/`.css` após a validação manual confirmar o fluxo
+Usuário validou no navegador (proposta 37, logado): **A** (fonte Gothic no preview), **B** (rodapé não come mais conteúdo) e **C** (foto ao lado do descritivo) — todos OK. Durante o QA apareceram/foram corrigidos dois bugs:
+
+- [x] **Fix rodapé na EDIÇÃO** (`2a69dbc`): o usuário reportou a cláusula 5.11 comida pelo rodapé **já ao abrir**, sem editar. Causa raiz confirmada por reprodução em Chromium headless (mesmo caminho do PDF, `html_rendered` da 37): a paginação está correta, mas `ativarEdicaoClausulas` roda **depois** e injeta altura que a medição nunca viu — a barra de controles `↑↓+🗑` (~25px × 23 cláusulas) no fluxo + `min-height:3em` inline em cada corpo. Como `.page-content` tem `overflow:hidden`, o excedente é cortado silenciosamente (pág 9 estourava 124px, pág 10 233px). O PDF nunca foi afetado (não ativa edição). **Fix:** barra vira `position:absolute` (fora do fluxo) e o `min-height` do corpo vazio virou regra CSS `:empty` (aplicada antes da paginação medir). Verificado: 0 vazamento, 5.11 renderiza completa.
+- [x] **Fix cláusula nova vazia persistindo** (`8e54b29`): confirmado por código/harness — "+ cláusula" + salvar sem digitar persistia "5.x Nova Cláusula" com corpo vazio (oposto da remoção implícita). Causa: título placeholder "Nova Cláusula" + `renumerarClausulas` prefixando "5.x " antes de qualquer digitação, e o filtro de save era `titulo || conteudo` (título sempre truthy). **Fix:** predicado `ehClausulaNovaVazia` em `clausulasInlineEditor.js` — descarta ao salvar só cláusula `temp-*` com corpo vazio e título ainda no placeholder; exige key `temp-*` pra nunca apagar cláusula persistida com título limpo; cláusula só-com-título é preservada. 6 testes novos (27/27 no total).
+
+### Pendente (retomar em outra máquina — `git pull` traz tudo; último commit `8e54b29`)
+
+Validado no Chrome: A, B, C. Falta validar no Chrome (ver checklist detalhado em `teste-chrome-edicao-inline.md`):
+
+- [ ] **D — cláusula nova vazia (fix `8e54b29`)**: "+ cláusula" → não digitar → Salvar → recarregar → a cláusula NÃO deve persistir. E o caso-guarda: "+ cláusula" → digitar SÓ o título → salvar → deve persistir. (Coberto por unit test, falta o end-to-end no navegador — o save muta a proposta 37: sai do modo padrão, reverte com "Resetar cláusulas".)
+- [ ] **E — renumeração + sumário**: adicionar/mover/remover cláusula no meio → 5.x renumera e o sumário reflete. (Confirmado por código + testes, falta ver live.)
+- [ ] **Regressão inline**: editar texto/título → salvar → recarregar → persiste; editar campos de contato da capa; "Resetar cláusulas" volta ao padrão; console sem erros. (Nesta sessão o console estava limpo — só warnings do React Router.)
+- [ ] **PDF**: "Baixar PDF" da 37 e conferir o rodapé no PDF final (não muta dado; dá pra fazer isolado). Nota: o snapshot `html_rendered` da 37 foi regenerado nesta sessão (está fresco, com fontes base64).
+- [ ] **Task 7 — remover `EditorClausulas.js`/`.css`** (código morto, já não importado): **gated** até D+E+regressão passarem no navegador.
+- [ ] Backlog não-bloqueante: bloco atômico indivisível maior que uma página inteira (`propostaPremiumV2.js:1658-1664`) ainda é aceito com overflow e cortado — sem caso ativo na 37; rótulo "Descritivo técnico:" órfão em quebra extrema.
 - [ ] (Opcional) Limpar/atualizar `proposta_template_config` no banco — registro atual aponta para uploads de header/footer inexistentes (legado CBC2, anterior ao redesign)

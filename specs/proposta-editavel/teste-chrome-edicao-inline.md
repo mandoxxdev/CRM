@@ -4,13 +4,23 @@
 
 ## Contexto
 
-Branch: `feat/proposta-redesign-fase15`. Todos os commits já estão no remote (`git pull` traz tudo). O último commit de código é `df293ac`.
+Branch: `feat/proposta-redesign-fase15`. Todos os commits já estão no remote (`git pull` traz tudo). O último commit de código é `8e54b29`.
 
-Foram entregues, nesta e na sessão anterior:
+Foram entregues, nas sessões anteriores:
 - Edição inline das cláusulas (substituiu o painel lateral `EditorClausulas`)
 - 5 ajustes: (A) fonte Century Gothic embutida, (B) conteúdo não ultrapassa o rodapé, (C) foto do equipamento flutuando à direita, (D) corpo da cláusula nova visível/clicável, (E) renumeração automática das cláusulas
 
-Detalhes técnicos de cada um em `tasks.md` (seções "Edição inline das cláusulas" e "Ajustes de layout e edição", sessão 20/07/2026).
+Detalhes técnicos em `tasks.md` (seções "Edição inline das cláusulas", "Ajustes de layout e edição" e "QA no Chrome + 2 fixes").
+
+### Estado do QA (atualizado 21/07/2026)
+
+Já validado no Chrome pelo usuário (proposta 37): **A** (fonte Gothic), **B** (rodapé), **C** (foto). ✅
+
+Dois bugs corrigidos após esse QA — **ainda a validar no navegador**:
+- `2a69dbc` — rodapé comia cláusula (ex.: 5.11) já ao abrir, por causa da UI de edição (barra de controles + `min-height`) somando altura depois da paginação. Corrigido; confirmado por harness headless. Reconfirmar visualmente ao abrir a 37.
+- `8e54b29` — cláusula nova deixada em branco persistia como "5.x Nova Cláusula". Corrigido + 6 unit tests. Falta o end-to-end no navegador (Task D abaixo).
+
+Foco da retomada: **D, E, regressão e PDF**. Depois, Task 7.
 
 ## Como usar a skill do Chrome (para o assistente na nova sessão)
 
@@ -27,25 +37,24 @@ Rota do preview editável: `/comercial/propostas/:id/preview-editavel` (abre em 
 
 ## Checklist
 
-### 1. Rodapé (Task B) — foco do usuário
-- [ ] Abrir uma proposta grande (a 37, e se preciso adicionar cláusulas longas) e percorrer TODAS as páginas
-- [ ] Confirmar que NENHUM conteúdo fica por baixo/sobreposto ao rodapé em nenhuma página
-- [ ] Confirmar que nenhum parágrafo some (conteúdo que antes era cortado agora deve estar em página seguinte)
-- [ ] Gerar o PDF ("Baixar PDF") e conferir o mesmo no PDF final
+### 1. Rodapé (Task B) — ✅ VALIDADO 20/07 + reconfirmar o fix `2a69dbc`
+- [x] Abrir a 37 e percorrer as páginas — sem conteúdo sob/sobre o rodapé (usuário confirmou, não replicou o bug)
+- [ ] **Reconfirmar após o fix da edição**: ao ABRIR a 37 (modo edição já ativo), a cláusula 5.11 e as demais aparecem completas — nenhuma engolida pelo rodapé
+- [ ] Gerar o PDF ("Baixar PDF") e conferir o rodapé no PDF final
 
-### 2. Fonte Century Gothic (Task A)
-- [ ] No preview, o texto está em Century Gothic (não Arial/Trebuchet)
-- [ ] No PDF gerado, idem (é onde mais importa — o embed serve pra isso)
+### 2. Fonte Century Gothic (Task A) — ✅ VALIDADO
+- [x] No preview, texto em Century Gothic (usuário confirmou)
+- [ ] No PDF gerado, idem (conferir junto do PDF acima)
 
-### 3. Foto do equipamento (Task C)
-- [ ] Numa proposta com item que tenha foto de produto: a foto aparece à direita (~35% da largura), texto do descritivo envolvendo à esquerda, e continuando full-width abaixo quando a imagem acaba
-- [ ] Legenda "IMAGEM ILUSTRATIVA" sob a foto; imagem sem distorção
-- [ ] Item sem foto: renderiza normal, sem espaço vazio flutuante
+### 3. Foto do equipamento (Task C) — ✅ VALIDADO
+- [x] Foto à direita, texto envolvendo, sem distorção (usuário confirmou)
 
-### 4. Corpo da cláusula nova (Task D)
+### 4. Corpo da cláusula nova (Task D) — fix `8e54b29`, VALIDAR END-TO-END
 - [ ] Clicar "+ cláusula": aparece o corpo como área clicável com placeholder "Clique para escrever o conteúdo da cláusula..."
 - [ ] Clicar no corpo e digitar: o placeholder some, o texto entra
-- [ ] Criar uma cláusula e NÃO preencher nada → salvar → recarregar: a cláusula vazia não persiste (remoção implícita)
+- [ ] **Remoção implícita**: criar uma cláusula e NÃO preencher nada → Salvar alterações → recarregar → a cláusula vazia NÃO persiste
+- [ ] **Caso-guarda (não pode remover)**: criar cláusula → digitar SÓ o título (deixar corpo vazio) → salvar → recarregar → a cláusula PERSISTE com o título digitado
+- [ ] Obs.: salvar aqui muta a proposta 37 (sai do modo padrão). Reverter com "Resetar cláusulas" ao final se quiser deixar a 37 como estava.
 
 ### 5. Renumeração das cláusulas (Task E)
 - [ ] Adicionar uma cláusula no meio da lista → as de baixo renumeram (5.x incrementa) e o SUMÁRIO reflete
@@ -57,8 +66,18 @@ Rota do preview editável: `/comercial/propostas/:id/preview-editavel` (abre em 
 - [ ] Editar o título de uma cláusula → persiste
 - [ ] Editar campos de contato da capa (nome/email/telefone) → persiste
 - [ ] "Resetar cláusulas" volta ao padrão
-- [ ] Console do navegador sem erros durante todo o fluxo
+- [ ] Console do navegador sem erros durante todo o fluxo (nesta sessão só apareceram warnings do React Router — inofensivos)
 - [ ] Caso especial (Task B interação): criar uma cláusula grande o suficiente para dividir em 2+ páginas, editar o texto no fragmento da 2ª página, salvar, recarregar → o conteúdo NÃO é truncado (deve manter todos os parágrafos)
+
+## Reproduzir/medir o rodapé SEM o Chrome (headless)
+
+Se a extensão do Chrome não estiver disponível na outra máquina, dá pra medir o vazamento do rodapé direto no Chromium do Puppeteer (mesmo caminho do PDF). Técnica usada nesta sessão para achar o fix `2a69dbc`:
+
+1. App rodando. Forçar regeneração do snapshot fresco (com fontes base64): limpar `html_rendered` da proposta e chamar o PDF —
+   `UPDATE propostas SET html_rendered = NULL WHERE id = 37;` depois `curl -s http://localhost:5000/api/propostas/37/pdf -o /dev/null` (a rota regrava o snapshot).
+2. Carregar `SELECT html_rendered` no Puppeteer, rodar a mesma sequência do `server/index.js` (setContent → 1.5s → `paginateProposalContent()` → beforeprint), e para cada `.proposal-page` comparar `stack.getBoundingClientRect().bottom` com `pageContent.bottom - paddingBottom`. `> 0.5px` = conteúdo sob o rodapé.
+3. Para reproduzir o MODO DE EDIÇÃO (onde o bug vivia), aplicar no DOM o que `ativarEdicaoClausulas` faz — `contentEditable`, `min-height:3em` nos corpos e a barra `.ppe-clausula-controles` em cada `[data-clausula-key]` — ANTES de medir.
+   - Nota: com o fix, a barra é `position:absolute` e o `min-height` é regra CSS `:empty`, então a medição não deve acusar vazamento.
 
 ## Depois do teste
 
