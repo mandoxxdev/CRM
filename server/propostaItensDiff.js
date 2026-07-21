@@ -30,26 +30,43 @@ function normaliza(valor, numerico) {
   return String(valor).trim();
 }
 
-function diffItensParaLog(itensAtuais, itensNovos) {
-  const antesMap = new Map((itensAtuais || []).map((i) => [chaveDe(i), i]));
-  const depoisMap = new Map((itensNovos || []).map((i) => [chaveDe(i), i]));
-  const adicionados = [], removidos = [], editados = [];
-
-  for (const [k, novo] of depoisMap) {
-    if (!antesMap.has(k)) { adicionados.push(novo); continue; }
-    const antigo = antesMap.get(k);
-    // Agrupa TODAS as mudanças de campos de um mesmo item numa única entrada,
-    // em vez de uma entrada por campo (evita a sensação de log "duplicado").
-    const mudancas = [];
-    for (const { campo, label, numerico } of CAMPOS_COMPARAR) {
-      if (normaliza(antigo[campo], numerico) !== normaliza(novo[campo], numerico)) {
-        mudancas.push({ campo, label, antes: antigo[campo], depois: novo[campo] });
-      }
-    }
-    if (mudancas.length > 0) editados.push({ chave: k, nome: nomeDe(novo), mudancas });
+// Agrupa itens por chaveDe preservando a ORDEM (lista por chave). Necessário
+// porque uma proposta pode ter varios itens do MESMO produto (mesmo
+// codigo_produto) — um Map simples colapsaria as duplicatas numa entrada so e
+// quebraria a deteccao de inclusao/remocao.
+function agruparPorChave(itens) {
+  const m = new Map();
+  for (const it of (itens || [])) {
+    const k = chaveDe(it);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(it);
   }
-  for (const [k, antigo] of antesMap) {
-    if (!depoisMap.has(k)) removidos.push(antigo);
+  return m;
+}
+
+function diffItensParaLog(itensAtuais, itensNovos) {
+  const antes = agruparPorChave(itensAtuais);
+  const depois = agruparPorChave(itensNovos);
+  const adicionados = [], removidos = [], editados = [];
+  const chaves = new Set([...antes.keys(), ...depois.keys()]);
+
+  for (const k of chaves) {
+    const listaA = antes.get(k) || [];
+    const listaD = depois.get(k) || [];
+    const pares = Math.min(listaA.length, listaD.length);
+    // Pares (mesma chave, mesma posicao) -> possivel edicao, agrupada por item.
+    for (let i = 0; i < pares; i++) {
+      const mudancas = [];
+      for (const { campo, label, numerico } of CAMPOS_COMPARAR) {
+        if (normaliza(listaA[i][campo], numerico) !== normaliza(listaD[i][campo], numerico)) {
+          mudancas.push({ campo, label, antes: listaA[i][campo], depois: listaD[i][campo] });
+        }
+      }
+      if (mudancas.length > 0) editados.push({ chave: k, nome: nomeDe(listaD[i]), mudancas });
+    }
+    // Sobras em "depois" = itens adicionados; sobras em "antes" = itens removidos.
+    for (let i = pares; i < listaD.length; i++) adicionados.push(listaD[i]);
+    for (let i = pares; i < listaA.length; i++) removidos.push(listaA[i]);
   }
   return { adicionados, removidos, editados };
 }

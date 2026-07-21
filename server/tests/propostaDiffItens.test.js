@@ -54,4 +54,31 @@ test('adicionar um produto não gera edição espúria no item existente', () =>
   assert.strictEqual(d.adicionados[0].descricao, 'Moinho');
   assert.strictEqual(d.editados.length, 0, 'o item existente não deve aparecer como editado');
 });
+test('DUPLICATAS: remover uma de 3 itens com o mesmo codigo_produto é detectado', () => {
+  const dup = () => ({ codigo_produto: 'PROD-X', descricao: 'Moinho', quantidade: 1, valor_unitario: 100, valor_total: 100 });
+  const outro = { codigo_produto: 'PROD-Y', descricao: 'Masseira', quantidade: 1, valor_unitario: 5, valor_total: 5 };
+  const antes = [outro, dup(), dup(), dup()];   // 3 iguais
+  const depois = [outro, dup(), dup()];          // sobrou 2
+  const d = diffItensParaLog(antes, depois);
+  assert.strictEqual(d.removidos.length, 1, 'deve detectar 1 removido mesmo com chave duplicada');
+  assert.strictEqual(d.adicionados.length, 0);
+});
+test('DUPLICATAS: adicionar mais uma de um item com codigo_produto repetido é detectado', () => {
+  const dup = () => ({ codigo_produto: 'PROD-X', descricao: 'Moinho', quantidade: 1, valor_unitario: 100, valor_total: 100 });
+  const antes = [dup(), dup()];    // 2 iguais
+  const depois = [dup(), dup(), dup()]; // virou 3
+  const d = diffItensParaLog(antes, depois);
+  assert.strictEqual(d.adicionados.length, 1, 'deve detectar 1 adicionado mesmo com chave duplicada');
+  assert.strictEqual(d.removidos.length, 0);
+});
+test('DUPLICATAS: editar uma entre várias iguais ainda é detectado (par por posição)', () => {
+  const dup = (v) => ({ codigo_produto: 'PROD-X', descricao: 'Moinho', quantidade: 1, valor_unitario: v, valor_total: v });
+  const antes = [dup(100), dup(100)];
+  const depois = [dup(100), dup(200)]; // a 2a mudou
+  const d = diffItensParaLog(antes, depois);
+  assert.strictEqual(d.editados.length, 1, 'deve detectar 1 edição entre duplicatas');
+  assert.strictEqual(d.adicionados.length, 0);
+  assert.strictEqual(d.removidos.length, 0);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`); process.exit(failed?1:0);
