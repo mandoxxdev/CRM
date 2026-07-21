@@ -697,7 +697,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       ${equipDescritivoHtml}
 
-      ${clausulasSection !== null ? clausulasSection : `<section class="block stack-md avoid-break five-intro-group">
+      ${clausulasSection !== null ? clausulasSection : `<section class="block stack-md avoid-break five-intro-group" data-page-break="before">
         <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
 
         <section class="block stack-md allow-break">
@@ -930,7 +930,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       ${sec523PrecoHtml}
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break" data-page-break="before">
         <h3>5.24 CONSIDERAÇÃO FINAL</h3>
         <p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:</p>
         <p>Data da assinatura: _____/_____/_____</p>
@@ -1689,6 +1689,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
         for (const block of blocks) {
           ensurePage();
+          // Quebra de página forçada: se o bloco pede data-page-break="before" e a página
+          // corrente já recebeu conteúdo, fecha-a e começa numa página nova antes de posicioná-lo
+          // (usado pela seção 5, pela 5.23 fixa e pela 5.24 — cada uma inicia em página própria).
+          if (block.getAttribute && block.getAttribute('data-page-break') === 'before'
+              && stack && stack.children.length > 0) {
+            page = null;
+            ensurePage();
+          }
           const table = block.querySelector('table[data-split-table=\"true\"]');
           if (table) {
             const wrapper = block.cloneNode(true);
