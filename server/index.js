@@ -24,7 +24,7 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-const { diffItensParaLog, nomeDe } = require('./propostaItensDiff');
+const { diffItensParaLog, nomeDe, resumoLado } = require('./propostaItensDiff');
 const propostaEngine = require('./propostaCompositionEngine');
 const {
   fetchComercialResponsaveis,
@@ -7803,9 +7803,11 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioIdAuditoriaItens], (_, uAuditoriaItens) => {
                 const usuarioNomeAuditoriaItens = uAuditoriaItens?.nome || req.user.email || 'N/A';
                 const diffItens = diffItensParaLog(itensAtuais || [], itensNovos);
-                diffItens.adicionados.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_adicionado', 'item', null, null, nomeDe(it)));
-                diffItens.removidos.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_removido', 'item', null, nomeDe(it), null));
-                diffItens.editados.forEach((e) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_editado', e.campo, null, e.antes == null ? null : String(e.antes), e.depois == null ? null : String(e.depois)));
+                diffItens.adicionados.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_adicionado', nomeDe(it), null, null, nomeDe(it)));
+                diffItens.removidos.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_removido', nomeDe(it), null, nomeDe(it), null));
+                // Uma entrada por item editado (agrupada), com o nome do produto no campo
+                // e um resumo antes/depois dos campos que mudaram.
+                diffItens.editados.forEach((e) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_editado', e.nome, null, resumoLado(e.mudancas, 'antes'), resumoLado(e.mudancas, 'depois')));
               });
 
               res.json({
