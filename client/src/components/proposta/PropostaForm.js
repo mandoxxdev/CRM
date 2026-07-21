@@ -590,7 +590,7 @@ export default function PropostaForm() {
                     <th>Total</th>
                     <th>Família</th>
                     <th>Região</th>
-                    <th />
+                    <th>Remover</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -627,7 +627,7 @@ export default function PropostaForm() {
                         </select>
                       </td>
                       <td>
-                        <button type="button" className="btn-remove" onClick={() => removeItem(idx)} title="Remover"><FiTrash2 /></button>
+                        <button type="button" className="btn-remove" onClick={() => removeItem(idx)} title="Remover item"><FiTrash2 /> Remover</button>
                       </td>
                     </tr>
                   ))}
