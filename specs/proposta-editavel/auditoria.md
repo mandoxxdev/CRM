@@ -16,6 +16,9 @@ Implementado. Log gerado no backend a cada operação de escrita.
 | Cláusulas reordenadas | `clausula_reordenada` | `valor_novo` (nova ordem de IDs) |
 | Cláusulas inicializadas | `clausulas_inicializadas` | — |
 | Reset para padrão | `clausulas_resetadas` | — |
+| Produto adicionado | `item_adicionado` | `valor_novo` (nome/descrição do item) |
+| Produto editado | `item_editado` | `campo` (quantidade/valor_unitario/valor_total/modelo/descritivo_tecnico), `valor_anterior`, `valor_novo` |
+| Produto removido | `item_removido` | `valor_anterior` (nome/descrição do item) |
 
 ---
 
