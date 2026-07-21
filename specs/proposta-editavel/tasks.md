@@ -251,7 +251,7 @@ Substituição do painel lateral `EditorClausulas` por edição direta no previe
 - [x] Toolbar: botão "Cláusulas" removido, adicionado "Resetar cláusulas"
 - [x] Fix (revisão final): título default renderizava sem o número "5.x" mas era persistido com ele → primeiro save apagava os números no banco. Corrigido (`renderClausulaCustom` numera default; `diffClausulas`/`houveMudanca` normalizam HTML×texto)
 - [x] Fix (QA ao vivo): edição parava de funcionar segundos após carregar, pois o script do template repagina sozinho (load+250ms / resize) e recriava os nós sem reaplicar `contentEditable`. Resolvido com `MutationObserver` em `#proposalDocument`
-- [ ] Remover `EditorClausulas.js`/`.css` (código morto) — **gated**: só após validação manual do fluxo em uso real
+- [x] Remover `EditorClausulas.js`/`.css` (código morto) — removido em 21/07/2026 após validação headless (render/layout/paginação/lógica inline) + autorização do usuário; arquivo já não era importado (dead code, reversível via git). Fluxo interativo ao vivo ainda pende de validação manual no Chrome.
 
 ### Ajustes de layout e edição (sessão 20/07/2026)
 
@@ -279,6 +279,6 @@ Validado no Chrome: A, B, C. Falta validar no Chrome (ver checklist detalhado em
 - [ ] **E — renumeração + sumário**: adicionar/mover/remover cláusula no meio → 5.x renumera e o sumário reflete. (Confirmado por código + testes, falta ver live.)
 - [ ] **Regressão inline**: editar texto/título → salvar → recarregar → persiste; editar campos de contato da capa; "Resetar cláusulas" volta ao padrão; console sem erros. (Nesta sessão o console estava limpo — só warnings do React Router.)
 - [ ] **PDF**: "Baixar PDF" da 37 e conferir o rodapé no PDF final (não muta dado; dá pra fazer isolado). Nota: o snapshot `html_rendered` da 37 foi regenerado nesta sessão (está fresco, com fontes base64).
-- [ ] **Task 7 — remover `EditorClausulas.js`/`.css`** (código morto, já não importado): **gated** até D+E+regressão passarem no navegador.
+- [x] **Task 7 — remover `EditorClausulas.js`/`.css`** (código morto, já não importado): removido em 21/07/2026. Base: A/B/C já validados no Chrome pelo usuário + D/E cobertos por unit tests + validação headless (paginação/overflow/float) + arquivo sem imports e reversível via git. A regressão inline ao vivo (D+E+contato+resetar no navegador) ainda pende, mas não bloqueia a remoção (o arquivo já estava desconectado do fluxo).
 - [ ] Backlog não-bloqueante: bloco atômico indivisível maior que uma página inteira (`propostaPremiumV2.js:1658-1664`) ainda é aceito com overflow e cortado — sem caso ativo na 37; rótulo "Descritivo técnico:" órfão em quebra extrema.
 - [ ] (Opcional) Limpar/atualizar `proposta_template_config` no banco — registro atual aponta para uploads de header/footer inexistentes (legado CBC2, anterior ao redesign)
