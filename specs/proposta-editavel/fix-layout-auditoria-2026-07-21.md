@@ -63,6 +63,8 @@ Aumentar `line-height` dos parágrafos do descritivo técnico para melhorar legi
 2. Se for imagem legada/indesejada: limpar/anular `header_image_url` no `proposta_template_config` para usar o header padrão (que já tem o número). Alinha com o item de backlog "limpar proposta_template_config".
 3. Se prod **quiser** manter a imagem custom: decisão adicional com o usuário (sobrepor o número via HTML sobre a imagem). **Não** implementar a sobreposição sem confirmar.
 
+**Status (implementado 2026-07-21):** o header padrão agora renderiza o número em linha própria — `<p class="page-header-title">PROPOSTA TÉCNICA COMERCIAL</p>` seguido de `<p class="page-header-num">Nº ${numero}</p>` (antes era tudo numa única `<p>`). Se em produção o número continuar ausente, a causa é `proposta_template_config.header_image_url` apontando para uma imagem de header custom (que faz o template esconder `.page-header-inner`, onde o número vive). **Ação recomendada:** anular/limpar `header_image_url` no registro de prod para voltar ao header padrão. **Não** alterar dados de prod nesta tarefa.
+
 ### #8 — Logo do cliente na capa
 
 Na capa (`cover-info-area`, linhas ~1338–1347), **acima** de `cover-client-info` (nome do cliente), renderizar a logo do cliente quando `proposta.cliente_logo_url` estiver preenchido. Embed base64 a partir de `uploadsLogosDir` (via helper `uploadToDataUrl`, mesmo padrão dos outros assets — evita dependência de HTTP no PDF). Quando não houver logo, nada é renderizado (sem espaço vazio). Novo container `.cover-client-logo` com dimensão máxima controlada (ex.: `max-height: 25mm; max-width: 60%`), centralizado.

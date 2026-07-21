@@ -977,7 +977,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${myLogoB64 ? `<img src="${myLogoB64}" alt="MOINHO YPIRANGA" />` : `<span class="page-header-title">MOINHO YPIRANGA</span>`}
         </div>
         <div class="page-header-center-box">
-          <p class="page-header-title">PROPOSTA TÉCNICA COMERCIAL Nº ${numero}</p>
+          <p class="page-header-title">PROPOSTA TÉCNICA COMERCIAL</p>
+          <p class="page-header-num">Nº ${numero}</p>
           <p class="page-header-tagline">Especialista em Misturas, Moagens, Dispersões, Dosagens, <br> Automações, Excelência Operacional, Projetos Conceituais,<br> Projetos Executivos, Instalações e Sistemas Turn-Keys.</p>
         </div>
         <div class="page-header-logo-gmp">
@@ -1160,6 +1161,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       text-align: center;
     }
     .page-header-title { font-size: 11pt; font-weight: 700; color: var(--blue-900); margin: 0 0 1mm 0; line-height: 1.2; text-align: center; }
+    .page-header-num { font-size: 9pt; font-weight: 700; color: var(--blue-900); margin: 0 0 1mm 0; line-height: 1.15; text-align: center; }
     .page-header-tagline {
       margin: 0;
       text-align: center;
