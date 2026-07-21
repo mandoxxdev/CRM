@@ -1300,8 +1300,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     /* Equipamentos: chave-valor sem tabela (10pt como no modelo DOCX) */
     .equip-specs-kv { display: block; margin-top: 3mm; }
     .equip-specs-kv::after { content: ""; display: block; clear: both; }
-    .equip-specs-kv > p { margin: 0 0 3px 0; font-size: 10pt; }
-    .equip-descritivo { margin: 1mm 0 3mm 6mm; font-size: 10pt; line-height: 1.4; }
+    .equip-specs-kv > p { margin: 0 0 3px 0; font-size: 10pt; line-height: 1.6; }
+    .equip-descritivo { margin: 1mm 0 3mm 6mm; font-size: 10pt; line-height: 1.6; }
+    .equip-descritivo p { margin: 0 0 4px 0; line-height: 1.6; }
     .equip-photo-caption { color: #ED7D31; font-size: 7pt; font-weight: 700; text-align: center; margin-top: 2px; letter-spacing: 0.5px; }
 
     /* Sumário (preenchido via JS após a paginação) */
