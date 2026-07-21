@@ -16,6 +16,10 @@ const LABELS = {
   clausula_reordenada: 'Cláusulas reordenadas',
   clausulas_inicializadas: 'Cláusulas inicializadas',
   clausulas_resetadas: 'Cláusulas resetadas para padrão',
+  // tipo values for item audit events (save principal da proposta)
+  item_adicionado: 'Produto adicionado',
+  item_editado: 'Produto editado',
+  item_removido: 'Produto removido',
 };
 
 function formatarData(str) {
