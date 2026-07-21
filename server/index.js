@@ -7806,6 +7806,15 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioIdAuditoriaItens], (_, uAuditoriaItens) => {
                 const usuarioNomeAuditoriaItens = uAuditoriaItens?.nome || req.user.email || 'N/A';
                 const diffItens = diffItensParaLog(itensAtuais || [], itensNovos);
+                // [DIAGNOSTICO TEMPORARIO — auditoria de itens] remover depois
+                try {
+                  const resumo = (arr) => (arr || []).map((i) => `${i.codigo_produto || i.descricao}|q=${i.quantidade}|vt=${i.valor_total}`);
+                  console.log('🔎 [AUDIT-DIAG] proposta', id,
+                    '\n  itensAtuais:', JSON.stringify(resumo(itensAtuais)),
+                    '\n  itensNovos :', JSON.stringify(resumo(itensNovos)),
+                    '\n  diff -> add:', diffItens.adicionados.length, 'rem:', diffItens.removidos.length, 'edit:', diffItens.editados.length,
+                    JSON.stringify(diffItens.editados.map((e) => ({ nome: e.nome, campos: e.mudancas.map((m) => m.campo) }))));
+                } catch (e) { console.log('🔎 [AUDIT-DIAG] erro', e.message); }
                 diffItens.adicionados.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_adicionado', nomeDe(it), null, null, nomeDe(it)));
                 diffItens.removidos.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_removido', nomeDe(it), null, nomeDe(it), null));
                 // Uma entrada por item editado (agrupada), com o nome do produto no campo
