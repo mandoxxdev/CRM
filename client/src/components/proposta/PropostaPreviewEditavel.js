@@ -14,6 +14,7 @@ import {
   diffClausulas,
   htmlParaTexto,
   renumerarClausulas,
+  ehClausulaNovaVazia,
 } from './clausulasInlineEditor';
 import './PropostaPreviewEditavel.css';
 
@@ -276,7 +277,10 @@ export default function PropostaPreviewEditavel() {
     const snapshotOriginal = clausulas; // carregado por carregarPreview() ao abrir a proposta
     let listaAtual = lerClausulasDoSource(doc)
       .map((c) => ({ ...c, titulo: (c.titulo || '').trim(), conteudo: htmlParaTexto(c.conteudo) }))
-      .filter((c) => c.titulo || c.conteudo); // titulo+conteudo vazios = remoção implícita
+      // Remoção implícita: corpo+título vazios, OU cláusula nova (temp-*) intocada cujo
+      // título ainda é o placeholder "Nova Cláusula" (renumerarClausulas o prefixa com
+      // "5.x ", então o filtro antigo `titulo || conteudo` nunca a descartava).
+      .filter((c) => (c.titulo || c.conteudo) && !ehClausulaNovaVazia(c));
 
     if (clausulasIsDefault) {
       const houveMudanca = listaAtual.length !== snapshotOriginal.length

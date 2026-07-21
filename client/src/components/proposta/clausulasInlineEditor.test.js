@@ -8,6 +8,7 @@ import {
   diffClausulas,
   htmlParaTexto,
   renumerarClausulas,
+  ehClausulaNovaVazia,
 } from './clausulasInlineEditor';
 
 // Fixture equivalente ao HTML gerado por clausulasSection (propostaPremiumV2.js, Task 1):
@@ -246,4 +247,32 @@ test('renumerarClausulas preserva o texto após o número', () => {
 test('renumerarClausulas retorna false sem throwing quando #proposalSource está ausente', () => {
   // Não monta fixture, deixando document.body vazio (sem #proposalSource)
   expect(renumerarClausulas(document)).toBe(false);
+});
+
+describe('ehClausulaNovaVazia (remoção implícita da cláusula nova vazia)', () => {
+  test('descarta cláusula nova (temp-*) com título placeholder renumerado e corpo vazio', () => {
+    expect(ehClausulaNovaVazia({ key: 'temp-123', titulo: '5.4 Nova Cláusula', conteudo: '' })).toBe(true);
+  });
+
+  test('descarta cláusula nova (temp-*) com placeholder sem prefixo e corpo vazio', () => {
+    expect(ehClausulaNovaVazia({ key: 'temp-123', titulo: 'Nova Cláusula', conteudo: '' })).toBe(true);
+  });
+
+  test('descarta cláusula nova (temp-*) com título e corpo totalmente vazios', () => {
+    expect(ehClausulaNovaVazia({ key: 'temp-123', titulo: '', conteudo: '' })).toBe(true);
+  });
+
+  test('MANTÉM cláusula nova cujo usuário só preencheu o título', () => {
+    expect(ehClausulaNovaVazia({ key: 'temp-123', titulo: '5.4 MULTA POR ATRASO', conteudo: '' })).toBe(false);
+  });
+
+  test('MANTÉM cláusula nova cujo usuário só preencheu o corpo (título ainda placeholder)', () => {
+    expect(ehClausulaNovaVazia({ key: 'temp-123', titulo: '5.4 Nova Cláusula', conteudo: 'algum texto' })).toBe(false);
+  });
+
+  test('NÃO descarta cláusula persistida (key numérica) mesmo com título placeholder e corpo vazio', () => {
+    // Guarda contra apagar por engano uma cláusula real cujo título foi limpo.
+    expect(ehClausulaNovaVazia({ key: '42', titulo: 'Nova Cláusula', conteudo: '' })).toBe(false);
+    expect(ehClausulaNovaVazia({ key: 'default-5.4', titulo: '', conteudo: '' })).toBe(false);
+  });
 });

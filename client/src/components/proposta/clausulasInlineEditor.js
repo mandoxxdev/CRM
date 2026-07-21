@@ -105,6 +105,10 @@ export function removerClausulaDoSource(doc, key) {
   });
 }
 
+// Título que uma cláusula recém-criada recebe antes de qualquer digitação.
+// renumerarClausulas pode prefixá-lo com "5.x ", então nunca fica vazio.
+export const TITULO_CLAUSULA_NOVA = 'Nova Cláusula';
+
 export function adicionarClausulaAoSource(doc, apósKey) {
   return comWrapperNormalizado(doc, () => {
     const source = getSource(doc);
@@ -115,7 +119,7 @@ export function adicionarClausulaAoSource(doc, apósKey) {
     secao.setAttribute('data-clausula-key', key);
     const h3 = doc.createElement('h3');
     h3.setAttribute('data-clausula-campo', 'titulo');
-    h3.textContent = 'Nova Cláusula';
+    h3.textContent = TITULO_CLAUSULA_NOVA;
     const div = doc.createElement('div');
     div.className = 'stack-sm';
     div.setAttribute('data-clausula-campo', 'conteudo');
@@ -160,6 +164,20 @@ export function diffClausulas(snapshotOriginal, listaAtual) {
   const ordemMudou = ordemOriginal.filter((k) => ordemAtual.includes(k)).join(',') !== ordemAtual.join(',');
 
   return { novas, alteradas, removidas, ordemMudou, ordemFinal: listaAtual.map((c) => c.key) };
+}
+
+// "Remoção implícita" da cláusula nova vazia: uma cláusula criada pelo "+ cláusula"
+// e deixada intocada (corpo vazio e título ainda no placeholder — com ou sem o prefixo
+// "5.x " que renumerarClausulas adiciona) não deve virar registro no banco ao salvar.
+// Exige a key temp-* para nunca descartar por engano uma cláusula default cujo título
+// o usuário porventura tenha apagado. Uma cláusula só-com-título (título diferente do
+// placeholder) é preservada — é edição real do usuário.
+// `clausula` vem no formato já processado: { key, titulo (trim), conteudo (texto) }.
+export function ehClausulaNovaVazia(clausula) {
+  if (!clausula || typeof clausula.key !== 'string' || !clausula.key.startsWith('temp-')) return false;
+  if (String(clausula.conteudo || '').trim()) return false;
+  const semPrefixo = String(clausula.titulo || '').replace(/^\s*\d+\.\d+\s*/, '').trim();
+  return semPrefixo === '' || semPrefixo === TITULO_CLAUSULA_NOVA;
 }
 
 export function renumerarClausulas(doc) {
