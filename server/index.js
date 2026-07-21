@@ -24,7 +24,7 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-const { diffItensParaLog, nomeDe, resumoLado } = require('./propostaItensDiff');
+const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
 const propostaEngine = require('./propostaCompositionEngine');
 const {
   fetchComercialResponsaveis,
@@ -7780,7 +7780,10 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                 );
 
-                itens.forEach((item, idx) => {
+                // Preserva campos que o formulário não envia (modelo, descritivo_tecnico,
+                // categoria, etc.) a partir dos itens existentes — senão o re-INSERT os apaga.
+                const itensParaInserir = mesclarItensPreservandoCampos(itensAtuais || [], itens);
+                itensParaInserir.forEach((item, idx) => {
                   stmt.run([
                     id, item.descricao || item.nome || '', item.quantidade || 1, item.unidade || 'UN',
                     item.valor_unitario || 0, item.valor_total || 0,

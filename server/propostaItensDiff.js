@@ -54,6 +54,32 @@ function diffItensParaLog(itensAtuais, itensNovos) {
   return { adicionados, removidos, editados };
 }
 
+// Campos que o formulário de edição NÃO gerencia e, portanto, não envia no
+// payload. Sem preservação, o re-INSERT do save gravaria null e apagaria esses
+// dados dos itens (ex.: descritivo técnico da seção 4.x). Preservados a partir
+// do item existente correspondente (mesma chave codigo_produto/descricao).
+const CAMPOS_PRESERVAR = [
+  'tag', 'modelo', 'categoria', 'descricao_resumida', 'descritivo_tecnico',
+  'dados_processo', 'materiais_construtivos', 'utilidades_requeridas',
+  'opcionais', 'exclusoes', 'prazo_individual',
+];
+
+function mesclarItensPreservandoCampos(itensAtuais, itensNovos) {
+  const antesMap = new Map((itensAtuais || []).map((i) => [chaveDe(i), i]));
+  return (itensNovos || []).map((novo) => {
+    const antigo = antesMap.get(chaveDe(novo));
+    if (!antigo) return novo; // item novo: não há de onde preservar
+    const merged = { ...novo };
+    for (const campo of CAMPOS_PRESERVAR) {
+      // só preenche quando o payload não trouxe valor para o campo
+      if ((merged[campo] == null || merged[campo] === '') && antigo[campo] != null) {
+        merged[campo] = antigo[campo];
+      }
+    }
+    return merged;
+  });
+}
+
 // Monta um resumo legível de um lado (antes/depois) de uma edição agrupada.
 // Ex.: "Qtd: 1, Valor unit.: 250000" — usado no valor_anterior/valor_novo do log.
 function resumoLado(mudancas, lado) {
@@ -63,4 +89,4 @@ function resumoLado(mudancas, lado) {
   }).join(', ');
 }
 
-module.exports = { diffItensParaLog, chaveDe, nomeDe, resumoLado, CAMPOS_COMPARAR };
+module.exports = { diffItensParaLog, chaveDe, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
