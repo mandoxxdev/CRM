@@ -45,11 +45,12 @@ Extra: renumeração automática das cláusulas reserva o slot **5.23** (editáv
 - [ x ] No topo de cada página: "PROPOSTA TÉCNICA COMERCIAL" e, **abaixo**, "Nº {número}"
 - [ ] ⚠️ **Se em produção o número NÃO aparecer**: a causa é `proposta_template_config.header_image_url` apontando para uma imagem de header custom (estática, esconde o header dinâmico). Ação: anular esse campo no banco de prod. (n entendi, vamos verificar depois)
 
-### #7 — Histórico de edições (produtos)
-- [ ] Adicionar um produto à proposta → salvar → abrir o Histórico → aparece "Produto adicionado" ( Não consigo visualizar produto adicionado. Editei o valor de um produto e duplicou a edição, nao sei se é um BLUR ou algo assim que manda salvar).
-- [ x ] Editar quantidade/valor de um produto → salvar → aparece "Produto editado" (com antes/depois) Editou mas achei que duplicou um cenario meu. Nao tem problema isso acontecer, mas poderia pelo menos checar antes de salvar se nao alterei pro mesmo valor.
-- [ ] Remover um produto → salvar → aparece "Produto removido" (Nao tem a opcao de remover kkkkkkkkkkkkkkkkkk )
-- [ ] (Robustez) Um save que falha (ex.: número de proposta duplicado) **não** cria registros de produto no histórico (nao sei como testa isso)
+### #7 — Histórico de edições (produtos) — ✅ VALIDADO (todos os cenários testados OK em 21/07)
+- [x] Adicionar um produto → salvar → "Produto adicionado: {nome}" (corrigido: chave duplicada, `19cb97a`)
+- [x] Editar quantidade/valor de um produto → "Produto editado: {nome}" — **uma** entrada agrupada ("Qtd: X, Total: Y"), sem duplicar (corrigido: agrupamento + campos-do-payload + normalização numérica, `7ac895f`)
+- [x] Remover um produto (🗑 vermelho na última coluna — botão agora rotulado/visível, `1f841de`) → "Produto removido: {nome}"
+- [x] Save que falha não cria registros (log movido para o caminho de sucesso, `8f4b7c0`)
+- [x] **Bônus corrigidos:** editar só o nome do cliente não apaga mais o e-mail (`3d74c7b`); salvar não apaga mais `modelo`/`descritivo_tecnico` dos itens (`2fec8b4`); data do histórico corrigida (mostrava "—")
 
 ### #8 — Logo do cliente na capa
 - [ x ] Cliente **com** logo cadastrada: a logo aparece na capa, **acima** do nome do cliente
@@ -89,14 +90,40 @@ Extra: renumeração automática das cláusulas reserva o slot **5.23** (editáv
 - [x] Normalizar comparação numérica no diff (250000 == "250000" == 250000.0) (#7)
 - [x] Bônus: corrigida a **data** do histórico que mostrava sempre "—" (`criado_em` → `created_at`)
 - [x] **2ª causa raiz (add/remove não apareciam) — confirmada no banco e corrigida** (commit `19cb97a`): a proposta 288 tinha 3 itens com o **mesmo `codigo_produto`**. O diff usava um `Map` por chave que **colapsava duplicatas** → adicionar/remover uma duplicata não mudava o conjunto de chaves e não era detectado (só edição aparecia). Trocado por agrupamento por chave + pareamento por posição. 10/10 nos testes.
-- [ ] **Reteste no Chrome (após `git pull`):** adicionar produto → **uma** entrada "Produto adicionado: {nome}"; editar → "Produto editado: {nome}"; remover produto (🗑 vermelho na última coluna, role a tabela à direita) → "Produto removido"; a data aparece correta. Vale testar inclusive com produtos repetidos.
+- [x] **Reteste ✅ (21/07):** adicionar/editar/remover produto (inclusive repetidos) aparecem corretamente no histórico, entrada agrupada, data correta. Validado no banco também.
 
 > ✅ **Achado colateral — CORRIGIDO (commit `2fec8b4`):** ao salvar pelo formulário, o payload não envia `modelo`/`descritivo_tecnico`/`categoria`/`tag`/etc., e o INSERT gravava `null` → **salvar apagava esses dados dos itens**. Corrigido no backend: o re-INSERT agora **preserva** esses campos a partir do item existente (função `mesclarItensPreservandoCampos`, 4/4 no teste). Respeita o payload quando ele traz o campo.
-> - [ ] **Reteste no Chrome:** editar uma proposta que tenha itens com descritivo técnico → salvar → reabrir → o descritivo técnico (seção 4.x) **continua lá** (antes sumia).
+> - [ ] **Reteste sugerido:** editar uma proposta que tenha itens com descritivo técnico → salvar → reabrir → o descritivo técnico (seção 4.x) **continua lá** (antes sumia).
 
 ---
 
-## Pendências não-bloqueantes
-- [ ] Diagnóstico prod do #6 (`header_image_url`) — só se o número sumir em prod
-- [ ] Push da branch / abrir PR (ainda não feito)
-- [ ] Decidir se o commit de performance `03c2697` fica nesta branch ou vai para uma branch separada
+## Pendências / o que ainda falta
+
+### Reteste visual (quando puder, no navegador)
+- [ ] **#8 Logo do cliente na capa** — abrir uma proposta cujo cliente tenha logo cadastrada e conferir a aparência (não validável headless aqui).
+- [ ] **#1 Aparência final da 5.23** com dados reais (o isolamento em página própria já está confirmado).
+- [ ] **Preservação do descritivo técnico** (achado colateral) — editar/salvar/reabrir e confirmar que a seção 4.x continua com o descritivo.
+
+### Decisões suas
+- [ ] **Abrir PR** de `fix/proposta-layout-auditoria` → `main`? (posso preparar)
+- [ ] O commit de performance `03c2697` fica nesta branch ou vai para uma branch separada?
+- [ ] **Diagnóstico prod #6** (`header_image_url`) — só se o número da proposta sumir no cabeçalho em produção.
+
+### Backlog (não bloqueia; anotado em `auditoria.md`)
+- [ ] Histórico: agrupar entradas consecutivas do mesmo usuário; filtros por usuário/tipo/período; controle de permissão (só admin/comercial).
+- [ ] Auditoria de itens cobre só o save do formulário (`PUT /propostas/:id`). Produtos adicionados por outros fluxos (criar de oportunidade, duplicar proposta, importação) não entram no histórico.
+- [ ] (Ofereci) Varredura por outros endpoints de save com o mesmo risco de "payload parcial zera colunas não enviadas" (já apareceu em itens e em contato).
+
+---
+
+## Todos os commits desta rodada (branch `fix/proposta-layout-auditoria`, pushados)
+
+| Commit | O quê |
+|---|---|
+| Grupo A/B + merge | 8 cenários originais (5.23, quebras, descritivo, header, logo, auditoria base) |
+| `8f4b7c0` | auditoria de itens só após save bem-sucedido |
+| `7ac895f` | auditoria fiel: sem edições espúrias, agrupada por item, normalização numérica, data corrigida |
+| `2fec8b4` | preservar campos do item não enviados pelo formulário (modelo/descritivo/etc.) |
+| `1f841de` | botão de remover item visível (coluna rotulada + botão vermelho) |
+| `19cb97a` | auditoria detecta add/remove com `codigo_produto` repetido (pareamento por posição) |
+| `3d74c7b` | editar um campo de contato não apaga os demais (customizações) |
