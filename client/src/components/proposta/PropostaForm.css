@@ -175,15 +175,22 @@
 }
 
 .proposta-form-table .btn-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   background: none;
-  border: none;
+  border: 1px solid var(--gmp-error);
+  border-radius: 6px;
   cursor: pointer;
-  color: var(--gmp-text-light);
-  padding: 0.25rem;
+  color: var(--gmp-error);
+  padding: 0.3rem 0.55rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .proposta-form-table .btn-remove:hover {
-  color: var(--gmp-error);
+  background: var(--gmp-error);
+  color: #fff;
 }
 
 .proposta-form-total {

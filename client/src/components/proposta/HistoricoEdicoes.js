@@ -16,6 +16,10 @@ const LABELS = {
   clausula_reordenada: 'Cláusulas reordenadas',
   clausulas_inicializadas: 'Cláusulas inicializadas',
   clausulas_resetadas: 'Cláusulas resetadas para padrão',
+  // tipo values for item audit events (save principal da proposta)
+  item_adicionado: 'Produto adicionado',
+  item_editado: 'Produto editado',
+  item_removido: 'Produto removido',
 };
 
 function formatarData(str) {
@@ -92,14 +96,18 @@ export default function HistoricoEdicoes({ propostaId }) {
               <div key={log.id} className="he-item">
                 <div className="he-item-header">
                   <div className="he-item-info">
-                    <span className="he-campo">{LABELS[log.tipo] || LABELS[log.campo] || log.tipo || log.campo}</span>
+                    <span className="he-campo">
+                      {LABELS[log.tipo] || LABELS[log.campo] || log.tipo || log.campo}
+                      {['item_adicionado', 'item_editado', 'item_removido'].includes(log.tipo) && log.campo && log.campo !== 'item'
+                        ? `: ${log.campo}` : ''}
+                    </span>
                     {log.clausula_id && (
                       <span className="he-clausula-id">#{log.clausula_id}</span>
                     )}
                   </div>
                   <div className="he-item-meta">
                     <span className="he-usuario">{log.usuario_nome || 'Usuário'}</span>
-                    <span className="he-data">{formatarData(log.criado_em)}</span>
+                    <span className="he-data">{formatarData(log.created_at)}</span>
                     {temDiff(log) && (
                       <button
                         className="he-btn-diff"

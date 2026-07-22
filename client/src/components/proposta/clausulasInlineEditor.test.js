@@ -244,6 +244,21 @@ test('renumerarClausulas preserva o texto após o número', () => {
   expect(lista[1].titulo).toBe('5.2 FORO E JURISDIÇÃO');
 });
 
+test('renumerarClausulas reserva o slot 23 (23a clausula vira 5.24)', () => {
+  // A 5.23 é seção FIXA (preço/FINAME/fiscais), não editável. A renumeração das
+  // cláusulas editáveis deve PULAR o slot 23: 5.1..5.22 e depois 5.24, 5.25...
+  const chaves = [];
+  for (let i = 0; i < 24; i++) chaves.push([`k${i}`, `X.Y TITULO ${i}`, `<p>c${i}</p>`]);
+  montarFixture(document, chaves);
+  const resultado = renumerarClausulas(document);
+  expect(resultado).toBe(true);
+  const lista = lerClausulasDoSource(document);
+  const nums = lista.map((c) => c.titulo.split(' ')[0]);
+  expect(nums[21]).toBe('5.22'); // 22a
+  expect(nums[22]).toBe('5.24'); // 23a pula o 23
+  expect(nums[23]).toBe('5.25'); // 24a
+});
+
 test('renumerarClausulas retorna false sem throwing quando #proposalSource está ausente', () => {
   // Não monta fixture, deixando document.body vazio (sem #proposalSource)
   expect(renumerarClausulas(document)).toBe(false);

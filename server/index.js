@@ -24,6 +24,8 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
+const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
+const { resolverCamposCustomizacao } = require('./propostaCustomizacoes');
 const propostaEngine = require('./propostaCompositionEngine');
 const {
   fetchComercialResponsaveis,
@@ -5488,15 +5490,16 @@ app.get('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
 app.put('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
-  const { cliente_nome, cliente_email, cliente_telefone, cliente_contato } = req.body;
   const usuarioId = req.user.id;
 
   db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (err, u) => {
     const usuarioNome = u?.nome || req.user.email || 'N/A';
 
     db.get('SELECT * FROM proposta_customizacoes WHERE proposta_id = ?', [id], (err, anterior) => {
-      const campos = { cliente_nome, cliente_email, cliente_telefone, cliente_contato };
       const camposAntes = anterior || {};
+      // Payload é PARCIAL (só os campos que o usuário editou). Preserva os demais
+      // a partir do registro anterior — senão editar só o nome apagava o e-mail.
+      const campos = resolverCamposCustomizacao(req.body, anterior);
 
       db.run(
         `INSERT INTO proposta_customizacoes (proposta_id, cliente_nome, cliente_email, cliente_telefone, cliente_contato, updated_by, updated_at)
@@ -5508,7 +5511,7 @@ app.put('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
            cliente_contato = excluded.cliente_contato,
            updated_by = excluded.updated_by,
            updated_at = excluded.updated_at`,
-        [id, cliente_nome || null, cliente_email || null, cliente_telefone || null, cliente_contato || null, usuarioId],
+        [id, campos.cliente_nome, campos.cliente_email, campos.cliente_telefone, campos.cliente_contato, usuarioId],
         (err) => {
           if (err) return res.status(500).json({ error: err.message });
 
@@ -7671,7 +7674,7 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
         // Comparar itens
         const itensNovos = (itens && Array.isArray(itens)) ? itens : [];
         const itensMudaram = compararItens(itensAtuais || [], itensNovos);
-        
+
         // Só incrementar revisão se itens ou valor total mudaram
         const deveIncrementarRevisao = itensMudaram || valorTotalMudou;
         const novaRevisao = deveIncrementarRevisao ? revisaoAtual + 1 : revisaoAtual;
@@ -7779,7 +7782,10 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                 );
 
-                itens.forEach((item, idx) => {
+                // Preserva campos que o formulário não envia (modelo, descritivo_tecnico,
+                // categoria, etc.) a partir dos itens existentes — senão o re-INSERT os apaga.
+                const itensParaInserir = mesclarItensPreservandoCampos(itensAtuais || [], itens);
+                itensParaInserir.forEach((item, idx) => {
                   stmt.run([
                     id, item.descricao || item.nome || '', item.quantidade || 1, item.unidade || 'UN',
                     item.valor_unitario || 0, item.valor_total || 0,
@@ -7795,7 +7801,21 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                 stmt.finalize();
               }
 
-              res.json({ 
+              // Auditoria: registrar inclusão/edição/remoção de itens no log de
+              // histórico — só APÓS o update + reinserção dos itens terem sido
+              // persistidos com sucesso (evita logar mudanças de um save que falhou).
+              const usuarioIdAuditoriaItens = req.user.id;
+              db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioIdAuditoriaItens], (_, uAuditoriaItens) => {
+                const usuarioNomeAuditoriaItens = uAuditoriaItens?.nome || req.user.email || 'N/A';
+                const diffItens = diffItensParaLog(itensAtuais || [], itensNovos);
+                diffItens.adicionados.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_adicionado', nomeDe(it), null, null, nomeDe(it)));
+                diffItens.removidos.forEach((it) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_removido', nomeDe(it), null, nomeDe(it), null));
+                // Uma entrada por item editado (agrupada), com o nome do produto no campo
+                // e um resumo antes/depois dos campos que mudaram.
+                diffItens.editados.forEach((e) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_editado', e.nome, null, resumoLado(e.mudancas, 'antes'), resumoLado(e.mudancas, 'depois')));
+              });
+
+              res.json({
                 message: 'Proposta atualizada com sucesso',
                 numero_proposta: numeroFinal,
                 revisao: novaRevisao
