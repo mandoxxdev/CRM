@@ -1,5 +1,8 @@
 /**
- * Testa o embed das fontes Century Gothic via @font-face base64.
+ * Testa as fontes Century Gothic no @font-face.
+ * Contrato (desde a otimização de payload do preview):
+ *   - forPdfServer=true  (PDF, Puppeteer offline) → fonte embutida em base64.
+ *   - forPdfServer=false (preview no navegador)    → fonte referenciada por URL cacheável.
  * Executar: node tests/propostaFonteEmbed.test.js
  */
 const assert = require('assert');
@@ -32,14 +35,22 @@ const itens = [{
 }];
 const totais = { subtotal: 1000, icms: 0, ipi: 0, total: 1000, dataEmissao: '01/01/2026', dataValidade: '15/01/2026' };
 
+// Preview (navegador): forPdfServer=false → fontes por URL.
 const html = gerarHTMLPropostaPremiumV2(proposta, itens, totais, null, null, false, true);
+// PDF (Puppeteer offline): forPdfServer=true → fontes em base64.
+const htmlPdf = gerarHTMLPropostaPremiumV2(proposta, itens, totais, null, 'http://localhost:5000', true, true);
 
 test('HTML contém @font-face', () => {
   assert.ok(html.includes('@font-face'), 'esperava encontrar @font-face no HTML');
 });
 
-test('HTML contém data:font/ttf;base64, (prova de embed)', () => {
-  assert.ok(html.includes('data:font/ttf;base64,'), 'esperava encontrar data:font/ttf;base64, indicando que a fonte foi embutida');
+test('PDF (forPdfServer=true) embute a fonte em base64', () => {
+  assert.ok(htmlPdf.includes('data:font/ttf;base64,'), 'esperava data:font/ttf;base64, no HTML do PDF (Puppeteer roda offline)');
+});
+
+test('Preview (forPdfServer=false) referencia a fonte por URL cacheável, sem base64', () => {
+  assert.ok(!html.includes('data:font'), 'preview NÃO deve embutir fonte em base64 (payload gigante)');
+  assert.ok(/\/api\/assets\/fonts\/CenturyGothic\.ttf/.test(html), 'esperava referência /api/assets/fonts/CenturyGothic.ttf no preview');
 });
 
 test('HTML contém @font-face com font-family Century Gothic', () => {

@@ -1,5 +1,5 @@
 /**
- * #3 — O hero da capa (industria40.png) deve preencher 100% da largura, sem
+ * #3 — O hero da capa (industria40.webp) deve preencher 100% da largura, sem
  * faixa branca vertical a esquerda. Verifica por pixel no screenshot.
  * Executar: node tests/propostaCapaHero.test.js
  */

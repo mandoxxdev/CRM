@@ -8336,16 +8336,29 @@ app.get('/api/propostas/:id/premium', (req, res) => {
     }
     // Não exigir dbReady: permite atender mesmo durante inicialização e evita 503 permanente
 
-    // Buscar proposta completa com todos os dados
+    // Buscar proposta completa com todos os dados.
+    // Colunas explícitas em vez de p.* para NÃO trafegar html_rendered (~4.8MB) e
+    // css_snapshot (~0.7MB) — a rota regenera o HTML e não usa o snapshot. Puxá-los
+    // custava ~15ms/query (vs 0.04ms) e alocava 5.5MB por request. (mesmo motivo do
+    // commit 99e172e, que enxugou a listagem). Manter esta lista em sincronia com o
+    // schema de propostas ao adicionar colunas NÃO-gigantes.
     db.get(`
-    SELECT p.*,
+    SELECT p.id, p.cliente_id, p.projeto_id, p.numero_proposta, p.titulo, p.descricao,
+           p.valor_total, p.validade, p.condicoes_pagamento, p.prazo_entrega, p.garantia,
+           p.observacoes, p.status, p.responsavel_id, p.created_by, p.motivo_nao_venda,
+           p.origem_busca, p.familia_produto, p.lembrete_data, p.lembrete_mensagem,
+           p.created_at, p.updated_at, p.anexo_cotacao, p.revisao, p.cliente_email,
+           p.cliente_contato, p.margem_desconto, p.cliente_telefone, p.template_id,
+           p.pdf_gerado_at, p.template_versao, p.expira_em, p.tipo_proposta, p.enviada_em,
+           p.oportunidade_id, p.idioma, p.unidade_negocio, p.incoterm, p.moeda,
+           p.snapshot_checksum, p.data_fechamento, p.inativada_por, p.probabilidade,
+           p.inativada_em, p.ativo, p.pdf_proposta_cliente, p.pdf_proposta_nome,
            c.razao_social, c.nome_fantasia, c.cnpj, c.logo_url as cliente_logo_url,
            c.endereco as cliente_endereco, c.cidade as cliente_cidade,
            c.estado as cliente_estado, c.cep as cliente_cep,
            COALESCE(p.cliente_telefone, c.telefone) as cliente_telefone,
            COALESCE(p.cliente_email, c.email) as cliente_email,
            c.telefone as cliente_telefone_cadastro, c.email as cliente_email_cadastro,
-           p.cliente_contato,
            u.nome as responsavel_nome, u.email as responsavel_email
     FROM propostas p
     LEFT JOIN clientes c ON p.cliente_id = c.id
@@ -16236,6 +16249,16 @@ app.get('/api/notificacoes', authenticateToken, (req, res) => {
 
 // ========== ROTAS DE CHAT ==========
 // Movidas para server/routes/chat.js (persistência permanente + Socket.IO)
+
+// ========== ASSETS ESTÁTICOS DO TEMPLATE DE PROPOSTA ==========
+// Imagens da capa/logos + fontes Century Gothic. No preview o HTML referencia estes
+// arquivos por URL (em vez de base64 inline), então servimos com cache longo e imutável.
+// As URLs geradas no template levam ?v=<mtime>, então trocar um arquivo invalida o cache
+// sozinho — imutável aqui é seguro. Corta ~4.5MB do payload do preview por abertura.
+const propostaAssetsStaticDir = path.join(__dirname, 'assets', 'proposta');
+const propostaFontsStaticDir = path.join(__dirname, 'assets', 'fonts');
+app.use('/api/assets/proposta', express.static(propostaAssetsStaticDir, { maxAge: '365d', immutable: true }));
+app.use('/api/assets/fonts', express.static(propostaFontsStaticDir, { maxAge: '365d', immutable: true }));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE COTAÇÕES ==========
 // Servir arquivos estáticos de uploads

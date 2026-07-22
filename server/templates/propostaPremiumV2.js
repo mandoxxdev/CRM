@@ -98,19 +98,36 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       ? (uploadToDataUrl(uploadsLogosDir, String(proposta.cliente_logo_url).trim()) || null)
       : null;
 
+    // Assets estáticos do template (logos/imagens da capa + fontes). No PREVIEW
+    // (navegador) referenciamos por URL cacheável servida por /api/assets/*, em vez de
+    // base64 inline: eram ~4.5MB (imagens da capa + 4 fontes) inflados 34% pelo base64 e
+    // regenerados a cada abertura, sem cache. Via URL o browser baixa 1x e reusa do cache.
+    // No PDF (forPdfServer) mantém base64 — o Puppeteer roda offline, sem servidor HTTP.
+    // O ?v=<mtime> invalida o cache automaticamente se o arquivo mudar. statSync falha
+    // para arquivo ausente → '' (mesmo contrato de degradação do fileToDataUrl anterior).
     const propostaAssetsDir = path.join(__dirname, '..', 'assets', 'proposta');
-    const gmpLogoSmB64 = fileToDataUrl(path.join(propostaAssetsDir, 'logo-gmp.png'));
-    const gmpLogoGrandeB64 = fileToDataUrl(path.join(propostaAssetsDir, 'logo-gmp-grande.png'));
-    const myLogoB64 = fileToDataUrl(path.join(propostaAssetsDir, 'logo-moinho-ypiranga.png'));
-    const dadosContratadaB64 = fileToDataUrl(path.join(propostaAssetsDir, 'dados-contratada.png'));
-    const industria40B64 = fileToDataUrl(path.join(propostaAssetsDir, 'industria40.png'));
-    const projetosB64 = fileToDataUrl(path.join(propostaAssetsDir, 'projetos.png'));
-
     const fontsDir = path.join(__dirname, '..', 'assets', 'fonts');
-    const cgRegularB64 = fileToDataUrl(path.join(fontsDir, 'CenturyGothic.ttf'));
-    const cgBoldB64 = fileToDataUrl(path.join(fontsDir, 'CenturyGothic-Bold.ttf'));
-    const cgItalicB64 = fileToDataUrl(path.join(fontsDir, 'CenturyGothic-Italic.ttf'));
-    const cgBoldItalicB64 = fileToDataUrl(path.join(fontsDir, 'CenturyGothic-BoldItalic.ttf'));
+    const assetUrl = (baseDir, rota, filename) => {
+      const abs = path.join(baseDir, filename);
+      if (forPdfServer) return fileToDataUrl(abs);
+      let v;
+      try { v = Math.floor(fs.statSync(abs).mtimeMs); } catch (_) { return ''; }
+      return `${baseURL}/api/assets/${rota}/${filename}?v=${v}`;
+    };
+    const assetProposta = (filename) => assetUrl(propostaAssetsDir, 'proposta', filename);
+    const assetFonte = (filename) => assetUrl(fontsDir, 'fonts', filename);
+
+    const gmpLogoSmB64 = assetProposta('logo-gmp.png');
+    const gmpLogoGrandeB64 = assetProposta('logo-gmp-grande.png');
+    const myLogoB64 = assetProposta('logo-moinho-ypiranga.png');
+    const dadosContratadaB64 = assetProposta('dados-contratada.png');
+    const industria40B64 = assetProposta('industria40.webp');
+    const projetosB64 = assetProposta('projetos.webp');
+
+    const cgRegularB64 = assetFonte('CenturyGothic.ttf');
+    const cgBoldB64 = assetFonte('CenturyGothic-Bold.ttf');
+    const cgItalicB64 = assetFonte('CenturyGothic-Italic.ttf');
+    const cgBoldItalicB64 = assetFonte('CenturyGothic-BoldItalic.ttf');
 
     const numero = esc(proposta.numero_proposta || 'N/A');
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
