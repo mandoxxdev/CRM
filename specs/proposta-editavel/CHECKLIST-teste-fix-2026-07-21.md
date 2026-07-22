@@ -100,14 +100,14 @@ Extra: renumeração automática das cláusulas reserva o slot **5.23** (editáv
 ## Pendências / o que ainda falta
 
 ### Reteste visual (quando puder, no navegador)
-- [ ] **#8 Logo do cliente na capa** — abrir uma proposta cujo cliente tenha logo cadastrada e conferir a aparência (não validável headless aqui).
-- [ ] **#1 Aparência final da 5.23** com dados reais (o isolamento em página própria já está confirmado).
-- [ ] **Preservação do descritivo técnico** (achado colateral) — editar/salvar/reabrir e confirmar que a seção 4.x continua com o descritivo.
+- [ x ] **#8 Logo do cliente na capa** — abrir uma proposta cujo cliente tenha logo cadastrada e conferir a aparência (não validável headless aqui).
+- [ x ] **#1 Aparência final da 5.23** com dados reais (o isolamento em página própria já está confirmado).
+- [ x  ] **Preservação do descritivo técnico** (achado colateral) — editar/salvar/reabrir e confirmar que a seção 4.x continua com o descritivo.
 
 ### Decisões suas
-- [ ] **Abrir PR** de `fix/proposta-layout-auditoria` → `main`? (posso preparar)
-- [ ] O commit de performance `03c2697` fica nesta branch ou vai para uma branch separada?
-- [ ] **Diagnóstico prod #6** (`header_image_url`) — só se o número da proposta sumir no cabeçalho em produção.
+- [ x ] **Abrir PR** de `fix/proposta-layout-auditoria` → `main`? (posso preparar)
+- [ x ] O commit de performance `03c2697` fica nesta branch ou vai para uma branch separada? (performance? se for o da consulta do sqlite das propostas é pra estar na main ja)
+- [ ] **Diagnóstico prod #6** (`header_image_url`) — só se o número da proposta sumir no cabeçalho em produção. (ainda n entendi esse, vmo ignorar)
 
 ### Backlog (não bloqueia; anotado em `auditoria.md`)
 - [ ] Histórico: agrupar entradas consecutivas do mesmo usuário; filtros por usuário/tipo/período; controle de permissão (só admin/comercial).

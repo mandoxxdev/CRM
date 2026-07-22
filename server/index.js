@@ -8338,12 +8338,13 @@ app.get('/api/propostas/:id/premium', (req, res) => {
 
     // Buscar proposta completa com todos os dados
     db.get(`
-    SELECT p.*, 
+    SELECT p.*,
            c.razao_social, c.nome_fantasia, c.cnpj, c.logo_url as cliente_logo_url,
-           c.endereco as cliente_endereco, c.cidade as cliente_cidade, 
+           c.endereco as cliente_endereco, c.cidade as cliente_cidade,
            c.estado as cliente_estado, c.cep as cliente_cep,
            COALESCE(p.cliente_telefone, c.telefone) as cliente_telefone,
            COALESCE(p.cliente_email, c.email) as cliente_email,
+           c.telefone as cliente_telefone_cadastro, c.email as cliente_email_cadastro,
            p.cliente_contato,
            u.nome as responsavel_nome, u.email as responsavel_email
     FROM propostas p
@@ -8633,12 +8634,13 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
   try {
     const proposta = await new Promise((resolve, reject) => {
       db.get(`
-        SELECT p.*, 
+        SELECT p.*,
                c.razao_social, c.nome_fantasia, c.cnpj, c.logo_url as cliente_logo_url,
-               c.endereco as cliente_endereco, c.cidade as cliente_cidade, 
+               c.endereco as cliente_endereco, c.cidade as cliente_cidade,
                c.estado as cliente_estado, c.cep as cliente_cep,
                COALESCE(p.cliente_telefone, c.telefone) as cliente_telefone,
                COALESCE(p.cliente_email, c.email) as cliente_email,
+               c.telefone as cliente_telefone_cadastro, c.email as cliente_email_cadastro,
                p.cliente_contato,
                u.nome as responsavel_nome, u.email as responsavel_email
         FROM propostas p

@@ -637,16 +637,30 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </section>`;
         };
         const [primeiraClausula, ...demaisClausulas] = templateConfig.clausulas_custom;
-        // A 5.24 (CONSIDERAÇÃO FINAL) é editável (vem de clausulas_custom), mas deve ser emitida
-        // DEPOIS da seção fixa 5.23. Separamos ela do restante para intercalar a 5.23 fixa.
-        const is524 = (c) => String(c && c.numero || '').trim() === '5.24';
-        const demaisSem524 = demaisClausulas.filter((c) => !is524(c));
-        const clausula524 = demaisClausulas.find(is524);
-        // A 5.24 inicia em página própria (data-page-break); ver Task A3.
-        const clausula524Html = clausula524
-          ? renderClausulaCustom(clausula524, demaisClausulas.indexOf(clausula524) + 1)
-              .replace('<section class="block stack-md allow-break"', '<section class="block stack-md allow-break" data-page-break="before"')
-          : '';
+        // As cláusulas >= 5.24 (a CONSIDERAÇÃO FINAL e qualquer outra além dela) são
+        // editáveis (vêm de clausulas_custom), mas devem ser emitidas DEPOIS da seção
+        // fixa 5.23 (preço/FINAME/fiscais), que ocupa o slot 23.
+        // IMPORTANTE: cláusulas persistidas no banco NÃO têm campo `numero` (a tabela
+        // proposta_clausulas não tem essa coluna) — o número vive no PREFIXO do título
+        // ("5.24 CONSIDERAÇÃO FINAL"). Um predicado que só olhe c.numero funciona nos
+        // testes (defaults têm numero) mas falha com dados reais, fazendo a 5.24
+        // renderizar no meio da lista e "sumir" do fim do documento (bug da proposta 288).
+        const subNumeroDe = (c) => {
+          const numero = (c && c.numero != null && String(c.numero).trim()) ? String(c.numero).trim() : null;
+          const m = /^\s*(\d+)\.(\d+)/.exec(numero || String(c && c.titulo || ''));
+          return m ? parseInt(m[2], 10) : NaN;
+        };
+        const demaisSem524 = demaisClausulas.filter((c) => !(subNumeroDe(c) >= 24));
+        const clausulasPos523 = demaisClausulas.filter((c) => subNumeroDe(c) >= 24);
+        // A primeira delas (5.24) inicia em página própria (data-page-break); ver Task A3.
+        const clausula524Html = clausulasPos523
+          .map((c, i) => {
+            const htmlClausula = renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1);
+            return i === 0
+              ? htmlClausula.replace('<section class="block stack-md allow-break"', '<section class="block stack-md allow-break" data-page-break="before"')
+              : htmlClausula;
+          })
+          .join('');
         // IMPORTANTE: apenas o título + a 1ª cláusula ficam dentro do grupo "avoid-break"
         // (para o título "5. CONDIÇÕES GERAIS" não ficar órfão no fim da página). As demais
         // cláusulas são seções IRMÃS com "allow-break", igual ao layout das cláusulas padrão.
@@ -1373,7 +1387,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <div class="cover-client-info">
           <p class="cover-field-contratante"><p style="font-weight: bold;">EMPRESA CONTRATANTE:</p> <span data-edit="cliente_nome">${clienteNome}</span></p>
           <p class="cover-field-cnpj"><strong>CNPJ:</strong> ${clienteCnpj}</p>
-          <p class="cover-field-email"><strong>Email:</strong> <span data-edit="cliente_email">${esc(proposta.cliente_email || '—')}</span></p>
+          <p class="cover-field-email"><strong>Email:</strong> <span data-edit="cliente_email">${esc(proposta.cliente_email || proposta.cliente_email_cadastro || '—')}</span></p>
+          <p class="cover-field-telefone"><strong>Telefone:</strong> <span data-edit="cliente_telefone">${esc(proposta.cliente_telefone || proposta.cliente_telefone_cadastro || '—')}</span></p>
           <p class="cover-field-emissao">Data de Emissão: <strong>${dataEmissao || '—'}</strong></p>
         </div>
       </div>
@@ -1491,6 +1506,30 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       // ancestrais entre o bloco e o container em cada parte, preservando título/irmãos
       // apenas na primeira parte. Se não houver container com múltiplos filhos para dividir
       // (ex.: um único parágrafo gigantesco), retorna [blockEl] inalterado.
+      // Monta a "parte final" de um split: os irmãos que vêm DEPOIS do filho da
+      // cadeia em cada nível (ex.: a seção de CONDIÇÃO DE PAGAMENTO depois da
+      // tabela da 5.23). Esses irmãos precisam renderizar após TODAS as
+      // continuações do container dividido — não junto da 1ª parte, senão a
+      // ordem do documento fica embaralhada. Retorna null se não houver nenhum.
+      function montarParteFinalIrmaosPosteriores(fullChain) {
+        let inner = null;
+        for (let i = fullChain.length - 2; i >= 0; i--) {
+          const originalEl = fullChain[i];
+          const nextPathEl = fullChain[i + 1];
+          const kids = Array.from(originalEl.children).filter(isElement);
+          const idx = kids.indexOf(nextPathEl);
+          const posteriores = idx >= 0 ? kids.slice(idx + 1) : [];
+          if (!posteriores.length && !inner) continue;
+          const clone = originalEl.cloneNode(false);
+          // conteúdo mais profundo vem ANTES dos irmãos deste nível (ordem do documento)
+          if (inner) clone.appendChild(inner);
+          posteriores.forEach((k) => clone.appendChild(k.cloneNode(true)));
+          inner = clone;
+        }
+        // a parte final flui logo após a última continuação — nunca força página nova
+        if (inner && inner.removeAttribute) inner.removeAttribute('data-page-break');
+        return inner;
+      }
       function splitBlockByChildren(blockEl, pageContentEl) {
         let container = null;
         let maxCount = 1; // precisa de pelo menos 2 filhos para valer a pena dividir
@@ -1513,20 +1552,43 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           fullChain.unshift(blockEl);
         }
 
-        // Reconstrói a cadeia em cada parte (shallow clone por nível), preservando irmãos
-        // (ex.: título) apenas quando includeSideChildren=true (1ª parte de cada grupo).
+        // Se o container dividido é um tbody, cada parte precisa repetir o cabeçalho
+        // da tabela (colgroup/thead) — espelhando splitTableByRows. Sem isso, as partes
+        // de continuação (includeSideChildren=false) perderiam o thead ITEM/DESCRIÇÃO/...
+        const tabelaAncestral = container.tagName === 'TBODY' ? container.closest('table') : null;
+
+        // Reconstrói a cadeia em cada parte (shallow clone por nível). Irmãos que vêm
+        // ANTES do filho da cadeia (ex.: título/intro) entram apenas na 1ª parte
+        // (includeSideChildren=true). Irmãos que vêm DEPOIS (ex.: a CONDIÇÃO DE
+        // PAGAMENTO após a tabela da 5.23) NÃO entram em nenhuma parte aqui — vão para
+        // a parte final via montarParteFinalIrmaosPosteriores, preservando a ordem do
+        // documento (bug: condição aparecia junto do 1º fragmento e a tabela seguia depois).
         const mkShell = (includeSideChildren) => {
           const clones = fullChain.map((el, i) => (i === fullChain.length - 1 ? container.cloneNode(false) : el.cloneNode(false)));
           for (let i = 0; i < fullChain.length - 1; i++) {
             const originalEl = fullChain[i];
             const nextPathEl = fullChain[i + 1];
+            let depoisDaCadeia = false;
             Array.from(originalEl.children).filter(isElement).forEach((k) => {
               if (k === nextPathEl) {
                 clones[i].appendChild(clones[i + 1]);
-              } else if (includeSideChildren) {
+                depoisDaCadeia = true;
+              } else if (includeSideChildren && !depoisDaCadeia) {
                 clones[i].appendChild(k.cloneNode(true));
               }
             });
+          }
+          // Repete colgroup/thead da tabela ancestral em TODAS as partes (não só na 1ª),
+          // inserindo-os antes do tbody reconstruído se ainda não estiverem presentes.
+          if (tabelaAncestral) {
+            const cloneTable = clones[fullChain.indexOf(tabelaAncestral)];
+            const tbodyClone = clones[clones.length - 1];
+            if (cloneTable) {
+              const cg = tabelaAncestral.querySelector(':scope > colgroup');
+              const th = tabelaAncestral.querySelector(':scope > thead');
+              if (cg && !cloneTable.querySelector(':scope > colgroup')) cloneTable.insertBefore(cg.cloneNode(true), tbodyClone);
+              if (th && !cloneTable.querySelector(':scope > thead')) cloneTable.insertBefore(th.cloneNode(true), tbodyClone);
+            }
           }
           return { shell: clones[0], container: clones[clones.length - 1] };
         };
@@ -1551,6 +1613,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             parts.push(currentShell);
           }
         }
+        const parteFinal = montarParteFinalIrmaosPosteriores(fullChain);
+        if (parteFinal) parts.push(parteFinal);
         return parts;
       }
       // Fallback para quando splitBlockByChildren não encontra um container com múltiplos
@@ -1587,10 +1651,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           for (let i = 0; i < fullChain.length - 1; i++) {
             const originalEl = fullChain[i];
             const nextPathEl = fullChain[i + 1];
+            let depoisDaCadeia = false;
             Array.from(originalEl.children).filter(isElement).forEach((k) => {
               if (k === nextPathEl) {
                 clones[i].appendChild(clones[i + 1]);
-              } else if (includeSideChildren) {
+                depoisDaCadeia = true;
+              } else if (includeSideChildren && !depoisDaCadeia) {
+                // irmãos ANTES da cadeia: só na 1ª parte; os DEPOIS vão na parte final
                 clones[i].appendChild(k.cloneNode(true));
               }
             });
@@ -1620,7 +1687,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           wordIdx = best;
           first = false;
         }
-        return parts.length > 1 ? parts : [blockEl];
+        if (parts.length > 1) {
+          const parteFinal = montarParteFinalIrmaosPosteriores(fullChain);
+          if (parteFinal) parts.push(parteFinal);
+          return parts;
+        }
+        return [blockEl];
       }
       function paginateProposalContent() {
         const doc = document.getElementById('proposalDocument');
@@ -1777,18 +1849,23 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           }
         });
 
-        const pages = Array.from(doc.querySelectorAll('.proposal-page')).filter(p => p.style.display !== 'none');
-        const total = pages.length;
-        pages.forEach((p, idx) => {
-          const n = idx + 1;
-          p.querySelectorAll('.js-page-number').forEach(el => { el.textContent = String(n); });
-          p.querySelectorAll('.js-page-count').forEach(el => { el.textContent = String(total); });
-        });
-
+        // Renumera Pág. X/Y sobre as páginas atualmente VISÍVEIS (display !== 'none'),
+        // devolvendo essa lista para reuso pelo sumário.
+        function numerarPaginas() {
+          const pages = Array.from(doc.querySelectorAll('.proposal-page')).filter(p => p.style.display !== 'none');
+          const total = pages.length;
+          pages.forEach((p, idx) => {
+            const n = idx + 1;
+            p.querySelectorAll('.js-page-number').forEach(el => { el.textContent = String(n); });
+            p.querySelectorAll('.js-page-count').forEach(el => { el.textContent = String(total); });
+          });
+          return pages;
+        }
         // Sumário: coleta títulos numerados (h2 "1." ... / h3 "5.x") das páginas geradas
         // e monta as linhas com o número real da página, como no modelo DOCX.
-        const tocList = document.getElementById('tocList');
-        if (tocList) {
+        function preencherSumario(pages) {
+          const tocList = document.getElementById('tocList');
+          if (!tocList) return;
           tocList.innerHTML = '';
           pages.forEach((p, idx) => {
             if (p.id === 'tocPage') return;
@@ -1812,6 +1889,21 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             });
           });
         }
+
+        // #1 — sumário que estoura a área útil sai da proposta (reversível):
+        // preenche provisoriamente para medir; se o .page-content do tocPage
+        // transbordar, esconde a página do sumário. A cada repaginação o estado é
+        // reavaliado (o filtro de páginas ignora display:none), então se o usuário
+        // remover cláusulas e o sumário voltar a caber, ele reaparece.
+        const tocPage = document.getElementById('tocPage');
+        if (tocPage) {
+          tocPage.style.display = '';                    // re-testa a cada repaginação
+          preencherSumario(numerarPaginas());            // provisório, para medir
+          const pc = tocPage.querySelector('.page-content');
+          if (pc && pc.scrollHeight > pc.clientHeight) tocPage.style.display = 'none';
+        }
+        const paginasFinais = numerarPaginas();          // renumera já sem (ou com) o sumário
+        if (!tocPage || tocPage.style.display !== 'none') preencherSumario(paginasFinais);
       }
       window.paginateProposalContent = paginateProposalContent;
       const run = () => { try { paginateProposalContent(); } catch (_) {} };
