@@ -16298,97 +16298,73 @@ app.use('/api/uploads/contrato', express.static(uploadsContratoDir));
 
 // Chat uploads servidos em server/routes/chat.js
 
-// Servir logo.png do public (logo padrão)
-const publicLogoPath = path.join(__dirname, '..', 'client', 'public', 'logo.png');
-app.get('/logo.png', (req, res) => {
-  if (fs.existsSync(publicLogoPath)) {
-    res.sendFile(publicLogoPath);
-  } else {
-    res.status(404).send('Logo not found');
+// Resolve um asset do client priorizando client/build (produção — o CRA copia o
+// public/ para dentro do build/ no npm run build), com fallback para client/public
+// (dev local). Corrige 404 em prod, onde a imagem Docker só contém client/build.
+function resolveClientAsset(...names) {
+  const bases = [
+    path.join(__dirname, '..', 'client', 'build'),
+    path.join(__dirname, '..', 'client', 'public'),
+  ];
+  for (const base of bases) {
+    for (const name of names) {
+      const candidate = path.join(base, name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
   }
+  return null;
+}
+
+// Servir logo.png (prioriza build; fallback public para dev local)
+app.get('/logo.png', (req, res) => {
+  const p = resolveClientAsset('logo.png');
+  if (p) res.sendFile(p);
+  else res.status(404).send('Logo not found');
 });
 
-// Servir cabecalho.jpg do public (mantido para compatibilidade)
-const publicCabecalhoPath = path.join(__dirname, '..', 'client', 'public', 'cabecalho.jpg');
+// Servir cabecalho.jpg (prioriza build; fallback public para dev local)
 app.get('/cabecalho.jpg', (req, res) => {
   // Adicionar headers para evitar cache
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   
-  if (fs.existsSync(publicCabecalhoPath)) {
-    res.sendFile(publicCabecalhoPath);
-  } else {
-    res.status(404).send('Imagem de cabeçalho não encontrada');
-  }
+  const p = resolveClientAsset('cabecalho.jpg');
+  if (p) res.sendFile(p);
+  else res.status(404).send('Imagem de cabeçalho não encontrada');
 });
 
-// Servir CBC2.png do public (mantido para compatibilidade)
-const publicCBC2Path = path.join(__dirname, '..', 'client', 'public', 'CBC2.png');
+// Servir CBC2.png (prioriza build; fallback public para dev local)
 app.get('/CBC2.png', (req, res) => {
-  if (fs.existsSync(publicCBC2Path)) {
-    res.sendFile(publicCBC2Path);
-  } else {
-    res.status(404).send('Imagem CBC2 não encontrada');
-  }
+  const p = resolveClientAsset('CBC2.png');
+  if (p) res.sendFile(p);
+  else res.status(404).send('Imagem CBC2 não encontrada');
 });
 
-// Servir CABECALHO.PNG do public (imagem de fundo do cabeçalho)
-const publicCabecalhoPNGPath = path.join(__dirname, '..', 'client', 'public', 'CABECALHO.PNG');
+// Servir CABECALHO.PNG (prioriza build; fallback public para dev local)
 app.get('/CABECALHO.PNG', (req, res) => {
   // Adicionar headers para evitar cache
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   
-  if (fs.existsSync(publicCabecalhoPNGPath)) {
-    res.sendFile(publicCabecalhoPNGPath);
-  } else {
-    res.status(404).send('Imagem CABECALHO.PNG não encontrada');
-  }
+  const p = resolveClientAsset('CABECALHO.PNG');
+  if (p) res.sendFile(p);
+  else res.status(404).send('Imagem CABECALHO.PNG não encontrada');
 });
 
-// Servir Logo_MY.jpg do public (logo do Moinho Ypiranga - lado esquerdo)
-const publicLogoMYPath = path.join(__dirname, '..', 'client', 'public', 'Logo_MY.jpg');
+// Servir Logo_MY.jpg (prioriza build; fallback public, outras extensões e logo.png)
 app.get('/Logo_MY.jpg', (req, res) => {
-  if (fs.existsSync(publicLogoMYPath)) {
-    res.sendFile(publicLogoMYPath);
-  } else {
-    // Tentar outras extensões comuns
-    const extensions = ['.jpg', '.jpeg', '.png', '.svg'];
-    let found = false;
-    for (const ext of extensions) {
-      const logoPath = path.join(__dirname, '..', 'client', 'public', 'Logo_MY' + ext);
-      if (fs.existsSync(logoPath)) {
-        res.sendFile(logoPath);
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      // Fallback para logo.png
-      if (fs.existsSync(publicLogoPath)) {
-        res.sendFile(publicLogoPath);
-      } else {
-        res.status(404).send('Logo_MY not found');
-      }
-    }
-  }
+  const p = resolveClientAsset('Logo_MY.jpg', 'Logo_MY.jpeg', 'Logo_MY.png', 'Logo_MY.svg', 'logo.png');
+  if (p) res.sendFile(p);
+  else res.status(404).send('Logo_MY not found');
 });
 
-// Servir logo-gmp.png do public (logo do GMP - lado direito)
-const publicLogoGMPPath = path.join(__dirname, '..', 'client', 'public', 'logo-gmp.png');
+// Servir logo-gmp.png (prioriza build; fallback public e logo.png)
 app.get('/logo-gmp.png', (req, res) => {
-  if (fs.existsSync(publicLogoGMPPath)) {
-    res.sendFile(publicLogoGMPPath);
-  } else {
-    // Se não encontrar logo-gmp.png, usar logo.png como fallback
-    if (fs.existsSync(publicLogoPath)) {
-      res.sendFile(publicLogoPath);
-    } else {
-      res.status(404).send('Logo GMP not found');
-    }
-  }
+  const p = resolveClientAsset('logo-gmp.png', 'logo.png');
+  if (p) res.sendFile(p);
+  else res.status(404).send('Logo GMP not found');
 });
 
 // Upload de imagem de produto
