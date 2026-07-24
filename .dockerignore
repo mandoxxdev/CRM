@@ -1,14 +1,44 @@
+# Dependências e artefatos locais (reinstalados/gerados no build)
 node_modules
 client/node_modules
 server/node_modules
 client/build
 .git
 .gitignore
+
+# Dados/runtime — volume no Coolify; não devem ir na imagem
+server/data
+server/uploads
+
+# Lixo de desenvolvimento / não usados em produção
+backend
+docs
+specs
+src
+public
+.vscode
+.cursor
 *.md
 *.bat
 *.ps1
 *.sh
 .env
-.env.local
+.env.*
+!.env.example
 .DS_Store
 Thumbs.db
+.eslintrc*
+.prettier*
+tsconfig*.json
+vite.config.*
+postcss.config.*
+tailwind.config.*
+index.html
+firebase.json
+netlify.toml
+vercel.json
+.htaccess
+
+# Testes e scripts locais do server
+server/tests
+server/scripts

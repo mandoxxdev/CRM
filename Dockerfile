@@ -1,5 +1,6 @@
 # Dockerfile customizado para Coolify
 # Build do client em estagio separado (sem Chromium) para reduzir RAM no npm run build.
+# Runtime sem client/node_modules — so serve client/build estatico.
 
 # --- Estagio 1: build do React (so client; menos memoria que build na imagem final) ---
 FROM node:20-alpine AS client-builder
@@ -35,29 +36,25 @@ RUN apk add --no-cache \
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV NODE_ENV=production
+ENV PORT=3000
 
 COPY package*.json ./
 COPY server/package*.json ./server/
-COPY client/package*.json ./client/
 
-RUN rm -f package-lock.json server/package-lock.json client/package-lock.json && \
-    npm install --legacy-peer-deps && \
-    cd server && npm install --legacy-peer-deps && cd .. && \
-    cd client && npm install --legacy-peer-deps && cd ..
+# So runtime: root + server. Client build vem do stage 1 (sem node_modules do React).
+RUN rm -f package-lock.json server/package-lock.json && \
+    npm install --omit=dev --legacy-peer-deps && \
+    cd server && npm install --omit=dev --legacy-peer-deps && cd ..
 
-COPY . .
-
-# Artefato do estagio de build (client/build esta no .dockerignore; nao vem do COPY acima)
+COPY server/ ./server/
 COPY --from=client-builder /app/client/build ./client/build
 
 EXPOSE 3000
 
-ENV NODE_ENV=production
-ENV PORT=3000
+RUN mkdir -p /app/server/data /app/server/data/uploads /app/server/uploads && chmod -R 777 /app/server/data /app/server/uploads || true
 
-RUN mkdir -p /app/server/data /app/server/data/uploads && chmod -R 777 /app/server/data || true
-
-VOLUME ["/app/server/data"]
+VOLUME ["/app/server/data", "/app/server/uploads"]
 
 WORKDIR /app/server
 CMD ["node", "index.js"]
