@@ -386,7 +386,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             : '';
         descritivoTec = esc(String(cand || '').trim());
       }
-      if (!descritivoTec) descritivoTec = '<em style="color:var(--muted);font-style:italic;">Descrição técnica não cadastrada. Acesse o cadastro do produto para preenchê-la.</em>';
+      if (!descritivoTec) descritivoTec = '';
 
       const normKey = (s) => String(s || '')
         .trim()
@@ -1344,8 +1344,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     }
     .cover-client-logo { text-align: center; margin: 0 0 4mm 0; }
     .cover-client-logo img { max-height: 25mm; max-width: 60%; object-fit: contain; }
+    /* Campos do cliente centralizados na capa. text-align (e não align-self como a data de
+       emissão usava) porque o campo "EMPRESA CONTRATANTE" tem um <p> aninhado dentro de outro
+       <p>: o browser fecha o externo e o nome vira um irmão solto, então centralizar item a
+       item por align-self deixaria as duas linhas desalinhadas. text-align é herdado e alcança
+       todos os pedaços, inclusive os que o parser separou. */
     .cover-client-info {
-      text-align: left;
+      text-align: center;
       width: 100%;
       max-width: 150mm;
       padding-top: 5mm;
@@ -1353,7 +1358,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       flex-direction: column;
       gap: 6px;
     }
-    .cover-client-info p { margin: 0; font-size: 13pt; line-height: 1.5; color: #1a1a1a; }
+    /* text-align aqui também, e não só no container: a regra global "p, li { text-align:
+       justify }" casa DIRETAMENTE com estes <p>, e valor herdado sempre perde para uma regra
+       que casa direto — o center do .cover-client-info só pegava no <span> do nome do cliente. */
+    .cover-client-info p { margin: 0; font-size: 13pt; line-height: 1.5; color: #1a1a1a; text-align: center; }
     [data-edit] { display: inline-block; min-width: 60px; cursor: text; }
     .cover-field-contratante {}
     .cover-field-cnpj {}
