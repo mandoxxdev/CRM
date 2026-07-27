@@ -1418,10 +1418,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .cover-field-contratante {}
     .cover-field-cnpj {}
     .cover-field-email {}
-    .cover-field-emissao {
-      padding-top: 80px;
-      align-self: center;
-    }
+    /* Data de emissão logo abaixo dos demais campos, na sequência. Sem regra própria: o
+       padding-top de 80px a descolava do bloco e o align-self:center era o jeito antigo de
+       centralizá-la, hoje desnecessário — o text-align do .cover-client-info p já centraliza
+       todos os campos por igual, e o gap do container dá o espaçamento entre eles. */
+    .cover-field-emissao {}
 
     /* Página de Apresentação da empresa (modelo DOCX: texto largura total + imagem centrada) */
     .pres-page-content { display: flex; flex-direction: column; height: 100%; padding-top: 5mm; }

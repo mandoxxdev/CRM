@@ -15,6 +15,8 @@
  *   C4 — nenhum <p> aninhado dentro de outro <p> no bloco: era o markup do campo
  *        "EMPRESA CONTRATANTE", invalido, e o parser jogava o nome do cliente para fora
  *        do campo — o alinhamento quebrava so naquele item
+ *   C7 — a data de emissao vem logo abaixo dos demais campos, com o MESMO espacamento
+ *        entre eles (antes tinha um padding-top de 80px que a descolava do bloco)
  *   C6 — a capa NAO tem rodape (e folha de rosto: sem dados da empresa e sem "Pag. X/Y"),
  *        e isso nao desloca a numeracao das demais paginas — a capa continua contando no
  *        total, entao a pagina seguinte segue sendo a 2 de N
@@ -113,6 +115,24 @@ async function medir(browser, forPdfServer) {
     };
   });
 
+  // C7 — espacamento vertical entre campos consecutivos, na ordem do documento.
+  // Mede entre as CAIXAS DE CONTEUDO, descontando o padding: getBoundingClientRect inclui o
+  // padding, entao um padding-top no elemento empurra o TEXTO para baixo sem mexer no topo da
+  // caixa — medindo so o rect, um espaco de 80px passaria batido.
+  const espacos = await page.evaluate(() => {
+    const ps = Array.from(document.querySelectorAll('.cover-client-info > p'));
+    const topoTexto = (el) => el.getBoundingClientRect().top + (parseFloat(getComputedStyle(el).paddingTop) || 0);
+    const baseTexto = (el) => el.getBoundingClientRect().bottom - (parseFloat(getComputedStyle(el).paddingBottom) || 0);
+    const out = [];
+    for (let i = 1; i < ps.length; i++) {
+      out.push({
+        campo: ps[i].className.replace('cover-field-', ''),
+        gap: topoTexto(ps[i]) - baseTexto(ps[i - 1]),
+      });
+    }
+    return out;
+  });
+
   // C6 — capa sem rodape, sem quebrar a numeracao das outras paginas
   const capa = await page.evaluate(() => {
     const cp = document.querySelector('.cover-page');
@@ -130,7 +150,7 @@ async function medir(browser, forPdfServer) {
   });
 
   await page.close();
-  return { campos: r, logo, capa };
+  return { campos: r, logo, capa, espacos };
 }
 
 (async () => {
@@ -138,7 +158,7 @@ async function medir(browser, forPdfServer) {
   const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
 
   for (const [forPdfServer, rotulo] of [[false, 'preview'], [true, 'PDF']]) {
-    const { campos: r, logo, capa } = await medir(browser, forPdfServer);
+    const { campos: r, logo, capa, espacos } = await medir(browser, forPdfServer);
     console.log(`\n[${rotulo}]`);
     checar(!!r, `${rotulo}: bloco .cover-client-info existe`);
     if (!r) continue;
@@ -165,6 +185,15 @@ async function medir(browser, forPdfServer) {
       checar(logo.desvio <= TOL_PX,
         `C5 [${rotulo}]: logo alinhada ao centro dos campos (desvio ${logo.desvio.toFixed(1)}px, largura ${logo.largura}px)`);
     }
+
+    // C7 — a data de emissao segue os demais na mesma cadencia (o gap do container),
+    // sem o antigo padding-top de 80px que a descolava do bloco.
+    const gapEmissao = espacos.find(e => e.campo === 'emissao');
+    const gapsAnteriores = espacos.filter(e => e.campo !== 'emissao').map(e => e.gap);
+    const maiorAnterior = Math.max(...gapsAnteriores);
+    checar(!!gapEmissao, `C7 [${rotulo}]: data de emissao e o ultimo campo do bloco`);
+    checar(gapEmissao && Math.abs(gapEmissao.gap - maiorAnterior) <= TOL_PX,
+      `C7 [${rotulo}]: mesmo espacamento dos demais (emissao ${gapEmissao ? Math.round(gapEmissao.gap) : '?'}px vs ${Math.round(maiorAnterior)}px)`);
 
     checar(!capa.temRodape, `C6 [${rotulo}]: capa sem .page-footer`);
     checar(!capa.temTextoDeRodape, `C6 [${rotulo}]: capa sem dados da empresa nem "Pág."`);
