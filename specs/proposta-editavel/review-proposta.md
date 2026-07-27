@@ -18,6 +18,7 @@
 | I8 | 5.23 (preço/FINAME/fiscais) renderiza nos **dois caminhos** (default e custom/inline) | `proposta523Fixa.test.js` |
 | I9 | Capa: hero 100% da largura sem faixa branca; nome/CNPJ/email/telefone presentes | `propostaCapaHero.test.js` (pixel exige `pngjs`), `propostaCapaContatoCadastro.test.js` |
 | I10 | **Tabela DADOS DA CONTRATADA sozinha na página**, e a paginação não muda conforme a imagem carrega (mesmo resultado com imagem presente, ausente/404 ou chegando tarde) | `propostaTabelaContratadaPaginaPropria.test.js` |
+| I11 | **PDF abaixo do teto de peso**: fotos entram como JPEG (`DCTDecode`), preview segue em WebP por URL, logos permanecem PNG | `propostaPdfPesoImagens.test.js` |
 
 ## ⚠️ Armadilhas conhecidas (causas de bugs reais — não repetir)
 
@@ -42,7 +43,12 @@
    e o documento parecia pular da 1 direto para a 5. Toda `<img>` que participa da paginação precisa
    de `width`/`height` reais (ver `dimensoesImg`), e blocos que devem ser donos da página usam
    `data-page-break-after="true"` em vez de depender da altura medida.
-10. **Medições de altura acontecem ANTES da edição inline injetar UI** — controles de edição devem ficar fora do fluxo (`position:absolute`) e `min-height` via CSS `:empty` (bug histórico `2a69dbc`).
+10. **WebP/PNG fotográfico infla o PDF ~10x.** O Chrome só copia JPEG para dentro do PDF sem
+    recomprimir; WebP e PNG viram bitmap Flate. Ao trocar/adicionar uma FOTO em
+    `server/assets/proposta/`, gere também o gêmeo `.jpg` (o template o usa sozinho no PDF, ver
+    `versaoParaPdf`). Não faça isso com logo (perde transparência) nem com `dados-contratada.png`
+    (texto borraria). Ver `propostaPdfPesoImagens.test.js`.
+11. **Medições de altura acontecem ANTES da edição inline injetar UI** — controles de edição devem ficar fora do fluxo (`position:absolute`) e `min-height` via CSS `:empty` (bug histórico `2a69dbc`).
 
 ## Como rodar a validação (obrigatório antes de merge)
 
@@ -58,6 +64,7 @@ node tests/propostaQuebras.test.js
 node tests/propostaSumarioOverflow.test.js
 node tests/propostaCapaHero.test.js
 node tests/propostaTabelaContratadaPaginaPropria.test.js
+node tests/propostaPdfPesoImagens.test.js
 
 # Rápidos (node puro)
 node tests/proposta523Fixa.test.js

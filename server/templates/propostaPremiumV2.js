@@ -103,9 +103,26 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     // para arquivo ausente → '' (mesmo contrato de degradação do fileToDataUrl anterior).
     const propostaAssetsDir = path.join(__dirname, '..', 'assets', 'proposta');
     const fontsDir = path.join(__dirname, '..', 'assets', 'fonts');
+    // No PDF, prefere um gêmeo .jpg do asset quando ele existir no disco. Motivo: o Chrome
+    // copia um JPEG para dentro do PDF sem tocar nos bytes (DCTDecode), mas WebP e PNG ele
+    // precisa decodificar e regravar como bitmap comprimido em Flate — péssimo para foto.
+    // Medido: industria40.webp 123KB no disco → 1161KB dentro do PDF (9.4x); projetos.webp
+    // 45KB → 712KB (15.9x). Em JPEG os mesmos arquivos entram 1:1. Isso derrubou o PDF de
+    // ~2.4MB para ~0.6MB sem mudança visível. O PREVIEW continua usando o WebP por URL, que
+    // é o formato mais leve na rede (foi o ganho do commit b8429e2) — cada caminho usa o
+    // formato bom para ele. Assets sem gêmeo .jpg (logos com transparência, que viram fundo
+    // preto/branco em JPEG) seguem inalterados.
+    const versaoParaPdf = (baseDir, filename) => {
+      const jpg = filename.replace(/\.(webp|png)$/i, '.jpg');
+      if (jpg === filename) return filename;
+      try {
+        if (fs.statSync(path.join(baseDir, jpg)).isFile()) return jpg;
+      } catch (_) { /* sem gêmeo: usa o original */ }
+      return filename;
+    };
     const assetUrl = (baseDir, rota, filename) => {
+      if (forPdfServer) return fileToDataUrl(path.join(baseDir, versaoParaPdf(baseDir, filename)));
       const abs = path.join(baseDir, filename);
-      if (forPdfServer) return fileToDataUrl(abs);
       let v;
       try { v = Math.floor(fs.statSync(abs).mtimeMs); } catch (_) { return ''; }
       return `${baseURL}/api/assets/${rota}/${filename}?v=${v}`;

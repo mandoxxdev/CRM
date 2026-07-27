@@ -151,7 +151,34 @@ reais no disco — a condição exata em que o bug aparecia.
 
 ## Imagens de proposta
 
-Ficam em `server/assets/proposta/` e são carregadas como base64 via `fileToDataUrl()` para funcionar no Puppeteer.
+Ficam em `server/assets/proposta/` (dentro do `server/`, portanto copiadas para a imagem Docker
+pelo `COPY server/ ./server/`) e são servidas por `/api/assets/proposta/*`.
+
+### Formato por caminho: WebP no preview, JPEG no PDF
+
+Cada caminho usa o formato bom para ele, porque os dois têm gargalos opostos:
+
+| | preview (URL) | PDF (base64) |
+|---|---|---|
+| gargalo | bytes na rede | como o Chrome grava a imagem no PDF |
+| formato | **WebP** (mais leve na rede) | **JPEG** (copiado 1:1, filtro `DCTDecode`) |
+
+O Chrome copia um JPEG para dentro do PDF sem tocar nos bytes, mas **WebP e PNG ele decodifica e
+regrava como bitmap comprimido em Flate** — que não comprime foto. Medido antes da correção:
+`industria40.webp` 123 KB no disco → **1161 KB** dentro do PDF (9,4×); `projetos.webp` 45 KB →
+**712 KB** (15,9×). Essas duas sozinhas eram 1,87 MB dos 2,44 MB do arquivo; com os gêmeos `.jpg`
+o PDF caiu para **0,80 MB**.
+
+`versaoParaPdf()` faz isso automaticamente: com `forPdfServer`, se existir um `<nome>.jpg` ao lado
+do `.webp`/`.png`, ele é usado. Logo, **para aliviar o PDF basta colocar o gêmeo `.jpg` na pasta** —
+nenhuma mudança de código.
+
+**Não crie gêmeo `.jpg` para logo** (`logo-gmp*.png`, `logo-moinho-ypiranga.png`): eles dependem de
+transparência e ganhariam fundo sólido. Também não vale para `dados-contratada.png`, que é cor
+chapada com texto — Flate já a comprime bem (99 KB) e JPEG borraria as letras.
+
+Travado por `server/tests/propostaPdfPesoImagens.test.js` (formato por caminho + teto de peso do
+PDF gerado de fato).
 
 | Arquivo | Uso |
 |---|---|
