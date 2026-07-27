@@ -15,6 +15,9 @@
  *   C4 — nenhum <p> aninhado dentro de outro <p> no bloco: era o markup do campo
  *        "EMPRESA CONTRATANTE", invalido, e o parser jogava o nome do cliente para fora
  *        do campo — o alinhamento quebrava so naquele item
+ *   C6 — a capa NAO tem rodape (e folha de rosto: sem dados da empresa e sem "Pag. X/Y"),
+ *        e isso nao desloca a numeracao das demais paginas — a capa continua contando no
+ *        total, entao a pagina seguinte segue sendo a 2 de N
  *   C5 — a LOGO DO CLIENTE alinhada com os campos. Mesma armadilha por outro caminho: a
  *        regra global "img { display: block }" faz da logo um bloco, e bloco nao e
  *        centralizado por text-align — precisa de margin auto. A CAIXA da logo ja vinha
@@ -110,8 +113,24 @@ async function medir(browser, forPdfServer) {
     };
   });
 
+  // C6 — capa sem rodape, sem quebrar a numeracao das outras paginas
+  const capa = await page.evaluate(() => {
+    const cp = document.querySelector('.cover-page');
+    const vis = Array.from(document.querySelectorAll('.proposal-page')).filter(p => p.style.display !== 'none');
+    const seg = vis[1];
+    const n = seg && seg.querySelector('.js-page-number');
+    const t = seg && seg.querySelector('.js-page-count');
+    return {
+      temRodape: !!cp.querySelector('.page-footer'),
+      temTextoDeRodape: /MOINHO YPIRANGA \| CNPJ|Pág\./.test(cp.textContent || ''),
+      totalVisiveis: vis.length,
+      numeroDaSegunda: n ? n.textContent : null,
+      totalNaSegunda: t ? t.textContent : null,
+    };
+  });
+
   await page.close();
-  return { campos: r, logo };
+  return { campos: r, logo, capa };
 }
 
 (async () => {
@@ -119,7 +138,7 @@ async function medir(browser, forPdfServer) {
   const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
 
   for (const [forPdfServer, rotulo] of [[false, 'preview'], [true, 'PDF']]) {
-    const { campos: r, logo } = await medir(browser, forPdfServer);
+    const { campos: r, logo, capa } = await medir(browser, forPdfServer);
     console.log(`\n[${rotulo}]`);
     checar(!!r, `${rotulo}: bloco .cover-client-info existe`);
     if (!r) continue;
@@ -146,6 +165,11 @@ async function medir(browser, forPdfServer) {
       checar(logo.desvio <= TOL_PX,
         `C5 [${rotulo}]: logo alinhada ao centro dos campos (desvio ${logo.desvio.toFixed(1)}px, largura ${logo.largura}px)`);
     }
+
+    checar(!capa.temRodape, `C6 [${rotulo}]: capa sem .page-footer`);
+    checar(!capa.temTextoDeRodape, `C6 [${rotulo}]: capa sem dados da empresa nem "Pág."`);
+    checar(capa.numeroDaSegunda === '2' && capa.totalNaSegunda === String(capa.totalVisiveis),
+      `C6 [${rotulo}]: numeracao intacta — 2a pagina marca ${capa.numeroDaSegunda}/${capa.totalNaSegunda} de ${capa.totalVisiveis} visiveis`);
   }
 
   await browser.close();

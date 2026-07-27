@@ -1510,9 +1510,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <p class="cover-field-emissao">Data de Emissão: <strong>${dataEmissao || '—'}</strong></p>
         </div>
       </div>
-      <footer class="page-footer">
-        ${pageFooterTemplateHtml}
-      </footer>
+      ${/* Capa sem rodapé: é folha de rosto, não leva os dados da empresa nem "Pág. X/Y".
+           A numeração das demais páginas NÃO muda — numerarPaginas() conta .proposal-page
+           (a capa continua entrando no total) e só preenche os .js-page-number que existirem,
+           então a página seguinte segue sendo a 2. */''}
     </section>
 
     <section class="proposal-page">
