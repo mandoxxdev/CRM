@@ -1208,7 +1208,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .page-stack:has(> .pagina-assinatura) { height: 100%; }
     .pagina-assinatura { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; }
     .assinatura-meio { padding: 6mm 0; }
-    .campo-manual { font-size: 11.5pt; margin: 0 0 9mm 0; text-align: left; }
+    /* Negrito: a regra global "p, li { font-weight: 400 }" casa direto com estes <p>, então
+       o peso precisa vir de um seletor de classe (especificidade maior) — herdar não bastaria. */
+    .campo-manual { font-size: 11.5pt; margin: 0 0 9mm 0; text-align: left; font-weight: 700; }
     /* Espaços em branco da data: largura fixa com filete embaixo, para preencher à caneta. */
     .campo-branco { display: inline-block; border-bottom: 1px solid var(--ink); margin: 0 2px; }
     .campo-branco-dia, .campo-branco-mes { width: 16mm; }
