@@ -17,6 +17,7 @@
 | I7 | Seção 5, 5.23 e 5.24 iniciam em **página nova** (`data-page-break`) | `propostaQuebras.test.js` |
 | I8 | 5.23 (preço/FINAME/fiscais) renderiza nos **dois caminhos** (default e custom/inline) | `proposta523Fixa.test.js` |
 | I9 | Capa: hero 100% da largura sem faixa branca; nome/CNPJ/email/telefone presentes | `propostaCapaHero.test.js` (pixel exige `pngjs`), `propostaCapaContatoCadastro.test.js` |
+| I10 | **Tabela DADOS DA CONTRATADA sozinha na página**, e a paginação não muda conforme a imagem carrega (mesmo resultado com imagem presente, ausente/404 ou chegando tarde) | `propostaTabelaContratadaPaginaPropria.test.js` |
 
 ## ⚠️ Armadilhas conhecidas (causas de bugs reais — não repetir)
 
@@ -32,7 +33,16 @@
    `.page-header-inner` inteiro e, com ele, o `Nº da proposta` (bug de produção 24/07/2026 — só
    aparecia em prod, porque o arquivo referenciado não existe no disco local). Ver
    `propostaHeaderPadraoSempre.test.js`.
-9. **Medições de altura acontecem ANTES da edição inline injetar UI** — controles de edição devem ficar fora do fluxo (`position:absolute`) e `min-height` via CSS `:empty` (bug histórico `2a69dbc`).
+9. **`<img>` sem `width`/`height` mede 0px até baixar.** A paginação decide as páginas medindo o
+   DOM; um `<img>` carregado por URL (o caso do preview, que não usa base64) só tem altura depois
+   que os bytes chegam. Sem os atributos, o bloco "cabe" numa fração da página, o paginador puxa
+   os blocos seguintes para junto dele e, quando a imagem materializa a altura real, esse conteúdo
+   vai para baixo do rodapé e o `overflow:hidden` o corta — **sem erro nenhum no console**. Foi o
+   bug da proposta 87 (27/07/2026): as seções 1–4 iam parar na página da tabela DADOS DA CONTRATADA
+   e o documento parecia pular da 1 direto para a 5. Toda `<img>` que participa da paginação precisa
+   de `width`/`height` reais (ver `dimensoesImg`), e blocos que devem ser donos da página usam
+   `data-page-break-after="true"` em vez de depender da altura medida.
+10. **Medições de altura acontecem ANTES da edição inline injetar UI** — controles de edição devem ficar fora do fluxo (`position:absolute`) e `min-height` via CSS `:empty` (bug histórico `2a69dbc`).
 
 ## Como rodar a validação (obrigatório antes de merge)
 
@@ -47,6 +57,7 @@ node tests/proposta523TheadRepetido.test.js
 node tests/propostaQuebras.test.js
 node tests/propostaSumarioOverflow.test.js
 node tests/propostaCapaHero.test.js
+node tests/propostaTabelaContratadaPaginaPropria.test.js
 
 # Rápidos (node puro)
 node tests/proposta523Fixa.test.js

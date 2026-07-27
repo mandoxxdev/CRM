@@ -107,7 +107,29 @@ Fallback padrão: `—` quando o campo está vazio (evita span invisível).
 - Cria páginas clonando `#proposalPageTemplate` e anexando a `#proposalDocument` via `appendChild`
 - `avoid-break`: o bloco inteiro é movido para a próxima página se não couber
 - `allow-break`: tabelas com `data-split-table="true"` são divididas linha a linha
+- `data-page-break="before"`: fecha a página corrente ANTES de posicionar o bloco (seção 5, 5.23, 5.24)
+- `data-page-break-after="true"`: fecha a página DEPOIS de posicionar o bloco, para que ele seja
+  dono exclusivo dela — usado pela tabela DADOS DA CONTRATADA (ver abaixo)
 - Após distribuir, conta `.proposal-page:not([style*="none"])` e preenche `js-page-number` / `js-page-count`
+
+### Posse de página não pode depender de altura de imagem
+
+A paginação mede o DOM. No preview os assets vêm por **URL** (não base64), então um `<img>` sem
+`width`/`height` mede **0px** até os bytes chegarem — e permanece 0px se a URL 404. O bloco então
+"cabe" numa fração da página e o paginador puxa os blocos seguintes para junto dele; quando a
+imagem materializa a altura real, esse conteúdo é empurrado para baixo do rodapé e o
+`overflow:hidden` da página o corta silenciosamente.
+
+Foi o bug da proposta 87 (27/07/2026): as seções 1–4 iam parar na página da tabela DADOS DA
+CONTRATADA e o documento parecia pular da seção 1 direto para a 5. Duas defesas, ambas necessárias:
+
+1. `dimensoesImg()` lê largura/altura do IHDR do PNG e emite `width`/`height` no `<img>`, então o
+   espaço é reservado já na primeira medição — inclusive com a imagem ausente.
+2. O bloco usa `data-page-break-after="true"`, tornando a posse da página **estrutural** em vez de
+   consequência da altura medida.
+
+Travado por `server/tests/propostaTabelaContratadaPaginaPropria.test.js`, que roda os três estados
+da imagem (presente, 404 e chegando depois da paginação) e exige o mesmo layout nos três.
 
 ---
 

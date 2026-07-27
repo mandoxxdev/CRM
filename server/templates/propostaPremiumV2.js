@@ -113,6 +113,26 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const assetProposta = (filename) => assetUrl(propostaAssetsDir, 'proposta', filename);
     const assetFonte = (filename) => assetUrl(fontsDir, 'fonts', filename);
 
+    // Dimensões intrínsecas de um PNG (IHDR: largura/altura big-endian nos offsets 16 e 20),
+    // emitidas como atributos width/height no <img>. Sem elas o browser só conhece o tamanho
+    // da imagem DEPOIS de baixá-la: até lá o elemento mede 0px de altura e a paginação, que
+    // roda medindo o DOM, decide a página com a altura errada. Com os atributos o espaço é
+    // reservado desde a primeira medição — inclusive se a imagem 404. Retorna '' se não der
+    // para ler (o layout então volta ao comportamento anterior, sem quebrar).
+    const dimensoesImg = (baseDir, filename) => {
+      try {
+        const fd = fs.openSync(path.join(baseDir, filename), 'r');
+        const buf = Buffer.alloc(24);
+        fs.readSync(fd, buf, 0, 24, 0);
+        fs.closeSync(fd);
+        if (buf.slice(0, 8).toString('hex') !== '89504e470d0a1a0a') return '';
+        const w = buf.readUInt32BE(16);
+        const h = buf.readUInt32BE(20);
+        return (w > 0 && h > 0) ? ` width="${w}" height="${h}"` : '';
+      } catch (_) { return ''; }
+    };
+    const dadosContratadaDim = dimensoesImg(propostaAssetsDir, 'dados-contratada.png');
+
     const gmpLogoSmB64 = assetProposta('logo-gmp.png');
     const gmpLogoGrandeB64 = assetProposta('logo-gmp-grande.png');
     const myLogoB64 = assetProposta('logo-moinho-ypiranga.png');
@@ -694,10 +714,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     })();
 
     const blocksHtml = `
-      <section class="block stack-md allow-break">
+      <section class="block stack-md avoid-break" data-page-break-after="true">
         <p class="cover-strip-titulo" style="text-align: center;">Tabela com Dados Cadastrais da <strong>CONTRATADA</strong></p>
         ${dadosContratadaB64
-          ? `<img src="${dadosContratadaB64}" alt="Tabela com Dados Cadastrais da CONTRATADA" style="max-width:100%;height:auto;display:block; font-weight: bold;" />`
+          ? `<img src="${dadosContratadaB64}" alt="Tabela com Dados Cadastrais da CONTRATADA"${dadosContratadaDim} style="max-width:100%;height:auto;display:block; font-weight: bold;" />`
           : `<p class="muted">Tabela de dados cadastrais não disponível.</p>`}
       </section>
 
@@ -1785,6 +1805,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             page = null;
             ensurePage();
           }
+          // Quebra forçada DEPOIS do bloco: fecha a página assim que ele é posicionado, para
+          // que nenhum bloco seguinte entre junto. Necessário para blocos cuja posse da página
+          // não pode depender da altura medida — o caso da tabela DADOS DA CONTRATADA, cuja
+          // altura vem só de uma <img> carregada por URL: enquanto ela não chega (ou se ela
+          // 404), o bloco mede ~0px e o paginador puxava as seções 1..4 para a mesma página;
+          // quando a imagem materializava sua altura, esse conteúdo ia para baixo do rodapé e
+          // o overflow:hidden o cortava. Ver tests/propostaTabelaContratadaPaginaPropria.test.js.
+          const fecharPaginaDepois = !!(block.getAttribute && block.getAttribute('data-page-break-after') === 'true');
           const table = block.querySelector('table[data-split-table=\"true\"]');
           if (table) {
             const wrapper = block.cloneNode(true);
@@ -1820,6 +1848,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               }
               if (i < parts.length - 1) page = null;
             }
+            if (fecharPaginaDepois) page = null;
             continue;
           }
           // Se faltar espaço para título+primeiro texto, empurra o tópico para próxima página
@@ -1840,6 +1869,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
           const node = block.cloneNode(true);
           placeBlockOrSplit(node);
+          if (fecharPaginaDepois) page = null;
         }
         // Limpeza final: remove páginas geradas sem conteúdo útil
         Array.from(doc.querySelectorAll('.proposal-page[data-generated="1"]')).forEach((p) => {
