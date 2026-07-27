@@ -107,7 +107,7 @@ Fallback padrão: `—` quando o campo está vazio (evita span invisível).
 - Cria páginas clonando `#proposalPageTemplate` e anexando a `#proposalDocument` via `appendChild`
 - `avoid-break`: o bloco inteiro é movido para a próxima página se não couber
 - `allow-break`: tabelas com `data-split-table="true"` são divididas linha a linha
-- `data-page-break="before"`: fecha a página corrente ANTES de posicionar o bloco (seção 5, 5.23, 5.24)
+- `data-page-break="before"`: fecha a página corrente ANTES de posicionar o bloco (seções 4 e 5, 5.23, 5.24)
 - `data-page-break-after="true"`: fecha a página DEPOIS de posicionar o bloco, para que ele seja
   dono exclusivo dela — usado pela tabela DADOS DA CONTRATADA (ver abaixo)
 - Após distribuir, conta `.proposal-page:not([style*="none"])` e preenche `js-page-number` / `js-page-count`

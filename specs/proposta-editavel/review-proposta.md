@@ -14,7 +14,7 @@
 | I4 | **Tabela da 5.23 íntegra e em ordem**: todas as linhas (nº itens + TOTAL), montada completa ANTES da condição de pagamento; todo fragmento repetindo o `thead` | `propostaInvariantes.test.js`, `proposta523OrdemCondicao.test.js`, `proposta523TheadRepetido.test.js` |
 | I5 | **Numeração `Pág. X/Y` contínua e consistente**, com ou sem sumário (sumário visível ⇔ cabe na página; escondido quando estoura) | `propostaInvariantes.test.js`, `propostaSumarioOverflow.test.js` |
 | I6 | **Nada ultrapassa o rodapé** — nenhum bloco além da área útil de nenhuma página gerada | `propostaInvariantes.test.js` + script de overflow |
-| I7 | Seção 5, 5.23 e 5.24 iniciam em **página nova** (`data-page-break`) | `propostaQuebras.test.js` |
+| I7 | Seção **4**, seção 5, 5.23 e 5.24 iniciam em **página nova** (`data-page-break="before"`). A 4 é verificada nos dois ramos: com itens e sem nenhum item | `propostaQuebras.test.js` |
 | I8 | 5.23 (preço/FINAME/fiscais) renderiza nos **dois caminhos** (default e custom/inline) | `proposta523Fixa.test.js` |
 | I9 | Capa: hero 100% da largura sem faixa branca; nome/CNPJ/email/telefone presentes | `propostaCapaHero.test.js` (pixel exige `pngjs`), `propostaCapaContatoCadastro.test.js` |
 | I10 | **Tabela DADOS DA CONTRATADA sozinha na página**, e a paginação não muda conforme a imagem carrega (mesmo resultado com imagem presente, ausente/404 ou chegando tarde) | `propostaTabelaContratadaPaginaPropria.test.js` |

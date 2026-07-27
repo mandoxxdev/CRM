@@ -474,12 +474,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const warningMsgEscopo = (itens && itens.length > 0 && !algumItemComDados)
       ? `<p style="color:var(--muted);font-style:italic;font-size:10pt;margin-top:2mm;">As informações técnicas não estão cadastradas nos produtos desta proposta. Acesse o cadastro de produtos para preenchê-las.</p>`
       : '';
+    // A seção 4 inicia em página própria (data-page-break="before"), como a 5, a 5.23 e a
+    // 5.24 — ver I7 em specs/proposta-editavel/review-proposta.md. O `avoid-break` sozinho
+    // só impede o título de ficar órfão do primeiro equipamento; sem a quebra, numa proposta
+    // curta a seção 4 caía na mesma página das seções 1, 2 e 3. Vale nos DOIS ramos abaixo.
     const equipDescritivoHtml = equipItems.length === 0
-      ? `<section class="block stack-md avoid-break">
+      ? `<section class="block stack-md avoid-break" data-page-break="before">
           <h2>4. ESCOPO DE FORNECIMENTO</h2>
           <p class="muted">Nenhum equipamento selecionado nesta proposta.</p>
         </section>`
-      : `<section class="block stack-md avoid-break">
+      : `<section class="block stack-md avoid-break" data-page-break="before">
           <h2>4. ESCOPO DE FORNECIMENTO</h2>
           ${warningMsgEscopo}
           <section class="block stack-md allow-break">${equipItems[0]}</section>
