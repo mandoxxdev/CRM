@@ -4,8 +4,6 @@ const fs = require('fs');
 const {
   uploadsProdutosDir,
   uploadsLogosDir,
-  uploadsHeaderDir,
-  uploadsFooterDir,
   uploadsCoverDir,
 } = require('../config/paths');
 const propostaEngine = require('../propostaCompositionEngine');
@@ -82,15 +80,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const moedaBRL = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 
-    // Header/Footer customizados: usar SOMENTE se o arquivo existir no disco (embed base64).
-    // Sem fallback HTTP: se a imagem configurada não existe mais (config antiga apontando para
-    // upload removido), renderiza o header/footer padrão do modelo DOCX em vez de espaço em branco.
-    const headerImageURL = (config.header_image_url && String(config.header_image_url).trim())
-      ? (uploadToDataUrl(uploadsHeaderDir, String(config.header_image_url).trim()) || null)
-      : null;
-    const footerImageURL = (config.footer_image_url && String(config.footer_image_url).trim())
-      ? (uploadToDataUrl(uploadsFooterDir, String(config.footer_image_url).trim()) || null)
-      : null;
+    // Cabeçalho/rodapé por IMAGEM foram removidos: o template usa sempre o cabeçalho e o rodapé
+    // montados do modelo DOCX. As colunas header_image_url/footer_image_url continuam existindo em
+    // proposta_template_config (dados legados), mas são deliberadamente IGNORADAS aqui.
+    // Motivo: a imagem estática substituía o cabeçalho montado inteiro e, com ele, o "Nº da
+    // proposta" — que só existe no cabeçalho montado. Em produção isso deixava toda proposta sem
+    // número, enquanto no local o mesmo registro parecia correto porque o arquivo não existia no
+    // disco. Ver tests/propostaHeaderPadraoSempre.test.js.
 
     // Logo do cliente (capa): embed base64 a partir de uploads/logos, nunca via HTTP (PDF offline).
     // Se o arquivo não existir no disco, degrada para null (não renderiza o bloco).
@@ -1010,7 +1006,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     `;
 
     const pageHeaderTemplateHtml = `
-      <div class="page-header-inner" style="${headerImageURL ? 'display:none;' : ''}">
+      <div class="page-header-inner">
         <div class="page-header-logo-my">
           ${myLogoB64 ? `<img src="${myLogoB64}" alt="MOINHO YPIRANGA" />` : `<span class="page-header-title">MOINHO YPIRANGA</span>`}
         </div>
@@ -1022,11 +1018,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <div class="page-header-logo-gmp">
           ${gmpLogoSmB64 ? `<img src="${gmpLogoSmB64}" alt="GMP INDUSTRIAIS" />` : `<span class="page-header-title">GMP</span>`}
         </div>
-      </div>
-      ${headerImageURL ? `<img class="header-image" src="${headerImageURL}" alt="" onerror="this.style.display='none';var hi=this.parentElement&&this.parentElement.querySelector('.page-header-inner');if(hi)hi.style.display='';" />` : ''}`;
+      </div>`;
 
     const pageFooterTemplateHtml = `
-      <div class="page-footer-inner" style="${footerImageURL ? 'display:none;' : ''}">
+      <div class="page-footer-inner">
         <div class="page-footer-line1">MOINHO YPIRANGA | CNPJ: 13.273.368/0001-75 | T +55 (11) 4513-9570</div>
         <div class="page-footer-line2">www.gmp.ind.br | www.moinhoypiranga.com | www.ultradispersoravacuo.com.br</div>
         <div class="page-footer-line2">www.colorcell.com.br | www.transmicell.com.br</div>
@@ -1034,8 +1029,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <span class="page-footer-addr">Av. Dr. Ulysses Guimarães, nº 4105, Vila Nogueira, Diadema, São Paulo – Brasil | CEP: 09990-080</span>
           <span class="page-footer-right">Pág. <span class="js-page-number"></span>/<span class="js-page-count"></span></span>
         </div>
-      </div>
-      ${footerImageURL ? `<img class="footer-image" src="${footerImageURL}" alt="" onerror="this.style.display='none';var fi=this.parentElement&&this.parentElement.querySelector('.page-footer-inner');if(fi)fi.style.display='';" />` : ''}`;
+      </div>`;
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -1167,14 +1161,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     .page-header { position: relative; }
     .page-footer { position: relative; }
-    .header-image, .footer-image {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 0;
-    }
     .page-header-inner, .page-footer-inner { position: relative; z-index: 1; }
 
     /* Cabeçalho: logo Moinho à esquerda, GMP à direita, box central arredondado

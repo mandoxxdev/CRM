@@ -8504,21 +8504,9 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             templateConfig.clausulas_custom = clausulasParaTemplate;
           }
 
-          const hasHeaderOrFooter = (templateConfig.header_image_url && String(templateConfig.header_image_url).trim()) || (templateConfig.footer_image_url && String(templateConfig.footer_image_url).trim());
-          const tryMergeImages = (cb) => {
-            if (hasHeaderOrFooter) return cb();
-            db.all('SELECT header_image_url, footer_image_url FROM proposta_template_config ORDER BY id DESC LIMIT 5', [], (e2, rows) => {
-              if (rows && rows.length) {
-                const row = rows.find(r => (r.header_image_url && String(r.header_image_url).trim()) || (r.footer_image_url && String(r.footer_image_url).trim()));
-                if (row) {
-                  if (!(templateConfig.header_image_url && String(templateConfig.header_image_url).trim())) templateConfig.header_image_url = row.header_image_url || templateConfig.header_image_url;
-                  if (!(templateConfig.footer_image_url && String(templateConfig.footer_image_url).trim())) templateConfig.footer_image_url = row.footer_image_url || templateConfig.footer_image_url;
-                }
-              }
-              cb();
-            });
-          };
-          tryMergeImages(() => {
+          // (removido) tryMergeImages: herdava header_image_url/footer_image_url de outras linhas
+          // de proposta_template_config quando a linha escolhida não tinha imagem. O template não
+          // usa mais cabeçalho/rodapé por imagem — ver templates/propostaPremiumV2.js.
           function runGerar() {
             if (responseSent) return;
             let html;
@@ -8610,7 +8598,6 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             }
             runGerarSafe();
           });
-        });
         }); // fecha db.all clausulas
       });
       } catch (error) {

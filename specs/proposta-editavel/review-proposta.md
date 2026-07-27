@@ -27,7 +27,12 @@
 5. **Sumário ↔ numeração:** esconder/mostrar `#tocPage` exige renumerar (preencher → medir → decidir → renumerar → repreencher).
 6. **`industria40.png` foi aparado** (tinha margem transparente à esquerda). Se substituir a imagem, rodar `propostaCapaHero.test.js` **com `pngjs` instalado**.
 7. **Payload parcial nunca pode zerar colunas não enviadas** (bugs históricos: itens perdiam `modelo`/`descritivo_tecnico`; editar nome apagava email). Ver `mesclarItensPreservandoCampos` e `resolverCamposCustomizacao`.
-8. **Medições de altura acontecem ANTES da edição inline injetar UI** — controles de edição devem ficar fora do fluxo (`position:absolute`) e `min-height` via CSS `:empty` (bug histórico `2a69dbc`).
+8. **Cabeçalho/rodapé por imagem NÃO existe mais.** `header_image_url`/`footer_image_url` continuam
+   no banco mas são ignorados pelo template. Não reintroduzir: a imagem escondia o
+   `.page-header-inner` inteiro e, com ele, o `Nº da proposta` (bug de produção 24/07/2026 — só
+   aparecia em prod, porque o arquivo referenciado não existe no disco local). Ver
+   `propostaHeaderPadraoSempre.test.js`.
+9. **Medições de altura acontecem ANTES da edição inline injetar UI** — controles de edição devem ficar fora do fluxo (`position:absolute`) e `min-height` via CSS `:empty` (bug histórico `2a69dbc`).
 
 ## Como rodar a validação (obrigatório antes de merge)
 
@@ -49,6 +54,7 @@ node tests/propostaClausulasInline.test.js
 node tests/propostaCapaContatoCadastro.test.js
 node tests/propostaDescritivoOrdem.test.js
 node tests/propostaHeaderNumero.test.js
+node tests/propostaHeaderPadraoSempre.test.js
 node tests/propostaCapaLogoCliente.test.js
 node tests/propostaFonteEmbed.test.js
 node tests/propostaDiffItens.test.js

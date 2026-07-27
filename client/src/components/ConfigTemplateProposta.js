@@ -10,8 +10,6 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadingHeader, setUploadingHeader] = useState(false);
-  const [uploadingFooter, setUploadingFooter] = useState(false);
   const [uploadingContrato, setUploadingContrato] = useState(false);
   const [variaveisList, setVariaveisList] = useState([]);
   const [variaveisPropostaSearch, setVariaveisPropostaSearch] = useState('');
@@ -38,8 +36,6 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
     margin_navegador_bottom: 19
   });
   const [logoPreview, setLogoPreview] = useState(null);
-  const [headerPreview, setHeaderPreview] = useState(null);
-  const [footerPreview, setFooterPreview] = useState(null);
   const [familiasList, setFamiliasList] = useState([]);
   const [familiaEquipamentoSelecionada, setFamiliaEquipamentoSelecionada] = useState('');
   const [variaveisPorEquipamentoSearch, setVariaveisPorEquipamentoSearch] = useState('');
@@ -92,12 +88,6 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
         if (response.data.logo_url) {
           setLogoPreview(`/api/uploads/logos/${response.data.logo_url}`);
         }
-        if (response.data.header_image_url) {
-          setHeaderPreview(`/api/uploads/headers/${response.data.header_image_url}`);
-        }
-        if (response.data.footer_image_url) {
-          setFooterPreview(`/api/uploads/footers/${response.data.footer_image_url}`);
-        }
         // contrato_anexo_url carregado em config
       }
     } catch (error) {
@@ -142,113 +132,8 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
     }
   };
 
-  const handleHeaderImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setUploadingHeader(true);
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('headerImage', file);
-
-      const response = await axios.post('/api/proposta-template/header-image', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      setConfig(prev => ({ ...prev, header_image_url: response.data.filename }));
-      setHeaderPreview(`/api/uploads/headers/${response.data.filename}`);
-      alert('Imagem de cabeçalho enviada com sucesso!');
-    } catch (error) {
-      console.error('Erro ao fazer upload da imagem de cabeçalho:', error);
-      alert('Erro ao fazer upload da imagem de cabeçalho: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setUploadingHeader(false);
-    }
-  };
-
-  const handleFooterImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setUploadingFooter(true);
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('footerImage', file);
-
-      const response = await axios.post('/api/proposta-template/footer-image', formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      setConfig(prev => ({ ...prev, footer_image_url: response.data.filename }));
-      setFooterPreview(`/api/uploads/footers/${response.data.filename}`);
-      alert('Imagem de rodapé enviada com sucesso!');
-    } catch (error) {
-      console.error('Erro ao fazer upload da imagem de rodapé:', error);
-      alert('Erro ao fazer upload da imagem de rodapé: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setUploadingFooter(false);
-    }
-  };
-
-  const handleRemoveHeader = async () => {
-    if (!headerPreview && !config.header_image_url) return;
-    if (!window.confirm('Remover a imagem de cabeçalho? O cabeçalho fixo não aparecerá nas propostas.')) return;
-    setSaving(true);
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/proposta-template', {
-        ...config,
-        header_image_url: null,
-        mostrar_logo: config.mostrar_logo ? 1 : 0,
-        mostrar_especificacoes: config.mostrar_especificacoes ? 1 : 0,
-        mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0,
-        variaveis_proposta_tecnica: Array.isArray(config.variaveis_proposta_tecnica) ? config.variaveis_proposta_tecnica : [],
-        variaveis_proposta_por_familia: config.variaveis_proposta_por_familia && typeof config.variaveis_proposta_por_familia === 'object' ? config.variaveis_proposta_por_familia : {}
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      setConfig(prev => ({ ...prev, header_image_url: null }));
-      setHeaderPreview(null);
-      alert('Cabeçalho removido. As propostas não exibirão imagem de cabeçalho fixo.');
-    } catch (error) {
-      console.error('Erro ao remover cabeçalho:', error);
-      alert('Erro: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRemoveFooter = async () => {
-    if (!footerPreview && !config.footer_image_url) return;
-    if (!window.confirm('Remover a imagem de rodapé? O rodapé não aparecerá nas propostas.')) return;
-    setSaving(true);
-    try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/proposta-template', {
-        ...config,
-        footer_image_url: null,
-        mostrar_logo: config.mostrar_logo ? 1 : 0,
-        mostrar_especificacoes: config.mostrar_especificacoes ? 1 : 0,
-        mostrar_imagens_produtos: config.mostrar_imagens_produtos ? 1 : 0,
-        variaveis_proposta_tecnica: Array.isArray(config.variaveis_proposta_tecnica) ? config.variaveis_proposta_tecnica : [],
-        variaveis_proposta_por_familia: config.variaveis_proposta_por_familia && typeof config.variaveis_proposta_por_familia === 'object' ? config.variaveis_proposta_por_familia : {}
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      setConfig(prev => ({ ...prev, footer_image_url: null }));
-      setFooterPreview(null);
-      alert('Rodapé removido. As propostas não exibirão imagem de rodapé.');
-    } catch (error) {
-      console.error('Erro ao remover rodapé:', error);
-      alert('Erro: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setSaving(false);
-    }
-  };
+  // handleHeaderImageUpload / handleFooterImageUpload / handleRemoveHeader / handleRemoveFooter
+  // removidos junto com os campos de upload de cabeçalho e rodapé por imagem.
 
   const handleContratoAnexoUpload = async (e) => {
     const file = e.target.files[0];
@@ -598,63 +483,9 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
             />
           </div>
 
-          <div className="form-group">
-            <label>Imagem de Cabeçalho</label>
-            {headerPreview && (
-              <div className="logo-preview" style={{ marginBottom: '10px' }}>
-                <img src={headerPreview} alt="Cabeçalho" style={{ maxWidth: '100%', maxHeight: '200px' }} />
-              </div>
-            )}
-            <div className="upload-logo-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <input
-                type="file"
-                id="header-image-upload"
-                accept="image/*"
-                onChange={handleHeaderImageUpload}
-                style={{ display: 'none' }}
-              />
-              <label htmlFor="header-image-upload" className="btn-upload-logo">
-                <FiUpload /> {uploadingHeader ? 'Enviando...' : headerPreview ? 'Alterar Imagem de Cabeçalho' : 'Enviar Imagem de Cabeçalho'}
-              </label>
-              {(headerPreview || config.header_image_url) && (
-                <button type="button" onClick={handleRemoveHeader} className="btn-remove-image" disabled={saving}>
-                  <FiTrash2 /> Remover cabeçalho
-                </button>
-              )}
-            </div>
-            <small style={{ display: 'block', marginTop: '5px', color: '#666' }}>
-              A imagem aparecerá como cabeçalho fixo a partir da segunda página (onde está "OBJETIVO DA PROPOSTA")
-            </small>
-          </div>
-
-          <div className="form-group">
-            <label>Imagem de Rodapé</label>
-            {footerPreview && (
-              <div className="logo-preview" style={{ marginBottom: '10px' }}>
-                <img src={footerPreview} alt="Rodapé" style={{ maxWidth: '100%', maxHeight: '200px' }} />
-              </div>
-            )}
-            <div className="upload-logo-container" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <input
-                type="file"
-                id="footer-image-upload"
-                accept="image/*"
-                onChange={handleFooterImageUpload}
-                style={{ display: 'none' }}
-              />
-              <label htmlFor="footer-image-upload" className="btn-upload-logo">
-                <FiUpload /> {uploadingFooter ? 'Enviando...' : footerPreview ? 'Alterar Imagem de Rodapé' : 'Enviar Imagem de Rodapé'}
-              </label>
-              {(footerPreview || config.footer_image_url) && (
-                <button type="button" onClick={handleRemoveFooter} className="btn-remove-image" disabled={saving}>
-                  <FiTrash2 /> Remover rodapé
-                </button>
-              )}
-            </div>
-            <small style={{ display: 'block', marginTop: '5px', color: '#666' }}>
-              A imagem aparecerá no final da proposta como parte do conteúdo
-            </small>
-          </div>
+          {/* Upload de imagem de cabeçalho/rodapé removido: a proposta usa sempre o cabeçalho e o
+              rodapé montados do modelo DOCX (com o Nº da proposta). Manter os campos aqui daria a
+              impressão de que enviar uma imagem muda a proposta, o que não acontece mais. */}
 
           <div className="form-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
             <label>Contrato (anexo)</label>

@@ -111,6 +111,22 @@ Fallback padrão: `—` quando o campo está vazio (evita span invisível).
 
 ---
 
+## Cabeçalho e rodapé — sempre montados (sem imagem)
+
+O template **não** suporta mais cabeçalho/rodapé por imagem. As colunas `header_image_url` e
+`footer_image_url` de `proposta_template_config` continuam existindo (dados legados), mas são
+ignoradas pelo template, e os campos de upload saíram da tela de configuração.
+
+**Motivo (bug de produção, 24/07/2026):** quando a imagem existia no disco, o template aplicava
+`display:none` no `.page-header-inner` inteiro — e o `Nº da proposta` só existe lá dentro. Produção
+usava uma imagem legada (`header_1773852005478_CBC2.png`, branding CBC2 anterior ao redesign do
+modelo DOCX) e saía sem número em toda proposta. No ambiente local o mesmo registro parecia correto
+porque o arquivo não existe fora do volume de produção (o backup do banco não traz `uploads/`),
+então caía no fallback do cabeçalho padrão.
+
+Travado por `server/tests/propostaHeaderPadraoSempre.test.js`, que roda com arquivos de imagem
+reais no disco — a condição exata em que o bug aparecia.
+
 ## Imagens de proposta
 
 Ficam em `server/assets/proposta/` e são carregadas como base64 via `fileToDataUrl()` para funcionar no Puppeteer.
