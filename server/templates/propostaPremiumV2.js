@@ -645,6 +645,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </div>
       </section>`;
 
+    // Campos preenchidos À MÃO depois de impresso (data e assinatura/carimbo do cliente).
+    // Ficam FORA do conteúdo da cláusula 5.24 de propósito: a 5.24 é editável pelo usuário no
+    // preview, e se estes campos morassem dentro dela uma edição poderia apagá-los.
+    // O traço da assinatura é um ::after com flex:1 — assim ele vai da label até a margem
+    // direita sozinho, sem depender de contar underscores (que desalinham se a fonte mudar).
+    const camposAssinaturaManualHtml = `
+      <p class="campo-manual">Data da assinatura: <span class="campo-branco campo-branco-dia"></span>/<span class="campo-branco campo-branco-mes"></span>/<span class="campo-branco campo-branco-ano"></span></p>
+      <p class="campo-manual campo-manual-linha">Assinatura e carimbo da empresa CONTRATANTE:</p>`;
+
     const clausulasSection = (() => {
       if (templateConfig && Array.isArray(templateConfig.clausulas_custom) && templateConfig.clausulas_custom.length > 0) {
         const assinaturasHtml = `
@@ -706,14 +715,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         };
         const demaisSem524 = demaisClausulas.filter((c) => !(subNumeroDe(c) >= 24));
         const clausulasPos523 = demaisClausulas.filter((c) => subNumeroDe(c) >= 24);
-        // A primeira delas (5.24) inicia em página própria (data-page-break); ver Task A3.
+        // A 5.24 (e o que vier depois dela) ocupa uma PÁGINA PRÓPRIA, dividida em três faixas:
+        // texto no topo, campos de preenchimento manual no meio e assinaturas junto ao rodapé.
+        // Por isso as três partes viram UM único bloco (.pagina-assinatura): o paginador
+        // posiciona bloco a bloco, então só mantendo-as juntas dá para distribuí-las na altura
+        // da página. O data-page-break fica no bloco externo — o paginador só lê o atributo em
+        // filhos DIRETOS de #proposalSource.
         const clausula524Html = clausulasPos523
-          .map((c, i) => {
-            const htmlClausula = renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1);
-            return i === 0
-              ? htmlClausula.replace('<section class="block stack-md allow-break"', '<section class="block stack-md allow-break" data-page-break="before"')
-              : htmlClausula;
-          })
+          .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
           .join('');
         // IMPORTANTE: apenas o título + a 1ª cláusula ficam dentro do grupo "avoid-break"
         // (para o título "5. CONDIÇÕES GERAIS" não ficar órfão no fim da página). As demais
@@ -728,8 +737,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </section>
           ${demaisSem524.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
           ${sec523PrecoHtml}
-          ${clausula524Html}
-          <section class="block stack-md allow-break">${assinaturasHtml}</section>`;
+          <section class="block avoid-break pagina-assinatura" data-page-break="before">
+            <div class="assinatura-topo">${clausula524Html}</div>
+            <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
+            <div class="assinatura-rodape">
+              <p>Atenciosamente,</p>
+              ${assinaturasHtml}
+            </div>
+          </section>`;
       }
       return null;
     })();
@@ -1005,11 +1020,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       ${sec523PrecoHtml}
 
-      <section class="block stack-md allow-break clausula-corpo" data-page-break="before">
-        <h3>5.24 CONSIDERAÇÃO FINAL</h3>
-        <p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:</p>
-        <p>Data da assinatura: _____/_____/_____</p>
-        <p>Assinatura e carimbo da empresa CONTRATANTE: _____________________________________</p>
+      <section class="block avoid-break pagina-assinatura" data-page-break="before">
+        <div class="assinatura-topo stack-md clausula-corpo">
+          <h3>5.24 CONSIDERAÇÃO FINAL</h3>
+          <p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:</p>
+        </div>
+
+        <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
+
+        <div class="assinatura-rodape">
         <p>Atenciosamente,</p>
 
         <div class="signature-grid avoid-break">
@@ -1041,6 +1060,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <div class="sig-line">M +55 (11) 9.3386-9232</div>
             <div class="sig-email">matheus@gmp.ind.br</div>
           </div>
+        </div>
         </div>
       </section>
     `}
@@ -1181,6 +1201,22 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .equip-photo-img-float { width: 100%; height: auto; object-fit: contain; border-radius: 6px; display: block; }
     .equip-photo-fallback-float { display: flex; align-items: center; justify-content: center; min-height: 30mm; font-size: 10pt; color: var(--muted); background: var(--blue-100); border-radius: 6px; }
     .equip-tech { width: 100%; }
+
+    /* Página da 5.24: texto no topo, campos de preenchimento manual no meio e assinaturas
+       junto ao rodapé. O :has() estica APENAS a .page-stack que contém este bloco — esticar
+       todas mudaria a medição de altura que o paginador usa em todas as páginas. */
+    .page-stack:has(> .pagina-assinatura) { height: 100%; }
+    .pagina-assinatura { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; }
+    .assinatura-meio { padding: 6mm 0; }
+    .campo-manual { font-size: 11.5pt; margin: 0 0 9mm 0; text-align: left; }
+    /* Espaços em branco da data: largura fixa com filete embaixo, para preencher à caneta. */
+    .campo-branco { display: inline-block; border-bottom: 1px solid var(--ink); margin: 0 2px; }
+    .campo-branco-dia, .campo-branco-mes { width: 16mm; }
+    .campo-branco-ano { width: 24mm; }
+    /* Filete que corre da label até a margem direita: flex:1 no ::after resolve sozinho,
+       sem contar underscores (que mudariam de comprimento junto com a fonte). */
+    .campo-manual-linha { display: flex; align-items: baseline; gap: 3mm; margin-bottom: 0; }
+    .campo-manual-linha::after { content: ''; flex: 1 1 auto; border-bottom: 1px solid var(--ink); }
 
     /* Assinaturas/setor comercial (após "Atenciosamente,") */
     .signature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10mm; align-items: start; margin-top: 8mm; }
@@ -1343,7 +1379,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       margin: 0 0 7mm 0;
     }
     .cover-client-logo { text-align: center; margin: 0 0 4mm 0; }
-    .cover-client-logo img { max-height: 25mm; max-width: 60%; object-fit: contain; }
+    /* margin auto, e não só o text-align:center do pai: a regra global "img { display: block }"
+       torna a logo um elemento de bloco, e bloco não é centralizado por text-align — ele fica
+       encostado à esquerda da caixa. A caixa em si já vinha centrada (align-items:center do
+       .cover-info-area), o que disfarçava o desalinhamento da imagem dentro dela. */
+    .cover-client-logo img { max-height: 25mm; max-width: 60%; object-fit: contain; margin-left: auto; margin-right: auto; }
     /* Campos do cliente centralizados na capa. text-align (e não align-self como a data de
        emissão usava) porque o campo "EMPRESA CONTRATANTE" tem um <p> aninhado dentro de outro
        <p>: o browser fecha o externo e o nome vira um irmão solto, então centralizar item a

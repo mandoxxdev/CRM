@@ -15,22 +15,51 @@
  *   C4 — nenhum <p> aninhado dentro de outro <p> no bloco: era o markup do campo
  *        "EMPRESA CONTRATANTE", invalido, e o parser jogava o nome do cliente para fora
  *        do campo — o alinhamento quebrava so naquele item
+ *   C5 — a LOGO DO CLIENTE alinhada com os campos. Mesma armadilha por outro caminho: a
+ *        regra global "img { display: block }" faz da logo um bloco, e bloco nao e
+ *        centralizado por text-align — precisa de margin auto. A CAIXA da logo ja vinha
+ *        centrada pelo align-items do .cover-info-area, o que disfarcava a imagem torta
+ *        dentro dela (media 19px a esquerda). Por isso o teste mede a IMAGEM, nao a caixa.
  *
  * Roda nos dois caminhos (PDF e preview) porque a capa e a mesma nos dois.
  *
  * Executar: node tests/propostaCapaCamposCentralizados.test.js  (usa puppeteer)
  */
+const fs = require('fs');
+const path = require('path');
 const { gerarHTMLPropostaPremiumV2 } = require('../templates/propostaPremiumV2');
 const { getClausulasDefault } = require('../clausulasDefault');
+const { uploadsLogosDir } = require('../config/paths');
 const puppeteer = require('puppeteer');
 
 const CAMPOS = ['contratante', 'cnpj', 'email', 'telefone', 'emissao'];
 const TOL_PX = 2;
 
+// Logo de teste gravada no disco (o template le do uploadsLogosDir e embute em base64).
+// Retangular de proposito: com a imagem quadrada e pequena o desalinhamento fica
+// dentro da tolerancia e passaria despercebido.
+const LOGO_ARQUIVO = '__test_logo_capa_centralizada.png';
+const LOGO_CAMINHO = path.join(uploadsLogosDir, LOGO_ARQUIVO);
+function criarLogo() {
+  const { PNG } = require('pngjs');
+  const png = new PNG({ width: 240, height: 90 });
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 11; png.data[i + 1] = 58; png.data[i + 2] = 102; png.data[i + 3] = 255;
+  }
+  fs.mkdirSync(uploadsLogosDir, { recursive: true });
+  fs.writeFileSync(LOGO_CAMINHO, PNG.sync.write(png));
+}
+// Chamado ANTES de cada process.exit, e não num .finally: process.exit encerra o processo
+// na hora, sem esperar a microtask do finally — a logo de teste ficava para trás no volume.
+function limparLogo() {
+  try { fs.unlinkSync(LOGO_CAMINHO); } catch (_) { /* já removida */ }
+}
+
 const proposta = {
   numero_proposta: '058-02-MH-2026-REV00', titulo: 'TESTT',
   razao_social: 'CLIENTE TESTE LTDA', cnpj: '12.345.678/0001-90',
   cliente_email: 'contato@cliente.com.br', cliente_telefone: '(11) 98888-7777',
+  cliente_logo_url: LOGO_ARQUIVO,
 };
 const itens = [{ produto_nome: 'Masseira', quantidade: 1, unidade: 'UN', valor_unitario: 1000, valor_total: 1000 }];
 const totais = { total: 1000, dataEmissao: '27/07/2026' };
@@ -66,15 +95,31 @@ async function medir(browser, forPdfServer) {
       };
     });
   }, CAMPOS);
+
+  // C5 — a IMAGEM da logo (não a caixa dela) alinhada ao centro dos campos
+  const logo = await page.evaluate(() => {
+    const bloco = document.querySelector('.cover-client-info');
+    const img = document.querySelector('.cover-client-logo img');
+    if (!bloco || !img) return { ausente: true };
+    const bb = bloco.getBoundingClientRect();
+    const ib = img.getBoundingClientRect();
+    return {
+      ausente: false,
+      largura: Math.round(ib.width),
+      desvio: Math.abs((ib.left + ib.width / 2) - (bb.left + bb.width / 2)),
+    };
+  });
+
   await page.close();
-  return r;
+  return { campos: r, logo };
 }
 
 (async () => {
+  criarLogo();
   const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
 
   for (const [forPdfServer, rotulo] of [[false, 'preview'], [true, 'PDF']]) {
-    const r = await medir(browser, forPdfServer);
+    const { campos: r, logo } = await medir(browser, forPdfServer);
     console.log(`\n[${rotulo}]`);
     checar(!!r, `${rotulo}: bloco .cover-client-info existe`);
     if (!r) continue;
@@ -95,9 +140,16 @@ async function medir(browser, forPdfServer) {
 
     const aninhados = r.filter(x => x.pAninhado).map(x => x.campo);
     checar(aninhados.length === 0, `C4 [${rotulo}]: nenhum <p> dentro de <p> (achado em: ${aninhados.join(', ') || 'nenhum'})`);
+
+    checar(!logo.ausente, `C5 [${rotulo}]: logo do cliente renderizada`);
+    if (!logo.ausente) {
+      checar(logo.desvio <= TOL_PX,
+        `C5 [${rotulo}]: logo alinhada ao centro dos campos (desvio ${logo.desvio.toFixed(1)}px, largura ${logo.largura}px)`);
+    }
   }
 
   await browser.close();
   console.log(falhas === 0 ? '\n0 failed' : `\n${falhas} failed`);
+  limparLogo();
   process.exit(falhas === 0 ? 0 : 1);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => { console.error(e); limparLogo(); process.exit(1); });
