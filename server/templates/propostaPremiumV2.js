@@ -1380,7 +1380,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       color: #1a1a1a;
       margin: 0 0 7mm 0;
     }
-    .cover-client-logo { text-align: center; margin: 0 0 4mm 0; }
+    .cover-client-logo {    
+      display: flex;
+      justify-content: center;
+      margin: 0 0 4mm 0;
+    }
     /* margin auto, e não só o text-align:center do pai: a regra global "img { display: block }"
        torna a logo um elemento de bloco, e bloco não é centralizado por text-align — ele fica
        encostado à esquerda da caixa. A caixa em si já vinha centrada (align-items:center do
