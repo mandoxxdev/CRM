@@ -11209,9 +11209,9 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
             <tr><td class="dados-label">CNPJ</td><td class="dados-value">13.273.368/0001-75</td></tr>
             <tr><td class="dados-label">Inscrição Estadual</td><td class="dados-value">286.444.118.116</td></tr>
             <tr><td class="dados-label">Inscrição Municipal</td><td class="dados-value">76.310</td></tr>
-            <tr><td class="dados-label">Logradouro</td><td class="dados-value">Av. Dr. Ulysses Guimarães, nº 4105</td></tr>
-            <tr><td class="dados-label">Bairro</td><td class="dados-value">Vila Nogueira</td></tr>
-            <tr><td class="dados-label">Município</td><td class="dados-value">Diadema</td></tr>
+            <tr><td class="dados-label">Logradouro</td><td class="dados-value">Av. Ângelo Demarchi, nº 130</td></tr>
+            <tr><td class="dados-label">Bairro</td><td class="dados-value">Batistini</td></tr>
+            <tr><td class="dados-label">Município</td><td class="dados-value">São Bernardo do Campo</td></tr>
             <tr><td class="dados-label">Estado</td><td class="dados-value">São Paulo</td></tr>
             <tr><td class="dados-label">Pais</td><td class="dados-value">Brasil</td></tr>
             <tr><td class="dados-label">Telefone</td><td class="dados-value">+55 (11) 4513-9570</td></tr>

@@ -518,7 +518,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     // preco-group) para iniciar em página própria (ver paginateProposalContent).
     const sec523PrecoHtml = `
       <section class="block stack-md avoid-break five-23-preco-group" data-page-break="before">
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>
           <p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>
         </section>
@@ -742,12 +742,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           : `<p class="muted">Tabela de dados cadastrais não disponível.</p>`}
       </section>
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h2>1. OBJETIVO DA PROPOSTA</h2>
         <p>Apresentar condições técnicas e comerciais, para fornecimento de equipamentos e/ou serviços industriais.</p>
       </section>
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h2>2. ELABORAÇÃO DA PROPOSTA</h2>
         <p>A proposta apresentada a seguir, foi elaborada atendendo às solicitações e especificações informadas pelo CONTRATANTE, através de reunião, ligação e/ou e-mail.</p>
         <p>Deve-se atentar, que os itens oferecidos estão descriminados e especificados nesta proposta técnica comercial. Os parâmetros e dimensionamentos dos equipamentos e garantias relacionadas nesta proposta, estão baseadas nas condições e características do produtos, disponibilizadas pelo CONTRATANTE, conforme dados resumidos apresentados no decorrer desta proposta.</p>
@@ -775,27 +775,27 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       ${clausulasSection !== null ? clausulasSection : `<section class="block stack-md avoid-break five-intro-group" data-page-break="before">
         <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.1 PRAZO DE ENTREGA</h3>
           <p>O prazo para entrega dos itens apresentados nesta proposta comercial, é dentro de 90 dias úteis, a partir da data da aprovação formal do pedido (via e-mail) e compensação do pagamento referente a entrada.</p>
           <p>O prazo pode prolongar, em casos de atraso no envio de informações e aprovação das documentações, por parte da CONTRATANTE.</p>
           <p>Caso ocorra atraso na entrega dos equipamentos por motivos cuja responsabilidade não possa ser atribuída à CONTRATADA, forças maiores como fenômenos naturais, atos governamentais, acidentes ou outros motivos abrangidos pelo artigo 1058 do Código Civil, que a impossibilite de obter os insumos necessários à fabricação, impossibilitando está de cumprir o prazo de entrega, este será prorrogado pelo período necessário para a normalização da produção.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.2 TRANSPORTE E EMBALAGEM</h3>
-          <p>A CONTRATADA deverá promover a liberação do(s) EQUIPAMENTO(S), na modalidade EXW (Ex Works), conforme previsto na relação de ICOTERMS editada pela Câmara Internacional de Comércio, diretamente na fábrica, estabelecida à Av. Dr. Ulysses Guimarães, nº 4105, Vila Nogueira, Diadema, São Paulo – Brasil, CEP 09990-080.</p>
+          <p>A CONTRATADA deverá promover a liberação do(s) EQUIPAMENTO(S), na modalidade EXW (Ex Works), conforme previsto na relação de ICOTERMS editada pela Câmara Internacional de Comércio, diretamente na fábrica, estabelecida à Av. Ângelo Demarchi, nº 130, Batistini, São Bernardo do Campo, São Paulo – Brasil, CEP 09844-100.</p>
           <p>O(s) EQUIPAMENTO(S) serão embalado(s) com plástico bolha.</p>
           <p>Caso a CONTRATANTE necessite de outro tipo de embalagem, a mesma deverá comunicar a CONTRATADA previamente via e-mail, para que ela possa atualizar a proposta com o custo e novo modelo da embalagem.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.3 LIBERAÇÃO DO PEDIDO</h3>
           <p>A formalização da entrega se dará, através do comunicado de liberação do pedido, o qual será enviado via e-mail, endereçado para o contato que consta nesta proposta técnica comercial e/ou via carta registrada.</p>
         </section>
       </section>
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h3>5.4 GARANTIA</h3>
         <p>A CONTRATADA garante aos equipamentos, devidamente previstos nesta proposta técnica comercial, contra defeitos de fabricação, pelo prazo de 12 (doze) meses, a contar da assinatura do "Termo de Entrega e Startup", se limitando a 14 (quatorze) meses, a contar da emissão de nota fiscal de venda e/ou remessa.</p>
         <p>A CONTRATADA se obriga, sob sua conta e risco, durante o prazo de vigência da garantia, a reparar, quando apresentarem defeitos ou falhas provenientes de projeto, desempenho ou qualidade dos serviços ora prestados, sem qualquer custo para a CONTRATANTE.</p>
@@ -807,7 +807,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>A CONTRATANTE não se beneficiará da garantia contratual, quando os serviços forem acometidos por eventos de caso fortuito, força maior, uso incorreto, falta de manutenção, montagem e startup dos equipamentos sem supervisão da CONTRATADA.</p>
       </section>
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h3>5.5 SUPERVISÃO E COMISSIONAMENTO DE STARTUP</h3>
         <p>A CONTRATANTE deverá solicitar para a CONTRATADA, o agendamento da montagem e acompanhamento de startup dos equipamentos, os quais serão agendados de acordo com a disponibilidade da agenda dos técnicos.</p>
         <p>Para agendamento da montagem, a CONTRATANTE deverá solicitar, quando os equipamentos já estiverem em sua sede.</p>
@@ -869,7 +869,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
 
       <section class="block stack-md avoid-break five-6-7-group">
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.6 OBRIGAÇÕES DA CONTRATANTE</h3>
           <p>A CONTRATANTE deverá disponibilizar e fornecer informações e documentos, pertinentes ao produto processado e local de instalação dos equipamentos.</p>
           <p>A CONTRATANTE deverá analisar, conferir e aprovar documentos e projetos junto a CONTRATADA, dentro do prazo de 5 (cinco) dias úteis, contados da data de envio do documento e/ou projeto.</p>
@@ -877,7 +877,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <p>Reembolsar a CONTRATADA, de eventuais custos adicionais, originados por ato de responsabilidade da CONTRATANTE.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.7 OBRIGAÇÕES DA CONTRATADA</h3>
           <p>A CONTRATADA deverá oferecer mão-de-obra especializada e cumprir todos os deveres e obrigações dispostos no ESCOPO DE FORNECIMENTO e CONDIÇÕES GERAIS desta proposta técnica comercial.</p>
           <p>É dever da CONTRATADA proibir o uso do nome ou logotipo da CONTRATANTE, devendo proibir seu pessoal de utilizar o logo da CONTRATANTE em suas vestimentas, o que inclui o uso de bonés, cordões de porte de crachá, camisetas e quaisquer outras peças do vestuário ou acessórios.</p>
@@ -888,44 +888,44 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
 
       <section class="block stack-md avoid-break five-8-ate-14-group">
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.8 ALTERAÇÃO DE PEDIDO</h3>
           <p>Caso a CONTRATANTE solicite alterações no escopo de fornecimento, a CONTRATADA apresentará a CONTRATANTE, os impactos, valores e prazos para realização da alteração.</p>
           <p>A CONTRATANTE deverá responder a CONTRATADA, com a aprovação ou declínio da alteração, dentro de 5 (cinco) dias úteis, contados da apresentação da proposta de alteração da CONTRATADA para a CONTRATANTE.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.9 DEVOLUÇÃO OU TROCA DE MERCADORIA</h3>
           <p>Não serão aceitas. Apenas em casos excepcionais serão aceitas, se houver prévia autorização da CONTRATADA e a CONTRATANTE arcará com todas as despesas envolvidas.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.10 CANCELAMENTO DE PEDIDO</h3>
           <p>Não serão aceitas. Visto que os produtos são produzidos sob encomenda e necessitam de horas de engenharia, projeto e desenvolvimento e as peças/serviços oriundas dele atendem exclusivamente ao CONTRATANTE.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.11 ATRASO DE FATURAMENTO</h3>
           <p>Ocorrendo atraso de faturamento por razões de responsabilidade do CONTRATANTE, como falta de documentos para aprovação do crédito, identificação de transportadora, não pagamento de antecipações/parcelas constantes nesta proposta técnica comercial, atraso de inspeção, diligenciamento e liberação de financiamento, a CONTRATADA cobrará o preço da mercadoria e/ou serviço, com base na lista de preço vigente na data do faturamento.</p>
         </section>
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.12 TAXA DE ARMAZENAGEM</h3>
           <p>Será cobrada uma taxa de armazenagem de 1% ao mês do valor do fornecimento, caso as mercadorias não sejam retiradas em até 30 dias após a data de faturamento, calculada pro-rata diem a partir do 31º dia, limitada a 10% do valor do faturamento.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.13 DANOS OU PREJUÍZOS</h3>
           <p>A responsabilidade civil da CONTRATADA está limitada ao produto fornecido, não se responsabilizando por danos indiretos ou emergentes, tais como lucros cessantes, perdas de receitas, produtividade ou de dados, reclamações, paralizações, despesas, danos pessoais.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.14 RESPONSABILIDADE FINANCEIRA</h3>
           <p>A CONTRATANTE poderá optar em proceder o pagamento das parcelas supracitadas através de financiamento junto ao BANCO, porém, desde que respeitados os prazos de pagamento desta proposta técnica comercial e sem qualquer participação da CONTRATADA, junto as instituições financeiras para liberação desses valores.</p>
         </section>
       </section>
 
       <section class="block stack-md avoid-break five-15-16-17-group">
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.15 CONSIDERAÇÕES CONSTRUTIVAS</h3>
           <p>Os equipamentos e serviços ora ofertados nesta proposta técnica comercial, são padronizados pela CONTRATADA. Caso a CONTRATANTE tenha preferência ou necessidade que seja utilizado marca ou modelo especifico de qualquer componente ou material, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta comercial.</p>
           <p>A CONTRATADA se resguarda do direito de utilizar o melhor aproveitamento dos materiais, durante o processo de fabricação e montagem de seus equipamentos, podendo aparecer soldas de complementos de materiais em pontos distintos.</p>
@@ -933,12 +933,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <p>Fica entendido que todas as informações foram apresentadas ao CONTRATANTE nesta proposta técnica comercial, e foram suficientes para o entendimento e aceite do produto e/ou serviço que será fornecido, desta forma, qualquer informação e/ou característica que não foi apresentada previamente neste documento, seguirá o padrão do projeto e/ou serviço da CONTRATADA.</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.16 VALIDADE DA PROPOSTA</h3>
           <p>Esta proposta técnica comercial é válida por 15 (quinze) dias corridos, contados da data de emissão, informada na página inicial (capa).</p>
         </section>
 
-        <section class="block stack-md allow-break">
+        <section class="block stack-md allow-break clausula-corpo">
           <h3>5.17 REAJUSTE DE PREÇO</h3>
           <p>Havendo alterações na legislação tributária vigente na época, a CONTRATADA se resguarda ao direito de atualizar os preços apresentados, de acordo com a nova tributação, com prévia aprovação do CONTRATANTE.</p>
           <p>Para vendas fora do território nacional (BRASIL), os preços apresentados nesta proposta técnica comercial, poderão ser reajustado pela taxa do Dólar Americano, valor comercial de venda, até a data do faturamento, utilizando como taxa base USD 1,00 = VALOR DA COTAÇÃO NA DATA DA PROPOSTA.</p>
@@ -946,7 +946,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
 
       <section class="block stack-md avoid-break five-18-19-group">
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h3>5.18 DOCUMENTAÇÃO PARTE DO ESCOPO</h3>
         <p>Os documentos abaixo relacionados, serão fornecidos em arquivos, formatos e cronograma padrão da CONTRATATADA. Caso a CONTRATANTE necessite de documentos não relacionados abaixo ou padrões específicos, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta.</p>
         <ul>
@@ -957,7 +957,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>Os documentos entregues a CONTRATANTE pela CONTRATADA, não poderão ser reproduzidos, comercializados e cedidos a terceiros, sem o prévio e expresso consentimento da CONTRATADA, e permanecem a sua exclusiva propriedade industrial.</p>
       </section>
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h3>5.19 EXTINÇÃO DO CONTRATO</h3>
         <p>O presente contrato estará imediatamente extinto entre as PARTES, em decorrência de causas supervenientes à sua celebração, sem nenhum ônus a qualquer das Partes e independentemente de qualquer notificação ou interpelação judicial ou extrajudicial nas seguintes hipóteses:</p>
         <div class="list-num">
@@ -971,7 +971,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
 
       <section class="block stack-md avoid-break five-20-21-group">
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h3>5.20 DISPOSIÇÕES ADICIONAIS</h3>
         <p><strong>MODIFICAÇÃO DO CONTRATO:</strong> Toda e qualquer obrigação não mencionada no presente instrumento de contrato, bem como toda e qualquer alteração do ora pactuado, somente surtirá efeitos entre as Partes, quando realizada, por escrito, na forma de termo de aditivo ou alteração contratual.</p>
         <p><strong>TOLERÂNCIA:</strong> O cumprimento de modo diverso de quaisquer cláusulas deste ajuste caracterizará mera liberalidade da Parte tolerante, e, por conseguinte, não implicará em novação, perdão, suspensão, interrupção, renúncia, extinção, direito adquirido e/ou modificação do CONTRATO.</p>
@@ -982,13 +982,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>Na interpretação das disposições contratuais deve-se levar em conta sempre o Princípio da Boa-Fé Objetiva, tanta na fase pré-contratual como em sua formação e execução.</p>
       </section>
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h3>5.21 FORO</h3>
         <p>As partes elegem o Foro da Comarca de São Bernardo do Campo - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>
       </section>
       </section>
 
-      <section class="block stack-md allow-break five-22-separate-page">
+      <section class="block stack-md allow-break clausula-corpo five-22-separate-page">
         <h3>5.22 EXCLUSO DO FORNECIMENTO</h3>
         <p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p>
         <div class="list-num">
@@ -1005,7 +1005,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       ${sec523PrecoHtml}
 
-      <section class="block stack-md allow-break" data-page-break="before">
+      <section class="block stack-md allow-break clausula-corpo" data-page-break="before">
         <h3>5.24 CONSIDERAÇÃO FINAL</h3>
         <p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:</p>
         <p>Data da assinatura: _____/_____/_____</p>
@@ -1063,11 +1063,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     const pageFooterTemplateHtml = `
       <div class="page-footer-inner">
-        <div class="page-footer-line1">MOINHO YPIRANGA | CNPJ: 13.273.368/0001-75 | T +55 (11) 4513-9570</div>
+        <div class="page-footer-line1"><strong>MOINHO YPIRANGA</strong> | <strong>CNPJ</strong>: 13.273.368/0001-75 | <strong>T</strong> +55 (11) 4513-9570</div>
         <div class="page-footer-line2">www.gmp.ind.br | www.moinhoypiranga.com | www.ultradispersoravacuo.com.br</div>
         <div class="page-footer-line2">www.colorcell.com.br | www.transmicell.com.br</div>
         <div class="page-footer-line3">
-          <span class="page-footer-addr">Av. Dr. Ulysses Guimarães, nº 4105, Vila Nogueira, Diadema, São Paulo – Brasil | CEP: 09990-080</span>
+          <span class="page-footer-addr">Av. Ângelo Demarchi, nº 130, Batistini, São Bernardo do Campo, São Paulo – Brasil | CEP: 09844-100</span>
           <span class="page-footer-right">Pág. <span class="js-page-number"></span>/<span class="js-page-count"></span></span>
         </div>
       </div>`;
@@ -1085,9 +1085,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     ${cgBoldItalicB64 ? `@font-face { font-family: 'Century Gothic'; font-style: italic; font-weight: 700; font-display: swap; src: url('${cgBoldItalicB64}') format('truetype'); }` : ''}
     :root{
       /* Paleta do modelo DOCX: texto integral em azul marinho #002060 */
-      --ink: #002060;
+      --ink: #002061;
       --muted: rgba(0,32,96,0.55);
       --blue-900: #002060;
+      --blue-600: #41afcc;
       --blue-700: #17365D;
       --blue-100: #e8f2fb;
       --navy-950: #0a2a4f;
@@ -1108,9 +1109,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     h1, h2, h3, h4, h5, h6, p, ul, ol { margin-top: 0; }
     p:last-child, ul:last-child, ol:last-child { margin-bottom: 0; }
     h1 { margin: 0 0 10px 0; font-size: 14pt; font-weight: 700; line-height: 1.15; }
-    h2 { margin: 0 0 8px 0; font-size: 14pt; font-weight: 700; line-height: 1.15; }
+    h2 { margin: 0 0 3px 0; font-size: 14pt; font-weight: 700; line-height: 1.15; }
     h3 { margin: 0 0 6px 0; font-size: 12pt; font-weight: 700; line-height: 1.15; }
-    p, li { margin: 0 0 6px 0; font-size: 11pt; line-height: 1.15; text-align: justify; text-transform: none; font-variant: normal; font-weight: 400; }
+    p, li { margin: 0 0 0 0; font-size: 11pt; line-height: 1.6; text-align: justify; text-transform: none; font-variant: normal; font-weight: 400; }
     ul, ol { padding-left: 16px; margin-bottom: 6px; }
 
     .proposal-document { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
@@ -1139,8 +1140,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .proposal-page { width: 210mm; height: 297mm; min-height: 297mm; flex-shrink: 0; background: #fff; display: flex; flex-direction: column; overflow: hidden; position: relative; page-break-after: always; break-after: page; }
     /* Header/footers com altura fixa para repetir corretamente em todas as páginas */
     .page-header { flex: 0 0 auto; width: 100%; height: 39mm; padding: 0; margin: 0; }
-    .page-content { flex: 1 1 auto; width: 100%; padding: 10mm 14mm 10mm 14mm; margin: 0; overflow: hidden; }
-    .page-footer { flex: 0 0 auto; width: 100%; height: 20mm; padding: 0; margin: 0; }
+    .page-content { flex: 1 1 auto; width: 100%; padding: 3mm 14mm 10mm 14mm; margin: 0; overflow: hidden; }
+    .page-footer { flex: 0 0 auto; width: 100%; height: 20mm; padding: 0; margin: 0 0 18px 0; }
 
     .stack-xs, .stack-sm, .stack-md, .stack-lg, .stack-xl { display: flex; flex-direction: column; }
     .stack-xs { gap: 4px; } .stack-sm { gap: 8px; } .stack-md { gap: 12px; } .stack-lg { gap: 16px; } .stack-xl { gap: 24px; }
@@ -1201,6 +1202,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .sig-role { font-size: 11px; opacity: 0.75; }
 
     .page-header { position: relative; }
+      header.page-header::after {
+      content: '';
+      width: 95%;
+      height: 2.5px;
+      background: #41afcc;
+      display: block;
+      margin: 0 auto;
+      border-bottom: 2.5px solid #909090;
+  }
     .page-footer { position: relative; }
     .page-header-inner, .page-footer-inner { position: relative; z-index: 1; }
 
@@ -1213,14 +1223,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       align-items: center;
       gap: 5mm;
       padding: 0 8mm;
-      border-bottom: 2px solid var(--blue-900);
     }
     .page-header-logo-my { display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; }
     .page-header-logo-my img { height: 12mm; width: auto; object-fit: contain; }
     .page-header-logo-gmp { display: flex; align-items: center; justify-content: flex-end; flex-shrink: 0; }
     .page-header-logo-gmp img { height: 12mm; width: auto; object-fit: contain; }
     .page-header-center-box {
-      border: 1.5px solid var(--blue-900);
+      border: 1.5px solid var(--blue-600);
       border-radius: 10px;
       padding: 3.5mm 4mm;
       text-align: center;
@@ -1245,11 +1254,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       justify-content: center;
       gap: 0.8mm;
       padding: 0 8mm;
-      border-top: 1px solid var(--line);
       text-align: center;
     }
-    .page-footer-line1 { font-size: 7.5pt; font-weight: 700; color: var(--blue-900); line-height: 1.25; }
-    .page-footer-line2 { font-size: 7pt; color: var(--blue-900); line-height: 1.25; }
+    .page-footer-line1 { font-size: 8.5pt; font-weight: 500; color: var(--blue-900); line-height: 1.25; }
+    .page-footer-line2 { font-size: 8pt; color: var(--blue-900); line-height: 1.25; }
     .page-footer-line3 {
       width: 100%;
       display: flex;
@@ -1257,11 +1265,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       justify-content: center;
       gap: 4mm;
     }
-    .page-footer-addr { font-size: 6.5pt; color: var(--blue-700); line-height: 1.25; text-align: left; }
+    .page-footer-addr { font-size: 7.5pt; color: var(--blue-700); line-height: 1.25; text-align: left; }
     .page-footer-right {     
       text-align: right;
       white-space: nowrap;
-      font-size: 7.5pt;
+      font-size: 8.5pt;
       font-weight: 700;
       color: var(--blue-900);
       flex-shrink: 0;
@@ -1356,7 +1364,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     }
 
     /* Página de Apresentação da empresa (modelo DOCX: texto largura total + imagem centrada) */
-    .pres-page-content { display: flex; flex-direction: column; height: 100%; padding-top: 14mm; }
+    .pres-page-content { display: flex; flex-direction: column; height: 100%; padding-top: 5mm; }
     /* Indentação de primeira linha do modelo DOCX (w:firstLine=709 twips ≈ 12.5mm);
        itens com check alinham no mesmo recuo */
     .pres-text p { font-size: 12pt; margin-bottom: 4mm; line-height: 1.3; text-indent: 12.5mm; }
@@ -1373,6 +1381,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .equip-descritivo { margin: 1mm 0 3mm 6mm; font-size: 10pt; line-height: 1.6; }
     .equip-descritivo p { margin: 0 0 4px 0; line-height: 1.6; }
     .equip-photo-caption { color: #ED7D31; font-size: 7pt; font-weight: 700; text-align: center; margin-top: 2px; letter-spacing: 0.5px; }
+
+    /* Recuo de primeira linha no CORPO das cláusulas. Precisa dos dois seletores porque as
+       cláusulas têm duas origens: .clausula-corpo são as seções 5.x fixas do template (usadas
+       no PDF quando a proposta não tem cláusulas salvas) e [data-clausula-campo="conteudo"] é
+       o corpo editável vindo do banco/clausulasDefault.js (usado no preview).
+       As seções 1 (OBJETIVO) e 2 (ELABORAÇÃO) também levam .clausula-corpo: são texto corrido
+       e seguem o mesmo tratamento. A 3 (tabela) e a 4 (specs chave-valor) ficam de fora.
+       Só filho DIRETO (> p): não recua parágrafo dentro de tabela, lista ou .equip-specs-kv.
+       Também não atinge títulos, capa nem rodapé.
+       (sem crases neste comentário: todo o CSS vive dentro de um template literal JS) */
+    .clausula-corpo > p,
+    [data-clausula-campo="conteudo"] > p { text-indent: 48px; }
 
     /* Sumário (preenchido via JS após a paginação) */
     .toc-list { display: flex; flex-direction: column; gap: 2mm; }
@@ -1448,8 +1468,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       <main class="page-content pres-page-content">
         <div class="pres-text">
           <p style="text-indent:0;"><strong>APRESENTAÇÃO</strong></p>
-          <br>
-          <p>A <strong>MOINHO YPIRANGA</strong> é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Somos uma das maiores empresas com foco e participação no desenvolvimento, fabricação e comercialização de equipamentos para produção de produtos químicos do MERCOSUL, destacando nossas competências no fornecimento de plantas em regime Turn-Key.</p>
+          <p>A <strong>MOINHO YPIRANGA</strong> é uma empresa especializada no desenvolvimento de projetos e instalações industriais. Somos uma das maiores empresas com foco e participação no desenvolvimento, fabricação e comercialização de equipamentos para produção de produtos químicos do <strong>MERCOSUL</strong>, destacando nossas competências no fornecimento de plantas em regime Turn-Key.</p>
           <p>Neste regime Turn-Key, quando contratado, assumimos o gerenciamento integral de todas as etapas de implantação do empreendimento, entregando a planta totalmente construída e pronta para o funcionamento.</p>
           <p>Na contratação Turn-Key, a trajetória do pedido segue:</p>
           <ul>

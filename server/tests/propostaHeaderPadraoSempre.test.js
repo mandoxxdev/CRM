@@ -67,7 +67,11 @@ try {
   });
 
   test('conteudo montado do rodape (empresa + paginacao) esta presente', () => {
-    assert(html.includes('MOINHO YPIRANGA | CNPJ'), 'faltou a linha da empresa no rodape');
+    // Compara o TEXTO do rodape, sem as tags: o que importa e o conteudo estar la, nao a
+    // marcacao inline. Antes a assercao casava a string crua e quebrava so por alguem
+    // envolver os termos em <strong>, sem nada de errado com o rodape.
+    const texto = html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+    assert(texto.includes('MOINHO YPIRANGA | CNPJ'), 'faltou a linha da empresa no rodape');
     assert(html.includes('js-page-number') && html.includes('js-page-count'), 'faltou a paginacao Pag. X/Y');
   });
 } finally {

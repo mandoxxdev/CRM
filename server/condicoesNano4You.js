@@ -38,7 +38,7 @@ function getCondicoesGeraisNano4YouHTML(proposta, itens, totais, config, esc) {
       <div class="section">
         <div class="section-title">5.2 TRANSPORTE E EMBALAGEM</div>
         <div class="texto-corpo">
-          <p contenteditable="true">A CONTRATADA deverá promover a liberação do(s) EQUIPAMENTO(S), na modalidade EXW (Ex Works), conforme previsto na relação de ICOTERMS editada pela Câmara Internacional de Comércio, diretamente na fábrica, estabelecida à Av. Dr. Ulysses Guimarães, nº 4105, Vila Nogueira, Diadema, São Paulo – Brasil, CEP 09990-080.</p>
+          <p contenteditable="true">A CONTRATADA deverá promover a liberação do(s) EQUIPAMENTO(S), na modalidade EXW (Ex Works), conforme previsto na relação de ICOTERMS editada pela Câmara Internacional de Comércio, diretamente na fábrica, estabelecida à Av. Ângelo Demarchi, nº 130, Batistini, São Bernardo do Campo, São Paulo – Brasil, CEP 09844-100.</p>
           <p contenteditable="true">O(s) EQUIPAMENTO(S) serão embalado(s) com plástico bolha. Caso a CONTRATANTE necessite de outro tipo de embalagem, a mesma deverá comunicar a CONTRATADA previamente via e-mail, para que ela possa atualizar a proposta com o custo e novo modelo da embalagem.</p>
         </div>
       </div>
