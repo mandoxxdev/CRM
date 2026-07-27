@@ -1363,6 +1363,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
        que casa direto — o center do .cover-client-info só pegava no <span> do nome do cliente. */
     .cover-client-info p { margin: 0; font-size: 13pt; line-height: 1.5; color: #1a1a1a; text-align: center; }
     [data-edit] { display: inline-block; min-width: 60px; cursor: text; }
+    /* Rótulo em uma linha, valor na linha de baixo, ambos centrados. display:block no rótulo
+       é o que força a quebra — o valor cai na linha seguinte e o text-align:center herdado do
+       .cover-client-info p o centraliza. Antes o rótulo "EMPRESA CONTRATANTE" era um <p>
+       aninhado dentro de outro <p>, o que é inválido: o parser fechava o externo e jogava o
+       nome do cliente para fora do campo, quebrando o alinhamento só naquele item. */
+    .cover-field-rotulo { display: block; font-weight: 700; }
     .cover-field-contratante {}
     .cover-field-cnpj {}
     .cover-field-email {}
@@ -1457,10 +1463,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p class="cover-info-num">Nº ${numero}</p>
         ${clienteLogoB64 ? `<div class="cover-client-logo"><img src="${clienteLogoB64}" alt="Logo do cliente" /></div>` : ''}
         <div class="cover-client-info">
-          <p class="cover-field-contratante"><p style="font-weight: bold;">EMPRESA CONTRATANTE:</p> <span data-edit="cliente_nome">${clienteNome}</span></p>
-          <p class="cover-field-cnpj"><strong>CNPJ:</strong> ${clienteCnpj}</p>
-          <p class="cover-field-email"><strong>Email:</strong> <span data-edit="cliente_email">${esc(proposta.cliente_email || proposta.cliente_email_cadastro || '—')}</span></p>
-          <p class="cover-field-telefone"><strong>Telefone:</strong> <span data-edit="cliente_telefone">${esc(proposta.cliente_telefone || proposta.cliente_telefone_cadastro || '—')}</span></p>
+          <p class="cover-field-contratante"><span class="cover-field-rotulo">EMPRESA CONTRATANTE:</span><span data-edit="cliente_nome">${clienteNome}</span></p>
+          <p class="cover-field-cnpj"><span class="cover-field-rotulo">CNPJ:</span>${clienteCnpj}</p>
+          <p class="cover-field-email"><span class="cover-field-rotulo">Email:</span><span data-edit="cliente_email">${esc(proposta.cliente_email || proposta.cliente_email_cadastro || '—')}</span></p>
+          <p class="cover-field-telefone"><span class="cover-field-rotulo">Telefone:</span><span data-edit="cliente_telefone">${esc(proposta.cliente_telefone || proposta.cliente_telefone_cadastro || '—')}</span></p>
           <p class="cover-field-emissao">Data de Emissão: <strong>${dataEmissao || '—'}</strong></p>
         </div>
       </div>

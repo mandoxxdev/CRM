@@ -10,6 +10,11 @@
  * Por isso a verificacao mede a POSICAO renderizada, e nao a presenca da regra CSS:
  *   C1 — text-align computado = center em todos os campos
  *   C2 — o centro de cada campo coincide com o centro do bloco (tolerancia 2px)
+ *   C3 — formato rotulo em cima / valor embaixo: o .cover-field-rotulo e display:block
+ *        (e o que força a quebra) e o campo ocupa 2 linhas de fato
+ *   C4 — nenhum <p> aninhado dentro de outro <p> no bloco: era o markup do campo
+ *        "EMPRESA CONTRATANTE", invalido, e o parser jogava o nome do cliente para fora
+ *        do campo — o alinhamento quebrava so naquele item
  *
  * Roda nos dois caminhos (PDF e preview) porque a capa e a mesma nos dois.
  *
@@ -49,10 +54,15 @@ async function medir(browser, forPdfServer) {
       const el = document.querySelector('.cover-field-' + k);
       if (!el) return { campo: k, ausente: true };
       const b = el.getBoundingClientRect();
+      const rot = el.querySelector('.cover-field-rotulo');
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
       return {
         campo: k,
         align: getComputedStyle(el).textAlign,
         desvio: Math.abs((b.left + b.width / 2) - centroBloco),
+        rotuloDisplay: rot ? getComputedStyle(rot).display : null,
+        linhas: lh > 0 ? Math.round(b.height / lh) : 0,
+        pAninhado: !!el.querySelector('p'),
       };
     });
   }, CAMPOS);
@@ -74,6 +84,17 @@ async function medir(browser, forPdfServer) {
     checar(naoCentro.length === 0, `C1 [${rotulo}]: text-align center em todos (fora: ${naoCentro.join(', ') || 'nenhum'})`);
     const fora = r.filter(x => !x.ausente && x.desvio > TOL_PX).map(x => `${x.campo} (${x.desvio.toFixed(1)}px)`);
     checar(fora.length === 0, `C2 [${rotulo}]: centro alinhado ao do bloco (desalinhados: ${fora.join(', ') || 'nenhum'})`);
+
+    // C3 — so os 4 campos de cliente tem rotulo proprio; a data de emissao segue em 1 linha
+    const comRotulo = CAMPOS.filter(k => k !== 'emissao');
+    const semBloco = r.filter(x => comRotulo.includes(x.campo) && x.rotuloDisplay !== 'block')
+      .map(x => `${x.campo}=${x.rotuloDisplay}`);
+    checar(semBloco.length === 0, `C3 [${rotulo}]: rotulo em display:block (fora: ${semBloco.join(', ') || 'nenhum'})`);
+    const umaLinha = r.filter(x => comRotulo.includes(x.campo) && x.linhas < 2).map(x => `${x.campo} (${x.linhas})`);
+    checar(umaLinha.length === 0, `C3 [${rotulo}]: rotulo em cima, valor embaixo — 2 linhas (fora: ${umaLinha.join(', ') || 'nenhum'})`);
+
+    const aninhados = r.filter(x => x.pAninhado).map(x => x.campo);
+    checar(aninhados.length === 0, `C4 [${rotulo}]: nenhum <p> dentro de <p> (achado em: ${aninhados.join(', ') || 'nenhum'})`);
   }
 
   await browser.close();
