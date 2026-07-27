@@ -1,5 +1,5 @@
 /**
- * Rotulos tecnicos da secao 4 (ESCOPO) — 27/07/2026.
+ * Caixa de texto da secao 4 (ESCOPO) — rotulos E valores — 27/07/2026.
  *
  * O cadastro grava os rotulos em CAIXA ALTA (64 dos 77 registros de variaveis_tecnicas:
  * "MATERIAL TANQUE", "ROTAÇÃO DO MOTOR [RPM]"), o que fazia a secao inteira gritar. A
@@ -89,6 +89,65 @@ CASOS.forEach(([entrada, esperado], i) => {
 console.log('');
 const gritando = renderizados.filter(r => r && r === r.toUpperCase() && /\p{L}{2,}/u.test(r));
 checar(gritando.length === 0, `R5: nenhum rotulo em CAIXA ALTA (${gritando.length}: ${gritando.join(' | ')})`);
+
+// ============================================================================
+// R6/R7 — os VALORES do item (o caso da proposta 41)
+// ============================================================================
+function secao4DoItem(item) {
+  const proposta = { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' };
+  const html = gerarHTMLPropostaPremiumV2(proposta, [item], { total: 1, dataEmissao: '27/07/2026' }, null, null, false, true);
+  const campo = (rotulo) => {
+    const m = new RegExp(`<p><strong>${rotulo}:</strong>\\s*([^<]*)</p>`).exec(html);
+    return m ? m[1].trim() : null;
+  };
+  const h3 = /<h3>4\.1\s*([^<]*)<\/h3>/.exec(html);
+  return {
+    titulo: h3 ? h3[1].trim() : null,
+    equipamento: campo('Equipamento'),
+    quantidade: campo('Quantidade'),
+    familia: campo('Fam&iacute;lia') || campo('Família'),
+    codigo: campo('C&oacute;digo') || campo('Código'),
+    modelo: campo('Modelo'),
+    ncm: campo('NCM'),
+    tabelaOferta: (/<td>([^<]*)<\/td>\s*<\/tr>/.exec(html) || [])[1],
+  };
+}
+
+console.log('\n[R6] valores do item — caso REAL da proposta 41');
+const r41 = secao4DoItem({
+  descricao: 'TALHAS PARA IÇAMENTO DE BIGBAG + TANQUES DE ARMAZENAMENTO DE SLURRYS',
+  familia_produto: 'OUTROS', unidade: 'UN', quantidade: 1,
+});
+checar(r41.equipamento === 'Talhas para içamento de bigbag + tanques de armazenamento de slurrys',
+  `R6: Equipamento -> ${JSON.stringify(r41.equipamento)}`);
+checar(r41.quantidade === '1 Un', `R6: Quantidade -> ${JSON.stringify(r41.quantidade)}`);
+checar(r41.familia === 'Outros', `R6: Família -> ${JSON.stringify(r41.familia)}`);
+checar(r41.titulo === 'Talhas para içamento de bigbag + tanques de armazenamento de slurrys',
+  `R6: titulo 4.1 acompanha o Equipamento -> ${JSON.stringify(r41.titulo)}`);
+// A secao 3 lista o MESMO equipamento: as duas nao podem divergir na caixa.
+checar(r41.tabelaOferta === r41.equipamento,
+  `R6: tabela da secao 3 casa com a secao 4 -> ${JSON.stringify(r41.tabelaOferta)}`);
+
+console.log('\n[R7] codigos de familia entre parenteses preservados (dados reais do banco)');
+[
+  ['MOINHO DE LABORATÓRIO (MLY)', 'Moinho de laboratório (MLY)'],
+  ['MOINHO VERTICAL DE ALTO IMPACTO (MPY)', 'Moinho vertical de alto impacto (MPY)'],
+  ['TANQUE DISPERSOR (TQY)', 'Tanque dispersor (TQY)'],
+  ['DISPERSOR HIDROPNEUMÁTICO (DHY)', 'Dispersor hidropneumático (DHY)'],
+  ['MASSEIRA BIMIX (MBY)', 'Masseira bimix (MBY)'],
+].forEach(([entrada, esperado]) => {
+  const out = secao4DoItem({ descricao: 'X', familia_produto: entrada, unidade: 'UN', quantidade: 1 }).familia;
+  checar(out === esperado, `R7: ${JSON.stringify(entrada)} -> ${JSON.stringify(out)}`);
+});
+
+console.log('\n[R8] identificadores NAO podem ser rebaixados');
+const ids = secao4DoItem({
+  descricao: 'X', familia_produto: 'OUTROS', unidade: 'UN', quantidade: 1,
+  codigo_produto: 'MPY-500A', modelo: 'AISI 316L', ncm: '8474.20.90',
+});
+checar(ids.codigo === 'MPY-500A', `R8: Código intacto -> ${JSON.stringify(ids.codigo)}`);
+checar(ids.modelo === 'AISI 316L', `R8: Modelo intacto -> ${JSON.stringify(ids.modelo)}`);
+checar(ids.ncm === '8474.20.90', `R8: NCM intacto -> ${JSON.stringify(ids.ncm)}`);
 
 console.log(falhas === 0 ? '\n0 failed' : `\n${falhas} failed`);
 process.exit(falhas === 0 ? 0 : 1);

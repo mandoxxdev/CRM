@@ -184,15 +184,19 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       return bruto;
     };
 
-    // Rótulos técnicos da seção 4 saem em CAIXA ALTA do cadastro (64 dos 77 registros de
-    // variaveis_tecnicas estão assim: "MATERIAL TANQUE", "ROTAÇÃO DO MOTOR [RPM]"), o que deixa
-    // a seção inteira gritando. Reduz para "Material tanque:", preservando:
+    // A seção 4 sai gritando porque o CADASTRO grava em CAIXA ALTA — tanto os rótulos técnicos
+    // (64 dos 77 registros de variaveis_tecnicas: "MATERIAL TANQUE", "ROTAÇÃO DO MOTOR [RPM]")
+    // quanto os campos do item ("TALHAS PARA IÇAMENTO DE BIGBAG", "OUTROS", "UN"). Reduz para
+    // caixa de frase — "Material tanque:", "Talhas para içamento de bigbag" — preservando:
     //  - o conteúdo entre COLCHETES, onde moram as unidades — [kW], [Hz], [RPM], [pol.], [L/H]
     //    seriam destruídas por um toLowerCase cego;
+    //  - o conteúdo entre PARÊNTESES, onde moram os códigos de família: "MOINHO DE LABORATÓRIO
+    //    (MLY)" tem de virar "Moinho de laboratório (MLY)", nunca "(mly)";
     //  - siglas reais (CCM aparece em 3 rótulos);
-    //  - rótulos que JÁ vêm em caixa mista, sinal de que alguém os escreveu à mão com cuidado.
+    //  - textos que JÁ vêm em caixa mista, sinal de que alguém os escreveu à mão com cuidado.
+    // NÃO é aplicada a código, modelo e NCM: são identificadores, e rebaixá-los mudaria o dado.
     const SIGLAS_ROTULO = new Set(['CCM', 'PLC', 'IHM', 'CV', 'IP', 'ABNT', 'AISI', 'NR', 'PVC', 'LED']);
-    const humanizarRotulo = (texto) => {
+    const semCapsLock = (texto) => {
       const bruto = String(texto ?? '').trim();
       if (!bruto) return '';
       // A checagem de "está em caixa alta" ignora colchetes E parênteses, e os dois são
@@ -235,11 +239,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </div>`;
 
+    // Mesmo tratamento de caixa da seção 4: é o MESMO equipamento listado nas duas seções, e
+    // sem isto o documento traria "TALHAS PARA IÇAMENTO..." na tabela da 3 e "Talhas para
+    // içamento..." na 4. Os cabeçalhos da tabela (ITEM/QUANT./DESCRIÇÃO) seguem em caixa alta,
+    // que é o estilo de cabeçalho do documento.
     const ofertaRows = (itens || []).map((it, idx) => {
       const itemRef = `4.${idx + 1}`;
-      const nome = esc(it.produto_nome || it.descricao || `Item ${idx + 1}`);
+      const nome = esc(semCapsLock(it.produto_nome || it.descricao || `Item ${idx + 1}`));
       const qtd = Number(it.quantidade) || 1;
-      const und = esc(it.unidade || 'UN');
+      const und = esc(semCapsLock(it.unidade || 'UN'));
       return `<tr>
         <td class="col-center">${itemRef}</td>
         <td class="col-center">${qtd} ${und}</td>
@@ -406,13 +414,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const equipItems = (itens || []).map((it, idx) => {
       const n = idx + 1;
       const itemNo = `4.${n}`;
-      const nome = esc(it.produto_nome || it.descricao || `Equipamento ${n}`);
+      // semCapsLock só no que é TEXTO descritivo. Código, modelo e NCM ficam intactos: são
+      // identificadores ("MPY-500", "AISI 316", "8474.20.90") e rebaixá-los mudaria o dado.
+      const nome = esc(semCapsLock(it.produto_nome || it.descricao || `Equipamento ${n}`));
       const codigo = esc(it.codigo_produto || it.produto_codigo || '—');
       const qtd = esc(Number(it.quantidade) || 1);
-      const und = esc(it.unidade || 'UN');
-      const familia = esc(it.familia_produto || it.produto_familia || it.familia || '—');
+      const und = esc(semCapsLock(it.unidade || 'UN'));
+      const familia = esc(semCapsLock(it.familia_produto || it.produto_familia || it.familia || '—'));
       const modelo = esc(it.modelo || '—');
-      const categoria = esc(it.categoria || '—');
+      const categoria = esc(semCapsLock(it.categoria || '—'));
       const ncm = esc(it.ncm || it.produto_ncm || '—');
 
       const descritivoTecRaw = it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '';
@@ -486,7 +496,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
                 : '';
               if (!displayVal) return '';
               const valueDisplay = displayVal + (sufixo ? ` ${sufixo}` : '');
-              return `<p><strong>${esc(humanizarRotulo(label))}:</strong> ${esc(valueDisplay)}</p>`;
+              return `<p><strong>${esc(semCapsLock(label))}:</strong> ${esc(semCapsLock(valueDisplay))}</p>`;
             }).filter(Boolean).join('')
         : '';
 
