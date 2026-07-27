@@ -184,6 +184,41 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       return bruto;
     };
 
+    // Rótulos técnicos da seção 4 saem em CAIXA ALTA do cadastro (64 dos 77 registros de
+    // variaveis_tecnicas estão assim: "MATERIAL TANQUE", "ROTAÇÃO DO MOTOR [RPM]"), o que deixa
+    // a seção inteira gritando. Reduz para "Material tanque:", preservando:
+    //  - o conteúdo entre COLCHETES, onde moram as unidades — [kW], [Hz], [RPM], [pol.], [L/H]
+    //    seriam destruídas por um toLowerCase cego;
+    //  - siglas reais (CCM aparece em 3 rótulos);
+    //  - rótulos que JÁ vêm em caixa mista, sinal de que alguém os escreveu à mão com cuidado.
+    const SIGLAS_ROTULO = new Set(['CCM', 'PLC', 'IHM', 'CV', 'IP', 'ABNT', 'AISI', 'NR', 'PVC', 'LED']);
+    const humanizarRotulo = (texto) => {
+      const bruto = String(texto ?? '').trim();
+      if (!bruto) return '';
+      // A checagem de "está em caixa alta" ignora colchetes E parênteses, e os dois são
+      // copiados verbatim. Colchetes por causa das unidades ("MOTOR ESQUERDO [kW]" tem um 'w'
+      // minúsculo que faria o rótulo passar por caixa mista e escapar da regra). Parênteses
+      // pelo mesmo motivo: "DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]" só tem caixa
+      // mista dentro do parêntese, e sem isto o resto continuaria gritando.
+      const GRUPOS = /(\[[^\]]*\]|\([^)]*\))/g;
+      const semGrupos = bruto.replace(GRUPOS, ' ');
+      if (semGrupos !== semGrupos.toUpperCase()) return bruto;
+      const partes = bruto.split(GRUPOS);
+      let primeiraLetraFeita = false;
+      return partes.map((parte) => {
+        if (parte.startsWith('[') || parte.startsWith('(')) return parte;
+        return parte.replace(/[\p{L}\p{N}]+/gu, (palavra) => {
+          if (SIGLAS_ROTULO.has(palavra)) return palavra;
+          const minuscula = palavra.toLocaleLowerCase('pt-BR');
+          if (!primeiraLetraFeita && /\p{L}/u.test(palavra)) {
+            primeiraLetraFeita = true;
+            return minuscula.charAt(0).toLocaleUpperCase('pt-BR') + minuscula.slice(1);
+          }
+          return minuscula;
+        });
+      }).join('');
+    };
+
     const numero = esc(proposta.numero_proposta || 'N/A');
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
     const clienteNome = esc(proposta.razao_social || proposta.nome_fantasia || '—');
@@ -451,7 +486,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
                 : '';
               if (!displayVal) return '';
               const valueDisplay = displayVal + (sufixo ? ` ${sufixo}` : '');
-              return `<p><strong>${esc(label)}:</strong> ${esc(valueDisplay)}</p>`;
+              return `<p><strong>${esc(humanizarRotulo(label))}:</strong> ${esc(valueDisplay)}</p>`;
             }).filter(Boolean).join('')
         : '';
 
