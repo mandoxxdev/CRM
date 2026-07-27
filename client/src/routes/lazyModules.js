@@ -148,6 +148,7 @@ export const ConfiguracoesAlmoxarifado = page(() => import('../components/almoxa
 export const MapaLocalizacoesAlmoxarifado = page(() => import('../components/almoxarifado/MapaLocalizacoesAlmoxarifado'));
 export const RecebimentosAlmoxarifado = page(() => import('../components/almoxarifado/RecebimentosAlmoxarifado'));
 export const ChatPage = page(() => import('../components/chat/ChatPage'));
+export const TodolistBoard = page(() => import('../components/todolist/TodolistBoard'));
 
 /** Warm-up do chunk principal de cada módulo (hover na seleção). */
 export const MODULE_PREFETCH = {
@@ -160,6 +161,7 @@ export const MODULE_PREFETCH = {
   engenharia: () => import('../components/CalculosEngenharia'),
   engenharia_projetos: () => import('../components/engenhariaProjetos/EngenhariaProjetosHome'),
   almoxarifado: () => import('../components/almoxarifado/AlmoxarifadoDashboard'),
+  todolist: () => import('../components/todolist/TodolistBoard'),
   admin: () => import('../components/Admin'),
 };
 
@@ -179,6 +181,7 @@ export const ROUTE_PREFETCH = {
   '/chat': () => import('../components/chat/ChatPage'),
   '/frota': () => import('../components/frotas/FrotasDashboard'),
   '/frota/veiculos': () => import('../components/frotas/FrotasEntityPage'),
+  '/todolist': () => import('../components/todolist/TodolistBoard'),
   '/compras/solicitacoes': () => import('../components/ComprasSolicitacoesCompra'),
   '/compras/fornecedores': () => import('../components/GruposFornecedores'),
   '/financeiro/dashboard': () => import('../components/Financeiro'),
@@ -219,6 +222,7 @@ export function prefetchModuleByRoute(rota) {
   prefetchRoute(path);
   if (path.startsWith('/comercial')) return prefetchModule('comercial');
   if (path.startsWith('/frota')) return prefetchModule('frota');
+  if (path.startsWith('/todolist')) return prefetchModule('todolist');
   if (path.startsWith('/compras')) return prefetchModule('compras');
   if (path.startsWith('/financeiro')) return prefetchModule('financeiro');
   if (path.startsWith('/fabrica')) return prefetchModule('operacional');

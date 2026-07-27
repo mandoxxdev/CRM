@@ -10,7 +10,7 @@ import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
-  FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle
+  FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -31,6 +31,7 @@ const CHAT_MENU_ITEM = { path: '/chat', icon: FiMessageCircle, label: 'Chat', gl
 
 function getActiveModuleFromPath(path) {
   if (path.startsWith('/frota')) return 'frota';
+  if (path.startsWith('/todolist')) return 'todolist';
   if (path.startsWith('/compras')) return 'compras';
   if (path.startsWith('/financeiro')) return 'financeiro';
   if (path.startsWith('/fabrica')) return 'operacional';
@@ -289,6 +290,10 @@ const Layout = () => {
     { path: '/frota/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
 
+  const todolistMenuItems = [
+    { path: '/todolist', icon: FiCheckSquare, label: 'Quadro Kanban' },
+  ];
+
   // Menu do módulo Admin
   const adminMenuItems = [
     { path: '/admin/usuarios', icon: FiUsers, label: 'Usuários' },
@@ -351,6 +356,8 @@ const Layout = () => {
         return operacionalMenuItems;
       case 'frota':
         return frotaMenuItems;
+      case 'todolist':
+        return todolistMenuItems;
       case 'admin':
         return adminMenuItems;
       case 'administrativo':

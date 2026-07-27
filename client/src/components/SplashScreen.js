@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   FiZap, FiTrendingUp, FiShoppingCart, FiDollarSign, 
-  FiBriefcase, FiSettings, FiTarget, FiTool, FiX, FiShield, FiArchive, FiSliders
+  FiBriefcase, FiSettings, FiTarget, FiTool, FiX, FiShield, FiArchive, FiSliders, FiCheckSquare
 } from 'react-icons/fi';
 import AnimatedBackground from './AnimatedBackground';
 import './SplashScreen.css';
@@ -95,6 +95,14 @@ const moduleConfigs = {
     loadingText: 'Carregando módulo de frota...',
     gradientColors: ['rgba(234, 88, 12, 0.15)', 'rgba(185, 28, 28, 0.1)', 'rgba(234, 88, 12, 0.15)'],
     accentColor: '#ea580c'
+  },
+  todolist: {
+    icon: FiCheckSquare,
+    title: 'TODOLIST',
+    subtitle: 'Kanban de atividades e controle de programação',
+    loadingText: 'Carregando TODOLIST...',
+    gradientColors: ['rgba(3, 105, 161, 0.15)', 'rgba(14, 165, 233, 0.1)', 'rgba(3, 105, 161, 0.15)'],
+    accentColor: '#0369a1'
   }
 };
 

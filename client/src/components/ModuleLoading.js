@@ -11,6 +11,7 @@ const MODULE_LABELS = {
   engenharia: 'Engenharia',
   engenharia_projetos: 'Engenharia / Projetos',
   almoxarifado: 'Almoxarifado',
+  todolist: 'TODOLIST',
   admin: 'Administração',
   sistema: 'Orion',
 };

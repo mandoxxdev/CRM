@@ -31,6 +31,7 @@ function getModuloFromPath(path) {
   if (path.startsWith('/engenharia')) return 'engenharia';
   if (path.startsWith('/almoxarifado')) return 'almoxarifado';
   if (path.startsWith('/frota')) return 'frota';
+  if (path.startsWith('/todolist')) return 'todolist';
   if (path.startsWith('/comercial')) return 'comercial';
   return null;
 }
@@ -251,6 +252,7 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
       engenharia_projetos: 'Engenharia / Projetos',
       almoxarifado: 'Almoxarifado',
       frota: 'Frota',
+      todolist: 'TODOLIST',
       administrativo: 'Administrativo',
       admin: 'Administração',
     };

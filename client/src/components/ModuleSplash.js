@@ -68,6 +68,7 @@ const ModuleSplash = ({ children }) => {
            path.startsWith('/almoxarifado') ||
            path.startsWith('/engenharia') ||
            path.startsWith('/frota') ||
+           path.startsWith('/todolist') ||
            path.startsWith('/chat');
   };
 

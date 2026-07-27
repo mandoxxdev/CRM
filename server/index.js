@@ -21985,6 +21985,9 @@ require('./routes/frotas')(app, db, authenticateToken, checkModulePermission);
 // Módulo Produção (MES) — GMP Industriais
 require('./routes/producao')(app, db, authenticateToken, checkModulePermission);
 
+// ── Módulo TODOLIST ──────────────────────────────────────────────────────────
+require('./routes/todolist')(app, db, authenticateToken, checkModulePermission);
+
 // Adaptador de WhatsApp (recebe {to,message} do alertService e envia via Z-API/Meta)
 require('./routes/whatsappGateway')(app);
 

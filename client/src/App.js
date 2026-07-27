@@ -104,6 +104,7 @@ import {
   RecebimentosAlmoxarifado,
   ChatPage,
   MinhaConta,
+  TodolistBoard,
 } from './routes/lazyModules';
 
 const PrivateRoute = ({ children }) => {
@@ -117,6 +118,7 @@ const PrivateRoute = ({ children }) => {
     return path.startsWith('/comercial') ||
            path.startsWith('/chat') ||
            path.startsWith('/frota') ||
+           path.startsWith('/todolist') ||
            path.startsWith('/compras') || 
            path.startsWith('/financeiro') || 
            path.startsWith('/fabrica') ||
@@ -288,6 +290,18 @@ function AppRoutes() {
         <Route path="relatorios" element={<FrotasRelatorios />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="frota" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="frota" />} />
+      </Route>
+      <Route
+        path="/todolist"
+        element={
+          <PrivateRoute>
+            <ProtectedModuleRoute modulo="todolist" nomeModulo="TODOLIST">
+              <Layout />
+            </ProtectedModuleRoute>
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<TodolistBoard />} />
       </Route>
       <Route
         path="/compras"

@@ -6,7 +6,7 @@ import { useModulosTipoConfig } from '../hooks/useModulosTipoConfig';
 import {
   FiBriefcase, FiShoppingCart, FiDollarSign,
   FiSettings, FiPackage, FiTarget,
-  FiLock, FiShield, FiTool, FiSliders, FiArchive,
+  FiLock, FiShield, FiTool, FiSliders, FiArchive, FiCheckSquare,
   FiSearch, FiPlay, FiX
 } from 'react-icons/fi';
 import { prefetchModule, prefetchModuleByRoute } from '../routes/lazyModules';
@@ -155,6 +155,15 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       modulo: 'almoxarifado',
       rota: '/almoxarifado',
       gradient: 'linear-gradient(135deg, #78350f 0%, #a16207 100%)'
+    },
+    {
+      id: 'todolist',
+      nome: 'TODOLIST',
+      descricao: 'Kanban de atividades e controle de programação',
+      icon: FiCheckSquare,
+      modulo: 'todolist',
+      rota: '/todolist',
+      gradient: 'linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%)'
     },
     {
       id: 'admin',

@@ -19,6 +19,7 @@ const DEFAULT_MODULOS_TIPO = {
   administrativo: TIPO_ADMINISTRATIVO,
   admin: TIPO_ADMINISTRATIVO,
   frota: TIPO_INDUSTRIAL,
+  todolist: TIPO_ADMINISTRATIVO,
 };
 
 async function ensureModulosTipoConfig(db) {
