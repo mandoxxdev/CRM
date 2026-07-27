@@ -162,6 +162,28 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const cgItalicB64 = assetFonte('CenturyGothic-Italic.ttf');
     const cgBoldItalicB64 = assetFonte('CenturyGothic-BoldItalic.ttf');
 
+    // Máscara de telefone. O cadastro aceitou o campo livre por anos, então o banco tem de
+    // tudo: "67998420146", "21 99723-1500", "(11) 9.6406-3306", "7999192-0940". Normaliza pelos
+    // DÍGITOS e remonta no padrão brasileiro. Se a quantidade de dígitos não bater com nenhum
+    // formato conhecido (ramal, número estrangeiro, cadastro incompleto), devolve o valor
+    // ORIGINAL — mascarar na marra inventaria um número errado num documento comercial.
+    const formatarTelefone = (valor) => {
+      const bruto = String(valor ?? '').trim();
+      if (!bruto) return '';
+      let d = bruto.replace(/\D/g, '');
+      // Número internacional explícito que não seja +55: devolve como veio. Sem isto,
+      // "+1 415 555 2671" (11 dígitos) casava com a regra de celular e virava
+      // "(14) 15555-2671" — um número brasileiro que não existe.
+      if (bruto.startsWith('+') && !d.startsWith('55')) return bruto;
+      if (d.length === 13 && d.startsWith('55')) d = d.slice(2); // +55 11 9XXXX-XXXX
+      if (d.length === 12 && d.startsWith('55')) d = d.slice(2); // +55 11 XXXX-XXXX
+      if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+      if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+      if (d.length === 9) return `${d.slice(0, 5)}-${d.slice(5)}`;   // sem DDD
+      if (d.length === 8) return `${d.slice(0, 4)}-${d.slice(4)}`;   // sem DDD
+      return bruto;
+    };
+
     const numero = esc(proposta.numero_proposta || 'N/A');
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
     const clienteNome = esc(proposta.razao_social || proposta.nome_fantasia || '—');
@@ -1389,7 +1411,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
        torna a logo um elemento de bloco, e bloco não é centralizado por text-align — ele fica
        encostado à esquerda da caixa. A caixa em si já vinha centrada (align-items:center do
        .cover-info-area), o que disfarçava o desalinhamento da imagem dentro dela. */
-    .cover-client-logo img { max-height: 25mm; max-width: 60%; object-fit: contain; margin-left: auto; margin-right: auto; }
+    .cover-client-logo img { max-height: 45mm; max-width: 60%; object-fit: contain; margin-left: auto; margin-right: auto; }
     /* Campos do cliente centralizados na capa. text-align (e não align-self como a data de
        emissão usava) porque o campo "EMPRESA CONTRATANTE" tem um <p> aninhado dentro de outro
        <p>: o browser fecha o externo e o nome vira um irmão solto, então centralizar item a
@@ -1513,7 +1535,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <p class="cover-field-contratante"><span class="cover-field-rotulo">EMPRESA CONTRATANTE:</span><span data-edit="cliente_nome">${clienteNome}</span></p>
           <p class="cover-field-cnpj"><span class="cover-field-rotulo">CNPJ:</span>${clienteCnpj}</p>
           <p class="cover-field-email"><span class="cover-field-rotulo">Email:</span><span data-edit="cliente_email">${esc(proposta.cliente_email || proposta.cliente_email_cadastro || '—')}</span></p>
-          <p class="cover-field-telefone"><span class="cover-field-rotulo">Telefone:</span><span data-edit="cliente_telefone">${esc(proposta.cliente_telefone || proposta.cliente_telefone_cadastro || '—')}</span></p>
+          <p class="cover-field-telefone"><span class="cover-field-rotulo">Telefone:</span><span data-edit="cliente_telefone">${esc(formatarTelefone(proposta.cliente_telefone || proposta.cliente_telefone_cadastro) || '—')}</span></p>
           <p class="cover-field-emissao">Data de Emissão: <strong>${dataEmissao || '—'}</strong></p>
         </div>
       </div>
