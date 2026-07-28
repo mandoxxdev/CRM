@@ -507,7 +507,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
                 : '';
               if (!displayVal) return '';
               const valueDisplay = displayVal + (sufixo ? ` ${sufixo}` : '');
-              return `<p><strong>${esc(semCapsLock(label))}:</strong> ${esc(semCapsLock(valueDisplay))}</p>`;
+              return `<p>${esc(semCapsLock(label))}: ${esc(semCapsLock(valueDisplay))}</p>`;
             }).filter(Boolean).join('')
         : '';
 
@@ -536,14 +536,14 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <h3>${itemNo} ${nome}</h3>
         <div class="equip-specs-kv">
           ${fotoHtml}
-          ${descritivoTec ? `<p><strong>Descritivo técnico:</strong></p><div class="equip-descritivo">${descritivoTec}</div>` : ''}
-          <p><strong>Equipamento:</strong> ${nome}</p>
-          ${codigo !== '—' ? `<p><strong>Código:</strong> ${codigo}</p>` : ''}
-          <p><strong>Quantidade:</strong> ${qtd} ${und}</p>
-          ${modelo !== '—' ? `<p><strong>Modelo:</strong> ${modelo}</p>` : ''}
-          ${familia !== '—' ? `<p><strong>Família:</strong> ${familia}</p>` : ''}
-          ${categoria !== '—' ? `<p><strong>Categoria:</strong> ${categoria}</p>` : ''}
-          ${ncm !== '—' ? `<p><strong>NCM:</strong> ${ncm}</p>` : ''}
+          ${descritivoTec ? `<p>Descritivo técnico:</p><div class="equip-descritivo">${descritivoTec}</div>` : ''}
+          <p>Equipamento: ${nome}</p>
+          ${codigo !== '—' ? `<p>Código: ${codigo}</p>` : ''}
+          <p>Quantidade: ${qtd} ${und}</p>
+          ${modelo !== '—' ? `<p>Modelo: ${modelo}</p>` : ''}
+          ${familia !== '—' ? `<p>Família: ${familia}</p>` : ''}
+          ${categoria !== '—' ? `<p>Categoria: ${categoria}</p>` : ''}
+          ${ncm !== '—' ? `<p>NCM: ${ncm}</p>` : ''}
           ${specRowsHtml}
         </div>
       `;

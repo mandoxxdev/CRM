@@ -66,8 +66,8 @@ function rotulosRenderizados(labels) {
     variaveis_proposta_por_familia: { TESTE: chaves },
   };
   const html = gerarHTMLPropostaPremiumV2(proposta, itens, { total: 1000, dataEmissao: '27/07/2026' }, cfg, null, false, true);
-  // <p><strong>Rotulo:</strong> valor</p>
-  return Array.from(html.matchAll(/<p><strong>([^<]*?):<\/strong>\s*valor-de-teste<\/p>/g)).map(m => m[1]);
+  // <p>Rotulo: valor</p>
+  return Array.from(html.matchAll(/<p>([^<]*?):\s*valor-de-teste<\/p>/g)).map(m => m[1]);
 }
 
 const renderizados = rotulosRenderizados(CASOS.map(c => c[0]));
@@ -97,7 +97,7 @@ function secao4DoItem(item) {
   const proposta = { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' };
   const html = gerarHTMLPropostaPremiumV2(proposta, [item], { total: 1, dataEmissao: '27/07/2026' }, null, null, false, true);
   const campo = (rotulo) => {
-    const m = new RegExp(`<p><strong>${rotulo}:</strong>\\s*([^<]*)</p>`).exec(html);
+    const m = new RegExp(`<p>${rotulo}:\\s*([^<]*)</p>`).exec(html);
     return m ? m[1].trim() : null;
   };
   const h3 = /<h3>4\.1\s*([^<]*)<\/h3>/.exec(html);

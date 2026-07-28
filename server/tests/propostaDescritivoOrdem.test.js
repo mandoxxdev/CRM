@@ -9,7 +9,7 @@ const html = gerarHTMLPropostaPremiumV2({ numero_proposta: '1' }, itens, { total
 
 test('Descritivo técnico aparece antes de "Equipamento:"', () => {
   const iDesc = html.indexOf('DESCRITIVO_MARCADOR');
-  const iEquip = html.indexOf('<strong>Equipamento:</strong>');
+  const iEquip = html.indexOf('Equipamento:');
   assert(iDesc > -1 && iEquip > -1, 'marcadores ausentes');
   assert(iDesc < iEquip, 'descritivo deveria vir antes de Equipamento');
 });
