@@ -33,18 +33,22 @@ test('contato é editável inline (span data-edit="cliente_contato"), como o nom
     'faltou span data-edit="cliente_contato" na linha do contato');
 });
 
-test('contato vem logo APÓS a empresa contratante e ANTES do CNPJ', () => {
+// Ordem da capa: primeiro a IDENTIFICAÇÃO da empresa (razão social + CNPJ), depois os
+// dados de CONTATO (pessoa, e-mail, telefone). Antes o CNPJ ficava entre o nome e o
+// contato, separando a empresa da própria identificação fiscal.
+test('capa identifica a empresa (nome + CNPJ) antes dos dados de contato', () => {
   const html = gerar({ cliente_contato: 'MARIA SILVA' });
   // Recorta o BLOCO da capa: os mesmos nomes de classe também aparecem no <style>,
   // e comparar índices do documento inteiro compararia com as regras CSS, não com os campos.
   const bloco = html.match(/<div class="cover-client-info">[\s\S]*?<\/div>/);
   assert(bloco, 'não achei o bloco .cover-client-info');
-  const iContratante = bloco[0].indexOf('cover-field-contratante');
-  const iContato = bloco[0].indexOf('cover-field-contato');
-  const iCnpj = bloco[0].indexOf('cover-field-cnpj');
-  assert(iContratante > -1 && iContato > -1 && iCnpj > -1, 'algum campo da capa sumiu');
-  assert(iContratante < iContato, 'contato deveria vir depois de EMPRESA CONTRATANTE');
-  assert(iContato < iCnpj, 'contato deveria vir antes do CNPJ');
+  const pos = (campo) => bloco[0].indexOf(`cover-field-${campo}`);
+  const [iContratante, iCnpj, iContato, iEmail, iTelefone] =
+    ['contratante', 'cnpj', 'contato', 'email', 'telefone'].map(pos);
+  assert([iContratante, iCnpj, iContato, iEmail, iTelefone].every((i) => i > -1), 'algum campo da capa sumiu');
+  assert(iContratante < iCnpj, 'CNPJ deveria vir logo depois de EMPRESA CONTRATANTE');
+  assert(iCnpj < iContato, 'o contato deveria vir DEPOIS do CNPJ');
+  assert(iContato < iEmail && iEmail < iTelefone, 'contato, e-mail e telefone devem ficar juntos, nessa ordem');
 });
 
 test('cai para o contato do CADASTRO (clientes.contato_principal) quando a proposta não tem override', () => {

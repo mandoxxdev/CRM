@@ -558,7 +558,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
              <img class="equip-photo-img-float" src="${produtoImagem}" alt="Foto do equipamento"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
              <div class="equip-photo-fallback-float" style="display:none;">Foto não disponível</div>
-             <div class="equip-photo-caption">IMAGEM ILUSTRATIVA</div>
            </div>`
         : '';
 
@@ -1672,7 +1671,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .equip-specs-kv > p { margin: 0 0 3px 0; font-size: 10pt; line-height: 1.6; }
     .equip-descritivo { margin: 1mm 0 3mm 6mm; font-size: 10pt; line-height: 1.6; }
     .equip-descritivo p { margin: 0 0 4px 0; line-height: 1.6; }
-    .equip-photo-caption { color: #ED7D31; font-size: 7pt; font-weight: 700; text-align: center; margin-top: 2px; letter-spacing: 0.5px; }
 
     /* Recuo de primeira linha no CORPO das cláusulas. Precisa dos dois seletores porque as
        cláusulas têm duas origens: .clausula-corpo são as seções 5.x fixas do template (usadas
@@ -1753,9 +1751,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p class="cover-info-num">Nº ${numero}</p>
         ${clienteLogoB64 ? `<div class="cover-client-logo"><img src="${clienteLogoB64}" alt="Logo do cliente" /></div>` : ''}
         <div class="cover-client-info">
+          ${/* Ordem: identificação da EMPRESA (razão social + CNPJ) primeiro, depois os
+               dados de CONTATO (pessoa, e-mail, telefone). O CNPJ ficava no meio do
+               bloco de contato, separando a empresa da própria identificação fiscal. */''}
           <p class="cover-field-contratante"><span class="cover-field-rotulo">EMPRESA CONTRATANTE:</span><span data-edit="cliente_nome">${clienteNome}</span></p>
-          <p class="cover-field-contato"><span class="cover-field-rotulo">Contato:</span><span data-edit="cliente_contato">${clienteContato}</span></p>
           <p class="cover-field-cnpj"><span class="cover-field-rotulo">CNPJ:</span>${clienteCnpj}</p>
+          <p class="cover-field-contato"><span class="cover-field-rotulo">Contato:</span><span data-edit="cliente_contato">${clienteContato}</span></p>
           <p class="cover-field-email"><span class="cover-field-rotulo">Email:</span><span data-edit="cliente_email">${esc(proposta.cliente_email || proposta.cliente_email_cadastro || '—')}</span></p>
           <p class="cover-field-telefone"><span class="cover-field-rotulo">Telefone:</span><span data-edit="cliente_telefone">${esc(formatarTelefone(proposta.cliente_telefone || proposta.cliente_telefone_cadastro) || '—')}</span></p>
           <p class="cover-field-emissao">Data de Emissão: <strong>${dataEmissao || '—'}</strong></p>

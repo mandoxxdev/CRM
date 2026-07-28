@@ -8890,9 +8890,17 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     };
     const familiaTemplate = pareceFamiliaDeTemplate(familiaTemplateCandidate) ? familiaTemplateCandidate : null;
     const templateQuery = familiaTemplate
-      ? 'SELECT * FROM proposta_template_config WHERE (familia = ? OR familia IS NULL OR familia = \'\') ORDER BY CASE WHEN familia = ? THEN 0 ELSE 1 END, id DESC LIMIT 1'
+      // SEM WHERE: o filtro antigo (familia = ? OR IS NULL OR = '') DESCARTAVA a linha de
+      // configuração quando ela tinha familia preenchida com outro valor — inclusive
+      // 'Geral', que é justamente o balde padrão usado ao SALVAR (ver POST
+      // /api/proposta-template: "WHERE familia IS NULL OR familia = 'Geral'"). Resultado:
+      // o admin marcava as variáveis por família, salvava em 'Geral', e a proposta lia
+      // NENHUMA configuração — as variáveis simplesmente não apareciam no Escopo.
+      // Agora a preferência vira ordenação: família exata > padrão (NULL/''/Geral) >
+      // qualquer outra, garantindo que sempre exista configuração quando há alguma linha.
+      ? 'SELECT * FROM proposta_template_config ORDER BY CASE WHEN familia = ? THEN 0 WHEN familia IS NULL OR familia = \'\' OR familia = \'Geral\' THEN 1 ELSE 2 END, id DESC LIMIT 1'
       : 'SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1';
-    const templateParams = familiaTemplate ? [familiaTemplate, familiaTemplate] : [];
+    const templateParams = familiaTemplate ? [familiaTemplate] : [];
     let templateConfig = await new Promise((resolve, reject) => {
       db.get(templateQuery, templateParams, (err, row) => {
         if (err) reject(err);
