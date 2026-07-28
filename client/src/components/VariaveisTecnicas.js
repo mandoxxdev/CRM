@@ -8,7 +8,8 @@ const TIPOS = [
   { value: 'numero', label: 'Número' },
   { value: 'lista', label: 'Lista (opções fixas)' },
   { value: 'lista_condicional', label: 'Lista condicional (1ª escolha define a lista)' },
-  { value: 'soma', label: 'Soma automática (soma outras variáveis)' }
+  { value: 'soma', label: 'Soma automática (soma outras variáveis)' },
+  { value: 'manual_proposta', label: 'Manual na Proposta (preencher direto na proposta)' }
 ];
 
 const FONTE_OPCOES = [
@@ -356,7 +357,10 @@ const VariaveisTecnicas = () => {
                   />
                 </div>
               </div>
-              {form.tipo !== 'lista' && form.tipo !== 'lista_condicional' && form.tipo !== 'soma' && (
+              {form.tipo === 'manual_proposta' && (
+                <p className="vt-form-hint vt-form-hint-block">Esta variável aparecerá no <strong>Escopo de Fornecimento</strong> da proposta como um campo em branco, para o vendedor <strong>preencher manualmente no preview editável</strong>. O valor digitado é salvo na proposta e sai igual no PDF.</p>
+              )}
+              {form.tipo !== 'lista' && form.tipo !== 'lista_condicional' && form.tipo !== 'soma' && form.tipo !== 'manual_proposta' && (
                 <p className="vt-form-hint vt-form-hint-block">Para vincular esta variável ao módulo <strong>Compras (fornecedores homologados)</strong>, altere o tipo para <strong>Lista (opções fixas)</strong>. Em seguida será exibida a opção &quot;Fonte das opções&quot; com o grupo de fornecedores.</p>
               )}
               {form.tipo === 'soma' && (() => {

@@ -1127,6 +1127,24 @@ function initializeDatabase(onReadyCallback) {
     else console.log('✅ Tabela proposta_fotos criada/verificada');
   });
 
+  // Valores das variáveis técnicas do tipo "Manual na Proposta" (manual_proposta):
+  // preenchidos pelo vendedor direto no preview editável, por item da proposta.
+  // item_id = proposta_itens.id (cada equipamento 4.x tem seus próprios valores).
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_variaveis_manuais (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposta_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    chave TEXT NOT NULL,
+    valor TEXT NOT NULL DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(proposta_id, item_id, chave),
+    FOREIGN KEY (proposta_id) REFERENCES propostas(id) ON DELETE CASCADE
+  )`, (err) => {
+    if (err) console.error('❌ Erro ao criar tabela proposta_variaveis_manuais:', err);
+    else console.log('✅ Tabela proposta_variaveis_manuais criada/verificada');
+  });
+
   // Log de auditoria de edições no preview editável
   db.run(`CREATE TABLE IF NOT EXISTS proposta_edicoes_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5826,6 +5844,37 @@ app.delete('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => 
   });
 });
 
+// PUT /api/propostas/:id/variaveis-manuais — grava os valores preenchidos direto na
+// proposta (variáveis técnicas do tipo manual_proposta). Upsert por (item, chave);
+// valor vazio remove a linha (o campo volta a renderizar como espaço em branco).
+app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const valores = Array.isArray(req.body && req.body.valores) ? req.body.valores : null;
+  if (!valores) return res.status(400).json({ error: 'valores deve ser um array de {item_id, chave, valor}' });
+
+  const upsert = db.prepare(`
+    INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(proposta_id, item_id, chave)
+    DO UPDATE SET valor = excluded.valor, updated_at = datetime('now')
+  `);
+  const remover = db.prepare('DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ? AND item_id = ? AND chave = ?');
+  valores.forEach((v) => {
+    if (!v || v.chave == null || v.item_id == null) return;
+    const valor = String(v.valor ?? '').trim();
+    if (valor) upsert.run([id, v.item_id, String(v.chave), valor]);
+    else remover.run([id, v.item_id, String(v.chave)]);
+  });
+  upsert.finalize((errU) => {
+    remover.finalize((errR) => {
+      const err = errU || errR;
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true });
+    });
+  });
+});
+
 // GET /api/propostas/:id/edicoes-log
 app.get('/api/propostas/:id/edicoes-log', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
@@ -8617,6 +8666,11 @@ app.get('/api/propostas/:id/premium', (req, res) => {
           if (errF) console.error('Erro ao buscar fotos da proposta (ignorado, preview segue):', errF.message);
           if (!errF && Array.isArray(fotosRows) && fotosRows.length > 0) templateConfig.fotos_proposta = fotosRows;
 
+          // Valores das variáveis "Manual na Proposta" preenchidos no preview editável
+          db.all('SELECT item_id, chave, valor FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errVM, vmRows) => {
+          if (errVM) console.error('Erro ao buscar variáveis manuais (ignorado, preview segue):', errVM.message);
+          if (!errVM && Array.isArray(vmRows) && vmRows.length > 0) templateConfig.variaveis_manuais = vmRows;
+
           // Aplicar cláusulas customizadas (se existirem para esta proposta)
           db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (errCl, clausulas) => {
           const clausulasParaTemplate = resolverClausulasParaPreview(errCl ? [] : clausulas, omitPrintBar);
@@ -8708,17 +8762,18 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             return;
           }
           const placeholders = chavesUnicas.map(() => '?').join(',');
-          db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err2, rows) => {
+          db.all('SELECT chave, nome, sufixo, tipo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err2, rows) => {
             if (err2) console.error('Erro ao buscar variaveis_tecnicas (ignorado, preview segue):', err2.message);
             if (templateConfig && rows && Array.isArray(rows) && rows.length) {
               templateConfig.variaveis_proposta_labels = {};
               rows.forEach(function (r) {
-                if (r && r.chave != null) templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
+                if (r && r.chave != null) templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim() };
               });
             }
             runGerarSafe();
           });
         }); // fecha db.all clausulas
+        }); // fecha db.all variaveis manuais
         }); // fecha db.all fotos
       });
       } catch (error) {
@@ -8934,14 +8989,14 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     if (chavesUnicas.length > 0) {
       const rows = await new Promise((resolve, reject) => {
         const placeholders = chavesUnicas.map(() => '?').join(',');
-        db.all('SELECT chave, nome, sufixo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err, r) => {
+        db.all('SELECT chave, nome, sufixo, tipo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err, r) => {
           if (err) reject(err);
           else resolve(r || []);
         });
       });
       if (rows && rows.length) {
         rows.forEach((r) => {
-          templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim() };
+          templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim() };
         });
       }
     }
@@ -8980,6 +9035,15 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     if (fotosPdf.length > 0) {
       templateConfig = templateConfig || {};
       templateConfig.fotos_proposta = fotosPdf;
+    }
+
+    // Valores das variáveis "Manual na Proposta" preenchidos no preview editável
+    const variaveisManuaisPdf = await new Promise((resolve) => {
+      db.all('SELECT item_id, chave, valor FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (err, rows) => resolve(rows || []));
+    });
+    if (variaveisManuaisPdf.length > 0) {
+      templateConfig = templateConfig || {};
+      templateConfig.variaveis_manuais = variaveisManuaisPdf;
     }
 
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));

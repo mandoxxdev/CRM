@@ -243,6 +243,38 @@ export default function PropostaPreviewEditavel() {
       injetarControlesClausula(doc, secao);
     });
     ativarEdicaoFotos(doc);
+    ativarEdicaoVariaveisManuais(doc);
+  }
+
+  // Variáveis técnicas do tipo "Manual na Proposta": o template as renderiza na seção 4
+  // como <span data-variavel-manual data-variavel-item> (vazio = espaço sublinhado).
+  // A edição espelha o padrão das cláusulas: digita na página gerada, o valor é sincronizado
+  // para o #proposalSource (fonte que sobrevive às repaginações) e persiste no "Salvar".
+  function ativarEdicaoVariaveisManuais(doc) {
+    doc.querySelectorAll('.proposal-page[data-generated="1"] [data-variavel-manual]').forEach((el) => {
+      el.contentEditable = 'true';
+      el.style.outline = '2px dashed #f59e0b';
+      el.style.background = '#fffde7';
+      el.style.borderRadius = '3px';
+      el.style.cursor = 'text';
+      el.oninput = () => {
+        const chave = el.getAttribute('data-variavel-manual');
+        const item = el.getAttribute('data-variavel-item');
+        const fonte = doc.querySelector(
+          `#proposalSource [data-variavel-manual="${chave}"][data-variavel-item="${item}"]`
+        );
+        if (fonte) fonte.textContent = el.textContent;
+        setMudancasPendentes(true);
+      };
+    });
+  }
+
+  function lerVariaveisManuaisDoSource(doc) {
+    return Array.from(doc.querySelectorAll('#proposalSource [data-variavel-manual]')).map((el) => ({
+      item_id: Number(el.getAttribute('data-variavel-item')),
+      chave: el.getAttribute('data-variavel-manual'),
+      valor: (el.textContent || '').trim(),
+    })).filter((v) => v.chave && Number.isFinite(v.item_id));
   }
 
   // Fotos avulsas: o template as renderiza como overlays .proposta-foto (posição em mm
@@ -496,6 +528,10 @@ export default function PropostaPreviewEditavel() {
       const doc = iframeRef.current?.contentDocument;
       if (doc) {
         await salvarClausulas(doc);
+        const variaveisManuais = lerVariaveisManuaisDoSource(doc);
+        if (variaveisManuais.length > 0) {
+          await api.put(`/propostas/${id}/variaveis-manuais`, { valores: variaveisManuais });
+        }
       }
       if (Object.keys(camposEditados).length > 0) {
         await api.put(`/propostas/${id}/customizacoes`, camposEditados);

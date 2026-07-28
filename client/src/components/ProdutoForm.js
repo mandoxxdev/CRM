@@ -704,6 +704,7 @@ const ProdutoForm = () => {
               const nomeVariavel = (v.nome || variaveisNomesMap[chave] || chave || '').trim() || chave;
               const isListaCondicional = (String(v.tipo || '').toLowerCase() === 'lista_condicional');
               const isSoma = (String(v.tipo || '').toLowerCase() === 'soma');
+              const isManualProposta = (String(v.tipo || '').toLowerCase() === 'manual_proposta');
               const valorCond = isListaCondicional ? (especificacoesTecnicas[chave + '_cond'] ?? '') : '';
               const valor = especificacoesTecnicas[chave] ?? '';
               const isNumero = (String(v.tipo || '').toLowerCase() === 'numero');
@@ -786,6 +787,11 @@ const ProdutoForm = () => {
                             </div>
                           )}
                         </div>
+                      </>
+                    ) : isManualProposta ? (
+                      <>
+                        <label>{nomeVariavel}{sufixo ? ` (${sufixo})` : ''}</label>
+                        <small className="produto-form-variavel-soma-hint">Preenchida manualmente direto na proposta (preview editável) — não há valor no cadastro do produto</small>
                       </>
                     ) : isSoma ? (
                       <>

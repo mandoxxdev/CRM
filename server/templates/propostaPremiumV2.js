@@ -431,9 +431,19 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       (it.especificacoes_tecnicas || it.produto_especificacoes || '').trim()
     );
 
+    // Valores das variáveis "Manual na Proposta" já preenchidos (por item da proposta).
+    // Chave do mapa: "<proposta_itens.id>:<chave da variável>".
+    const valoresManuais = {};
+    (Array.isArray(config.variaveis_manuais) ? config.variaveis_manuais : []).forEach((v) => {
+      if (v && v.chave != null && v.item_id != null) valoresManuais[`${v.item_id}:${v.chave}`] = String(v.valor ?? '');
+    });
+
     const equipItems = (itens || []).map((it, idx) => {
       const n = idx + 1;
       const itemNo = `4.${n}`;
+      // id estável do item para persistir as variáveis manuais (proposta_itens.id);
+      // fallback no índice só para itens sintéticos de teste, sem id.
+      const itemIdPersistencia = (it.id != null ? it.id : idx);
       // semCapsLock só no que é TEXTO descritivo. Código, modelo e NCM ficam intactos: são
       // identificadores ("MPY-500", "AISI 316", "8474.20.90") e rebaixá-los mudaria o dado.
       const nome = esc(semCapsLock(it.produto_nome || it.descricao || `Equipamento ${n}`));
@@ -510,6 +520,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               const meta = variaveisLabels[k] || {};
               const label = (meta && meta.nome) ? meta.nome : k;
               const sufixo = (meta && meta.sufixo) ? meta.sufixo : '';
+              // Tipo "Manual na Proposta": o valor NÃO vem do cadastro do produto — é
+              // preenchido pelo vendedor direto no preview editável e persistido em
+              // proposta_variaveis_manuais. A linha SEMPRE aparece (mesmo vazia, como um
+              // espaço em branco sublinhado), para o vendedor ver o que falta preencher.
+              if (String(meta.tipo || '') === 'manual_proposta') {
+                const manual = String(valoresManuais[`${itemIdPersistencia}:${k}`] || '').trim();
+                const sufixoHtml = sufixo ? ` ${esc(semCapsLock(sufixo))}` : '';
+                return `<p>${esc(semCapsLock(label))}: <span class="variavel-manual" data-variavel-manual="${esc(k)}" data-variavel-item="${esc(itemIdPersistencia)}">${esc(manual)}</span>${sufixoHtml}</p>`;
+              }
               const rawVal = getSpecValue(specs, k);
               const displayVal = (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '')
                 ? String(rawVal).trim()
@@ -1391,6 +1410,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .proposta-foto { position: absolute; z-index: 4; }
     .proposta-foto img { width: 100%; height: auto; display: block; }
 
+    /* Variável "Manual na Proposta": vazia vira um espaço em branco sublinhado (a linha
+       sempre aparece — é o convite para preencher no editor, e sai assim no PDF se o
+       vendedor não preencher). Preenchida, o texto sai normal, sem sublinhado. */
+    .variavel-manual { display: inline-block; min-width: 10mm; text-indent: 0; }
+    .variavel-manual:empty { min-width: 40mm; border-bottom: 1px solid var(--ink); }
+
     .equip-photo-float { float: right; width: 35%; margin: 0 0 4mm 6mm; text-align: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
     .equip-photo-img-float { width: 100%; height: auto; object-fit: contain; border-radius: 6px; display: block; }
     .equip-photo-fallback-float { display: flex; align-items: center; justify-content: center; min-height: 30mm; font-size: 10pt; color: var(--muted); background: var(--blue-100); border-radius: 6px; }
@@ -1825,6 +1850,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         });
       }
       window.aplicarFotosProposta = aplicarFotosProposta;
+      // Exposto para o editor: permite acrescentar uma foto recém-subida à lista e
+      // reaplicar na hora, sem recarregar o iframe (recarregar piscava a tela e jogava
+      // o usuário de volta para a capa).
+      window.__FOTOS_PROPOSTA = FOTOS_PROPOSTA;
       function splitTableByRows(tableEl, pageContentEl) {
         const thead = tableEl.querySelector('thead');
         const rows = Array.from(tableEl.querySelectorAll('tbody > tr'));
