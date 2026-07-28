@@ -339,17 +339,33 @@ export default function PropostaPreviewEditavel() {
       el.style.cursor = 'move';
       el.style.outline = '2px dashed #f59e0b';
 
-      const btnRemover = doc.createElement('button');
-      btnRemover.type = 'button';
-      btnRemover.textContent = '✕';
-      btnRemover.title = 'Remover foto';
-      btnRemover.style.cssText = 'position:absolute;top:-10px;right:-10px;z-index:6;width:20px;height:20px;line-height:1;font-size:11px;padding:0;border:1px solid #dc2626;background:#fee2e2;color:#dc2626;border-radius:50%;cursor:pointer;';
-      el.appendChild(btnRemover);
+      // tabIndex: sem foco o elemento não recebe keydown — é o que habilita apagar com Del.
+      el.tabIndex = 0;
 
-      const alca = doc.createElement('div');
-      alca.title = 'Redimensionar';
-      alca.style.cssText = 'position:absolute;bottom:-6px;right:-6px;z-index:6;width:12px;height:12px;background:#f59e0b;border:1px solid #b45309;border-radius:2px;cursor:nwse-resize;';
-      el.appendChild(alca);
+      // Oito alças, como no Word. Todas redimensionam PROPORCIONALMENTE: a foto é um
+      // <img> com height:auto, então a altura decorre da largura — e só a largura é
+      // persistida (coluna `largura`). Esticar um lado sozinho distorceria a imagem e
+      // exigiria gravar a altura também. O que muda por alça é a ÂNCORA: o canto/lado
+      // oposto ao que se arrasta fica parado, como se espera de um resize.
+      const ALCAS = [
+        ['nw', 'top:-5px;left:-5px;cursor:nwse-resize;'],
+        ['n', 'top:-5px;left:50%;margin-left:-5px;cursor:ns-resize;'],
+        ['ne', 'top:-5px;right:-5px;cursor:nesw-resize;'],
+        ['e', 'top:50%;right:-5px;margin-top:-5px;cursor:ew-resize;'],
+        ['se', 'bottom:-5px;right:-5px;cursor:nwse-resize;'],
+        ['s', 'bottom:-5px;left:50%;margin-left:-5px;cursor:ns-resize;'],
+        ['sw', 'bottom:-5px;left:-5px;cursor:nesw-resize;'],
+        ['w', 'top:50%;left:-5px;margin-top:-5px;cursor:ew-resize;'],
+      ];
+      const alcas = ALCAS.map(([dir, pos]) => {
+        const h = doc.createElement('div');
+        h.className = 'ppe-alca';
+        h.title = 'Redimensionar';
+        h.style.cssText = `position:absolute;z-index:6;width:10px;height:10px;background:#fff;border:1px solid #b45309;border-radius:2px;${pos}`;
+        h.onmousedown = (e) => iniciarResize(e, dir);
+        el.appendChild(h);
+        return h;
+      });
 
       const pxPorMm = () => {
         const pg = el.closest('.proposal-page');
@@ -381,8 +397,9 @@ export default function PropostaPreviewEditavel() {
       };
 
       el.onmousedown = (e) => {
-        if (e.target === btnRemover || e.target === alca) return;
+        if (alcas.includes(e.target)) return;
         e.preventDefault();
+        el.focus(); // seleciona a foto: habilita apagar com Del
         // Offset do clique dentro da foto: a foto segue o cursor mantendo o ponto pego.
         const rectInicial = el.getBoundingClientRect();
         const offX = e.clientX - rectInicial.left;
@@ -435,14 +452,39 @@ export default function PropostaPreviewEditavel() {
         doc.addEventListener('mouseup', aoSoltar);
       };
 
-      alca.onmousedown = (e) => {
+      function iniciarResize(e, dir) {
         e.preventDefault();
         e.stopPropagation();
+        el.focus();
         const k = pxPorMm();
+        const r0 = el.getBoundingClientRect();
+        const pg = el.closest('.proposal-page');
+        const rp0 = pg.getBoundingClientRect();
         const startX = e.clientX;
-        const startW = parseFloat(el.style.width) || 80;
+        const startY = e.clientY;
+        const left0 = (r0.left - rp0.left) / k;
+        const top0 = (r0.top - rp0.top) / k;
+        const w0 = r0.width / k;
+        const h0 = r0.height / k;
+        const proporcao = w0 > 0 ? h0 / w0 : 1;
+        // Lados que ficam PARADOS enquanto se arrasta esta alça.
+        const ancoraDireita = dir.includes('w');
+        const ancoraInferior = dir.includes('n');
+
         const aoMover = (ev) => {
-          el.style.width = `${Math.max(10, startW + (ev.clientX - startX) / k)}mm`;
+          const dx = (ev.clientX - startX) / k;
+          const dy = (ev.clientY - startY) / k;
+          // Alças de topo/base não têm componente horizontal: a largura vem do arrasto
+          // vertical convertido pela proporção, senão elas não redimensionariam nada.
+          let novaLargura;
+          if (dir === 'n') novaLargura = w0 - dy / proporcao;
+          else if (dir === 's') novaLargura = w0 + dy / proporcao;
+          else novaLargura = w0 + (ancoraDireita ? -dx : dx);
+          novaLargura = Math.max(10, novaLargura);
+          const novaAltura = novaLargura * proporcao;
+          el.style.width = `${novaLargura}mm`;
+          if (ancoraDireita) el.style.left = `${left0 + w0 - novaLargura}mm`;
+          if (ancoraInferior) el.style.top = `${top0 + h0 - novaAltura}mm`;
         };
         const aoSoltar = () => {
           doc.removeEventListener('mousemove', aoMover);
@@ -451,11 +493,9 @@ export default function PropostaPreviewEditavel() {
         };
         doc.addEventListener('mousemove', aoMover);
         doc.addEventListener('mouseup', aoSoltar);
-      };
+      }
 
-      btnRemover.onclick = async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      async function excluirFoto() {
         if (!window.confirm('Remover esta foto da proposta?')) return;
         try {
           await api.delete(`/propostas/${id}/fotos/${fotoId}`);
@@ -470,6 +510,38 @@ export default function PropostaPreviewEditavel() {
         } catch (_) {
           toast.error('Erro ao remover foto.');
         }
+      }
+
+      // Del/Backspace com a foto selecionada. O listener fica NO elemento (que só recebe
+      // teclado quando focado), então digitar Del dentro de uma cláusula não apaga foto.
+      el.onkeydown = (ev) => {
+        if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+        ev.preventDefault();
+        excluirFoto();
+      };
+
+      // Botão direito: menu com "Excluir foto", no lugar do antigo ✕ sempre visível.
+      el.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        el.focus();
+        doc.querySelectorAll('.ppe-menu-foto').forEach((m) => m.remove());
+        const menu = doc.createElement('div');
+        menu.className = 'ppe-menu-foto';
+        menu.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #d1d5db;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:4px;font-family:sans-serif;font-size:13px;';
+        menu.style.left = `${ev.clientX}px`;
+        menu.style.top = `${ev.clientY}px`;
+        const item = doc.createElement('button');
+        item.type = 'button';
+        item.textContent = '🗑  Excluir foto';
+        item.style.cssText = 'display:block;width:100%;text-align:left;padding:6px 14px;border:none;background:none;cursor:pointer;color:#dc2626;white-space:nowrap;';
+        item.onmouseenter = () => { item.style.background = '#fee2e2'; };
+        item.onmouseleave = () => { item.style.background = 'none'; };
+        item.onclick = () => { menu.remove(); excluirFoto(); };
+        menu.appendChild(item);
+        doc.body.appendChild(menu);
+        const fechar = () => { menu.remove(); doc.removeEventListener('mousedown', fechar); };
+        setTimeout(() => doc.addEventListener('mousedown', fechar), 0);
       };
     });
   }
