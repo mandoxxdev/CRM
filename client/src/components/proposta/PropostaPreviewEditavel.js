@@ -303,6 +303,30 @@ export default function PropostaPreviewEditavel() {
     })).filter((v) => v.chave && Number.isFinite(v.item_id));
   }
 
+  // Guias de centralização (estilo Word): enquanto se arrasta uma foto, quando o centro
+  // dela chega perto do centro da página a foto "gruda" ali e uma linha marca o eixo.
+  // Os limites são os da folha A4 em mm — a mesma unidade em que a posição é gravada,
+  // então o alinhamento vale igual no preview e no PDF, independente do zoom.
+  // As linhas são overlays transitórios (criados no arrasto, removidos ao soltar), então
+  // não entram na medição da paginação nem no PDF, que é regerado no servidor.
+  const SNAP_TOLERANCIA_MM = 2.5;
+  const A4_LARGURA_MM = 210;
+  const A4_ALTURA_MM = 297;
+
+  function limparGuias(doc) {
+    doc.querySelectorAll('.ppe-guia-centro').forEach((g) => g.remove());
+  }
+
+  function desenharGuia(doc, pagina, orientacao) {
+    if (pagina.querySelector(`.ppe-guia-${orientacao}`)) return;
+    const g = doc.createElement('div');
+    g.className = `ppe-guia-centro ppe-guia-${orientacao}`;
+    g.style.cssText = orientacao === 'v'
+      ? 'position:absolute;top:0;bottom:0;left:50%;width:0;border-left:1px dashed #e11d48;z-index:7;pointer-events:none;'
+      : 'position:absolute;left:0;right:0;top:50%;height:0;border-top:1px dashed #e11d48;z-index:7;pointer-events:none;';
+    pagina.appendChild(g);
+  }
+
   // Fotos avulsas: o template as renderiza como overlays .proposta-foto (posição em mm
   // sobre a página) e as recria a CADA repaginação — por isso o wiring roda junto de
   // ativarEdicaoClausulas (load + MutationObserver) e usa a flag ppeWired para não
@@ -377,12 +401,34 @@ export default function PropostaPreviewEditavel() {
           if (alvo !== el.parentElement) alvo.appendChild(el);
           const rp = alvo.getBoundingClientRect();
           const k = rp.width / 210;
-          el.style.left = `${(ev.clientX - offX - rp.left) / k}mm`;
-          el.style.top = `${(ev.clientY - offY - rp.top) / k}mm`;
+          const r = el.getBoundingClientRect();
+          const larguraMm = r.width / k;
+          const alturaMm = r.height / k;
+          let leftMm = (ev.clientX - offX - rp.left) / k;
+          let topMm = (ev.clientY - offY - rp.top) / k;
+
+          // Imã de centralização. Alt pressionado desliga o encaixe (igual ao Word),
+          // para quando o usuário quer posicionar livremente perto do centro.
+          limparGuias(doc);
+          if (!ev.altKey) {
+            const centroX = A4_LARGURA_MM / 2;
+            if (Math.abs(leftMm + larguraMm / 2 - centroX) <= SNAP_TOLERANCIA_MM) {
+              leftMm = centroX - larguraMm / 2;
+              desenharGuia(doc, alvo, 'v');
+            }
+            const centroY = A4_ALTURA_MM / 2;
+            if (Math.abs(topMm + alturaMm / 2 - centroY) <= SNAP_TOLERANCIA_MM) {
+              topMm = centroY - alturaMm / 2;
+              desenharGuia(doc, alvo, 'h');
+            }
+          }
+          el.style.left = `${leftMm}mm`;
+          el.style.top = `${topMm}mm`;
         };
         const aoSoltar = () => {
           doc.removeEventListener('mousemove', aoMover);
           doc.removeEventListener('mouseup', aoSoltar);
+          limparGuias(doc);
           persistir();
         };
         doc.addEventListener('mousemove', aoMover);
