@@ -54,12 +54,20 @@ test('clausula 5.9 DEVOLUÇÃO OU TROCA DE MERCADORIA presente na lista padrão'
   assert(c.conteudo.includes('Não serão aceitas'), 'conteudo da cláusula 5.9 incompleto');
 });
 
-test('clausula 5.10 NÃO ALICIAMENTO presente na lista padrão', () => {
+test('clausula 5.10 CANCELAMENTO DE PEDIDO presente na lista padrão', () => {
   const lista = getClausulasDefault();
   const c = lista.find(x => x.numero === '5.10');
   assert(c, 'faltou a cláusula 5.10');
+  assert(c.titulo === 'CANCELAMENTO DE PEDIDO', `titulo errado: ${c.titulo}`);
+  assert(c.conteudo.includes('produzidos sob encomenda'), 'conteudo da cláusula 5.10 incompleto');
+});
+
+test('clausula 5.11 NÃO ALICIAMENTO presente na lista padrão', () => {
+  const lista = getClausulasDefault();
+  const c = lista.find(x => x.numero === '5.11');
+  assert(c, 'faltou a cláusula 5.11');
   assert(c.titulo === 'NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL', `titulo errado: ${c.titulo}`);
-  assert(c.conteudo.includes('não aliciar'), 'conteudo da cláusula 5.10 incompleto');
+  assert(c.conteudo.includes('não aliciar'), 'conteudo da cláusula 5.11 incompleto');
 });
 
 for (const [rotulo, custom] of [['banco', comoBanco], ['default', comoDefault]]) {
