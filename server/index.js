@@ -8837,13 +8837,20 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       if (customizacoes.cliente_contato) proposta.cliente_contato = customizacoes.cliente_contato;
     }
 
-    // Aplicar cláusulas customizadas no PDF
+    // Aplicar cláusulas customizadas no PDF.
+    // MESMA resolução do preview do editor (embed=1): sem cláusulas salvas, usa as
+    // cláusulas padrão como clausulas_custom — assim o template renderiza o MESMO ramo
+    // (seções planas allow-break) nos dois caminhos. Antes, sem cláusulas salvas o PDF
+    // caía no ramo estático legado do template, cujos grupos avoid-break (5.6-5.7,
+    // 5.9-5.15, ...) eram empurrados inteiros para a página seguinte quando não cabiam,
+    // deixando páginas com grandes espaços em branco que não existiam no preview.
     const clausulasPdf = await new Promise((resolve) => {
       db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (err, rows) => resolve(rows || []));
     });
-    if (clausulasPdf.length > 0) {
+    const clausulasParaPdf = resolverClausulasParaPreview(clausulasPdf, true);
+    if (clausulasParaPdf) {
       templateConfig = templateConfig || {};
-      templateConfig.clausulas_custom = clausulasPdf;
+      templateConfig.clausulas_custom = clausulasParaPdf;
     }
 
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
