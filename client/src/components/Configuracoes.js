@@ -6,6 +6,7 @@ import { FiSettings, FiSave, FiRefreshCw, FiBriefcase, FiMail, FiDatabase, FiGlo
 import VariaveisTecnicas from './VariaveisTecnicas';
 import OpcoesPorFamilia from './OpcoesPorFamilia';
 import ConfigTemplateProposta from './ConfigTemplateProposta';
+import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './Configuracoes.css';
 
 const Configuracoes = () => {
@@ -32,7 +33,16 @@ const Configuracoes = () => {
     try {
       setLoading(true);
       const response = await api.get('/configuracoes');
-      setConfigs(response.data);
+      // O telefone da empresa foi gravado sem máscara por anos e é ele que sai impresso no
+      // cabeçalho da proposta; mascara na abertura para o campo já exibir o formato final.
+      const dados = response.data;
+      if (dados?.empresa && typeof dados.empresa.empresa_telefone === 'string') {
+        dados.empresa = {
+          ...dados.empresa,
+          empresa_telefone: mascararTelefoneCompleto(dados.empresa.empresa_telefone),
+        };
+      }
+      setConfigs(dados);
     } catch (error) {
       console.error('Erro ao carregar configurações:', error);
       setMensagem({ tipo: 'erro', texto: 'Erro ao carregar configurações' });
@@ -191,7 +201,10 @@ const Configuracoes = () => {
                 <input
                   type="text"
                   value={configs.empresa?.empresa_telefone || ''}
-                  onChange={(e) => handleChange('empresa', 'empresa_telefone', e.target.value)}
+                  onChange={(e) => handleChange('empresa', 'empresa_telefone', mascararTelefoneDigitando(e.target.value))}
+                  placeholder="(00) 00000-0000"
+                  inputMode="tel"
+                  maxLength={15}
                 />
               </div>
               <div className="config-item">

@@ -8359,6 +8359,7 @@ app.get('/api/propostas/:id/premium', (req, res) => {
            COALESCE(p.cliente_telefone, c.telefone) as cliente_telefone,
            COALESCE(p.cliente_email, c.email) as cliente_email,
            c.telefone as cliente_telefone_cadastro, c.email as cliente_email_cadastro,
+           c.contato_principal as cliente_contato_cadastro,
            u.nome as responsavel_nome, u.email as responsavel_email
     FROM propostas p
     LEFT JOIN clientes c ON p.cliente_id = c.id
@@ -8641,6 +8642,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
                COALESCE(p.cliente_telefone, c.telefone) as cliente_telefone,
                COALESCE(p.cliente_email, c.email) as cliente_email,
                c.telefone as cliente_telefone_cadastro, c.email as cliente_email_cadastro,
+               c.contato_principal as cliente_contato_cadastro,
                p.cliente_contato,
                u.nome as responsavel_nome, u.email as responsavel_email
         FROM propostas p

@@ -15,10 +15,12 @@
 | I5 | **Numeração `Pág. X/Y` contínua e consistente**, com ou sem sumário (sumário visível ⇔ cabe na página; escondido quando estoura) | `propostaInvariantes.test.js`, `propostaSumarioOverflow.test.js` |
 | I6 | **Nada ultrapassa o rodapé** — nenhum bloco além da área útil de nenhuma página gerada | `propostaInvariantes.test.js` + script de overflow |
 | I7 | Seção **4**, seção 5, 5.23 e 5.24 iniciam em **página nova** (`data-page-break="before"`). A 4 é verificada nos dois ramos: com itens e sem nenhum item | `propostaQuebras.test.js` |
-| I8 | 5.23 (preço/FINAME/fiscais) renderiza nos **dois caminhos** (default e custom/inline) | `proposta523Fixa.test.js` |
-| I9 | Capa: hero 100% da largura sem faixa branca; nome/CNPJ/email/telefone presentes | `propostaCapaHero.test.js` (pixel exige `pngjs`), `propostaCapaContatoCadastro.test.js` |
+| I8 | 5.23 (preço/FINAME/fiscais) renderiza nos **dois caminhos** (default e custom/inline), com os **textos editáveis** (abertura e condição de pagamento) e as **tabelas calculadas** | `proposta523Fixa.test.js`, `proposta523Editavel.test.js` |
+| I9 | Capa: hero 100% da largura sem faixa branca; nome/**contato**/CNPJ/email/telefone presentes, centralizados e com rótulo em cima | `propostaCapaHero.test.js` (pixel exige `pngjs`), `propostaCapaContatoCadastro.test.js`, `propostaCapaContato.test.js`, `propostaCapaCamposCentralizados.test.js` |
 | I10 | **Tabela DADOS DA CONTRATADA sozinha na página**, e a paginação não muda conforme a imagem carrega (mesmo resultado com imagem presente, ausente/404 ou chegando tarde) | `propostaTabelaContratadaPaginaPropria.test.js` |
 | I11 | **PDF abaixo do teto de peso**: fotos entram como JPEG (`DCTDecode`), preview segue em WebP por URL, logos permanecem PNG | `propostaPdfPesoImagens.test.js` |
+| I12 | **Número da proposta no cabeçalho**, na mesma linha do título: `PROPOSTA TÉCNICA COMERCIAL: Nº <numero>` (número num `<span class="page-header-num">`) | `propostaHeaderNumero.test.js`, `propostaHeaderPadraoSempre.test.js` |
+| I13 | **Round-trip do título de cláusula**: `data-titulo-prefixo` + texto visível = título salvo. Se a soma mudar, o bloco sai do slot 23 e a 5.23 se parte no meio da lista | `proposta523Editavel.test.js` |
 
 ## ⚠️ Armadilhas conhecidas (causas de bugs reais — não repetir)
 
@@ -49,6 +51,30 @@
     `versaoParaPdf`). Não faça isso com logo (perde transparência) nem com `dados-contratada.png`
     (texto borraria). Ver `propostaPdfPesoImagens.test.js`.
 11. **Medições de altura acontecem ANTES da edição inline injetar UI** — controles de edição devem ficar fora do fluxo (`position:absolute`) e `min-height` via CSS `:empty` (bug histórico `2a69dbc`).
+12. **Número de cláusula NÃO identifica a CONSIDERAÇÃO FINAL.** Antes de o slot 23 ser reservado,
+    o `/clausulas/inicializar` gravava a consideração final como **`5.23 CONSIDERAÇÃO FINAL`** — e
+    existe proposta assim em produção (74). Como o slot 23 agora é dos TEXTOS da 5.23, classificar
+    só pelo número fazia essa cláusula tomar o lugar da abertura da 5.23: a **CONDIÇÃO DE PAGAMENTO
+    sumia inteira** do documento e a consideração final subia para antes da tabela de preços
+    (violando I2). O template usa `ehConsideracaoFinal()` (título sem acento/caixa começando por
+    "consideracao final") para mandá-la sempre para a página de assinatura, qualquer que seja o
+    número salvo. Travado em `proposta523Editavel.test.js`.
+13. **O que é `data-clausula-slot="23"`.** Marca os blocos de texto que moram DENTRO da seção de
+    preço (entre a tabela de preços e as tabelas fiscais). Eles são cláusulas de verdade — editáveis
+    e persistidas — mas ficam de fora da renumeração, da contagem 5.1…5.22/5.24, da reordenação e
+    da barra de controles inline. Mover uma cláusula "para dentro" desse grupo quebraria a ordem
+    tabela completa → condição de pagamento (I4). Ver `clausulasInlineEditor.js`
+    (`CLAUSULA_EDITAVEL_SELECTOR`) e `clausulasInlineEditor.test.js`.
+14. **Estilo inline em texto de cláusula não sobrevive ao primeiro save.** O conteúdo é gravado
+    como TEXTO (`htmlParaTexto`) e volta re-embrulhado em `<p>`; qualquer `style="..."` dos
+    parágrafos padrão se perde. Foi por isso que o `line-height: 26px` da condição de pagamento
+    virou regra de classe no container (`.clausula-523-condicao > p`) — se ficasse inline, a altura
+    medida pelo paginador mudaria depois da primeira edição do usuário.
+15. **`clientes.contato_principal` não está nos SELECTs de `/premium` e `/pdf`.** O contato da capa
+    cai para `cliente_contato_cadastro`/`contato_principal`, mas **nenhuma** das 56 propostas do
+    banco tem `propostas.cliente_contato` preenchido — sem acrescentar
+    `c.contato_principal as cliente_contato_cadastro` às duas queries de `server/index.js`, a capa
+    mostra `—` para todas. Ver a nota em `template.md`.
 
 ## Como rodar a validação (obrigatório antes de merge)
 
@@ -63,11 +89,14 @@ node tests/proposta523TheadRepetido.test.js
 node tests/propostaQuebras.test.js
 node tests/propostaSumarioOverflow.test.js
 node tests/propostaCapaHero.test.js
+node tests/propostaCapaCamposCentralizados.test.js
 node tests/propostaTabelaContratadaPaginaPropria.test.js
 node tests/propostaPdfPesoImagens.test.js
 
 # Rápidos (node puro)
 node tests/proposta523Fixa.test.js
+node tests/proposta523Editavel.test.js
+node tests/propostaCapaContato.test.js
 node tests/propostaClausulasInline.test.js
 node tests/propostaCapaContatoCadastro.test.js
 node tests/propostaDescritivoOrdem.test.js
@@ -88,6 +117,8 @@ Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge.
 ## Validação manual complementar (quando mexer em área visual)
 
 - Abrir uma proposta REAL grande (ex.: 288, 30 itens, cláusulas customizadas) no preview editável e percorrer todas as páginas.
-- Conferir: capa (hero/campos) → sumário (presente ou ausente conforme couber) → seções 1–4 → 5.1–5.22 → 5.23 (tabela completa → condição) → 5.24 + assinaturas na última página.
+- Conferir: capa (hero/campos, incluindo o **contato**) → sumário (presente ou ausente conforme couber) → seções 1–4 → 5.1–5.22 → 5.23 (abertura → tabela completa → condição de pagamento → FINAME/fiscais) → 5.24 + assinaturas na última página.
+- Editar os textos da 5.23 no preview, salvar, recarregar e baixar o PDF: o texto novo tem de
+  sobreviver nos dois, e a tabela de preços tem de continuar entre a abertura e a condição.
 - Baixar o PDF e repetir a conferência (o PDF usa o mesmo paginador).
 - Console do navegador sem erros.

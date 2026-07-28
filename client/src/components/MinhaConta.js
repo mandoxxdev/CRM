@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { FiArrowLeft, FiUser, FiLock, FiCamera, FiTrash2, FiSave } from 'react-icons/fi';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './MinhaConta.css';
 
 const avatarUrl = (filename) =>
@@ -31,7 +32,9 @@ export default function MinhaConta() {
       setConta(data);
       setPerfil({
         nome: data.nome || '',
-        telefone: data.telefone || '',
+        // Perfis antigos foram salvos sem máscara; formata na abertura para o campo não
+        // aparecer como "11988887777" logo depois de a máscara passar a existir.
+        telefone: mascararTelefoneCompleto(data.telefone),
         ramal: data.ramal || '',
         data_nascimento: data.data_nascimento || '',
         bio: data.bio || '',
@@ -195,7 +198,7 @@ export default function MinhaConta() {
             </div>
             <div className="conta-campo">
               <label>Telefone</label>
-              <input value={perfil.telefone} onChange={(e) => setPerfil(p => ({ ...p, telefone: e.target.value }))} placeholder="(11) 99999-9999" />
+              <input value={perfil.telefone} onChange={(e) => setPerfil(p => ({ ...p, telefone: mascararTelefoneDigitando(e.target.value) }))} placeholder="(11) 99999-9999" inputMode="tel" maxLength={15} />
             </div>
             <div className="conta-campo">
               <label>Ramal</label>

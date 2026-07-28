@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { FiX, FiSave, FiDownload, FiEdit2 } from 'react-icons/fi';
+import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './PreviewPropostaEditavel.css';
 
 const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: onSaveCallback }) => {
@@ -13,7 +14,8 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
     garantia: formData.garantia || '',
     observacoes: formData.observacoes || '',
     cliente_contato: formData.cliente_contato || '',
-    cliente_telefone: formData.cliente_telefone || '',
+    // Telefone salvo na proposta pode ser anterior à máscara: formata para o campo abrir certo.
+    cliente_telefone: mascararTelefoneCompleto(formData.cliente_telefone),
     cliente_email: formData.cliente_email || ''
   });
   
@@ -59,7 +61,7 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
         setCliente(clienteRes.data);
         // Preencher telefone e email do cliente se não estiverem nos dados editáveis
         if (!dadosEditaveis.cliente_telefone && clienteRes.data.telefone) {
-          setDadosEditaveis(prev => ({ ...prev, cliente_telefone: clienteRes.data.telefone }));
+          setDadosEditaveis(prev => ({ ...prev, cliente_telefone: mascararTelefoneCompleto(clienteRes.data.telefone) }));
         }
         if (!dadosEditaveis.cliente_email && clienteRes.data.email) {
           setDadosEditaveis(prev => ({ ...prev, cliente_email: clienteRes.data.email }));
@@ -581,9 +583,11 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
                 <label>Telefone:</label>
                 <input
                   type="text"
-                  value={dadosEditaveis.cliente_telefone || (cliente?.telefone || '')}
-                  onChange={(e) => handleChange('cliente_telefone', e.target.value)}
-                  placeholder="Telefone do cliente"
+                  value={dadosEditaveis.cliente_telefone || mascararTelefoneCompleto(cliente?.telefone)}
+                  onChange={(e) => handleChange('cliente_telefone', mascararTelefoneDigitando(e.target.value))}
+                  placeholder="(00) 00000-0000"
+                  inputMode="tel"
+                  maxLength={15}
                 />
               </div>
               <div className="preview-form-group">

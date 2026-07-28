@@ -7,7 +7,7 @@ const {
   uploadsCoverDir,
 } = require('../config/paths');
 const propostaEngine = require('../propostaCompositionEngine');
-const { getClausulasDefault } = require('../clausulasDefault');
+const { getClausulasDefault, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
 
 // Substitui placeholders (simples e avançados: {{#if}}, {{#each}}, etc.) — usa motor de composição
 function substituirPlaceholdersProposta(html, proposta, itens, totais) {
@@ -227,6 +227,17 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
     const clienteNome = esc(proposta.razao_social || proposta.nome_fantasia || '—');
     const clienteCnpj = esc(proposta.cnpj || '—');
+    // Nome do contato do cliente (capa). Mesmo encadeamento de fallback do email/telefone:
+    //   1) proposta.cliente_contato  — override da proposta (propostas.cliente_contato) e TAMBÉM
+    //      onde a edição inline do preview chega, porque as rotas /premium e /pdf sobrescrevem
+    //      esse campo com proposta_customizacoes.cliente_contato antes de chamar o template;
+    //   2) proposta.cliente_contato_cadastro / proposta.contato_principal — o cadastro do cliente
+    //      (clientes.contato_principal). Os dois nomes são aceitos porque a query pode trazer a
+    //      coluna com alias (padrão dos demais campos: cliente_email_cadastro) ou crua;
+    //   3) '—' quando não há contato em lugar nenhum (a linha nunca some, igual às outras).
+    const clienteContato = esc(
+      proposta.cliente_contato || proposta.cliente_contato_cadastro || proposta.contato_principal || '—'
+    );
     const responsavelNome = esc(proposta.responsavel_nome || '—');
     const dataEmissao = esc(totais.dataEmissao || '');
     const dataValidade = esc(totais.dataValidade || '');
@@ -579,16 +590,100 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </tr>`;
     }).join('');
 
-    // Seção 5.23 FIXA (não editável): título + tabela de preços DINÂMICA + FINAME/BNDES + tabelas
-    // fiscais. Construída uma vez e injetada nos DOIS caminhos de render (custom/inline e hardcoded),
+    // ===== Helpers de cláusula compartilhados =====
+    // Ficam aqui (fora do IIFE de clausulasSection) porque a seção 5.23 também os usa: os
+    // TEXTOS dela viraram cláusulas de verdade e precisam ser renderizados com os mesmos
+    // atributos de edição inline (data-clausula-key / data-clausula-campo).
+    const clausulaKey = (c, idx) => (c.id != null ? String(c.id) : `default-${c.numero || idx}`);
+    // Conteúdo sem nenhuma tag = texto puro vindo do banco (o save grava texto, não HTML):
+    // cada parágrafo vira um <p>.
+    const conteudoClausulaHtml = (raw) => {
+      const bruto = raw || '';
+      if (/<[a-z][\s\S]*>/i.test(bruto)) return bruto;
+      return String(bruto).split(/\n{2,}/).map((p) => `<p>${esc(p.trim())}</p>`).join('') || '<p></p>';
+    };
+    // IMPORTANTE: cláusulas persistidas no banco NÃO têm campo `numero` (a tabela
+    // proposta_clausulas não tem essa coluna) — o número vive no PREFIXO do título
+    // ("5.24 CONSIDERAÇÃO FINAL"). Um predicado que só olhe c.numero funciona nos
+    // testes (defaults têm numero) mas falha com dados reais, fazendo a 5.24
+    // renderizar no meio da lista e "sumir" do fim do documento (bug da proposta 288).
+    // "5.23.1" também resolve para 23 — é o segundo bloco de texto da própria 5.23.
+    const subNumeroDe = (c) => {
+      const numeroDeclarado = (c && c.numero != null && String(c.numero).trim()) ? String(c.numero).trim() : null;
+      const m = /^\s*(\d+)\.(\d+)/.exec(numeroDeclarado || String((c && c.titulo) || ''));
+      return m ? parseInt(m[2], 10) : NaN;
+    };
+    // A CONSIDERAÇÃO FINAL fecha o documento (I2/I3: sempre depois da 5.23 e junto das
+    // assinaturas), independente do número com que foi salva. Isso NÃO é preciosismo:
+    // antes de o slot 23 ser reservado, o /clausulas/inicializar gravava essa cláusula
+    // como "5.23 CONSIDERAÇÃO FINAL" — e existe proposta assim em produção (74). Indo só
+    // pelo número, ela ocuparia o slot dos TEXTOS da 5.23: o documento perderia a
+    // CONDIÇÃO DE PAGAMENTO inteira e a consideração final subiria para antes da tabela
+    // de preços. Comparação sem acento/caixa porque o título vem digitado pelo usuário.
+    const ehConsideracaoFinal = (c) => {
+      const titulo = String((c && c.titulo) || '')
+        .replace(/^\s*\d+(\.\d+)*\s*/, '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '');
+      return titulo.startsWith('consideracao final');
+    };
+    const ehTextoDa523 = (c) => subNumeroDe(c) === 23 && !ehConsideracaoFinal(c);
+    const ehPos523 = (c) => subNumeroDe(c) >= 24 || ehConsideracaoFinal(c);
+
+    // ===== Seção 5.23 — MISTA: textos editáveis + tabelas calculadas =====
+    // As TABELAS (preços gerada dos itens, FINAME/BNDES e fiscais) continuam sendo montadas
+    // aqui e NÃO são editáveis: elas têm de sair íntegras, em ordem e com o thead repetido em
+    // cada fragmento (invariante I4) — garantia que só o gerador dá; conteúdo livre digitado
+    // no preview não teria como respeitá-la.
+    // Os TEXTOS (abertura e condição de pagamento) são cláusulas de verdade: vêm de
+    // clausulas_custom quando a proposta já tem cláusulas salvas, senão dos padrões de
+    // clausulasDefault.js — a MESMA fonte nos dois ramos de render, para o PDF nunca divergir
+    // do preview.
+    const clausulasCustomLista = (templateConfig && Array.isArray(templateConfig.clausulas_custom))
+      ? templateConfig.clausulas_custom
+      : [];
+    const clausulas523DoBanco = clausulasCustomLista.filter(ehTextoDa523);
+    const blocos523 = clausulas523DoBanco.length > 0
+      ? clausulas523DoBanco
+      : [CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO];
+    // Propostas LEGADAS (cláusulas salvas antes desta feature) não têm linhas 5.23 no banco.
+    // Nesse caso os blocos entram com key "temp-*", que é o contrato do editor inline para
+    // "cláusula ainda não persistida": na primeira gravação eles viram linhas novas, em vez
+    // de a edição ser silenciosamente descartada (keys "default-*" são ignoradas pelo diff
+    // quando a proposta já está customizada).
+    const key523 = (c, i) => (clausulas523DoBanco.length > 0 ? clausulaKey(c, i) : `temp-523-${i}`);
+    // Primeiro bloco: título visível como <h3> "5.23 ..." (é ele que entra no sumário).
+    // Blocos seguintes: subtítulo em negrito com o prefixo numérico ESCONDIDO — o documento
+    // continua mostrando só "CONDIÇÃO DE PAGAMENTO:", mas o prefixo fica no atributo
+    // data-titulo-prefixo para o editor remontar o título completo ao salvar (é ele que
+    // mantém o bloco ancorado no slot 23 na próxima renderização).
+    const render523Bloco = (c, i) => {
+      const key = esc(key523(c, i));
+      const tituloCompleto = String(c.numero ? `${c.numero} ${c.titulo}` : (c.titulo || '')).trim();
+      const conteudo = conteudoClausulaHtml(c.conteudo);
+      if (i === 0) {
+        return `<section class="block stack-md allow-break" data-clausula-key="${key}" data-clausula-slot="23">
+          <h3 data-clausula-campo="titulo">${esc(tituloCompleto)}</h3>
+          <div class="stack-sm" data-clausula-campo="conteudo">${conteudo}</div>
+        </section>`;
+      }
+      const m = /^\s*(\d+\.\d+(?:\.\d+)*)\s+([\s\S]*)$/.exec(tituloCompleto);
+      const prefixo = m ? `${m[1]} ` : '';
+      const visivel = m ? m[2] : tituloCompleto;
+      return `<section class="block stack-md allow-break" data-clausula-key="${key}" data-clausula-slot="23">
+        <p class="clausula-subtitulo" data-clausula-campo="titulo" data-titulo-prefixo="${esc(prefixo)}">${esc(visivel)}</p>
+        <div class="stack-sm clausula-523-condicao" data-clausula-campo="conteudo">${conteudo}</div>
+      </section>`;
+    };
+
+    // Construída uma vez e injetada nos DOIS caminhos de render (custom/inline e hardcoded),
     // sempre entre a 5.22 e a 5.24. Marcada com data-page-break="before" no elemento raiz (five-23-
     // preco-group) para iniciar em página própria (ver paginateProposalContent).
     const sec523PrecoHtml = `
       <section class="block stack-md avoid-break five-23-preco-group" data-page-break="before">
-        <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>
-          <p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>
-        </section>
+        ${render523Bloco(blocos523[0], 0)}
 
         <section class="block stack-md allow-break">
           <div class="table-caption">Tabela de Preços</div>
@@ -612,13 +707,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </table>
         </section>
 
-        <section class="block stack-md allow-break">
-          <p><strong>CONDIÇÃO DE PAGAMENTO:</strong></p>
-          <p style="text-indent: 12.5mm; line-height: 26px;"><strong>Primeira Parcela/Entrada:</strong> – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p>
-          <p style="text-indent: 12.5mm; line-height: 26px;"><strong>Segunda Parcela/Liberação:</strong> – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p>
-          <p style="text-indent: 12.5mm; line-height: 26px;"><strong>Terceira Parcela/Saldo:</strong> – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p>
-          <p style="text-indent: 12.5mm; line-height: 26px;">Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>
-        </section>
+        ${blocos523.slice(1).map((c, i) => render523Bloco(c, i + 1)).join('')}
       </section>
 
       <section class="block stack-md allow-break finame-compact">
@@ -754,34 +843,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <div class="sig-email">matheus@gmp.ind.br</div>
             </div>
           </div>`;
-        const clausulaKey = (c, idx) => (c.id != null ? String(c.id) : `default-${c.numero || idx}`);
-        const renderClausulaCustom = (c, idx) => {
-          const raw = c.conteudo || '';
-          // If content has no HTML tags, treat as plain text: wrap each paragraph in <p>
-          const html = /<[a-z][\s\S]*>/i.test(raw)
-            ? raw
-            : raw.split(/\n{2,}/).map(p => `<p>${esc(p.trim())}</p>`).join('') || '<p></p>';
-          return `<section class="block stack-md allow-break" data-clausula-key="${esc(clausulaKey(c, idx))}">
+        const renderClausulaCustom = (c, idx) => `<section class="block stack-md allow-break" data-clausula-key="${esc(clausulaKey(c, idx))}">
             <h3 data-clausula-campo="titulo">${esc(c.numero ? `${c.numero} ${c.titulo}` : c.titulo)}</h3>
-            <div class="stack-sm" data-clausula-campo="conteudo">${html}</div>
+            <div class="stack-sm" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div>
           </section>`;
-        };
         const [primeiraClausula, ...demaisClausulas] = templateConfig.clausulas_custom;
-        // As cláusulas >= 5.24 (a CONSIDERAÇÃO FINAL e qualquer outra além dela) são
-        // editáveis (vêm de clausulas_custom), mas devem ser emitidas DEPOIS da seção
-        // fixa 5.23 (preço/FINAME/fiscais), que ocupa o slot 23.
-        // IMPORTANTE: cláusulas persistidas no banco NÃO têm campo `numero` (a tabela
-        // proposta_clausulas não tem essa coluna) — o número vive no PREFIXO do título
-        // ("5.24 CONSIDERAÇÃO FINAL"). Um predicado que só olhe c.numero funciona nos
-        // testes (defaults têm numero) mas falha com dados reais, fazendo a 5.24
-        // renderizar no meio da lista e "sumir" do fim do documento (bug da proposta 288).
-        const subNumeroDe = (c) => {
-          const numero = (c && c.numero != null && String(c.numero).trim()) ? String(c.numero).trim() : null;
-          const m = /^\s*(\d+)\.(\d+)/.exec(numero || String(c && c.titulo || ''));
-          return m ? parseInt(m[2], 10) : NaN;
-        };
-        const demaisSem524 = demaisClausulas.filter((c) => !(subNumeroDe(c) >= 24));
-        const clausulasPos523 = demaisClausulas.filter((c) => subNumeroDe(c) >= 24);
+        // As cláusulas do slot 23 (os TEXTOS da 5.23) e as >= 5.24 (a CONSIDERAÇÃO FINAL e
+        // qualquer outra além dela) saem daqui: as do slot 23 são renderizadas DENTRO de
+        // sec523PrecoHtml, intercaladas com as tabelas; as >= 24 vêm DEPOIS dele.
+        // Sem esta exclusão a 5.23 apareceria duas vezes — uma no meio da lista de cláusulas
+        // e outra na seção de preço.
+        const demaisSem523e524 = demaisClausulas.filter((c) => !ehTextoDa523(c) && !ehPos523(c));
+        const clausulasPos523 = demaisClausulas.filter(ehPos523);
         // A 5.24 (e o que vier depois dela) ocupa uma PÁGINA PRÓPRIA, dividida em três faixas:
         // texto no topo, campos de preenchimento manual no meio e assinaturas junto ao rodapé.
         // Por isso as três partes viram UM único bloco (.pagina-assinatura): o paginador
@@ -802,7 +875,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
             ${primeiraClausula ? renderClausulaCustom(primeiraClausula, 0) : ''}
           </section>
-          ${demaisSem524.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
+          ${demaisSem523e524.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
           ${sec523PrecoHtml}
           <section class="block avoid-break pagina-assinatura" data-page-break="before">
             <div class="assinatura-topo">${clausula524Html}</div>
@@ -1139,8 +1212,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${myLogoB64 ? `<img src="${myLogoB64}" alt="MOINHO YPIRANGA" />` : `<span class="page-header-title">MOINHO YPIRANGA</span>`}
         </div>
         <div class="page-header-center-box">
-          <p class="page-header-title">PROPOSTA TÉCNICA COMERCIAL</p>
-          <p class="page-header-num">Nº ${numero}</p>
+          ${/* Título e número na MESMA linha: "PROPOSTA TÉCNICA COMERCIAL: Nº 059-02-MH-2026-REV00".
+               O número segue num elemento PRÓPRIO (.page-header-num) de propósito: é a âncora que
+               os testes de regressão do cabeçalho usam para provar que o Nº não sumiu (bug de
+               produção 24/07/2026, armadilha 8 do review). Não remover a classe ao mexer aqui. */''}
+          <p class="page-header-title">PROPOSTA TÉCNICA COMERCIAL: <span class="page-header-num">Nº ${numero}</span></p>
           <p class="page-header-tagline">Especialista em Misturas, Moagens, Dispersões, Dosagens, <br> Automações, Excelência Operacional, Projetos Conceituais,<br> Projetos Executivos, Instalações e Sistemas Turn-Keys.</p>
         </div>
         <div class="page-header-logo-gmp">
@@ -1340,7 +1416,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       text-align: center;
     }
     .page-header-title { font-size: 11pt; font-weight: 700; color: var(--blue-900); margin: 0 0 1mm 0; line-height: 1.2; text-align: center; }
-    .page-header-num { font-size: 9pt; font-weight: 700; color: var(--blue-900); margin: 0 0 1mm 0; line-height: 1.15; text-align: center; }
+    /* O número vive DENTRO do <p> do título (mesma linha), então herda tamanho/altura de
+       linha dele — só o white-space precisa ser travado para "Nº 059-02-MH-2026-REV00" nunca
+       quebrar no meio se o título encostar na largura da caixa. */
+    .page-header-num { font-weight: 700; color: var(--blue-900); white-space: nowrap; }
     .page-header-tagline {
       margin: 0;
       text-align: center;
@@ -1483,6 +1562,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
        nome do cliente para fora do campo, quebrando o alinhamento só naquele item. */
     .cover-field-rotulo { display: block; font-weight: 700; }
     .cover-field-contratante {}
+    /* Nome do contato do cliente: mesmo formato dos demais (rótulo em cima, valor embaixo,
+       tudo centralizado pelo .cover-client-info p). Sem regra própria de propósito. */
+    .cover-field-contato {}
     .cover-field-cnpj {}
     .cover-field-email {}
     /* Data de emissão logo abaixo dos demais campos, na sequência. Sem regra própria: o
@@ -1521,6 +1603,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
        (sem crases neste comentário: todo o CSS vive dentro de um template literal JS) */
     .clausula-corpo > p,
     [data-clausula-campo="conteudo"] > p { text-indent: 48px; }
+
+    /* Subtítulo editável dentro da 5.23 ("CONDIÇÃO DE PAGAMENTO:"). Antes era um
+       <p><strong>...</strong></p> fixo; virou o TÍTULO de uma cláusula, e o título é
+       sincronizado por textContent (o <strong> não sobreviveria a uma edição). Por isso
+       o negrito vem de CLASSE: a regra global "p, li { font-weight: 400; text-align:
+       justify }" casa DIRETAMENTE com este <p> e venceria qualquer valor herdado. */
+    .clausula-subtitulo { font-weight: 700; text-align: left; text-indent: 0; margin: 0; }
+    /* A condição de pagamento vinha com line-height 26px em estilo INLINE em cada <p>.
+       Agora o texto vem do banco e o inline se perde no primeiro save (o conteúdo é
+       gravado como texto), então a régua virou regra de classe no CONTAINER — continua
+       valendo depois de editada, e a altura medida pelo paginador não muda. */
+    .clausula-523-condicao > p { line-height: 26px; }
 
     /* Sumário (preenchido via JS após a paginação) */
     .toc-list { display: flex; flex-direction: column; gap: 2mm; }
@@ -1578,6 +1672,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         ${clienteLogoB64 ? `<div class="cover-client-logo"><img src="${clienteLogoB64}" alt="Logo do cliente" /></div>` : ''}
         <div class="cover-client-info">
           <p class="cover-field-contratante"><span class="cover-field-rotulo">EMPRESA CONTRATANTE:</span><span data-edit="cliente_nome">${clienteNome}</span></p>
+          <p class="cover-field-contato"><span class="cover-field-rotulo">Contato:</span><span data-edit="cliente_contato">${clienteContato}</span></p>
           <p class="cover-field-cnpj"><span class="cover-field-rotulo">CNPJ:</span>${clienteCnpj}</p>
           <p class="cover-field-email"><span class="cover-field-rotulo">Email:</span><span data-edit="cliente_email">${esc(proposta.cliente_email || proposta.cliente_email_cadastro || '—')}</span></p>
           <p class="cover-field-telefone"><span class="cover-field-rotulo">Telefone:</span><span data-edit="cliente_telefone">${esc(formatarTelefone(proposta.cliente_telefone || proposta.cliente_telefone_cadastro) || '—')}</span></p>

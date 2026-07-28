@@ -1,6 +1,12 @@
 const SOURCE_SELECTOR = '#proposalSource';
 const CLAUSULA_SELECTOR = '[data-clausula-key]';
 const WRAPPER_SELECTOR = '.five-intro-group';
+// Blocos de texto que moram num SLOT FIXO do documento — hoje só a 5.23, cujos textos
+// (abertura e condição de pagamento) ficam intercalados com a tabela de preços gerada
+// dos itens. Eles são cláusulas de verdade (editáveis e persistidas), mas NÃO participam
+// da sequência de numeração nem podem ser reordenados junto com as demais: mover uma
+// cláusula "para dentro" do grupo da 5.23 quebraria a ordem tabela → condição (I4).
+const CLAUSULA_EDITAVEL_SELECTOR = '[data-clausula-key]:not([data-clausula-slot])';
 
 function escapeAttrValue(v) {
   return String(v).replace(/"/g, '\\"');
@@ -38,7 +44,9 @@ function reempacotarPrimeiraClausula(doc) {
   const source = getSource(doc);
   const wrapper = getWrapper(doc);
   if (!source || !wrapper) return;
-  const primeira = source.querySelector(CLAUSULA_SELECTOR);
+  // :not([data-clausula-slot]) — um bloco de texto da 5.23 nunca pode ser promovido a
+  // "primeira cláusula" e arrastado para dentro do wrapper do título da seção 5.
+  const primeira = source.querySelector(CLAUSULA_EDITAVEL_SELECTOR);
   if (primeira) wrapper.appendChild(primeira);
 }
 
@@ -55,9 +63,14 @@ export function lerClausulasDoSource(doc) {
   return Array.from(source.querySelectorAll(CLAUSULA_SELECTOR)).map((secao) => {
     const tituloEl = secao.querySelector('[data-clausula-campo="titulo"]');
     const conteudoEl = secao.querySelector('[data-clausula-campo="conteudo"]');
+    // data-titulo-prefixo: número que o documento NÃO mostra, mas que precisa voltar ao
+    // título salvo. É o caso da "CONDIÇÃO DE PAGAMENTO:" (5.23.1) — visualmente ela é só
+    // um subtítulo em negrito, e sem o prefixo o template deixaria de reconhecê-la como
+    // parte da 5.23 na próxima renderização (ela cairia no meio da lista de cláusulas).
+    const prefixo = (tituloEl && tituloEl.getAttribute('data-titulo-prefixo')) || '';
     return {
       key: secao.getAttribute('data-clausula-key'),
-      titulo: tituloEl ? tituloEl.textContent.trim() : '',
+      titulo: tituloEl ? `${prefixo}${tituloEl.textContent}`.trim() : '',
       conteudo: conteudoEl ? conteudoEl.innerHTML : '',
     };
   });
@@ -84,7 +97,10 @@ export function moverClausulaNoSource(doc, key, direcao) {
   return comWrapperNormalizado(doc, () => {
     const source = getSource(doc);
     if (!source) return false;
-    const secoes = Array.from(source.querySelectorAll(CLAUSULA_SELECTOR));
+    // Só cláusulas reordenáveis: os blocos de texto da 5.23 ficam de fora para nunca
+    // virarem "vizinho" de destino — insertAdjacentElement neles jogaria a cláusula
+    // movida para dentro do grupo da tabela de preços.
+    const secoes = Array.from(source.querySelectorAll(CLAUSULA_EDITAVEL_SELECTOR));
     const idx = secoes.findIndex((el) => el.getAttribute('data-clausula-key') === key);
     const alvo = idx + direcao;
     if (idx === -1 || alvo < 0 || alvo >= secoes.length) return false;
@@ -183,7 +199,10 @@ export function ehClausulaNovaVazia(clausula) {
 export function renumerarClausulas(doc) {
   const source = doc.querySelector('#proposalSource');
   if (!source) return false;
-  const secoes = Array.from(source.querySelectorAll('[data-clausula-key]'));
+  // Os blocos de texto da 5.23 (data-clausula-slot) ficam FORA da renumeração e também
+  // fora da CONTAGEM: eles já têm número próprio (5.23 / 5.23.1) e contá-los empurraria
+  // a 5.24 para 5.26. É o mesmo motivo da reserva do slot 23 logo abaixo.
+  const secoes = Array.from(source.querySelectorAll(CLAUSULA_EDITAVEL_SELECTOR));
   secoes.forEach((secao, i) => {
     const tituloEl = secao.querySelector('[data-clausula-campo="titulo"]');
     if (!tituloEl) return;

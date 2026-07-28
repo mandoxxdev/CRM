@@ -36,10 +36,16 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
   const performSearch = async (searchQuery) => {
     setLoading(true);
     try {
-      const response = await api.get('/api/busca-global', {
+      // ATENCAO: o baseURL do axios ja termina em '/api' (ver services/api.js).
+      // Prefixar '/api' aqui gera '/api/api/busca-global', que cai no catch-all
+      // do Express e devolve 404 (a busca ficava sempre vazia).
+      const response = await api.get('/busca-global', {
         params: { q: searchQuery }
       });
-      setResults(response.data || []);
+      const lista = Array.isArray(response.data) ? response.data : [];
+      // Descarta tipos sem rota registrada no App.js: exibi-los levaria o usuario
+      // para a home ao clicar, o que parece que "a busca nao funciona".
+      setResults(lista.filter((item) => Boolean(getRoute(item.type))));
       setSelectedIndex(0);
     } catch (error) {
       console.error('Erro na busca:', error);
@@ -73,7 +79,9 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
     return labels[type] || type;
   };
 
-  const getRoute = (type, id, item) => {
+  // Retorna null quando o tipo nao tem rota em App.js (ex.: 'oportunidade', cujo
+  // modulo existe em components/ mas nao esta registrado no roteador).
+  const getRoute = (type, id) => {
     const routes = {
       cliente: `/comercial/clientes/editar/${id}`,
       projeto: `/comercial/projetos/editar/${id}`,
@@ -82,11 +90,12 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
       produto: `/comercial/produtos/editar/${id}`,
       custo: `/comercial/custos-viagens`,
     };
-    return routes[type] || '/';
+    return routes[type] || null;
   };
 
   const handleSelect = (result) => {
-    const route = getRoute(result.type, result.id, result);
+    const route = getRoute(result.type, result.id);
+    if (!route) return;
     navigate(route);
     onClose();
   };

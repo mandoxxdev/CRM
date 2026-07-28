@@ -50,7 +50,39 @@ O paginador lê filhos diretos de `#proposalSource`, clona `#proposalPageTemplat
 | 3 | OFERTA | tabela dinâmica (`ofertaRows`) |
 | 4 | ESCOPO DE FORNECIMENTO | gerado de `equipItems` (array por item) |
 | 5+ | CONDIÇÕES GERAIS | cláusulas (customizadas ou padrão de `clausulasDefault.js`) |
+| 5.23 | PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS | **misto**: textos editáveis + tabelas calculadas (ver abaixo) |
 | — | ASSINATURAS | bloco fixo |
+
+---
+
+## Seção 5.23 — textos editáveis, tabelas calculadas
+
+A 5.23 é a única seção mista do documento. Ordem emitida por `sec523PrecoHtml`:
+
+| Parte | Origem | Editável? |
+|---|---|---|
+| Título `5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS` + parágrafo de abertura | cláusula (banco ou `CLAUSULA_523_PRECO`) | **sim** |
+| Tabela de Preços (itens + TOTAL DA PROPOSTA) | gerada de `itens` | não |
+| `CONDIÇÃO DE PAGAMENTO:` + parcelas | cláusula (banco ou `CLAUSULA_523_CONDICAO`) | **sim** |
+| Tabela FINAME/BNDES, classificação fiscal, alíquotas e notas | fixas no template | não |
+
+**Por que as tabelas não são editáveis:** a de preços precisa sair íntegra, na ordem e com o
+`thead` repetido em cada fragmento (I4) — garantia do gerador/paginador, que texto livre digitado
+no preview não teria como respeitar. As demais são dados institucionais (FINAME, NCM, alíquotas).
+
+**Como os textos são reconhecidos e ancorados:**
+- `CLAUSULA_523_PRECO` (`5.23`) e `CLAUSULA_523_CONDICAO` (`5.23.1`) vivem em
+  `server/clausulasDefault.js` e entram em `getClausulasDefault()` **entre a 5.22 e a 5.24** — a
+  ordem do array vira a coluna `ordem` em `proposta_clausulas` (rota `/clausulas/inicializar`).
+- O template separa do resto da lista tudo que tem sub-número 23 (`ehTextoDa523`) e renderiza
+  dentro de `sec523PrecoHtml`; o que tem sub-número ≥ 24 vai para a página de assinatura.
+- As seções levam `data-clausula-slot="23"`, que o editor inline usa para **não** renumerar, não
+  contar na sequência 5.1…5.22/5.24 e não oferecer mover/remover.
+- O 2º bloco mostra só `CONDIÇÃO DE PAGAMENTO:`; o número fica escondido em
+  `data-titulo-prefixo="5.23.1 "` e o editor o reanexa ao salvar (`lerClausulasDoSource`).
+- Proposta **legada** (cláusulas salvas antes desta feature, sem linhas 5.23): os blocos entram
+  com key `temp-523-*`, então a primeira edição vira cláusula nova no banco em vez de ser
+  descartada pelo diff.
 
 ---
 
@@ -60,7 +92,7 @@ O paginador lê filhos diretos de `#proposalSource`, clona `#proposalPageTemplat
 | Classe | Descrição |
 |---|---|
 | `.proposal-page` | Página A4 fixa: `width: 210mm; height: 297mm; flex-shrink: 0; overflow: hidden` |
-| `.page-header` | Cabeçalho 28mm: dual-logo GMP + Moinho Ypiranga + nº proposta |
+| `.page-header` | Cabeçalho 39mm: dual-logo GMP + Moinho Ypiranga + caixa central com `PROPOSTA TÉCNICA COMERCIAL: Nº <numero>` (uma linha só, o número num `<span class="page-header-num">`) + tagline |
 | `.page-content` | Área de conteúdo com `flex: 1 1 auto; padding: 10mm 14mm; overflow: hidden` |
 | `.page-footer` | Rodapé 20mm: dados da empresa + número de página |
 
@@ -72,7 +104,7 @@ O paginador lê filhos diretos de `#proposalSource`, clona `#proposalPageTemplat
 | `.cover-logos-bar` | Barra branca dividida: GMP (`.cover-logo-half`) \| Moinho Ypiranga (`.cover-logo-half`) |
 | `.cover-blue-strip` | Faixa azul `var(--blue-900)` com título da proposta |
 | `.cover-info-area` | `flex: 1 1 auto; justify-content: flex-start` — título, nº proposta, dados do cliente |
-| `.cover-field-*` | Classes individuais por campo: `contratante`, `cnpj`, `email`, `emissao` |
+| `.cover-field-*` | Classes individuais por campo, na ordem do documento: `contratante`, `contato`, `cnpj`, `email`, `telefone`, `emissao` |
 | `.cover-client-info` | Container dos `<p>` com os campos `data-edit` |
 
 ### Conteúdo
@@ -98,6 +130,23 @@ Os `<span data-edit="campo">` na **capa** são gerados diretamente no HTML pelo 
 Todos os `[data-edit]` têm `display: inline-block; min-width: 60px; cursor: text` via CSS — clicáveis mesmo quando vazios.
 
 Fallback padrão: `—` quando o campo está vazio (evita span invisível).
+
+| `data-edit` | Origem (na ordem em que o template tenta) |
+|---|---|
+| `cliente_nome` | `proposta.razao_social` → `nome_fantasia` |
+| `cliente_contato` | `proposta.cliente_contato` → `cliente_contato_cadastro` → `contato_principal` |
+| `cliente_email` | `proposta.cliente_email` (já `COALESCE(p.cliente_email, c.email)` na query) → `cliente_email_cadastro` |
+| `cliente_telefone` | `proposta.cliente_telefone` → `cliente_telefone_cadastro` (passa por `formatarTelefone`) |
+
+As rotas `/premium` e `/pdf` sobrescrevem esses campos com `proposta_customizacoes.*` antes de
+chamar o template — é assim que a edição inline chega ao documento.
+
+> ⚠️ **`cliente_contato_cadastro` depende do SELECT das rotas.** As duas queries de `server/index.js`
+> ainda **não** trazem `c.contato_principal`, e hoje **nenhuma** das 56 propostas do banco tem
+> `propostas.cliente_contato` preenchido — ou seja, sem o alias na query a capa mostra `—` para
+> todo mundo. Falta acrescentar `c.contato_principal as cliente_contato_cadastro` ao SELECT da rota
+> `/premium` (lista de colunas explícita) e ao da rota `/pdf` (`SELECT p.*, c...`). O template já
+> aceita os dois nomes (`cliente_contato_cadastro` e `contato_principal`).
 
 ---
 

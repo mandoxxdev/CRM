@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { canConfigureModule, canAccessAdministrativoConfig } from '../utils/systemPermissions';
+import { identificarAtalho } from '../utils/atalhosTeclado';
 import api from '../services/api';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
@@ -81,30 +82,38 @@ const Layout = () => {
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl+B - Toggle sidebar (apenas no mobile)
-      if (e.ctrlKey && e.key === 'b' && window.innerWidth <= 768) {
-        e.preventDefault();
-        setSidebarOpen(prev => !prev);
-      }
-      // Ctrl+K - Busca global
-      if (e.ctrlKey && e.key === 'k') {
-        e.preventDefault();
-        setBuscaGlobalOpen(true);
-      }
-      // Ctrl+R - Report Builder
-      if (e.ctrlKey && e.key === 'r') {
-        e.preventDefault();
-        setReportBuilderOpen(true);
-      }
-      // Ctrl+W - Workflow Engine
-      if (e.ctrlKey && e.key === 'w') {
-        e.preventDefault();
-        setWorkflowEngineOpen(true);
-      }
-      // Ctrl+? ou F1 - Help Search
-      if ((e.ctrlKey && e.key === '/') || e.key === 'F1') {
-        e.preventDefault();
-        setHelpSearchOpen(true);
+      const atalho = identificarAtalho(e);
+      if (!atalho) return;
+
+      switch (atalho) {
+        case 'sidebar':
+          // Ctrl+B - Toggle sidebar (apenas no mobile)
+          if (window.innerWidth > 768) return;
+          e.preventDefault();
+          setSidebarOpen(prev => !prev);
+          break;
+        case 'busca':
+          // Ctrl+K - Busca global
+          e.preventDefault();
+          setBuscaGlobalOpen(true);
+          break;
+        case 'report':
+          // Ctrl+R - Report Builder
+          e.preventDefault();
+          setReportBuilderOpen(true);
+          break;
+        case 'workflow':
+          // Ctrl+W - Workflow Engine
+          e.preventDefault();
+          setWorkflowEngineOpen(true);
+          break;
+        case 'ajuda':
+          // Ctrl+/ ou F1 - Help Search
+          e.preventDefault();
+          setHelpSearchOpen(true);
+          break;
+        default:
+          break;
       }
     };
 

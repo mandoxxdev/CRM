@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiX, FiSave } from 'react-icons/fi';
+import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils/telefone';
 import './Operacional.css';
 
 const ColaboradorForm = ({ colaborador, onClose }) => {
@@ -30,7 +31,8 @@ const ColaboradorForm = ({ colaborador, onClose }) => {
         matricula: colaborador.matricula || '',
         cargo: colaborador.cargo || '',
         setor: colaborador.setor || '',
-        telefone: colaborador.telefone || '',
+        // Cadastro antigo veio sem máscara: formata na abertura da edição.
+        telefone: mascararTelefoneCompleto(colaborador.telefone),
         email: colaborador.email || '',
         data_admissao: colaborador.data_admissao ? colaborador.data_admissao.split('T')[0] : '',
         salario_base: colaborador.salario_base || '',
@@ -93,7 +95,7 @@ const ColaboradorForm = ({ colaborador, onClose }) => {
           </div>
           <div className="form-group">
             <label>Telefone</label>
-            <input type="text" value={formData.telefone} onChange={(e) => setFormData({ ...formData, telefone: e.target.value })} />
+            <input type="text" value={formData.telefone} onChange={(e) => setFormData({ ...formData, telefone: mascararTelefoneDigitando(e.target.value) })} placeholder="(00) 00000-0000" inputMode="tel" maxLength={15} />
           </div>
           <div className="form-group">
             <label>Email</label>

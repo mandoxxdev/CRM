@@ -224,7 +224,11 @@ export default function PropostaPreviewEditavel() {
         repaginacaoTimerRef.current = setTimeout(() => repaginarERestaurar(doc), 500);
       };
     });
-    doc.querySelectorAll('.proposal-page[data-generated="1"] [data-clausula-key]').forEach((secao) => {
+    // :not([data-clausula-slot]) — os blocos de texto da 5.23 (abertura e condição de
+    // pagamento) têm o TEXTO editável como qualquer cláusula, mas não ganham a barra de
+    // mover/remover/adicionar: eles moram entre a tabela de preços e as tabelas fiscais,
+    // e reordená-los ali quebraria a ordem "tabela completa → condição de pagamento" (I4).
+    doc.querySelectorAll('.proposal-page[data-generated="1"] [data-clausula-key]:not([data-clausula-slot])').forEach((secao) => {
       injetarControlesClausula(doc, secao);
     });
   }

@@ -7,6 +7,8 @@
  *
  * Executar: cd client && CI=true npx react-scripts test src/utils/telefone.test.js --watchAll=false
  */
+import fs from 'fs';
+import path from 'path';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from './telefone';
 
 describe('mascararTelefoneDigitando (a cada tecla)', () => {
@@ -108,5 +110,96 @@ describe('mascararTelefoneCompleto (valor ja pronto)', () => {
   test('vazio continua vazio', () => {
     expect(mascararTelefoneCompleto('')).toBe('');
     expect(mascararTelefoneCompleto(null)).toBe('');
+  });
+});
+
+/**
+ * Este bloco existe por causa de um bug REAL: a mascara nasceu aplicada em UM unico
+ * componente (ClienteForm) porque a busca que localizou os campos procurou so por
+ * name="telefone". O usuario testou em outra tela e relatou "nao consegui fazer a mascara
+ * funcionar" — nao havia defeito na funcao, havia telefone sem mascara em 5 outras telas.
+ *
+ * Um teste de unidade da funcao nunca pegaria isso: a funcao sempre passou. O que precisa
+ * ser garantido e a COBERTURA — que nenhum input de telefone do app fique de fora. Por isso
+ * o teste varre o codigo-fonte em vez de exercitar um componente so.
+ */
+describe('cobertura: nenhum input de telefone do app fica sem mascara', () => {
+  const RAIZ = path.resolve(__dirname, '..');
+
+  function listarFontes(dir) {
+    return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entrada) => {
+      const completo = path.join(dir, entrada.name);
+      if (entrada.isDirectory()) return listarFontes(completo);
+      if (!entrada.name.endsWith('.js') || entrada.name.endsWith('.test.js')) return [];
+      return [completo];
+    });
+  }
+
+  /** Tags <input .../> cujo proprio conteudo menciona telefone (value, name ou placeholder). */
+  function inputsDeTelefone(codigo) {
+    return (codigo.match(/<input\b[\s\S]*?\/>/g) || []).filter((tag) => /telefone/i.test(tag));
+  }
+
+  const arquivosComTelefone = listarFontes(RAIZ)
+    .map((arquivo) => ({
+      arquivo: path.relative(RAIZ, arquivo).replace(/\\/g, '/'),
+      codigo: fs.readFileSync(arquivo, 'utf8'),
+    }))
+    .filter(({ codigo }) => inputsDeTelefone(codigo).length > 0);
+
+  test('a varredura enxerga as telas de telefone conhecidas', () => {
+    // Trava de seguranca do proprio scanner: se a heuristica parar de casar, este teste cai
+    // antes de os testes abaixo passarem vazios e darem falsa sensacao de cobertura.
+    const nomes = arquivosComTelefone.map((a) => a.arquivo);
+    expect(nomes).toEqual(
+      expect.arrayContaining([
+        'components/ClienteForm.js',
+        'components/Configuracoes.js',
+        'components/MinhaConta.js',
+        'components/FornecedoresDoGrupo.js',
+        'components/operacional/ColaboradorForm.js',
+        'components/PreviewPropostaEditavel.js',
+      ])
+    );
+  });
+
+  test('todo arquivo com input de telefone importa a mascara compartilhada', () => {
+    const semImport = arquivosComTelefone
+      .filter(({ codigo }) => !/from '(\.\.\/)+utils\/telefone'/.test(codigo))
+      .map((a) => a.arquivo);
+    expect(semImport).toEqual([]);
+  });
+
+  test('todo input de telefone mascara a cada tecla, direto ou via handler nomeado', () => {
+    const semMascara = [];
+    arquivosComTelefone.forEach(({ arquivo, codigo }) => {
+      inputsDeTelefone(codigo).forEach((tag) => {
+        // onChange={(e) => ... mascararTelefoneDigitando(...)} — mascara embutida na tag.
+        if (tag.includes('mascararTelefoneDigitando')) return;
+        // onChange={handleTelefoneChange} — a mascara mora no handler, como no ClienteForm.
+        const handler = tag.match(/onChange=\{(\w+)\}/);
+        if (handler) {
+          const corpo = new RegExp(`${handler[1]}\\s*=[\\s\\S]{0,400}?mascararTelefoneDigitando`);
+          if (corpo.test(codigo)) return;
+        }
+        semMascara.push(`${arquivo}: ${tag.replace(/\s+/g, ' ').slice(0, 90)}`);
+      });
+    });
+    expect(semMascara).toEqual([]);
+  });
+
+  test('a logica da mascara nao foi duplicada dentro de componente', () => {
+    // O corte 5-4 / 4-4 mora em utils/telefone.js. Uma copia local volta a divergir com o
+    // tempo, que foi o motivo de o formatador da consulta de CNPJ ter sido removido dali.
+    const duplicadas = listarFontes(RAIZ)
+      .filter((arquivo) => !arquivo.endsWith(path.join('utils', 'telefone.js')))
+      .filter((arquivo) => {
+        const codigo = fs.readFileSync(arquivo, 'utf8');
+        if (!/telefone/i.test(codigo)) return false;
+        // Assinatura de mascara de telefone escrita a mao: fatia DDD e monta "(XX) ".
+        return /\(\$\{?\w*\.?slice\(0,\s*2\)\}?\)\s/.test(codigo) || /\(\$1\)\s\$2-\$3/.test(codigo);
+      })
+      .map((arquivo) => path.relative(RAIZ, arquivo).replace(/\\/g, '/'));
+    expect(duplicadas).toEqual([]);
   });
 });

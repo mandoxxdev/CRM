@@ -259,6 +259,87 @@ test('renumerarClausulas reserva o slot 23 (23a clausula vira 5.24)', () => {
   expect(nums[23]).toBe('5.25'); // 24a
 });
 
+describe('blocos de texto da 5.23 (data-clausula-slot="23")', () => {
+  // Fixture do que propostaPremiumV2 emite na 5.23: dois blocos de texto marcados com
+  // data-clausula-slot="23" (o 2º com o número ESCONDIDO em data-titulo-prefixo, porque
+  // o documento mostra só "CONDIÇÃO DE PAGAMENTO:"), com a tabela de preços entre eles.
+  function montarFixtureCom523(doc) {
+    const root = montarFixture(doc, [
+      ['1', '5.1 PRAZO', '<p>A</p>'],
+      ['2', '5.2 TRANSPORTE', '<p>B</p>'],
+    ]);
+    const grupo = doc.createElement('section');
+    grupo.className = 'block stack-md avoid-break five-23-preco-group';
+
+    const intro = doc.createElement('section');
+    intro.setAttribute('data-clausula-key', '90');
+    intro.setAttribute('data-clausula-slot', '23');
+    intro.innerHTML = '<h3 data-clausula-campo="titulo">5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>'
+      + '<div data-clausula-campo="conteudo"><p>Intro.</p></div>';
+    grupo.appendChild(intro);
+    grupo.appendChild(doc.createElement('table'));
+
+    const condicao = doc.createElement('section');
+    condicao.setAttribute('data-clausula-key', '91');
+    condicao.setAttribute('data-clausula-slot', '23');
+    condicao.innerHTML = '<p class="clausula-subtitulo" data-clausula-campo="titulo" data-titulo-prefixo="5.23.1 ">CONDIÇÃO DE PAGAMENTO:</p>'
+      + '<div data-clausula-campo="conteudo"><p>40%...</p></div>';
+    grupo.appendChild(condicao);
+    root.appendChild(grupo);
+
+    const final = doc.createElement('section');
+    final.setAttribute('data-clausula-key', '99');
+    final.innerHTML = '<h3 data-clausula-campo="titulo">5.24 CONSIDERAÇÃO FINAL</h3>'
+      + '<div data-clausula-campo="conteudo"><p>Z</p></div>';
+    root.appendChild(final);
+    return root;
+  }
+
+  test('lerClausulasDoSource inclui os blocos da 5.23 e remonta o título com o prefixo escondido', () => {
+    montarFixtureCom523(document);
+    const lista = lerClausulasDoSource(document);
+    expect(lista.map((c) => c.key)).toEqual(['1', '2', '90', '91', '99']);
+    expect(lista[2].titulo).toBe('5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS');
+    // o prefixo não é exibido no documento, mas volta no título salvo — é ele que
+    // mantém o bloco ancorado no slot 23 na próxima renderização
+    expect(lista[3].titulo).toBe('5.23.1 CONDIÇÃO DE PAGAMENTO:');
+  });
+
+  test('renumerarClausulas NÃO renumera os blocos da 5.23 nem os conta na sequência', () => {
+    montarFixtureCom523(document);
+    renumerarClausulas(document);
+    const lista = lerClausulasDoSource(document);
+    expect(lista[0].titulo).toBe('5.1 PRAZO');
+    expect(lista[1].titulo).toBe('5.2 TRANSPORTE');
+    expect(lista[2].titulo).toBe('5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS');
+    expect(lista[3].titulo).toBe('5.23.1 CONDIÇÃO DE PAGAMENTO:');
+    // A cláusula seguinte é renumerada pela posição entre as EDITÁVEIS: aqui ela é a 3ª,
+    // vira "5.3". Se os dois blocos da 5.23 entrassem na contagem, ela viraria "5.5" —
+    // e, numa proposta real (22 cláusulas antes), a 5.24 viraria 5.26.
+    expect(lista[4].titulo).toBe('5.3 CONSIDERAÇÃO FINAL');
+  });
+
+  test('mover uma cláusula para baixo pula os blocos da 5.23 (não entra na seção de preço)', () => {
+    montarFixtureCom523(document);
+    // "para baixo" troca de lugar com a próxima cláusula EDITÁVEL ('99'), e não com o
+    // bloco de texto da 5.23 — que mora dentro do grupo da tabela de preços.
+    expect(moverClausulaNoSource(document, '2', 1)).toBe(true);
+    const lista = lerClausulasDoSource(document);
+    expect(lista.map((c) => c.key)).toEqual(['1', '90', '91', '99', '2']);
+    // e a cláusula movida NÃO pode ter caído dentro do grupo da 5.23
+    const movida = document.querySelector('[data-clausula-key="2"]');
+    expect(movida.closest('.five-23-preco-group')).toBeNull();
+  });
+
+  test('sincronizarCampoParaSource edita os blocos da 5.23 como qualquer outra cláusula', () => {
+    montarFixtureCom523(document);
+    expect(sincronizarCampoParaSource(document, '91', 'conteudo', '<p>50% na entrada.</p>')).toBe(true);
+    const lista = lerClausulasDoSource(document);
+    expect(lista[3].conteudo).toBe('<p>50% na entrada.</p>');
+    expect(lista[3].titulo).toBe('5.23.1 CONDIÇÃO DE PAGAMENTO:');
+  });
+});
+
 test('renumerarClausulas retorna false sem throwing quando #proposalSource está ausente', () => {
   // Não monta fixture, deixando document.body vazio (sem #proposalSource)
   expect(renumerarClausulas(document)).toBe(false);

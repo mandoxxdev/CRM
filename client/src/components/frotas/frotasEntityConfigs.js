@@ -71,6 +71,11 @@ export const ENTITY_CONFIGS = {
     breadcrumb: 'Motoristas',
     newLabel: 'Novo Motorista',
     searchPlaceholder: 'Buscar por nome, CPF, CNH...',
+    // Campos que o formulário genérico do FrotasEntityPage trata como telefone: máscara a cada
+    // tecla ao digitar e formatação do valor vindo do banco ao abrir a edição. Declarado aqui
+    // (e não no formFields) porque o formFields de outras entidades depende de `form`, que não
+    // existe ainda na hora de carregar o registro.
+    camposTelefone: ['telefone'],
     columns: [
       { key: 'nome', label: 'Nome', bold: true },
       { key: 'cnh_numero', label: 'CNH' },

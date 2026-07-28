@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiX, FiCheck } from 'react-icons/fi';
 import FrotasPageHeader from './FrotasPageHeader';
 import { ENTITY_CONFIGS } from './frotasEntityConfigs';
+import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils/telefone';
 import './Frotas.css';
 
 const FrotasEntityPage = ({ entityKey }) => {
@@ -63,6 +64,10 @@ const FrotasEntityPage = ({ entityKey }) => {
     const merged = { ...defaults };
     Object.keys(defaults).forEach((k) => {
       if (row[k] !== undefined && row[k] !== null) merged[k] = row[k];
+    });
+    // Registro gravado antes da máscara abre já formatado no campo.
+    (config.camposTelefone || []).forEach((k) => {
+      if (merged[k]) merged[k] = mascararTelefoneCompleto(merged[k]);
     });
     setForm(merged);
     setShowModal(true);
@@ -131,6 +136,7 @@ const FrotasEntityPage = ({ entityKey }) => {
   };
 
   const formFields = config.formFields(meta, form, setForm, veiculos, motoristas);
+  const ehCampoTelefone = (key) => (config.camposTelefone || []).includes(key);
 
   if (!config) return <div className="frotas-page">Entidade não configurada.</div>;
 
@@ -268,6 +274,16 @@ const FrotasEntityPage = ({ entityKey }) => {
                           <textarea
                             value={form[field.key] ?? ''}
                             onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                          />
+                        ) : ehCampoTelefone(field.key) ? (
+                          <input
+                            type="text"
+                            value={form[field.key] ?? ''}
+                            required={field.required}
+                            placeholder="(00) 00000-0000"
+                            inputMode="tel"
+                            maxLength={15}
+                            onChange={(e) => setForm((f) => ({ ...f, [field.key]: mascararTelefoneDigitando(e.target.value) }))}
                           />
                         ) : (
                           <input

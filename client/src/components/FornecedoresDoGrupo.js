@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import { FiPlus, FiTruck, FiChevronRight, FiArrowLeft, FiEdit2, FiUserMinus, FiUploadCloud } from 'react-icons/fi';
+import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './FamiliasProdutos.css';
 import './ModalGrupoForm.css';
 import './Loading.css';
@@ -96,7 +97,10 @@ const FornecedoresDoGrupo = () => {
       setEditCnpj(editingFornecedor.cnpj || '');
       setEditContato(editingFornecedor.contato || '');
       setEditEmail(editingFornecedor.email || '');
-      setEditTelefone(editingFornecedor.telefone || '');
+      // Fornecedor cadastrado antes da máscara abre já formatado. mascararTelefoneCompleto
+      // devolve o original quando não reconhece a quantidade de dígitos, então telefone com
+      // ramal ou número estrangeiro continua intacto ao abrir a edição.
+      setEditTelefone(mascararTelefoneCompleto(editingFornecedor.telefone));
       setEditEndereco(editingFornecedor.endereco || '');
       setEditFotoFile(null);
       setEditPreviewUrl(editingFornecedor.foto ? getFotoUrlFornecedor(editingFornecedor.foto) : null);
@@ -372,7 +376,7 @@ const FornecedoresDoGrupo = () => {
               </div>
               <div className="modal-grupo-field">
                 <label>Telefone</label>
-                <input type="text" value={editTelefone} onChange={(e) => setEditTelefone(e.target.value)} placeholder="Telefone" />
+                <input type="text" value={editTelefone} onChange={(e) => setEditTelefone(mascararTelefoneDigitando(e.target.value))} placeholder="(00) 00000-0000" inputMode="tel" maxLength={15} />
               </div>
               <div className="modal-grupo-field">
                 <label>Endereço</label>

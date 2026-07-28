@@ -37,7 +37,7 @@ const { getClausulasDefault } = require('../clausulasDefault');
 const { uploadsLogosDir } = require('../config/paths');
 const puppeteer = require('puppeteer');
 
-const CAMPOS = ['contratante', 'cnpj', 'email', 'telefone', 'emissao'];
+const CAMPOS = ['contratante', 'contato', 'cnpj', 'email', 'telefone', 'emissao'];
 const TOL_PX = 2;
 
 // Logo de teste gravada no disco (o template le do uploadsLogosDir e embute em base64).
@@ -64,6 +64,7 @@ const proposta = {
   numero_proposta: '058-02-MH-2026-REV00', titulo: 'TESTT',
   razao_social: 'CLIENTE TESTE LTDA', cnpj: '12.345.678/0001-90',
   cliente_email: 'contato@cliente.com.br', cliente_telefone: '(11) 98888-7777',
+  cliente_contato: 'MARIA SILVA',
   cliente_logo_url: LOGO_ARQUIVO,
 };
 const itens = [{ produto_nome: 'Masseira', quantidade: 1, unidade: 'UN', valor_unitario: 1000, valor_total: 1000 }];
