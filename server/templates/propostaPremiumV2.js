@@ -512,7 +512,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         variaveisLabels = variaveisLabelsRaw;
       }
       const variaveisList = getVariaveisListForFamilia(it.familia_produto || it.produto_familia || it.familia || '');
-      // Sempre respeitar a seleção do admin (por família). Se não houver lista, não imprime specs extras.
+      // Sempre respeitar a seleção do admin (por família) — inclusive para as variáveis
+      // "Manual na Proposta": elas só aparecem nos itens de famílias em que o admin as
+      // selecionou (a diferença é que aparecem MESMO sem valor, como campo em branco).
       const specRowsHtml = (Array.isArray(variaveisList) && variaveisList.length > 0)
         ? variaveisList
             .filter((k) => k && String(k).indexOf('_cond') === -1)
