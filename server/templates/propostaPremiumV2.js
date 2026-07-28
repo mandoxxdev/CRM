@@ -250,22 +250,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </div>`;
 
-    // Mesmo tratamento de caixa da seção 4: é o MESMO equipamento listado nas duas seções, e
-    // sem isto o documento traria "TALHAS PARA IÇAMENTO..." na tabela da 3 e "Talhas para
-    // içamento..." na 4. Os cabeçalhos da tabela (ITEM/QUANT./DESCRIÇÃO) seguem em caixa alta,
-    // que é o estilo de cabeçalho do documento.
-    const ofertaRows = (itens || []).map((it, idx) => {
-      const itemRef = `4.${idx + 1}`;
-      const nome = esc(semCapsLock(it.produto_nome || it.descricao || `Item ${idx + 1}`));
-      const qtd = Number(it.quantidade) || 1;
-      const und = esc(semCapsLock(it.unidade || 'UN'));
-      return `<tr>
-        <td class="col-center">${itemRef}</td>
-        <td class="col-center">${qtd} ${und}</td>
-        <td>${nome}</td>
-      </tr>`;
-    }).join('');
-
     // ===== Variáveis técnicas (Item 4.x) - parsing robusto do template =====
     // Objetivo: sempre transformar config (variáveis do admin) em uma lista real de chaves
     // para que `${specRowsHtml}` seja montado no <tbody> da tabela.
@@ -919,18 +903,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>Os equipamentos e/ou serviços serão fornecidos exclusivamente conforme as características, quantidades, capacidades, materiais, componentes, limites e condições expressamente descritos no Item 4 – Escopo de Fornecimento.</p>
         <p>Qualquer equipamento, componente, acessório, serviço, instalação, documentação ou atividade que não esteja expressamente indicado nesta proposta não integra o fornecimento da CONTRATADA, ainda que seja necessário à operação completa do empreendimento, salvo quando formalmente incluído por meio de revisão da proposta ou aditivo contratual.</p>
         <p>Alterações nas condições do produto, processo, instalação, capacidade produtiva, tensão elétrica, área classificada, normas aplicáveis ou demais informações inicialmente fornecidas poderão resultar em revisão técnica, comercial e de prazo.</p>
-        <table class="table">
-          <thead>
-            <tr>
-              <th class="col-center">ITEM</th>
-              <th class="col-center">QUANT.</th>
-              <th>DESCRIÇÃO</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${ofertaRows || `<tr><td colspan="3" class="muted">Nenhum item selecionado.</td></tr>`}
-          </tbody>
-        </table>
       </section>
 
       ${equipDescritivoHtml}
@@ -1051,19 +1023,19 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
 
       <section class="block stack-md allow-break clausula-corpo">
-        <h3>5.8 NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL</h3>
-        <p>A CONTRATANTE se obriga, durante a vigência deste contrato e pelo período de 24 (vinte e quatro) meses após seu encerramento, independentemente do motivo, a não aliciar, abordar, convidar, recrutar, contratar ou manter qualquer relação profissional, comercial ou societária, direta ou indiretamente, com empregados, ex-empregados, representantes, consultores, parceiros, subcontratados ou prestadores de serviços da CONTRATADA que tenham sido apresentados, indicados, disponibilizados, alocados ou que tenham participado da execução dos serviços objeto desta proposta técnica comercial.</p>
-        <p>A proibição prevista nesta cláusula abrange a contratação sob qualquer modalidade, incluindo vínculo empregatício, prestação de serviços por pessoa física ou jurídica, sociedade, representação comercial, consultoria, subcontratação, terceirização ou qualquer outra forma de aproveitamento profissional, ainda que realizada por intermédio de empresas controladoras, controladas, coligadas, integrantes do mesmo grupo econômico, sócios, administradores ou terceiros relacionados à CONTRATANTE.</p>
-        <p>A contratação somente poderá ocorrer mediante autorização prévia, expressa e escrita da CONTRATADA.</p>
-        <p>O descumprimento desta obrigação sujeitará a CONTRATANTE ao pagamento de multa compensatória, por profissional contratado, equivalente a 12 (doze) vezes o valor da última remuneração mensal bruta ou da média mensal dos honorários pagos pela CONTRATADA ao respectivo profissional nos 3 (três) meses anteriores à ocorrência, respeitado o limite global correspondente ao valor total deste contrato, sem prejuízo da indenização suplementar por perdas e danos excedentes, desde que devidamente comprovados.</p>
-        <p>A presente obrigação vincula exclusivamente a CONTRATANTE, não constituindo impedimento ou restrição ao livre exercício profissional do empregado ou prestador de serviços envolvido.</p>
+        <h3>5.8 ALTERAÇÃO DE PEDIDO</h3>
+        <p>Caso a CONTRATANTE solicite alterações no escopo de fornecimento, a CONTRATADA apresentará a CONTRATANTE, os impactos, valores e prazos para realização da alteração.</p>
+        <p>A CONTRATANTE deverá responder a CONTRATADA, com a aprovação ou declínio da alteração, dentro de 5 (cinco) dias úteis, contados da apresentação da proposta de alteração da CONTRATADA para a CONTRATANTE.</p>
       </section>
 
       <section class="block stack-md avoid-break five-8-ate-14-group">
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.9 ALTERAÇÃO DE PEDIDO</h3>
-          <p>Caso a CONTRATANTE solicite alterações no escopo de fornecimento, a CONTRATADA apresentará a CONTRATANTE, os impactos, valores e prazos para realização da alteração.</p>
-          <p>A CONTRATANTE deverá responder a CONTRATADA, com a aprovação ou declínio da alteração, dentro de 5 (cinco) dias úteis, contados da apresentação da proposta de alteração da CONTRATADA para a CONTRATANTE.</p>
+          <h3>5.9 NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL</h3>
+          <p>A CONTRATANTE se obriga, durante a vigência deste contrato e pelo período de 24 (vinte e quatro) meses após seu encerramento, independentemente do motivo, a não aliciar, abordar, convidar, recrutar, contratar ou manter qualquer relação profissional, comercial ou societária, direta ou indiretamente, com empregados, ex-empregados, representantes, consultores, parceiros, subcontratados ou prestadores de serviços da CONTRATADA que tenham sido apresentados, indicados, disponibilizados, alocados ou que tenham participado da execução dos serviços objeto desta proposta técnica comercial.</p>
+          <p>A proibição prevista nesta cláusula abrange a contratação sob qualquer modalidade, incluindo vínculo empregatício, prestação de serviços por pessoa física ou jurídica, sociedade, representação comercial, consultoria, subcontratação, terceirização ou qualquer outra forma de aproveitamento profissional, ainda que realizada por intermédio de empresas controladoras, controladas, coligadas, integrantes do mesmo grupo econômico, sócios, administradores ou terceiros relacionados à CONTRATANTE.</p>
+          <p>A contratação somente poderá ocorrer mediante autorização prévia, expressa e escrita da CONTRATADA.</p>
+          <p>O descumprimento desta obrigação sujeitará a CONTRATANTE ao pagamento de multa compensatória, por profissional contratado, equivalente a 12 (doze) vezes o valor da última remuneração mensal bruta ou da média mensal dos honorários pagos pela CONTRATADA ao respectivo profissional nos 3 (três) meses anteriores à ocorrência, respeitado o limite global correspondente ao valor total deste contrato, sem prejuízo da indenização suplementar por perdas e danos excedentes, desde que devidamente comprovados.</p>
+          <p>A presente obrigação vincula exclusivamente a CONTRATANTE, não constituindo impedimento ou restrição ao livre exercício profissional do empregado ou prestador de serviços envolvido.</p>
         </section>
 
         <section class="block stack-md allow-break clausula-corpo">

@@ -109,7 +109,6 @@ function secao4DoItem(item) {
     codigo: campo('C&oacute;digo') || campo('Código'),
     modelo: campo('Modelo'),
     ncm: campo('NCM'),
-    tabelaOferta: (/<td>([^<]*)<\/td>\s*<\/tr>/.exec(html) || [])[1],
   };
 }
 
@@ -124,9 +123,6 @@ checar(r41.quantidade === '1 Un', `R6: Quantidade -> ${JSON.stringify(r41.quanti
 checar(r41.familia === 'Outros', `R6: Família -> ${JSON.stringify(r41.familia)}`);
 checar(r41.titulo === 'Talhas para içamento de bigbag + tanques de armazenamento de slurrys',
   `R6: titulo 4.1 acompanha o Equipamento -> ${JSON.stringify(r41.titulo)}`);
-// A secao 3 lista o MESMO equipamento: as duas nao podem divergir na caixa.
-checar(r41.tabelaOferta === r41.equipamento,
-  `R6: tabela da secao 3 casa com a secao 4 -> ${JSON.stringify(r41.tabelaOferta)}`);
 
 console.log('\n[R7] codigos de familia entre parenteses preservados (dados reais do banco)');
 [

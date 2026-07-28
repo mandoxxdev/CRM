@@ -10957,7 +10957,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      <!-- Seção 3: Oferta (texto + tabela ITEM QUANT. DESCRIÇÃO - igual ao PDF) -->
+      <!-- Seção 3: Oferta (texto) -->
       <div class="section">
         <div class="section-title">3. OFERTA</div>
         <div class="texto-corpo">
@@ -10966,23 +10966,6 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           <p contenteditable="true">Qualquer equipamento, componente, acessório, serviço, instalação, documentação ou atividade que não esteja expressamente indicado nesta proposta não integra o fornecimento da <strong>CONTRATADA</strong>, ainda que seja necessário à operação completa do empreendimento, salvo quando formalmente incluído por meio de revisão da proposta ou aditivo contratual.</p>
           <p contenteditable="true">Alterações nas condições do produto, processo, instalação, capacidade produtiva, tensão elétrica, área classificada, normas aplicáveis ou demais informações inicialmente fornecidas poderão resultar em revisão técnica, comercial e de prazo.</p>
         </div>
-        <table class="valores-table" style="margin-top: 15px;">
-          <thead>
-            <tr>
-              <th>ITEM</th>
-              <th>QUANT.</th>
-              <th>DESCRIÇÃO</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${(itens || []).map((item, index) => {
-              const nome = item.descricao || item.produto_nome || item.nome || (item.nome ? item.nome : '') || 'Item sem nome';
-              const quantidade = parseFloat(item.quantidade) || 1;
-              return `<tr><td>4.${index + 1}</td><td>${quantidade}</td><td contenteditable="true">${esc(nome)}</td></tr>`;
-            }).join('')}
-            ${(!itens || itens.length === 0) ? '<tr><td>4.1</td><td>1</td><td contenteditable="true"></td></tr>' : ''}
-          </tbody>
-        </table>
       </div>
       
       <!-- Apresentação (sem número - igual ao PDF) -->
@@ -11023,8 +11006,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           <p>5.5 SUPERVISÃO E COMISSIONAMENTO DE STARTUP ........................................................ 10</p>
           <p>5.6 OBRIGAÇÕES DA CONTRATANTE ................................................................................. 12</p>
           <p>5.7 OBRIGAÇÕES DA CONTRATADA .................................................................................. 13</p>
-          <p>5.8 NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL ........................................ 13</p>
-          <p>5.9 ALTERAÇÃO DE PEDIDO ................................................................................................ 13</p>
+          <p>5.8 ALTERAÇÃO DE PEDIDO ................................................................................................ 13</p>
+          <p>5.9 NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL ........................................ 13</p>
           <p>5.10 DEVOLUÇÃO OU TROCA DE MERCADORIA ................................................................. 14</p>
           <p>5.11 CANCELAMENTO DE PEDIDO .................................................................................... 14</p>
           <p>5.12 ATRASO DE FATURAMENTO........................................................................................ 14</p>
