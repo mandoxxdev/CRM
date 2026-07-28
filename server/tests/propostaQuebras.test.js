@@ -40,17 +40,17 @@ async function medir(browser, itens, rotulo) {
     // primeira pagina de cada marco
     const pSecao4 = vis.findIndex(p => (p.textContent || '').includes('4. ESCOPO DE FORNECIMENTO'));
     const pSecao5 = vis.findIndex(p => (p.textContent || '').includes('CONDIÇÕES GERAIS DE FORNECIMENTO'));
-    const p523 = vis.findIndex(p => (p.textContent || '').includes('5.23 PREÇO'));
+    const p524 = vis.findIndex(p => (p.textContent || '').includes('5.24 PREÇO'));
     const p525 = vis.findIndex(p => (p.textContent || '').includes('5.25 CONSIDERAÇÃO FINAL'));
-    // a pagina onde a 5.23 começa NAO deve conter uma clausula 5.22 (nao mistura)
-    const pg523 = vis[p523];
-    const misturou = pg523 ? /5\.22\s/.test(pg523.textContent) : true;
+    // a pagina onde a 5.24 começa NAO deve conter a clausula 5.23 EXCLUSO junto (nao mistura)
+    const pg524 = vis[p524];
+    const misturou = pg524 ? /5\.23\s+EXCLUSO/.test(pg524.textContent) : true;
     // a pagina da secao 4 nao pode trazer junto nenhuma das secoes anteriores
     const pg4 = vis[pSecao4];
     const txt4 = pg4 ? (pg4.textContent || '') : '';
     const anterioresJunto = ['1. OBJETIVO DA PROPOSTA', '2. ELABORAÇÃO DA PROPOSTA', '3. OFERTA']
       .filter((t) => txt4.includes(t));
-    return { pSecao4, pSecao5, p523, p525, misturou, anterioresJunto, totalPaginas: vis.length };
+    return { pSecao4, pSecao5, p524, p525, misturou, anterioresJunto, totalPaginas: vis.length };
   });
   await page.close();
   return r;
@@ -66,9 +66,9 @@ async function medir(browser, itens, rotulo) {
     checar(r.anterioresJunto.length === 0,
       `secao 4 inicia em pagina NOVA (secoes anteriores junto: ${JSON.stringify(r.anterioresJunto)})`);
     checar(r.pSecao5 > r.pSecao4, `secao 5 depois da secao 4 (pag ${r.pSecao5 + 1} vs ${r.pSecao4 + 1})`);
-    checar(r.p523 > r.pSecao5, `5.23 depois da secao 5 (pag ${r.p523 + 1} vs ${r.pSecao5 + 1})`);
-    checar(r.p525 > r.p523, `5.25 depois da 5.23 (pag ${r.p525 + 1} vs ${r.p523 + 1})`);
-    checar(!r.misturou, 'pagina da 5.23 nao traz a 5.22 junto');
+    checar(r.p524 > r.pSecao5, `5.24 depois da secao 5 (pag ${r.p524 + 1} vs ${r.pSecao5 + 1})`);
+    checar(r.p525 > r.p524, `5.25 depois da 5.24 (pag ${r.p525 + 1} vs ${r.p524 + 1})`);
+    checar(!r.misturou, 'pagina da 5.24 nao traz a 5.23 EXCLUSO junto');
   }
 
   await browser.close();

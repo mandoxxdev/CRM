@@ -209,9 +209,9 @@ export function renumerarClausulas(doc) {
     const atual = tituloEl.textContent || '';
     // remove um prefixo numérico existente do tipo "5.4 " / "12.3 " no começo
     const semPrefixo = atual.replace(/^\s*\d+\.\d+\s*/, '').trimStart();
-    // Reserva o slot 23 para a 5.23 FIXA (preço/FINAME/fiscais, seção não editável):
-    // as cláusulas editáveis preenchem 5.1..5.22 e a próxima continua em 5.24 (pula 23).
-    const n = (i + 1) < 23 ? (i + 1) : (i + 2);
+    // Reserva o slot 24 para a 5.24 FIXA (preço/FINAME/fiscais, seção não editável):
+    // as cláusulas editáveis preenchem 5.1..5.23 e a próxima continua em 5.25 (pula 24).
+    const n = (i + 1) < 24 ? (i + 1) : (i + 2);
     const novoTitulo = `5.${n} ${semPrefixo}`.trimEnd();
     if (tituloEl.textContent !== novoTitulo) tituloEl.textContent = novoTitulo;
   });

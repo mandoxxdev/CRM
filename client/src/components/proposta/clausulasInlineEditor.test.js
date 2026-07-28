@@ -244,99 +244,88 @@ test('renumerarClausulas preserva o texto após o número', () => {
   expect(lista[1].titulo).toBe('5.2 FORO E JURISDIÇÃO');
 });
 
-test('renumerarClausulas reserva o slot 23 (23a clausula vira 5.24)', () => {
-  // A 5.23 é seção FIXA (preço/FINAME/fiscais), não editável. A renumeração das
-  // cláusulas editáveis deve PULAR o slot 23: 5.1..5.22 e depois 5.24, 5.25...
+test('renumerarClausulas reserva o slot 24 (24a clausula vira 5.25)', () => {
+  // A 5.24 é seção FIXA (preço/FINAME/fiscais), não editável. A renumeração das
+  // cláusulas editáveis deve PULAR o slot 24: 5.1..5.23 e depois 5.25, 5.26...
   const chaves = [];
-  for (let i = 0; i < 24; i++) chaves.push([`k${i}`, `X.Y TITULO ${i}`, `<p>c${i}</p>`]);
+  for (let i = 0; i < 25; i++) chaves.push([`k${i}`, `X.Y TITULO ${i}`, `<p>c${i}</p>`]);
   montarFixture(document, chaves);
   const resultado = renumerarClausulas(document);
   expect(resultado).toBe(true);
   const lista = lerClausulasDoSource(document);
   const nums = lista.map((c) => c.titulo.split(' ')[0]);
-  expect(nums[21]).toBe('5.22'); // 22a
-  expect(nums[22]).toBe('5.24'); // 23a pula o 23
-  expect(nums[23]).toBe('5.25'); // 24a
+  expect(nums[22]).toBe('5.23'); // 23a
+  expect(nums[23]).toBe('5.25'); // 24a pula o 24
+  expect(nums[24]).toBe('5.26'); // 25a
 });
 
-describe('blocos de texto da 5.23 (data-clausula-slot="23")', () => {
-  // Fixture do que propostaPremiumV2 emite na 5.23: dois blocos de texto marcados com
-  // data-clausula-slot="23" (o 2º com o número ESCONDIDO em data-titulo-prefixo, porque
-  // o documento mostra só "CONDIÇÃO DE PAGAMENTO:"), com a tabela de preços entre eles.
-  function montarFixtureCom523(doc) {
+describe('blocos de texto da 5.24 (data-clausula-slot="24")', () => {
+  function montarFixtureCom524(doc) {
     const root = montarFixture(doc, [
       ['1', '5.1 PRAZO', '<p>A</p>'],
       ['2', '5.2 TRANSPORTE', '<p>B</p>'],
     ]);
     const grupo = doc.createElement('section');
-    grupo.className = 'block stack-md avoid-break five-23-preco-group';
+    grupo.className = 'block stack-md avoid-break five-24-preco-group';
 
     const intro = doc.createElement('section');
     intro.setAttribute('data-clausula-key', '90');
-    intro.setAttribute('data-clausula-slot', '23');
-    intro.innerHTML = '<h3 data-clausula-campo="titulo">5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>'
+    intro.setAttribute('data-clausula-slot', '24');
+    intro.innerHTML = '<h3 data-clausula-campo="titulo">5.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3>'
       + '<div data-clausula-campo="conteudo"><p>Intro.</p></div>';
     grupo.appendChild(intro);
     grupo.appendChild(doc.createElement('table'));
 
     const condicao = doc.createElement('section');
     condicao.setAttribute('data-clausula-key', '91');
-    condicao.setAttribute('data-clausula-slot', '23');
-    condicao.innerHTML = '<p class="clausula-subtitulo" data-clausula-campo="titulo" data-titulo-prefixo="5.23.1 ">CONDIÇÃO DE PAGAMENTO:</p>'
+    condicao.setAttribute('data-clausula-slot', '24');
+    condicao.innerHTML = '<p class="clausula-subtitulo" data-clausula-campo="titulo" data-titulo-prefixo="5.24.1 ">CONDIÇÃO DE PAGAMENTO:</p>'
       + '<div data-clausula-campo="conteudo"><p>40%...</p></div>';
     grupo.appendChild(condicao);
     root.appendChild(grupo);
 
     const final = doc.createElement('section');
     final.setAttribute('data-clausula-key', '99');
-    final.innerHTML = '<h3 data-clausula-campo="titulo">5.24 CONSIDERAÇÃO FINAL</h3>'
+    final.innerHTML = '<h3 data-clausula-campo="titulo">5.25 CONSIDERAÇÃO FINAL</h3>'
       + '<div data-clausula-campo="conteudo"><p>Z</p></div>';
     root.appendChild(final);
     return root;
   }
 
-  test('lerClausulasDoSource inclui os blocos da 5.23 e remonta o título com o prefixo escondido', () => {
-    montarFixtureCom523(document);
+  test('lerClausulasDoSource inclui os blocos da 5.24 e remonta o título com o prefixo escondido', () => {
+    montarFixtureCom524(document);
     const lista = lerClausulasDoSource(document);
     expect(lista.map((c) => c.key)).toEqual(['1', '2', '90', '91', '99']);
-    expect(lista[2].titulo).toBe('5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS');
-    // o prefixo não é exibido no documento, mas volta no título salvo — é ele que
-    // mantém o bloco ancorado no slot 23 na próxima renderização
-    expect(lista[3].titulo).toBe('5.23.1 CONDIÇÃO DE PAGAMENTO:');
+    expect(lista[2].titulo).toBe('5.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS');
+    expect(lista[3].titulo).toBe('5.24.1 CONDIÇÃO DE PAGAMENTO:');
   });
 
-  test('renumerarClausulas NÃO renumera os blocos da 5.23 nem os conta na sequência', () => {
-    montarFixtureCom523(document);
+  test('renumerarClausulas NÃO renumera os blocos da 5.24 nem os conta na sequência', () => {
+    montarFixtureCom524(document);
     renumerarClausulas(document);
     const lista = lerClausulasDoSource(document);
     expect(lista[0].titulo).toBe('5.1 PRAZO');
     expect(lista[1].titulo).toBe('5.2 TRANSPORTE');
-    expect(lista[2].titulo).toBe('5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS');
-    expect(lista[3].titulo).toBe('5.23.1 CONDIÇÃO DE PAGAMENTO:');
-    // A cláusula seguinte é renumerada pela posição entre as EDITÁVEIS: aqui ela é a 3ª,
-    // vira "5.3". Se os dois blocos da 5.23 entrassem na contagem, ela viraria "5.5" —
-    // e, numa proposta real (22 cláusulas antes), a 5.24 viraria 5.26.
+    expect(lista[2].titulo).toBe('5.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS');
+    expect(lista[3].titulo).toBe('5.24.1 CONDIÇÃO DE PAGAMENTO:');
     expect(lista[4].titulo).toBe('5.3 CONSIDERAÇÃO FINAL');
   });
 
-  test('mover uma cláusula para baixo pula os blocos da 5.23 (não entra na seção de preço)', () => {
-    montarFixtureCom523(document);
-    // "para baixo" troca de lugar com a próxima cláusula EDITÁVEL ('99'), e não com o
-    // bloco de texto da 5.23 — que mora dentro do grupo da tabela de preços.
+  test('mover uma cláusula para baixo pula os blocos da 5.24 (não entra na seção de preço)', () => {
+    montarFixtureCom524(document);
     expect(moverClausulaNoSource(document, '2', 1)).toBe(true);
     const lista = lerClausulasDoSource(document);
     expect(lista.map((c) => c.key)).toEqual(['1', '90', '91', '99', '2']);
-    // e a cláusula movida NÃO pode ter caído dentro do grupo da 5.23
     const movida = document.querySelector('[data-clausula-key="2"]');
-    expect(movida.closest('.five-23-preco-group')).toBeNull();
+    expect(movida.closest('.five-24-preco-group')).toBeNull();
   });
 
-  test('sincronizarCampoParaSource edita os blocos da 5.23 como qualquer outra cláusula', () => {
-    montarFixtureCom523(document);
+  test('sincronizarCampoParaSource edita os blocos da 5.24 como qualquer outra cláusula', () => {
+    montarFixtureCom524(document);
     expect(sincronizarCampoParaSource(document, '91', 'conteudo', '<p>50% na entrada.</p>')).toBe(true);
     const lista = lerClausulasDoSource(document);
     expect(lista[3].conteudo).toBe('<p>50% na entrada.</p>');
-    expect(lista[3].titulo).toBe('5.23.1 CONDIÇÃO DE PAGAMENTO:');
+    expect(lista[3].titulo).toBe('5.24.1 CONDIÇÃO DE PAGAMENTO:');
   });
 });
 

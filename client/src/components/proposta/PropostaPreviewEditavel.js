@@ -376,6 +376,22 @@ export default function PropostaPreviewEditavel() {
   async function baixarPdf() {
     setBaixandoPdf(true);
     try {
+      const doc = iframeRef.current?.contentDocument;
+      if (doc?.documentElement) {
+        repaginarERestaurar(doc);
+        await new Promise((r) => setTimeout(r, 350));
+        const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+        const res = await api.post(`/propostas/${id}/pdf`, { html }, { responseType: 'blob' });
+        const url = URL.createObjectURL(res.data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `proposta-${id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+        return;
+      }
       const res = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');

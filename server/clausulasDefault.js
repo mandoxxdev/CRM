@@ -2,28 +2,28 @@
  * Cláusulas padrão das Condições Gerais de Fornecimento.
  * Usadas para inicializar proposta_clausulas quando o usuário edita pela primeira vez.
  *
- * A 5.23 é MISTA: as TABELAS (preços gerada dos itens, FINAME/BNDES e fiscais) continuam
+ * A 5.24 é MISTA: as TABELAS (preços gerada dos itens, FINAME/BNDES e fiscais) continuam
  * sendo montadas pelo template — elas precisam sair íntegras, em ordem e com o thead
  * repetido em cada fragmento (invariante I4), o que só o gerador garante. Já os TEXTOS
  * dela (introdução e condição de pagamento) moram AQUI, como cláusulas de verdade, para
  * serem editáveis e persistidos pelo mesmo caminho das demais.
  */
 
-// Texto de ABERTURA da 5.23 — sai antes da tabela de preços, com o <h3> "5.23 ...".
-const CLAUSULA_523_PRECO = {
-  numero: '5.23',
+// Texto de ABERTURA da 5.24 — sai antes da tabela de preços, com o <h3> "5.24 ...".
+const CLAUSULA_524_PRECO = {
+  numero: '5.24',
   titulo: 'PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS',
   conteudo: '<p>A CONTRATANTE pagará pelos equipamentos e/ou serviços indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>'
 };
 
 // Texto da CONDIÇÃO DE PAGAMENTO — sai DEPOIS da tabela de preços completa (I4).
-// O número é '5.23.1' (e não '5.23') por dois motivos: (a) as keys de cláusula default
-// são "default-<numero>" e dois '5.23' colidiriam; (b) o extrator de sub-número do
-// template lê "5.23.1" como 23, então este bloco continua caindo no slot da 5.23.
-// O prefixo "5.23.1 " do título NÃO é exibido no documento (o template o esconde) —
+// O número é '5.24.1' (e não '5.24') por dois motivos: (a) as keys de cláusula default
+// são "default-<numero>" e dois '5.24' colidiriam; (b) o extrator de sub-número do
+// template lê "5.24.1" como 24, então este bloco continua caindo no slot da 5.24.
+// O prefixo "5.24.1 " do título NÃO é exibido no documento (o template o esconde) —
 // visualmente continua sendo a linha "CONDIÇÃO DE PAGAMENTO:" em negrito, como sempre foi.
-const CLAUSULA_523_CONDICAO = {
-  numero: '5.23.1',
+const CLAUSULA_524_CONDICAO = {
+  numero: '5.24.1',
   titulo: 'CONDIÇÃO DE PAGAMENTO:',
   conteudo: '<p><strong>Primeira Parcela/Entrada:</strong> – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p><p><strong>Segunda Parcela/Liberação:</strong> – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p><p><strong>Terceira Parcela/Saldo:</strong> – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p><p>Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>'
 };
@@ -141,16 +141,16 @@ function getClausulasDefault() {
       conteudo: '<p>As partes elegem o Foro da Comarca de São Bernardo do Campo - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>'
     },
     {
-      numero: '5.24',
+      numero: '5.23',
       titulo: 'EXCLUSO DO FORNECIMENTO',
       conteudo: '<p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p><ol style="padding-left:25px;line-height:2;"><li>Transporte e seguro dos equipamentos e suas partes;</li><li>Serviços de movimentação, como munck, guindaste, empilhadeira e demais que se fizerem necessários;</li><li>Serviços e materiais de instalação e infraestrutura, como elétrica, hidráulica, pneumática, civil, alvenaria e demais que se fizerem necessários;</li><li>Despesas com translado, estadia e alimentação da equipe de montagem e startup;</li><li>Sapatas, brocas, bases, e outros tipos de reforço necessário;</li><li>Consultoria química, de processo, para obtenção de licenças, e de qualquer outra natureza;</li><li>Laudo e certificados de calibração/aferição, como RBC, ISO, e outros que se fizerem necessários;</li><li>Equipamentos, acessórios e periféricos, como compressor de ar, exaustores, torre de resfriamento, unidade Chiller, bombas, tachos, tanques, reservatórios, balanças, envasadoras e outros que se fizerem necessários;</li><li>E demais itens não citados expressamente nesta proposta técnica comercial.</li></ol>'
     },
-    // Os TEXTOS da 5.23 entram na lista padrão (as TABELAS não — ver comentário acima):
-    // é o que faz a edição da 5.23 percorrer o mesmo caminho de persistência das demais
+    // Os TEXTOS da 5.24 entram na lista padrão (as TABELAS não — ver comentário acima):
+    // é o que faz a edição da 5.24 percorrer o mesmo caminho de persistência das demais
     // (POST /clausulas/inicializar copia esta lista para proposta_clausulas, na ordem do
-    // array). Precisam ficar ENTRE a 5.22/5.24 e a 5.25: a ordem do array vira a coluna `ordem`.
-    CLAUSULA_523_PRECO,
-    CLAUSULA_523_CONDICAO,
+    // array). Precisam ficar ENTRE a 5.23 e a 5.25: a ordem do array vira a coluna `ordem`.
+    CLAUSULA_524_PRECO,
+    CLAUSULA_524_CONDICAO,
     {
       numero: '5.25',
       titulo: 'CONSIDERAÇÃO FINAL',
@@ -168,6 +168,9 @@ function resolverClausulasParaPreview(clausulasAtivas, embedPreview) {
 module.exports = {
   getClausulasDefault,
   resolverClausulasParaPreview,
-  CLAUSULA_523_PRECO,
-  CLAUSULA_523_CONDICAO,
+  CLAUSULA_524_PRECO,
+  CLAUSULA_524_CONDICAO,
+  // aliases legados (propostas/tests antigos)
+  CLAUSULA_523_PRECO: CLAUSULA_524_PRECO,
+  CLAUSULA_523_CONDICAO: CLAUSULA_524_CONDICAO,
 };

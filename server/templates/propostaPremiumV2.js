@@ -7,7 +7,7 @@ const {
   uploadsCoverDir,
 } = require('../config/paths');
 const propostaEngine = require('../propostaCompositionEngine');
-const { getClausulasDefault, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
+const { getClausulasDefault, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO } = require('../clausulasDefault');
 
 // Substitui placeholders (simples e avançados: {{#if}}, {{#each}}, etc.) — usa motor de composição
 function substituirPlaceholdersProposta(html, proposta, itens, totais) {
@@ -153,7 +153,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const gmpLogoSmB64 = assetProposta('logo-gmp.png');
     const gmpLogoGrandeB64 = assetProposta('logo-gmp-grande.png');
     const myLogoB64 = assetProposta('logo-moinho-ypiranga.png');
-    const dadosContratadaB64 = assetProposta('dados-contratada.png');
+    // Sempre inline (base64): a paginação mede a altura real na 1ª passada. Via URL a imagem
+    // pode chegar tarde e o bloco mede ~0px — empurra seções 1..4 para a mesma página e depois
+    // corta no rodapé (ver propostaTabelaContratadaPaginaPropria.test.js).
+    const dadosContratadaB64 = fileToDataUrl(path.join(propostaAssetsDir, 'dados-contratada.png'));
     const industria40B64 = assetProposta('industria40.webp');
     const projetosB64 = assetProposta('projetos.webp');
 
@@ -613,11 +616,24 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         .replace(/[̀-ͯ]/g, '');
       return titulo.startsWith('consideracao final');
     };
-    const ehTextoDa523 = (c) => subNumeroDe(c) === 23 && !ehConsideracaoFinal(c);
-    const ehPos523 = (c) => subNumeroDe(c) >= 24 || ehConsideracaoFinal(c);
-    const ehPos523Normal = (c) => subNumeroDe(c) >= 24 && !ehConsideracaoFinal(c);
+    const ehTextoPrecoPagamento = (c) => {
+      const titulo = String((c && c.titulo) || '')
+        .replace(/^\s*\d+(\.\d+)*\s*/, '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '');
+      return (titulo.includes('preco') && titulo.includes('pagamento'))
+        || titulo.startsWith('condicao de pagamento');
+    };
+    // Slot 24 = textos da seção PREÇO (5.24). Aceita legado salvo como 5.23 PREÇO.
+    const ehTextoDa524 = (c) => !ehConsideracaoFinal(c) && (
+      subNumeroDe(c) === 24 || (subNumeroDe(c) === 23 && ehTextoPrecoPagamento(c))
+    );
+    const ehPos524 = (c) => subNumeroDe(c) >= 25 || ehConsideracaoFinal(c);
+    const ehPos524Normal = (c) => subNumeroDe(c) >= 25 && !ehConsideracaoFinal(c);
 
-    // ===== Seção 5.23 — MISTA: textos editáveis + tabelas calculadas =====
+    // ===== Seção 5.24 — MISTA: textos editáveis + tabelas calculadas =====
     // As TABELAS (preços gerada dos itens, FINAME/BNDES e fiscais) continuam sendo montadas
     // aqui e NÃO são editáveis: elas têm de sair íntegras, em ordem e com o thead repetido em
     // cada fragmento (invariante I4) — garantia que só o gerador dá; conteúdo livre digitado
@@ -629,27 +645,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const clausulasCustomLista = (templateConfig && Array.isArray(templateConfig.clausulas_custom))
       ? templateConfig.clausulas_custom
       : [];
-    const clausulas523DoBanco = clausulasCustomLista.filter(ehTextoDa523);
-    const blocos523 = clausulas523DoBanco.length > 0
-      ? clausulas523DoBanco
-      : [CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO];
-    // Propostas LEGADAS (cláusulas salvas antes desta feature) não têm linhas 5.23 no banco.
-    // Nesse caso os blocos entram com key "temp-*", que é o contrato do editor inline para
-    // "cláusula ainda não persistida": na primeira gravação eles viram linhas novas, em vez
-    // de a edição ser silenciosamente descartada (keys "default-*" são ignoradas pelo diff
-    // quando a proposta já está customizada).
-    const key523 = (c, i) => (clausulas523DoBanco.length > 0 ? clausulaKey(c, i) : `temp-523-${i}`);
-    // Primeiro bloco: título visível como <h3> "5.23 ..." (é ele que entra no sumário).
-    // Blocos seguintes: subtítulo em negrito com o prefixo numérico ESCONDIDO — o documento
-    // continua mostrando só "CONDIÇÃO DE PAGAMENTO:", mas o prefixo fica no atributo
-    // data-titulo-prefixo para o editor remontar o título completo ao salvar (é ele que
-    // mantém o bloco ancorado no slot 23 na próxima renderização).
-    const render523Bloco = (c, i) => {
-      const key = esc(key523(c, i));
+    const clausulas524DoBanco = clausulasCustomLista.filter(ehTextoDa524);
+    const blocos524 = clausulas524DoBanco.length > 0
+      ? clausulas524DoBanco
+      : [CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO];
+    // Propostas LEGADAS (cláusulas salvas antes desta feature) não têm linhas 5.24 no banco.
+    const key524 = (c, i) => (clausulas524DoBanco.length > 0 ? clausulaKey(c, i) : `temp-524-${i}`);
+    const render524Bloco = (c, i) => {
+      const key = esc(key524(c, i));
       const tituloCompleto = String(c.numero ? `${c.numero} ${c.titulo}` : (c.titulo || '')).trim();
       const conteudo = conteudoClausulaHtml(c.conteudo);
       if (i === 0) {
-        return `<section class="block stack-md allow-break" data-clausula-key="${key}" data-clausula-slot="23">
+        return `<section class="block stack-md allow-break" data-clausula-key="${key}" data-clausula-slot="24">
           <h3 data-clausula-campo="titulo">${esc(tituloCompleto)}</h3>
           <div class="stack-sm" data-clausula-campo="conteudo">${conteudo}</div>
         </section>`;
@@ -657,18 +664,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       const m = /^\s*(\d+\.\d+(?:\.\d+)*)\s+([\s\S]*)$/.exec(tituloCompleto);
       const prefixo = m ? `${m[1]} ` : '';
       const visivel = m ? m[2] : tituloCompleto;
-      return `<section class="block stack-md allow-break" data-clausula-key="${key}" data-clausula-slot="23">
+      return `<section class="block stack-md allow-break" data-clausula-key="${key}" data-clausula-slot="24">
         <p class="clausula-subtitulo" data-clausula-campo="titulo" data-titulo-prefixo="${esc(prefixo)}">${esc(visivel)}</p>
-        <div class="stack-sm clausula-523-condicao" data-clausula-campo="conteudo">${conteudo}</div>
+        <div class="stack-sm clausula-524-condicao" data-clausula-campo="conteudo">${conteudo}</div>
       </section>`;
     };
 
-    // Construída uma vez e injetada nos DOIS caminhos de render (custom/inline e hardcoded),
-    // sempre entre a 5.22 e a 5.24. Marcada com data-page-break="before" no elemento raiz (five-23-
-    // preco-group) para iniciar em página própria (ver paginateProposalContent).
-    const sec523PrecoHtml = `
-      <section class="block stack-md avoid-break five-23-preco-group" data-page-break="before">
-        ${render523Bloco(blocos523[0], 0)}
+    const sec524PrecoHtml = `
+      <section class="block stack-md avoid-break five-24-preco-group" data-page-break="before">
+        ${render524Bloco(blocos524[0], 0)}
 
         <section class="block stack-md allow-break">
           <div class="table-caption">Tabela de Preços</div>
@@ -692,7 +696,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </table>
         </section>
 
-        ${blocos523.slice(1).map((c, i) => render523Bloco(c, i + 1)).join('')}
+        ${blocos524.slice(1).map((c, i) => render524Bloco(c, i + 1)).join('')}
       </section>
 
       <section class="block stack-md allow-break finame-compact">
@@ -828,27 +832,58 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <div class="sig-email">matheus@gmp.ind.br</div>
             </div>
           </div>`;
-        const renderClausulaCustom = (c, idx) => `<section class="block stack-md allow-break" data-clausula-key="${esc(clausulaKey(c, idx))}">
+        const renderClausulaCustom = (c, idx) => `<section class="block stack-md allow-break clausula-corpo" data-clausula-key="${esc(clausulaKey(c, idx))}">
             <h3 data-clausula-campo="titulo">${esc(c.numero ? `${c.numero} ${c.titulo}` : c.titulo)}</h3>
             <div class="stack-sm" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div>
           </section>`;
+        // Mesmos agrupamentos do ramo fixo (five-6-7-group, etc.) para a paginação empacotar
+        // cláusulas curtas na mesma página — evita páginas quase vazias no PDF.
+        const FAIXAS_AGRUPAMENTO = [
+          { min: 6, max: 7, cls: 'five-6-7-group', avoid: true },
+          { min: 8, max: 8, solo: true },
+          { min: 9, max: 15, cls: 'five-8-ate-14-group', avoid: true },
+          { min: 16, max: 18, cls: 'five-15-16-17-group', avoid: true },
+          { min: 19, max: 20, cls: 'five-18-19-group', avoid: true },
+          { min: 21, max: 22, cls: 'five-20-21-group', avoid: true },
+          { min: 23, max: 23, solo: true },
+        ];
+        const renderClausulasAgrupadas = (lista, offsetIdx = 0) => {
+          const parts = [];
+          let i = 0;
+          while (i < lista.length) {
+            const c = lista[i];
+            const n = subNumeroDe(c);
+            const faixa = FAIXAS_AGRUPAMENTO.find((f) => !Number.isNaN(n) && n >= f.min && n <= f.max);
+            if (!faixa || faixa.solo) {
+              parts.push(renderClausulaCustom(c, offsetIdx + i));
+              i += 1;
+              continue;
+            }
+            const grupo = [];
+            while (i < lista.length) {
+              const ni = subNumeroDe(lista[i]);
+              if (Number.isNaN(ni) || ni < faixa.min || ni > faixa.max) break;
+              grupo.push(lista[i]);
+              i += 1;
+            }
+            const inner = grupo.map((item, j) => renderClausulaCustom(item, offsetIdx + i - grupo.length + j)).join('');
+            parts.push(`<section class="block stack-md ${faixa.avoid ? 'avoid-break' : 'allow-break'} ${faixa.cls}">${inner}</section>`);
+          }
+          return parts.join('');
+        };
         const [primeiraClausula, ...demaisClausulas] = templateConfig.clausulas_custom;
         // As cláusulas do slot 23 (os TEXTOS da 5.23) e as >= 5.24 (a CONSIDERAÇÃO FINAL e
         // qualquer outra além dela) saem daqui: as do slot 23 são renderizadas DENTRO de
         // sec523PrecoHtml, intercaladas com as tabelas; as >= 24 vêm DEPOIS dele.
         // Sem esta exclusão a 5.23 apareceria duas vezes — uma no meio da lista de cláusulas
         // e outra na seção de preço.
-        const demaisSem523e524 = demaisClausulas.filter((c) => !ehTextoDa523(c) && !ehPos523(c));
-        const clausulasPos523Normal = demaisClausulas.filter(ehPos523Normal);
+        const demaisSem524ePos = demaisClausulas.filter((c) => !ehTextoDa524(c) && !ehPos524(c));
+        const clausulasPos524Normal = demaisClausulas.filter(ehPos524Normal);
         const clausulasConsideracao = demaisClausulas.filter(ehConsideracaoFinal);
-        // A CONSIDERAÇÃO FINAL (e só ela) ocupa a PÁGINA PRÓPRIA de assinatura, dividida em três faixas:
-        // texto no topo, campos de preenchimento manual no meio e assinaturas junto ao rodapé.
-        // Cláusulas >= 5.24 que não sejam a consideração final (ex.: EXCLUSO DO FORNECIMENTO)
-        // renderizam DEPOIS da 5.23, em fluxo normal, antes da página de assinatura.
-        const clausula524Html = clausulasConsideracao
+        const clausulaConsideracaoHtml = clausulasConsideracao
           .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
           .join('');
-        const clausulasPos523NormalHtml = clausulasPos523Normal
+        const clausulasPos524NormalHtml = clausulasPos524Normal
           .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
           .join('');
         // IMPORTANTE: apenas o título + a 1ª cláusula ficam dentro do grupo "avoid-break"
@@ -862,11 +897,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
             ${primeiraClausula ? renderClausulaCustom(primeiraClausula, 0) : ''}
           </section>
-          ${demaisSem523e524.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
-          ${sec523PrecoHtml}
-          ${clausulasPos523NormalHtml}
+          ${renderClausulasAgrupadas(demaisSem524ePos, 1)}
+          ${sec524PrecoHtml}
+          ${clausulasPos524NormalHtml}
           <section class="block avoid-break pagina-assinatura" data-page-break="before">
-            <div class="assinatura-topo">${clausula524Html}</div>
+            <div class="assinatura-topo">${clausulaConsideracaoHtml}</div>
             <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
             <div class="assinatura-rodape">
               <p>Atenciosamente,</p>
@@ -1131,10 +1166,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
       </section>
 
-      ${sec523PrecoHtml}
-
       <section class="block stack-md allow-break clausula-corpo five-22-separate-page">
-        <h3>5.24 EXCLUSO DO FORNECIMENTO</h3>
+        <h3>5.23 EXCLUSO DO FORNECIMENTO</h3>
         <p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p>
         <div class="list-num">
           <p>1) Transporte e seguro dos equipamentos e suas partes;</p>
@@ -1147,6 +1180,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           <p>8) E demais itens não citados expressamente nesta proposta técnica comercial.</p>
         </div>
       </section>
+
+      ${sec524PrecoHtml}
 
       <section class="block avoid-break pagina-assinatura" data-page-break="before">
         <div class="assinatura-topo stack-md clausula-corpo">
@@ -1602,7 +1637,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
        Agora o texto vem do banco e o inline se perde no primeiro save (o conteúdo é
        gravado como texto), então a régua virou regra de classe no CONTAINER — continua
        valendo depois de editada, e a altura medida pelo paginador não muda. */
-    .clausula-523-condicao > p { line-height: 26px; }
+    .clausula-524-condicao > p { line-height: 26px; }
 
     /* Sumário (preenchido via JS após a paginação) */
     .toc-list { display: flex; flex-direction: column; gap: 2mm; }
@@ -2191,7 +2226,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         if (!tocPage || tocPage.style.display !== 'none') preencherSumario(paginasFinais);
       }
       window.paginateProposalContent = paginateProposalContent;
-      const run = () => { try { paginateProposalContent(); } catch (_) {} };
+      const run = () => {
+        if (document.documentElement.getAttribute('data-pagination-frozen') === '1') return;
+        try { paginateProposalContent(); } catch (_) {}
+      };
       window.addEventListener('load', () => { run(); setTimeout(run, 250); });
       window.addEventListener('beforeprint', () => { run(); });
       let t = null;

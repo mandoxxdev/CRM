@@ -27,6 +27,7 @@ const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausul
 const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
 const { resolverCamposCustomizacao } = require('./propostaCustomizacoes');
 const propostaEngine = require('./propostaCompositionEngine');
+const { htmlPropostaParaPdfBuffer, marcarHtmlPaginado } = require('./services/propostaPdfRender');
 const {
   fetchComercialResponsaveis,
   invalidateComercialResponsaveisCache,
@@ -8631,7 +8632,6 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     });
   }
   
-  let browser = null;
   try {
     const proposta = await new Promise((resolve, reject) => {
       db.get(`
@@ -8841,9 +8841,10 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     const clausulasPdf = await new Promise((resolve) => {
       db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (err, rows) => resolve(rows || []));
     });
-    if (clausulasPdf.length > 0) {
+    const clausulasResolvidas = resolverClausulasParaPreview(clausulasPdf, true);
+    if (clausulasResolvidas) {
       templateConfig = templateConfig || {};
-      templateConfig.clausulas_custom = clausulasPdf;
+      templateConfig.clausulas_custom = clausulasResolvidas;
     }
 
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
@@ -8859,49 +8860,8 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     if (!html || typeof html !== 'string' || html.trim().length === 0) {
       throw new Error('HTML da proposta está vazio');
     }
-    
-    browser = await puppeteer.launch({
-      ...getPuppeteerLaunchOptions(),
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
-      ]
-    });
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
-    
-    await page.setContent(html, {
-      // Com imagens embedadas em base64, não precisamos depender de networkidle0 (evita travas no primeiro PDF)
-      waitUntil: ['load', 'domcontentloaded'],
-      timeout: 60000
-    });
-    
-    await new Promise((r) => setTimeout(r, 1500));
-    
-    await page.evaluate(function() {
-      if (typeof window.paginateProposalContent === 'function') window.paginateProposalContent();
-    });
-    await new Promise((r) => setTimeout(r, 400));
-    
-    await page.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
-    await new Promise((r) => setTimeout(r, 450));
-    
-    const pdfResult = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      preferCSSPageSize: true,
-      displayHeaderFooter: false,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' },
-      scale: 1.0
-    });
-    // Puppeteer >=22 retorna Uint8Array; converter para Buffer antes de res.end().
-    const pdfBuffer = Buffer.from(pdfResult);
 
-    await browser.close();
-    browser = null;
+    const pdfBuffer = await htmlPropostaParaPdfBuffer(html, getPuppeteerLaunchOptions());
 
     // Snapshot: gravar HTML/CSS (e checksum se a coluna existir) para reprodução futura
     if (!usouSnapshot && html) {
@@ -8936,9 +8896,6 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     res.end(pdfBuffer);
     
   } catch (error) {
-    if (browser) {
-      try { await browser.close(); } catch (_) {}
-    }
     console.error('Erro ao gerar PDF (Puppeteer):', error);
     console.error('Stack:', error.stack);
     if (!res.headersSent) {
@@ -8950,6 +8907,54 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
         error: errorMessage,
         details: !isProd ? { message: error.message, stack: error.stack, name: error.name } : { message: error.message }
       });
+    }
+  }
+});
+
+// PDF idêntico ao preview: recebe o HTML já paginado do iframe (WYSIWYG).
+app.post('/api/propostas/:id/pdf', async (req, res) => {
+  const { id } = req.params;
+
+  if (!id || isNaN(parseInt(id))) {
+    return res.status(400).json({ error: 'ID da proposta inválido' });
+  }
+
+  if (!db || !dbReady) {
+    return res.status(503).json({
+      error: 'Banco de dados ainda está sendo inicializado. Aguarde alguns segundos e tente novamente.',
+      retryAfter: 2,
+    });
+  }
+
+  const htmlBody = req.body && req.body.html;
+  if (!htmlBody || typeof htmlBody !== 'string' || htmlBody.trim().length < 200) {
+    return res.status(400).json({ error: 'HTML do preview é obrigatório para gerar o PDF.' });
+  }
+  if (!htmlBody.includes('proposalDocument') || !htmlBody.includes('proposal-page')) {
+    return res.status(400).json({ error: 'HTML do preview inválido ou incompleto.' });
+  }
+
+  try {
+    const proposta = await new Promise((resolve, reject) => {
+      db.get('SELECT id, numero_proposta FROM propostas WHERE id = ?', [id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+    if (!proposta) {
+      return res.status(404).json({ error: 'Proposta não encontrada' });
+    }
+
+    const html = marcarHtmlPaginado(htmlBody);
+    const pdfBuffer = await htmlPropostaParaPdfBuffer(html, getPuppeteerLaunchOptions());
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="proposta-${(proposta.numero_proposta || id).replace(/[/\\]/g, '-')}.pdf"`);
+    res.end(pdfBuffer);
+  } catch (error) {
+    console.error('Erro ao gerar PDF a partir do preview:', error);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'Erro ao gerar PDF: ' + (error.message || 'erro desconhecido') });
     }
   }
 });
@@ -10801,7 +10806,7 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         break-inside: avoid !important;
       }
 
-      .five-23-preco-group {
+      .five-24-preco-group {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
@@ -11021,8 +11026,8 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           <p>5.20 EXTINÇÃO DO CONTRATO ........................................................................................ 16</p>
           <p>5.21 DISPOSIÇÕES ADICIONAIS ........................................................................................ 17</p>
           <p>5.22 FORO........................................................................................................................... 18</p>
-          <p>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS ................................................. 20</p>
-          <p>5.24 EXCLUSO DO FORNECIMENTO .................................................................................. 19</p>
+          <p>5.23 EXCLUSO DO FORNECIMENTO .................................................................................. 19</p>
+          <p>5.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS ................................................. 20</p>
           <p>5.25 CONSIDERAÇÃO FINAL ............................................................................................. 23</p>
         </div>
       </div>
