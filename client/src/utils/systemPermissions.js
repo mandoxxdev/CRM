@@ -48,7 +48,11 @@ export function hasAlmoxAdminPerfil(user) {
 
 export function canConfigureModule(user, module) {
   if (!module) return false;
-  if (isSuperAdmin(user)) return true;
+  // isSystemAdmin (e não só isSuperAdmin): role "admin" é administrador de sistema em
+  // todo o resto do app (bypassModuleRestrictions, canManageUsers, módulo Admin). Só
+  // aqui ele ficava de fora — um admin abria o módulo Administrativo pelo portão de
+  // módulo e era devolvido para a seleção pelo portão da tela de configurações.
+  if (isSystemAdmin(user)) return true;
   if (isModuleAdmin(user, module)) return true;
   if (module === 'almoxarifado' && hasAlmoxAdminPerfil(user)) return true;
   if (module === 'frota' && hasFrotaAdminPerfil(user)) return true;
