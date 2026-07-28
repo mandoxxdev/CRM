@@ -187,14 +187,19 @@ async function medir(browser, forPdfServer) {
         `C5 [${rotulo}]: logo alinhada ao centro dos campos (desvio ${logo.desvio.toFixed(1)}px, largura ${logo.largura}px)`);
     }
 
-    // C7 — a data de emissao segue os demais na mesma cadencia (o gap do container),
-    // sem o antigo padding-top de 80px que a descolava do bloco.
+    // C7 — a data de emissao continua ANCORADA ao bloco de campos.
+    // O que este caso existe para pegar e o bug original: um padding-top de 80px que a
+    // descolava do bloco e a jogava sozinha no meio da capa. NAO exige espacamento identico
+    // ao dos demais — um respiro deliberado antes dela e decisao de layout, e o teste nao
+    // deve engessar isso. O teto e generoso de proposito; so acusa o descolamento.
+    const GAP_MAXIMO_EMISSAO = 40; // px — 80px (o bug) reprova, um respiro de 15px passa
     const gapEmissao = espacos.find(e => e.campo === 'emissao');
     const gapsAnteriores = espacos.filter(e => e.campo !== 'emissao').map(e => e.gap);
     const maiorAnterior = Math.max(...gapsAnteriores);
     checar(!!gapEmissao, `C7 [${rotulo}]: data de emissao e o ultimo campo do bloco`);
-    checar(gapEmissao && Math.abs(gapEmissao.gap - maiorAnterior) <= TOL_PX,
-      `C7 [${rotulo}]: mesmo espacamento dos demais (emissao ${gapEmissao ? Math.round(gapEmissao.gap) : '?'}px vs ${Math.round(maiorAnterior)}px)`);
+    checar(gapEmissao && gapEmissao.gap >= maiorAnterior - TOL_PX && gapEmissao.gap <= GAP_MAXIMO_EMISSAO,
+      `C7 [${rotulo}]: emissao ancorada ao bloco — gap ${gapEmissao ? Math.round(gapEmissao.gap) : '?'}px `
+      + `(minimo ${Math.round(maiorAnterior)}px dos demais, teto ${GAP_MAXIMO_EMISSAO}px)`);
 
     checar(!capa.temRodape, `C6 [${rotulo}]: capa sem .page-footer`);
     checar(!capa.temTextoDeRodape, `C6 [${rotulo}]: capa sem dados da empresa nem "Pág."`);

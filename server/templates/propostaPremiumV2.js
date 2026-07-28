@@ -1511,7 +1511,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     }
     .cover-info-title {
       font-family: 'Century Gothic', CenturyGothic, 'Trebuchet MS', Arial, sans-serif;
-      font-size: 20pt;
+      font-size: 18pt;
       font-weight: 800;
       color: #1a1a1a;
       margin: 0 0 1mm 0;
@@ -1521,15 +1521,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     }
     .cover-info-num {
       font-family: 'Century Gothic', CenturyGothic, 'Trebuchet MS', Arial, sans-serif;
-      font-size: 17pt;
+      font-size: 15pt;
       font-weight: 700;
       color: #1a1a1a;
-      margin: 0 0 7mm 0;
+      margin: 0 0 0 0;
     }
     .cover-client-logo {    
       display: flex;
       justify-content: center;
-      margin: 0 0 4mm 0;
+      margin: 0 0 0 0;
     }
     /* margin auto, e não só o text-align:center do pai: a regra global "img { display: block }"
        torna a logo um elemento de bloco, e bloco não é centralizado por text-align — ele fica
@@ -1545,7 +1545,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       text-align: center;
       width: 100%;
       max-width: 150mm;
-      padding-top: 5mm;
+      padding-top: 0px;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -1571,7 +1571,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
        padding-top de 80px a descolava do bloco e o align-self:center era o jeito antigo de
        centralizá-la, hoje desnecessário — o text-align do .cover-client-info p já centraliza
        todos os campos por igual, e o gap do container dá o espaçamento entre eles. */
-    .cover-field-emissao {}
+    .cover-field-emissao {margin-top: 15px !important;}
 
     /* Página de Apresentação da empresa (modelo DOCX: texto largura total + imagem centrada) */
     .pres-page-content { display: flex; flex-direction: column; height: 100%; padding-top: 5mm; }
