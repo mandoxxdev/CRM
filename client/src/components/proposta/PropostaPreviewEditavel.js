@@ -16,6 +16,7 @@ import {
   renumerarClausulas,
   ehClausulaNovaVazia,
 } from './clausulasInlineEditor';
+import { aplicarMascaraNoNoEditavel } from '../../utils/telefoneContentEditable';
 import './PropostaPreviewEditavel.css';
 
 const CAMPOS_EDITAVEIS = [
@@ -92,6 +93,14 @@ export default function PropostaPreviewEditavel() {
       el.style.borderRadius = '3px';
       el.style.cursor = 'text';
       el.oninput = () => {
+        // O telefone é mascarado AQUI, enquanto se digita. Antes a máscara só existia no
+        // servidor: o usuário apagava o campo, digitava um número novo e nada acontecia —
+        // a formatação só aparecia depois de salvar, quando o preview era regerado.
+        // Num nó contentEditable reescrever o texto tira o cursor do lugar, então
+        // aplicarMascaraNoNoEditavel o reancora pela contagem de dígitos.
+        if (campo === 'cliente_telefone') {
+          aplicarMascaraNoNoEditavel(el, getCursorOffset, setCursorOffset);
+        }
         setCamposEditados(prev => ({ ...prev, [campo]: el.textContent }));
         setMudancasPendentes(true);
       };
