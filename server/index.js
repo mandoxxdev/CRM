@@ -4828,7 +4828,7 @@ app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
   if (!chave) chave = nome.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
   var categoria = (body.categoria || '').trim() || null;
   var tipo = (body.tipo || 'texto');
-  if (!['texto', 'numero', 'lista', 'lista_condicional', 'soma'].includes(tipo)) tipo = 'texto';
+  if (!['texto', 'numero', 'lista', 'lista_condicional', 'soma', 'manual_proposta'].includes(tipo)) tipo = 'texto';
   var opcoes = body.opcoes;
   var opcoesStr = null;
   if ((tipo === 'lista_condicional' || tipo === 'soma') && typeof opcoes === 'object' && opcoes !== null && !Array.isArray(opcoes)) {
@@ -4870,7 +4870,7 @@ app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
   if (!chave) return res.status(400).json({ error: 'Chave é obrigatória' });
   var categoria = (body.categoria || '').trim() || null;
   var tipo = (body.tipo || 'texto');
-  if (!['texto', 'numero', 'lista', 'lista_condicional', 'soma'].includes(tipo)) tipo = 'texto';
+  if (!['texto', 'numero', 'lista', 'lista_condicional', 'soma', 'manual_proposta'].includes(tipo)) tipo = 'texto';
   var opcoes = body.opcoes;
   var opcoesStr = null;
   if ((tipo === 'lista_condicional' || tipo === 'soma') && typeof opcoes === 'object' && opcoes !== null && !Array.isArray(opcoes)) {

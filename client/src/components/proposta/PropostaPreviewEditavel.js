@@ -313,45 +313,50 @@ export default function PropostaPreviewEditavel() {
         const k = pg.getBoundingClientRect().width / 210;
         const r = el.getBoundingClientRect();
         const rp = pg.getBoundingClientRect();
-        api.put(`/propostas/${id}/fotos/${fotoId}`, {
+        const novo = {
           pagina: paginas.indexOf(pg) + 1,
           pos_x: (r.left - rp.left) / k,
           pos_y: (r.top - rp.top) / k,
           largura: r.width / k,
-        }).catch(() => toast.error('Erro ao salvar a posição da foto.'));
+        };
+        // Sincroniza a lista em memória do template: a repaginação REAPLICA as fotos a
+        // partir dela — sem isto, qualquer repaginação devolvia a foto à posição antiga.
+        const win = doc.defaultView;
+        if (win && Array.isArray(win.__FOTOS_PROPOSTA)) {
+          const f = win.__FOTOS_PROPOSTA.find((x) => String(x.id) === String(fotoId));
+          if (f) { f.pagina = novo.pagina; f.x = novo.pos_x; f.y = novo.pos_y; f.largura = novo.largura; }
+        }
+        api.put(`/propostas/${id}/fotos/${fotoId}`, novo)
+          .catch(() => toast.error('Erro ao salvar a posição da foto.'));
       };
 
       el.onmousedown = (e) => {
         if (e.target === btnRemover || e.target === alca) return;
         e.preventDefault();
-        const k = pxPorMm();
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const startLeft = parseFloat(el.style.left) || 0;
-        const startTop = parseFloat(el.style.top) || 0;
+        // Offset do clique dentro da foto: a foto segue o cursor mantendo o ponto pego.
+        const rectInicial = el.getBoundingClientRect();
+        const offX = e.clientX - rectInicial.left;
+        const offY = e.clientY - rectInicial.top;
         const aoMover = (ev) => {
-          el.style.left = `${startLeft + (ev.clientX - startX) / k}mm`;
-          el.style.top = `${startTop + (ev.clientY - startY) / k}mm`;
-        };
-        const aoSoltar = (ev) => {
-          doc.removeEventListener('mousemove', aoMover);
-          doc.removeEventListener('mouseup', aoSoltar);
-          // Soltou sobre outra página? Reparenta preservando a posição visual — é o que
-          // permite arrastar a foto para QUALQUER página do documento.
+          // Reparenta DURANTE o arrasto para a página sob o cursor. Sem isso a foto
+          // "sumia" ao cruzar a borda: .proposal-page tem overflow:hidden, então o
+          // trecho fora da página-mãe era cortado até o mouseup.
           const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
-          const alvo = paginas.find((p) => {
+          let alvo = paginas.find((p) => {
             const rr = p.getBoundingClientRect();
             return ev.clientY >= rr.top && ev.clientY <= rr.bottom;
           });
-          const atual = el.closest('.proposal-page');
-          if (alvo && atual && alvo !== atual) {
-            const rEl = el.getBoundingClientRect();
-            const rAlvo = alvo.getBoundingClientRect();
-            const kk = rAlvo.width / 210;
-            alvo.appendChild(el);
-            el.style.left = `${(rEl.left - rAlvo.left) / kk}mm`;
-            el.style.top = `${(rEl.top - rAlvo.top) / kk}mm`;
-          }
+          if (!alvo) alvo = el.closest('.proposal-page');
+          if (!alvo) return;
+          if (alvo !== el.parentElement) alvo.appendChild(el);
+          const rp = alvo.getBoundingClientRect();
+          const k = rp.width / 210;
+          el.style.left = `${(ev.clientX - offX - rp.left) / k}mm`;
+          el.style.top = `${(ev.clientY - offY - rp.top) / k}mm`;
+        };
+        const aoSoltar = () => {
+          doc.removeEventListener('mousemove', aoMover);
+          doc.removeEventListener('mouseup', aoSoltar);
           persistir();
         };
         doc.addEventListener('mousemove', aoMover);
@@ -382,6 +387,12 @@ export default function PropostaPreviewEditavel() {
         if (!window.confirm('Remover esta foto da proposta?')) return;
         try {
           await api.delete(`/propostas/${id}/fotos/${fotoId}`);
+          // Tira também da lista em memória — senão a próxima repaginação recriava a foto.
+          const win = doc.defaultView;
+          if (win && Array.isArray(win.__FOTOS_PROPOSTA)) {
+            const idx = win.__FOTOS_PROPOSTA.findIndex((x) => String(x.id) === String(fotoId));
+            if (idx >= 0) win.__FOTOS_PROPOSTA.splice(idx, 1);
+          }
           el.remove();
           toast.success('Foto removida.');
         } catch (_) {
@@ -391,19 +402,62 @@ export default function PropostaPreviewEditavel() {
     });
   }
 
+  // Página mais visível no viewport do iframe agora — é nela que a foto nova entra
+  // (adicionar sempre na capa obrigava o usuário a arrastar a foto pelo documento inteiro).
+  function paginaVisivelAtual() {
+    const doc = iframeRef.current?.contentDocument;
+    const win = iframeRef.current?.contentWindow;
+    if (!doc || !win) return 1;
+    const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
+    const meioViewport = win.innerHeight / 2;
+    let melhor = 1;
+    let melhorDist = Infinity;
+    paginas.forEach((p, i) => {
+      const r = p.getBoundingClientRect();
+      const dist = Math.abs((r.top + r.bottom) / 2 - meioViewport);
+      if (dist < melhorDist) { melhorDist = dist; melhor = i + 1; }
+    });
+    return melhor;
+  }
+
   async function enviarFotos(e) {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (files.length === 0) return;
     setEnviandoFotos(true);
+    const pagina = paginaVisivelAtual();
     try {
+      const novas = [];
       for (const file of files) {
         const fd = new FormData();
         fd.append('foto', file);
-        await api.post(`/propostas/${id}/fotos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        fd.append('pagina', String(pagina));
+        const res = await api.post(`/propostas/${id}/fotos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        novas.push(res.data);
+      }
+      // Injeta as fotos novas SEM recarregar o iframe: recarregar piscava a tela e voltava
+      // para o topo do documento. O template expõe __FOTOS_PROPOSTA/aplicarFotosProposta;
+      // se não estiverem disponíveis (preview antigo em cache), cai no reload completo.
+      const doc = iframeRef.current?.contentDocument;
+      const win = iframeRef.current?.contentWindow;
+      const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '');
+      if (doc && win && Array.isArray(win.__FOTOS_PROPOSTA) && typeof win.aplicarFotosProposta === 'function') {
+        novas.forEach((f) => {
+          win.__FOTOS_PROPOSTA.push({
+            id: f.id,
+            pagina: f.pagina || pagina,
+            x: f.pos_x != null ? f.pos_x : 20,
+            y: f.pos_y != null ? f.pos_y : 60,
+            largura: f.largura != null ? f.largura : 80,
+            src: `${base}/uploads/proposta-fotos/${encodeURIComponent(f.arquivo)}`,
+          });
+        });
+        win.aplicarFotosProposta();
+        ativarEdicaoFotos(doc);
+      } else {
+        carregarPreview();
       }
       toast.success(files.length > 1 ? `${files.length} fotos adicionadas. Arraste-as para posicionar.` : 'Foto adicionada. Arraste-a para posicionar.');
-      carregarPreview();
     } catch (_) {
       toast.error('Erro ao enviar foto.');
     } finally {
