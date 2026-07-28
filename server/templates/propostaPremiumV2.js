@@ -541,6 +541,29 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             }).filter(Boolean).join('')
         : '';
 
+      // Diagnóstico exibido SÓ no preview do editor (nunca no PDF): quando o item não
+      // imprime nenhuma variável, diz QUAL dos dois lados falhou. Antes a omissão era
+      // silenciosa e indistinguível — "não selecionei a variável para esta família" e
+      // "selecionei mas o produto está sem valor" produziam exatamente a mesma tela.
+      const dicaVariaveis = (() => {
+        if (forPdfServer || specRowsHtml) return '';
+        const lista = (Array.isArray(variaveisList) ? variaveisList : [])
+          .filter((k) => k && String(k).indexOf('_cond') === -1);
+        if (lista.length === 0) {
+          return `<p class="dica-editor">Nenhuma variável técnica está selecionada para a família <strong>${familia}</strong>. Configure em Configurações → Template da Proposta → “Variáveis por equipamento (família)”. Se já configurou, confira se a família escolhida ali é exatamente esta.</p>`;
+        }
+        const semValor = lista
+          .filter((k) => String((variaveisLabels[k] || {}).tipo || '') !== 'manual_proposta')
+          .filter((k) => {
+            const v = getSpecValue(specs, k);
+            return !(v !== undefined && v !== null && String(v).trim() !== '');
+          })
+          .map((k) => esc(semCapsLock((variaveisLabels[k] || {}).nome || k)));
+        if (semValor.length === 0) return '';
+        const amostra = semValor.slice(0, 8).join(', ') + (semValor.length > 8 ? `, +${semValor.length - 8}` : '');
+        return `<p class="dica-editor">${semValor.length} variável(is) selecionada(s) para <strong>${familia}</strong> estão sem valor no cadastro deste produto: ${amostra}.</p>`;
+      })();
+
       const produtoImagem = it.produto_imagem_base64
         ? it.produto_imagem_base64
         : (() => {
@@ -574,6 +597,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${categoria !== '—' ? `<p>Categoria: ${categoria}</p>` : ''}
           ${ncm !== '—' ? `<p>NCM: ${ncm}</p>` : ''}
           ${specRowsHtml}
+          ${dicaVariaveis}
         </div>
       `;
     });
@@ -1666,6 +1690,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .pres-image img { max-width: 145mm; width: 100%; height: auto; margin: 0 auto; }
 
     /* Equipamentos: chave-valor sem tabela (10pt como no modelo DOCX) */
+    /* Aviso de diagnóstico do EDITOR — nunca sai no PDF (o template só o emite quando
+       forPdfServer=false). Cor/estilo distintos do documento para não ser confundido
+       com conteúdo da proposta. */
+    .dica-editor { color: #b45309; background: #fffbeb; border-left: 3px solid #f59e0b; font-size: 9pt; font-style: italic; text-align: left; text-indent: 0; padding: 4px 8px; margin-top: 3mm; }
     .equip-specs-kv { display: block; margin-top: 3mm; }
     .equip-specs-kv::after { content: ""; display: block; clear: both; }
     .equip-specs-kv > p { margin: 0 0 3px 0; font-size: 10pt; line-height: 1.6; }
