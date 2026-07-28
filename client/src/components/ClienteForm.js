@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { FiSearch, FiLoader, FiUpload, FiX } from 'react-icons/fi';
+import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './ClienteForm.css';
 
 const ClienteForm = () => {
@@ -54,7 +55,9 @@ const ClienteForm = () => {
   const loadCliente = async () => {
     try {
       const response = await api.get(`/clientes/${id}`);
-      setFormData(response.data);
+      // Cadastros antigos vieram sem máscara; mascara na abertura para o campo já mostrar o
+      // formato certo, em vez de só depois que o usuário encostar nele.
+      setFormData({ ...response.data, telefone: mascararTelefoneCompleto(response.data.telefone) });
       // Se houver logo_url, criar preview
       if (response.data.logo_url) {
         const logoUrl = response.data.logo_url.startsWith('http') 
@@ -128,6 +131,14 @@ const ClienteForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Máscara aplicada a cada tecla, no mesmo padrão do CNPJ logo abaixo. Antes o campo era
+  // texto livre: o telefone só aparecia formatado depois, na proposta, e por isso o banco
+  // acumulou "67998420146", "21 99723-1500", "(11) 9.6406-3306" para o mesmo tipo de dado.
+  const handleTelefoneChange = (e) => {
+    const { value } = e.target;
+    setFormData(prev => ({ ...prev, telefone: mascararTelefoneDigitando(value) }));
   };
 
   // Função para formatar CNPJ
@@ -346,19 +357,9 @@ const ClienteForm = () => {
       }
     }
 
-    // Formatar telefone se existir
-    let telefoneFormatado = '';
-    if (data.telefone || data.phone) {
-      const telefone = data.telefone || data.phone || '';
-      const telLimpo = telefone.replace(/\D/g, '');
-      if (telLimpo.length === 10) {
-        telefoneFormatado = telLimpo.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
-      } else if (telLimpo.length === 11) {
-        telefoneFormatado = telLimpo.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
-      } else {
-        telefoneFormatado = telefone;
-      }
-    }
+    // Telefone da consulta de CNPJ: usa a mesma máscara do resto do app em vez de uma cópia
+    // local das regras — eram duas implementações do mesmo formato, livres para divergir.
+    const telefoneFormatado = mascararTelefoneCompleto(data.telefone || data.phone || '');
 
     // Preencher campos automaticamente
     setFormData(prev => ({
@@ -629,8 +630,10 @@ const ClienteForm = () => {
                 type="text"
                 name="telefone"
                 value={formData.telefone}
-                onChange={handleChange}
-                placeholder="(00) 0000-0000"
+                onChange={handleTelefoneChange}
+                placeholder="(00) 00000-0000"
+                inputMode="tel"
+                maxLength={15}
               />
             </div>
             <div className="form-group">
