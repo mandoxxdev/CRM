@@ -1,5 +1,5 @@
 /**
- * T2 — os TEXTOS da 5.24 (PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS) são editáveis
+ * T2 — os TEXTOS da 5.23 (PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS) são editáveis
  * pelo MESMO mecanismo das demais cláusulas (data-clausula-key / data-clausula-campo),
  * enquanto as TABELAS (preços gerada dos itens, FINAME/BNDES e fiscais) continuam
  * calculadas/fixas — ver I4: a tabela de preços precisa sair íntegra, em ordem e com
@@ -9,7 +9,7 @@
  */
 const assert = require('assert');
 const { gerarHTMLPropostaPremiumV2 } = require('../templates/propostaPremiumV2');
-const { getClausulasDefault, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO } = require('../clausulasDefault');
+const { getClausulasDefault, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
 
 let passed = 0, failed = 0;
 function test(n, f) { try { f(); passed++; console.log('  ✓ ' + n); } catch (e) { failed++; console.error('  ✗ ' + n + ': ' + e.message); } }
@@ -24,17 +24,19 @@ const comoBanco = getClausulasDefault().map((c, i) => ({
 const comoDefault = getClausulasDefault().map(c => ({ numero: c.numero, titulo: c.titulo, conteudo: c.conteudo }));
 const gerar = (custom) => gerarHTMLPropostaPremiumV2(proposta, itens, totais, custom ? { clausulas_custom: custom } : null, null, false, true);
 
-test('clausulasDefault exporta os textos da 5.24 e os inclui na lista padrão, entre 5.23 e 5.25', () => {
-  assert(CLAUSULA_524_PRECO && CLAUSULA_524_CONDICAO, 'faltou exportar os textos da 5.24');
+test('clausulasDefault exporta os textos da 5.24 e os inclui na lista padrão, entre 5.23/5.25', () => {
+  assert(CLAUSULA_523_PRECO && CLAUSULA_523_CONDICAO, 'faltou exportar os textos da 5.24');
+  assert(CLAUSULA_523_PRECO.numero === '5.24', 'preço deve ser 5.24');
   const lista = getClausulasDefault();
   const nums = lista.map(c => c.numero);
   const i22 = nums.indexOf('5.22');
   const i23 = nums.indexOf('5.23');
-  const i24 = nums.indexOf(CLAUSULA_524_PRECO.numero);
-  const i24b = nums.indexOf(CLAUSULA_524_CONDICAO.numero);
+  const i24 = nums.indexOf(CLAUSULA_523_PRECO.numero);
+  const i24b = nums.indexOf(CLAUSULA_523_CONDICAO.numero);
   const i25 = nums.indexOf('5.25');
   assert(i22 > -1 && i23 > -1 && i24 > -1 && i24b > -1 && i25 > -1, `faltou alguma cláusula na lista padrão: ${nums.join(',')}`);
   assert(i22 < i23 && i23 < i24 && i24 < i24b && i24b < i25, `ordem errada na lista padrão: ${nums.join(',')}`);
+  assert(lista.find(c => c.numero === '5.23').titulo === 'EXCLUSO DO FORNECIMENTO', '5.23 deve ser EXCLUSO');
   assert(new Set(nums).size === nums.length, 'números duplicados na lista padrão (colidiriam em data-clausula-key="default-N")');
 });
 
@@ -124,7 +126,7 @@ for (const [rotulo, custom] of [['banco', comoBanco], ['default', comoDefault]])
 
 test('texto editado no banco aparece no lugar do padrão (a edição realmente vale)', () => {
   const editadas = comoBanco.map(c => (
-    /^5\.24\b/.test(c.titulo) || /^5\.23 PREÇO/.test(c.titulo) ? { ...c, conteudo: '<p>TEXTO EDITADO PELA VENDEDORA</p>' } : c
+    /^5\.24\b/.test(c.titulo) ? { ...c, conteudo: '<p>TEXTO EDITADO PELA VENDEDORA</p>' } : c
   ));
   const html = gerar(editadas);
   assert(html.includes('TEXTO EDITADO PELA VENDEDORA'), 'o texto editado da 5.24 não foi usado');
@@ -148,7 +150,7 @@ test('dado REAL da proposta 74: cláusula salva como "5.23 CONSIDERAÇÃO FINAL"
   // ela ocuparia o slot dos textos da 5.23 — o documento perderia a CONDIÇÃO DE PAGAMENTO
   // inteira e a consideração final apareceria no meio, antes da tabela de preços.
   const legado = getClausulasDefault()
-    .filter(c => !/^5\.24/.test(c.numero) && c.numero !== '5.25' && c.numero !== '5.24.1')
+    .filter(c => !/^5\.24/.test(c.numero) && c.numero !== '5.25')
     .map((c, i) => ({ id: 200 + i, ordem: i, ativo: 1, titulo: `${c.numero} ${c.titulo}`, conteudo: c.conteudo }));
   legado.push({ id: 299, ordem: 99, ativo: 1, titulo: '5.23 CONSIDERAÇÃO FINAL', conteudo: '<p>Texto final.</p>' });
   const html = gerar(legado);
@@ -167,10 +169,11 @@ test('a 5.24 aparece uma única vez (não duplica entre a lista de cláusulas e 
   const html = gerar(comoBanco);
   const ocorrencias = (html.match(/5\.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS/g) || []).length;
   assert(ocorrencias === 1, `título da 5.24 aparece ${ocorrencias}x (esperado 1)`);
+  const iForo = html.indexOf('5.22 FORO');
   const iExcluso = html.indexOf('5.23 EXCLUSO');
   const i524 = html.indexOf('5.24 PREÇO');
   const i525 = html.indexOf('5.25 CONSIDERAÇÃO FINAL');
-  assert(iExcluso > -1 && iExcluso < i524 && i524 < i525, 'a ordem 5.23 EXCLUSO / 5.24 PREÇO / 5.25 saiu errada');
+  assert(iForo < iExcluso && iExcluso < i524 && i524 < i525, 'ordem errada: 5.22 → 5.23 EXCLUSO → 5.24 PREÇO → 5.25');
 });
 
 test('round-trip do título: o que o editor lê de volta é EXATAMENTE o título salvo', () => {
@@ -186,7 +189,7 @@ test('round-trip do título: o que o editor lê de volta é EXATAMENTE o título
     const prefixo = (s.match(/data-titulo-prefixo="([^"]*)"/) || ['', ''])[1];
     return `${prefixo}${el ? el[2] : ''}`.trim();
   });
-  const salvos = comoBanco.filter(c => /^5\.24/.test(c.titulo) || /^5\.23 PREÇO/.test(c.titulo)).map(c => c.titulo);
+  const salvos = comoBanco.filter(c => /^5\.24/.test(c.titulo)).map(c => c.titulo);
   assert.deepStrictEqual(lidos, salvos, `título lido ${JSON.stringify(lidos)} != salvo ${JSON.stringify(salvos)}`);
 });
 
@@ -200,8 +203,8 @@ test('o prefixo numérico do 2º bloco NÃO é exibido (o documento mostra só "
 test('ramo hardcoded (sem cláusulas salvas) traz os MESMOS textos da 5.24', () => {
   const html = gerar(null);
   assert(html.includes('5.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS'), 'faltou o título da 5.24 no ramo fixo');
-  assert(html.includes('5.23 EXCLUSO DO FORNECIMENTO'), 'faltou o título da 5.23 EXCLUSO no ramo fixo');
-  assert(html.includes('A CONTRATANTE pagará pelos equipamentos'), 'faltou a introdução da 5.23 no ramo fixo');
+  assert(html.includes('5.23 EXCLUSO DO FORNECIMENTO'), 'faltou EXCLUSO 5.23 no ramo fixo');
+  assert(html.includes('A CONTRATANTE pagará pelos equipamentos'), 'faltou a introdução da 5.24 no ramo fixo');
   assert(html.includes('Primeira Parcela/Entrada'), 'faltou a condição de pagamento no ramo fixo');
   assert(html.includes('TOTAL DA PROPOSTA') && html.includes('Ref. FINAME'), 'faltou tabela no ramo fixo');
 });

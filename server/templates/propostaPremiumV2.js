@@ -7,7 +7,7 @@ const {
   uploadsCoverDir,
 } = require('../config/paths');
 const propostaEngine = require('../propostaCompositionEngine');
-const { getClausulasDefault, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO } = require('../clausulasDefault');
+const { getClausulasDefault, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
 
 // Substitui placeholders (simples e avançados: {{#if}}, {{#each}}, etc.) — usa motor de composição
 function substituirPlaceholdersProposta(html, proposta, itens, totais) {
@@ -153,10 +153,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const gmpLogoSmB64 = assetProposta('logo-gmp.png');
     const gmpLogoGrandeB64 = assetProposta('logo-gmp-grande.png');
     const myLogoB64 = assetProposta('logo-moinho-ypiranga.png');
-    // Sempre inline (base64): a paginação mede a altura real na 1ª passada. Via URL a imagem
-    // pode chegar tarde e o bloco mede ~0px — empurra seções 1..4 para a mesma página e depois
-    // corta no rodapé (ver propostaTabelaContratadaPaginaPropria.test.js).
-    const dadosContratadaB64 = fileToDataUrl(path.join(propostaAssetsDir, 'dados-contratada.png'));
+    const dadosContratadaB64 = assetProposta('dados-contratada.png');
     const industria40B64 = assetProposta('industria40.webp');
     const projetosB64 = assetProposta('projetos.webp');
 
@@ -616,24 +613,28 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         .replace(/[̀-ͯ]/g, '');
       return titulo.startsWith('consideracao final');
     };
-    const ehTextoPrecoPagamento = (c) => {
-      const titulo = String((c && c.titulo) || '')
+    const ehTextoDa524 = (c) => {
+      if (ehConsideracaoFinal(c)) return false;
+      const tituloFull = String((c && c.titulo) || '');
+      const tituloNorm = tituloFull
         .replace(/^\s*\d+(\.\d+)*\s*/, '')
         .trim()
         .toLowerCase()
         .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '');
-      return (titulo.includes('preco') && titulo.includes('pagamento'))
-        || titulo.startsWith('condicao de pagamento');
+        .replace(/[\u0300-\u036f]/g, '');
+      if (tituloNorm.startsWith('excluso do fornecimento')) return false;
+      if (tituloNorm.startsWith('preco, condicao de pagamento e impostos')) return true;
+      if (tituloNorm === 'condicao de pagamento:') return true;
+      const num = String((c && c.numero) || '').trim();
+      if (num === '5.24' || num === '5.24.1') return true;
+      // Legado: textos de preço salvos como 5.23 antes da troca com a 5.23 EXCLUSO
+      if ((num === '5.23' || num === '5.23.1') && tituloNorm.includes('preco')) return true;
+      if (/^5\.23(\.| |$)/.test(tituloFull) && tituloNorm.includes('preco, condicao de pagamento')) return true;
+      return false;
     };
-    // Slot 24 = textos da seção PREÇO (5.24). Aceita legado salvo como 5.23 PREÇO.
-    const ehTextoDa524 = (c) => !ehConsideracaoFinal(c) && (
-      subNumeroDe(c) === 24 || (subNumeroDe(c) === 23 && ehTextoPrecoPagamento(c))
-    );
-    const ehPos524 = (c) => subNumeroDe(c) >= 25 || ehConsideracaoFinal(c);
-    const ehPos524Normal = (c) => subNumeroDe(c) >= 25 && !ehConsideracaoFinal(c);
+    const ehPos525 = (c) => subNumeroDe(c) >= 25 || ehConsideracaoFinal(c);
 
-    // ===== Seção 5.24 — MISTA: textos editáveis + tabelas calculadas =====
+    // ===== Seção 5.23 — MISTA: textos editáveis + tabelas calculadas =====
     // As TABELAS (preços gerada dos itens, FINAME/BNDES e fiscais) continuam sendo montadas
     // aqui e NÃO são editáveis: elas têm de sair íntegras, em ordem e com o thead repetido em
     // cada fragmento (invariante I4) — garantia que só o gerador dá; conteúdo livre digitado
@@ -649,7 +650,6 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const blocos524 = clausulas524DoBanco.length > 0
       ? clausulas524DoBanco
       : [CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO];
-    // Propostas LEGADAS (cláusulas salvas antes desta feature) não têm linhas 5.24 no banco.
     const key524 = (c, i) => (clausulas524DoBanco.length > 0 ? clausulaKey(c, i) : `temp-524-${i}`);
     const render524Bloco = (c, i) => {
       const key = esc(key524(c, i));
@@ -832,58 +832,19 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               <div class="sig-email">matheus@gmp.ind.br</div>
             </div>
           </div>`;
-        const renderClausulaCustom = (c, idx) => `<section class="block stack-md allow-break clausula-corpo" data-clausula-key="${esc(clausulaKey(c, idx))}">
+        const renderClausulaCustom = (c, idx) => `<section class="block stack-md allow-break" data-clausula-key="${esc(clausulaKey(c, idx))}">
             <h3 data-clausula-campo="titulo">${esc(c.numero ? `${c.numero} ${c.titulo}` : c.titulo)}</h3>
             <div class="stack-sm" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div>
           </section>`;
-        // Mesmos agrupamentos do ramo fixo (five-6-7-group, etc.) para a paginação empacotar
-        // cláusulas curtas na mesma página — evita páginas quase vazias no PDF.
-        const FAIXAS_AGRUPAMENTO = [
-          { min: 6, max: 7, cls: 'five-6-7-group', avoid: true },
-          { min: 8, max: 8, solo: true },
-          { min: 9, max: 15, cls: 'five-8-ate-14-group', avoid: true },
-          { min: 16, max: 18, cls: 'five-15-16-17-group', avoid: true },
-          { min: 19, max: 20, cls: 'five-18-19-group', avoid: true },
-          { min: 21, max: 22, cls: 'five-20-21-group', avoid: true },
-          { min: 23, max: 23, solo: true },
-        ];
-        const renderClausulasAgrupadas = (lista, offsetIdx = 0) => {
-          const parts = [];
-          let i = 0;
-          while (i < lista.length) {
-            const c = lista[i];
-            const n = subNumeroDe(c);
-            const faixa = FAIXAS_AGRUPAMENTO.find((f) => !Number.isNaN(n) && n >= f.min && n <= f.max);
-            if (!faixa || faixa.solo) {
-              parts.push(renderClausulaCustom(c, offsetIdx + i));
-              i += 1;
-              continue;
-            }
-            const grupo = [];
-            while (i < lista.length) {
-              const ni = subNumeroDe(lista[i]);
-              if (Number.isNaN(ni) || ni < faixa.min || ni > faixa.max) break;
-              grupo.push(lista[i]);
-              i += 1;
-            }
-            const inner = grupo.map((item, j) => renderClausulaCustom(item, offsetIdx + i - grupo.length + j)).join('');
-            parts.push(`<section class="block stack-md ${faixa.avoid ? 'avoid-break' : 'allow-break'} ${faixa.cls}">${inner}</section>`);
-          }
-          return parts.join('');
-        };
         const [primeiraClausula, ...demaisClausulas] = templateConfig.clausulas_custom;
         // As cláusulas do slot 23 (os TEXTOS da 5.23) e as >= 5.24 (a CONSIDERAÇÃO FINAL e
         // qualquer outra além dela) saem daqui: as do slot 23 são renderizadas DENTRO de
         // sec523PrecoHtml, intercaladas com as tabelas; as >= 24 vêm DEPOIS dele.
         // Sem esta exclusão a 5.23 apareceria duas vezes — uma no meio da lista de cláusulas
         // e outra na seção de preço.
-        const demaisSem524ePos = demaisClausulas.filter((c) => !ehTextoDa524(c) && !ehPos524(c));
-        const clausulasPos524Normal = demaisClausulas.filter(ehPos524Normal);
+        const demaisSem524e525 = demaisClausulas.filter((c) => !ehTextoDa524(c) && !ehPos525(c));
         const clausulasConsideracao = demaisClausulas.filter(ehConsideracaoFinal);
-        const clausulaConsideracaoHtml = clausulasConsideracao
-          .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
-          .join('');
-        const clausulasPos524NormalHtml = clausulasPos524Normal
+        const clausula525Html = clausulasConsideracao
           .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
           .join('');
         // IMPORTANTE: apenas o título + a 1ª cláusula ficam dentro do grupo "avoid-break"
@@ -897,11 +858,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <h2>5. CONDIÇÕES GERAIS DE FORNECIMENTO</h2>
             ${primeiraClausula ? renderClausulaCustom(primeiraClausula, 0) : ''}
           </section>
-          ${renderClausulasAgrupadas(demaisSem524ePos, 1)}
+          ${demaisSem524e525.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
           ${sec524PrecoHtml}
-          ${clausulasPos524NormalHtml}
           <section class="block avoid-break pagina-assinatura" data-page-break="before">
-            <div class="assinatura-topo">${clausulaConsideracaoHtml}</div>
+            <div class="assinatura-topo">${clausula525Html}</div>
             <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
             <div class="assinatura-rodape">
               <p>Atenciosamente,</p>
@@ -1166,7 +1126,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
       </section>
 
-      <section class="block stack-md allow-break clausula-corpo five-22-separate-page">
+      <section class="block stack-md allow-break clausula-corpo">
         <h3>5.23 EXCLUSO DO FORNECIMENTO</h3>
         <p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p>
         <div class="list-num">
@@ -2226,10 +2186,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         if (!tocPage || tocPage.style.display !== 'none') preencherSumario(paginasFinais);
       }
       window.paginateProposalContent = paginateProposalContent;
-      const run = () => {
-        if (document.documentElement.getAttribute('data-pagination-frozen') === '1') return;
-        try { paginateProposalContent(); } catch (_) {}
-      };
+      const run = () => { try { paginateProposalContent(); } catch (_) {} };
       window.addEventListener('load', () => { run(); setTimeout(run, 250); });
       window.addEventListener('beforeprint', () => { run(); });
       let t = null;

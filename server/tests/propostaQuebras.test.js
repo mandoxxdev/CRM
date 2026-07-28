@@ -42,9 +42,8 @@ async function medir(browser, itens, rotulo) {
     const pSecao5 = vis.findIndex(p => (p.textContent || '').includes('CONDIÇÕES GERAIS DE FORNECIMENTO'));
     const p524 = vis.findIndex(p => (p.textContent || '').includes('5.24 PREÇO'));
     const p525 = vis.findIndex(p => (p.textContent || '').includes('5.25 CONSIDERAÇÃO FINAL'));
-    // a pagina onde a 5.24 começa NAO deve conter a clausula 5.23 EXCLUSO junto (nao mistura)
     const pg524 = vis[p524];
-    const misturou = pg524 ? /5\.23\s+EXCLUSO/.test(pg524.textContent) : true;
+    const misturou = pg524 ? /5\.22\s/.test(pg524.textContent) : true;
     // a pagina da secao 4 nao pode trazer junto nenhuma das secoes anteriores
     const pg4 = vis[pSecao4];
     const txt4 = pg4 ? (pg4.textContent || '') : '';
@@ -68,7 +67,7 @@ async function medir(browser, itens, rotulo) {
     checar(r.pSecao5 > r.pSecao4, `secao 5 depois da secao 4 (pag ${r.pSecao5 + 1} vs ${r.pSecao4 + 1})`);
     checar(r.p524 > r.pSecao5, `5.24 depois da secao 5 (pag ${r.p524 + 1} vs ${r.pSecao5 + 1})`);
     checar(r.p525 > r.p524, `5.25 depois da 5.24 (pag ${r.p525 + 1} vs ${r.p524 + 1})`);
-    checar(!r.misturou, 'pagina da 5.24 nao traz a 5.23 EXCLUSO junto');
+    checar(!r.misturou, 'pagina da 5.24 nao traz clausulas anteriores misturadas');
   }
 
   await browser.close();

@@ -170,7 +170,7 @@ module.exports = {
   resolverClausulasParaPreview,
   CLAUSULA_524_PRECO,
   CLAUSULA_524_CONDICAO,
-  // aliases legados (propostas/tests antigos)
+  // aliases legados (testes e imports antigos)
   CLAUSULA_523_PRECO: CLAUSULA_524_PRECO,
   CLAUSULA_523_CONDICAO: CLAUSULA_524_CONDICAO,
 };

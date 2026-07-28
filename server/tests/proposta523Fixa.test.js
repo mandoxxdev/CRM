@@ -15,7 +15,7 @@ const itens = [{ produto_nome: 'Masseira', quantidade: 1, unidade: 'UN', valor_u
 const totais = { total: 1000, dataEmissao: '21/07/2026' };
 const custom = getClausulasDefault().map(c => ({ numero: c.numero, titulo: c.titulo, conteudo: c.conteudo }));
 
-test('caminho custom/inline contém a 5.24 PREÇO', () => {
+test('caminho custom/inline contém a 5.23 PREÇO', () => {
   const html = gerarHTMLPropostaPremiumV2(proposta, itens, totais, { clausulas_custom: custom }, null, false, true);
   assert(html.includes('5.24 PREÇO'), 'faltou título 5.24 no caminho custom');
 });
@@ -27,7 +27,7 @@ test('caminho custom/inline contém a tabela de preços com o total', () => {
   const html = gerarHTMLPropostaPremiumV2(proposta, itens, totais, { clausulas_custom: custom }, null, false, true);
   assert(html.includes('TOTAL DA PROPOSTA'), 'faltou tabela de preços no caminho custom');
 });
-test('caminho hardcoded (sem custom) mantém a 5.24', () => {
+test('caminho hardcoded (sem custom) mantém a 5.23', () => {
   const html = gerarHTMLPropostaPremiumV2(proposta, itens, totais, null, null, false, true);
   assert(html.includes('5.24 PREÇO'), 'regrediu a 5.24 no hardcoded');
 });

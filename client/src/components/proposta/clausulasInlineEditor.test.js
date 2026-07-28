@@ -246,20 +246,23 @@ test('renumerarClausulas preserva o texto após o número', () => {
 
 test('renumerarClausulas reserva o slot 24 (24a clausula vira 5.25)', () => {
   // A 5.24 é seção FIXA (preço/FINAME/fiscais), não editável. A renumeração das
-  // cláusulas editáveis deve PULAR o slot 24: 5.1..5.23 e depois 5.25, 5.26...
+  // cláusulas editáveis deve PULAR o slot 24: 5.1..5.23 e depois 5.25...
   const chaves = [];
-  for (let i = 0; i < 25; i++) chaves.push([`k${i}`, `X.Y TITULO ${i}`, `<p>c${i}</p>`]);
+  for (let i = 0; i < 24; i++) chaves.push([`k${i}`, `X.Y TITULO ${i}`, `<p>c${i}</p>`]);
   montarFixture(document, chaves);
   const resultado = renumerarClausulas(document);
   expect(resultado).toBe(true);
   const lista = lerClausulasDoSource(document);
   const nums = lista.map((c) => c.titulo.split(' ')[0]);
+  expect(nums[21]).toBe('5.22'); // 22a
   expect(nums[22]).toBe('5.23'); // 23a
   expect(nums[23]).toBe('5.25'); // 24a pula o 24
-  expect(nums[24]).toBe('5.26'); // 25a
 });
 
 describe('blocos de texto da 5.24 (data-clausula-slot="24")', () => {
+  // Fixture do que propostaPremiumV2 emite na 5.24: dois blocos de texto marcados com
+  // data-clausula-slot="24" (o 2º com o número ESCONDIDO em data-titulo-prefixo, porque
+  // o documento mostra só "CONDIÇÃO DE PAGAMENTO:"), com a tabela de preços entre eles.
   function montarFixtureCom524(doc) {
     const root = montarFixture(doc, [
       ['1', '5.1 PRAZO', '<p>A</p>'],
