@@ -28,6 +28,7 @@ const uploadsCoverDir            = mkd(path.join(PERSISTENT_DATA_DIR, 'uploads',
 const uploadsContratoDir         = mkd(path.join(PERSISTENT_DATA_DIR, 'uploads', 'contrato'));
 const uploadsOSDir               = mkd(path.join(PERSISTENT_DATA_DIR, 'uploads', 'ordens-servico'));
 const uploadsPropostasPdfDir     = mkd(path.join(PERSISTENT_DATA_DIR, 'uploads', 'propostas'));
+const uploadsPropostaFotosDir    = mkd(path.join(PERSISTENT_DATA_DIR, 'uploads', 'proposta-fotos'));
 
 module.exports = {
   PERSISTENT_DATA_DIR,
@@ -48,4 +49,5 @@ module.exports = {
   uploadsContratoDir,
   uploadsOSDir,
   uploadsPropostasPdfDir,
+  uploadsPropostaFotosDir,
 };

@@ -74,6 +74,7 @@ const {
   uploadsContratoDir,
   uploadsOSDir,
   uploadsPropostasPdfDir,
+  uploadsPropostaFotosDir,
 } = require('./config/paths');
 const { gerarHTMLPropostaPremiumV2, substituirPlaceholdersProposta } = require('./templates/propostaPremiumV2');
 
@@ -726,6 +727,27 @@ const uploadCover = multer({
   }
 });
 
+// Storage para FOTOS AVULSAS da proposta (posicionadas livremente no preview/PDF)
+const storagePropostaFoto = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadsPropostaFotosDir); },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext);
+    cb(null, `foto_${Date.now()}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`);
+  }
+});
+const uploadPropostaFoto = multer({
+  storage: storagePropostaFoto,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) return cb(null, true);
+    cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
+  }
+});
+
 // Storage para contrato anexo (Word / PDF)
 const storageContrato = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, uploadsContratoDir); },
@@ -1082,6 +1104,27 @@ function initializeDatabase(onReadyCallback) {
   )`, (err) => {
     if (err) console.error('❌ Erro ao criar tabela proposta_clausulas:', err);
     else console.log('✅ Tabela proposta_clausulas criada/verificada');
+  });
+
+  // Fotos avulsas da proposta: imagens que o usuário sobe no preview editável e
+  // posiciona livremente sobre qualquer página (preview e PDF). Posição/tamanho em MM
+  // relativos à página A4 (210x297) — independem de zoom/resolução. `pagina` é o índice
+  // 1-based sobre as páginas visíveis do documento (a capa é a 1).
+  db.run(`CREATE TABLE IF NOT EXISTS proposta_fotos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposta_id INTEGER NOT NULL,
+    arquivo TEXT NOT NULL,
+    pagina INTEGER NOT NULL DEFAULT 1,
+    pos_x REAL NOT NULL DEFAULT 20,
+    pos_y REAL NOT NULL DEFAULT 60,
+    largura REAL NOT NULL DEFAULT 80,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proposta_id) REFERENCES propostas(id) ON DELETE CASCADE
+  )`, (err) => {
+    if (err) console.error('❌ Erro ao criar tabela proposta_fotos:', err);
+    else console.log('✅ Tabela proposta_fotos criada/verificada');
   });
 
   // Log de auditoria de edições no preview editável
@@ -5712,6 +5755,77 @@ app.delete('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, (req, 
   });
 });
 
+// ========== FOTOS AVULSAS DA PROPOSTA (posicionadas livremente no preview/PDF) ==========
+// GET /api/propostas/:id/fotos — lista fotos ativas
+app.get('/api/propostas/:id/fotos', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  db.all('SELECT * FROM proposta_fotos WHERE proposta_id = ? AND ativo = 1 ORDER BY id ASC', [req.params.id], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ fotos: rows || [] });
+  });
+});
+
+// POST /api/propostas/:id/fotos — sobe uma foto (o cliente itera para várias)
+app.post('/api/propostas/:id/fotos', authenticateToken, uploadPropostaFoto.single('foto'), (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const usuarioId = req.user.id;
+  if (!req.file) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  const pagina = Math.max(1, parseInt(req.body.pagina, 10) || 1);
+
+  db.run(
+    'INSERT INTO proposta_fotos (proposta_id, arquivo, pagina) VALUES (?, ?, ?)',
+    [id, req.file.filename, pagina],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      const novoId = this.lastID;
+      db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+        registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'foto_adicionada', 'foto', novoId, null, req.file.filename);
+      });
+      res.status(201).json({ id: novoId, arquivo: req.file.filename, pagina, pos_x: 20, pos_y: 60, largura: 80 });
+    }
+  );
+});
+
+// PUT /api/propostas/:id/fotos/:fotoId — atualiza posição/tamanho/página
+app.put('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id, fotoId } = req.params;
+  const { pagina, pos_x, pos_y, largura } = req.body;
+
+  db.get('SELECT * FROM proposta_fotos WHERE id = ? AND proposta_id = ? AND ativo = 1', [fotoId, id], (err, foto) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!foto) return res.status(404).json({ error: 'Foto não encontrada' });
+    const num = (v, atual) => (v !== undefined && v !== null && isFinite(Number(v)) ? Number(v) : atual);
+    db.run(
+      `UPDATE proposta_fotos SET pagina = ?, pos_x = ?, pos_y = ?, largura = ?, updated_at = datetime('now') WHERE id = ? AND proposta_id = ?`,
+      [Math.max(1, Math.round(num(pagina, foto.pagina))), num(pos_x, foto.pos_x), num(pos_y, foto.pos_y), Math.max(10, num(largura, foto.largura)), fotoId, id],
+      (err2) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ ok: true });
+      }
+    );
+  });
+});
+
+// DELETE /api/propostas/:id/fotos/:fotoId — remove foto (soft delete)
+app.delete('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id, fotoId } = req.params;
+  const usuarioId = req.user.id;
+  db.get('SELECT arquivo FROM proposta_fotos WHERE id = ? AND proposta_id = ?', [fotoId, id], (err, foto) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!foto) return res.status(404).json({ error: 'Foto não encontrada' });
+    db.run(`UPDATE proposta_fotos SET ativo = 0, updated_at = datetime('now') WHERE id = ? AND proposta_id = ?`, [fotoId, id], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+        registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'foto_removida', 'foto', fotoId, foto.arquivo, null);
+      });
+      res.json({ ok: true });
+    });
+  });
+});
+
 // GET /api/propostas/:id/edicoes-log
 app.get('/api/propostas/:id/edicoes-log', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
@@ -8498,6 +8612,11 @@ app.get('/api/propostas/:id/premium', (req, res) => {
           templateConfig.margin_navegador_top = templateConfig.margin_navegador_top != null ? Number(templateConfig.margin_navegador_top) : 19;
           templateConfig.margin_navegador_bottom = templateConfig.margin_navegador_bottom != null ? Number(templateConfig.margin_navegador_bottom) : 19;
 
+          // Fotos avulsas posicionadas no documento (o template resolve URL no preview / base64 no PDF)
+          db.all('SELECT * FROM proposta_fotos WHERE proposta_id = ? AND ativo = 1 ORDER BY id ASC', [id], (errF, fotosRows) => {
+          if (errF) console.error('Erro ao buscar fotos da proposta (ignorado, preview segue):', errF.message);
+          if (!errF && Array.isArray(fotosRows) && fotosRows.length > 0) templateConfig.fotos_proposta = fotosRows;
+
           // Aplicar cláusulas customizadas (se existirem para esta proposta)
           db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (errCl, clausulas) => {
           const clausulasParaTemplate = resolverClausulasParaPreview(errCl ? [] : clausulas, omitPrintBar);
@@ -8600,6 +8719,7 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             runGerarSafe();
           });
         }); // fecha db.all clausulas
+        }); // fecha db.all fotos
       });
       } catch (error) {
         console.error('Erro geral ao processar proposta:', error);
@@ -8851,6 +8971,15 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     if (clausulasParaPdf) {
       templateConfig = templateConfig || {};
       templateConfig.clausulas_custom = clausulasParaPdf;
+    }
+
+    // Fotos avulsas posicionadas no documento (o template embeda base64 no PDF)
+    const fotosPdf = await new Promise((resolve) => {
+      db.all('SELECT * FROM proposta_fotos WHERE proposta_id = ? AND ativo = 1 ORDER BY id ASC', [id], (err, rows) => resolve(rows || []));
+    });
+    if (fotosPdf.length > 0) {
+      templateConfig = templateConfig || {};
+      templateConfig.fotos_proposta = fotosPdf;
     }
 
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
@@ -16253,6 +16382,7 @@ app.use('/api/uploads/cotacoes', express.static(uploadsDir));
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE PRODUTOS ==========
 // Servir arquivos estáticos de imagens de produtos
 app.use('/api/uploads/produtos', express.static(uploadsProdutosDir));
+app.use('/api/uploads/proposta-fotos', express.static(uploadsPropostaFotosDir));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE MATERIAIS (ESCRITÓRIO) ==========
 app.use('/api/uploads/materiais-escritorio', express.static(uploadsMateriaisEscritorioDir));

@@ -5,6 +5,7 @@ const {
   uploadsProdutosDir,
   uploadsLogosDir,
   uploadsCoverDir,
+  uploadsPropostaFotosDir,
 } = require('../config/paths');
 const propostaEngine = require('../propostaCompositionEngine');
 const { getClausulasDefault, CLAUSULAS_INTRO, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
@@ -93,6 +94,30 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const clienteLogoB64 = (proposta.cliente_logo_url && String(proposta.cliente_logo_url).trim())
       ? (uploadToDataUrl(uploadsLogosDir, String(proposta.cliente_logo_url).trim()) || null)
       : null;
+
+    // Fotos avulsas da proposta: subidas no preview editável e posicionadas livremente
+    // sobre as páginas (posição/tamanho em MM, aplicadas por script APÓS a paginação —
+    // são overlays position:absolute, então não interferem na medição de altura do
+    // paginador). No PDF embeda base64 (Puppeteer roda offline); no preview usa URL.
+    const fotosProposta = (Array.isArray(config.fotos_proposta) ? config.fotos_proposta : [])
+      .map((f) => {
+        const arquivo = String((f && f.arquivo) || '').trim();
+        if (!arquivo) return null;
+        const src = forPdfServer
+          ? fileToDataUrl(path.join(uploadsPropostaFotosDir, arquivo))
+          : `${baseURL}/api/uploads/proposta-fotos/${encodeURIComponent(arquivo)}?t=${ts}`;
+        if (!src) return null;
+        return {
+          id: f.id,
+          pagina: Math.max(1, parseInt(f.pagina, 10) || 1),
+          x: Number(f.pos_x) || 0,
+          y: Number(f.pos_y) || 0,
+          largura: Math.max(10, Number(f.largura) || 80),
+          src,
+        };
+      })
+      .filter(Boolean);
+    const fotosPropostaJson = JSON.stringify(fotosProposta).replace(/</g, '\\u003c');
 
     // Assets estáticos do template (logos/imagens da capa + fontes). No PREVIEW
     // (navegador) referenciamos por URL cacheável servida por /api/assets/*, em vez de
@@ -1361,6 +1386,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .col-center { text-align: center; }
     .tech-desc { margin-top: 4px; font-size: 10pt; line-height: 1.15; color: var(--muted); text-align: justify; }
 
+    /* Fotos avulsas: overlays em mm sobre a página (fora do fluxo — não afetam a
+       paginação). O editor injeta os controles de arrastar/redimensionar/remover. */
+    .proposta-foto { position: absolute; z-index: 4; }
+    .proposta-foto img { width: 100%; height: auto; display: block; }
+
     .equip-photo-float { float: right; width: 35%; margin: 0 0 4mm 6mm; text-align: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
     .equip-photo-img-float { width: 100%; height: auto; object-fit: contain; border-radius: 6px; display: block; }
     .equip-photo-fallback-float { display: flex; align-items: center; justify-content: center; min-height: 30mm; font-size: 10pt; color: var(--muted); background: var(--blue-100); border-radius: 6px; }
@@ -1768,6 +1798,33 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
   <script>
     (function () {
       function isElement(node) { return node && node.nodeType === 1; }
+      // Fotos avulsas (posição/tamanho em mm). Reaplicadas a CADA paginação: o paginador
+      // destrói e recria as páginas geradas, levando junto qualquer overlay antigo.
+      var FOTOS_PROPOSTA = ${fotosPropostaJson};
+      function aplicarFotosProposta() {
+        var doc = document.getElementById('proposalDocument');
+        if (!doc || !FOTOS_PROPOSTA.length) return;
+        Array.from(doc.querySelectorAll('.proposta-foto')).forEach(function (el) { el.remove(); });
+        var pages = Array.from(doc.querySelectorAll('.proposal-page')).filter(function (p) { return p.style.display !== 'none'; });
+        if (!pages.length) return;
+        FOTOS_PROPOSTA.forEach(function (f) {
+          var page = pages[Math.min(f.pagina, pages.length) - 1];
+          if (!page) return;
+          var wrap = document.createElement('div');
+          wrap.className = 'proposta-foto';
+          wrap.setAttribute('data-foto-id', String(f.id));
+          wrap.style.left = f.x + 'mm';
+          wrap.style.top = f.y + 'mm';
+          wrap.style.width = f.largura + 'mm';
+          var img = document.createElement('img');
+          img.src = f.src;
+          img.alt = 'Foto da proposta';
+          img.draggable = false;
+          wrap.appendChild(img);
+          page.appendChild(wrap);
+        });
+      }
+      window.aplicarFotosProposta = aplicarFotosProposta;
       function splitTableByRows(tableEl, pageContentEl) {
         const thead = tableEl.querySelector('thead');
         const rows = Array.from(tableEl.querySelectorAll('tbody > tr'));
@@ -2232,6 +2289,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         }
         const paginasFinais = numerarPaginas();          // renumera já sem (ou com) o sumário
         if (!tocPage || tocPage.style.display !== 'none') preencherSumario(paginasFinais);
+        aplicarFotosProposta();
       }
       window.paginateProposalContent = paginateProposalContent;
       const run = () => { try { paginateProposalContent(); } catch (_) {} };

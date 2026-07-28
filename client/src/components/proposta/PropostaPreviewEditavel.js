@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FiSave, FiClock, FiX, FiDownload, FiRefreshCw } from 'react-icons/fi';
+import { FiSave, FiClock, FiX, FiDownload, FiRefreshCw, FiImage } from 'react-icons/fi';
 import api from '../../services/api';
 import HistoricoEdicoes from './HistoricoEdicoes';
 import {
@@ -39,6 +39,8 @@ export default function PropostaPreviewEditavel() {
   const [clausulasIsDefault, setClausulasIsDefault] = useState(true);
   const [mudancasPendentes, setMudancasPendentes] = useState(false);
   const [baixandoPdf, setBaixandoPdf] = useState(false);
+  const [enviandoFotos, setEnviandoFotos] = useState(false);
+  const fotoInputRef = useRef(null);
   const repaginacaoTimerRef = useRef(null);
   const edicaoEmAndamentoRef = useRef(null); // { key, campo, cursorOffset }
 
@@ -240,6 +242,141 @@ export default function PropostaPreviewEditavel() {
     doc.querySelectorAll('.proposal-page[data-generated="1"] [data-clausula-key]:not([data-clausula-slot])').forEach((secao) => {
       injetarControlesClausula(doc, secao);
     });
+    ativarEdicaoFotos(doc);
+  }
+
+  // Fotos avulsas: o template as renderiza como overlays .proposta-foto (posição em mm
+  // sobre a página) e as recria a CADA repaginação — por isso o wiring roda junto de
+  // ativarEdicaoClausulas (load + MutationObserver) e usa a flag ppeWired para não
+  // duplicar listeners num overlay já tratado.
+  function ativarEdicaoFotos(doc) {
+    doc.querySelectorAll('.proposta-foto').forEach((el) => {
+      if (el.dataset.ppeWired === '1') return;
+      el.dataset.ppeWired = '1';
+      const fotoId = el.getAttribute('data-foto-id');
+      el.style.cursor = 'move';
+      el.style.outline = '2px dashed #f59e0b';
+
+      const btnRemover = doc.createElement('button');
+      btnRemover.type = 'button';
+      btnRemover.textContent = '✕';
+      btnRemover.title = 'Remover foto';
+      btnRemover.style.cssText = 'position:absolute;top:-10px;right:-10px;z-index:6;width:20px;height:20px;line-height:1;font-size:11px;padding:0;border:1px solid #dc2626;background:#fee2e2;color:#dc2626;border-radius:50%;cursor:pointer;';
+      el.appendChild(btnRemover);
+
+      const alca = doc.createElement('div');
+      alca.title = 'Redimensionar';
+      alca.style.cssText = 'position:absolute;bottom:-6px;right:-6px;z-index:6;width:12px;height:12px;background:#f59e0b;border:1px solid #b45309;border-radius:2px;cursor:nwse-resize;';
+      el.appendChild(alca);
+
+      const pxPorMm = () => {
+        const pg = el.closest('.proposal-page');
+        return pg ? pg.getBoundingClientRect().width / 210 : 96 / 25.4;
+      };
+
+      const persistir = () => {
+        const pg = el.closest('.proposal-page');
+        if (!pg) return;
+        const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
+        const k = pg.getBoundingClientRect().width / 210;
+        const r = el.getBoundingClientRect();
+        const rp = pg.getBoundingClientRect();
+        api.put(`/propostas/${id}/fotos/${fotoId}`, {
+          pagina: paginas.indexOf(pg) + 1,
+          pos_x: (r.left - rp.left) / k,
+          pos_y: (r.top - rp.top) / k,
+          largura: r.width / k,
+        }).catch(() => toast.error('Erro ao salvar a posição da foto.'));
+      };
+
+      el.onmousedown = (e) => {
+        if (e.target === btnRemover || e.target === alca) return;
+        e.preventDefault();
+        const k = pxPorMm();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startLeft = parseFloat(el.style.left) || 0;
+        const startTop = parseFloat(el.style.top) || 0;
+        const aoMover = (ev) => {
+          el.style.left = `${startLeft + (ev.clientX - startX) / k}mm`;
+          el.style.top = `${startTop + (ev.clientY - startY) / k}mm`;
+        };
+        const aoSoltar = (ev) => {
+          doc.removeEventListener('mousemove', aoMover);
+          doc.removeEventListener('mouseup', aoSoltar);
+          // Soltou sobre outra página? Reparenta preservando a posição visual — é o que
+          // permite arrastar a foto para QUALQUER página do documento.
+          const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
+          const alvo = paginas.find((p) => {
+            const rr = p.getBoundingClientRect();
+            return ev.clientY >= rr.top && ev.clientY <= rr.bottom;
+          });
+          const atual = el.closest('.proposal-page');
+          if (alvo && atual && alvo !== atual) {
+            const rEl = el.getBoundingClientRect();
+            const rAlvo = alvo.getBoundingClientRect();
+            const kk = rAlvo.width / 210;
+            alvo.appendChild(el);
+            el.style.left = `${(rEl.left - rAlvo.left) / kk}mm`;
+            el.style.top = `${(rEl.top - rAlvo.top) / kk}mm`;
+          }
+          persistir();
+        };
+        doc.addEventListener('mousemove', aoMover);
+        doc.addEventListener('mouseup', aoSoltar);
+      };
+
+      alca.onmousedown = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const k = pxPorMm();
+        const startX = e.clientX;
+        const startW = parseFloat(el.style.width) || 80;
+        const aoMover = (ev) => {
+          el.style.width = `${Math.max(10, startW + (ev.clientX - startX) / k)}mm`;
+        };
+        const aoSoltar = () => {
+          doc.removeEventListener('mousemove', aoMover);
+          doc.removeEventListener('mouseup', aoSoltar);
+          persistir();
+        };
+        doc.addEventListener('mousemove', aoMover);
+        doc.addEventListener('mouseup', aoSoltar);
+      };
+
+      btnRemover.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!window.confirm('Remover esta foto da proposta?')) return;
+        try {
+          await api.delete(`/propostas/${id}/fotos/${fotoId}`);
+          el.remove();
+          toast.success('Foto removida.');
+        } catch (_) {
+          toast.error('Erro ao remover foto.');
+        }
+      };
+    });
+  }
+
+  async function enviarFotos(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    setEnviandoFotos(true);
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('foto', file);
+        await api.post(`/propostas/${id}/fotos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+      toast.success(files.length > 1 ? `${files.length} fotos adicionadas. Arraste-as para posicionar.` : 'Foto adicionada. Arraste-a para posicionar.');
+      carregarPreview();
+    } catch (_) {
+      toast.error('Erro ao enviar foto.');
+    } finally {
+      setEnviandoFotos(false);
+    }
   }
 
   function repaginarERestaurar(doc) {
@@ -420,6 +557,22 @@ export default function PropostaPreviewEditavel() {
           >
             <FiRefreshCw /> Resetar cláusulas
           </button>
+          <button
+            className="ppe-btn"
+            onClick={() => fotoInputRef.current && fotoInputRef.current.click()}
+            disabled={enviandoFotos}
+            title="Adicionar foto(s) à proposta — depois arraste para posicionar onde quiser"
+          >
+            <FiImage /> {enviandoFotos ? 'Enviando...' : 'Adicionar foto'}
+          </button>
+          <input
+            ref={fotoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            style={{ display: 'none' }}
+            onChange={enviarFotos}
+          />
           <button
             className="ppe-btn"
             onClick={() => setMostrarHistorico(true)}
