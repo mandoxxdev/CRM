@@ -1103,14 +1103,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       <section class="block stack-md allow-break clausula-corpo">
         <h3>5.20 EXTINÇÃO DO CONTRATO</h3>
-        <p>O presente contrato estará imediatamente extinto entre as PARTES, em decorrência de causas supervenientes à sua celebração, sem nenhum ônus a qualquer das Partes e independentemente de qualquer notificação ou interpelação judicial ou extrajudicial nas seguintes hipóteses:</p>
-        <div class="list-num">
-          <p>1) Decretação de falência da CONTRATADA, sem prejuízo da obrigação de indenizar.</p>
-          <p>2) Caso fortuito ou força maior: O evento proveniente de caso fortuito ou força maior não poderá perdurar por mais de 30 (trinta) dias corridos, contados do evento inesperado e inevitável.</p>
-          <p>3) Descumprimento do contrato: Em caso de quaisquer infrações contratuais constatadas, a Parte infratora será notificada, por escrito, para, no prazo de até 05 (cinco) dias úteis sanar o problema ou a falta notificada pela Parte inocente.</p>
-          <p>3.1) Caso a Parte infratora não solucione o problema ou a falta notificada no prazo assinalado nesta cláusula, o contrato será considerado, automática e totalmente, descumprido, e, consequentemente, resolvido, independentemente de qualquer interpelação judicial ou extrajudicial.</p>
-          <p>4) Distrato: As partes poderão, a qualquer tempo, mediante comunicação escrita enviada com, no mínimo, 30 (trinta) dias de antecedência, extinguir o presente contrato sem aplicação de qualquer ônus, desde que esse distrato seja de comum acordo.</p>
-        </div>
+        <p>O presente contrato poderá ser extinto entre as PARTES, sem aplicação de ônus, nas seguintes hipóteses:</p>
+        <ul>
+          <li>Decretação de falência da CONTRATADA, sem prejuízo das indenizações eventualmente aplicáveis;</li>
+          <li>Caso fortuito ou força maior que impeça a continuidade do contrato por período superior a 30 (trinta) dias corridos;</li>
+          <li>Descumprimento de obrigação contratual não corrigido pela Parte infratora no prazo de até 05 (cinco) dias úteis, contado do recebimento de notificação por escrito;</li>
+          <li>Distrato de comum acordo entre as PARTES, formalizado por escrito, mediante aviso prévio mínimo de 30 (trinta) dias.</li>
+        </ul>
       </section>
       </section>
 
