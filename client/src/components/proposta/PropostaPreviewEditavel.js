@@ -44,6 +44,18 @@ export default function PropostaPreviewEditavel() {
   const repaginacaoTimerRef = useRef(null);
   const edicaoEmAndamentoRef = useRef(null); // { key, campo, cursorOffset }
 
+  // Número real da proposta (ex.: "062-03-MH-2026-REV01") — o que o cliente reconhece,
+  // em vez do id interno da tabela. Extraído do HTML do preview, que já está carregado:
+  // evita uma segunda requisição a GET /propostas/:id, cuja query usa `pr.*` e traz
+  // html_rendered (~5MB) junto só para ler um campo.
+  // A âncora .page-header-num é estável de propósito — há teste de regressão garantindo
+  // que o número do cabeçalho não suma (tests/propostaHeaderNumero.test.js).
+  const numeroProposta = (() => {
+    const m = /class="page-header-num"[^>]*>([^<]*)</.exec(html || '');
+    if (!m) return '';
+    return m[1].replace(/^\s*N[ºo°]?\s*/i, '').trim();
+  })();
+
   const carregarPreview = useCallback(async () => {
     setLoading(true);
     try {
@@ -751,7 +763,12 @@ export default function PropostaPreviewEditavel() {
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `proposta-${id}.pdf`;
+      // O servidor manda o nome certo no Content-Disposition, mas baixamos via blob:
+      // nesse caminho o navegador ignora o cabeçalho e usa o `download` daqui. Sanitiza
+      // os caracteres que o Windows não aceita em nome de arquivo.
+      a.download = numeroProposta
+        ? `proposta-${numeroProposta.replace(/[\\/:*?"<>|]/g, '-')}.pdf`
+        : `proposta-${id}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -780,7 +797,9 @@ export default function PropostaPreviewEditavel() {
       {/* Toolbar */}
       <div className="ppe-toolbar">
         <div className="ppe-toolbar-left">
-          <span className="ppe-titulo">Proposta #{id}</span>
+          <span className="ppe-titulo">
+            {numeroProposta ? `Proposta Nº ${numeroProposta}` : `Proposta #${id}`}
+          </span>
           {mudancasPendentes && <span className="ppe-badge-pendente">Alterações não salvas</span>}
         </div>
         <div className="ppe-toolbar-actions">
