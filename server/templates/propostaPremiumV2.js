@@ -1414,8 +1414,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     /* Variável "Manual na Proposta": vazia vira um espaço em branco sublinhado (a linha
        sempre aparece — é o convite para preencher no editor, e sai assim no PDF se o
-       vendedor não preencher). Preenchida, o texto sai normal, sem sublinhado. */
-    .variavel-manual { display: inline-block; min-width: 10mm; text-indent: 0; }
+       vendedor não preencher). Preenchida, o texto sai normal, sem sublinhado.
+       white-space: pre-wrap — o valor pode ter VÁRIAS linhas (Enter no editor grava \n);
+       vertical-align: top alinha a 1ª linha do valor com o rótulo. */
+    .variavel-manual { display: inline-block; min-width: 10mm; text-indent: 0; white-space: pre-wrap; vertical-align: top; text-align: left; }
     .variavel-manual:empty { min-width: 40mm; border-bottom: 1px solid var(--ink); }
 
     .equip-photo-float { float: right; width: 35%; margin: 0 0 4mm 6mm; text-align: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }

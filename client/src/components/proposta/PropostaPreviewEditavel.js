@@ -257,13 +257,39 @@ export default function PropostaPreviewEditavel() {
       el.style.background = '#fffde7';
       el.style.borderRadius = '3px';
       el.style.cursor = 'text';
+      // Enter = quebra de linha DENTRO do valor (o campo aceita várias linhas). Inserimos
+      // '\n' como TEXTO (o CSS white-space: pre-wrap o exibe como linha nova) em vez de
+      // deixar o contentEditable criar <div>/<br> — assim o valor continua texto puro e
+      // persiste/re-renderiza sem HTML.
+      el.onkeydown = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        try {
+          doc.execCommand('insertText', false, '\n');
+        } catch (_) {
+          const sel = doc.defaultView.getSelection();
+          if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0);
+            range.deleteContents();
+            const no = doc.createTextNode('\n');
+            range.insertNode(no);
+            range.setStartAfter(no);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+          el.oninput && el.oninput();
+        }
+      };
       el.oninput = () => {
         const chave = el.getAttribute('data-variavel-manual');
         const item = el.getAttribute('data-variavel-item');
         const fonte = doc.querySelector(
           `#proposalSource [data-variavel-manual="${chave}"][data-variavel-item="${item}"]`
         );
-        if (fonte) fonte.textContent = el.textContent;
+        // innerText (e não textContent): converte <br>/<div> que o navegador porventura
+        // crie (ex.: texto colado) em '\n', mantendo o valor como texto puro multi-linha.
+        if (fonte) fonte.textContent = el.innerText;
         setMudancasPendentes(true);
       };
     });
