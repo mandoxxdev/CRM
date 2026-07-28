@@ -36,7 +36,7 @@ test('clausulasDefault exporta os textos da 5.24 e os inclui na lista padrão, e
   const i25 = nums.indexOf('5.25');
   assert(i22 > -1 && i23 > -1 && i24 > -1 && i24b > -1 && i25 > -1, `faltou alguma cláusula na lista padrão: ${nums.join(',')}`);
   assert(i22 < i23 && i23 < i24 && i24 < i24b && i24b < i25, `ordem errada na lista padrão: ${nums.join(',')}`);
-  assert(lista.find(c => c.numero === '5.23').titulo === 'EXCLUSO DO FORNECIMENTO', '5.23 deve ser EXCLUSO');
+  assert(lista.find(c => c.numero === '5.23').titulo === 'ITENS EXCLUSOS DO FORNECIMENTO', '5.23 deve ser ITENS EXCLUSOS');
   assert(new Set(nums).size === nums.length, 'números duplicados na lista padrão (colidiriam em data-clausula-key="default-N")');
 });
 
@@ -170,10 +170,10 @@ test('a 5.24 aparece uma única vez (não duplica entre a lista de cláusulas e 
   const ocorrencias = (html.match(/5\.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS/g) || []).length;
   assert(ocorrencias === 1, `título da 5.24 aparece ${ocorrencias}x (esperado 1)`);
   const iForo = html.indexOf('5.22 FORO');
-  const iExcluso = html.indexOf('5.23 EXCLUSO');
+  const iExcluso = html.indexOf('5.23 ITENS EXCLUSOS');
   const i524 = html.indexOf('5.24 PREÇO');
   const i525 = html.indexOf('5.25 CONSIDERAÇÃO FINAL');
-  assert(iForo < iExcluso && iExcluso < i524 && i524 < i525, 'ordem errada: 5.22 → 5.23 EXCLUSO → 5.24 PREÇO → 5.25');
+  assert(iForo < iExcluso && iExcluso < i524 && i524 < i525, 'ordem errada: 5.22 → 5.23 ITENS EXCLUSOS → 5.24 PREÇO → 5.25');
 });
 
 test('round-trip do título: o que o editor lê de volta é EXATAMENTE o título salvo', () => {
@@ -203,7 +203,7 @@ test('o prefixo numérico do 2º bloco NÃO é exibido (o documento mostra só "
 test('ramo hardcoded (sem cláusulas salvas) traz os MESMOS textos da 5.24', () => {
   const html = gerar(null);
   assert(html.includes('5.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS'), 'faltou o título da 5.24 no ramo fixo');
-  assert(html.includes('5.23 EXCLUSO DO FORNECIMENTO'), 'faltou EXCLUSO 5.23 no ramo fixo');
+  assert(html.includes('5.23 ITENS EXCLUSOS DO FORNECIMENTO'), 'faltou ITENS EXCLUSOS 5.23 no ramo fixo');
   assert(html.includes('A CONTRATANTE pagará pelos equipamentos'), 'faltou a introdução da 5.24 no ramo fixo');
   assert(html.includes('Primeira Parcela/Entrada'), 'faltou a condição de pagamento no ramo fixo');
   assert(html.includes('TOTAL DA PROPOSTA') && html.includes('Ref. FINAME'), 'faltou tabela no ramo fixo');

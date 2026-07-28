@@ -29,13 +29,15 @@ async function render(clausulas) {
     const tocVisivel = !!toc && toc.style.display !== 'none';
     const tocOverflow = pc ? pc.scrollHeight > pc.clientHeight + 2 : false;
     const vis = Array.from(document.querySelectorAll('.proposal-page')).filter(p => p.style.display !== 'none');
-    // numeração consistente: página i (1-based) mostra js-page-number == i e count == vis.length
+    // numeração consistente: a capa NÃO conta — a página numerável i (1-based, sem
+    // .cover-page) mostra js-page-number == i e count == total de numeráveis
     let numeracaoOk = true;
-    vis.forEach((p, i) => {
+    const numeraveis = vis.filter(p => !p.classList.contains('cover-page'));
+    numeraveis.forEach((p, i) => {
       const n = p.querySelector('.js-page-number');
       const c = p.querySelector('.js-page-count');
       if (n && String(i + 1) !== n.textContent) numeracaoOk = false;
-      if (c && String(vis.length) !== c.textContent) numeracaoOk = false;
+      if (c && String(numeraveis.length) !== c.textContent) numeracaoOk = false;
     });
     return { tocVisivel, tocOverflow, totalVisiveis: vis.length, numeracaoOk };
   });

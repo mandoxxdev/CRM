@@ -28,8 +28,33 @@ const CLAUSULA_524_CONDICAO = {
   conteudo: '<p><strong>Primeira Parcela/Entrada:</strong> – 40% (quarenta por cento) sobre o valor total da proposta, pago na assinatura da presente proposta técnica comercial, via transferência bancaria.</p><p><strong>Segunda Parcela/Liberação:</strong> – 30% (trinta por cento) sobre o valor total da proposta, pago no comunicado de liberação do pedido, via transferência bancaria.</p><p><strong>Terceira Parcela/Saldo:</strong> – 30% (trinta por cento) sobre o valor total da proposta, será pago via boleto bancário, com prazo para pagamento de 28 DDL, contados do comunicado de liberação do pedido.</p><p>Em caso de inadimplemento por parte da CONTRATANTE quanto ao pagamento dos serviços contratados, deverá incidir sobre o valor do contrato multa pecuniária de 2% (dois por cento), juros de mora de 1% (um por cento) ao mês e correção monetária até a data do efetivo pagamento.</p>'
 };
 
+// Seções 1–3 do documento (OBJETIVO / ELABORAÇÃO / OFERTA). São cláusulas de verdade —
+// editáveis e persistidas pelo MESMO fluxo das 5.x — mas moram em SLOT FIXO no começo do
+// documento (data-clausula-slot="intro" no template): ficam fora da sequência de
+// numeração "5.x" e não podem ser reordenadas/removidas pela barra de controles.
+// O numero traz o ponto ("1.") porque o título exibido é "1. OBJETIVO DA PROPOSTA" e o
+// /clausulas/inicializar grava `${numero} ${titulo}`.
+const CLAUSULAS_INTRO = [
+  {
+    numero: '1.',
+    titulo: 'OBJETIVO DA PROPOSTA',
+    conteudo: '<p>Apresentar condições técnicas e comerciais, para fornecimento de equipamentos e/ou serviços industriais.</p>'
+  },
+  {
+    numero: '2.',
+    titulo: 'ELABORAÇÃO DA PROPOSTA',
+    conteudo: '<p>A proposta apresentada a seguir, foi elaborada atendendo às solicitações e especificações informadas pelo CONTRATANTE, através de reunião, ligação e/ou e-mail.</p><p>Deve-se atentar, que os itens oferecidos estão descriminados e especificados nesta proposta técnica comercial. Os parâmetros e dimensionamentos dos equipamentos e garantias relacionadas nesta proposta, estão baseadas nas condições e características do produtos, disponibilizadas pelo CONTRATANTE, conforme dados resumidos apresentados no decorrer desta proposta.</p><p>Qualquer alteração, inclusão ou exclusão no escopo ofertado, deve ser solicitado, para revisão deste documento.</p>'
+  },
+  {
+    numero: '3.',
+    titulo: 'OFERTA',
+    conteudo: '<p>A presente proposta foi elaborada com base nas informações técnicas, operacionais e comerciais disponibilizadas pela CONTRATANTE até a data de sua emissão.</p><p>Os equipamentos e/ou serviços serão fornecidos exclusivamente conforme as características, quantidades, capacidades, materiais, componentes, limites e condições expressamente descritos no Item 4 – Escopo de Fornecimento.</p><p>Qualquer equipamento, componente, acessório, serviço, instalação, documentação ou atividade que não esteja expressamente indicado nesta proposta não integra o fornecimento da CONTRATADA, ainda que seja necessário à operação completa do empreendimento, salvo quando formalmente incluído por meio de revisão da proposta ou aditivo contratual.</p><p>Alterações nas condições do produto, processo, instalação, capacidade produtiva, tensão elétrica, área classificada, normas aplicáveis ou demais informações inicialmente fornecidas poderão resultar em revisão técnica, comercial e de prazo.</p>'
+  }
+];
+
 function getClausulasDefault() {
   return [
+    ...CLAUSULAS_INTRO,
     {
       numero: '5.1',
       titulo: 'PRAZO DE ENTREGA',
@@ -142,8 +167,8 @@ function getClausulasDefault() {
     },
     {
       numero: '5.23',
-      titulo: 'EXCLUSO DO FORNECIMENTO',
-      conteudo: '<p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p><ol style="padding-left:25px;line-height:2;"><li>Transporte e seguro dos equipamentos e suas partes;</li><li>Serviços de movimentação, como munck, guindaste, empilhadeira e demais que se fizerem necessários;</li><li>Serviços e materiais de instalação e infraestrutura, como elétrica, hidráulica, pneumática, civil, alvenaria e demais que se fizerem necessários;</li><li>Despesas com translado, estadia e alimentação da equipe de montagem e startup;</li><li>Sapatas, brocas, bases, e outros tipos de reforço necessário;</li><li>Consultoria química, de processo, para obtenção de licenças, e de qualquer outra natureza;</li><li>Laudo e certificados de calibração/aferição, como RBC, ISO, e outros que se fizerem necessários;</li><li>Equipamentos, acessórios e periféricos, como compressor de ar, exaustores, torre de resfriamento, unidade Chiller, bombas, tachos, tanques, reservatórios, balanças, envasadoras e outros que se fizerem necessários;</li><li>E demais itens não citados expressamente nesta proposta técnica comercial.</li></ol>'
+      titulo: 'ITENS EXCLUSOS DO FORNECIMENTO',
+      conteudo: '<p>Estão expressamente exclusos do escopo de fornecimento da CONTRATADA, ficando sob total responsabilidade da CONTRATANTE, o fornecimento, contratação, execução, disponibilização, custeio e/ou manutenção dos itens abaixo relacionados, salvo quando houver menção expressa em contrário nesta proposta técnica comercial:</p><ol style="padding-left:25px;line-height:2;"><li>Transporte, frete e seguro dos equipamentos, componentes, acessórios, peças e demais partes integrantes do fornecimento, incluindo coletas, remoções, entregas intermediárias, içamentos, armazenagens externas, bem como quaisquer seguros de transporte nacional ou internacional;</li><li>Serviços de movimentação e içamento, tais como munck, guindaste, empilhadeira, caminhão munkado, pórtico, talha, plataforma elevatória, rigging, amarração de carga e demais recursos e serviços que se fizerem necessários para carga, descarga, remoção, posicionamento e instalação dos equipamentos;</li><li>Serviços, materiais e infraestrutura de instalação, incluindo, mas não se limitando, a elétrica, hidráulica, pneumática, civil, alvenaria, serralheria, tubulação, isolamento, pintura, drenagem, exaustão, ventilação, bases metálicas e demais adequações necessárias no local de instalação;</li><li>Obras civis e adequações estruturais, compreendendo fundações, pisos, reforços estruturais, aberturas, demolições, recomposições, canaletas, valas, suportes, chumbadores, inserts, mezaninos, plataformas, escadas, guarda-corpos e quaisquer intervenções necessárias para recebimento e operação dos equipamentos;</li><li>Despesas com translado, hospedagem, estadia, alimentação e logística da equipe técnica da CONTRATADA para serviços de montagem, acompanhamento, comissionamento, startup, assistência técnica, treinamento, inspeções ou visitas técnicas, quando aplicáveis;</li><li>Sapatas, brocas, bases, reforços e elementos de fixação estrutural, bem como quaisquer recursos de apoio mecânico, estrutural ou civil necessários à correta instalação, ancoragem, nivelamento e operação dos equipamentos;</li><li>Consultoria química, industrial, de processo, regulatória, ambiental ou de qualquer outra natureza, incluindo obtenção de licenças, alvarás, aprovações e liberações junto a órgãos públicos, concessionárias, entidades reguladoras, seguradoras ou certificadoras;</li><li>Laudos, certificados, ensaios e calibrações especiais, tais como RBC, ISO, certificações de organismos acreditados, aferições especiais, inspeções por terceiros, validações específicas, relatórios complementares e quaisquer documentos não expressamente previstos no escopo desta proposta;</li><li>Equipamentos, acessórios, utilidades e periféricos complementares, tais como compressor de ar, exaustores, ventiladores, torre de resfriamento, unidade Chiller, bombas, tachos, tanques, reservatórios, balanças, envasadoras, tubulações de interligação, válvulas, instrumentação complementar e demais itens auxiliares não expressamente indicados nesta proposta;</li><li>Consumíveis, insumos e utilidades operacionais, incluindo energia elétrica, água, ar comprimido, vapor, fluido térmico, óleo, combustível, produtos de limpeza, matéria-prima, produto para testes, bem como demais insumos necessários para operação, testes, partida e validação do sistema;</li><li>Mão de obra de terceiros necessária para execução de serviços complementares, inclusive eletricistas, encanadores, soldadores, montadores, pedreiros, operadores de empilhadeira, riggers, técnicos de automação e profissionais de apoio não expressamente previstos como responsabilidade da CONTRATADA;</li><li>Adequações normativas e exigências específicas do local de instalação, incluindo itens relacionados à NR-10, NR-12, NR-13, AVCB, prevenção e combate a incêndio, aterramento, SPDA, exaustão, enclausuramento, proteção coletiva, sinalização de segurança e demais exigências legais ou internas da CONTRATANTE, quando não expressamente contempladas no escopo;</li><li>Serviços de manutenção preventiva, corretiva ou preditiva, bem como reposição de peças por desgaste natural, salvo quando expressamente cobertos pelas condições de garantia estabelecidas nesta proposta técnica comercial;</li><li>Custos decorrentes de paralisações, improdutividade, indisponibilidade operacional, perdas de produção, perdas de receitas, lucros cessantes ou danos indiretos relacionados à instalação, operação ou indisponibilidade dos equipamentos;</li><li>Quaisquer outros itens, serviços, materiais, documentos, recursos, adequações ou fornecimentos não citados expressamente nesta proposta técnica comercial como sendo de responsabilidade da CONTRATADA.</li></ol>'
     },
     // Os TEXTOS da 5.24 entram na lista padrão (as TABELAS não — ver comentário acima):
     // é o que faz a edição da 5.24 percorrer o mesmo caminho de persistência das demais
@@ -168,6 +193,7 @@ function resolverClausulasParaPreview(clausulasAtivas, embedPreview) {
 module.exports = {
   getClausulasDefault,
   resolverClausulasParaPreview,
+  CLAUSULAS_INTRO,
   CLAUSULA_524_PRECO,
   CLAUSULA_524_CONDICAO,
   // aliases legados (testes e imports antigos)

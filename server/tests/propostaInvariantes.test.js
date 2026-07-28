@@ -71,12 +71,13 @@ async function medirInvariantes(browser, clausulas, rotulo) {
     const pagCondicao = pagCom('Primeira Parcela/Entrada');
     const pagAssin = pagCom('Junior Machado');
 
-    // I5 — numeração
+    // I5 — numeração (a capa não conta: números e total são sobre as páginas sem .cover-page)
     let numeracaoOk = true;
-    vis.forEach((p, i) => {
+    const numeraveis = vis.filter(p => !p.classList.contains('cover-page'));
+    numeraveis.forEach((p, i) => {
       const n = p.querySelector('.js-page-number'); const c = p.querySelector('.js-page-count');
       if (n && String(i + 1) !== n.textContent) numeracaoOk = false;
-      if (c && String(vis.length) !== c.textContent) numeracaoOk = false;
+      if (c && String(numeraveis.length) !== c.textContent) numeracaoOk = false;
     });
 
     // I6 — overflow do rodapé

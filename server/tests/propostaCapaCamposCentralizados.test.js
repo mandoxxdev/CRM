@@ -203,8 +203,9 @@ async function medir(browser, forPdfServer) {
 
     checar(!capa.temRodape, `C6 [${rotulo}]: capa sem .page-footer`);
     checar(!capa.temTextoDeRodape, `C6 [${rotulo}]: capa sem dados da empresa nem "Pág."`);
-    checar(capa.numeroDaSegunda === '2' && capa.totalNaSegunda === String(capa.totalVisiveis),
-      `C6 [${rotulo}]: numeracao intacta — 2a pagina marca ${capa.numeroDaSegunda}/${capa.totalNaSegunda} de ${capa.totalVisiveis} visiveis`);
+    // A capa nao conta na numeracao: a 2a pagina visivel e a "Pag. 1" e o total exclui a capa.
+    checar(capa.numeroDaSegunda === '1' && capa.totalNaSegunda === String(capa.totalVisiveis - 1),
+      `C6 [${rotulo}]: capa fora da numeracao — 2a pagina marca ${capa.numeroDaSegunda}/${capa.totalNaSegunda} de ${capa.totalVisiveis} visiveis`);
   }
 
   await browser.close();

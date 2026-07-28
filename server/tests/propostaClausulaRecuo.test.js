@@ -64,7 +64,9 @@ async function medir(browser, templateConfig, rotulo) {
         if (!h2) return;
         const t = (h2.textContent || '').trim();
         if (!/^(1\. OBJETIVO|2\. ELABORA)/.test(t)) return;
-        Array.from(sec.querySelectorAll(':scope > p')).forEach((p) => {
+        // As seções 1–3 viraram cláusulas editáveis: os <p> moram no wrapper
+        // [data-clausula-campo="conteudo"] (e não mais como filhos diretos da section).
+        Array.from(sec.querySelectorAll(':scope > p, :scope > [data-clausula-campo="conteudo"] > p')).forEach((p) => {
           if (p.getBoundingClientRect().height > 0) secoes12.push({ secao: t.slice(0, 14), recuo: recuoDe(p) });
         });
       });

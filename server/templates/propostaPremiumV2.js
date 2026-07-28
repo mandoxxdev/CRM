@@ -7,7 +7,7 @@ const {
   uploadsCoverDir,
 } = require('../config/paths');
 const propostaEngine = require('../propostaCompositionEngine');
-const { getClausulasDefault, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
+const { getClausulasDefault, CLAUSULAS_INTRO, CLAUSULA_524_PRECO, CLAUSULA_524_CONDICAO, CLAUSULA_523_PRECO, CLAUSULA_523_CONDICAO } = require('../clausulasDefault');
 
 // Substitui placeholders (simples e avançados: {{#if}}, {{#each}}, etc.) — usa motor de composição
 function substituirPlaceholdersProposta(html, proposta, itens, totais) {
@@ -623,6 +623,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '');
       if (tituloNorm.startsWith('excluso do fornecimento')) return false;
+      if (tituloNorm.startsWith('itens exclusos do fornecimento')) return false;
       if (tituloNorm.startsWith('preco, condicao de pagamento e impostos')) return true;
       if (tituloNorm === 'condicao de pagamento:') return true;
       const num = String((c && c.numero) || '').trim();
@@ -633,6 +634,27 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       return false;
     };
     const ehPos525 = (c) => subNumeroDe(c) >= 25 || ehConsideracaoFinal(c);
+
+    // ===== Seções 1–3 (OBJETIVO / ELABORAÇÃO / OFERTA) — cláusulas em SLOT FIXO =====
+    // Mesmo padrão dos textos da 5.24: cláusulas de verdade (editáveis e persistidas pelo
+    // fluxo comum), mas renderizadas em posição fixa ANTES da seção 4 e FORA da sequência
+    // "5.x". Reconhecidas pelo prefixo numérico de topo ("1.", "2.", "3." — nunca "5.x")
+    // OU pelo título, porque o usuário pode editar o título e apagar o número (mesma
+    // defesa do ehConsideracaoFinal). Sem esta extração, uma seção salva no banco cairia
+    // no meio da lista de cláusulas da seção 5 e seria renumerada como "5.x".
+    const ehSecaoIntro = (c) => {
+      const alvo = String((c && c.numero != null && String(c.numero).trim()) ? c.numero : ((c && c.titulo) || '')).trim();
+      if (/^[123]\.(?!\d)/.test(alvo)) return true;
+      const tituloNorm = String((c && c.titulo) || '')
+        .replace(/^\s*\d+(\.\d+)*\.?\s*/, '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '');
+      return tituloNorm.startsWith('objetivo da proposta')
+        || tituloNorm.startsWith('elaboracao da proposta')
+        || tituloNorm === 'oferta';
+    };
 
     // ===== Seção 5.23 — MISTA: textos editáveis + tabelas calculadas =====
     // As TABELAS (preços gerada dos itens, FINAME/BNDES e fiscais) continuam sendo montadas
@@ -646,6 +668,29 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const clausulasCustomLista = (templateConfig && Array.isArray(templateConfig.clausulas_custom))
       ? templateConfig.clausulas_custom
       : [];
+
+    // Seções 1–3: vêm do banco quando a proposta tem cláusulas salvas, senão dos padrões
+    // de CLAUSULAS_INTRO — a MESMA fonte nos dois ramos de render (PDF nunca diverge do
+    // preview). data-clausula-slot="intro" dá a elas o comportamento dos textos da 5.24:
+    // texto editável no preview, mas sem barra de mover/remover e fora da renumeração 5.x.
+    // O conteúdo fica num wrapper .stack-md (não .stack-sm) para preservar o espaçamento
+    // que os parágrafos dessas seções sempre tiveram como filhos diretos da section.
+    const clausulasIntroDoBanco = clausulasCustomLista.filter(ehSecaoIntro);
+    const blocosIntro = clausulasIntroDoBanco.length > 0 ? clausulasIntroDoBanco : CLAUSULAS_INTRO;
+    // Key temp-* quando as seções NÃO vêm da lista custom (proposta LEGADA, com cláusulas
+    // salvas antes das seções 1–3 existirem como cláusulas): igual ao contrato da 5.24,
+    // a 1ª edição as cria como cláusulas novas no banco. Quando a lista custom as traz
+    // (banco OU defaults resolvidos), clausulaKey dá id/default-N e o save flui normal.
+    const keyIntro = (c, i) => (clausulasIntroDoBanco.length > 0 ? clausulaKey(c, i) : `temp-intro-${i}`);
+    const secoesIntroHtml = blocosIntro.map((c, i) => {
+      const key = esc(keyIntro(c, i));
+      const tituloCompleto = String(c.numero ? `${c.numero} ${c.titulo}` : (c.titulo || '')).trim();
+      return `<section class="block stack-md allow-break clausula-corpo" data-clausula-key="${key}" data-clausula-slot="intro">
+        <h2 data-clausula-campo="titulo">${esc(tituloCompleto)}</h2>
+        <div class="stack-md" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div>
+      </section>`;
+    }).join('\n\n      ');
+
     const clausulas524DoBanco = clausulasCustomLista.filter(ehTextoDa524);
     const blocos524 = clausulas524DoBanco.length > 0
       ? clausulas524DoBanco
@@ -836,7 +881,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             <h3 data-clausula-campo="titulo">${esc(c.numero ? `${c.numero} ${c.titulo}` : c.titulo)}</h3>
             <div class="stack-sm" data-clausula-campo="conteudo">${conteudoClausulaHtml(c.conteudo)}</div>
           </section>`;
-        const [primeiraClausula, ...demaisClausulas] = templateConfig.clausulas_custom;
+        // As seções 1–3 (slot intro) saem da lista ANTES do destructuring: elas são
+        // renderizadas em posição fixa no começo do documento (secoesIntroHtml) e, sem
+        // este filtro, a "1. OBJETIVO DA PROPOSTA" viraria a primeira cláusula da seção 5.
+        const listaCorpoClausulas = templateConfig.clausulas_custom.filter((c) => !ehSecaoIntro(c));
+        const [primeiraClausula, ...demaisClausulas] = listaCorpoClausulas;
         // As cláusulas do slot 23 (os TEXTOS da 5.23) e as >= 5.24 (a CONSIDERAÇÃO FINAL e
         // qualquer outra além dela) saem daqui: as do slot 23 são renderizadas DENTRO de
         // sec523PrecoHtml, intercaladas com as tabelas; as >= 24 vêm DEPOIS dele.
@@ -880,25 +929,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           : `<p class="muted">Tabela de dados cadastrais não disponível.</p>`}
       </section>
 
-      <section class="block stack-md allow-break clausula-corpo">
-        <h2>1. OBJETIVO DA PROPOSTA</h2>
-        <p>Apresentar condições técnicas e comerciais, para fornecimento de equipamentos e/ou serviços industriais.</p>
-      </section>
-
-      <section class="block stack-md allow-break clausula-corpo">
-        <h2>2. ELABORAÇÃO DA PROPOSTA</h2>
-        <p>A proposta apresentada a seguir, foi elaborada atendendo às solicitações e especificações informadas pelo CONTRATANTE, através de reunião, ligação e/ou e-mail.</p>
-        <p>Deve-se atentar, que os itens oferecidos estão descriminados e especificados nesta proposta técnica comercial. Os parâmetros e dimensionamentos dos equipamentos e garantias relacionadas nesta proposta, estão baseadas nas condições e características do produtos, disponibilizadas pelo CONTRATANTE, conforme dados resumidos apresentados no decorrer desta proposta.</p>
-        <p>Qualquer alteração, inclusão ou exclusão no escopo ofertado, deve ser solicitado, para revisão deste documento.</p>
-      </section>
-
-      <section class="block stack-md allow-break clausula-corpo">
-        <h2>3. OFERTA</h2>
-        <p>A presente proposta foi elaborada com base nas informações técnicas, operacionais e comerciais disponibilizadas pela CONTRATANTE até a data de sua emissão.</p>
-        <p>Os equipamentos e/ou serviços serão fornecidos exclusivamente conforme as características, quantidades, capacidades, materiais, componentes, limites e condições expressamente descritos no Item 4 – Escopo de Fornecimento.</p>
-        <p>Qualquer equipamento, componente, acessório, serviço, instalação, documentação ou atividade que não esteja expressamente indicado nesta proposta não integra o fornecimento da CONTRATADA, ainda que seja necessário à operação completa do empreendimento, salvo quando formalmente incluído por meio de revisão da proposta ou aditivo contratual.</p>
-        <p>Alterações nas condições do produto, processo, instalação, capacidade produtiva, tensão elétrica, área classificada, normas aplicáveis ou demais informações inicialmente fornecidas poderão resultar em revisão técnica, comercial e de prazo.</p>
-      </section>
+      ${secoesIntroHtml}
 
       ${equipDescritivoHtml}
 
@@ -1127,18 +1158,25 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
 
       <section class="block stack-md allow-break clausula-corpo">
-        <h3>5.23 EXCLUSO DO FORNECIMENTO</h3>
-        <p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p>
-        <div class="list-num">
-          <p>1) Transporte e seguro dos equipamentos e suas partes;</p>
-          <p>2) Serviços de movimentação, como munck, guindaste, empilhadeira e demais que se fizerem necessários;</p>
-          <p>3) Serviços e materiais de instalação, como elétrica, hidráulica, pneumática, civil, alvenaria e demais que se fizerem necessários;</p>
-          <p>4) Despesas com translado, estadia e alimentação da equipe de montagem e startup;</p>
-          <p>5) Consultoria química, de processo, para obtenção de licenças, e de qualquer outra natureza;</p>
-          <p>6) Laudo e certificados de calibração/aferição, como RBC, ISO, e outros que se fizerem necessários.</p>
-          <p>7) Equipamentos, periféricos e acessórios, como compressor de ar, exaustores, torre de resfriamento, unidade Chiller, bombas, balanças, envasadoras, válvulas de abastecimento, sistema de exaustão, tubulações, automação de sólidos e líquidos, prolongadores de envase, células de cargas, plataformas, estrutura metálica, e outros que se fizerem necessários;</p>
-          <p>8) E demais itens não citados expressamente nesta proposta técnica comercial.</p>
-        </div>
+        <h3>5.23 ITENS EXCLUSOS DO FORNECIMENTO</h3>
+        <p>Estão expressamente exclusos do escopo de fornecimento da CONTRATADA, ficando sob total responsabilidade da CONTRATANTE, o fornecimento, contratação, execução, disponibilização, custeio e/ou manutenção dos itens abaixo relacionados, salvo quando houver menção expressa em contrário nesta proposta técnica comercial:</p>
+        <ol style="padding-left:25px;line-height:2;">
+          <li>Transporte, frete e seguro dos equipamentos, componentes, acessórios, peças e demais partes integrantes do fornecimento, incluindo coletas, remoções, entregas intermediárias, içamentos, armazenagens externas, bem como quaisquer seguros de transporte nacional ou internacional;</li>
+          <li>Serviços de movimentação e içamento, tais como munck, guindaste, empilhadeira, caminhão munkado, pórtico, talha, plataforma elevatória, rigging, amarração de carga e demais recursos e serviços que se fizerem necessários para carga, descarga, remoção, posicionamento e instalação dos equipamentos;</li>
+          <li>Serviços, materiais e infraestrutura de instalação, incluindo, mas não se limitando, a elétrica, hidráulica, pneumática, civil, alvenaria, serralheria, tubulação, isolamento, pintura, drenagem, exaustão, ventilação, bases metálicas e demais adequações necessárias no local de instalação;</li>
+          <li>Obras civis e adequações estruturais, compreendendo fundações, pisos, reforços estruturais, aberturas, demolições, recomposições, canaletas, valas, suportes, chumbadores, inserts, mezaninos, plataformas, escadas, guarda-corpos e quaisquer intervenções necessárias para recebimento e operação dos equipamentos;</li>
+          <li>Despesas com translado, hospedagem, estadia, alimentação e logística da equipe técnica da CONTRATADA para serviços de montagem, acompanhamento, comissionamento, startup, assistência técnica, treinamento, inspeções ou visitas técnicas, quando aplicáveis;</li>
+          <li>Sapatas, brocas, bases, reforços e elementos de fixação estrutural, bem como quaisquer recursos de apoio mecânico, estrutural ou civil necessários à correta instalação, ancoragem, nivelamento e operação dos equipamentos;</li>
+          <li>Consultoria química, industrial, de processo, regulatória, ambiental ou de qualquer outra natureza, incluindo obtenção de licenças, alvarás, aprovações e liberações junto a órgãos públicos, concessionárias, entidades reguladoras, seguradoras ou certificadoras;</li>
+          <li>Laudos, certificados, ensaios e calibrações especiais, tais como RBC, ISO, certificações de organismos acreditados, aferições especiais, inspeções por terceiros, validações específicas, relatórios complementares e quaisquer documentos não expressamente previstos no escopo desta proposta;</li>
+          <li>Equipamentos, acessórios, utilidades e periféricos complementares, tais como compressor de ar, exaustores, ventiladores, torre de resfriamento, unidade Chiller, bombas, tachos, tanques, reservatórios, balanças, envasadoras, tubulações de interligação, válvulas, instrumentação complementar e demais itens auxiliares não expressamente indicados nesta proposta;</li>
+          <li>Consumíveis, insumos e utilidades operacionais, incluindo energia elétrica, água, ar comprimido, vapor, fluido térmico, óleo, combustível, produtos de limpeza, matéria-prima, produto para testes, bem como demais insumos necessários para operação, testes, partida e validação do sistema;</li>
+          <li>Mão de obra de terceiros necessária para execução de serviços complementares, inclusive eletricistas, encanadores, soldadores, montadores, pedreiros, operadores de empilhadeira, riggers, técnicos de automação e profissionais de apoio não expressamente previstos como responsabilidade da CONTRATADA;</li>
+          <li>Adequações normativas e exigências específicas do local de instalação, incluindo itens relacionados à NR-10, NR-12, NR-13, AVCB, prevenção e combate a incêndio, aterramento, SPDA, exaustão, enclausuramento, proteção coletiva, sinalização de segurança e demais exigências legais ou internas da CONTRATANTE, quando não expressamente contempladas no escopo;</li>
+          <li>Serviços de manutenção preventiva, corretiva ou preditiva, bem como reposição de peças por desgaste natural, salvo quando expressamente cobertos pelas condições de garantia estabelecidas nesta proposta técnica comercial;</li>
+          <li>Custos decorrentes de paralisações, improdutividade, indisponibilidade operacional, perdas de produção, perdas de receitas, lucros cessantes ou danos indiretos relacionados à instalação, operação ou indisponibilidade dos equipamentos;</li>
+          <li>Quaisquer outros itens, serviços, materiais, documentos, recursos, adequações ou fornecimentos não citados expressamente nesta proposta técnica comercial como sendo de responsabilidade da CONTRATADA.</li>
+        </ol>
       </section>
 
       ${sec524PrecoHtml}
@@ -1663,9 +1701,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </div>
       ${/* Capa sem rodapé: é folha de rosto, não leva os dados da empresa nem "Pág. X/Y".
-           A numeração das demais páginas NÃO muda — numerarPaginas() conta .proposal-page
-           (a capa continua entrando no total) e só preenche os .js-page-number que existirem,
-           então a página seguinte segue sendo a 2. */''}
+           Ela também NÃO conta na numeração — numerarPaginas() exclui .cover-page do
+           número e do total, então a página seguinte à capa é a "Pág. 1/Y". */''}
     </section>
 
     <section class="proposal-page">
@@ -2130,12 +2167,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         });
 
         // Renumera Pág. X/Y sobre as páginas atualmente VISÍVEIS (display !== 'none'),
-        // devolvendo essa lista para reuso pelo sumário.
+        // devolvendo essa lista para reuso pelo sumário. A CAPA não conta: é folha de
+        // rosto (sem rodapé) — a página seguinte a ela é a "Pág. 1" e o total Y também a
+        // exclui. Cada página numerada recebe data-page-number, que o sumário reusa para
+        // exibir o MESMO número impresso no rodapé.
         function numerarPaginas() {
           const pages = Array.from(doc.querySelectorAll('.proposal-page')).filter(p => p.style.display !== 'none');
-          const total = pages.length;
-          pages.forEach((p, idx) => {
+          const numeraveis = pages.filter(p => !p.classList.contains('cover-page'));
+          const total = numeraveis.length;
+          pages.forEach(p => p.removeAttribute('data-page-number'));
+          numeraveis.forEach((p, idx) => {
             const n = idx + 1;
+            p.setAttribute('data-page-number', String(n));
             p.querySelectorAll('.js-page-number').forEach(el => { el.textContent = String(n); });
             p.querySelectorAll('.js-page-count').forEach(el => { el.textContent = String(total); });
           });
@@ -2147,8 +2190,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           const tocList = document.getElementById('tocList');
           if (!tocList) return;
           tocList.innerHTML = '';
-          pages.forEach((p, idx) => {
+          pages.forEach((p) => {
             if (p.id === 'tocPage') return;
+            // Número IMPRESSO no rodapé (data-page-number, atribuído por numerarPaginas,
+            // que exclui a capa) — não a posição no array, senão o sumário divergiria
+            // do "Pág. X/Y" em 1 depois que a capa deixou de contar.
+            const numeroImpresso = p.getAttribute('data-page-number');
+            if (!numeroImpresso) return;
             p.querySelectorAll('h2, h3').forEach((h) => {
               const txt = String(h.textContent || '').trim();
               if (!/^\\d+(\\.\\d+)?[.\\s]/.test(txt)) return;
@@ -2161,7 +2209,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               dots.className = 'toc-dots';
               const pageNo = document.createElement('span');
               pageNo.className = 'toc-page';
-              pageNo.textContent = String(idx + 1);
+              pageNo.textContent = numeroImpresso;
               row.appendChild(title);
               row.appendChild(dots);
               row.appendChild(pageNo);
