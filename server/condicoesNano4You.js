@@ -208,7 +208,6 @@ function getCondicoesGeraisNano4YouHTML(proposta, itens, totais, config, esc) {
             <li contenteditable="true">✓ Manual do equipamento;</li>
             <li contenteditable="true">✓ Diagrama elétrico do painel;</li>
             <li contenteditable="true">✓ Desenho com as dimensões gerais dos equipamentos;</li>
-            <li contenteditable="true">✓ ART e laudo NR12 e NR13 do Dispersor e Reservatório de óleo.</li>
           </ul>
           <p contenteditable="true">Os documentos entregues a CONTRATANTE pela CONTRATADA, não poderão ser reproduzidos, comercializados e cedidos a terceiros, sem o prévio e expresso consentimento da CONTRATADA, e permanecem a sua exclusiva propriedade industrial.</p>
         </div>

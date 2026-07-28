@@ -631,6 +631,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     };
     const ehTextoDa523 = (c) => subNumeroDe(c) === 23 && !ehConsideracaoFinal(c);
     const ehPos523 = (c) => subNumeroDe(c) >= 24 || ehConsideracaoFinal(c);
+    const ehPos523Normal = (c) => subNumeroDe(c) >= 24 && !ehConsideracaoFinal(c);
 
     // ===== Seção 5.23 — MISTA: textos editáveis + tabelas calculadas =====
     // As TABELAS (preços gerada dos itens, FINAME/BNDES e fiscais) continuam sendo montadas
@@ -854,14 +855,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         // Sem esta exclusão a 5.23 apareceria duas vezes — uma no meio da lista de cláusulas
         // e outra na seção de preço.
         const demaisSem523e524 = demaisClausulas.filter((c) => !ehTextoDa523(c) && !ehPos523(c));
-        const clausulasPos523 = demaisClausulas.filter(ehPos523);
-        // A 5.24 (e o que vier depois dela) ocupa uma PÁGINA PRÓPRIA, dividida em três faixas:
+        const clausulasPos523Normal = demaisClausulas.filter(ehPos523Normal);
+        const clausulasConsideracao = demaisClausulas.filter(ehConsideracaoFinal);
+        // A CONSIDERAÇÃO FINAL (e só ela) ocupa a PÁGINA PRÓPRIA de assinatura, dividida em três faixas:
         // texto no topo, campos de preenchimento manual no meio e assinaturas junto ao rodapé.
-        // Por isso as três partes viram UM único bloco (.pagina-assinatura): o paginador
-        // posiciona bloco a bloco, então só mantendo-as juntas dá para distribuí-las na altura
-        // da página. O data-page-break fica no bloco externo — o paginador só lê o atributo em
-        // filhos DIRETOS de #proposalSource.
-        const clausula524Html = clausulasPos523
+        // Cláusulas >= 5.24 que não sejam a consideração final (ex.: EXCLUSO DO FORNECIMENTO)
+        // renderizam DEPOIS da 5.23, em fluxo normal, antes da página de assinatura.
+        const clausula524Html = clausulasConsideracao
+          .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
+          .join('');
+        const clausulasPos523NormalHtml = clausulasPos523Normal
           .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
           .join('');
         // IMPORTANTE: apenas o título + a 1ª cláusula ficam dentro do grupo "avoid-break"
@@ -877,6 +880,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </section>
           ${demaisSem523e524.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
           ${sec523PrecoHtml}
+          ${clausulasPos523NormalHtml}
           <section class="block avoid-break pagina-assinatura" data-page-break="before">
             <div class="assinatura-topo">${clausula524Html}</div>
             <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
@@ -909,8 +913,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         <p>Qualquer alteração, inclusão ou exclusão no escopo ofertado, deve ser solicitado, para revisão deste documento.</p>
       </section>
 
-      <section class="block stack-md allow-break">
+      <section class="block stack-md allow-break clausula-corpo">
         <h2>3. OFERTA</h2>
+        <p>A presente proposta foi elaborada com base nas informações técnicas, operacionais e comerciais disponibilizadas pela CONTRATANTE até a data de sua emissão.</p>
+        <p>Os equipamentos e/ou serviços serão fornecidos exclusivamente conforme as características, quantidades, capacidades, materiais, componentes, limites e condições expressamente descritos no Item 4 – Escopo de Fornecimento.</p>
+        <p>Qualquer equipamento, componente, acessório, serviço, instalação, documentação ou atividade que não esteja expressamente indicado nesta proposta não integra o fornecimento da CONTRATADA, ainda que seja necessário à operação completa do empreendimento, salvo quando formalmente incluído por meio de revisão da proposta ou aditivo contratual.</p>
+        <p>Alterações nas condições do produto, processo, instalação, capacidade produtiva, tensão elétrica, área classificada, normas aplicáveis ou demais informações inicialmente fornecidas poderão resultar em revisão técnica, comercial e de prazo.</p>
         <table class="table">
           <thead>
             <tr>
@@ -1042,46 +1050,55 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </section>
       </section>
 
+      <section class="block stack-md allow-break clausula-corpo">
+        <h3>5.8 NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL</h3>
+        <p>A CONTRATANTE se obriga, durante a vigência deste contrato e pelo período de 24 (vinte e quatro) meses após seu encerramento, independentemente do motivo, a não aliciar, abordar, convidar, recrutar, contratar ou manter qualquer relação profissional, comercial ou societária, direta ou indiretamente, com empregados, ex-empregados, representantes, consultores, parceiros, subcontratados ou prestadores de serviços da CONTRATADA que tenham sido apresentados, indicados, disponibilizados, alocados ou que tenham participado da execução dos serviços objeto desta proposta técnica comercial.</p>
+        <p>A proibição prevista nesta cláusula abrange a contratação sob qualquer modalidade, incluindo vínculo empregatício, prestação de serviços por pessoa física ou jurídica, sociedade, representação comercial, consultoria, subcontratação, terceirização ou qualquer outra forma de aproveitamento profissional, ainda que realizada por intermédio de empresas controladoras, controladas, coligadas, integrantes do mesmo grupo econômico, sócios, administradores ou terceiros relacionados à CONTRATANTE.</p>
+        <p>A contratação somente poderá ocorrer mediante autorização prévia, expressa e escrita da CONTRATADA.</p>
+        <p>O descumprimento desta obrigação sujeitará a CONTRATANTE ao pagamento de multa compensatória, por profissional contratado, equivalente a 12 (doze) vezes o valor da última remuneração mensal bruta ou da média mensal dos honorários pagos pela CONTRATADA ao respectivo profissional nos 3 (três) meses anteriores à ocorrência, respeitado o limite global correspondente ao valor total deste contrato, sem prejuízo da indenização suplementar por perdas e danos excedentes, desde que devidamente comprovados.</p>
+        <p>A presente obrigação vincula exclusivamente a CONTRATANTE, não constituindo impedimento ou restrição ao livre exercício profissional do empregado ou prestador de serviços envolvido.</p>
+      </section>
+
       <section class="block stack-md avoid-break five-8-ate-14-group">
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.8 ALTERAÇÃO DE PEDIDO</h3>
+          <h3>5.9 ALTERAÇÃO DE PEDIDO</h3>
           <p>Caso a CONTRATANTE solicite alterações no escopo de fornecimento, a CONTRATADA apresentará a CONTRATANTE, os impactos, valores e prazos para realização da alteração.</p>
           <p>A CONTRATANTE deverá responder a CONTRATADA, com a aprovação ou declínio da alteração, dentro de 5 (cinco) dias úteis, contados da apresentação da proposta de alteração da CONTRATADA para a CONTRATANTE.</p>
         </section>
 
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.9 DEVOLUÇÃO OU TROCA DE MERCADORIA</h3>
+          <h3>5.10 DEVOLUÇÃO OU TROCA DE MERCADORIA</h3>
           <p>Não serão aceitas. Apenas em casos excepcionais serão aceitas, se houver prévia autorização da CONTRATADA e a CONTRATANTE arcará com todas as despesas envolvidas.</p>
         </section>
 
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.10 CANCELAMENTO DE PEDIDO</h3>
+          <h3>5.11 CANCELAMENTO DE PEDIDO</h3>
           <p>Não serão aceitas. Visto que os produtos são produzidos sob encomenda e necessitam de horas de engenharia, projeto e desenvolvimento e as peças/serviços oriundas dele atendem exclusivamente ao CONTRATANTE.</p>
         </section>
 
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.11 ATRASO DE FATURAMENTO</h3>
+          <h3>5.12 ATRASO DE FATURAMENTO</h3>
           <p>Ocorrendo atraso de faturamento por razões de responsabilidade do CONTRATANTE, como falta de documentos para aprovação do crédito, identificação de transportadora, não pagamento de antecipações/parcelas constantes nesta proposta técnica comercial, atraso de inspeção, diligenciamento e liberação de financiamento, a CONTRATADA cobrará o preço da mercadoria e/ou serviço, com base na lista de preço vigente na data do faturamento.</p>
         </section>
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.12 TAXA DE ARMAZENAGEM</h3>
+          <h3>5.13 TAXA DE ARMAZENAGEM</h3>
           <p>Será cobrada uma taxa de armazenagem de 1% ao mês do valor do fornecimento, caso as mercadorias não sejam retiradas em até 30 dias após a data de faturamento, calculada pro-rata diem a partir do 31º dia, limitada a 10% do valor do faturamento.</p>
         </section>
 
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.13 DANOS OU PREJUÍZOS</h3>
+          <h3>5.14 DANOS OU PREJUÍZOS</h3>
           <p>A responsabilidade civil da CONTRATADA está limitada ao produto fornecido, não se responsabilizando por danos indiretos ou emergentes, tais como lucros cessantes, perdas de receitas, produtividade ou de dados, reclamações, paralizações, despesas, danos pessoais.</p>
         </section>
 
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.14 RESPONSABILIDADE FINANCEIRA</h3>
+          <h3>5.15 RESPONSABILIDADE FINANCEIRA</h3>
           <p>A CONTRATANTE poderá optar em proceder o pagamento das parcelas supracitadas através de financiamento junto ao BANCO, porém, desde que respeitados os prazos de pagamento desta proposta técnica comercial e sem qualquer participação da CONTRATADA, junto as instituições financeiras para liberação desses valores.</p>
         </section>
       </section>
 
       <section class="block stack-md avoid-break five-15-16-17-group">
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.15 CONSIDERAÇÕES CONSTRUTIVAS</h3>
+          <h3>5.16 CONSIDERAÇÕES CONSTRUTIVAS</h3>
           <p>Os equipamentos e serviços ora ofertados nesta proposta técnica comercial, são padronizados pela CONTRATADA. Caso a CONTRATANTE tenha preferência ou necessidade que seja utilizado marca ou modelo especifico de qualquer componente ou material, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta comercial.</p>
           <p>A CONTRATADA se resguarda do direito de utilizar o melhor aproveitamento dos materiais, durante o processo de fabricação e montagem de seus equipamentos, podendo aparecer soldas de complementos de materiais em pontos distintos.</p>
           <p>Caso a CONTRATANTE não concorde com o aproveitamento de material, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta comercial.</p>
@@ -1089,12 +1106,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </section>
 
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.16 VALIDADE DA PROPOSTA</h3>
+          <h3>5.17 VALIDADE DA PROPOSTA</h3>
           <p>Esta proposta técnica comercial é válida por 15 (quinze) dias corridos, contados da data de emissão, informada na página inicial (capa).</p>
         </section>
 
         <section class="block stack-md allow-break clausula-corpo">
-          <h3>5.17 REAJUSTE DE PREÇO</h3>
+          <h3>5.18 REAJUSTE DE PREÇO</h3>
           <p>Havendo alterações na legislação tributária vigente na época, a CONTRATADA se resguarda ao direito de atualizar os preços apresentados, de acordo com a nova tributação, com prévia aprovação do CONTRATANTE.</p>
           <p>Para vendas fora do território nacional (BRASIL), os preços apresentados nesta proposta técnica comercial, poderão ser reajustado pela taxa do Dólar Americano, valor comercial de venda, até a data do faturamento, utilizando como taxa base USD 1,00 = VALOR DA COTAÇÃO NA DATA DA PROPOSTA.</p>
         </section>
@@ -1102,7 +1119,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       <section class="block stack-md avoid-break five-18-19-group">
       <section class="block stack-md allow-break clausula-corpo">
-        <h3>5.18 DOCUMENTAÇÃO PARTE DO ESCOPO</h3>
+        <h3>5.19 DOCUMENTAÇÃO PARTE DO ESCOPO</h3>
         <p>Os documentos abaixo relacionados, serão fornecidos em arquivos, formatos e cronograma padrão da CONTRATATADA. Caso a CONTRATANTE necessite de documentos não relacionados abaixo ou padrões específicos, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta.</p>
         <ul>
           <li>Nota fiscal;</li>
@@ -1113,7 +1130,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
 
       <section class="block stack-md allow-break clausula-corpo">
-        <h3>5.19 EXTINÇÃO DO CONTRATO</h3>
+        <h3>5.20 EXTINÇÃO DO CONTRATO</h3>
         <p>O presente contrato estará imediatamente extinto entre as PARTES, em decorrência de causas supervenientes à sua celebração, sem nenhum ônus a qualquer das Partes e independentemente de qualquer notificação ou interpelação judicial ou extrajudicial nas seguintes hipóteses:</p>
         <div class="list-num">
           <p>1) Decretação de falência da CONTRATADA, sem prejuízo da obrigação de indenizar.</p>
@@ -1127,7 +1144,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
       <section class="block stack-md avoid-break five-20-21-group">
       <section class="block stack-md allow-break clausula-corpo">
-        <h3>5.20 DISPOSIÇÕES ADICIONAIS</h3>
+        <h3>5.21 DISPOSIÇÕES ADICIONAIS</h3>
         <p><strong>MODIFICAÇÃO DO CONTRATO:</strong> Toda e qualquer obrigação não mencionada no presente instrumento de contrato, bem como toda e qualquer alteração do ora pactuado, somente surtirá efeitos entre as Partes, quando realizada, por escrito, na forma de termo de aditivo ou alteração contratual.</p>
         <p><strong>TOLERÂNCIA:</strong> O cumprimento de modo diverso de quaisquer cláusulas deste ajuste caracterizará mera liberalidade da Parte tolerante, e, por conseguinte, não implicará em novação, perdão, suspensão, interrupção, renúncia, extinção, direito adquirido e/ou modificação do CONTRATO.</p>
         <p><strong>SUFICIÊNCIA DO CONTRATO:</strong> Ficam expressamente revogados todos e quaisquer pactos, ajustes, cláusulas e condições estabelecidas entre as partes na fase de negociação deste contrato. Ocorrendo divergência entre o avençado neste ajuste e eventuais anexos ou pedidos, prevalecerão as disposições deste contrato e/ou as de seus eventuais aditivos e/ou alterações.</p>
@@ -1138,13 +1155,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       </section>
 
       <section class="block stack-md allow-break clausula-corpo">
-        <h3>5.21 FORO</h3>
+        <h3>5.22 FORO</h3>
         <p>As partes elegem o Foro da Comarca de São Bernardo do Campo - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>
       </section>
       </section>
 
+      ${sec523PrecoHtml}
+
       <section class="block stack-md allow-break clausula-corpo five-22-separate-page">
-        <h3>5.22 EXCLUSO DO FORNECIMENTO</h3>
+        <h3>5.24 EXCLUSO DO FORNECIMENTO</h3>
         <p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p>
         <div class="list-num">
           <p>1) Transporte e seguro dos equipamentos e suas partes;</p>
@@ -1158,11 +1177,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </section>
 
-      ${sec523PrecoHtml}
-
       <section class="block avoid-break pagina-assinatura" data-page-break="before">
         <div class="assinatura-topo stack-md clausula-corpo">
-          <h3>5.24 CONSIDERAÇÃO FINAL</h3>
+          <h3>5.25 CONSIDERAÇÃO FINAL</h3>
           <p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:</p>
         </div>
 

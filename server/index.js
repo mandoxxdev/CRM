@@ -10957,9 +10957,15 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
         </div>
       </div>
       
-      <!-- Seção 3: Oferta (tabela ITEM QUANT. DESCRIÇÃO - igual ao PDF) -->
+      <!-- Seção 3: Oferta (texto + tabela ITEM QUANT. DESCRIÇÃO - igual ao PDF) -->
       <div class="section">
         <div class="section-title">3. OFERTA</div>
+        <div class="texto-corpo">
+          <p contenteditable="true">A presente proposta foi elaborada com base nas informações técnicas, operacionais e comerciais disponibilizadas pela <strong>CONTRATANTE</strong> até a data de sua emissão.</p>
+          <p contenteditable="true">Os equipamentos e/ou serviços serão fornecidos exclusivamente conforme as características, quantidades, capacidades, materiais, componentes, limites e condições expressamente descritos no Item 4 – Escopo de Fornecimento.</p>
+          <p contenteditable="true">Qualquer equipamento, componente, acessório, serviço, instalação, documentação ou atividade que não esteja expressamente indicado nesta proposta não integra o fornecimento da <strong>CONTRATADA</strong>, ainda que seja necessário à operação completa do empreendimento, salvo quando formalmente incluído por meio de revisão da proposta ou aditivo contratual.</p>
+          <p contenteditable="true">Alterações nas condições do produto, processo, instalação, capacidade produtiva, tensão elétrica, área classificada, normas aplicáveis ou demais informações inicialmente fornecidas poderão resultar em revisão técnica, comercial e de prazo.</p>
+        </div>
         <table class="valores-table" style="margin-top: 15px;">
           <thead>
             <tr>
@@ -11017,23 +11023,24 @@ function gerarHTMLPropostaPremium(proposta, itens, totais, templateConfig = null
           <p>5.5 SUPERVISÃO E COMISSIONAMENTO DE STARTUP ........................................................ 10</p>
           <p>5.6 OBRIGAÇÕES DA CONTRATANTE ................................................................................. 12</p>
           <p>5.7 OBRIGAÇÕES DA CONTRATADA .................................................................................. 13</p>
-          <p>5.8 ALTERAÇÃO DE PEDIDO ................................................................................................ 13</p>
-          <p>5.9 DEVOLUÇÃO OU TROCA DE MERCADORIA ................................................................. 14</p>
-          <p>5.10 CANCELAMENTO DE PEDIDO .................................................................................... 14</p>
-          <p>5.11 ATRASO DE FATURAMENTO........................................................................................ 14</p>
-          <p>5.12 TAXA DE ARMAZENAGEM.......................................................................................... 14</p>
-          <p>5.13 DANOS OU PREJUÍZOS ............................................................................................... 14</p>
-          <p>5.14 RESPONSABILIDADE FINANCEIRA .............................................................................. 15</p>
-          <p>5.15 CONSIDERAÇÕES CONSTRUTIVAS ............................................................................ 15</p>
-          <p>5.16 VALIDADE DA PROPOSTA .......................................................................................... 15</p>
-          <p>5.17 REAJUSTE DE PREÇO ................................................................................................... 16</p>
-          <p>5.18 DOCUMENTAÇÃO PARTE DO ESCOPO ..................................................................... 16</p>
-          <p>5.19 EXTINÇÃO DO CONTRATO ........................................................................................ 16</p>
-          <p>5.20 DISPOSIÇÕES ADICIONAIS ........................................................................................ 17</p>
-          <p>5.21 FORO........................................................................................................................... 18</p>
-          <p>5.22 EXCLUSO DO FORNECIMENTO .................................................................................. 19</p>
+          <p>5.8 NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL ........................................ 13</p>
+          <p>5.9 ALTERAÇÃO DE PEDIDO ................................................................................................ 13</p>
+          <p>5.10 DEVOLUÇÃO OU TROCA DE MERCADORIA ................................................................. 14</p>
+          <p>5.11 CANCELAMENTO DE PEDIDO .................................................................................... 14</p>
+          <p>5.12 ATRASO DE FATURAMENTO........................................................................................ 14</p>
+          <p>5.13 TAXA DE ARMAZENAGEM.......................................................................................... 14</p>
+          <p>5.14 DANOS OU PREJUÍZOS ............................................................................................... 14</p>
+          <p>5.15 RESPONSABILIDADE FINANCEIRA .............................................................................. 15</p>
+          <p>5.16 CONSIDERAÇÕES CONSTRUTIVAS ............................................................................ 15</p>
+          <p>5.17 VALIDADE DA PROPOSTA .......................................................................................... 15</p>
+          <p>5.18 REAJUSTE DE PREÇO ................................................................................................... 16</p>
+          <p>5.19 DOCUMENTAÇÃO PARTE DO ESCOPO ..................................................................... 16</p>
+          <p>5.20 EXTINÇÃO DO CONTRATO ........................................................................................ 16</p>
+          <p>5.21 DISPOSIÇÕES ADICIONAIS ........................................................................................ 17</p>
+          <p>5.22 FORO........................................................................................................................... 18</p>
           <p>5.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS ................................................. 20</p>
-          <p>5.24 CONSIDERAÇÃO FINAL ............................................................................................. 23</p>
+          <p>5.24 EXCLUSO DO FORNECIMENTO .................................................................................. 19</p>
+          <p>5.25 CONSIDERAÇÃO FINAL ............................................................................................. 23</p>
         </div>
       </div>
       

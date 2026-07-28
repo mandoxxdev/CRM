@@ -67,87 +67,92 @@ function getClausulasDefault() {
     },
     {
       numero: '5.8',
+      titulo: 'NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL',
+      conteudo: '<p>A CONTRATANTE se obriga, durante a vigência deste contrato e pelo período de 24 (vinte e quatro) meses após seu encerramento, independentemente do motivo, a não aliciar, abordar, convidar, recrutar, contratar ou manter qualquer relação profissional, comercial ou societária, direta ou indiretamente, com empregados, ex-empregados, representantes, consultores, parceiros, subcontratados ou prestadores de serviços da CONTRATADA que tenham sido apresentados, indicados, disponibilizados, alocados ou que tenham participado da execução dos serviços objeto desta proposta técnica comercial.</p><p>A proibição prevista nesta cláusula abrange a contratação sob qualquer modalidade, incluindo vínculo empregatício, prestação de serviços por pessoa física ou jurídica, sociedade, representação comercial, consultoria, subcontratação, terceirização ou qualquer outra forma de aproveitamento profissional, ainda que realizada por intermédio de empresas controladoras, controladas, coligadas, integrantes do mesmo grupo econômico, sócios, administradores ou terceiros relacionados à CONTRATANTE.</p><p>A contratação somente poderá ocorrer mediante autorização prévia, expressa e escrita da CONTRATADA.</p><p>O descumprimento desta obrigação sujeitará a CONTRATANTE ao pagamento de multa compensatória, por profissional contratado, equivalente a 12 (doze) vezes o valor da última remuneração mensal bruta ou da média mensal dos honorários pagos pela CONTRATADA ao respectivo profissional nos 3 (três) meses anteriores à ocorrência, respeitado o limite global correspondente ao valor total deste contrato, sem prejuízo da indenização suplementar por perdas e danos excedentes, desde que devidamente comprovados.</p><p>A presente obrigação vincula exclusivamente a CONTRATANTE, não constituindo impedimento ou restrição ao livre exercício profissional do empregado ou prestador de serviços envolvido.</p>'
+    },
+    {
+      numero: '5.9',
       titulo: 'ALTERAÇÃO DE PEDIDO',
       conteudo: '<p>Caso a CONTRATANTE solicite alterações no escopo de fornecimento, a CONTRATADA apresentará a CONTRATANTE, os impactos, valores e prazos para realização da alteração. A CONTRATANTE deverá responder a CONTRATADA, com a aprovação ou declínio da alteração, dentro de 5 (cinco) dias úteis, contados da apresentação da proposta de alteração da CONTRATADA para a CONTRATANTE.</p>'
     },
     {
-      numero: '5.9',
+      numero: '5.10',
       titulo: 'DEVOLUÇÃO OU TROCA DE MERCADORIA',
       conteudo: '<p>Não serão aceitas. Apenas em casos excepcionais serão aceitas, se houver prévia autorização da CONTRATADA e a CONTRATANTE arcará com todas as despesas envolvidas.</p>'
     },
     {
-      numero: '5.10',
+      numero: '5.11',
       titulo: 'CANCELAMENTO DE PEDIDO',
       conteudo: '<p>Não serão aceitas. Visto que os produtos são produzidos sob encomenda e necessitam de horas de engenharia, projeto e desenvolvimento e as peças/serviços oriundas dele atendem exclusivamente ao CONTRATANTE.</p>'
     },
     {
-      numero: '5.11',
+      numero: '5.12',
       titulo: 'ATRASO DE FATURAMENTO',
       conteudo: '<p>Ocorrendo atraso de faturamento por razões de responsabilidade do CONTRATANTE, como falta de documentos para aprovação do crédito, identificação de transportadora, não pagamento de antecipações/parcelas constantes nesta proposta técnica comercial, atraso de inspeção, diligenciamento e liberação de financiamento, a CONTRATADA cobrará o preço da mercadoria e/ou serviço, com base na lista de preço vigente na data do faturamento.</p>'
     },
     {
-      numero: '5.12',
+      numero: '5.13',
       titulo: 'TAXA DE ARMAZENAGEM',
       conteudo: '<p>Será cobrada uma taxa de armazenagem de 1% ao mês do valor do fornecimento, caso as mercadorias não sejam retiradas em até 30 dias após a data de faturamento, calculada pro-rata diem a partir do 31º dia, limitada a 10% do valor do faturamento.</p>'
     },
     {
-      numero: '5.13',
+      numero: '5.14',
       titulo: 'DANOS OU PREJUÍZOS',
       conteudo: '<p>A responsabilidade civil da CONTRATADA está limitada ao produto fornecido, não se responsabilizando por danos indiretos ou emergentes, tais como lucros cessantes, perdas de receitas, produtividade ou de dados, reclamações, paralizações, despesas, danos pessoais.</p>'
     },
     {
-      numero: '5.14',
+      numero: '5.15',
       titulo: 'RESPONSABILIDADE FINANCEIRA',
       conteudo: '<p>A CONTRATANTE poderá optar em proceder o pagamento das parcelas supracitadas através de financiamento junto ao BANCO, porém, desde que respeitados os prazos de pagamento desta proposta técnica comercial e sem qualquer participação da CONTRATADA, junto as instituições financeiras para liberação desses valores.</p>'
     },
     {
-      numero: '5.15',
+      numero: '5.16',
       titulo: 'CONSIDERAÇÕES CONSTRUTIVAS',
       conteudo: '<p>Os equipamentos e serviços ora ofertados nesta proposta técnica comercial, são padronizados pela CONTRATADA. Caso a CONTRATANTE tenha preferência ou necessidade que seja utilizado marca ou modelo especifico de qualquer componente ou material, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta comercial.</p><p>A CONTRATADA se resguarda do direito de utilizar o melhor aproveitamento dos materiais, durante o processo de fabricação e montagem de seus equipamentos, podendo aparecer soldas de complementos de materiais em pontos distintos.</p><p>Fica entendido que todas as informações foram apresentadas ao CONTRATANTE nesta proposta técnica comercial, e foram suficientes para o entendimento e aceite do produto e/ou serviço que será fornecido.</p>'
     },
     {
-      numero: '5.16',
+      numero: '5.17',
       titulo: 'VALIDADE DA PROPOSTA',
       conteudo: '<p>Esta proposta técnica comercial é válida por 15 (quinze) dias corridos, contados da data de emissão, informada na página inicial (capa).</p>'
     },
     {
-      numero: '5.17',
+      numero: '5.18',
       titulo: 'REAJUSTE DE PREÇO',
       conteudo: '<p>Havendo alterações na legislação tributária vigente na época, a CONTRATADA se resguarda ao direito de atualizar os preços apresentados, de acordo com a nova tributação, com prévia aprovação do CONTRATANTE.</p><p>Para vendas fora do território nacional (BRASIL), os preços apresentados nesta proposta técnica comercial, poderão ser reajustado pela taxa do Dólar Americano, valor comercial de venda, até a data do faturamento.</p>'
     },
     {
-      numero: '5.18',
+      numero: '5.19',
       titulo: 'DOCUMENTAÇÃO PARTE DO ESCOPO',
-      conteudo: '<p>Os documentos abaixo relacionados, serão fornecidos em arquivos, formatos e cronograma padrão da CONTRATADA. Caso a CONTRATANTE necessite de documentos não relacionados abaixo ou padrões específicos, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta.</p><ul style="list-style:none;padding-left:0;"><li>✓ Nota fiscal;</li><li>✓ Manual do equipamento;</li><li>✓ Diagrama elétrico do painel;</li><li>✓ Desenho com as dimensões gerais dos equipamentos;</li><li>✓ ART e laudo NR12 e NR13 do Dispersor e Reservatório de óleo.</li></ul><p>Os documentos entregues a CONTRATANTE pela CONTRATADA, não poderão ser reproduzidos, comercializados e cedidos a terceiros, sem o prévio e expresso consentimento da CONTRATADA.</p>'
+      conteudo: '<p>Os documentos abaixo relacionados, serão fornecidos em arquivos, formatos e cronograma padrão da CONTRATADA. Caso a CONTRATANTE necessite de documentos não relacionados abaixo ou padrões específicos, deverá ser comunicado para a CONTRATADA previamente via e-mail, para revisão desta proposta.</p><ul style="list-style:none;padding-left:0;"><li>✓ Nota fiscal;</li><li>✓ Manual do equipamento;</li><li>✓ Diagrama elétrico do painel;</li><li>✓ Desenho com as dimensões gerais dos equipamentos;</li></ul><p>Os documentos entregues a CONTRATANTE pela CONTRATADA, não poderão ser reproduzidos, comercializados e cedidos a terceiros, sem o prévio e expresso consentimento da CONTRATADA.</p>'
     },
     {
-      numero: '5.19',
+      numero: '5.20',
       titulo: 'EXTINÇÃO DO CONTRATO',
       conteudo: '<p>O presente contrato estará imediatamente extinto entre as PARTES, em decorrência de causas supervenientes à sua celebração, sem nenhum ônus a qualquer das Partes nas seguintes hipóteses:</p><p>1) Decretação de falência da CONTRATADA, sem prejuízo da obrigação de indenizar.</p><p>2) Caso fortuito ou força maior: O evento proveniente de caso fortuito ou força maior não poderá perdurar por mais de 30 (trinta) dias corridos, contados do evento inesperado e inevitável.</p><p>3) Descumprimento do contrato: Em caso de quaisquer infrações contratuais constatadas, a Parte infratora será notificada, por escrito, para, no prazo de até 05 (cinco) dias úteis sanar o problema.</p><p>4) Distrato: As partes poderão, a qualquer tempo, mediante comunicação escrita enviada com, no mínimo, 30 (trinta) dias de antecedência, extinguir o presente contrato sem aplicação de qualquer ônus, desde que esse distrato seja de comum acordo.</p>'
     },
     {
-      numero: '5.20',
+      numero: '5.21',
       titulo: 'DISPOSIÇÕES ADICIONAIS',
       conteudo: '<p><strong>MODIFICAÇÃO DO CONTRATO:</strong> Toda e qualquer obrigação não mencionada no presente instrumento de contrato, bem como toda e qualquer alteração do ora pactuado, somente surtirá efeitos entre as Partes, quando realizada, por escrito, na forma de termo de aditivo ou alteração contratual.</p><p><strong>TOLERÂNCIA:</strong> O cumprimento de modo diverso de quaisquer cláusulas deste ajuste caracterizará mera liberalidade da Parte tolerante, e, por conseguinte, não implicará em novação, perdão, suspensão, interrupção, renúncia, extinção, direito adquirido e/ou modificação do CONTRATO.</p><p><strong>SUFICIÊNCIA DO CONTRATO:</strong> Ficam expressamente revogados todos e quaisquer pactos, ajustes, cláusulas e condições estabelecidas entre as partes na fase de negociação deste contrato.</p><p><strong>SIGILO:</strong> As PARTES se comprometem a manter em sigilo todos e quaisquer documentos, informações e dados técnicos de propriedade e interesse das mesmas. O dever de sigilo é contínuo, perene, irretratável e irrevogável, devendo manter-se mesmo após o término do contrato.</p><p><strong>DIREITO E USO DE IMAGEM:</strong> Os direitos de divulgação das imagens dos produtos e serviços comercializados, instalados ou meramente desenvolvidos pertencem à CONTRATADA podendo esta divulgá-las em operações de marketing e propaganda como melhor lhe convir.</p>'
     },
     {
-      numero: '5.21',
+      numero: '5.22',
       titulo: 'FORO',
       conteudo: '<p>As partes elegem o Foro da Comarca de São Bernardo do Campo - SP, para qualquer ação, processo ou litígio oriundo da responsabilidade pelos produtos e/ou serviços fornecidos conforme ESCOPO DE FORNECIMENTO deste contrato, com renúncia de qualquer outro por mais especial que seja.</p>'
     },
     {
-      numero: '5.22',
+      numero: '5.24',
       titulo: 'EXCLUSO DO FORNECIMENTO',
       conteudo: '<p>Estão exclusos do escopo de fornecimento da CONTRATADA, ficando de responsabilidade da CONTRATANTE, os seguintes itens:</p><ol style="padding-left:25px;line-height:2;"><li>Transporte e seguro dos equipamentos e suas partes;</li><li>Serviços de movimentação, como munck, guindaste, empilhadeira e demais que se fizerem necessários;</li><li>Serviços e materiais de instalação e infraestrutura, como elétrica, hidráulica, pneumática, civil, alvenaria e demais que se fizerem necessários;</li><li>Despesas com translado, estadia e alimentação da equipe de montagem e startup;</li><li>Sapatas, brocas, bases, e outros tipos de reforço necessário;</li><li>Consultoria química, de processo, para obtenção de licenças, e de qualquer outra natureza;</li><li>Laudo e certificados de calibração/aferição, como RBC, ISO, e outros que se fizerem necessários;</li><li>Equipamentos, acessórios e periféricos, como compressor de ar, exaustores, torre de resfriamento, unidade Chiller, bombas, tachos, tanques, reservatórios, balanças, envasadoras e outros que se fizerem necessários;</li><li>E demais itens não citados expressamente nesta proposta técnica comercial.</li></ol>'
     },
     // Os TEXTOS da 5.23 entram na lista padrão (as TABELAS não — ver comentário acima):
     // é o que faz a edição da 5.23 percorrer o mesmo caminho de persistência das demais
     // (POST /clausulas/inicializar copia esta lista para proposta_clausulas, na ordem do
-    // array). Precisam ficar ENTRE a 5.22 e a 5.24: a ordem do array vira a coluna `ordem`.
+    // array). Precisam ficar ENTRE a 5.22/5.24 e a 5.25: a ordem do array vira a coluna `ordem`.
     CLAUSULA_523_PRECO,
     CLAUSULA_523_CONDICAO,
     {
-      numero: '5.24',
+      numero: '5.25',
       titulo: 'CONSIDERAÇÃO FINAL',
       conteudo: '<p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo.</p>'
     }

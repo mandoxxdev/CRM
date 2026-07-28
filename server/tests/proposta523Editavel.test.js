@@ -24,17 +24,26 @@ const comoBanco = getClausulasDefault().map((c, i) => ({
 const comoDefault = getClausulasDefault().map(c => ({ numero: c.numero, titulo: c.titulo, conteudo: c.conteudo }));
 const gerar = (custom) => gerarHTMLPropostaPremiumV2(proposta, itens, totais, custom ? { clausulas_custom: custom } : null, null, false, true);
 
-test('clausulasDefault exporta os textos da 5.23 e os inclui na lista padrão, entre 5.22 e 5.24', () => {
+test('clausulasDefault exporta os textos da 5.23 e os inclui na lista padrão, entre 5.22/5.24 e 5.25', () => {
   assert(CLAUSULA_523_PRECO && CLAUSULA_523_CONDICAO, 'faltou exportar os textos da 5.23');
   const lista = getClausulasDefault();
   const nums = lista.map(c => c.numero);
   const i22 = nums.indexOf('5.22');
+  const i24 = nums.indexOf('5.24');
   const i23 = nums.indexOf(CLAUSULA_523_PRECO.numero);
   const i23b = nums.indexOf(CLAUSULA_523_CONDICAO.numero);
-  const i24 = nums.indexOf('5.24');
-  assert(i22 > -1 && i23 > -1 && i23b > -1 && i24 > -1, `faltou alguma cláusula na lista padrão: ${nums.join(',')}`);
-  assert(i22 < i23 && i23 < i23b && i23b < i24, `ordem errada na lista padrão: ${nums.join(',')}`);
+  const i25 = nums.indexOf('5.25');
+  assert(i22 > -1 && i23 > -1 && i23b > -1 && i24 > -1 && i25 > -1, `faltou alguma cláusula na lista padrão: ${nums.join(',')}`);
+  assert(i22 < i23 && i23 < i23b && i23b < i25, `ordem errada na lista padrão: ${nums.join(',')}`);
   assert(new Set(nums).size === nums.length, 'números duplicados na lista padrão (colidiriam em data-clausula-key="default-N")');
+});
+
+test('clausula 5.8 NÃO ALICIAMENTO presente na lista padrão', () => {
+  const lista = getClausulasDefault();
+  const c = lista.find(x => x.numero === '5.8');
+  assert(c, 'faltou a cláusula 5.8');
+  assert(c.titulo === 'NÃO ALICIAMENTO E NÃO CONTRATAÇÃO DE PESSOAL', `titulo errado: ${c.titulo}`);
+  assert(c.conteudo.includes('não aliciar'), 'conteudo da cláusula 5.8 incompleto');
 });
 
 for (const [rotulo, custom] of [['banco', comoBanco], ['default', comoDefault]]) {
@@ -115,7 +124,7 @@ test('dado REAL da proposta 74: cláusula salva como "5.23 CONSIDERAÇÃO FINAL"
   // ela ocuparia o slot dos textos da 5.23 — o documento perderia a CONDIÇÃO DE PAGAMENTO
   // inteira e a consideração final apareceria no meio, antes da tabela de preços.
   const legado = getClausulasDefault()
-    .filter(c => !/^5\.23/.test(c.numero) && c.numero !== '5.24')
+    .filter(c => !/^5\.23/.test(c.numero) && c.numero !== '5.25')
     .map((c, i) => ({ id: 200 + i, ordem: i, ativo: 1, titulo: `${c.numero} ${c.titulo}`, conteudo: c.conteudo }));
   legado.push({ id: 299, ordem: 99, ativo: 1, titulo: '5.23 CONSIDERAÇÃO FINAL', conteudo: '<p>Texto final.</p>' });
   const html = gerar(legado);
@@ -134,10 +143,10 @@ test('a 5.23 aparece uma única vez (não duplica entre a lista de cláusulas e 
   const html = gerar(comoBanco);
   const ocorrencias = (html.match(/5\.23 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS/g) || []).length;
   assert(ocorrencias === 1, `título da 5.23 aparece ${ocorrencias}x (esperado 1)`);
-  const iForo = html.indexOf('5.21 FORO');
+  const iForo = html.indexOf('5.22 FORO');
   const i523 = html.indexOf('5.23 PREÇO');
-  const i524 = html.indexOf('5.24 CONSIDERAÇÃO FINAL');
-  assert(iForo < i523 && i523 < i524, 'a 5.23 saiu fora de ordem em relação a 5.21/5.24');
+  const i525 = html.indexOf('5.25 CONSIDERAÇÃO FINAL');
+  assert(iForo < i523 && i523 < i525, 'a 5.23 saiu fora de ordem em relação a 5.22/5.25');
 });
 
 test('round-trip do título: o que o editor lê de volta é EXATAMENTE o título salvo', () => {
