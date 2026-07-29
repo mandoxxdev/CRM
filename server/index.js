@@ -13885,7 +13885,47 @@ app.get('/api/produtos/proximo-codigo', authenticateToken, (req, res) => {
       return res.json({ codigo: proximoCodigo });
     }
     
-    // Formato padrão para outros produtos
+    // ===== Formato padrão: GRUPO-FAMILIA-MODELO-SEQUENCIAL (ex.: 20-01-MHY-30-01) =====
+    // GRUPO     = grupos_produto.numero do grupo a que a família pertence (10, 20, 30...)
+    // FAMILIA   = familias_produto.codigo, com 2 dígitos
+    // MODELO    = produtos.modelo, como cadastrado (ex.: MHY-30)
+    // SEQUENCIAL= quantos produtos JÁ existem com esse mesmo modelo na mesma família, +1.
+    //             Assim a segunda MHY-30 vira ...-02, a terceira ...-03.
+    // Sem modelo informado não dá para montar o código; nesse caso caímos no formato
+    // antigo (PROD-...), que continua servindo de rascunho até o usuário digitar o modelo.
+    const modeloParam = req.query.modelo ? decodeURIComponent(String(req.query.modelo)).trim() : '';
+    if (modeloParam && familia && familia.trim()) {
+      const dois = (v) => String(parseInt(v, 10) || 0).padStart(2, '0');
+      return db.get(
+        `SELECT f.id AS familia_id, f.codigo AS familia_codigo, g.numero AS grupo_numero
+           FROM familias_produto f
+           LEFT JOIN grupos_produto g ON g.id = f.grupo_id
+          WHERE TRIM(LOWER(f.nome)) = TRIM(LOWER(?))
+          LIMIT 1`,
+        [familia.trim()],
+        (errFam, fam) => {
+          if (errFam) return res.status(500).json({ error: errFam.message });
+          if (!fam) {
+            return res.json({ codigo: '', aviso: 'Família não encontrada no cadastro de famílias.' });
+          }
+          const prefixo = `${dois(fam.grupo_numero)}-${dois(fam.familia_codigo)}-${modeloParam.toUpperCase()}`;
+          // Conta pelo PREFIXO já montado: pega qualquer produto cujo código comece com
+          // "grupo-familia-modelo-", independentemente do sequencial. Comparar pela coluna
+          // `modelo` seria frágil — produtos antigos podem ter o modelo só dentro do nome.
+          db.get(
+            "SELECT COUNT(*) AS n FROM produtos WHERE UPPER(TRIM(COALESCE(codigo,''))) LIKE ?",
+            [`${prefixo}-%`],
+            (errCount, row) => {
+              if (errCount) return res.status(500).json({ error: errCount.message });
+              const sequencial = dois((row && row.n ? row.n : 0) + 1);
+              return res.json({ codigo: `${prefixo}-${sequencial}` });
+            }
+          );
+        }
+      );
+    }
+
+    // Formato antigo (rascunho enquanto o modelo não foi informado)
     // Pegar as 3 primeiras letras do nome (em maiúsculas, removendo espaços e caracteres especiais)
     let iniciaisNome = '';
     if (nome && nome.trim()) {

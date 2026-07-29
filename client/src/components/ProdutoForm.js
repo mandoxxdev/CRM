@@ -295,13 +295,15 @@ const ProdutoForm = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdit]);
 
-  const generateCodigoProduto = async (nomeParam = null, familiaParam = null) => {
+  const generateCodigoProduto = async (nomeParam = null, familiaParam = null, modeloParam = null) => {
     try {
       const nome = nomeParam || formData.nome || '';
       const familia = familiaParam || formData.familia_produto || '';
+      // O modelo entra no código (GRUPO-FAMILIA-MODELO-SEQUENCIAL), por isso vai junto.
+      const modelo = modeloParam !== null ? modeloParam : (formData.modelo || '');
       
       // Se for Hélices e Acessórios, enviar informações adicionais
-      const params = { nome, familia };
+      const params = { nome, familia, modelo };
       
       if (familia === 'Hélices e Acessórios') {
         params.diametro = especificacoesTecnicas.diametro || '';
@@ -450,13 +452,15 @@ const ProdutoForm = () => {
         console.log('Família alterada para:', newValue);
       }
       
-      // Se mudou o nome ou a família do produto e não está editando, regenerar o código
-      if ((name === 'nome' || name === 'familia_produto') && !isEdit && !id) {
+      // Se mudou nome, família ou MODELO e não está editando, regenerar o código.
+      // O modelo entrou aqui porque agora faz parte do código do produto.
+      if ((name === 'nome' || name === 'familia_produto' || name === 'modelo') && !isEdit && !id) {
         // Usar setTimeout para garantir que o estado foi atualizado
         setTimeout(() => {
           const nomeAtual = name === 'nome' ? newValue : newData.nome || '';
           const familiaAtual = name === 'familia_produto' ? newValue : newData.familia_produto || '';
-          generateCodigoProduto(nomeAtual, familiaAtual);
+          const modeloAtual = name === 'modelo' ? newValue : newData.modelo || '';
+          generateCodigoProduto(nomeAtual, familiaAtual, modeloAtual);
         }, 0);
       }
       
