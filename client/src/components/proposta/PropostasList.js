@@ -73,6 +73,20 @@ export default function PropostasList() {
   }, []);
 
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
+
+  const renderValorComDesconto = (p) => {
+    const bruto = Number(p.valor_total) || 0;
+    const desconto = Number(p.margem_desconto) || 0;
+    if (desconto <= 0) return formatMoney(bruto);
+    const liquido = Math.max(0, bruto * (1 - desconto / 100));
+    return (
+      <div className="propostas-list-valor-desconto" title={`Desconto de ${desconto.toFixed(2)}%`}>
+        <span className="propostas-list-valor-antigo">{formatMoney(bruto)}</span>
+        <strong className="propostas-list-valor-novo">{formatMoney(liquido)}</strong>
+      </div>
+    );
+  };
+
   const isRascunho = (s) => s === 'rascunho';
   const isDescontoAprovado = (s) => s === 'desconto_aprovado';
   const documentoBloqueado = (s) => s === 'rascunho' || s === 'desconto_aprovado';
@@ -236,7 +250,7 @@ export default function PropostasList() {
                   <td>{p.titulo || '—'}</td>
                   <td>{p.cliente_nome || p.cliente_nome_fantasia || '—'}</td>
                   <td>{TIPOS[p.tipo_proposta] || '—'}</td>
-                  <td>{formatMoney(p.valor_total)}</td>
+                  <td>{renderValorComDesconto(p)}</td>
                   <td>{formatDateBR(p.validade)}</td>
                   <td><span className="badge" data-status={p.status}>{STATUS[p.status] || p.status || '—'}</span></td>
                   <td>{formatDateTimeBR(p.enviada_em)}</td>

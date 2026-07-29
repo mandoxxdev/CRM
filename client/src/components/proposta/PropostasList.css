@@ -243,6 +243,29 @@
 .propostas-list .badge[data-status="cancelada"] { background: #78716c; }
 .propostas-list .badge[data-status="expirada"] { background: #f59e0b; }
 
+.propostas-list-valor-desconto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  line-height: 1.2;
+}
+
+.propostas-list-valor-antigo {
+  font-size: 0.78rem;
+  color: #dc2626;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.propostas-list-valor-novo {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--gmp-text);
+  font-variant-numeric: tabular-nums;
+}
+
 .propostas-list-cell-actions {
   display: flex;
   gap: 0.25rem;
