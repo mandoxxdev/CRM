@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign, FiArrowLeft, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
+import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign, FiArrowLeft, FiCheckCircle, FiAlertCircle, FiChevronRight } from 'react-icons/fi';
 import './SelecaoProdutosPremium.css';
 
 const baseUploads = () => (api.defaults.baseURL || '/api').replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/';
@@ -20,6 +20,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
   const [loading, setLoading] = useState(true);
   const [loadingProdutos, setLoadingProdutos] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [familiaSearch, setFamiliaSearch] = useState('');
   const [filterPrecoMin, setFilterPrecoMin] = useState('');
   const [filterPrecoMax, setFilterPrecoMax] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -346,7 +347,12 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
     setCurrentPage(1);
   };
 
-  const familiasAtivas = useMemo(() => familias.filter(f => f.ativo !== 0), [familias]);
+  const familiasAtivas = useMemo(() => {
+    const base = familias.filter(f => f.ativo !== 0);
+    const termo = familiaSearch.trim().toLowerCase();
+    if (!termo) return base;
+    return base.filter(f => String(f.nome || '').toLowerCase().includes(termo));
+  }, [familias, familiaSearch]);
   const urlEsquematico = (f) => {
     if (!f || !f.esquematico) return null;
     const base = baseUploads();
@@ -634,6 +640,23 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                 <p>Nenhuma família cadastrada</p>
               </div>
             ) : (
+              <>
+              <div className="familias-busca">
+                <FiSearch className="familias-busca-icone" aria-hidden />
+                <input
+                  type="text"
+                  value={familiaSearch}
+                  onChange={(e) => setFamiliaSearch(e.target.value)}
+                  placeholder="Buscar família..."
+                  className="familias-busca-input"
+                  autoFocus
+                />
+                {familiaSearch && (
+                  <button type="button" className="familias-busca-limpar" onClick={() => setFamiliaSearch('')} aria-label="Limpar busca">
+                    <FiX />
+                  </button>
+                )}
+              </div>
               <div className="familias-grid-selecao">
                 {familiasAtivas.map(familia => {
                   const esquematicoUrl = urlEsquematico(familia);
@@ -652,14 +675,20 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                           </div>
                         )}
                       </div>
-                      <div className="familia-card-nome">{familia.nome}</div>
-                      <button type="button" className="familia-card-btn" onClick={(e) => { e.stopPropagation(); escolherFamilia(familia); }}>
-                        Abrir itens desta família
-                      </button>
+                      <div className="familia-card-info">
+                        <span className="familia-card-nome">{familia.nome}</span>
+                        <FiChevronRight className="familia-card-seta" aria-hidden />
+                      </div>
                     </div>
                   );
                 })}
               </div>
+              {familiasAtivas.length === 0 && (
+                <div className="familias-vazio-busca">
+                  Nenhuma família encontrada para &quot;{familiaSearch}&quot;.
+                </div>
+              )}
+              </>
             )
           ) : (
             loadingProdutos ? (
