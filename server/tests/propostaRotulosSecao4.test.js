@@ -121,8 +121,10 @@ checar(r41.equipamento === 'Talhas para içamento de bigbag + tanques de armazen
   `R6: Equipamento -> ${JSON.stringify(r41.equipamento)}`);
 checar(r41.quantidade === '1 Un', `R6: Quantidade -> ${JSON.stringify(r41.quantidade)}`);
 checar(r41.familia === 'Outros', `R6: Família -> ${JSON.stringify(r41.familia)}`);
-checar(r41.titulo === 'Talhas para içamento de bigbag + tanques de armazenamento de slurrys',
-  `R6: titulo 4.1 acompanha o Equipamento -> ${JSON.stringify(r41.titulo)}`);
+// O TÍTULO do item sai em CAIXA ALTA (padrão dos títulos do documento); o "Equipamento:"
+// no corpo é que segue em caixa de frase, como todo texto descritivo.
+checar(r41.titulo === 'TALHAS PARA IÇAMENTO DE BIGBAG + TANQUES DE ARMAZENAMENTO DE SLURRYS',
+  `R6: titulo 4.1 em CAIXA ALTA -> ${JSON.stringify(r41.titulo)}`);
 
 console.log('\n[R7] codigos de familia entre parenteses preservados (dados reais do banco)');
 [

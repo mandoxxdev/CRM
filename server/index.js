@@ -8469,6 +8469,44 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
 // Proteções para evitar 502: timeout de resposta, guarda de resposta única, não exige dbReady.
 const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Traefik) devolva 502 por timeout
 
+// Escolhe a linha de proposta_template_config a usar e MESCLA o mapa
+// `variaveis_proposta_por_familia` de TODAS as linhas.
+//
+// Por que mesclar: a tela de configuração sempre carrega e grava a linha de MAIOR id
+// (GET /api/proposta-template usa "ORDER BY id DESC LIMIT 1") e guarda nela o mapa de
+// TODAS as famílias. A proposta, por outro lado, prefere a linha da família do item.
+// Com mais de uma linha na tabela — cenário comum, porque o POST cria linha nova por
+// família — a seleção do admin ficava numa linha que a proposta não lia, e as variáveis
+// simplesmente não apareciam no Escopo, sem erro nenhum.
+//
+// Também trata 'Geral' como linha padrão: é o balde que o POST usa quando `familia` vem
+// vazio ("WHERE familia IS NULL OR familia = 'Geral'"), mas a leitura antiga só aceitava
+// NULL ou '', descartando justamente a configuração default.
+function resolverTemplateConfig(rows, familiaTemplate) {
+  const lista = (Array.isArray(rows) ? rows.slice() : []).sort((a, b) => (b.id || 0) - (a.id || 0));
+  if (lista.length === 0) return null;
+  const norm = (s) => String(s || '').trim().toLowerCase();
+  const ehPadrao = (f) => !String(f || '').trim() || norm(f) === 'geral';
+  const preferida =
+    (familiaTemplate ? lista.find((r) => norm(r.familia) === norm(familiaTemplate)) : null)
+    || lista.find((r) => ehPadrao(r.familia))
+    || lista[0];
+  // Mescla do mais ANTIGO para o mais NOVO: em conflito de mesma família, vence a linha
+  // mais recente (que é a que a tela de configuração acabou de gravar).
+  const mapa = {};
+  lista.slice().reverse().forEach((r) => {
+    const bruto = r && r.variaveis_proposta_por_familia;
+    let obj = null;
+    if (typeof bruto === 'string') { try { obj = JSON.parse(bruto); } catch (_) { obj = null; } }
+    else if (bruto && typeof bruto === 'object') obj = bruto;
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+    Object.entries(obj).forEach(([fam, val]) => {
+      if (Array.isArray(val) ? val.length > 0 : Boolean(val)) mapa[fam] = val;
+    });
+  });
+  return { ...preferida, variaveis_proposta_por_familia: mapa };
+}
+
 app.get('/api/propostas/:id/premium', (req, res) => {
   let responseSent = false;
   let timeoutId = null;
@@ -8644,15 +8682,14 @@ app.get('/api/propostas/:id/premium', (req, res) => {
           return true;
         };
         const familiaTemplate = pareceFamiliaDeTemplate(familiaTemplateCandidate) ? familiaTemplateCandidate : null;
-        const templateQuery = familiaTemplate
-          ? 'SELECT * FROM proposta_template_config WHERE (familia = ? OR familia IS NULL OR familia = \'\') ORDER BY CASE WHEN familia = ? THEN 0 ELSE 1 END, id DESC LIMIT 1'
-          : 'SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1';
-        const templateParams = familiaTemplate ? [familiaTemplate, familiaTemplate] : [];
-        db.get(templateQuery, templateParams, (err, templateConfig) => {
+        // Lê TODAS as linhas: a escolha da linha e a mesclagem do mapa de variáveis por
+        // família ficam em resolverTemplateConfig (ver o comentário lá).
+        db.all('SELECT * FROM proposta_template_config ORDER BY id DESC', [], (err, templateRows) => {
           if (err) {
             console.error('Erro ao buscar configuração do template:', err);
-            templateConfig = null;
+            templateRows = [];
           }
+          let templateConfig = resolverTemplateConfig(templateRows, familiaTemplate);
           if (!templateConfig) templateConfig = {};
           templateConfig.margin_impressao_top_primeira = templateConfig.margin_impressao_top_primeira != null ? Number(templateConfig.margin_impressao_top_primeira) : 20;
           templateConfig.margin_impressao_top_outras = templateConfig.margin_impressao_top_outras != null ? Number(templateConfig.margin_impressao_top_outras) : 50;
@@ -8889,24 +8926,13 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       return true;
     };
     const familiaTemplate = pareceFamiliaDeTemplate(familiaTemplateCandidate) ? familiaTemplateCandidate : null;
-    const templateQuery = familiaTemplate
-      // SEM WHERE: o filtro antigo (familia = ? OR IS NULL OR = '') DESCARTAVA a linha de
-      // configuração quando ela tinha familia preenchida com outro valor — inclusive
-      // 'Geral', que é justamente o balde padrão usado ao SALVAR (ver POST
-      // /api/proposta-template: "WHERE familia IS NULL OR familia = 'Geral'"). Resultado:
-      // o admin marcava as variáveis por família, salvava em 'Geral', e a proposta lia
-      // NENHUMA configuração — as variáveis simplesmente não apareciam no Escopo.
-      // Agora a preferência vira ordenação: família exata > padrão (NULL/''/Geral) >
-      // qualquer outra, garantindo que sempre exista configuração quando há alguma linha.
-      ? 'SELECT * FROM proposta_template_config ORDER BY CASE WHEN familia = ? THEN 0 WHEN familia IS NULL OR familia = \'\' OR familia = \'Geral\' THEN 1 ELSE 2 END, id DESC LIMIT 1'
-      : 'SELECT * FROM proposta_template_config ORDER BY id DESC LIMIT 1';
-    const templateParams = familiaTemplate ? [familiaTemplate] : [];
-    let templateConfig = await new Promise((resolve, reject) => {
-      db.get(templateQuery, templateParams, (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
+    // Mesma resolução do preview (ver resolverTemplateConfig): lê todas as linhas,
+    // escolhe a preferida e mescla o mapa de variáveis por família. Sem isso o PDF
+    // poderia divergir do preview justamente nas variáveis do Escopo.
+    const templateRows = await new Promise((resolve) => {
+      db.all('SELECT * FROM proposta_template_config ORDER BY id DESC', [], (err, rows) => resolve(err ? [] : (rows || [])));
     });
+    let templateConfig = resolverTemplateConfig(templateRows, familiaTemplate);
     if (templateConfig) {
       templateConfig.margin_impressao_top_primeira = templateConfig.margin_impressao_top_primeira != null ? Number(templateConfig.margin_impressao_top_primeira) : 20;
       templateConfig.margin_impressao_top_outras = templateConfig.margin_impressao_top_outras != null ? Number(templateConfig.margin_impressao_top_outras) : 50;

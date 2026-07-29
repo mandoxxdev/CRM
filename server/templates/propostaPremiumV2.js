@@ -446,7 +446,12 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       const itemIdPersistencia = (it.id != null ? it.id : idx);
       // semCapsLock só no que é TEXTO descritivo. Código, modelo e NCM ficam intactos: são
       // identificadores ("MPY-500", "AISI 316", "8474.20.90") e rebaixá-los mudaria o dado.
-      const nome = esc(semCapsLock(it.produto_nome || it.descricao || `Equipamento ${n}`));
+      const nomeBruto = it.produto_nome || it.descricao || `Equipamento ${n}`;
+      const nome = esc(semCapsLock(nomeBruto));
+      // O TÍTULO do item (4.x) sai sempre em caixa alta, como os demais títulos do
+      // documento. Só o título: no corpo ("Equipamento: ...") o nome continua em caixa
+      // de frase, que é o tratamento dado a todo texto descritivo (ver semCapsLock).
+      const nomeTitulo = esc(String(nomeBruto).toLocaleUpperCase('pt-BR'));
       const codigo = esc(it.codigo_produto || it.produto_codigo || '—');
       const qtd = esc(Number(it.quantidade) || 1);
       const und = esc(semCapsLock(it.unidade || 'UN'));
@@ -585,7 +590,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         : '';
 
       return `
-        <h3>${itemNo} ${nome}</h3>
+        <h3>${itemNo} ${nomeTitulo}</h3>
         <div class="equip-specs-kv">
           ${fotoHtml}
           ${descritivoTec ? `<p>Descritivo técnico:</p><div class="equip-descritivo">${descritivoTec}</div>` : ''}
