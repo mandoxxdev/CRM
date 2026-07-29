@@ -816,7 +816,7 @@ export default function PropostaForm() {
                         </select>
                       </label>
                     </div>
-                  </div>                  </div>
+                  </div>
                 </div>
               ))}
               <div className="proposta-form-totais">
