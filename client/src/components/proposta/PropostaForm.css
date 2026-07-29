@@ -168,17 +168,18 @@
 .proposta-form-itens-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .proposta-form-item-card {
-  background: var(--gmp-bg);
+  background: var(--gmp-surface);
   border: 1px solid var(--gmp-border);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .proposta-form-item-card.is-manual {
@@ -190,6 +191,9 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(180deg, rgba(0, 102, 204, 0.06) 0%, transparent 100%);
+  border-bottom: 1px solid var(--gmp-border);
 }
 
 .proposta-form-item-main {
@@ -197,14 +201,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .proposta-form-item-code {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--gmp-text-light);
+  letter-spacing: 0.03em;
+  color: var(--gmp-primary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -218,58 +222,70 @@
 }
 
 .proposta-form-item-desc {
-  font-size: 0.98rem;
-  font-weight: 600;
+  font-size: 1.02rem;
+  font-weight: 700;
   color: var(--gmp-text);
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .proposta-form-item-grid {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0;
+  padding: 0.85rem 1rem 1rem;
 }
 
-.proposta-form-item-row {
+.proposta-form-item-panel {
   display: grid;
-  gap: 0.65rem 0.75rem;
+  gap: 0.75rem;
   align-items: end;
 }
 
-.proposta-form-item-row-valores {
-  grid-template-columns: 88px 72px minmax(168px, 1.2fr) minmax(150px, 1fr);
+.proposta-form-item-panel-valores {
+  grid-template-columns: 72px 64px minmax(140px, 1.2fr) 110px minmax(140px, 1fr);
+  padding: 0.85rem;
+  border-radius: 10px;
+  background: var(--gmp-bg);
+  border: 1px solid var(--gmp-border);
 }
 
-.proposta-form-item-row-meta {
-  grid-template-columns: minmax(0, 1.6fr) minmax(140px, 0.8fr);
+.proposta-form-item-panel-meta {
+  grid-template-columns: minmax(0, 1.6fr) minmax(140px, 0.85fr);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--gmp-border);
 }
 
 .proposta-form-item-field {
   display: flex;
   flex-direction: column;
-  gap: 0.28rem;
+  gap: 0.35rem;
   min-width: 0;
   margin: 0;
 }
 
 .proposta-form-item-field > span {
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--gmp-text-light);
+  letter-spacing: 0.05em;
+  color: #64748b;
 }
 
 .proposta-form-item-static {
   display: flex;
   align-items: center;
   min-height: 40px;
+  padding: 0 0.55rem;
   font-size: 0.92rem;
+  font-weight: 600;
   color: var(--gmp-text);
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
 }
 
-.proposta-form-money-input,
-.proposta-form-money-display {
+.proposta-form-money-input {
   display: flex;
   align-items: stretch;
   min-height: 40px;
@@ -288,9 +304,9 @@
   display: inline-flex;
   align-items: center;
   padding: 0 0.65rem;
-  background: var(--gmp-bg);
+  background: #eef2f7;
   border-right: 1px solid var(--gmp-border);
-  color: var(--gmp-text-light);
+  color: #64748b;
   font-size: 0.85rem;
   font-weight: 700;
   flex-shrink: 0;
@@ -312,7 +328,6 @@
   box-sizing: border-box;
 }
 
-/* esconde setas do number no valor */
 .proposta-form-item-card .input-money::-webkit-outer-spin-button,
 .proposta-form-item-card .input-money::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -324,15 +339,45 @@
   appearance: textfield;
 }
 
-.proposta-form-money-display {
+.proposta-form-price-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  min-height: 40px;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+}
+
+.proposta-form-price-old {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-decoration: line-through;
+  font-variant-numeric: tabular-nums;
+}
+
+.proposta-form-price-now {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--gmp-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.proposta-form-total-chip {
+  display: flex;
   align-items: center;
   justify-content: flex-end;
+  min-height: 40px;
   padding: 0 0.75rem;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--gmp-primary) 0%, var(--gmp-primary-dark, #004a99) 100%);
+  color: #fff;
   font-size: 0.95rem;
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--gmp-text);
-  background: var(--gmp-bg);
+  box-shadow: 0 4px 10px rgba(0, 102, 204, 0.22);
 }
 
 .proposta-form-item-card .input-num,
@@ -353,10 +398,7 @@
 .proposta-form-item-card .input-num {
   font-variant-numeric: tabular-nums;
   text-align: right;
-}
-
-.proposta-form-item-field-familia .input-select-sm {
-  text-overflow: ellipsis;
+  font-weight: 600;
 }
 
 .proposta-form-item-card .btn-remove {
@@ -366,11 +408,11 @@
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  background: none;
+  background: var(--gmp-surface);
   border: 1px solid var(--gmp-border);
   border-radius: 8px;
   cursor: pointer;
-  color: var(--gmp-text-light);
+  color: #94a3b8;
   padding: 0;
 }
 
@@ -378,6 +420,38 @@
   border-color: var(--gmp-error);
   color: var(--gmp-error);
   background: rgba(220, 38, 38, 0.06);
+}
+
+.proposta-form-item-card .btn-desconto {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 40px;
+  padding: 0.35rem 0.7rem;
+  border: 1px dashed var(--gmp-primary);
+  border-radius: 8px;
+  background: rgba(0, 102, 204, 0.06);
+  color: var(--gmp-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+}
+
+.proposta-form-item-card .btn-desconto:hover {
+  background: rgba(0, 102, 204, 0.12);
+}
+
+.proposta-form-item-card .btn-desconto.has-value {
+  border-style: solid;
+  background: rgba(0, 102, 204, 0.12);
+}
+
+.proposta-form-item-card .btn-desconto.is-alert {
+  border-color: #d97706;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
 }
 
 .proposta-form-total {
@@ -388,26 +462,27 @@
   background: var(--gmp-surface);
   color: var(--gmp-text);
   text-align: right;
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
 @media (max-width: 900px) {
-  .proposta-form-item-row-valores {
+  .proposta-form-item-panel-valores {
     grid-template-columns: 1fr 1fr;
   }
 
-  .proposta-form-item-field-valor,
-  .proposta-form-item-field-total {
+  .field-preco,
+  .field-total,
+  .field-desconto {
     grid-column: 1 / -1;
   }
 
-  .proposta-form-item-row-meta {
+  .proposta-form-item-panel-meta {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 560px) {
-  .proposta-form-item-row-valores {
+  .proposta-form-item-panel-valores {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -491,56 +566,6 @@
 
 .proposta-form-desconto-resumo.is-alert strong {
   color: var(--gmp-warning-dark, #b45309);
-}
-
-.proposta-form-valor-catalogo {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.proposta-form-money-display.is-locked {
-  justify-content: flex-end;
-  opacity: 0.95;
-}
-
-.proposta-form-desconto-badge {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--gmp-primary);
-}
-
-.proposta-form-desconto-badge em {
-  font-style: normal;
-  font-weight: 500;
-  color: var(--gmp-text-light);
-  margin-left: 0.25rem;
-}
-
-.proposta-form-desconto-badge.is-alert {
-  color: var(--gmp-warning-dark, #b45309);
-}
-
-.proposta-form-item-card .btn-desconto {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 34px;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--gmp-border);
-  border-radius: 8px;
-  background: var(--gmp-surface);
-  color: var(--gmp-text);
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  width: fit-content;
-}
-
-.proposta-form-item-card .btn-desconto:hover {
-  border-color: var(--gmp-primary);
-  color: var(--gmp-primary);
 }
 
 .proposta-form-modal-overlay {

@@ -738,8 +738,8 @@ export default function PropostaForm() {
                   </div>
 
                   <div className="proposta-form-item-grid">
-                    <div className="proposta-form-item-row proposta-form-item-row-valores">
-                      <label className="proposta-form-item-field">
+                    <div className="proposta-form-item-panel proposta-form-item-panel-valores">
+                      <label className="proposta-form-item-field field-qtd">
                         <span>Qtd</span>
                         <input
                           type="number"
@@ -750,7 +750,7 @@ export default function PropostaForm() {
                           className="input-num"
                         />
                       </label>
-                      <label className="proposta-form-item-field">
+                      <label className="proposta-form-item-field field-un">
                         <span>Un.</span>
                         {item.manual ? (
                           <input
@@ -763,8 +763,9 @@ export default function PropostaForm() {
                           <span className="proposta-form-item-static">{item.unidade || '—'}</span>
                         )}
                       </label>
-                      <label className="proposta-form-item-field proposta-form-item-field-valor">
-                        <span>Valor unitário</span>
+
+                      <div className="proposta-form-item-field field-preco">
+                        <span>{item.manual ? 'Valor unitário' : 'Preço tabela'}</span>
                         {item.manual ? (
                           <div className="proposta-form-money-input">
                             <span className="proposta-form-money-prefix" aria-hidden="true">R$</span>
@@ -779,38 +780,45 @@ export default function PropostaForm() {
                             />
                           </div>
                         ) : (
-                          <div className="proposta-form-valor-catalogo">
-                            <div className="proposta-form-money-display is-locked" title="Preço do catálogo — use Desconto para alterar">
-                              {formatMoney(item.valor_unitario)}
-                            </div>
-                            {(Number(item.desconto_percentual) || 0) > 0 && (
-                              <span className={`proposta-form-desconto-badge${(Number(item.desconto_percentual) || 0) > DESCONTO_LIMITE_SEM_APROVACAO ? ' is-alert' : ''}`}>
-                                −{Number(item.desconto_percentual).toFixed(1)}%
-                                {item.preco_tabela != null && (
-                                  <em> de {formatMoney(item.preco_tabela)}</em>
-                                )}
-                              </span>
+                          <div className="proposta-form-price-block">
+                            {(Number(item.desconto_percentual) || 0) > 0 && item.preco_tabela != null ? (
+                              <>
+                                <span className="proposta-form-price-old">{formatMoney(item.preco_tabela)}</span>
+                                <strong className="proposta-form-price-now">{formatMoney(item.valor_unitario)}</strong>
+                              </>
+                            ) : (
+                              <strong className="proposta-form-price-now">{formatMoney(item.valor_unitario)}</strong>
                             )}
-                            <button
-                              type="button"
-                              className="btn-desconto"
-                              onClick={() => abrirDescontoItem(idx, item)}
-                            >
-                              <FiPercent /> Desconto
-                            </button>
                           </div>
                         )}
-                      </label>
-                      <div className="proposta-form-item-field proposta-form-item-field-total">
+                      </div>
+
+                      {!item.manual && (
+                        <div className="proposta-form-item-field field-desconto">
+                          <span>Desconto</span>
+                          <button
+                            type="button"
+                            className={`btn-desconto${(Number(item.desconto_percentual) || 0) > 0 ? ' has-value' : ''}${(Number(item.desconto_percentual) || 0) > DESCONTO_LIMITE_SEM_APROVACAO ? ' is-alert' : ''}`}
+                            onClick={() => abrirDescontoItem(idx, item)}
+                          >
+                            <FiPercent />
+                            {(Number(item.desconto_percentual) || 0) > 0
+                              ? `${Number(item.desconto_percentual).toFixed(1)}%`
+                              : 'Aplicar'}
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="proposta-form-item-field field-total">
                         <span>Total do item</span>
-                        <div className="proposta-form-money-display">
+                        <div className="proposta-form-total-chip">
                           {formatMoney(item.valor_total)}
                         </div>
                       </div>
                     </div>
 
-                    <div className="proposta-form-item-row proposta-form-item-row-meta">
-                      <label className="proposta-form-item-field proposta-form-item-field-familia">
+                    <div className="proposta-form-item-panel proposta-form-item-panel-meta">
+                      <label className="proposta-form-item-field field-familia">
                         <span>Família</span>
                         <select
                           value={item.familia_produto}
@@ -824,7 +832,7 @@ export default function PropostaForm() {
                           ))}
                         </select>
                       </label>
-                      <label className="proposta-form-item-field proposta-form-item-field-regiao">
+                      <label className="proposta-form-item-field field-regiao">
                         <span>Região</span>
                         <select
                           value={item.regiao_busca}
@@ -838,7 +846,7 @@ export default function PropostaForm() {
                         </select>
                       </label>
                     </div>
-                  </div>
+                  </div>                  </div>
                 </div>
               ))}
               <p className="proposta-form-total">
