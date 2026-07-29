@@ -1,6 +1,6 @@
 .proposta-form {
   padding: var(--spacing-xl);
-  max-width: 1000px;
+  max-width: 1100px;
   margin: 0 auto;
   color: var(--gmp-text);
 }
@@ -145,6 +145,191 @@
   color: var(--gmp-text-light);
 }
 
+.proposta-form-itens-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+
+.proposta-form-itens-header h2 {
+  margin: 0;
+}
+
+.proposta-form-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0;
+}
+
+.proposta-form-itens-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.proposta-form-item-card {
+  background: var(--gmp-bg);
+  border: 1px solid var(--gmp-border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.proposta-form-item-card.is-manual {
+  border-left: 3px solid var(--gmp-primary);
+}
+
+.proposta-form-item-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.proposta-form-item-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.proposta-form-item-code {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--gmp-text-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.proposta-form-item-code span {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.proposta-form-item-desc {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--gmp-text);
+  line-height: 1.35;
+}
+
+.proposta-form-item-grid {
+  display: grid;
+  grid-template-columns: 88px 72px minmax(130px, 1fr) minmax(110px, 0.9fr) minmax(180px, 1.4fr) minmax(120px, 0.9fr);
+  gap: 0.65rem 0.75rem;
+  align-items: end;
+}
+
+.proposta-form-item-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.proposta-form-item-field > span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gmp-text-light);
+}
+
+.proposta-form-item-static,
+.proposta-form-item-total {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  font-size: 0.92rem;
+  color: var(--gmp-text);
+}
+
+.proposta-form-item-total {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.proposta-form-item-card .input-num,
+.proposta-form-item-card .input-text,
+.proposta-form-item-card .input-text-sm,
+.proposta-form-item-card .input-select-sm {
+  width: 100%;
+  min-height: 36px;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  box-sizing: border-box;
+}
+
+.proposta-form-item-card .input-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.proposta-form-item-card .btn-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--gmp-text-light);
+  padding: 0;
+}
+
+.proposta-form-item-card .btn-remove:hover {
+  border-color: var(--gmp-error);
+  color: var(--gmp-error);
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.proposta-form-total {
+  margin: 0.25rem 0 0 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--gmp-border);
+  border-radius: 10px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  text-align: right;
+  font-size: 1rem;
+}
+
+@media (max-width: 900px) {
+  .proposta-form-item-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .proposta-form-item-field-familia,
+  .proposta-form-item-field-valor {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .proposta-form-item-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* tabela legada (caso ainda exista em outro fluxo) */
 .proposta-form-table-wrap {
   margin-top: 0.75rem;
   overflow: auto;
@@ -167,37 +352,6 @@
   background: linear-gradient(135deg, var(--gmp-primary) 0%, var(--gmp-primary-dark) 100%);
   font-size: 0.8rem;
   color: #fff;
-}
-
-.proposta-form-table .input-num {
-  width: 80px;
-  padding: 0.35rem;
-}
-
-.proposta-form-table .btn-remove {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: none;
-  border: 1px solid var(--gmp-error);
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--gmp-error);
-  padding: 0.3rem 0.55rem;
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.proposta-form-table .btn-remove:hover {
-  background: var(--gmp-error);
-  color: #fff;
-}
-
-.proposta-form-total {
-  margin: 0.5rem 0 0 0;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--gmp-border);
-  color: var(--gmp-text);
 }
 
 .proposta-form-section-dashboard {
@@ -224,41 +378,6 @@
 
 .proposta-form-field-required label {
   color: var(--gmp-warning);
-}
-
-.proposta-form-item-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.proposta-form-table .input-text,
-.proposta-form-table .input-text-sm,
-.proposta-form-table .input-select-sm {
-  padding: 0.35rem;
-  border: 1px solid var(--gmp-border);
-  border-radius: 6px;
-  font-size: 0.85rem;
-  background: var(--gmp-bg);
-  color: var(--gmp-text);
-}
-
-.proposta-form-table .input-text {
-  min-width: 160px;
-}
-
-.proposta-form-table .input-text-sm {
-  width: 72px;
-}
-
-.proposta-form-table .input-select-sm {
-  min-width: 110px;
-  font-size: 0.8rem;
-}
-
-.proposta-form-table tr.item-manual td:first-child {
-  border-left: 3px solid var(--gmp-primary);
 }
 
 .proposta-form-pdf-anexo {

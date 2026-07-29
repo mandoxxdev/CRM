@@ -569,71 +569,133 @@ export default function PropostaForm() {
           </div>
         </section>
 
-        <section className="proposta-form-section">
-          <h2><FiFileText /> Itens da proposta</h2>
-          <div className="proposta-form-item-actions">
-            <button type="button" className="btn btn-pri" onClick={() => setShowProdutos(true)}><FiPlus /> Catálogo de produtos</button>
-            <button type="button" className="btn btn-sec" onClick={addManualItem}><FiPlus /> Item manual</button>
+        <section className="proposta-form-section proposta-form-section-itens">
+          <div className="proposta-form-itens-header">
+            <h2><FiFileText /> Itens da proposta</h2>
+            <div className="proposta-form-item-actions">
+              <button type="button" className="btn btn-pri" onClick={() => setShowProdutos(true)}><FiPlus /> Catálogo de produtos</button>
+              <button type="button" className="btn btn-sec" onClick={addManualItem}><FiPlus /> Item manual</button>
+            </div>
           </div>
           {itens.length === 0 ? (
             <p className="proposta-form-empty">Nenhum item. Adicione do catálogo ou crie um item manual (texto livre).</p>
           ) : (
-            <div className="proposta-form-table-wrap">
-              <table className="proposta-form-table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Descrição</th>
-                    <th>Qtd</th>
-                    <th>Un.</th>
-                    <th>Val. unit.</th>
-                    <th>Total</th>
-                    <th>Família</th>
-                    <th>Região</th>
-                    <th>Remover</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {itens.map((item, idx) => (
-                    <tr key={idx} className={item.manual ? 'item-manual' : ''}>
-                      <td>
+            <div className="proposta-form-itens-list">
+              {itens.map((item, idx) => (
+                <div key={idx} className={`proposta-form-item-card${item.manual ? ' is-manual' : ''}`}>
+                  <div className="proposta-form-item-card-top">
+                    <div className="proposta-form-item-main">
+                      <div className="proposta-form-item-code" title={item.codigo_produto || ''}>
                         {item.manual ? (
-                          <input type="text" value={item.codigo_produto} onChange={(e) => updateItem(idx, 'codigo_produto', e.target.value)} placeholder="Opcional" className="input-text-sm" />
-                        ) : (item.codigo_produto || '—')}
-                      </td>
-                      <td>
+                          <input
+                            type="text"
+                            value={item.codigo_produto}
+                            onChange={(e) => updateItem(idx, 'codigo_produto', e.target.value)}
+                            placeholder="Código (opcional)"
+                            className="input-text-sm"
+                          />
+                        ) : (
+                          <span>{item.codigo_produto || '—'}</span>
+                        )}
+                      </div>
+                      <div className="proposta-form-item-desc">
                         {item.manual ? (
-                          <input type="text" value={item.descricao} onChange={(e) => updateItem(idx, 'descricao', e.target.value)} placeholder="Descrição do item" className="input-text" required />
-                        ) : item.descricao}
-                      </td>
-                      <td><input type="number" min={0.01} step={0.01} value={item.quantidade} onChange={(e) => updateItem(idx, 'quantidade', e.target.value)} className="input-num" /></td>
-                      <td>
-                        {item.manual ? (
-                          <input type="text" value={item.unidade} onChange={(e) => updateItem(idx, 'unidade', e.target.value)} className="input-text-sm" />
-                        ) : item.unidade}
-                      </td>
-                      <td><input type="number" min={0} step={0.01} value={item.valor_unitario} onChange={(e) => updateItem(idx, 'valor_unitario', e.target.value)} className="input-num" /></td>
-                      <td>{formatMoney(item.valor_total)}</td>
-                      <td>
-                        <select value={item.familia_produto} onChange={(e) => updateItem(idx, 'familia_produto', e.target.value)} className="input-select-sm">
-                          <option value="">—</option>
-                          {familiasProduto.map((fam) => <option key={fam} value={fam}>{fam}</option>)}
-                        </select>
-                      </td>
-                      <td>
-                        <select value={item.regiao_busca} onChange={(e) => updateItem(idx, 'regiao_busca', e.target.value)} className="input-select-sm">
-                          <option value="">—</option>
-                          {REGIOES_BUSCA.map((r) => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      </td>
-                      <td>
-                        <button type="button" className="btn-remove" onClick={() => removeItem(idx)} title="Remover item"><FiTrash2 /> Remover</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="proposta-form-total"><strong>Total: {formatMoney(itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0))}</strong></p>
+                          <input
+                            type="text"
+                            value={item.descricao}
+                            onChange={(e) => updateItem(idx, 'descricao', e.target.value)}
+                            placeholder="Descrição do item"
+                            className="input-text"
+                            required
+                          />
+                        ) : (
+                          <span>{item.descricao}</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-remove"
+                      onClick={() => removeItem(idx)}
+                      title="Remover item"
+                      aria-label="Remover item"
+                    >
+                      <FiTrash2 />
+                    </button>
+                  </div>
+
+                  <div className="proposta-form-item-grid">
+                    <label className="proposta-form-item-field">
+                      <span>Qtd</span>
+                      <input
+                        type="number"
+                        min={0.01}
+                        step={0.01}
+                        value={item.quantidade}
+                        onChange={(e) => updateItem(idx, 'quantidade', e.target.value)}
+                        className="input-num"
+                      />
+                    </label>
+                    <label className="proposta-form-item-field">
+                      <span>Un.</span>
+                      {item.manual ? (
+                        <input
+                          type="text"
+                          value={item.unidade}
+                          onChange={(e) => updateItem(idx, 'unidade', e.target.value)}
+                          className="input-text-sm"
+                        />
+                      ) : (
+                        <span className="proposta-form-item-static">{item.unidade || '—'}</span>
+                      )}
+                    </label>
+                    <label className="proposta-form-item-field proposta-form-item-field-valor">
+                      <span>Val. unit.</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={item.valor_unitario}
+                        onChange={(e) => updateItem(idx, 'valor_unitario', e.target.value)}
+                        className="input-num"
+                      />
+                    </label>
+                    <div className="proposta-form-item-field">
+                      <span>Total</span>
+                      <strong className="proposta-form-item-total">{formatMoney(item.valor_total)}</strong>
+                    </div>
+                    <label className="proposta-form-item-field proposta-form-item-field-familia">
+                      <span>Família</span>
+                      <select
+                        value={item.familia_produto}
+                        onChange={(e) => updateItem(idx, 'familia_produto', e.target.value)}
+                        className="input-select-sm"
+                      >
+                        <option value="">—</option>
+                        {familiasProduto.map((fam) => (
+                          <option key={fam} value={fam}>{fam}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="proposta-form-item-field">
+                      <span>Região</span>
+                      <select
+                        value={item.regiao_busca}
+                        onChange={(e) => updateItem(idx, 'regiao_busca', e.target.value)}
+                        className="input-select-sm"
+                      >
+                        <option value="">—</option>
+                        {REGIOES_BUSCA.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <p className="proposta-form-total">
+                <strong>Total: {formatMoney(itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0))}</strong>
+              </p>
             </div>
           )}
         </section>
