@@ -13930,17 +13930,28 @@ app.get('/api/produtos/proximo-codigo', authenticateToken, (req, res) => {
               if (errPos) return res.status(500).json({ error: errPos.message });
               const posicaoFamilia = (pos && pos.posicao) || 1;
               const prefixo = `${dois(fam.grupo_numero)}-${dois(posicaoFamilia)}-${modeloParam.toUpperCase()}`;
-              // Conta pelo PREFIXO já montado: pega qualquer produto cujo código comece com
-              // "grupo-familia-modelo-", independentemente do sequencial. Comparar pela
-              // coluna `modelo` seria frágil — produtos antigos podem ter o modelo só
-              // dentro do nome.
-              db.get(
-                "SELECT COUNT(*) AS n FROM produtos WHERE UPPER(TRIM(COALESCE(codigo,''))) LIKE ?",
+              // Sequencial: MAIOR sufixo numérico já usado neste prefixo, + 1.
+              //
+              // O LIKE só pré-filtra; quem decide é a regex, que exige APENAS DÍGITOS
+              // depois do modelo. Sem isso o prefixo "20-02-MBY-" casava com
+              // "20-02-MBY-30-01" (modelo MBY-30), e cadastrar um MBY já saía como 02
+              // por causa de um produto de OUTRO modelo.
+              //
+              // MAX em vez de COUNT: se um produto for excluído, o COUNT reutilizaria um
+              // número já impresso em proposta, gerando dois produtos com o mesmo código.
+              db.all(
+                "SELECT codigo FROM produtos WHERE UPPER(TRIM(COALESCE(codigo,''))) LIKE ?",
                 [`${prefixo}-%`],
-                (errCount, row) => {
+                (errCount, rows) => {
                   if (errCount) return res.status(500).json({ error: errCount.message });
-                  const sequencial = dois((row && row.n ? row.n : 0) + 1);
-                  return res.json({ codigo: `${prefixo}-${sequencial}` });
+                  const prefixoRegex = prefixo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                  const re = new RegExp(`^${prefixoRegex}-(\\d+)$`);
+                  let maior = 0;
+                  (rows || []).forEach((r) => {
+                    const m = re.exec(String(r.codigo || '').trim().toUpperCase());
+                    if (m) maior = Math.max(maior, parseInt(m[1], 10) || 0);
+                  });
+                  return res.json({ codigo: `${prefixo}-${dois(maior + 1)}` });
                 }
               );
             }
@@ -13949,31 +13960,16 @@ app.get('/api/produtos/proximo-codigo', authenticateToken, (req, res) => {
       );
     }
 
-    // Formato antigo (rascunho enquanto o modelo não foi informado)
-    // Pegar as 3 primeiras letras do nome (em maiúsculas, removendo espaços e caracteres especiais)
-    let iniciaisNome = '';
-    if (nome && nome.trim()) {
-      // Remover espaços e caracteres especiais, pegar 3 primeiras letras
-      const nomeLimpo = nome.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-      iniciaisNome = nomeLimpo.substring(0, 3).padEnd(3, 'X'); // Se tiver menos de 3 letras, preencher com X
-    } else {
-      iniciaisNome = 'XXX';
-    }
-    
-    // Pegar as 5 primeiras letras da família (em maiúsculas)
-    let iniciaisFamilia = '';
-    if (familia && familia.trim()) {
-      const familiaLimpa = familia.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-      iniciaisFamilia = familiaLimpa.substring(0, 5).padEnd(5, 'X'); // Se tiver menos de 5 letras, preencher com X
-    } else {
-      // Se não tiver família, usar "GENXX" (genérico)
-      iniciaisFamilia = 'GENXX';
-    }
-    
-    // Gerar código no formato: PROD-NUMERO-3PRIMEIRASLETRASDONOMEDOPRODUTO-5LETRASINICIALDAFAMILIASELECIONADA
-    const proximoCodigo = `PROD-${quantidadeProdutos}-${iniciaisNome}-${iniciaisFamilia}`;
-    
-    res.json({ codigo: proximoCodigo });
+    // Sem família ou sem modelo não há como montar o código. Devolve VAZIO em vez do
+    // formato antigo (PROD-<total>-<3 letras>-<5 letras>): mostrar um código que não é o
+    // que será gravado confunde — o campo aparecia preenchido com "PROD-25-XXX-MBYXX" e
+    // trocava sozinho quando o usuário digitava o modelo.
+    return res.json({
+      codigo: '',
+      aviso: !familia || !familia.trim()
+        ? 'Selecione a Família para gerar o código.'
+        : 'Informe o Modelo para gerar o código.',
+    });
   });
 });
 

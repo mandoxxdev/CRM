@@ -134,8 +134,9 @@ const r = secao4DoItem({
 checar(r.equipamento === 'MASSEIRA HELICOIDAL ATM', `Equipamento inalterado -> ${JSON.stringify(r.equipamento)}`);
 checar(r.quantidade === '1 UN', `Quantidade com a unidade como cadastrada -> ${JSON.stringify(r.quantidade)}`);
 checar(r.familia === 'MASSEIRA HELICOIDAL ATM [MHY]', `Família inalterada -> ${JSON.stringify(r.familia)}`);
-// O CODIGO nao sai mais na proposta (e interno); no lugar dele vai o MODELO.
-checar(r.codigo === null, `Código nao aparece na proposta -> ${JSON.stringify(r.codigo)}`);
+// O codigo voltou a aparecer depois que passou a ser significativo
+// (GRUPO-FAMILIA-MODELO-SEQUENCIAL); antes era PROD-24-MAS-MASSE, interno.
+checar(r.codigo === 'PROD-24-MAS-MASSE', `Código aparece na proposta -> ${JSON.stringify(r.codigo)}`);
 checar(r.modelo === 'MHY-30', `Modelo intacto -> ${JSON.stringify(r.modelo)}`);
 checar(r.ncm === '8474.20.90', `NCM intacto -> ${JSON.stringify(r.ncm)}`);
 

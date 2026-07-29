@@ -313,10 +313,13 @@ const ProdutoForm = () => {
       
       const response = await api.get('/produtos/proximo-codigo', { params });
       
-      if (response.data && response.data.codigo) {
+      // Aplica inclusive quando vem VAZIO: o servidor devolve '' enquanto Familia/Modelo
+      // nao estiverem preenchidos, e o campo deve ficar em branco em vez de exibir um
+      // codigo de rascunho que nao sera o gravado.
+      if (response.data) {
         setFormData(prev => ({
           ...prev,
-          codigo: response.data.codigo
+          codigo: response.data.codigo || ''
         }));
       }
     } catch (error) {
@@ -344,12 +347,10 @@ const ProdutoForm = () => {
           codigo: `${iniciaisNome}-${diametro}-${espessura}-${material}`
         }));
       } else {
-        const iniciaisNome = nome.replace(/[^a-zA-Z0-9]/g, '').substring(0, 3).toUpperCase().padEnd(3, 'X');
-        const iniciaisFamilia = familia.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase().padEnd(5, 'X');
-        setFormData(prev => ({
-          ...prev,
-          codigo: `PROD-${quantidade}-${iniciaisNome}-${iniciaisFamilia}`
-        }));
+        // Falha ao consultar: deixa em branco. O codigo depende de dados do banco
+        // (numero do grupo, posicao da familia, sequencial), entao nao da para inventar
+        // um localmente sem arriscar gravar um codigo fora do padrao.
+        setFormData(prev => ({ ...prev, codigo: '' }));
       }
     }
   };
@@ -879,7 +880,7 @@ const ProdutoForm = () => {
                 value={formData.codigo}
                 onChange={handleChange}
                 required
-                placeholder="Código (gerado automaticamente)"
+                placeholder="Preencha Família e Modelo para gerar"
                 readOnly={!!isEdit}
                 className={formData.codigo ? 'field-valid' : ''}
               />
@@ -1043,7 +1044,7 @@ const ProdutoForm = () => {
                     value={formData.codigo}
                     onChange={handleChange}
                     required
-                    placeholder="Código gerado automaticamente"
+                    placeholder="Preencha Família e Modelo para gerar"
                     readOnly={!isEdit}
                     className={formData.codigo ? 'field-valid' : ''}
                   />
@@ -1327,7 +1328,7 @@ const ProdutoForm = () => {
                   value={formData.codigo}
                   onChange={handleChange}
                   required
-                  placeholder="Código gerado automaticamente"
+                  placeholder="Preencha Família e Modelo para gerar"
                   className={formData.codigo ? 'field-valid' : ''}
                   readOnly={!isEdit}
                 />

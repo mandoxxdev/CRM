@@ -607,8 +607,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${fotoHtml}
           ${descritivoTec ? `<p>Descritivo técnico:</p><div class="equip-descritivo">${descritivoTec}</div>` : ''}
           <p>Equipamento: ${nome}</p>
-          ${/* MODELO no lugar do CÓDIGO: o código (PROD-24-MAS-MASSE) é interno e não diz
-               nada ao cliente; o modelo (MHY-30) é a identificação comercial. */''}
+          ${/* Código E modelo. O código voltou a aparecer depois que passou a ser
+               significativo (GRUPO-FAMÍLIA-MODELO-SEQUENCIAL, ex.: 20-01-MHY-30-01);
+               antes era PROD-24-MAS-MASSE, que não dizia nada ao cliente. */''}
+          ${codigo !== '—' ? `<p>Código: ${codigo}</p>` : ''}
           ${modelo !== '—' ? `<p>Modelo: ${modelo}</p>` : ''}
           <p>Quantidade: ${qtd} ${und}</p>
           ${familia !== '—' ? `<p>Família: ${familia}</p>` : ''}
