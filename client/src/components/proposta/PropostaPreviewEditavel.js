@@ -731,8 +731,26 @@ export default function PropostaPreviewEditavel() {
     }
   }
 
+  // Próxima revisão, lida do sufixo REV do número da proposta (070-08-AJ-2026-REV06 → 7).
+  // Sai do NÚMERO e não de um campo separado porque é o número que o cliente enxerga no
+  // documento — e é ele que o servidor também usa como fonte ao emitir a revisão.
+  function proximaRevisao() {
+    const m = /REV\s*(\d+)\s*$/i.exec(numeroProposta || '');
+    return (m ? parseInt(m[1], 10) : 0) + 1;
+  }
+
   async function salvar() {
     if (!mudancasPendentes) return;
+
+    const rev = proximaRevisao();
+    const revFormatada = `REV${String(rev).padStart(2, '0')}`;
+    const confirmado = window.confirm(
+      'Deseja salvar esta alteração?\n\n'
+      + 'Ela será registrada no histórico e a proposta será emitida como '
+      + `revisão ${rev} (${revFormatada}).`
+    );
+    if (!confirmado) return;
+
     setSalvando(true);
     try {
       const doc = iframeRef.current?.contentDocument;
@@ -746,8 +764,11 @@ export default function PropostaPreviewEditavel() {
       if (Object.keys(camposEditados).length > 0) {
         await api.put(`/propostas/${id}/customizacoes`, camposEditados);
       }
+      // A revisão é emitida só DEPOIS de tudo gravar: se algum passo acima falhasse,
+      // o número avançaria sem que a alteração correspondente existisse.
+      const { data } = await api.post(`/propostas/${id}/revisao`);
       setMudancasPendentes(false);
-      toast.success('Alterações salvas com sucesso.');
+      toast.success(`Alterações salvas. Proposta emitida como ${data?.numero_proposta || revFormatada}.`);
       carregarPreview();
     } catch (e) {
       toast.error('Erro ao salvar alterações.');

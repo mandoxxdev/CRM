@@ -5882,6 +5882,50 @@ app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) =>
   });
 });
 
+// POST /api/propostas/:id/revisao — emite a proposta como uma NOVA revisão.
+// Chamado ao salvar alterações no preview editável: incrementa o REV do número da
+// proposta (070-08-AJ-2026-REV06 → ...-REV07) e registra no histórico de edições.
+//
+// A revisão atual é lida do SUFIXO do número, não da coluna `revisao`: o número é o que
+// o cliente vê no documento, e as duas podem divergir (propostas antigas, importações).
+// A coluna é atualizada junto para as duas voltarem a bater.
+app.post('/api/propostas/:id/revisao', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const usuarioId = req.user.id;
+
+  db.get('SELECT numero_proposta, revisao FROM propostas WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Proposta não encontrada' });
+
+    const numeroAtual = String(row.numero_proposta || '').trim();
+    const m = /REV\s*(\d+)\s*$/i.exec(numeroAtual);
+    const revisaoAtual = m ? parseInt(m[1], 10) : (parseInt(row.revisao, 10) || 0);
+    const novaRevisao = revisaoAtual + 1;
+    // padStart(2) mantém REV07; a partir de 100 o número cresce sozinho (revisões
+    // ilimitadas, sem truncar).
+    const sufixo = `REV${String(novaRevisao).padStart(2, '0')}`;
+    const novoNumero = m
+      ? numeroAtual.replace(/REV\s*\d+\s*$/i, sufixo)
+      : (numeroAtual ? `${numeroAtual}-${sufixo}` : sufixo);
+
+    db.run(
+      'UPDATE propostas SET numero_proposta = ?, revisao = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [novoNumero, novaRevisao, id],
+      (errUp) => {
+        if (errUp) return res.status(500).json({ error: errUp.message });
+        db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_e, u) => {
+          registrarEdicaoLog(
+            id, usuarioId, u?.nome || 'N/A', 'revisao_emitida', 'numero_proposta',
+            null, numeroAtual, novoNumero
+          );
+        });
+        res.json({ ok: true, revisao: novaRevisao, numero_proposta: novoNumero });
+      }
+    );
+  });
+});
+
 // GET /api/propostas/:id/edicoes-log
 app.get('/api/propostas/:id/edicoes-log', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
