@@ -463,6 +463,138 @@
   color: var(--gmp-warning);
 }
 
+.proposta-form-desconto-resumo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-height: 40px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-bg);
+}
+
+.proposta-form-desconto-resumo strong {
+  font-size: 1rem;
+  color: var(--gmp-text);
+}
+
+.proposta-form-desconto-resumo span {
+  font-size: 0.75rem;
+  color: var(--gmp-text-light);
+}
+
+.proposta-form-desconto-resumo.is-alert {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.proposta-form-desconto-resumo.is-alert strong {
+  color: var(--gmp-warning-dark, #b45309);
+}
+
+.proposta-form-valor-catalogo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.proposta-form-money-display.is-locked {
+  justify-content: flex-end;
+  opacity: 0.95;
+}
+
+.proposta-form-desconto-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--gmp-primary);
+}
+
+.proposta-form-desconto-badge em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--gmp-text-light);
+  margin-left: 0.25rem;
+}
+
+.proposta-form-desconto-badge.is-alert {
+  color: var(--gmp-warning-dark, #b45309);
+}
+
+.proposta-form-item-card .btn-desconto {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 34px;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.proposta-form-item-card .btn-desconto:hover {
+  border-color: var(--gmp-primary);
+  color: var(--gmp-primary);
+}
+
+.proposta-form-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 1rem;
+}
+
+.proposta-form-modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  color: var(--gmp-text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.proposta-form-modal h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
+}
+
+.proposta-form-modal-desc {
+  margin: 0 0 0.85rem 0;
+  font-size: 0.9rem;
+  color: var(--gmp-text-light);
+  line-height: 1.4;
+}
+
+.proposta-form-desconto-aviso {
+  margin: 0 0 0.75rem 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--gmp-warning-dark, #b45309);
+  font-size: 0.85rem;
+}
+
+.proposta-form-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .proposta-form-pdf-anexo {
   display: flex;
   flex-direction: column;

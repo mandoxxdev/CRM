@@ -2260,7 +2260,9 @@ function executeMigrations(callback) {
         { nome: 'opcionais', tipo: 'TEXT' },
         { nome: 'exclusoes', tipo: 'TEXT' },
         { nome: 'prazo_individual', tipo: 'TEXT' },
-        { nome: 'numero_item', tipo: 'INTEGER' }
+        { nome: 'numero_item', tipo: 'INTEGER' },
+        { nome: 'desconto_percentual', tipo: 'REAL DEFAULT 0' },
+        { nome: 'preco_tabela', tipo: 'REAL' }
       ];
       
       novasColunas.forEach(col => {
@@ -7643,8 +7645,8 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
               `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
                 valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
                 tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-                materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             );
 
             itens.forEach((item, index) => {
@@ -7670,7 +7672,9 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
                   item.opcionais || null,
                   item.exclusoes || null,
                   item.prazo_individual || null,
-                  item.numero_item != null ? item.numero_item : (index + 1)
+                  item.numero_item != null ? item.numero_item : (index + 1),
+                Number(item.desconto_percentual) || 0,
+                (item.preco_tabela != null ? Number(item.preco_tabela) : null)
                 ]);
               } catch (itemErr) {
                 console.error(`❌ Erro ao inserir item ${index}:`, itemErr);
@@ -7992,8 +7996,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                   `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
                     valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
                     tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                 );
 
                 // Preserva campos que o formulário não envia (modelo, descritivo_tecnico,
@@ -8008,7 +8012,9 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                     item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
                     item.materiais_construtivos || null, item.utilidades_requeridas || null,
                     item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
-                    item.numero_item != null ? item.numero_item : idx + 1
+                    item.numero_item != null ? item.numero_item : idx + 1,
+                  Number(item.desconto_percentual) || 0,
+                  (item.preco_tabela != null ? Number(item.preco_tabela) : null)
                   ]);
                 });
 
@@ -8308,7 +8314,7 @@ app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
           db.all('SELECT * FROM proposta_itens WHERE proposta_id = ?', [id], (errItens, itens) => {
             if (!errItens && itens && itens.length > 0) {
               const stmt = db.prepare(
-                `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca, tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo, materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca, tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo, materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
               );
               itens.forEach((item, idx) => {
                 stmt.run([
@@ -8318,7 +8324,9 @@ app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
                   item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
                   item.materiais_construtivos || null, item.utilidades_requeridas || null,
                   item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
-                  item.numero_item != null ? item.numero_item : idx + 1
+                  item.numero_item != null ? item.numero_item : idx + 1,
+                Number(item.desconto_percentual) || 0,
+                (item.preco_tabela != null ? Number(item.preco_tabela) : null)
                 ]);
               });
               stmt.finalize();
@@ -8486,8 +8494,8 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
             `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
               valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
               tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-              materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           );
 
           itens.forEach((item, idx) => {
@@ -8499,7 +8507,9 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
               item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
               item.materiais_construtivos || null, item.utilidades_requeridas || null,
               item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
-              item.numero_item != null ? item.numero_item : idx + 1
+              item.numero_item != null ? item.numero_item : idx + 1,
+            Number(item.desconto_percentual) || 0,
+            (item.preco_tabela != null ? Number(item.preco_tabela) : null)
             ]);
           });
 
