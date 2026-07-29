@@ -20,7 +20,6 @@ import WorkflowEngine from './WorkflowEngine';
 import AnimatedBackground from './AnimatedBackground';
 import HelpGuide from './HelpGuide';
 import HelpSearch from './HelpSearch';
-import ChatIA from './ChatIA';
 import ModuleSplash from './ModuleSplash';
 import ErrorBoundary from './ErrorBoundary';
 import { RouteLoading } from './LazyPage';
@@ -72,7 +71,6 @@ const Layout = () => {
   const [reportBuilderOpen, setReportBuilderOpen] = useState(false);
   const [workflowEngineOpen, setWorkflowEngineOpen] = useState(false);
   const [helpSearchOpen, setHelpSearchOpen] = useState(false);
-  const [chatIaOpen, setChatIaOpen] = useState(false);
   const [animatedBackgroundEnabled, setAnimatedBackgroundEnabled] = useState(
     localStorage.getItem('animatedBackground') !== 'false'
   );
@@ -537,11 +535,7 @@ const Layout = () => {
       <BuscaGlobal isOpen={buscaGlobalOpen} onClose={() => setBuscaGlobalOpen(false)} />
       <ReportBuilder isOpen={reportBuilderOpen} onClose={() => setReportBuilderOpen(false)} />
       <WorkflowEngine isOpen={workflowEngineOpen} onClose={() => setWorkflowEngineOpen(false)} />
-      <HelpGuide
-        hideFab={chatIaOpen}
-        onFabClick={() => setChatIaOpen(true)}
-      />
-      <ChatIA isOpen={chatIaOpen} onClose={() => setChatIaOpen(false)} />
+      <HelpGuide />
       <HelpSearch isOpen={helpSearchOpen} onClose={() => setHelpSearchOpen(false)} />
     </div>
   );

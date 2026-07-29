@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FiHelpCircle, FiX, FiChevronRight, FiChevronLeft, FiCheck, FiMessageCircle } from 'react-icons/fi';
+import { FiHelpCircle, FiX, FiChevronRight, FiChevronLeft, FiCheck } from 'react-icons/fi';
 import './HelpGuide.css';
 
-const HelpGuide = ({ onFabClick, hideFab = false }) => {
+const HelpGuide = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState(new Set());
@@ -135,17 +135,13 @@ const HelpGuide = ({ onFabClick, hideFab = false }) => {
 
   return (
     <>
-      {!hideFab && (
       <button
         className="help-guide-button"
-        onClick={onFabClick || startGuide}
-        title={onFabClick ? 'Orion I.A' : 'Iniciar guia de ajuda'}
-        aria-label={onFabClick ? 'Abrir Orion I.A' : 'Iniciar guia de ajuda'}
+        onClick={startGuide}
+        title="Iniciar guia de ajuda"
       >
-        <FiMessageCircle />
+        <FiHelpCircle />
       </button>
-      )}
-
       {isOpen && (
         <div className="help-guide-overlay" onClick={closeGuide}>
           <div className="help-guide-modal" onClick={(e) => e.stopPropagation()}>

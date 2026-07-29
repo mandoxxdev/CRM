@@ -22326,9 +22326,6 @@ require('./routes/producao')(app, db, authenticateToken, checkModulePermission);
 // ── Módulo TODOLIST ──────────────────────────────────────────────────────────
 require('./routes/todolist')(app, db, authenticateToken, checkModulePermission);
 
-// ── Assistente IA (Gemini free tier) ─────────────────────────────────────────
-require('./routes/aiAssistant')(app, db, authenticateToken);
-
 // Adaptador de WhatsApp (recebe {to,message} do alertService e envia via Z-API/Meta)
 require('./routes/whatsappGateway')(app);
 
