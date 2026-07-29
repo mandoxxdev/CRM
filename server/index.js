@@ -13887,7 +13887,10 @@ app.get('/api/produtos/proximo-codigo', authenticateToken, (req, res) => {
     
     // ===== Formato padrão: GRUPO-FAMILIA-MODELO-SEQUENCIAL (ex.: 20-01-MHY-30-01) =====
     // GRUPO     = grupos_produto.numero do grupo a que a família pertence (10, 20, 30...)
-    // FAMILIA   = familias_produto.codigo, com 2 dígitos
+    // FAMILIA   = POSIÇÃO da família DENTRO do grupo (01 = primeira família daquele grupo).
+    //             NÃO é familias_produto.codigo: aquele campo é um contador GLOBAL
+    //             (MAX(codigo)+10, e legado id*10), então a 17ª família do sistema valia
+    //             170 mesmo sendo a primeira do grupo 20.
     // MODELO    = produtos.modelo, como cadastrado (ex.: MHY-30)
     // SEQUENCIAL= quantos produtos JÁ existem com esse mesmo modelo na mesma família, +1.
     //             Assim a segunda MHY-30 vira ...-02, a terceira ...-03.
@@ -13897,7 +13900,8 @@ app.get('/api/produtos/proximo-codigo', authenticateToken, (req, res) => {
     if (modeloParam && familia && familia.trim()) {
       const dois = (v) => String(parseInt(v, 10) || 0).padStart(2, '0');
       return db.get(
-        `SELECT f.id AS familia_id, f.codigo AS familia_codigo, g.numero AS grupo_numero
+        `SELECT f.id AS familia_id, f.ordem AS familia_ordem, f.grupo_id AS grupo_id,
+                g.numero AS grupo_numero
            FROM familias_produto f
            LEFT JOIN grupos_produto g ON g.id = f.grupo_id
           WHERE TRIM(LOWER(f.nome)) = TRIM(LOWER(?))
@@ -13908,17 +13912,33 @@ app.get('/api/produtos/proximo-codigo', authenticateToken, (req, res) => {
           if (!fam) {
             return res.json({ codigo: '', aviso: 'Família não encontrada no cadastro de famílias.' });
           }
-          const prefixo = `${dois(fam.grupo_numero)}-${dois(fam.familia_codigo)}-${modeloParam.toUpperCase()}`;
-          // Conta pelo PREFIXO já montado: pega qualquer produto cujo código comece com
-          // "grupo-familia-modelo-", independentemente do sequencial. Comparar pela coluna
-          // `modelo` seria frágil — produtos antigos podem ter o modelo só dentro do nome.
+          // Posição da família dentro do grupo, na mesma ordem em que ela aparece na tela
+          // (ordem, depois id). Conta TODAS as famílias do grupo, inclusive inativas: o
+          // código vai impresso em proposta, e desativar uma família não pode renumerar as
+          // seguintes. IFNULL(-1) trata famílias sem grupo como um "grupo" próprio.
           db.get(
-            "SELECT COUNT(*) AS n FROM produtos WHERE UPPER(TRIM(COALESCE(codigo,''))) LIKE ?",
-            [`${prefixo}-%`],
-            (errCount, row) => {
-              if (errCount) return res.status(500).json({ error: errCount.message });
-              const sequencial = dois((row && row.n ? row.n : 0) + 1);
-              return res.json({ codigo: `${prefixo}-${sequencial}` });
+            `SELECT COUNT(*) + 1 AS posicao
+               FROM familias_produto x
+              WHERE IFNULL(x.grupo_id, -1) = IFNULL(?, -1)
+                AND (x.ordem < ? OR (x.ordem = ? AND x.id < ?))`,
+            [fam.grupo_id, fam.familia_ordem || 0, fam.familia_ordem || 0, fam.familia_id],
+            (errPos, pos) => {
+              if (errPos) return res.status(500).json({ error: errPos.message });
+              const posicaoFamilia = (pos && pos.posicao) || 1;
+              const prefixo = `${dois(fam.grupo_numero)}-${dois(posicaoFamilia)}-${modeloParam.toUpperCase()}`;
+              // Conta pelo PREFIXO já montado: pega qualquer produto cujo código comece com
+              // "grupo-familia-modelo-", independentemente do sequencial. Comparar pela
+              // coluna `modelo` seria frágil — produtos antigos podem ter o modelo só
+              // dentro do nome.
+              db.get(
+                "SELECT COUNT(*) AS n FROM produtos WHERE UPPER(TRIM(COALESCE(codigo,''))) LIKE ?",
+                [`${prefixo}-%`],
+                (errCount, row) => {
+                  if (errCount) return res.status(500).json({ error: errCount.message });
+                  const sequencial = dois((row && row.n ? row.n : 0) + 1);
+                  return res.json({ codigo: `${prefixo}-${sequencial}` });
+                }
+              );
             }
           );
         }
