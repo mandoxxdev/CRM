@@ -55,6 +55,7 @@
 }
 
 .proposta-detalhe-badge[data-status="rascunho"] { background: #64748b; }
+.proposta-detalhe-badge[data-status="desconto_aprovado"] { background: #059669; }
 .proposta-detalhe-badge[data-status="em_revisao"] { background: #6366f1; }
 .proposta-detalhe-badge[data-status="aprovada_internamente"] { background: #14b8a6; }
 .proposta-detalhe-badge[data-status="enviada"] { background: #0ea5e9; }
@@ -209,6 +210,22 @@
 .proposta-detalhe .btn-pri {
   background: linear-gradient(135deg, var(--gmp-primary) 0%, var(--gmp-primary-dark) 100%);
   color: #fff;
+}
+
+.proposta-detalhe .btn-enviar-pulse {
+  background: #059669 !important;
+  animation: proposta-enviar-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes proposta-enviar-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.55);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 10px rgba(5, 150, 105, 0);
+  }
 }
 
 .proposta-detalhe-modal-overlay {

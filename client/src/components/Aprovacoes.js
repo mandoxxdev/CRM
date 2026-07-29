@@ -65,7 +65,7 @@ const Aprovacoes = () => {
         aprovado_por: user?.id
       });
       console.log('✅ Aprovação confirmada:', response.data);
-      toast.success('Aprovação confirmada com sucesso!');
+      toast.success('Desconto aprovado! A proposta ficou como Desconto aprovado — envie-a para liberar o documento.');
       loadAprovacoes();
       setMostrarModal(false);
       setAprovacaoSelecionada(null);

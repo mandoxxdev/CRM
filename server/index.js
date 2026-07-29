@@ -7782,8 +7782,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
     
-    // VALIDAÇÃO: Se desconto > 5% e status não for rascunho, verificar se há aprovação aprovada
-    if (margem_desconto > 5 && status && status !== 'rascunho') {
+    // VALIDAÇÃO: Se desconto > 5% e status não for rascunho/desconto_aprovado, verificar se há aprovação aprovada
+    if (margem_desconto > 5 && status && status !== 'rascunho' && status !== 'desconto_aprovado') {
       // Verificar se existe uma aprovação aprovada para esta proposta com este desconto
       // Usar comparação com tolerância para valores decimais (evita problemas de precisão)
       const margemDescontoArredondada = Math.round(margem_desconto * 100) / 100;
@@ -8178,15 +8178,16 @@ app.post('/api/propostas/:id/enviar', authenticateToken, (req, res) => {
   db.get('SELECT id, status FROM propostas WHERE id = ?', [id], (err, proposta) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
-    if (proposta.status !== 'rascunho') {
-      return res.status(400).json({ error: 'Só é possível enviar proposta em rascunho' });
+    if (!['rascunho', 'desconto_aprovado'].includes(proposta.status)) {
+      return res.status(400).json({ error: 'Só é possível enviar proposta em rascunho ou com desconto aprovado' });
     }
+    const statusAnterior = proposta.status;
     db.run(
       `UPDATE propostas SET status = 'enviada', enviada_em = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [id],
       (errUpdate) => {
         if (errUpdate) return res.status(500).json({ error: errUpdate.message });
-        registrarStatusProposta(id, 'rascunho', 'enviada', userId, 'Proposta enviada ao cliente', () => {});
+        registrarStatusProposta(id, statusAnterior, 'enviada', userId, 'Proposta enviada ao cliente', () => {});
         res.json({ message: 'Proposta marcada como enviada', status: 'enviada', enviada_em: new Date().toISOString() });
       }
     );
@@ -13724,19 +13725,36 @@ app.put('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 
       console.log('✅ Aprovação atualizada. Linhas afetadas:', this.changes);
 
-      // Se aprovado, atualizar margem_desconto na proposta
+      // Se aprovado, atualizar margem_desconto e status da proposta para desconto_aprovado
       if (status === 'aprovado' && aprovacao.tipo === 'desconto' && aprovacao.proposta_id) {
-        db.run(
-          'UPDATE propostas SET margem_desconto = ? WHERE id = ?',
-          [aprovacao.valor_desconto, aprovacao.proposta_id],
-          (err) => {
-            if (err) {
-              console.error('❌ Erro ao atualizar margem_desconto na proposta:', err);
-            } else {
-              console.log('✅ Margem de desconto atualizada na proposta:', aprovacao.proposta_id);
-            }
+        db.get('SELECT id, status FROM propostas WHERE id = ?', [aprovacao.proposta_id], (errProp, proposta) => {
+          if (errProp) {
+            console.error('❌ Erro ao buscar proposta para atualizar desconto:', errProp);
+            return;
           }
-        );
+          const statusAnterior = proposta?.status || 'rascunho';
+          db.run(
+            `UPDATE propostas SET margem_desconto = ?, status = 'desconto_aprovado', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [aprovacao.valor_desconto, aprovacao.proposta_id],
+            (errUpd) => {
+              if (errUpd) {
+                console.error('❌ Erro ao atualizar proposta após aprovação de desconto:', errUpd);
+              } else {
+                console.log('✅ Proposta atualizada para desconto_aprovado:', aprovacao.proposta_id);
+                if (statusAnterior !== 'desconto_aprovado') {
+                  registrarStatusProposta(
+                    aprovacao.proposta_id,
+                    statusAnterior,
+                    'desconto_aprovado',
+                    aprovadoPorFinal,
+                    `Desconto de ${aprovacao.valor_desconto}% aprovado`,
+                    () => {}
+                  );
+                }
+              }
+            }
+          );
+        });
       }
 
       res.json({ 

@@ -2,10 +2,17 @@
 
 export const STATUS_PROPOSTA = [
   { value: 'rascunho', label: 'Rascunho' },
+  { value: 'desconto_aprovado', label: 'Desconto aprovado' },
   { value: 'enviada', label: 'Enviada' },
   { value: 'aprovada', label: 'Aprovada (ganha)' },
   { value: 'rejeitada', label: 'Perdida / Rejeitada' }
 ];
+
+/** Status em que o documento automático (olho/PDF) ainda não está liberado */
+export const STATUS_SEM_DOCUMENTO = ['rascunho', 'desconto_aprovado'];
+
+/** Status a partir dos quais a proposta pode ser enviada ao cliente */
+export const STATUS_PODE_ENVIAR = ['rascunho', 'desconto_aprovado'];
 
 export const ORIGENS_BUSCA = [
   'Google',

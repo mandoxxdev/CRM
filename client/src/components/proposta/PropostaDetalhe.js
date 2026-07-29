@@ -7,7 +7,15 @@ import { FiArrowLeft, FiEye, FiDownload, FiEdit, FiSend, FiCheck, FiX, FiCopy, F
 import { formatDateBR, formatDateTimeBR, isPropostaInativa } from '../../utils/formatDate';
 import './PropostaDetalhe.css';
 
-const STATUS = { rascunho: 'Rascunho', enviada: 'Enviada', visualizada: 'Visualizada', aceita: 'Aceita', rejeitada: 'Rejeitada', expirada: 'Expirada' };
+const STATUS = {
+  rascunho: 'Rascunho',
+  desconto_aprovado: 'Desconto aprovado',
+  enviada: 'Enviada',
+  visualizada: 'Visualizada',
+  aceita: 'Aceita',
+  rejeitada: 'Rejeitada',
+  expirada: 'Expirada'
+};
 const TIPOS = { comercial: 'Comercial', tecnica: 'Técnica', orcamento: 'Orçamento', aditivo: 'Aditivo' };
 
 export default function PropostaDetalhe() {
@@ -40,7 +48,10 @@ export default function PropostaDetalhe() {
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
   const status = proposta?.status || 'rascunho';
   const inativa = isPropostaInativa(proposta);
-  const podeInativar = !inativa && (isAdmin || status === 'rascunho');
+  const podeInativar = !inativa && (isAdmin || status === 'rascunho' || status === 'desconto_aprovado');
+  const documentoBloqueado = status === 'rascunho' || status === 'desconto_aprovado';
+  const podeEnviar = status === 'rascunho' || status === 'desconto_aprovado';
+  const isDescontoAprovado = status === 'desconto_aprovado';
 
   const confirmInativar = () => {
     const numero = proposta?.numero_proposta || id;
@@ -79,8 +90,10 @@ export default function PropostaDetalhe() {
   };
 
   const abrirPreview = () => {
-    if (status === 'rascunho') {
-      toast.info('Envie a proposta para gerar o documento automático.');
+    if (documentoBloqueado) {
+      toast.info(isDescontoAprovado
+        ? 'Clique em Enviar proposta para liberar o documento.'
+        : 'Envie a proposta para gerar o documento automático.');
       return;
     }
     api.get(`/propostas/${id}/premium`, { responseType: 'text' }).then(({ data }) => {
@@ -90,8 +103,10 @@ export default function PropostaDetalhe() {
   };
 
   const baixarPdfGerado = async () => {
-    if (status === 'rascunho') {
-      toast.info('Envie a proposta para gerar o PDF.');
+    if (documentoBloqueado) {
+      toast.info(isDescontoAprovado
+        ? 'Clique em Enviar proposta para liberar o PDF.'
+        : 'Envie a proposta para gerar o PDF.');
       return;
     }
     setPdfLoading(true);
@@ -242,8 +257,8 @@ export default function PropostaDetalhe() {
           type="button"
           className="btn btn-sec"
           onClick={abrirPreview}
-          disabled={status === 'rascunho'}
-          title={status === 'rascunho' ? 'Disponível após enviar a proposta' : 'Ver proposta'}
+          disabled={documentoBloqueado}
+          title={documentoBloqueado ? 'Disponível após enviar a proposta' : 'Ver proposta'}
         >
           <FiEye /> Ver proposta
         </button>
@@ -251,12 +266,20 @@ export default function PropostaDetalhe() {
           type="button"
           className="btn btn-pri"
           onClick={baixarPdfGerado}
-          disabled={pdfLoading || status === 'rascunho'}
-          title={status === 'rascunho' ? 'Disponível após enviar a proposta' : undefined}
+          disabled={pdfLoading || documentoBloqueado}
+          title={documentoBloqueado ? 'Disponível após enviar a proposta' : undefined}
         >
           <FiDownload /> {pdfLoading ? 'Gerando...' : 'PDF gerado'}
         </button>
-        {status === 'rascunho' && <button type="button" className="btn btn-sec" onClick={() => acao('enviar')}><FiSend /> Enviar</button>}
+        {podeEnviar && (
+          <button
+            type="button"
+            className={`btn btn-pri${isDescontoAprovado ? ' btn-enviar-pulse' : ''}`}
+            onClick={() => acao('enviar')}
+          >
+            <FiSend /> Enviar proposta
+          </button>
+        )}
         {(status === 'enviada' || status === 'visualizada') && (
           <>
             <button type="button" className="btn btn-sec" onClick={() => acao('aceitar')}><FiCheck /> Aceitar</button>

@@ -12,6 +12,7 @@ import './PropostasList.css';
 
 const STATUS = {
   rascunho: 'Rascunho',
+  desconto_aprovado: 'Desconto aprovado',
   em_revisao: 'Em revisão',
   aprovada_internamente: 'Aprovada internamente',
   enviada: 'Enviada',
@@ -73,18 +74,25 @@ export default function PropostasList() {
 
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
   const isRascunho = (s) => s === 'rascunho';
+  const isDescontoAprovado = (s) => s === 'desconto_aprovado';
+  const documentoBloqueado = (s) => s === 'rascunho' || s === 'desconto_aprovado';
+  const podeEnviar = (s) => s === 'rascunho' || s === 'desconto_aprovado';
 
   const abrirPreview = (id, status) => {
-    if (isRascunho(status)) {
-      toast.info('Envie a proposta para gerar o documento automático.');
+    if (documentoBloqueado(status)) {
+      toast.info(isDescontoAprovado(status)
+        ? 'Clique em Enviar proposta para liberar o documento.'
+        : 'Envie a proposta para gerar o documento automático.');
       return;
     }
     window.open(`/comercial/propostas/${id}/preview-editavel`, '_blank');
   };
 
   const baixarPdf = async (id, numero, status) => {
-    if (isRascunho(status)) {
-      toast.info('Envie a proposta para gerar o PDF.');
+    if (documentoBloqueado(status)) {
+      toast.info(isDescontoAprovado(status)
+        ? 'Clique em Enviar proposta para liberar o PDF.'
+        : 'Envie a proposta para gerar o PDF.');
       return;
     }
     if (pdfId) return;
@@ -236,21 +244,31 @@ export default function PropostasList() {
                     <div className="propostas-list-cell-actions">
                       <button
                         type="button"
-                        title={isRascunho(p.status) ? 'Disponível após enviar a proposta' : 'Ver proposta'}
+                        title={documentoBloqueado(p.status) ? 'Disponível após enviar a proposta' : 'Ver proposta'}
                         onClick={() => abrirPreview(p.id, p.status)}
-                        disabled={isRascunho(p.status)}
+                        disabled={documentoBloqueado(p.status)}
                       >
                         <FiEye />
                       </button>
                       <button
                         type="button"
-                        title={isRascunho(p.status) ? 'Disponível após enviar a proposta' : 'PDF'}
+                        title={documentoBloqueado(p.status) ? 'Disponível após enviar a proposta' : 'PDF'}
                         onClick={() => baixarPdf(p.id, p.numero_proposta, p.status)}
-                        disabled={isRascunho(p.status) || pdfId === p.id}
+                        disabled={documentoBloqueado(p.status) || pdfId === p.id}
                       >
                         {pdfId === p.id ? '...' : <FiDownload />}
                       </button>
-                      {isRascunho(p.status) && <button type="button" title="Enviar" onClick={() => acao('enviar', p.id)}><FiSend /></button>}
+                      {podeEnviar(p.status) && (
+                        <button
+                          type="button"
+                          className={isDescontoAprovado(p.status) ? 'btn-enviar-proposta is-pulse' : undefined}
+                          title="Enviar proposta"
+                          onClick={() => acao('enviar', p.id)}
+                        >
+                          <FiSend />
+                          {isDescontoAprovado(p.status) ? <span className="btn-enviar-label">Enviar proposta</span> : null}
+                        </button>
+                      )}
                       {podeAceitarRejeitar(p.status) && (
                         <>
                           <button type="button" title="Aceitar" onClick={() => acao('aceitar', p.id)}><FiCheck /></button>

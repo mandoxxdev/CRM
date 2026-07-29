@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { fetchComercialResponsaveis } from '../../utils/userFilters';
 import { toast } from 'react-toastify';
-import { FiSave, FiX, FiUser, FiFileText, FiEye, FiDownload, FiPlus, FiTrash2, FiBarChart2, FiUpload, FiPaperclip, FiPercent } from 'react-icons/fi';
+import { FiSave, FiX, FiUser, FiFileText, FiEye, FiDownload, FiPlus, FiTrash2, FiBarChart2, FiUpload, FiPaperclip, FiPercent, FiSend } from 'react-icons/fi';
 import SelecaoProdutosPremium from '../SelecaoProdutosPremium';
 import {
   STATUS_PROPOSTA,
@@ -326,7 +326,8 @@ export default function PropostaForm() {
 
     const maxDesc = Number(form.margem_desconto) || 0;
     let statusSalvar = form.status;
-    if (maxDesc > DESCONTO_LIMITE_SEM_APROVACAO) {
+    const statusJaLiberado = ['desconto_aprovado', 'enviada', 'visualizada', 'aceita', 'aprovada'].includes(form.status);
+    if (maxDesc > DESCONTO_LIMITE_SEM_APROVACAO && !statusJaLiberado) {
       statusSalvar = 'rascunho';
       if (form.status !== 'rascunho') {
         toast.info(`Desconto acima de ${DESCONTO_LIMITE_SEM_APROVACAO}% exige aprovação. A proposta será salva como rascunho.`);
@@ -381,7 +382,7 @@ export default function PropostaForm() {
         }
       }
 
-      if (maxDesc > DESCONTO_LIMITE_SEM_APROVACAO && propostaId && user?.id) {
+      if (maxDesc > DESCONTO_LIMITE_SEM_APROVACAO && propostaId && user?.id && statusSalvar === 'rascunho') {
         try {
           const valorDescontoRs = valorTotal * (maxDesc / 100);
           await api.post('/aprovacoes', {
@@ -413,8 +414,10 @@ export default function PropostaForm() {
 
   const abrirPreview = () => {
     if (!id) return;
-    if (form.status === 'rascunho') {
-      toast.info('Envie a proposta para gerar o documento automático.');
+    if (form.status === 'rascunho' || form.status === 'desconto_aprovado') {
+      toast.info(form.status === 'desconto_aprovado'
+        ? 'Clique em Enviar proposta para liberar o documento.'
+        : 'Envie a proposta para gerar o documento automático.');
       return;
     }
     api.get(`/propostas/${id}/premium`, { responseType: 'text' }).then(({ data }) => {
@@ -425,8 +428,10 @@ export default function PropostaForm() {
 
   const baixarPdf = () => {
     if (!id) return;
-    if (form.status === 'rascunho') {
-      toast.info('Envie a proposta para gerar o PDF.');
+    if (form.status === 'rascunho' || form.status === 'desconto_aprovado') {
+      toast.info(form.status === 'desconto_aprovado'
+        ? 'Clique em Enviar proposta para liberar o PDF.'
+        : 'Envie a proposta para gerar o PDF.');
       return;
     }
     api.get(`/propostas/${id}/pdf`, { responseType: 'blob' }).then(({ data }) => {
@@ -524,13 +529,13 @@ export default function PropostaForm() {
       <header className="proposta-form-header">
         <h1>{isEdit ? 'Editar proposta' : 'Nova proposta'}</h1>
         <div className="proposta-form-header-actions">
-          {isEdit && form.status !== 'rascunho' && (
+          {isEdit && !['rascunho', 'desconto_aprovado'].includes(form.status) && (
             <>
               <button type="button" className="btn btn-sec" onClick={abrirPreview}><FiEye /> Ver proposta</button>
               <button type="button" className="btn btn-sec" onClick={baixarPdf}><FiDownload /> PDF</button>
             </>
           )}
-          {isEdit && form.status === 'rascunho' && (
+          {isEdit && ['rascunho', 'desconto_aprovado'].includes(form.status) && (
             <button
               type="button"
               className="btn btn-sec"
@@ -538,6 +543,23 @@ export default function PropostaForm() {
               title="Disponível após enviar a proposta"
             >
               <FiEye /> Ver proposta
+            </button>
+          )}
+          {isEdit && (form.status === 'rascunho' || form.status === 'desconto_aprovado') && (
+            <button
+              type="button"
+              className={`btn btn-pri${form.status === 'desconto_aprovado' ? ' btn-enviar-pulse' : ''}`}
+              onClick={async () => {
+                try {
+                  await api.post(`/propostas/${id}/enviar`);
+                  toast.success('Proposta enviada.');
+                  setForm((f) => ({ ...f, status: 'enviada' }));
+                } catch (e) {
+                  toast.error(e.response?.data?.error || 'Erro ao enviar proposta.');
+                }
+              }}
+            >
+              <FiSend /> Enviar proposta
             </button>
           )}
           <button type="button" className="btn btn-sec" onClick={() => navigate('/comercial/propostas')}><FiX /> Cancelar</button>
