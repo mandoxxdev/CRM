@@ -1,17 +1,13 @@
 /**
- * Caixa de texto da secao 4 (ESCOPO) — rotulos E valores — 27/07/2026.
+ * Caixa de texto da secao 4 (ESCOPO) — rotulos E valores.
  *
- * O cadastro grava os rotulos em CAIXA ALTA (64 dos 77 registros de variaveis_tecnicas:
- * "MATERIAL TANQUE", "ROTAÇÃO DO MOTOR [RPM]"), o que fazia a secao inteira gritar. A
- * secao passa a sair no formato "Material tanque: <valor>".
+ * CONTRATO ATUAL (28/07/2026): o documento mostra o texto EXATAMENTE como esta no
+ * cadastro. Nao ha transformacao de caixa. Antes existia um semCapsLock que rebaixava
+ * CAIXA ALTA para caixa de frase ("MATERIAL TANQUE" -> "Material tanque"); foi removido
+ * a pedido, porque escondia o que o usuario cadastrou de proposito em maiusculo.
  *
- * CONTRATO — o que NAO pode ser rebaixado junto:
- *   R1 — unidades entre COLCHETES: [kW], [Hz], [RPM], [pol.], [L/H], [m], [kg], [V], [L].
- *        Um toLowerCase cego virava "[kw]", "[rpm]" — unidade errada em documento tecnico.
- *   R2 — trechos entre PARENTESES, escritos a mao: "(Larg. × Comp. × Alt)"
- *   R3 — siglas reais: CCM aparece em 3 rotulos
- *   R4 — rotulo JA escrito em caixa mista fica intacto (alguem cuidou dele)
- *   R5 — a secao 4 renderiza "Rotulo: valor" e nenhum rotulo sai gritando
+ * A UNICA transformacao que resta e o TITULO do item (4.x), que sai sempre em CAIXA
+ * ALTA, como os demais titulos do documento.
  *
  * Executar: node tests/propostaRotulosSecao4.test.js
  */
@@ -20,84 +16,88 @@ const { gerarHTMLPropostaPremiumV2 } = require('../templates/propostaPremiumV2')
 let falhas = 0;
 const checar = (cond, msg) => { if (cond) console.log('  ✓ ' + msg); else { console.log('  ✗ ' + msg); falhas++; } };
 
-// Rotulos REAIS do banco (variaveis_tecnicas.nome)
-const CASOS = [
-  ['VOLUME ÚTIL [L]', 'Volume útil [L]'],
-  ['ROTAÇÃO MOTOR ESQUERDO [RPM]', 'Rotação motor esquerdo [RPM]'],
-  ['MOTOR / MOTOREDUTOR CENTRAL [kW]', 'Motor / motoredutor central [kW]'],
-  ['FREQUÊNCIA [Hz]', 'Frequência [Hz]'],
-  ['DIÂMETRO BOCAL DE SAÍDA [pol.]', 'Diâmetro bocal de saída [pol.]'],
-  ['VOLUME ÚTIL DE MOAGEM [L/H]', 'Volume útil de moagem [L/H]'],
-  ['PESO ESTIMADO DO EQUIPAMENTO [kg]', 'Peso estimado do equipamento [kg]'],
-  ['TENSÃO DE TRABALHO [V]', 'Tensão de trabalho [V]'],
-  ['ÁREA DE INSTALAÇÃO', 'Área de instalação'],
-  ['MATERIAL EIXOS E HÉLICES', 'Material eixos e hélices'],
-  ['MARCA DO ACIONAMENTO P/ MOTOR CENTRAL', 'Marca do acionamento p/ motor central'],
-  ['POSIÇÃO DO BOCAL DE SAÍDA 1', 'Posição do bocal de saída 1'],
-  // R2 — parenteses escritos a mao
-  ['DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]', 'Dimensões gerais estimadas (Larg. × Comp. × Alt) [m]'],
-  // R3 — sigla
-  ['GRAU DE PROTEÇÃO DO CCM', 'Grau de proteção do CCM'],
-  ['MATERIAL DO CCM', 'Material do CCM'],
-  ['PESO ESTIMADO DO CCM [kg]', 'Peso estimado do CCM [kg]'],
-  // R4 — ja em caixa mista, nao mexe
-  ['Volume útil do tanque', 'Volume útil do tanque'],
-  ['Potência nominal do motor', 'Potência nominal do motor'],
+// Rotulos REAIS do banco (variaveis_tecnicas.nome), incluindo os casos que antes eram
+// armadilha para o rebaixamento de caixa: unidades entre colchetes, parenteses escritos
+// a mao, siglas e rotulos ja em caixa mista. Todos devem sair inalterados.
+const ROTULOS = [
+  'VOLUME ÚTIL [L]',
+  'ROTAÇÃO MOTOR ESQUERDO [RPM]',
+  'MOTOR / MOTOREDUTOR CENTRAL [kW]',
+  'FREQUÊNCIA [Hz]',
+  'DIÂMETRO BOCAL DE SAÍDA [pol.]',
+  'VOLUME ÚTIL DE MOAGEM [L/H]',
+  'PESO ESTIMADO DO EQUIPAMENTO [kg]',
+  'TENSÃO DE TRABALHO [V]',
+  'ÁREA DE INSTALAÇÃO',
+  'MATERIAL EIXOS E HÉLICES',
+  'MARCA DO ACIONAMENTO P/ MOTOR CENTRAL',
+  'POSIÇÃO DO BOCAL DE SAÍDA 1',
+  'DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]',
+  'GRAU DE PROTEÇÃO DO CCM',
+  'MATERIAL DO CCM',
+  'PESO ESTIMADO DO CCM [kg]',
+  'Volume útil do tanque',
+  'Potência nominal do motor',
 ];
 
+const FAMILIA = 'TESTE';
+
 // A secao 4 e montada dentro do template; renderiza um item com specs para ler o resultado.
-function rotulosRenderizados(labels) {
-  const chaves = labels.map((l, i) => `k${i}`);
+function renderizarSecao4({ rotulos = [], valores = {}, item = {} } = {}) {
   const variaveisLabels = {};
   const specs = {};
-  labels.forEach((l, i) => { variaveisLabels[`k${i}`] = { nome: l }; specs[`k${i}`] = 'valor-de-teste'; });
-
-  const proposta = { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' };
-  const itens = [{
-    produto_nome: 'Masseira', descricao: 'Masseira', quantidade: 1, unidade: 'UN',
-    valor_unitario: 1000, valor_total: 1000,
-    familia_produto: 'TESTE', especificacoes_tecnicas: JSON.stringify(specs),
-  }];
-  // Nomes exatos que o template le: config.variaveis_proposta_tecnica (lista base) e
-  // config.variaveis_proposta_por_familia (mapa familia -> chaves).
-  const cfg = {
-    variaveis_proposta_labels: variaveisLabels,
-    variaveis_proposta_tecnica: chaves,
-    variaveis_proposta_por_familia: { TESTE: chaves },
-  };
-  const html = gerarHTMLPropostaPremiumV2(proposta, itens, { total: 1000, dataEmissao: '27/07/2026' }, cfg, null, false, true);
-  // <p>Rotulo: valor</p>
-  return Array.from(html.matchAll(/<p>([^<]*?):\s*valor-de-teste<\/p>/g)).map(m => m[1]);
+  rotulos.forEach((l, i) => {
+    variaveisLabels[`k${i}`] = { nome: l };
+    specs[`k${i}`] = valores[l] != null ? valores[l] : 'valor-de-teste';
+  });
+  const html = gerarHTMLPropostaPremiumV2(
+    { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' },
+    [{
+      produto_nome: 'Masseira', descricao: 'Masseira', quantidade: 1, unidade: 'UN',
+      valor_unitario: 1000, valor_total: 1000,
+      familia_produto: FAMILIA, especificacoes_tecnicas: JSON.stringify(specs),
+      ...item,
+    }],
+    { total: 1000, dataEmissao: '28/07/2026' },
+    {
+      variaveis_proposta_por_familia: { [FAMILIA]: rotulos.map((_, i) => `k${i}`) },
+      variaveis_proposta_labels: variaveisLabels,
+    },
+    null, false, true
+  );
+  return html;
 }
 
-const renderizados = rotulosRenderizados(CASOS.map(c => c[0]));
-console.log(`[R5] a secao 4 renderizou ${renderizados.length} de ${CASOS.length} rotulos no formato "Rotulo: valor"`);
-checar(renderizados.length === CASOS.length,
-  `R5: todos os rotulos saem como "Rotulo: valor" (saiu ${renderizados.length}/${CASOS.length})`);
-
-console.log('');
-CASOS.forEach(([entrada, esperado], i) => {
-  const saida = renderizados[i];
-  const regra = /^(Volume útil do|Potência nominal)/.test(esperado) ? 'R4'
-    : /\(/.test(entrada) ? 'R2'
-      : /CCM/.test(entrada) ? 'R3'
-        : /\[/.test(entrada) ? 'R1' : 'R1';
-  checar(saida === esperado, `${regra}: ${JSON.stringify(entrada)} -> ${JSON.stringify(saida)} (esperado ${JSON.stringify(esperado)})`);
+// ============================================================================
+// Rotulos e valores saem exatamente como cadastrados
+// ============================================================================
+console.log('\n[rotulos] texto identico ao cadastro');
+const htmlRotulos = renderizarSecao4({ rotulos: ROTULOS });
+const semTags = htmlRotulos.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
+ROTULOS.forEach((rotulo) => {
+  checar(semTags.includes(`${rotulo}: valor-de-teste`), `${JSON.stringify(rotulo)} sai inalterado`);
 });
 
-// Nenhum rotulo pode sair inteiramente em caixa alta
-console.log('');
-const gritando = renderizados.filter(r => r && r === r.toUpperCase() && /\p{L}{2,}/u.test(r));
-checar(gritando.length === 0, `R5: nenhum rotulo em CAIXA ALTA (${gritando.length}: ${gritando.join(' | ')})`);
+console.log('\n[valores] texto identico ao cadastro');
+const VALORES = {
+  'ÁREA DE INSTALAÇÃO': 'AÇO INOX AISI 316',
+  'MATERIAL DO CCM': 'Aço carbono pintado',
+  'VOLUME ÚTIL [L]': '540',
+};
+const htmlValores = renderizarSecao4({ rotulos: Object.keys(VALORES), valores: VALORES });
+const textoValores = htmlValores.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+Object.entries(VALORES).forEach(([rotulo, valor]) => {
+  checar(textoValores.includes(`${rotulo}: ${valor}`), `valor ${JSON.stringify(valor)} sai inalterado`);
+});
 
 // ============================================================================
-// R6/R7 — os VALORES do item (o caso da proposta 41)
+// Campos do item: tambem sem transformacao (o titulo e a excecao)
 // ============================================================================
 function secao4DoItem(item) {
-  const proposta = { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' };
-  const html = gerarHTMLPropostaPremiumV2(proposta, [item], { total: 1, dataEmissao: '27/07/2026' }, null, null, false, true);
-  const campo = (rotulo) => {
-    const m = new RegExp(`<p>${rotulo}:\\s*([^<]*)</p>`).exec(html);
+  const html = renderizarSecao4({ rotulos: [], item });
+  const campo = (nome) => {
+    const re = new RegExp(`<p>${nome}:\\s*([^<]*)</p>`);
+    const m = re.exec(html);
     return m ? m[1].trim() : null;
   };
   const h3 = /<h3>4\.1\s*([^<]*)<\/h3>/.exec(html);
@@ -112,40 +112,33 @@ function secao4DoItem(item) {
   };
 }
 
-console.log('\n[R6] valores do item — caso REAL da proposta 41');
-const r41 = secao4DoItem({
-  descricao: 'TALHAS PARA IÇAMENTO DE BIGBAG + TANQUES DE ARMAZENAMENTO DE SLURRYS',
-  familia_produto: 'OUTROS', unidade: 'UN', quantidade: 1,
+console.log('\n[item] campos do equipamento');
+const r = secao4DoItem({
+  produto_nome: 'MASSEIRA HELICOIDAL ATM',
+  descricao: 'MASSEIRA HELICOIDAL ATM',
+  familia_produto: 'MASSEIRA HELICOIDAL ATM [MHY]',
+  unidade: 'UN',
+  quantidade: 1,
+  codigo_produto: 'PROD-24-MAS-MASSE',
+  modelo: 'MHY-30',
+  ncm: '8474.20.90',
 });
-checar(r41.equipamento === 'Talhas para içamento de bigbag + tanques de armazenamento de slurrys',
-  `R6: Equipamento -> ${JSON.stringify(r41.equipamento)}`);
-checar(r41.quantidade === '1 Un', `R6: Quantidade -> ${JSON.stringify(r41.quantidade)}`);
-checar(r41.familia === 'Outros', `R6: Família -> ${JSON.stringify(r41.familia)}`);
-// O TÍTULO do item sai em CAIXA ALTA (padrão dos títulos do documento); o "Equipamento:"
-// no corpo é que segue em caixa de frase, como todo texto descritivo.
-checar(r41.titulo === 'TALHAS PARA IÇAMENTO DE BIGBAG + TANQUES DE ARMAZENAMENTO DE SLURRYS',
-  `R6: titulo 4.1 em CAIXA ALTA -> ${JSON.stringify(r41.titulo)}`);
+checar(r.equipamento === 'MASSEIRA HELICOIDAL ATM', `Equipamento inalterado -> ${JSON.stringify(r.equipamento)}`);
+checar(r.quantidade === '1 UN', `Quantidade com a unidade como cadastrada -> ${JSON.stringify(r.quantidade)}`);
+checar(r.familia === 'MASSEIRA HELICOIDAL ATM [MHY]', `Família inalterada -> ${JSON.stringify(r.familia)}`);
+// O CODIGO nao sai mais na proposta (e interno); no lugar dele vai o MODELO.
+checar(r.codigo === null, `Código nao aparece na proposta -> ${JSON.stringify(r.codigo)}`);
+checar(r.modelo === 'MHY-30', `Modelo intacto -> ${JSON.stringify(r.modelo)}`);
+checar(r.ncm === '8474.20.90', `NCM intacto -> ${JSON.stringify(r.ncm)}`);
 
-console.log('\n[R7] codigos de familia entre parenteses preservados (dados reais do banco)');
-[
-  ['MOINHO DE LABORATÓRIO (MLY)', 'Moinho de laboratório (MLY)'],
-  ['MOINHO VERTICAL DE ALTO IMPACTO (MPY)', 'Moinho vertical de alto impacto (MPY)'],
-  ['TANQUE DISPERSOR (TQY)', 'Tanque dispersor (TQY)'],
-  ['DISPERSOR HIDROPNEUMÁTICO (DHY)', 'Dispersor hidropneumático (DHY)'],
-  ['MASSEIRA BIMIX (MBY)', 'Masseira bimix (MBY)'],
-].forEach(([entrada, esperado]) => {
-  const out = secao4DoItem({ descricao: 'X', familia_produto: entrada, unidade: 'UN', quantidade: 1 }).familia;
-  checar(out === esperado, `R7: ${JSON.stringify(entrada)} -> ${JSON.stringify(out)}`);
-});
-
-console.log('\n[R8] identificadores NAO podem ser rebaixados');
-const ids = secao4DoItem({
-  descricao: 'X', familia_produto: 'OUTROS', unidade: 'UN', quantidade: 1,
-  codigo_produto: 'MPY-500A', modelo: 'AISI 316L', ncm: '8474.20.90',
-});
-checar(ids.codigo === 'MPY-500A', `R8: Código intacto -> ${JSON.stringify(ids.codigo)}`);
-checar(ids.modelo === 'AISI 316L', `R8: Modelo intacto -> ${JSON.stringify(ids.modelo)}`);
-checar(ids.ncm === '8474.20.90', `R8: NCM intacto -> ${JSON.stringify(ids.ncm)}`);
+// O titulo e a UNICA transformacao: sempre CAIXA ALTA.
+console.log('\n[titulo] unica transformacao: CAIXA ALTA');
+checar(r.titulo === 'MASSEIRA HELICOIDAL ATM', `titulo 4.1 -> ${JSON.stringify(r.titulo)}`);
+const rMinusculo = secao4DoItem({ produto_nome: 'Masseira helicoidal atm', descricao: 'Masseira helicoidal atm' });
+checar(rMinusculo.titulo === 'MASSEIRA HELICOIDAL ATM',
+  `nome cadastrado em minusculo tambem vira CAPS no titulo -> ${JSON.stringify(rMinusculo.titulo)}`);
+checar(rMinusculo.equipamento === 'Masseira helicoidal atm',
+  `mas no corpo continua como cadastrado -> ${JSON.stringify(rMinusculo.equipamento)}`);
 
 console.log(falhas === 0 ? '\n0 failed' : `\n${falhas} failed`);
 process.exit(falhas === 0 ? 0 : 1);

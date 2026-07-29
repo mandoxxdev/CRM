@@ -8595,7 +8595,7 @@ app.get('/api/propostas/:id/premium', (req, res) => {
 
     // Buscar itens da proposta com dados completos dos produtos (produto_imagem explícito para exibir foto do produto)
     db.all(`
-      SELECT pi.*, pr.id as produto_id, pr.codigo as produto_codigo, pr.nome as produto_nome, pr.imagem as produto_imagem,
+      SELECT pi.*, pr.id as produto_id, pr.codigo as produto_codigo, pr.nome as produto_nome, pr.imagem as produto_imagem, pr.modelo as produto_modelo,
              pr.descricao as produto_descricao, pr.especificacoes_tecnicas, pr.familia as produto_familia,
              pr.preco_base, pr.icms, pr.ipi
       FROM proposta_itens pi
@@ -8875,7 +8875,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     
     const itens = await new Promise((resolve, reject) => {
       db.all(`
-        SELECT pi.*, pr.id as produto_id, pr.codigo as produto_codigo, pr.nome as produto_nome, pr.imagem as produto_imagem,
+        SELECT pi.*, pr.id as produto_id, pr.codigo as produto_codigo, pr.nome as produto_nome, pr.imagem as produto_imagem, pr.modelo as produto_modelo,
                pr.descricao as produto_descricao, pr.especificacoes_tecnicas, pr.familia as produto_familia,
                pr.preco_base, pr.icms, pr.ipi
         FROM proposta_itens pi

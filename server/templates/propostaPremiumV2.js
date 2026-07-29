@@ -209,44 +209,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       return bruto;
     };
 
-    // A seção 4 sai gritando porque o CADASTRO grava em CAIXA ALTA — tanto os rótulos técnicos
-    // (64 dos 77 registros de variaveis_tecnicas: "MATERIAL TANQUE", "ROTAÇÃO DO MOTOR [RPM]")
-    // quanto os campos do item ("TALHAS PARA IÇAMENTO DE BIGBAG", "OUTROS", "UN"). Reduz para
-    // caixa de frase — "Material tanque:", "Talhas para içamento de bigbag" — preservando:
-    //  - o conteúdo entre COLCHETES, onde moram as unidades — [kW], [Hz], [RPM], [pol.], [L/H]
-    //    seriam destruídas por um toLowerCase cego;
-    //  - o conteúdo entre PARÊNTESES, onde moram os códigos de família: "MOINHO DE LABORATÓRIO
-    //    (MLY)" tem de virar "Moinho de laboratório (MLY)", nunca "(mly)";
-    //  - siglas reais (CCM aparece em 3 rótulos);
-    //  - textos que JÁ vêm em caixa mista, sinal de que alguém os escreveu à mão com cuidado.
-    // NÃO é aplicada a código, modelo e NCM: são identificadores, e rebaixá-los mudaria o dado.
-    const SIGLAS_ROTULO = new Set(['CCM', 'PLC', 'IHM', 'CV', 'IP', 'ABNT', 'AISI', 'NR', 'PVC', 'LED']);
-    const semCapsLock = (texto) => {
-      const bruto = String(texto ?? '').trim();
-      if (!bruto) return '';
-      // A checagem de "está em caixa alta" ignora colchetes E parênteses, e os dois são
-      // copiados verbatim. Colchetes por causa das unidades ("MOTOR ESQUERDO [kW]" tem um 'w'
-      // minúsculo que faria o rótulo passar por caixa mista e escapar da regra). Parênteses
-      // pelo mesmo motivo: "DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]" só tem caixa
-      // mista dentro do parêntese, e sem isto o resto continuaria gritando.
-      const GRUPOS = /(\[[^\]]*\]|\([^)]*\))/g;
-      const semGrupos = bruto.replace(GRUPOS, ' ');
-      if (semGrupos !== semGrupos.toUpperCase()) return bruto;
-      const partes = bruto.split(GRUPOS);
-      let primeiraLetraFeita = false;
-      return partes.map((parte) => {
-        if (parte.startsWith('[') || parte.startsWith('(')) return parte;
-        return parte.replace(/[\p{L}\p{N}]+/gu, (palavra) => {
-          if (SIGLAS_ROTULO.has(palavra)) return palavra;
-          const minuscula = palavra.toLocaleLowerCase('pt-BR');
-          if (!primeiraLetraFeita && /\p{L}/u.test(palavra)) {
-            primeiraLetraFeita = true;
-            return minuscula.charAt(0).toLocaleUpperCase('pt-BR') + minuscula.slice(1);
-          }
-          return minuscula;
-        });
-      }).join('');
-    };
+    // NÃO existe mais transformação de caixa nos textos da seção 4: o documento mostra o
+    // valor EXATAMENTE como está no cadastro. Havia um semCapsLock que rebaixava CAIXA ALTA
+    // para caixa de frase; foi removido a pedido — o que está em maiúsculo no cadastro tem
+    // de sair em maiúsculo na proposta. O único texto que o template força é o TÍTULO do
+    // item (4.x), que sai sempre em caixa alta como os demais títulos do documento.
 
     const numero = esc(proposta.numero_proposta || 'N/A');
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
@@ -444,20 +411,21 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       // id estável do item para persistir as variáveis manuais (proposta_itens.id);
       // fallback no índice só para itens sintéticos de teste, sem id.
       const itemIdPersistencia = (it.id != null ? it.id : idx);
-      // semCapsLock só no que é TEXTO descritivo. Código, modelo e NCM ficam intactos: são
-      // identificadores ("MPY-500", "AISI 316", "8474.20.90") e rebaixá-los mudaria o dado.
+      // Todos os campos saem como estão no cadastro (sem transformação de caixa).
       const nomeBruto = it.produto_nome || it.descricao || `Equipamento ${n}`;
-      const nome = esc(semCapsLock(nomeBruto));
-      // O TÍTULO do item (4.x) sai sempre em caixa alta, como os demais títulos do
-      // documento. Só o título: no corpo ("Equipamento: ...") o nome continua em caixa
-      // de frase, que é o tratamento dado a todo texto descritivo (ver semCapsLock).
+      const nome = esc(nomeBruto);
+      // O TÍTULO do item (4.x) sai sempre em CAIXA ALTA, como os demais títulos do
+      // documento. É a única transformação de caixa que resta: no corpo, "Equipamento: ..."
+      // mostra o nome exatamente como cadastrado.
       const nomeTitulo = esc(String(nomeBruto).toLocaleUpperCase('pt-BR'));
       const codigo = esc(it.codigo_produto || it.produto_codigo || '—');
       const qtd = esc(Number(it.quantidade) || 1);
-      const und = esc(semCapsLock(it.unidade || 'UN'));
-      const familia = esc(semCapsLock(it.familia_produto || it.produto_familia || it.familia || '—'));
-      const modelo = esc(it.modelo || '—');
-      const categoria = esc(semCapsLock(it.categoria || '—'));
+      const und = esc(it.unidade || 'UN');
+      const familia = esc(it.familia_produto || it.produto_familia || it.familia || '—');
+      // produto_modelo: o modelo vem do CADASTRO do produto (produtos.modelo) via join;
+      // it.modelo só existe se o item da proposta trouxer um override próprio.
+      const modelo = esc(it.modelo || it.produto_modelo || '—');
+      const categoria = esc(it.categoria || '—');
       const ncm = esc(it.ncm || it.produto_ncm || '—');
 
       const descritivoTecRaw = it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '';
@@ -533,8 +501,8 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               // espaço em branco sublinhado), para o vendedor ver o que falta preencher.
               if (String(meta.tipo || '') === 'manual_proposta') {
                 const manual = String(valoresManuais[`${itemIdPersistencia}:${k}`] || '').trim();
-                const sufixoHtml = sufixo ? ` ${esc(semCapsLock(sufixo))}` : '';
-                return `<p>${esc(semCapsLock(label))}: <span class="variavel-manual" data-variavel-manual="${esc(k)}" data-variavel-item="${esc(itemIdPersistencia)}">${esc(manual)}</span>${sufixoHtml}</p>`;
+                const sufixoHtml = sufixo ? ` ${esc(sufixo)}` : '';
+                return `<p>${esc(label)}: <span class="variavel-manual" data-variavel-manual="${esc(k)}" data-variavel-item="${esc(itemIdPersistencia)}">${esc(manual)}</span>${sufixoHtml}</p>`;
               }
               const rawVal = getSpecValue(specs, k);
               const displayVal = (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '')
@@ -542,7 +510,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
                 : '';
               if (!displayVal) return '';
               const valueDisplay = displayVal + (sufixo ? ` ${sufixo}` : '');
-              return `<p>${esc(semCapsLock(label))}: ${esc(semCapsLock(valueDisplay))}</p>`;
+              return `<p>${esc(label)}: ${esc(valueDisplay)}</p>`;
             }).filter(Boolean).join('')
         : '';
 
@@ -563,7 +531,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             const v = getSpecValue(specs, k);
             return !(v !== undefined && v !== null && String(v).trim() !== '');
           })
-          .map((k) => esc(semCapsLock((variaveisLabels[k] || {}).nome || k)));
+          .map((k) => esc((variaveisLabels[k] || {}).nome || k));
         if (semValor.length === 0) return '';
         const amostra = semValor.slice(0, 8).join(', ') + (semValor.length > 8 ? `, +${semValor.length - 8}` : '');
         return `<p class="dica-editor">${semValor.length} variável(is) selecionada(s) para <strong>${familia}</strong> estão sem valor no cadastro deste produto: ${amostra}.</p>`;
@@ -595,9 +563,10 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           ${fotoHtml}
           ${descritivoTec ? `<p>Descritivo técnico:</p><div class="equip-descritivo">${descritivoTec}</div>` : ''}
           <p>Equipamento: ${nome}</p>
-          ${codigo !== '—' ? `<p>Código: ${codigo}</p>` : ''}
-          <p>Quantidade: ${qtd} ${und}</p>
+          ${/* MODELO no lugar do CÓDIGO: o código (PROD-24-MAS-MASSE) é interno e não diz
+               nada ao cliente; o modelo (MHY-30) é a identificação comercial. */''}
           ${modelo !== '—' ? `<p>Modelo: ${modelo}</p>` : ''}
+          <p>Quantidade: ${qtd} ${und}</p>
           ${familia !== '—' ? `<p>Família: ${familia}</p>` : ''}
           ${categoria !== '—' ? `<p>Categoria: ${categoria}</p>` : ''}
           ${ncm !== '—' ? `<p>NCM: ${ncm}</p>` : ''}
