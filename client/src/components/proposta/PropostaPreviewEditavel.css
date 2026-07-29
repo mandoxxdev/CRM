@@ -1,7 +1,15 @@
+/* height: 100% e NÃO 100vh. Esta tela vive dentro do .main-content do Layout, que já
+   tem altura definida (calc(100vh - 70px)) MAIS padding-top: 70px para o cabeçalho fixo.
+   Pedindo 100vh o container ficava ~140px mais alto que o espaço disponível, e o
+   .main-content (overflow-y: auto) ganhava uma SEGUNDA barra de rolagem — a que empurrava
+   a toolbar da proposta para fora da vista. Com 100% ele preenche exatamente o espaço, e
+   a única rolagem que sobra é a do documento, dentro do iframe. */
 .ppe-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: #f1f5f9;
 }
 
@@ -89,8 +97,12 @@
 }
 
 /* Preview */
+/* min-height: 0 — sem isso um filho flex não encolhe abaixo do seu conteúdo, e o iframe
+   (que é alto) empurraria o container para além da altura da tela, trazendo a barra
+   externa de volta. */
 .ppe-preview-wrapper {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
