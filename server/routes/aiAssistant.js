@@ -284,7 +284,7 @@ function getProviderConfig() {
     ollamaBaseUrl: (process.env.OLLAMA_BASE_URL || process.env.OLLAMA_URL || 'http://127.0.0.1:11434')
       .trim()
       .replace(/\/$/, ''),
-    ollamaModel: (process.env.OLLAMA_MODEL || 'llama3.2').trim(),
+    ollamaModel: (process.env.OLLAMA_MODEL || 'llama3.2:1b').trim(),
     geminiKey: (process.env.GEMINI_API_KEY || '').trim(),
     geminiModel: (process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite').trim(),
   };
@@ -607,35 +607,163 @@ ${JSON.stringify(live, null, 2)}`;
   throw Object.assign(new Error('agent_max_rounds'), { status: 502 });
 }
 
+function formatMoney(value) {
+  const n = Number(value) || 0;
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/**
+ * Respostas instantâneas de dados do CRM (sem LLM) — rápidas para o usuário.
+ */
+async function tryFastCrmAnswer(db, message) {
+  const m = String(message || '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+
+  const wantsCountClientes =
+    /quantos?.{0,20}clientes/.test(m) ||
+    (/clientes/.test(m) && /(ativos?|total|quantos?|qtd|quantidade)/.test(m));
+  if (wantsCountClientes) {
+    const ativos = await dbGet(db, `SELECT COUNT(*) AS total FROM clientes WHERE status = 'ativo'`);
+    const total = await dbGet(db, `SELECT COUNT(*) AS total FROM clientes`);
+    return {
+      reply: `Temos **${ativos.total || 0} clientes ativos** no CRM (de ${total.total || 0} no total).`,
+      toolsUsed: ['resumo_crm'],
+      fast: true,
+    };
+  }
+
+  if (/pipeline|oportunidades?\s+ativas?|como\s+esta\s+o\s+pipeline/.test(m)) {
+    const qtd = await dbGet(db, `SELECT COUNT(*) AS total FROM oportunidades WHERE status = 'ativa'`);
+    const valor = await dbGet(
+      db,
+      `SELECT COALESCE(SUM(valor_estimado), 0) AS total FROM oportunidades WHERE status = 'ativa'`
+    );
+    return {
+      reply: `Pipeline atual: **${qtd.total || 0} oportunidades ativas**, valor estimado **${formatMoney(valor.total)}**.`,
+      toolsUsed: ['buscar_oportunidades'],
+      fast: true,
+    };
+  }
+
+  if (/propostas?.{0,30}(por\s+)?status|resumo.{0,20}propostas|propostas?\s+recentes/.test(m)) {
+    const porStatus = await dbAll(
+      db,
+      `SELECT status, COUNT(*) AS total, COALESCE(SUM(valor_total), 0) AS valor
+       FROM propostas WHERE ${SQL_PROPOSTA_ATIVA} GROUP BY status ORDER BY total DESC`
+    );
+    const recentes = await dbAll(
+      db,
+      `SELECT pr.numero_proposta, pr.status, pr.valor_total, c.razao_social AS cliente
+       FROM propostas pr
+       LEFT JOIN clientes c ON c.id = pr.cliente_id
+       WHERE (pr.ativo IS NULL OR pr.ativo = 1)
+       ORDER BY pr.created_at DESC LIMIT 5`
+    );
+    const linhasStatus = (porStatus || [])
+      .map((r) => `• ${r.status || 'sem status'}: ${r.total} (${formatMoney(r.valor)})`)
+      .join('\n');
+    const linhasRecentes = (recentes || [])
+      .map(
+        (r) =>
+          `• ${r.numero_proposta || '-'} — ${r.cliente || 'sem cliente'} — ${r.status} — ${formatMoney(r.valor_total)}`
+      )
+      .join('\n');
+    return {
+      reply: `Propostas por status:\n${linhasStatus || '• Nenhuma proposta encontrada'}\n\nÚltimas propostas:\n${linhasRecentes || '• Nenhuma'}`,
+      toolsUsed: ['buscar_propostas'],
+      fast: true,
+    };
+  }
+
+  if (/atividades?\s+pendentes?|tarefas?\s+pendentes?|quantas?\s+atividades/.test(m)) {
+    const row = await dbGet(
+      db,
+      `SELECT COUNT(*) AS total FROM atividades WHERE status IN ('pendente','em_andamento','aberta')`
+    );
+    return {
+      reply: `Há **${row.total || 0} atividades pendentes/em andamento** no CRM.`,
+      toolsUsed: ['buscar_atividades'],
+      fast: true,
+    };
+  }
+
+  // Busca rápida de cliente: "busque/procure o cliente X" ou "cliente X"
+  const buscaCliente = m.match(
+    /(?:busque|busca|procure|mostra|mostre|encontre|ver)\s+(?:o\s+|a\s+)?cliente\s+(.+)$/i
+  ) || m.match(/^cliente\s+(.+)$/i);
+  if (buscaCliente) {
+    const termo = String(buscaCliente[1] || '').trim().replace(/[?.!]+$/, '');
+    if (termo.length >= 2) {
+      const clientes = await toolBuscarClientes(db, { termo, status: 'todos', limite: 8 });
+      const lista = clientes.clientes || [];
+      if (!lista.length) {
+        return {
+          reply: `Não encontrei cliente com “${termo}”.`,
+          toolsUsed: ['buscar_clientes'],
+          fast: true,
+        };
+      }
+      const linhas = lista
+        .map(
+          (c) =>
+            `• #${c.id} ${c.razao_social || c.nome_fantasia || '-'}${c.cidade ? ` (${c.cidade}/${c.estado || '-'})` : ''} — ${c.status || '-'}`
+        )
+        .join('\n');
+      return {
+        reply: `Encontrei ${lista.length} cliente(s):\n${linhas}`,
+        toolsUsed: ['buscar_clientes'],
+        fast: true,
+      };
+    }
+  }
+
+  return null;
+}
+
 module.exports = function registerAiAssistantRoutes(app, db, authenticateToken) {
   if (!db) return;
 
   app.get('/api/ai/status', authenticateToken, async (req, res) => {
     const provider = await resolveProvider();
+    // Mesmo sem LLM, consultas rápidas do CRM funcionam
     res.json({
-      configured: Boolean(provider.configured),
+      configured: true,
       name: 'Orion I.A',
       agent: true,
-      mode: provider.kind || null,
+      mode: provider.configured ? provider.kind : 'crm-fast',
+      llmReady: Boolean(provider.configured),
       learnsFromCrmLive: true,
     });
   });
 
   app.post('/api/ai/chat', authenticateToken, async (req, res) => {
     try {
-      const provider = await resolveProvider();
-      if (!provider.configured) {
-        return res.status(503).json({
-          error:
-            'Orion I.A ainda não está disponível. Instale/inicie o Ollama no servidor (OLLAMA_BASE_URL) ou configure um provedor válido.',
-          code: 'ORION_NOT_CONFIGURED',
-        });
-      }
-
       const message = String(req.body?.message || '').trim();
       if (!message) return res.status(400).json({ error: 'Informe a mensagem.' });
       if (message.length > 4000) {
         return res.status(400).json({ error: 'Mensagem muito longa (máx. 4000 caracteres).' });
+      }
+
+      const fast = await tryFastCrmAnswer(db, message);
+      if (fast) {
+        return res.json({
+          reply: fast.reply,
+          name: 'Orion I.A',
+          agent: true,
+          toolsUsed: fast.toolsUsed,
+          fast: true,
+        });
+      }
+
+      const provider = await resolveProvider();
+      if (!provider.configured) {
+        return res.json({
+          reply:
+            'Para essa pergunta eu preciso do motor de conversa (Ollama). Consultas de clientes, propostas e pipeline eu já respondo na hora — tente uma delas, ou peça ao administrador para ativar o modelo llama3.2:1b no servidor.',
+          name: 'Orion I.A',
+          agent: true,
+          toolsUsed: [],
+          fast: false,
+        });
       }
 
       const userName = req.user?.nome || req.user?.name || req.user?.email || 'usuário';

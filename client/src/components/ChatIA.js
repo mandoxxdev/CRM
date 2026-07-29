@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FiSend, FiUser, FiX, FiStar, FiCpu } from 'react-icons/fi';
-import { gerarRespostaContextual, sugerirPerguntas } from '../utils/assistenteIA';
+import { sugerirPerguntas } from '../utils/assistenteIA';
 import api from '../services/api';
 import './ChatIA.css';
 
@@ -45,8 +45,8 @@ const ChatIA = ({ isOpen, onClose }) => {
           id: Date.now(),
           type: 'bot',
           text: configured
-            ? `Olá! Sou a Orion I.A, agente inteligente do CRM GMP.\n\nPosso consultar clientes, propostas, oportunidades, projetos e atividades em tempo real — e também te ajudar a usar o sistema.\n\nExemplos:\n• Quantos clientes ativos temos?\n• Busque o cliente X\n• Como está o pipeline?\n• Propostas aprovadas deste mês\n\nComo posso ajudar?`
-            : `Olá! Sou a Orion I.A.\n\nNo momento estou em modo limitado (sem conexão com o agente completo). Ainda consigo responder dúvidas básicas de uso do CRM.\n\nPeça ao administrador para ativar a Orion I.A no servidor.`,
+            ? `Olá! Sou a Orion I.A, agente inteligente do CRM GMP.\n\nConsultas de dados (clientes, propostas, pipeline) eu respondo na hora.\nPara conversa livre, uso o motor no servidor.\n\nExemplos:\n• Quantos clientes ativos temos?\n• Como está o pipeline?\n• Mostre propostas recentes\n• Busque o cliente X\n\nComo posso ajudar?`
+            : `Olá! Sou a Orion I.A.\n\nNo momento estou em modo limitado. Ainda consigo responder dúvidas básicas de uso do CRM.\n\nPeça ao administrador para ativar a Orion I.A no servidor.`,
           timestamp: new Date(),
         },
       ]);
@@ -111,16 +111,16 @@ const ChatIA = ({ isOpen, onClose }) => {
         respostaTexto =
           'Orion I.A está processando, mas o servidor está lento (comum sem GPU). Aguarde e tente de novo, ou peça ao admin para usar o modelo llama3.2:1b.';
       } else if (code === 'ORION_NOT_CONFIGURED' || code === 'GEMINI_NOT_CONFIGURED' || error?.response?.status === 503) {
-        const local = gerarRespostaContextual(texto);
-        respostaTexto = `${local.resposta}\n\n—\nOrion I.A completa ainda não está ativa neste servidor.`;
+        respostaTexto =
+          'Orion I.A não conseguiu usar o motor de conversa agora. Perguntas de dados do CRM (clientes, propostas, pipeline) costumam responder na hora — tente uma delas.';
       } else if (apiMsg) {
         // Nunca mostrar erro técnico de provedor ao usuário
         respostaTexto = /quota|gemini|google|rate.?limit|limit:\s*0/i.test(apiMsg)
           ? 'Orion I.A está temporariamente indisponível. O administrador precisa ativar o Ollama no servidor.'
           : apiMsg;
       } else {
-        const local = gerarRespostaContextual(texto);
-        respostaTexto = local.resposta;
+        respostaTexto =
+          'Não consegui falar com o servidor da Orion I.A. Verifique sua conexão e tente novamente.';
       }
     }
 
