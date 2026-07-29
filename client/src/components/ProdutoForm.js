@@ -411,6 +411,21 @@ const ProdutoForm = () => {
     }
   };
 
+  // Preco em formato de moeda brasileira: o usuario nao precisa contar virgula.
+  // O estado guarda o NUMERO cru (ex.: "102308.91"); a exibicao e formatada.
+  // Digitacao estilo caixa: os digitos entram pela direita e os dois ultimos sao os
+  // centavos, entao "10230891" vira 102.308,91 sem o usuario posicionar a virgula.
+  const formatarMoedaBR = (valor) => {
+    const n = Number(valor);
+    if (valor === '' || valor == null || !isFinite(n)) return '';
+    return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const handlePrecoBaseChange = (e) => {
+    const digitos = String(e.target.value).replace(/\D/g, '');
+    const numero = digitos ? String(Number(digitos) / 100) : '';
+    setFormData((prev) => ({ ...prev, preco_base: numero }));
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     const newValue = name === 'ativo' ? (value === 'true' || value === '1' ? 1 : 0) : 
@@ -927,7 +942,7 @@ const ProdutoForm = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {imagemProduto && (
                     <div style={{ width: 200, height: 200, border: '1px solid var(--gmp-border)', borderRadius: 8, overflow: 'hidden' }}>
-                      <img src={`${api.defaults.baseURL || ''}/api/uploads/produtos/${imagemProduto}`} alt="Produto" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      <img src={`${api.defaults.baseURL || ''}/uploads/produtos/${imagemProduto}`} alt="Produto" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     </div>
                   )}
                   <input type="file" accept="image/*" onChange={handleUploadImagem} disabled={uploadingImagem || !id} />
@@ -943,12 +958,11 @@ const ProdutoForm = () => {
             <div className="form-group">
               <label>Preço Base (R$)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 name="preco_base"
-                value={formData.preco_base}
-                onChange={handleChange}
-                step="0.01"
-                min={0}
+                value={formatarMoedaBR(formData.preco_base)}
+                onChange={handlePrecoBaseChange}
                 placeholder="0,00"
               />
             </div>
@@ -1178,13 +1192,12 @@ const ProdutoForm = () => {
               <div className="form-group">
                 <label>Preço Base (R$)</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   name="preco_base"
-                  value={formData.preco_base}
-                  onChange={handleChange}
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
+                  value={formatarMoedaBR(formData.preco_base)}
+                  onChange={handlePrecoBaseChange}
+                  placeholder="0,00"
                 />
               </div>
 
