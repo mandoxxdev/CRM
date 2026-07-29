@@ -209,11 +209,43 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       return bruto;
     };
 
-    // NÃO existe mais transformação de caixa nos textos da seção 4: o documento mostra o
-    // valor EXATAMENTE como está no cadastro. Havia um semCapsLock que rebaixava CAIXA ALTA
-    // para caixa de frase; foi removido a pedido — o que está em maiúsculo no cadastro tem
-    // de sair em maiúsculo na proposta. O único texto que o template força é o TÍTULO do
-    // item (4.x), que sai sempre em caixa alta como os demais títulos do documento.
+    // Caixa de frase APENAS nos RÓTULOS das variáveis técnicas. O cadastro grava 64 dos 77
+    // rótulos em CAIXA ALTA ("MATERIAL TANQUE", "USO/FUNÇÃO DO EQUIPAMENTO"), o que fazia a
+    // seção 4 gritar e destoar dos rótulos fixos do próprio bloco ("Equipamento:", "Modelo:",
+    // "Família:"). Preserva:
+    //  - conteúdo entre COLCHETES, onde moram as unidades: [kW], [Hz], [RPM], [pol.], [L/H];
+    //  - conteúdo entre PARÊNTESES, onde moram códigos e descritores escritos à mão;
+    //  - siglas reais (CCM, PLC, IHM...);
+    //  - rótulos que JÁ vêm em caixa mista — sinal de que alguém os escreveu com cuidado.
+    // NÃO é aplicada aos VALORES: o que o usuário cadastrou aparece exatamente como cadastrado
+    // (inclusive em maiúsculo). Também não toca no sufixo, que é unidade e é sensível a caixa.
+    const SIGLAS_ROTULO = new Set(['CCM', 'PLC', 'IHM', 'CV', 'IP', 'ABNT', 'AISI', 'NR', 'PVC', 'LED']);
+    const semCapsLock = (texto) => {
+      const bruto = String(texto ?? '').trim();
+      if (!bruto) return '';
+      // A checagem de "está em caixa alta" ignora colchetes E parênteses, e os dois são
+      // copiados verbatim. Colchetes por causa das unidades ("MOTOR ESQUERDO [kW]" tem um 'w'
+      // minúsculo que faria o rótulo passar por caixa mista e escapar da regra). Parênteses
+      // pelo mesmo motivo: "DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]" só tem caixa
+      // mista dentro do parêntese, e sem isto o resto continuaria gritando.
+      const GRUPOS = /(\[[^\]]*\]|\([^)]*\))/g;
+      const semGrupos = bruto.replace(GRUPOS, ' ');
+      if (semGrupos !== semGrupos.toUpperCase()) return bruto;
+      const partes = bruto.split(GRUPOS);
+      let primeiraLetraFeita = false;
+      return partes.map((parte) => {
+        if (parte.startsWith('[') || parte.startsWith('(')) return parte;
+        return parte.replace(/[\p{L}\p{N}]+/gu, (palavra) => {
+          if (SIGLAS_ROTULO.has(palavra)) return palavra;
+          const minuscula = palavra.toLocaleLowerCase('pt-BR');
+          if (!primeiraLetraFeita && /\p{L}/u.test(palavra)) {
+            primeiraLetraFeita = true;
+            return minuscula.charAt(0).toLocaleUpperCase('pt-BR') + minuscula.slice(1);
+          }
+          return minuscula;
+        });
+      }).join('');
+    };
 
     const numero = esc(proposta.numero_proposta || 'N/A');
     const titulo = esc(proposta.titulo || 'Proposta Técnica Comercial');
@@ -495,6 +527,9 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               const meta = variaveisLabels[k] || {};
               const label = (meta && meta.nome) ? meta.nome : k;
               const sufixo = (meta && meta.sufixo) ? meta.sufixo : '';
+              // Prefixo: mesma ideia do sufixo, mas ANTES do valor (ex.: "Aprox.", "Máx.", "R$").
+              // Como o sufixo, sai literal — é notação e é sensível a caixa.
+              const prefixo = (meta && meta.prefixo) ? meta.prefixo : '';
               // Tipo "Manual na Proposta": o valor NÃO vem do cadastro do produto — é
               // preenchido pelo vendedor direto no preview editável e persistido em
               // proposta_variaveis_manuais. A linha SEMPRE aparece (mesmo vazia, como um
@@ -502,15 +537,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
               if (String(meta.tipo || '') === 'manual_proposta') {
                 const manual = String(valoresManuais[`${itemIdPersistencia}:${k}`] || '').trim();
                 const sufixoHtml = sufixo ? ` ${esc(sufixo)}` : '';
-                return `<p>${esc(label)}: <span class="variavel-manual" data-variavel-manual="${esc(k)}" data-variavel-item="${esc(itemIdPersistencia)}">${esc(manual)}</span>${sufixoHtml}</p>`;
+                const prefixoHtml = prefixo ? `${esc(prefixo)} ` : '';
+                return `<p>${esc(semCapsLock(label))}: ${prefixoHtml}<span class="variavel-manual" data-variavel-manual="${esc(k)}" data-variavel-item="${esc(itemIdPersistencia)}">${esc(manual)}</span>${sufixoHtml}</p>`;
               }
               const rawVal = getSpecValue(specs, k);
               const displayVal = (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '')
                 ? String(rawVal).trim()
                 : '';
               if (!displayVal) return '';
-              const valueDisplay = displayVal + (sufixo ? ` ${sufixo}` : '');
-              return `<p>${esc(label)}: ${esc(valueDisplay)}</p>`;
+              const valueDisplay = (prefixo ? `${prefixo} ` : '') + displayVal + (sufixo ? ` ${sufixo}` : '');
+              return `<p>${esc(semCapsLock(label))}: ${esc(valueDisplay)}</p>`;
             }).filter(Boolean).join('')
         : '';
 
@@ -531,7 +567,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             const v = getSpecValue(specs, k);
             return !(v !== undefined && v !== null && String(v).trim() !== '');
           })
-          .map((k) => esc((variaveisLabels[k] || {}).nome || k));
+          .map((k) => esc(semCapsLock((variaveisLabels[k] || {}).nome || k)));
         if (semValor.length === 0) return '';
         const amostra = semValor.slice(0, 8).join(', ') + (semValor.length > 8 ? `, +${semValor.length - 8}` : '');
         return `<p class="dica-editor">${semValor.length} variável(is) selecionada(s) para <strong>${familia}</strong> estão sem valor no cadastro deste produto: ${amostra}.</p>`;

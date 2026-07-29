@@ -26,7 +26,7 @@ const VariaveisTecnicas = () => {
   const [filterCategoria, setFilterCategoria] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, fontePorEscolha: {}, grupoPorEscolha: {}, variaveisSoma: [] });
+  const [form, setForm] = useState({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, prefixo: '', sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, fontePorEscolha: {}, grupoPorEscolha: {}, variaveisSoma: [] });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [somaSearch, setSomaSearch] = useState('');
@@ -66,7 +66,7 @@ const VariaveisTecnicas = () => {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, fontePorEscolha: {}, grupoPorEscolha: {}, variaveisSoma: [] });
+    setForm({ nome: '', chave: '', categoria: '', tipo: 'texto', opcoes: '', ordem: 0, prefixo: '', sufixo: '', fonte_opcoes: 'manual', grupo_compras_id: '', primeiraEscolha: '', opcoesPorEscolha: {}, fontePorEscolha: {}, grupoPorEscolha: {}, variaveisSoma: [] });
     setError('');
     setSomaSearch('');
     setModalOpen(true);
@@ -108,6 +108,7 @@ const VariaveisTecnicas = () => {
       tipo: v.tipo || 'texto',
       opcoes,
       ordem: v.ordem || 0,
+      prefixo: v.prefixo || '',
       sufixo: v.sufixo || '',
       fonte_opcoes: v.fonte_opcoes === 'fornecedores_grupo' ? 'fornecedores_grupo' : 'manual',
       grupo_compras_id: v.grupo_compras_id != null ? String(v.grupo_compras_id) : '',
@@ -164,15 +165,16 @@ const VariaveisTecnicas = () => {
     }
     const ordem = Number(form.ordem) || 0;
     const sufixo = (form.sufixo || '').trim() || null;
+    const prefixo = (form.prefixo || '').trim() || null;
     const fonte_opcoes = form.tipo === 'lista' && form.fonte_opcoes === 'fornecedores_grupo' ? 'fornecedores_grupo' : 'manual';
     const grupo_compras_id = fonte_opcoes === 'fornecedores_grupo' && form.grupo_compras_id ? (parseInt(form.grupo_compras_id, 10) || null) : null;
     setSaving(true);
     setError('');
     try {
       if (editing) {
-        await api.put(`/variaveis-tecnicas/${editing.id}`, { nome, chave, categoria, tipo, opcoes, ordem, sufixo, fonte_opcoes, grupo_compras_id });
+        await api.put(`/variaveis-tecnicas/${editing.id}`, { nome, chave, categoria, tipo, opcoes, ordem, prefixo, sufixo, fonte_opcoes, grupo_compras_id });
       } else {
-        await api.post('/variaveis-tecnicas', { nome, chave, categoria, tipo, opcoes, ordem, sufixo, fonte_opcoes, grupo_compras_id });
+        await api.post('/variaveis-tecnicas', { nome, chave, categoria, tipo, opcoes, ordem, prefixo, sufixo, fonte_opcoes, grupo_compras_id });
       }
       setModalOpen(false);
       loadList();
@@ -237,6 +239,7 @@ const VariaveisTecnicas = () => {
                 <th>Chave</th>
                 <th>Categoria</th>
                 <th>Tipo</th>
+                <th>Prefixo</th>
                 <th>Sufixo</th>
                 <th>Fonte opções</th>
                 <th>Ordem</th>
@@ -259,6 +262,7 @@ const VariaveisTecnicas = () => {
                     <td className="vt-chave"><code>{v.chave}</code></td>
                     <td>{v.categoria || '—'}</td>
                     <td>{TIPOS.find(t => t.value === v.tipo)?.label || v.tipo}</td>
+                    <td>{v.prefixo || '—'}</td>
                     <td>{v.sufixo || '—'}</td>
                     <td>
                       {v.tipo === 'soma'
@@ -324,6 +328,16 @@ const VariaveisTecnicas = () => {
                 <datalist id="vt-categorias-list">
                   {categorias.map(c => <option key={c} value={c} />)}
                 </datalist>
+              </div>
+              <div className="vt-form-group">
+                <label>Prefixo (texto exibido antes do valor)</label>
+                <input
+                  type="text"
+                  value={form.prefixo}
+                  onChange={(e) => setForm(f => ({ ...f, prefixo: e.target.value }))}
+                  placeholder="Ex: Aprox., Máx., R$ (deixe vazio se não houver)"
+                />
+                <small className="vt-form-hint">Ex.: o cliente informa &quot;30&quot; e o sistema exibe &quot;Aprox. 30&quot;</small>
               </div>
               <div className="vt-form-group">
                 <label>Sufixo (unidade exibida após o valor)</label>

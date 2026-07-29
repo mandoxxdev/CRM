@@ -1635,6 +1635,7 @@ function initializeDatabase(onReadyCallback) {
     tipo TEXT DEFAULT 'texto',
     opcoes TEXT,
     ordem INTEGER DEFAULT 0,
+    prefixo TEXT,
     sufixo TEXT,
     fonte_opcoes TEXT,
     grupo_compras_id INTEGER,
@@ -1647,6 +1648,8 @@ function initializeDatabase(onReadyCallback) {
     // Migrações de colunas (bancos antigos); depois garantir variáveis base
     db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN sufixo TEXT', (alterErr) => {
       if (alterErr && !String(alterErr.message || '').includes('duplicate column')) console.error('Migração sufixo:', alterErr.message);
+      db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN prefixo TEXT', (ePre) => {
+      if (ePre && !String(ePre.message || '').includes('duplicate column')) console.error('Migração prefixo:', ePre.message);
       db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN fonte_opcoes TEXT', (e1) => {
         if (e1 && !String(e1.message || '').includes('duplicate column')) console.error('Migração fonte_opcoes:', e1.message);
         db.run('ALTER TABLE variaveis_tecnicas ADD COLUMN grupo_compras_id INTEGER', (e2) => {
@@ -1680,6 +1683,7 @@ function initializeDatabase(onReadyCallback) {
             });
           })();
         });
+      });
       });
     });
   });
@@ -4481,7 +4485,7 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
 app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
   var familiaId = req.params.familiaId;
   db.all(
-    `SELECT fv.variavel_chave AS chave, fv.ordem, vt.nome, vt.categoria, vt.tipo, vt.opcoes, vt.sufixo, vt.fonte_opcoes, vt.grupo_compras_id
+    `SELECT fv.variavel_chave AS chave, fv.ordem, vt.nome, vt.categoria, vt.tipo, vt.opcoes, vt.prefixo, vt.sufixo, vt.fonte_opcoes, vt.grupo_compras_id
      FROM familia_variaveis fv
      LEFT JOIN variaveis_tecnicas vt ON vt.chave = fv.variavel_chave AND vt.ativo = 1
      WHERE fv.familia_id = ? AND fv.ativo = 1
@@ -4499,6 +4503,7 @@ app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
           categoria: r.categoria,
           tipo: r.tipo || 'texto',
           opcoes: opcoes,
+          prefixo: (r.prefixo || '').trim() || null,
           sufixo: (r.sufixo || '').trim() || null,
           fonte_opcoes: (r.fonte_opcoes || '').trim() || null,
           grupo_compras_id: r.grupo_compras_id != null ? r.grupo_compras_id : null
@@ -4840,11 +4845,12 @@ app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
   }
   var ordem = parseInt(body.ordem, 10) || 0;
   var sufixo = (body.sufixo || '').trim() || null;
+  var prefixo = (body.prefixo || '').trim() || null;
   var fonte_opcoes = (body.fonte_opcoes || '').trim() || null;
   if (fonte_opcoes && fonte_opcoes !== 'manual' && fonte_opcoes !== 'fornecedores_grupo') fonte_opcoes = null;
   var grupo_compras_id = body.grupo_compras_id != null ? (parseInt(body.grupo_compras_id, 10) || null) : null;
-  db.run('INSERT INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, sufixo, fonte_opcoes, grupo_compras_id, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
-    [nome, chave, categoria, tipo, opcoesStr, ordem, sufixo, fonte_opcoes, grupo_compras_id],
+  db.run('INSERT INTO variaveis_tecnicas (nome, chave, categoria, tipo, opcoes, ordem, prefixo, sufixo, fonte_opcoes, grupo_compras_id, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)',
+    [nome, chave, categoria, tipo, opcoesStr, ordem, prefixo, sufixo, fonte_opcoes, grupo_compras_id],
     function(err) {
       if (err) {
         if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma variável com esta chave' });
@@ -4882,11 +4888,12 @@ app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
   }
   var ordem = parseInt(body.ordem, 10) || 0;
   var sufixo = (body.sufixo || '').trim() || null;
+  var prefixo = (body.prefixo || '').trim() || null;
   var fonte_opcoes = (body.fonte_opcoes || '').trim() || null;
   if (fonte_opcoes && fonte_opcoes !== 'manual' && fonte_opcoes !== 'fornecedores_grupo') fonte_opcoes = null;
   var grupo_compras_id = body.grupo_compras_id != null ? (parseInt(body.grupo_compras_id, 10) || null) : null;
-  db.run('UPDATE variaveis_tecnicas SET nome = ?, chave = ?, categoria = ?, tipo = ?, opcoes = ?, ordem = ?, sufixo = ?, fonte_opcoes = ?, grupo_compras_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [nome, chave, categoria, tipo, opcoesStr, ordem, sufixo, fonte_opcoes, grupo_compras_id, id],
+  db.run('UPDATE variaveis_tecnicas SET nome = ?, chave = ?, categoria = ?, tipo = ?, opcoes = ?, ordem = ?, prefixo = ?, sufixo = ?, fonte_opcoes = ?, grupo_compras_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [nome, chave, categoria, tipo, opcoesStr, ordem, prefixo, sufixo, fonte_opcoes, grupo_compras_id, id],
     function(err) {
       if (err) {
         if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe outra variável com esta chave' });
@@ -8799,12 +8806,12 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             return;
           }
           const placeholders = chavesUnicas.map(() => '?').join(',');
-          db.all('SELECT chave, nome, sufixo, tipo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err2, rows) => {
+          db.all('SELECT chave, nome, prefixo, sufixo, tipo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err2, rows) => {
             if (err2) console.error('Erro ao buscar variaveis_tecnicas (ignorado, preview segue):', err2.message);
             if (templateConfig && rows && Array.isArray(rows) && rows.length) {
               templateConfig.variaveis_proposta_labels = {};
               rows.forEach(function (r) {
-                if (r && r.chave != null) templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim() };
+                if (r && r.chave != null) templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, prefixo: (r.prefixo || '').trim(), sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim() };
               });
             }
             runGerarSafe();
@@ -9023,14 +9030,14 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     if (chavesUnicas.length > 0) {
       const rows = await new Promise((resolve, reject) => {
         const placeholders = chavesUnicas.map(() => '?').join(',');
-        db.all('SELECT chave, nome, sufixo, tipo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err, r) => {
+        db.all('SELECT chave, nome, prefixo, sufixo, tipo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err, r) => {
           if (err) reject(err);
           else resolve(r || []);
         });
       });
       if (rows && rows.length) {
         rows.forEach((r) => {
-          templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim() };
+          templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, prefixo: (r.prefixo || '').trim(), sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim() };
         });
       }
     }

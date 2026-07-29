@@ -1,13 +1,16 @@
 /**
- * Caixa de texto da secao 4 (ESCOPO) — rotulos E valores.
+ * Caixa de texto da secao 4 (ESCOPO).
  *
- * CONTRATO ATUAL (28/07/2026): o documento mostra o texto EXATAMENTE como esta no
- * cadastro. Nao ha transformacao de caixa. Antes existia um semCapsLock que rebaixava
- * CAIXA ALTA para caixa de frase ("MATERIAL TANQUE" -> "Material tanque"); foi removido
- * a pedido, porque escondia o que o usuario cadastrou de proposito em maiusculo.
+ * CONTRATO (29/07/2026), depois de dois ajustes a pedido:
+ *   - ROTULO da variavel -> caixa de FRASE. O cadastro grava 64 dos 77 rotulos em CAIXA
+ *     ALTA ("MATERIAL TANQUE", "USO/FUNCAO DO EQUIPAMENTO"), o que fazia a secao gritar e
+ *     destoar dos rotulos fixos do bloco ("Equipamento:", "Modelo:", "Familia:").
+ *   - VALOR -> EXATAMENTE como cadastrado, inclusive em maiusculo. E o dado do usuario.
+ *   - TITULO do item (4.x) -> sempre CAIXA ALTA, como os demais titulos do documento.
+ *   - PREFIXO e SUFIXO -> literais (sao notacao/unidade e sao sensiveis a caixa).
  *
- * A UNICA transformacao que resta e o TITULO do item (4.x), que sai sempre em CAIXA
- * ALTA, como os demais titulos do documento.
+ * O que o rebaixamento do rotulo NAO pode estragar: unidades entre colchetes ([kW], [RPM]),
+ * trechos entre parenteses escritos a mao, siglas (CCM) e rotulos ja em caixa mista.
  *
  * Executar: node tests/propostaRotulosSecao4.test.js
  */
@@ -20,24 +23,21 @@ const checar = (cond, msg) => { if (cond) console.log('  ✓ ' + msg); else { co
 // armadilha para o rebaixamento de caixa: unidades entre colchetes, parenteses escritos
 // a mao, siglas e rotulos ja em caixa mista. Todos devem sair inalterados.
 const ROTULOS = [
-  'VOLUME ÚTIL [L]',
-  'ROTAÇÃO MOTOR ESQUERDO [RPM]',
-  'MOTOR / MOTOREDUTOR CENTRAL [kW]',
-  'FREQUÊNCIA [Hz]',
-  'DIÂMETRO BOCAL DE SAÍDA [pol.]',
-  'VOLUME ÚTIL DE MOAGEM [L/H]',
-  'PESO ESTIMADO DO EQUIPAMENTO [kg]',
-  'TENSÃO DE TRABALHO [V]',
-  'ÁREA DE INSTALAÇÃO',
-  'MATERIAL EIXOS E HÉLICES',
-  'MARCA DO ACIONAMENTO P/ MOTOR CENTRAL',
-  'POSIÇÃO DO BOCAL DE SAÍDA 1',
-  'DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]',
-  'GRAU DE PROTEÇÃO DO CCM',
-  'MATERIAL DO CCM',
-  'PESO ESTIMADO DO CCM [kg]',
-  'Volume útil do tanque',
-  'Potência nominal do motor',
+  ['VOLUME ÚTIL [L]', 'Volume útil [L]'],
+  ['ROTAÇÃO MOTOR ESQUERDO [RPM]', 'Rotação motor esquerdo [RPM]'],
+  ['MOTOR / MOTOREDUTOR CENTRAL [kW]', 'Motor / motoredutor central [kW]'],
+  ['FREQUÊNCIA [Hz]', 'Frequência [Hz]'],
+  ['DIÂMETRO BOCAL DE SAÍDA [pol.]', 'Diâmetro bocal de saída [pol.]'],
+  ['VOLUME ÚTIL DE MOAGEM [L/H]', 'Volume útil de moagem [L/H]'],
+  ['PESO ESTIMADO DO EQUIPAMENTO [kg]', 'Peso estimado do equipamento [kg]'],
+  ['TENSÃO DE TRABALHO [V]', 'Tensão de trabalho [V]'],
+  ['USO/FUNÇÃO DO EQUIPAMENTO', 'Uso/função do equipamento'],
+  ['MATERIAL EIXOS E HÉLICES', 'Material eixos e hélices'],
+  ['MARCA DO ACIONAMENTO P/ MOTOR CENTRAL', 'Marca do acionamento p/ motor central'],
+  ['DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]', 'Dimensões gerais estimadas (Larg. × Comp. × Alt) [m]'],
+  ['GRAU DE PROTEÇÃO DO CCM', 'Grau de proteção do CCM'],
+  ['MATERIAL DO CCM', 'Material do CCM'],
+  ['Volume útil do tanque', 'Volume útil do tanque'],
 ];
 
 const FAMILIA = 'TESTE';
@@ -46,9 +46,10 @@ const FAMILIA = 'TESTE';
 function renderizarSecao4({ rotulos = [], valores = {}, item = {} } = {}) {
   const variaveisLabels = {};
   const specs = {};
-  rotulos.forEach((l, i) => {
-    variaveisLabels[`k${i}`] = { nome: l };
-    specs[`k${i}`] = valores[l] != null ? valores[l] : 'valor-de-teste';
+  rotulos.forEach((par, i) => {
+    const cadastrado = Array.isArray(par) ? par[0] : par;
+    variaveisLabels[`k${i}`] = { nome: cadastrado };
+    specs[`k${i}`] = valores[cadastrado] != null ? valores[cadastrado] : 'valor-de-teste';
   });
   const html = gerarHTMLPropostaPremiumV2(
     { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' },
@@ -71,23 +72,30 @@ function renderizarSecao4({ rotulos = [], valores = {}, item = {} } = {}) {
 // ============================================================================
 // Rotulos e valores saem exatamente como cadastrados
 // ============================================================================
-console.log('\n[rotulos] texto identico ao cadastro');
+console.log('\n[rotulos] caixa de frase, preservando unidades, parenteses e siglas');
 const htmlRotulos = renderizarSecao4({ rotulos: ROTULOS });
 const semTags = htmlRotulos.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
-ROTULOS.forEach((rotulo) => {
-  checar(semTags.includes(`${rotulo}: valor-de-teste`), `${JSON.stringify(rotulo)} sai inalterado`);
+ROTULOS.forEach(([cadastrado, esperado]) => {
+  checar(semTags.includes(`${esperado}: valor-de-teste`),
+    `${JSON.stringify(cadastrado)} -> ${JSON.stringify(esperado)}`);
 });
+const gritando = ROTULOS.map(([, e]) => e).filter((r) => r === r.toUpperCase() && /\p{L}{2,}/u.test(r));
+checar(gritando.length === 0, `nenhum rotulo sai em CAIXA ALTA (${gritando.join(' | ')})`);
 
-console.log('\n[valores] texto identico ao cadastro');
-const VALORES = {
-  'ÁREA DE INSTALAÇÃO': 'AÇO INOX AISI 316',
-  'MATERIAL DO CCM': 'Aço carbono pintado',
-  'VOLUME ÚTIL [L]': '540',
-};
-const htmlValores = renderizarSecao4({ rotulos: Object.keys(VALORES), valores: VALORES });
+console.log('\n[valores] texto EXATAMENTE como cadastrado');
+const VALORES = [
+  ['MATERIAL EIXOS E HÉLICES', 'Material eixos e hélices', 'AÇO INOX AISI 316'],
+  ['MATERIAL DO CCM', 'Material do CCM', 'Aço carbono pintado'],
+  ['VOLUME ÚTIL [L]', 'Volume útil [L]', '540'],
+];
+const htmlValores = renderizarSecao4({
+  rotulos: VALORES.map(([c, e]) => [c, e]),
+  valores: Object.fromEntries(VALORES.map(([c, , v]) => [c, v])),
+});
 const textoValores = htmlValores.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-Object.entries(VALORES).forEach(([rotulo, valor]) => {
-  checar(textoValores.includes(`${rotulo}: ${valor}`), `valor ${JSON.stringify(valor)} sai inalterado`);
+VALORES.forEach(([, exibido, valor]) => {
+  checar(textoValores.includes(`${exibido}: ${valor}`),
+    `valor ${JSON.stringify(valor)} sai EXATAMENTE como cadastrado`);
 });
 
 // ============================================================================
