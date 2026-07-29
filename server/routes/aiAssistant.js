@@ -9,7 +9,7 @@
  */
 
 const SQL_PROPOSTA_ATIVA = '(ativo IS NULL OR ativo = 1)';
-const MAX_AGENT_ROUNDS = 4;
+const MAX_AGENT_ROUNDS = 2;
 
 function dbGet(db, sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -108,7 +108,7 @@ async function toolResumoCrm(db) {
     oportunidades_ativas: oportunidadesAtivas.total || 0,
     pipeline_estimado: pipeline.total || 0,
     projetos_por_status: projetosPorStatus,
-    top_clientes_por_valor: topClientes,
+    top_clientes_por_valor: (topClientes || []).slice(0, 5),
   };
 }
 
@@ -350,6 +350,9 @@ function sanitizePublicError(message, status) {
   if (status === 429 || /quota|rate|exhausted|429|limit:\s*0/i.test(raw)) {
     return 'Orion I.A está temporariamente indisponível. Configure o Ollama no servidor para uso gratuito sem cota.';
   }
+  if (status === 504 || /demorou demais|timeout|AbortError/i.test(raw)) {
+    return 'Orion I.A demorou demais (servidor sem GPU fica lento). Tente de novo ou use o modelo llama3.2:1b.';
+  }
   if (/ECONNREFUSED|fetch failed|aborted|ollama/i.test(raw)) {
     return 'Orion I.A não encontrou o Ollama no servidor. Verifique se o serviço está rodando.';
   }
@@ -460,27 +463,51 @@ function buildChatMessages(systemInstruction, history, message) {
 }
 
 async function callOllamaChat({ baseUrl, model, messages }) {
-  const response = await fetch(`${baseUrl}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      options: { temperature: 0.2 },
-    }),
-  });
+  const timeoutMs = Math.max(
+    30000,
+    parseInt(process.env.OLLAMA_TIMEOUT_MS || '120000', 10) || 120000
+  );
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const err = new Error(data?.error || `ollama_error_${response.status}`);
-    err.status = 502;
-    throw err;
+  try {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        keep_alive: '10m',
+        options: {
+          temperature: 0.2,
+          num_predict: 400,
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const err = new Error(data?.error || `ollama_error_${response.status}`);
+      err.status = 502;
+      throw err;
+    }
+
+    const text = String(data?.message?.content || '').trim();
+    if (!text) throw Object.assign(new Error('empty_response'), { status: 502 });
+    return text;
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      throw Object.assign(
+        new Error('Orion I.A demorou demais para responder. Tente de novo ou use um modelo menor (llama3.2:1b).'),
+        { status: 504 }
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const text = String(data?.message?.content || '').trim();
-  if (!text) throw Object.assign(new Error('empty_response'), { status: 502 });
-  return text;
 }
 
 async function callGeminiChat({ apiKey, model, systemInstruction, messages }) {

@@ -92,14 +92,25 @@ const ChatIA = ({ isOpen, onClose }) => {
 
     try {
       const history = buildHistory(messages);
-      const { data } = await api.post('/ai/chat', { message: texto, history });
+      const { data } = await api.post(
+        '/ai/chat',
+        { message: texto, history },
+        { timeout: 130000 }
+      );
       respostaTexto = data?.reply || 'Não consegui gerar uma resposta.';
       usedAgent = true;
     } catch (error) {
       const code = error?.response?.data?.code;
       const apiMsg = error?.response?.data?.error;
+      const isTimeout =
+        error?.code === 'ECONNABORTED' ||
+        /timeout/i.test(error?.message || '') ||
+        error?.response?.status === 504;
 
-      if (code === 'ORION_NOT_CONFIGURED' || code === 'GEMINI_NOT_CONFIGURED' || error?.response?.status === 503) {
+      if (isTimeout) {
+        respostaTexto =
+          'Orion I.A está processando, mas o servidor está lento (comum sem GPU). Aguarde e tente de novo, ou peça ao admin para usar o modelo llama3.2:1b.';
+      } else if (code === 'ORION_NOT_CONFIGURED' || code === 'GEMINI_NOT_CONFIGURED' || error?.response?.status === 503) {
         const local = gerarRespostaContextual(texto);
         respostaTexto = `${local.resposta}\n\n—\nOrion I.A completa ainda não está ativa neste servidor.`;
       } else if (apiMsg) {
@@ -195,11 +206,14 @@ const ChatIA = ({ isOpen, onClose }) => {
               <FiCpu />
             </div>
             <div className="chat-ia-message-content">
-              <div className="chat-ia-typing-indicator">
-                <span />
-                <span />
-                <span />
-              </div>
+                {isTyping && (
+                  <span style={{ fontSize: 12, opacity: 0.75 }}>Consultando o CRM… pode levar até 1–2 min na 1ª pergunta</span>
+                )}
+                <div className="chat-ia-typing-indicator">
+                  <span />
+                  <span />
+                  <span />
+                </div>
             </div>
           </div>
         )}
