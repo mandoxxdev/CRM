@@ -103,7 +103,10 @@ const ChatIA = ({ isOpen, onClose }) => {
         const local = gerarRespostaContextual(texto);
         respostaTexto = `${local.resposta}\n\n—\nOrion I.A completa ainda não está ativa neste servidor.`;
       } else if (apiMsg) {
-        respostaTexto = apiMsg;
+        // Nunca mostrar erro técnico de provedor ao usuário
+        respostaTexto = /quota|gemini|google|rate.?limit|limit:\s*0/i.test(apiMsg)
+          ? 'Orion I.A está temporariamente indisponível. O administrador precisa ativar o Ollama no servidor.'
+          : apiMsg;
       } else {
         const local = gerarRespostaContextual(texto);
         respostaTexto = local.resposta;

@@ -1,7 +1,11 @@
 /**
  * Orion I.A — agente de consulta do CRM GMP.
- * Backend usa provedor externo via GEMINI_API_KEY (nunca exposto ao frontend).
- * Env: GEMINI_API_KEY, GEMINI_MODEL (default gemini-2.0-flash-lite)
+ * Provedor preferencial: Ollama (local/grátis). Gemini só como fallback opcional.
+ * Env:
+ *   AI_PROVIDER=ollama|gemini|auto (default: auto)
+ *   OLLAMA_BASE_URL=http://127.0.0.1:11434
+ *   OLLAMA_MODEL=llama3.2
+ *   GEMINI_API_KEY / GEMINI_MODEL (opcional)
  */
 
 const SQL_PROPOSTA_ATIVA = '(ativo IS NULL OR ativo = 1)';
@@ -28,85 +32,30 @@ const AGENT_TOOLS = [
     name: 'resumo_crm',
     description:
       'Retorna o painel geral do CRM: totais de clientes, propostas por status, pipeline, projetos e top clientes.',
-    parameters: { type: 'OBJECT', properties: {}, required: [] },
   },
   {
     name: 'buscar_clientes',
-    description:
-      'Busca clientes por nome, razão social, nome fantasia, CNPJ, cidade ou estado. Use quando o usuário perguntar sobre um cliente específico ou listar clientes.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        termo: { type: 'STRING', description: 'Texto de busca (nome, CNPJ, cidade, UF)' },
-        status: { type: 'STRING', description: "Filtro opcional: 'ativo', 'inativo' ou 'todos'" },
-        limite: { type: 'NUMBER', description: 'Máximo de resultados (padrão 15, máx 30)' },
-      },
-      required: [],
-    },
+    description: 'Busca clientes por nome, razão social, CNPJ, cidade ou estado.',
   },
   {
     name: 'detalhe_cliente',
-    description: 'Busca um cliente pelo id e retorna dados cadastrais + resumo de propostas e oportunidades.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        cliente_id: { type: 'NUMBER', description: 'ID do cliente' },
-      },
-      required: ['cliente_id'],
-    },
+    description: 'Detalhe de um cliente por id + propostas/oportunidades.',
   },
   {
     name: 'buscar_propostas',
-    description:
-      'Lista propostas recentes ou filtra por status, número ou cliente. Use para perguntas sobre propostas comerciais.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        termo: { type: 'STRING', description: 'Número da proposta ou nome do cliente' },
-        status: { type: 'STRING', description: 'Status da proposta (ex: aprovada, enviada, rascunho, rejeitada)' },
-        limite: { type: 'NUMBER', description: 'Máximo de resultados (padrão 15, máx 30)' },
-      },
-      required: [],
-    },
+    description: 'Lista propostas por status, número ou cliente.',
   },
   {
     name: 'buscar_oportunidades',
-    description: 'Lista oportunidades de venda / pipeline. Pode filtrar por status ou termo.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        termo: { type: 'STRING', description: 'Nome da oportunidade ou cliente' },
-        status: { type: 'STRING', description: "Ex: 'ativa', 'ganha', 'perdida'" },
-        limite: { type: 'NUMBER', description: 'Máximo de resultados (padrão 15, máx 30)' },
-      },
-      required: [],
-    },
+    description: 'Lista oportunidades / pipeline.',
   },
   {
     name: 'buscar_projetos',
-    description: 'Lista projetos do CRM por status ou termo.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        termo: { type: 'STRING', description: 'Nome do projeto ou cliente' },
-        status: { type: 'STRING', description: 'Status do projeto' },
-        limite: { type: 'NUMBER', description: 'Máximo de resultados (padrão 15, máx 30)' },
-      },
-      required: [],
-    },
+    description: 'Lista projetos do CRM.',
   },
   {
     name: 'buscar_atividades',
-    description: 'Lista atividades / tarefas pendentes ou recentes.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        termo: { type: 'STRING', description: 'Texto livre na descrição/título' },
-        apenas_pendentes: { type: 'BOOLEAN', description: 'Se true, só atividades abertas/pendentes' },
-        limite: { type: 'NUMBER', description: 'Máximo de resultados (padrão 15, máx 30)' },
-      },
-      required: [],
-    },
+    description: 'Lista atividades / tarefas.',
   },
 ];
 
@@ -181,7 +130,6 @@ async function toolBuscarClientes(db, args = {}) {
   }
   sql += ' ORDER BY razao_social LIMIT ?';
   params.push(limite);
-
   return { clientes: await dbAll(db, sql, params) };
 }
 
@@ -237,7 +185,6 @@ async function toolBuscarPropostas(db, args = {}) {
   }
   sql += ' ORDER BY pr.created_at DESC LIMIT ?';
   params.push(limite);
-
   return { propostas: await dbAll(db, sql, params) };
 }
 
@@ -271,8 +218,7 @@ async function toolBuscarOportunidades(db, args = {}) {
 async function toolBuscarProjetos(db, args = {}) {
   const limite = clampLimit(args.limite);
   const params = [];
-  let sql = `SELECT p.id, p.nome, p.status, p.created_at,
-                    c.razao_social AS cliente
+  let sql = `SELECT p.id, p.nome, p.status, p.created_at, c.razao_social AS cliente
              FROM projetos p
              LEFT JOIN clientes c ON c.id = p.cliente_id
              WHERE 1=1`;
@@ -333,18 +279,82 @@ async function executeTool(db, name, args) {
 }
 
 function getProviderConfig() {
-  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
-  const model = (process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite').trim();
-  return { apiKey, model, configured: Boolean(apiKey) };
+  return {
+    provider: String(process.env.AI_PROVIDER || 'auto').trim().toLowerCase(),
+    ollamaBaseUrl: (process.env.OLLAMA_BASE_URL || process.env.OLLAMA_URL || 'http://127.0.0.1:11434')
+      .trim()
+      .replace(/\/$/, ''),
+    ollamaModel: (process.env.OLLAMA_MODEL || 'llama3.2').trim(),
+    geminiKey: (process.env.GEMINI_API_KEY || '').trim(),
+    geminiModel: (process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite').trim(),
+  };
+}
+
+async function probeOllama(baseUrl) {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    const res = await fetch(`${baseUrl}/api/tags`, { signal: ctrl.signal });
+    clearTimeout(t);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveProvider() {
+  const cfg = getProviderConfig();
+
+  if (cfg.provider === 'ollama') {
+    const ok = await probeOllama(cfg.ollamaBaseUrl);
+    return {
+      configured: ok,
+      kind: 'ollama',
+      model: cfg.ollamaModel,
+      baseUrl: cfg.ollamaBaseUrl,
+    };
+  }
+
+  if (cfg.provider === 'gemini') {
+    return {
+      configured: Boolean(cfg.geminiKey),
+      kind: 'gemini',
+      model: cfg.geminiModel,
+      apiKey: cfg.geminiKey,
+    };
+  }
+
+  if (await probeOllama(cfg.ollamaBaseUrl)) {
+    return {
+      configured: true,
+      kind: 'ollama',
+      model: cfg.ollamaModel,
+      baseUrl: cfg.ollamaBaseUrl,
+    };
+  }
+
+  if (cfg.geminiKey) {
+    return {
+      configured: true,
+      kind: 'gemini',
+      model: cfg.geminiModel,
+      apiKey: cfg.geminiKey,
+    };
+  }
+
+  return { configured: false, kind: null };
 }
 
 function sanitizePublicError(message, status) {
   const raw = String(message || '');
-  if (status === 429 || /quota|rate|exhausted|429/i.test(raw)) {
-    return 'Orion I.A está temporariamente indisponível por limite de uso. Tente novamente em alguns minutos.';
+  if (status === 429 || /quota|rate|exhausted|429|limit:\s*0/i.test(raw)) {
+    return 'Orion I.A está temporariamente indisponível. Configure o Ollama no servidor para uso gratuito sem cota.';
+  }
+  if (/ECONNREFUSED|fetch failed|aborted|ollama/i.test(raw)) {
+    return 'Orion I.A não encontrou o Ollama no servidor. Verifique se o serviço está rodando.';
   }
   if (/no longer available|not found|model/i.test(raw)) {
-    return 'Orion I.A está em manutenção de modelo. Contate o administrador do sistema.';
+    return 'Orion I.A está sem o modelo configurado. Contate o administrador.';
   }
   if (/API key|permission|403|401/i.test(raw)) {
     return 'Orion I.A não está autenticada no servidor. Contate o administrador.';
@@ -352,140 +362,218 @@ function sanitizePublicError(message, status) {
   return 'Orion I.A não conseguiu processar sua pergunta agora. Tente novamente.';
 }
 
-async function callProvider({ apiKey, model, systemInstruction, contents, tools }) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+function extractSearchTerm(message) {
+  return String(message || '')
+    .replace(/[?!.,;:]+/g, ' ')
+    .replace(
+      /\b(quantos?|quais|qual|como|está|esta|mostrar?|mostre|buscar?|busque|liste|listar|cliente|clientes|proposta|propostas|oportunidade|oportunidades|projeto|projetos|atividade|atividades|pipeline|resumo|status|ativos?|aprovadas?|do|da|de|os|as|um|uma|o|a|me|sobre|temos|tem|no|na|crm|orion|teste|online)\b/gi,
+      ' '
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
 
-  const body = {
-    systemInstruction: { parts: [{ text: systemInstruction }] },
-    contents,
-    generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 2048,
-    },
+async function gatherLiveCrmContext(db, message) {
+  const toolsUsed = ['resumo_crm'];
+  const live = {
+    gerado_em: new Date().toISOString(),
+    resumo: await toolResumoCrm(db),
   };
 
-  if (tools?.length) {
-    body.tools = [
-      {
-        functionDeclarations: tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        })),
-      },
-    ];
+  const m = String(message || '').toLowerCase();
+  const termo = extractSearchTerm(message);
+
+  if (/cliente|cnpj|empresa|raz[aã]o/.test(m)) {
+    live.clientes = await toolBuscarClientes(db, {
+      termo: termo || undefined,
+      status: /inativ/.test(m) ? 'todos' : 'ativo',
+      limite: 12,
+    });
+    toolsUsed.push('buscar_clientes');
+  }
+  if (/proposta/.test(m)) {
+    live.propostas = await toolBuscarPropostas(db, {
+      termo: termo || undefined,
+      status: /aprovad/.test(m)
+        ? 'aprovada'
+        : /rejeit|recus/.test(m)
+          ? 'rejeitada'
+          : /enviad/.test(m)
+            ? 'enviada'
+            : undefined,
+      limite: 12,
+    });
+    toolsUsed.push('buscar_propostas');
+  }
+  if (/oportun|pipeline/.test(m)) {
+    live.oportunidades = await toolBuscarOportunidades(db, {
+      termo: termo || undefined,
+      status: /ativa|pipeline/.test(m) ? 'ativa' : undefined,
+      limite: 12,
+    });
+    toolsUsed.push('buscar_oportunidades');
+  }
+  if (/projeto/.test(m)) {
+    live.projetos = await toolBuscarProjetos(db, { termo: termo || undefined, limite: 12 });
+    toolsUsed.push('buscar_projetos');
+  }
+  if (/atividad|tarefa|lembrete|agenda/.test(m)) {
+    live.atividades = await toolBuscarAtividades(db, {
+      termo: termo || undefined,
+      apenas_pendentes: !/todas|conclu/.test(m),
+      limite: 12,
+    });
+    toolsUsed.push('buscar_atividades');
   }
 
-  const response = await fetch(url, {
+  return { live, toolsUsed };
+}
+
+function parseToolDirective(text) {
+  const raw = String(text || '').trim();
+  const match =
+    raw.match(/TOOL\s*:\s*(\{[\s\S]*\})/i) ||
+    raw.match(/```(?:json)?\s*(\{\s*"name"\s*:\s*"[^"]+"[\s\S]*?\})\s*```/i);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]);
+    if (!parsed?.name) return null;
+    return { name: parsed.name, args: parsed.args || parsed.arguments || {} };
+  } catch {
+    return null;
+  }
+}
+
+function buildChatMessages(systemInstruction, history, message) {
+  const messages = [{ role: 'system', content: systemInstruction }];
+  const safeHistory = Array.isArray(history) ? history.slice(-8) : [];
+  for (const item of safeHistory) {
+    const text = String(item.text || item.content || '').trim();
+    if (!text) continue;
+    const role =
+      item.role === 'model' || item.role === 'bot' || item.role === 'assistant' ? 'assistant' : 'user';
+    messages.push({ role, content: text });
+  }
+  messages.push({ role: 'user', content: String(message || '').trim() });
+  return messages;
+}
+
+async function callOllamaChat({ baseUrl, model, messages }) {
+  const response = await fetch(`${baseUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false,
+      options: { temperature: 0.2 },
+    }),
   });
 
   const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const err = new Error(data?.error || `ollama_error_${response.status}`);
+    err.status = 502;
+    throw err;
+  }
 
+  const text = String(data?.message?.content || '').trim();
+  if (!text) throw Object.assign(new Error('empty_response'), { status: 502 });
+  return text;
+}
+
+async function callGeminiChat({ apiKey, model, systemInstruction, messages }) {
+  const contents = [];
+  for (const msg of messages) {
+    if (msg.role === 'system') continue;
+    contents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    });
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      contents,
+      generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const err = new Error(data?.error?.message || `provider_error_${response.status}`);
     err.status = response.status === 429 ? 429 : 502;
     throw err;
   }
 
-  const candidate = data?.candidates?.[0];
-  const parts = candidate?.content?.parts || [];
-  const functionCalls = parts.filter((p) => p.functionCall).map((p) => p.functionCall);
-  const text = parts
+  const text = (data?.candidates || [])
+    .flatMap((c) => c?.content?.parts || [])
     .map((p) => p?.text || '')
     .join('')
     .trim();
 
-  return {
-    text,
-    functionCalls,
-    modelContent: candidate?.content || { role: 'model', parts },
-  };
+  if (!text) throw Object.assign(new Error('empty_response'), { status: 502 });
+  return text;
 }
 
-function buildContents(history, message) {
-  const contents = [];
-  const safeHistory = Array.isArray(history) ? history.slice(-10) : [];
+async function runAgent({ db, provider, userName, message, history }) {
+  const { live, toolsUsed } = await gatherLiveCrmContext(db, message);
+  const toolCatalog = AGENT_TOOLS.map((t) => `- ${t.name}: ${t.description}`).join('\n');
 
-  for (const item of safeHistory) {
-    const role = item.role === 'model' || item.role === 'bot' || item.role === 'assistant' ? 'model' : 'user';
-    const text = String(item.text || item.content || '').trim();
-    if (!text) continue;
-    contents.push({ role, parts: [{ text }] });
-  }
-
-  contents.push({
-    role: 'user',
-    parts: [{ text: String(message || '').trim() }],
-  });
-
-  return contents;
-}
-
-async function runAgent({ db, apiKey, model, userName, message, history }) {
   const systemInstruction = `Você é a Orion I.A, agente inteligente oficial do CRM GMP (Moinho Ypiranga / GMP Industriais).
-Nunca diga que é Gemini, Google, ChatGPT ou qualquer outro provedor. Seu nome é Orion I.A.
-Responda sempre em português do Brasil, clara, objetiva e profissional.
-Você TEM ferramentas para consultar o banco do CRM em tempo real. Use-as sempre que a pergunta envolver dados (clientes, propostas, oportunidades, projetos, atividades, totais, pipeline).
-Não invente números, clientes ou propostas. Se a ferramenta não trouxer o dado, diga que não encontrou.
-Também pode explicar como usar o CRM (cadastros, propostas, dashboard, busca Ctrl+K, etc.).
-Usuário logado: ${userName}.
-Quando listar resultados, seja útil: cite nomes, status e valores principais.`;
+Nunca revele provedor técnico. Seu nome é Orion I.A.
+Responda sempre em português do Brasil, clara e objetiva.
 
-  const contents = buildContents(history, message);
-  const toolsUsed = [];
+Os dados abaixo foram lidos AGORA do banco do CRM (tempo real). Use-os. Não invente.
+Se precisar de mais detalhe, responda APENAS com uma linha:
+TOOL:{"name":"nome_da_ferramenta","args":{...}}
+Ferramentas:
+${toolCatalog}
+
+Usuário logado: ${userName}.
+
+DADOS AO VIVO DO CRM:
+${JSON.stringify(live, null, 2)}`;
+
+  const messages = buildChatMessages(systemInstruction, history, message);
 
   for (let round = 0; round < MAX_AGENT_ROUNDS; round += 1) {
-    const result = await callProvider({
-      apiKey,
-      model,
-      systemInstruction,
-      contents,
-      tools: AGENT_TOOLS,
-    });
+    const text =
+      provider.kind === 'ollama'
+        ? await callOllamaChat({
+            baseUrl: provider.baseUrl,
+            model: provider.model,
+            messages,
+          })
+        : await callGeminiChat({
+            apiKey: provider.apiKey,
+            model: provider.model,
+            systemInstruction,
+            messages,
+          });
 
-    if (!result.functionCalls.length) {
-      if (!result.text) {
-        throw Object.assign(new Error('empty_response'), { status: 502 });
-      }
-      return { reply: result.text, toolsUsed };
+    const toolCall = parseToolDirective(text);
+    if (!toolCall) {
+      return { reply: text.replace(/^TOOL:.*$/gim, '').trim() || text, toolsUsed };
     }
 
-    contents.push(result.modelContent);
-
-    const functionResponses = [];
-    for (const fc of result.functionCalls) {
-      const name = fc.name;
-      let args = fc.args || {};
-      if (typeof args === 'string') {
-        try {
-          args = JSON.parse(args);
-        } catch {
-          args = {};
-        }
-      }
-
-      let toolResult;
-      try {
-        toolResult = await executeTool(db, name, args);
-        toolsUsed.push(name);
-      } catch (e) {
-        toolResult = { erro: e.message || 'falha na consulta' };
-      }
-
-      functionResponses.push({
-        functionResponse: {
-          name,
-          response: toolResult,
-        },
-      });
+    let toolResult;
+    try {
+      toolResult = await executeTool(db, toolCall.name, toolCall.args);
+      toolsUsed.push(toolCall.name);
+    } catch (e) {
+      toolResult = { erro: e.message || 'falha na consulta' };
     }
 
-    contents.push({
+    messages.push({ role: 'assistant', content: text });
+    messages.push({
       role: 'user',
-      parts: functionResponses,
+      content: `Resultado da ferramenta ${toolCall.name}:\n${JSON.stringify(toolResult, null, 2)}\n\nAgora responda ao usuário em português, sem mencionar ferramentas.`,
     });
   }
 
@@ -495,29 +583,30 @@ Quando listar resultados, seja útil: cite nomes, status e valores principais.`;
 module.exports = function registerAiAssistantRoutes(app, db, authenticateToken) {
   if (!db) return;
 
-  app.get('/api/ai/status', authenticateToken, (req, res) => {
-    const { configured } = getProviderConfig();
+  app.get('/api/ai/status', authenticateToken, async (req, res) => {
+    const provider = await resolveProvider();
     res.json({
-      configured,
+      configured: Boolean(provider.configured),
       name: 'Orion I.A',
       agent: true,
+      mode: provider.kind || null,
+      learnsFromCrmLive: true,
     });
   });
 
   app.post('/api/ai/chat', authenticateToken, async (req, res) => {
     try {
-      const { apiKey, model, configured } = getProviderConfig();
-      if (!configured) {
+      const provider = await resolveProvider();
+      if (!provider.configured) {
         return res.status(503).json({
-          error: 'Orion I.A ainda não está disponível neste servidor. Contate o administrador.',
+          error:
+            'Orion I.A ainda não está disponível. Instale/inicie o Ollama no servidor (OLLAMA_BASE_URL) ou configure um provedor válido.',
           code: 'ORION_NOT_CONFIGURED',
         });
       }
 
       const message = String(req.body?.message || '').trim();
-      if (!message) {
-        return res.status(400).json({ error: 'Informe a mensagem.' });
-      }
+      if (!message) return res.status(400).json({ error: 'Informe a mensagem.' });
       if (message.length > 4000) {
         return res.status(400).json({ error: 'Mensagem muito longa (máx. 4000 caracteres).' });
       }
@@ -525,8 +614,7 @@ module.exports = function registerAiAssistantRoutes(app, db, authenticateToken) 
       const userName = req.user?.nome || req.user?.name || req.user?.email || 'usuário';
       const { reply, toolsUsed } = await runAgent({
         db,
-        apiKey,
-        model,
+        provider,
         userName,
         message,
         history: req.body?.history,
