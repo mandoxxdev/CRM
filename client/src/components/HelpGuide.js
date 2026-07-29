@@ -139,8 +139,8 @@ const HelpGuide = ({ onFabClick, hideFab = false }) => {
       <button
         className="help-guide-button"
         onClick={onFabClick || startGuide}
-        title={onFabClick ? 'Assistente IA' : 'Iniciar guia de ajuda'}
-        aria-label={onFabClick ? 'Abrir assistente IA' : 'Iniciar guia de ajuda'}
+        title={onFabClick ? 'Orion I.A' : 'Iniciar guia de ajuda'}
+        aria-label={onFabClick ? 'Abrir Orion I.A' : 'Iniciar guia de ajuda'}
       >
         <FiMessageCircle />
       </button>

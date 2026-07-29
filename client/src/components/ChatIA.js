@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiSend, FiUser, FiX, FiStar, FiHelpCircle, FiCpu } from 'react-icons/fi';
+import { FiSend, FiUser, FiX, FiStar, FiCpu } from 'react-icons/fi';
 import { gerarRespostaContextual, sugerirPerguntas } from '../utils/assistenteIA';
 import api from '../services/api';
 import './ChatIA.css';
@@ -7,8 +7,8 @@ import './ChatIA.css';
 const SUGESTOES_INICIAIS = [
   'Quantos clientes ativos temos?',
   'Como está o pipeline de oportunidades?',
-  'Resumo das propostas por status',
-  'Como criar uma nova proposta?',
+  'Mostre as propostas recentes',
+  'Busque um cliente pelo nome',
 ];
 
 const ChatIA = ({ isOpen, onClose }) => {
@@ -45,8 +45,8 @@ const ChatIA = ({ isOpen, onClose }) => {
           id: Date.now(),
           type: 'bot',
           text: configured
-            ? `Olá! Sou a assistente IA do CRM GMP (Gemini, gratuito).\n\nPosso consultar dados do sistema e ajudar a usar o CRM. Exemplos:\n• Quantos clientes ativos temos?\n• Como está o pipeline?\n• Como criar uma proposta?\n\nPergunte o que precisar.`
-            : `Olá! O assistente Gemini ainda não está configurado no servidor.\n\nPara ativar (sem custo):\n1. Acesse https://aistudio.google.com/apikey\n2. Crie uma API key gratuita\n3. Defina GEMINI_API_KEY no ambiente do servidor e reinicie\n\nEnquanto isso, consigo responder dúvidas básicas de uso do CRM pelo guia local.`,
+            ? `Olá! Sou a Orion I.A, agente inteligente do CRM GMP.\n\nPosso consultar clientes, propostas, oportunidades, projetos e atividades em tempo real — e também te ajudar a usar o sistema.\n\nExemplos:\n• Quantos clientes ativos temos?\n• Busque o cliente X\n• Como está o pipeline?\n• Propostas aprovadas deste mês\n\nComo posso ajudar?`
+            : `Olá! Sou a Orion I.A.\n\nNo momento estou em modo limitado (sem conexão com o agente completo). Ainda consigo responder dúvidas básicas de uso do CRM.\n\nPeça ao administrador para ativar a Orion I.A no servidor.`,
           timestamp: new Date(),
         },
       ]);
@@ -83,29 +83,27 @@ const ChatIA = ({ isOpen, onClose }) => {
       timestamp: new Date(),
     };
 
-    const nextMessages = [...messages, userMessage];
-    setMessages(nextMessages);
+    setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
 
     let respostaTexto = '';
-    let usedGemini = false;
+    let usedAgent = false;
 
     try {
       const history = buildHistory(messages);
       const { data } = await api.post('/ai/chat', { message: texto, history });
       respostaTexto = data?.reply || 'Não consegui gerar uma resposta.';
-      usedGemini = true;
+      usedAgent = true;
     } catch (error) {
       const code = error?.response?.data?.code;
       const apiMsg = error?.response?.data?.error;
 
-      if (code === 'GEMINI_NOT_CONFIGURED' || error?.response?.status === 503) {
+      if (code === 'ORION_NOT_CONFIGURED' || code === 'GEMINI_NOT_CONFIGURED' || error?.response?.status === 503) {
         const local = gerarRespostaContextual(texto);
-        respostaTexto = `${local.resposta}\n\n—\n💡 Para respostas com dados ao vivo do CRM, configure a chave gratuita GEMINI_API_KEY (aistudio.google.com/apikey).`;
+        respostaTexto = `${local.resposta}\n\n—\nOrion I.A completa ainda não está ativa neste servidor.`;
       } else if (apiMsg) {
-        const local = gerarRespostaContextual(texto);
-        respostaTexto = `${apiMsg}\n\nResposta local (fallback):\n${local.resposta}`;
+        respostaTexto = apiMsg;
       } else {
         const local = gerarRespostaContextual(texto);
         respostaTexto = local.resposta;
@@ -121,7 +119,7 @@ const ChatIA = ({ isOpen, onClose }) => {
         type: 'bot',
         text: respostaTexto,
         timestamp: new Date(),
-        source: usedGemini ? 'gemini' : 'local',
+        source: usedAgent ? 'orion' : 'local',
       },
     ]);
     if (novasSugestoes.length > 0) {
@@ -167,9 +165,9 @@ const ChatIA = ({ isOpen, onClose }) => {
         <div className="chat-ia-header-title">
           <div className="chat-ia-badge">
             <FiCpu />
-            <span>{aiReady ? 'Gemini' : 'Assistente'}</span>
+            <span>Agente</span>
           </div>
-          <h3>Assistente IA</h3>
+          <h3>Orion I.A</h3>
         </div>
         <button type="button" className="chat-ia-close" onClick={onClose} aria-label="Fechar">
           <FiX />
@@ -180,7 +178,7 @@ const ChatIA = ({ isOpen, onClose }) => {
         {messages.map((message) => (
           <div key={message.id} className={`chat-ia-message chat-ia-message-${message.type}`}>
             <div className="chat-ia-message-avatar">
-              {message.type === 'user' ? <FiUser /> : <FiHelpCircle />}
+              {message.type === 'user' ? <FiUser /> : <FiCpu />}
             </div>
             <div className="chat-ia-message-content">
               <div className="chat-ia-message-text">{formatarTexto(message.text)}</div>
@@ -191,7 +189,7 @@ const ChatIA = ({ isOpen, onClose }) => {
         {isTyping && (
           <div className="chat-ia-message chat-ia-message-bot">
             <div className="chat-ia-message-avatar">
-              <FiHelpCircle />
+              <FiCpu />
             </div>
             <div className="chat-ia-message-content">
               <div className="chat-ia-typing-indicator">
@@ -232,7 +230,7 @@ const ChatIA = ({ isOpen, onClose }) => {
             ref={inputRef}
             type="text"
             className="chat-ia-input"
-            placeholder="Pergunte sobre dados do CRM ou como usar o sistema..."
+            placeholder="Pergunte à Orion I.A..."
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -249,7 +247,7 @@ const ChatIA = ({ isOpen, onClose }) => {
         </div>
         <div className="chat-ia-footer-hint">
           Pressione <kbd>Enter</kbd> para enviar
-          {aiReady === false ? ' · modo local (sem Gemini)' : ''}
+          {aiReady === false ? ' · modo limitado' : ''}
         </div>
       </div>
     </div>
