@@ -6,9 +6,8 @@ import { getEffectiveUser } from '../../services/permissionsCache';
 import { canAccessAdministrativoConfig } from '../../utils/systemPermissions';
 import { useComercialResponsaveis } from '../../hooks/useComercialResponsaveis';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiZap } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, normalizePropostasResponse, isPropostaInativa } from '../../utils/formatDate';
-import GerarPropostaModal from './GerarPropostaModal';
 import './PropostasList.css';
 
 const STATUS = {
@@ -39,7 +38,6 @@ export default function PropostasList() {
   const [filterTipo, setFilterTipo] = useState('');
   const [filterOportunidade, setFilterOportunidade] = useState('');
   const [filterResponsavel, setFilterResponsavel] = useState('');
-  const [showAutomatica, setShowAutomatica] = useState(false);
   const [showInativas, setShowInativas] = useState(false);
   const [rejeitarId, setRejeitarId] = useState(null);
   const [rejeitarMotivo, setRejeitarMotivo] = useState('');
@@ -149,9 +147,6 @@ export default function PropostasList() {
               <FiSettings /> Config. template
             </Link>
           )}
-          <button type="button" className="btn btn-sec" onClick={() => setShowAutomatica(true)}>
-            <FiZap /> Proposta automática
-          </button>
           <Link to="/comercial/propostas/nova" className="btn btn-pri">
             <FiPlus /> Nova proposta
           </Link>
@@ -260,13 +255,6 @@ export default function PropostasList() {
           </table>
         )}
       </div>
-
-      {showAutomatica && (
-        <GerarPropostaModal
-          onClose={() => setShowAutomatica(false)}
-          onSuccess={(data) => { load(); setShowAutomatica(false); if (data?.id) navigate(`/comercial/propostas/detalhe/${data.id}`); }}
-        />
-      )}
 
       {rejeitarId && (
         <div className="propostas-list-modal-overlay" onClick={() => setRejeitarId(null)}>
