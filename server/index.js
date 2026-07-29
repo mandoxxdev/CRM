@@ -13913,13 +13913,17 @@ app.get('/api/produtos/proximo-codigo', authenticateToken, (req, res) => {
             return res.json({ codigo: '', aviso: 'Família não encontrada no cadastro de famílias.' });
           }
           // Posição da família dentro do grupo, na mesma ordem em que ela aparece na tela
-          // (ordem, depois id). Conta TODAS as famílias do grupo, inclusive inativas: o
-          // código vai impresso em proposta, e desativar uma família não pode renumerar as
-          // seguintes. IFNULL(-1) trata famílias sem grupo como um "grupo" próprio.
+          // (ordem, depois id) e contando APENAS as ATIVAS — a lista de famílias do grupo
+          // só mostra ativas, então contar as excluídas fazia a 1ª família visível receber
+          // 03 num grupo com 2 famílias na tela.
+          // Consequência assumida: excluir uma família renumera as seguintes. Se isso
+          // virar problema, o caminho é gravar um número fixo por família no cadastro.
+          // IFNULL(-1) trata famílias sem grupo como um "grupo" próprio.
           db.get(
             `SELECT COUNT(*) + 1 AS posicao
                FROM familias_produto x
               WHERE IFNULL(x.grupo_id, -1) = IFNULL(?, -1)
+                AND IFNULL(x.ativo, 1) = 1
                 AND (x.ordem < ? OR (x.ordem = ? AND x.id < ?))`,
             [fam.grupo_id, fam.familia_ordem || 0, fam.familia_ordem || 0, fam.familia_id],
             (errPos, pos) => {
