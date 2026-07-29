@@ -413,6 +413,10 @@ export default function PropostaForm() {
 
   const abrirPreview = () => {
     if (!id) return;
+    if (form.status === 'rascunho') {
+      toast.info('Envie a proposta para gerar o documento automático.');
+      return;
+    }
     api.get(`/propostas/${id}/premium`, { responseType: 'text' }).then(({ data }) => {
       const url = URL.createObjectURL(new Blob([data], { type: 'text/html;charset=utf-8' }));
       window.open(url, '_blank');
@@ -421,6 +425,10 @@ export default function PropostaForm() {
 
   const baixarPdf = () => {
     if (!id) return;
+    if (form.status === 'rascunho') {
+      toast.info('Envie a proposta para gerar o PDF.');
+      return;
+    }
     api.get(`/propostas/${id}/pdf`, { responseType: 'blob' }).then(({ data }) => {
       const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
       const a = document.createElement('a');
@@ -516,11 +524,21 @@ export default function PropostaForm() {
       <header className="proposta-form-header">
         <h1>{isEdit ? 'Editar proposta' : 'Nova proposta'}</h1>
         <div className="proposta-form-header-actions">
-          {isEdit && (
+          {isEdit && form.status !== 'rascunho' && (
             <>
               <button type="button" className="btn btn-sec" onClick={abrirPreview}><FiEye /> Ver proposta</button>
               <button type="button" className="btn btn-sec" onClick={baixarPdf}><FiDownload /> PDF</button>
             </>
+          )}
+          {isEdit && form.status === 'rascunho' && (
+            <button
+              type="button"
+              className="btn btn-sec"
+              disabled
+              title="Disponível após enviar a proposta"
+            >
+              <FiEye /> Ver proposta
+            </button>
           )}
           <button type="button" className="btn btn-sec" onClick={() => navigate('/comercial/propostas')}><FiX /> Cancelar</button>
           <button type="submit" form="proposta-form-form" className="btn btn-pri" disabled={loading}>

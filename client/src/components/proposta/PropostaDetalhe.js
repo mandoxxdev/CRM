@@ -79,6 +79,10 @@ export default function PropostaDetalhe() {
   };
 
   const abrirPreview = () => {
+    if (status === 'rascunho') {
+      toast.info('Envie a proposta para gerar o documento automático.');
+      return;
+    }
     api.get(`/propostas/${id}/premium`, { responseType: 'text' }).then(({ data }) => {
       const url = URL.createObjectURL(new Blob([data], { type: 'text/html;charset=utf-8' }));
       window.open(url, '_blank');
@@ -86,6 +90,10 @@ export default function PropostaDetalhe() {
   };
 
   const baixarPdfGerado = async () => {
+    if (status === 'rascunho') {
+      toast.info('Envie a proposta para gerar o PDF.');
+      return;
+    }
     setPdfLoading(true);
     try {
       const { data } = await api.get(`/propostas/${id}/pdf`, { responseType: 'blob' });
@@ -230,8 +238,24 @@ export default function PropostaDetalhe() {
       </div>
 
       <div className="proposta-detalhe-actions">
-        <button type="button" className="btn btn-sec" onClick={abrirPreview}><FiEye /> Ver proposta</button>
-        <button type="button" className="btn btn-pri" onClick={baixarPdfGerado} disabled={pdfLoading}><FiDownload /> {pdfLoading ? 'Gerando...' : 'PDF gerado'}</button>
+        <button
+          type="button"
+          className="btn btn-sec"
+          onClick={abrirPreview}
+          disabled={status === 'rascunho'}
+          title={status === 'rascunho' ? 'Disponível após enviar a proposta' : 'Ver proposta'}
+        >
+          <FiEye /> Ver proposta
+        </button>
+        <button
+          type="button"
+          className="btn btn-pri"
+          onClick={baixarPdfGerado}
+          disabled={pdfLoading || status === 'rascunho'}
+          title={status === 'rascunho' ? 'Disponível após enviar a proposta' : undefined}
+        >
+          <FiDownload /> {pdfLoading ? 'Gerando...' : 'PDF gerado'}
+        </button>
         {status === 'rascunho' && <button type="button" className="btn btn-sec" onClick={() => acao('enviar')}><FiSend /> Enviar</button>}
         {(status === 'enviada' || status === 'visualizada') && (
           <>

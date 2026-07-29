@@ -272,6 +272,16 @@
   color: var(--gmp-primary);
 }
 
+.propostas-list-cell-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.propostas-list-cell-actions button:disabled:hover {
+  background: transparent;
+  color: var(--gmp-text-light);
+}
+
 [data-theme="dark"] .propostas-list-cell-actions button:hover,
 [data-theme="dark"] .propostas-list-cell-actions a:hover {
   background: rgba(51, 133, 214, 0.25);

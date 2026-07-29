@@ -72,12 +72,21 @@ export default function PropostasList() {
   }, []);
 
   const formatMoney = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v) || 0);
+  const isRascunho = (s) => s === 'rascunho';
 
-  const abrirPreview = (id) => {
+  const abrirPreview = (id, status) => {
+    if (isRascunho(status)) {
+      toast.info('Envie a proposta para gerar o documento automático.');
+      return;
+    }
     window.open(`/comercial/propostas/${id}/preview-editavel`, '_blank');
   };
 
-  const baixarPdf = async (id, numero) => {
+  const baixarPdf = async (id, numero, status) => {
+    if (isRascunho(status)) {
+      toast.info('Envie a proposta para gerar o PDF.');
+      return;
+    }
     if (pdfId) return;
     setPdfId(id);
     try {
@@ -121,7 +130,6 @@ export default function PropostasList() {
     }
   };
 
-  const isRascunho = (s) => s === 'rascunho';
   const podeAceitarRejeitar = (s) => s === 'enviada' || s === 'visualizada';
   const podeNovaRevisao = (s) => ['enviada', 'visualizada', 'aceita', 'rejeitada', 'cancelada', 'expirada'].includes(s);
   const isInativa = isPropostaInativa;
@@ -226,8 +234,22 @@ export default function PropostasList() {
                   <td>{formatDateTimeBR(p.enviada_em)}</td>
                   <td>
                     <div className="propostas-list-cell-actions">
-                      <button type="button" title="Ver proposta" onClick={() => abrirPreview(p.id)}><FiEye /></button>
-                      <button type="button" title="PDF" onClick={() => baixarPdf(p.id, p.numero_proposta)} disabled={pdfId === p.id}>{pdfId === p.id ? '...' : <FiDownload />}</button>
+                      <button
+                        type="button"
+                        title={isRascunho(p.status) ? 'Disponível após enviar a proposta' : 'Ver proposta'}
+                        onClick={() => abrirPreview(p.id, p.status)}
+                        disabled={isRascunho(p.status)}
+                      >
+                        <FiEye />
+                      </button>
+                      <button
+                        type="button"
+                        title={isRascunho(p.status) ? 'Disponível após enviar a proposta' : 'PDF'}
+                        onClick={() => baixarPdf(p.id, p.numero_proposta, p.status)}
+                        disabled={isRascunho(p.status) || pdfId === p.id}
+                      >
+                        {pdfId === p.id ? '...' : <FiDownload />}
+                      </button>
                       {isRascunho(p.status) && <button type="button" title="Enviar" onClick={() => acao('enviar', p.id)}><FiSend /></button>}
                       {podeAceitarRejeitar(p.status) && (
                         <>
