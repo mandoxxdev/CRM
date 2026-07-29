@@ -225,10 +225,23 @@
 }
 
 .proposta-form-item-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.proposta-form-item-row {
   display: grid;
-  grid-template-columns: 88px 72px minmax(130px, 1fr) minmax(110px, 0.9fr) minmax(180px, 1.4fr) minmax(120px, 0.9fr);
   gap: 0.65rem 0.75rem;
   align-items: end;
+}
+
+.proposta-form-item-row-valores {
+  grid-template-columns: 88px 72px minmax(168px, 1.2fr) minmax(150px, 1fr);
+}
+
+.proposta-form-item-row-meta {
+  grid-template-columns: minmax(0, 1.6fr) minmax(140px, 0.8fr);
 }
 
 .proposta-form-item-field {
@@ -247,18 +260,79 @@
   color: var(--gmp-text-light);
 }
 
-.proposta-form-item-static,
-.proposta-form-item-total {
+.proposta-form-item-static {
   display: flex;
   align-items: center;
-  min-height: 36px;
+  min-height: 40px;
   font-size: 0.92rem;
   color: var(--gmp-text);
 }
 
-.proposta-form-item-total {
+.proposta-form-money-input,
+.proposta-form-money-display {
+  display: flex;
+  align-items: stretch;
+  min-height: 40px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-surface);
+  overflow: hidden;
+}
+
+.proposta-form-money-input:focus-within {
+  border-color: var(--gmp-primary);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.12);
+}
+
+.proposta-form-money-prefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.65rem;
+  background: var(--gmp-bg);
+  border-right: 1px solid var(--gmp-border);
+  color: var(--gmp-text-light);
+  font-size: 0.85rem;
   font-weight: 700;
-  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.proposta-form-item-card .input-money {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--gmp-text);
+  box-sizing: border-box;
+}
+
+/* esconde setas do number no valor */
+.proposta-form-item-card .input-money::-webkit-outer-spin-button,
+.proposta-form-item-card .input-money::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.proposta-form-item-card .input-money[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.proposta-form-money-display {
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gmp-text);
+  background: var(--gmp-bg);
 }
 
 .proposta-form-item-card .input-num,
@@ -266,7 +340,7 @@
 .proposta-form-item-card .input-text-sm,
 .proposta-form-item-card .input-select-sm {
   width: 100%;
-  min-height: 36px;
+  min-height: 40px;
   padding: 0.4rem 0.55rem;
   border: 1px solid var(--gmp-border);
   border-radius: 8px;
@@ -278,6 +352,11 @@
 
 .proposta-form-item-card .input-num {
   font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.proposta-form-item-field-familia .input-select-sm {
+  text-overflow: ellipsis;
 }
 
 .proposta-form-item-card .btn-remove {
@@ -313,18 +392,22 @@
 }
 
 @media (max-width: 900px) {
-  .proposta-form-item-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .proposta-form-item-row-valores {
+    grid-template-columns: 1fr 1fr;
   }
 
-  .proposta-form-item-field-familia,
-  .proposta-form-item-field-valor {
+  .proposta-form-item-field-valor,
+  .proposta-form-item-field-total {
     grid-column: 1 / -1;
+  }
+
+  .proposta-form-item-row-meta {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 560px) {
-  .proposta-form-item-grid {
+  .proposta-form-item-row-valores {
     grid-template-columns: 1fr 1fr;
   }
 }

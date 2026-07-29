@@ -625,71 +625,83 @@ export default function PropostaForm() {
                   </div>
 
                   <div className="proposta-form-item-grid">
-                    <label className="proposta-form-item-field">
-                      <span>Qtd</span>
-                      <input
-                        type="number"
-                        min={0.01}
-                        step={0.01}
-                        value={item.quantidade}
-                        onChange={(e) => updateItem(idx, 'quantidade', e.target.value)}
-                        className="input-num"
-                      />
-                    </label>
-                    <label className="proposta-form-item-field">
-                      <span>Un.</span>
-                      {item.manual ? (
+                    <div className="proposta-form-item-row proposta-form-item-row-valores">
+                      <label className="proposta-form-item-field">
+                        <span>Qtd</span>
                         <input
-                          type="text"
-                          value={item.unidade}
-                          onChange={(e) => updateItem(idx, 'unidade', e.target.value)}
-                          className="input-text-sm"
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          value={item.quantidade}
+                          onChange={(e) => updateItem(idx, 'quantidade', e.target.value)}
+                          className="input-num"
                         />
-                      ) : (
-                        <span className="proposta-form-item-static">{item.unidade || '—'}</span>
-                      )}
-                    </label>
-                    <label className="proposta-form-item-field proposta-form-item-field-valor">
-                      <span>Val. unit.</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={item.valor_unitario}
-                        onChange={(e) => updateItem(idx, 'valor_unitario', e.target.value)}
-                        className="input-num"
-                      />
-                    </label>
-                    <div className="proposta-form-item-field">
-                      <span>Total</span>
-                      <strong className="proposta-form-item-total">{formatMoney(item.valor_total)}</strong>
+                      </label>
+                      <label className="proposta-form-item-field">
+                        <span>Un.</span>
+                        {item.manual ? (
+                          <input
+                            type="text"
+                            value={item.unidade}
+                            onChange={(e) => updateItem(idx, 'unidade', e.target.value)}
+                            className="input-text-sm"
+                          />
+                        ) : (
+                          <span className="proposta-form-item-static">{item.unidade || '—'}</span>
+                        )}
+                      </label>
+                      <label className="proposta-form-item-field proposta-form-item-field-valor">
+                        <span>Valor unitário</span>
+                        <div className="proposta-form-money-input">
+                          <span className="proposta-form-money-prefix" aria-hidden="true">R$</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={item.valor_unitario}
+                            onChange={(e) => updateItem(idx, 'valor_unitario', e.target.value)}
+                            className="input-money"
+                            aria-label="Valor unitário"
+                          />
+                        </div>
+                      </label>
+                      <div className="proposta-form-item-field proposta-form-item-field-total">
+                        <span>Total do item</span>
+                        <div className="proposta-form-money-display">
+                          {formatMoney(item.valor_total)}
+                        </div>
+                      </div>
                     </div>
-                    <label className="proposta-form-item-field proposta-form-item-field-familia">
-                      <span>Família</span>
-                      <select
-                        value={item.familia_produto}
-                        onChange={(e) => updateItem(idx, 'familia_produto', e.target.value)}
-                        className="input-select-sm"
-                      >
-                        <option value="">—</option>
-                        {familiasProduto.map((fam) => (
-                          <option key={fam} value={fam}>{fam}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="proposta-form-item-field">
-                      <span>Região</span>
-                      <select
-                        value={item.regiao_busca}
-                        onChange={(e) => updateItem(idx, 'regiao_busca', e.target.value)}
-                        className="input-select-sm"
-                      >
-                        <option value="">—</option>
-                        {REGIOES_BUSCA.map((r) => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                    </label>
+
+                    <div className="proposta-form-item-row proposta-form-item-row-meta">
+                      <label className="proposta-form-item-field proposta-form-item-field-familia">
+                        <span>Família</span>
+                        <select
+                          value={item.familia_produto}
+                          onChange={(e) => updateItem(idx, 'familia_produto', e.target.value)}
+                          className="input-select-sm"
+                          title={item.familia_produto || ''}
+                        >
+                          <option value="">—</option>
+                          {familiasProduto.map((fam) => (
+                            <option key={fam} value={fam}>{fam}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="proposta-form-item-field proposta-form-item-field-regiao">
+                        <span>Região</span>
+                        <select
+                          value={item.regiao_busca}
+                          onChange={(e) => updateItem(idx, 'regiao_busca', e.target.value)}
+                          className="input-select-sm"
+                        >
+                          <option value="">—</option>
+                          {REGIOES_BUSCA.map((r) => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                   </div>
                 </div>
               ))}
