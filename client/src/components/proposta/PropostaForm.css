@@ -242,7 +242,7 @@
 }
 
 .proposta-form-item-panel-valores {
-  grid-template-columns: 72px 64px minmax(140px, 1.2fr) 110px minmax(140px, 1fr);
+  grid-template-columns: 72px 64px minmax(150px, 1.2fr) minmax(150px, 1fr);
   padding: 0.85rem;
   border-radius: 10px;
   background: var(--gmp-bg);
@@ -465,19 +465,98 @@
   font-size: 1.05rem;
 }
 
+.proposta-form-totais {
+  margin-top: 0.35rem;
+  padding: 1rem;
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  background: var(--gmp-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.proposta-form-totais-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--gmp-text);
+}
+
+.proposta-form-totais-linha > span {
+  font-size: 0.92rem;
+  color: #64748b;
+}
+
+.proposta-form-totais-linha > strong {
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.proposta-form-totais-desconto {
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--gmp-bg);
+  border: 1px dashed var(--gmp-border);
+}
+
+.proposta-form-totais-desconto-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.proposta-form-totais-desconto-info em {
+  font-style: normal;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.proposta-form-totais-desconto-info em.is-alert {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.proposta-form-totais .btn-desconto-total {
+  flex-shrink: 0;
+}
+
+.proposta-form-totais-final {
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--gmp-border);
+}
+
+.proposta-form-totais-final > span {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gmp-text);
+}
+
+.proposta-form-totais-final > strong {
+  font-size: 1.25rem;
+  color: var(--gmp-primary);
+}
+
 @media (max-width: 900px) {
   .proposta-form-item-panel-valores {
     grid-template-columns: 1fr 1fr;
   }
 
   .field-preco,
-  .field-total,
-  .field-desconto {
+  .field-total {
     grid-column: 1 / -1;
   }
 
   .proposta-form-item-panel-meta {
     grid-template-columns: 1fr;
+  }
+
+  .proposta-form-totais-desconto {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 

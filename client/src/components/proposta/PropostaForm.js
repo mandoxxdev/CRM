@@ -90,14 +90,6 @@ function calcValorComDesconto(precoTabela, descontoPerc) {
   return Math.round(base * (1 - d / 100) * 100) / 100;
 }
 
-function maxDescontoItens(itensList) {
-  return (itensList || []).reduce((max, i) => {
-    if (i.manual) return max;
-    const d = Number(i.desconto_percentual) || 0;
-    return d > max ? d : max;
-  }, 0);
-}
-
 export default function PropostaForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -118,11 +110,17 @@ export default function PropostaForm() {
   const [pdfAnexo, setPdfAnexo] = useState(null);
   const [pdfNome, setPdfNome] = useState('');
   const [uploadingPdf, setUploadingPdf] = useState(false);
-  const [descontoEditIdx, setDescontoEditIdx] = useState(null);
+  const [descontoModalOpen, setDescontoModalOpen] = useState(false);
   const [descontoEditValor, setDescontoEditValor] = useState('');
 
-  const descontoMaximo = useMemo(() => maxDescontoItens(itens), [itens]);
-  const descontoRequerAprovacao = descontoMaximo > DESCONTO_LIMITE_SEM_APROVACAO;
+  const subtotalItens = useMemo(
+    () => itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0),
+    [itens]
+  );
+  const descontoPercentual = Number(form.margem_desconto) || 0;
+  const descontoRequerAprovacao = descontoPercentual > DESCONTO_LIMITE_SEM_APROVACAO;
+  const valorDescontoRs = subtotalItens * (descontoPercentual / 100);
+  const totalComDesconto = Math.max(0, subtotalItens - valorDescontoRs);
 
   const familiasProduto = useMemo(() => {
     const fromApi = (familiasFromApi || []).map((f) => (typeof f === 'string' ? f : f.nome)).filter(Boolean);
@@ -220,21 +218,26 @@ export default function PropostaForm() {
         setPdfNome(data.pdf_proposta_nome || data.pdf_proposta_cliente || '');
         setItens((data.itens || []).map((i) => {
           const manual = !i.codigo_produto;
-          const valorUnit = Number(i.valor_unitario) || 0;
-          const precoTabela = i.preco_tabela != null ? Number(i.preco_tabela) : (manual ? null : valorUnit);
-          const desconto = Number(i.desconto_percentual) || 0;
+          const precoTabela = i.preco_tabela != null
+            ? Number(i.preco_tabela)
+            : (manual ? null : (Number(i.valor_unitario) || 0));
+          // Preço de catálogo volta ao valor de tabela; desconto fica só no total da proposta
+          const valorUnit = manual
+            ? (Number(i.valor_unitario) || 0)
+            : (precoTabela != null ? precoTabela : (Number(i.valor_unitario) || 0));
+          const qtd = Number(i.quantidade) || 1;
           return {
             descricao: i.descricao ?? '',
-            quantidade: Number(i.quantidade) || 1,
+            quantidade: qtd,
             unidade: i.unidade ?? 'UN',
             valor_unitario: valorUnit,
-            valor_total: Number(i.valor_total) || 0,
+            valor_total: Math.round(qtd * valorUnit * 100) / 100,
             codigo_produto: i.codigo_produto ?? '',
             familia_produto: i.familia_produto ?? '',
             regiao_busca: i.regiao_busca ?? '',
             manual,
             preco_tabela: precoTabela,
-            desconto_percentual: desconto
+            desconto_percentual: 0
           };
         }));
       })
@@ -255,37 +258,20 @@ export default function PropostaForm() {
     });
   };
 
-  const aplicarDescontoItem = (idx, percentual) => {
-    setItens((prev) => {
-      const next = prev.map((item, i) => {
-        if (i !== idx || item.manual) return item;
-        const precoTabela = Number(item.preco_tabela != null ? item.preco_tabela : item.valor_unitario) || 0;
-        const desconto = Math.min(100, Math.max(0, Number(percentual) || 0));
-        const valorUnit = calcValorComDesconto(precoTabela, desconto);
-        const qtd = Number(item.quantidade) || 0;
-        return {
-          ...item,
-          preco_tabela: precoTabela,
-          desconto_percentual: desconto,
-          valor_unitario: valorUnit,
-          valor_total: Math.round(qtd * valorUnit * 100) / 100
-        };
-      });
-      const maxD = maxDescontoItens(next);
-      setForm((f) => ({
-        ...f,
-        margem_desconto: maxD,
-        ...(maxD > DESCONTO_LIMITE_SEM_APROVACAO ? { status: 'rascunho' } : {})
-      }));
-      return next;
-    });
-    setDescontoEditIdx(null);
+  const aplicarDescontoProposta = (percentual) => {
+    const desconto = Math.min(100, Math.max(0, Number(percentual) || 0));
+    setForm((f) => ({
+      ...f,
+      margem_desconto: desconto,
+      ...(desconto > DESCONTO_LIMITE_SEM_APROVACAO ? { status: 'rascunho' } : {})
+    }));
+    setDescontoModalOpen(false);
     setDescontoEditValor('');
   };
 
-  const abrirDescontoItem = (idx, item) => {
-    setDescontoEditIdx(idx);
-    setDescontoEditValor(String(item.desconto_percentual || ''));
+  const abrirDescontoProposta = () => {
+    setDescontoEditValor(String(form.margem_desconto || ''));
+    setDescontoModalOpen(true);
   };
 
   const addManualItem = () => setItens((prev) => [...prev, emptyItem()]);
@@ -338,7 +324,7 @@ export default function PropostaForm() {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const maxDesc = maxDescontoItens(itens);
+    const maxDesc = Number(form.margem_desconto) || 0;
     let statusSalvar = form.status;
     if (maxDesc > DESCONTO_LIMITE_SEM_APROVACAO) {
       statusSalvar = 'rascunho';
@@ -349,7 +335,7 @@ export default function PropostaForm() {
 
     setLoading(true);
     try {
-      const valorTotal = itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0);
+      const valorTotal = subtotalItens;
       const payload = {
         ...form,
         status: statusSalvar,
@@ -376,7 +362,7 @@ export default function PropostaForm() {
           codigo_produto: i.codigo_produto?.trim() || null,
           familia_produto: i.familia_produto || null,
           regiao_busca: i.regiao_busca || null,
-          desconto_percentual: Number(i.desconto_percentual) || 0,
+          desconto_percentual: 0,
           preco_tabela: i.preco_tabela != null ? Number(i.preco_tabela) : null
         }))
       };
@@ -590,17 +576,6 @@ export default function PropostaForm() {
                 {usuariosReady && usuarios.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
               </select>
             </div>
-            <div className="proposta-form-field">
-              <label>Desconto nos itens (máx. aplicado)</label>
-              <div className={`proposta-form-desconto-resumo${descontoRequerAprovacao ? ' is-alert' : ''}`}>
-                <strong>{Number(descontoMaximo || 0).toFixed(2)}%</strong>
-                <span>
-                  {descontoRequerAprovacao
-                    ? `Acima de ${DESCONTO_LIMITE_SEM_APROVACAO}% — exige aprovação`
-                    : `Até ${DESCONTO_LIMITE_SEM_APROVACAO}% sem aprovação`}
-                </span>
-              </div>
-            </div>
           </div>
           <div className="proposta-form-field">
             <label>Descrição</label>
@@ -781,33 +756,10 @@ export default function PropostaForm() {
                           </div>
                         ) : (
                           <div className="proposta-form-price-block">
-                            {(Number(item.desconto_percentual) || 0) > 0 && item.preco_tabela != null ? (
-                              <>
-                                <span className="proposta-form-price-old">{formatMoney(item.preco_tabela)}</span>
-                                <strong className="proposta-form-price-now">{formatMoney(item.valor_unitario)}</strong>
-                              </>
-                            ) : (
-                              <strong className="proposta-form-price-now">{formatMoney(item.valor_unitario)}</strong>
-                            )}
+                            <strong className="proposta-form-price-now">{formatMoney(item.valor_unitario)}</strong>
                           </div>
                         )}
                       </div>
-
-                      {!item.manual && (
-                        <div className="proposta-form-item-field field-desconto">
-                          <span>Desconto</span>
-                          <button
-                            type="button"
-                            className={`btn-desconto${(Number(item.desconto_percentual) || 0) > 0 ? ' has-value' : ''}${(Number(item.desconto_percentual) || 0) > DESCONTO_LIMITE_SEM_APROVACAO ? ' is-alert' : ''}`}
-                            onClick={() => abrirDescontoItem(idx, item)}
-                          >
-                            <FiPercent />
-                            {(Number(item.desconto_percentual) || 0) > 0
-                              ? `${Number(item.desconto_percentual).toFixed(1)}%`
-                              : 'Aplicar'}
-                          </button>
-                        </div>
-                      )}
 
                       <div className="proposta-form-item-field field-total">
                         <span>Total do item</span>
@@ -849,9 +801,32 @@ export default function PropostaForm() {
                   </div>                  </div>
                 </div>
               ))}
-              <p className="proposta-form-total">
-                <strong>Total: {formatMoney(itens.reduce((s, i) => s + (Number(i.valor_total) || 0), 0))}</strong>
-              </p>
+              <div className="proposta-form-totais">
+                <div className="proposta-form-totais-linha">
+                  <span>Subtotal dos itens</span>
+                  <strong>{formatMoney(subtotalItens)}</strong>
+                </div>
+                <div className="proposta-form-totais-linha proposta-form-totais-desconto">
+                  <div className="proposta-form-totais-desconto-info">
+                    <span>Desconto da proposta</span>
+                    {descontoPercentual > 0 ? (
+                      <em className={descontoRequerAprovacao ? 'is-alert' : ''}>
+                        −{descontoPercentual.toFixed(2)}% ({formatMoney(valorDescontoRs)})
+                        {descontoRequerAprovacao ? ` · acima de ${DESCONTO_LIMITE_SEM_APROVACAO}% exige aprovação` : ''}
+                      </em>
+                    ) : (
+                      <em>Nenhum desconto aplicado</em>
+                    )}
+                  </div>
+                  <button type="button" className="btn btn-sec btn-desconto-total" onClick={abrirDescontoProposta}>
+                    <FiPercent /> {descontoPercentual > 0 ? 'Alterar desconto' : 'Aplicar desconto'}
+                  </button>
+                </div>
+                <div className="proposta-form-totais-linha proposta-form-totais-final">
+                  <span>Total</span>
+                  <strong>{formatMoney(totalComDesconto)}</strong>
+                </div>
+              </div>
             </div>
           )}
         </section>
@@ -891,14 +866,14 @@ export default function PropostaForm() {
         />
       )}
 
-      {descontoEditIdx != null && itens[descontoEditIdx] && (
-        <div className="proposta-form-modal-overlay" onClick={() => { setDescontoEditIdx(null); setDescontoEditValor(''); }}>
+      {descontoModalOpen && (
+        <div className="proposta-form-modal-overlay" onClick={() => { setDescontoModalOpen(false); setDescontoEditValor(''); }}>
           <div className="proposta-form-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Desconto no item</h3>
+            <h3>Desconto da proposta</h3>
             <p className="proposta-form-modal-desc">
-              {itens[descontoEditIdx].descricao}
+              Subtotal: <strong>{formatMoney(subtotalItens)}</strong>
               <br />
-              Preço tabela: <strong>{formatMoney(itens[descontoEditIdx].preco_tabela ?? itens[descontoEditIdx].valor_unitario)}</strong>
+              O desconto é aplicado uma vez sobre o total dos itens.
             </p>
             <label className="proposta-form-field">
               <span>Desconto (%)</span>
@@ -918,24 +893,19 @@ export default function PropostaForm() {
               </p>
             )}
             <p className="proposta-form-modal-desc">
-              Valor com desconto:{' '}
+              Total com desconto:{' '}
               <strong>
-                {formatMoney(
-                  calcValorComDesconto(
-                    itens[descontoEditIdx].preco_tabela ?? itens[descontoEditIdx].valor_unitario,
-                    descontoEditValor
-                  )
-                )}
+                {formatMoney(calcValorComDesconto(subtotalItens, descontoEditValor))}
               </strong>
             </p>
             <div className="proposta-form-modal-actions">
-              <button type="button" className="btn btn-sec" onClick={() => { setDescontoEditIdx(null); setDescontoEditValor(''); }}>
+              <button type="button" className="btn btn-sec" onClick={() => { setDescontoModalOpen(false); setDescontoEditValor(''); }}>
                 Cancelar
               </button>
-              <button type="button" className="btn btn-sec" onClick={() => aplicarDescontoItem(descontoEditIdx, 0)}>
+              <button type="button" className="btn btn-sec" onClick={() => aplicarDescontoProposta(0)}>
                 Remover desconto
               </button>
-              <button type="button" className="btn btn-pri" onClick={() => aplicarDescontoItem(descontoEditIdx, descontoEditValor)}>
+              <button type="button" className="btn btn-pri" onClick={() => aplicarDescontoProposta(descontoEditValor)}>
                 Aplicar
               </button>
             </div>
