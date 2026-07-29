@@ -446,17 +446,25 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       // Todos os campos saem como estão no cadastro (sem transformação de caixa).
       const nomeBruto = it.produto_nome || it.descricao || `Equipamento ${n}`;
       const nome = esc(nomeBruto);
+      // produto_modelo: o modelo vem do CADASTRO do produto (produtos.modelo) via join;
+      // it.modelo só existe se o item da proposta trouxer um override próprio.
+      const modeloBruto = String(it.modelo || it.produto_modelo || '').trim();
       // O TÍTULO do item (4.x) sai sempre em CAIXA ALTA, como os demais títulos do
-      // documento. É a única transformação de caixa que resta: no corpo, "Equipamento: ..."
-      // mostra o nome exatamente como cadastrado.
-      const nomeTitulo = esc(String(nomeBruto).toLocaleUpperCase('pt-BR'));
+      // documento, e traz o MODELO junto: "MASSEIRA HELICOIDAL ATM, MODELO MHY-30".
+      // Se o nome do produto JÁ contém o modelo (cadastros antigos costumam ter o modelo
+      // no próprio nome), não repete — sairia "... ATM MHY-30, MODELO MHY-30".
+      // No corpo, "Equipamento: ..." segue mostrando o nome exatamente como cadastrado.
+      const nomeTitulo = (() => {
+        const nomeCaps = String(nomeBruto).toLocaleUpperCase('pt-BR');
+        const modeloCaps = modeloBruto.toLocaleUpperCase('pt-BR');
+        if (!modeloCaps || nomeCaps.includes(modeloCaps)) return esc(nomeCaps);
+        return esc(`${nomeCaps}, MODELO ${modeloCaps}`);
+      })();
       const codigo = esc(it.codigo_produto || it.produto_codigo || '—');
       const qtd = esc(Number(it.quantidade) || 1);
       const und = esc(it.unidade || 'UN');
       const familia = esc(it.familia_produto || it.produto_familia || it.familia || '—');
-      // produto_modelo: o modelo vem do CADASTRO do produto (produtos.modelo) via join;
-      // it.modelo só existe se o item da proposta trouxer um override próprio.
-      const modelo = esc(it.modelo || it.produto_modelo || '—');
+      const modelo = esc(modeloBruto || '—');
       const categoria = esc(it.categoria || '—');
       const ncm = esc(it.ncm || it.produto_ncm || '—');
 

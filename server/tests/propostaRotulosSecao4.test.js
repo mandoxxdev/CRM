@@ -139,9 +139,14 @@ checar(r.codigo === null, `Código nao aparece na proposta -> ${JSON.stringify(r
 checar(r.modelo === 'MHY-30', `Modelo intacto -> ${JSON.stringify(r.modelo)}`);
 checar(r.ncm === '8474.20.90', `NCM intacto -> ${JSON.stringify(r.ncm)}`);
 
-// O titulo e a UNICA transformacao: sempre CAIXA ALTA.
-console.log('\n[titulo] unica transformacao: CAIXA ALTA');
-checar(r.titulo === 'MASSEIRA HELICOIDAL ATM', `titulo 4.1 -> ${JSON.stringify(r.titulo)}`);
+// O titulo e a UNICA transformacao de caixa, e traz o MODELO junto.
+console.log('\n[titulo] CAIXA ALTA + modelo');
+checar(r.titulo === 'MASSEIRA HELICOIDAL ATM, MODELO MHY-30', `titulo 4.1 -> ${JSON.stringify(r.titulo)}`);
+const rSemModelo = secao4DoItem({ produto_nome: 'TANQUE PULMAO', descricao: 'TANQUE PULMAO' });
+checar(rSemModelo.titulo === 'TANQUE PULMAO', `sem modelo, titulo so com o nome -> ${JSON.stringify(rSemModelo.titulo)}`);
+const rDuplicado = secao4DoItem({ produto_nome: 'MASSEIRA ATM MHY-30', descricao: 'x', modelo: 'MHY-30' });
+checar(rDuplicado.titulo === 'MASSEIRA ATM MHY-30',
+  `nao repete o modelo quando o nome ja o contem -> ${JSON.stringify(rDuplicado.titulo)}`);
 const rMinusculo = secao4DoItem({ produto_nome: 'Masseira helicoidal atm', descricao: 'Masseira helicoidal atm' });
 checar(rMinusculo.titulo === 'MASSEIRA HELICOIDAL ATM',
   `nome cadastrado em minusculo tambem vira CAPS no titulo -> ${JSON.stringify(rMinusculo.titulo)}`);
