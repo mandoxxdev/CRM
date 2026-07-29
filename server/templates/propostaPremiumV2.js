@@ -822,10 +822,25 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             </thead>
             <tbody>
               ${tabelaPrecosRows || `<tr><td colspan="5" class="muted">Nenhum item cadastrado.</td></tr>`}
-              <tr>
+              ${(() => {
+                const totalBruto = Number(totais.total) || 0;
+                const descontoPerc = Math.min(100, Math.max(0, Number(proposta.margem_desconto) || 0));
+                if (descontoPerc <= 0) {
+                  return `<tr>
                 <td class="col-center" colspan="4"><strong>TOTAL DA PROPOSTA</strong></td>
-                <td class="col-right"><strong>${esc(moedaBRL(totais.total))}</strong></td>
+                <td class="col-right"><strong>${esc(moedaBRL(totalBruto))}</strong></td>
+              </tr>`;
+                }
+                const totalComDesconto = Math.max(0, totalBruto * (1 - descontoPerc / 100));
+                return `<tr class="total-proposta-original">
+                <td class="col-center" colspan="4"><strong>TOTAL DA PROPOSTA</strong></td>
+                <td class="col-right"><strong class="valor-riscado">${esc(moedaBRL(totalBruto))}</strong></td>
               </tr>
+              <tr class="total-proposta-desconto">
+                <td class="col-center" colspan="4"><strong>TOTAL DA PROPOSTA COM DESCONTO</strong></td>
+                <td class="col-right"><strong>${esc(moedaBRL(totalComDesconto))}</strong></td>
+              </tr>`;
+              })()}
             </tbody>
           </table>
         </section>
@@ -1448,6 +1463,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .table-caption { font-weight: 700; margin: 6px 0 6px 0; color: var(--blue-900); }
     .col-right { text-align: right; white-space: nowrap; }
     .col-center { text-align: center; }
+    .valor-riscado {
+      color: #dc2626 !important;
+      text-decoration: line-through;
+      text-decoration-thickness: 1.5px;
+      font-weight: 700;
+    }
+    tr.total-proposta-desconto td {
+      font-weight: 700;
+      color: var(--blue-900);
+    }
     .tech-desc { margin-top: 4px; font-size: 10pt; line-height: 1.15; color: var(--muted); text-align: justify; }
 
     /* Fotos avulsas: overlays em mm sobre a página (fora do fluxo — não afetam a
