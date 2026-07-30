@@ -1143,6 +1143,32 @@ function initializeDatabase(onReadyCallback) {
   )`, (err) => {
     if (err) console.error('❌ Erro ao criar tabela proposta_variaveis_manuais:', err);
     else console.log('✅ Tabela proposta_variaveis_manuais criada/verificada');
+
+    // item_chave: QUAL produto o valor pertence, gravado junto do valor.
+    // Sem isto o valor só sabe apontar para proposta_itens.id — e o salvamento da proposta
+    // APAGA e reinsere todos os itens, gerando ids novos. Ou seja: o vínculo dependia de um
+    // identificador que o próprio sistema destrói a cada save, e qualquer falha em religar
+    // no momento exato deixava o valor órfão (o campo reabria em branco).
+    // Com a identidade gravada aqui, a leitura conserta sozinha, sem depender de a
+    // religação ter acontecido na hora certa.
+    db.run('ALTER TABLE proposta_variaveis_manuais ADD COLUMN item_chave TEXT', (errCol) => {
+      const jaExiste = errCol && String(errCol.message || '').indexOf('duplicate column') !== -1;
+      if (errCol && !jaExiste) {
+        console.error('❌ Erro ao adicionar item_chave:', errCol.message);
+        return;
+      }
+      // Preenche o que já está gravado, usando a mesma identidade do resto do sistema
+      // (chaveDe = codigo_produto || descricao). Roda uma vez; depois não acha mais nulos.
+      db.run(`UPDATE proposta_variaveis_manuais
+                 SET item_chave = (
+                   SELECT COALESCE(NULLIF(TRIM(pi.codigo_produto), ''), NULLIF(TRIM(pi.descricao), ''))
+                     FROM proposta_itens pi WHERE pi.id = proposta_variaveis_manuais.item_id
+                 )
+               WHERE item_chave IS NULL`, (errBackfill) => {
+        if (errBackfill) console.error('❌ Erro ao preencher item_chave:', errBackfill.message);
+        else console.log('✅ Coluna item_chave verificada em proposta_variaveis_manuais');
+      });
+    });
   });
 
   // Log de auditoria de edições no preview editável
@@ -5931,17 +5957,23 @@ app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) =>
   const valores = Array.isArray(req.body && req.body.valores) ? req.body.valores : null;
   if (!valores) return res.status(400).json({ error: 'valores deve ser um array de {item_id, chave, valor}' });
 
+  // Grava também QUAL item é esse (item_chave), lendo direto da linha do item. É o que
+  // permite reencontrar o valor depois que o salvamento da proposta recria os itens com
+  // ids novos — ver o comentário da coluna, na criação da tabela.
   const upsert = db.prepare(`
-    INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor, item_chave)
+    VALUES (?, ?, ?, ?, (
+      SELECT COALESCE(NULLIF(TRIM(pi.codigo_produto), ''), NULLIF(TRIM(pi.descricao), ''))
+        FROM proposta_itens pi WHERE pi.id = ?
+    ))
     ON CONFLICT(proposta_id, item_id, chave)
-    DO UPDATE SET valor = excluded.valor, updated_at = datetime('now')
+    DO UPDATE SET valor = excluded.valor, item_chave = excluded.item_chave, updated_at = datetime('now')
   `);
   const remover = db.prepare('DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ? AND item_id = ? AND chave = ?');
   valores.forEach((v) => {
     if (!v || v.chave == null || v.item_id == null) return;
     const valor = String(v.valor ?? '').trim();
-    if (valor) upsert.run([id, v.item_id, String(v.chave), valor]);
+    if (valor) upsert.run([id, v.item_id, String(v.chave), valor, v.item_id]);
     else remover.run([id, v.item_id, String(v.chave)]);
   });
   upsert.finalize((errU) => {
@@ -8688,6 +8720,47 @@ const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Tr
 // Também trata 'Geral' como linha padrão: é o balde que o POST usa quando `familia` vem
 // vazio ("WHERE familia IS NULL OR familia = 'Geral'"), mas a leitura antiga só aceitava
 // NULL ou '', descartando justamente a configuração default.
+// Reaponta valores manuais orfaos usando a identidade do item gravada na propria linha
+// (item_chave). E o CONSERTO NA LEITURA: mesmo que a religacao no salvamento nao tenha
+// acontecido — ou tenha falhado — o valor volta a casar com o item certo aqui.
+// Devolve as linhas ja com item_id corrigido; nao escreve no banco (leitura nao deve
+// depender de escrita para funcionar).
+function repararVariaveisManuais(vmRows, itens) {
+  if (!Array.isArray(vmRows) || vmRows.length === 0) return vmRows || [];
+  const lista = Array.isArray(itens) ? itens : [];
+  const idsAtuais = new Set(lista.map((i) => String(i.id)));
+  // Se nenhuma linha esta orfa, nao ha o que consertar.
+  if (vmRows.every((v) => idsAtuais.has(String(v.item_id)))) return vmRows;
+
+  const identidade = (it) => String(
+    (it.codigo_produto && String(it.codigo_produto).trim())
+    || (it.descricao && String(it.descricao).trim())
+    || (it.nome && String(it.nome).trim())
+    || ''
+  );
+  // Indice da ocorrencia, para nao trocar valores entre dois itens iguais na proposta.
+  const contador = new Map();
+  const porChave = new Map();
+  lista.forEach((it) => {
+    const base = identidade(it);
+    if (!base) return;
+    const n = (contador.get(base) || 0) + 1;
+    contador.set(base, n);
+    porChave.set(base + '#' + n, it.id);
+  });
+
+  const usados = new Map();
+  return vmRows.map((v) => {
+    if (idsAtuais.has(String(v.item_id))) return v;
+    const base = String(v.item_chave || '').trim();
+    if (!base) return v; // linha antiga, sem identidade gravada: nada a fazer
+    const n = (usados.get(base) || 0) + 1;
+    usados.set(base, n);
+    const novoId = porChave.get(base + '#' + n);
+    return novoId != null ? { ...v, item_id: novoId } : v;
+  });
+}
+
 function resolverTemplateConfig(rows, familiaTemplate) {
   const lista = (Array.isArray(rows) ? rows.slice() : []).sort((a, b) => (b.id || 0) - (a.id || 0));
   if (lista.length === 0) return null;
@@ -8910,9 +8983,12 @@ app.get('/api/propostas/:id/premium', (req, res) => {
           if (!errF && Array.isArray(fotosRows) && fotosRows.length > 0) templateConfig.fotos_proposta = fotosRows;
 
           // Valores das variáveis "Manual na Proposta" preenchidos no preview editável
-          db.all('SELECT item_id, chave, valor FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errVM, vmRows) => {
+          db.all('SELECT item_id, chave, valor, item_chave FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errVM, vmRows) => {
           if (errVM) console.error('Erro ao buscar variáveis manuais (ignorado, preview segue):', errVM.message);
-          if (!errVM && Array.isArray(vmRows) && vmRows.length > 0) templateConfig.variaveis_manuais = vmRows;
+          if (!errVM && Array.isArray(vmRows) && vmRows.length > 0) {
+            // Conserta aqui quem ficou órfão por troca de id dos itens.
+            templateConfig.variaveis_manuais = repararVariaveisManuais(vmRows, itens);
+          }
 
           // Aplicar cláusulas customizadas (se existirem para esta proposta)
           db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (errCl, clausulas) => {
@@ -9279,11 +9355,12 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
 
     // Valores das variáveis "Manual na Proposta" preenchidos no preview editável
     const variaveisManuaisPdf = await new Promise((resolve) => {
-      db.all('SELECT item_id, chave, valor FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (err, rows) => resolve(rows || []));
+      db.all('SELECT item_id, chave, valor, item_chave FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (err, rows) => resolve(rows || []));
     });
     if (variaveisManuaisPdf.length > 0) {
       templateConfig = templateConfig || {};
-      templateConfig.variaveis_manuais = variaveisManuaisPdf;
+      // Mesmo conserto do preview: o PDF nao pode sair sem valores que o preview mostra.
+      templateConfig.variaveis_manuais = repararVariaveisManuais(variaveisManuaisPdf, itens);
     }
 
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
