@@ -1,3 +1,69 @@
+/* ===== Classificação de Área (Informações Básicas) =====
+   Duas opções e nada mais: Área Segura (verde claro) e Área Classificada (ATEX)
+   (vermelho claro). A cor é o ponto: num equipamento a diferença entre os dois é de
+   segurança, então tem de saltar aos olhos na conferida rápida do cadastro. */
+.classificacao-area-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.classificacao-area-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.classificacao-area-btn:hover {
+  transform: translateY(-1px);
+}
+
+.classificacao-area-segura {
+  background: #dcfce7;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.classificacao-area-segura:hover,
+.classificacao-area-segura.selecionado {
+  border-color: #16a34a;
+}
+
+.classificacao-area-segura.selecionado {
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+}
+
+.classificacao-area-atex {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.classificacao-area-atex:hover,
+.classificacao-area-atex.selecionado {
+  border-color: #dc2626;
+}
+
+.classificacao-area-atex.selecionado {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18);
+}
+
+.classificacao-area-aviso {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+}
+
 .produto-form {
   padding: var(--spacing-xl);
   max-width: 1200px;
@@ -783,41 +849,7 @@
 }
 
 /* Classificação de Área - Gradientes no mesmo estilo */
-.tecnica-card.classificacao-agua {
-  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-}
-.tecnica-card.classificacao-agua:hover {
-  background: linear-gradient(135deg, #bbdefb 0%, #90caf9 100%);
-  box-shadow: 0 12px 28px rgba(33, 150, 243, 0.25);
-}
-.tecnica-card.classificacao-agua.selecionado {
-  background: linear-gradient(135deg, #2196f3 0%, #1976d2 50%, #42a5f5 100%);
-  box-shadow: 0 10px 30px rgba(33, 150, 243, 0.4);
-}
-.tecnica-card.classificacao-agua.selecionado .tecnica-card-content strong {
-  color: #ffffff;
-}
-.tecnica-card.classificacao-agua .tecnica-card-check {
-  color: #2196f3;
-}
 
-.tecnica-card.classificacao-solvente {
-  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
-}
-.tecnica-card.classificacao-solvente:hover {
-  background: linear-gradient(135deg, #ffcdd2 0%, #ef9a9a 100%);
-  box-shadow: 0 12px 28px rgba(244, 67, 54, 0.25);
-}
-.tecnica-card.classificacao-solvente.selecionado {
-  background: linear-gradient(135deg, #f44336 0%, #d32f2f 50%, #e57373 100%);
-  box-shadow: 0 10px 30px rgba(244, 67, 54, 0.4);
-}
-.tecnica-card.classificacao-solvente.selecionado .tecnica-card-content strong {
-  color: #ffffff;
-}
-.tecnica-card.classificacao-solvente .tecnica-card-check {
-  color: #f44336;
-}
 
 /* CCM Não - gradiente vermelho */
 .tecnica-card.ccm-nao:hover {

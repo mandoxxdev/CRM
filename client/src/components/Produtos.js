@@ -227,7 +227,23 @@ const Produtos = ({ familiaFromUrl, familiaNome, grupoId }) => {
                   </td>
                   <td>{produto.familia || '-'}</td>
                   <td>{produto.modelo || '-'}</td>
-                  <td>{classificacao || '-'}</td>
+                  <td>
+                    {classificacao ? (
+                      // Comparacao sem caixa: o servidor grava em CAIXA ALTA (toUpper).
+                      // Valor fora das duas opcoes (ex.: "BASE AGUA", de antes) recebe selo
+                      // neutro em vez de verde ou vermelho — pintar de verde um valor que
+                      // nao afirma "area segura" seria pior do que nao pintar.
+                      <span className={`class-area-selo ${
+                        classificacao.toLocaleUpperCase('pt-BR').includes('ATEX')
+                          ? 'class-area-atex'
+                          : classificacao.toLocaleUpperCase('pt-BR').includes('SEGURA')
+                            ? 'class-area-segura'
+                            : 'class-area-outro'
+                      }`}>
+                        {classificacao}
+                      </span>
+                    ) : '-'}
+                  </td>
                   <td>{formatCurrency(produto.preco_base)}</td>
                   <td>{produto.icms}%</td>
                   <td>{produto.ipi}%</td>

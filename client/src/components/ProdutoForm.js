@@ -91,10 +91,22 @@ const ProdutoForm = () => {
     'Esfera Atuada'
   ];
 
+  // Classificação de área do equipamento. "Base Água / Base Solvente" que estava aqui era
+  // resíduo de outro domínio (base de tinta) ocupando a coluna classificacao_area, cujo
+  // rótulo na listagem sempre foi "Class. Área".
+  // O servidor grava em CAIXA ALTA (toUpper), então toda comparação com o valor salvo é
+  // feita sem considerar caixa — ver areaSelecionada.
   const opcoesClassificacaoArea = [
-    'Base Água',
-    'Base Solvente'
+    { valor: 'Área Segura', classe: 'classificacao-area-segura' },
+    { valor: 'Área Classificada (ATEX)', classe: 'classificacao-area-atex' }
   ];
+
+  const areaSalva = (especificacoesTecnicas.classificacao_area || formData.classificacao_area || '').trim();
+  const areaSelecionada = (valor) => areaSalva.toLocaleUpperCase('pt-BR') === valor.toLocaleUpperCase('pt-BR');
+  // Valor gravado que não é nenhuma das duas opções (ex.: "BASE ÁGUA" de antes). Fica
+  // visível em vez de desaparecer da tela — some silenciosamente seria pior, porque o
+  // campo continuaria preenchido no banco e saindo na listagem.
+  const areaForaDoPadrao = areaSalva && !opcoesClassificacaoArea.some((o) => areaSelecionada(o.valor));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -930,6 +942,29 @@ const ProdutoForm = () => {
                 <option value={1}>Ativo</option>
                 <option value={0}>Inativo</option>
               </select>
+            </div>
+            <div className="form-group full-width">
+              <label>Classificação de Área *</label>
+              <div className="classificacao-area-opcoes">
+                {opcoesClassificacaoArea.map(({ valor, classe }) => (
+                  <button
+                    type="button"
+                    key={valor}
+                    className={`classificacao-area-btn ${classe} ${areaSelecionada(valor) ? 'selecionado' : ''}`}
+                    onClick={() => handleEspecificacaoChange('classificacao_area', valor)}
+                    aria-pressed={areaSelecionada(valor)}
+                  >
+                    {areaSelecionada(valor) && <FiCheck size={15} strokeWidth={3} />}
+                    <span>{valor}</span>
+                  </button>
+                ))}
+              </div>
+              {areaForaDoPadrao && (
+                <p className="classificacao-area-aviso">
+                  Valor gravado: <strong>{areaSalva}</strong> — não é uma das duas opções acima.
+                  Escolha uma para substituir.
+                </p>
+              )}
             </div>
             <div className="form-group full-width">
               <label>Descrição</label>
@@ -2168,35 +2203,6 @@ const ProdutoForm = () => {
                   onClick={() => handleEspecificacaoChange('valvula_saida_tanque', opcao)}
                 >
                   {especificacoesTecnicas.valvula_saida_tanque === opcao && (
-                    <div className="tecnica-card-check">
-                      <FiCheck />
-                    </div>
-                  )}
-                  <div className="tecnica-card-content">
-                    <strong>{opcao}</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          </>
-          )}
-
-          {/* Classificação de Área - Apenas para Equipamentos */}
-          {tipoProduto === 'equipamentos' && (
-          <>
-          <div className="form-group" style={{ marginBottom: '30px' }}>
-            <label style={{ marginBottom: '15px', display: 'block' }}>Classificação de Área</label>
-            <div className="tecnicas-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-              {opcoesClassificacaoArea.map(opcao => (
-                <div
-                  key={opcao}
-                  className={`tecnica-card ${especificacoesTecnicas.classificacao_area === opcao ? 'selecionado' : ''} ${
-                    opcao === 'Base Água' ? 'classificacao-agua' : 'classificacao-solvente'
-                  }`}
-                  onClick={() => handleEspecificacaoChange('classificacao_area', opcao)}
-                >
-                  {especificacoesTecnicas.classificacao_area === opcao && (
                     <div className="tecnica-card-check">
                       <FiCheck />
                     </div>

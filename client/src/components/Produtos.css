@@ -296,3 +296,34 @@
 
 
 
+
+/* Selo da Classificação de Área na listagem. Mesmas cores do formulário: verde claro para
+   Área Segura, vermelho claro para ATEX. Valor fora dessas duas (dado antigo) recebe selo
+   neutro — pintar de verde algo que não afirma "área segura" seria pior que não pintar. */
+.class-area-selo {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.class-area-segura {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.class-area-atex {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.class-area-outro {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+[data-theme="dark"] .class-area-segura { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+[data-theme="dark"] .class-area-atex { background: rgba(248, 113, 113, 0.2); color: #fca5a5; }
+[data-theme="dark"] .class-area-outro { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
