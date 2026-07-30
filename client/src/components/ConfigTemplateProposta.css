@@ -458,3 +458,71 @@
     align-items: flex-start;
   }
 }
+
+/* ===== Filtro por variáveis da família (Variáveis por equipamento) =====
+   Antes a lista trazia as 83 variáveis do cadastro para qualquer família, incluindo as que
+   aquele equipamento nunca tem (motor esquerdo num moinho de laboratório). Agora ela mostra
+   só as cadastradas na família; a barra abaixo diz qual recorte está ativo e permite voltar
+   à lista completa quando for preciso marcar algo fora do cadastro da família. */
+.vpe-filtro-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 0;
+  min-height: 22px;
+}
+
+.vpe-filtro-info {
+  font-size: 13px;
+  color: var(--gmp-text-light, #64748b);
+}
+
+.vpe-filtro-aviso {
+  color: #b45309;
+}
+
+.vpe-filtro-toggle {
+  padding: 5px 12px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--gmp-surface, #fff);
+  color: var(--gmp-text-light, #64748b);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.vpe-filtro-toggle:hover {
+  border-color: #2563eb;
+  color: var(--gmp-text, #1e293b);
+}
+
+/* Marca a variável que está marcada aqui mas não pertence ao cadastro da família: ela
+   continua saindo na proposta, então precisa ficar visível e desmarcável. */
+.vpe-item-fora {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .vpe-filtro-toggle {
+  background: var(--gmp-bg-subtle);
+  border-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .vpe-filtro-aviso {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .vpe-item-fora {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}

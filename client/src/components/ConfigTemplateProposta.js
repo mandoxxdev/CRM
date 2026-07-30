@@ -39,6 +39,12 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   const [familiasList, setFamiliasList] = useState([]);
   const [familiaEquipamentoSelecionada, setFamiliaEquipamentoSelecionada] = useState('');
   const [variaveisPorEquipamentoSearch, setVariaveisPorEquipamentoSearch] = useState('');
+  // Variaveis CADASTRADAS na familia (cadastro de familias) — usadas para filtrar a lista
+  // desta tela. Sem isso eram 83 variaveis para toda familia, incluindo coisas que aquele
+  // equipamento nunca tem (ex.: motor esquerdo num moinho de laboratorio).
+  const [variaveisDaFamilia, setVariaveisDaFamilia] = useState(null); // null = ainda nao carregou
+  const [carregandoVariaveisFamilia, setCarregandoVariaveisFamilia] = useState(false);
+  const [mostrarTodasVariaveis, setMostrarTodasVariaveis] = useState(false);
 
   useEffect(() => {
     loadConfig();
@@ -61,6 +67,28 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
       })
       .catch(() => setFamiliasList([]));
   }, []);
+
+  // O select guarda o NOME da familia; a rota de variaveis precisa do id.
+  useEffect(() => {
+    const nome = (familiaEquipamentoSelecionada || '').trim();
+    setMostrarTodasVariaveis(false);
+    if (!nome) { setVariaveisDaFamilia(null); return; }
+    const fam = familiasList.find((f) => String(f.nome || '').trim() === nome);
+    if (!fam || fam.id == null) { setVariaveisDaFamilia(null); return; }
+    let cancelado = false;
+    setCarregandoVariaveisFamilia(true);
+    const token = localStorage.getItem('token');
+    axios.get(`/api/familias/${fam.id}/variaveis`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => {
+        if (cancelado) return;
+        const chaves = Array.isArray(res.data) ? res.data.map((v) => v && v.chave).filter(Boolean) : [];
+        setVariaveisDaFamilia(chaves);
+      })
+      // Falha de rede nao pode travar a tela: null volta a mostrar a lista completa.
+      .catch(() => { if (!cancelado) setVariaveisDaFamilia(null); })
+      .finally(() => { if (!cancelado) setCarregandoVariaveisFamilia(false); });
+    return () => { cancelado = true; };
+  }, [familiaEquipamentoSelecionada, familiasList]);
 
   const loadConfig = async () => {
     try {
@@ -623,14 +651,53 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                   className="variaveis-proposta-search-input"
                 />
               </div>
+
+              <div className="vpe-filtro-barra">
+                {carregandoVariaveisFamilia ? (
+                  <span className="vpe-filtro-info">Carregando as variáveis desta família...</span>
+                ) : Array.isArray(variaveisDaFamilia) && variaveisDaFamilia.length > 0 ? (
+                  <>
+                    <span className="vpe-filtro-info">
+                      {mostrarTodasVariaveis
+                        ? `Mostrando todas as ${variaveisList.length} variáveis do cadastro.`
+                        : `Mostrando as ${variaveisDaFamilia.length} variáveis cadastradas nesta família.`}
+                    </span>
+                    <button
+                      type="button"
+                      className="vpe-filtro-toggle"
+                      onClick={() => setMostrarTodasVariaveis((v) => !v)}
+                    >
+                      {mostrarTodasVariaveis
+                        ? 'Mostrar só as da família'
+                        : `Mostrar todas (${variaveisList.length})`}
+                    </button>
+                  </>
+                ) : Array.isArray(variaveisDaFamilia) ? (
+                  <span className="vpe-filtro-info vpe-filtro-aviso">
+                    Esta família não tem variáveis cadastradas, então aparecem todas. Marque as
+                    variáveis dela em Produtos → Famílias para filtrar esta lista.
+                  </span>
+                ) : null}
+              </div>
+
               <div className="variaveis-proposta-list">
                 {(() => {
-                  const termo = (variaveisPorEquipamentoSearch || '').trim().toLowerCase();
-                  const filtradas = termo
-                    ? variaveisList.filter((v) => (v.nome || '').toLowerCase().includes(termo) || (v.chave || '').toLowerCase().includes(termo))
-                    : variaveisList;
                   const porFamilia = config.variaveis_proposta_por_familia || {};
                   const selecionadas = Array.isArray(porFamilia[familiaEquipamentoSelecionada]) ? porFamilia[familiaEquipamentoSelecionada] : [];
+                  const daFamilia = Array.isArray(variaveisDaFamilia) ? variaveisDaFamilia : null;
+                  // Base = variaveis cadastradas na familia. Duas excecoes deliberadas:
+                  //  - familia sem nenhuma variavel cadastrada: mostra todas, senao a tela fica
+                  //    vazia e nao da para configurar nada;
+                  //  - variavel JA marcada aqui mas fora da familia: continua visivel, senao
+                  //    seguiria saindo na proposta sem nenhum jeito de desmarcar.
+                  const filtrandoPelaFamilia = !mostrarTodasVariaveis && daFamilia && daFamilia.length > 0;
+                  const permitidas = filtrandoPelaFamilia ? new Set([...daFamilia, ...selecionadas]) : null;
+                  const base = permitidas ? variaveisList.filter((v) => permitidas.has(v.chave || '')) : variaveisList;
+                  const chavesDaFamilia = daFamilia ? new Set(daFamilia) : null;
+                  const termo = (variaveisPorEquipamentoSearch || '').trim().toLowerCase();
+                  const filtradas = termo
+                    ? base.filter((v) => (v.nome || '').toLowerCase().includes(termo) || (v.chave || '').toLowerCase().includes(termo))
+                    : base;
                   return filtradas.length === 0 ? (
                     <div className="variaveis-proposta-empty">
                       {variaveisList.length === 0 ? 'Carregando variáveis...' : 'Nenhuma variável encontrada.'}
@@ -639,6 +706,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                     filtradas.map((v) => {
                       const chave = v.chave || '';
                       const checked = selecionadas.includes(chave);
+                      const foraDaFamilia = filtrandoPelaFamilia && chavesDaFamilia && !chavesDaFamilia.has(chave);
                       return (
                         <label key={v.id} className={`variaveis-proposta-item ${checked ? 'variaveis-proposta-item-selected' : ''}`}>
                           <input
@@ -656,6 +724,11 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                             }}
                           />
                           <span className="variaveis-proposta-item-nome">{v.nome || chave}</span>
+                          {foraDaFamilia && (
+                            <span className="vpe-item-fora" title="Marcada aqui, mas não está cadastrada nesta família">
+                              fora da família
+                            </span>
+                          )}
                           <code className="variaveis-proposta-item-chave">{chave}</code>
                         </label>
                       );
