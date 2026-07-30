@@ -8079,10 +8079,64 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                 diffItens.editados.forEach((e) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_editado', e.nome, null, resumoLado(e.mudancas, 'antes'), resumoLado(e.mudancas, 'depois')));
               });
 
-              res.json({
-                message: 'Proposta atualizada com sucesso',
-                numero_proposta: numeroFinal,
-                revisao: novaRevisao
+              // As variáveis manuais (proposta_variaveis_manuais) são chaveadas por
+              // item_id, e o bloco acima APAGA e REINSERE todos os itens — que voltam com
+              // ids NOVOS. Sem religar, os valores digitados no preview viram órfãos e a
+              // proposta reabre com os campos em branco.
+              // Sintoma relatado (30/07/2026): "salvo e ficam, mas quando adiciono outro
+              // produto, elas zeram" — salvar sem mexer nos itens não mudava id nenhum, por
+              // isso parecia intermitente.
+              // A religação usa a MESMA identidade que a mesclagem e a auditoria já usam
+              // (chaveDe = codigo_produto || descricao || nome), com o índice da ocorrência
+              // para não trocar os valores entre dois itens iguais na mesma proposta.
+              const religarVariaveisManuais = (feito) => {
+                const antigos = itensAtuais || [];
+                if (antigos.length === 0) return feito();
+                const chavesComOrdinal = (lista) => {
+                  const contador = new Map();
+                  return lista.map((it) => {
+                    const base = chaveDe(it);
+                    const n = (contador.get(base) || 0) + 1;
+                    contador.set(base, n);
+                    return base + '#' + n;
+                  });
+                };
+                db.all('SELECT item_id, chave, valor FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errVm, valores) => {
+                  if (errVm || !valores || valores.length === 0) return feito();
+                  const deIdAntigo = new Map();
+                  chavesComOrdinal(antigos).forEach((k, i) => deIdAntigo.set(String(antigos[i].id), k));
+                  db.all('SELECT id, codigo_produto, descricao FROM proposta_itens WHERE proposta_id = ? ORDER BY id ASC', [id], (errNovos, novos) => {
+                    if (errNovos || !novos || novos.length === 0) return feito();
+                    const paraIdNovo = new Map();
+                    chavesComOrdinal(novos).forEach((k, i) => paraIdNovo.set(k, novos[i].id));
+                    const remapeados = [];
+                    valores.forEach((v) => {
+                      const k = deIdAntigo.get(String(v.item_id));
+                      const novoItemId = k ? paraIdNovo.get(k) : null;
+                      // Item removido da proposta não tem para onde ir: o valor é
+                      // descartado junto, que é o comportamento correto.
+                      if (novoItemId != null && String(v.valor == null ? '' : v.valor).trim() !== '') {
+                        remapeados.push([id, novoItemId, v.chave, v.valor]);
+                      }
+                    });
+                    db.run('DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errDel) => {
+                      if (errDel || remapeados.length === 0) return feito();
+                      const ins = db.prepare('INSERT OR REPLACE INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor) VALUES (?, ?, ?, ?)');
+                      remapeados.forEach((r) => ins.run(r));
+                      ins.finalize(() => feito());
+                    });
+                  });
+                });
+              };
+
+              // A resposta espera a religação: o cliente recarrega o preview logo em
+              // seguida, e responder antes devolveria a proposta ainda com os campos vazios.
+              religarVariaveisManuais(() => {
+                res.json({
+                  message: 'Proposta atualizada com sucesso',
+                  numero_proposta: numeroFinal,
+                  revisao: novaRevisao
+                });
               });
             });
           }
