@@ -4829,7 +4829,12 @@ app.get('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
 
 app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
   var body = req.body || {};
-  var nome = (body.nome || '').trim();
+  // CAIXA ALTA sempre, para padronizar o cadastro independente de como foi digitado.
+  // Aplicado tambem no servidor (nao so no formulario) para valer em import e em qualquer
+  // outro caminho de gravacao. PREFIXO e SUFIXO ficam LITERAIS de proposito: sao unidades
+  // sensiveis a caixa (kW, RPM, Hz, l/h). O rotulo na proposta segue em caixa de frase --
+  // isso e feito na renderizacao (semCapsLock), nao no dado.
+  var nome = (body.nome || '').trim().toLocaleUpperCase('pt-BR');
   var chave = (body.chave || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!chave) chave = nome.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || ('var_' + Date.now());
@@ -4872,7 +4877,12 @@ app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
 app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
-  var nome = (body.nome || '').trim();
+  // CAIXA ALTA sempre, para padronizar o cadastro independente de como foi digitado.
+  // Aplicado tambem no servidor (nao so no formulario) para valer em import e em qualquer
+  // outro caminho de gravacao. PREFIXO e SUFIXO ficam LITERAIS de proposito: sao unidades
+  // sensiveis a caixa (kW, RPM, Hz, l/h). O rotulo na proposta segue em caixa de frase --
+  // isso e feito na renderizacao (semCapsLock), nao no dado.
+  var nome = (body.nome || '').trim().toLocaleUpperCase('pt-BR');
   var chave = (body.chave || '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
   if (!chave) return res.status(400).json({ error: 'Chave é obrigatória' });

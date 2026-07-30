@@ -124,7 +124,9 @@ const VariaveisTecnicas = () => {
   };
 
   const handleSave = async () => {
-    const nome = (form.nome || '').trim();
+    // CAIXA ALTA aqui tambem, e nao so no input: cobre valor colado/autocompletado que
+    // nao passe pelo onChange. O servidor repete a regra como fonte da verdade.
+    const nome = (form.nome || '').trim().toLocaleUpperCase('pt-BR');
     if (!nome) {
       setError('Nome é obrigatório.');
       return;
@@ -303,8 +305,8 @@ const VariaveisTecnicas = () => {
                 <input
                   type="text"
                   value={form.nome}
-                  onChange={(e) => setForm(f => ({ ...f, nome: e.target.value }))}
-                  placeholder="Ex: Potência motor central (CV)"
+                  onChange={(e) => setForm(f => ({ ...f, nome: e.target.value.toLocaleUpperCase('pt-BR') }))}
+                  placeholder="Ex: POTÊNCIA MOTOR CENTRAL (CV)"
                 />
               </div>
               <div className="vt-form-group">
