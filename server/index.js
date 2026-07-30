@@ -5824,6 +5824,40 @@ app.post('/api/propostas/:id/fotos', authenticateToken, uploadPropostaFoto.singl
   );
 });
 
+// POST /api/propostas/:id/fotos/:fotoId/duplicar — cria OUTRA foto apontando para o mesmo
+// arquivo já enviado. É o "colar": sem isto, reaproveitar a mesma imagem obrigava a subir o
+// arquivo de novo a cada vez.
+// Compartilhar o arquivo entre linhas é seguro porque o DELETE daqui é lógico (ativo = 0) e
+// nunca remove o arquivo do disco — apagar uma cópia não quebra as outras.
+app.post('/api/propostas/:id/fotos/:fotoId/duplicar', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id, fotoId } = req.params;
+  const usuarioId = req.user.id;
+  db.get('SELECT * FROM proposta_fotos WHERE id = ? AND proposta_id = ? AND ativo = 1', [fotoId, id], (err, foto) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!foto) return res.status(404).json({ error: 'Foto não encontrada' });
+    const num = (v, atual) => (v !== undefined && v !== null && isFinite(Number(v)) ? Number(v) : atual);
+    const pagina = Math.max(1, Math.round(num(req.body && req.body.pagina, foto.pagina)));
+    // Deslocamento padrão: a cópia nasce um pouco abaixo/à direita da original, senão ficaria
+    // exatamente por cima dela e pareceria que nada aconteceu.
+    const pos_x = num(req.body && req.body.pos_x, (foto.pos_x != null ? foto.pos_x : 20) + 5);
+    const pos_y = num(req.body && req.body.pos_y, (foto.pos_y != null ? foto.pos_y : 60) + 5);
+    const largura = Math.max(10, num(req.body && req.body.largura, foto.largura != null ? foto.largura : 80));
+    db.run(
+      'INSERT INTO proposta_fotos (proposta_id, arquivo, pagina, pos_x, pos_y, largura) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, foto.arquivo, pagina, pos_x, pos_y, largura],
+      function (err2) {
+        if (err2) return res.status(500).json({ error: err2.message });
+        const novoId = this.lastID;
+        db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+          registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'foto_adicionada', 'foto', novoId, null, foto.arquivo);
+        });
+        res.status(201).json({ id: novoId, arquivo: foto.arquivo, pagina, pos_x, pos_y, largura });
+      }
+    );
+  });
+});
+
 // PUT /api/propostas/:id/fotos/:fotoId — atualiza posição/tamanho/página
 app.put('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });

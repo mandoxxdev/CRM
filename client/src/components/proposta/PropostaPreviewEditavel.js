@@ -42,6 +42,11 @@ export default function PropostaPreviewEditavel() {
   const [enviandoFotos, setEnviandoFotos] = useState(false);
   const fotoInputRef = useRef(null);
   const repaginacaoTimerRef = useRef(null);
+  // Seleção de fotos (ids como string) e "área de transferência" do copiar/colar.
+  // Ficam em ref, e não em state, porque são lidas dentro de listeners do documento do
+  // iframe — que são recriados a cada repaginação e não acompanhariam um closure de state.
+  const fotosSelecionadasRef = useRef(new Set());
+  const fotosCopiadasRef = useRef([]);
   const edicaoEmAndamentoRef = useRef(null); // { key, campo, cursorOffset }
 
   // Número real da proposta (ex.: "062-03-MH-2026-REV01") — o que o cliente reconhece,
@@ -384,7 +389,108 @@ export default function PropostaPreviewEditavel() {
   // sobre a página) e as recria a CADA repaginação — por isso o wiring roda junto de
   // ativarEdicaoClausulas (load + MutationObserver) e usa a flag ppeWired para não
   // duplicar listeners num overlay já tratado.
+  // Pinta a seleção. Roda sobre TODAS as fotos (e não só a clicada) porque selecionar uma
+  // implica desmarcar as outras — e depois de uma repaginação os elementos são novos.
+  function aplicarSelecaoFotos(doc) {
+    const sel = fotosSelecionadasRef.current;
+    const varias = sel.size > 1;
+    doc.querySelectorAll('.proposta-foto').forEach((el) => {
+      const marcada = sel.has(String(el.getAttribute('data-foto-id')));
+      el.style.outline = marcada ? '2px dashed #f59e0b' : 'none';
+      // Alças só quando há UMA selecionada: redimensionar várias de uma vez não está
+      // definido (cada foto tem a sua proporção), e alças em todas confundiriam o arrasto
+      // em grupo, que é o que a seleção múltipla serve para fazer.
+      el.querySelectorAll('.ppe-alca').forEach((h) => {
+        h.style.display = (marcada && !varias) ? '' : 'none';
+      });
+    });
+  }
+
+  // Cola as fotos copiadas: cria novas linhas apontando para o MESMO arquivo (rota
+  // /duplicar), sem reenviar imagem nenhuma. As cópias nascem na página da foto de
+  // referência, deslocadas alguns milímetros para não ficarem exatamente por cima.
+  async function colarFotos(doc, elReferencia) {
+    const copiadas = fotosCopiadasRef.current || [];
+    if (copiadas.length === 0) {
+      toast.error('Nada copiado. Selecione uma foto e use Ctrl+C.');
+      return;
+    }
+    const win = doc.defaultView;
+    const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
+    const pgRef = elReferencia && elReferencia.closest('.proposal-page');
+    const paginaDestino = pgRef ? paginas.indexOf(pgRef) + 1 : 1;
+    const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '');
+    const novas = [];
+    for (const origemId of copiadas) {
+      try {
+        const origem = (win && Array.isArray(win.__FOTOS_PROPOSTA))
+          ? win.__FOTOS_PROPOSTA.find((x) => String(x.id) === String(origemId))
+          : null;
+        const corpo = { pagina: paginaDestino > 0 ? paginaDestino : 1 };
+        if (origem) {
+          corpo.pos_x = (origem.x != null ? origem.x : 20) + 5;
+          corpo.pos_y = (origem.y != null ? origem.y : 60) + 5;
+          corpo.largura = origem.largura;
+        }
+        const { data } = await api.post(`/propostas/${id}/fotos/${origemId}/duplicar`, corpo);
+        novas.push(data);
+      } catch (_) { /* segue para as demais; o total colado é informado no fim */ }
+    }
+    if (novas.length === 0) {
+      toast.error('Erro ao colar a(s) foto(s).');
+      return;
+    }
+    if (win && Array.isArray(win.__FOTOS_PROPOSTA) && typeof win.aplicarFotosProposta === 'function') {
+      novas.forEach((f) => {
+        win.__FOTOS_PROPOSTA.push({
+          id: f.id,
+          pagina: f.pagina,
+          x: f.pos_x,
+          y: f.pos_y,
+          largura: f.largura,
+          src: `${base}/uploads/proposta-fotos/${encodeURIComponent(f.arquivo)}`,
+        });
+      });
+      win.aplicarFotosProposta();
+      ativarEdicaoFotos(doc);
+      // A seleção passa para as cópias: é nelas que se vai mexer em seguida.
+      fotosSelecionadasRef.current = new Set(novas.map((f) => String(f.id)));
+      aplicarSelecaoFotos(doc);
+    } else {
+      carregarPreview();
+    }
+    toast.success(novas.length > 1 ? `${novas.length} fotos coladas.` : 'Foto colada.');
+  }
+
+  function selecionarFoto(doc, fotoId, comShift) {
+    const sel = fotosSelecionadasRef.current;
+    const chave = String(fotoId);
+    if (comShift) {
+      if (sel.has(chave)) sel.delete(chave);
+      else sel.add(chave);
+    } else if (!sel.has(chave) || sel.size > 1) {
+      // Clique simples numa foto que JÁ faz parte de uma seleção múltipla mantém o grupo,
+      // senão seria impossível arrastar o conjunto: o mousedown desfaria a seleção antes
+      // de o arrasto começar.
+      sel.clear();
+      sel.add(chave);
+    }
+    aplicarSelecaoFotos(doc);
+  }
+
   function ativarEdicaoFotos(doc) {
+    // Clique fora de qualquer foto desfaz a seleção. Fica no documento e é registrado uma
+    // única vez (a flag evita empilhar um listener a cada repaginação, que roda com
+    // frequência). Sem isto a moldura ficaria acesa mesmo depois de clicar no texto.
+    if (!doc.body.dataset.ppeCliqueForaFotos) {
+      doc.body.dataset.ppeCliqueForaFotos = '1';
+      doc.addEventListener('mousedown', (ev) => {
+        if (ev.target && ev.target.closest && ev.target.closest('.proposta-foto')) return;
+        if (fotosSelecionadasRef.current.size === 0) return;
+        fotosSelecionadasRef.current.clear();
+        aplicarSelecaoFotos(doc);
+      });
+    }
     doc.querySelectorAll('.proposta-foto').forEach((el) => {
       if (el.dataset.ppeWired === '1') return;
       el.dataset.ppeWired = '1';
@@ -419,18 +525,13 @@ export default function PropostaPreviewEditavel() {
         return h;
       });
 
-      // Moldura só na foto SELECIONADA, como no Word. Antes toda foto exibia borda
+      // Moldura só nas fotos SELECIONADAS, como no Word. Antes toda foto exibia borda
       // tracejada e as 8 alças o tempo todo, e o preview parecia um rascunho — atrapalhava
       // justamente na hora de conferir como a proposta vai sair.
-      // O gatilho é focus/blur (o elemento já tem tabIndex = 0 para receber o Del), então
-      // clicar na foto mostra, clicar fora esconde, sem nenhum controle de estado extra.
-      const mostrarMoldura = (ligado) => {
-        el.style.outline = ligado ? '2px dashed #f59e0b' : 'none';
-        alcas.forEach((h) => { h.style.display = ligado ? '' : 'none'; });
-      };
-      mostrarMoldura(false);
-      el.addEventListener('focus', () => mostrarMoldura(true));
-      el.addEventListener('blur', () => mostrarMoldura(false));
+      // Agora quem manda é a seleção (aplicarSelecaoFotos), não o foco: com Shift dá para
+      // ter várias marcadas ao mesmo tempo, e foco só existe em um elemento por vez.
+      el.style.outline = 'none';
+      alcas.forEach((h) => { h.style.display = 'none'; });
 
       const pxPorMm = () => {
         const pg = el.closest('.proposal-page');
@@ -460,15 +561,41 @@ export default function PropostaPreviewEditavel() {
         api.put(`/propostas/${id}/fotos/${fotoId}`, novo)
           .catch(() => toast.error('Erro ao salvar a posição da foto.'));
       };
+      // O arrasto em grupo move fotos que não são "esta"; cada uma precisa salvar a sua
+      // própria posição (o PUT é por foto), então o persistir fica acessível de fora.
+      el.ppePersistir = persistir;
 
       el.onmousedown = (e) => {
         if (alcas.includes(e.target)) return;
         e.preventDefault();
-        el.focus(); // seleciona a foto: habilita apagar com Del
+        el.focus(); // habilita Del, Ctrl+C e Ctrl+V (o listener de teclado é do elemento)
+        selecionarFoto(doc, fotoId, e.shiftKey);
+        // Shift é para montar a seleção, não para arrastar: sair arrastando junto faria o
+        // clique de marcar mover as fotos sem querer.
+        if (e.shiftKey) return;
         // Offset do clique dentro da foto: a foto segue o cursor mantendo o ponto pego.
         const rectInicial = el.getBoundingClientRect();
         const offX = e.clientX - rectInicial.left;
         const offY = e.clientY - rectInicial.top;
+        // Arrasto em GRUPO: as demais selecionadas acompanham pelo mesmo deslocamento, o
+        // que preserva o alinhamento entre elas. A posição inicial de cada uma é lida aqui,
+        // uma vez, e não a cada movimento.
+        const paginaInicial = el.closest('.proposal-page');
+        const kInicial = paginaInicial ? paginaInicial.getBoundingClientRect().width / 210 : 1;
+        const rpInicial = paginaInicial ? paginaInicial.getBoundingClientRect() : { left: 0, top: 0 };
+        const leftInicialMm = (rectInicial.left - rpInicial.left) / kInicial;
+        const topInicialMm = (rectInicial.top - rpInicial.top) / kInicial;
+        const grupo = fotosSelecionadasRef.current.size > 1
+          ? Array.from(doc.querySelectorAll('.proposta-foto'))
+              .filter((o) => o !== el && fotosSelecionadasRef.current.has(String(o.getAttribute('data-foto-id'))))
+              .map((o) => {
+                const pg2 = o.closest('.proposal-page');
+                const rp2 = pg2.getBoundingClientRect();
+                const k2 = rp2.width / 210;
+                const r2 = o.getBoundingClientRect();
+                return { el: o, left0: (r2.left - rp2.left) / k2, top0: (r2.top - rp2.top) / k2 };
+              })
+          : [];
         const aoMover = (ev) => {
           // Reparenta DURANTE o arrasto para a página sob o cursor. Sem isso a foto
           // "sumia" ao cruzar a borda: .proposal-page tem overflow:hidden, então o
@@ -497,7 +624,16 @@ export default function PropostaPreviewEditavel() {
           // linha de alinhamento.
           limparGuias(doc);
           if (!ev.altKey) {
-            const vizinhas = vizinhasDaPagina(alvo, el, k);
+            // Num arrasto em grupo as outras selecionadas viajam junto: se entrassem como
+            // candidatas, a foto imantaria nela mesma e o grupo grudaria sozinho.
+            const vizinhas = vizinhasDaPagina(alvo, el, k)
+              .filter((v) => !grupo.some((g) => {
+                const rp2 = g.el.closest('.proposal-page').getBoundingClientRect();
+                const k2 = rp2.width / 210;
+                const r2 = g.el.getBoundingClientRect();
+                return Math.abs((r2.left - rp2.left) / k2 - v.esquerda) < 0.01
+                  && Math.abs((r2.top - rp2.top) / k2 - v.topo) < 0.01;
+              }));
 
             // --- eixo horizontal: candidatos como valor de LEFT ---
             const candX = [{ left: A4_LARGURA_MM / 2 - larguraMm / 2, mm: A4_LARGURA_MM / 2 }];
@@ -544,12 +680,22 @@ export default function PropostaPreviewEditavel() {
           }
           el.style.left = `${leftMm}mm`;
           el.style.top = `${topMm}mm`;
+          if (grupo.length) {
+            const dLeft = leftMm - leftInicialMm;
+            const dTop = topMm - topInicialMm;
+            grupo.forEach((g) => {
+              g.el.style.left = `${g.left0 + dLeft}mm`;
+              g.el.style.top = `${g.top0 + dTop}mm`;
+            });
+          }
         };
         const aoSoltar = () => {
           doc.removeEventListener('mousemove', aoMover);
           doc.removeEventListener('mouseup', aoSoltar);
           limparGuias(doc);
           persistir();
+          // Cada foto do grupo persiste a SUA posição: o PUT é por foto.
+          grupo.forEach((g) => { if (g.el.ppePersistir) g.el.ppePersistir(); });
         };
         doc.addEventListener('mousemove', aoMover);
         doc.addEventListener('mouseup', aoSoltar);
@@ -650,29 +796,56 @@ export default function PropostaPreviewEditavel() {
         doc.addEventListener('mouseup', aoSoltar);
       }
 
-      async function excluirFoto() {
-        if (!window.confirm('Remover esta foto da proposta?')) return;
-        try {
-          await api.delete(`/propostas/${id}/fotos/${fotoId}`);
-          // Tira também da lista em memória — senão a próxima repaginação recriava a foto.
-          const win = doc.defaultView;
-          if (win && Array.isArray(win.__FOTOS_PROPOSTA)) {
-            const idx = win.__FOTOS_PROPOSTA.findIndex((x) => String(x.id) === String(fotoId));
-            if (idx >= 0) win.__FOTOS_PROPOSTA.splice(idx, 1);
+      async function excluirFotos(ids) {
+        const lista = (ids || []).map(String).filter(Boolean);
+        if (lista.length === 0) return;
+        const pergunta = lista.length > 1
+          ? `Remover ${lista.length} fotos da proposta?`
+          : 'Remover esta foto da proposta?';
+        if (!window.confirm(pergunta)) return;
+        const win = doc.defaultView;
+        let falhas = 0;
+        for (const alvoId of lista) {
+          try {
+            await api.delete(`/propostas/${id}/fotos/${alvoId}`);
+            // Tira também da lista em memória — senão a próxima repaginação recriava a foto.
+            if (win && Array.isArray(win.__FOTOS_PROPOSTA)) {
+              const idx = win.__FOTOS_PROPOSTA.findIndex((x) => String(x.id) === String(alvoId));
+              if (idx >= 0) win.__FOTOS_PROPOSTA.splice(idx, 1);
+            }
+            const no = doc.querySelector(`.proposta-foto[data-foto-id="${alvoId}"]`);
+            if (no) no.remove();
+            fotosSelecionadasRef.current.delete(String(alvoId));
+          } catch (_) {
+            falhas += 1;
           }
-          el.remove();
-          toast.success('Foto removida.');
-        } catch (_) {
-          toast.error('Erro ao remover foto.');
         }
+        aplicarSelecaoFotos(doc);
+        if (falhas > 0) toast.error(falhas === lista.length ? 'Erro ao remover foto.' : `${falhas} foto(s) não puderam ser removidas.`);
+        else toast.success(lista.length > 1 ? `${lista.length} fotos removidas.` : 'Foto removida.');
       }
 
-      // Del/Backspace com a foto selecionada. O listener fica NO elemento (que só recebe
-      // teclado quando focado), então digitar Del dentro de uma cláusula não apaga foto.
+      // Teclado da foto. O listener fica NO elemento (que só recebe teclado quando focado),
+      // então Del dentro de uma cláusula não apaga foto e Ctrl+V ali não cola imagem.
       el.onkeydown = (ev) => {
-        if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
-        ev.preventDefault();
-        excluirFoto();
+        const sel = Array.from(fotosSelecionadasRef.current);
+        if (ev.key === 'Delete' || ev.key === 'Backspace') {
+          ev.preventDefault();
+          excluirFotos(sel.length > 1 ? sel : [String(fotoId)]);
+          return;
+        }
+        if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'c' || ev.key === 'C')) {
+          ev.preventDefault();
+          fotosCopiadasRef.current = sel.length > 0 ? sel : [String(fotoId)];
+          toast.success(fotosCopiadasRef.current.length > 1
+            ? `${fotosCopiadasRef.current.length} fotos copiadas. Ctrl+V para colar.`
+            : 'Foto copiada. Ctrl+V para colar.');
+          return;
+        }
+        if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'v' || ev.key === 'V')) {
+          ev.preventDefault();
+          colarFotos(doc, el);
+        }
       };
 
       // Botão direito: menu com "Excluir foto", no lugar do antigo ✕ sempre visível.
@@ -692,7 +865,11 @@ export default function PropostaPreviewEditavel() {
         item.style.cssText = 'display:block;width:100%;text-align:left;padding:6px 14px;border:none;background:none;cursor:pointer;color:#dc2626;white-space:nowrap;';
         item.onmouseenter = () => { item.style.background = '#fee2e2'; };
         item.onmouseleave = () => { item.style.background = 'none'; };
-        item.onclick = () => { menu.remove(); excluirFoto(); };
+        item.onclick = () => {
+          menu.remove();
+          const sel = Array.from(fotosSelecionadasRef.current);
+          excluirFotos(sel.length > 1 ? sel : [String(fotoId)]);
+        };
         menu.appendChild(item);
         doc.body.appendChild(menu);
         const fechar = () => { menu.remove(); doc.removeEventListener('mousedown', fechar); };
@@ -753,6 +930,7 @@ export default function PropostaPreviewEditavel() {
         });
         win.aplicarFotosProposta();
         ativarEdicaoFotos(doc);
+        aplicarSelecaoFotos(doc);
       } else {
         carregarPreview();
       }
