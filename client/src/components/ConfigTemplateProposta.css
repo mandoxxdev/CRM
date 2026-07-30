@@ -751,3 +751,68 @@
   background: rgba(248, 113, 113, 0.2);
   color: #fca5a5;
 }
+
+/* Copiar a ordem de outra família. A prévia acima do botão diz o que vai acontecer ANTES
+   de clicar: quantas em comum, quantas só desta família (vão para o fim) e quantas só da
+   origem (ignoradas). A ordem atual é substituída, então vale mostrar a conta primeiro. */
+.vpe-copiar-ordem {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.vpe-copiar-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--gmp-surface, #fff);
+  color: var(--gmp-text, #1e293b);
+  font-size: 12px;
+}
+
+.vpe-copiar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.vpe-copiar-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.vpe-copiar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vpe-copiar-previa {
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+[data-theme="dark"] .vpe-copiar-select {
+  background: var(--gmp-bg-subtle);
+  border-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .vpe-copiar-previa {
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+}

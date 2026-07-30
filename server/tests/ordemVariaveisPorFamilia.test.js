@@ -186,6 +186,86 @@ t('busca sem resultado devolve lista vazia, nao a lista toda',
 t('busca vazia devolve a ordem completa',
   () => assert.strictEqual(linhasFiltradas(ORDEM, NOMES, '').length, ORDEM.length));
 
+// ---------------------------------------------------------------------------
+// 4) Copiar a ordem de outra familia
+// ---------------------------------------------------------------------------
+// Pedido: "se tem a variavel produto, tem que ficar na mesma posicao do outro cadastro, e
+// se um tem a variavel motor e outro nao, ignorar a variavel que nao existe".
+// Copia fiel de calcularOrdemCopiada (ConfigTemplateProposta.js).
+function copiarOrdem(chavesOrigem, ordemAtual) {
+  const presentes = new Set(ordemAtual);
+  // Deduplica a origem: chave repetida lá duplicaria a linha na proposta. Este teste pegou
+  // exatamente esse caso na primeira execucao.
+  const jaColocadas = new Set();
+  const comuns = [];
+  (chavesOrigem || []).forEach((c) => {
+    if (presentes.has(c) && !jaColocadas.has(c)) { jaColocadas.add(c); comuns.push(c); }
+  });
+  const restantes = ordemAtual.filter((c) => !jaColocadas.has(c));
+  return { nova: comuns.concat(restantes), comuns, restantes };
+}
+
+console.log('\n[copiar ordem] em comum seguem a origem; o resto vai para o fim');
+const FONTE = ['produto', 'motor', 'potencia', 'painel'];
+
+t('ordens identicas: fica igual a origem',
+  () => assert.deepStrictEqual(copiarOrdem(FONTE, ['painel', 'produto', 'motor', 'potencia']).nova, FONTE));
+
+// O caso do pedido: a origem tem "motor", o destino nao. Motor e IGNORADO, e as demais
+// mantem a ordem relativa da origem.
+const semMotor = copiarOrdem(FONTE, ['potencia', 'painel', 'produto']);
+t('variavel que só existe na ORIGEM é ignorada',
+  () => assert(!semMotor.nova.includes('motor')));
+t('as em comum assumem a ordem da origem',
+  () => assert.deepStrictEqual(semMotor.nova, ['produto', 'potencia', 'painel']));
+
+// Inverso: o destino tem uma variavel que a origem nao tem. Ela NAO pode ser descartada —
+// continuaria marcada e sairia na proposta, so que fora de ordem.
+const comExtra = copiarOrdem(FONTE, ['cuba', 'potencia', 'produto']);
+t('variavel que só existe no DESTINO nao e descartada',
+  () => assert(comExtra.nova.includes('cuba')));
+t('e vai para o fim, depois das em comum',
+  () => assert.deepStrictEqual(comExtra.nova, ['produto', 'potencia', 'cuba']));
+
+const duasExtras = copiarOrdem(['produto', 'motor'], ['cuba', 'produto', 'base', 'motor']);
+t('varias só do destino mantem entre si a ordem que tinham',
+  () => assert.deepStrictEqual(duasExtras.nova, ['produto', 'motor', 'cuba', 'base']));
+
+console.log('\n[copiar ordem] integridade: nada entra, nada sai');
+[
+  [FONTE, ['potencia', 'painel', 'produto']],
+  [FONTE, ['cuba', 'potencia', 'produto']],
+  [['produto'], ['cuba', 'base']],
+  [[], ['cuba', 'base']],
+  [FONTE, []],
+].forEach(([origem, destino], idx) => {
+  const r = copiarOrdem(origem, destino);
+  t(`caso ${idx + 1}: o conjunto de variaveis do destino nao muda`, () => {
+    assert.deepStrictEqual(r.nova.slice().sort(), destino.slice().sort(),
+      'copiar ordem so pode REORDENAR, nunca marcar/desmarcar');
+    assert.strictEqual(new Set(r.nova).size, r.nova.length, 'chave duplicada na ordem');
+  });
+});
+
+t('sem nada em comum, a ordem atual e preservada inteira',
+  () => assert.deepStrictEqual(copiarOrdem(['produto'], ['cuba', 'base']).nova, ['cuba', 'base']));
+t('sem nada em comum, comuns fica vazio (a tela avisa e nao aplica)',
+  () => assert.strictEqual(copiarOrdem(['produto'], ['cuba', 'base']).comuns.length, 0));
+t('origem vazia nao zera a ordem do destino',
+  () => assert.deepStrictEqual(copiarOrdem([], ['cuba', 'base']).nova, ['cuba', 'base']));
+
+// Origem com chave repetida (dado torto no banco) nao pode duplicar linha na proposta.
+t('chave repetida na origem nao duplica no resultado',
+  () => assert.deepStrictEqual(copiarOrdem(['produto', 'produto', 'motor'], ['motor', 'produto']).nova,
+    ['produto', 'motor']));
+
+console.log('\n[copiar ordem] a ordem copiada chega ao documento');
+const destinoReal = ['potencia', 'vazao', 'motor'];
+const fonteReal = ['motor', 'potencia', 'vazao'];
+const copiada = copiarOrdem(fonteReal, destinoReal).nova;
+t('resultado da copia imprime na ordem da origem',
+  () => assert.deepStrictEqual(ordemNoDocumento({ [FAM]: copiada }), ['motor', 'potencia', 'vazao']));
+
 console.log(`\n${ok}/${total} checagens`);
 console.log(ok === total ? '0 failed' : `${total - ok} failed`);
 process.exit(ok === total ? 0 : 1);

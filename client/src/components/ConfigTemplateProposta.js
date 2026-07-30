@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { FiSave, FiUpload, FiX, FiSettings, FiSearch, FiFileText, FiTrash2, FiEdit2 } from 'react-icons/fi';
+import { FiSave, FiUpload, FiX, FiSettings, FiSearch, FiFileText, FiTrash2, FiEdit2, FiCopy } from 'react-icons/fi';
 import './ConfigTemplateProposta.css';
 
 const ConfigTemplateProposta = ({ embedded = false }) => {
@@ -46,6 +46,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   const [carregandoVariaveisFamilia, setCarregandoVariaveisFamilia] = useState(false);
   const [mostrarTodasVariaveis, setMostrarTodasVariaveis] = useState(false);
   const [ordemSearch, setOrdemSearch] = useState('');
+  const [copiarOrdemDe, setCopiarOrdemDe] = useState('');
   const [arrastandoIndex, setArrastandoIndex] = useState(null);
   const [alvoArrasteIndex, setAlvoArrasteIndex] = useState(null);
 
@@ -76,6 +77,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
     const nome = (familiaEquipamentoSelecionada || '').trim();
     setMostrarTodasVariaveis(false);
     setOrdemSearch('');
+    setCopiarOrdemDe('');
     if (!nome) { setVariaveisDaFamilia(null); return; }
     const fam = familiasList.find((f) => String(f.nome || '').trim() === nome);
     if (!fam || fam.id == null) { setVariaveisDaFamilia(null); return; }
@@ -127,6 +129,55 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
         [familiaEquipamentoSelecionada]: nova
       }
     }));
+  };
+
+  // Familias que ja tem uma ordem gravada e servem de origem para copia.
+  const familiasComOrdem = Object.entries(config.variaveis_proposta_por_familia || {})
+    .filter(([fam, arr]) => fam !== familiaEquipamentoSelecionada && Array.isArray(arr) && arr.length > 0)
+    .map(([fam, arr]) => ({ fam, total: arr.length }))
+    .sort((a2, b2) => a2.fam.localeCompare(b2.fam, 'pt-BR'));
+
+  // Alinha a ordem desta familia a de outra:
+  //  - variaveis em COMUM assumem a ordem da origem;
+  //  - variaveis que só existem AQUI vão para o fim, mantendo a ordem relativa que tinham
+  //    (nao podem ser descartadas: continuariam marcadas e sairiam na proposta);
+  //  - variaveis que só existem NA ORIGEM são ignoradas.
+  // Isto apenas REORDENA. Nao marca nem desmarca nada: copiar ordem nao pode acrescentar
+  // a esta familia uma variavel que ela nao tem (ex.: motor lateral num moinho de bancada).
+  const calcularOrdemCopiada = (chavesOrigem, ordemAtual) => {
+    const presentes = new Set(ordemAtual);
+    // O Set tira repetidas da origem: uma chave duplicada lá (dado torto gravado por
+    // alguma versão antiga) duplicaria a linha na proposta.
+    const jaColocadas = new Set();
+    const comuns = [];
+    (chavesOrigem || []).forEach((c) => {
+      if (presentes.has(c) && !jaColocadas.has(c)) { jaColocadas.add(c); comuns.push(c); }
+    });
+    const restantes = ordemAtual.filter((c) => !jaColocadas.has(c));
+    return { nova: comuns.concat(restantes), comuns, restantes };
+  };
+
+  const aplicarOrdemDeOutraFamilia = () => {
+    const origem = (config.variaveis_proposta_por_familia || {})[copiarOrdemDe];
+    if (!Array.isArray(origem) || origem.length === 0) return;
+    const { nova, comuns, restantes } = calcularOrdemCopiada(origem, ordemDaFamilia);
+    if (comuns.length === 0) {
+      window.alert(`Nenhuma variável em comum entre "${copiarOrdemDe}" e "${familiaEquipamentoSelecionada}". Não há ordem para copiar.`);
+      return;
+    }
+    const detalhe = restantes.length > 0
+      ? `
+
+${restantes.length} variável(is) que só existe(m) nesta família vão para o fim da lista.`
+      : '';
+    const msg = `Copiar a ordem de "${copiarOrdemDe}"?
+
+${comuns.length} variável(is) em comum assumirão a ordem daquela família.${detalhe}
+
+A ordem atual desta família será substituída.`;
+    if (!window.confirm(msg)) return;
+    gravarOrdemFamilia(nova);
+    setOrdemSearch('');
   };
 
   const moverVariavel = (de, para) => {
@@ -805,6 +856,50 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                   Esta é exatamente a ordem em que as linhas saem na proposta. Arraste pelo
                   <strong> ⠿ </strong>, use as setas, ou digite o número da posição.
                 </p>
+
+                {familiasComOrdem.length > 0 && ordemDaFamilia.length > 0 && (
+                  <div className="vpe-copiar-ordem">
+                    <select
+                      value={copiarOrdemDe}
+                      onChange={(e) => setCopiarOrdemDe(e.target.value)}
+                      className="vpe-copiar-select"
+                      aria-label="Família de origem para copiar a ordem"
+                    >
+                      <option value="">Copiar ordem de outra família...</option>
+                      {familiasComOrdem.map(({ fam, total }) => (
+                        <option key={fam} value={fam}>{fam} ({total})</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="vpe-copiar-btn"
+                      onClick={aplicarOrdemDeOutraFamilia}
+                      disabled={!copiarOrdemDe}
+                      title={copiarOrdemDe
+                        ? `Aplicar a ordem de "${copiarOrdemDe}" às variáveis em comum`
+                        : 'Escolha a família de origem'}
+                    >
+                      <FiCopy size={14} /> Copiar
+                    </button>
+                  </div>
+                )}
+
+                {copiarOrdemDe && (() => {
+                  const origem = (config.variaveis_proposta_por_familia || {})[copiarOrdemDe] || [];
+                  const { comuns, restantes } = calcularOrdemCopiada(origem, ordemDaFamilia);
+                  const ignoradas = origem.length - comuns.length;
+                  return (
+                    <p className="vpe-copiar-previa">
+                      {comuns.length === 0
+                        ? <>Nenhuma variável em comum — não há ordem para copiar.</>
+                        : <>
+                            <strong>{comuns.length}</strong> em comum assumem a ordem de origem
+                            {restantes.length > 0 && <> · <strong>{restantes.length}</strong> só desta família vão para o fim</>}
+                            {ignoradas > 0 && <> · <strong>{ignoradas}</strong> só da origem são ignoradas</>}
+                          </>}
+                    </p>
+                  );
+                })()}
 
                 {ordemDaFamilia.length > 0 && (
                   <div className="variaveis-proposta-search-wrap">
