@@ -5858,6 +5858,31 @@ app.post('/api/propostas/:id/fotos/:fotoId/duplicar', authenticateToken, (req, r
   });
 });
 
+// POST /api/propostas/:id/fotos/:fotoId/restaurar — desfaz a exclusão de uma foto.
+// Só é possível porque o DELETE daqui é lógico (ativo = 0) e o arquivo continua no disco:
+// restaurar devolve a MESMA foto, com o mesmo id, e não uma cópia.
+app.post('/api/propostas/:id/fotos/:fotoId/restaurar', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id, fotoId } = req.params;
+  db.get('SELECT * FROM proposta_fotos WHERE id = ? AND proposta_id = ?', [fotoId, id], (err, foto) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!foto) return res.status(404).json({ error: 'Foto não encontrada' });
+    const num = (v, atual) => (v !== undefined && v !== null && isFinite(Number(v)) ? Number(v) : atual);
+    const pagina = Math.max(1, Math.round(num(req.body && req.body.pagina, foto.pagina)));
+    const pos_x = num(req.body && req.body.pos_x, foto.pos_x);
+    const pos_y = num(req.body && req.body.pos_y, foto.pos_y);
+    const largura = Math.max(10, num(req.body && req.body.largura, foto.largura));
+    db.run(
+      `UPDATE proposta_fotos SET ativo = 1, pagina = ?, pos_x = ?, pos_y = ?, largura = ?, updated_at = datetime('now') WHERE id = ? AND proposta_id = ?`,
+      [pagina, pos_x, pos_y, largura, fotoId, id],
+      (err2) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        res.json({ id: Number(fotoId), arquivo: foto.arquivo, pagina, pos_x, pos_y, largura });
+      }
+    );
+  });
+});
+
 // PUT /api/propostas/:id/fotos/:fotoId — atualiza posição/tamanho/página
 app.put('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
@@ -8035,6 +8060,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                 return res.status(500).json({ error: err.message });
               }
 
+              // Sem itens no payload não há inserção para esperar.
+              let insercoesDeItens = Promise.resolve();
               if (itens && Array.isArray(itens) && itens.length > 0) {
                 const stmt = db.prepare(
                   `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
@@ -8062,7 +8089,9 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                   ]);
                 });
 
-                stmt.finalize();
+                // O finalize com callback é o que garante a ordem: só depois dele os itens
+                // novos existem para serem lidos. Ver o comentário da religação abaixo.
+                insercoesDeItens = new Promise((pronto) => stmt.finalize(() => pronto()));
               }
 
               // Auditoria: registrar inclusão/edição/remoção de itens no log de
@@ -8129,13 +8158,23 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                 });
               };
 
-              // A resposta espera a religação: o cliente recarrega o preview logo em
+              // ORDEM IMPORTA, e de um jeito que não aparece lendo o código de cima a baixo:
+              // os INSERTs dos itens usam db.prepare/stmt.run, que NÃO passa pela fila de
+              // escrita do wrapDatabase (ela cobre run/get/all/exec, não prepare). Já o
+              // SELECT dos ids novos, feito com db.all, passa pela fila. Sem esperar o
+              // finalize, o SELECT podia rodar ANTES das inserções, não encontrar item algum
+              // e a religação simplesmente não fazer nada — os valores continuariam órfãos,
+              // com o mesmo sintoma de antes e nenhum erro para indicar o motivo.
+              //
+              // A resposta também espera a religação: o cliente recarrega o preview logo em
               // seguida, e responder antes devolveria a proposta ainda com os campos vazios.
-              religarVariaveisManuais(() => {
-                res.json({
-                  message: 'Proposta atualizada com sucesso',
-                  numero_proposta: numeroFinal,
-                  revisao: novaRevisao
+              insercoesDeItens.then(() => {
+                religarVariaveisManuais(() => {
+                  res.json({
+                    message: 'Proposta atualizada com sucesso',
+                    numero_proposta: numeroFinal,
+                    revisao: novaRevisao
+                  });
                 });
               });
             });

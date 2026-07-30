@@ -168,6 +168,41 @@ const valoresVisiveis = async (propostaId) => {
   const sobras = await all('SELECT COUNT(*) AS n FROM proposta_variaveis_manuais WHERE proposta_id = 2');
   t('e nao sobra linha orfa no banco', () => assert.strictEqual(sobras[0].n, 0));
 
+  console.log('\n[ordem] a religacao precisa esperar os INSERTs terminarem');
+  // Os INSERTs dos itens usam db.prepare/stmt.run, que NAO passa pela fila de escrita do
+  // wrapDatabase (ela cobre run/get/all/exec). O SELECT dos ids novos usa db.all e passa.
+  // Se a religacao rodar ANTES das insercoes, ela nao acha item nenhum e nao faz nada -
+  // sem erro, com o mesmo sintoma do bug original. Este caso simula esse adiantamento.
+  await run('DELETE FROM proposta_itens WHERE proposta_id = 4');
+  await run('INSERT INTO proposta_itens (proposta_id, codigo_produto, descricao) VALUES (?, ?, ?)',
+    [4, MOINHO.codigo_produto, MOINHO.descricao]);
+  const item4 = (await all('SELECT id FROM proposta_itens WHERE proposta_id = 4'))[0].id;
+  await run('INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor) VALUES (?, ?, ?, ?)',
+    [4, item4, 'nota', 'Texto que nao pode sumir']);
+
+  const antigos4 = await all('SELECT * FROM proposta_itens WHERE proposta_id = 4 ORDER BY id');
+  await run('DELETE FROM proposta_itens WHERE proposta_id = 4');
+  // Religa AGORA, com a tabela de itens ainda vazia (o adiantamento).
+  await religar(4, antigos4);
+  // So depois os itens sao inseridos, como o stmt.run faria fora da fila.
+  await run('INSERT INTO proposta_itens (proposta_id, codigo_produto, descricao) VALUES (?, ?, ?)',
+    [4, MOINHO.codigo_produto, MOINHO.descricao]);
+  const adiantado = await valoresVisiveis(4);
+  t('religar cedo demais perde o valor (por isso o codigo espera o finalize)',
+    () => assert.deepStrictEqual(adiantado, [], 'sem itens na hora da religacao, nada e religado'));
+
+  // Mesma sequencia, agora na ordem certa: insere e SO ENTAO religa.
+  await run('DELETE FROM proposta_itens WHERE proposta_id = 5');
+  await run('INSERT INTO proposta_itens (proposta_id, codigo_produto, descricao) VALUES (?, ?, ?)',
+    [5, MOINHO.codigo_produto, MOINHO.descricao]);
+  const item5 = (await all('SELECT id FROM proposta_itens WHERE proposta_id = 5'))[0].id;
+  await run('INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor) VALUES (?, ?, ?, ?)',
+    [5, item5, 'nota', 'Texto que nao pode sumir']);
+  await salvarProposta(5, [MOINHO, MASSEIRA], { comReligar: true });
+  const naOrdem = await valoresVisiveis(5);
+  t('esperando os INSERTs, o valor sobrevive',
+    () => assert.deepStrictEqual(naOrdem, ['10-02-MLY-2-01:nota=Texto que nao pode sumir']));
+
   db.close(() => {
     try { fs.unlinkSync(arq); } catch (_) {}
     console.log(`\n${ok}/${total} checagens`);
