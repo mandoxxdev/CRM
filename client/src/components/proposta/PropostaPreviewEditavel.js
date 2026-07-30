@@ -345,6 +345,41 @@ export default function PropostaPreviewEditavel() {
     doc.querySelectorAll('.ppe-guia-centro').forEach((g) => g.remove());
   }
 
+  // Guia numa posição qualquer da folha, em mm. A do centro (desenharGuia) é um caso
+  // particular disto; esta serve para mostrar a borda da foto VIZINHA em que o encaixe
+  // aconteceu — sem a linha, o resize "travando" sozinho parece defeito.
+  // Usa a mesma classe .ppe-guia-centro para ser removida por limparGuias.
+  function desenharGuiaEm(doc, pagina, orientacao, mm) {
+    const marca = `ppe-guia-em-${orientacao}-${Math.round(mm * 10)}`;
+    if (pagina.querySelector(`.${marca}`)) return;
+    const g = doc.createElement('div');
+    g.className = `ppe-guia-centro ${marca}`;
+    g.style.cssText = orientacao === 'v'
+      ? `position:absolute;top:0;bottom:0;left:${mm}mm;width:0;border-left:1px dashed #e11d48;z-index:7;pointer-events:none;`
+      : `position:absolute;left:0;right:0;top:${mm}mm;height:0;border-top:1px dashed #e11d48;z-index:7;pointer-events:none;`;
+    pagina.appendChild(g);
+  }
+
+  // Geometria (em mm) das OUTRAS fotos da mesma página — as candidatas de encaixe.
+  // Lida do DOM, e não de __FOTOS_PROPOSTA, porque a lista em memória guarda só a largura:
+  // a altura decorre da proporção da imagem e só o DOM sabe a altura realmente renderizada.
+  function vizinhasDaPagina(pagina, elAtual, k) {
+    const rp = pagina.getBoundingClientRect();
+    return Array.from(pagina.querySelectorAll('.proposta-foto'))
+      .filter((o) => o !== elAtual)
+      .map((o) => {
+        const r = o.getBoundingClientRect();
+        return {
+          esquerda: (r.left - rp.left) / k,
+          direita: (r.right - rp.left) / k,
+          topo: (r.top - rp.top) / k,
+          base: (r.bottom - rp.top) / k,
+          largura: r.width / k,
+          altura: r.height / k,
+        };
+      });
+  }
+
   function desenharGuia(doc, pagina, orientacao) {
     if (pagina.querySelector(`.ppe-guia-${orientacao}`)) return;
     const g = doc.createElement('div');
@@ -509,6 +544,57 @@ export default function PropostaPreviewEditavel() {
           else if (dir === 's') novaLargura = w0 + dy / proporcao;
           else novaLargura = w0 + (ancoraDireita ? -dx : dx);
           novaLargura = Math.max(10, novaLargura);
+
+          // Ímã de redimensionamento: trava quando a borda que está se movendo alcança a
+          // borda de uma foto vizinha, ou quando a foto fica do MESMO tamanho que ela.
+          // Como só a largura é livre (a altura decorre da proporção), todo encaixe é
+          // convertido para uma largura-alvo: assim um encaixe vertical e um horizontal
+          // competem na mesma unidade e vence o mais próximo. Alt desliga, igual ao arrasto.
+          limparGuias(doc);
+          if (!ev.altKey) {
+            const vizinhas = vizinhasDaPagina(pg, el, k);
+            const candidatos = [];
+            // Bordas que ficam PARADAS neste arrasto (as âncoras).
+            const direitaFixa = left0 + w0;
+            const baseFixa = top0 + h0;
+            vizinhas.forEach((v) => {
+              // Linhas verticais: alinhar a borda horizontal que se move.
+              [v.esquerda, v.direita].forEach((x) => {
+                const alvo = ancoraDireita ? (direitaFixa - x) : (x - left0);
+                if (alvo > 10) candidatos.push({ largura: alvo, tipo: 'v', mm: x });
+              });
+              // Linhas horizontais: alinhar a borda vertical que se move (via proporção).
+              [v.topo, v.base].forEach((y) => {
+                const alturaAlvo = ancoraInferior ? (baseFixa - y) : (y - top0);
+                const alvo = alturaAlvo / proporcao;
+                if (alvo > 10) candidatos.push({ largura: alvo, tipo: 'h', mm: y });
+              });
+              // Mesmo tamanho da vizinha — o caso das duas fotos lado a lado.
+              if (v.largura > 10) candidatos.push({ largura: v.largura, tipo: 'igual' });
+              const porAltura = v.altura / proporcao;
+              if (porAltura > 10) candidatos.push({ largura: porAltura, tipo: 'igual' });
+            });
+            let melhor = null;
+            candidatos.forEach((c) => {
+              const dist = Math.abs(c.largura - novaLargura);
+              if (dist <= SNAP_TOLERANCIA_MM && (!melhor || dist < melhor.dist)) {
+                melhor = { ...c, dist };
+              }
+            });
+            if (melhor) {
+              novaLargura = melhor.largura;
+              if (melhor.tipo === 'v') desenharGuiaEm(doc, pg, 'v', melhor.mm);
+              else if (melhor.tipo === 'h') desenharGuiaEm(doc, pg, 'h', melhor.mm);
+              else {
+                // "Mesmo tamanho" não tem uma linha própria: marca as bordas resultantes,
+                // que é o feedback que faz sentido ver.
+                const esq = ancoraDireita ? direitaFixa - novaLargura : left0;
+                desenharGuiaEm(doc, pg, 'v', esq);
+                desenharGuiaEm(doc, pg, 'v', esq + novaLargura);
+              }
+            }
+          }
+
           const novaAltura = novaLargura * proporcao;
           el.style.width = `${novaLargura}mm`;
           if (ancoraDireita) el.style.left = `${left0 + w0 - novaLargura}mm`;
@@ -517,6 +603,7 @@ export default function PropostaPreviewEditavel() {
         const aoSoltar = () => {
           doc.removeEventListener('mousemove', aoMover);
           doc.removeEventListener('mouseup', aoSoltar);
+          limparGuias(doc);
           persistir();
         };
         doc.addEventListener('mousemove', aoMover);
