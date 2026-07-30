@@ -428,6 +428,23 @@ export default function PropostaPreviewEditavel() {
     };
   }
 
+  // Página que o usuário está OLHANDO: a que tem o centro mais perto do centro da janela.
+  // É o destino do colar. Antes o colar mirava a página da foto de ORIGEM, então rolar até
+  // outra página e colar jogava a cópia lá atrás, fora da vista — parecia que não colou.
+  function paginaEmVista(doc) {
+    const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
+    if (paginas.length === 0) return { indice: 1, el: null };
+    const meioJanela = (doc.defaultView.innerHeight || 0) / 2;
+    let melhor = 0;
+    let menorDist = Infinity;
+    paginas.forEach((p, i) => {
+      const r = p.getBoundingClientRect();
+      const dist = Math.abs((r.top + r.height / 2) - meioJanela);
+      if (dist < menorDist) { menorDist = dist; melhor = i; }
+    });
+    return { indice: melhor + 1, el: paginas[melhor] };
+  }
+
   function registrarDesfazerFoto(acao) {
     if (!acao) return;
     desfazerFotosRef.current.push(acao);
@@ -516,16 +533,14 @@ export default function PropostaPreviewEditavel() {
   // Cola as fotos copiadas: cria novas linhas apontando para o MESMO arquivo (rota
   // /duplicar), sem reenviar imagem nenhuma. As cópias nascem na página da foto de
   // referência, deslocadas alguns milímetros para não ficarem exatamente por cima.
-  async function colarFotos(doc, elReferencia) {
+  async function colarFotos(doc) {
     const copiadas = fotosCopiadasRef.current || [];
     if (copiadas.length === 0) {
       toast.error('Nada copiado. Selecione uma foto e use Ctrl+C.');
       return;
     }
     const win = doc.defaultView;
-    const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
-    const pgRef = elReferencia && elReferencia.closest('.proposal-page');
-    const paginaDestino = pgRef ? paginas.indexOf(pgRef) + 1 : 1;
+    const paginaDestino = paginaEmVista(doc).indice;
     const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '');
     const novas = [];
     for (const origemId of copiadas) {
@@ -605,10 +620,31 @@ export default function PropostaPreviewEditavel() {
       // Dentro de texto editável o atalho NÃO é interceptado: ali vale o desfazer nativo do
       // navegador, que sabe reverter digitação caractere a caractere.
       doc.addEventListener('keydown', (ev) => {
-        if (!(ev.ctrlKey || ev.metaKey) || (ev.key !== 'z' && ev.key !== 'Z')) return;
+        if (!(ev.ctrlKey || ev.metaKey)) return;
+        // Em texto editável mandam os atalhos nativos do navegador.
         if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"]')) return;
-        ev.preventDefault();
-        desfazerUltimaAcaoFoto(doc);
+        const tecla = String(ev.key || '').toLowerCase();
+        if (tecla === 'z') {
+          ev.preventDefault();
+          desfazerUltimaAcaoFoto(doc);
+          return;
+        }
+        // Copiar/colar TAMBÉM ficam no documento, e não na foto: ao rolar para outra página
+        // e clicar nela, a foto perde o foco e um listener no elemento nunca dispararia —
+        // era exatamente o caso de "colar em outra página não funciona".
+        if (tecla === 'c') {
+          const sel = Array.from(fotosSelecionadasRef.current);
+          if (sel.length === 0) return; // sem seleção não há o que copiar; deixa o navegador agir
+          ev.preventDefault();
+          fotosCopiadasRef.current = sel;
+          toast.success(sel.length > 1 ? `${sel.length} fotos copiadas. Ctrl+V para colar.` : 'Foto copiada. Ctrl+V para colar.');
+          return;
+        }
+        if (tecla === 'v') {
+          if ((fotosCopiadasRef.current || []).length === 0) return;
+          ev.preventDefault();
+          colarFotos(doc);
+        }
       });
     }
     doc.querySelectorAll('.proposta-foto').forEach((el) => {
@@ -966,25 +1002,13 @@ export default function PropostaPreviewEditavel() {
 
       // Teclado da foto. O listener fica NO elemento (que só recebe teclado quando focado),
       // então Del dentro de uma cláusula não apaga foto e Ctrl+V ali não cola imagem.
+      // Só o Del fica no elemento: apagar exige uma foto em foco, e assim Del dentro de uma
+      // cláusula não apaga imagem. Copiar/colar/desfazer estão no documento (ver acima).
       el.onkeydown = (ev) => {
+        if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+        ev.preventDefault();
         const sel = Array.from(fotosSelecionadasRef.current);
-        if (ev.key === 'Delete' || ev.key === 'Backspace') {
-          ev.preventDefault();
-          excluirFotos(sel.length > 1 ? sel : [String(fotoId)]);
-          return;
-        }
-        if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'c' || ev.key === 'C')) {
-          ev.preventDefault();
-          fotosCopiadasRef.current = sel.length > 0 ? sel : [String(fotoId)];
-          toast.success(fotosCopiadasRef.current.length > 1
-            ? `${fotosCopiadasRef.current.length} fotos copiadas. Ctrl+V para colar.`
-            : 'Foto copiada. Ctrl+V para colar.');
-          return;
-        }
-        if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'v' || ev.key === 'V')) {
-          ev.preventDefault();
-          colarFotos(doc, el);
-        }
+        excluirFotos(sel.length > 1 ? sel : [String(fotoId)]);
       };
 
       // Botão direito: menu com "Excluir foto", no lugar do antigo ✕ sempre visível.
