@@ -345,8 +345,8 @@ export default function PropostaPreviewEditavel() {
     doc.querySelectorAll('.ppe-guia-centro').forEach((g) => g.remove());
   }
 
-  // Guia numa posição qualquer da folha, em mm. A do centro (desenharGuia) é um caso
-  // particular disto; esta serve para mostrar a borda da foto VIZINHA em que o encaixe
+  // Guia numa posição qualquer da folha, em mm — o centro da página é só um caso
+  // particular (mm = 105). Serve para mostrar a borda da foto VIZINHA em que o encaixe
   // aconteceu — sem a linha, o resize "travando" sozinho parece defeito.
   // Usa a mesma classe .ppe-guia-centro para ser removida por limparGuias.
   function desenharGuiaEm(doc, pagina, orientacao, mm) {
@@ -380,16 +380,6 @@ export default function PropostaPreviewEditavel() {
       });
   }
 
-  function desenharGuia(doc, pagina, orientacao) {
-    if (pagina.querySelector(`.ppe-guia-${orientacao}`)) return;
-    const g = doc.createElement('div');
-    g.className = `ppe-guia-centro ppe-guia-${orientacao}`;
-    g.style.cssText = orientacao === 'v'
-      ? 'position:absolute;top:0;bottom:0;left:50%;width:0;border-left:1px dashed #e11d48;z-index:7;pointer-events:none;'
-      : 'position:absolute;left:0;right:0;top:50%;height:0;border-top:1px dashed #e11d48;z-index:7;pointer-events:none;';
-    pagina.appendChild(g);
-  }
-
   // Fotos avulsas: o template as renderiza como overlays .proposta-foto (posição em mm
   // sobre a página) e as recria a CADA repaginação — por isso o wiring roda junto de
   // ativarEdicaoClausulas (load + MutationObserver) e usa a flag ppeWired para não
@@ -400,7 +390,6 @@ export default function PropostaPreviewEditavel() {
       el.dataset.ppeWired = '1';
       const fotoId = el.getAttribute('data-foto-id');
       el.style.cursor = 'move';
-      el.style.outline = '2px dashed #f59e0b';
 
       // tabIndex: sem foco o elemento não recebe keydown — é o que habilita apagar com Del.
       el.tabIndex = 0;
@@ -429,6 +418,19 @@ export default function PropostaPreviewEditavel() {
         el.appendChild(h);
         return h;
       });
+
+      // Moldura só na foto SELECIONADA, como no Word. Antes toda foto exibia borda
+      // tracejada e as 8 alças o tempo todo, e o preview parecia um rascunho — atrapalhava
+      // justamente na hora de conferir como a proposta vai sair.
+      // O gatilho é focus/blur (o elemento já tem tabIndex = 0 para receber o Del), então
+      // clicar na foto mostra, clicar fora esconde, sem nenhum controle de estado extra.
+      const mostrarMoldura = (ligado) => {
+        el.style.outline = ligado ? '2px dashed #f59e0b' : 'none';
+        alcas.forEach((h) => { h.style.display = ligado ? '' : 'none'; });
+      };
+      mostrarMoldura(false);
+      el.addEventListener('focus', () => mostrarMoldura(true));
+      el.addEventListener('blur', () => mostrarMoldura(false));
 
       const pxPorMm = () => {
         const pg = el.closest('.proposal-page');
@@ -487,19 +489,57 @@ export default function PropostaPreviewEditavel() {
           let leftMm = (ev.clientX - offX - rp.left) / k;
           let topMm = (ev.clientY - offY - rp.top) / k;
 
-          // Imã de centralização. Alt pressionado desliga o encaixe (igual ao Word),
-          // para quando o usuário quer posicionar livremente perto do centro.
+          // Imã de posicionamento: centro da página MAIS as fotos vizinhas. Ao contrário do
+          // resize (onde largura e altura são acopladas pela proporção, e por isso todos os
+          // candidatos disputam uma única largura-alvo), aqui os eixos são independentes —
+          // a foto pode grudar na horizontal de uma vizinha e na vertical de outra.
+          // Alt desliga o encaixe (igual ao Word), para posicionar livremente perto de uma
+          // linha de alinhamento.
           limparGuias(doc);
           if (!ev.altKey) {
-            const centroX = A4_LARGURA_MM / 2;
-            if (Math.abs(leftMm + larguraMm / 2 - centroX) <= SNAP_TOLERANCIA_MM) {
-              leftMm = centroX - larguraMm / 2;
-              desenharGuia(doc, alvo, 'v');
+            const vizinhas = vizinhasDaPagina(alvo, el, k);
+
+            // --- eixo horizontal: candidatos como valor de LEFT ---
+            const candX = [{ left: A4_LARGURA_MM / 2 - larguraMm / 2, mm: A4_LARGURA_MM / 2 }];
+            vizinhas.forEach((v) => {
+              const centroV = (v.esquerda + v.direita) / 2;
+              // borda esquerda desta foto alinhada às bordas da vizinha
+              candX.push({ left: v.esquerda, mm: v.esquerda });
+              candX.push({ left: v.direita, mm: v.direita });
+              // borda direita desta foto alinhada às bordas da vizinha
+              candX.push({ left: v.esquerda - larguraMm, mm: v.esquerda });
+              candX.push({ left: v.direita - larguraMm, mm: v.direita });
+              // centros na mesma vertical
+              candX.push({ left: centroV - larguraMm / 2, mm: centroV });
+            });
+            let melhorX = null;
+            candX.forEach((c) => {
+              const d = Math.abs(c.left - leftMm);
+              if (d <= SNAP_TOLERANCIA_MM && (!melhorX || d < melhorX.d)) melhorX = { ...c, d };
+            });
+            if (melhorX) {
+              leftMm = melhorX.left;
+              desenharGuiaEm(doc, alvo, 'v', melhorX.mm);
             }
-            const centroY = A4_ALTURA_MM / 2;
-            if (Math.abs(topMm + alturaMm / 2 - centroY) <= SNAP_TOLERANCIA_MM) {
-              topMm = centroY - alturaMm / 2;
-              desenharGuia(doc, alvo, 'h');
+
+            // --- eixo vertical: candidatos como valor de TOP ---
+            const candY = [{ top: A4_ALTURA_MM / 2 - alturaMm / 2, mm: A4_ALTURA_MM / 2 }];
+            vizinhas.forEach((v) => {
+              const centroV = (v.topo + v.base) / 2;
+              candY.push({ top: v.topo, mm: v.topo });
+              candY.push({ top: v.base, mm: v.base });
+              candY.push({ top: v.topo - alturaMm, mm: v.topo });
+              candY.push({ top: v.base - alturaMm, mm: v.base });
+              candY.push({ top: centroV - alturaMm / 2, mm: centroV });
+            });
+            let melhorY = null;
+            candY.forEach((c) => {
+              const d = Math.abs(c.top - topMm);
+              if (d <= SNAP_TOLERANCIA_MM && (!melhorY || d < melhorY.d)) melhorY = { ...c, d };
+            });
+            if (melhorY) {
+              topMm = melhorY.top;
+              desenharGuiaEm(doc, alvo, 'h', melhorY.mm);
             }
           }
           el.style.left = `${leftMm}mm`;

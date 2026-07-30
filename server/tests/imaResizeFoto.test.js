@@ -176,6 +176,110 @@ t('altura sempre = largura x proporcao, mesmo apos encaixe', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Ima de ARRASTO (posicionamento)
+// ---------------------------------------------------------------------------
+// Diferenca essencial em relacao ao resize: aqui os eixos sao INDEPENDENTES. No resize
+// largura e altura estao acopladas pela proporcao da imagem, e por isso todos os
+// candidatos disputam uma unica largura-alvo; no arrasto a foto pode grudar na horizontal
+// de uma vizinha e na vertical de outra ao mesmo tempo.
+const A4_LARGURA_MM = 210;
+const A4_ALTURA_MM = 297;
+
+function arrastar({ leftCru, topCru, larguraMm, alturaMm, vizinhas }) {
+  const candX = [{ left: A4_LARGURA_MM / 2 - larguraMm / 2, mm: A4_LARGURA_MM / 2 }];
+  const candY = [{ top: A4_ALTURA_MM / 2 - alturaMm / 2, mm: A4_ALTURA_MM / 2 }];
+  vizinhas.forEach((v) => {
+    const cx = (v.esquerda + v.direita) / 2;
+    candX.push({ left: v.esquerda, mm: v.esquerda });
+    candX.push({ left: v.direita, mm: v.direita });
+    candX.push({ left: v.esquerda - larguraMm, mm: v.esquerda });
+    candX.push({ left: v.direita - larguraMm, mm: v.direita });
+    candX.push({ left: cx - larguraMm / 2, mm: cx });
+    const cy = (v.topo + v.base) / 2;
+    candY.push({ top: v.topo, mm: v.topo });
+    candY.push({ top: v.base, mm: v.base });
+    candY.push({ top: v.topo - alturaMm, mm: v.topo });
+    candY.push({ top: v.base - alturaMm, mm: v.base });
+    candY.push({ top: cy - alturaMm / 2, mm: cy });
+  });
+  let mx = null;
+  candX.forEach((c) => {
+    const d = Math.abs(c.left - leftCru);
+    if (d <= SNAP_TOLERANCIA_MM && (!mx || d < mx.d)) mx = { ...c, d };
+  });
+  let my = null;
+  candY.forEach((c) => {
+    const d = Math.abs(c.top - topCru);
+    if (d <= SNAP_TOLERANCIA_MM && (!my || d < my.d)) my = { ...c, d };
+  });
+  const left = mx ? mx.left : leftCru;
+  const top = my ? my.top : topCru;
+  return {
+    left, top, direita: left + larguraMm, base: top + alturaMm,
+    encaixouX: !!mx, encaixouY: !!my,
+  };
+}
+
+console.log('\n[arrasto] alinhar com a foto vizinha');
+const VIZ = { esquerda: 20, direita: 90, topo: 100, base: 160, largura: 70, altura: 60 };
+const MOVEL = { larguraMm: 50, alturaMm: 40, vizinhas: [VIZ] };
+
+const topoIgual = arrastar({ ...MOVEL, leftCru: 120, topCru: VIZ.topo + 1 });
+t('o TOPO gruda no topo da vizinha', () => {
+  assert(topoIgual.encaixouY, 'nao encaixou na vertical');
+  quase(topoIgual.top, VIZ.topo, 'topo');
+});
+
+const baseIgual = arrastar({ ...MOVEL, leftCru: 120, topCru: VIZ.base - 40 - 1 });
+t('a BASE gruda na base da vizinha (fotos de alturas diferentes)',
+  () => quase(baseIgual.base, VIZ.base, 'base'));
+
+const encostando = arrastar({ ...MOVEL, leftCru: VIZ.direita + 1, topCru: 200 });
+t('a borda ESQUERDA gruda na direita da vizinha (fotos encostadas)',
+  () => quase(encostando.left, VIZ.direita, 'esquerda'));
+
+const aDireita = arrastar({ ...MOVEL, leftCru: VIZ.esquerda - 50 - 1, topCru: 200 });
+t('a borda DIREITA gruda na esquerda da vizinha',
+  () => quase(aDireita.direita, VIZ.esquerda, 'direita'));
+
+const centrado = arrastar({ ...MOVEL, leftCru: 55 - 25 + 1, topCru: 200 });
+t('os CENTROS alinham na mesma vertical', () => {
+  const centroViz = (VIZ.esquerda + VIZ.direita) / 2;
+  quase(centrado.left + 50 / 2, centroViz, 'centro horizontal');
+});
+
+console.log('\n[arrasto] os dois eixos sao independentes');
+const doisEixos = arrastar({ ...MOVEL, leftCru: VIZ.direita + 1, topCru: VIZ.topo - 1 });
+t('gruda na horizontal E na vertical no mesmo movimento', () => {
+  assert(doisEixos.encaixouX && doisEixos.encaixouY, 'faltou um dos eixos');
+  quase(doisEixos.left, VIZ.direita, 'esquerda');
+  quase(doisEixos.top, VIZ.topo, 'topo');
+});
+const soUmEixo = arrastar({ ...MOVEL, leftCru: VIZ.direita + 1, topCru: 250 });
+t('um eixo pode encaixar sem o outro', () => {
+  assert(soUmEixo.encaixouX, 'horizontal devia encaixar');
+  assert(!soUmEixo.encaixouY, 'vertical nao devia encaixar');
+  quase(soUmEixo.top, 250, 'topo livre');
+});
+
+console.log('\n[arrasto] o centro da pagina continua valendo');
+const centroPag = arrastar({ ...MOVEL, leftCru: A4_LARGURA_MM / 2 - 25 + 1, topCru: 250 });
+t('centro da folha segue imantando como antes',
+  () => quase(centroPag.left + 25, A4_LARGURA_MM / 2, 'centro da pagina'));
+
+console.log('\n[arrasto] o ima nao rouba o controle');
+const livre = arrastar({ ...MOVEL, leftCru: 130, topCru: 250 });
+t('longe de qualquer linha, a posicao e respeitada', () => {
+  assert(!livre.encaixouX && !livre.encaixouY);
+  quase(livre.left, 130, 'left');
+  quase(livre.top, 250, 'top');
+});
+t('sem vizinhas, so o centro da pagina imanta', () => {
+  const r = arrastar({ larguraMm: 50, alturaMm: 40, vizinhas: [], leftCru: 130, topCru: 250 });
+  assert(!r.encaixouX && !r.encaixouY, 'encaixou sem candidato');
+});
+
 console.log(`\n${ok}/${total} checagens`);
 console.log(ok === total ? '0 failed' : `${total - ok} failed`);
 process.exit(ok === total ? 0 : 1);

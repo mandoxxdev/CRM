@@ -1477,8 +1477,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
 
     /* Fotos avulsas: overlays em mm sobre a página (fora do fluxo — não afetam a
        paginação). O editor injeta os controles de arrastar/redimensionar/remover. */
-    .proposta-foto { position: absolute; z-index: 4; }
-    .proposta-foto img { width: 100%; height: auto; display: block; }
+    /* Mesma moldura da foto do equipamento (.equip-photo-float): fio fino, canto
+       arredondado e respiro branco — as fotos avulsas apareciam "soltas" na folha ao lado
+       de uma foto de produto emoldurada.
+       box-sizing: border-box e OBRIGATORIO aqui, nao e preferencia: o editor le a largura
+       pelo retangulo renderizado (getBoundingClientRect) e a grava de volta em style.width.
+       Em content-box o padding entraria na leitura e nao na escrita, e a foto encolheria
+       um pouco a cada redimensionamento; as larguras ja gravadas tambem renderizariam
+       maiores do que foram salvas. */
+    .proposta-foto { position: absolute; z-index: 4; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: #fff; }
+    .proposta-foto img { width: 100%; height: auto; display: block; border-radius: 6px; }
 
     /* Variável "Manual na Proposta": vazia vira um espaço em branco sublinhado (a linha
        sempre aparece — é o convite para preencher no editor, e sai assim no PDF se o
