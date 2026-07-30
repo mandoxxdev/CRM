@@ -47,6 +47,10 @@ export default function PropostaPreviewEditavel() {
   // iframe — que são recriados a cada repaginação e não acompanhariam um closure de state.
   const fotosSelecionadasRef = useRef(new Set());
   const fotosCopiadasRef = useRef([]);
+  // Pilha de desfazer das FOTOS (Ctrl+Z). Só fotos: o texto das cláusulas é contentEditable
+  // e já tem o desfazer nativo do navegador, que é melhor do que qualquer coisa que eu
+  // reimplementasse — por isso o atalho não é interceptado quando o foco está num texto.
+  const desfazerFotosRef = useRef([]);
   const edicaoEmAndamentoRef = useRef(null); // { key, campo, cursorOffset }
 
   // Número real da proposta (ex.: "062-03-MH-2026-REV01") — o que o cliente reconhece,
@@ -406,6 +410,109 @@ export default function PropostaPreviewEditavel() {
     });
   }
 
+  // Geometria atual de uma foto, no formato em que ela é persistida. É o que a pilha de
+  // desfazer guarda ANTES de cada mexida.
+  function geometriaDaFoto(doc, el) {
+    const pg = el.closest('.proposal-page');
+    if (!pg) return null;
+    const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
+    const rp = pg.getBoundingClientRect();
+    const k = rp.width / 210;
+    const r = el.getBoundingClientRect();
+    return {
+      id: String(el.getAttribute('data-foto-id')),
+      pagina: paginas.indexOf(pg) + 1,
+      x: (r.left - rp.left) / k,
+      y: (r.top - rp.top) / k,
+      largura: r.width / k,
+    };
+  }
+
+  function registrarDesfazerFoto(acao) {
+    if (!acao) return;
+    desfazerFotosRef.current.push(acao);
+    // Teto na pilha: uma sessão longa de ajustes não pode crescer sem limite.
+    if (desfazerFotosRef.current.length > 40) desfazerFotosRef.current.shift();
+  }
+
+  // Aplica uma geometria salva: DOM, lista em memória (senão a repaginação desfazia o
+  // desfazer) e banco.
+  async function aplicarGeometriaFoto(doc, g) {
+    const win = doc.defaultView;
+    const el = doc.querySelector(`.proposta-foto[data-foto-id="${g.id}"]`);
+    const paginas = Array.from(doc.querySelectorAll('.proposal-page')).filter((p) => p.style.display !== 'none');
+    const pgAlvo = paginas[Math.min(g.pagina, paginas.length) - 1];
+    if (el && pgAlvo) {
+      if (el.parentElement !== pgAlvo) pgAlvo.appendChild(el);
+      el.style.left = `${g.x}mm`;
+      el.style.top = `${g.y}mm`;
+      el.style.width = `${g.largura}mm`;
+    }
+    if (win && Array.isArray(win.__FOTOS_PROPOSTA)) {
+      const f = win.__FOTOS_PROPOSTA.find((x) => String(x.id) === String(g.id));
+      if (f) { f.pagina = g.pagina; f.x = g.x; f.y = g.y; f.largura = g.largura; }
+    }
+    await api.put(`/propostas/${id}/fotos/${g.id}`, { pagina: g.pagina, pos_x: g.x, pos_y: g.y, largura: g.largura });
+  }
+
+  async function desfazerUltimaAcaoFoto(doc) {
+    const acao = desfazerFotosRef.current.pop();
+    if (!acao) {
+      toast.error('Nada para desfazer nas fotos.');
+      return;
+    }
+    const win = doc.defaultView;
+    const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '');
+    try {
+      if (acao.tipo === 'geometria') {
+        for (const g of acao.fotos) await aplicarGeometriaFoto(doc, g);
+        toast.success(acao.fotos.length > 1 ? 'Movimento desfeito.' : 'Alteração desfeita.');
+        return;
+      }
+      if (acao.tipo === 'colar') {
+        // Desfazer um "colar" é apagar as cópias que ele criou.
+        for (const fid of acao.ids) {
+          await api.delete(`/propostas/${id}/fotos/${fid}`);
+          if (win && Array.isArray(win.__FOTOS_PROPOSTA)) {
+            const idx = win.__FOTOS_PROPOSTA.findIndex((x) => String(x.id) === String(fid));
+            if (idx >= 0) win.__FOTOS_PROPOSTA.splice(idx, 1);
+          }
+          const no = doc.querySelector(`.proposta-foto[data-foto-id="${fid}"]`);
+          if (no) no.remove();
+          fotosSelecionadasRef.current.delete(String(fid));
+        }
+        aplicarSelecaoFotos(doc);
+        toast.success('Colagem desfeita.');
+        return;
+      }
+      if (acao.tipo === 'excluir') {
+        // Restaura pelo MESMO id (o delete é lógico), então nada de foto duplicada.
+        for (const g of acao.fotos) {
+          const { data } = await api.post(`/propostas/${id}/fotos/${g.id}/restaurar`, {
+            pagina: g.pagina, pos_x: g.x, pos_y: g.y, largura: g.largura,
+          });
+          if (win && Array.isArray(win.__FOTOS_PROPOSTA)) {
+            win.__FOTOS_PROPOSTA.push({
+              id: data.id, pagina: data.pagina, x: data.pos_x, y: data.pos_y, largura: data.largura,
+              src: `${base}/uploads/proposta-fotos/${encodeURIComponent(data.arquivo)}`,
+            });
+          }
+        }
+        if (win && typeof win.aplicarFotosProposta === 'function') {
+          win.aplicarFotosProposta();
+          ativarEdicaoFotos(doc);
+          fotosSelecionadasRef.current = new Set(acao.fotos.map((g) => String(g.id)));
+          aplicarSelecaoFotos(doc);
+        } else {
+          carregarPreview();
+        }
+        toast.success(acao.fotos.length > 1 ? 'Exclusão desfeita.' : 'Foto restaurada.');
+      }
+    } catch (_) {
+      toast.error('Não foi possível desfazer.');
+    }
+  }
+
   // Cola as fotos copiadas: cria novas linhas apontando para o MESMO arquivo (rota
   // /duplicar), sem reenviar imagem nenhuma. As cópias nascem na página da foto de
   // referência, deslocadas alguns milímetros para não ficarem exatamente por cima.
@@ -459,6 +566,7 @@ export default function PropostaPreviewEditavel() {
     } else {
       carregarPreview();
     }
+    registrarDesfazerFoto({ tipo: 'colar', ids: novas.map((f) => String(f.id)) });
     toast.success(novas.length > 1 ? `${novas.length} fotos coladas.` : 'Foto colada.');
   }
 
@@ -468,10 +576,11 @@ export default function PropostaPreviewEditavel() {
     if (comShift) {
       if (sel.has(chave)) sel.delete(chave);
       else sel.add(chave);
-    } else if (!sel.has(chave) || sel.size > 1) {
-      // Clique simples numa foto que JÁ faz parte de uma seleção múltipla mantém o grupo,
-      // senão seria impossível arrastar o conjunto: o mousedown desfaria a seleção antes
-      // de o arrasto começar.
+    } else if (!sel.has(chave)) {
+      // Clique simples numa foto que JÁ faz parte da seleção MANTÉM o grupo — é o que
+      // permite arrastar o conjunto. Só clicar numa foto de FORA é que reinicia a seleção.
+      // (A condição tinha um `|| sel.size > 1` que limpava o grupo justamente no mousedown
+      // que iniciaria o arrasto, tornando impossível mover duas juntas.)
       sel.clear();
       sel.add(chave);
     }
@@ -489,6 +598,17 @@ export default function PropostaPreviewEditavel() {
         if (fotosSelecionadasRef.current.size === 0) return;
         fotosSelecionadasRef.current.clear();
         aplicarSelecaoFotos(doc);
+      });
+      // Ctrl+Z das fotos fica no DOCUMENTO, e não no elemento: depois de apagar uma foto o
+      // elemento nem existe mais, então um listener nela nunca dispararia justamente na
+      // ação que mais se quer desfazer.
+      // Dentro de texto editável o atalho NÃO é interceptado: ali vale o desfazer nativo do
+      // navegador, que sabe reverter digitação caractere a caractere.
+      doc.addEventListener('keydown', (ev) => {
+        if (!(ev.ctrlKey || ev.metaKey) || (ev.key !== 'z' && ev.key !== 'Z')) return;
+        if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"]')) return;
+        ev.preventDefault();
+        desfazerUltimaAcaoFoto(doc);
       });
     }
     doc.querySelectorAll('.proposta-foto').forEach((el) => {
@@ -585,6 +705,15 @@ export default function PropostaPreviewEditavel() {
         const rpInicial = paginaInicial ? paginaInicial.getBoundingClientRect() : { left: 0, top: 0 };
         const leftInicialMm = (rectInicial.left - rpInicial.left) / kInicial;
         const topInicialMm = (rectInicial.top - rpInicial.top) / kInicial;
+        // Estado ANTES do arrasto (esta foto + o grupo): é o que o Ctrl+Z restaura.
+        registrarDesfazerFoto({
+          tipo: 'geometria',
+          fotos: [geometriaDaFoto(doc, el)].concat(
+            Array.from(doc.querySelectorAll('.proposta-foto'))
+              .filter((o) => o !== el && fotosSelecionadasRef.current.has(String(o.getAttribute('data-foto-id'))))
+              .map((o) => geometriaDaFoto(doc, o))
+          ).filter(Boolean),
+        });
         const grupo = fotosSelecionadasRef.current.size > 1
           ? Array.from(doc.querySelectorAll('.proposta-foto'))
               .filter((o) => o !== el && fotosSelecionadasRef.current.has(String(o.getAttribute('data-foto-id'))))
@@ -705,6 +834,7 @@ export default function PropostaPreviewEditavel() {
         e.preventDefault();
         e.stopPropagation();
         el.focus();
+        registrarDesfazerFoto({ tipo: 'geometria', fotos: [geometriaDaFoto(doc, el)].filter(Boolean) });
         const k = pxPorMm();
         const r0 = el.getBoundingClientRect();
         const pg = el.closest('.proposal-page');
@@ -804,6 +934,15 @@ export default function PropostaPreviewEditavel() {
           : 'Remover esta foto da proposta?';
         if (!window.confirm(pergunta)) return;
         const win = doc.defaultView;
+        // Geometria de cada uma ANTES de apagar: o Ctrl+Z restaura no lugar exato.
+        registrarDesfazerFoto({
+          tipo: 'excluir',
+          fotos: lista
+            .map((alvoId) => doc.querySelector(`.proposta-foto[data-foto-id="${alvoId}"]`))
+            .filter(Boolean)
+            .map((no) => geometriaDaFoto(doc, no))
+            .filter(Boolean),
+        });
         let falhas = 0;
         for (const alvoId of lista) {
           try {
