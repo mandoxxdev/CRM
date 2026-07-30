@@ -369,8 +369,70 @@
   gap: 6px 12px;
 }
 
+/* Chips das variaveis ja selecionadas. Ficam ACIMA da lista, e nao reordenando a lista,
+   porque reordenar faria o item pular de lugar no momento do clique. */
+.modal-familia-variaveis-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 22px 0;
+}
+
+.modal-familia-variavel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #FF6B35;
+  border-radius: 999px;
+  background: rgba(255, 107, 53, 0.1);
+  color: var(--gmp-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.modal-familia-variavel-chip:hover {
+  background: rgba(255, 107, 53, 0.2);
+}
+
+.modal-familia-variavel-chip svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.modal-familia-variaveis-acoes {
+  display: flex;
+  gap: 10px;
+  margin: 12px 22px 0;
+}
+
+.modal-familia-variaveis-acoes button {
+  padding: 6px 12px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text-light);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.modal-familia-variaveis-acoes button:hover {
+  border-color: #FF6B35;
+  color: var(--gmp-text);
+}
+
+/* 280px em 2 colunas mostrava 8 de 77 variaveis por vez: uma janelinha rolando dentro de
+   um modal que tambem rola, o que obrigava a arrastar a barra para achar qualquer coisa.
+   Agora a caixa acompanha a altura da tela (min-height garante utilidade em telas baixas). */
 .modal-familia-variaveis-list.premium {
-  max-height: 280px;
+  max-height: min(52vh, 560px);
+  min-height: 240px;
   margin: 0 22px;
   padding: 16px;
   border-radius: 14px;
@@ -1540,6 +1602,21 @@
   background: var(--gmp-bg-subtle);
   border-color: var(--gmp-border);
   scrollbar-color: #475569 #334155;
+}
+
+/* No tema escuro o laranja a 10% quase desaparece sobre o fundo; sobe para 18%. */
+[data-theme="dark"] .modal-familia-variavel-chip {
+  background: rgba(255, 107, 53, 0.18);
+  border-color: rgba(255, 107, 53, 0.7);
+}
+
+[data-theme="dark"] .modal-familia-variavel-chip:hover {
+  background: rgba(255, 107, 53, 0.3);
+}
+
+[data-theme="dark"] .modal-familia-variaveis-acoes button {
+  background: var(--gmp-bg-subtle);
+  border-color: var(--gmp-border);
 }
 
 [data-theme="dark"] .modal-familia-variaveis-list.premium::-webkit-scrollbar-track {

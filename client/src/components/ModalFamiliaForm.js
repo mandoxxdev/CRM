@@ -123,6 +123,40 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
     );
   }, [variaveisList, searchVariavelFamilia]);
 
+  // As variaveis selecionadas, resolvidas para exibir nome (nao a chave crua). Sao 77
+  // variaveis no cadastro; numa caixa que mostra ~8 por vez, as marcadas ficavam
+  // espalhadas fora da vista e o contador ("8 selecionadas") parecia estar mentindo.
+  // Mostrando-as em cima, a selecao fica conferivel sem rolar nada.
+  const variaveisSelecionadas = useMemo(() => {
+    const porChave = new Map(variaveisList.map((v) => [v.chave, v]));
+    return variaveisDaFamiliaChaves.map((chave) => ({
+      chave,
+      nome: (porChave.get(chave) || {}).nome || chave,
+    }));
+  }, [variaveisList, variaveisDaFamiliaChaves]);
+
+  // Quantas das que estao na tela ainda nao foram marcadas — habilita "marcar todas"
+  // sem prometer acao quando nao ha nada a marcar.
+  const variaveisVisiveis = useMemo(
+    () => (searchVariavelFamilia ? variaveisFiltradasFamilia : variaveisList).filter((v) => v && v.chave),
+    [searchVariavelFamilia, variaveisFiltradasFamilia, variaveisList]
+  );
+
+  const marcarVisiveis = useCallback(() => {
+    setVariaveisDaFamiliaChaves((prev) => {
+      const set = new Set(prev);
+      variaveisVisiveis.forEach((v) => set.add(v.chave));
+      return Array.from(set);
+    });
+  }, [variaveisVisiveis]);
+
+  const desmarcarVisiveis = useCallback(() => {
+    setVariaveisDaFamiliaChaves((prev) => {
+      const remover = new Set(variaveisVisiveis.map((v) => v.chave));
+      return prev.filter((c) => !remover.has(c));
+    });
+  }, [variaveisVisiveis]);
+
   const toggleVariavelFamilia = useCallback((chave) => {
     setVariaveisDaFamiliaChaves((prev) =>
       prev.includes(chave) ? prev.filter((c) => c !== chave) : [...prev, chave]
@@ -692,10 +726,37 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                     placeholder="Buscar variável por nome..."
                   />
                 </div>
+
+                {variaveisSelecionadas.length > 0 && (
+                  <div className="modal-familia-variaveis-chips">
+                    {variaveisSelecionadas.map((v) => (
+                      <button
+                        type="button"
+                        key={`chip-${v.chave}`}
+                        className="modal-familia-variavel-chip"
+                        onClick={() => toggleVariavelFamilia(v.chave)}
+                        title="Remover desta família"
+                      >
+                        <span>{v.nome}</span>
+                        <FiX size={13} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="modal-familia-variaveis-acoes">
+                  <button type="button" onClick={marcarVisiveis}>
+                    {searchVariavelFamilia
+                      ? `Marcar as ${variaveisVisiveis.length} encontradas`
+                      : 'Marcar todas'}
+                  </button>
+                  <button type="button" onClick={desmarcarVisiveis}>
+                    {searchVariavelFamilia ? 'Desmarcar as encontradas' : 'Limpar seleção'}
+                  </button>
+                </div>
                 <div className="modal-familia-variaveis-list premium">
                   {(searchVariavelFamilia ? variaveisFiltradasFamilia : variaveisList)
                     .filter((v) => v != null)
-                    .slice(0, 100)
                     .map((v, i) => {
                       const chave = (v && v.chave) || '';
                       const checked = variaveisDaFamiliaChaves.includes(chave);
