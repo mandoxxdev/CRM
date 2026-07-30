@@ -45,6 +45,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   const [variaveisDaFamilia, setVariaveisDaFamilia] = useState(null); // null = ainda nao carregou
   const [carregandoVariaveisFamilia, setCarregandoVariaveisFamilia] = useState(false);
   const [mostrarTodasVariaveis, setMostrarTodasVariaveis] = useState(false);
+  const [ordemSearch, setOrdemSearch] = useState('');
   const [arrastandoIndex, setArrastandoIndex] = useState(null);
   const [alvoArrasteIndex, setAlvoArrasteIndex] = useState(null);
 
@@ -74,6 +75,7 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   useEffect(() => {
     const nome = (familiaEquipamentoSelecionada || '').trim();
     setMostrarTodasVariaveis(false);
+    setOrdemSearch('');
     if (!nome) { setVariaveisDaFamilia(null); return; }
     const fam = familiasList.find((f) => String(f.nome || '').trim() === nome);
     if (!fam || fam.id == null) { setVariaveisDaFamilia(null); return; }
@@ -99,6 +101,23 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   const ordemDaFamilia = Array.isArray((config.variaveis_proposta_por_familia || {})[familiaEquipamentoSelecionada])
     ? config.variaveis_proposta_por_familia[familiaEquipamentoSelecionada]
     : [];
+
+  // Cada linha carrega o indice REAL na ordem, e nao a posicao na lista filtrada. E o que
+  // permite buscar e ainda assim reordenar certo: setas e caixa numerica operam sobre a
+  // ordem inteira, nao sobre o recorte visivel. (Arrastar fica desligado durante a busca:
+  // com a lista filtrada, o vizinho na tela nao e o vizinho real, e soltar entre duas
+  // linhas visiveis levaria o item para um lugar diferente do que a tela sugere.)
+  const filtrandoOrdem = (ordemSearch || '').trim().length > 0;
+  const linhasDaOrdem = (() => {
+    const termo = (ordemSearch || '').trim().toLowerCase();
+    return ordemDaFamilia
+      .map((chave, i) => ({ chave, i, meta: variaveisList.find((v) => (v.chave || '') === chave) }))
+      .filter(({ chave, meta }) => {
+        if (!termo) return true;
+        const nome = (meta && meta.nome) || '';
+        return nome.toLowerCase().includes(termo) || String(chave).toLowerCase().includes(termo);
+      });
+  })();
 
   const gravarOrdemFamilia = (nova) => {
     setConfig((prev) => ({
@@ -778,12 +797,38 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
               <div className="vpe-painel">
                 <div className="vpe-painel-head">
                   <span>Ordem na proposta</span>
-                  <span className="vpe-painel-contador">{ordemDaFamilia.length}</span>
+                  <span className="vpe-painel-contador">
+                    {filtrandoOrdem ? `${linhasDaOrdem.length} de ${ordemDaFamilia.length}` : ordemDaFamilia.length}
+                  </span>
                 </div>
                 <p className="vpe-painel-dica">
                   Esta é exatamente a ordem em que as linhas saem na proposta. Arraste pelo
                   <strong> ⠿ </strong>, use as setas, ou digite o número da posição.
                 </p>
+
+                {ordemDaFamilia.length > 0 && (
+                  <div className="variaveis-proposta-search-wrap">
+                    <FiSearch className="variaveis-proposta-search-icon" aria-hidden />
+                    <input
+                      type="text"
+                      value={ordemSearch}
+                      onChange={(e) => setOrdemSearch(e.target.value)}
+                      placeholder="Buscar nesta ordem..."
+                      className="variaveis-proposta-search-input"
+                      aria-label="Buscar variável dentro da ordem da proposta"
+                    />
+                    {ordemSearch && (
+                      <button
+                        type="button"
+                        className="vpe-busca-limpar"
+                        onClick={() => setOrdemSearch('')}
+                        aria-label="Limpar busca"
+                      >
+                        <FiX />
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {ordemDaFamilia.length === 0 ? (
                   <div className="variaveis-proposta-empty">
@@ -791,15 +836,18 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                   </div>
                 ) : (
                   <div className="vpe-ordem-list">
-                    {ordemDaFamilia.map((chave, i) => {
-                      const meta = variaveisList.find((v) => (v.chave || '') === chave);
+                    {linhasDaOrdem.length === 0 ? (
+                      <div className="variaveis-proposta-empty">
+                        Nada encontrado para &quot;{ordemSearch}&quot; nesta ordem.
+                      </div>
+                    ) : linhasDaOrdem.map(({ chave, i, meta }) => {
                       const arrastando = arrastandoIndex === i;
                       const alvo = alvoArrasteIndex === i && arrastandoIndex !== null && arrastandoIndex !== i;
                       return (
                         <div
                           key={`ordem-${chave}`}
                           className={`vpe-ordem-item${arrastando ? ' vpe-ordem-arrastando' : ''}${alvo ? ' vpe-ordem-alvo' : ''}`}
-                          draggable
+                          draggable={!filtrandoOrdem}
                           onDragStart={(e) => {
                             setArrastandoIndex(i);
                             // Alguns navegadores só iniciam o arraste se houver dado no evento.
@@ -819,7 +867,11 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                           }}
                           onDragEnd={() => { setArrastandoIndex(null); setAlvoArrasteIndex(null); }}
                         >
-                          <span className="vpe-ordem-alca" title="Arraste para reordenar" aria-hidden>⠿</span>
+                          <span
+                            className={`vpe-ordem-alca${filtrandoOrdem ? ' vpe-ordem-alca-off' : ''}`}
+                            title={filtrandoOrdem ? 'Limpe a busca para arrastar' : 'Arraste para reordenar'}
+                            aria-hidden
+                          >⠿</span>
                           <input
                             type="number"
                             className="vpe-ordem-pos"
@@ -833,6 +885,14 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                             }}
                           />
                           <span className="vpe-ordem-nome" title={chave}>{(meta && meta.nome) || chave}</span>
+                          {!meta && (
+                            <span
+                              className="vpe-ordem-orfa"
+                              title={`A variável "${chave}" não está mais ativa no cadastro. Ela sai na proposta com a chave crua no lugar do nome — o certo é remover daqui.`}
+                            >
+                              inativa
+                            </span>
+                          )}
                           <span className="vpe-ordem-botoes">
                             <button
                               type="button"

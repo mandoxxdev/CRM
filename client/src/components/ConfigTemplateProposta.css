@@ -699,3 +699,55 @@
   background: var(--gmp-surface);
   border-color: var(--gmp-border);
 }
+
+/* Busca dentro do painel de ordem. Com 37 variáveis, achar uma para mover exigia varrer a
+   lista com o olho. A alça de arraste é desligada enquanto a busca está ativa: na lista
+   filtrada o vizinho da tela não é o vizinho real, então soltar entre duas linhas visíveis
+   levaria o item para uma posição diferente da que a tela sugere. Setas e caixa numérica
+   continuam valendo, porque operam sobre o índice real. */
+.vpe-ordem-alca-off {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+.vpe-busca-limpar {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--gmp-text-light, #94a3b8);
+  cursor: pointer;
+}
+
+.vpe-busca-limpar:hover {
+  background: var(--gmp-bg-subtle, #f1f5f9);
+  color: var(--gmp-text, #1e293b);
+}
+
+/* Sobra do cadastro: a chave continua na ordem, mas a variável não está mais ativa. Sai na
+   proposta com a chave crua no lugar do nome, então precisa gritar aqui. */
+.vpe-ordem-orfa {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .vpe-ordem-orfa {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+}

@@ -143,6 +143,49 @@ const duas = { [FAM]: ['motor', 'vazao', 'potencia'], [OUTRA]: ['potencia', 'mot
 t('a ordem aplicada e a da familia do item, nao a da outra',
   () => assert.deepStrictEqual(ordemNoDocumento(duas), ['motor', 'vazao', 'potencia']));
 
+// ---------------------------------------------------------------------------
+// 3) Busca dentro do painel de ordem
+// ---------------------------------------------------------------------------
+// A armadilha: se as setas / caixa numerica operassem sobre a posicao na lista FILTRADA, o
+// item iria para o lugar errado assim que houvesse busca ativa — e de forma silenciosa,
+// porque a tela mostraria o movimento "certo" dentro do recorte. Por isso cada linha
+// carrega o indice REAL na ordem.
+function linhasFiltradas(ordem, nomes, termo) {
+  const tl = (termo || '').trim().toLowerCase();
+  return ordem
+    .map((chave, i) => ({ chave, i, nome: nomes[chave] || '' }))
+    .filter(({ chave, nome }) => !tl || nome.toLowerCase().includes(tl) || String(chave).toLowerCase().includes(tl));
+}
+
+console.log('\n[busca na ordem] o indice REAL comanda o reordenamento');
+const ORDEM = ['vazao', 'motor', 'potencia', 'material', 'painel'];
+const NOMES = {
+  vazao: 'VAZAO ESTIMADA', motor: 'MOTOR CENTRAL', potencia: 'POTENCIA TOTAL',
+  material: 'MATERIAL EIXOS', painel: 'PAINEL ELETRICO',
+};
+
+const achadas = linhasFiltradas(ORDEM, NOMES, 'material');
+t('a busca acha a linha certa', () => assert.strictEqual(achadas.length, 1));
+t('e carrega o indice REAL (3), nao 0 da lista filtrada',
+  () => assert.strictEqual(achadas[0].i, 3));
+t('digitar 1 na linha achada leva ao topo da ordem inteira',
+  () => assert.deepStrictEqual(mover(ORDEM, achadas[0].i, 0),
+    ['material', 'vazao', 'motor', 'potencia', 'painel']));
+
+// A regressao que este teste existe para pegar: usar a posicao do recorte (0) como origem
+// moveria a variavel ERRADA — "vazao", que por acaso esta no indice 0 da ordem real.
+t('usar a posicao do recorte moveria a variavel errada (regressao)',
+  () => assert.notDeepStrictEqual(mover(ORDEM, 0, 0), mover(ORDEM, achadas[0].i, 0)));
+
+t('busca casa pelo nome parcial',
+  () => assert.strictEqual(linhasFiltradas(ORDEM, NOMES, 'potenc')[0].chave, 'potencia'));
+t('busca casa pela chave quando a variavel nao tem nome (sobra do cadastro)',
+  () => assert.strictEqual(linhasFiltradas(['posio_do_bocal_de_sada_2'], {}, 'bocal')[0].chave, 'posio_do_bocal_de_sada_2'));
+t('busca sem resultado devolve lista vazia, nao a lista toda',
+  () => assert.strictEqual(linhasFiltradas(ORDEM, NOMES, 'zzzz').length, 0));
+t('busca vazia devolve a ordem completa',
+  () => assert.strictEqual(linhasFiltradas(ORDEM, NOMES, '').length, ORDEM.length));
+
 console.log(`\n${ok}/${total} checagens`);
 console.log(ok === total ? '0 failed' : `${total - ok} failed`);
 process.exit(ok === total ? 0 : 1);
