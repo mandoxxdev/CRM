@@ -8138,22 +8138,29 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                     if (errNovos || !novos || novos.length === 0) return feito();
                     const paraIdNovo = new Map();
                     chavesComOrdinal(novos).forEach((k, i) => paraIdNovo.set(k, novos[i].id));
-                    const remapeados = [];
-                    valores.forEach((v) => {
-                      const k = deIdAntigo.get(String(v.item_id));
-                      const novoItemId = k ? paraIdNovo.get(k) : null;
-                      // Item removido da proposta não tem para onde ir: o valor é
-                      // descartado junto, que é o comportamento correto.
-                      if (novoItemId != null && String(v.valor == null ? '' : v.valor).trim() !== '') {
-                        remapeados.push([id, novoItemId, v.chave, v.valor]);
+                    // NUNCA apagar. A primeira versão disto fazia DELETE de todos os
+                    // valores e reinseria só os religados: bastava o casamento falhar por
+                    // qualquer motivo (código do produto mudado, item sem código, formato
+                    // inesperado) para APAGAR tudo e não repor nada — perda total, e em
+                    // TODO salvamento, não só ao mexer nos itens.
+                    // Agora só reaponta o item_id de quem casou. O que não casar fica
+                    // intocado: não renderiza (o item não existe mais), mas também não é
+                    // destruído. Não volta sozinho se o produto for readicionado — a
+                    // identidade vive na linha do ITEM, que foi apagada; recuperar exigiria
+                    // gravar essa identidade junto do valor.
+                    const paraAtualizar = [];
+                    deIdAntigo.forEach((k, idAntigo) => {
+                      const idNovo = paraIdNovo.get(k);
+                      if (idNovo != null && String(idNovo) !== String(idAntigo)) {
+                        paraAtualizar.push([idNovo, id, idAntigo]);
                       }
                     });
-                    db.run('DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errDel) => {
-                      if (errDel || remapeados.length === 0) return feito();
-                      const ins = db.prepare('INSERT OR REPLACE INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor) VALUES (?, ?, ?, ?)');
-                      remapeados.forEach((r) => ins.run(r));
-                      ins.finalize(() => feito());
-                    });
+                    if (paraAtualizar.length === 0) return feito();
+                    // OR REPLACE por causa do UNIQUE(proposta_id, item_id, chave): se já
+                    // existir linha no destino, a religada vence.
+                    const upd = db.prepare("UPDATE OR REPLACE proposta_variaveis_manuais SET item_id = ?, updated_at = datetime('now') WHERE proposta_id = ? AND item_id = ?");
+                    paraAtualizar.forEach((r) => upd.run(r));
+                    upd.finalize(() => feito());
                   });
                 });
               };

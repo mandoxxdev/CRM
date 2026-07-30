@@ -59,17 +59,14 @@ async function religar(propostaId, itensAntigos) {
   if (!novos.length) return;
   const paraIdNovo = new Map();
   chavesComOrdinal(novos).forEach((k, i) => paraIdNovo.set(k, novos[i].id));
-  const remapeados = [];
-  valores.forEach((v) => {
-    const k = deIdAntigo.get(String(v.item_id));
-    const novoItemId = k ? paraIdNovo.get(k) : null;
-    if (novoItemId != null && String(v.valor == null ? '' : v.valor).trim() !== '') {
-      remapeados.push([propostaId, novoItemId, v.chave, v.valor]);
-    }
+  // NAO-DESTRUTIVO: so reaponta o item_id de quem casou. Nada e apagado.
+  const paraAtualizar = [];
+  deIdAntigo.forEach((k, idAntigo) => {
+    const idNovo = paraIdNovo.get(k);
+    if (idNovo != null && String(idNovo) !== String(idAntigo)) paraAtualizar.push([idNovo, propostaId, idAntigo]);
   });
-  await run('DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ?', [propostaId]);
-  for (const r of remapeados) {
-    await run('INSERT OR REPLACE INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor) VALUES (?, ?, ?, ?)', r);
+  for (const r of paraAtualizar) {
+    await run("UPDATE OR REPLACE proposta_variaveis_manuais SET item_id = ? WHERE proposta_id = ? AND item_id = ?", r);
   }
 }
 
@@ -160,13 +157,26 @@ const valoresVisiveis = async (propostaId) => {
   t('cada copia mantem o SEU valor (o ordinal evita a troca)',
     () => assert.deepStrictEqual(iguais.map((r) => r.valor), ['PRIMEIRO', 'SEGUNDO']));
 
-  console.log('\n[remocao] item excluido leva o valor junto');
+  console.log('\n[remocao] item excluido: valor some da proposta mas NAO do banco');
+  // Mudanca deliberada de comportamento (nao e o teste se acomodando ao codigo): a versao
+  // anterior apagava tudo e reinseria so o que casasse, entao uma falha de casamento
+  // destruia os valores. A versao atual NUNCA apaga - so reaponta quem casou. O preco e
+  // deixar a linha orfa no banco; o beneficio, abaixo, e que ela volta se o item voltar.
   await salvarProposta(2, [MASSEIRA], { comReligar: true });
   const semMoinho = await valoresVisiveis(2);
-  t('removido o moinho, o valor dele nao fica sobrando',
+  t('removido o moinho, o valor dele nao aparece mais na proposta',
     () => assert.deepStrictEqual(semMoinho, []));
   const sobras = await all('SELECT COUNT(*) AS n FROM proposta_variaveis_manuais WHERE proposta_id = 2');
-  t('e nao sobra linha orfa no banco', () => assert.strictEqual(sobras[0].n, 0));
+  t('a linha fica guardada (nada e destruido)', () => assert.strictEqual(sobras[0].n, 1));
+
+  // NAO recupera ao readicionar o produto: removido o item, a linha perde a referencia e a
+  // religacao nao tem como saber a que produto ela pertencia (a identidade vive na linha do
+  // ITEM, que foi apagada). Fica registrado para ninguem prometer o contrario - so seria
+  // possivel gravando a identidade do item junto do valor.
+  await salvarProposta(2, [MASSEIRA, MOINHO], { comReligar: true });
+  const readicionado = await valoresVisiveis(2);
+  t('readicionar o produto NAO traz o texto de volta (limitacao conhecida)',
+    () => assert.deepStrictEqual(readicionado, []));
 
   console.log('\n[ordem] a religacao precisa esperar os INSERTs terminarem');
   // Os INSERTs dos itens usam db.prepare/stmt.run, que NAO passa pela fila de escrita do
