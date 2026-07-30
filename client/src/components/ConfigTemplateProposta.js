@@ -45,6 +45,8 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   const [variaveisDaFamilia, setVariaveisDaFamilia] = useState(null); // null = ainda nao carregou
   const [carregandoVariaveisFamilia, setCarregandoVariaveisFamilia] = useState(false);
   const [mostrarTodasVariaveis, setMostrarTodasVariaveis] = useState(false);
+  const [arrastandoIndex, setArrastandoIndex] = useState(null);
+  const [alvoArrasteIndex, setAlvoArrasteIndex] = useState(null);
 
   useEffect(() => {
     loadConfig();
@@ -89,6 +91,34 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
       .finally(() => { if (!cancelado) setCarregandoVariaveisFamilia(false); });
     return () => { cancelado = true; };
   }, [familiaEquipamentoSelecionada, familiasList]);
+
+  // ORDEM: o array salvo em variaveis_proposta_por_familia[familia] JA e a ordem que sai na
+  // proposta — o gerador itera o array como esta (propostaPremiumV2: variaveisList.map).
+  // Ate aqui a tela so acrescentava no fim a cada clique, o que fazia a ordem do documento
+  // ser "a sequencia em que voce clicou". Reordenar este array e tudo o que falta.
+  const ordemDaFamilia = Array.isArray((config.variaveis_proposta_por_familia || {})[familiaEquipamentoSelecionada])
+    ? config.variaveis_proposta_por_familia[familiaEquipamentoSelecionada]
+    : [];
+
+  const gravarOrdemFamilia = (nova) => {
+    setConfig((prev) => ({
+      ...prev,
+      variaveis_proposta_por_familia: {
+        ...(prev.variaveis_proposta_por_familia || {}),
+        [familiaEquipamentoSelecionada]: nova
+      }
+    }));
+  };
+
+  const moverVariavel = (de, para) => {
+    const atual = ordemDaFamilia.slice();
+    if (de < 0 || de >= atual.length) return;
+    const destino = Math.max(0, Math.min(atual.length - 1, para));
+    if (destino === de) return;
+    const [item] = atual.splice(de, 1);
+    atual.splice(destino, 0, item);
+    gravarOrdemFamilia(atual);
+  };
 
   const loadConfig = async () => {
     try {
@@ -640,7 +670,11 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
             </select>
           </div>
           {familiaEquipamentoSelecionada && (
-            <>
+            <div className="vpe-paineis">
+              <div className="vpe-painel">
+                <div className="vpe-painel-head">
+                  <span>Disponíveis nesta família</span>
+                </div>
               <div className="variaveis-proposta-search-wrap">
                 <FiSearch className="variaveis-proposta-search-icon" aria-hidden />
                 <input
@@ -737,9 +771,98 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
                 })()}
               </div>
               <div className="variaveis-proposta-selecionadas">
-                {((config.variaveis_proposta_por_familia || {})[familiaEquipamentoSelecionada] || []).length} variável(is) para &quot;{familiaEquipamentoSelecionada}&quot;
+                {ordemDaFamilia.length} marcada(s) para &quot;{familiaEquipamentoSelecionada}&quot;
               </div>
-            </>
+              </div>
+
+              <div className="vpe-painel">
+                <div className="vpe-painel-head">
+                  <span>Ordem na proposta</span>
+                  <span className="vpe-painel-contador">{ordemDaFamilia.length}</span>
+                </div>
+                <p className="vpe-painel-dica">
+                  Esta é exatamente a ordem em que as linhas saem na proposta. Arraste pelo
+                  <strong> ⠿ </strong>, use as setas, ou digite o número da posição.
+                </p>
+
+                {ordemDaFamilia.length === 0 ? (
+                  <div className="variaveis-proposta-empty">
+                    Marque variáveis à esquerda para montar a ordem.
+                  </div>
+                ) : (
+                  <div className="vpe-ordem-list">
+                    {ordemDaFamilia.map((chave, i) => {
+                      const meta = variaveisList.find((v) => (v.chave || '') === chave);
+                      const arrastando = arrastandoIndex === i;
+                      const alvo = alvoArrasteIndex === i && arrastandoIndex !== null && arrastandoIndex !== i;
+                      return (
+                        <div
+                          key={`ordem-${chave}`}
+                          className={`vpe-ordem-item${arrastando ? ' vpe-ordem-arrastando' : ''}${alvo ? ' vpe-ordem-alvo' : ''}`}
+                          draggable
+                          onDragStart={(e) => {
+                            setArrastandoIndex(i);
+                            // Alguns navegadores só iniciam o arraste se houver dado no evento.
+                            try { e.dataTransfer.setData('text/plain', String(i)); } catch (_) {}
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragOver={(e) => { e.preventDefault(); setAlvoArrasteIndex(i); }}
+                          onDragLeave={() => setAlvoArrasteIndex((v) => (v === i ? null : v))}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const de = arrastandoIndex != null
+                              ? arrastandoIndex
+                              : parseInt(e.dataTransfer.getData('text/plain'), 10);
+                            if (!isNaN(de)) moverVariavel(de, i);
+                            setArrastandoIndex(null);
+                            setAlvoArrasteIndex(null);
+                          }}
+                          onDragEnd={() => { setArrastandoIndex(null); setAlvoArrasteIndex(null); }}
+                        >
+                          <span className="vpe-ordem-alca" title="Arraste para reordenar" aria-hidden>⠿</span>
+                          <input
+                            type="number"
+                            className="vpe-ordem-pos"
+                            min={1}
+                            max={ordemDaFamilia.length}
+                            value={i + 1}
+                            aria-label={`Posição de ${(meta && meta.nome) || chave}`}
+                            onChange={(e) => {
+                              const n = parseInt(e.target.value, 10);
+                              if (!isNaN(n)) moverVariavel(i, n - 1);
+                            }}
+                          />
+                          <span className="vpe-ordem-nome" title={chave}>{(meta && meta.nome) || chave}</span>
+                          <span className="vpe-ordem-botoes">
+                            <button
+                              type="button"
+                              onClick={() => moverVariavel(i, i - 1)}
+                              disabled={i === 0}
+                              aria-label="Subir"
+                              title="Subir"
+                            >↑</button>
+                            <button
+                              type="button"
+                              onClick={() => moverVariavel(i, i + 1)}
+                              disabled={i === ordemDaFamilia.length - 1}
+                              aria-label="Descer"
+                              title="Descer"
+                            >↓</button>
+                            <button
+                              type="button"
+                              className="vpe-ordem-remover"
+                              onClick={() => gravarOrdemFamilia(ordemDaFamilia.filter((c) => c !== chave))}
+                              aria-label="Remover da proposta"
+                              title="Remover da proposta"
+                            >✕</button>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 

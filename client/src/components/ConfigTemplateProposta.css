@@ -526,3 +526,176 @@
   background: rgba(251, 191, 36, 0.2);
   color: #fbbf24;
 }
+
+/* ===== Dois painéis: marcar (esquerda) e ordenar (direita) =====
+   A ordem do array salvo é a ordem que sai na proposta, então precisa ser visível e
+   editável. Lado a lado, você vê a seleção e a ordem ao mesmo tempo, sem rolar a página:
+   cada painel rola por dentro e a altura acompanha a tela. */
+.vpe-paineis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+  margin-top: 14px;
+}
+
+@media (max-width: 1100px) {
+  .vpe-paineis {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vpe-painel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;          /* deixa o texto truncar em vez de esticar a coluna */
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--gmp-surface, #fff);
+}
+
+.vpe-painel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gmp-text, #1e293b);
+}
+
+.vpe-painel-contador {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+}
+
+.vpe-painel-dica {
+  margin: 4px 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gmp-text-light, #64748b);
+}
+
+.vpe-ordem-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(52vh, 560px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.vpe-ordem-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--gmp-surface, #fff);
+}
+
+.vpe-ordem-item:hover {
+  border-color: #93c5fd;
+}
+
+.vpe-ordem-arrastando {
+  opacity: 0.45;
+}
+
+/* Linha de destino do arraste: uma barra grossa em cima diz onde o item vai cair. */
+.vpe-ordem-alvo {
+  border-top: 3px solid #2563eb;
+}
+
+.vpe-ordem-alca {
+  cursor: grab;
+  color: var(--gmp-text-light, #94a3b8);
+  font-size: 15px;
+  line-height: 1;
+  user-select: none;
+}
+
+.vpe-ordem-alca:active {
+  cursor: grabbing;
+}
+
+.vpe-ordem-pos {
+  width: 46px;
+  flex-shrink: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--gmp-bg-subtle, #f8fafc);
+  color: var(--gmp-text, #1e293b);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.vpe-ordem-nome {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--gmp-text, #1e293b);
+}
+
+.vpe-ordem-botoes {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.vpe-ordem-botoes button {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--gmp-surface, #fff);
+  color: var(--gmp-text-light, #64748b);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vpe-ordem-botoes button:hover:not(:disabled) {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.vpe-ordem-botoes button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.vpe-ordem-remover:hover:not(:disabled) {
+  border-color: #dc2626 !important;
+  color: #dc2626 !important;
+}
+
+[data-theme="dark"] .vpe-painel {
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .vpe-ordem-item,
+[data-theme="dark"] .vpe-ordem-botoes button {
+  background: var(--gmp-bg-subtle);
+  border-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .vpe-ordem-pos {
+  background: var(--gmp-surface);
+  border-color: var(--gmp-border);
+}
