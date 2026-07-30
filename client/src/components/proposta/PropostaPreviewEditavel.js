@@ -242,7 +242,7 @@ export default function PropostaPreviewEditavel() {
         setMudancasPendentes(true);
         const pagina = el.closest('.proposal-page');
         if (pagina) pagina.style.overflow = 'visible';
-        edicaoEmAndamentoRef.current = { key, campo, cursorOffset: getCursorOffset(el) };
+        edicaoEmAndamentoRef.current = { tipo: 'clausula', key, campo, cursorOffset: getCursorOffset(el) };
         clearTimeout(repaginacaoTimerRef.current);
         repaginacaoTimerRef.current = setTimeout(() => repaginarERestaurar(doc), 500);
       };
@@ -303,6 +303,22 @@ export default function PropostaPreviewEditavel() {
         // crie (ex.: texto colado) em '\n', mantendo o valor como texto puro multi-linha.
         if (fonte) fonte.textContent = el.innerText;
         setMudancasPendentes(true);
+
+        // MESMA sequência da edição de cláusula. Sem isto, digitar um texto longo aqui
+        // aumentava o bloco e NADA repaginava: a seção 4 transbordava a caixa da página e
+        // as últimas linhas iam para debaixo do rodapé (relatado em 30/07/2026 — o
+        // "Espaçador" desapareceu sob o rodapé da pág. 5 depois de preencher a nota
+        // técnica). O PDF saía certo porque o servidor repagina do zero; era só o preview.
+        const pagina = el.closest('.proposal-page');
+        if (pagina) pagina.style.overflow = 'visible';
+        edicaoEmAndamentoRef.current = {
+          tipo: 'manual',
+          chave: el.getAttribute('data-variavel-manual'),
+          item: el.getAttribute('data-variavel-item'),
+          cursorOffset: getCursorOffset(el),
+        };
+        clearTimeout(repaginacaoTimerRef.current);
+        repaginacaoTimerRef.current = setTimeout(() => repaginarERestaurar(doc), 500);
       };
     });
   }
@@ -627,8 +643,17 @@ export default function PropostaPreviewEditavel() {
     ativarEdicaoClausulas(doc);
     const pendente = edicaoEmAndamentoRef.current;
     if (pendente) {
-      const secao = doc.querySelector(`.proposal-page[data-generated="1"] [data-clausula-key="${pendente.key}"]`);
-      const alvo = secao && secao.querySelector(`[data-clausula-campo="${pendente.campo}"]`);
+      // A repaginação destrói e recria os nós, então o campo é reencontrado pelos atributos
+      // de dados — nunca por referência ao elemento antigo, que já não está no documento.
+      let alvo = null;
+      if (pendente.tipo === 'manual') {
+        alvo = doc.querySelector(
+          `.proposal-page[data-generated="1"] [data-variavel-manual="${pendente.chave}"][data-variavel-item="${pendente.item}"]`
+        );
+      } else {
+        const secao = doc.querySelector(`.proposal-page[data-generated="1"] [data-clausula-key="${pendente.key}"]`);
+        alvo = secao && secao.querySelector(`[data-clausula-campo="${pendente.campo}"]`);
+      }
       if (alvo) {
         alvo.focus();
         setCursorOffset(alvo, pendente.cursorOffset);
