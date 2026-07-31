@@ -8,6 +8,27 @@ const {
   respondDbError,
 } = require('./services/sqliteConcurrency');
 const { prepareDatabaseOnStartup, pruneOldBackups, fileSizeIfExists } = require('./services/dbRecovery');
+const { otimizarImagem, otimizarPasta } = require('./services/otimizarImagem');
+
+// Conversão única das imagens que já estavam no servidor antes desta otimização.
+// Roda uma vez, em segundo plano, sem segurar a subida: quem já foi convertida é
+// reconhecida pelo .original ao lado e ignorada nas execuções seguintes.
+function otimizarImagensExistentes() {
+  setTimeout(async () => {
+    try {
+      const pastas = [uploadsPropostaFotosDir, uploadsProdutosDir].filter(Boolean);
+      for (const pasta of pastas) {
+        const r = await otimizarPasta(pasta);
+        if (r.otimizadas > 0) {
+          const mb = (b) => (b / 1024 / 1024).toFixed(1);
+          console.log(`[imagem] ${pasta}: ${r.otimizadas}/${r.arquivos} otimizadas, ${mb(r.antes)}MB -> ${mb(r.depois)}MB`);
+        }
+      }
+    } catch (e) {
+      console.warn('[imagem] conversão inicial falhou (segue sem otimizar):', e.message);
+    }
+  }, 15000).unref?.(); // depois do servidor já estar atendendo, e sem prender o processo
+}
 installProcessGuards();
 const express = require('express');
 const http = require('http');
@@ -5888,12 +5909,19 @@ app.get('/api/propostas/:id/fotos', authenticateToken, (req, res) => {
 });
 
 // POST /api/propostas/:id/fotos — sobe uma foto (o cliente itera para várias)
-app.post('/api/propostas/:id/fotos', authenticateToken, uploadPropostaFoto.single('foto'), (req, res) => {
+app.post('/api/propostas/:id/fotos', authenticateToken, uploadPropostaFoto.single('foto'), async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const usuarioId = req.user.id;
   if (!req.file) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
   const pagina = Math.max(1, parseInt(req.body.pagina, 10) || 1);
+
+  // Reduz a imagem AQUI, uma vez, e não a cada PDF: as fotos viajam em base64 dentro do
+  // HTML da proposta, e é esse peso que domina o tempo de geração. O original fica ao lado.
+  const otim = await otimizarImagem(req.file.path);
+  if (otim.otimizada) {
+    console.log(`[imagem] ${req.file.filename}: ${(otim.antes / 1024).toFixed(0)}KB -> ${(otim.depois / 1024).toFixed(0)}KB`);
+  }
 
   db.run(
     'INSERT INTO proposta_fotos (proposta_id, arquivo, pagina) VALUES (?, ?, ?)',
@@ -17032,11 +17060,18 @@ app.get('/logo-gmp.png', (req, res) => {
 });
 
 // Upload de imagem de produto
-app.post('/api/produtos/:id/imagem', authenticateToken, uploadProduto.single('imagem'), (req, res) => {
+app.post('/api/produtos/:id/imagem', authenticateToken, uploadProduto.single('imagem'), async (req, res) => {
   const { id } = req.params;
   
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+  }
+
+  // Mesma otimização das fotos da proposta: a imagem do produto também é embutida em base64
+  // na seção 4 do documento, então o peso dela entra no tempo de gerar cada PDF.
+  const otimProduto = await otimizarImagem(req.file.path);
+  if (otimProduto.otimizada) {
+    console.log(`[imagem] ${req.file.filename}: ${(otimProduto.antes / 1024).toFixed(0)}KB -> ${(otimProduto.depois / 1024).toFixed(0)}KB`);
   }
   
   // Verificar se o produto existe
@@ -22699,6 +22734,7 @@ httpServer.on('error', (err) => {
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor CRM GMP INDUSTRIAIS rodando na porta ${PORT}`);
+  otimizarImagensExistentes();
   console.log(`📊 API disponível em http://localhost:${PORT}/api`);
   console.log(`💬 Chat Socket.io em http://localhost:${PORT}/socket.io`);
   if (process.env.NODE_ENV === 'production') {
