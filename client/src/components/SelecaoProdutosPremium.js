@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign, FiArrowLeft, FiCheckCircle, FiAlertCircle, FiChevronRight } from 'react-icons/fi';
+import { FiX, FiSearch, FiFilter, FiCheck, FiImage, FiPackage, FiDollarSign, FiArrowLeft, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 import './SelecaoProdutosPremium.css';
 
 const baseUploads = () => (api.defaults.baseURL || '/api').replace(/\/api\/?$/, '') + '/api/uploads/familias-produtos/';
@@ -660,6 +660,12 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
               <div className="familias-grid-selecao">
                 {familiasAtivas.map(familia => {
                   const esquematicoUrl = urlEsquematico(familia);
+                  // O nome traz o código entre parênteses ("Tanque Dispersor (TQY)"). Separar
+                  // os dois deixa o nome respirar e transforma o código em etiqueta — é por
+                  // ele que a equipe se refere às famílias no dia a dia.
+                  const casouCodigo = /^(.*?)[\s]*[([]([^)\]]+)[)\]]\s*$/.exec(String(familia.nome || '').trim());
+                  const nomeSemCodigo = casouCodigo ? casouCodigo[1].trim() : String(familia.nome || '');
+                  const codigoFamilia = casouCodigo ? casouCodigo[2].trim() : '';
                   return (
                     <div
                       key={familia.id}
@@ -670,14 +676,16 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                         {esquematicoUrl ? (
                           <img src={esquematicoUrl} alt={familia.nome} />
                         ) : (
-                          <div className="familia-card-placeholder">
-                            <FiImage size={40} />
+                          // Sem foto: a inicial da família, em vez do ícone de imagem
+                          // quebrada. Dá identidade ao cartão em vez de deixar um buraco.
+                          <div className="familia-card-placeholder" aria-hidden>
+                            {String(familia.nome || '?').trim().charAt(0).toLocaleUpperCase('pt-BR')}
                           </div>
                         )}
                       </div>
                       <div className="familia-card-info">
-                        <span className="familia-card-nome">{familia.nome}</span>
-                        <FiChevronRight className="familia-card-seta" aria-hidden />
+                        {codigoFamilia && <span className="familia-card-codigo">{codigoFamilia}</span>}
+                        <span className="familia-card-nome">{nomeSemCodigo}</span>
                       </div>
                     </div>
                   );

@@ -28,14 +28,17 @@
   margin: 0 auto;
 }
 
+/* Cabeçalho SEM gradiente. A faixa laranja de ponta a ponta datava a tela e roubava a
+   atenção do que importa — os produtos. Agora o topo é neutro e o laranja fica reservado
+   para o que responde ao usuário (foco, seleção, hover). */
 .selecao-produtos-header {
-  padding: 24px 30px;
-  border-bottom: 2px solid var(--gmp-border);
+  padding: 22px 30px 18px;
+  border-bottom: 1px solid var(--gmp-border);
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
-  color: white;
+  align-items: flex-start;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
 }
 
 .header-content {
@@ -43,12 +46,16 @@
 }
 
 .selecao-produtos-header h2 {
-  margin: 0 0 8px 0;
-  font-size: 24px;
+  margin: 0 0 6px 0;
+  font-size: 20px;
   display: flex;
   align-items: center;
   font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--gmp-text);
 }
+
+.selecao-produtos-header h2 svg { color: #FF6B35; }
 
 .header-stats {
   display: flex;
@@ -58,36 +65,39 @@
 }
 
 .stat-item {
-  padding: 4px 12px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-}
-
-.stat-item.selected {
-  background: rgba(255, 255, 255, 0.3);
+  padding: 3px 10px;
+  background: var(--gmp-bg-subtle, #f1f5f9);
+  border-radius: 999px;
+  color: var(--gmp-text-light, #64748b);
+  font-size: 12px;
   font-weight: 600;
 }
 
+.stat-item.selected {
+  background: rgba(255, 107, 53, 0.12);
+  color: #c2410c;
+}
+
 .btn-close-premium {
-  background: rgba(255, 255, 255, 0.2);
+  background: transparent;
   border: none;
-  color: white;
-  font-size: 24px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  color: var(--gmp-text-light, #94a3b8);
+  font-size: 20px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s;
-  backdrop-filter: blur(10px);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
 
+/* Sem o giro de 90°: efeito chamativo num botão de fechar é ruído, não informação. */
 .btn-close-premium:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: rotate(90deg);
+  background: var(--gmp-bg-subtle, #f1f5f9);
+  color: var(--gmp-text, #1e293b);
 }
 
 .header-familia-nome {
@@ -747,157 +757,173 @@
   box-shadow: 0 6px 24px rgba(34, 197, 94, 0.5);
 }
 
-/* ===== Etapa "Escolher família" =====
-   Antes: cada cartão repetia um botão laranja cheio ("Abrir itens desta família"), o que
-   deixava a tela gritando em laranja e competindo por atenção — sendo que o cartão INTEIRO
-   já era clicável. Agora o cartão é a única área de clique, com afordância no hover e uma
-   seta discreta indicando que abre. A altura ficou uniforme (imagem com proporção fixa e
-   nome com altura mínima), então a grade não fica "serrilhada" quando o nome ocupa 1 ou 2
-   linhas. */
+/* ===== Etapa "Escolher família" — CONCEITO REFEITO =====
+   A versão anterior era um grid de caixas brancas com moldura, seta ">" repetida em cada
+   uma e um retângulo cinza gigante quando a família não tinha foto. Muita moldura, pouca
+   informação: a tela parecia um formulário, não um catálogo.
+   Agora a FOTO é a protagonista — ocupa o cartão inteiro, e o nome vem sobre um véu escuro
+   na base, como em catálogo de produto. Sem borda em repouso; o cartão só se manifesta ao
+   passar o mouse. A seta saiu: o cartão inteiro já é clicável, e repetir a seta 13 vezes
+   só polui. */
 
 .familias-busca {
   position: relative;
   display: flex;
   align-items: center;
-  margin: 22px 30px 0;
+  margin: 20px 30px 0;
 }
 
 .familias-busca-icone {
   position: absolute;
-  left: 14px;
+  left: 16px;
   color: var(--gmp-text-light);
   pointer-events: none;
 }
 
 .familias-busca-input {
   width: 100%;
-  padding: 12px 40px 12px 42px;
-  border: 2px solid var(--gmp-border);
-  border-radius: 10px;
+  padding: 13px 42px 13px 46px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
   font-size: 15px;
-  background: var(--gmp-surface);
+  background: var(--gmp-bg-subtle, #f8fafc);
   color: var(--gmp-text);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
+
+.familias-busca-input::placeholder { color: var(--gmp-text-light, #94a3b8); }
 
 .familias-busca-input:focus {
   outline: none;
+  background: var(--gmp-surface);
   border-color: #FF6B35;
-  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.12);
+  box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.1);
 }
 
 .familias-busca-limpar {
   position: absolute;
-  right: 10px;
+  right: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border: none;
-  border-radius: 50%;
+  border-radius: 6px;
   background: transparent;
   color: var(--gmp-text-light);
   cursor: pointer;
 }
 
 .familias-busca-limpar:hover {
-  background: var(--gmp-surface-secondary, #eee);
+  background: var(--gmp-border);
   color: var(--gmp-text);
 }
 
 .familias-vazio-busca {
-  padding: 8px 30px 28px;
+  padding: 40px 30px;
   color: var(--gmp-text-light);
   text-align: center;
+  font-size: 15px;
 }
 
 .familias-grid-selecao {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 16px;
   padding: 20px 30px 28px;
   overflow-y: auto;
 }
 
 .familia-card-selecao {
-  border: 1px solid var(--gmp-border);
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 4;
   border-radius: 14px;
   overflow: hidden;
-  background: var(--gmp-surface);
+  background: var(--gmp-bg-subtle, #f1f5f9);
   cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .familia-card-selecao:hover {
-  border-color: #FF6B35;
-  box-shadow: 0 10px 26px rgba(17, 24, 39, 0.12);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
 }
 
 .familia-card-selecao:focus-visible {
-  outline: 3px solid rgba(255, 107, 53, 0.45);
-  outline-offset: 2px;
+  outline: 3px solid #FF6B35;
+  outline-offset: 3px;
 }
 
-/* aspect-ratio no lugar de altura fixa: a área da imagem acompanha a largura da coluna,
-   então os cartões continuam alinhados em qualquer largura de tela */
 .familia-card-preview {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  background: var(--gmp-surface-secondary, #f3f4f6);
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
 }
 
+/* cover, e não contain: a foto preenche o cartão em vez de flutuar num vazio cinza */
 .familia-card-preview img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
-  padding: 10px;
+  transition: transform 0.35s ease;
 }
 
+.familia-card-selecao:hover .familia-card-preview img {
+  transform: scale(1.05);
+}
+
+/* Sem foto: em vez do ícone cinza de "imagem quebrada", uma superfície com a INICIAL da
+   família. Vira identidade visual em vez de buraco. */
 .familia-card-placeholder {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--gmp-text-light);
-  opacity: 0.45;
+  background: linear-gradient(150deg, #1e293b 0%, #334155 100%);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
+/* Véu na base para o nome ficar legível sobre qualquer foto, clara ou escura. */
 .familia-card-info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 26px 14px 12px;
+  background: linear-gradient(to top, rgba(2, 6, 23, 0.92) 25%, rgba(2, 6, 23, 0.6) 60%, rgba(2, 6, 23, 0) 100%);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--gmp-border);
-  min-height: 62px;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .familia-card-nome {
-  font-weight: 600;
-  color: var(--gmp-text);
-  font-size: 14px;
-  line-height: 1.3;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #fff;
 }
 
-.familia-card-seta {
-  flex-shrink: 0;
-  color: var(--gmp-text-light);
-  transition: color 0.18s, transform 0.18s;
-}
-
-.familia-card-selecao:hover .familia-card-seta {
-  color: #FF6B35;
-  transform: translateX(3px);
+/* O código entre parênteses do nome (DHY, MLY, TQY) vira uma etiqueta: é assim que a
+   equipe se refere às famílias no dia a dia, e ajuda a achar sem ler o nome inteiro. */
+.familia-card-codigo {
+  align-self: flex-start;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .selecao-produtos-toolbar {
@@ -1356,8 +1382,31 @@
   background: var(--gmp-surface);
 }
 
+/* No escuro o cabeçalho também é neutro: reintroduzir o gradiente aqui traria de volta
+   justamente o que foi tirado no tema claro. */
 [data-theme="dark"] .selecao-produtos-header {
-  background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+  background: var(--gmp-surface);
+  border-bottom-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .familias-busca-input {
+  background: var(--gmp-bg-subtle);
+  border-color: var(--gmp-border);
+}
+
+[data-theme="dark"] .familias-busca-input:focus {
+  background: var(--gmp-surface);
+  border-color: #FF6B35;
+}
+
+[data-theme="dark"] .stat-item {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .stat-item.selected {
+  background: rgba(255, 107, 53, 0.2);
+  color: #fdba74;
 }
 
 [data-theme="dark"] .produto-card-premium {
