@@ -1540,23 +1540,24 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .campo-manual-linha::after { content: ''; flex: 1 1 auto; border-bottom: 1px solid var(--ink); }
 
     /* Assinaturas/setor comercial (após "Atenciosamente,") */
-    /* Contatos comerciais em CARD: fio fino, canto arredondado e respiro, no mesmo
-       vocabulário visual das fotos do produto e da moldura das tabelas. O gap encolheu de
-       10mm para 4mm porque agora quem separa é a borda do card, não o espaço vazio — assim
-       o bloco não fica mais alto do que era e a paginação não muda. */
-    .signature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; align-items: stretch; margin-top: 8mm; }
+    /* Contatos comerciais: TIPOGRÁFICO, não card.
+       A primeira tentativa usou caixa com borda e canto arredondado — e ficou com cara de
+       aplicativo, não de documento comercial. Caixa arredondada é vocabulário de tela; em
+       papel timbrado o que organiza é o filete e o alinhamento.
+       Agora cada contato é uma coluna aberta, com um filete azul no topo (o mesmo recurso
+       que o documento já usa para separar seções) e hierarquia por peso e tamanho. */
+    .signature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8mm; align-items: start; margin-top: 8mm; }
     .sig-col {
-      display: flex; flex-direction: column; gap: 1.2mm;
-      border: 1px solid var(--line); border-radius: 8px;
-      padding: 3mm 3.2mm; background: #fff;
+      display: flex; flex-direction: column; gap: 1mm;
+      border-top: 2px solid var(--blue-700);
+      padding-top: 2.4mm;
     }
-    .sig-name { font-size: 10.5pt; font-weight: 800; color: var(--blue-900); line-height: 1.2; }
-    /* Divisor sob o nome: separa identificação de contato sem gastar altura. */
+    .sig-name { font-size: 10.5pt; font-weight: 800; color: var(--blue-900); line-height: 1.25; }
     .sig-role {
-      font-size: 8.5pt; font-weight: 700; color: var(--blue-700);
-      padding-bottom: 1.6mm; margin-bottom: 0.6mm; border-bottom: 1px solid var(--line);
+      font-size: 8.5pt; font-weight: 600; color: var(--muted);
+      letter-spacing: 0.02em; margin-bottom: 1.4mm;
     }
-    .sig-line { font-size: 8.8pt; color: var(--blue-900); font-weight: 700; }
+    .sig-line { font-size: 8.8pt; color: var(--blue-900); font-weight: 600; }
     .sig-email { font-size: 8.5pt; color: var(--blue-700); font-weight: 600; word-break: break-all; }
     tr, img, table, blockquote { page-break-inside: avoid; break-inside: avoid; }
     .col-idx { width: 10mm; text-align: right; }
