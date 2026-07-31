@@ -684,8 +684,8 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                         )}
                       </div>
                       <div className="catalogo-familia-info">
-                        {codigoFamilia && <span className="catalogo-familia-codigo">{codigoFamilia}</span>}
                         <span className="catalogo-familia-nome">{nomeSemCodigo}</span>
+                        {codigoFamilia && <span className="catalogo-familia-codigo">{codigoFamilia}</span>}
                       </div>
                     </div>
                   );

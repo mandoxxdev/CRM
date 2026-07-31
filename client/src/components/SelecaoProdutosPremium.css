@@ -827,114 +827,119 @@
   font-size: 15px;
 }
 
-/* O grid rola por dentro e tem altura propria: sem isso, em tela baixa a fileira ficava
-   cortada pela metade e o modal inteiro rolava junto — era o "fica estranho" relatado. */
+/* ===== Escolher família — LISTA =====
+   Terceira tentativa, e a que abandona o grid de cartões. As duas anteriores falharam pelo
+   mesmo motivo estrutural: item de grid ESTICA por padrão (align-items: stretch), então o
+   aspect-ratio do cartão era ignorado sempre que a fileira tinha conteúdos de alturas
+   diferentes — cartões com foto ao lado de cartões só com a inicial. O resultado eram
+   nomes cortados e cartões desencontrados, e piorava conforme a largura da tela mudava.
+   Lista não tem esse problema: cada linha tem altura fixa, definida pela miniatura, e o
+   comportamento é idêntico em qualquer tela. Também lê melhor — nome de família é texto,
+   e texto se compara em coluna, não espalhado num mosaico. */
+
 .catalogo-familias-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 14px;
-  padding: 18px 30px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 30px 22px;
   overflow-y: auto;
-  align-content: start;
-  max-height: min(58vh, 620px);
+  max-height: min(60vh, 640px);
 }
 
-/* PAISAGEM (4:3), e nao retrato. Em 3:4 o cartao ficava com ~260px de altura: numa tela de
-   notebook cabia pouco mais de uma fileira, e sempre sobrava meia fileira cortada. Deitado,
-   a altura cai para ~135px, cabem 2-3 fileiras inteiras e a mesma foto de equipamento
-   continua legivel — sao fotos horizontais de maquina, nao retratos. */
 .catalogo-familia-card {
-  position: relative;
-  display: block;
-  aspect-ratio: 4 / 3;
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--gmp-bg-subtle, #f1f5f9);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition: background 0.14s, border-color 0.14s;
 }
 
 .catalogo-familia-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  background: var(--gmp-bg-subtle, #f8fafc);
+  border-color: var(--gmp-border, #e2e8f0);
 }
 
 .catalogo-familia-card:focus-visible {
-  outline: 3px solid #FF6B35;
-  outline-offset: 3px;
+  outline: 2px solid #FF6B35;
+  outline-offset: 1px;
 }
 
+/* Miniatura de tamanho FIXO: é ela que define a altura da linha, então nenhuma família
+   desalinha as outras — com foto ou sem. */
 .catalogo-familia-foto {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  flex: 0 0 auto;
+  width: 68px;
+  height: 51px;
+  border-radius: 8px;
   overflow: hidden;
+  background: var(--gmp-bg-subtle, #f1f5f9);
 }
 
-/* cover, e não contain: a foto preenche o cartão em vez de flutuar num vazio cinza */
 .catalogo-familia-foto img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
-  transition: transform 0.35s ease;
+  display: block;
 }
 
-.catalogo-familia-card:hover .catalogo-familia-foto img {
-  transform: scale(1.05);
-}
-
-/* Sem foto: em vez do ícone cinza de "imagem quebrada", uma superfície com a INICIAL da
-   família. Vira identidade visual em vez de buraco. */
 .catalogo-familia-inicial {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Sobe a inicial para nao ficar atras do veu do nome, que ocupa a base do cartao. */
-  padding-bottom: 22px;
-  box-sizing: border-box;
-  background: linear-gradient(150deg, #1e293b 0%, #334155 100%);
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 38px;
+  background: linear-gradient(150deg, #334155 0%, #475569 100%);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 22px;
   font-weight: 800;
-  letter-spacing: -0.02em;
 }
 
-/* Véu na base para o nome ficar legível sobre qualquer foto, clara ou escura. */
 .catalogo-familia-info {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 20px 12px 10px;
-  background: linear-gradient(to top, rgba(2, 6, 23, 0.92) 25%, rgba(2, 6, 23, 0.6) 60%, rgba(2, 6, 23, 0) 100%);
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .catalogo-familia-nome {
-  font-size: 12.5px;
-  font-weight: 700;
-  line-height: 1.25;
-  color: #fff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--gmp-text, #1e293b);
 }
 
-/* O código entre parênteses do nome (DHY, MLY, TQY) vira uma etiqueta: é assim que a
-   equipe se refere às famílias no dia a dia, e ajuda a achar sem ler o nome inteiro. */
+/* Etiqueta do código à DIREITA, alinhada em coluna: vira uma régua vertical que dá para
+   varrer com o olho, em vez de flutuar sobre a foto de cada cartão. */
 .catalogo-familia-codigo {
-  align-self: flex-start;
-  padding: 1px 7px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  font-size: 10.5px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--gmp-bg-subtle, #f1f5f9);
+  color: var(--gmp-text-light, #64748b);
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.catalogo-familia-card:hover .catalogo-familia-codigo {
+  background: rgba(255, 107, 53, 0.12);
+  color: #c2410c;
+}
+
+[data-theme="dark"] .catalogo-familia-card:hover {
+  background: var(--gmp-bg-subtle);
+  border-color: var(--gmp-border);
 }
 
 .selecao-produtos-toolbar {
