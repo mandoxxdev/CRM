@@ -827,18 +827,26 @@
   font-size: 15px;
 }
 
+/* O grid rola por dentro e tem altura propria: sem isso, em tela baixa a fileira ficava
+   cortada pela metade e o modal inteiro rolava junto — era o "fica estranho" relatado. */
 .catalogo-familias-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
-  gap: 16px;
-  padding: 20px 30px 28px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  padding: 18px 30px 24px;
   overflow-y: auto;
+  align-content: start;
+  max-height: min(58vh, 620px);
 }
 
+/* PAISAGEM (4:3), e nao retrato. Em 3:4 o cartao ficava com ~260px de altura: numa tela de
+   notebook cabia pouco mais de uma fileira, e sempre sobrava meia fileira cortada. Deitado,
+   a altura cai para ~135px, cabem 2-3 fileiras inteiras e a mesma foto de equipamento
+   continua legivel — sao fotos horizontais de maquina, nao retratos. */
 .catalogo-familia-card {
   position: relative;
   display: block;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 4 / 3;
   border-radius: 14px;
   overflow: hidden;
   background: var(--gmp-bg-subtle, #f1f5f9);
@@ -886,9 +894,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Sobe a inicial para nao ficar atras do veu do nome, que ocupa a base do cartao. */
+  padding-bottom: 22px;
+  box-sizing: border-box;
   background: linear-gradient(150deg, #1e293b 0%, #334155 100%);
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 52px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 38px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -899,7 +910,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 26px 14px 12px;
+  padding: 20px 12px 10px;
   background: linear-gradient(to top, rgba(2, 6, 23, 0.92) 25%, rgba(2, 6, 23, 0.6) 60%, rgba(2, 6, 23, 0) 100%);
   display: flex;
   flex-direction: column;
@@ -907,7 +918,7 @@
 }
 
 .catalogo-familia-nome {
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 700;
   line-height: 1.25;
   color: #fff;
