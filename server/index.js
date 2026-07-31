@@ -29,6 +29,60 @@ function semearModelosClausulas() {
   };
   semear('Equipamentos', 'Contrato completo para equipamentos e sistemas', true, getClausulasDefault());
   semear('Hélices e Discos', 'Contrato reduzido para peças e acessórios', false, getClausulasHelices());
+  // O semear acima nao mexe em modelo que ja existe — de proposito, para nao desfazer
+  // edicao do usuario. Mas quando o codigo GANHA uma clausula nova (foi o caso da 3. OFERTA
+  // e do bloco de preco), o modelo ja criado ficaria sem ela para sempre. Este completar
+  // insere SO o que falta, casando por titulo, e nao toca no texto do que ja esta la.
+  setTimeout(() => {
+    completarModeloClausulas('Hélices e Discos', getClausulasHelices());
+  }, 3000).unref?.();
+}
+
+function completarModeloClausulas(nome, clausulasDoCodigo) {
+  db.get('SELECT id FROM clausulas_modelo WHERE nome = ?', [nome], (err, modelo) => {
+    if (err || !modelo) return;
+    db.all('SELECT id, titulo FROM clausulas_modelo_itens WHERE modelo_id = ?', [modelo.id], (errI, existentes) => {
+      if (errI) return;
+      const chave = (t) => String(t || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const jaTem = new Set((existentes || []).map((e) => chave(e.titulo)));
+      // Sincroniza o NUMERO das que ja existem. Acrescentar clausula no meio empurra a
+      // numeracao das seguintes: sem isto, a CONSIDERACAO FINAL continuaria como 5.8 e
+      // colidiria com o PRECO, que passou a ser 5.8 tambem — duas clausulas com o mesmo
+      // numero no documento. So o numero e tocado; titulo e conteudo (onde mora qualquer
+      // edicao do usuario) ficam como estao.
+      const porTitulo = new Map(clausulasDoCodigo.map((c) => [chave(c.titulo), c]));
+      const renumerar = db.prepare('UPDATE clausulas_modelo_itens SET numero = ? WHERE id = ?');
+      (existentes || []).forEach((e) => {
+        const doCodigo = porTitulo.get(chave(e.titulo));
+        if (doCodigo) renumerar.run([doCodigo.numero, e.id]);
+      });
+      renumerar.finalize();
+
+      const faltando = clausulasDoCodigo.filter((c) => !jaTem.has(chave(c.titulo)));
+      if (faltando.length === 0) return;
+      const stmt = db.prepare('INSERT INTO clausulas_modelo_itens (modelo_id, ordem, numero, titulo, conteudo) VALUES (?, ?, ?, ?, ?)');
+      faltando.forEach((c) => {
+        const ordem = clausulasDoCodigo.findIndex((x) => chave(x.titulo) === chave(c.titulo));
+        stmt.run([modelo.id, ordem, c.numero, c.titulo, c.conteudo]);
+      });
+      stmt.finalize(() => {
+        // Reordena pelo indice do codigo. O que nao existe no codigo (clausula que o
+        // usuario tenha acrescentado) vai para o fim, mantendo a ordem relativa.
+        db.all('SELECT id, titulo FROM clausulas_modelo_itens WHERE modelo_id = ? ORDER BY ordem ASC, id ASC', [modelo.id], (errT, todas) => {
+          if (errT || !todas) return;
+          const upd = db.prepare('UPDATE clausulas_modelo_itens SET ordem = ? WHERE id = ?');
+          const conhecidas = todas.filter((r) => clausulasDoCodigo.some((c) => chave(c.titulo) === chave(r.titulo)));
+          const extras = todas.filter((r) => !conhecidas.includes(r));
+          conhecidas
+            .sort((a2, b2) => clausulasDoCodigo.findIndex((c) => chave(c.titulo) === chave(a2.titulo))
+                            - clausulasDoCodigo.findIndex((c) => chave(c.titulo) === chave(b2.titulo)))
+            .forEach((r, i) => upd.run([i, r.id]));
+          extras.forEach((r, i) => upd.run([conhecidas.length + i, r.id]));
+          upd.finalize(() => console.log(`✅ Modelo "${nome}": ${faltando.length} cláusula(s) acrescentada(s)`));
+        });
+      });
+    });
+  });
 }
 
 // Qual modelo de contrato vale para esta proposta.
