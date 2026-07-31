@@ -78,6 +78,9 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
   const [showBolinhasPremium, setShowBolinhasPremium] = useState(false);
   const [modoAdicionarBolinha, setModoAdicionarBolinha] = useState(false);
   const [variaveisDaFamiliaChaves, setVariaveisDaFamiliaChaves] = useState([]);
+  // Modelo de contrato desta família: define QUAIS cláusulas a proposta recebe.
+  const [modelosClausulas, setModelosClausulas] = useState([]);
+  const [modeloClausulasId, setModeloClausulasId] = useState('');
   const [searchVariavelFamilia, setSearchVariavelFamilia] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -86,6 +89,9 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
 
   useEffect(() => {
     if (isOpen) {
+      api.get('/clausulas-modelos')
+        .then((res) => setModelosClausulas(Array.isArray(res.data?.modelos) ? res.data.modelos : []))
+        .catch(() => setModelosClausulas([]));
       api.get('/variaveis-tecnicas', { params: { ativo: 'true' } })
         .then((res) => setVariaveisTecnicas(Array.isArray(res.data) ? res.data : []))
         .catch(() => setVariaveisTecnicas([]));
@@ -171,6 +177,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       setEsquematicoPreviewUrl(familia.esquematico ? getEsquematicoUrl(familia.esquematico) : null);
       const raw = familia.marcadores_vista;
       setMarcadores(parseMarcadores(typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return []; } })() : raw));
+      setModeloClausulasId(familia.clausulas_modelo_id != null ? String(familia.clausulas_modelo_id) : '');
       if (familia.id && !useLocalOnly) {
         api.get(`/familias/${familia.id}/variaveis`)
           .then((res) => setVariaveisDaFamiliaChaves(Array.isArray(res.data) ? res.data.map((v) => v.chave).filter(Boolean) : []))
@@ -187,6 +194,7 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
       setEsquematicoFile(null);
       setMarcadores([]);
       setVariaveisDaFamiliaChaves([]);
+      setModeloClausulasId('');
     }
     setSearchVariavelFamilia('');
     setEditingMarcadorId(null);
@@ -425,6 +433,12 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
           if (fotoFile) await uploadImagemFamilia('foto', familiaId, fotoFile);
           if (esquematicoFile) await uploadImagemFamilia('esquematico', familiaId, esquematicoFile);
         }
+      }
+      if (familiaId) {
+        // Falhar aqui nao pode derrubar o salvamento da familia: o vinculo e ajustavel depois.
+        await api.put(`/familias/${familiaId}/clausulas-modelo`, {
+          clausulas_modelo_id: modeloClausulasId === '' ? null : Number(modeloClausulasId),
+        }).catch(() => {});
       }
       if (familiaId && variaveisDaFamiliaChaves.length >= 0) {
         await api.put(`/familias/${familiaId}/variaveis`, {
@@ -705,6 +719,27 @@ const ModalFamiliaForm = ({ isOpen, onClose, onSaved, onSavedLocal, familia, use
                   </p>
                 </div>
               )}
+
+              <div className="modal-familia-field">
+                <label>Modelo de contrato</label>
+                <select
+                  value={modeloClausulasId}
+                  onChange={(e) => setModeloClausulasId(e.target.value)}
+                  className="input-premium"
+                >
+                  <option value="">— Usar o padrão (Equipamentos) —</option>
+                  {modelosClausulas.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nome} ({m.total_clausulas} cláusulas)
+                    </option>
+                  ))}
+                </select>
+                <p className="modal-familia-hint premium" style={{ marginTop: 6, marginBottom: 0 }}>
+                  Define quais cláusulas a proposta recebe ao ser criada. Capa, tabela de preços
+                  e tabelas fiscais seguem iguais em todos os modelos — só o texto do contrato muda.
+                  Numa proposta que misture famílias, prevalece o contrato de Equipamentos.
+                </p>
+              </div>
             </div>
           </section>
 

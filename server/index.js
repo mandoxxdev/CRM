@@ -9,6 +9,68 @@ const {
 } = require('./services/sqliteConcurrency');
 const { prepareDatabaseOnStartup, pruneOldBackups, fileSizeIfExists } = require('./services/dbRecovery');
 const { otimizarImagem, otimizarPasta } = require('./services/otimizarImagem');
+const { getClausulasHelices } = require('./clausulasHelices');
+
+// Cria os dois modelos de contrato na primeira subida. Idempotente: se o modelo ja existe,
+// nao mexe nele — para nao desfazer edicoes que o usuario tenha feito depois.
+function semearModelosClausulas() {
+  const semear = (nome, descricao, isPadrao, clausulas) => {
+    db.get('SELECT id FROM clausulas_modelo WHERE nome = ?', [nome], (err, row) => {
+      if (err || row) return; // ja existe: preserva o que esta la
+      db.run('INSERT INTO clausulas_modelo (nome, descricao, is_padrao) VALUES (?, ?, ?)',
+        [nome, descricao, isPadrao ? 1 : 0], function (errIns) {
+          if (errIns) return console.error('❌ Erro ao semear modelo', nome, errIns.message);
+          const modeloId = this.lastID;
+          const stmt = db.prepare('INSERT INTO clausulas_modelo_itens (modelo_id, ordem, numero, titulo, conteudo) VALUES (?, ?, ?, ?, ?)');
+          clausulas.forEach((c, i) => stmt.run([modeloId, i, c.numero, c.titulo, c.conteudo]));
+          stmt.finalize(() => console.log(`✅ Modelo de contrato "${nome}" criado (${clausulas.length} cláusulas)`));
+        });
+    });
+  };
+  semear('Equipamentos', 'Contrato completo para equipamentos e sistemas', true, getClausulasDefault());
+  semear('Hélices e Discos', 'Contrato reduzido para peças e acessórios', false, getClausulasHelices());
+}
+
+// Qual modelo de contrato vale para esta proposta.
+// REGRA DEFINIDA PELO USUARIO: havendo itens de tipos diferentes, EQUIPAMENTO PREVALECE.
+// O contrato de equipamento e o mais completo (29 clausulas contra 10), entao na duvida
+// ele protege as duas partes; o contrario deixaria um equipamento sem clausula de startup,
+// obrigacoes e foro. Item sem familia vinculada tambem cai no padrao, pelo mesmo motivo.
+function resolverModeloClausulas(propostaId, callback) {
+  db.get('SELECT id FROM clausulas_modelo WHERE is_padrao = 1 AND ativo = 1 ORDER BY id ASC LIMIT 1', [], (errP, padrao) => {
+    const idPadrao = padrao ? padrao.id : null;
+    if (errP) return callback(null, idPadrao);
+    db.all(
+      `SELECT DISTINCT f.clausulas_modelo_id AS modelo_id
+         FROM proposta_itens pi
+         LEFT JOIN familias_produto f
+           ON TRIM(LOWER(f.nome)) = TRIM(LOWER(COALESCE(pi.familia_produto, '')))
+        WHERE pi.proposta_id = ?`,
+      [propostaId],
+      (err, linhas) => {
+        if (err || !linhas || linhas.length === 0) return callback(null, idPadrao);
+        // Qualquer item sem modelo proprio (ou apontando para o padrao) puxa tudo para o
+        // padrao — e a regra "equipamento prevalece".
+        const temPadrao = linhas.some((l) => l.modelo_id == null || String(l.modelo_id) === String(idPadrao));
+        if (temPadrao) return callback(null, idPadrao);
+        const distintos = Array.from(new Set(linhas.map((l) => String(l.modelo_id))));
+        // Modelos diferentes entre si, nenhum deles o padrao: sem criterio melhor, o padrao
+        // decide — outra vez pelo lado mais completo.
+        if (distintos.length > 1) return callback(null, idPadrao);
+        callback(null, linhas[0].modelo_id);
+      }
+    );
+  });
+}
+
+// Clausulas do modelo, no formato que o resto do sistema ja usa ({numero, titulo, conteudo}).
+function carregarClausulasDoModelo(modeloId, callback) {
+  if (!modeloId) return callback(null, getClausulasDefault());
+  db.all('SELECT numero, titulo, conteudo FROM clausulas_modelo_itens WHERE modelo_id = ? ORDER BY ordem ASC', [modeloId], (err, rows) => {
+    if (err || !rows || rows.length === 0) return callback(null, getClausulasDefault());
+    callback(null, rows);
+  });
+}
 
 // Conversão única das imagens que já estavam no servidor antes desta otimização.
 // Roda uma vez, em segundo plano, sem segurar a subida: quem já foi convertida é
@@ -1210,6 +1272,46 @@ function initializeDatabase(onReadyCallback) {
   // Valores das variáveis técnicas do tipo "Manual na Proposta" (manual_proposta):
   // preenchidos pelo vendedor direto no preview editável, por item da proposta.
   // item_id = proposta_itens.id (cada equipamento 4.x tem seus próprios valores).
+  // ---------------------------------------------------------------------------
+  // Modelos de contrato (conjuntos de clausulas)
+  // ---------------------------------------------------------------------------
+  // Ate aqui existia UM conjunto de clausulas, no codigo (clausulasDefault.js), copiado
+  // para dentro de cada proposta na criacao. Isso ja isolava proposta a proposta, mas so
+  // permitia UM contrato padrao. Com pecas de reposicao (helices, discos) o contrato e
+  // outro - mais curto, sem startup, obrigacoes das partes, foro nem cancelamento.
+  // Agora os conjuntos sao DADO: da para ter varios e vincular cada um a familias.
+  db.run(`CREATE TABLE IF NOT EXISTS clausulas_modelo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL UNIQUE,
+    descricao TEXT,
+    is_padrao INTEGER DEFAULT 0,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (errM) => {
+    if (errM) return console.error('❌ Erro ao criar clausulas_modelo:', errM.message);
+    db.run(`CREATE TABLE IF NOT EXISTS clausulas_modelo_itens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      modelo_id INTEGER NOT NULL,
+      ordem INTEGER NOT NULL DEFAULT 0,
+      numero TEXT,
+      titulo TEXT,
+      conteudo TEXT,
+      FOREIGN KEY (modelo_id) REFERENCES clausulas_modelo(id) ON DELETE CASCADE
+    )`, (errI) => {
+      if (errI) return console.error('❌ Erro ao criar clausulas_modelo_itens:', errI.message);
+      semearModelosClausulas();
+    });
+  });
+
+  // Vinculo familia -> modelo. Fica na familia porque e assim que o usuario pensa o
+  // negocio ("helices usam o contrato de pecas"), e uma familia pode ter varios produtos.
+  db.run('ALTER TABLE familias_produto ADD COLUMN clausulas_modelo_id INTEGER', (errFam) => {
+    const jaExiste = errFam && String(errFam.message || '').indexOf('duplicate column') !== -1;
+    if (errFam && !jaExiste) console.error('❌ Erro ao adicionar clausulas_modelo_id:', errFam.message);
+    else if (!errFam) console.log('✅ Coluna clausulas_modelo_id adicionada em familias_produto');
+  });
+
   db.run(`CREATE TABLE IF NOT EXISTS proposta_variaveis_manuais (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     proposta_id INTEGER NOT NULL,
@@ -5733,6 +5835,42 @@ app.get('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
   );
 });
 
+// GET /api/clausulas-modelos — lista os modelos de contrato (para o select da família)
+app.get('/api/clausulas-modelos', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  db.all(`SELECT m.id, m.nome, m.descricao, m.is_padrao,
+                 (SELECT COUNT(*) FROM clausulas_modelo_itens i WHERE i.modelo_id = m.id) AS total_clausulas
+            FROM clausulas_modelo m
+           WHERE m.ativo = 1
+           ORDER BY m.is_padrao DESC, m.nome ASC`, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ modelos: rows || [] });
+  });
+});
+
+// GET /api/clausulas-modelos/:id/clausulas — cláusulas de um modelo (para conferência)
+app.get('/api/clausulas-modelos/:id/clausulas', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  db.all('SELECT numero, titulo, conteudo, ordem FROM clausulas_modelo_itens WHERE modelo_id = ? ORDER BY ordem ASC',
+    [req.params.id], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ clausulas: rows || [] });
+    });
+});
+
+// PUT /api/familias/:id/clausulas-modelo — vincula (ou desvincula) o modelo da família
+app.put('/api/familias/:id/clausulas-modelo', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const bruto = req.body && req.body.clausulas_modelo_id;
+  // Vazio/null desvincula: a família volta a usar o modelo padrão.
+  const modeloId = (bruto === null || bruto === undefined || bruto === '') ? null : (parseInt(bruto, 10) || null);
+  db.run('UPDATE familias_produto SET clausulas_modelo_id = ? WHERE id = ?', [modeloId, req.params.id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });
+    res.json({ ok: true, clausulas_modelo_id: modeloId });
+  });
+});
+
 // POST /api/propostas/:id/clausulas/inicializar — copia defaults para a tabela
 app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
@@ -5743,19 +5881,26 @@ app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, (req, re
     if (err) return res.status(500).json({ error: err.message });
     if (row && row.total > 0) return res.json({ ok: true, jaInicializado: true });
 
-    const defaults = getClausulasDefault();
-    const stmt = db.prepare(
-      'INSERT INTO proposta_clausulas (proposta_id, ordem, titulo, conteudo) VALUES (?, ?, ?, ?)'
-    );
-    defaults.forEach((c, i) => stmt.run([id, i, `${c.numero} ${c.titulo}`, c.conteudo]));
-    stmt.finalize((err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    // Escolhe o modelo de contrato pela FAMILIA dos itens (equipamento prevalece na mistura)
+    // e copia as clausulas DELE. A copia continua sendo por proposta, entao editar aqui nao
+    // afeta nem o modelo nem as outras propostas.
+    resolverModeloClausulas(id, (_errModelo, modeloId) => {
+      carregarClausulasDoModelo(modeloId, (_errCl, defaults) => {
+        const stmt = db.prepare(
+          'INSERT INTO proposta_clausulas (proposta_id, ordem, titulo, conteudo) VALUES (?, ?, ?, ?)'
+        );
+        defaults.forEach((c, i) => stmt.run([id, i, `${c.numero} ${c.titulo}`, c.conteudo]));
+        stmt.finalize((err) => {
+          if (err) return res.status(500).json({ error: err.message });
 
-      db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
-        registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausulas_inicializadas', null, null, null, `${defaults.length} cláusulas padrão copiadas`);
+          db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+            registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausulas_inicializadas', null, null, null,
+              `${defaults.length} cláusulas copiadas (modelo ${modeloId || 'padrão'})`);
+          });
+
+          res.json({ ok: true, modelo_id: modeloId || null, total: defaults.length });
+        });
       });
-
-      res.json({ ok: true });
     });
   });
 });
