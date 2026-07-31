@@ -90,8 +90,32 @@ async function criarFoto(nome, largura, altura) {
     assert.strictEqual(fs.statSync(foto).size, tamanho1);
   });
 
+  console.log('\n[peso] imagem ESTREITA mas PESADA tambem e recomprimida');
+  // A primeira versao disto so olhava a LARGURA. Em producao isso deixou passar mais da
+  // metade das imagens (8 de 21 otimizadas) e o HTML do PDF nao encolheu nada: uma foto de
+  // 1000px cabe no teto de largura e ainda assim pode ter varios MB. Este caso existe para
+  // esse buraco nao voltar.
+  const estreitaPesada = await criarFoto('estreita.jpg', 1000, 1400);
+  const antesEP = fs.statSync(estreitaPesada).size;
+  const metaEP = await sharp(estreitaPesada).metadata();
+  t('a imagem de teste cabe no teto de largura',
+    () => assert(metaEP.width <= LARGURA_MAXIMA, `${metaEP.width}px`));
+  const rEP = await otimizarImagem(estreitaPesada);
+  t('mesmo cabendo na largura, e otimizada por PESO',
+    () => assert(rEP.otimizada, rEP.motivo || 'nao otimizou'));
+  t('e o arquivo encolhe', () => assert(fs.statSync(estreitaPesada).size < antesEP,
+    `${fs.statSync(estreitaPesada).size} deveria ser < ${antesEP}`));
+  const metaEPd = await sharp(estreitaPesada).metadata();
+  t('sem alterar as dimensoes (nao precisava)', () => {
+    assert.strictEqual(metaEPd.width, metaEP.width);
+    assert.strictEqual(metaEPd.height, metaEP.height);
+  });
+
   console.log('\n[bom senso] nao mexe no que nao precisa');
-  const pequena = await criarFoto('pequena.jpg', 600, 400);
+  // Imagem lisa: cabe no teto de largura E de peso, entao deve ser deixada em paz.
+  const pequena = arq('pequena.jpg');
+  await sharp({ create: { width: 600, height: 400, channels: 3, background: { r: 200, g: 210, b: 220 } } })
+    .jpeg({ quality: 70 }).toFile(pequena);
   const tamPequena = fs.statSync(pequena).size;
   const rp = await otimizarImagem(pequena);
   t('imagem ja pequena e deixada em paz', () => {

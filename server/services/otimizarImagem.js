@@ -35,6 +35,11 @@ try {
 const LARGURA_MAXIMA = 1400;
 const QUALIDADE_JPEG = 82;
 const SUFIXO_ORIGINAL = '.original';
+// Recomprimir também por PESO, e não só por largura. A primeira versão disto só olhava a
+// largura, e por isso deixou passar mais da metade das imagens: uma foto de 900px cabe no
+// teto e ainda assim pode ter 5 MB (PNG de foto, JPEG em qualidade máxima). Foi o que
+// aconteceu em produção — 8 de 21 fotos otimizadas e o HTML do PDF sem encolher nada.
+const PESO_MAXIMO_BYTES = 350 * 1024;
 
 const ehImagemSuportada = (arquivo) => /\.(jpe?g|png|webp)$/i.test(arquivo);
 
@@ -54,9 +59,13 @@ async function otimizarImagem(caminhoAbsoluto) {
 
     resultado.antes = fs.statSync(caminhoAbsoluto).size;
     const meta = await sharp(caminhoAbsoluto).metadata();
-    // Imagem já pequena: mexer só perderia qualidade sem ganhar peso.
-    if (!meta.width || meta.width <= LARGURA_MAXIMA) {
-      resultado.motivo = `já cabe (${meta.width || '?'}px)`;
+    if (!meta.width) { resultado.motivo = 'sem dimensões legíveis'; return resultado; }
+    // Vale mexer se for larga DEMAIS ou pesada DEMAIS. Só uma das duas condições já basta:
+    // largura grande estoura o tempo de renderizar; peso grande estoura o de carregar.
+    const larga = meta.width > LARGURA_MAXIMA;
+    const pesada = resultado.antes > PESO_MAXIMO_BYTES;
+    if (!larga && !pesada) {
+      resultado.motivo = `já leve (${meta.width}px, ${(resultado.antes / 1024).toFixed(0)}KB)`;
       return resultado;
     }
 
@@ -66,8 +75,12 @@ async function otimizarImagem(caminhoAbsoluto) {
     let pipeline = sharp(caminhoAbsoluto).rotate() // respeita o EXIF antes de redimensionar
       .resize({ width: LARGURA_MAXIMA, fit: 'inside', withoutEnlargement: true });
     if (ext === '.png') {
-      // PNG de foto vira enorme; mantém PNG (pode ter transparência) mas com compressão alta.
-      pipeline = pipeline.png({ compressionLevel: 9, palette: true });
+      // PNG guardando FOTO é o pior caso de peso. Sem canal alfa dá para reescrever como
+      // JPEG dentro do mesmo arquivo .png — o navegador identifica a imagem pelo conteúdo,
+      // não pela extensão, então nada muda para quem lê. Com transparência, mantém PNG.
+      pipeline = meta.hasAlpha
+        ? pipeline.png({ compressionLevel: 9, palette: true })
+        : pipeline.jpeg({ quality: QUALIDADE_JPEG, mozjpeg: true });
     } else if (ext === '.webp') {
       pipeline = pipeline.webp({ quality: QUALIDADE_JPEG });
     } else {
