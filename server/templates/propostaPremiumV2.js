@@ -645,7 +645,16 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     // Observação: a TABELA DE PREÇOS é gerada a partir dos itens selecionados na proposta (cadastro de produtos).
     const tabelaPrecosRows = (itens || []).map((it, idx) => {
       const itemRef = esc(it.numero_item != null ? it.numero_item : (idx + 1));
-      const nome = esc(it.produto_nome || it.descricao || `Item ${idx + 1}`);
+      // O MODELO entra aqui também, como no título da seção 4: "DISCO DISPERSOR" sozinho
+      // não diz ao cliente qual peça é. Mesma regra de lá — se o nome já contém o modelo
+      // (cadastros antigos costumam trazer), não repete.
+      const nomeBase = String(it.produto_nome || it.descricao || `Item ${idx + 1}`);
+      const modeloItem = String(it.modelo || it.produto_modelo || '').trim();
+      const nome = esc((() => {
+        if (!modeloItem) return nomeBase;
+        const cmp = (v) => v.toLocaleUpperCase('pt-BR');
+        return cmp(nomeBase).includes(cmp(modeloItem)) ? nomeBase : `${nomeBase}, MODELO ${modeloItem}`;
+      })());
       const descritivoTecRaw = it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '';
       const descritivoTec = esc(String(descritivoTecRaw || '').trim());
       const descHtml = descritivoTec
