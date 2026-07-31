@@ -63,6 +63,21 @@ function resolverModeloClausulas(propostaId, callback) {
   });
 }
 
+// Clausulas que valem para ESTA proposta.
+// Enquanto o usuario nao edita nenhuma clausula, a proposta NAO tem linhas em
+// proposta_clausulas — e ate aqui esse caminho caia no getClausulasDefault(), o conjunto de
+// equipamentos fixo no codigo. Resultado: o modelo escolhido na familia era ignorado no
+// preview e no PDF, e so passava a valer depois do primeiro salvamento de clausula.
+// Agora o vazio busca as clausulas do MODELO da familia.
+function carregarClausulasDaProposta(propostaId, callback) {
+  db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [propostaId], (err, rows) => {
+    if (!err && Array.isArray(rows) && rows.length > 0) return callback(null, rows);
+    resolverModeloClausulas(propostaId, (_e, modeloId) => {
+      carregarClausulasDoModelo(modeloId, (_e2, doModelo) => callback(null, doModelo || []));
+    });
+  });
+}
+
 // Clausulas do modelo, no formato que o resto do sistema ja usa ({numero, titulo, conteudo}).
 function carregarClausulasDoModelo(modeloId, callback) {
   if (!modeloId) return callback(null, getClausulasDefault());
@@ -5830,7 +5845,13 @@ app.get('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
       if (rows && rows.length > 0) {
         return res.json({ clausulas: rows, isDefault: false });
       }
-      res.json({ clausulas: getClausulasDefault(), isDefault: true });
+      // Sem linhas gravadas, devolve as do MODELO da família — não o padrão fixo. Senão o
+      // editor mostraria cláusulas de equipamento numa proposta de peças.
+      resolverModeloClausulas(id, (_e, modeloId) => {
+        carregarClausulasDoModelo(modeloId, (_e2, doModelo) => {
+          res.json({ clausulas: doModelo || getClausulasDefault(), isDefault: true, modelo_id: modeloId || null });
+        });
+      });
     }
   );
 });
@@ -9223,7 +9244,7 @@ app.get('/api/propostas/:id/premium', (req, res) => {
           }
 
           // Aplicar cláusulas customizadas (se existirem para esta proposta)
-          db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (errCl, clausulas) => {
+          carregarClausulasDaProposta(id, (errCl, clausulas) => {
           const clausulasParaTemplate = resolverClausulasParaPreview(errCl ? [] : clausulas, omitPrintBar);
           if (clausulasParaTemplate) {
             templateConfig.clausulas_custom = clausulasParaTemplate;
@@ -9568,7 +9589,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     // 5.9-5.15, ...) eram empurrados inteiros para a página seguinte quando não cabiam,
     // deixando páginas com grandes espaços em branco que não existiam no preview.
     const clausulasPdf = await new Promise((resolve) => {
-      db.all('SELECT * FROM proposta_clausulas WHERE proposta_id = ? AND ativo = 1 ORDER BY ordem ASC', [id], (err, rows) => resolve(rows || []));
+      carregarClausulasDaProposta(id, (_e, rows) => resolve(rows || []));
     });
     const clausulasParaPdf = resolverClausulasParaPreview(clausulasPdf, true);
     if (clausulasParaPdf) {
