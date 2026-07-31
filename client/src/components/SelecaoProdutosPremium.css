@@ -827,119 +827,145 @@
   font-size: 15px;
 }
 
-/* ===== Escolher família — LISTA =====
-   Terceira tentativa, e a que abandona o grid de cartões. As duas anteriores falharam pelo
-   mesmo motivo estrutural: item de grid ESTICA por padrão (align-items: stretch), então o
-   aspect-ratio do cartão era ignorado sempre que a fileira tinha conteúdos de alturas
-   diferentes — cartões com foto ao lado de cartões só com a inicial. O resultado eram
-   nomes cortados e cartões desencontrados, e piorava conforme a largura da tela mudava.
-   Lista não tem esse problema: cada linha tem altura fixa, definida pela miniatura, e o
-   comportamento é idêntico em qualquer tela. Também lê melhor — nome de família é texto,
-   e texto se compara em coluna, não espalhado num mosaico. */
+/* ===== Escolher família — VITRINE =====
+   Conceito escolhido pelo usuário entre três, em 31/07/2026: "vitrine escura para o tema
+   escuro, vitrine clara para o tema claro". A ideia é a bancada de exposição — a máquina
+   sobre uma placa, e o resto do quadro calado para ela aparecer.
+
+   DUAS TENTATIVAS ANTERIORES QUEBRARAM AQUI, e a causa foi a mesma nas duas: item de grid
+   ESTICA por padrão (align-items: stretch), então o aspect-ratio que eu dava ao cartão era
+   ignorado sempre que a fileira misturava alturas — cartão com foto ao lado de cartão só com
+   a inicial. Daí os cartões desencontrados e os nomes cortados, e o estrago mudava de cara
+   conforme a largura da tela.
+
+   A cura é não depender de proporção: a PLACA tem altura fixa em pixel, então a fileira não
+   tem como desencontrar, com foto ou sem. A foto é dimensionada por OFFSET (left/top + calc)
+   em vez de percentual — aqui percentual também funcionaria, porque a placa é bloco com
+   altura definida, mas offset continua valendo se um dia a placa virar flex ou grid (dentro
+   de grid, percentual de altura cai na altura natural do arquivo e a foto vaza; foi o que
+   aconteceu no protótipo em que desenhei este conceito).
+
+   Coberto por server/tests/catalogoFamiliaVitrine.test.js.
+
+   A placa é CLARA NOS DOIS TEMAS, de propósito: as fotos das famílias são renders sobre
+   fundo branco, então placa clara é o que faz a peça se destacar no tema escuro. Trocá-la
+   por escura no dark seria "coerente" e sumiria com o produto. */
 
 .catalogo-familias-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 30px 22px;
+  /* Tema claro. Só estes tokens mudam no escuro — o layout abaixo não se repete. */
+  --vitrine-tile: #ffffff;
+  --vitrine-borda: #e5e9ee;
+  --vitrine-placa: #f1f5f9;
+  --vitrine-nome: #1e293b;
+  --vitrine-codigo: #c2410c;
+  --vitrine-inicial: #94a3b8;
+  --vitrine-sombra: rgba(15, 23, 42, 0.16);
+
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 12px;
+  padding: 18px 30px 26px;
   overflow-y: auto;
-  max-height: min(60vh, 640px);
+  max-height: min(58vh, 560px);
+}
+
+body.dark-theme .catalogo-familias-grid {
+  --vitrine-tile: #1a212a;
+  --vitrine-borda: #262e39;
+  --vitrine-placa: #e9edf1;
+  --vitrine-nome: #eef2f6;
+  --vitrine-codigo: #ff8b3d;
+  --vitrine-inicial: #aab4c0;
+  --vitrine-sombra: rgba(0, 0, 0, 0.45);
 }
 
 .catalogo-familia-card {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 8px 12px 8px 8px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: transparent;
+  flex-direction: column;
+  background: var(--vitrine-tile);
+  border: 1px solid var(--vitrine-borda);
+  border-radius: 11px;
+  overflow: hidden;
   cursor: pointer;
-  transition: background 0.14s, border-color 0.14s;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .catalogo-familia-card:hover {
-  background: var(--gmp-bg-subtle, #f8fafc);
-  border-color: var(--gmp-border, #e2e8f0);
+  border-color: #FF6B35;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px -12px var(--vitrine-sombra);
 }
 
 .catalogo-familia-card:focus-visible {
   outline: 2px solid #FF6B35;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-/* Miniatura de tamanho FIXO: é ela que define a altura da linha, então nenhuma família
-   desalinha as outras — com foto ou sem. */
+@media (prefers-reduced-motion: reduce) {
+  .catalogo-familia-card { transition: border-color 0.15s; }
+  .catalogo-familia-card:hover { transform: none; }
+}
+
+/* A PLACA. Altura fixa em pixel — é ela que garante que a fileira nunca desencontre,
+   tenha a família foto ou não. */
 .catalogo-familia-foto {
   position: relative;
+  height: 116px;
+  background: var(--vitrine-placa);
   flex: 0 0 auto;
-  width: 68px;
-  height: 51px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--gmp-bg-subtle, #f1f5f9);
 }
 
+/* Dimensão vinda dos offsets: não depende de como a placa faz layout. object-fit: contain
+   mostra a máquina inteira — cortar um equipamento técnico é pior do que sobrar fundo. */
 .catalogo-familia-foto img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  width: calc(100% - 18px);
+  height: calc(100% - 18px);
+  object-fit: contain;
   display: block;
 }
 
 .catalogo-familia-inicial {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(150deg, #334155 0%, #475569 100%);
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 22px;
-  font-weight: 800;
+  color: var(--vitrine-inicial);
+  font-size: 30px;
+  font-weight: 700;
 }
 
 .catalogo-familia-info {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 10px 12px 12px;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
+/* Duas linhas e reticências: "Moinho Vertical de Alto Impacto" cabe inteiro, e o min-height
+   mantém o rodapé do mesmo tamanho em quem tem nome curto. */
 .catalogo-familia-nome {
-  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 14.5px;
+  min-height: 35px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: var(--gmp-text, #1e293b);
+  line-height: 1.3;
+  color: var(--vitrine-nome);
 }
 
-/* Etiqueta do código à DIREITA, alinhada em coluna: vira uma régua vertical que dá para
-   varrer com o olho, em vez de flutuar sobre a foto de cada cartão. */
 .catalogo-familia-codigo {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding: 3px 9px;
-  border-radius: 6px;
-  background: var(--gmp-bg-subtle, #f1f5f9);
-  color: var(--gmp-text-light, #64748b);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.catalogo-familia-card:hover .catalogo-familia-codigo {
-  background: rgba(255, 107, 53, 0.12);
-  color: #c2410c;
-}
-
-[data-theme="dark"] .catalogo-familia-card:hover {
-  background: var(--gmp-bg-subtle);
-  border-color: var(--gmp-border);
+  letter-spacing: 0.09em;
+  color: var(--vitrine-codigo);
 }
 
 .selecao-produtos-toolbar {
