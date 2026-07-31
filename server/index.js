@@ -9436,8 +9436,21 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       throw new Error('HTML da proposta está vazio');
     }
     
+    // Cronometragem por etapa, impressa no log do servidor. Sem isto, "o PDF esta lento" e
+    // um relato sem numero: nao da para saber se o tempo esta no navegador, no peso das
+    // imagens embutidas ou na renderizacao. Uma linha por PDF, barata.
+    const tPdf = { inicio: Date.now(), marca: Date.now(), etapas: [] };
+    const marcarPdf = (nome) => { tPdf.etapas.push(`${nome}=${Date.now() - tPdf.marca}ms`); tPdf.marca = Date.now(); };
+    // Peso do HTML e quantas imagens embutidas ele carrega: e o principal suspeito quando a
+    // proposta tem muitas fotos, porque cada uma viaja em base64 dentro do documento.
+    const imagensEmbutidas = (html.match(/data:image\//g) || []).length;
+    const htmlMb = (Buffer.byteLength(html) / 1024 / 1024).toFixed(2);
+    const navegadorJaEstavaDePe = !!navegadorPdf;
+
     browser = await obterNavegadorPdf();
+    marcarPdf(navegadorJaEstavaDePe ? 'navegador(reuso)' : 'navegador(abriu)');
     const page = await browser.newPage();
+    marcarPdf('novaAba');
     // deviceScaleFactor 1, e não 2: o PDF sai vetorial, então 2x só dobra o trabalho de
     // rasterizar sem mudar o resultado. Medido: mesmas páginas, mesmo texto, mesmo tamanho
     // de arquivo (922 KB nos dois), com o page.pdf caindo de 1279 ms para 857 ms.
@@ -9448,6 +9461,7 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       waitUntil: ['load', 'domcontentloaded'],
       timeout: 60000
     });
+    marcarPdf('carregarHTML');
 
     // Aqui havia três esperas fixas somando 2350 ms — 37% do tempo total do PDF, gastas
     // "por garantia" sem observar nada. Agora espera-se o que de fato precisa estar pronto
@@ -9463,9 +9477,12 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       )));
     });
 
+    marcarPdf('fontes+imagens');
+
     await page.evaluate(function() {
       if (typeof window.paginateProposalContent === 'function') window.paginateProposalContent();
     });
+    marcarPdf('paginar');
 
     await page.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
     // Dois quadros de layout, em vez de 450 ms cravados: dá ao navegador a chance de
@@ -9480,8 +9497,10 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       margin: { top: '0', right: '0', bottom: '0', left: '0' },
       scale: 1.0
     });
+    marcarPdf('renderizarPDF');
     // Puppeteer >=22 retorna Uint8Array; converter para Buffer antes de res.end().
     const pdfBuffer = Buffer.from(pdfResult);
+    console.log(`[PDF] proposta ${id} em ${Date.now() - tPdf.inicio}ms | html=${htmlMb}MB imagens=${imagensEmbutidas} pdf=${(pdfBuffer.length / 1024).toFixed(0)}KB | ${tPdf.etapas.join(' ')}`);
 
     // Fecha a ABA, não o navegador: ele fica de pé para o próximo PDF (ver obterNavegadorPdf).
     await page.close();
