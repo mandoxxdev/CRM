@@ -1375,6 +1375,14 @@ function initializeDatabase(onReadyCallback) {
 
   // Vinculo familia -> modelo. Fica na familia porque e assim que o usuario pensa o
   // negocio ("helices usam o contrato de pecas"), e uma familia pode ter varios produtos.
+  // Texto livre da coluna DESCRIÇÃO na tabela de preços, por item. Independente do nome
+  // técnico que aparece na seção 4 — decisão do usuário: "os textos são independentes".
+  db.run('ALTER TABLE proposta_itens ADD COLUMN descricao_tabela TEXT', (errDT) => {
+    const jaExiste = errDT && String(errDT.message || '').indexOf('duplicate column') !== -1;
+    if (errDT && !jaExiste) console.error('❌ Erro ao adicionar descricao_tabela:', errDT.message);
+    else if (!errDT) console.log('✅ Coluna descricao_tabela adicionada em proposta_itens');
+  });
+
   db.run('ALTER TABLE familias_produto ADD COLUMN clausulas_modelo_id INTEGER', (errFam) => {
     const jaExiste = errFam && String(errFam.message || '').indexOf('duplicate column') !== -1;
     if (errFam && !jaExiste) console.error('❌ Erro ao adicionar clausulas_modelo_id:', errFam.message);
@@ -5910,6 +5918,27 @@ app.get('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
   );
 });
 
+// PUT /api/propostas/:id/itens/descricoes — texto da coluna DESCRIÇÃO da tabela de preços,
+// digitado direto no preview. Um por item; vazio volta ao nome do produto + modelo.
+app.put('/api/propostas/:id/itens/descricoes', authenticateToken, (req, res) => {
+  if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+  const { id } = req.params;
+  const lista = Array.isArray(req.body && req.body.descricoes) ? req.body.descricoes : null;
+  if (!lista) return res.status(400).json({ error: 'descricoes deve ser um array de {item_id, texto}' });
+  const stmt = db.prepare('UPDATE proposta_itens SET descricao_tabela = ? WHERE id = ? AND proposta_id = ?');
+  lista.forEach((d) => {
+    if (!d || d.item_id == null) return;
+    const texto = String(d.texto == null ? '' : d.texto).trim();
+    // Vazio grava NULL: assim a descrição volta a ser o nome do produto + modelo, em vez de
+    // ficar uma linha em branco na tabela.
+    stmt.run([texto || null, d.item_id, id]);
+  });
+  stmt.finalize((err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true });
+  });
+});
+
 // GET /api/clausulas-modelos — lista os modelos de contrato (para o select da família)
 app.get('/api/clausulas-modelos', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
@@ -8406,8 +8435,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                   `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
                     valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
                     tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, descricao_tabela)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
                 );
 
                 // Preserva campos que o formulário não envia (modelo, descritivo_tecnico,
@@ -8424,7 +8453,10 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                     item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
                     item.numero_item != null ? item.numero_item : idx + 1,
                   Number(item.desconto_percentual) || 0,
-                  (item.preco_tabela != null ? Number(item.preco_tabela) : null)
+                  (item.preco_tabela != null ? Number(item.preco_tabela) : null),
+                  // Vem da mesclagem (CAMPOS_PRESERVAR): o formulário não envia este campo,
+                  // então sem grava-lo aqui o texto digitado no preview se perderia no save.
+                  (item.descricao_tabela != null ? item.descricao_tabela : null)
                   ]);
                 });
 

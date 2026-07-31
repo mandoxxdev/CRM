@@ -79,6 +79,10 @@ const CAMPOS_PRESERVAR = [
   'tag', 'modelo', 'categoria', 'descricao_resumida', 'descritivo_tecnico',
   'dados_processo', 'materiais_construtivos', 'utilidades_requeridas',
   'opcionais', 'exclusoes', 'prazo_individual',
+  // Texto que o vendedor digita na coluna DESCRIÇÃO da tabela de preços, direto no preview.
+  // Precisa estar AQUI: o formulário não envia este campo, e sem preservá-lo o salvamento
+  // da proposta (que apaga e reinsere todos os itens) apagaria o texto digitado.
+  'descricao_tabela',
 ];
 
 function mesclarItensPreservandoCampos(itensAtuais, itensNovos) {

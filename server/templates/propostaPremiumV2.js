@@ -650,16 +650,25 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       // (cadastros antigos costumam trazer), não repete.
       const nomeBase = String(it.produto_nome || it.descricao || `Item ${idx + 1}`);
       const modeloItem = String(it.modelo || it.produto_modelo || '').trim();
-      const nome = esc((() => {
+      const nomeAutomatico = (() => {
         if (!modeloItem) return nomeBase;
         const cmp = (v) => v.toLocaleUpperCase('pt-BR');
         return cmp(nomeBase).includes(cmp(modeloItem)) ? nomeBase : `${nomeBase}, MODELO ${modeloItem}`;
-      })());
+      })();
+      // Texto digitado pelo vendedor no preview vence o automático. É INDEPENDENTE do nome
+      // que aparece na seção 4 ("Equipamento: ..."), por decisão do usuário: ali fica o nome
+      // técnico, aqui pode ficar um texto comercial mais rico.
+      const descricaoManual = String(it.descricao_tabela || '').trim();
+      const nome = esc(descricaoManual || nomeAutomatico);
       const descritivoTecRaw = it.descritivo_tecnico || it.descricao_tecnica || it.descricao_resumida || it.produto_descricao || it.produto_descritivo || '';
       const descritivoTec = esc(String(descritivoTecRaw || '').trim());
+      // data-item-descricao marca a célula como editável no preview (o editor liga o
+      // contentEditable por este atributo). O PDF sai igual — lá o atributo é inerte.
+      const idPersistencia = esc(it.id != null ? it.id : '');
+      const nomeEditavel = `<span class="descricao-item-tabela" data-item-descricao="${idPersistencia}">${nome}</span>`;
       const descHtml = descritivoTec
-        ? `${nome}<div class="tech-desc">${descritivoTec}</div>`
-        : `${nome}`;
+        ? `${nomeEditavel}<div class="tech-desc">${descritivoTec}</div>`
+        : `${nomeEditavel}`;
       const qtd = esc(Number(it.quantidade) || 1);
       const vUnitNum = Number(it.valor_unitario) || Number(it.preco_base) || 0;
       const vTotNum = Number(it.valor_total) || ((Number(it.quantidade) || 1) * vUnitNum);

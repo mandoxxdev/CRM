@@ -265,6 +265,7 @@ export default function PropostaPreviewEditavel() {
     });
     ativarEdicaoFotos(doc);
     ativarEdicaoVariaveisManuais(doc);
+    ativarEdicaoDescricoesTabela(doc);
   }
 
   // Variáveis técnicas do tipo "Manual na Proposta": o template as renderiza na seção 4
@@ -330,6 +331,42 @@ export default function PropostaPreviewEditavel() {
         repaginacaoTimerRef.current = setTimeout(() => repaginarERestaurar(doc), 500);
       };
     });
+  }
+
+  // Coluna DESCRIÇÃO da tabela de preços: texto livre por item, independente do nome que
+  // aparece na seção 4. Mesmo padrão das variáveis manuais — edita na página visível e
+  // sincroniza para o #proposalSource, que é o que sobrevive às repaginações.
+  function ativarEdicaoDescricoesTabela(doc) {
+    doc.querySelectorAll('.proposal-page[data-generated="1"] [data-item-descricao]').forEach((el) => {
+      if (!el.getAttribute('data-item-descricao')) return; // item sem id: nada a persistir
+      el.contentEditable = 'true';
+      el.style.outline = '1px dashed #94a3b8';
+      el.style.borderRadius = '3px';
+      el.style.cursor = 'text';
+      el.title = 'Clique para editar a descrição deste item';
+      // Enter aqui encerra a edição em vez de criar parágrafo: é uma célula de tabela, e
+      // quebra de linha dentro dela desalinharia as colunas.
+      el.onkeydown = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        el.blur();
+      };
+      el.oninput = () => {
+        const itemId = el.getAttribute('data-item-descricao');
+        const fonte = doc.querySelector(`#proposalSource [data-item-descricao="${itemId}"]`);
+        if (fonte) fonte.textContent = el.innerText;
+        setMudancasPendentes(true);
+      };
+    });
+  }
+
+  function lerDescricoesTabelaDoSource(doc) {
+    return Array.from(doc.querySelectorAll('#proposalSource [data-item-descricao]'))
+      .map((el) => ({
+        item_id: Number(el.getAttribute('data-item-descricao')),
+        texto: (el.textContent || '').trim(),
+      }))
+      .filter((d) => Number.isFinite(d.item_id));
   }
 
   function lerVariaveisManuaisDoSource(doc) {
@@ -1252,6 +1289,10 @@ export default function PropostaPreviewEditavel() {
         const variaveisManuais = lerVariaveisManuaisDoSource(doc);
         if (variaveisManuais.length > 0) {
           await api.put(`/propostas/${id}/variaveis-manuais`, { valores: variaveisManuais });
+        }
+        const descricoes = lerDescricoesTabelaDoSource(doc);
+        if (descricoes.length > 0) {
+          await api.put(`/propostas/${id}/itens/descricoes`, { descricoes });
         }
       }
       if (Object.keys(camposEditados).length > 0) {
