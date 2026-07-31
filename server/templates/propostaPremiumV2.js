@@ -1540,23 +1540,35 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     .campo-manual-linha::after { content: ''; flex: 1 1 auto; border-bottom: 1px solid var(--ink); }
 
     /* Assinaturas/setor comercial (após "Atenciosamente,") */
-    .signature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10mm; align-items: start; margin-top: 8mm; }
-    .sig-col { display: flex; flex-direction: column; gap: 2mm; }
-    .sig-name { font-size: 11pt; font-weight: 800; color: var(--blue-900); }
-    .sig-role { font-size: 9.5pt; font-weight: 700; color: var(--blue-700); }
-    .sig-line { font-size: 9.5pt; color: var(--blue-900); font-weight: 700; }
-    .sig-email { font-size: 9.5pt; color: var(--blue-700); font-weight: 600; }
+    /* Contatos comerciais em CARD: fio fino, canto arredondado e respiro, no mesmo
+       vocabulário visual das fotos do produto e da moldura das tabelas. O gap encolheu de
+       10mm para 4mm porque agora quem separa é a borda do card, não o espaço vazio — assim
+       o bloco não fica mais alto do que era e a paginação não muda. */
+    .signature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; align-items: stretch; margin-top: 8mm; }
+    .sig-col {
+      display: flex; flex-direction: column; gap: 1.2mm;
+      border: 1px solid var(--line); border-radius: 8px;
+      padding: 3mm 3.2mm; background: #fff;
+    }
+    .sig-name { font-size: 10.5pt; font-weight: 800; color: var(--blue-900); line-height: 1.2; }
+    /* Divisor sob o nome: separa identificação de contato sem gastar altura. */
+    .sig-role {
+      font-size: 8.5pt; font-weight: 700; color: var(--blue-700);
+      padding-bottom: 1.6mm; margin-bottom: 0.6mm; border-bottom: 1px solid var(--line);
+    }
+    .sig-line { font-size: 8.8pt; color: var(--blue-900); font-weight: 700; }
+    .sig-email { font-size: 8.5pt; color: var(--blue-700); font-weight: 600; word-break: break-all; }
     tr, img, table, blockquote { page-break-inside: avoid; break-inside: avoid; }
     .col-idx { width: 10mm; text-align: right; }
     .col-qtd { width: 16mm; text-align: right; }
     .col-und { width: 14mm; text-align: center; }
     .col-money { width: 26mm; text-align: right; white-space: nowrap; }
 
-    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .sig { border: 1px solid rgba(0,0,0,0.10); border-radius: 10px; padding: 10px 12px; }
-    .sig-line { height: 1px; background: rgba(0,0,0,0.35); margin: 22px 0 8px 0; }
-    .sig-name { font-weight: 700; }
-    .sig-role { font-size: 11px; opacity: 0.75; }
+    /* Aqui existiam regras de um bloco .signatures que NÃO é usado em lugar nenhum do
+       documento. Como vinham depois, sobrescreviam .sig-line/.sig-name/.sig-role do bloco
+       de contatos que é realmente renderizado — em especial
+       ".sig-line { height: 1px; background: ... }", que virava aquele risco horizontal
+       acima de cada telefone. Não era design: era colisão de CSS morto. */
 
     .page-header { position: relative; }
       header.page-header::after {
