@@ -79,6 +79,65 @@ const {
 const { gerarHTMLPropostaPremiumV2, substituirPlaceholdersProposta } = require('./templates/propostaPremiumV2');
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
+// ---------------------------------------------------------------------------
+// Navegador reaproveitado para gerar PDF
+// ---------------------------------------------------------------------------
+// Abrir e fechar o Chromium a cada PDF custava 2,1 s dos 6,3 s totais (medido). Mantendo
+// um so de pe, esse custo sai do caminho de todo PDF menos o primeiro.
+//
+// O preco e memoria: o Chromium fica residente (~580 MB de pico medido). Por isso ele NAO
+// vive para sempre — e reciclado depois de PDFS_ANTES_DE_RECICLAR e derrubado quando fica
+// ocioso, para nao segurar memoria a toa entre um orcamento e outro. Isso importa aqui:
+// ja investigamos queda do banco por pressao de memoria neste servidor.
+const PDFS_ANTES_DE_RECICLAR = 20;
+const OCIOSO_ATE_FECHAR_MS = 5 * 60 * 1000;
+let navegadorPdf = null;
+let pdfsGerados = 0;
+let timerOciosoPdf = null;
+
+function agendarFechamentoOcioso() {
+  clearTimeout(timerOciosoPdf);
+  timerOciosoPdf = setTimeout(() => { fecharNavegadorPdf('ocioso'); }, OCIOSO_ATE_FECHAR_MS);
+  if (timerOciosoPdf.unref) timerOciosoPdf.unref(); // não segura o processo no ar
+}
+
+async function fecharNavegadorPdf(motivo) {
+  clearTimeout(timerOciosoPdf);
+  const b = navegadorPdf;
+  navegadorPdf = null;
+  pdfsGerados = 0;
+  if (!b) return;
+  try { await b.close(); } catch (_) { /* já morreu; nada a fazer */ }
+  console.log(`[PDF] navegador encerrado (${motivo})`);
+}
+
+async function obterNavegadorPdf() {
+  // connected() falso = o Chromium morreu por fora (OOM, crash). Descarta e abre outro,
+  // senão todo PDF seguinte falharia reusando um navegador morto.
+  if (navegadorPdf && !navegadorPdf.connected) {
+    console.warn('[PDF] navegador anterior caiu; abrindo outro');
+    navegadorPdf = null;
+    pdfsGerados = 0;
+  }
+  if (navegadorPdf && pdfsGerados >= PDFS_ANTES_DE_RECICLAR) {
+    await fecharNavegadorPdf(`reciclagem apos ${PDFS_ANTES_DE_RECICLAR} PDFs`);
+  }
+  if (!navegadorPdf) {
+    navegadorPdf = await puppeteer.launch({
+      ...getPuppeteerLaunchOptions(),
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu'
+      ]
+    });
+    pdfsGerados = 0;
+  }
+  return navegadorPdf;
+}
+
 function getPuppeteerLaunchOptions() {
   const opts = { headless: true, timeout: 30000 };
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || process.env.CHROMIUM_PATH;
@@ -9377,34 +9436,41 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
       throw new Error('HTML da proposta está vazio');
     }
     
-    browser = await puppeteer.launch({
-      ...getPuppeteerLaunchOptions(),
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu'
-      ]
-    });
+    browser = await obterNavegadorPdf();
     const page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
-    
+    // deviceScaleFactor 1, e não 2: o PDF sai vetorial, então 2x só dobra o trabalho de
+    // rasterizar sem mudar o resultado. Medido: mesmas páginas, mesmo texto, mesmo tamanho
+    // de arquivo (922 KB nos dois), com o page.pdf caindo de 1279 ms para 857 ms.
+    await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 1 });
+
     await page.setContent(html, {
       // Com imagens embedadas em base64, não precisamos depender de networkidle0 (evita travas no primeiro PDF)
       waitUntil: ['load', 'domcontentloaded'],
       timeout: 60000
     });
-    
-    await new Promise((r) => setTimeout(r, 1500));
-    
+
+    // Aqui havia três esperas fixas somando 2350 ms — 37% do tempo total do PDF, gastas
+    // "por garantia" sem observar nada. Agora espera-se o que de fato precisa estar pronto
+    // antes de paginar: as fontes (o paginador MEDE altura de texto, e medir com a fonte
+    // errada quebra a quebra de página) e as imagens decodificadas. Na prática leva ~5 ms.
+    await page.evaluate(async () => {
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      await Promise.all(Array.from(document.images).map((img) => (
+        img.complete ? Promise.resolve() : new Promise((r) => {
+          img.addEventListener('load', r, { once: true });
+          img.addEventListener('error', r, { once: true });
+        })
+      )));
+    });
+
     await page.evaluate(function() {
       if (typeof window.paginateProposalContent === 'function') window.paginateProposalContent();
     });
-    await new Promise((r) => setTimeout(r, 400));
-    
+
     await page.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
-    await new Promise((r) => setTimeout(r, 450));
+    // Dois quadros de layout, em vez de 450 ms cravados: dá ao navegador a chance de
+    // aplicar o que o beforeprint mudou, e devolve assim que estiver aplicado.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     
     const pdfResult = await page.pdf({
       format: 'A4',
@@ -9417,8 +9483,11 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     // Puppeteer >=22 retorna Uint8Array; converter para Buffer antes de res.end().
     const pdfBuffer = Buffer.from(pdfResult);
 
-    await browser.close();
+    // Fecha a ABA, não o navegador: ele fica de pé para o próximo PDF (ver obterNavegadorPdf).
+    await page.close();
     browser = null;
+    pdfsGerados += 1;
+    agendarFechamentoOcioso();
 
     // Snapshot: gravar HTML/CSS (e checksum se a coluna existir) para reprodução futura
     if (!usouSnapshot && html) {
@@ -9453,8 +9522,10 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     res.end(pdfBuffer);
     
   } catch (error) {
+    // Falhou no meio: derruba o navegador compartilhado em vez de reaproveitá-lo. Uma aba
+    // pendurada ou um Chromium em estado ruim contaminaria todos os PDFs seguintes.
     if (browser) {
-      try { await browser.close(); } catch (_) {}
+      await fecharNavegadorPdf('erro na geração');
     }
     console.error('Erro ao gerar PDF (Puppeteer):', error);
     console.error('Stack:', error.stack);
