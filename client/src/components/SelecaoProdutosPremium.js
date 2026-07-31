@@ -657,7 +657,7 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                   </button>
                 )}
               </div>
-              <div className="familias-grid-selecao">
+              <div className="catalogo-familias-grid">
                 {familiasAtivas.map(familia => {
                   const esquematicoUrl = urlEsquematico(familia);
                   // O nome traz o código entre parênteses ("Tanque Dispersor (TQY)"). Separar
@@ -669,23 +669,23 @@ const SelecaoProdutosPremium = ({ onClose, onSelect, produtosSelecionados = [] }
                   return (
                     <div
                       key={familia.id}
-                      className="familia-card-selecao"
+                      className="catalogo-familia-card"
                       onClick={() => escolherFamilia(familia)}
                     >
-                      <div className="familia-card-preview">
+                      <div className="catalogo-familia-foto">
                         {esquematicoUrl ? (
                           <img src={esquematicoUrl} alt={familia.nome} />
                         ) : (
                           // Sem foto: a inicial da família, em vez do ícone de imagem
                           // quebrada. Dá identidade ao cartão em vez de deixar um buraco.
-                          <div className="familia-card-placeholder" aria-hidden>
+                          <div className="catalogo-familia-inicial" aria-hidden>
                             {String(familia.nome || '?').trim().charAt(0).toLocaleUpperCase('pt-BR')}
                           </div>
                         )}
                       </div>
-                      <div className="familia-card-info">
-                        {codigoFamilia && <span className="familia-card-codigo">{codigoFamilia}</span>}
-                        <span className="familia-card-nome">{nomeSemCodigo}</span>
+                      <div className="catalogo-familia-info">
+                        {codigoFamilia && <span className="catalogo-familia-codigo">{codigoFamilia}</span>}
+                        <span className="catalogo-familia-nome">{nomeSemCodigo}</span>
                       </div>
                     </div>
                   );

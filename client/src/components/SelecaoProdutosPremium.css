@@ -827,7 +827,7 @@
   font-size: 15px;
 }
 
-.familias-grid-selecao {
+.catalogo-familias-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
   gap: 16px;
@@ -835,7 +835,7 @@
   overflow-y: auto;
 }
 
-.familia-card-selecao {
+.catalogo-familia-card {
   position: relative;
   display: block;
   aspect-ratio: 3 / 4;
@@ -846,17 +846,17 @@
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
-.familia-card-selecao:hover {
+.catalogo-familia-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
 }
 
-.familia-card-selecao:focus-visible {
+.catalogo-familia-card:focus-visible {
   outline: 3px solid #FF6B35;
   outline-offset: 3px;
 }
 
-.familia-card-preview {
+.catalogo-familia-foto {
   position: absolute;
   inset: 0;
   display: flex;
@@ -866,7 +866,7 @@
 }
 
 /* cover, e não contain: a foto preenche o cartão em vez de flutuar num vazio cinza */
-.familia-card-preview img {
+.catalogo-familia-foto img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -874,13 +874,13 @@
   transition: transform 0.35s ease;
 }
 
-.familia-card-selecao:hover .familia-card-preview img {
+.catalogo-familia-card:hover .catalogo-familia-foto img {
   transform: scale(1.05);
 }
 
 /* Sem foto: em vez do ícone cinza de "imagem quebrada", uma superfície com a INICIAL da
    família. Vira identidade visual em vez de buraco. */
-.familia-card-placeholder {
+.catalogo-familia-inicial {
   width: 100%;
   height: 100%;
   display: flex;
@@ -894,7 +894,7 @@
 }
 
 /* Véu na base para o nome ficar legível sobre qualquer foto, clara ou escura. */
-.familia-card-info {
+.catalogo-familia-info {
   position: absolute;
   left: 0;
   right: 0;
@@ -906,7 +906,7 @@
   gap: 3px;
 }
 
-.familia-card-nome {
+.catalogo-familia-nome {
   font-size: 13.5px;
   font-weight: 700;
   line-height: 1.25;
@@ -915,7 +915,7 @@
 
 /* O código entre parênteses do nome (DHY, MLY, TQY) vira uma etiqueta: é assim que a
    equipe se refere às famílias no dia a dia, e ajuda a achar sem ler o nome inteiro. */
-.familia-card-codigo {
+.catalogo-familia-codigo {
   align-self: flex-start;
   padding: 1px 7px;
   border-radius: 5px;
