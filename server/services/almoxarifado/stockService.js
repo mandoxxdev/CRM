@@ -221,6 +221,12 @@ async function registrarMovimentacao(db, user, params) {
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
+    if (tiposAjuste.includes(tipo)) {
+      // AJUSTE não mexe em localização (não é entrada nem saída) — mas sem isto o saldo
+      // por localização diverge do total do material quando só há saldo na localização padrão
+      // (paridade com o antigo v1, que chamava isto incondicionalmente após cada movimento).
+      await syncSaldoLocalizacaoPadrao(db, material_id);
+    }
   }
 
   const result = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado

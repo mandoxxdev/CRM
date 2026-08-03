@@ -99,6 +99,27 @@ async function criarMaterial(db, codigo, qtd = 100) {
     assert.strictEqual(res.status, 400);
   });
 
+  await test('AJUSTE sincroniza saldo da localização padrão quando não há saldo por localização (regressão v1)', async () => {
+    const loc = await dbRun(db,
+      `INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, ativo) VALUES (?,?,?,1)`,
+      ['LOC-AJT', 'Depósito Teste', 'Almoxarifado']);
+    const locId = loc.lastID;
+    const matAjuste = await dbRun(db,
+      `INSERT INTO materiais_almoxarifado (codigo, nome, quantidade_atual, ativo, localizacao_padrao_id) VALUES (?,?,?,1,?)`,
+      ['MOV-AJUSTE-LOC', 'Material Ajuste Loc', 20, locId]);
+    const matAjusteId = matAjuste.lastID;
+
+    const res = await request(app).post('/api/almoxarifado/movimentacoes')
+      .send({ material_id: matAjusteId, tipo: 'AJUSTE', quantidade: 55, motivo: 'Inventário' });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+
+    const saldo = await dbGet(db,
+      'SELECT * FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ?',
+      [matAjusteId, locId]);
+    assert.ok(saldo, 'saldo por localização não foi criado/atualizado');
+    assert.strictEqual(saldo.quantidade, 55);
+  });
+
   await test('livro registra saldo_anterior/saldo_posterior encadeados', async () => {
     const movs = await dbAll(db,
       `SELECT saldo_anterior, saldo_posterior FROM movimentacoes_almoxarifado
