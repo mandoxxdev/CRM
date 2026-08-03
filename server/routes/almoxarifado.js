@@ -2003,6 +2003,6 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       console.warn('[almoxarifado-lembretes] Erro no job periódico:', err.message);
     });
   };
-  setTimeout(runReminderJob, 30 * 1000);
-  setInterval(runReminderJob, REMINDER_INTERVAL_MS);
+  setTimeout(runReminderJob, 30 * 1000).unref();
+  setInterval(runReminderJob, REMINDER_INTERVAL_MS).unref();
 };
