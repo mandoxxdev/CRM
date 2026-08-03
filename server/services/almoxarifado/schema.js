@@ -59,6 +59,32 @@ const SETORES_ALMOX_SEED = [
   ['Almoxarifado Principal', 'ALM', 'area', 8],
 ];
 
+// Migrado de routes/almoxarifado.js (diff de segurança — Task 3): seed de tipos de
+// material que só existia no callback do CREATE TABLE da rota.
+const TIPOS_MATERIAL_ALMOX_SEED = [
+  ['EPI', 'Equipamento de Proteção Individual', '🦺', '#f59e0b', 1, 1, 1, 1],
+  ['Ferramenta', 'Ferramentas e utensílios controlados', '🔧', '#8b5cf6', 0, 1, 0, 1],
+  ['Consumível', 'Materiais de uso contínuo', '📦', '#4facfe', 0, 0, 0, 0],
+  ['Insumo', 'Matéria-prima e insumos de produção', '⚗️', '#1aa34a', 0, 0, 0, 0],
+  ['Embalagem', 'Materiais de embalagem', '📫', '#06b6d4', 0, 0, 0, 0],
+  ['Manutenção', 'Peças e materiais de manutenção', '⚙️', '#ef4444', 0, 0, 0, 0],
+  ['Escritório', 'Material de escritório e papelaria', '📝', '#6b7280', 0, 0, 0, 0],
+  ['Limpeza', 'Produtos de higiene e limpeza', '🧹', '#22c55e', 0, 0, 0, 0],
+];
+
+// Migrado de routes/almoxarifado.js (diff de segurança — Task 3): seed de localizações
+// padrão que só existia no callback do CREATE TABLE da rota.
+const LOCALIZACOES_ALMOX_SEED = [
+  ['A-01', 'Prateleira A, Coluna 1', 'Corredor A'],
+  ['A-02', 'Prateleira A, Coluna 2', 'Corredor A'],
+  ['B-01', 'Prateleira B, Coluna 1', 'Corredor B'],
+  ['B-02', 'Prateleira B, Coluna 2', 'Corredor B'],
+  ['GAV-01', 'Gaveta 1', 'Bancada'],
+  ['GAV-02', 'Gaveta 2', 'Bancada'],
+  ['EPI', 'Armário de EPIs', 'Área de Segurança'],
+  ['FERR', 'Painel de Ferramentas', 'Área de Ferramentas'],
+];
+
 async function safeAlter(db, sql) {
   try { await dbRun(db, sql); } catch (e) { /* duplicate column */ }
 }
@@ -326,6 +352,29 @@ async function initSchema(db) {
   ];
   for (const col of materialCols) await safeAlter(db, `ALTER TABLE materiais_almoxarifado ADD COLUMN ${col}`);
 
+  // ── Colunas que existiam SÓ em routes/almoxarifado.js (diff de segurança — Task 3,
+  // unificação de DDL). Confirmado ausentes aqui antes da remoção do DDL duplicado. ──
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN tipo_material_id INTEGER REFERENCES tipos_material_almoxarifado(id)');
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN ponto_pedido REAL DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN prazo_reposicao_dias INTEGER DEFAULT 0');
+
+  // ── Seed de tipos_material_almoxarifado (só existia no callback do CREATE TABLE da
+  // rota — diff de segurança Task 3). Protegido por try/catch: alguns harnesses de teste
+  // pré-criam essa tabela com um subconjunto mínimo de colunas (id, nome); nesses casos o
+  // seed é ignorado silenciosamente, sem quebrar o restante do initSchema. ──
+  try {
+    const tiposCount = await dbGet(db, 'SELECT COUNT(*) as c FROM tipos_material_almoxarifado');
+    if (tiposCount.c === 0) {
+      for (const [nome, descricao, icone, cor, assinatura, termo, epi, controlado] of TIPOS_MATERIAL_ALMOX_SEED) {
+        await dbRun(db,
+          `INSERT INTO tipos_material_almoxarifado
+           (nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado)
+           VALUES (?,?,?,?,?,?,?,?)`,
+          [nome, descricao, icone, cor, assinatura, termo, epi, controlado]);
+      }
+    }
+  } catch (e) { /* tabela com schema mínimo (harness de teste) — seed ignorado com segurança */ }
+
   // ── Extend localizações ──
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN tipo TEXT DEFAULT \'Almoxarifado\'');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN parent_id INTEGER');
@@ -334,6 +383,18 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN altura REAL DEFAULT 80');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN subgrupo TEXT');
+
+  // ── Seed de localizacoes_almoxarifado (só existia no callback do CREATE TABLE da
+  // rota — diff de segurança Task 3). Protegido por try/catch pelo mesmo motivo do
+  // seed de tipos_material_almoxarifado acima. ──
+  try {
+    const locCount = await dbGet(db, 'SELECT COUNT(*) as c FROM localizacoes_almoxarifado');
+    if (locCount.c === 0) {
+      for (const [cod, desc, setor] of LOCALIZACOES_ALMOX_SEED) {
+        await dbRun(db, 'INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor) VALUES (?,?,?)', [cod, desc, setor]);
+      }
+    }
+  } catch (e) { /* tabela com schema mínimo (harness de teste) — seed ignorado com segurança */ }
 
   // ── Setores e áreas do almoxarifado ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS setores_almoxarifado (
@@ -721,6 +782,15 @@ async function initSchema(db) {
 
   // ── Config defaults ──
   const configs = [
+    // Migrado de routes/almoxarifado.js (diff de segurança — Task 3): chaves base que só
+    // existiam no callback do CREATE TABLE da rota.
+    ['aprovacao_automatica', '0', 'Aprovar requisições automaticamente sem revisão'],
+    ['limite_aprovacao_auto', '5', 'Quantidade máxima para aprovação automática por item'],
+    ['notificar_estoque_critico', '1', 'Enviar alerta quando estoque atingir mínimo'],
+    ['prazo_atendimento_horas', '24', 'Prazo padrão para atendimento de requisições (horas)'],
+    ['prefixo_requisicao', 'REQ', 'Prefixo do número de requisição'],
+    ['prefixo_material', 'ALM', 'Prefixo do código de material'],
+    ['requer_justificativa_urgente', '1', 'Exigir justificativa para requisições urgentes'],
     ['inspecao_material_critico', '1', 'Exigir inspeção para materiais críticos no recebimento'],
     ['permite_saldo_negativo_global', '0', 'Permitir saldo negativo (global)'],
     ['perfil_padrao', 'PRODUCAO', 'Perfil padrão para novos usuários no almoxarifado'],
@@ -760,6 +830,8 @@ module.exports = {
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
   SETORES_ALMOX_SEED,
+  TIPOS_MATERIAL_ALMOX_SEED,
+  LOCALIZACOES_ALMOX_SEED,
   TIPOS_MATERIAL_ENUM,
   TIPOS_LOCALIZACAO,
   UNIDADES_SEED,

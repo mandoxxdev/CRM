@@ -51,82 +51,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   });
 
-  // ── Criação das tabelas ─────────────────────────────────────────────────────
-  db.run(`CREATE TABLE IF NOT EXISTS materiais_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    codigo TEXT UNIQUE NOT NULL,
-    nome TEXT NOT NULL,
-    descricao TEXT,
-    categoria TEXT DEFAULT 'OUTROS',
-    unidade TEXT DEFAULT 'UN',
-    foto TEXT,
-    localizacao TEXT,
-    quantidade_atual REAL DEFAULT 0,
-    quantidade_minima REAL DEFAULT 0,
-    quantidade_maxima REAL DEFAULT 0,
-    custo_unitario REAL DEFAULT 0,
-    fornecedor_principal TEXT,
-    codigo_fornecedor TEXT,
-    ncm TEXT,
-    especificacoes TEXT,
-    observacoes TEXT,
-    ativo INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`, (err) => {
-    if (err) console.error('Erro ao criar tabela materiais_almoxarifado:', err);
-    else console.log('✅ Tabela materiais_almoxarifado verificada');
-  });
-
-  db.run(`CREATE TABLE IF NOT EXISTS movimentacoes_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    material_id INTEGER NOT NULL,
-    tipo TEXT NOT NULL,
-    quantidade REAL NOT NULL,
-    saldo_anterior REAL NOT NULL,
-    saldo_posterior REAL NOT NULL,
-    motivo TEXT,
-    referencia TEXT,
-    observacoes TEXT,
-    usuario_id INTEGER,
-    usuario_nome TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
-  )`, (err) => {
-    if (err) console.error('Erro ao criar tabela movimentacoes_almoxarifado:', err);
-    else console.log('✅ Tabela movimentacoes_almoxarifado verificada');
-  });
-
-  db.run(`CREATE TABLE IF NOT EXISTS conferencias_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    numero TEXT UNIQUE NOT NULL,
-    status TEXT DEFAULT 'ABERTO',
-    responsavel_id INTEGER,
-    responsavel_nome TEXT,
-    data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
-    data_fim DATETIME,
-    observacoes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`, (err) => {
-    if (err) console.error('Erro ao criar tabela conferencias_almoxarifado:', err);
-    else console.log('✅ Tabela conferencias_almoxarifado verificada');
-  });
-
-  db.run(`CREATE TABLE IF NOT EXISTS itens_conferencia_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    conferencia_id INTEGER NOT NULL,
-    material_id INTEGER NOT NULL,
-    quantidade_sistema REAL NOT NULL,
-    quantidade_contada REAL,
-    divergencia REAL,
-    ajustado INTEGER DEFAULT 0,
-    observacoes TEXT,
-    FOREIGN KEY (conferencia_id) REFERENCES conferencias_almoxarifado(id),
-    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
-  )`, (err) => {
-    if (err) console.error('Erro ao criar tabela itens_conferencia_almoxarifado:', err);
-    else console.log('✅ Tabela itens_conferencia_almoxarifado verificada');
-  });
+  // ── Schema único — todo o DDL do módulo vive em services/almoxarifado/schema.js ──
+  const { initSchema } = require('../services/almoxarifado/schema');
+  initSchema(db).catch((e) => console.error('❌ Erro no schema do almoxarifado:', e.message));
 
   // Servir fotos — padrão /api/uploads/almoxarifado (compatível com proxy /api)
   app.use('/api/uploads/almoxarifado', require('express').static(uploadsAlmoxDir));
@@ -845,203 +772,6 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // NOVAS TABELAS — Requisições, Tipos, Localizações, Configurações
   // ════════════════════════════════════════════════════════════════════════════
 
-  db.run(`CREATE TABLE IF NOT EXISTS tipos_material_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    descricao TEXT,
-    icone TEXT DEFAULT '📦',
-    cor TEXT DEFAULT '#4facfe',
-    requer_assinatura INTEGER DEFAULT 0,
-    requer_termo INTEGER DEFAULT 0,
-    is_epi INTEGER DEFAULT 0,
-    is_controlado INTEGER DEFAULT 0,
-    ativo INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`, () => {
-    // Inserir tipos padrão se a tabela estiver vazia
-    db.get('SELECT COUNT(*) as c FROM tipos_material_almoxarifado', [], (err, r) => {
-      if (!err && r.c === 0) {
-        const tipos = [
-          ['EPI', 'Equipamento de Proteção Individual', '🦺', '#f59e0b', 1, 1, 1, 1],
-          ['Ferramenta', 'Ferramentas e utensílios controlados', '🔧', '#8b5cf6', 0, 1, 0, 1],
-          ['Consumível', 'Materiais de uso contínuo', '📦', '#4facfe', 0, 0, 0, 0],
-          ['Insumo', 'Matéria-prima e insumos de produção', '⚗️', '#1aa34a', 0, 0, 0, 0],
-          ['Embalagem', 'Materiais de embalagem', '📫', '#06b6d4', 0, 0, 0, 0],
-          ['Manutenção', 'Peças e materiais de manutenção', '⚙️', '#ef4444', 0, 0, 0, 0],
-          ['Escritório', 'Material de escritório e papelaria', '📝', '#6b7280', 0, 0, 0, 0],
-          ['Limpeza', 'Produtos de higiene e limpeza', '🧹', '#22c55e', 0, 0, 0, 0],
-        ];
-        tipos.forEach(([nome, desc, icone, cor, assin, termo, epi, ctrl]) => {
-          db.run(`INSERT INTO tipos_material_almoxarifado (nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado) VALUES (?,?,?,?,?,?,?,?)`,
-            [nome, desc, icone, cor, assin, termo, epi, ctrl]);
-        });
-      }
-    });
-  });
-
-  db.run(`CREATE TABLE IF NOT EXISTS localizacoes_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    codigo TEXT UNIQUE NOT NULL,
-    descricao TEXT,
-    setor TEXT,
-    ativo INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`, () => {
-    db.get('SELECT COUNT(*) as c FROM localizacoes_almoxarifado', [], (err, r) => {
-      if (!err && r.c === 0) {
-        const locs = [
-          ['A-01', 'Prateleira A, Coluna 1', 'Corredor A'],
-          ['A-02', 'Prateleira A, Coluna 2', 'Corredor A'],
-          ['B-01', 'Prateleira B, Coluna 1', 'Corredor B'],
-          ['B-02', 'Prateleira B, Coluna 2', 'Corredor B'],
-          ['GAV-01', 'Gaveta 1', 'Bancada'],
-          ['GAV-02', 'Gaveta 2', 'Bancada'],
-          ['EPI', 'Armário de EPIs', 'Área de Segurança'],
-          ['FERR', 'Painel de Ferramentas', 'Área de Ferramentas'],
-        ];
-        locs.forEach(([cod, desc, setor]) => {
-          db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor) VALUES (?,?,?)`, [cod, desc, setor]);
-        });
-      }
-    });
-  });
-
-  db.run(`CREATE TABLE IF NOT EXISTS setores_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT UNIQUE NOT NULL,
-    codigo_prefixo TEXT NOT NULL,
-    tipo TEXT NOT NULL DEFAULT 'area',
-    ordem INTEGER DEFAULT 0,
-    ativo INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`, () => {
-    db.get('SELECT COUNT(*) as c FROM setores_almoxarifado', [], (err, r) => {
-      if (!err && r.c === 0) {
-        const setores = [
-          ['Bancada', 'GAV', 'bancada', 1],
-          ['Corredor A', 'A', 'corredor', 2],
-          ['Corredor B', 'B', 'corredor', 3],
-          ['Corredor C', 'C', 'corredor', 4],
-          ['Área de Segurança', 'EPI', 'area', 5],
-          ['Área de Ferramentas', 'FERR', 'area', 6],
-          ['Área Externa', 'EXT', 'area', 7],
-          ['Almoxarifado Principal', 'ALM', 'area', 8],
-        ];
-        setores.forEach(([nome, prefixo, tipo, ordem]) => {
-          db.run('INSERT INTO setores_almoxarifado (nome, codigo_prefixo, tipo, ordem) VALUES (?,?,?,?)',
-            [nome, prefixo, tipo, ordem]);
-        });
-      }
-    });
-  });
-
-  db.run(`CREATE TABLE IF NOT EXISTS configuracoes_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chave TEXT UNIQUE NOT NULL,
-    valor TEXT,
-    descricao TEXT,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_by TEXT
-  )`, () => {
-    const defaults = [
-      ['aprovacao_automatica', '0', 'Aprovar requisições automaticamente sem revisão'],
-      ['limite_aprovacao_auto', '5', 'Quantidade máxima para aprovação automática por item'],
-      ['notificar_estoque_critico', '1', 'Enviar alerta quando estoque atingir mínimo'],
-      ['prazo_atendimento_horas', '24', 'Prazo padrão para atendimento de requisições (horas)'],
-      ['prefixo_requisicao', 'REQ', 'Prefixo do número de requisição'],
-      ['prefixo_material', 'ALM', 'Prefixo do código de material'],
-      ['requer_justificativa_urgente', '1', 'Exigir justificativa para requisições urgentes'],
-    ];
-    defaults.forEach(([chave, valor, descricao]) => {
-      db.run(`INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)`, [chave, valor, descricao]);
-    });
-
-    const defaultsAlertas = [
-      ['alertas_estoque_notificar_email', '1', 'Habilita alertas de estoque mínimo por e-mail'],
-      ['alertas_estoque_notificar_whatsapp', '0', 'Habilita alertas de estoque mínimo por WhatsApp'],
-      ['alertas_estoque_emails', '[]', 'Lista de e-mails para notificação de estoque mínimo'],
-      ['alertas_estoque_whatsapp_numeros', '[]', 'Lista de números WhatsApp para notificação de estoque mínimo'],
-      ['alertas_estoque_intervalo_verificacao_horas', '4', 'Intervalo sugerido de verificação de alertas (horas)'],
-      ['alertas_estoque_debounce_segundos', '60', 'Debounce anti-duplicata na mesma operação (segundos; 0=desligado)'],
-      ['alertas_app_url', 'https://systemgmp.online', 'URL base do sistema para links nos alertas (e-mail e WhatsApp)'],
-      ['alertas_smtp_host', '', 'Servidor SMTP para alertas de estoque'],
-      ['alertas_smtp_port', '587', 'Porta SMTP para alertas de estoque'],
-      ['alertas_smtp_user', '', 'Usuário SMTP para alertas de estoque'],
-      ['alertas_smtp_pass', '', 'Senha SMTP para alertas de estoque'],
-      ['alertas_smtp_from', '', 'E-mail remetente dos alertas de estoque'],
-      ['alertas_smtp_secure', '0', 'Usar TLS/SSL no SMTP dos alertas (1=sim)'],
-      ['alertas_whatsapp_webhook_url', '', 'URL do webhook WhatsApp para alertas de estoque'],
-      ['alertas_whatsapp_api_key', '', 'Token/chave API opcional do webhook WhatsApp'],
-      ['requisicoes_notificar_email', '1', 'Habilita notificação por e-mail de novas requisições de material'],
-      ['requisicoes_notificar_emails', '[]', 'Lista de e-mails para notificação de requisições (vazio = usa alertas_estoque_emails)'],
-      ['compras_notificar_emails', '[]', 'E-mails do setor de Compras para solicitações automáticas de compra (itens sem estoque)'],
-      ['requisicoes_lembrete_ativo', '1', 'Habilita lembretes diários por e-mail para requisições pendentes'],
-      ['requisicoes_lembrete_intervalo_horas', '24', 'Intervalo mínimo entre lembretes da mesma requisição (horas)'],
-      ['liberacao_valor_ativo', '0', 'Habilita aprovação de alto valor em requisições de material'],
-      ['liberacao_valor_limite', '500', 'Valor máximo (R$) para liberação automática sem aprovação extra'],
-      ['liberacao_valor_aprovadores', '[]', 'IDs dos usuários aprovadores de alto valor (JSON)'],
-    ];
-    defaultsAlertas.forEach(([chave, valor, descricao]) => {
-      db.run(`INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)`, [chave, valor, descricao]);
-    });
-  });
-
-  db.run(`CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (
-    material_id INTEGER PRIMARY KEY,
-    estado_estoque TEXT DEFAULT 'ACIMA',
-    ultimo_alerta_enviado DATETIME,
-    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
-  )`, () => {});
-
-  db.run(`CREATE TABLE IF NOT EXISTS alertas_estoque_historico_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    material_id INTEGER,
-    canal TEXT NOT NULL,
-    destinatario TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'ENVIADO',
-    erro TEXT,
-    teste INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
-  )`, () => {});
-
-  db.run(`CREATE TABLE IF NOT EXISTS requisicoes_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    numero TEXT UNIQUE NOT NULL,
-    solicitante_id INTEGER NOT NULL,
-    solicitante_nome TEXT NOT NULL,
-    departamento TEXT,
-    os_referencia TEXT,
-    urgencia TEXT DEFAULT 'NORMAL',
-    status TEXT DEFAULT 'PENDENTE',
-    observacoes TEXT,
-    justificativa_urgencia TEXT,
-    aprovador_id INTEGER,
-    aprovador_nome TEXT,
-    data_aprovacao DATETIME,
-    data_entrega DATETIME,
-    rejeicao_motivo TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`, (err) => {
-    if (err) console.error('Erro ao criar tabela requisicoes_almoxarifado:', err);
-    else console.log('✅ Tabela requisicoes_almoxarifado verificada');
-  });
-
-  db.run(`CREATE TABLE IF NOT EXISTS itens_requisicao_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    requisicao_id INTEGER NOT NULL,
-    material_id INTEGER NOT NULL,
-    quantidade_solicitada REAL NOT NULL,
-    quantidade_atendida REAL DEFAULT 0,
-    observacoes TEXT,
-    FOREIGN KEY (requisicao_id) REFERENCES requisicoes_almoxarifado(id),
-    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
-  )`, (err) => {
-    if (err) console.error('Erro ao criar tabela itens_requisicao_almoxarifado:', err);
-    else console.log('✅ Tabela itens_requisicao_almoxarifado verificada');
-  });
-
   // Adicionar coluna tipo_material_id na tabela materiais (se não existir)
   db.run(`ALTER TABLE materiais_almoxarifado ADD COLUMN tipo_material_id INTEGER REFERENCES tipos_material_almoxarifado(id)`, () => {});
   db.run(`ALTER TABLE materiais_almoxarifado ADD COLUMN ponto_pedido REAL DEFAULT 0`, () => {});
@@ -1064,31 +794,6 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN altura REAL DEFAULT 80`, () => {});
   db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN subgrupo TEXT`, () => {});
   db.run(`ALTER TABLE materiais_almoxarifado ADD COLUMN familia_id INTEGER REFERENCES familias_material_almoxarifado(id)`, () => {});
-
-  db.run(`CREATE TABLE IF NOT EXISTS familias_material_almoxarifado (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    codigo TEXT UNIQUE NOT NULL,
-    nome TEXT NOT NULL,
-    descricao TEXT,
-    categoria_id INTEGER,
-    ativo INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (categoria_id) REFERENCES categorias_material_almoxarifado(id)
-  )`, () => {
-    db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado', [], (err, r) => {
-      if (!err && r.c === 0) {
-        const familias = [
-          ['PAR', 'Parafusos e Porcas', 'Elementos de fixação — parafusos, porcas e arruelas'],
-          ['ROL', 'Rolamentos', 'Rolamentos e mancais'],
-          ['VAL', 'Válvulas', 'Válvulas pneumáticas e hidráulicas'],
-        ];
-        familias.forEach(([codigo, nome, descricao]) => {
-          db.run('INSERT INTO familias_material_almoxarifado (codigo, nome, descricao) VALUES (?,?,?)', [codigo, nome, descricao]);
-        });
-      }
-    });
-  });
-
 
   // ════════════════════════════════════════════════════════════════════════════
   // TIPOS DE MATERIAL
@@ -1991,7 +1696,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // ── Rotas estendidas v3 (serviços, reservas, recebimentos, relatórios) ──
-  // Aguarda fila de CREATE TABLE do módulo antes do initSchema (evita race no SQLite).
+  // Aguarda a fila de DDL do initSchema (services/almoxarifado/schema.js) esvaziar
+  // antes de registrar as rotas estendidas (evita race no SQLite — mesma conexão,
+  // fila FIFO).
   db.run('SELECT 1', [], () => {
     require('./almoxarifado/extended')(app, db, authenticateToken);
     console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
