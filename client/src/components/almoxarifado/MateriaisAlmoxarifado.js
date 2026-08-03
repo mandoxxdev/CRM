@@ -324,8 +324,13 @@ const MateriaisAlmoxarifado = () => {
                       value={movQtd} onChange={e => setMovQtd(e.target.value)} placeholder="0" required />
                   </div>
                   <div className="almox-field">
-                    <label className="almox-label">Motivo</label>
-                    <input className="almox-input" value={movMotivo} onChange={e => setMovMotivo(e.target.value)} placeholder="Ex: Compra, Uso interno..." />
+                    <label className="almox-label">
+                      Motivo
+                      {(movTipo === 'SAIDA' || movTipo === 'AJUSTE') && <span className="required">*</span>}
+                    </label>
+                    <input className="almox-input" value={movMotivo} onChange={e => setMovMotivo(e.target.value)}
+                      placeholder="Ex: Compra, Uso interno..."
+                      required={movTipo === 'SAIDA' || movTipo === 'AJUSTE'} />
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">Referência (OS/NF)</label>

@@ -497,69 +497,30 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // POST /api/almoxarifado/movimentacoes — registrar movimento
-  app.post('/api/almoxarifado/movimentacoes',(req, res) => {
+  // Compat v1: contrato antigo, motor novo (stockService = validações + auditoria + saldo por localização)
+  app.post('/api/almoxarifado/movimentacoes', async (req, res) => {
     const { material_id, tipo, quantidade, motivo, referencia, observacoes } = req.body;
 
-    if (!material_id || !tipo || !quantidade) {
-      return res.status(400).json({ error: 'material_id, tipo e quantidade são obrigatórios' });
-    }
     if (!['ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO'].includes(tipo)) {
       return res.status(400).json({ error: 'Tipo inválido. Use ENTRADA, SAIDA, AJUSTE ou DEVOLUCAO' });
     }
-    if (quantidade <= 0) {
-      return res.status(400).json({ error: 'Quantidade deve ser maior que zero' });
+    if ((tipo === 'SAIDA' || tipo === 'AJUSTE') && !motivo) {
+      return res.status(400).json({ error: 'Motivo é obrigatório para saída e ajuste' });
     }
 
-    db.get(`SELECT * FROM materiais_almoxarifado WHERE id = ? AND ativo = 1`, [material_id], (err, material) => {
-      if (err) return res.status(500).json({ error: err.message });
-      if (!material) return res.status(404).json({ error: 'Material não encontrado' });
-
-      const saldoAnterior = material.quantidade_atual;
-      let saldoPosterior;
-
-      if (tipo === 'ENTRADA' || tipo === 'DEVOLUCAO') {
-        saldoPosterior = saldoAnterior + parseFloat(quantidade);
-      } else if (tipo === 'SAIDA') {
-        if (saldoAnterior < quantidade) {
-          return res.status(400).json({ error: `Saldo insuficiente. Disponível: ${saldoAnterior} ${material.unidade}` });
-        }
-        saldoPosterior = saldoAnterior - parseFloat(quantidade);
-      } else if (tipo === 'AJUSTE') {
-        saldoPosterior = parseFloat(quantidade); // ajuste define o saldo diretamente
-      }
-
-      db.run(`INSERT INTO movimentacoes_almoxarifado
-        (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes, usuario_id, usuario_nome)
-        VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [material_id, tipo, quantidade, saldoAnterior, saldoPosterior,
-         motivo || null, referencia || null, observacoes || null,
-         req.user.id, req.user.nome || req.user.email],
-        function (err2) {
-          if (err2) return res.status(500).json({ error: err2.message });
-          const movId = this.lastID;
-
-          // Atualizar saldo do material
-          db.run(`UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [saldoPosterior, material_id], (err3) => {
-              if (err3) return res.status(500).json({ error: err3.message });
-              Promise.all([
-                stockService.syncSaldoLocalizacaoPadrao(db, material_id).catch((e) => {
-                  console.warn('[almoxarifado] Falha ao sincronizar saldo por localização:', e.message);
-                }),
-                alertService.verificarAlertaPorMaterialId(db, material_id).catch((alertErr) => {
-                  console.warn('[almoxarifado-alertas] Falha no pós-movimentação:', alertErr.message);
-                }),
-              ]).finally(() => {
-                  res.status(201).json({
-                    id: movId, material_id, tipo, quantidade,
-                    saldo_anterior: saldoAnterior, saldo_posterior: saldoPosterior,
-                    motivo, referencia, observacoes
-                  });
-              });
-            });
-        }
-      );
-    });
+    try {
+      const result = await stockService.registrarMovimentacao(db, req.user, {
+        material_id, tipo, quantidade, motivo, referencia, observacoes,
+        justificativa: motivo || null,
+      });
+      res.status(201).json({
+        id: result.id, material_id, tipo, quantidade,
+        saldo_anterior: result.saldo_anterior, saldo_posterior: result.saldo_posterior,
+        motivo, referencia, observacoes,
+      });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // GET /api/almoxarifado/movimentacoes/:id/historico — histórico de um material

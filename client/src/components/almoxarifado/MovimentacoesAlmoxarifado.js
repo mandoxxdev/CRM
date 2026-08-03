@@ -265,10 +265,14 @@ const MovimentacoesAlmoxarifado = () => {
                     )}
                   </div>
                   <div className="almox-field">
-                    <label className="almox-label">Motivo</label>
+                    <label className="almox-label">
+                      Motivo
+                      {(form.tipo === 'SAIDA' || form.tipo === 'AJUSTE') && <span className="required">*</span>}
+                    </label>
                     <input className="almox-input" value={form.motivo}
                       onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
-                      placeholder="Compra, Uso produção, Retorno, etc." />
+                      placeholder="Compra, Uso produção, Retorno, etc."
+                      required={form.tipo === 'SAIDA' || form.tipo === 'AJUSTE'} />
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">Referência (OS / NF)</label>
