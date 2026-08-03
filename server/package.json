@@ -9,6 +9,7 @@
     "seed-variaveis": "node scripts/seed-variaveis-from-excel.js",
     "test:almoxarifado": "node tests/almoxarifado.test.js",
     "test:api": "node tests/api/run-all.js",
+    "test:safealter": "node tests/safeAlter.test.js",
     "test:sqlite": "node tests/sqliteConcurrency.test.js",
     "test:permissions": "node tests/permissionsCacheAdmin.test.js",
     "check-db": "node scripts/check-db.js"

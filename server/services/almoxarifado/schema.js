@@ -86,7 +86,13 @@ const LOCALIZACOES_ALMOX_SEED = [
 ];
 
 async function safeAlter(db, sql) {
-  try { await dbRun(db, sql); } catch (e) { /* duplicate column */ }
+  try {
+    await dbRun(db, sql);
+  } catch (e) {
+    if (/duplicate column name/i.test(e.message)) return;
+    console.error('[almoxarifado-schema] ALTER falhou:', sql.trim().slice(0, 80), '—', e.message);
+    throw e;
+  }
 }
 
 /** Base tables from almoxarifado.js — ensure they exist before v3 migrations (avoids startup race). */
@@ -827,6 +833,7 @@ async function initSchema(db) {
 
 module.exports = {
   initSchema,
+  safeAlter,
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
   SETORES_ALMOX_SEED,
