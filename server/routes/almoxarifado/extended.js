@@ -13,6 +13,7 @@ const toolService = require('../../services/almoxarifado/toolService');
 const clientMaterialService = require('../../services/almoxarifado/clientMaterialService');
 const reportService = require('../../services/almoxarifado/reportService');
 const sectorMaterialService = require('../../services/almoxarifado/sectorMaterialService');
+const purchaseService = require('../../services/almoxarifado/purchaseService');
 
 function handleError(res, err) {
   const status = err.status || 500;
