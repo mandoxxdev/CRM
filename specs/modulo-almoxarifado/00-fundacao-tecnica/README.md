@@ -44,7 +44,7 @@ Remover os riscos estruturais que fariam qualquer feature nova quebrar as existe
 ### 0.5 Segurança básica e bugs
 - [x] **Bug descoberto no planejamento (2026-08-02):** `purchaseService` é usado em `extended.js:294,300` mas nunca importado — `POST /compras/verificar-minimos` e `POST /compras/solicitacoes/:id/vincular-pedido` respondem 500 (`ReferenceError`) hoje. Corrigir com teste (Task 2 do plano).
 - [x] Corrigir checagem inconsistente em `extended.js:358/368`: trocar `req.user.role !== 'admin'` por `canConfigureAlmox` (hoje exclui super admins e admins do módulo sem `role='admin'`) — Task 6 do plano.
-- [ ] ⏸️ SMTP hardcoded (`server/index.js:2928-2937`): o comentário no código diz que o hardcode foi **solicitação explícita do usuário** — NÃO alterar sem confirmação. Proposta (env com fallback idêntico) documentada na Task 7 do plano; decidir também se rotaciona a senha (está no histórico do git).
+- [ ] ⏸️ SMTP hardcoded (`server/index.js:2928-2937`): **decisão de 2026-08-03 — manter hardcoded por ora**; débito técnico do dev dono do projeto, que será consultado antes de qualquer mudança. Proposta (env com fallback idêntico) segue documentada na Task 7 do plano para quando for revisitado.
 - [ ] Adotar validação de entrada consistente nas rotas do almoxarifado (o `express-validator` já está instalado e não é usado — decisão adiada; validações da Etapa 0 seguem o padrão manual).
 
 ## Regras essenciais + testes de API exigidos
