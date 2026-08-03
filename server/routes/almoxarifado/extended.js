@@ -1,7 +1,7 @@
 /**
  * Extended API routes for almoxarifado v3
  */
-const { canConfigureAlmox } = require('../../services/systemPermissions');
+const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
@@ -356,7 +356,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   });
 
   app.put('/api/almoxarifado/setores-requisicao/:id/permissoes', auth, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (!isSystemAdmin(req.user) && !canConfigureAlmox(req.user)) {
+      return res.status(403).json({ error: 'Acesso restrito — administrador do Almoxarifado ou Super Administrador' });
+    }
     const { permissoes } = req.body;
     if (!Array.isArray(permissoes)) return res.status(400).json({ error: 'Envie um array de permissões' });
     try {
@@ -366,7 +368,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   });
 
   app.post('/api/almoxarifado/setores-requisicao/:id/permissoes/bulk-tipo', auth, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas administradores' });
+    if (!isSystemAdmin(req.user) && !canConfigureAlmox(req.user)) {
+      return res.status(403).json({ error: 'Acesso restrito — administrador do Almoxarifado ou Super Administrador' });
+    }
     const { tipo_uso } = req.body;
     if (!['administrativo', 'industrial'].includes(tipo_uso)) {
       return res.status(400).json({ error: 'tipo_uso deve ser administrativo ou industrial' });
