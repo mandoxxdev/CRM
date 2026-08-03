@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiX } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiX, FiUploadCloud } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
+import { isSystemAdmin, canAccessAdministrativoConfig } from '../utils/systemPermissions';
+import ImportarVariaveisModal from './ImportarVariaveisModal';
 import './VariaveisTecnicas.css';
 
 const TIPOS = [
@@ -18,6 +21,11 @@ const FONTE_OPCOES = [
 ];
 
 const VariaveisTecnicas = () => {
+  const { user } = useAuth();
+  // Importar em massa reescreve cadastro que alimenta todas as propostas —
+  // mesma regra do backend, para o botão não aparecer e dar 403 depois.
+  const podeImportar = isSystemAdmin(user) || canAccessAdministrativoConfig(user);
+  const [importOpen, setImportOpen] = useState(false);
   const [list, setList] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [gruposCompras, setGruposCompras] = useState([]);
@@ -225,10 +233,22 @@ const VariaveisTecnicas = () => {
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
+        {podeImportar && (
+          <button type="button" onClick={() => setImportOpen(true)} className="vt-btn-import">
+            <FiUploadCloud /> Importar planilha
+          </button>
+        )}
         <button type="button" onClick={openNew} className="vt-btn-new">
           <FiPlus /> Nova variável
         </button>
       </div>
+
+      {importOpen && (
+        <ImportarVariaveisModal
+          onClose={() => setImportOpen(false)}
+          onImportado={loadList}
+        />
+      )}
 
       {loading ? (
         <div className="vt-loading">Carregando...</div>

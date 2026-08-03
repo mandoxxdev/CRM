@@ -22937,6 +22937,9 @@ if (db) {
     console.error('❌ Erro ao inicializar modulos_tipo_config:', err));
 }
 
+// ── Importação de variáveis técnicas por planilha (admin) ───────────────────
+require('./routes/variaveisImport')(app, db, authenticateToken);
+
 // ── Requisições de material (cross-módulo — qualquer usuário autenticado) ───
 require('./routes/requisicoesMaterial')(app, db, authenticateToken);
 
