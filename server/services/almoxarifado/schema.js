@@ -379,7 +379,9 @@ async function initSchema(db) {
           [nome, descricao, icone, cor, assinatura, termo, epi, controlado]);
       }
     }
-  } catch (e) { /* tabela com schema mínimo (harness de teste) — seed ignorado com segurança */ }
+  } catch (e) { /* tabela com schema mínimo (harness de teste) — seed ignorado com segurança */
+    console.warn('[almoxarifado-schema] Seed ignorado:', e.message);
+  }
 
   // ── Extend localizações ──
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN tipo TEXT DEFAULT \'Almoxarifado\'');
@@ -400,7 +402,9 @@ async function initSchema(db) {
         await dbRun(db, 'INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor) VALUES (?,?,?)', [cod, desc, setor]);
       }
     }
-  } catch (e) { /* tabela com schema mínimo (harness de teste) — seed ignorado com segurança */ }
+  } catch (e) { /* tabela com schema mínimo (harness de teste) — seed ignorado com segurança */
+    console.warn('[almoxarifado-schema] Seed ignorado:', e.message);
+  }
 
   // ── Setores e áreas do almoxarifado ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS setores_almoxarifado (

@@ -1657,9 +1657,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // ── Rotas estendidas v3 (serviços, reservas, recebimentos, relatórios) ──
-  // Aguarda a fila de DDL do initSchema (services/almoxarifado/schema.js) esvaziar
-  // antes de registrar as rotas estendidas (evita race no SQLite — mesma conexão,
-  // fila FIFO).
+  // Registra a extended após um roundtrip no sqlite (garante apenas a ordem de
+  // registro; o initSchema disparado acima pode ainda estar em andamento — é
+  // idempotente e a extended roda runInitSchemaWithRetry por conta própria).
   db.run('SELECT 1', [], () => {
     require('./almoxarifado/extended')(app, db, authenticateToken);
     console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');

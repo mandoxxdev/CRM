@@ -36,7 +36,9 @@ async function createTestApp(options = {}) {
   require('../../routes/requisicoesMaterial')(app, db, fakeAuth);
 
   // O registrador principal agenda a extended num callback do sqlite
-  // (almoxarifado.js:1995). Um roundtrip garante que ela já registrou.
+  // (almoxarifado.js:1663). Roundtrip no sqlite: garante que a extended
+  // registrou as rotas (fila FIFO). Não garante que TODO o initSchema em
+  // background terminou — ele é idempotente.
   await dbRun(db, 'SELECT 1');
 
   return {
@@ -44,7 +46,10 @@ async function createTestApp(options = {}) {
     db,
     setUser(user) { currentUser = user; },
     close() {
-      return new Promise((resolve) => db.close(() => resolve()));
+      return new Promise((resolve) => db.close(() => {
+        try { fs.rmSync(dataDir, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+        resolve();
+      }));
     },
   };
 }

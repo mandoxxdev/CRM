@@ -260,7 +260,12 @@ const MovimentacoesAlmoxarifado = () => {
                       placeholder="0" required />
                     {selectedMaterial && form.tipo === 'SAIDA' && (
                       <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                        Disponível: {selectedMaterial.quantidade_atual} {selectedMaterial.unidade}
+                        Disponível: {(
+                          (selectedMaterial.quantidade_atual || 0)
+                          - (selectedMaterial.quantidade_reservada || 0)
+                          - (selectedMaterial.quantidade_bloqueada || 0)
+                          - (selectedMaterial.quantidade_em_inspecao || 0)
+                        )} {selectedMaterial.unidade}
                       </small>
                     )}
                   </div>
