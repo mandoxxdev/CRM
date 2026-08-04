@@ -11,7 +11,7 @@ Um único caminho de movimentação, transacional, com livro imutável (estorno 
 ## O que já existe
 
 - **Motor v2:** `stockService.registrarMovimentacao` (`services/almoxarifado/stockService.js`) — 20 tipos de movimento, lote, localização origem/destino, centro de custo, integração com reservas, custo médio, grava auditoria, saldo anterior/posterior atômico. Rota: `POST /movimentacoes/v2` (`extended.js`).
-- **Estorno:** `POST /movimentacoes/:id/cancelar` (`extended.js`, `stockService.cancelarMovimentacao`) com `movimento_estorno_id`, `cancelamento_motivo`; reverte entrada/saída/ajuste/transferência inclusive por localização; bloqueia estornar ESTORNO/RESERVA/LIBERACAO_RESERVA e movimentação já cancelada. Exige perfil `ajustar_estoque`. UI: botão "Estornar" por linha em `MovimentacoesAlmoxarifado.js` (mini-modal com motivo obrigatório).
+- **Estorno:** `POST /movimentacoes/:id/cancelar` (`extended.js`, `stockService.cancelarMovimentacao`) com `movimento_estorno_id`, `cancelamento_motivo`; reverte saldo e localizações (entrada/saída/ajuste/transferência); NÃO reverte custo médio — decisão registrada em 2026-08-04; bloqueia estornar ESTORNO/RESERVA/LIBERACAO_RESERVA e movimentação já cancelada (claim atômico fecha a corrida entre cancelamentos concorrentes do mesmo movimento). Também zera `regularizacao_pendente` da movimentação estornada e dispara verificação de alertas de estoque. Exige perfil `ajustar_estoque`. UI: botão "Estornar" por linha em `MovimentacoesAlmoxarifado.js` (mini-modal com motivo obrigatório).
 - **Extrato do item:** `GET /materiais/:id/extrato` (`extended.js`) agrega material (com `quantidade_disponivel`), saldos por localização, últimas 100 movimentações e reservas ativas. UI: `ExtratoMaterialModal.js`, aberto pelo nome do material no livro e pelo botão "Extrato" em `MateriaisAlmoxarifado.js`.
 - **Saldos:** `estoque_saldo_almoxarifado` por material+localização+lote com `quantidade_reservada/bloqueada/em_inspecao`; espelho agregado no material.
 - **Vínculo estruturado** na movimentação: `projeto_id`, `os_id`, `centro_custo_id` (+ `centros_custo_almoxarifado`), `cliente_id`, `requisicao_id`, `reserva_id`, `recebimento_id`, `documento_vinculado`, `justificativa`. Regra por tipo (`avaliarRegrasVinculo`/`REGRAS_VINCULO`) decide o que é obrigatório.
@@ -35,6 +35,7 @@ Colunas existem; falta garantir que TODAS as operações (saída, reserva, inspe
 - [x] Saída emergencial: permitida com flag + justificativa obrigatória + pendência de regularização (`regularizacao_pendente`, badge "PENDENTE REGULARIZAÇÃO" no livro, `PUT /movimentacoes/:id/regularizar`)
 - [x] Validar saída de material bloqueado / em quarentena (já coberto pelo motor, testes em `almoxarifado.test.js`/regressão)
 - [ ] Validar saída de lote vencido / reprovado — **depende da feature 10** (lotes ainda são texto livre, sem validade/status)
+- [ ] (futuro) avaliar reversão de custo médio quando o estorno for da última entrada com custo
 - [x] `permite_saldo_negativo` respeitado (default: bloquear; guarda atômica em `registrarMovimentacao` e em `cancelarMovimentacao`)
 - [x] Centro de custo como vínculo (`centros_custo_almoxarifado`, `CentroCustoSchema`, rota `/centros-custo`)
 - [x] Atualização de custo médio na entrada (`custo_medio` calculado atomicamente na mesma UPDATE da entrada; teste dedicado)

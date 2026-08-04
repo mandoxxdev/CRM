@@ -91,6 +91,44 @@ async function criarMaterial(db, codigo, qtd = 100) {
     assert.strictEqual(est.status, 400, JSON.stringify(est.body));
   });
 
+  await test('estornar saida emergencial zera regularizacao_pendente e bloqueia regularizacao', async () => {
+    const mat = await criarMaterial(db, 'EST-007', 50);
+    const sai = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'SAIDA', quantidade: 10, emergencial: true, justificativa: 'urgente' });
+    assert.strictEqual(sai.status, 201, JSON.stringify(sai.body));
+    const antes = await dbGet(db, 'SELECT regularizacao_pendente FROM movimentacoes_almoxarifado WHERE id = ?', [sai.body.id]);
+    assert.strictEqual(antes.regularizacao_pendente, 1);
+
+    const est = await request(app).post(`/api/almoxarifado/movimentacoes/${sai.body.id}/cancelar`)
+      .send({ motivo: 'saida emergencial errada' });
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+
+    const depois = await dbGet(db, 'SELECT regularizacao_pendente, cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [sai.body.id]);
+    assert.strictEqual(depois.regularizacao_pendente, 0);
+    assert.strictEqual(depois.cancelado, 1);
+
+    const reg = await request(app).put(`/api/almoxarifado/movimentacoes/${sai.body.id}/regularizar`)
+      .send({ projeto_id: 1 });
+    assert.strictEqual(reg.status, 400, JSON.stringify(reg.body));
+  });
+
+  await test('cancelamentos concorrentes: exatamente um vence', async () => {
+    const mat = await criarMaterial(db, 'EST-008', 100);
+    const ent = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'ENTRADA', quantidade: 20 });
+    assert.strictEqual(ent.status, 201, JSON.stringify(ent.body));
+
+    const [a, b] = await Promise.all([
+      request(app).post(`/api/almoxarifado/movimentacoes/${ent.body.id}/cancelar`).send({ motivo: 'corrida 1' }),
+      request(app).post(`/api/almoxarifado/movimentacoes/${ent.body.id}/cancelar`).send({ motivo: 'corrida 2' }),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    assert.deepStrictEqual(statuses, [200, 400], `esperado [200,400], foi ${JSON.stringify(statuses)}`);
+
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 100, 'saldo deveria ter sido revertido exatamente uma vez');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

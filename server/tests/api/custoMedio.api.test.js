@@ -82,6 +82,19 @@ async function criarMaterial(db, codigo, qtd = 0) {
     assert.strictEqual(m.custo_medio, 30); // ((0)+(10*20))/10=20, depois ((10*20)+(10*40))/20=30 — qualquer ordem
   });
 
+  await test('estorno de entrada com custo NAO altera custo medio', async () => {
+    const mat = await criarMaterial(db, 'CM-007', 0);
+    const ent = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'ENTRADA', quantidade: 10, custo_unitario: 20 });
+    assert.strictEqual(ent.status, 201, JSON.stringify(ent.body));
+    const est = await request(app).post(`/api/almoxarifado/movimentacoes/${ent.body.id}/cancelar`)
+      .send({ motivo: 'lancamento errado' });
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+    const m = await dbGet(db, 'SELECT custo_medio, quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.custo_medio, 20);
+    assert.strictEqual(m.quantidade_atual, 0);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

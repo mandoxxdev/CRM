@@ -3,6 +3,7 @@ const { registrarAuditoria } = require('./audit');
 const { can } = require('./permissions');
 const alertService = require('./alertService');
 const { avaliarRegrasVinculo } = require('./movementRules');
+const { TIPOS_MOVIMENTO } = require('./schema');
 
 async function getConfig(db, chave) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
@@ -158,6 +159,12 @@ async function registrarMovimentacao(db, user, params) {
   if (!material_id || !tipo || quantidadeInvalida) {
     throw Object.assign(new Error('material_id, tipo e quantidade são obrigatórios'), { status: 400 });
   }
+  // Motor não aceita tipo forjado/desconhecido (achado do review final): TIPOS_MOVIMENTO é a
+  // única fonte de verdade de tipos válidos. ESTORNO é proibido aqui mesmo estando na lista —
+  // linhas ESTORNO só podem nascer do INSERT direto dentro de cancelarMovimentacao.
+  if (!TIPOS_MOVIMENTO.includes(tipo) || tipo === 'ESTORNO') {
+    throw Object.assign(new Error('Tipo de movimento inválido'), { status: 400 });
+  }
 
   const material = await getMaterial(db, material_id);
   if (!material.ativo) throw Object.assign(new Error('Material inativo não pode ser movimentado'), { status: 400 });
@@ -263,9 +270,15 @@ async function registrarMovimentacao(db, user, params) {
       await syncMaterialTotals(db, material_id);
       const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
       saldoPosterior = atual.quantidade_atual;
-    } else { // AJUSTE sem localização — define valor absoluto (last-writer-wins é aceitável para ajuste)
+    } else if (tiposAjuste.includes(tipo)) { // AJUSTE sem localização — define valor absoluto (last-writer-wins é aceitável para ajuste)
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [saldoPosterior, material_id]);
+    } else {
+      // Tipo neutro ao saldo (ex.: RETRABALHO) — achado do review final: este ramo antes caía
+      // no "else" de AJUSTE acima e disparava um UPDATE...SET quantidade_atual = <valor lido no
+      // início da função>, um last-writer-wins stale que podia sobrescrever saldo alterado por
+      // outra transação concorrente. Tipos aqui não devem tocar quantidade_atual — saldoPosterior
+      // permanece = saldoAnterior (setado no topo da função); o movimento ainda é registrado.
     }
 
     // saldo_anterior derivado do valor real pós-update (não da leitura pré-corrida):
@@ -333,110 +346,140 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (!motivo) throw Object.assign(new Error('Justificativa obrigatória para cancelamento'), { status: 400 });
   const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [movimentoId]);
   if (!mov) throw Object.assign(new Error('Movimentação não encontrada'), { status: 404 });
-  if (mov.cancelado) throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
   if (mov.tipo === 'ESTORNO') throw Object.assign(new Error('Estorno não pode ser estornado'), { status: 400 });
   if (['RESERVA', 'LIBERACAO_RESERVA'].includes(mov.tipo)) {
     throw Object.assign(new Error('Use a liberação de reserva para desfazer reservas'), { status: 400 });
   }
 
+  // Claim atômico ANTES de aplicar qualquer efeito inverso (achado do review final: double-cancel
+  // race). O UPDATE...WHERE cancelado = 0 é a própria seção crítica sob o lock de linha do SQLite:
+  // de duas chamadas concorrentes para o mesmo movimentoId, só uma tem changes = 1 — essa é a
+  // única que segue para reverter saldo; a outra falha aqui, antes de tocar em qualquer saldo.
+  // Também zera regularizacao_pendente aqui (achado do review: estorno deixava a pendência viva).
+  const claim = await dbRun(db, `UPDATE movimentacoes_almoxarifado
+    SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ?, regularizacao_pendente = 0
+    WHERE id = ? AND cancelado = 0`, [user.id, motivo, movimentoId]);
+  if (!claim.changes) throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
+
   const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
   const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
-  const material = await getMaterial(db, mov.material_id);
-  let saldoAntes = material.quantidade_atual;
-  let saldoDepois = saldoAntes;
+  let estornoId;
 
-  if (tiposEntrada.includes(mov.tipo)) {
-    // Reverter entrada = saída com guarda de disponível (a mercadoria pode já ter sido consumida).
-    // Mesmo padrão atômico de registrarMovimentacao (Task 3): UPDATE...RETURNING sob o lock de
-    // linha do SQLite fecha a janela de corrida entre a leitura acima e a escrita; saldoAntes é
-    // derivado do valor pós-update (não da leitura pré-corrida) para manter o par saldo_anterior/
-    // saldo_posterior do livro coerente mesmo sob concorrência.
-    const permiteNegativo = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
-    const row = await dbGet(db, `UPDATE materiais_almoxarifado
-      SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
-      RETURNING quantidade_atual`,
-      [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]);
-    if (!row) throw Object.assign(new Error('Não é possível estornar: saldo disponível insuficiente (material já consumido)'), { status: 400 });
-    saldoDepois = row.quantidade_atual;
-    saldoAntes = saldoDepois + parseFloat(mov.quantidade);
-    // reverter localização da entrada original
-    const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
-    if (loc) {
-      const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote);
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
-    }
-  } else if (tiposSaida.includes(mov.tipo)) {
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [mov.quantidade, mov.material_id]);
-    saldoDepois = saldoAntes + parseFloat(mov.quantidade);
-    const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
-    if (loc) {
-      const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote);
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
-    }
-  } else if (mov.tipo === 'AJUSTE') {
-    if (mov.localizacao_destino_id) {
-      // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
-      // global abaixo, ignoraria as OUTRAS localizações do material — a soma das linhas de
-      // estoque_saldo_almoxarifado deixaria de bater com quantidade_atual (achado do review
-      // pós-Task 6). O delta que o ajuste aplicou à localização é o mesmo que aplicou ao total
-      // (saldo_posterior - saldo_anterior do livro, ambos totais do material), então revertemos
-      // SÓ a localização por esse delta e recalculamos o total a partir da soma real.
-      const delta = mov.saldo_posterior - mov.saldo_anterior;
-      const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);
-      if (saldoLoc.quantidade - delta < 0) {
-        throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
+  try {
+    const material = await getMaterial(db, mov.material_id);
+    let saldoAntes = material.quantidade_atual;
+    let saldoDepois = saldoAntes;
+
+    if (tiposEntrada.includes(mov.tipo)) {
+      // Reverter entrada = saída com guarda de disponível (a mercadoria pode já ter sido consumida).
+      // Mesmo padrão atômico de registrarMovimentacao (Task 3): UPDATE...RETURNING sob o lock de
+      // linha do SQLite fecha a janela de corrida entre a leitura acima e a escrita; saldoAntes é
+      // derivado do valor pós-update (não da leitura pré-corrida) para manter o par saldo_anterior/
+      // saldo_posterior do livro coerente mesmo sob concorrência.
+      const permiteNegativo = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+      const row = await dbGet(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
+        RETURNING quantidade_atual`,
+        [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]);
+      if (!row) throw Object.assign(new Error('Não é possível estornar: saldo disponível insuficiente (material já consumido)'), { status: 400 });
+      saldoDepois = row.quantidade_atual;
+      saldoAntes = saldoDepois + parseFloat(mov.quantidade);
+      // reverter localização da entrada original
+      const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
+      if (loc) {
+        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote);
+        await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
       }
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [delta, saldoLoc.id]);
-      await syncMaterialTotals(db, mov.material_id);
-      const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
-      saldoDepois = atual.quantidade_atual;
-    } else {
-      // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [mov.saldo_anterior, mov.material_id]);
-      saldoDepois = mov.saldo_anterior;
-      await syncSaldoLocalizacaoPadrao(db, mov.material_id);
+      // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
+      // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
+      // specs/modulo-almoxarifado/03-motor-estoque/README.md.
+    } else if (tiposSaida.includes(mov.tipo)) {
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [mov.quantidade, mov.material_id]);
+      saldoDepois = saldoAntes + parseFloat(mov.quantidade);
+      const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
+      if (loc) {
+        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote);
+        await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
+      }
+    } else if (mov.tipo === 'AJUSTE') {
+      if (mov.localizacao_destino_id) {
+        // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
+        // global abaixo, ignoraria as OUTRAS localizações do material — a soma das linhas de
+        // estoque_saldo_almoxarifado deixaria de bater com quantidade_atual (achado do review
+        // pós-Task 6). O delta que o ajuste aplicou à localização é o mesmo que aplicou ao total
+        // (saldo_posterior - saldo_anterior do livro, ambos totais do material), então revertemos
+        // SÓ a localização por esse delta e recalculamos o total a partir da soma real.
+        const delta = mov.saldo_posterior - mov.saldo_anterior;
+        const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);
+        if (saldoLoc.quantidade - delta < 0) {
+          throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
+        }
+        await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [delta, saldoLoc.id]);
+        await syncMaterialTotals(db, mov.material_id);
+        const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+        saldoDepois = atual.quantidade_atual;
+      } else {
+        // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
+        await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [mov.saldo_anterior, mov.material_id]);
+        saldoDepois = mov.saldo_anterior;
+        await syncSaldoLocalizacaoPadrao(db, mov.material_id);
+      }
+    } else if (mov.tipo === 'TRANSFERENCIA') {
+      const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote);
+      const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);
+      if (destino.quantidade < mov.quantidade) {
+        throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
+      }
+      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, destino.id]);
+      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, origem.id]);
+    } else if (mov.tipo === 'BLOQUEIO') {
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = MAX(0, COALESCE(quantidade_bloqueada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
+    } else if (mov.tipo === 'DESBLOQUEIO') {
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
     }
-  } else if (mov.tipo === 'TRANSFERENCIA') {
-    const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote);
-    const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);
-    if (destino.quantidade < mov.quantidade) {
-      throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
-    }
-    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, destino.id]);
-    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, origem.id]);
-  } else if (mov.tipo === 'BLOQUEIO') {
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = MAX(0, COALESCE(quantidade_bloqueada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
-  } else if (mov.tipo === 'DESBLOQUEIO') {
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
+
+    const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
+      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
+       usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, unidade,
+       projeto_id, os_id, cliente_id, documento_vinculado, justificativa, centro_custo_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+      mov.material_id, 'ESTORNO', mov.quantidade, saldoAntes, saldoDepois,
+      `Estorno mov. #${movimentoId}`, mov.referencia, null,
+      user.id, user.nome || user.email,
+      mov.localizacao_destino_id, mov.localizacao_origem_id, mov.lote, mov.unidade,
+      mov.projeto_id, mov.os_id, mov.cliente_id, `ESTORNO-${movimentoId}`, motivo,
+      mov.centro_custo_id,
+    ]);
+    estornoId = r.lastID;
+
+    await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET movimento_estorno_id = ? WHERE id = ?', [estornoId, movimentoId]);
+  } catch (err) {
+    // Desfaz o claim: se a aplicação do efeito inverso falhar (ex.: saldo insuficiente para
+    // reverter uma entrada já consumida), o movimento não pode ficar marcado como cancelado sem
+    // ter revertido nada — senão fica "preso" (não pode ser estornado de novo) sem o saldo ter
+    // voltado. regularizacao_pendente volta ao valor original lido antes do claim.
+    await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por = NULL, cancelado_em = NULL,
+      cancelamento_motivo = NULL, regularizacao_pendente = ? WHERE id = ?`, [mov.regularizacao_pendente, movimentoId]);
+    throw err;
   }
-
-  const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-    (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
-     usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, unidade,
-     projeto_id, os_id, cliente_id, documento_vinculado, justificativa, centro_custo_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
-    mov.material_id, 'ESTORNO', mov.quantidade, saldoAntes, saldoDepois,
-    `Estorno mov. #${movimentoId}`, mov.referencia, null,
-    user.id, user.nome || user.email,
-    mov.localizacao_destino_id, mov.localizacao_origem_id, mov.lote, mov.unidade,
-    mov.projeto_id, mov.os_id, mov.cliente_id, `ESTORNO-${movimentoId}`, motivo,
-    mov.centro_custo_id,
-  ]);
-
-  await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP,
-    cancelamento_motivo = ?, movimento_estorno_id = ? WHERE id = ?`, [user.id, motivo, r.lastID, movimentoId]);
 
   await registrarAuditoria(db, {
     entidade: 'movimentacao', entidade_id: movimentoId, acao: 'CANCELAMENTO',
     usuario_id: user.id, usuario_nome: user.nome || user.email, justificativa: motivo,
-    dados_novos: { estorno_id: r.lastID },
+    dados_novos: { estorno_id: estornoId },
   });
 
-  return { success: true, estorno_id: r.lastID };
+  try {
+    await alertService.verificarAlertaPorMaterialId(db, mov.material_id);
+  } catch (alertErr) {
+    console.warn('[almoxarifado-alertas] Falha ao verificar alerta pós-estorno:', alertErr.message);
+  }
+
+  return { success: true, estorno_id: estornoId };
 }
 
 async function criarReserva(db, user, data) {

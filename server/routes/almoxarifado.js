@@ -492,7 +492,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (projeto_id) { sql += ` AND m.projeto_id = ?`; params.push(projeto_id); }
     if (centro_custo_id) { sql += ` AND m.centro_custo_id = ?`; params.push(centro_custo_id); }
     if (usuario_id) { sql += ` AND m.usuario_id = ?`; params.push(usuario_id); }
-    if (pendentes_regularizacao === '1') { sql += ` AND m.regularizacao_pendente = 1`; }
+    if (pendentes_regularizacao === '1') { sql += ` AND m.regularizacao_pendente = 1 AND m.cancelado = 0`; }
 
     sql += ` ORDER BY m.created_at DESC`;
     if (limit) { sql += ` LIMIT ?`; params.push(parseInt(limit)); }

@@ -120,6 +120,18 @@ async function criarMaterial(db, codigo, qtd = 100) {
     assert.strictEqual(saldo.quantidade, 55);
   });
 
+  await test('tipo desconhecido retorna 400', async () => {
+    const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: matId, tipo: 'FOO', quantidade: 1 });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+  });
+
+  await test('tipo ESTORNO nao pode ser criado diretamente', async () => {
+    const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: matId, tipo: 'ESTORNO', quantidade: 1 });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+  });
+
   await test('livro registra saldo_anterior/saldo_posterior encadeados', async () => {
     const movs = await dbAll(db,
       `SELECT saldo_anterior, saldo_posterior FROM movimentacoes_almoxarifado

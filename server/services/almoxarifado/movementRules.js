@@ -2,7 +2,8 @@
  * Regra crítica de saída (spec 13.3): vínculo obrigatório por tipo de movimento.
  * vinculo:
  *   'os_ou_projeto'  → exige os_id || projeto_id
- *   'qualquer'       → exige os_id || projeto_id || centro_custo_id || justificativa
+ *   'qualquer'       → exige os_id || projeto_id || centro_custo_id || justificativa || referencia
+ *                      (referencia é aceita aqui por compat v1 — ver avaliarRegrasVinculo abaixo)
  *   'nenhum'         → sem exigência de vínculo
  * justificativa: true → exige justificativa (independente de vínculo)
  * Emergencial (emergencial=true + justificativa) bypassa o vínculo e marca regularizacao_pendente.

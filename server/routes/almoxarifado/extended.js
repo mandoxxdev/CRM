@@ -140,6 +140,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     try {
       const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [req.params.id]);
       if (!mov) return res.status(404).json({ error: 'Movimentação não encontrada' });
+      // Defesa em profundidade (achado do review final): cancelarMovimentacao já zera
+      // regularizacao_pendente no claim do estorno, então este caminho normalmente nem seria
+      // alcançado — mas um cancelamento não pode virar regularizável por nenhuma outra via.
+      if (mov.cancelado) return res.status(400).json({ error: 'Movimentação cancelada não pode ser regularizada' });
       if (!mov.regularizacao_pendente) return res.status(400).json({ error: 'Movimentação não está pendente de regularização' });
       const { os_id = mov.os_id, projeto_id = mov.projeto_id, centro_custo_id = mov.centro_custo_id } = req.body;
       await dbRun(db, `UPDATE movimentacoes_almoxarifado SET os_id=?, projeto_id=?, centro_custo_id=?, regularizacao_pendente=0 WHERE id=?`,
