@@ -206,24 +206,30 @@ async function registrarMovimentacao(db, user, params) {
   if (!['TRANSFERENCIA', 'BLOQUEIO', 'DESBLOQUEIO', 'RESERVA', 'LIBERACAO_RESERVA'].includes(tipo)) {
     if (tiposSaida.includes(tipo)) {
       // Decremento atômico: o próprio UPDATE valida o disponível sob o lock de linha do
-      // SQLite, fechando a janela de corrida entre a leitura acima e a escrita.
-      const upd = await dbRun(db, `UPDATE materiais_almoxarifado
+      // SQLite, fechando a janela de corrida entre a leitura acima e a escrita. RETURNING
+      // captura o quantidade_atual pós-update NA MESMA instrução — uma SELECT separada
+      // reabriria uma segunda janela de corrida entre o UPDATE e a leitura do saldo, que é
+      // o que vai para o par saldo_anterior/saldo_posterior do livro, da auditoria e da resposta.
+      const row = await dbGet(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)`,
+        WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
+        RETURNING quantidade_atual`,
         [quantidade, material_id, permiteNegativo ? 1 : 0, quantidade]);
-      if (!upd.changes) {
+      if (!row) {
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
       }
+      saldoPosterior = row.quantidade_atual;
     } else if (tiposEntrada.includes(tipo)) {
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      const row = await dbGet(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? RETURNING quantidade_atual`,
         [quantidade, material_id]);
+      saldoPosterior = row.quantidade_atual;
     } else { // AJUSTE — define valor absoluto (last-writer-wins é aceitável para ajuste)
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [saldoPosterior, material_id]);
     }
 
-    const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
-    saldoPosterior = atual.quantidade_atual;
     // saldo_anterior derivado do valor real pós-update (não da leitura pré-corrida):
     // entrada: anterior = posterior - qtd; saída: anterior = posterior + qtd; ajuste: mantém a leitura inicial.
     if (tiposEntrada.includes(tipo)) saldoAnteriorReal = saldoPosterior - parseFloat(quantidade);

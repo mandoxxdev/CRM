@@ -1,7 +1,7 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -53,6 +53,33 @@ async function criarMaterial(db, codigo, qtd = 100) {
     assert.ok(results.every((r) => r.status === 201));
     const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
     assert.strictEqual(m.quantidade_atual, 40);
+  });
+
+  await test('10 saidas concorrentes de 10: livro registra a cadeia real de saldo_anterior/posterior (não [10,0] repetido)', async () => {
+    const mat = await criarMaterial(db, 'CONC-004', 50);
+    const reqs = Array.from({ length: 10 }, () =>
+      request(app).post('/api/almoxarifado/movimentacoes/v2')
+        .send({ material_id: mat, tipo: 'SAIDA', quantidade: 10, justificativa: 'corrida' }));
+    const results = await Promise.all(reqs);
+    const sucessos = results.filter((r) => r.status === 201).length;
+    assert.strictEqual(sucessos, 5, `esperado 5 sucessos, houve ${sucessos}`);
+
+    const movs = await dbAll(db,
+      `SELECT saldo_anterior, saldo_posterior FROM movimentacoes_almoxarifado
+       WHERE material_id = ? AND tipo = 'SAIDA' AND cancelado = 0 ORDER BY id`, [mat]);
+    assert.strictEqual(movs.length, 5, `esperado 5 linhas no livro, houve ${movs.length}`);
+
+    const anteriores = movs.map((m) => m.saldo_anterior).sort((x, y) => x - y);
+    assert.deepStrictEqual(anteriores, [10, 20, 30, 40, 50],
+      `saldo_anterior deveria ser exatamente {10,20,30,40,50}, foi ${JSON.stringify(anteriores)}`);
+
+    for (const m of movs) {
+      assert.strictEqual(m.saldo_posterior, m.saldo_anterior - 10,
+        `par quebrado: anterior=${m.saldo_anterior} posterior=${m.saldo_posterior}`);
+    }
+
+    const pares = movs.map((m) => `${m.saldo_anterior}-${m.saldo_posterior}`);
+    assert.strictEqual(new Set(pares).size, 5, `pares deveriam ser todos distintos, foram ${JSON.stringify(pares)}`);
   });
 
   await close();
