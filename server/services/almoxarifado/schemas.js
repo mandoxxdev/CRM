@@ -10,7 +10,7 @@ const CentroCustoSchema = z.object({
 const MovimentacaoSchema = z.object({
   material_id: z.number().int().positive(),
   tipo: z.string().min(1),
-  quantidade: z.number().gt(0, 'quantidade deve ser maior que zero'),
+  quantidade: z.number().min(0, 'quantidade deve ser maior que zero'),
   motivo: z.string().optional(),
   referencia: z.string().optional(),
   observacoes: z.string().optional(),
@@ -25,6 +25,14 @@ const MovimentacaoSchema = z.object({
   documento_vinculado: z.string().optional(),
   custo_unitario: z.number().gt(0).optional(),
   emergencial: z.boolean().optional(),
+}).superRefine((d, ctx) => {
+  // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização
+  // e propaga o total do material — ver stockService.registrarMovimentacao). Para
+  // qualquer outro caso quantidade continua exigindo > 0.
+  const zeraLocalizacao = d.tipo === 'AJUSTE' && !!d.localizacao_destino_id;
+  if (d.quantidade === 0 && !zeraLocalizacao) {
+    ctx.addIssue({ code: 'custom', path: ['quantidade'], message: 'quantidade deve ser maior que zero' });
+  }
 });
 
 const RegularizacaoSchema = z.object({

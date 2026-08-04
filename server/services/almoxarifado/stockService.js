@@ -30,7 +30,13 @@ async function syncMaterialTotals(db, materialId) {
            COALESCE(SUM(quantidade_em_inspecao),0) as inspecao
     FROM estoque_saldo_almoxarifado WHERE material_id = ?`, [materialId]);
 
-  if (saldos && saldos.total > 0) {
+  // Antes: só atualizava com total > 0, então zerar todas as localizações de um material
+  // (ex.: AJUSTE para 0) nunca propagava para materiais_almoxarifado.quantidade_atual — o
+  // total ficava "preso" no último valor positivo. Contagem de linhas cobre o caso 0 mantendo
+  // o comportamento de não tocar no material quando ele não tem NENHUMA linha de saldo ainda.
+  const linhas = await dbGet(db, 'SELECT COUNT(*) as n FROM estoque_saldo_almoxarifado WHERE material_id = ?', [materialId]);
+
+  if (linhas && linhas.n > 0) {
     await dbRun(db, `UPDATE materiais_almoxarifado SET
       quantidade_atual = ?, quantidade_reservada = ?, quantidade_bloqueada = ?, quantidade_em_inspecao = ?,
       updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -142,7 +148,14 @@ async function registrarMovimentacao(db, user, params) {
   } = params;
 
   if (!user?.id) throw Object.assign(new Error('Usuário responsável obrigatório'), { status: 400 });
-  if (!material_id || !tipo || !quantidade || quantidade <= 0) {
+  // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização e recalcula
+  // o total do material — espelha o superRefine de MovimentacaoSchema). Fora desse caso,
+  // 0 e negativos continuam rejeitados; a checagem não pode usar `!quantidade` porque isso
+  // também rejeitaria o 0 legítimo.
+  const ajusteZeraLocalizacao = tipo === 'AJUSTE' && !!localizacao_destino_id;
+  const quantidadeInvalida = quantidade === undefined || quantidade === null || Number.isNaN(quantidade)
+    || quantidade < 0 || (quantidade === 0 && !ajusteZeraLocalizacao);
+  if (!material_id || !tipo || quantidadeInvalida) {
     throw Object.assign(new Error('material_id, tipo e quantidade são obrigatórios'), { status: 400 });
   }
 
@@ -239,7 +252,18 @@ async function registrarMovimentacao(db, user, params) {
           WHERE id = ? RETURNING quantidade_atual`, [quantidade, material_id]);
         saldoPosterior = row.quantidade_atual;
       }
-    } else { // AJUSTE — define valor absoluto (last-writer-wins é aceitável para ajuste)
+    } else if (tiposAjuste.includes(tipo) && localizacao_destino_id) {
+      // AJUSTE escopado a uma localização: define o saldo APENAS daquela localização
+      // (não o total do material) e recalcula o total a partir da soma de todas as
+      // localizações — inclui o caso de zerar (quantidade 0), daí o syncMaterialTotals
+      // contar linhas em vez de exigir total > 0 (fix desta task).
+      const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, lote);
+      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [parseFloat(quantidade), saldo.id]);
+      await syncMaterialTotals(db, material_id);
+      const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
+      saldoPosterior = atual.quantidade_atual;
+    } else { // AJUSTE sem localização — define valor absoluto (last-writer-wins é aceitável para ajuste)
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [saldoPosterior, material_id]);
     }
@@ -263,10 +287,12 @@ async function registrarMovimentacao(db, user, params) {
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
-    if (tiposAjuste.includes(tipo)) {
-      // AJUSTE não mexe em localização (não é entrada nem saída) — mas sem isto o saldo
-      // por localização diverge do total do material quando só há saldo na localização padrão
-      // (paridade com o antigo v1, que chamava isto incondicionalmente após cada movimento).
+    if (tiposAjuste.includes(tipo) && !localizacao_destino_id) {
+      // AJUSTE sem localização não mexe em localização (não é entrada nem saída) — mas sem
+      // isto o saldo por localização diverge do total do material quando só há saldo na
+      // localização padrão (paridade com o antigo v1, que chamava isto incondicionalmente
+      // após cada movimento). AJUSTE COM localização já escreveu na localização certa acima
+      // — chamar isto aqui reescreveria a localização padrão por engano.
       await syncSaldoLocalizacaoPadrao(db, material_id);
     }
   }
