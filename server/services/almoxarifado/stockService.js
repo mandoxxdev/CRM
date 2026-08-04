@@ -201,12 +201,34 @@ async function registrarMovimentacao(db, user, params) {
     saldoPosterior = saldoAnterior;
   }
 
+  let saldoAnteriorReal = saldoAnterior;
+
   if (!['TRANSFERENCIA', 'BLOQUEIO', 'DESBLOQUEIO', 'RESERVA', 'LIBERACAO_RESERVA'].includes(tipo)) {
-    if (saldoPosterior < 0 && !permiteNegativo) {
-      throw Object.assign(new Error('Operação resultaria em saldo negativo'), { status: 400 });
+    if (tiposSaida.includes(tipo)) {
+      // Decremento atômico: o próprio UPDATE valida o disponível sob o lock de linha do
+      // SQLite, fechando a janela de corrida entre a leitura acima e a escrita.
+      const upd = await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)`,
+        [quantidade, material_id, permiteNegativo ? 1 : 0, quantidade]);
+      if (!upd.changes) {
+        throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
+      }
+    } else if (tiposEntrada.includes(tipo)) {
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [quantidade, material_id]);
+    } else { // AJUSTE — define valor absoluto (last-writer-wins é aceitável para ajuste)
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [saldoPosterior, material_id]);
     }
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [saldoPosterior, material_id]);
+
+    const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
+    saldoPosterior = atual.quantidade_atual;
+    // saldo_anterior derivado do valor real pós-update (não da leitura pré-corrida):
+    // entrada: anterior = posterior - qtd; saída: anterior = posterior + qtd; ajuste: mantém a leitura inicial.
+    if (tiposEntrada.includes(tipo)) saldoAnteriorReal = saldoPosterior - parseFloat(quantidade);
+    else if (tiposSaida.includes(tipo)) saldoAnteriorReal = saldoPosterior + parseFloat(quantidade);
+    else saldoAnteriorReal = saldoAnterior;
 
     const locEntrada = tiposEntrada.includes(tipo) ? resolveLocalizacaoEntrada(material, localizacao_destino_id) : null;
     const locSaida = tiposSaida.includes(tipo) ? resolveLocalizacaoSaida(material, localizacao_origem_id) : null;
@@ -235,7 +257,7 @@ async function registrarMovimentacao(db, user, params) {
      projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
      centro_custo_id, emergencial, regularizacao_pendente)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
-    material_id, tipo, quantidade, saldoAnterior, saldoPosterior,
+    material_id, tipo, quantidade, saldoAnteriorReal, saldoPosterior,
     motivo || null, referencia || null, observacoes || null,
     user.id, user.nome || user.email,
     localizacao_origem_id || null, localizacao_destino_id || null, lote || null, material.unidade,
@@ -258,7 +280,7 @@ async function registrarMovimentacao(db, user, params) {
     console.warn('[almoxarifado-alertas] Falha ao verificar alerta pós-movimentação:', alertErr.message);
   }
 
-  return { id: result.lastID, saldo_anterior: saldoAnterior, saldo_posterior: saldoPosterior };
+  return { id: result.lastID, saldo_anterior: saldoAnteriorReal, saldo_posterior: saldoPosterior };
 }
 
 async function cancelarMovimentacao(db, user, movimentoId, motivo) {
