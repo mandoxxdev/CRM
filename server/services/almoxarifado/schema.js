@@ -841,6 +841,8 @@ async function initSchema(db) {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN centro_custo_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN emergencial INTEGER DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN regularizacao_pendente INTEGER DEFAULT 0');
 
   console.log('✅ Schema almoxarifado v3 inicializado');
 }

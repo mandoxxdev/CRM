@@ -34,6 +34,7 @@ async function registrarDevolucao(db, user, data) {
   } else if (destino === 'SUCATA') {
     await registrarMovimentacao(db, user, {
       material_id, tipo: 'SUCATA', quantidade, motivo, os_id: origem_os_id,
+      justificativa: observacoes || motivo,
     });
   } else if (destino === 'RETRABALHO') {
     await registrarMovimentacao(db, user, {

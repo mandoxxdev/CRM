@@ -6,7 +6,8 @@ const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO }
 const { requirePermission } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, MovimentacaoSchema, RegularizacaoSchema } = require('../../services/almoxarifado/schemas');
+const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const returnService = require('../../services/almoxarifado/returnService');
@@ -128,10 +129,27 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     } catch (e) { handleError(res, e); }
   });
 
-  app.post('/api/almoxarifado/movimentacoes/v2', auth, requirePermission('movimentar'), async (req, res) => {
+  app.post('/api/almoxarifado/movimentacoes/v2', auth, requirePermission('movimentar'), validate(MovimentacaoSchema), async (req, res) => {
     try {
       const result = await stockService.registrarMovimentacao(db, req.user, req.body);
       res.status(201).json(result);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/movimentacoes/:id/regularizar', auth, requirePermission('movimentar'), validate(RegularizacaoSchema), async (req, res) => {
+    try {
+      const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!mov) return res.status(404).json({ error: 'Movimentação não encontrada' });
+      if (!mov.regularizacao_pendente) return res.status(400).json({ error: 'Movimentação não está pendente de regularização' });
+      const { os_id = mov.os_id, projeto_id = mov.projeto_id, centro_custo_id = mov.centro_custo_id } = req.body;
+      await dbRun(db, `UPDATE movimentacoes_almoxarifado SET os_id=?, projeto_id=?, centro_custo_id=?, regularizacao_pendente=0 WHERE id=?`,
+        [os_id || null, projeto_id || null, centro_custo_id || null, req.params.id]);
+      await registrarAuditoria(db, {
+        entidade: 'movimentacao', entidade_id: mov.id, acao: 'REGULARIZACAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { os_id, projeto_id, centro_custo_id },
+      });
+      res.json({ success: true });
     } catch (e) { handleError(res, e); }
   });
 

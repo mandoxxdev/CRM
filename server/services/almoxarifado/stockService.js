@@ -2,6 +2,7 @@ const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const { can } = require('./permissions');
 const alertService = require('./alertService');
+const { avaliarRegrasVinculo } = require('./movementRules');
 
 async function getConfig(db, chave) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
@@ -137,6 +138,7 @@ async function registrarMovimentacao(db, user, params) {
     material_id, tipo, quantidade, motivo, referencia, observacoes,
     localizacao_origem_id, localizacao_destino_id, lote, projeto_id, os_id, cliente_id,
     documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id, centro_custo_id,
+    emergencial,
   } = params;
 
   if (!user?.id) throw Object.assign(new Error('Usuário responsável obrigatório'), { status: 400 });
@@ -155,6 +157,10 @@ async function registrarMovimentacao(db, user, params) {
   const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
   const tiposAjuste = ['AJUSTE'];
 
+  const regras = avaliarRegrasVinculo(tipo, { os_id, projeto_id, centro_custo_id, justificativa, referencia, emergencial });
+  if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
+  const regularizacaoPendente = regras.pendente ? 1 : 0;
+
   if (tiposEntrada.includes(tipo)) {
     saldoPosterior = saldoAnterior + parseFloat(quantidade);
   } else if (tiposSaida.includes(tipo)) {
@@ -168,14 +174,8 @@ async function registrarMovimentacao(db, user, params) {
         throw Object.assign(new Error('Material bloqueado não pode ser utilizado'), { status: 400 });
       }
     }
-    if (tiposSaida.includes(tipo) && !os_id && !projeto_id && !justificativa && !referencia) {
-      throw Object.assign(new Error('Saída de produção requer OS/projeto ou justificativa'), { status: 400 });
-    }
     saldoPosterior = saldoAnterior - parseFloat(quantidade);
   } else if (tiposAjuste.includes(tipo)) {
-    if (!justificativa && !can(user, 'ajustar_estoque')) {
-      throw Object.assign(new Error('Ajuste requer justificativa'), { status: 400 });
-    }
     saldoPosterior = parseFloat(quantidade);
   } else if (tipo === 'TRANSFERENCIA') {
     if (!localizacao_origem_id || !localizacao_destino_id) {
@@ -233,8 +233,8 @@ async function registrarMovimentacao(db, user, params) {
     (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
      usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, unidade,
      projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
-     centro_custo_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     centro_custo_id, emergencial, regularizacao_pendente)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     material_id, tipo, quantidade, saldoAnterior, saldoPosterior,
     motivo || null, referencia || null, observacoes || null,
     user.id, user.nome || user.email,
@@ -242,7 +242,7 @@ async function registrarMovimentacao(db, user, params) {
     projeto_id || null, os_id || null, cliente_id || null,
     documento_vinculado || null, justificativa || null,
     reserva_id || null, recebimento_id || null, requisicao_id || null,
-    centro_custo_id || null,
+    centro_custo_id || null, emergencial ? 1 : 0, regularizacaoPendente,
   ]);
 
   await registrarAuditoria(db, {
