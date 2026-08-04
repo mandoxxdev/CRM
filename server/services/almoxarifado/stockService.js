@@ -376,10 +376,30 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
     }
   } else if (mov.tipo === 'AJUSTE') {
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [mov.saldo_anterior, mov.material_id]);
-    saldoDepois = mov.saldo_anterior;
-    await syncSaldoLocalizacaoPadrao(db, mov.material_id);
+    if (mov.localizacao_destino_id) {
+      // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
+      // global abaixo, ignoraria as OUTRAS localizações do material — a soma das linhas de
+      // estoque_saldo_almoxarifado deixaria de bater com quantidade_atual (achado do review
+      // pós-Task 6). O delta que o ajuste aplicou à localização é o mesmo que aplicou ao total
+      // (saldo_posterior - saldo_anterior do livro, ambos totais do material), então revertemos
+      // SÓ a localização por esse delta e recalculamos o total a partir da soma real.
+      const delta = mov.saldo_posterior - mov.saldo_anterior;
+      const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);
+      if (saldoLoc.quantidade - delta < 0) {
+        throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
+      }
+      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [delta, saldoLoc.id]);
+      await syncMaterialTotals(db, mov.material_id);
+      const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+      saldoDepois = atual.quantidade_atual;
+    } else {
+      // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [mov.saldo_anterior, mov.material_id]);
+      saldoDepois = mov.saldo_anterior;
+      await syncSaldoLocalizacaoPadrao(db, mov.material_id);
+    }
   } else if (mov.tipo === 'TRANSFERENCIA') {
     const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote);
     const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);

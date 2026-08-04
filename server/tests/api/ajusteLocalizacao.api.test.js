@@ -61,6 +61,37 @@ async function criarMaterial(db, codigo, qtd = 100) {
     assert.strictEqual(m.quantidade_atual, 70);
   });
 
+  await test('estorno de AJUSTE por localizacao reverte so a localizacao afetada (nao a soma inteira)', async () => {
+    const locA = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('AJL-D','D')`)).lastID;
+    const locB = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('AJL-E','E')`)).lastID;
+    const mat = await criarMaterial(db, 'AJL-004', 0);
+    await dbRun(db, `INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,30)`, [mat, locA]);
+    await dbRun(db, `INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,20)`, [mat, locB]);
+    await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = 50 WHERE id = ?`, [mat]);
+
+    const aj = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'AJUSTE', quantidade: 10, localizacao_destino_id: locA, justificativa: 'contagem A' });
+    assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
+    const totalAposAjuste = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id=?', [mat]);
+    assert.strictEqual(totalAposAjuste.quantidade_atual, 30); // 10 (A) + 20 (B)
+
+    const est = await request(app).post(`/api/almoxarifado/movimentacoes/${aj.body.id}/cancelar`)
+      .send({ motivo: 'contagem errada' });
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+
+    const sa = await dbGet(db, 'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id=? AND localizacao_id=?', [mat, locA]);
+    const sb = await dbGet(db, 'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id=? AND localizacao_id=?', [mat, locB]);
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id=?', [mat]);
+    assert.strictEqual(sa.quantidade, 30, 'localizacao A deveria voltar a 30');
+    assert.strictEqual(sb.quantidade, 20, 'localizacao B nao deveria ser tocada');
+    assert.strictEqual(m.quantidade_atual, 50, 'total deveria voltar a 50 (30 + 20)');
+
+    const estornoMov = await dbGet(db,
+      `SELECT tipo, quantidade FROM movimentacoes_almoxarifado WHERE id = ?`, [est.body.estorno_id]);
+    assert.ok(estornoMov, 'movimento de ESTORNO deveria existir');
+    assert.strictEqual(estornoMov.tipo, 'ESTORNO');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
