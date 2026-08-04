@@ -144,9 +144,12 @@ const MovimentacoesAlmoxarifado = () => {
       if (form.os_id) payload.os_id = Number(form.os_id);
       if (form.projeto_id) payload.projeto_id = Number(form.projeto_id);
       if (form.centro_custo_id) payload.centro_custo_id = Number(form.centro_custo_id);
-      if (form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
-      if (form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
-      if (form.lote) payload.lote = form.lote;
+      // Localização/lote só valem para o tipo que os exibe no form — evita que um valor
+      // "grudado" de uma seleção anterior (ex.: destino escolhido em ENTRADA, depois
+      // trocado para AJUSTE) vaze para um tipo onde o campo nem aparece na tela.
+      if (form.tipo === 'SAIDA' && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
+      if (form.tipo === 'ENTRADA' && form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
+      if ((form.tipo === 'ENTRADA' || form.tipo === 'SAIDA') && form.lote) payload.lote = form.lote;
       if (form.tipo === 'ENTRADA' && form.custo_unitario) {
         const custo = parseFloat(form.custo_unitario);
         if (!Number.isNaN(custo) && custo > 0) payload.custo_unitario = custo;
@@ -331,11 +334,22 @@ const MovimentacoesAlmoxarifado = () => {
                   <div className="almox-field">
                     <label className="almox-label">Tipo<span className="required">*</span></label>
                     <select className="almox-form-select" value={form.tipo}
-                      onChange={e => setForm(f => ({
-                        ...f,
-                        tipo: e.target.value,
-                        emergencial: e.target.value === 'SAIDA' ? f.emergencial : false
-                      }))}>
+                      onChange={e => {
+                        const novoTipo = e.target.value;
+                        const mostraLote = novoTipo === 'ENTRADA' || novoTipo === 'SAIDA';
+                        // Limpa qualquer campo que só aparece para outro tipo — o estado nunca
+                        // pode carregar um valor que o usuário não está mais vendo na tela
+                        // (senão ele vaza escondido para o payload do tipo atual).
+                        setForm(f => ({
+                          ...f,
+                          tipo: novoTipo,
+                          emergencial: novoTipo === 'SAIDA' ? f.emergencial : false,
+                          localizacao_destino_id: novoTipo === 'ENTRADA' ? f.localizacao_destino_id : '',
+                          custo_unitario: novoTipo === 'ENTRADA' ? f.custo_unitario : '',
+                          localizacao_origem_id: novoTipo === 'SAIDA' ? f.localizacao_origem_id : '',
+                          lote: mostraLote ? f.lote : ''
+                        }));
+                      }}>
                       {TIPOS_FORM.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
