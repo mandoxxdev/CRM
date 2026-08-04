@@ -68,6 +68,20 @@ async function criarMaterial(db, codigo, qtd = 0) {
     assert.strictEqual(m.custo_medio, 15);
   });
 
+  await test('entradas concorrentes com custos diferentes ponderam corretamente (ordem-independente)', async () => {
+    const mat = await criarMaterial(db, 'CM-006', 0);
+    const [a, b] = await Promise.all([
+      request(app).post('/api/almoxarifado/movimentacoes/v2')
+        .send({ material_id: mat, tipo: 'ENTRADA', quantidade: 10, custo_unitario: 20 }),
+      request(app).post('/api/almoxarifado/movimentacoes/v2')
+        .send({ material_id: mat, tipo: 'ENTRADA', quantidade: 10, custo_unitario: 40 }),
+    ]);
+    assert.strictEqual(a.status, 201); assert.strictEqual(b.status, 201);
+    const m = await dbGet(db, 'SELECT quantidade_atual, custo_medio FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 20);
+    assert.strictEqual(m.custo_medio, 30); // ((0)+(10*20))/10=20, depois ((10*20)+(10*40))/20=30 — qualquer ordem
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

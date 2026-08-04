@@ -220,20 +220,24 @@ async function registrarMovimentacao(db, user, params) {
       }
       saldoPosterior = row.quantidade_atual;
     } else if (tiposEntrada.includes(tipo)) {
-      const row = await dbGet(db, `UPDATE materiais_almoxarifado
-        SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? RETURNING quantidade_atual`,
-        [quantidade, material_id]);
-      saldoPosterior = row.quantidade_atual;
-
-      // Cálculo de custo médio ponderado
       if (custoInformado && custoInformado > 0) {
-        const custoMedioAtual = (saldoAnterior > 0 ? (material.custo_medio || material.custo_unitario || 0) : 0);
-        const novoCustoMedio = saldoAnterior > 0
-          ? ((saldoAnterior * custoMedioAtual) + (parseFloat(quantidade) * custoInformado)) / (saldoAnterior + parseFloat(quantidade))
-          : custoInformado;
-        await dbRun(db, 'UPDATE materiais_almoxarifado SET custo_medio = ?, custo_unitario = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          [Math.round(novoCustoMedio * 10000) / 10000, custoInformado, material_id]);
+        const row = await dbGet(db, `UPDATE materiais_almoxarifado SET
+            quantidade_atual = quantidade_atual + ?,
+            custo_medio = CASE WHEN quantidade_atual > 0
+              THEN ROUND(((quantidade_atual * (CASE WHEN COALESCE(custo_medio,0) > 0 THEN custo_medio ELSE COALESCE(custo_unitario,0) END)) + (? * ?)) / (quantidade_atual + ?), 4)
+              ELSE ? END,
+            custo_unitario = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+          RETURNING quantidade_atual`,
+          [quantidade, quantidade, custoInformado, quantidade, custoInformado, custoInformado, material_id]);
+        saldoPosterior = row.quantidade_atual;
+      } else {
+        // entrada sem custo informado: comportamento atual (só quantidade), inalterado
+        const row = await dbGet(db, `UPDATE materiais_almoxarifado
+          SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? RETURNING quantidade_atual`, [quantidade, material_id]);
+        saldoPosterior = row.quantidade_atual;
       }
     } else { // AJUSTE — define valor absoluto (last-writer-wins é aceitável para ajuste)
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
