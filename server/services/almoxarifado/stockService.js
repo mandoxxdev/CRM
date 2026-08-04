@@ -138,7 +138,7 @@ async function registrarMovimentacao(db, user, params) {
     material_id, tipo, quantidade, motivo, referencia, observacoes,
     localizacao_origem_id, localizacao_destino_id, lote, projeto_id, os_id, cliente_id,
     documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id, centro_custo_id,
-    emergencial,
+    emergencial, custo_unitario: custoInformado,
   } = params;
 
   if (!user?.id) throw Object.assign(new Error('Usuário responsável obrigatório'), { status: 400 });
@@ -225,6 +225,16 @@ async function registrarMovimentacao(db, user, params) {
         WHERE id = ? RETURNING quantidade_atual`,
         [quantidade, material_id]);
       saldoPosterior = row.quantidade_atual;
+
+      // Cálculo de custo médio ponderado
+      if (custoInformado && custoInformado > 0) {
+        const custoMedioAtual = (saldoAnterior > 0 ? (material.custo_medio || material.custo_unitario || 0) : 0);
+        const novoCustoMedio = saldoAnterior > 0
+          ? ((saldoAnterior * custoMedioAtual) + (parseFloat(quantidade) * custoInformado)) / (saldoAnterior + parseFloat(quantidade))
+          : custoInformado;
+        await dbRun(db, 'UPDATE materiais_almoxarifado SET custo_medio = ?, custo_unitario = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [Math.round(novoCustoMedio * 10000) / 10000, custoInformado, material_id]);
+      }
     } else { // AJUSTE — define valor absoluto (last-writer-wins é aceitável para ajuste)
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [saldoPosterior, material_id]);
