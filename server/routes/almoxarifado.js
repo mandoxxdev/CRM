@@ -474,11 +474,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // GET /api/almoxarifado/movimentacoes — listar
   app.get('/api/almoxarifado/movimentacoes',(req, res) => {
-    const { material_id, tipo, data_inicio, data_fim, limit } = req.query;
+    const { material_id, tipo, data_inicio, data_fim, limit, os_id, projeto_id, centro_custo_id, usuario_id, pendentes_regularizacao } = req.query;
 
-    let sql = `SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo, ma.unidade
+    let sql = `SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo, ma.unidade,
+               cc.codigo as centro_custo_codigo, cc.nome as centro_custo_nome
                FROM movimentacoes_almoxarifado m
                JOIN materiais_almoxarifado ma ON m.material_id = ma.id
+               LEFT JOIN centros_custo_almoxarifado cc ON m.centro_custo_id = cc.id
                WHERE 1=1`;
     const params = [];
 
@@ -486,6 +488,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (tipo) { sql += ` AND m.tipo = ?`; params.push(tipo); }
     if (data_inicio) { sql += ` AND DATE(m.created_at) >= ?`; params.push(data_inicio); }
     if (data_fim) { sql += ` AND DATE(m.created_at) <= ?`; params.push(data_fim); }
+    if (os_id) { sql += ` AND m.os_id = ?`; params.push(os_id); }
+    if (projeto_id) { sql += ` AND m.projeto_id = ?`; params.push(projeto_id); }
+    if (centro_custo_id) { sql += ` AND m.centro_custo_id = ?`; params.push(centro_custo_id); }
+    if (usuario_id) { sql += ` AND m.usuario_id = ?`; params.push(usuario_id); }
+    if (pendentes_regularizacao === '1') { sql += ` AND m.regularizacao_pendente = 1`; }
 
     sql += ` ORDER BY m.created_at DESC`;
     if (limit) { sql += ` LIMIT ?`; params.push(parseInt(limit)); }

@@ -194,6 +194,45 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     } catch (e) { handleError(res, e); }
   });
 
+  // ── Extrato do item ──
+  app.get('/api/almoxarifado/materiais/:id/extrato', auth, async (req, res) => {
+    try {
+      const material = await dbGet(db, `SELECT m.*,
+        (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0) - COALESCE(m.quantidade_em_inspecao,0)) as quantidade_disponivel
+        FROM materiais_almoxarifado m WHERE m.id = ?`, [req.params.id]);
+      if (!material) return res.status(404).json({ error: 'Material não encontrado' });
+      const [saldos, movimentacoes, reservas] = await Promise.all([
+        stockService.consultarSaldosPorLocalizacao(db, req.params.id),
+        dbAll(db, `SELECT m.*, cc.codigo as centro_custo_codigo FROM movimentacoes_almoxarifado m
+          LEFT JOIN centros_custo_almoxarifado cc ON m.centro_custo_id = cc.id
+          WHERE m.material_id = ? ORDER BY m.id DESC LIMIT 100`, [req.params.id]),
+        dbAll(db, `SELECT * FROM reservas_material_almoxarifado WHERE material_id = ? AND status = 'ATIVA' ORDER BY created_at DESC`, [req.params.id]),
+      ]);
+      res.json({ material, saldos_localizacao: saldos, movimentacoes, reservas });
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Aux: ordens de serviço (padrão recebimentos-aux, sem gate do módulo operacional) ──
+  app.get('/api/almoxarifado/aux/ordens-servico', auth, async (req, res) => {
+    try {
+      const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, c.razao_social as cliente_nome
+        FROM ordens_servico os LEFT JOIN clientes c ON os.cliente_id = c.id
+        ORDER BY os.id DESC LIMIT 300`);
+      return res.json(rows);
+    } catch (e) {
+      // Ambiente parcial: tabela clientes pode não existir mesmo com ordens_servico presente
+      // (clientes é tabela core, fora do initSchema do almoxarifado). Tenta sem o JOIN antes de desistir.
+      if (/no such table:\s*clientes/i.test(e.message)) {
+        try {
+          const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, NULL as cliente_nome
+            FROM ordens_servico os ORDER BY os.id DESC LIMIT 300`);
+          return res.json(rows);
+        } catch (e2) { return res.json([]); }
+      }
+      return res.json([]); // tabela ordens_servico pode não existir em ambiente parcial
+    }
+  });
+
   // ── Recebimentos ──
   app.get('/api/almoxarifado/recebimentos', auth, async (req, res) => {
     try { res.json(await receiptService.listarRecebimentos(db, req.query)); }
