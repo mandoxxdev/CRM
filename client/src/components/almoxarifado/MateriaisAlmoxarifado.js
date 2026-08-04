@@ -6,9 +6,10 @@ import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiImage, FiPackage,
-  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard
+  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText
 } from 'react-icons/fi';
 import AlmoxPageHeader from './AlmoxPageHeader';
+import ExtratoMaterialModal from './ExtratoMaterialModal';
 import './Almoxarifado.css';
 
 const CATEGORIAS = [
@@ -31,6 +32,7 @@ const MateriaisAlmoxarifado = () => {
   const [movMotivo, setMovMotivo] = useState('');
   const [movRef, setMovRef] = useState('');
   const [savingMov, setSavingMov] = useState(false);
+  const [extratoMaterialId, setExtratoMaterialId] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -259,6 +261,10 @@ const MateriaisAlmoxarifado = () => {
                     </td>
                     <td>
                       <div className="almox-actions">
+                        <button className="almox-btn-icon primary" title="Extrato"
+                          onClick={() => setExtratoMaterialId(m.id)}>
+                          <FiFileText />
+                        </button>
                         <button className="almox-btn-icon primary" title="Requisitar"
                           onClick={() => navigate(`/almoxarifado/requisicoes/nova?material_id=${m.id}`)}>
                           <FiClipboard />
@@ -347,6 +353,11 @@ const MateriaisAlmoxarifado = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Extrato do material */}
+      {extratoMaterialId && (
+        <ExtratoMaterialModal materialId={extratoMaterialId} onClose={() => setExtratoMaterialId(null)} />
       )}
     </div>
   );

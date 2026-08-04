@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiPlus, FiSearch, FiRefreshCw, FiArrowUp, FiArrowDown } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiRefreshCw, FiArrowUp, FiArrowDown, FiCornerUpLeft } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
+import ExtratoMaterialModal from './ExtratoMaterialModal';
 import './Almoxarifado.css';
 
 const TIPOS_FORM = [
@@ -17,8 +18,13 @@ const TIPOS_FORM = [
 // servidor ao cancelar uma movimentação e não é selecionável ao registrar manualmente.
 const TIPOS = [
   ...TIPOS_FORM,
-  { value: 'ESTORNO', label: 'Estorno', cls: 'ajuste' },
+  { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
+
+// Tipos que não podem ser estornados pelo botão do livro: já são estorno, ou são
+// reserva/liberação de reserva (desfeitas pela própria tela de reservas, não pelo
+// cancelamento de movimentação — ver stockService.cancelarMovimentacao no servidor).
+const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !['RESERVA', 'LIBERACAO_RESERVA'].includes(m.tipo);
 
 const MovimentacoesAlmoxarifado = () => {
   const location = useLocation();
@@ -34,6 +40,10 @@ const MovimentacoesAlmoxarifado = () => {
   const [ordensServico, setOrdensServico] = useState([]);
   const [projetos, setProjetos] = useState([]);
   const [localizacoes, setLocalizacoes] = useState([]);
+  const [estornoTarget, setEstornoTarget] = useState(null);
+  const [estornoMotivo, setEstornoMotivo] = useState('');
+  const [estornoSaving, setEstornoSaving] = useState(false);
+  const [extratoMaterialId, setExtratoMaterialId] = useState(null);
 
   const [form, setForm] = useState({
     material_id: '',
@@ -170,6 +180,31 @@ const MovimentacoesAlmoxarifado = () => {
     }
   };
 
+  const abrirEstorno = (m) => {
+    setEstornoTarget(m);
+    setEstornoMotivo('');
+  };
+
+  const confirmarEstorno = async () => {
+    if (!estornoMotivo.trim()) {
+      toast.error('Informe o motivo do estorno');
+      return;
+    }
+    setEstornoSaving(true);
+    try {
+      await api.post(`/almoxarifado/movimentacoes/${estornoTarget.id}/cancelar`, { motivo: estornoMotivo.trim() });
+      toast.success('Movimentação estornada!');
+      setEstornoTarget(null);
+      loadMovimentacoes();
+    } catch (err) {
+      // Servidor nega estorno para quem não tem o perfil ajustar_estoque (403) — mostramos
+      // a mensagem dele em vez de esconder o botão por perfil (decisão desta etapa).
+      toast.error(err.response?.data?.error || 'Erro ao estornar movimentação');
+    } finally {
+      setEstornoSaving(false);
+    }
+  };
+
   const tipoInfo = (tipo) => TIPOS.find(t => t.value === tipo) || { label: tipo, cls: 'ajuste' };
 
   // Vínculo estruturado da movimentação, na ordem OS > projeto > centro de custo
@@ -229,7 +264,7 @@ const MovimentacoesAlmoxarifado = () => {
 
       {/* Tabela */}
       <div className="almox-table-container">
-        {loading ? <SkeletonTable rows={10} columns={9} /> : movimentacoes.length === 0 ? (
+        {loading ? <SkeletonTable rows={10} columns={10} /> : movimentacoes.length === 0 ? (
           <div className="almox-empty"><p>Nenhuma movimentação encontrada</p></div>
         ) : (
           <table className="almox-table">
@@ -244,6 +279,7 @@ const MovimentacoesAlmoxarifado = () => {
                 <th>Motivo / Referência</th>
                 <th>Vínculo</th>
                 <th>Usuário</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -251,7 +287,7 @@ const MovimentacoesAlmoxarifado = () => {
                 const t = tipoInfo(m.tipo);
                 const vinculo = vinculoLabel(m);
                 return (
-                  <tr key={m.id}>
+                  <tr key={m.id} style={{ opacity: m.cancelado ? 0.55 : 1 }}>
                     <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', whiteSpace: 'nowrap' }}>
                       {formatDate(m.created_at)}
                     </td>
@@ -260,9 +296,16 @@ const MovimentacoesAlmoxarifado = () => {
                         {m.tipo === 'ENTRADA' || m.tipo === 'DEVOLUCAO' ? <FiArrowUp size={10} /> : <FiArrowDown size={10} />}
                         {t.label}
                       </span>
+                      {m.cancelado ? (
+                        <span className="almox-badge almox-badge-cancelado" style={{ marginLeft: 6, marginTop: 4 }}>
+                          ESTORNADA
+                        </span>
+                      ) : null}
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{m.material_nome}</div>
+                      <button type="button" className="almox-link-btn" onClick={() => setExtratoMaterialId(m.material_id)}>
+                        {m.material_nome}
+                      </button>
                       <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{m.material_codigo}</div>
                     </td>
                     <td>
@@ -294,6 +337,17 @@ const MovimentacoesAlmoxarifado = () => {
                       )}
                     </td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{m.usuario_nome}</td>
+                    <td>
+                      <div className="almox-actions">
+                        {podeEstornar(m) ? (
+                          <button className="almox-btn-icon danger" title="Estornar movimentação" onClick={() => abrirEstorno(m)}>
+                            <FiCornerUpLeft />
+                          </button>
+                        ) : (
+                          <span style={{ color: 'var(--gmp-text-light)' }}>—</span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -496,6 +550,45 @@ const MovimentacoesAlmoxarifado = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Mini-modal de estorno */}
+      {estornoTarget && (
+        <div className="almox-modal-overlay" onClick={() => !estornoSaving && setEstornoTarget(null)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>↩️ Estornar Movimentação</h2>
+              <button className="almox-modal-close" onClick={() => setEstornoTarget(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <div style={{ background: 'var(--gmp-bg)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, border: '1px solid var(--gmp-border)' }}>
+                <div style={{ fontWeight: 700, color: 'var(--gmp-text)' }}>{estornoTarget.material_nome}</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+                  {tipoInfo(estornoTarget.tipo).label} de {estornoTarget.quantidade} {estornoTarget.unidade} em {formatDate(estornoTarget.created_at)}
+                </div>
+              </div>
+              <div className="almox-field">
+                <label className="almox-label">Motivo do estorno<span className="required">*</span></label>
+                <textarea className="almox-textarea" rows={3} value={estornoMotivo}
+                  onChange={e => setEstornoMotivo(e.target.value)}
+                  placeholder="Explique o motivo do cancelamento desta movimentação" />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button type="button" className="btn-almox-secondary" onClick={() => setEstornoTarget(null)} disabled={estornoSaving}>
+                Cancelar
+              </button>
+              <button type="button" className="btn-almox-danger" onClick={confirmarEstorno} disabled={estornoSaving || !estornoMotivo.trim()}>
+                {estornoSaving ? 'Estornando...' : 'Confirmar Estorno'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extrato do material (aberto pelo nome do material no livro) */}
+      {extratoMaterialId && (
+        <ExtratoMaterialModal materialId={extratoMaterialId} onClose={() => setExtratoMaterialId(null)} />
       )}
     </div>
   );

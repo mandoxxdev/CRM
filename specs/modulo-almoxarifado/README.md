@@ -18,7 +18,7 @@
 | 00 | [Fundação técnica](00-fundacao-tecnica/README.md) | ✅ | ✅ | ✅ | 🟡 quase completa (2026-08-03: Tasks 1-6 entregues; restam decisão SMTP e padrão de validação) |
 | 01 | [Cadastros de materiais](01-cadastros-materiais/README.md) | 🟡 | 🟡 | 🟡 | 🟡 |
 | 02 | [Localizações e endereçamento](02-localizacoes-enderecamento/README.md) | 🟡 | 🟡 | 🟡 | 🟡 |
-| 03 | [Motor de estoque](03-motor-estoque/README.md) | 🟡 | ❌ (usa rota antiga) | 🟡 | 🟡 |
+| 03 | [Motor de estoque](03-motor-estoque/README.md) | ✅ | ✅ | ✅ | 🟢 Etapa 1 entregue (2026-08-04); 🟡 resta validação de vencido/lote reprovado, que depende da feature 10 |
 | 04 | [Requisições](04-requisicoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 mais maduro |
 | 05 | [Separação e picking](05-separacao-picking/README.md) | 🟡 | 🟡 | 🟡 | 🟡 básico |
 | 06 | [Motor de aprovações](06-aprovacoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 só por valor |
