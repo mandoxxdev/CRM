@@ -286,6 +286,13 @@ const MovimentacoesAlmoxarifado = () => {
               {movimentacoes.map(m => {
                 const t = tipoInfo(m.tipo);
                 const vinculo = vinculoLabel(m);
+                // O tipo sozinho não diz se o saldo subiu ou desceu: TRANSFERENCIA, BLOQUEIO,
+                // DESBLOQUEIO, RESERVA e LIBERACAO_RESERVA não mexem no físico
+                // (saldo_posterior === saldo_anterior), e um ESTORNO pode ir em qualquer
+                // direção dependendo do que reverte. O sinal/cor/seta vêm do delta real.
+                const delta = (m.saldo_posterior ?? 0) - (m.saldo_anterior ?? 0);
+                const deltaColor = delta > 0 ? 'var(--gmp-success)' : delta < 0 ? 'var(--gmp-error)' : 'var(--gmp-text-light)';
+                const DeltaArrow = delta > 0 ? FiArrowUp : delta < 0 ? FiArrowDown : null;
                 return (
                   <tr key={m.id} style={{ opacity: m.cancelado ? 0.55 : 1 }}>
                     <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', whiteSpace: 'nowrap' }}>
@@ -293,7 +300,7 @@ const MovimentacoesAlmoxarifado = () => {
                     </td>
                     <td>
                       <span className={`almox-badge almox-badge-${t.cls}`}>
-                        {m.tipo === 'ENTRADA' || m.tipo === 'DEVOLUCAO' ? <FiArrowUp size={10} /> : <FiArrowDown size={10} />}
+                        {DeltaArrow ? <DeltaArrow size={10} /> : null}
                         {t.label}
                       </span>
                       {m.cancelado ? (
@@ -311,10 +318,10 @@ const MovimentacoesAlmoxarifado = () => {
                     <td>
                       <span style={{
                         fontWeight: 700,
-                        color: m.tipo === 'SAIDA' ? 'var(--gmp-error)' : 'var(--gmp-success)',
+                        color: deltaColor,
                         fontSize: '0.9rem'
                       }}>
-                        {m.tipo === 'SAIDA' ? '-' : '+'}{m.quantidade} {m.unidade}
+                        {delta === 0 ? `${m.quantidade} ${m.unidade}` : `${delta > 0 ? '+' : '−'}${m.quantidade} ${m.unidade}`}
                       </span>
                     </td>
                     <td style={{ color: 'var(--gmp-text-light)' }}>{m.saldo_anterior} {m.unidade}</td>

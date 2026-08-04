@@ -15,7 +15,7 @@ Um único caminho de movimentação, transacional, com livro imutável (estorno 
 - **Extrato do item:** `GET /materiais/:id/extrato` (`extended.js`) agrega material (com `quantidade_disponivel`), saldos por localização, últimas 100 movimentações e reservas ativas. UI: `ExtratoMaterialModal.js`, aberto pelo nome do material no livro e pelo botão "Extrato" em `MateriaisAlmoxarifado.js`.
 - **Saldos:** `estoque_saldo_almoxarifado` por material+localização+lote com `quantidade_reservada/bloqueada/em_inspecao`; espelho agregado no material.
 - **Vínculo estruturado** na movimentação: `projeto_id`, `os_id`, `centro_custo_id` (+ `centros_custo_almoxarifado`), `cliente_id`, `requisicao_id`, `reserva_id`, `recebimento_id`, `documento_vinculado`, `justificativa`. Regra por tipo (`avaliarRegrasVinculo`/`REGRAS_VINCULO`) decide o que é obrigatório.
-- **Rota v1 legada:** `POST /movimentacoes` (`routes/almoxarifado.js:573`) — 4 tipos, sem lote/localização; delega para `stockService.registrarMovimentacao` desde a Etapa 0 (grava auditoria). O front deixou de usá-la: `MovimentacoesAlmoxarifado.js` posta em `/movimentacoes/v2` desde a Etapa 1.
+- **Rota v1 legada:** `POST /movimentacoes` (`routes/almoxarifado.js:573`) — 4 tipos, sem lote/localização; delega para `stockService.registrarMovimentacao` desde a Etapa 0 (grava auditoria). A tela de Movimentações posta em `/movimentacoes/v2` desde a Etapa 1; a entrada/saída rápida de `MateriaisAlmoxarifado.js` ainda usa a rota v1 (que delega ao mesmo motor — migrar quando a tela for retrabalhada).
 - Testes de serviço: entrada/saída, saldo negativo bloqueado, transferência, bloqueio, material inativo (em `almoxarifado.test.js`); testes de API de estorno, regras de vínculo, livro/extrato (`server/tests/api/`).
 - Concorrência SQLite tratada (`services/sqliteConcurrency.js` — WAL + retry BUSY).
 
@@ -45,6 +45,7 @@ Colunas existem; falta garantir que TODAS as operações (saída, reserva, inspe
 - [x] `MovimentacoesAlmoxarifado.js` na v2: lote, localização origem/destino, vínculo projeto/OS/centro de custo (selects estruturados no lugar do campo texto `referencia`)
 - [x] Tela/ação de estorno com motivo — botão "Estornar" por linha do livro (mini-modal, motivo obrigatório); linha cancelada fica com opacidade reduzida + badge "ESTORNADA"; linha tipo ESTORNO com badge própria
 - [x] Extrato do item (histórico completo) — `ExtratoMaterialModal.js`, acionado pelo nome do material no livro e por um botão "Extrato" em `MateriaisAlmoxarifado.js`
+- [ ] Migrar entrada/saída rápida de `MateriaisAlmoxarifado.js` para a v2 (hoje ainda posta em `/movimentacoes` v1; sem lote/localização/centro de custo/vínculo nesse atalho)
 
 ## Regras essenciais + testes de API exigidos
 

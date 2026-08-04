@@ -27,7 +27,12 @@ const tipoBadgeCls = (tipo) => {
   return 'ajuste';
 };
 
-const isSaida = (tipo) => tipoBadgeCls(tipo) === 'saida';
+// O tipo por si só não diz se o saldo subiu ou desceu: TRANSFERENCIA, BLOQUEIO,
+// DESBLOQUEIO, RESERVA e LIBERACAO_RESERVA não alteram o físico (saldo_posterior ===
+// saldo_anterior), e um ESTORNO pode ir em qualquer direção dependendo do que reverte.
+// O sinal/cor/seta da quantidade vêm sempre do delta real do par de saldos do livro —
+// nunca de uma suposição por tipo.
+const deltaSaldo = (m) => (m.saldo_posterior ?? 0) - (m.saldo_anterior ?? 0);
 
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString('pt-BR', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -191,6 +196,9 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                       {data.movimentacoes.map(m => {
                         const cls = tipoBadgeCls(m.tipo);
                         const vinculo = vinculoLabel(m);
+                        const delta = deltaSaldo(m);
+                        const deltaColor = delta > 0 ? 'var(--gmp-success)' : delta < 0 ? 'var(--gmp-error)' : 'var(--gmp-text-light)';
+                        const DeltaArrow = delta > 0 ? FiArrowUp : delta < 0 ? FiArrowDown : null;
                         return (
                           <tr key={m.id} style={{ opacity: m.cancelado ? 0.55 : 1 }}>
                             <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', whiteSpace: 'nowrap' }}>
@@ -198,15 +206,15 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                             </td>
                             <td>
                               <span className={`almox-badge almox-badge-${cls}`}>
-                                {isSaida(m.tipo) ? <FiArrowDown size={10} /> : <FiArrowUp size={10} />}
+                                {DeltaArrow ? <DeltaArrow size={10} /> : null}
                                 {m.tipo}
                               </span>
                               {m.cancelado ? (
                                 <span className="almox-badge almox-badge-cancelado" style={{ marginLeft: 6 }}>ESTORNADA</span>
                               ) : null}
                             </td>
-                            <td style={{ fontWeight: 700, color: isSaida(m.tipo) ? 'var(--gmp-error)' : 'var(--gmp-success)' }}>
-                              {isSaida(m.tipo) ? '-' : '+'}{m.quantidade}
+                            <td style={{ fontWeight: 700, color: deltaColor }}>
+                              {delta === 0 ? `${m.quantidade} ${material.unidade}` : `${delta > 0 ? '+' : '−'}${m.quantidade}`}
                             </td>
                             <td style={{ fontWeight: 600 }}>{m.saldo_posterior}</td>
                             <td style={{ fontSize: '0.8rem' }}>
