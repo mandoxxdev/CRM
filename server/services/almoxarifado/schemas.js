@@ -35,4 +35,8 @@ const RegularizacaoSchema = z.object({
   message: 'Informe OS, projeto ou centro de custo para regularizar',
 });
 
-module.exports = { CentroCustoSchema, MovimentacaoSchema, RegularizacaoSchema };
+const CancelamentoSchema = z.object({
+  motivo: z.string().min(1, 'motivo é obrigatório'),
+});
+
+module.exports = { CentroCustoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema };

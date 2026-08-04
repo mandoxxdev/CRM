@@ -294,37 +294,89 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [movimentoId]);
   if (!mov) throw Object.assign(new Error('Movimentação não encontrada'), { status: 404 });
   if (mov.cancelado) throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
-
-  const material = await getMaterial(db, mov.material_id);
-  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
-  let novoSaldo = material.quantidade_atual;
-  if (tiposEntrada.includes(mov.tipo)) novoSaldo -= mov.quantidade;
-  else if (['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'].includes(mov.tipo)) {
-    novoSaldo += mov.quantidade;
+  if (mov.tipo === 'ESTORNO') throw Object.assign(new Error('Estorno não pode ser estornado'), { status: 400 });
+  if (['RESERVA', 'LIBERACAO_RESERVA'].includes(mov.tipo)) {
+    throw Object.assign(new Error('Use a liberação de reserva para desfazer reservas'), { status: 400 });
   }
 
-  await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [novoSaldo, mov.material_id]);
-  await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ? WHERE id = ?`,
-    [user.id, motivo, movimentoId]);
+  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
+  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
+  const material = await getMaterial(db, mov.material_id);
+  let saldoAntes = material.quantidade_atual;
+  let saldoDepois = saldoAntes;
 
-  const estorno = await registrarMovimentacao(db, user, {
-    material_id: mov.material_id,
-    tipo: 'AJUSTE',
-    quantidade: novoSaldo,
-    motivo: `Estorno mov. #${movimentoId}`,
-    justificativa: motivo,
-    documento_vinculado: `ESTORNO-${movimentoId}`,
-  });
+  if (tiposEntrada.includes(mov.tipo)) {
+    // Reverter entrada = saída com guarda de disponível (a mercadoria pode já ter sido consumida).
+    // Mesmo padrão atômico de registrarMovimentacao (Task 3): UPDATE...RETURNING sob o lock de
+    // linha do SQLite fecha a janela de corrida entre a leitura acima e a escrita; saldoAntes é
+    // derivado do valor pós-update (não da leitura pré-corrida) para manter o par saldo_anterior/
+    // saldo_posterior do livro coerente mesmo sob concorrência.
+    const permiteNegativo = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+    const row = await dbGet(db, `UPDATE materiais_almoxarifado
+      SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
+      RETURNING quantidade_atual`,
+      [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]);
+    if (!row) throw Object.assign(new Error('Não é possível estornar: saldo disponível insuficiente (material já consumido)'), { status: 400 });
+    saldoDepois = row.quantidade_atual;
+    saldoAntes = saldoDepois + parseFloat(mov.quantidade);
+    // reverter localização da entrada original
+    const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
+    if (loc) {
+      const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote);
+      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
+    }
+  } else if (tiposSaida.includes(mov.tipo)) {
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [mov.quantidade, mov.material_id]);
+    saldoDepois = saldoAntes + parseFloat(mov.quantidade);
+    const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
+    if (loc) {
+      const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote);
+      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
+    }
+  } else if (mov.tipo === 'AJUSTE') {
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [mov.saldo_anterior, mov.material_id]);
+    saldoDepois = mov.saldo_anterior;
+    await syncSaldoLocalizacaoPadrao(db, mov.material_id);
+  } else if (mov.tipo === 'TRANSFERENCIA') {
+    const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote);
+    const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);
+    if (destino.quantidade < mov.quantidade) {
+      throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
+    }
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, destino.id]);
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, origem.id]);
+  } else if (mov.tipo === 'BLOQUEIO') {
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = MAX(0, COALESCE(quantidade_bloqueada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
+  } else if (mov.tipo === 'DESBLOQUEIO') {
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
+  }
 
-  await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET movimento_estorno_id = ? WHERE id = ?', [estorno.id, movimentoId]);
+  const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
+    (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
+     usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, unidade,
+     projeto_id, os_id, cliente_id, documento_vinculado, justificativa, centro_custo_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+    mov.material_id, 'ESTORNO', mov.quantidade, saldoAntes, saldoDepois,
+    `Estorno mov. #${movimentoId}`, mov.referencia, null,
+    user.id, user.nome || user.email,
+    mov.localizacao_destino_id, mov.localizacao_origem_id, mov.lote, mov.unidade,
+    mov.projeto_id, mov.os_id, mov.cliente_id, `ESTORNO-${movimentoId}`, motivo,
+    mov.centro_custo_id,
+  ]);
+
+  await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP,
+    cancelamento_motivo = ?, movimento_estorno_id = ? WHERE id = ?`, [user.id, motivo, r.lastID, movimentoId]);
 
   await registrarAuditoria(db, {
     entidade: 'movimentacao', entidade_id: movimentoId, acao: 'CANCELAMENTO',
     usuario_id: user.id, usuario_nome: user.nome || user.email, justificativa: motivo,
+    dados_novos: { estorno_id: r.lastID },
   });
 
-  return { success: true, estorno_id: estorno.id };
+  return { success: true, estorno_id: r.lastID };
 }
 
 async function criarReserva(db, user, data) {

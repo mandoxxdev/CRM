@@ -6,7 +6,7 @@ const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO }
 const { requirePermission } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, MovimentacaoSchema, RegularizacaoSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const receiptService = require('../../services/almoxarifado/receiptService');
@@ -153,7 +153,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     } catch (e) { handleError(res, e); }
   });
 
-  app.post('/api/almoxarifado/movimentacoes/:id/cancelar', auth, requirePermission('ajustar_estoque'), async (req, res) => {
+  app.post('/api/almoxarifado/movimentacoes/:id/cancelar', auth, requirePermission('ajustar_estoque'), validate(CancelamentoSchema), async (req, res) => {
     try {
       const result = await stockService.cancelarMovimentacao(db, req.user, req.params.id, req.body.motivo);
       res.json(result);
