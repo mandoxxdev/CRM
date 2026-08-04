@@ -85,26 +85,6 @@
   opacity: 0.95;
 }
 
-/* Secundário ao lado de "Nova variável": ação de admin, menos frequente. */
-.vt-btn-import {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: var(--gmp-surface);
-  color: var(--gmp-text);
-  border: 2px solid var(--gmp-border);
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 0.95rem;
-}
-
-.vt-btn-import:hover {
-  border-color: var(--gmp-primary);
-  color: var(--gmp-primary);
-}
-
 .vt-loading {
   padding: 2rem;
   text-align: center;
