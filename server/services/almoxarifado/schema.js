@@ -832,6 +832,16 @@ async function initSchema(db) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
   }
 
+  // ── Centros de custo ──
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS centros_custo_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN centro_custo_id INTEGER');
+
   console.log('✅ Schema almoxarifado v3 inicializado');
 }
 

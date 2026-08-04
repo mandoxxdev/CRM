@@ -136,7 +136,7 @@ async function registrarMovimentacao(db, user, params) {
   const {
     material_id, tipo, quantidade, motivo, referencia, observacoes,
     localizacao_origem_id, localizacao_destino_id, lote, projeto_id, os_id, cliente_id,
-    documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
+    documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id, centro_custo_id,
   } = params;
 
   if (!user?.id) throw Object.assign(new Error('Usuário responsável obrigatório'), { status: 400 });
@@ -232,8 +232,9 @@ async function registrarMovimentacao(db, user, params) {
   const result = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
     (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
      usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, unidade,
-     projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
+     centro_custo_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     material_id, tipo, quantidade, saldoAnterior, saldoPosterior,
     motivo || null, referencia || null, observacoes || null,
     user.id, user.nome || user.email,
@@ -241,6 +242,7 @@ async function registrarMovimentacao(db, user, params) {
     projeto_id || null, os_id || null, cliente_id || null,
     documento_vinculado || null, justificativa || null,
     reserva_id || null, recebimento_id || null, requisicao_id || null,
+    centro_custo_id || null,
   ]);
 
   await registrarAuditoria(db, {

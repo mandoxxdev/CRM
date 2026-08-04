@@ -5,6 +5,8 @@ const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermi
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
+const { validate } = require('../../services/almoxarifado/validation');
+const { CentroCustoSchema } = require('../../services/almoxarifado/schemas');
 const stockService = require('../../services/almoxarifado/stockService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const returnService = require('../../services/almoxarifado/returnService');
@@ -55,6 +57,34 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     try {
       const rows = await dbAll(db, 'SELECT * FROM unidades_medida_almoxarifado WHERE ativo = 1 ORDER BY sigla');
       res.json(rows);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/centros-custo', auth, async (req, res) => {
+    try {
+      const where = req.query.todos === '1' ? '1=1' : 'ativo = 1';
+      res.json(await dbAll(db, `SELECT * FROM centros_custo_almoxarifado WHERE ${where} ORDER BY codigo`));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/centros-custo', auth, requirePermission('configurar'), validate(CentroCustoSchema), async (req, res) => {
+    try {
+      const { codigo, nome } = req.body;
+      const r = await dbRun(db, 'INSERT INTO centros_custo_almoxarifado (codigo, nome) VALUES (?,?)', [codigo.trim(), nome.trim()]);
+      res.status(201).json({ id: r.lastID, codigo, nome, ativo: 1 });
+    } catch (e) {
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(409).json({ error: 'Código de centro de custo já existe' });
+      handleError(res, e);
+    }
+  });
+
+  app.put('/api/almoxarifado/centros-custo/:id', auth, requirePermission('configurar'), validate(CentroCustoSchema.partial()), async (req, res) => {
+    try {
+      const atual = await dbGet(db, 'SELECT * FROM centros_custo_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!atual) return res.status(404).json({ error: 'Centro de custo não encontrado' });
+      const { codigo = atual.codigo, nome = atual.nome, ativo = atual.ativo } = req.body;
+      await dbRun(db, 'UPDATE centros_custo_almoxarifado SET codigo=?, nome=?, ativo=? WHERE id=?', [codigo, nome, ativo, req.params.id]);
+      res.json({ id: Number(req.params.id), codigo, nome, ativo });
     } catch (e) { handleError(res, e); }
   });
 
