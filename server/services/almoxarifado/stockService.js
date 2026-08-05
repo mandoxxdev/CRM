@@ -85,6 +85,44 @@ function resolveLocalizacaoSaida(material, origemId) {
   return origemId || material.localizacao_padrao_id || null;
 }
 
+/**
+ * Restrições de endereço (Etapa 2, Task 2): valida se uma localização pode participar de um
+ * movimento no papel indicado ('origem'|'destino'), ANTES de qualquer efeito de saldo ser
+ * aplicado (chamado pelo registrarMovimentacao antes das UPDATEs atômicas).
+ * - bloqueada=1 rejeita sempre, independente do papel (não é possível nem tirar nem colocar
+ *   material numa localização bloqueada).
+ * - tipos_material_permitidos (JSON array de strings; NULL = sem restrição) só é avaliado no
+ *   papel 'destino' — restringir por tipo faz sentido para "o que pode entrar aqui", não para
+ *   "o que pode sair daqui" (uma localização pode ficar temporariamente com material fora da
+ *   política vigente, ex.: política mudou depois que o material já estava lá).
+ * localizacaoId ausente (null/undefined) é no-op: resolveLocalizacaoEntrada/Saida já retornam
+ * null quando não há localização explícita nem localizacao_padrao_id no material.
+ * NÃO é chamado por cancelarMovimentacao (estorno): reverter precisa sempre ser possível, mesmo
+ * numa localização bloqueada depois do movimento original — ver comentário em cancelarMovimentacao.
+ */
+async function validarLocalizacaoParaMovimento(db, localizacaoId, material, papel) {
+  if (!localizacaoId) return;
+  const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
+  if (!loc) return; // localização inexistente: não é responsabilidade deste helper (FK/lookup trata em outro lugar)
+
+  if (loc.bloqueada) {
+    throw Object.assign(new Error(`Localização ${loc.codigo} está bloqueada`), { status: 400 });
+  }
+
+  if (papel === 'destino' && loc.tipos_material_permitidos) {
+    let permitidos;
+    try {
+      permitidos = JSON.parse(loc.tipos_material_permitidos);
+    } catch (e) {
+      permitidos = null; // JSON corrompido — defensivo: trata como sem restrição
+    }
+    if (Array.isArray(permitidos) && !permitidos.includes(material.tipo_material)) {
+      throw Object.assign(new Error(
+        `Localização ${loc.codigo} não aceita o tipo de material '${material.tipo_material || ''}'`), { status: 400 });
+    }
+  }
+}
+
 const MAPA_LOCALIZACOES_SQL = `
   SELECT l.*,
     COALESCE(s.qtd_itens, 0) as qtd_itens,
@@ -180,6 +218,21 @@ async function registrarMovimentacao(db, user, params) {
   const regras = avaliarRegrasVinculo(tipo, { os_id, projeto_id, centro_custo_id, justificativa, referencia, emergencial });
   if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
   const regularizacaoPendente = regras.pendente ? 1 : 0;
+
+  // Restrições de endereço (Etapa 2, Task 2): validadas ANTES de qualquer efeito de saldo —
+  // inclusive antes das UPDATEs da própria TRANSFERENCIA logo abaixo, que grava direto em
+  // estoque_saldo_almoxarifado. Usa a MESMA resolução de localização (fallback para
+  // localizacao_padrao_id) que será usada mais adiante para aplicar o efeito de saldo.
+  if (tiposEntrada.includes(tipo)) {
+    await validarLocalizacaoParaMovimento(db, resolveLocalizacaoEntrada(material, localizacao_destino_id), material, 'destino');
+  } else if (tiposSaida.includes(tipo)) {
+    await validarLocalizacaoParaMovimento(db, resolveLocalizacaoSaida(material, localizacao_origem_id), material, 'origem');
+  } else if (tipo === 'TRANSFERENCIA') {
+    await validarLocalizacaoParaMovimento(db, localizacao_origem_id, material, 'origem');
+    await validarLocalizacaoParaMovimento(db, localizacao_destino_id, material, 'destino');
+  } else if (tiposAjuste.includes(tipo) && localizacao_destino_id) {
+    await validarLocalizacaoParaMovimento(db, localizacao_destino_id, material, 'destino');
+  }
 
   if (tiposEntrada.includes(tipo)) {
     saldoPosterior = saldoAnterior + parseFloat(quantidade);
@@ -342,6 +395,11 @@ async function registrarMovimentacao(db, user, params) {
   return { id: result.lastID, saldo_anterior: saldoAnteriorReal, saldo_posterior: saldoPosterior };
 }
 
+// Decisão (Etapa 2, Task 2): cancelarMovimentacao NÃO chama validarLocalizacaoParaMovimento.
+// Reverter um movimento precisa ser sempre possível, mesmo que a localização envolvida tenha
+// sido bloqueada (ou teve seus tipos_material_permitidos alterados) DEPOIS que o movimento
+// original aconteceu — senão o saldo fica preso sem forma de estornar. Restrições de endereço
+// só se aplicam a movimentos NOVOS via registrarMovimentacao.
 async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (!motivo) throw Object.assign(new Error('Justificativa obrigatória para cancelamento'), { status: 400 });
   const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [movimentoId]);
@@ -561,6 +619,9 @@ module.exports = {
   syncMaterialTotals,
   syncSaldoLocalizacaoPadrao,
   getOrCreateSaldo,
+  resolveLocalizacaoEntrada,
+  resolveLocalizacaoSaida,
+  validarLocalizacaoParaMovimento,
   registrarMovimentacao,
   cancelarMovimentacao,
   criarReserva,

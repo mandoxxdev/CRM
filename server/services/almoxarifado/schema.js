@@ -446,6 +446,12 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN altura REAL DEFAULT 80');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN subgrupo TEXT');
+  // Restrições de endereço (Etapa 2, Task 2): localização bloqueada rejeita qualquer uso como
+  // origem OU destino de movimento; tipos_material_permitidos (JSON array de strings, NULL =
+  // sem restrição) só é avaliado quando a localização é destino. Ver validarLocalizacaoParaMovimento
+  // em stockService.js.
+  await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN bloqueada INTEGER DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN tipos_material_permitidos TEXT');
 
   // ── Seed de localizacoes_almoxarifado (só existia no callback do CREATE TABLE da
   // rota — diff de segurança Task 3). Protegido por try/catch pelo mesmo motivo do

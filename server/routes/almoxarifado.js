@@ -840,12 +840,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
+  // tipos_material_permitidos chega do cliente como array de strings (ou ausente/null = sem
+  // restrição); persistido como JSON. Qualquer outra forma (string solta, objeto, etc.) é
+  // tratada como "sem restrição" em vez de quebrar a gravação.
+  function serializeTiposPermitidos(value) {
+    return Array.isArray(value) ? JSON.stringify(value) : null;
+  }
+
   app.post('/api/almoxarifado/localizacoes',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id } = req.body;
+    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
     if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
+    const bloqueadaVal = bloqueada ? 1 : 0;
+    const tiposPermitidosVal = serializeTiposPermitidos(tipos_material_permitidos);
     resolveAlmoxarifadoId(almoxarifado_id, (_rErr, almoxarifadoIdVal) => {
       checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal }, (dupErr, isDup) => {
         if (dupErr) return res.status(500).json({ error: dupErr.message });
@@ -865,10 +874,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           // Existe uma localização EXCLUÍDA com este código → reativa e atualiza os dados.
           if (existente) {
             db.run(`UPDATE localizacoes_almoxarifado
-                    SET descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=?, ativo=1
+                    SET descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=?, bloqueada=?, tipos_material_permitidos=?, ativo=1
                     WHERE id=?`,
               [descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
-               pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdVal, existente.id],
+               pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdVal,
+               bloqueadaVal, tiposPermitidosVal, existente.id],
               function (updErr) {
                 if (updErr) return res.status(500).json({ error: updErr.message });
                 db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [existente.id], (e, r) => res.status(201).json(r));
@@ -877,9 +887,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           }
 
           // Código livre → insere normalmente.
-          db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id, bloqueada, tipos_material_permitidos) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
-             pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdVal],
+             pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdVal,
+             bloqueadaVal, tiposPermitidosVal],
             function (err) {
               if (err) {
                 if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
@@ -894,9 +905,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.put('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo, almoxarifado_id } = req.body;
+    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
+    const bloqueadaVal = bloqueada ? 1 : 0;
+    const tiposPermitidosVal = serializeTiposPermitidos(tipos_material_permitidos);
     if (parentVal && parseInt(req.params.id, 10) === parentVal) {
       return res.status(400).json({ error: 'Uma localização não pode ser pai de si mesma' });
     }
@@ -905,16 +918,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // campo e manda o body sem ele — se tratássemos ausência/null como "resetar para ALM-GERAL"
     // (como no POST), qualquer edição feita pela tela atual reverteria silenciosamente o vínculo.
     // Por isso: undefined OU null preservam o valor já gravado (via COALESCE, sem round-trip extra
-    // nem race de leitura); só um valor numérico presente no body troca o vínculo.
+    // nem race de leitura); só um valor numérico presente no body troca o vínculo. bloqueada e
+    // tipos_material_permitidos seguem o padrão full-replace normal dos demais campos (não têm
+    // essa semântica de preservação — omitir zera/limpa, igual descricao, setor etc.).
     const almoxarifadoIdParam = (almoxarifado_id === undefined || almoxarifado_id === null)
       ? null
       : (parseInt(almoxarifado_id, 10) || null);
     checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal, excludeId: req.params.id }, (dupErr, isDup) => {
       if (dupErr) return res.status(500).json({ error: dupErr.message });
       if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
-      db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=COALESCE(?, almoxarifado_id), ativo=? WHERE id=?`,
+      db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=COALESCE(?, almoxarifado_id), bloqueada=?, tipos_material_permitidos=?, ativo=? WHERE id=?`,
         [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
          pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdParam,
+         bloqueadaVal, tiposPermitidosVal,
          ativo !== undefined ? ativo : 1, req.params.id],
         function (err) {
           if (err) return res.status(500).json({ error: err.message });
@@ -925,10 +941,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.delete('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true });
-    });
+    db.get(`SELECT COALESCE(SUM(quantidade), 0) as total FROM estoque_saldo_almoxarifado WHERE localizacao_id = ?`,
+      [req.params.id], (saldoErr, row) => {
+        if (saldoErr) return res.status(500).json({ error: saldoErr.message });
+        if (row && row.total > 0) {
+          return res.status(400).json({ error: 'Não é possível remover: localização possui saldo' });
+        }
+        db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ success: true });
+        });
+      });
   });
 
 
