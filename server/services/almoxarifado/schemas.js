@@ -58,6 +58,30 @@ const CancelamentoSchema = z.object({
 // mandar em checkboxes). Usado nas flags de controle do material.
 const FlagSchema = z.union([z.boolean(), z.literal(0), z.literal(1)]).optional();
 
+// Coerção tolerante para campos numéricos vindos de formulário HTML (fix pós-review — Critical):
+// MaterialAlmoxarifadoForm.js espalha `form` inteiro no submit; inputs de texto/número guardam
+// STRING no state (`onChange={e => set('campo', e.target.value)}`), nunca number. Um campo nunca
+// tocado pelo usuário chega como `''`; um campo preenchido chega como `'10'`. Sem coerção,
+// `z.number()` rejeita os dois casos e QUALQUER submit do formulário real (criar ou editar
+// material) quebra com 400.
+//
+// Regras, na ordem (a distinção entre `''` e `null` é proposital e não pode ser perdida):
+//   '' ou undefined  -> undefined (chave "ausente" para efeitos de validação — no PUT isso é o
+//                        que aciona o preserve-when-omitted da rota; um <select> vazio e um
+//                        campo nunca editado têm que se comportar como "não mandei nada")
+//   null             -> permanece null (limpa explicitamente um campo nullable — ex.:
+//                        subfamilia_id: null — não pode colapsar para "ausente"/preservar)
+//   string não vazia -> Number(string) (aceita '10'; 'abc' vira NaN e o z.number() a jusante
+//                        rejeita normalmente — mantém o contrato de shape inválido -> 400)
+//   já é number       -> passa direto
+function numFromForm(schema) {
+  return z.preprocess((v) => {
+    if (v === '' || v === undefined) return undefined;
+    if (v === null) return null;
+    return typeof v === 'string' ? Number(v) : v;
+  }, schema);
+}
+
 // Fatores de conversão (Etapa 2, Task 4): quando a unidade de compra/consumo é informada, o
 // fator correspondente é obrigatório e deve ser > 0 — sem isso não dá para converter a
 // quantidade da unidade de compra/consumo para a unidade padrão do material. Compartilhada
@@ -88,26 +112,26 @@ function refineUnidadesFator(d, ctx) {
 const MaterialShape = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
   nome: z.string().min(1, 'nome é obrigatório'),
-  familia_id: z.number().int().positive(),
-  subfamilia_id: z.number().int().positive().nullable().optional(),
+  familia_id: numFromForm(z.number().int().positive()),
+  subfamilia_id: numFromForm(z.number().int().positive().nullable().optional()),
   descricao: z.string().nullable().optional(),
   categoria: z.string().optional(),
   unidade: z.string().optional(),
-  quantidade_atual: z.number().nonnegative().optional(),
-  quantidade_minima: z.number().nonnegative().optional(),
-  quantidade_maxima: z.number().nonnegative().optional(),
-  custo_unitario: z.number().nonnegative().optional(),
+  quantidade_atual: numFromForm(z.number().nonnegative().optional()),
+  quantidade_minima: numFromForm(z.number().nonnegative().optional()),
+  quantidade_maxima: numFromForm(z.number().nonnegative().optional()),
+  custo_unitario: numFromForm(z.number().nonnegative().optional()),
   fornecedor_principal: z.string().nullable().optional(),
   codigo_fornecedor: z.string().nullable().optional(),
   ncm: z.string().nullable().optional(),
   especificacoes: z.string().nullable().optional(),
   observacoes: z.string().nullable().optional(),
-  ativo: z.union([z.literal(0), z.literal(1)]).optional(),
+  ativo: FlagSchema,
   descricao_tecnica: z.string().nullable().optional(),
-  categoria_id: z.number().int().nullable().optional(),
-  subcategoria_id: z.number().int().nullable().optional(),
-  localizacao_padrao_id: z.number().int().nullable().optional(),
-  fornecedor_id: z.number().int().nullable().optional(),
+  categoria_id: numFromForm(z.number().int().nullable().optional()),
+  subcategoria_id: numFromForm(z.number().int().nullable().optional()),
+  localizacao_padrao_id: numFromForm(z.number().int().nullable().optional()),
+  fornecedor_id: numFromForm(z.number().int().nullable().optional()),
   tipo_material: z.string().nullable().optional(),
   material_critico: FlagSchema,
   controle_lote: FlagSchema,
@@ -116,15 +140,15 @@ const MaterialShape = z.object({
   // ── Cadastro completo (Etapa 2, Task 4) ──
   fabricante: z.string().nullable().optional(),
   codigo_fabricante: z.string().nullable().optional(),
-  peso_unitario: z.number().nonnegative().nullable().optional(),
+  peso_unitario: numFromForm(z.number().nonnegative().nullable().optional()),
   dimensoes: z.string().nullable().optional(),
   material_construtivo: z.string().nullable().optional(),
   norma: z.string().nullable().optional(),
   marca: z.string().nullable().optional(),
   modelo: z.string().nullable().optional(),
   aplicacao: z.string().nullable().optional(),
-  ponto_reposicao: z.number().nonnegative().nullable().optional(),
-  lote_economico: z.number().nonnegative().nullable().optional(),
+  ponto_reposicao: numFromForm(z.number().nonnegative().nullable().optional()),
+  lote_economico: numFromForm(z.number().nonnegative().nullable().optional()),
   controle_serie: FlagSchema,
   controle_validade: FlagSchema,
   controle_corrida: FlagSchema,
@@ -132,9 +156,9 @@ const MaterialShape = z.object({
   requer_foto: FlagSchema,
   classe_abc: z.enum(['A', 'B', 'C']).nullable().optional(),
   unidade_compra: z.string().nullable().optional(),
-  fator_conversao_compra: z.number().nullable().optional(),
+  fator_conversao_compra: numFromForm(z.number().nullable().optional()),
   unidade_consumo: z.string().nullable().optional(),
-  fator_conversao_consumo: z.number().nullable().optional(),
+  fator_conversao_consumo: numFromForm(z.number().nullable().optional()),
 });
 
 // POST — shape completo (familia_id obrigatório) + invariantes de fator de conversão.

@@ -204,8 +204,16 @@ async function ultimaAuditoria(db, entidadeId) {
     });
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
 
-    // Corpo idêntico ao que MaterialAlmoxarifadoForm.js manda hoje — nunca inclui os campos
-    // novos do Task 4 (o form ainda não tem essas seções), só o que ele conhece.
+    // Fix pós-review (Critical): o comentário anterior deste teste presumia que o form "limpa"
+    // strings vazias antes de mandar o PUT — ERRADO. `handleSubmit` espalha `...form` inteiro;
+    // os únicos campos convertidos são familia_id/localizacao_padrao_id (parseInt/null
+    // explícitos no próprio handleSubmit). Os demais — incluindo os numéricos
+    // quantidade_atual/minima/maxima e custo_unitario — vão exatamente como estão no `form`
+    // state: string vinda de `e.target.value`, ou (quando carregados via loadMaterial() e nunca
+    // editados) o valor numérico bruto devolvido pela API. Este payload reproduz fielmente o
+    // que handleSubmit manda ao reeditar MAT-FULL-010 (criado com os numéricos zerados por
+    // default e os textuais em branco) mudando só nome/categoria — prova que a preservação dos
+    // campos novos do Task 4 funciona com o shape REAL da tela, não uma versão idealizada dele.
     const payloadUiAtual = {
       codigo: 'MAT-FULL-010',
       nome: 'Material Renomeado pela UI',
@@ -214,25 +222,17 @@ async function ultimaAuditoria(db, entidadeId) {
       unidade: 'UN',
       familia_id: familia.id,
       localizacao_padrao_id: null,
-      quantidade_minima: '',
-      quantidade_maxima: '',
-      custo_unitario: '',
+      quantidade_atual: 0,
+      quantidade_minima: 0,
+      quantidade_maxima: 0,
+      custo_unitario: 0,
       fornecedor_principal: '',
       codigo_fornecedor: '',
       ncm: '',
       especificacoes: '',
       observacoes: '',
     };
-    // Campos '' vazios não são number/string válidos p/ os schemas numéricos — envia só o
-    // essencial (mesmo efeito de "campo omitido" que os inputs vazios do form geram após
-    // o form limpar strings vazias; o que importa aqui é a AUSÊNCIA das chaves novas).
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send({
-      codigo: payloadUiAtual.codigo,
-      nome: payloadUiAtual.nome,
-      categoria: payloadUiAtual.categoria,
-      unidade: payloadUiAtual.unidade,
-      familia_id: payloadUiAtual.familia_id,
-    });
+    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send(payloadUiAtual);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.nome, 'Material Renomeado pela UI');
     assert.strictEqual(res.body.fabricante, 'Fabricante API', 'fabricante deveria ter sido preservado');
@@ -260,6 +260,107 @@ async function ultimaAuditoria(db, entidadeId) {
     const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
       .send({ classe_abc: 'X' });
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+  });
+
+  // ── Fix pós-review (Critical): MaterialAlmoxarifadoForm.js espalha `form` inteiro no
+  // submit — inputs de texto/número guardam STRING no state (`e.target.value`), nunca number.
+  // Um campo nunca tocado chega como `''`; um campo preenchido chega como `'10'`. Sem coerção
+  // no schema, `z.number()` rejeitava os dois casos — qualquer submit do formulário real
+  // (criar OU editar material) quebrava com 400. Os dois testes abaixo reproduzem o payload
+  // EXATO que a tela manda (strings, incluindo vazias), não uma versão já tipada pelo teste. ──
+
+  await test('POST com payload exatamente como o form atual envia (strings/vazios) → 201 e números coagidos corretamente', async () => {
+    const payloadFormReal = {
+      codigo: 'FORM-1',
+      nome: 'Via Form',
+      descricao: '',
+      categoria: 'CONSUMÍVEL',
+      unidade: 'UN',
+      familia_id: String(familia.id), // <select> guarda string no state do form
+      localizacao_padrao_id: null, // já convertido por handleSubmit (parseInt/null explícitos)
+      quantidade_atual: '',
+      quantidade_minima: '10',
+      quantidade_maxima: '',
+      custo_unitario: '',
+      fornecedor_principal: '',
+      codigo_fornecedor: '',
+      ncm: '',
+      especificacoes: '',
+      observacoes: '',
+    };
+    const res = await request(app).post('/api/almoxarifado/materiais').send(payloadFormReal);
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+
+    const row = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [res.body.id]);
+    assert.strictEqual(row.familia_id, familia.id, 'familia_id "3" (string) deveria ter sido coagido para número');
+    assert.strictEqual(row.quantidade_minima, 10, 'string "10" deveria ter sido coagida para número 10');
+    assert.strictEqual(row.quantidade_atual, 0, 'string vazia deveria cair no default 0 (nunca NaN)');
+    assert.strictEqual(row.quantidade_maxima, 0);
+    assert.strictEqual(row.custo_unitario, 0);
+  });
+
+  await test('PUT com payload no mesmo formato do form (strings/vazios) → 200 e números coagidos corretamente', async () => {
+    const criado = await request(app).post('/api/almoxarifado/materiais').send({
+      codigo: 'FORM-2', nome: 'Via Form Original', familia_id: familia.id,
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send({
+      codigo: 'FORM-2',
+      nome: 'Via Form Editado',
+      descricao: '',
+      categoria: 'CONSUMÍVEL',
+      unidade: 'UN',
+      familia_id: String(familia.id),
+      localizacao_padrao_id: null,
+      quantidade_minima: '20',
+      quantidade_maxima: '',
+      custo_unitario: '15.5',
+      fornecedor_principal: '',
+      codigo_fornecedor: '',
+      ncm: '',
+      especificacoes: '',
+      observacoes: '',
+    });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.quantidade_minima, 20);
+    assert.strictEqual(res.body.custo_unitario, 15.5);
+    assert.strictEqual(res.body.nome, 'Via Form Editado');
+
+    const row = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [criado.body.id]);
+    assert.strictEqual(row.quantidade_minima, 20);
+    assert.strictEqual(row.custo_unitario, 15.5);
+  });
+
+  await test('subfamilia_id: null explícito continua limpando o vínculo mesmo com a coerção nova (não vira "preservar")', async () => {
+    const raiz = await criarFamilia(app, 'Raiz Coercao Null');
+    const sub = await request(app).post('/api/almoxarifado/familias').send({ nome: 'Sub Coercao Null', parent_id: raiz.id });
+    assert.strictEqual(sub.status, 201, JSON.stringify(sub.body));
+
+    const criado = await request(app).post('/api/almoxarifado/materiais').send({
+      codigo: 'FORM-3', nome: 'Material Sub Null', familia_id: raiz.id, subfamilia_id: sub.body.id,
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    assert.strictEqual(criado.body.subfamilia_id, sub.body.id);
+
+    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+      .send({ codigo: 'FORM-3', nome: 'Material Sub Null', familia_id: raiz.id, subfamilia_id: null });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.subfamilia_id, null, 'null explícito ainda precisa limpar o vínculo (não pode virar undefined/preservar)');
+  });
+
+  await test('MINOR: PUT ativo:false (boolean) é normalizado para 0 na coluna (FlagSchema tolerante)', async () => {
+    const criado = await request(app).post('/api/almoxarifado/materiais').send({
+      codigo: 'FORM-4', nome: 'Material Ativo Bool', familia_id: familia.id,
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send({ ativo: false });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.ativo, 0);
+
+    const row = await dbGet(db, 'SELECT ativo FROM materiais_almoxarifado WHERE id = ?', [criado.body.id]);
+    assert.strictEqual(row.ativo, 0);
   });
 
   await close();

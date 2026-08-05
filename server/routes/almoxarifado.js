@@ -276,8 +276,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   function bool01(v) { return v ? 1 : 0; }
 
+  // 'ativo' incluído aqui (fix pós-review — minor): o schema usa FlagSchema (tolera
+  // true/false além de 0/1), então o merge precisa normalizar para 0/1 antes de gravar —
+  // mesmo tratamento das demais flags de controle.
   const MATERIAL_BOOL_FIELDS = new Set([
-    'material_critico', 'controle_lote', 'controle_certificado',
+    'ativo', 'material_critico', 'controle_lote', 'controle_certificado',
     'controle_serie', 'controle_validade', 'controle_corrida', 'requer_inspecao', 'requer_foto',
   ]);
 
@@ -502,12 +505,24 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         dadosNovos[f] = merged[f] ?? null;
       }
     }
+    // Fix pós-review (Important): este await estava fora de qualquer try/catch — uma rejeição
+    // aqui (ex.: erro de I/O no SQLite) não vira uma resposta HTTP no Express 4 (promise
+    // rejeitada em handler async não é encaminhada ao error handler automaticamente), então a
+    // request PENDURA até o timeout do cliente. Decisão: o UPDATE já foi commitado com sucesso
+    // neste ponto — falhar a request inteira por causa só do log de auditoria devolveria um erro
+    // ao usuário para uma escrita que na verdade deu certo. Em vez disso, capturamos, logamos
+    // como erro (para investigação — auditoria é a regra da spec 29, uma falha aqui não deve
+    // passar despercebida) e seguimos para a resposta normal.
     if (Object.keys(dadosNovos).length > 0) {
-      await registrarAuditoria(db, {
-        entidade: 'material', entidade_id: Number(req.params.id), acao: 'ATUALIZACAO',
-        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_anteriores: dadosAnteriores, dados_novos: dadosNovos,
-      });
+      try {
+        await registrarAuditoria(db, {
+          entidade: 'material', entidade_id: Number(req.params.id), acao: 'ATUALIZACAO',
+          usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+          dados_anteriores: dadosAnteriores, dados_novos: dadosNovos,
+        });
+      } catch (errAudit) {
+        console.error('[almoxarifado] Falha ao registrar auditoria de edição de material:', errAudit.message);
+      }
     }
 
     try {
