@@ -969,16 +969,35 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/almoxarifado/localizacoes',(req, res) => {
-    let sql = `SELECT * FROM localizacoes_almoxarifado WHERE ativo = 1`;
+    let sql = `SELECT l.*, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo
+               FROM localizacoes_almoxarifado l
+               LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+               LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
+               WHERE l.ativo = 1`;
     const params = [];
     if (req.query.almoxarifado_id) {
-      sql += ' AND almoxarifado_id = ?';
+      sql += ' AND l.almoxarifado_id = ?';
       params.push(req.query.almoxarifado_id);
     }
-    sql += ` ORDER BY setor, parent_id, subgrupo, codigo`;
+    sql += ` ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo`;
     db.all(sql, params, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
+
+      // Build endereco_completo: almoxarifado.codigo + setor + parent.codigo + codigo
+      const enriched = rows.map(row => {
+        const parts = [];
+        if (row.almoxarifado_codigo) parts.push(row.almoxarifado_codigo);
+        if (row.setor) parts.push(row.setor);
+        if (row.parent_codigo) parts.push(row.parent_codigo);
+        if (row.codigo) parts.push(row.codigo);
+
+        return {
+          ...row,
+          endereco_completo: parts.join(' / ')
+        };
+      });
+
+      res.json(enriched);
     });
   });
 

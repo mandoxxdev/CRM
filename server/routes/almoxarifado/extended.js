@@ -446,6 +446,41 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     } catch (e) { handleError(res, e); }
   });
 
+  // ── Localizações vazias (sem estoque) ──
+  app.get('/api/almoxarifado/localizacoes/vazias', auth, async (req, res) => {
+    try {
+      const sql = `
+        SELECT l.*, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo
+        FROM localizacoes_almoxarifado l
+        LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+        LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
+        WHERE l.ativo = 1
+        AND NOT EXISTS (
+          SELECT 1 FROM estoque_saldo_almoxarifado s
+          WHERE s.localizacao_id = l.id AND s.quantidade > 0
+        )
+        ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo
+      `;
+      const rows = await dbAll(db, sql);
+
+      // Build endereco_completo for each location
+      const enriched = rows.map(row => {
+        const parts = [];
+        if (row.almoxarifado_codigo) parts.push(row.almoxarifado_codigo);
+        if (row.setor) parts.push(row.setor);
+        if (row.parent_codigo) parts.push(row.parent_codigo);
+        if (row.codigo) parts.push(row.codigo);
+
+        return {
+          ...row,
+          endereco_completo: parts.join(' / ')
+        };
+      });
+
+      res.json(enriched);
+    } catch (e) { handleError(res, e); }
+  });
+
   // ── Relatórios v2 ──
   const reports = {
     'estoque-atual': reportService.relatorioEstoqueAtual,
@@ -463,6 +498,17 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     'ferramentas-emprestadas': reportService.relatorioFerramentasEmprestadas,
     'epi-colaborador': reportService.relatorioEPIPorColaborador,
     'solicitacoes-compra': reportService.relatorioSolicitacoesCompraPendentes,
+    'materiais-sem-endereco': async (db) => {
+      return dbAll(db, `
+        SELECT m.* FROM materiais_almoxarifado m
+        WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM estoque_saldo_almoxarifado s
+          WHERE s.material_id = m.id AND s.localizacao_id IS NOT NULL AND s.quantidade > 0
+        )
+        ORDER BY m.codigo
+      `);
+    },
   };
 
   app.get('/api/almoxarifado/relatorios/:tipo', auth, async (req, res) => {
