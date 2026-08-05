@@ -3,6 +3,7 @@
  */
 const { dbRun, dbGet, dbAll } = require('./db');
 const valueApprovalService = require('./requisitionValueApprovalService');
+const stockService = require('./stockService');
 const { PODE_SEPARAR, PODE_ENTREGAR } = require('./requisitionStateMachine');
 
 function num(v) {
@@ -25,6 +26,13 @@ function pendenteSeparacao(item) {
   return Math.max(0, num(item.quantidade_solicitada) - getSeparado(item));
 }
 
+/**
+ * `estoque` aqui é o saldo DISPONÍVEL (quantidade_atual − reservada − bloqueada −
+ * em_inspecao), não mais o físico (Etapa 3, Task 3 — fecha o bypass de
+ * entregarRequisicao/excluirRequisicao que baixava/estornava direto no físico sem passar
+ * pelo motor). Os chamadores (separarRequisicao/entregarRequisicao/normalizarItem) já
+ * calculam e passam o disponível.
+ */
 function maxSeparar(item, estoque) {
   return Math.min(pendenteSeparacao(item), num(estoque));
 }
@@ -44,7 +52,11 @@ function normalizarItem(item) {
   const entregue = getEntregue(item);
   const separado = getSeparado(item);
   const solicitado = num(item.quantidade_solicitada);
-  const estoque = num(item.saldo_atual ?? item.quantidade_atual);
+  // saldo_atual mantém o NOME por compat com o front, mas passa a carregar o DISPONÍVEL
+  // quando a query de origem já traz saldo_disponivel (carregarItensRequisicao) — mudança
+  // semântica documentada na Task 3. Se só o físico estiver disponível (chamador antigo),
+  // cai no físico como antes.
+  const estoque = num(item.saldo_atual ?? item.saldo_disponivel ?? item.quantidade_atual);
   const pendente = Math.max(0, solicitado - entregue);
   const entregavel = maxEntregar(item, estoque);
   return {
@@ -64,7 +76,9 @@ function todosItensCompletos(itens) {
 
 async function carregarItensRequisicao(db, requisicaoId) {
   return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo,
-      COALESCE(ma.custo_medio, ma.custo_unitario, 0) as custo_unitario
+      COALESCE(ma.custo_medio, ma.custo_unitario, 0) as custo_unitario,
+      (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
+        - COALESCE(ma.quantidade_em_inspecao,0)) as saldo_disponivel
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
     WHERE ir.requisicao_id = ?`, [requisicaoId]);
@@ -96,14 +110,16 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
     const qty = num(entrada.quantidade_separada);
     if (qty <= 0) continue;
 
-    const mat = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
-    const estoque = num(mat?.quantidade_atual);
+    const mat = await dbGet(db, `SELECT (quantidade_atual - COALESCE(quantidade_reservada,0)
+        - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) as saldo_disponivel
+      FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
+    const estoque = num(mat?.saldo_disponivel);
     const max = maxSeparar(item, estoque);
 
     if (qty > max) {
       const err = new Error(
         `${item.material_nome}: não é possível separar ${qty} ${item.unidade || ''}. `
-        + `Máximo: ${max} (pendente: ${pendenteSeparacao(item)}, estoque: ${estoque})`
+        + `Máximo: ${max} (pendente: ${pendenteSeparacao(item)}, disponível: ${estoque})`
       );
       err.status = 400;
       throw err;
@@ -122,7 +138,14 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
   return { success: true, status: 'EM_SEPARACAO' };
 }
 
-async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) {
+/**
+ * `alertService` é aceito e ignorado (Etapa 3, Task 3): a baixa agora passa por
+ * stockService.registrarMovimentacao, que já dispara a checagem de alerta internamente
+ * (stockService.js, pós-INSERT da movimentação). Chamar de novo aqui duplicaria o disparo.
+ * Mantido no parâmetro só para não quebrar as duas rotas que ainda o passam
+ * (routes/almoxarifado.js, routes/requisicoesMaterial.js).
+ */
+async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) { // eslint-disable-line no-unused-vars
   const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   if (!reqRow) {
     const err = new Error('Requisição não encontrada');
@@ -145,34 +168,49 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
     const qtyEntregar = entrada ? num(entrada.quantidade_atendida) : 0;
     if (qtyEntregar <= 0) continue;
 
-    const mat = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
-    const estoque = num(mat?.quantidade_atual);
-    const max = maxEntregar(item, estoque);
+    // Ceiling é o DISPONÍVEL (Etapa 3, Task 3), não mais o físico — leitura fresca aqui é só
+    // uma checagem antecipada para uma mensagem de erro com nome do material/pendente; a
+    // validação que realmente vale é a atômica dentro de stockService.registrarMovimentacao
+    // logo abaixo (fecha a janela de corrida entre esta leitura e a baixa real).
+    const mat = await dbGet(db, `SELECT (quantidade_atual - COALESCE(quantidade_reservada,0)
+        - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) as saldo_disponivel
+      FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
+    const disponivel = num(mat?.saldo_disponivel);
+    const max = maxEntregar(item, disponivel);
 
     if (qtyEntregar > max) {
       const err = new Error(
         `${item.material_nome}: não é possível entregar ${qtyEntregar} ${item.unidade || ''}. `
-        + `Máximo: ${max} (pendente: ${pendenteEntrega(item)}, estoque: ${estoque})`
+        + `Máximo: ${max} (pendente: ${pendenteEntrega(item)}, disponível: ${disponivel})`
       );
       err.status = 400;
+      throw err;
+    }
+
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.registrarMovimentacao(db, user, {
+        material_id: item.material_id,
+        tipo: 'SAIDA',
+        quantidade: qtyEntregar,
+        motivo: `Requisição ${reqRow.numero}`,
+        referencia: reqRow.os_referencia || reqRow.numero,
+        justificativa: `Entrega requisição ${reqRow.numero}`,
+        requisicao_id: requisicaoId,
+        projeto_id: reqRow.projeto_id || undefined,
+        cliente_id: reqRow.cliente_id || undefined,
+        centro_custo_id: reqRow.centro_custo_id || undefined,
+      });
+    } catch (e) {
+      const err = new Error(`${item.material_nome}: ${e.message}`);
+      err.status = e.status;
       throw err;
     }
 
     const entregueAtual = getEntregue(item);
     const novaEntregue = entregueAtual + qtyEntregar;
     const novaSeparada = Math.max(getSeparado(item), novaEntregue);
-    const saldoAnterior = estoque;
-    const saldoPosterior = saldoAnterior - qtyEntregar;
 
-    await dbRun(db,
-      'UPDATE materiais_almoxarifado SET quantidade_atual=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [saldoPosterior, item.material_id]);
-    await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, usuario_id, usuario_nome, requisicao_id)
-      VALUES (?, 'SAIDA', ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [item.material_id, qtyEntregar, saldoAnterior, saldoPosterior,
-        `Requisição ${reqRow.numero}`, reqRow.os_referencia || reqRow.numero,
-        user.id, user.nome || user.email, requisicaoId]);
     await dbRun(db,
       'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue=?, quantidade_atendida=?, quantidade_separada=? WHERE id=?',
       [novaEntregue, novaEntregue, novaSeparada, item.id]);
@@ -200,18 +238,14 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
       [novoStatus, requisicaoId]);
   }
 
-  if (alertService) {
-    const materialIds = [...new Set(entregas.map((e) => {
-      const item = itens.find((i) => i.id === e.item_id);
-      return item?.material_id;
-    }).filter(Boolean))];
-    await Promise.all(materialIds.map((id) => alertService.verificarAlertaPorMaterialId(db, id).catch(() => null)));
-  }
-
   return { success: true, status: novoStatus, parcial: !completo, entregas };
 }
 
-async function excluirRequisicao(db, requisicaoId, user, justificativa, alertService) {
+/**
+ * `alertService` é aceito e ignorado (Etapa 3, Task 3) — mesmo motivo de entregarRequisicao:
+ * stockService.registrarMovimentacao já dispara a checagem de alerta internamente.
+ */
+async function excluirRequisicao(db, requisicaoId, user, justificativa, alertService) { // eslint-disable-line no-unused-vars
   const reqRow = await dbGet(db,
     'SELECT * FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1',
     [requisicaoId]);
@@ -228,21 +262,25 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
     const qtyEstorno = getEntregue(item);
     if (qtyEstorno <= 0) continue;
 
-    const mat = await dbGet(db, 'SELECT quantidade_atual, unidade FROM materiais_almoxarifado WHERE id = ?',
-      [item.material_id]);
-    const saldoAnterior = num(mat?.quantidade_atual);
-    const saldoPosterior = saldoAnterior + qtyEstorno;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.registrarMovimentacao(db, user, {
+        material_id: item.material_id,
+        tipo: 'ENTRADA',
+        quantidade: qtyEstorno,
+        motivo: `Estorno exclusão requisição ${reqRow.numero}`,
+        referencia: reqRow.os_referencia || reqRow.numero,
+        requisicao_id: requisicaoId,
+        projeto_id: reqRow.projeto_id || undefined,
+        cliente_id: reqRow.cliente_id || undefined,
+        centro_custo_id: reqRow.centro_custo_id || undefined,
+      });
+    } catch (e) {
+      const err = new Error(`${item.material_nome}: ${e.message}`);
+      err.status = e.status;
+      throw err;
+    }
 
-    await dbRun(db,
-      'UPDATE materiais_almoxarifado SET quantidade_atual=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-      [saldoPosterior, item.material_id]);
-    await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, usuario_id, usuario_nome, requisicao_id)
-      VALUES (?, 'ENTRADA', ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [item.material_id, qtyEstorno, saldoAnterior, saldoPosterior,
-        `Estorno exclusão requisição ${reqRow.numero}`,
-        reqRow.os_referencia || reqRow.numero,
-        user.id, user.nome || user.email, requisicaoId]);
     estornos.push({ material_id: item.material_id, quantidade: qtyEstorno });
   }
 
@@ -252,11 +290,6 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
      SET ativo=0, status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
      WHERE id=?`,
     [motivo, requisicaoId]);
-
-  if (alertService && estornos.length > 0) {
-    const materialIds = [...new Set(estornos.map((e) => e.material_id))];
-    await Promise.all(materialIds.map((id) => alertService.verificarAlertaPorMaterialId(db, id).catch(() => null)));
-  }
 
   return { success: true, estornos };
 }
