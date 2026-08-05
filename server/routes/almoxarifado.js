@@ -21,6 +21,7 @@ const {
   enrichMaterialRows,
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
+const { can } = require('../services/almoxarifado/permissions');
 const { dbRun, dbGet } = require('../services/almoxarifado/db');
 const { validate } = require('../services/almoxarifado/validation');
 const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
@@ -2011,6 +2012,162 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     requisitionService.entregarRequisicao(db, req.params.id, itens_atendidos, req.user, alertService)
       .then((result) => res.json(result))
       .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+  });
+
+  // PUT /api/almoxarifado/requisicoes/:id/confirmar-recebimento — confirmação de
+  // recebimento pelo SOLICITANTE (design, "Máquina de estados": "não é status: campos
+  // recebimento_confirmado_por/em setáveis pelo SOLICITANTE em
+  // ENTREGUE/PARCIALMENTE_ATENDIDA/ENCERRADA").
+  //
+  // Decisão: diferente de /cancelar e /enviar (que aceitam dono OU admin), aqui NÃO há
+  // bypass de admin — a confirmação é o testemunho do próprio solicitante de que recebeu
+  // o material fisicamente; um admin confirmando em nome de outra pessoa esvaziaria o
+  // propósito do campo (auditoria de recebimento). Se um admin precisar corrigir isso,
+  // é caso de suporte/edição direta no banco, não de rota de negócio.
+  app.put('/api/almoxarifado/requisicoes/:id/confirmar-recebimento', async (req, res) => {
+    try {
+      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
+
+      if (Number(req.user.id) !== Number(reqRow.solicitante_id)) {
+        return res.status(403).json({ error: 'Apenas o solicitante pode confirmar o recebimento' });
+      }
+
+      if (!['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'].includes(reqRow.status)) {
+        return res.status(400).json({ error: `Confirmação de recebimento não permitida no status ${reqRow.status}` });
+      }
+
+      if (reqRow.recebimento_confirmado_em) {
+        return res.status(400).json({ error: 'Recebimento já confirmado' });
+      }
+
+      await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET recebimento_confirmado_por=?, recebimento_confirmado_em=CURRENT_TIMESTAMP,
+         updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [req.user.id, req.params.id]);
+
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'CONFIRMACAO_RECEBIMENTO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { recebimento_confirmado_por: req.user.id },
+      });
+
+      const atualizada = await dbGet(db,
+        'SELECT recebimento_confirmado_por, recebimento_confirmado_em FROM requisicoes_almoxarifado WHERE id = ?',
+        [req.params.id]);
+
+      res.json({
+        success: true,
+        recebimento_confirmado_por: atualizada.recebimento_confirmado_por,
+        recebimento_confirmado_em: atualizada.recebimento_confirmado_em,
+      });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // Motivo é opcional no encerramento (design: "body motivo opcional") — Zod só para
+  // manter o padrão da casa (validate() de todo body de rota mutante), sem exigir nada.
+  const EncerramentoSchema = z.object({
+    motivo: z.string().nullable().optional(),
+  });
+
+  // PUT /api/almoxarifado/requisicoes/:id/encerrar — encerramento (design, "Máquina de
+  // estados": "cancela saldos pendentes (nenhuma entrega futura); a partir de ENTREGUE ou
+  // PARCIALMENTE_ATENDIDA. Registra encerrado_por/em."). Requer perfil aprovar_requisicao
+  // (mesma permissão de aprovar/rejeitar requisições) — não é ação do solicitante nem do
+  // almoxarife de separação isoladamente.
+  app.put('/api/almoxarifado/requisicoes/:id/encerrar', validate(EncerramentoSchema), async (req, res) => {
+    try {
+      if (!can(req.user, 'aprovar_requisicao')) {
+        return res.status(403).json({ error: 'Sem permissão para encerrar requisições' });
+      }
+
+      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
+
+      const check = requisitionStateMachine.validarTransicao(reqRow.status, 'ENCERRADA');
+      if (!check.ok) return res.status(400).json({ error: check.erro });
+
+      const { motivo } = req.body;
+
+      await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status='ENCERRADA', encerrado_por=?, encerrado_em=CURRENT_TIMESTAMP,
+         updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [req.user.id, req.params.id]);
+
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'ENCERRAMENTO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        justificativa: motivo || null, dados_novos: { status: 'ENCERRADA' },
+      });
+
+      res.json({ success: true, status: 'ENCERRADA' });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/almoxarifado/requisicoes/:id/copiar — copia uma requisição existente para um
+  // novo RASCUNHO (design: "cria NOVO RASCUNHO via createRequisicao com os mesmos itens
+  // (quantidade_solicitada, sem entregues), tipo/vínculos/setor copiados, solicitante =
+  // req.user"). Reaproveita requisitionCreateService.createRequisicao (Task 1) — mesmo
+  // caminho de criação normal, com salvar_rascunho:true (não dispara notificações nem
+  // avaliação de valor; isso só acontece quando o rascunho copiado for enviado via
+  // /enviar). Qualquer usuário autenticado do módulo pode copiar (não é uma decisão de
+  // negócio como aprovar/encerrar — é só um atalho de preenchimento de formulário) e o
+  // solicitante da cópia é sempre quem chamou a rota, nunca o dono do original.
+  app.post('/api/almoxarifado/requisicoes/:id/copiar', async (req, res) => {
+    try {
+      const origem = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!origem) return res.status(404).json({ error: 'Requisição não encontrada' });
+
+      const itensOrigem = await new Promise((resolve, reject) => {
+        db.all(
+          'SELECT material_id, quantidade_solicitada, observacoes FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?',
+          [req.params.id],
+          (err, rows) => (err ? reject(err) : resolve(rows)),
+        );
+      });
+      if (itensOrigem.length === 0) {
+        return res.status(400).json({ error: 'Requisição de origem não possui itens' });
+      }
+
+      const payload = {
+        tipo_requisicao: origem.tipo_requisicao || 'CONSUMO',
+        centro_custo_id: origem.centro_custo_id || null,
+        local_entrega: origem.local_entrega || null,
+        projeto_id: origem.projeto_id || null,
+        cliente_id: origem.cliente_id || null,
+        os_referencia: origem.os_referencia || null,
+        setor: origem.setor || null,
+        departamento: origem.departamento || null,
+        // Justificativa só é copiada para EMERGENCIAL (design: "justificativa copiada se
+        // tipo EMERGENCIAL") — nos demais tipos o campo é opcional e não faz parte do
+        // contrato de cópia.
+        justificativa: origem.tipo_requisicao === 'EMERGENCIAL' ? origem.justificativa : null,
+        salvar_rascunho: true,
+        itens: itensOrigem.map((item) => ({
+          material_id: item.material_id,
+          quantidade: item.quantidade_solicitada,
+          observacoes: item.observacoes || null,
+        })),
+      };
+
+      const result = await requisitionCreateService.createRequisicao(
+        db, req.user, payload, { modulo: 'almoxarifado' },
+      );
+
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: result.id, acao: 'COPIA',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { origem_id: Number(req.params.id), numero: result.numero },
+      });
+
+      res.status(201).json({ id: result.id, numero: result.numero, status: result.status });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/cancelar — cancelar
