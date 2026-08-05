@@ -7,10 +7,9 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const alertService = require('../services/almoxarifado/alertService');
-const requisitionNotificationService = require('../services/almoxarifado/requisitionNotificationService');
-const purchaseNotifyService = require('../services/almoxarifado/requisitionPurchaseNotifyService');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 const stockService = require('../services/almoxarifado/stockService');
 const {
@@ -22,7 +21,7 @@ const {
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
 const { dbRun, dbGet } = require('../services/almoxarifado/db');
 const { validate } = require('../services/almoxarifado/validation');
-const { MaterialSchema, MaterialUpdateSchema } = require('../services/almoxarifado/schemas');
+const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../services/almoxarifado/audit');
 
 function denyUnlessAlmoxAdmin(req, res) {
@@ -1675,12 +1674,6 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // REQUISIÇÕES (Solicitações da Fábrica)
   // ════════════════════════════════════════════════════════════════════════════
 
-  const gerarNumeroReq = () => {
-    const ts = Date.now().toString().slice(-6);
-    const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
-    return `REQ-${ts}${rand}`;
-  };
-
   // GET /api/almoxarifado/requisicoes — listar (com filtros)
   app.get('/api/almoxarifado/requisicoes',(req, res) => {
     const { status, urgencia, minha, departamento } = req.query;
@@ -1742,112 +1735,46 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // POST /api/almoxarifado/requisicoes — criar requisição
-  app.post('/api/almoxarifado/requisicoes', async (req, res) => {
-    const {
-      departamento, setor, os_referencia, urgencia, observacoes,
-      justificativa_urgencia, itens, modulo_origem,
-    } = req.body;
-    if (!itens || itens.length === 0) return res.status(400).json({ error: 'Inclua ao menos um item' });
-
-    const setorFinal = departamento || setor;
+  app.post('/api/almoxarifado/requisicoes', validate(RequisicaoSchema), async (req, res) => {
     try {
-      const sectorMaterialService = require('../services/almoxarifado/sectorMaterialService');
-      if (setorFinal) {
-        await sectorMaterialService.validateMateriaisParaSetor(
-          db, setorFinal, itens.map((i) => i.material_id)
-        );
+      const result = await requisitionCreateService.createRequisicao(
+        db, req.user, req.body, { modulo: 'almoxarifado' },
+      );
+
+      if (result.status === 'RASCUNHO') {
+        return res.status(201).json({ id: result.id, numero: result.numero, status: result.status });
       }
-    } catch (e) {
-      return res.status(e.status || 500).json({ error: e.message });
-    }
 
-    const numero = gerarNumeroReq();
+      if (result.status === valueApprovalService.STATUS_AGUARDANDO) {
+        return res.status(201).json({
+          id: result.id,
+          numero: result.numero,
+          status: result.status,
+          valor_total: result.valor_total,
+          requer_aprovacao_valor: true,
+        });
+      }
 
-    db.run(`INSERT INTO requisicoes_almoxarifado
-            (numero, solicitante_id, solicitante_nome, departamento, setor, os_referencia,
-             urgencia, observacoes, justificativa_urgencia, modulo_origem, status)
-            VALUES (?,?,?,?,?,?,?,?,?,?,'PENDENTE')`,
-      [numero, req.user.id, req.user.nome || req.user.email,
-       setorFinal || null, setorFinal || null, os_referencia || null,
-       urgencia || 'NORMAL', observacoes || null, justificativa_urgencia || null,
-       modulo_origem || null],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        const reqId = this.lastID;
-
-        const insertsItens = itens.map(item =>
-          new Promise((resolve, reject) => {
-            db.run(`INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, observacoes)
-                    VALUES (?,?,?,?)`,
-              [reqId, item.material_id, item.quantidade, item.observacoes || null],
-              (e) => e ? reject(e) : resolve());
-          })
-        );
-
-        Promise.all(insertsItens).then(async () => {
-          const reqData = {
-            id: reqId,
-            numero,
-            setor: setorFinal,
-            departamento: setorFinal,
-            os_referencia: os_referencia || null,
-            solicitante_nome: req.user.nome || req.user.email,
-            observacoes: observacoes || null,
-          };
-          const itensParaNotificar = itens.map((i) => ({
-            material_id: i.material_id,
-            quantidade_solicitada: i.quantidade,
-          }));
-          requisitionNotificationService.notificarNovaRequisicao(db, reqData).catch((err) => {
-            console.warn('[almoxarifado/requisicoes] Falha ao notificar por e-mail:', err.message);
-          });
-          purchaseNotifyService.notifyComprasItensSemEstoque(
-            db,
-            reqData,
-            itensParaNotificar,
-            req.user.email,
-          ).catch((err) => {
-            console.warn('[almoxarifado/requisicoes] Falha ao notificar Compras:', err.message);
-          });
-
-          let avaliacaoValor;
-          try {
-            avaliacaoValor = await valueApprovalService.aplicarAvaliacaoNaCriacao(db, reqId);
-          } catch (valErr) {
-            console.warn('[almoxarifado/requisicoes] Falha na avaliação de valor:', valErr.message);
-            avaliacaoValor = { status: 'PENDENTE' };
-          }
-
-          if (avaliacaoValor.status === valueApprovalService.STATUS_AGUARDANDO) {
-            return res.status(201).json({
-              id: reqId,
-              numero,
-              status: avaliacaoValor.status,
-              valor_total: avaliacaoValor.valor_total,
-              requer_aprovacao_valor: true,
-            });
-          }
-
-          // Verificar aprovação automática
-          db.get(`SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`, [], (e, cfg) => {
-            if (!e && cfg && cfg.valor === '1' && urgencia !== 'CRITICO') {
-              db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-                [reqId], () => {
-                  res.status(201).json({
-                    id: reqId, numero, status: 'APROVADO', aprovacao: 'automatica',
-                    valor_total: avaliacaoValor.valor_total,
-                  });
-                });
-            } else {
+      // Verificar aprovação automática
+      db.get(`SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`, [], (e, cfg) => {
+        if (!e && cfg && cfg.valor === '1' && req.body.urgencia !== 'CRITICO') {
+          db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
+            [result.id], () => {
               res.status(201).json({
-                id: reqId, numero, status: 'PENDENTE',
-                valor_total: avaliacaoValor.valor_total,
+                id: result.id, numero: result.numero, status: 'APROVADO', aprovacao: 'automatica',
+                valor_total: result.valor_total,
               });
-            }
+            });
+        } else {
+          res.status(201).json({
+            id: result.id, numero: result.numero, status: 'PENDENTE',
+            valor_total: result.valor_total,
           });
-        }).catch(e => res.status(500).json({ error: e.message }));
-      }
-    );
+        }
+      });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/aprovar — aprovar

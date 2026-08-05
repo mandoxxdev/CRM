@@ -1,5 +1,6 @@
 /** Schemas Zod compartilhados do almoxarifado (padrão da fundação — ver validation.js). */
 const { z } = require('zod');
+const { TIPOS_REQUISICAO } = require('./schema');
 
 const CentroCustoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
@@ -180,7 +181,50 @@ const MaterialSchema = MaterialShape.superRefine(refineUnidadesFator);
 // permite .partial() em cima de um schema que já carrega refinamentos (ZodEffects).
 const MaterialUpdateSchema = MaterialShape.partial().superRefine(refineUnidadesFator);
 
+// ── Requisições (Etapa 3, Task 1) ──────────────────────────────────────────────
+// Schema único usado pelas DUAS rotas de criação (/api/almoxarifado/requisicoes e
+// /api/requisicoes-material) via requisitionCreateService.createRequisicao — fecha o bug
+// conhecido de quantidade <= 0 (nenhuma das duas rotas validava isso antes desta etapa).
+const ItemRequisicaoSchema = z.object({
+  material_id: numFromForm(z.number().int().positive('material_id é obrigatório')),
+  // numFromForm — lição E2-T4: RequisicaoForm.js manda quantidade como string do form.
+  quantidade: numFromForm(z.number().gt(0, 'quantidade deve ser maior que zero')),
+  observacoes: z.string().nullable().optional(),
+});
+
+const RequisicaoSchema = z.object({
+  departamento: z.string().nullable().optional(),
+  setor: z.string().nullable().optional(),
+  os_referencia: z.string().nullable().optional(),
+  urgencia: z.string().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+  justificativa_urgencia: z.string().nullable().optional(),
+  modulo_origem: z.string().nullable().optional(),
+  // '' (select em branco no form) vira "ausente" -> default CONSUMO; mesma família de fix do
+  // classe_abc em MaterialShape acima.
+  tipo_requisicao: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(TIPOS_REQUISICAO).default('CONSUMO'),
+  ),
+  centro_custo_id: numFromForm(z.number().int().positive().nullable().optional()),
+  local_entrega: z.string().nullable().optional(),
+  projeto_id: numFromForm(z.number().int().positive().nullable().optional()),
+  cliente_id: numFromForm(z.number().int().positive().nullable().optional()),
+  equipamento: z.string().nullable().optional(),
+  prioridade: z.string().nullable().optional(),
+  data_necessidade: z.string().nullable().optional(),
+  justificativa: z.string().nullable().optional(),
+  salvar_rascunho: FlagSchema,
+  itens: z.array(ItemRequisicaoSchema).min(1, 'Inclua ao menos um item'),
+}).superRefine((d, ctx) => {
+  // Requisição emergencial exige justificativa na criação (design, seção "Dados") —
+  // vale tanto para envio direto quanto para rascunho (o campo nasce junto com o tipo).
+  if (d.tipo_requisicao === 'EMERGENCIAL' && !d.justificativa?.trim()) {
+    ctx.addIssue({ code: 'custom', path: ['justificativa'], message: 'Requisição emergencial exige justificativa' });
+  }
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema,
-  MaterialSchema, MaterialUpdateSchema,
+  MaterialSchema, MaterialUpdateSchema, RequisicaoSchema, ItemRequisicaoSchema,
 };

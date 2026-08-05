@@ -35,6 +35,14 @@ const SETORES_REQUISICAO = [
   'Montagem', 'Pintura', 'Expedição', 'Assistência técnica', 'Obras externas',
 ];
 
+// Etapa 3 (design 2026-08-05, seção "Dados"): tipo único de requisição — usado em
+// filtros, exibição e na regra do emergencial (EMERGENCIAL exige justificativa).
+const TIPOS_REQUISICAO = [
+  'CONSUMO', 'ORDEM_PRODUCAO', 'ORDEM_SERVICO', 'PROJETO', 'MONTAGEM',
+  'INSTALACAO_EXTERNA', 'ASSISTENCIA_TECNICA', 'MANUTENCAO', 'DESENVOLVIMENTO',
+  'ADMINISTRATIVO', 'EMERGENCIAL', 'FERRAMENTA', 'EPI', 'MATERIAL_CLIENTE',
+];
+
 const TIPOS_MOVIMENTO = [
   'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'SAIDA_PRODUCAO',
   'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'TRANSFERENCIA', 'RESERVA', 'LIBERACAO_RESERVA',
@@ -856,6 +864,16 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN data_aprovacao_valor DATETIME');
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN rejeicao_valor_motivo TEXT');
 
+  // ── Etapa 3 (Task 1): tipo de requisição, centro de custo, local de entrega,
+  // confirmação de recebimento (pelo solicitante) e encerramento (perfil aprovar_requisicao). ──
+  await safeAlter(db, "ALTER TABLE requisicoes_almoxarifado ADD COLUMN tipo_requisicao TEXT DEFAULT 'CONSUMO'");
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN centro_custo_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN local_entrega TEXT');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN recebimento_confirmado_por INTEGER');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN recebimento_confirmado_em DATETIME');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN encerrado_por INTEGER');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN encerrado_em DATETIME');
+
   await dbRun(db, `CREATE TABLE IF NOT EXISTS requisicao_lembretes_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     requisicao_id INTEGER NOT NULL,
@@ -952,4 +970,5 @@ module.exports = {
   UNIDADES_SEED,
   SETORES_REQUISICAO,
   TIPOS_MOVIMENTO,
+  TIPOS_REQUISICAO,
 };
