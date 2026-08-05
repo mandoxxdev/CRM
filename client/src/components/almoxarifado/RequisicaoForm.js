@@ -204,13 +204,19 @@ const RequisicaoForm = () => {
     setItens(prev => prev.map(i => i.material_id === material_id ? { ...i, [campo]: valor } : i));
   };
 
-  const validarFormulario = () => {
+  const validarFormulario = (salvarRascunho) => {
+    // Setor continua exigido mesmo em rascunho: a whitelist de materiais por setor depende dele
+    // e o server também exige na criação (não é regra client-only) — decisão consciente do fix loop.
     if (!form.departamento) { toast.error('Setor é obrigatório'); return false; }
     if (itens.length === 0) { toast.error('Adicione ao menos um material'); return false; }
-    if (form.urgencia !== 'NORMAL' && !form.justificativa_urgencia) {
+    // Justificativa de urgência é regra client-only (server não exige nem no envio direto) — pulada
+    // ao salvar rascunho, já que rascunho existe justamente para permitir salvar incompleto.
+    if (!salvarRascunho && form.urgencia !== 'NORMAL' && !form.justificativa_urgencia) {
       toast.error('Justifique a urgência para requisições urgentes/críticas');
       return false;
     }
+    // EMERGENCIAL exige justificativa nos dois fluxos: o server valida isso independente de
+    // salvar_rascunho (RequisicaoSchema.superRefine), então bloquear aqui evita round-trip com 400.
     if (form.tipo_requisicao === 'EMERGENCIAL' && !form.justificativa.trim()) {
       toast.error('Justifique a requisição emergencial');
       return false;
@@ -219,7 +225,7 @@ const RequisicaoForm = () => {
   };
 
   const enviarRequisicao = async (salvarRascunho) => {
-    if (!validarFormulario()) return;
+    if (!validarFormulario(salvarRascunho)) return;
     const setSavingFlag = salvarRascunho ? setSavingDraft : setSaving;
     setSavingFlag(true);
     try {
