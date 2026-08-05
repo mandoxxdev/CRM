@@ -1055,7 +1055,7 @@ const RequisicoesList = () => {
                     saldos pendentes, nenhuma entrega futura"). */}
                 {warehouseMode && ['ENTREGUE', 'PARCIALMENTE_ATENDIDA'].includes(detalhe.status) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
-                    onClick={() => setShowEncerrar(true)} disabled={saving}>
+                    onClick={() => { setMotivoEncerramento(''); setShowEncerrar(true); }} disabled={saving}>
                     <FiArchive size={14} /> Encerrar Requisição
                   </button>
                 )}
