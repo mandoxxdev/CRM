@@ -3,7 +3,7 @@
  */
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
-const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS } = require('../../services/almoxarifado/permissions');
+const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { validate } = require('../../services/almoxarifado/validation');
 const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema } = require('../../services/almoxarifado/schemas');
@@ -107,6 +107,106 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
       acoes[acao] = can(req.user, acao);
     }
     res.json({ perfil: getPerfilFromUser(req.user), acoes });
+  });
+
+  // ── Perfis de acesso ao módulo (atribuição por usuário) ──
+  //
+  // Até aqui o único jeito de dar perfil era o checkbox "Administrador do módulo" no
+  // cadastro de usuário, que concede ADMINISTRADOR e nada mais. Os outros cinco perfis
+  // (ALMOXARIFE, GESTOR, COMPRAS, ENGENHARIA, CONSULTA) só entravam por SQL, e quem não
+  // era admin caía calado no fallback PRODUCAO de getPerfilFromUser.
+  //
+  // PRECEDENCIA (a razão de `origem` existir na resposta): getPerfilFromUser resolve nesta
+  // ordem — superadmin, admin do módulo, role 'admin', perfil explícito, fallback PRODUCAO.
+  // Então para quem é superadmin/admin/admin-de-módulo o perfil explícito é IGNORADO em
+  // runtime, e ainda seria sobrescrito por syncModuleAdminProfiles no próximo save do
+  // usuário. A UI precisa saber disso para não oferecer um select que não tem efeito.
+  const PERFIS_VALIDOS = Object.values(PERFIS);
+
+  function classificarPerfil(u, perfilExplicito) {
+    let mods = [];
+    try { mods = JSON.parse(u.admin_modulos || '[]'); } catch { mods = []; }
+    const forcado = !!u.is_superadmin
+      || mods.includes('almoxarifado')
+      || String(u.role || '').toLowerCase() === 'admin';
+    if (forcado) return { efetivo: PERFIS.ADMINISTRADOR, origem: 'forcado' };
+    if (perfilExplicito) return { efetivo: perfilExplicito, origem: 'explicito' };
+    return { efetivo: PERFIS.PRODUCAO, origem: 'padrao' };
+  }
+
+  app.get('/api/almoxarifado/perfis-usuario', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      const rows = await dbAll(db, `
+        SELECT u.id, u.nome, u.email, u.role, u.is_superadmin, u.admin_modulos, u.ativo,
+               p.perfil as perfil_explicito
+        FROM usuarios u
+        LEFT JOIN perfil_almoxarifado_usuario p ON p.usuario_id = u.id
+        WHERE u.ativo = 1 AND COALESCE(u.is_oculto, 0) = 0
+        ORDER BY u.nome`);
+      res.json({
+        perfis: PERFIS_VALIDOS,
+        usuarios: rows.map((u) => {
+          const { efetivo, origem } = classificarPerfil(u, u.perfil_explicito);
+          return {
+            id: u.id,
+            nome: u.nome,
+            email: u.email,
+            perfil_explicito: u.perfil_explicito || null,
+            perfil_efetivo: efetivo,
+            origem,
+          };
+        }),
+      });
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/perfis-usuario/:usuarioId', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      const { perfil } = req.body;
+      const usuario = await dbGet(db,
+        'SELECT id, nome, role, is_superadmin, admin_modulos FROM usuarios WHERE id = ? AND ativo = 1',
+        [req.params.usuarioId]);
+      if (!usuario) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+      const { origem } = classificarPerfil(usuario, null);
+      if (origem === 'forcado') {
+        // Recusa em vez de gravar: a linha seria ignorada por getPerfilFromUser e apagada
+        // no próximo save do usuário. Gravar daria a impressão de ter funcionado.
+        return res.status(409).json({
+          error: 'Este usuário já é administrador (superadmin, admin de sistema ou admin do módulo) '
+            + 'e tem acesso total ao almoxarifado. Remova essa condição no cadastro de usuário antes '
+            + 'de definir um perfil específico.',
+          origem,
+        });
+      }
+
+      // perfil vazio/null = voltar ao padrão (sem linha → fallback PRODUCAO)
+      if (perfil === null || perfil === undefined || perfil === '') {
+        await dbRun(db, 'DELETE FROM perfil_almoxarifado_usuario WHERE usuario_id = ?', [usuario.id]);
+        return res.json({ usuario_id: usuario.id, perfil_explicito: null, perfil_efetivo: PERFIS.PRODUCAO, origem: 'padrao' });
+      }
+
+      if (!PERFIS_VALIDOS.includes(perfil)) {
+        return res.status(400).json({ error: `Perfil inválido. Use um de: ${PERFIS_VALIDOS.join(', ')}` });
+      }
+
+      await dbRun(db, `
+        INSERT INTO perfil_almoxarifado_usuario (usuario_id, perfil, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(usuario_id) DO UPDATE SET perfil = excluded.perfil, updated_at = CURRENT_TIMESTAMP`,
+        [usuario.id, perfil]);
+
+      await registrarAuditoria(db, {
+        entidade: 'perfil_almoxarifado_usuario',
+        entidade_id: usuario.id,
+        acao: 'ATUALIZAR',
+        usuario_id: req.user?.id,
+        usuario_nome: req.user?.nome,
+        dados_novos: { usuario: usuario.nome, perfil },
+      }).catch(() => { /* auditoria não bloqueia a operação */ });
+
+      res.json({ usuario_id: usuario.id, perfil_explicito: perfil, perfil_efetivo: perfil, origem: 'explicito' });
+    } catch (e) { handleError(res, e); }
   });
 
   // ── Almoxarifados (entidade raiz — multi-almoxarifado) ──

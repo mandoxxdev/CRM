@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import { prefixarAlmoxarifado, buildLocalizacaoPath } from '../../utils/localizacaoLabel';
+import { invalidarAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
 const ICONES = ['📦', '🔧', '🪛', '⚙️', '🛡️', '🧰', '🪝', '💡', '🔩', '🪜', '🧪', '🏗️', '🔌', '🧲', '📋'];
@@ -187,6 +188,7 @@ const TABS = [
   { id: 'localizacoes', label: 'Localizações', icon: FiMapPin },
   { id: 'alertas', label: 'Alertas de Estoque', icon: FiBell },
   { id: 'liberacao-valor', label: 'Liberação por Valor', icon: FiDollarSign },
+  { id: 'perfis', label: 'Perfis de Acesso', icon: FiShield },
   { id: 'geral', label: 'Configurações Gerais', icon: FiSettings },
 ];
 
@@ -260,6 +262,7 @@ const ConfiguracoesAlmoxarifado = () => {
       {tab === 'localizacoes' && <TabLocalizacoes />}
       {tab === 'alertas' && <TabAlertasEstoque />}
       {tab === 'liberacao-valor' && <TabLiberacaoValor />}
+      {tab === 'perfis' && <TabPerfisAcesso />}
       {tab === 'geral' && <TabConfiguracoes />}
     </div>
   );
@@ -2520,6 +2523,154 @@ const TabLiberacaoValor = () => {
       <button className="btn-almox-primary" style={{ marginTop: 24 }} onClick={handleSalvar} disabled={saving}>
         <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Configurações'}
       </button>
+    </div>
+  );
+};
+
+/* ===================== TAB PERFIS DE ACESSO ===================== */
+
+// Rótulo e o que cada perfil pode, em linguagem de usuário. As listas espelham
+// ACAO_PERFIS (server/services/almoxarifado/permissions.js) — se as regras mudarem lá,
+// atualize aqui: é texto de ajuda, não fonte de verdade (a decisão vem sempre do backend).
+const PERFIS_INFO = {
+  ADMINISTRADOR: { label: 'Administrador', desc: 'Acesso total, incluindo configurações do módulo' },
+  ALMOXARIFE: { label: 'Almoxarife', desc: 'Movimenta estoque, cadastra material, separa, entrega, aprova e inventaria — não ajusta saldo nem configura' },
+  GESTOR: { label: 'Gestor', desc: 'Ajusta saldo, aprova requisição e inventaria — não movimenta nem cadastra material' },
+  COMPRAS: { label: 'Compras', desc: 'Consulta e recebe material' },
+  ENGENHARIA: { label: 'Engenharia', desc: 'Cadastra e edita material, requisita e reserva' },
+  PRODUCAO: { label: 'Produção', desc: 'Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido)' },
+  CONSULTA: { label: 'Consulta', desc: 'Somente leitura' },
+};
+
+const TabPerfisAcesso = () => {
+  const [usuarios, setUsuarios] = useState([]);
+  const [perfis, setPerfis] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [salvandoId, setSalvandoId] = useState(null);
+  const [busca, setBusca] = useState('');
+
+  useEffect(() => { load(); }, []);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/almoxarifado/perfis-usuario');
+      setUsuarios(res.data.usuarios || []);
+      setPerfis(res.data.perfis || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao carregar perfis de acesso');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const alterar = async (usuarioId, perfil) => {
+    setSalvandoId(usuarioId);
+    try {
+      const res = await api.put(`/almoxarifado/perfis-usuario/${usuarioId}`, { perfil });
+      setUsuarios((lista) => lista.map((u) => (u.id === usuarioId
+        ? { ...u, perfil_explicito: res.data.perfil_explicito, perfil_efetivo: res.data.perfil_efetivo, origem: res.data.origem }
+        : u)));
+      // O hook de permissões guarda a resposta em cache de módulo; sem invalidar, quem
+      // acabou de ganhar perfil continuaria vendo os bloqueios até recarregar a página.
+      invalidarAlmoxPermissoes();
+      toast.success(perfil
+        ? `Perfil definido: ${PERFIS_INFO[perfil]?.label || perfil}`
+        : 'Perfil removido — o usuário volta ao padrão (Produção)');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao alterar o perfil');
+    } finally {
+      setSalvandoId(null);
+    }
+  };
+
+  const filtrados = usuarios.filter((u) => {
+    if (!busca.trim()) return true;
+    const q = busca.toLowerCase();
+    return (u.nome || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+  });
+
+  if (loading) return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
+
+  return (
+    <div>
+      <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem', marginBottom: 8 }}>
+        Define o que cada pessoa pode fazer <strong>dentro do almoxarifado</strong>. Ter acesso ao módulo
+        (no cadastro de usuário) permite <em>abrir</em> as telas; o perfil abaixo é o que permite <em>agir</em>.
+      </p>
+      <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem', marginBottom: 20 }}>
+        Quem não tem perfil definido entra como <strong>Produção</strong> — consulta e requisita, mas não
+        movimenta estoque, não cadastra material e não aprova.
+      </p>
+
+      <div className="almox-field" style={{ maxWidth: 360, marginBottom: 16 }}>
+        <input
+          className="almox-input"
+          placeholder="Buscar por nome ou e-mail..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+      </div>
+
+      <div className="almox-table-container">
+        <table className="almox-table">
+          <thead>
+            <tr>
+              <th>Usuário</th>
+              <th style={{ width: 220 }}>Perfil no almoxarifado</th>
+              <th>O que isso permite</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.length === 0 ? (
+              <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--gmp-text-light)', padding: 24 }}>
+                Nenhum usuário encontrado.
+              </td></tr>
+            ) : filtrados.map((u) => {
+              const forcado = u.origem === 'forcado';
+              const info = PERFIS_INFO[u.perfil_efetivo];
+              return (
+                <tr key={u.id}>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{u.nome}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{u.email}</div>
+                  </td>
+                  <td>
+                    {forcado ? (
+                      /* Administrador por superadmin/admin de sistema/admin de módulo: o perfil
+                         explícito seria ignorado em runtime e apagado no próximo save do
+                         usuário, então não oferecemos o select — o backend recusa com 409. */
+                      <span className="almox-badge almox-badge-ok" title="Definido no cadastro de usuário (superadmin, admin de sistema ou administrador do módulo)">
+                        <FiShield size={12} /> Administrador
+                      </span>
+                    ) : (
+                      <select
+                        className="almox-select"
+                        value={u.perfil_explicito || ''}
+                        disabled={salvandoId === u.id}
+                        onChange={(e) => alterar(u.id, e.target.value)}
+                      >
+                        <option value="">Produção (padrão)</option>
+                        {perfis.filter((p) => p !== 'PRODUCAO').map((p) => (
+                          <option key={p} value={p}>{PERFIS_INFO[p]?.label || p}</option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                    {info?.desc || '—'}
+                    {forcado && (
+                      <div style={{ marginTop: 4, fontSize: '0.75rem' }}>
+                        Para dar um perfil específico, remova a condição de administrador no cadastro de usuário.
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
