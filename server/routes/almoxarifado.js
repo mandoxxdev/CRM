@@ -22,7 +22,7 @@ const {
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
 const { can } = require('../services/almoxarifado/permissions');
-const { dbRun, dbGet } = require('../services/almoxarifado/db');
+const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
 const { validate } = require('../services/almoxarifado/validation');
 const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../services/almoxarifado/audit');
@@ -2122,13 +2122,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const origem = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
       if (!origem) return res.status(404).json({ error: 'Requisição não encontrada' });
 
-      const itensOrigem = await new Promise((resolve, reject) => {
-        db.all(
-          'SELECT material_id, quantidade_solicitada, observacoes FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?',
-          [req.params.id],
-          (err, rows) => (err ? reject(err) : resolve(rows)),
-        );
-      });
+      const itensOrigem = await dbAll(db,
+        'SELECT material_id, quantidade_solicitada, observacoes FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?',
+        [req.params.id]);
       if (itensOrigem.length === 0) {
         return res.status(400).json({ error: 'Requisição de origem não possui itens' });
       }

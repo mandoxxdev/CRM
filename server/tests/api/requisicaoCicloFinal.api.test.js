@@ -14,7 +14,7 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -348,12 +348,7 @@ async function criarRequisicao(db, {
       assert.strictEqual(novaReq.os_referencia, 'OS-9001');
       assert.strictEqual(novaReq.setor, 'Produção');
 
-      const novosItens = await new Promise((resolve, reject) => {
-        db.all('SELECT * FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [res.body.id], (err, rows) => {
-          if (err) return reject(err);
-          resolve(rows);
-        });
-      });
+      const novosItens = await dbAll(db, 'SELECT * FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [res.body.id]);
       assert.strictEqual(novosItens.length, 1);
       assert.strictEqual(novosItens[0].material_id, matId);
       assert.strictEqual(novosItens[0].quantidade_solicitada, 7);
