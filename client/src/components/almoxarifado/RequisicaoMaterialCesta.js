@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FiArrowLeft, FiMinus, FiPlus, FiShoppingCart, FiTrash2 } from 'react-icons/fi';
+import { FiArrowLeft, FiMinus, FiPlus, FiSave, FiShoppingCart, FiTrash2 } from 'react-icons/fi';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { DisponibilidadeBadge } from '../../utils/disponibilidadeEstoque';
+import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
 import '../engenhariaProjetos/SolicitacaoMaterialEscritorioCesta.css';
 
 function mapFotoUrl(material) {
@@ -25,7 +26,10 @@ export default function RequisicaoMaterialCesta() {
   const [cart, setCart] = useState(() => new Map());
   const [cartStatus, setCartStatus] = useState(() => new Map());
   const [observacoes, setObservacoes] = useState('');
+  const [tipoRequisicao, setTipoRequisicao] = useState('CONSUMO');
+  const [justificativa, setJustificativa] = useState('');
   const [sending, setSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -138,31 +142,42 @@ export default function RequisicaoMaterialCesta() {
 
   const itensSemEstoque = cartItems.filter((x) => x.disponibilidade && x.disponibilidade !== 'em_estoque');
 
-  const submit = async () => {
+  const submit = async (salvarRascunho = false) => {
     if (cartItems.length === 0) {
       toast.error('Sua cesta está vazia');
       return;
     }
+    if (tipoRequisicao === 'EMERGENCIAL' && !justificativa.trim()) {
+      toast.error('Justifique a requisição emergencial');
+      return;
+    }
+    const setSendingFlag = salvarRascunho ? setSavingDraft : setSending;
     try {
-      setSending(true);
+      setSendingFlag(true);
       const res = await api.post('/requisicoes-material', {
         setor,
         departamento: setor,
         modulo_origem: ctx.moduloOrigem,
         observacoes,
+        tipo_requisicao: tipoRequisicao,
+        justificativa,
+        salvar_rascunho: salvarRascunho,
         itens: cartItems.map((x) => ({
           material_id: x.id,
           quantidade: x.quantidade,
         })),
       });
-      toast.success(`Requisição ${res.data?.numero || ''} enviada com sucesso`);
+      toast.success(salvarRascunho
+        ? 'Rascunho salvo'
+        : `Requisição ${res.data?.numero || ''} enviada com sucesso`);
       clearCart();
       setObservacoes('');
+      setJustificativa('');
       navigate(listPath);
     } catch (e) {
-      toast.error(e.response?.data?.error || 'Erro ao enviar requisição');
+      toast.error(e.response?.data?.error || (salvarRascunho ? 'Erro ao salvar rascunho' : 'Erro ao enviar requisição'));
     } finally {
-      setSending(false);
+      setSendingFlag(false);
     }
   };
 
@@ -312,12 +327,34 @@ export default function RequisicaoMaterialCesta() {
           </div>
 
           <div className="engc-obs">
+            <label>Tipo de requisição</label>
+            <select value={tipoRequisicao} onChange={(e) => setTipoRequisicao(e.target.value)}>
+              {Object.entries(TIPO_REQUISICAO_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+
+          {tipoRequisicao === 'EMERGENCIAL' && (
+            <div className="engc-obs">
+              <label>Justificativa (obrigatória)</label>
+              <textarea value={justificativa} onChange={(e) => setJustificativa(e.target.value)} rows={3}
+                placeholder="Descreva o motivo da requisição emergencial…" />
+              <div className="engc-subtle">Requisições emergenciais exigem justificativa para liberação imediata.</div>
+            </div>
+          )}
+
+          <div className="engc-obs">
             <label>Observações</label>
             <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} placeholder="Opcional…" />
           </div>
 
-          <button className="engc-btn engc-btn--primary" type="button" onClick={submit} disabled={sending || !cartItems.length}>
+          <button className="engc-btn engc-btn--primary" type="button" onClick={() => submit(false)} disabled={sending || savingDraft || !cartItems.length}>
             {sending ? 'Enviando…' : 'Enviar solicitação'}
+          </button>
+          <button className="engc-btn engc-btn--ghost" type="button" onClick={() => submit(true)} disabled={sending || savingDraft || !cartItems.length}
+            style={{ marginTop: 8, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <FiSave size={14} /> {savingDraft ? 'Salvando…' : 'Salvar rascunho'}
           </button>
         </aside>
       </div>

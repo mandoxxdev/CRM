@@ -8,6 +8,7 @@ import { canDeleteAlmoxRequisicao } from '../../utils/systemPermissions';
 import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
+import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
@@ -29,25 +30,6 @@ const STATUS_INFO = {
   ENCERRADA:             { label: 'Encerrada',             cls: 'almox-badge-cancelado', icon: FiArchive },
   REJEITADO:             { label: 'Rejeitado',             cls: 'almox-badge-saida',     icon: FiX },
   CANCELADO:             { label: 'Cancelado',             cls: 'almox-badge-cancelado', icon: FiX },
-};
-
-// Etapa 3 (design, seção "Dados"): 14 valores fixos de tipo_requisicao — labels amigáveis
-// só existem no client (server trata como enum de texto puro), usados em filtro e coluna.
-const TIPO_REQUISICAO_LABELS = {
-  CONSUMO: 'Consumo',
-  ORDEM_PRODUCAO: 'Ordem de Produção',
-  ORDEM_SERVICO: 'Ordem de Serviço',
-  PROJETO: 'Projeto',
-  MONTAGEM: 'Montagem',
-  INSTALACAO_EXTERNA: 'Instalação Externa',
-  ASSISTENCIA_TECNICA: 'Assistência Técnica',
-  MANUTENCAO: 'Manutenção',
-  DESENVOLVIMENTO: 'Desenvolvimento',
-  ADMINISTRATIVO: 'Administrativo',
-  EMERGENCIAL: 'Emergencial',
-  FERRAMENTA: 'Ferramenta',
-  EPI: 'EPI',
-  MATERIAL_CLIENTE: 'Material do Cliente',
 };
 
 const getEntregue = (item) => Number(item.quantidade_entregue ?? item.quantidade_atendida) || 0;
