@@ -1,7 +1,7 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-02
+> **Última atualização:** 2026-08-04
 > **Regra de ouro:** toda regra essencial de funcionamento nasce com teste de API. Nenhuma feature é marcada como ✅ sem teste passando.
 
 ## Como usar esta pasta

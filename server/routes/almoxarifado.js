@@ -1380,20 +1380,23 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
     const familiaId = parseInt(req.params.id, 10);
-    const ativoVal = ativo !== undefined ? ativo : 1;
 
-    // Fix (review pós-Task 3, mesma classe do T2): a aba Famílias de ConfiguracoesAlmoxarifado.js
-    // manda PUT só com {nome, descricao, tipo_uso} — sem parent_id. Sem esta leitura prévia,
-    // `parent_id` omitido colapsava para NULL e renomear uma subfamília a convertia
-    // silenciosamente em família raiz. `parent_id` AUSENTE (undefined) preserva o vínculo
-    // atual; qualquer valor informado — incluindo `null` explícito, `0` ou `''` — substitui
-    // (e limpa, virando raiz).
-    db.get('SELECT parent_id FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (errCurrent, current) => {
+    // Fix (review pós-Task 3, mesma classe do T2; ampliado no review final da Etapa 2): a aba
+    // Famílias de ConfiguracoesAlmoxarifado.js manda PUT só com {nome, descricao, tipo_uso} —
+    // sem parent_id, ativo ou categoria_id. Sem esta leitura prévia, os campos omitidos
+    // colapsavam para o default do handler: `parent_id` ausente virava NULL (convertendo
+    // silenciosamente uma subfamília em raiz), `ativo` ausente virava 1 (reativando uma família
+    // inativada) e `categoria_id` ausente virava NULL (apagando o vínculo com a categoria).
+    // Qualquer campo AUSENTE (undefined) preserva o valor atual; qualquer valor informado —
+    // incluindo `null` explícito, `0` ou `''` — substitui.
+    db.get('SELECT parent_id, ativo, categoria_id FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (errCurrent, current) => {
       if (errCurrent) return res.status(500).json({ error: errCurrent.message });
       if (!current) return res.status(404).json({ error: 'Família não encontrada' });
 
       const parentIdOmitted = parent_id === undefined;
       const parentId = parentIdOmitted ? current.parent_id : (parent_id ? parseInt(parent_id, 10) : null);
+      const ativoVal = ativo === undefined ? current.ativo : ativo;
+      const categoriaIdVal = categoria_id === undefined ? current.categoria_id : (categoria_id || null);
 
       if (parentId && parentId === familiaId) {
         return res.status(400).json({ error: 'Família não pode ser pai de si mesma' });
@@ -1401,7 +1404,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
       const applyUpdate = () => {
         db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=?, parent_id=? WHERE id=?`,
-          [nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, ativoVal, parentId, familiaId],
+          [nome.trim(), descricao || null, categoriaIdVal, tipoUsoVal, ativoVal, parentId, familiaId],
           function (err) {
             if (err) return res.status(500).json({ error: err.message });
             db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => res.json(r));

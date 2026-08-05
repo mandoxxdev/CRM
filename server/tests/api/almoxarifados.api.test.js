@@ -35,6 +35,27 @@ function test(name, fn) {
     assert.strictEqual(dup.status, 409);
   });
 
+  await test('POST almoxarifado com descricao null (payload real da UI sem descrição) → 201', async () => {
+    // Fix pós-review final Etapa 2 (Critical): ConfiguracoesAlmoxarifado.js handleSalvar manda
+    // `descricao: form.descricao.trim() || null` — sem descrição, o body carrega `null`
+    // explícito, não string vazia nem chave ausente. AlmoxarifadoSchema.descricao era
+    // z.string().optional() (sem .nullable()), então esse payload real quebrava com 400.
+    const res = await request(app).post('/api/almoxarifado/almoxarifados')
+      .send({ codigo: 'ALM-DESCNULL', nome: 'Sem Descrição', descricao: null });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    assert.strictEqual(res.body.descricao, null);
+  });
+
+  await test('PUT almoxarifado com descricao null (payload real da UI) → 200', async () => {
+    const alm = await request(app).post('/api/almoxarifado/almoxarifados')
+      .send({ codigo: 'ALM-DESCNULL-PUT', nome: 'Vai Editar', descricao: 'Descrição inicial' });
+    assert.strictEqual(alm.status, 201, JSON.stringify(alm.body));
+    const res = await request(app).put(`/api/almoxarifado/almoxarifados/${alm.body.id}`)
+      .send({ codigo: 'ALM-DESCNULL-PUT', nome: 'Editado', descricao: null });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.descricao, null);
+  });
+
   await test('POST sem perfil configurar retorna 403', async () => {
     setUser({ id: 9, nome: 'Prod', role: 'user', perfil_almoxarifado: 'PRODUCAO' });
     const res = await request(app).post('/api/almoxarifado/almoxarifados')

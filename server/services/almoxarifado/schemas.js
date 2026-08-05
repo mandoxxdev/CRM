@@ -10,7 +10,11 @@ const CentroCustoSchema = z.object({
 const AlmoxarifadoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
   nome: z.string().min(1, 'nome é obrigatório'),
-  descricao: z.string().optional(),
+  // Fix pós-review (Critical): ConfiguracoesAlmoxarifado.js handleSalvar manda
+  // `descricao: form.descricao.trim() || null` — criar/editar almoxarifado sem descrição
+  // manda `null` explícito, não string vazia. Sem `.nullable()`, z.string().optional() só
+  // aceita string ou "ausente" e rejeita `null` com 400 em QUALQUER submit sem descrição.
+  descricao: z.string().nullable().optional(),
   ativo: z.union([z.literal(0), z.literal(1)]).optional(),
 });
 

@@ -211,6 +211,56 @@ async function criarMaterialReq(app, body) {
     assert.strictEqual(row.subfamilia_id, null);
   });
 
+  // ── Fix pós-review final Etapa 2: PUT /familias preservando ativo/categoria_id omitidos
+  // (mesma classe do fix de parent_id acima) — a aba Famílias manda PUT só com
+  // {nome, descricao, tipo_uso}, então "omitido" precisa preservar, não colapsar para o
+  // default do handler (ativo=1 reativa; categoria_id=null apaga o vínculo). ──
+
+  await test('PUT estilo UI ({nome, descricao, tipo_uso}) em família inativa com categoria_id preserva ambos', async () => {
+    const categoria = await dbGet(db, 'SELECT id FROM categorias_material_almoxarifado LIMIT 1');
+    assert.ok(categoria, 'seed deveria ter ao menos uma categoria');
+
+    const familia = await criarFamilia(app, 'Raiz Preserva Ativo/Categoria', { categoria_id: categoria.id });
+    assert.strictEqual(familia.categoria_id, categoria.id);
+
+    const inativou = await request(app).put(`/api/almoxarifado/familias/${familia.id}`)
+      .send({ nome: familia.nome, ativo: 0 });
+    assert.strictEqual(inativou.status, 200, JSON.stringify(inativou.body));
+    assert.strictEqual(Number(inativou.body.ativo), 0);
+
+    // Corpo IDÊNTICO ao que handleSalvar (ConfiguracoesAlmoxarifado.js) manda hoje — sem
+    // ativo, sem categoria_id.
+    const res = await request(app).put(`/api/almoxarifado/familias/${familia.id}`)
+      .send({ nome: familia.nome, descricao: familia.descricao, tipo_uso: familia.tipo_uso });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(Number(res.body.ativo), 0, 'ativo deveria continuar inativo (PUT da UI não manda o campo)');
+    assert.strictEqual(res.body.categoria_id, categoria.id, 'categoria_id deveria ter sido preservado (PUT da UI não manda o campo)');
+  });
+
+  await test('PUT com ativo:1 explícito reativa família inativa', async () => {
+    const familia = await criarFamilia(app, 'Raiz Reativa Explicito');
+    const inativou = await request(app).put(`/api/almoxarifado/familias/${familia.id}`)
+      .send({ nome: familia.nome, ativo: 0 });
+    assert.strictEqual(inativou.status, 200, JSON.stringify(inativou.body));
+    assert.strictEqual(Number(inativou.body.ativo), 0);
+
+    const res = await request(app).put(`/api/almoxarifado/familias/${familia.id}`)
+      .send({ nome: familia.nome, ativo: 1 });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(Number(res.body.ativo), 1, 'ativo:1 explícito deveria reativar a família');
+  });
+
+  await test('PUT com categoria_id:null explícito limpa o vínculo com a categoria', async () => {
+    const categoria = await dbGet(db, 'SELECT id FROM categorias_material_almoxarifado LIMIT 1');
+    const familia = await criarFamilia(app, 'Raiz Limpa Categoria', { categoria_id: categoria.id });
+    assert.strictEqual(familia.categoria_id, categoria.id);
+
+    const res = await request(app).put(`/api/almoxarifado/familias/${familia.id}`)
+      .send({ nome: familia.nome, categoria_id: null });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.categoria_id, null, 'categoria_id:null explícito deveria limpar o vínculo');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
