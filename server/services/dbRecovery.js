@@ -43,7 +43,11 @@ function backupDatabaseFiles(dbPath) {
   for (const suffix of ['', '-wal', '-shm']) {
     const src = dbPath + suffix;
     if (!fs.existsSync(src)) continue;
-    const dest = path.join(backupDir, `database-${stamp}${suffix || '.sqlite'}`);
+    // O `.sqlite` vem ANTES do sufixo: o SQLite pareia `F` com `F-wal`/`F-shm`, então o
+    // acompanhante de `database-X.sqlite` tem de ser `database-X.sqlite-wal`. Nomeando
+    // `database-X-wal` (o que esta linha fazia) o acompanhante virava órfão: o backup não
+    // enxergava o WAL e restaurava SEM as transações que só existiam nele.
+    const dest = path.join(backupDir, `database-${stamp}.sqlite${suffix}`);
     fs.copyFileSync(src, dest);
     copied.push(dest);
   }
@@ -102,10 +106,15 @@ function pruneOldBackups(dbPath, keep = 10) {
     .map((f) => ({ f, mtime: fs.statSync(path.join(backupDir, f)).mtimeMs }))
     .sort((a, b) => b.mtime - a.mtime);
   files.slice(keep).forEach(({ f }) => {
-    try {
-      fs.unlinkSync(path.join(backupDir, f));
-    } catch {
-      /* ignore */
+    // Apaga o backup E seus acompanhantes: eles fazem parte do mesmo backup e sozinhos não
+    // servem para nada. Antes só o `.sqlite` era removido (o filtro acima é por `.sqlite`),
+    // então -wal/-shm acumulavam indefinidamente — 154 órfãos para 10 backups no repo real.
+    for (const suffix of ['', '-wal', '-shm']) {
+      try {
+        fs.unlinkSync(path.join(backupDir, f + suffix));
+      } catch {
+        /* ignore: acompanhante pode não existir (backup tirado sem WAL ativo) */
+      }
     }
   });
 }
