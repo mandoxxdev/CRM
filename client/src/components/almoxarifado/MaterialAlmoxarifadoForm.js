@@ -62,6 +62,10 @@ const MaterialAlmoxarifadoForm = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localizacoes, setLocalizacoes] = useState([]);
+  const [almoxarifados, setAlmoxarifados] = useState([]);
+  // Filtro de apoio para achar a localização: NÃO vai no payload, só estreita o select
+  // abaixo. Localização continua opcional, então este campo também é.
+  const [almoxSelecionado, setAlmoxSelecionado] = useState('');
   const [familias, setFamilias] = useState([]);
   const [loadingFamilias, setLoadingFamilias] = useState(true);
   const [loadingLocalizacoes, setLoadingLocalizacoes] = useState(true);
@@ -129,6 +133,7 @@ const MaterialAlmoxarifadoForm = () => {
 
   useEffect(() => {
     loadLocalizacoes();
+    loadAlmoxarifados();
     loadFamilias();
     if (isEdit) {
       loadMaterial();
@@ -154,6 +159,13 @@ const MaterialAlmoxarifadoForm = () => {
     } finally {
       setLoadingFamilias(false);
     }
+  };
+
+  const loadAlmoxarifados = async () => {
+    try {
+      const res = await api.get('/almoxarifado/almoxarifados');
+      setAlmoxarifados(res.data || []);
+    } catch { /* silencioso: sem a lista o select fica vazio e a localização segue editável */ }
   };
 
   const loadLocalizacoes = async () => {
@@ -183,6 +195,34 @@ const MaterialAlmoxarifadoForm = () => {
       return (a.codigo || '').localeCompare(b.codigo || '', 'pt-BR');
     });
   }, [localizacoes, localizacaoInativa]);
+
+  const almoxarifadosAtivos = useMemo(
+    () => almoxarifados.filter(a => a.ativo !== 0),
+    [almoxarifados]
+  );
+
+  // Opções estreitadas pelo almoxarifado escolhido. A localização já vinculada ao material
+  // entra sempre — mesmo inativa ou de outro almoxarifado — para a edição nunca perder o
+  // vínculo existente sem o usuário perceber.
+  const localizacoesVisiveis = useMemo(() => {
+    if (!almoxSelecionado) return localizacoesOptions;
+    return localizacoesOptions.filter(l =>
+      String(l.almoxarifado_id ?? '') === String(almoxSelecionado)
+      || String(l.id) === String(form.localizacao_padrao_id)
+    );
+  }, [localizacoesOptions, almoxSelecionado, form.localizacao_padrao_id]);
+
+  // Pré-seleciona o almoxarifado: o da localização do material em edição, ou o único
+  // cadastrado. Só age enquanto o usuário não escolheu nada.
+  useEffect(() => {
+    if (almoxSelecionado || !almoxarifados.length) return;
+    const locAtual = localizacoes.find(l => String(l.id) === String(form.localizacao_padrao_id));
+    if (locAtual?.almoxarifado_id != null) {
+      setAlmoxSelecionado(String(locAtual.almoxarifado_id));
+      return;
+    }
+    if (almoxarifadosAtivos.length === 1) setAlmoxSelecionado(String(almoxarifadosAtivos[0].id));
+  }, [almoxarifados, almoxarifadosAtivos, localizacoes, form.localizacao_padrao_id, almoxSelecionado]);
 
   useEffect(() => {
     if (!materialLocInfo || loadingLocalizacoes) return;
@@ -659,19 +699,46 @@ const MaterialAlmoxarifadoForm = () => {
                     </div>
                   ) : (
                     <>
+                      {almoxarifadosAtivos.length > 1 && (
+                        <select
+                          className="almox-form-select"
+                          style={{ marginBottom: 8 }}
+                          value={almoxSelecionado}
+                          onChange={e => {
+                            setAlmoxSelecionado(e.target.value);
+                            // a localização anterior é de outro depósito — não faz sentido manter
+                            set('localizacao_padrao_id', '');
+                          }}
+                        >
+                          <option value="">Selecione o almoxarifado...</option>
+                          {almoxarifadosAtivos.map(a => (
+                            <option key={a.id} value={String(a.id)}>{a.codigo} — {a.nome}</option>
+                          ))}
+                        </select>
+                      )}
                       <select
                         className="almox-form-select"
                         value={form.localizacao_padrao_id}
                         onChange={e => set('localizacao_padrao_id', e.target.value)}
+                        disabled={almoxarifadosAtivos.length > 1 && !almoxSelecionado}
                       >
-                        <option value="">Selecione uma localização...</option>
-                        {localizacoesOptions.map(loc => (
+                        <option value="">
+                          {almoxarifadosAtivos.length > 1 && !almoxSelecionado
+                            ? 'Escolha o almoxarifado primeiro...'
+                            : 'Selecione uma localização...'}
+                        </option>
+                        {localizacoesVisiveis.map(loc => (
                           <option key={loc.id} value={String(loc.id)}>
                             {formatLocalizacaoLabel(loc, localizacoesOptions)}
                             {loc.ativo === 0 ? ' (inativa)' : ''}
                           </option>
                         ))}
                       </select>
+                      {almoxSelecionado && localizacoesVisiveis.length === 0 && (
+                        <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                          Este almoxarifado ainda não tem localizações cadastradas.
+                        </small>
+                      )}
                       {localizacaoInativa && localizacaoInativa.ativo === 0 && form.localizacao_padrao_id === String(localizacaoInativa.id) && (
                         <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
                           Localização atual está inativa — selecione outra ou mantenha.
