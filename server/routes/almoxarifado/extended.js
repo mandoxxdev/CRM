@@ -3,7 +3,7 @@
  */
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
-const { requirePermission } = require('../../services/almoxarifado/permissions');
+const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { validate } = require('../../services/almoxarifado/validation');
 const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema } = require('../../services/almoxarifado/schemas');
@@ -87,6 +87,26 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
       await dbRun(db, 'UPDATE centros_custo_almoxarifado SET codigo=?, nome=?, ativo=? WHERE id=?', [codigo, nome, ativo, req.params.id]);
       res.json({ id: Number(req.params.id), codigo, nome, ativo });
     } catch (e) { handleError(res, e); }
+  });
+
+  // ── O que EU posso fazer neste módulo ──
+  // Existe para a interface poder barrar a ação ANTES de o usuário preencher um formulário
+  // inteiro e só então tomar 403 no save.
+  //
+  // Devolve a resposta JÁ RESOLVIDA (booleano por ação), não a tabela ACAO_PERFIS. De
+  // propósito: se o front recebesse o mapa e reimplementasse a decisão, passariam a existir
+  // duas fontes de verdade — o fallback de getPerfilFromUser, a precedência de
+  // superadmin/admin de módulo e a lista de cada ação teriam de ser mantidos iguais nos dois
+  // lados, e divergiriam na primeira mudança. Aqui quem decide é o mesmo `can()` que os
+  // middlewares usam.
+  //
+  // Sem requirePermission: qualquer usuário do módulo pode perguntar o que ele mesmo pode.
+  app.get('/api/almoxarifado/minhas-permissoes', auth, (req, res) => {
+    const acoes = {};
+    for (const acao of Object.keys(ACAO_PERFIS)) {
+      acoes[acao] = can(req.user, acao);
+    }
+    res.json({ perfil: getPerfilFromUser(req.user), acoes });
   });
 
   // ── Almoxarifados (entidade raiz — multi-almoxarifado) ──

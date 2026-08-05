@@ -30,6 +30,11 @@ server/data/.runtime-secrets.json
 *.sqlite-shm
 *.sqlite-wal
 server/database.sqlite*
+# Os backups nomeiam o arquivo como "database-<timestamp>-shm/-wal", sem ".sqlite" no
+# meio, então os padrões acima não pegavam e eles ficavam untracked-mas-não-ignorados —
+# prontos para entrar num `git add -A` por acidente (megabytes de binário por commit).
+server/data/backups/*-shm
+server/data/backups/*-wal
 
 # Logs
 logs/

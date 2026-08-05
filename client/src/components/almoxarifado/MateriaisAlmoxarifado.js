@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
+import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
@@ -19,6 +20,7 @@ const CATEGORIAS = [
 ];
 
 const MateriaisAlmoxarifado = () => {
+  const { bloquearSeNaoPode } = useAlmoxPermissoes();
   const [materiais, setMateriais] = useState([]);
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -142,10 +144,14 @@ const MateriaisAlmoxarifado = () => {
             <button className="btn-almox-secondary" onClick={loadMateriais}>
               <FiRefreshCw size={13} /> Atualizar
             </button>
+            {/* Continua sendo um Link (o botão aparece e o hover mostra a dica), mas quem não
+                pode criar material é barrado NO CLIQUE — sem isso ele só descobriria depois de
+                preencher as seis seções do formulário. O 403 do backend segue valendo. */}
             <Link
               to="/almoxarifado/materiais/novo"
               className="btn-almox-primary"
               title="Cadastra um novo material no almoxarifado (código, família, dados técnicos, unidades e localização)"
+              onClick={(e) => bloquearSeNaoPode('criar_material', e)}
             >
               <FiPlus size={14} /> Novo Material
             </Link>
@@ -273,7 +279,7 @@ const MateriaisAlmoxarifado = () => {
                           <FiFileText />
                         </button>
                         <button className="almox-btn-icon primary" title="Requisitar"
-                          onClick={() => navigate(`/almoxarifado/requisicoes/nova?material_id=${m.id}`)}>
+                          onClick={(e) => { if (!bloquearSeNaoPode('requisitar', e)) return; navigate(`/almoxarifado/requisicoes/nova?material_id=${m.id}`); }}>
                           <FiClipboard />
                         </button>
                         {m.localizacao_padrao_id && (
@@ -282,16 +288,20 @@ const MateriaisAlmoxarifado = () => {
                             <FiMap />
                           </button>
                         )}
-                        <button className="almox-btn-icon success" title="Entrada" onClick={() => openMovModal(m, 'ENTRADA')}>
+                        <button className="almox-btn-icon success" title="Entrada rápida de estoque neste material"
+                          onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'ENTRADA'); }}>
                           <FiArrowUp />
                         </button>
-                        <button className="almox-btn-icon danger" title="Saída" onClick={() => openMovModal(m, 'SAIDA')}>
+                        <button className="almox-btn-icon danger" title="Saída rápida de estoque neste material"
+                          onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'SAIDA'); }}>
                           <FiArrowDown />
                         </button>
-                        <button className="almox-btn-icon primary" title="Editar" onClick={() => navigate(`/almoxarifado/materiais/editar/${m.id}`)}>
+                        <button className="almox-btn-icon primary" title="Edita o cadastro deste material"
+                          onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; navigate(`/almoxarifado/materiais/editar/${m.id}`); }}>
                           <FiEdit />
                         </button>
-                        <button className="almox-btn-icon danger" title="Inativar" onClick={() => handleDelete(m.id, m.nome)}>
+                        <button className="almox-btn-icon danger" title="Inativa o material (não apaga o histórico)"
+                          onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleDelete(m.id, m.nome); }}>
                           <FiTrash2 />
                         </button>
                       </div>

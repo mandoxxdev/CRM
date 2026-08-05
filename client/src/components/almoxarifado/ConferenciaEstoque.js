@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { FiPlus, FiRefreshCw, FiCheckCircle, FiXCircle, FiEye, FiClipboard } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
+import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
 const CATEGORIAS = [
@@ -12,6 +13,7 @@ const CATEGORIAS = [
 ];
 
 const ConferenciaEstoque = () => {
+  const { bloquearSeNaoPode } = useAlmoxPermissoes();
   const [conferencias, setConferencias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -160,7 +162,12 @@ const ConferenciaEstoque = () => {
             {confAberta.status === 'ABERTO' && (
               <button
                 className="btn-almox-primary"
-                onClick={handleConcluir}
+                onClick={(e) => {
+                  // com ajuste a rota exige TAMBEM ajustar_estoque (o /concluir grava saldo)
+                  if (!bloquearSeNaoPode('inventario', e)) return;
+                  if (aplicarAjustes && !bloquearSeNaoPode('ajustar_estoque', e)) return;
+                  handleConcluir();
+                }}
                 disabled={salvando}
                 title={aplicarAjustes
                   ? 'Fecha a contagem E grava as divergências no saldo dos materiais (exige perfil que pode ajustar estoque)'
@@ -256,7 +263,7 @@ const ConferenciaEstoque = () => {
           </button>
           <button
             className="btn-almox-primary"
-            onClick={() => setShowCreateModal(true)}
+            onClick={(e) => { if (!bloquearSeNaoPode('inventario', e)) return; setShowCreateModal(true); }}
             title="Abre uma contagem de inventário: congela o saldo atual de cada material para você conferir com o físico"
           >
             <FiPlus size={14} /> Nova Conferência
@@ -298,7 +305,8 @@ const ConferenciaEstoque = () => {
                         <FiEye />
                       </button>
                       {c.status === 'ABERTO' && (
-                        <button className="almox-btn-icon danger" title="Cancelar" onClick={() => handleCancelar(c.id, c.numero)}>
+                        <button className="almox-btn-icon danger" title="Cancela esta contagem sem alterar saldo nenhum"
+                          onClick={(e) => { if (!bloquearSeNaoPode('inventario', e)) return; handleCancelar(c.id, c.numero); }}>
                           <FiXCircle />
                         </button>
                       )}

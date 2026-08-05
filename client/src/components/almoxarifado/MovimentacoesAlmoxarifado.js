@@ -6,6 +6,7 @@ import { FiPlus, FiSearch, FiRefreshCw, FiArrowUp, FiArrowDown, FiCornerUpLeft }
 import { SkeletonTable } from '../SkeletonLoader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
+import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
 const TIPOS_FORM = [
@@ -28,6 +29,7 @@ const TIPOS = [
 const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !['RESERVA', 'LIBERACAO_RESERVA'].includes(m.tipo);
 
 const MovimentacoesAlmoxarifado = () => {
+  const { bloquearSeNaoPode } = useAlmoxPermissoes();
   const location = useLocation();
   const navigate = useNavigate();
   const [movimentacoes, setMovimentacoes] = useState([]);
@@ -237,7 +239,9 @@ const MovimentacoesAlmoxarifado = () => {
           <button className="btn-almox-secondary" onClick={loadMovimentacoes}>
             <FiRefreshCw size={13} /> Atualizar
           </button>
-          <button className="btn-almox-primary" onClick={openModal}>
+          <button className="btn-almox-primary"
+            title="Registra entrada, saída, ajuste ou transferência de estoque (com vínculo de OS/projeto e localização)"
+            onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openModal(); }}>
             <FiPlus size={14} /> Nova Movimentação
           </button>
         </div>
@@ -348,7 +352,9 @@ const MovimentacoesAlmoxarifado = () => {
                     <td>
                       <div className="almox-actions">
                         {podeEstornar(m) ? (
-                          <button className="almox-btn-icon danger" title="Estornar movimentação" onClick={() => abrirEstorno(m)}>
+                          <button className="almox-btn-icon danger"
+                            title="Cria um lançamento reverso desta movimentação (exige perfil que pode ajustar estoque)"
+                            onClick={(e) => { if (!bloquearSeNaoPode('ajustar_estoque', e)) return; abrirEstorno(m); }}>
                             <FiCornerUpLeft />
                           </button>
                         ) : (
