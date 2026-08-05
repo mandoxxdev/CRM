@@ -12,22 +12,15 @@ import {
   FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers, FiClipboard, FiShoppingCart, FiDollarSign
 } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
+import { prefixarAlmoxarifado, buildLocalizacaoPath } from '../../utils/localizacaoLabel';
 import './Almoxarifado.css';
 
 const ICONES = ['📦', '🔧', '🪛', '⚙️', '🛡️', '🧰', '🪝', '💡', '🔩', '🪜', '🧪', '🏗️', '🔌', '🧲', '📋'];
 const CORES = ['#4facfe', '#00f2fe', '#43e97b', '#f9a825', '#ef5350', '#ab47bc', '#26c6da', '#ff7043', '#78909c', '#5c6bc0'];
 
-const buildLocalizacaoPath = (loc, allLocs = []) => {
-  if (!loc) return '';
-  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
-  const parts = [];
-  if (loc.setor) parts.push(loc.setor);
-  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
-  if (loc.subgrupo) parts.push(loc.subgrupo);
-  else if (loc.descricao && !parent) parts.push(loc.descricao);
-  return parts.join(' / ');
-};
-
+// Deliberadamente SEM o almoxarifado: esta tela já tem uma coluna dedicada
+// ("Almoxarifado", com loc.almoxarifado_codigo) ao lado da coluna "Caminho" — prefixar
+// aqui duplicaria o dado na mesma linha.
 const formatLocalizacaoPath = (loc, allLocs = []) => {
   const path = buildLocalizacaoPath(loc, allLocs);
   return path || '—';
@@ -658,7 +651,9 @@ const TabFamilias = () => {
                               <td><span style={{ fontFamily: 'monospace', color: '#4facfe' }}>{item.codigo}</span></td>
                               <td>{item.nome}</td>
                               <td>{item.quantidade_atual} {item.unidade}</td>
-                              <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem' }}>{item.localizacao || '—'}</td>
+                              <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem' }}>
+                                {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo) || '—'}
+                              </td>
                               <td>
                                 <Link to={`/almoxarifado/materiais/editar/${item.id}`} className="almox-btn-icon" title="Editar">
                                   <FiEdit2 size={13} />

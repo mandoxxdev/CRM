@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiRefreshCw, FiArrowUp, FiArrowDown, FiCornerUpLeft } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
+import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import './Almoxarifado.css';
 
 const TIPOS_FORM = [
@@ -498,7 +499,10 @@ const MovimentacoesAlmoxarifado = () => {
                         onChange={e => setForm(f => ({ ...f, localizacao_destino_id: e.target.value }))}>
                         <option value="">—</option>
                         {localizacoes.map(l => (
-                          <option key={l.id} value={l.id}>{l.codigo}{l.descricao ? ` — ${l.descricao}` : ''}</option>
+                          <option key={l.id} value={l.id}>
+                            {l.endereco_completo || formatLocalizacaoLabel(l, localizacoes)}
+                            {l.descricao ? ` — ${l.descricao}` : ''}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -518,7 +522,10 @@ const MovimentacoesAlmoxarifado = () => {
                         onChange={e => setForm(f => ({ ...f, localizacao_origem_id: e.target.value }))}>
                         <option value="">—</option>
                         {localizacoes.map(l => (
-                          <option key={l.id} value={l.id}>{l.codigo}{l.descricao ? ` — ${l.descricao}` : ''}</option>
+                          <option key={l.id} value={l.id}>
+                            {l.endereco_completo || formatLocalizacaoLabel(l, localizacoes)}
+                            {l.descricao ? ` — ${l.descricao}` : ''}
+                          </option>
                         ))}
                       </select>
                     </div>

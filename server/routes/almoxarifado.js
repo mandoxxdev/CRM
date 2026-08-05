@@ -146,9 +146,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         ? await sectorMaterialService.buildMaterialFilterClause(db, setor)
         : null;
 
-      let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
+      // almoxarifado_codigo/nome: `m.localizacao` é um TEXT desnormalizado que não guarda o
+      // almoxarifado; resolvemos pelo FK da localização padrão. LEFT JOIN em cadeia — material
+      // sem localização (ou com localização sem almoxarifado) continua na lista, com null.
+      let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
+                        a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
                  FROM materiais_almoxarifado m
                  LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
+                 LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
+                 LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
                  WHERE 1=1`;
       const params = [];
 
@@ -245,9 +251,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // GET /api/almoxarifado/materiais/:id — detalhe
   app.get('/api/almoxarifado/materiais/:id',(req, res) => {
-    db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
+    db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
+                   a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
             FROM materiais_almoxarifado m
             LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
+            LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
+            LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
             WHERE m.id = ?`, [req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(404).json({ error: 'Material não encontrado' });
@@ -733,9 +742,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
 
       db.all(`SELECT ic.*, ma.nome as material_nome, ma.codigo as material_codigo,
-                     ma.unidade, ma.localizacao, ma.foto
+                     ma.unidade, ma.localizacao, ma.foto,
+                     a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
               FROM itens_conferencia_almoxarifado ic
               JOIN materiais_almoxarifado ma ON ic.material_id = ma.id
+              LEFT JOIN localizacoes_almoxarifado l ON ma.localizacao_padrao_id = l.id
+              LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
               WHERE ic.conferencia_id = ?
               ORDER BY ma.nome`,
         [req.params.id], (err2, itens) => {
@@ -1359,9 +1371,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.get('/api/almoxarifado/familias/:id/itens',(req, res) => {
-    db.all(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
+    db.all(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
+                   a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
             FROM materiais_almoxarifado m
             LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
+            LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
+            LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
             WHERE m.familia_id = ? AND m.ativo = 1
             ORDER BY m.nome ASC`,
       [req.params.id], (err, rows) => {
@@ -1758,10 +1773,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                        - COALESCE(ma.quantidade_em_inspecao,0)) as saldo_atual,
                      ma.foto,
                      ma.localizacao, ma.localizacao_padrao_id,
+                     a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
                      tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura
               FROM itens_requisicao_almoxarifado ir
               JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
               LEFT JOIN tipos_material_almoxarifado tm ON ma.tipo_material_id = tm.id
+              LEFT JOIN localizacoes_almoxarifado l ON ma.localizacao_padrao_id = l.id
+              LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
               WHERE ir.requisicao_id = ?`,
         [req.params.id], (err2, itens) => {
           if (err2) return res.status(500).json({ error: err2.message });

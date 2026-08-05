@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
+import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
@@ -251,7 +252,9 @@ const MateriaisAlmoxarifado = () => {
                       </div>
                     </td>
                     <td>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{m.localizacao || '—'}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                        {prefixarAlmoxarifado(m.localizacao, m.almoxarifado_codigo) || '—'}
+                      </span>
                     </td>
                     <td>
                       <span className={`almox-badge almox-badge-${status.cls}`}>

@@ -5,6 +5,7 @@ import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { canDeleteAlmoxRequisicao } from '../../utils/systemPermissions';
+import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
@@ -860,7 +861,7 @@ const RequisicoesList = () => {
                       <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                         {item.material_codigo} · Saldo: {item.saldo_atual} {item.unidade}
                         {item.localizacao && (
-                          <span> · 📍 {item.localizacao}</span>
+                          <span> · 📍 {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo)}</span>
                         )}
                       </div>
                       {item.localizacao_padrao_id && (

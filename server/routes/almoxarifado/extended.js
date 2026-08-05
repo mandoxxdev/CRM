@@ -243,8 +243,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   app.get('/api/almoxarifado/materiais/:id/extrato', auth, async (req, res) => {
     try {
       const material = await dbGet(db, `SELECT m.*,
-        (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0) - COALESCE(m.quantidade_em_inspecao,0)) as quantidade_disponivel
-        FROM materiais_almoxarifado m WHERE m.id = ?`, [req.params.id]);
+        (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0) - COALESCE(m.quantidade_em_inspecao,0)) as quantidade_disponivel,
+        a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
+        FROM materiais_almoxarifado m
+        LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
+        LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+        WHERE m.id = ?`, [req.params.id]);
       if (!material) return res.status(404).json({ error: 'Material não encontrado' });
       const [saldos, movimentacoes, reservas] = await Promise.all([
         stockService.consultarSaldosPorLocalizacao(db, req.params.id),

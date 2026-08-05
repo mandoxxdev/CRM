@@ -6,6 +6,9 @@ import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { canConfigureAlmox } from '../../utils/systemPermissions';
 import {
+  buildLocalizacaoPath, formatLocalizacaoLabel, resolveAlmoxarifadoCodigo
+} from '../../utils/localizacaoLabel';
+import {
   FiMap, FiRefreshCw, FiFilter, FiMove, FiSave, FiX,
   FiPackage, FiAlertTriangle, FiSettings, FiInfo
 } from 'react-icons/fi';
@@ -63,17 +66,6 @@ const TIPO_TAMANHOS = {
 
 function tamanhoTipo(tipo) {
   return TIPO_TAMANHOS[tipo] || TIPO_TAMANHOS.default;
-}
-
-function buildLocalizacaoPath(loc, allLocs = []) {
-  if (!loc) return '';
-  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
-  const parts = [];
-  if (loc.setor) parts.push(loc.setor);
-  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
-  if (loc.subgrupo) parts.push(loc.subgrupo);
-  else if (loc.descricao && !parent) parts.push(loc.descricao);
-  return parts.join(' / ');
 }
 
 function parseTiposPermitidos(raw) {
@@ -682,6 +674,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
                 const icone = TIPO_ICONES[tipo] || '📍';
                 const pathLabel = buildLocalizacaoPath(loc, filtradas);
                 const subLabel = loc.subgrupo || (pathLabel && pathLabel !== loc.setor ? pathLabel.split(' / ').slice(-1)[0] : null);
+                const almCodigo = resolveAlmoxarifadoCodigo(loc, almoxarifados);
 
                 return (
                   <g
@@ -694,7 +687,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
                     onClick={() => !arrastando && setSelecionada(loc)}
                     filter="url(#almox-shadow)"
                   >
-                    <title>{`${pathLabel ? `${loc.codigo} — ${pathLabel}` : loc.codigo}${loc.bloqueada ? ' (bloqueada)' : ''}`}</title>
+                    <title>{`${formatLocalizacaoLabel(loc, filtradas, almoxarifados)}${loc.bloqueada ? ' (bloqueada)' : ''}`}</title>
                     <rect
                       width={pos.w}
                       height={pos.h}
@@ -712,7 +705,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
                       {icone}
                     </text>
                     <text x={pos.w / 2} y={pos.h * 0.62} textAnchor="middle" className="almox-mapa-zone-code">
-                      {loc.codigo}
+                      {almCodigo ? `${almCodigo} / ${loc.codigo}` : loc.codigo}
                     </text>
                     {subLabel && (
                       <text x={pos.w / 2} y={pos.h * 0.74} textAnchor="middle" className="almox-mapa-zone-sub">

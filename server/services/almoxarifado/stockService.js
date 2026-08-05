@@ -612,9 +612,14 @@ async function consultarEstoque(db, filters = {}) {
 }
 
 async function consultarSaldosPorLocalizacao(db, materialId) {
-  return dbAll(db, `SELECT s.*, l.codigo as localizacao_codigo, l.descricao as localizacao_descricao, l.tipo as localizacao_tipo
+  // almoxarifado_codigo/nome vêm do almoxarifado da PRÓPRIA localização do saldo
+  // (s.localizacao_id), não da localização padrão do material — cada linha de saldo
+  // pode estar num almoxarifado diferente. Saldo sem localização => null nos dois.
+  return dbAll(db, `SELECT s.*, l.codigo as localizacao_codigo, l.descricao as localizacao_descricao, l.tipo as localizacao_tipo,
+           a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
     FROM estoque_saldo_almoxarifado s
     LEFT JOIN localizacoes_almoxarifado l ON s.localizacao_id = l.id
+    LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
     WHERE s.material_id = ?`, [materialId]);
 }
 

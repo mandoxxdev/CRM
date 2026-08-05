@@ -5,6 +5,7 @@ import {
   FiPackage, FiLock, FiEye, FiCheckCircle, FiDollarSign, FiMapPin, FiArrowUp, FiArrowDown
 } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
+import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import './Almoxarifado.css';
 
 // Tipos de movimento cobrem os 20 valores do motor v2 (ver stockService); mapeamos por
@@ -159,7 +160,7 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                         <tr key={s.id}>
                           <td>
                             <FiMapPin size={11} style={{ marginRight: 4, opacity: 0.6 }} />
-                            {s.localizacao_codigo || 'Sem localização'}
+                            {prefixarAlmoxarifado(s.localizacao_codigo, s.almoxarifado_codigo) || 'Sem localização'}
                             {s.localizacao_descricao && (
                               <span style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}> — {s.localizacao_descricao}</span>
                             )}

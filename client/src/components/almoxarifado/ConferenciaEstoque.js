@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiPlus, FiRefreshCw, FiCheckCircle, FiXCircle, FiEye, FiClipboard } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
+import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import './Almoxarifado.css';
 
 const CATEGORIAS = [
@@ -196,7 +197,9 @@ const ConferenciaEstoque = () => {
                         <div style={{ fontWeight: 600 }}>{item.material_nome}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{item.unidade}</div>
                       </td>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{item.localizacao || '—'}</td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                        {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo) || '—'}
+                      </td>
                       <td style={{ fontWeight: 600 }}>{item.quantidade_sistema} {item.unidade}</td>
                       <td>
                         {confAberta.status === 'ABERTO' ? (

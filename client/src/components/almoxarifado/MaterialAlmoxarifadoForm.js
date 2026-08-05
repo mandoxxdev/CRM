@@ -5,6 +5,7 @@ import { getEffectiveUser } from '../../services/permissionsCache';
 import { canConfigureAlmox } from '../../utils/systemPermissions';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
+import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
 import './Almoxarifado.css';
@@ -32,23 +33,6 @@ const CONTROLE_CHECKS = [
   { field: 'requer_inspecao', label: 'Requer inspeção' },
   { field: 'requer_foto', label: 'Requer foto' },
 ];
-
-const buildLocalizacaoPath = (loc, allLocs = []) => {
-  if (!loc) return '';
-  const parent = loc.parent_id ? allLocs.find(l => l.id === loc.parent_id) : null;
-  const parts = [];
-  if (loc.setor) parts.push(loc.setor);
-  if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
-  if (loc.subgrupo) parts.push(loc.subgrupo);
-  else if (loc.descricao && !parent) parts.push(loc.descricao);
-  return parts.join(' / ');
-};
-
-const formatLocalizacaoLabel = (loc, allLocs = []) => {
-  if (!loc) return '';
-  const path = buildLocalizacaoPath(loc, allLocs);
-  return path ? `${loc.codigo} — ${path}` : loc.codigo;
-};
 
 const MaterialAlmoxarifadoForm = () => {
   const { user } = useAuth();
@@ -729,7 +713,7 @@ const MaterialAlmoxarifadoForm = () => {
                         </option>
                         {localizacoesVisiveis.map(loc => (
                           <option key={loc.id} value={String(loc.id)}>
-                            {formatLocalizacaoLabel(loc, localizacoesOptions)}
+                            {formatLocalizacaoLabel(loc, localizacoesOptions, almoxarifados)}
                             {loc.ativo === 0 ? ' (inativa)' : ''}
                           </option>
                         ))}
