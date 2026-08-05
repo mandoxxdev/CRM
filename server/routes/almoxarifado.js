@@ -6,6 +6,7 @@
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const { z } = require('zod');
 const alertService = require('../services/almoxarifado/alertService');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
@@ -1850,6 +1851,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
       if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
 
+      // Segregação de funções (design, "Decisões aprovadas" #1): quem solicitou não pode
+      // aprovar a própria requisição — vale para as duas lanes (aprovar e aprovar-valor,
+      // ver requisitionValueApprovalService.aprovarValor). NÃO se aplica a
+      // rejeitar/rejeitar-valor: reprovar a própria requisição é desistência, decisão
+      // legítima do solicitante.
+      if (Number(req.user.id) === Number(reqRow.solicitante_id)) {
+        return res.status(403).json({ error: 'Solicitante não pode aprovar a própria requisição' });
+      }
+
       // Nota: NÃO usamos validarTransicao(reqRow.status, 'APROVADO') aqui — TRANSICOES
       // também lista AGUARDANDO_APROVACAO_VALOR -> APROVADO como válido, mas essa seta é
       // exclusiva da rota /aprovar-valor (design: anotada "(aprovar-valor)"), que exige
@@ -1874,29 +1884,64 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
          WHERE id=?`,
         [statusFinal, req.user.id, req.user.nome || req.user.email, req.params.id]);
 
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { status: statusFinal },
+      });
+
       res.json({ success: true, status: statusFinal });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
   });
 
-  // PUT /api/almoxarifado/requisicoes/:id/rejeitar — rejeitar
-  app.put('/api/almoxarifado/requisicoes/:id/rejeitar',(req, res) => {
-    const { motivo } = req.body;
-    db.run(`UPDATE requisicoes_almoxarifado SET status='REJEITADO', rejeicao_motivo=?, aprovador_id=?, aprovador_nome=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-            WHERE id=? AND status='PENDENTE'`,
-      [motivo || null, req.user.id, req.user.nome || req.user.email, req.params.id],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(400).json({ error: 'Apenas requisições pendentes podem ser rejeitadas' });
-        res.json({ success: true });
-      });
+  // Motivo obrigatório na rejeição (design, "Decisões aprovadas" #1) — vale para as duas
+  // lanes (rejeitar e rejeitar-valor). Zod inline, padrão validation.js.
+  const RejeicaoSchema = z.object({
+    motivo: z.string().min(1, 'Motivo da rejeição é obrigatório'),
   });
 
-  // PUT /api/almoxarifado/requisicoes/:id/aprovar-valor — aprovar liberação por valor
+  // PUT /api/almoxarifado/requisicoes/:id/rejeitar — rejeitar (sem segregação: reprovar a
+  // própria requisição é desistência, decisão legítima do solicitante — ver comentário na
+  // rota /aprovar acima).
+  app.put('/api/almoxarifado/requisicoes/:id/rejeitar', validate(RejeicaoSchema), async (req, res) => {
+    try {
+      const { motivo } = req.body;
+      const result = await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status='REJEITADO', rejeicao_motivo=?, aprovador_id=?, aprovador_nome=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+         WHERE id=? AND status='PENDENTE'`,
+        [motivo, req.user.id, req.user.nome || req.user.email, req.params.id]);
+      if (result.changes === 0) {
+        return res.status(400).json({ error: 'Apenas requisições pendentes podem ser rejeitadas' });
+      }
+
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'REJEICAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        justificativa: motivo, dados_novos: { status: 'REJEITADO' },
+      });
+
+      res.json({ success: true });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // PUT /api/almoxarifado/requisicoes/:id/aprovar-valor — aprovar liberação por valor.
+  // Segregação (solicitante não aprova a própria) é aplicada dentro do serviço, que já
+  // busca a requisição para validar o status AGUARDANDO_APROVACAO_VALOR — ver
+  // requisitionValueApprovalService.aprovarValor.
   app.put('/api/almoxarifado/requisicoes/:id/aprovar-valor', async (req, res) => {
     try {
       const result = await valueApprovalService.aprovarValor(db, req.params.id, req.user);
+
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_VALOR',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { status: result.status },
+      });
+
       res.json(result);
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
@@ -1904,9 +1949,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/rejeitar-valor — reprovar liberação por valor
-  app.put('/api/almoxarifado/requisicoes/:id/rejeitar-valor', async (req, res) => {
+  // (sem segregação — mesma decisão de design do /rejeitar).
+  app.put('/api/almoxarifado/requisicoes/:id/rejeitar-valor', validate(RejeicaoSchema), async (req, res) => {
     try {
-      const result = await valueApprovalService.rejeitarValor(db, req.params.id, req.user, req.body?.motivo);
+      const result = await valueApprovalService.rejeitarValor(db, req.params.id, req.user, req.body.motivo);
+
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'REJEICAO_VALOR',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        justificativa: req.body.motivo, dados_novos: { status: result.status },
+      });
+
       res.json(result);
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });

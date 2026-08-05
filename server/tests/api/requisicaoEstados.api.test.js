@@ -178,9 +178,11 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
   });
 
   // ── aprovar sem estoque em nada -> AGUARDANDO_ESTOQUE ──
+  // solicitanteId:77 (≠ ADMIN_USER.id) — Task 4 adiciona segregação de funções: quem
+  // aprova/rejeita não pode ser quem solicitou (ver requisicaoAprovacao.api.test.js).
   await test('[aprovar] item sem disponível e sem compra pendente -> AGUARDANDO_ESTOQUE', async () => {
     const matId = await criarMaterial('MATEST-04', 0);
-    const { id: reqId } = await criarRequisicao(db, { status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 5 }] });
+    const { id: reqId } = await criarRequisicao(db, { status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 5 }], solicitanteId: 77 });
 
     const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
@@ -194,7 +196,7 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
   await test('[aprovar] item sem disponível, com solicitação de compra PENDENTE -> AGUARDANDO_COMPRA', async () => {
     const matId = await criarMaterial('MATEST-05', 0);
     await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, status) VALUES (?, 10, 'PENDENTE')`, [matId]);
-    const { id: reqId } = await criarRequisicao(db, { status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 5 }] });
+    const { id: reqId } = await criarRequisicao(db, { status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 5 }], solicitanteId: 77 });
 
     const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
@@ -207,7 +209,7 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
   // ── aprovar com estoque disponível -> continua APROVADO (regressão) ──
   await test('[aprovar] item com disponível > 0 -> permanece APROVADO', async () => {
     const matId = await criarMaterial('MATEST-06', 50);
-    const { id: reqId } = await criarRequisicao(db, { status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 5 }] });
+    const { id: reqId } = await criarRequisicao(db, { status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 5 }], solicitanteId: 77 });
 
     const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
@@ -227,7 +229,7 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
   // não pode ser usada para pular essa checagem de permissão. ──
   await test('[aprovar] NÃO aprova requisição AGUARDANDO_APROVACAO_VALOR (só /aprovar-valor pode) -> 400', async () => {
     const matId = await criarMaterial('MATEST-13', 50);
-    const { id: reqId } = await criarRequisicao(db, { status: 'AGUARDANDO_APROVACAO_VALOR', itens: [{ material_id: matId, quantidade: 1 }] });
+    const { id: reqId } = await criarRequisicao(db, { status: 'AGUARDANDO_APROVACAO_VALOR', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 77 });
 
     const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
