@@ -23,6 +23,26 @@ async function criarLocalizacao(app, codigo, overrides = {}) {
   return res.body;
 }
 
+// Corpo IDÊNTICO ao que handleSalvarEdit/handleMoverConfirm (client/src/components/almoxarifado/
+// ConfiguracoesAlmoxarifado.js, ~:1193 e ~:1252) mandam hoje num PUT de localização: nunca inclui
+// bloqueada, tipos_material_permitidos, almoxarifado_id nem ativo. Usado para reproduzir o achado
+// do review — PUT feito pela tela real não pode apagar restrições configuradas por outra via.
+function corpoPutFormatoUI(loc, overrides = {}) {
+  return {
+    codigo: loc.codigo,
+    descricao: loc.descricao,
+    setor: loc.setor,
+    subgrupo: loc.subgrupo || null,
+    parent_id: loc.parent_id || null,
+    tipo: loc.tipo || 'Almoxarifado',
+    pos_x: loc.pos_x ?? null,
+    pos_y: loc.pos_y ?? null,
+    largura: loc.largura ?? 120,
+    altura: loc.altura ?? 80,
+    ...overrides,
+  };
+}
+
 (async () => {
   // Rotas de localização (canConfigureAlmox) exigem is_superadmin (mesmo motivo do
   // almoxarifados.api.test.js). is_superadmin:1 também dá perfil ADMINISTRADOR nas rotas
@@ -150,6 +170,51 @@ async function criarLocalizacao(app, codigo, overrides = {}) {
 
     const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
     assert.strictEqual(m.quantidade_atual, 0, 'estorno deveria ter revertido o saldo mesmo com a localização bloqueada');
+  });
+
+  await test('PUT no formato da UI (sem bloqueada/tipos_material_permitidos) preserva restrições existentes', async () => {
+    const loc = await criarLocalizacao(app, 'REST-I', { bloqueada: true, tipos_material_permitidos: ['Ferramenta'] });
+    assert.strictEqual(loc.bloqueada, 1);
+    assert.strictEqual(loc.tipos_material_permitidos, JSON.stringify(['Ferramenta']));
+
+    const res = await request(app).put(`/api/almoxarifado/localizacoes/${loc.id}`).send(corpoPutFormatoUI(loc));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.bloqueada, 1, 'bloqueio deveria ter sido preservado (PUT da UI não manda o campo)');
+    assert.strictEqual(res.body.tipos_material_permitidos, JSON.stringify(['Ferramenta']),
+      'restrição de tipo deveria ter sido preservada (PUT da UI não manda o campo)');
+  });
+
+  await test('PUT com bloqueada:0 explícito limpa o bloqueio', async () => {
+    const loc = await criarLocalizacao(app, 'REST-J', { bloqueada: true });
+    const res = await request(app).put(`/api/almoxarifado/localizacoes/${loc.id}`)
+      .send(corpoPutFormatoUI(loc, { bloqueada: 0 }));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.bloqueada, 0, 'bloqueio deveria ter sido limpo por um valor explícito');
+  });
+
+  await test('PUT com tipos_material_permitidos:[] remove a restrição (vira NULL, aceita qualquer tipo)', async () => {
+    const loc = await criarLocalizacao(app, 'REST-K', { tipos_material_permitidos: ['Ferramenta'] });
+    const res = await request(app).put(`/api/almoxarifado/localizacoes/${loc.id}`)
+      .send(corpoPutFormatoUI(loc, { tipos_material_permitidos: [] }));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.tipos_material_permitidos, null, 'lista vazia deveria ter virado NULL (sem restrição)');
+
+    const mat = await criarMaterial(db, 'REST-MAT-K', { qtd: 0, tipoMaterial: 'Consumível' });
+    const entrada = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'ENTRADA', quantidade: 5, localizacao_destino_id: loc.id });
+    assert.strictEqual(entrada.status, 201, JSON.stringify(entrada.body));
+  });
+
+  await test('DELETE localizacao bloqueia mesmo quando SUM(quantidade) das linhas dá zero (net-zero)', async () => {
+    const loc = await criarLocalizacao(app, 'REST-L');
+    const matA = await criarMaterial(db, 'REST-MAT-L1', { qtd: 0 });
+    const matB = await criarMaterial(db, 'REST-MAT-L2', { qtd: 0 });
+    await dbRun(db, `INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,10)`, [matA, loc.id]);
+    await dbRun(db, `INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?,?,-10)`, [matB, loc.id]);
+
+    const res = await request(app).delete(`/api/almoxarifado/localizacoes/${loc.id}`);
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.ok(/saldo/i.test(res.body.error), `mensagem deveria citar saldo: ${res.body.error}`);
   });
 
   await close();

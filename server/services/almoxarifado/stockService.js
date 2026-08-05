@@ -116,7 +116,10 @@ async function validarLocalizacaoParaMovimento(db, localizacaoId, material, pape
     } catch (e) {
       permitidos = null; // JSON corrompido — defensivo: trata como sem restrição
     }
-    if (Array.isArray(permitidos) && !permitidos.includes(material.tipo_material)) {
+    // Lista vazia ([]) tem a MESMA semântica de NULL/ausente: "sem restrição" — não "nenhum tipo
+    // permitido". A rota já normaliza [] para NULL na gravação, mas o helper trata o caso aqui
+    // também (defesa em profundidade: dado escrito por outro caminho, ex. SQL direto/migração).
+    if (Array.isArray(permitidos) && permitidos.length > 0 && !permitidos.includes(material.tipo_material)) {
       throw Object.assign(new Error(
         `Localização ${loc.codigo} não aceita o tipo de material '${material.tipo_material || ''}'`), { status: 400 });
     }

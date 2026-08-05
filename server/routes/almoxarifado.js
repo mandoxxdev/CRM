@@ -841,10 +841,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // tipos_material_permitidos chega do cliente como array de strings (ou ausente/null = sem
-  // restrição); persistido como JSON. Qualquer outra forma (string solta, objeto, etc.) é
-  // tratada como "sem restrição" em vez de quebrar a gravação.
+  // restrição); persistido como JSON. Array vazio ([]) tem a MESMA semântica de ausente/null —
+  // "sem restrição" (definição de produto: lista vazia não significa "nenhum tipo permitido") —
+  // por isso normaliza para NULL em vez de gravar "[]" (achado do review). Qualquer outra forma
+  // (string solta, objeto, etc.) também é tratada como "sem restrição" em vez de quebrar a gravação.
   function serializeTiposPermitidos(value) {
-    return Array.isArray(value) ? JSON.stringify(value) : null;
+    if (!Array.isArray(value) || value.length === 0) return null;
+    return JSON.stringify(value);
   }
 
   app.post('/api/almoxarifado/localizacoes',(req, res) => {
@@ -908,43 +911,61 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
-    const bloqueadaVal = bloqueada ? 1 : 0;
-    const tiposPermitidosVal = serializeTiposPermitidos(tipos_material_permitidos);
     if (parentVal && parseInt(req.params.id, 10) === parentVal) {
       return res.status(400).json({ error: 'Uma localização não pode ser pai de si mesma' });
     }
     // almoxarifado_id é o ÚNICO campo deste PUT full-replace com semântica "preserva quando
-    // omitido": a UI hoje (ConfiguracoesAlmoxarifado.js "Editar"/"Mover") ainda não conhece esse
-    // campo e manda o body sem ele — se tratássemos ausência/null como "resetar para ALM-GERAL"
-    // (como no POST), qualquer edição feita pela tela atual reverteria silenciosamente o vínculo.
-    // Por isso: undefined OU null preservam o valor já gravado (via COALESCE, sem round-trip extra
-    // nem race de leitura); só um valor numérico presente no body troca o vínculo. bloqueada e
-    // tipos_material_permitidos seguem o padrão full-replace normal dos demais campos (não têm
-    // essa semântica de preservação — omitir zera/limpa, igual descricao, setor etc.).
+    // omitido" via COALESCE puro: a UI hoje (ConfiguracoesAlmoxarifado.js "Editar"/"Mover") ainda
+    // não conhece esse campo e manda o body sem ele — se tratássemos ausência/null como "resetar
+    // para ALM-GERAL" (como no POST), qualquer edição feita pela tela atual reverteria
+    // silenciosamente o vínculo. Por isso: undefined OU null preservam o valor já gravado; só um
+    // valor numérico presente no body troca o vínculo.
     const almoxarifadoIdParam = (almoxarifado_id === undefined || almoxarifado_id === null)
       ? null
       : (parseInt(almoxarifado_id, 10) || null);
-    checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal, excludeId: req.params.id }, (dupErr, isDup) => {
-      if (dupErr) return res.status(500).json({ error: dupErr.message });
-      if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
-      db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=COALESCE(?, almoxarifado_id), bloqueada=?, tipos_material_permitidos=?, ativo=? WHERE id=?`,
-        [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
-         pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdParam,
-         bloqueadaVal, tiposPermitidosVal,
-         ativo !== undefined ? ativo : 1, req.params.id],
-        function (err) {
-          if (err) return res.status(500).json({ error: err.message });
-          db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
+
+    // bloqueada e tipos_material_permitidos: mesma UI (handleSalvarEdit/handleMoverConfirm em
+    // ConfiguracoesAlmoxarifado.js) ainda não manda esses campos em edições/movimentações comuns
+    // — um full-replace ingênuo colapsaria undefined→0/null e apagaria silenciosamente qualquer
+    // bloqueio/restrição já configurado a cada edição (achado do review). Diferente de
+    // almoxarifado_id, aqui um `null`/`[]` EXPLÍCITO precisa poder LIMPAR o valor (não só
+    // "trocar por outro"), então COALESCE puro não serve — computamos em JS lendo a linha atual:
+    // omitido (undefined) preserva; presente (incluindo null/[]) substitui/limpa normalmente.
+    db.get(`SELECT bloqueada, tipos_material_permitidos FROM localizacoes_almoxarifado WHERE id = ?`,
+      [req.params.id], (curErr, current) => {
+        if (curErr) return res.status(500).json({ error: curErr.message });
+        if (!current) return res.status(404).json({ error: 'Localização não encontrada' });
+
+        const bloqueadaFinal = bloqueada === undefined ? (current.bloqueada ? 1 : 0) : (bloqueada ? 1 : 0);
+        const tiposFinal = tipos_material_permitidos === undefined
+          ? current.tipos_material_permitidos
+          : serializeTiposPermitidos(tipos_material_permitidos);
+
+        checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal, excludeId: req.params.id }, (dupErr, isDup) => {
+          if (dupErr) return res.status(500).json({ error: dupErr.message });
+          if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
+          db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=COALESCE(?, almoxarifado_id), bloqueada=?, tipos_material_permitidos=?, ativo=? WHERE id=?`,
+            [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+             pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdParam,
+             bloqueadaFinal, tiposFinal,
+             ativo !== undefined ? ativo : 1, req.params.id],
+            function (err) {
+              if (err) return res.status(500).json({ error: err.message });
+              db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
+            });
         });
-    });
+      });
   });
 
   app.delete('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    db.get(`SELECT COALESCE(SUM(quantidade), 0) as total FROM estoque_saldo_almoxarifado WHERE localizacao_id = ?`,
+    // Checa EXISTÊNCIA de saldo não-zero por linha, não a SOMA agregada: SUM pode dar zero com
+    // +10 de um material e -10 de outro na mesma localização, escondendo saldo real e permitindo
+    // apagar uma localização que ainda tem estoque físico registrado (achado do review).
+    db.get(`SELECT 1 as tem FROM estoque_saldo_almoxarifado WHERE localizacao_id = ? AND quantidade != 0 LIMIT 1`,
       [req.params.id], (saldoErr, row) => {
         if (saldoErr) return res.status(500).json({ error: saldoErr.message });
-        if (row && row.total > 0) {
+        if (row) {
           return res.status(400).json({ error: 'Não é possível remover: localização possui saldo' });
         }
         db.run(`UPDATE localizacoes_almoxarifado SET ativo = 0 WHERE id = ?`, [req.params.id], function (err) {
