@@ -4550,8 +4550,12 @@ app.post('/api/clientes', authenticateToken, (req, res) => {
 });
 
 // ========== ROTAS DE FAMÍLIAS (resto: todas, :id, put, delete, foto) ==========
+// "todas" = todas as famílias independente do grupo (o /api/familias filtra por
+// grupo_id). NÃO inclui as apagadas: DELETE /api/familias/:id faz exclusão lógica
+// (ativo = 0), e sem este filtro a família apagada continuava aparecendo nos
+// seletores de configuração — variáveis por família e opções por família.
 app.get('/api/familias/todas', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM familias_produto ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
+  db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
