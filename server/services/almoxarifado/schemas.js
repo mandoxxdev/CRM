@@ -154,7 +154,14 @@ const MaterialShape = z.object({
   controle_corrida: FlagSchema,
   requer_inspecao: FlagSchema,
   requer_foto: FlagSchema,
-  classe_abc: z.enum(['A', 'B', 'C']).nullable().optional(),
+  // Fix pós-review (Critical): '' (default do <select> no form quando o material ainda não
+  // tem classe) não é um valor válido do enum nem `null` — sem o preprocess, z.enum rejeita
+  // '' com 400 e QUALQUER submit real do formulário (criar sem escolher classe, ou editar um
+  // material existente sem classe) quebra. Mesma família de bug do numFromForm (linha ~77):
+  // '' vira undefined (ausente — preserva no PUT), só null explícito limpa o campo. Defesa em
+  // profundidade: o cliente já manda null explícito quando o select fica em branco, mas este
+  // preprocess protege qualquer outro caller que mande ''.
+  classe_abc: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['A', 'B', 'C']).nullable().optional()),
   unidade_compra: z.string().nullable().optional(),
   fator_conversao_compra: numFromForm(z.number().nullable().optional()),
   unidade_consumo: z.string().nullable().optional(),

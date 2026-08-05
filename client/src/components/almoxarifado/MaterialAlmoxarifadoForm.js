@@ -330,6 +330,12 @@ const MaterialAlmoxarifadoForm = () => {
         localizacao_padrao_id: form.localizacao_padrao_id
           ? parseInt(form.localizacao_padrao_id, 10)
           : null,
+        // classe_abc é z.enum(['A','B','C']) no servidor — '' não é um valor válido do enum
+        // nem null, então precisa virar null explícito aqui (mesmo padrão dos FKs acima).
+        // Fix pós-review (Critical): sem isso, TODO submit — criar material sem escolher
+        // classe, ou editar qualquer material existente (nenhum tem classe ainda) — quebrava
+        // com 400, porque o form sempre manda a chave (default '' no state).
+        classe_abc: form.classe_abc || null,
       };
       delete payload.localizacao;
 

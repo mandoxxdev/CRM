@@ -127,6 +127,37 @@ async function ultimaAuditoria(db, entidadeId) {
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
   });
 
+  // Fix pós-review (Critical): MaterialAlmoxarifadoForm.js manda classe_abc: '' por padrão (todo
+  // material sem classe ainda, e todo cadastro novo antes de escolher uma) — sem o preprocess
+  // em schemas.js, z.enum(['A','B','C']) rejeitava '' com 400 e QUALQUER submit real quebrava.
+  await test('POST classe_abc: "" (default do select do form) → 201 e coluna NULL', async () => {
+    const res = await request(app).post('/api/almoxarifado/materiais').send({
+      codigo: 'MAT-FULL-004B', nome: 'Material Classe Vazia', familia_id: familia.id, classe_abc: '',
+    });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    const row = await dbGet(db, 'SELECT classe_abc FROM materiais_almoxarifado WHERE id = ?', [res.body.id]);
+    assert.strictEqual(row.classe_abc, null);
+  });
+
+  await test('PUT classe_abc: "" preserva o valor atual (mesma semântica de numFromForm — "" = ausente); null explícito limpa', async () => {
+    const criado = await request(app).post('/api/almoxarifado/materiais').send({
+      codigo: 'MAT-FULL-004C', nome: 'Material Classe C', familia_id: familia.id, classe_abc: 'C',
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    // '' -> preprocess vira undefined -> chave "ausente" -> preserve-when-omitted mantém 'C'.
+    const resVazio = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+      .send({ classe_abc: '' });
+    assert.strictEqual(resVazio.status, 200, JSON.stringify(resVazio.body));
+    assert.strictEqual(resVazio.body.classe_abc, 'C', 'classe_abc deveria ter sido preservado (não confundir "" com limpar)');
+
+    // null explícito continua limpando de verdade (não pode virar "preservar").
+    const resNull = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+      .send({ classe_abc: null });
+    assert.strictEqual(resNull.status, 200, JSON.stringify(resNull.body));
+    assert.strictEqual(resNull.body.classe_abc, null, 'null explícito deveria limpar classe_abc');
+  });
+
   await test('POST peso_unitario como string → 400 Zod (shape inválido)', async () => {
     const res = await request(app).post('/api/almoxarifado/materiais').send({
       codigo: 'MAT-FULL-005', nome: 'Material Peso String', familia_id: familia.id, peso_unitario: 'abc',
