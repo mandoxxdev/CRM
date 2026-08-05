@@ -61,6 +61,29 @@ function test(name, fn) {
     assert.strictEqual(loc.body.almoxarifado_id, geral.id);
   });
 
+  await test('PUT em localizacao sem almoxarifado_id preserva o vinculo atual (como a UI hoje manda)', async () => {
+    const almA = await request(app).post('/api/almoxarifado/almoxarifados')
+      .send({ codigo: 'ALM-PUT1', nome: 'Vinculo A' });
+    const almB = await request(app).post('/api/almoxarifado/almoxarifados')
+      .send({ codigo: 'ALM-PUT2', nome: 'Vinculo B' });
+    const loc = await request(app).post('/api/almoxarifado/localizacoes')
+      .send({ codigo: 'PUT-01', descricao: 'Preserva vinculo', almoxarifado_id: almA.body.id });
+    assert.strictEqual(loc.status, 201, JSON.stringify(loc.body));
+
+    // PUT full-replace SEM almoxarifado_id — reproduz o body que a tela de Configurações
+    // (Editar/Mover) manda hoje, que ainda não conhece esse campo.
+    const putSemCampo = await request(app).put(`/api/almoxarifado/localizacoes/${loc.body.id}`)
+      .send({ codigo: 'PUT-01', descricao: 'Editado sem tocar no vinculo', setor: loc.body.setor });
+    assert.strictEqual(putSemCampo.status, 200, JSON.stringify(putSemCampo.body));
+    assert.strictEqual(putSemCampo.body.almoxarifado_id, almA.body.id, 'vinculo deveria ter sido preservado');
+
+    // PUT com almoxarifado_id explícito — troca o vinculo normalmente.
+    const putComCampo = await request(app).put(`/api/almoxarifado/localizacoes/${loc.body.id}`)
+      .send({ codigo: 'PUT-01', descricao: 'Editado trocando o vinculo', almoxarifado_id: almB.body.id });
+    assert.strictEqual(putComCampo.status, 200, JSON.stringify(putComCampo.body));
+    assert.strictEqual(putComCampo.body.almoxarifado_id, almB.body.id, 'vinculo deveria ter sido trocado');
+  });
+
   await test('inativar almoxarifado com localizacoes ativas falha 400', async () => {
     const alm = await dbGet(db, `SELECT id FROM almoxarifados WHERE codigo = 'ALM-FIX'`);
     const res = await request(app).put(`/api/almoxarifado/almoxarifados/${alm.id}`).send({ ativo: 0 });

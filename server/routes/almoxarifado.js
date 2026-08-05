@@ -900,19 +900,26 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (parentVal && parseInt(req.params.id, 10) === parentVal) {
       return res.status(400).json({ error: 'Uma localização não pode ser pai de si mesma' });
     }
-    resolveAlmoxarifadoId(almoxarifado_id, (_rErr, almoxarifadoIdVal) => {
-      checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal, excludeId: req.params.id }, (dupErr, isDup) => {
-        if (dupErr) return res.status(500).json({ error: dupErr.message });
-        if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
-        db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=?, ativo=? WHERE id=?`,
-          [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
-           pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdVal,
-           ativo !== undefined ? ativo : 1, req.params.id],
-          function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
-          });
-      });
+    // almoxarifado_id é o ÚNICO campo deste PUT full-replace com semântica "preserva quando
+    // omitido": a UI hoje (ConfiguracoesAlmoxarifado.js "Editar"/"Mover") ainda não conhece esse
+    // campo e manda o body sem ele — se tratássemos ausência/null como "resetar para ALM-GERAL"
+    // (como no POST), qualquer edição feita pela tela atual reverteria silenciosamente o vínculo.
+    // Por isso: undefined OU null preservam o valor já gravado (via COALESCE, sem round-trip extra
+    // nem race de leitura); só um valor numérico presente no body troca o vínculo.
+    const almoxarifadoIdParam = (almoxarifado_id === undefined || almoxarifado_id === null)
+      ? null
+      : (parseInt(almoxarifado_id, 10) || null);
+    checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal, excludeId: req.params.id }, (dupErr, isDup) => {
+      if (dupErr) return res.status(500).json({ error: dupErr.message });
+      if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
+      db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=COALESCE(?, almoxarifado_id), ativo=? WHERE id=?`,
+        [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+         pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdParam,
+         ativo !== undefined ? ativo : 1, req.params.id],
+        function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
+        });
     });
   });
 

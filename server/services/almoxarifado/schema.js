@@ -259,7 +259,12 @@ async function migrateCriarAlmoxarifadoGeral(db) {
     await dbRun(db, 'UPDATE localizacoes_almoxarifado SET almoxarifado_id = ? WHERE almoxarifado_id IS NULL', [geral.id]);
   }
 
-  await dbRun(db, 'INSERT INTO schema_migrations_almoxarifado (id) VALUES (?)',
+  // OR IGNORE: no boot há duas chamadas de initSchema em paralelo (routes/almoxarifado.js:56
+  // fire-and-forget + extended.js runInitSchemaWithRetry) que podem interlear num DB fresco —
+  // ambas passam pelo `if (applied) return;` acima antes de qualquer uma commitar a marca, então
+  // a perdedora bateria numa violação de PK aqui. Com OR IGNORE ela é auto-curativa e silenciosa
+  // (a vencedora já persistiu a marca; a corrida não perde nem duplica o vínculo/ALM-GERAL).
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
     [MIGRATION_CRIAR_ALMOXARIFADO_GERAL]);
   console.log('✅ Migração criar_almoxarifado_geral aplicada (ALM-GERAL criado e localizações vinculadas)');
 }
