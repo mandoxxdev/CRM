@@ -3,6 +3,7 @@
  */
 const { dbRun, dbGet, dbAll } = require('./db');
 const valueApprovalService = require('./requisitionValueApprovalService');
+const { PODE_SEPARAR, PODE_ENTREGAR } = require('./requisitionStateMachine');
 
 function num(v) {
   return Number(v) || 0;
@@ -76,8 +77,10 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = []) {
     err.status = 404;
     throw err;
   }
-  if (!['APROVADO', 'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA'].includes(reqRow.status)) {
-    const err = new Error('Requisição deve estar aprovada, em separação ou parcialmente atendida para separar');
+  if (!PODE_SEPARAR.includes(reqRow.status)) {
+    const err = new Error(
+      'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar'
+    );
     err.status = 400;
     throw err;
   }
@@ -126,8 +129,8 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
     err.status = 404;
     throw err;
   }
-  if (!['EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA'].includes(reqRow.status)) {
-    const err = new Error('Requisição deve estar em separação ou parcialmente atendida');
+  if (!PODE_ENTREGAR.includes(reqRow.status)) {
+    const err = new Error('Requisição deve estar em separação, pronta para retirada ou parcialmente atendida');
     err.status = 400;
     throw err;
   }

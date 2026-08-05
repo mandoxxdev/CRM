@@ -10,6 +10,7 @@ const alertService = require('../services/almoxarifado/alertService');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
+const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 const stockService = require('../services/almoxarifado/stockService');
 const {
@@ -1777,16 +1778,98 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   });
 
-  // PUT /api/almoxarifado/requisicoes/:id/aprovar — aprovar
-  app.put('/api/almoxarifado/requisicoes/:id/aprovar',(req, res) => {
-    db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-            WHERE id=? AND status='PENDENTE'`,
-      [req.user.id, req.user.nome || req.user.email, req.params.id],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(400).json({ error: 'Apenas requisições pendentes podem ser aprovadas' });
-        res.json({ success: true });
+  // POST /api/almoxarifado/requisicoes/:id/enviar — enviar rascunho (RASCUNHO -> PENDENTE),
+  // dispara as notificações + avaliação de valor que o rascunho pulou na criação (mesmo
+  // bloco pós-criação do POST /requisicoes, reaproveitado aqui — ver requisitionCreateService
+  // .dispararNotificacoesCriacao, Task 1).
+  // Nota: TRANSICOES também permite AGUARDANDO_APROVACAO_VALOR -> PENDENTE (seta reservada
+  // ao /aprovar-valor no design); esta rota aceitá-la via validarTransicao é inofensivo —
+  // não seta APROVADO nem pula nenhuma permissão, e aplicarAvaliacaoNaCriacao (chamada
+  // logo abaixo) recoloca em AGUARDANDO_APROVACAO_VALOR se o valor ainda excede o limite.
+  app.post('/api/almoxarifado/requisicoes/:id/enviar', async (req, res) => {
+    try {
+      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
+
+      const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PENDENTE');
+      if (!check.ok) return res.status(400).json({ error: check.erro });
+
+      await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status='PENDENTE', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [req.params.id]);
+
+      const avaliacaoValor = await requisitionCreateService.dispararNotificacoesCriacao(
+        db, req.params.id, req.user.email,
+      );
+
+      if (avaliacaoValor.status === valueApprovalService.STATUS_AGUARDANDO) {
+        return res.json({
+          id: Number(req.params.id),
+          numero: reqRow.numero,
+          status: avaliacaoValor.status,
+          valor_total: avaliacaoValor.valor_total,
+          requer_aprovacao_valor: true,
+        });
+      }
+
+      // Mesma checagem de aprovação automática que o POST /requisicoes aplica na criação direta.
+      db.get(`SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`, [], (e, cfg) => {
+        if (!e && cfg && cfg.valor === '1' && reqRow.urgencia !== 'CRITICO') {
+          db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
+            [req.params.id], () => {
+              res.json({
+                id: Number(req.params.id), numero: reqRow.numero, status: 'APROVADO', aprovacao: 'automatica',
+                valor_total: avaliacaoValor.valor_total,
+              });
+            });
+        } else {
+          res.json({
+            id: Number(req.params.id), numero: reqRow.numero, status: 'PENDENTE',
+            valor_total: avaliacaoValor.valor_total,
+          });
+        }
       });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // PUT /api/almoxarifado/requisicoes/:id/aprovar — aprovar
+  app.put('/api/almoxarifado/requisicoes/:id/aprovar', async (req, res) => {
+    try {
+      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
+
+      // Nota: NÃO usamos validarTransicao(reqRow.status, 'APROVADO') aqui — TRANSICOES
+      // também lista AGUARDANDO_APROVACAO_VALOR -> APROVADO como válido, mas essa seta é
+      // exclusiva da rota /aprovar-valor (design: anotada "(aprovar-valor)"), que exige
+      // isAprovadorValor e grava aprovador_valor_id/data_aprovacao_valor. Esta rota
+      // genérica só aprova a partir de PENDENTE — manter isso explícito evita que
+      // qualquer usuário autenticado aprove uma requisição bloqueada por valor sem passar
+      // pela permissão dedicada.
+      if (reqRow.status !== 'PENDENTE') {
+        return res.status(400).json({ error: `Transição inválida: ${reqRow.status} → APROVADO` });
+      }
+
+      await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+         WHERE id=?`,
+        [req.user.id, req.user.nome || req.user.email, req.params.id]);
+
+      // Pós-aprovação: se nenhum item tem saldo disponível, a requisição não fica em
+      // APROVADO — vai para AGUARDANDO_COMPRA/AGUARDANDO_ESTOQUE (design, seção "Máquina
+      // de estados").
+      const statusFinal = await requisitionStateMachine.calcularStatusPosAprovacao(db, req.params.id);
+      if (statusFinal !== 'APROVADO') {
+        await dbRun(db,
+          `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [statusFinal, req.params.id]);
+      }
+
+      res.json({ success: true, status: statusFinal });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/rejeitar — rejeitar
@@ -1834,6 +1917,33 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // Alias conforme especificação
   app.put('/api/almoxarifado/requisicoes/:id/separar', handleSeparacao);
 
+  // PUT /api/almoxarifado/requisicoes/:id/liberar-retirada — libera para retirada
+  // (EM_SEPARACAO -> PRONTA_PARA_RETIRADA), exige ao menos 1 item com quantidade separada.
+  app.put('/api/almoxarifado/requisicoes/:id/liberar-retirada', async (req, res) => {
+    try {
+      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+      if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
+
+      const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PRONTA_PARA_RETIRADA');
+      if (!check.ok) return res.status(400).json({ error: check.erro });
+
+      const separados = await dbGet(db,
+        `SELECT COUNT(*) as n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0`,
+        [req.params.id]);
+      if (!separados || separados.n === 0) {
+        return res.status(400).json({ error: 'Nenhum item separado' });
+      }
+
+      await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status='PRONTA_PARA_RETIRADA', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [req.params.id]);
+
+      res.json({ success: true, status: 'PRONTA_PARA_RETIRADA' });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
   // PUT /api/almoxarifado/requisicoes/:id/entregar — entrega parcial ou total e baixa estoque
   app.put('/api/almoxarifado/requisicoes/:id/entregar', (req, res) => {
     const { itens_atendidos } = req.body;
@@ -1851,9 +1961,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (r.solicitante_id !== req.user.id && !isSystemAdmin(req.user)) {
         return res.status(403).json({ error: 'Sem permissão' });
       }
-      if (!['PENDENTE', 'APROVADO'].includes(r.status)) {
-        return res.status(400).json({ error: 'Não é possível cancelar neste status' });
-      }
+      const check = requisitionStateMachine.validarTransicao(r.status, 'CANCELADO');
+      if (!check.ok) return res.status(400).json({ error: 'Não é possível cancelar neste status' });
       db.run(`UPDATE requisicoes_almoxarifado SET status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
         [motivo || null, req.params.id],
         function (err2) {
