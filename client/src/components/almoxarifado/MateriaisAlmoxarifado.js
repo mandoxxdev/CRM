@@ -142,7 +142,11 @@ const MateriaisAlmoxarifado = () => {
             <button className="btn-almox-secondary" onClick={loadMateriais}>
               <FiRefreshCw size={13} /> Atualizar
             </button>
-            <Link to="/almoxarifado/materiais/novo" className="btn-almox-primary">
+            <Link
+              to="/almoxarifado/materiais/novo"
+              className="btn-almox-primary"
+              title="Cadastra um novo material no almoxarifado (código, família, dados técnicos, unidades e localização)"
+            >
               <FiPlus size={14} /> Novo Material
             </Link>
           </>

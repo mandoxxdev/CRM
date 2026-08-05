@@ -937,15 +937,18 @@ const RequisicoesList = () => {
                 {warehouseMode && detalhe.status === 'PENDENTE' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
                     <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
-                      onClick={() => handleAprovar(detalhe.id, true)} disabled={saving}>
+                      onClick={() => handleAprovar(detalhe.id, true)} disabled={saving}
+                      title="Aprova a requisição e já abre a separação dos materiais">
                       <FiCheck size={14} /> Aprovar e Separar
                     </button>
                     <button className="btn-almox-secondary" style={{ flex: 1, justifyContent: 'center', minWidth: 120 }}
-                      onClick={() => handleAprovar(detalhe.id, false)} disabled={saving}>
+                      onClick={() => handleAprovar(detalhe.id, false)} disabled={saving}
+                      title="Aprova a requisição sem iniciar a separação agora">
                       <FiCheck size={14} /> Só Aprovar
                     </button>
                     <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center', minWidth: 100 }}
-                      onClick={() => setShowRejeitar(true)}>
+                      onClick={() => setShowRejeitar(true)}
+                      title="Recusa a requisição — exige um motivo, que fica registrado para o solicitante">
                       <FiX size={14} /> Rejeitar
                     </button>
                   </div>
@@ -958,7 +961,8 @@ const RequisicoesList = () => {
                       {detalhe.status === 'APROVADO' && 'Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.'}
                     </div>
                     <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                      onClick={abrirModalSeparacao} disabled={saving}>
+                      onClick={abrirModalSeparacao} disabled={saving}
+                      title="Registra quanto de cada item foi separado fisicamente, limitado ao saldo disponível">
                       <FiPackage size={14} /> Iniciar Separação
                     </button>
                   </div>
@@ -966,7 +970,8 @@ const RequisicoesList = () => {
                 {warehouseMode && detalhe.status === 'EM_SEPARACAO' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
                     <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
-                      onClick={abrirModalSeparacao}>
+                      onClick={abrirModalSeparacao}
+                      title="Corrige as quantidades já registradas na separação">
                       <FiPackage size={14} /> Ajustar Separação
                     </button>
                     {detalhe.itens.some((i) => getSeparado(i) > 0) && (
@@ -977,13 +982,15 @@ const RequisicoesList = () => {
                           confirmLabel: 'Liberar',
                           onConfirm: () => handleLiberarRetirada(detalhe.id),
                         })}
-                        disabled={saving}>
+                        disabled={saving}
+                        title="Marca a requisição como pronta para o solicitante buscar os itens já separados">
                         <FiCheckSquare size={14} /> Liberar para Retirada
                       </button>
                     )}
                     {temEntregavel(detalhe.itens) ? (
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                        onClick={() => handleConfirmarEntrega({ direto: true })} disabled={saving}>
+                        onClick={() => handleConfirmarEntrega({ direto: true })} disabled={saving}
+                        title="Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro">
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
                     ) : (
@@ -1000,7 +1007,8 @@ const RequisicoesList = () => {
                     </div>
                     {temEntregavel(detalhe.itens) ? (
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-                        onClick={() => handleConfirmarEntrega({ direto: true })} disabled={saving}>
+                        onClick={() => handleConfirmarEntrega({ direto: true })} disabled={saving}
+                        title="Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro">
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
                     ) : (

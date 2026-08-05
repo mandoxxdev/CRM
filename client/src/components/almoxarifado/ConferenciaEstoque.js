@@ -158,7 +158,14 @@ const ConferenciaEstoque = () => {
               ← Voltar à lista
             </button>
             {confAberta.status === 'ABERTO' && (
-              <button className="btn-almox-primary" onClick={handleConcluir} disabled={salvando}>
+              <button
+                className="btn-almox-primary"
+                onClick={handleConcluir}
+                disabled={salvando}
+                title={aplicarAjustes
+                  ? 'Fecha a contagem E grava as divergências no saldo dos materiais (exige perfil que pode ajustar estoque)'
+                  : 'Fecha a contagem sem alterar saldo nenhum — as divergências ficam apenas registradas'}
+              >
                 <FiCheckCircle size={14} /> {salvando ? 'Concluindo...' : 'Concluir Conferência'}
               </button>
             )}
@@ -247,7 +254,11 @@ const ConferenciaEstoque = () => {
           <button className="btn-almox-secondary" onClick={loadConferencias}>
             <FiRefreshCw size={13} /> Atualizar
           </button>
-          <button className="btn-almox-primary" onClick={() => setShowCreateModal(true)}>
+          <button
+            className="btn-almox-primary"
+            onClick={() => setShowCreateModal(true)}
+            title="Abre uma contagem de inventário: congela o saldo atual de cada material para você conferir com o físico"
+          >
             <FiPlus size={14} /> Nova Conferência
           </button>
         </div>
