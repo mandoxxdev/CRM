@@ -404,6 +404,29 @@ async function initSchema(db) {
     'custo_medio REAL DEFAULT 0',
     'permite_saldo_negativo INTEGER DEFAULT 0',
     'subfamilia_id INTEGER',
+
+    // ── Cadastro completo de material (Etapa 2, Task 4) ──
+    'fabricante TEXT',
+    'codigo_fabricante TEXT',
+    'peso_unitario REAL',
+    'dimensoes TEXT',
+    'material_construtivo TEXT',
+    'norma TEXT',
+    'marca TEXT',
+    'modelo TEXT',
+    'aplicacao TEXT',
+    'ponto_reposicao REAL',
+    'lote_economico REAL',
+    'controle_serie INTEGER DEFAULT 0',
+    'controle_validade INTEGER DEFAULT 0',
+    'controle_corrida INTEGER DEFAULT 0',
+    'requer_inspecao INTEGER DEFAULT 0',
+    'requer_foto INTEGER DEFAULT 0',
+    'classe_abc TEXT',
+    'unidade_compra TEXT',
+    'fator_conversao_compra REAL',
+    'unidade_consumo TEXT',
+    'fator_conversao_consumo REAL',
   ];
   for (const col of materialCols) await safeAlter(db, `ALTER TABLE materiais_almoxarifado ADD COLUMN ${col}`);
 

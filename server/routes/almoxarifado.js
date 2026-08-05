@@ -20,6 +20,10 @@ const {
   enrichMaterialRows,
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
+const { dbRun, dbGet } = require('../services/almoxarifado/db');
+const { validate } = require('../services/almoxarifado/validation');
+const { MaterialSchema, MaterialUpdateSchema } = require('../services/almoxarifado/schemas');
+const { registrarAuditoria } = require('../services/almoxarifado/audit');
 
 function denyUnlessAlmoxAdmin(req, res) {
   if (!canConfigureAlmox(req.user)) {
@@ -85,27 +89,26 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     return path ? `${loc.codigo} — ${path}` : loc.codigo;
   }
 
-  function resolveLocalizacaoFromFk(localizacaoPadraoId, callback) {
+  // Resolve o par (id, rótulo formatado) de uma localização padrão a partir do FK — usado
+  // no cadastro de materiais (POST/PUT). Retorna { locId, locText }; locId é null quando o FK
+  // não foi informado, locText é null quando a localização não existe mais (FK órfão).
+  async function resolveLocalizacaoFromFk(localizacaoPadraoId) {
     const id = localizacaoPadraoId ? parseInt(localizacaoPadraoId, 10) : null;
-    if (!id) return callback(null, null, null);
-    db.get(
+    if (!id) return { locId: null, locText: null };
+    const row = await dbGet(db,
       `SELECT l.id, l.codigo, l.descricao, l.setor, l.subgrupo, l.parent_id,
               p.codigo as parent_codigo, p.descricao as parent_descricao, p.subgrupo as parent_subgrupo
        FROM localizacoes_almoxarifado l
        LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
        WHERE l.id = ?`,
-      [id],
-      (err, row) => {
-        if (err) return callback(err);
-        if (!row) return callback(null, id, null);
-        const parent = row.parent_id ? {
-          codigo: row.parent_codigo,
-          descricao: row.parent_descricao,
-          subgrupo: row.parent_subgrupo,
-        } : null;
-        callback(null, id, formatLocalizacaoLabel(row, parent));
-      }
-    );
+      [id]);
+    if (!row) return { locId: id, locText: null };
+    const parent = row.parent_id ? {
+      codigo: row.parent_codigo,
+      descricao: row.parent_descricao,
+      subgrupo: row.parent_subgrupo,
+    } : null;
+    return { locId: id, locText: formatLocalizacaoLabel(row, parent) };
   }
 
   // Resolve o almoxarifado_id a persistir numa localização: usa o valor informado,
@@ -250,32 +253,53 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
-  function validateFamiliaAtiva(familiaId, callback) {
-    if (!familiaId) return callback(null, null);
-    db.get('SELECT id, ativo FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (err, row) => {
-      if (err) return callback(err);
-      if (!row) return callback(new Error('Família não encontrada'));
-      if (row.ativo !== 1) return callback(new Error('Família inativa — não é possível vincular novos itens'));
-      callback(null, row);
-    });
+  async function validateFamiliaAtiva(familiaId) {
+    if (!familiaId) return null;
+    const row = await dbGet(db, 'SELECT id, ativo FROM familias_material_almoxarifado WHERE id = ?', [familiaId]);
+    if (!row) throw new Error('Família não encontrada');
+    if (row.ativo !== 1) throw new Error('Família inativa — não é possível vincular novos itens');
+    return row;
   }
 
   // Subfamílias (Etapa 2, Task 3): quando informada, a subfamília do material precisa ser
   // filha (parent_id = familiaId) e ativa. familiaId pode ser null (família omitida no PUT
   // full-replace) — nesse caso nenhuma subfamília bate no WHERE e a validação falha, o que é
   // o comportamento correto (não existe família válida para amarrar a subfamília).
-  function validateSubfamilia(subfamiliaId, familiaId, callback) {
-    if (!subfamiliaId) return callback(null, null);
-    db.get('SELECT id FROM familias_material_almoxarifado WHERE id = ? AND parent_id = ? AND ativo = 1',
-      [subfamiliaId, familiaId], (err, row) => {
-        if (err) return callback(err);
-        if (!row) return callback(new Error('Subfamília inválida para a família selecionada'));
-        callback(null, row);
-      });
+  async function validateSubfamilia(subfamiliaId, familiaId) {
+    if (!subfamiliaId) return null;
+    const row = await dbGet(db,
+      'SELECT id FROM familias_material_almoxarifado WHERE id = ? AND parent_id = ? AND ativo = 1',
+      [subfamiliaId, familiaId]);
+    if (!row) throw new Error('Subfamília inválida para a família selecionada');
+    return row;
   }
 
+  function bool01(v) { return v ? 1 : 0; }
+
+  const MATERIAL_BOOL_FIELDS = new Set([
+    'material_critico', 'controle_lote', 'controle_certificado',
+    'controle_serie', 'controle_validade', 'controle_corrida', 'requer_inspecao', 'requer_foto',
+  ]);
+
+  // Colunas de materiais_almoxarifado que o PUT sabe atualizar (preserve-when-omitted — ver
+  // helper `val()` na rota). 'localizacao' (texto formatado) é derivada de localizacao_padrao_id
+  // e não entra no merge genérico — é resolvida à parte via resolveLocalizacaoFromFk.
+  const MATERIAL_UPDATE_COLUMNS = [
+    'codigo', 'nome', 'descricao', 'categoria', 'unidade', 'localizacao',
+    'quantidade_minima', 'quantidade_maxima', 'custo_unitario', 'fornecedor_principal',
+    'codigo_fornecedor', 'ncm', 'especificacoes', 'observacoes', 'ativo',
+    'descricao_tecnica', 'categoria_id', 'subcategoria_id', 'localizacao_padrao_id',
+    'fornecedor_id', 'tipo_material', 'material_critico', 'controle_lote', 'controle_certificado',
+    'familia_id', 'subfamilia_id',
+    // Cadastro completo (Etapa 2, Task 4)
+    'fabricante', 'codigo_fabricante', 'peso_unitario', 'dimensoes', 'material_construtivo',
+    'norma', 'marca', 'modelo', 'aplicacao', 'ponto_reposicao', 'lote_economico',
+    'controle_serie', 'controle_validade', 'controle_corrida', 'requer_inspecao', 'requer_foto',
+    'classe_abc', 'unidade_compra', 'fator_conversao_compra', 'unidade_consumo', 'fator_conversao_consumo',
+  ];
+
   // POST /api/almoxarifado/materiais — criar
-  app.post('/api/almoxarifado/materiais',(req, res) => {
+  app.post('/api/almoxarifado/materiais', validate(MaterialSchema), async (req, res) => {
     const {
       codigo, nome, descricao, categoria, unidade,
       quantidade_atual, quantidade_minima, quantidade_maxima,
@@ -284,179 +308,233 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
       fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado,
       familia_id, subfamilia_id,
+      fabricante, codigo_fabricante, peso_unitario, dimensoes, material_construtivo,
+      norma, marca, modelo, aplicacao, ponto_reposicao, lote_economico,
+      controle_serie, controle_validade, controle_corrida, requer_inspecao, requer_foto,
+      classe_abc, unidade_compra, fator_conversao_compra, unidade_consumo, fator_conversao_consumo,
     } = req.body;
 
-    if (!codigo || !nome) return res.status(400).json({ error: 'Código e nome são obrigatórios' });
-    if (!familia_id) return res.status(400).json({ error: 'Família é obrigatória para novos materiais' });
+    try {
+      await validateFamiliaAtiva(familia_id);
+    } catch (errFam) {
+      return res.status(400).json({ error: errFam.message });
+    }
 
-    const familiaId = parseInt(familia_id, 10);
-    const subfamiliaId = subfamilia_id ? parseInt(subfamilia_id, 10) : null;
-    validateFamiliaAtiva(familiaId, (errFam, familia) => {
-      if (errFam) return res.status(400).json({ error: errFam.message });
+    try {
+      await validateSubfamilia(subfamilia_id || null, familia_id);
+    } catch (errSub) {
+      return res.status(400).json({ error: errSub.message });
+    }
 
-      validateSubfamilia(subfamiliaId, familiaId, (errSub) => {
-        if (errSub) return res.status(400).json({ error: errSub.message });
+    let locId, locText;
+    try {
+      ({ locId, locText } = await resolveLocalizacaoFromFk(localizacao_padrao_id));
+    } catch (errLoc) {
+      return res.status(500).json({ error: errLoc.message });
+    }
 
-      resolveLocalizacaoFromFk(localizacao_padrao_id, (errLoc, locId, locText) => {
-        if (errLoc) return res.status(500).json({ error: errLoc.message });
+    const insertValues = {
+      codigo, nome,
+      descricao: descricao || null,
+      categoria: categoria || 'OUTROS',
+      unidade: unidade || 'UN',
+      localizacao: locText,
+      quantidade_atual: quantidade_atual || 0,
+      quantidade_minima: quantidade_minima || 0,
+      quantidade_maxima: quantidade_maxima || 0,
+      custo_unitario: custo_unitario || 0,
+      fornecedor_principal: fornecedor_principal || null,
+      codigo_fornecedor: codigo_fornecedor || null,
+      ncm: ncm || null,
+      especificacoes: especificacoes || null,
+      observacoes: observacoes || null,
+      descricao_tecnica: descricao_tecnica || null,
+      categoria_id: categoria_id ?? null,
+      subcategoria_id: subcategoria_id ?? null,
+      localizacao_padrao_id: locId,
+      fornecedor_id: fornecedor_id ?? null,
+      tipo_material: tipo_material || null,
+      material_critico: bool01(material_critico),
+      controle_lote: bool01(controle_lote),
+      controle_certificado: bool01(controle_certificado),
+      familia_id,
+      subfamilia_id: subfamilia_id ?? null,
+      fabricante: fabricante || null,
+      codigo_fabricante: codigo_fabricante || null,
+      peso_unitario: peso_unitario ?? null,
+      dimensoes: dimensoes || null,
+      material_construtivo: material_construtivo || null,
+      norma: norma || null,
+      marca: marca || null,
+      modelo: modelo || null,
+      aplicacao: aplicacao || null,
+      ponto_reposicao: ponto_reposicao ?? null,
+      lote_economico: lote_economico ?? null,
+      controle_serie: bool01(controle_serie),
+      controle_validade: bool01(controle_validade),
+      controle_corrida: bool01(controle_corrida),
+      requer_inspecao: bool01(requer_inspecao),
+      requer_foto: bool01(requer_foto),
+      classe_abc: classe_abc || null,
+      unidade_compra: unidade_compra || null,
+      fator_conversao_compra: fator_conversao_compra ?? null,
+      unidade_consumo: unidade_consumo || null,
+      fator_conversao_consumo: fator_conversao_consumo ?? null,
+    };
+    const insertColumns = Object.keys(insertValues);
 
-        db.run(`INSERT INTO materiais_almoxarifado
-        (codigo, nome, descricao, categoria, unidade, localizacao, quantidade_atual,
-         quantidade_minima, quantidade_maxima, custo_unitario, fornecedor_principal,
-         codigo_fornecedor, ncm, especificacoes, observacoes,
-         descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
-         fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado, familia_id, subfamilia_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
-           locText, quantidade_atual || 0, quantidade_minima || 0,
-           quantidade_maxima || 0, custo_unitario || 0, fornecedor_principal || null,
-           codigo_fornecedor || null, ncm || null, especificacoes || null, observacoes || null,
-           descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
-           locId, fornecedor_id || null, tipo_material || null,
-           material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0,
-           familiaId, subfamiliaId],
-          function (err) {
-            if (err) {
-              if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-              return res.status(500).json({ error: err.message });
-            }
-            const id = this.lastID;
+    try {
+      const result = await dbRun(db, `INSERT INTO materiais_almoxarifado
+        (${insertColumns.join(', ')})
+        VALUES (${insertColumns.map(() => '?').join(',')})`,
+        insertColumns.map((c) => insertValues[c]));
+      const id = result.lastID;
 
-            // Registrar movimentação inicial se quantidade > 0
-            if ((quantidade_atual || 0) > 0) {
-              db.run(`INSERT INTO movimentacoes_almoxarifado
-              (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, usuario_id, usuario_nome)
-              VALUES (?, 'ENTRADA', ?, 0, ?, 'Saldo inicial de cadastro', ?, ?)`,
-                [id, quantidade_atual, quantidade_atual, req.user.id, req.user.nome || req.user.email]);
-            }
+      // Registrar movimentação inicial se quantidade > 0
+      if ((quantidade_atual || 0) > 0) {
+        await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
+          (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, usuario_id, usuario_nome)
+          VALUES (?, 'ENTRADA', ?, 0, ?, 'Saldo inicial de cadastro', ?, ?)`,
+          [id, quantidade_atual, quantidade_atual, req.user.id, req.user.nome || req.user.email]);
+      }
 
-            stockService.syncSaldoLocalizacaoPadrao(db, id).catch((e) => {
-              console.warn('[almoxarifado] Falha ao sincronizar saldo por localização:', e.message);
-            }).finally(() => {
-            db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
-                    FROM materiais_almoxarifado m
-                    LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
-                    WHERE m.id = ?`, [id], (err2, row) => {
-              res.status(201).json(row);
-            });
-            });
-          }
-        );
+      await stockService.syncSaldoLocalizacaoPadrao(db, id).catch((e) => {
+        console.warn('[almoxarifado] Falha ao sincronizar saldo por localização:', e.message);
       });
+
+      await registrarAuditoria(db, {
+        entidade: 'material', entidade_id: id, acao: 'CRIACAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { codigo, nome, familia_id },
       });
-    });
+
+      const row = await dbGet(db, `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
+              FROM materiais_almoxarifado m
+              LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
+              WHERE m.id = ?`, [id]);
+      res.status(201).json(row);
+    } catch (err) {
+      if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // PUT /api/almoxarifado/materiais/:id — atualizar
-  app.put('/api/almoxarifado/materiais/:id',(req, res) => {
-    const {
-      codigo, nome, descricao, categoria, unidade,
-      quantidade_minima, quantidade_maxima, custo_unitario,
-      fornecedor_principal, codigo_fornecedor, ncm, especificacoes, observacoes, ativo,
-      descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
-      fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado,
-      familia_id, subfamilia_id,
-    } = req.body;
+  //
+  // HARD REQUIREMENT (Etapa 2, Task 4 — mesma classe de bug corrigida 3x nas tasks
+  // anteriores): preserve-when-omitted para TODA coluna, não só subfamilia_id. `val(k)` decide
+  // por chave: `undefined` no body preserva o valor atual; qualquer valor explícito (incluindo
+  // `null`) substitui. A tela atual (MaterialAlmoxarifadoForm.js) não manda os campos novos
+  // deste task — sem essa preservação, editar nome/marca pelo formulário de hoje apagaria
+  // fabricante/classe_abc/unidade_compra/etc. setados via API.
+  app.put('/api/almoxarifado/materiais/:id', validate(MaterialUpdateSchema), async (req, res) => {
+    let current;
+    try {
+      current = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [req.params.id]);
+    } catch (errCurrent) {
+      return res.status(500).json({ error: errCurrent.message });
+    }
+    if (!current) return res.status(404).json({ error: 'Material não encontrado' });
 
-    // Fix (review pós-Task 3, mesma classe do T2): MaterialAlmoxarifadoForm.js ainda não
-    // carrega subfamilia_id no form — o handleSubmit manda o payload sem essa chave. Sem esta
-    // leitura prévia, `subfamilia_id` omitido colapsava para NULL e qualquer edição de
-    // material (nome, quantidade mínima, o que for) apagava o vínculo com a subfamília.
-    // `subfamilia_id` AUSENTE (undefined) preserva o vínculo atual; qualquer valor informado —
-    // incluindo `null` explícito, `0` ou `''` — substitui (e limpa).
-    db.get('SELECT familia_id, subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [req.params.id], (errCurrent, current) => {
-      if (errCurrent) return res.status(500).json({ error: errCurrent.message });
-      if (!current) return res.status(404).json({ error: 'Material não encontrado' });
+    const val = (k) => (req.body[k] === undefined ? current[k] : req.body[k]);
 
-      const subfamiliaIdOmitted = subfamilia_id === undefined;
-      const subfamiliaIdFinal = subfamiliaIdOmitted
-        ? current.subfamilia_id
-        : (subfamilia_id ? parseInt(subfamilia_id, 10) : null);
+    const merged = {};
+    for (const col of MATERIAL_UPDATE_COLUMNS) {
+      if (col === 'localizacao') continue; // derivada de localizacao_padrao_id, resolvida abaixo
+      merged[col] = MATERIAL_BOOL_FIELDS.has(col) ? bool01(val(col)) : val(col);
+    }
 
-      const applyUpdate = (familiaIdVal) => {
-        const proceedWithUpdate = () => {
-        resolveLocalizacaoFromFk(localizacao_padrao_id, (errLoc, locId, locText) => {
-          if (errLoc) return res.status(500).json({ error: errLoc.message });
-
-          db.run(`UPDATE materiais_almoxarifado SET
-          codigo = ?, nome = ?, descricao = ?, categoria = ?, unidade = ?, localizacao = ?,
-          quantidade_minima = ?, quantidade_maxima = ?, custo_unitario = ?,
-          fornecedor_principal = ?, codigo_fornecedor = ?, ncm = ?, especificacoes = ?,
-          observacoes = ?, ativo = ?,
-          descricao_tecnica = ?, categoria_id = ?, subcategoria_id = ?, localizacao_padrao_id = ?,
-          fornecedor_id = ?, tipo_material = ?, material_critico = ?, controle_lote = ?, controle_certificado = ?,
-          familia_id = ?, subfamilia_id = ?,
-          updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?`,
-            [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
-             locText, quantidade_minima || 0, quantidade_maxima || 0,
-             custo_unitario || 0, fornecedor_principal || null, codigo_fornecedor || null,
-             ncm || null, especificacoes || null, observacoes || null,
-             ativo !== undefined ? ativo : 1,
-             descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
-             locId, fornecedor_id || null, tipo_material || null,
-             material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0,
-             familiaIdVal || null, subfamiliaIdFinal,
-             req.params.id],
-            function (err) {
-              if (err) {
-                if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-                return res.status(500).json({ error: err.message });
-              }
-              db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
-                      FROM materiais_almoxarifado m
-                      LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
-                      WHERE m.id = ?`, [req.params.id], (err2, row) => {
-                if (err2) return res.status(500).json({ error: err2.message });
-                const materialId = Number(req.params.id);
-                Promise.all([
-                  stockService.syncSaldoLocalizacaoPadrao(db, materialId).catch(() => null),
-                  alertService.verificarAlertaPorMaterialId(db, materialId).catch(() => null),
-                ]).finally(() => res.json(row));
-              });
-            }
-          );
-        });
-        };
-
-        // Só revalida quando o valor é NOVO: informado explicitamente, OU a família efetiva
-        // mudou (mesmo com subfamilia_id preservado, um vínculo válido para a família antiga
-        // pode não ser filho da família nova). Um vínculo preservado com a MESMA família já
-        // era válido quando foi setado; revalidar quebraria a edição de um material cuja
-        // subfamília foi inativada depois (mesma regra aplicada em familias/parent_id).
-        const familiaChanged = familiaIdVal !== current.familia_id;
-        if (subfamiliaIdFinal && (!subfamiliaIdOmitted || familiaChanged)) {
-          validateSubfamilia(subfamiliaIdFinal, familiaIdVal, (errSub) => {
-            if (errSub) return res.status(400).json({ error: errSub.message });
-            proceedWithUpdate();
-          });
-        } else {
-          proceedWithUpdate();
-        }
-      };
-
-      if (familia_id) {
-        const familiaId = parseInt(familia_id, 10);
-        if (current.familia_id === familiaId) {
-          return applyUpdate(familiaId);
-        }
-        validateFamiliaAtiva(familiaId, (errFam) => {
-          if (errFam) return res.status(400).json({ error: errFam.message });
-          applyUpdate(familiaId);
-        });
-      } else {
-        applyUpdate(null);
+    // Mesma semântica do T3 (comentário original preservado): só revalida quando o valor é
+    // NOVO — informado explicitamente, OU a família efetiva mudou (um vínculo preservado pode
+    // não ser filho da família nova). Um vínculo preservado com a MESMA família já era válido
+    // quando foi setado; revalidar quebraria a edição de um material cuja subfamília foi
+    // inativada depois.
+    const familiaOmitted = req.body.familia_id === undefined;
+    const familiaChanged = merged.familia_id !== current.familia_id;
+    if (!familiaOmitted && familiaChanged) {
+      try {
+        await validateFamiliaAtiva(merged.familia_id);
+      } catch (errFam) {
+        return res.status(400).json({ error: errFam.message });
       }
-    });
+    }
+
+    const subfamiliaOmitted = req.body.subfamilia_id === undefined;
+    if (merged.subfamilia_id && (!subfamiliaOmitted || familiaChanged)) {
+      try {
+        await validateSubfamilia(merged.subfamilia_id, merged.familia_id);
+      } catch (errSub) {
+        return res.status(400).json({ error: errSub.message });
+      }
+    }
+
+    let locId, locText;
+    try {
+      ({ locId, locText } = await resolveLocalizacaoFromFk(merged.localizacao_padrao_id));
+    } catch (errLoc) {
+      return res.status(500).json({ error: errLoc.message });
+    }
+    merged.localizacao_padrao_id = locId;
+    merged.localizacao = locText;
+
+    try {
+      await dbRun(db, `UPDATE materiais_almoxarifado SET
+        ${MATERIAL_UPDATE_COLUMNS.map((c) => `${c} = ?`).join(', ')},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`,
+        [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id]);
+    } catch (err) {
+      if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+      return res.status(500).json({ error: err.message });
+    }
+
+    // Auditoria com diff (spec 29 / Task 4): só os campos cujo valor final difere do valor
+    // anterior entram no log — para colunas preservadas (omitidas no body) merged === current,
+    // então elas nunca aparecem aqui.
+    const dadosAnteriores = {};
+    const dadosNovos = {};
+    for (const f of MATERIAL_UPDATE_COLUMNS) {
+      if (f === 'localizacao') continue; // derivada — o que importa para auditoria é o FK
+      const oldVal = current[f] ?? null;
+      const newVal = merged[f] ?? null;
+      if (oldVal !== newVal) {
+        dadosAnteriores[f] = current[f] ?? null;
+        dadosNovos[f] = merged[f] ?? null;
+      }
+    }
+    if (Object.keys(dadosNovos).length > 0) {
+      await registrarAuditoria(db, {
+        entidade: 'material', entidade_id: Number(req.params.id), acao: 'ATUALIZACAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_anteriores: dadosAnteriores, dados_novos: dadosNovos,
+      });
+    }
+
+    try {
+      const row = await dbGet(db, `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
+              FROM materiais_almoxarifado m
+              LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
+              WHERE m.id = ?`, [req.params.id]);
+      const materialId = Number(req.params.id);
+      await Promise.all([
+        stockService.syncSaldoLocalizacaoPadrao(db, materialId).catch(() => null),
+        alertService.verificarAlertaPorMaterialId(db, materialId).catch(() => null),
+      ]);
+      res.json(row);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // DELETE /api/almoxarifado/materiais/:id — inativar
-  app.delete('/api/almoxarifado/materiais/:id',(req, res) => {
-    db.run(`UPDATE materiais_almoxarifado SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true });
-      });
+  app.delete('/api/almoxarifado/materiais/:id', async (req, res) => {
+    try {
+      await dbRun(db, `UPDATE materiais_almoxarifado SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // POST /api/almoxarifado/materiais/:id/foto — upload de foto
