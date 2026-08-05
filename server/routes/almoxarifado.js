@@ -358,79 +358,96 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       familia_id, subfamilia_id,
     } = req.body;
 
-    const subfamiliaId = subfamilia_id ? parseInt(subfamilia_id, 10) : null;
+    // Fix (review pós-Task 3, mesma classe do T2): MaterialAlmoxarifadoForm.js ainda não
+    // carrega subfamilia_id no form — o handleSubmit manda o payload sem essa chave. Sem esta
+    // leitura prévia, `subfamilia_id` omitido colapsava para NULL e qualquer edição de
+    // material (nome, quantidade mínima, o que for) apagava o vínculo com a subfamília.
+    // `subfamilia_id` AUSENTE (undefined) preserva o vínculo atual; qualquer valor informado —
+    // incluindo `null` explícito, `0` ou `''` — substitui (e limpa).
+    db.get('SELECT familia_id, subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [req.params.id], (errCurrent, current) => {
+      if (errCurrent) return res.status(500).json({ error: errCurrent.message });
+      if (!current) return res.status(404).json({ error: 'Material não encontrado' });
 
-    const applyUpdate = (familiaIdVal) => {
-      const proceedWithUpdate = () => {
-      resolveLocalizacaoFromFk(localizacao_padrao_id, (errLoc, locId, locText) => {
-        if (errLoc) return res.status(500).json({ error: errLoc.message });
+      const subfamiliaIdOmitted = subfamilia_id === undefined;
+      const subfamiliaIdFinal = subfamiliaIdOmitted
+        ? current.subfamilia_id
+        : (subfamilia_id ? parseInt(subfamilia_id, 10) : null);
 
-        db.run(`UPDATE materiais_almoxarifado SET
-        codigo = ?, nome = ?, descricao = ?, categoria = ?, unidade = ?, localizacao = ?,
-        quantidade_minima = ?, quantidade_maxima = ?, custo_unitario = ?,
-        fornecedor_principal = ?, codigo_fornecedor = ?, ncm = ?, especificacoes = ?,
-        observacoes = ?, ativo = ?,
-        descricao_tecnica = ?, categoria_id = ?, subcategoria_id = ?, localizacao_padrao_id = ?,
-        fornecedor_id = ?, tipo_material = ?, material_critico = ?, controle_lote = ?, controle_certificado = ?,
-        familia_id = ?, subfamilia_id = ?,
-        updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?`,
-          [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
-           locText, quantidade_minima || 0, quantidade_maxima || 0,
-           custo_unitario || 0, fornecedor_principal || null, codigo_fornecedor || null,
-           ncm || null, especificacoes || null, observacoes || null,
-           ativo !== undefined ? ativo : 1,
-           descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
-           locId, fornecedor_id || null, tipo_material || null,
-           material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0,
-           familiaIdVal || null, subfamiliaId,
-           req.params.id],
-          function (err) {
-            if (err) {
-              if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-              return res.status(500).json({ error: err.message });
+      const applyUpdate = (familiaIdVal) => {
+        const proceedWithUpdate = () => {
+        resolveLocalizacaoFromFk(localizacao_padrao_id, (errLoc, locId, locText) => {
+          if (errLoc) return res.status(500).json({ error: errLoc.message });
+
+          db.run(`UPDATE materiais_almoxarifado SET
+          codigo = ?, nome = ?, descricao = ?, categoria = ?, unidade = ?, localizacao = ?,
+          quantidade_minima = ?, quantidade_maxima = ?, custo_unitario = ?,
+          fornecedor_principal = ?, codigo_fornecedor = ?, ncm = ?, especificacoes = ?,
+          observacoes = ?, ativo = ?,
+          descricao_tecnica = ?, categoria_id = ?, subcategoria_id = ?, localizacao_padrao_id = ?,
+          fornecedor_id = ?, tipo_material = ?, material_critico = ?, controle_lote = ?, controle_certificado = ?,
+          familia_id = ?, subfamilia_id = ?,
+          updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+            [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
+             locText, quantidade_minima || 0, quantidade_maxima || 0,
+             custo_unitario || 0, fornecedor_principal || null, codigo_fornecedor || null,
+             ncm || null, especificacoes || null, observacoes || null,
+             ativo !== undefined ? ativo : 1,
+             descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
+             locId, fornecedor_id || null, tipo_material || null,
+             material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0,
+             familiaIdVal || null, subfamiliaIdFinal,
+             req.params.id],
+            function (err) {
+              if (err) {
+                if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+                return res.status(500).json({ error: err.message });
+              }
+              db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
+                      FROM materiais_almoxarifado m
+                      LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
+                      WHERE m.id = ?`, [req.params.id], (err2, row) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                const materialId = Number(req.params.id);
+                Promise.all([
+                  stockService.syncSaldoLocalizacaoPadrao(db, materialId).catch(() => null),
+                  alertService.verificarAlertaPorMaterialId(db, materialId).catch(() => null),
+                ]).finally(() => res.json(row));
+              });
             }
-            db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
-                    FROM materiais_almoxarifado m
-                    LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
-                    WHERE m.id = ?`, [req.params.id], (err2, row) => {
-              if (err2) return res.status(500).json({ error: err2.message });
-              const materialId = Number(req.params.id);
-              Promise.all([
-                stockService.syncSaldoLocalizacaoPadrao(db, materialId).catch(() => null),
-                alertService.verificarAlertaPorMaterialId(db, materialId).catch(() => null),
-              ]).finally(() => res.json(row));
-            });
-          }
-        );
-      });
+          );
+        });
+        };
+
+        // Só revalida quando o valor é NOVO: informado explicitamente, OU a família efetiva
+        // mudou (mesmo com subfamilia_id preservado, um vínculo válido para a família antiga
+        // pode não ser filho da família nova). Um vínculo preservado com a MESMA família já
+        // era válido quando foi setado; revalidar quebraria a edição de um material cuja
+        // subfamília foi inativada depois (mesma regra aplicada em familias/parent_id).
+        const familiaChanged = familiaIdVal !== current.familia_id;
+        if (subfamiliaIdFinal && (!subfamiliaIdOmitted || familiaChanged)) {
+          validateSubfamilia(subfamiliaIdFinal, familiaIdVal, (errSub) => {
+            if (errSub) return res.status(400).json({ error: errSub.message });
+            proceedWithUpdate();
+          });
+        } else {
+          proceedWithUpdate();
+        }
       };
 
-      if (subfamiliaId) {
-        validateSubfamilia(subfamiliaId, familiaIdVal, (errSub) => {
-          if (errSub) return res.status(400).json({ error: errSub.message });
-          proceedWithUpdate();
-        });
-      } else {
-        proceedWithUpdate();
-      }
-    };
-
-    if (familia_id) {
-      const familiaId = parseInt(familia_id, 10);
-      db.get('SELECT familia_id FROM materiais_almoxarifado WHERE id = ?', [req.params.id], (errExist, existing) => {
-        if (errExist) return res.status(500).json({ error: errExist.message });
-        if (existing && existing.familia_id === familiaId) {
+      if (familia_id) {
+        const familiaId = parseInt(familia_id, 10);
+        if (current.familia_id === familiaId) {
           return applyUpdate(familiaId);
         }
         validateFamiliaAtiva(familiaId, (errFam) => {
           if (errFam) return res.status(400).json({ error: errFam.message });
           applyUpdate(familiaId);
         });
-      });
-    } else {
-      applyUpdate(null);
-    }
+      } else {
+        applyUpdate(null);
+      }
+    });
   });
 
   // DELETE /api/almoxarifado/materiais/:id — inativar
@@ -1251,44 +1268,61 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
     const familiaId = parseInt(req.params.id, 10);
-    const parentId = parent_id ? parseInt(parent_id, 10) : null;
     const ativoVal = ativo !== undefined ? ativo : 1;
 
-    if (parentId && parentId === familiaId) {
-      return res.status(400).json({ error: 'Família não pode ser pai de si mesma' });
-    }
+    // Fix (review pós-Task 3, mesma classe do T2): a aba Famílias de ConfiguracoesAlmoxarifado.js
+    // manda PUT só com {nome, descricao, tipo_uso} — sem parent_id. Sem esta leitura prévia,
+    // `parent_id` omitido colapsava para NULL e renomear uma subfamília a convertia
+    // silenciosamente em família raiz. `parent_id` AUSENTE (undefined) preserva o vínculo
+    // atual; qualquer valor informado — incluindo `null` explícito, `0` ou `''` — substitui
+    // (e limpa, virando raiz).
+    db.get('SELECT parent_id FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (errCurrent, current) => {
+      if (errCurrent) return res.status(500).json({ error: errCurrent.message });
+      if (!current) return res.status(404).json({ error: 'Família não encontrada' });
 
-    const applyUpdate = () => {
-      db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=?, parent_id=? WHERE id=?`,
-        [nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, ativoVal, parentId, familiaId],
-        function (err) {
-          if (err) return res.status(500).json({ error: err.message });
-          db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => res.json(r));
-        });
-    };
+      const parentIdOmitted = parent_id === undefined;
+      const parentId = parentIdOmitted ? current.parent_id : (parent_id ? parseInt(parent_id, 10) : null);
 
-    // Subfamílias ativas da família sendo editada (só existem se ela for raiz — subfamília
-    // não pode ter filhos). Usadas para bloquear (a) virar subfamília de outra família e
-    // (b) ser inativada enquanto ainda tem filhas ativas.
-    db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1', [familiaId], (errChildren, childrenRow) => {
-      if (errChildren) return res.status(500).json({ error: errChildren.message });
-      const hasActiveChildren = childrenRow.c > 0;
-
-      if (Number(ativoVal) === 0 && hasActiveChildren) {
-        return res.status(400).json({ error: 'Não é possível inativar: família possui subfamília(s) ativa(s)' });
-      }
-      if (parentId && hasActiveChildren) {
-        return res.status(400).json({ error: 'Família com subfamília(s) ativa(s) não pode virar subfamília' });
+      if (parentId && parentId === familiaId) {
+        return res.status(400).json({ error: 'Família não pode ser pai de si mesma' });
       }
 
-      if (parentId) {
-        validateParentFamilia(parentId, (errParent) => {
-          if (errParent) return res.status(400).json({ error: errParent.message });
+      const applyUpdate = () => {
+        db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=?, parent_id=? WHERE id=?`,
+          [nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, ativoVal, parentId, familiaId],
+          function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => res.json(r));
+          });
+      };
+
+      // Subfamílias ativas da família sendo editada (só existem se ela for raiz — subfamília
+      // não pode ter filhos). Usadas para bloquear (a) virar subfamília de outra família e
+      // (b) ser inativada enquanto ainda tem filhas ativas.
+      db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1', [familiaId], (errChildren, childrenRow) => {
+        if (errChildren) return res.status(500).json({ error: errChildren.message });
+        const hasActiveChildren = childrenRow.c > 0;
+
+        if (Number(ativoVal) === 0 && hasActiveChildren) {
+          return res.status(400).json({ error: 'Não é possível inativar: família possui subfamília(s) ativa(s)' });
+        }
+        if (parentId && hasActiveChildren) {
+          return res.status(400).json({ error: 'Família com subfamília(s) ativa(s) não pode virar subfamília' });
+        }
+
+        // Só revalida a hierarquia do pai quando o valor é NOVO (informado explicitamente).
+        // Um parent_id preservado (omitido → veio do current) já era válido quando foi
+        // setado; revalidar quebraria a edição de uma subfamília cujo pai foi inativado
+        // depois (ex.: renomear a subfamília não deveria falhar por causa disso).
+        if (parentId && !parentIdOmitted) {
+          validateParentFamilia(parentId, (errParent) => {
+            if (errParent) return res.status(400).json({ error: errParent.message });
+            applyUpdate();
+          });
+        } else {
           applyUpdate();
-        });
-      } else {
-        applyUpdate();
-      }
+        }
+      });
     });
   });
 

@@ -150,6 +150,67 @@ async function criarMaterialReq(app, body) {
     assert.strictEqual(row.subfamilia_id, subA.id);
   });
 
+  // ── Fix pós-review: PUT full-replace preservando parent_id/subfamilia_id omitidos
+  // (mesma proteção já aplicada em localizações na Task 2) — as telas reais mandam PUT sem
+  // esses campos, então "omitido" precisa preservar, não colapsar para NULL. ──
+
+  await test('PUT em subfamília no formato da UI (sem parent_id) preserva o vínculo com a raiz', async () => {
+    const raiz = await criarFamilia(app, 'Raiz PUT-UI');
+    const sub = await criarFamilia(app, 'Sub PUT-UI', { parent_id: raiz.id });
+
+    // Corpo IDÊNTICO ao que handleSalvar (ConfiguracoesAlmoxarifado.js:489-493) manda hoje:
+    // {nome, descricao, tipo_uso} — nunca inclui parent_id.
+    const res = await request(app).put(`/api/almoxarifado/familias/${sub.id}`)
+      .send({ nome: sub.nome, descricao: sub.descricao, tipo_uso: sub.tipo_uso });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.parent_id, raiz.id, 'parent_id deveria ter sido preservado (PUT da UI não manda o campo)');
+  });
+
+  await test('PUT em família com parent_id:null explícito converte subfamília em raiz', async () => {
+    const raiz = await criarFamilia(app, 'Raiz PUT-NULL');
+    const sub = await criarFamilia(app, 'Sub PUT-NULL', { parent_id: raiz.id });
+
+    const res = await request(app).put(`/api/almoxarifado/familias/${sub.id}`)
+      .send({ nome: sub.nome, parent_id: null });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.parent_id, null, 'parent_id null explícito deveria limpar o vínculo (virar raiz)');
+  });
+
+  await test('PUT de material no formato da UI (sem subfamilia_id) preserva o vínculo com a subfamília', async () => {
+    const raiz = await criarFamilia(app, 'Raiz Mat PUT-UI');
+    const sub = await criarFamilia(app, 'Sub Mat PUT-UI', { parent_id: raiz.id });
+    const criado = await criarMaterialReq(app, {
+      codigo: 'MAT-SUB-005', nome: 'Material preservar sub', familia_id: raiz.id, subfamilia_id: sub.id,
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    // Corpo no formato que MaterialAlmoxarifadoForm.js manda hoje: o form nunca carregou
+    // subfamilia_id no state (nem em loadMaterial, nem no payload do handleSubmit), então a
+    // chave simplesmente não existe no body.
+    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+      .send({ codigo: 'MAT-SUB-005', nome: 'Material renomeado', familia_id: raiz.id });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.subfamilia_id, sub.id, 'subfamilia_id deveria ter sido preservado (PUT da UI não manda o campo)');
+    const row = await dbGet(db, 'SELECT subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [criado.body.id]);
+    assert.strictEqual(row.subfamilia_id, sub.id);
+  });
+
+  await test('PUT de material com subfamilia_id:null explícito limpa o vínculo', async () => {
+    const raiz = await criarFamilia(app, 'Raiz Mat PUT-NULL');
+    const sub = await criarFamilia(app, 'Sub Mat PUT-NULL', { parent_id: raiz.id });
+    const criado = await criarMaterialReq(app, {
+      codigo: 'MAT-SUB-006', nome: 'Material limpar sub', familia_id: raiz.id, subfamilia_id: sub.id,
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+
+    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+      .send({ codigo: 'MAT-SUB-006', nome: 'Material limpar sub', familia_id: raiz.id, subfamilia_id: null });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.subfamilia_id, null, 'subfamilia_id null explícito deveria limpar o vínculo');
+    const row = await dbGet(db, 'SELECT subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [criado.body.id]);
+    assert.strictEqual(row.subfamilia_id, null);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
