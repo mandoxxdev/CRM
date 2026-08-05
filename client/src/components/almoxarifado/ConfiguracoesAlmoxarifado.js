@@ -1162,6 +1162,7 @@ const TabSetores = () => {
 
 /* ===================== TAB LOCALIZAÇÕES ===================== */
 const WIZARD_INITIAL = {
+  almoxarifado_id: '',
   setor: '',
   estruturaTipo: '',
   parent_id: '',
@@ -1231,11 +1232,18 @@ const TabLocalizacoes = () => {
   );
   const setoresOptions = buildSetoresOptions(setoresConfig, localizacoes);
 
-  const parentOptionsForSetor = (setor, excludeId) => localizacoes.filter(l => {
+  // almoxarifadoId é opcional: o wizard passa (uma posição filha não pode ter pai em outro
+  // almoxarifado); o fluxo de "mover" omite, para não mudar o comportamento que já existia.
+  const parentOptionsForSetor = (setor, excludeId, almoxarifadoId) => localizacoes.filter(l => {
     if (excludeId && l.id === excludeId) return false;
     if (setor && l.setor !== setor) return false;
+    if (almoxarifadoId && String(l.almoxarifado_id ?? '') !== String(almoxarifadoId)) return false;
     return true;
   });
+
+  const wizardParentOptions = parentOptionsForSetor(wizard.setor, null, wizard.almoxarifado_id);
+  const almoxarifadosAtivos = almoxarifados.filter(a => a.ativo !== 0);
+  const almoxarifadoSelecionado = almoxarifados.find(a => String(a.id) === String(wizard.almoxarifado_id));
 
   const resetWizard = () => {
     setWizard(WIZARD_INITIAL);
@@ -1243,6 +1251,20 @@ const TabLocalizacoes = () => {
     setWizardError('');
     setShowMapaStep(false);
     setShowWizard(false);
+  };
+
+  // Com um único almoxarifado cadastrado o passo 1 não tem escolha a fazer — pré-seleciona
+  // para não virar um clique obrigatório em quem nunca vai ter mais de um depósito.
+  const abrirWizard = () => {
+    const ativos = almoxarifados.filter(a => a.ativo !== 0);
+    setWizard({
+      ...WIZARD_INITIAL,
+      almoxarifado_id: ativos.length === 1 ? String(ativos[0].id) : '',
+    });
+    setWizardStep(1);
+    setWizardError('');
+    setShowMapaStep(false);
+    setShowWizard(true);
   };
 
   const resetEdit = () => {
@@ -1285,22 +1307,26 @@ const TabLocalizacoes = () => {
   const validateWizardStep = (step) => {
     setWizardError('');
     if (step === 1) {
-      if (!wizard.setor) { setWizardError('Selecione o setor ou corredor onde a localização fica.'); return false; }
+      if (!wizard.almoxarifado_id) { setWizardError('Selecione o almoxarifado onde a localização será criada.'); return false; }
       return true;
     }
     if (step === 2) {
+      if (!wizard.setor) { setWizardError('Selecione o setor ou corredor onde a localização fica.'); return false; }
+      return true;
+    }
+    if (step === 3) {
       if (!wizard.estruturaTipo) { setWizardError('Escolha se é uma posição raiz ou dentro de uma estrutura existente.'); return false; }
       if (wizard.estruturaTipo === 'child' && !wizard.parent_id) {
         setWizardError('Selecione a estrutura pai dentro do setor escolhido.');
         return false;
       }
-      if (wizard.estruturaTipo === 'child' && parentOptionsForSetor(wizard.setor).length === 0) {
-        setWizardError('Não há estruturas neste setor. Cadastre uma posição raiz primeiro.');
+      if (wizard.estruturaTipo === 'child' && wizardParentOptions.length === 0) {
+        setWizardError('Não há estruturas neste setor dentro deste almoxarifado. Cadastre uma posição raiz primeiro.');
         return false;
       }
       return true;
     }
-    if (step === 3) {
+    if (step === 4) {
       if (wizard.estruturaTipo === 'root' && !wizard.tipo) {
         setWizardError('Selecione o tipo de área.');
         return false;
@@ -1321,11 +1347,11 @@ const TabLocalizacoes = () => {
 
   const handleWizardNext = () => {
     if (!validateWizardStep(wizardStep)) return;
-    if (wizardStep === 2 || wizardStep === 3) {
+    if (wizardStep === 3 || wizardStep === 4) {
       const computed = computeWizardDetails(wizard);
       setWizard(w => ({ ...w, subgrupo: computed.subgrupo, codigo: computed.codigo, descricao: w.descricao || computed.descricao }));
     }
-    setWizardStep(s => Math.min(s + 1, 4));
+    setWizardStep(s => Math.min(s + 1, 5));
   };
 
   const handleWizardBack = () => {
@@ -1349,6 +1375,7 @@ const TabLocalizacoes = () => {
         subgrupo: subgrupo || null,
         parent_id: parentId,
         tipo: wizard.tipo || 'Almoxarifado',
+        almoxarifado_id: wizard.almoxarifado_id ? parseInt(wizard.almoxarifado_id, 10) : null,
         pos_x: wizard.pos_x !== '' && wizard.pos_x != null ? parseFloat(wizard.pos_x) : null,
         pos_y: wizard.pos_y !== '' && wizard.pos_y != null ? parseFloat(wizard.pos_y) : null,
         largura: parseFloat(wizard.largura) || 120,
@@ -1480,7 +1507,7 @@ const TabLocalizacoes = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         {!showWizard && !showEdit && !moverLoc && (
-          <button className="btn-almox-primary" onClick={() => { resetEdit(); resetMover(); setShowWizard(true); }}>
+          <button className="btn-almox-primary" onClick={() => { resetEdit(); resetMover(); abrirWizard(); }}>
             <FiPlus size={14} /> Nova Localização
           </button>
         )}
@@ -1495,9 +1522,44 @@ const TabLocalizacoes = () => {
             <h3>Nova Localização</h3>
             <button type="button" className="almox-btn-icon" onClick={resetWizard} title="Cancelar"><FiX size={16} /></button>
           </div>
-          <WizardProgress step={wizardStep} />
+          <WizardProgress step={wizardStep} total={5} />
 
           {wizardStep === 1 && (
+            <div className="almox-wizard-step">
+              <h4>Em qual almoxarifado?</h4>
+              <p className="almox-wizard-hint">
+                A localização nasce vinculada a este depósito. Para criar um novo, use o bloco
+                {' '}<strong>Almoxarifados</strong> na aba <strong>Setores e Áreas</strong>.
+              </p>
+              {almoxarifadosAtivos.length === 0 ? (
+                <p className="almox-wizard-error-inline">
+                  Nenhum almoxarifado ativo cadastrado. Cadastre um em &quot;Setores e Áreas&quot; antes de criar localizações.
+                </p>
+              ) : (
+                <div className="almox-wizard-setor-grid">
+                  {almoxarifadosAtivos.map(a => (
+                    <RadioCard
+                      key={a.id}
+                      selected={String(wizard.almoxarifado_id) === String(a.id)}
+                      onClick={() => setWizard(w => ({
+                        ...w,
+                        almoxarifado_id: String(a.id),
+                        // trocar de almoxarifado invalida o pai escolhido (ele é de outro depósito)
+                        parent_id: '',
+                        estruturaTipo: '',
+                        subgrupo: '',
+                      }))}
+                      title={a.codigo}
+                      subtitle={a.nome}
+                      icon="🏭"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {wizardStep === 2 && (
             <div className="almox-wizard-step">
               <h4>Onde fica?</h4>
               <p className="almox-wizard-hint">
@@ -1519,10 +1581,13 @@ const TabLocalizacoes = () => {
             </div>
           )}
 
-          {wizardStep === 2 && (
+          {wizardStep === 3 && (
             <div className="almox-wizard-step">
               <h4>Tipo de estrutura</h4>
-              <p className="almox-wizard-hint">Setor selecionado: <strong>{wizard.setor}</strong></p>
+              <p className="almox-wizard-hint">
+                Almoxarifado: <strong>{almoxarifadoSelecionado?.codigo || '—'}</strong>
+                {' · '}Setor selecionado: <strong>{wizard.setor}</strong>
+              </p>
               <div className="almox-wizard-cards-row">
                 <RadioCard
                   selected={wizard.estruturaTipo === 'root'}
@@ -1548,21 +1613,21 @@ const TabLocalizacoes = () => {
                     onChange={e => setWizard(w => ({ ...w, parent_id: e.target.value, subgrupo: '' }))}
                   >
                     <option value="">Selecione a estrutura pai...</option>
-                    {parentOptionsForSetor(wizard.setor).map(l => (
+                    {wizardParentOptions.map(l => (
                       <option key={l.id} value={l.id}>
                         {l.codigo} — {l.subgrupo || l.descricao || l.tipo || 'Sem descrição'}
                       </option>
                     ))}
                   </select>
-                  {parentOptionsForSetor(wizard.setor).length === 0 && (
-                    <p className="almox-wizard-error-inline">Nenhuma estrutura neste setor. Volte e escolha &quot;Posição raiz&quot; ou outro setor.</p>
+                  {wizardParentOptions.length === 0 && (
+                    <p className="almox-wizard-error-inline">Nenhuma estrutura neste setor dentro deste almoxarifado. Volte e escolha &quot;Posição raiz&quot;, outro setor ou outro almoxarifado.</p>
                   )}
                 </div>
               )}
             </div>
           )}
 
-          {wizardStep === 3 && (
+          {wizardStep === 4 && (
             <div className="almox-wizard-step">
               <h4>Detalhes</h4>
               {wizard.estruturaTipo === 'root' && (
@@ -1608,7 +1673,7 @@ const TabLocalizacoes = () => {
             </div>
           )}
 
-          {wizardStep === 4 && (
+          {wizardStep === 5 && (
             <div className="almox-wizard-step">
               <h4>Confirmação</h4>
               <div className="almox-wizard-confirm-box">
@@ -1618,6 +1683,7 @@ const TabLocalizacoes = () => {
                 </div>
                 <dl className="almox-wizard-confirm-dl">
                   <dt>Código</dt><dd style={{ fontFamily: 'monospace', color: '#4facfe' }}>{preview.codigo}</dd>
+                  <dt>Almoxarifado</dt><dd>{almoxarifadoSelecionado ? `${almoxarifadoSelecionado.codigo} — ${almoxarifadoSelecionado.nome}` : '—'}</dd>
                   <dt>Setor</dt><dd>{preview.setor}</dd>
                   <dt>Tipo</dt><dd>{preview.tipo}</dd>
                   {preview.subgrupo && <><dt>Subgrupo</dt><dd>{preview.subgrupo}</dd></>}
@@ -1652,15 +1718,16 @@ const TabLocalizacoes = () => {
               </button>
             )}
             <div style={{ flex: 1 }} />
-            {wizardStep < 4 ? (
+            {wizardStep < 5 ? (
               <button
                 type="button"
                 className="btn-almox-primary"
                 onClick={handleWizardNext}
                 disabled={
-                  (wizardStep === 1 && !wizard.setor) ||
-                  (wizardStep === 2 && (!wizard.estruturaTipo || (wizard.estruturaTipo === 'child' && !wizard.parent_id))) ||
-                  (wizardStep === 3 && wizard.estruturaTipo === 'root' && !wizard.tipo)
+                  (wizardStep === 1 && !wizard.almoxarifado_id) ||
+                  (wizardStep === 2 && !wizard.setor) ||
+                  (wizardStep === 3 && (!wizard.estruturaTipo || (wizard.estruturaTipo === 'child' && !wizard.parent_id))) ||
+                  (wizardStep === 4 && wizard.estruturaTipo === 'root' && !wizard.tipo)
                 }
               >
                 Próximo <FiArrowRight size={14} />
