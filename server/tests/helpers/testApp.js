@@ -44,6 +44,10 @@ async function createTestApp(options = {}) {
   return {
     app,
     db,
+    // Exposto para os testes que precisam inspecionar o que o multer gravou (ou NÃO
+    // gravou) em disco — ex.: permissoesRotas.api.test.js prova que um 403 na rota de
+    // foto acontece ANTES do upload, sem deixar arquivo órfão.
+    uploadsAlmoxDir: path.join(dataDir, 'uploads', 'almoxarifado'),
     setUser(user) { currentUser = user; },
     close() {
       return new Promise((resolve) => db.close(() => {

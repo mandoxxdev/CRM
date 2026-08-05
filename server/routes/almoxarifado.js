@@ -304,7 +304,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   ];
 
   // POST /api/almoxarifado/materiais — criar
-  app.post('/api/almoxarifado/materiais', validate(MaterialSchema), async (req, res) => {
+  // requirePermission('criar_material'): o gate global do módulo (linha ~71) só checa
+  // ACESSO, não perfil — sem isto qualquer usuário do módulo (fallback PRODUCAO em
+  // getPerfilFromUser) cadastrava material, contornando
+  // criar_material: [ADMINISTRADOR, ALMOXARIFE, ENGENHARIA].
+  app.post('/api/almoxarifado/materiais', requirePermission('criar_material'), validate(MaterialSchema), async (req, res) => {
     const {
       codigo, nome, descricao, categoria, unidade,
       quantidade_atual, quantidade_minima, quantidade_maxima,
@@ -432,7 +436,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // `null`) substitui. A tela atual (MaterialAlmoxarifadoForm.js) não manda os campos novos
   // deste task — sem essa preservação, editar nome/marca pelo formulário de hoje apagaria
   // fabricante/classe_abc/unidade_compra/etc. setados via API.
-  app.put('/api/almoxarifado/materiais/:id', validate(MaterialUpdateSchema), async (req, res) => {
+  //
+  // requirePermission('editar_material') — mesma razão do POST acima (gate global só
+  // checa acesso ao módulo, não perfil).
+  app.put('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), validate(MaterialUpdateSchema), async (req, res) => {
     let current;
     try {
       current = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [req.params.id]);
@@ -543,8 +550,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   });
 
-  // DELETE /api/almoxarifado/materiais/:id — inativar
-  app.delete('/api/almoxarifado/materiais/:id', async (req, res) => {
+  // DELETE /api/almoxarifado/materiais/:id — inativar (soft delete: é uma edição do
+  // cadastro, daí `editar_material` e não uma ação própria).
+  app.delete('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), async (req, res) => {
     try {
       await dbRun(db, `UPDATE materiais_almoxarifado SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [req.params.id]);
@@ -555,7 +563,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // POST /api/almoxarifado/materiais/:id/foto — upload de foto
-  app.post('/api/almoxarifado/materiais/:id/foto',uploadAlmox.single('foto'), (req, res) => {
+  // ORDEM IMPORTA: requirePermission ANTES do multer. Invertido, o multer já teria
+  // gravado o arquivo em disco quando o 403 fosse emitido — upload não autorizado + lixo
+  // órfão em uploads/almoxarifado (coberto em permissoesRotas.api.test.js).
+  app.post('/api/almoxarifado/materiais/:id/foto', requirePermission('editar_material'), uploadAlmox.single('foto'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Nenhuma foto enviada' });
 
     const filename = req.file.filename;
@@ -735,7 +746,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // POST /api/almoxarifado/conferencias — criar nova conferência
-  app.post('/api/almoxarifado/conferencias',(req, res) => {
+  // Todo o fluxo de inventário exige `inventario` ([ADMINISTRADOR, ALMOXARIFE, GESTOR]) —
+  // o gate global do módulo só checa ACESSO, não perfil.
+  app.post('/api/almoxarifado/conferencias', requirePermission('inventario'), (req, res) => {
     const { observacoes, categoria } = req.body;
 
     // Gerar número único
@@ -779,7 +792,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/conferencias/:id/item — registrar contagem de um item
-  app.put('/api/almoxarifado/conferencias/:id/item/:itemId',(req, res) => {
+  app.put('/api/almoxarifado/conferencias/:id/item/:itemId', requirePermission('inventario'), (req, res) => {
     const { quantidade_contada, observacoes } = req.body;
 
     db.get(`SELECT ic.*, ma.quantidade_atual
@@ -804,8 +817,27 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/conferencias/:id/concluir — concluir e aplicar ajustes
-  app.put('/api/almoxarifado/conferencias/:id/concluir',(req, res) => {
+  //
+  // Dupla permissão, por causa de duas ações distintas na MESMA rota:
+  //  - concluir a conferência (fechar a contagem) => `inventario`, no middleware;
+  //  - `aplicar_ajustes: true` => além disso `ajustar_estoque`, checado no handler porque
+  //    requirePermission é middleware e não vê a semântica do body.
+  // Com aplicar_ajustes o handler faz `UPDATE materiais_almoxarifado SET
+  // quantidade_atual = ?` DIRETO, por fora do stockService (sem validação de saldo,
+  // localização bloqueada ou custo médio) — é o caminho mais destrutivo do arquivo, e
+  // deve exigir o mesmo perfil de qualquer outro ajuste de saldo
+  // (ajustar_estoque: [ADMINISTRADOR, GESTOR]). Efeito prático da segregação: o
+  // ALMOXARIFE conta o inventário, mas quem homologa a divergência no saldo é
+  // ADMINISTRADOR/GESTOR.
+  app.put('/api/almoxarifado/conferencias/:id/concluir', requirePermission('inventario'), (req, res) => {
     const { aplicar_ajustes } = req.body;
+
+    if (aplicar_ajustes && !can(req.user, 'ajustar_estoque')) {
+      return res.status(403).json({
+        error: 'Sem permissão para aplicar ajustes de estoque na conclusão do inventário',
+        acao: 'ajustar_estoque',
+      });
+    }
 
     db.get(`SELECT * FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id], (err, conf) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -855,7 +887,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // DELETE /api/almoxarifado/conferencias/:id — cancelar conferência
-  app.put('/api/almoxarifado/conferencias/:id/cancelar',(req, res) => {
+  app.put('/api/almoxarifado/conferencias/:id/cancelar', requirePermission('inventario'), (req, res) => {
     db.run(`UPDATE conferencias_almoxarifado SET status = 'CANCELADO' WHERE id = ? AND status = 'ABERTO'`,
       [req.params.id], function (err) {
         if (err) return res.status(500).json({ error: err.message });
@@ -1744,7 +1776,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // POST /api/almoxarifado/requisicoes — criar requisição
-  app.post('/api/almoxarifado/requisicoes', validate(RequisicaoSchema), async (req, res) => {
+  // requirePermission('requisitar'): [ADMINISTRADOR, PRODUCAO, ENGENHARIA, ALMOXARIFE] —
+  // inclui PRODUCAO por design (quem pede material é o chão de fábrica), então o fallback
+  // de getPerfilFromUser continua passando aqui. O que este gate barra é CONSULTA (perfil
+  // de leitura), COMPRAS e GESTOR.
+  app.post('/api/almoxarifado/requisicoes', requirePermission('requisitar'), validate(RequisicaoSchema), async (req, res) => {
     try {
       const result = await requisitionCreateService.createRequisicao(
         db, req.user, req.body, { modulo: 'almoxarifado' },
@@ -1852,7 +1888,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/aprovar — aprovar
-  app.put('/api/almoxarifado/requisicoes/:id/aprovar', async (req, res) => {
+  // Duas checagens INDEPENDENTES e cumulativas:
+  //  1. requirePermission('aprovar_requisicao') — perfil habilitado a aprovar
+  //     ([ADMINISTRADOR, ALMOXARIFE, GESTOR]); antes disto qualquer usuário do módulo
+  //     aprovava requisição de terceiro (fallback PRODUCAO no gate global);
+  //  2. segregação de funções no handler (abaixo) — nem quem TEM o perfil aprova a
+  //     própria requisição.
+  app.put('/api/almoxarifado/requisicoes/:id/aprovar', requirePermission('aprovar_requisicao'), async (req, res) => {
     try {
       const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
       if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
@@ -1911,8 +1953,25 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // PUT /api/almoxarifado/requisicoes/:id/rejeitar — rejeitar (sem segregação: reprovar a
   // própria requisição é desistência, decisão legítima do solicitante — ver comentário na
   // rota /aprovar acima).
+  //
+  // A permissão NÃO pode ser um requirePermission puro por causa exatamente dessa
+  // exceção: rejeitar a requisição de OUTRA pessoa é decisão de aprovação e exige
+  // `aprovar_requisicao`; rejeitar a PRÓPRIA é desistência e todo solicitante pode, com
+  // qualquer perfil. Daí a checagem no handler, depois de saber quem é o solicitante.
   app.put('/api/almoxarifado/requisicoes/:id/rejeitar', validate(RejeicaoSchema), async (req, res) => {
     try {
+      const reqRow = await dbGet(db, 'SELECT solicitante_id FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+      // reqRow ausente (id inexistente) não vira 404 aqui de propósito: o UPDATE abaixo
+      // já devolve o 400 "Apenas requisições pendentes podem ser rejeitadas", contrato
+      // que esta rota sempre teve — este commit é só sobre autorização.
+      const ehSolicitante = !!reqRow && Number(req.user.id) === Number(reqRow.solicitante_id);
+      if (!ehSolicitante && !can(req.user, 'aprovar_requisicao')) {
+        return res.status(403).json({
+          error: 'Sem permissão para rejeitar requisição de outro solicitante',
+          acao: 'aprovar_requisicao',
+        });
+      }
+
       const { motivo } = req.body;
       const result = await dbRun(db,
         `UPDATE requisicoes_almoxarifado SET status='REJEITADO', rejeicao_motivo=?, aprovador_id=?, aprovador_nome=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
@@ -1979,14 +2038,20 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       .catch((e) => res.status(e.status || 500).json({ error: e.message }));
   };
 
+  // Todo o fluxo de separação/entrega é trabalho de almoxarifado: `separar_emitir`
+  // ([ADMINISTRADOR, ALMOXARIFE]). O gate global do módulo só checa ACESSO — sem isto
+  // qualquer usuário com acesso separava/liberava/entregava requisição (e /entregar baixa
+  // estoque real via requisitionService -> stockService).
+  const requireSepararEmitir = requirePermission('separar_emitir');
+
   // PUT /api/almoxarifado/requisicoes/:id/separacao — iniciar separação (com quantidades opcionais)
-  app.put('/api/almoxarifado/requisicoes/:id/separacao', handleSeparacao);
+  app.put('/api/almoxarifado/requisicoes/:id/separacao', requireSepararEmitir, handleSeparacao);
   // Alias conforme especificação
-  app.put('/api/almoxarifado/requisicoes/:id/separar', handleSeparacao);
+  app.put('/api/almoxarifado/requisicoes/:id/separar', requireSepararEmitir, handleSeparacao);
 
   // PUT /api/almoxarifado/requisicoes/:id/liberar-retirada — libera para retirada
   // (EM_SEPARACAO -> PRONTA_PARA_RETIRADA), exige ao menos 1 item com quantidade separada.
-  app.put('/api/almoxarifado/requisicoes/:id/liberar-retirada', async (req, res) => {
+  app.put('/api/almoxarifado/requisicoes/:id/liberar-retirada', requireSepararEmitir, async (req, res) => {
     try {
       const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
       if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
@@ -2012,7 +2077,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/entregar — entrega parcial ou total e baixa estoque
-  app.put('/api/almoxarifado/requisicoes/:id/entregar', (req, res) => {
+  app.put('/api/almoxarifado/requisicoes/:id/entregar', requireSepararEmitir, (req, res) => {
     const { itens_atendidos } = req.body;
     requisitionService.entregarRequisicao(db, req.params.id, itens_atendidos, req.user, alertService)
       .then((result) => res.json(result))
@@ -2119,10 +2184,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // req.user"). Reaproveita requisitionCreateService.createRequisicao (Task 1) — mesmo
   // caminho de criação normal, com salvar_rascunho:true (não dispara notificações nem
   // avaliação de valor; isso só acontece quando o rascunho copiado for enviado via
-  // /enviar). Qualquer usuário autenticado do módulo pode copiar (não é uma decisão de
-  // negócio como aprovar/encerrar — é só um atalho de preenchimento de formulário) e o
-  // solicitante da cópia é sempre quem chamou a rota, nunca o dono do original.
-  app.post('/api/almoxarifado/requisicoes/:id/copiar', async (req, res) => {
+  // /enviar). Não é uma decisão de negócio como aprovar/encerrar — é um atalho de
+  // preenchimento de formulário — e o solicitante da cópia é sempre quem chamou a rota,
+  // nunca o dono do original. Ainda assim exige `requisitar`: a cópia CRIA uma requisição,
+  // então tem de pedir a mesma permissão do POST /requisicoes, senão é um caminho
+  // alternativo para requisitar sem a permissão de requisitar (perfil CONSULTA/COMPRAS).
+  app.post('/api/almoxarifado/requisicoes/:id/copiar', requirePermission('requisitar'), async (req, res) => {
     try {
       const origem = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
       if (!origem) return res.status(404).json({ error: 'Requisição não encontrada' });

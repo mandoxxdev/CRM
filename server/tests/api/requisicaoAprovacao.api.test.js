@@ -66,13 +66,19 @@ async function setupLiberacaoValor(db, { limite = 100, aprovadorIds = [] } = {})
 
   // ════════════════════════════ /aprovar — segregação ════════════════════════════
 
-  await test('[aprovar] solicitante tenta aprovar a própria -> 403, status inalterado', async () => {
+  // perfil_almoxarifado GESTOR de propósito: a rota /aprovar exige
+  // requirePermission('aprovar_requisicao') ANTES da segregação (ver
+  // permissoesRotas.api.test.js). Um usuário sem perfil cairia no fallback PRODUCAO e
+  // tomaria 403 já no gate de perfil — o teste passaria pelo motivo ERRADO, sem provar
+  // nada sobre segregação de funções. GESTOR tem a permissão e ainda assim não pode
+  // aprovar a própria requisição: é exatamente essa a regra sob teste.
+  await test('[aprovar] solicitante COM permissão de aprovar tenta aprovar a própria -> 403, status inalterado', async () => {
     const matId = await criarMaterial('MATAPR-01');
     const { id: reqId } = await criarRequisicao(db, {
       status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 42,
     });
 
-    setUser({ id: 42, nome: 'Solicitante Dono', role: 'user', email: 'dono@test.com' });
+    setUser({ id: 42, nome: 'Solicitante Dono', role: 'user', perfil_almoxarifado: 'GESTOR', email: 'dono@test.com' });
     try {
       const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
       assert.strictEqual(res.status, 403, JSON.stringify(res.body));
