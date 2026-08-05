@@ -217,6 +217,9 @@ async function registrarMovimentacao(db, user, params) {
   const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
   const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
   const tiposAjuste = ['AJUSTE'];
+  // Consumo de reserva: só quando a saída cita `reserva_id`. RESERVA/LIBERACAO_RESERVA também
+  // carregam reserva_id, mas não consomem nada — são o lançamento da própria reserva.
+  const consumindoReserva = !!reserva_id && tiposSaida.includes(tipo);
 
   const regras = avaliarRegrasVinculo(tipo, { os_id, projeto_id, centro_custo_id, justificativa, referencia, emergencial });
   if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
@@ -240,9 +243,15 @@ async function registrarMovimentacao(db, user, params) {
   if (tiposEntrada.includes(tipo)) {
     saldoPosterior = saldoAnterior + parseFloat(quantidade);
   } else if (tiposSaida.includes(tipo)) {
-    const disponivel = await getSaldoDisponivel(material);
-    if (disponivel < quantidade && !permiteNegativo) {
-      throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
+    // Saída citando uma reserva consome o que JÁ estava separado para ela, então não pode ser
+    // barrada pelo disponível — o disponível justamente exclui o reservado. Sem esta exceção,
+    // reservar material o tornava inutilizável até para quem reservou (ver o design da Etapa 4).
+    // A validação real acontece contra a própria reserva, atomicamente, mais abaixo.
+    if (!consumindoReserva) {
+      const disponivel = await getSaldoDisponivel(material);
+      if (disponivel < quantidade && !permiteNegativo) {
+        throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
+      }
     }
     if ((material.quantidade_bloqueada || 0) > 0 && tiposSaida.includes(tipo)) {
       const dispSemBloqueio = material.quantidade_atual - (material.quantidade_bloqueada || 0);
@@ -286,6 +295,50 @@ async function registrarMovimentacao(db, user, params) {
       // captura o quantidade_atual pós-update NA MESMA instrução — uma SELECT separada
       // reabriria uma segunda janela de corrida entre o UPDATE e a leitura do saldo, que é
       // o que vai para o par saldo_anterior/saldo_posterior do livro, da auditoria e da resposta.
+      if (consumindoReserva) {
+        // ── Consumo contra reserva ──
+        // Reivindica a reserva PRIMEIRO: é o recurso escasso específico desta saída, e o
+        // UPDATE condicional impede que duas entregas concorrentes consumam o mesmo saldo
+        // reservado. `saldo` da reserva = quantidade - quantidade_utilizada.
+        const reserva = await dbGet(db, `UPDATE reservas_material_almoxarifado
+          SET quantidade_utilizada = quantidade_utilizada + ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND material_id = ? AND status = 'ATIVA'
+            AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ?
+          RETURNING quantidade, quantidade_utilizada`,
+          [quantidade, reserva_id, material_id, quantidade]);
+        if (!reserva) {
+          const atual = await dbGet(db, 'SELECT quantidade, quantidade_utilizada, status FROM reservas_material_almoxarifado WHERE id = ? AND material_id = ?', [reserva_id, material_id]);
+          if (!atual) throw Object.assign(new Error('Reserva não encontrada para este material'), { status: 400 });
+          if (atual.status !== 'ATIVA') throw Object.assign(new Error(`Reserva ${atual.status.toLowerCase()} não pode ser consumida`), { status: 400 });
+          const saldoReserva = atual.quantidade - (atual.quantidade_utilizada || 0);
+          throw Object.assign(new Error(`Quantidade acima do saldo da reserva: ${saldoReserva} ${material.unidade}`), { status: 400 });
+        }
+
+        // Agora o material: baixa o físico E o reservado juntos, porque a quantidade sai do
+        // estoque e deixa de estar reservada na mesma operação. A guarda exige apenas que o
+        // disponível não fique negativo IGNORANDO a parte reservada que está sendo consumida —
+        // por isso `+ ?` (a quantidade) no cálculo.
+        const rowRes = await dbGet(db, `UPDATE materiais_almoxarifado
+          SET quantidade_atual = quantidade_atual - ?,
+              quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?),
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) + ? - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
+          RETURNING quantidade_atual`,
+          [quantidade, quantidade, material_id, permiteNegativo ? 1 : 0, quantidade, quantidade]);
+        if (!rowRes) {
+          // Não há transação neste serviço (padrão do módulo: UPDATE condicional único).
+          // Compensa a reivindicação acima à mão para não deixar a reserva consumida sem a
+          // baixa correspondente de estoque.
+          await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = MAX(0, quantidade_utilizada - ?) WHERE id = ?', [quantidade, reserva_id]);
+          throw Object.assign(new Error(`Saldo físico insuficiente para consumir a reserva. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
+        }
+        saldoPosterior = rowRes.quantidade_atual;
+
+        // Reserva zerada não deve seguir ATIVA segurando saldo (reserva zumbi).
+        if (reserva.quantidade - reserva.quantidade_utilizada <= 0) {
+          await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'CONSUMIDA', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [reserva_id]);
+        }
+      } else {
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
@@ -295,6 +348,7 @@ async function registrarMovimentacao(db, user, params) {
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
       }
       saldoPosterior = row.quantidade_atual;
+      }
     } else if (tiposEntrada.includes(tipo)) {
       if (custoInformado && custoInformado > 0) {
         const row = await dbGet(db, `UPDATE materiais_almoxarifado SET

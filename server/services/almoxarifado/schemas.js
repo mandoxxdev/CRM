@@ -34,6 +34,10 @@ const MovimentacaoSchema = z.object({
   os_id: z.number().int().optional(),
   cliente_id: z.number().int().optional(),
   centro_custo_id: z.number().int().optional(),
+  // Consumo contra reserva (Etapa 4). Sem declarar aqui o Zod removia o campo em silêncio
+  // (z.object descarta chaves desconhecidas), então o motor nunca via o reserva_id vindo da
+  // v2 e tratava a saída como consumo do disponível geral.
+  reserva_id: z.number().int().positive().optional(),
   documento_vinculado: z.string().optional(),
   custo_unitario: z.number().gt(0).optional(),
   emergencial: z.boolean().optional(),
