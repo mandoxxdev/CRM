@@ -88,6 +88,18 @@ const getCodigoPrefix = (codigo) => {
 
 const TIPOS_AREA_RAIZ = ['Prateleira', 'Gaveta', 'Box', 'Rua', 'Almoxarifado', 'Área externa'];
 
+const formatTipoMaterial = (tipo) => String(tipo || '')
+  .replace(/_/g, ' ')
+  .replace(/^./, c => c.toUpperCase());
+
+const parseTiposPermitidos = (raw) => {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+};
+
 const generateNextCodigo = (localizacoes, { setor, parent_id, tipo }, setoresConfig = []) => {
   const parentId = parent_id ? parseInt(parent_id, 10) : null;
   if (parentId) {
@@ -788,6 +800,165 @@ const TabEstoquesMinimos = () => {
   );
 };
 
+/* ===================== BLOCO ALMOXARIFADOS (topo da aba Setores e Áreas) ===================== */
+const ALMOXARIFADO_FORM_INITIAL = { codigo: '', nome: '', descricao: '' };
+
+const AlmoxarifadosSection = () => {
+  const [almoxarifados, setAlmoxarifados] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState(ALMOXARIFADO_FORM_INITIAL);
+
+  useEffect(() => { loadAlmoxarifados(); }, []);
+
+  const loadAlmoxarifados = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/almoxarifado/almoxarifados?todos=1');
+      setAlmoxarifados(res.data);
+    } catch { toast.error('Erro ao carregar almoxarifados'); }
+    finally { setLoading(false); }
+  };
+
+  const resetForm = () => {
+    setForm(ALMOXARIFADO_FORM_INITIAL);
+    setEditando(null);
+    setShowForm(false);
+  };
+
+  const handleEditar = (alm) => {
+    setForm({ codigo: alm.codigo, nome: alm.nome, descricao: alm.descricao || '' });
+    setEditando(alm.id);
+    setShowForm(true);
+  };
+
+  const handleSalvar = async () => {
+    if (!form.codigo.trim()) { toast.error('Código é obrigatório'); return; }
+    if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        codigo: form.codigo.trim().toUpperCase(),
+        nome: form.nome.trim(),
+        descricao: form.descricao.trim() || null,
+      };
+      if (editando) {
+        await api.put(`/almoxarifado/almoxarifados/${editando}`, payload);
+        toast.success('Almoxarifado atualizado!');
+      } else {
+        await api.post('/almoxarifado/almoxarifados', payload);
+        toast.success('Almoxarifado criado!');
+      }
+      resetForm();
+      loadAlmoxarifados();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar');
+    } finally { setSaving(false); }
+  };
+
+  const handleInativar = async (alm) => {
+    if (!window.confirm(`Inativar o almoxarifado "${alm.nome}"?`)) return;
+    try {
+      await api.put(`/almoxarifado/almoxarifados/${alm.id}`, { ativo: 0 });
+      toast.success('Almoxarifado inativado');
+      loadAlmoxarifados();
+    } catch (err) {
+      // Backend recusa (400) quando existem localizações ativas vinculadas — mensagem exibida direto no toast.
+      toast.error(err.response?.data?.error || 'Erro ao inativar');
+    }
+  };
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 12 }}>
+        <h3 style={{ margin: 0, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gmp-text)' }}>
+          <FiPackage size={16} style={{ color: '#4facfe' }} /> Almoxarifados
+        </h3>
+        {!showForm && (
+          <button className="btn-almox-primary" onClick={() => setShowForm(true)}>
+            <FiPlus size={14} /> Novo Almoxarifado
+          </button>
+        )}
+      </div>
+      <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 16, maxWidth: 720 }}>
+        Cada almoxarifado é um depósito independente (ex.: unidade, obra, filial). Localizações são vinculadas a um almoxarifado.
+      </p>
+
+      {showForm && (
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18, color: 'var(--gmp-text)' }}>
+            {editando ? '✏️ Editar Almoxarifado' : '➕ Novo Almoxarifado'}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div className="almox-field">
+              <label className="almox-label">Código<span className="required">*</span></label>
+              <input className="almox-input" value={form.codigo}
+                onChange={e => setForm(f => ({ ...f, codigo: e.target.value.toUpperCase() }))}
+                placeholder="Ex: ALM-02" style={{ fontFamily: 'monospace' }} maxLength={20} />
+            </div>
+            <div className="almox-field">
+              <label className="almox-label">Nome<span className="required">*</span></label>
+              <input className="almox-input" value={form.nome}
+                onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                placeholder="Ex: Almoxarifado Filial Sul" />
+            </div>
+            <div className="almox-field" style={{ gridColumn: '1 / -1' }}>
+              <label className="almox-label">Descrição</label>
+              <input className="almox-input" value={form.descricao}
+                onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                placeholder="Descrição breve (opcional)" />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
+              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button className="btn-almox-secondary" onClick={resetForm}><FiX size={14} /> Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
+      ) : (
+        <div className="almox-table-container">
+          <table className="almox-table">
+            <thead>
+              <tr><th>Código</th><th>Nome</th><th>Descrição</th><th>Status</th><th style={{ textAlign: 'right' }}>Ações</th></tr>
+            </thead>
+            <tbody>
+              {almoxarifados.map(a => (
+                <tr key={a.id} style={{ opacity: a.ativo ? 1 : 0.55 }}>
+                  <td><span style={{ fontFamily: 'monospace', color: '#4facfe', fontWeight: 700 }}>{a.codigo}</span></td>
+                  <td style={{ fontWeight: 600 }}>{a.nome}</td>
+                  <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.85rem' }}>{a.descricao || '—'}</td>
+                  <td>
+                    <span className={`almox-badge almox-badge-${a.ativo ? 'ok' : 'critico'}`}>
+                      {a.ativo ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button className="almox-btn-icon" onClick={() => handleEditar(a)} title="Editar"><FiEdit2 size={13} /></button>
+                      {!!a.ativo && (
+                        <button className="almox-btn-icon danger" onClick={() => handleInativar(a)} title="Inativar">
+                          <FiTrash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ===================== TAB SETORES E ÁREAS ===================== */
 const SETOR_FORM_INITIAL = { nome: '', codigo_prefixo: '', tipo: 'corredor', ordem: 0 };
 
@@ -875,6 +1046,11 @@ const TabSetores = () => {
 
   return (
     <div>
+      <AlmoxarifadosSection />
+      <div style={{ borderTop: '1px solid var(--gmp-border)', margin: '0 0 24px' }} />
+      <h3 style={{ margin: '0 0 4px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gmp-text)' }}>
+        <FiGrid size={16} style={{ color: '#4facfe' }} /> Setores e Áreas
+      </h3>
       <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 20, maxWidth: 720 }}>
         Defina os corredores, bancadas e áreas disponíveis no cadastro guiado de localizações.
         O <strong>prefixo do código</strong> é usado na geração automática (ex.: Corredor D com prefixo &quot;D&quot; gera códigos D-01, D-02…).
@@ -1003,6 +1179,8 @@ const TabLocalizacoes = () => {
   const [localizacoes, setLocalizacoes] = useState([]);
   const [setoresConfig, setSetoresConfig] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
+  const [tiposMaterial, setTiposMaterial] = useState([]);
+  const [almoxarifados, setAlmoxarifados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -1013,7 +1191,7 @@ const TabLocalizacoes = () => {
   const [showMapaStep, setShowMapaStep] = useState(false);
 
   const [editando, setEditando] = useState(null);
-  const [editForm, setEditForm] = useState({ descricao: '', tipo: 'Almoxarifado' });
+  const [editForm, setEditForm] = useState({ descricao: '', tipo: 'Almoxarifado', almoxarifado_id: '', bloqueada: false, tipos_material_permitidos: [] });
   const [showEdit, setShowEdit] = useState(false);
 
   const [moverLoc, setMoverLoc] = useState(null);
@@ -1021,7 +1199,7 @@ const TabLocalizacoes = () => {
   const [moverData, setMoverData] = useState({ setor: '', estruturaTipo: '', parent_id: '', subgrupo: '', codigo: '' });
   const [moverError, setMoverError] = useState('');
 
-  useEffect(() => { loadLocs(); loadTipos(); loadSetores(); }, []);
+  useEffect(() => { loadLocs(); loadTipos(); loadSetores(); loadAlmoxarifados(); }, []);
 
   const loadSetores = async () => {
     try {
@@ -1033,7 +1211,14 @@ const TabLocalizacoes = () => {
     try {
       const r = await api.get('/almoxarifado/meta/tipos-material');
       setTiposLoc(r.data.localizacoes_tipos || []);
+      setTiposMaterial(r.data.tipos || []);
     } catch { /* ignore */ }
+  };
+  const loadAlmoxarifados = async () => {
+    try {
+      const r = await api.get('/almoxarifado/almoxarifados');
+      setAlmoxarifados(r.data);
+    } catch { /* ignore — select fica vazio, PUT preserva o vínculo atual */ }
   };
   const loadLocs = async () => {
     setLoading(true);
@@ -1062,7 +1247,7 @@ const TabLocalizacoes = () => {
 
   const resetEdit = () => {
     setEditando(null);
-    setEditForm({ descricao: '', tipo: 'Almoxarifado' });
+    setEditForm({ descricao: '', tipo: 'Almoxarifado', almoxarifado_id: '', bloqueada: false, tipos_material_permitidos: [] });
     setShowEdit(false);
   };
 
@@ -1181,7 +1366,13 @@ const TabLocalizacoes = () => {
     resetWizard();
     resetMover();
     setEditando(loc.id);
-    setEditForm({ descricao: loc.descricao || '', tipo: loc.tipo || 'Almoxarifado' });
+    setEditForm({
+      descricao: loc.descricao || '',
+      tipo: loc.tipo || 'Almoxarifado',
+      almoxarifado_id: loc.almoxarifado_id != null ? String(loc.almoxarifado_id) : '',
+      bloqueada: !!loc.bloqueada,
+      tipos_material_permitidos: parseTiposPermitidos(loc.tipos_material_permitidos),
+    });
     setShowEdit(true);
   };
 
@@ -1201,6 +1392,9 @@ const TabLocalizacoes = () => {
         pos_y: loc.pos_y ?? null,
         largura: loc.largura ?? 120,
         altura: loc.altura ?? 80,
+        almoxarifado_id: editForm.almoxarifado_id ? parseInt(editForm.almoxarifado_id, 10) : null,
+        bloqueada: !!editForm.bloqueada,
+        tipos_material_permitidos: editForm.tipos_material_permitidos,
       });
       toast.success('Localização atualizada!');
       resetEdit();
@@ -1512,6 +1706,57 @@ const TabLocalizacoes = () => {
                 {tiposEdit.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
+            <div className="almox-field">
+              <label className="almox-label">Almoxarifado</label>
+              <select className="almox-select" value={editForm.almoxarifado_id}
+                onChange={e => setEditForm(f => ({ ...f, almoxarifado_id: e.target.value }))}>
+                <option value="">— Selecione —</option>
+                {almoxarifados.map(a => (
+                  <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div className="almox-field">
+              <label className="almox-label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={editForm.bloqueada}
+                  onChange={e => setEditForm(f => ({ ...f, bloqueada: e.target.checked }))} />
+                🔒 Localização bloqueada
+              </label>
+              <span style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)' }}>
+                Impede movimentações de entrada e saída nesta posição.
+              </span>
+            </div>
+          </div>
+          <div className="almox-field" style={{ marginBottom: 16 }}>
+            <label className="almox-label">
+              Tipos de material permitidos{' '}
+              <span style={{ fontWeight: 400, color: 'var(--gmp-text-light)' }}>(nenhum selecionado = qualquer tipo)</span>
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+              {tiposMaterial.map(t => {
+                const checked = editForm.tipos_material_permitidos.includes(t);
+                return (
+                  <label key={t} style={{
+                    display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', cursor: 'pointer',
+                    background: checked ? 'rgba(79,172,254,0.12)' : 'var(--gmp-bg)',
+                    border: `1px solid ${checked ? '#4facfe' : 'var(--gmp-border)'}`,
+                    borderRadius: 20, padding: '4px 10px',
+                  }}>
+                    <input type="checkbox" checked={checked} style={{ margin: 0 }}
+                      onChange={() => setEditForm(f => ({
+                        ...f,
+                        tipos_material_permitidos: checked
+                          ? f.tipos_material_permitidos.filter(x => x !== t)
+                          : [...f.tipos_material_permitidos, t],
+                      }))} />
+                    {formatTipoMaterial(t)}
+                  </label>
+                );
+              })}
+              {tiposMaterial.length === 0 && (
+                <span style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)' }}>Nenhum tipo de material cadastrado.</span>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn-almox-primary" onClick={handleSalvarEdit} disabled={saving}>
@@ -1640,16 +1885,20 @@ const TabLocalizacoes = () => {
       ) : (
         <div className="almox-table-container">
           <table className="almox-table">
-            <thead><tr><th>Código</th><th>Descrição</th><th>Subgrupo</th><th>Caminho</th><th>Tipo</th><th>Setor</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Descrição</th><th>Subgrupo</th><th>Caminho</th><th>Tipo</th><th>Setor</th><th>Almoxarifado</th><th></th></tr></thead>
             <tbody>
               {localizacoes.map(loc => (
                 <tr key={loc.id}>
-                  <td><span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe' }}>{loc.codigo}</span></td>
+                  <td>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe' }}>{loc.codigo}</span>
+                    {!!loc.bloqueada && <span title="Localização bloqueada" style={{ marginLeft: 6 }}>🔒</span>}
+                  </td>
                   <td>{loc.descricao || '—'}</td>
                   <td>{loc.subgrupo ? <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 600 }}>{loc.subgrupo}</span> : '—'}</td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatLocalizacaoPath(loc, localizacoes)}</td>
                   <td><span style={{ fontSize: '0.8rem', background: 'rgba(79,172,254,0.1)', color: '#4facfe', padding: '2px 10px', borderRadius: 6 }}>{loc.tipo || 'Almoxarifado'}</span></td>
                   <td>{loc.setor ? <span style={{ fontSize: '0.8rem', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: '2px 10px' }}>{loc.setor}</span> : '—'}</td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{loc.almoxarifado_codigo || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                       <button className="almox-btn-icon" onClick={() => handleEditar(loc)} title="Editar"><FiEdit2 size={13} /></button>

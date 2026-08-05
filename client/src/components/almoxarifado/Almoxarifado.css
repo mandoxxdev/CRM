@@ -865,6 +865,9 @@
   font-size: 9px;
   fill: var(--gmp-text-light, #64748b);
 }
+.almox-mapa-zone-lock {
+  font-size: 12px;
+}
 
 .almox-mapa-sidebar {
   display: flex;
