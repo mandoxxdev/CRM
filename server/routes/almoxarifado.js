@@ -21,7 +21,7 @@ const {
   enrichMaterialRows,
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
-const { can } = require('../services/almoxarifado/permissions');
+const { can, requirePermission } = require('../services/almoxarifado/permissions');
 const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
 const { validate } = require('../services/almoxarifado/validation');
 const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
@@ -661,7 +661,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // POST /api/almoxarifado/movimentacoes — registrar movimento
   // Compat v1: contrato antigo, motor novo (stockService = validações + auditoria + saldo por localização)
-  app.post('/api/almoxarifado/movimentacoes', async (req, res) => {
+  // requirePermission('movimentar') espelha a v2 (routes/almoxarifado/extended.js:173): o gate
+  // global do módulo só checa ACESSO, não perfil — sem isto a v1 era um bypass da regra
+  // movimentar: [ADMINISTRADOR, ALMOXARIFE] para qualquer usuário com acesso ao módulo.
+  app.post('/api/almoxarifado/movimentacoes', requirePermission('movimentar'), async (req, res) => {
     const { material_id, tipo, quantidade, motivo, referencia, observacoes } = req.body;
 
     if (!['ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO'].includes(tipo)) {
