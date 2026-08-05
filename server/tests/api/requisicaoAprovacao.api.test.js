@@ -91,7 +91,11 @@ async function setupLiberacaoValor(db, { limite = 100, aprovadorIds = [] } = {})
     }
   });
 
-  await test('[aprovar] usuário diferente do solicitante -> 200 APROVADO', async () => {
+  // Etapa 4: com saldo, a aprovação também RESERVA — o status de sucesso passou de APROVADO
+  // para TOTALMENTE_RESERVADA (design, decisão 2: os status de reserva SUBSTITUEM o APROVADO
+  // quando há saldo). O que este teste prova continua sendo a segregação (aprovador ≠
+  // solicitante libera a requisição), só o nome do status de sucesso mudou.
+  await test('[aprovar] usuário diferente do solicitante -> 200, requisição liberada', async () => {
     const matId = await criarMaterial('MATAPR-02');
     const { id: reqId } = await criarRequisicao(db, {
       status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 42,
@@ -99,7 +103,7 @@ async function setupLiberacaoValor(db, { limite = 100, aprovadorIds = [] } = {})
 
     const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-    assert.strictEqual(res.body.status, 'APROVADO');
+    assert.strictEqual(res.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(res.body));
   });
 
   await test('[aprovar] decisão auditada (acao APROVACAO)', async () => {

@@ -228,17 +228,21 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
     assert.strictEqual(row.status, 'AGUARDANDO_COMPRA');
   });
 
-  // ── aprovar com estoque disponível -> continua APROVADO (regressão) ──
-  await test('[aprovar] item com disponível > 0 -> permanece APROVADO', async () => {
+  // ── aprovar com estoque disponível -> NÃO cai em AGUARDANDO_* (regressão da Task 2) ──
+  // Etapa 4 mudou o status de destino: havendo saldo, a aprovação reserva e a requisição vai
+  // para TOTALMENTE_RESERVADA (design da Etapa 4, decisão 2 — os status de reserva substituem
+  // o APROVADO quando há saldo). O que a Task 2 travava aqui — item com disponível > 0 não vai
+  // para AGUARDANDO_ESTOQUE/AGUARDANDO_COMPRA — continua valendo e é o ponto do teste.
+  await test('[aprovar] item com disponível > 0 -> reservado, não AGUARDANDO_*', async () => {
     const matId = await criarMaterial('MATEST-06', 50);
     const { id: reqId } = await criarRequisicao(db, { status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 5 }], solicitanteId: 77 });
 
     const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-    assert.strictEqual(res.body.status, 'APROVADO');
+    assert.strictEqual(res.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(res.body));
 
     const row = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
-    assert.strictEqual(row.status, 'APROVADO');
+    assert.strictEqual(row.status, 'TOTALMENTE_RESERVADA');
   });
 
   await test('[aprovar] requisição inexistente -> 404', async () => {

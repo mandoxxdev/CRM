@@ -600,54 +600,149 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   return { success: true, estorno_id: estornoId };
 }
 
-async function criarReserva(db, user, data) {
-  const { material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem, observacoes } = data;
-  if (!can(user, 'reservar')) throw Object.assign(new Error('Sem permissão para reservar'), { status: 403 });
+/**
+ * Cria um hold de saldo (reserva) para uma OS/projeto.
+ *
+ * `opcoes` NÃO vem do body — a rota POST /reservas repassa `req.body` inteiro como `data`, então
+ * qualquer coisa lida de `data` é forjável pelo cliente. Por isso o vínculo com a requisição e a
+ * dispensa do gate de permissão moram no 4º argumento, alcançável só por chamada interna:
+ *  - `opcoes.sistema`: a reserva nasce do próprio fluxo (aprovação de requisição), não de uma
+ *    ação de reservar do usuário. O gate que vale nesse caso é o da rota que disparou o fluxo
+ *    (`aprovar_requisicao`) — exigir `reservar` aqui faria um GESTOR, que aprova mas não reserva,
+ *    tomar 403 no meio da aprovação.
+ *  - `opcoes.requisicao_id`/`item_requisicao_id`: vínculo que a entrega usa para achar e consumir
+ *    a reserva daquele item (ver requisitionService.entregarRequisicao).
+ */
+async function criarReserva(db, user, data, opcoes = {}) {
+  const { material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem, observacoes,
+    data_necessidade, expira_em } = data;
+  const sistema = opcoes.sistema === true;
+  if (!sistema && !can(user, 'reservar')) throw Object.assign(new Error('Sem permissão para reservar'), { status: 403 });
 
   const material = await getMaterial(db, material_id);
-  const disponivel = await getSaldoDisponivel(material);
-  if (disponivel < quantidade) {
-    throw Object.assign(new Error(`Saldo disponível insuficiente: ${disponivel}`), { status: 400 });
+  const qtd = Number(quantidade);
+  if (!(qtd > 0)) throw Object.assign(new Error('Quantidade da reserva deve ser maior que zero'), { status: 400 });
+
+  // Hold atômico: o próprio UPDATE valida o disponível sob o lock de linha do SQLite (mesmo
+  // padrão do resto do motor). Uma leitura + INSERT deixaria duas reservas concorrentes
+  // passarem e `quantidade_reservada` ficaria acima do físico — e reserva acima do físico é
+  // reserva IMPOSSÍVEL de consumir, porque a baixa contra reserva também exige saldo físico.
+  const hold = await dbGet(db, `UPDATE materiais_almoxarifado
+    SET quantidade_reservada = COALESCE(quantidade_reservada,0) + ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+      AND (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0)
+           - COALESCE(quantidade_em_inspecao,0)) >= ?
+    RETURNING id`, [qtd, material_id, qtd]);
+  if (!hold) {
+    const atual = await getMaterial(db, material_id);
+    throw Object.assign(new Error(`Saldo disponível insuficiente: ${await getSaldoDisponivel(atual)}`), { status: 400 });
   }
 
-  const r = await dbRun(db, `INSERT INTO reservas_material_almoxarifado
-    (material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem,
-     solicitante_id, solicitante_nome, observacoes)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [
-    material_id, quantidade, projeto_id || null, os_id || null, os_referencia || null,
-    cliente_id || null, equipamento || null, submontagem || null,
-    user.id, user.nome || user.email, observacoes || null,
-  ]);
+  // Vencimento da reserva. `expira_em` explícito manda; senão, é calculado a partir da config
+  // `reserva_dias_validade`. Sem a config e sem valor explícito a reserva NÃO expira — o job de
+  // expiração só age sobre quem tem `expira_em`. É opt-in de propósito: ligar um default aqui
+  // faria as reservas manuais que já existem começarem a ser liberadas sozinhas.
+  let expiraEm = expira_em || null;
+  if (!expiraEm) {
+    const dias = parseInt(await getConfig(db, 'reserva_dias_validade'), 10);
+    if (Number.isFinite(dias) && dias > 0) {
+      const d = new Date(Date.now() + dias * 24 * 60 * 60 * 1000);
+      expiraEm = d.toISOString().slice(0, 10);
+    }
+  }
 
-  await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = COALESCE(quantidade_reservada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [quantidade, material_id]);
+  let reservaId = null;
+  try {
+    const r = await dbRun(db, `INSERT INTO reservas_material_almoxarifado
+      (material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem,
+       solicitante_id, solicitante_nome, observacoes, requisicao_id, item_requisicao_id, origem,
+       data_necessidade, expira_em)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+      material_id, qtd, projeto_id || null, os_id || null, os_referencia || null,
+      cliente_id || null, equipamento || null, submontagem || null,
+      user.id, user.nome || user.email, observacoes || null,
+      opcoes.requisicao_id || null, opcoes.item_requisicao_id || null,
+      opcoes.requisicao_id ? 'REQUISICAO' : 'MANUAL',
+      data_necessidade || opcoes.data_necessidade || null, expiraEm,
+    ]);
+    reservaId = r.lastID;
 
-  await registrarMovimentacao(db, user, {
-    material_id, tipo: 'RESERVA', quantidade,
-    motivo: 'Reserva por OS/projeto', os_id, projeto_id, cliente_id,
-    reserva_id: r.lastID, referencia: os_referencia,
-  });
+    await registrarMovimentacao(db, user, {
+      material_id, tipo: 'RESERVA', quantidade: qtd,
+      motivo: opcoes.motivo || 'Reserva por OS/projeto', os_id, projeto_id, cliente_id,
+      reserva_id: reservaId, referencia: os_referencia, requisicao_id: opcoes.requisicao_id,
+    });
+  } catch (e) {
+    // Não há transação neste serviço (padrão do módulo: UPDATE condicional único), então o hold
+    // acima é compensado à mão — senão o material ficaria com saldo reservado sem reserva viva.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [qtd, material_id]);
+    if (reservaId) await dbRun(db, 'DELETE FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]);
+    throw e;
+  }
 
-  return { id: r.lastID };
+  return { id: reservaId };
 }
 
-async function liberarReserva(db, user, reservaId, quantidade = null) {
-  const reserva = await dbGet(db, 'SELECT * FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]);
-  if (!reserva || reserva.status !== 'ATIVA') throw Object.assign(new Error('Reserva não encontrada ou inativa'), { status: 404 });
+/**
+ * Devolve ao disponível o que ainda está preso numa reserva ATIVA.
+ *
+ * `options.statusFinal` existe para a expiração: uma reserva que venceu sozinha vira EXPIRADA,
+ * não LIBERADA — os dois fatos são diferentes no relatório, e é o único jeito de o job de
+ * expiração reusar este caminho sem duplicar a devolução de saldo.
+ *
+ * `options.motivo` (+ liberado_por/liberado_em) é o rastro na PRÓPRIA reserva: antes só existia
+ * a movimentação LIBERACAO_RESERVA, então olhando a reserva não se sabia quem a soltou.
+ */
+async function liberarReserva(db, user, reservaId, quantidade = null, options = {}) {
+  const {
+    statusFinal = 'LIBERADA',
+    motivo = null,
+    motivoMovimentacao = 'Liberação de reserva',
+  } = options;
 
-  const qtd = quantidade || (reserva.quantidade - reserva.quantidade_utilizada);
+  const reserva = await dbGet(db, 'SELECT * FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]);
+  if (!reserva) throw Object.assign(new Error('Reserva não encontrada'), { status: 404 });
+  if (reserva.status !== 'ATIVA') {
+    throw Object.assign(new Error(`Reserva ${String(reserva.status).toLowerCase()} não pode ser liberada`), { status: 400 });
+  }
+
+  const restante = reserva.quantidade - (reserva.quantidade_utilizada || 0);
+  const qtd = quantidade == null ? restante : Number(quantidade);
+  if (!(qtd > 0)) throw Object.assign(new Error('Quantidade a liberar deve ser maior que zero'), { status: 400 });
+  if (qtd > restante) {
+    throw Object.assign(new Error(`Quantidade acima do saldo da reserva: ${restante}`), { status: 400 });
+  }
+  const total = qtd >= restante;
+
+  // Reivindica a reserva num UPDATE condicional (padrão do módulo: não há transação aqui).
+  // Sem isso duas liberações concorrentes — ou duas rodadas do job de expiração — passariam
+  // as duas e o quantidade_reservada do material seria descontado em dobro.
+  // Liberação parcial reduz `quantidade` para o hold restante continuar coerente com o que o
+  // material tem reservado; liberação total preserva a quantidade original como histórico.
+  const claim = await dbGet(db, `UPDATE reservas_material_almoxarifado
+    SET status = ?,
+        quantidade = quantidade - ?,
+        liberado_por = ?, liberado_em = CURRENT_TIMESTAMP, motivo_liberacao = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = 'ATIVA' AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ?
+    RETURNING id`,
+    [total ? statusFinal : 'ATIVA', total ? 0 : qtd, user?.id || null, motivo, reservaId, qtd]);
+  if (!claim) {
+    const atual = await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]);
+    throw Object.assign(new Error(`Reserva ${String(atual?.status || 'inexistente').toLowerCase()} não pode ser liberada`), { status: 400 });
+  }
+
   await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [qtd, reserva.material_id]);
-  await dbRun(db, 'UPDATE reservas_material_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [qtd >= reserva.quantidade - reserva.quantidade_utilizada ? 'LIBERADA' : 'ATIVA', reservaId]);
 
   await registrarMovimentacao(db, user, {
     material_id: reserva.material_id, tipo: 'LIBERACAO_RESERVA', quantidade: qtd,
     reserva_id: reservaId, os_id: reserva.os_id, projeto_id: reserva.projeto_id,
-    motivo: 'Liberação de reserva',
+    motivo: motivoMovimentacao,
   });
 
-  return { success: true };
+  return { success: true, reserva_id: Number(reservaId), quantidade_liberada: qtd, status: total ? statusFinal : 'ATIVA' };
 }
 
 async function consultarEstoque(db, filters = {}) {

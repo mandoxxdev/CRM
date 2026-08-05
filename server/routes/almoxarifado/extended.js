@@ -9,6 +9,7 @@ const { validate } = require('../../services/almoxarifado/validation');
 const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
+const reservationService = require('../../services/almoxarifado/reservationService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const returnService = require('../../services/almoxarifado/returnService');
 const scrapService = require('../../services/almoxarifado/scrapService');
@@ -335,13 +336,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   // ── Reservas ──
   app.get('/api/almoxarifado/reservas', auth, async (req, res) => {
     try {
-      let sql = `SELECT r.*, m.nome as material_nome, m.codigo as material_codigo
-        FROM reservas_material_almoxarifado r JOIN materiais_almoxarifado m ON r.material_id = m.id WHERE 1=1`;
-      const params = [];
-      if (req.query.status) { sql += ' AND r.status = ?'; params.push(req.query.status); }
-      if (req.query.os_id) { sql += ' AND (r.os_id = ? OR r.os_referencia = ?)'; params.push(req.query.os_id, String(req.query.os_id)); }
-      sql += ' ORDER BY r.created_at DESC';
-      res.json(await dbAll(db, sql, params));
+      res.json(await reservationService.listarReservas(db, req.query));
     } catch (e) { handleError(res, e); }
   });
 
@@ -354,8 +349,31 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
 
   app.post('/api/almoxarifado/reservas/:id/liberar', auth, requirePermission('reservar'), async (req, res) => {
     try {
-      const result = await stockService.liberarReserva(db, req.user, req.params.id, req.body.quantidade);
+      const result = await stockService.liberarReserva(db, req.user, req.params.id, req.body.quantidade, {
+        motivo: req.body.motivo || req.body.motivo_liberacao || null,
+      });
       res.json(result);
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Transferência entre projetos/OS — troca de dono, sem tocar em saldo. `reservar_outra_os`
+  // (ADMINISTRADOR/GESTOR) e não `reservar`: quem reserva para o próprio setor não redireciona
+  // material já separado para outro projeto.
+  app.put('/api/almoxarifado/reservas/:id/transferir', auth, requirePermission('reservar_outra_os'), async (req, res) => {
+    try {
+      res.json(await reservationService.transferirReserva(db, req.user, req.params.id, req.body));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Job de expiração (cron externo/admin) — mesmo papel de
+  // POST /requisicoes/processar-lembretes, que usa denyUnlessAlmoxAdmin. Aquele helper é local
+  // de routes/almoxarifado.js; aqui o equivalente é requirePermission('configurar'), que só
+  // libera o perfil ADMINISTRADOR e é o gate usado pelos outros jobs deste arquivo
+  // (ex.: compras/verificar-minimos).
+  app.post('/api/almoxarifado/reservas/processar-expiracao', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      const resultado = await reservationService.processarExpiracao(db, req.user, req.body || {});
+      res.json({ success: true, ...resultado });
     } catch (e) { handleError(res, e); }
   });
 

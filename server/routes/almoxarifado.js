@@ -22,6 +22,7 @@ const {
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
 const { can, requirePermission } = require('../services/almoxarifado/permissions');
+const reservationService = require('../services/almoxarifado/reservationService');
 const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
 const { validate } = require('../services/almoxarifado/validation');
 const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
@@ -1767,10 +1768,23 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (err) return res.status(500).json({ error: err.message });
       if (!req_row) return res.status(404).json({ error: 'Requisição não encontrada' });
 
+      // saldo_atual carrega o DISPONÍVEL (Etapa 3, Task 3) MAIS o hold da própria requisição
+      // (Etapa 4): a reserva criada na aprovação é deduzida do disponível geral, então sem
+      // somá-la de volta o detalhe anunciaria entregável 0 justamente para a requisição que tem
+      // o material garantido. Reserva de terceiro (origem MANUAL ou de outra requisição)
+      // continua fora, como saldo de outro dono.
       db.all(`SELECT ir.*, ma.nome as material_nome, ma.codigo as material_codigo,
                      ma.unidade,
                      (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
-                       - COALESCE(ma.quantidade_em_inspecao,0)) as saldo_atual,
+                       - COALESCE(ma.quantidade_em_inspecao,0)
+                       + COALESCE((SELECT SUM(r.quantidade - COALESCE(r.quantidade_utilizada,0))
+                                   FROM reservas_material_almoxarifado r
+                                   WHERE r.item_requisicao_id = ir.id AND r.material_id = ir.material_id
+                                     AND r.status = 'ATIVA' AND r.origem = 'REQUISICAO'), 0)) as saldo_atual,
+                     COALESCE((SELECT SUM(r2.quantidade - COALESCE(r2.quantidade_utilizada,0))
+                               FROM reservas_material_almoxarifado r2
+                               WHERE r2.item_requisicao_id = ir.id AND r2.material_id = ir.material_id
+                                 AND r2.status = 'ATIVA' AND r2.origem = 'REQUISICAO'), 0) as quantidade_reservada_item,
                      ma.foto,
                      ma.localizacao, ma.localizacao_padrao_id,
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
@@ -1943,7 +1957,24 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // dos itens/materiais, não do status da requisição) para gravar tudo num único
       // UPDATE — evita uma janela transitória com status=APROVADO visível a leitores
       // concorrentes entre dois writes.
-      const statusFinal = await requisitionStateMachine.calcularStatusPosAprovacao(db, req.params.id);
+      const statusPosAprovacao = await requisitionStateMachine.calcularStatusPosAprovacao(db, req.params.id);
+
+      // Etapa 4 (design, decisão 2 — ligação 04→07): a aprovação RESERVA o saldo de cada item,
+      // e a requisição assume TOTALMENTE_RESERVADA/PARCIALMENTE_RESERVADA em vez de ficar só
+      // APROVADO. Sem isso o material aprovado continuava no bolo do disponível e podia ser
+      // levado por outra saída entre a aprovação e a entrega.
+      //
+      // Se nada foi reservado (nenhum item com disponível), `status` vem null e o
+      // comportamento anterior é preservado na íntegra — AGUARDANDO_ESTOQUE/AGUARDANDO_COMPRA
+      // NÃO regridem para um status de reserva.
+      //
+      // As reservas nascem ANTES do UPDATE do status porque o status DEPENDE delas, e o UPDATE
+      // continua único (sem janela transitória com status=APROVADO visível a leitores
+      // concorrentes). A janela invertida — reserva criada com a requisição ainda PENDENTE — é
+      // inofensiva: a reserva já segura o saldo e carrega requisicao_id, então a entrega a
+      // encontra normalmente depois.
+      const reserva = await requisitionService.reservarItensAprovacao(db, req.params.id, req.user, reqRow);
+      const statusFinal = reserva.status || statusPosAprovacao;
 
       await dbRun(db,
         `UPDATE requisicoes_almoxarifado SET status=?, aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
@@ -1953,10 +1984,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_novos: { status: statusFinal },
+        dados_novos: { status: statusFinal, reservas: reserva.reservas },
       });
 
-      res.json({ success: true, status: statusFinal });
+      res.json({ success: true, status: statusFinal, reservas: reserva.reservas });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
@@ -2271,7 +2302,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         [motivo || null, req.params.id],
         function (err2) {
           if (err2) return res.status(500).json({ error: err2.message });
-          res.json({ success: true });
+          // Cancelar sem soltar as reservas deixaria o hold preso: como a expiração é opt-in
+          // por config, na prática ficaria preso para sempre — a mesma armadilha de saldo
+          // reservado inutilizável que a Etapa 4 fecha no consumo. Best-effort: falha aqui não
+          // desfaz o cancelamento, que é a ação que o usuário pediu.
+          reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, motivo || 'Requisição cancelada')
+            .catch((e) => console.warn('Liberação de reservas no cancelamento:', e.message))
+            .finally(() => res.json({ success: true }));
         });
     });
   });

@@ -8,13 +8,28 @@
  */
 const { dbGet, dbAll } = require('./db');
 
+/**
+ * Etapa 4: os dois status de reserva. Nomeados aqui porque a máquina de estados é a dona da
+ * lista de status — quem os grava (requisitionService.reservarItensAprovacao) importa daqui em
+ * vez de repetir a string.
+ */
+const STATUS_PARCIALMENTE_RESERVADA = 'PARCIALMENTE_RESERVADA';
+const STATUS_TOTALMENTE_RESERVADA = 'TOTALMENTE_RESERVADA';
+
 const TRANSICOES = {
   RASCUNHO: ['PENDENTE', 'CANCELADO'],
   PENDENTE: ['APROVADO', 'REJEITADO', 'AGUARDANDO_APROVACAO_VALOR', 'CANCELADO'],
   AGUARDANDO_APROVACAO_VALOR: ['PENDENTE', 'APROVADO', 'REJEITADO', 'CANCELADO'],
-  APROVADO: ['EM_SEPARACAO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'CANCELADO'],
+  APROVADO: ['EM_SEPARACAO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
+    'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA', 'CANCELADO'],
   AGUARDANDO_ESTOQUE: ['EM_SEPARACAO', 'CANCELADO'],
   AGUARDANDO_COMPRA: ['EM_SEPARACAO', 'CANCELADO'],
+  // Etapa 4 (design, decisão 2): entram ENTRE APROVADO e EM_SEPARACAO. A aprovação reserva o
+  // saldo de cada item e a requisição para num deles em vez de ficar só APROVADO. Daqui só se
+  // vai para a separação (o caminho normal) ou para o cancelamento — não há atalho para
+  // PRONTA_PARA_RETIRADA/ENTREGUE, que continuam exigindo passar por EM_SEPARACAO.
+  PARCIALMENTE_RESERVADA: ['EM_SEPARACAO', 'CANCELADO'],
+  TOTALMENTE_RESERVADA: ['EM_SEPARACAO', 'CANCELADO'],
   EM_SEPARACAO: ['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE'],
   PRONTA_PARA_RETIRADA: ['PARCIALMENTE_ATENDIDA', 'ENTREGUE'],
   PARCIALMENTE_ATENDIDA: ['EM_SEPARACAO', 'ENTREGUE', 'ENCERRADA'],
@@ -26,9 +41,12 @@ const TRANSICOES = {
  * .separarRequisicao). Além de APROVADO/EM_SEPARACAO/PARCIALMENTE_ATENDIDA (já existentes
  * antes desta Task), inclui AGUARDANDO_ESTOQUE/AGUARDANDO_COMPRA — o almoxarife pode
  * iniciar separação a partir deles quando o estoque chegar (design, seção "Máquina de
- * estados").
+ * estados") — e, desde a Etapa 4, PARCIALMENTE_RESERVADA/TOTALMENTE_RESERVADA, que são o
+ * novo estado normal de uma requisição recém-aprovada com saldo: sem eles aqui, a reserva
+ * automática travaria a separação da própria requisição que a criou.
  */
-const PODE_SEPARAR = ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA'];
+const PODE_SEPARAR = ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
+  'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA', 'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA'];
 
 /**
  * Estados a partir dos quais é permitido entregar (requisitionService.entregarRequisicao).
@@ -92,6 +110,8 @@ async function calcularStatusPosAprovacao(db, requisicaoId) {
 
 module.exports = {
   TRANSICOES,
+  STATUS_PARCIALMENTE_RESERVADA,
+  STATUS_TOTALMENTE_RESERVADA,
   PODE_SEPARAR,
   PODE_ENTREGAR,
   validarTransicao,

@@ -586,6 +586,27 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
 
+  // Etapa 4 — prazo da reserva e rastro da liberação.
+  // `expira_em` é a data limite do hold: o job POST /reservas/processar-expiracao devolve ao
+  // disponível tudo que passou dessa data (reserva sem a coluna preenchida nunca expira).
+  // O trio liberado_* responde "quem soltou, quando e por quê" — sem ele a liberação
+  // (e a expiração) só existia como movimentação, sem dono na própria reserva.
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN data_necessidade DATE');
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN expira_em DATE');
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN liberado_por INTEGER');
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN liberado_em DATETIME');
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN motivo_liberacao TEXT');
+
+  // Etapa 4 — vínculo da reserva com a requisição que a originou (ligação 04→07).
+  // `requisicao_id`/`item_requisicao_id` são o que permite à entrega achar a reserva DAQUELE
+  // item e consumi-la (stockService.registrarMovimentacao com reserva_id) em vez de disputar
+  // o disponível geral — sem esse vínculo a reserva da aprovação seria um hold contra a
+  // própria requisição. `origem` separa o que nasceu do fluxo (REQUISICAO) do que alguém
+  // reservou à mão (MANUAL): só a primeira pode ser consumida automaticamente pela entrega.
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN requisicao_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN item_requisicao_id INTEGER');
+  await safeAlter(db, "ALTER TABLE reservas_material_almoxarifado ADD COLUMN origem TEXT DEFAULT 'MANUAL'");
+
   // ── Recebimentos ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS recebimentos_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

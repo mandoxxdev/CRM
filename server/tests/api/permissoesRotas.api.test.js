@@ -354,7 +354,11 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
     assert.strictEqual(await statusDe(db, reqId), 'PENDENTE', 'status mudou apesar do 403');
   });
 
-  await test('[PUT /requisicoes/:id/aprovar] GESTOR (não solicitante) -> 200 APROVADO', async () => {
+  // Etapa 4: com saldo, aprovar também reserva, e o status de sucesso é TOTALMENTE_RESERVADA.
+  // GESTOR é o caso interessante: tem `aprovar_requisicao` mas NÃO tem `reservar`. A reserva
+  // automática é ação do fluxo, não do usuário — quem a barrasse aqui faria o GESTOR tomar 403
+  // no meio da própria aprovação que a permissão dele autoriza.
+  await test('[PUT /requisicoes/:id/aprovar] GESTOR (não solicitante) -> 200 e reserva automática', async () => {
     const matId = await criarMaterial(db);
     const { id: reqId } = await criarRequisicao(db, {
       status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 999,
@@ -363,7 +367,11 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
     setUser(GESTOR);
     const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-    assert.strictEqual(res.body.status, 'APROVADO');
+    assert.strictEqual(res.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(res.body));
+    const reserva = await dbGet(db,
+      `SELECT quantidade, origem FROM reservas_material_almoxarifado WHERE requisicao_id = ?`, [reqId]);
+    assert.ok(reserva, 'aprovação do GESTOR deveria ter criado a reserva do item');
+    assert.strictEqual(reserva.origem, 'REQUISICAO');
   });
 
   // A segregação de funções (solicitante não aprova a própria) continua valendo e é
