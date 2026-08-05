@@ -2,7 +2,7 @@
 
 > Atualizado em 2026-08-05 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 e 2) e o que está planejado para a próxima etapa (Etapa 3). Cada etapa tem um roteiro de cliques para você testar manualmente no navegador.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1, 2 e 3) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
 ## Etapa 0 — Fundação (resumo)
 
@@ -82,24 +82,53 @@ Vá em **Almoxarifado → Movimentações**.
 
 ---
 
-## Etapa 3 — Requisições Ponta a Ponta (PLANEJADA — o que vem)
+## Etapa 3 — Requisições Ponta a Ponta (ENTREGUE — 2026-08-05)
 
-> Esta seção descreve o que está no planejamento, sujeito a ajustes quando o detalhamento técnico for fechado. Nada abaixo está implementado ainda.
+O fluxo de requisição de materiais (o funcionário pede material, o almoxarifado separa e entrega) já era a parte mais madura do módulo — a Etapa 3 fechou as lacunas que faltavam para o ciclo completo, do pedido até a confirmação de recebimento.
 
-O fluxo de requisição de materiais (o funcionário pede material, o almoxarifado separa e entrega) é a parte mais madura do módulo hoje, mas tem lacunas que a Etapa 3 pretende fechar:
+| Antes | Agora |
+|---|---|
+| Era possível criar uma requisição com quantidade zero ou negativa em um item | Bloqueado nas duas rotas de criação (mensagem de erro, item nenhum é salvo) |
+| A entrega de uma requisição baixava estoque por um caminho próprio, sem passar pelas mesmas validações do motor (bloqueio de localização, saldo negativo, etc.) e sem gravar auditoria | Entrega e estorno passam pelo mesmo motor da Etapa 1 (`stockService.registrarMovimentacao`): auditoria completa, saldo por localização, localização bloqueada é respeitada, e a entrega passa a considerar o **disponível** (descontando reserva/bloqueio de terceiros), não só o saldo físico |
+| Uma requisição nascia direto como "Pendente" (enviada) | Pode nascer como **Rascunho** (botão "Salvar Rascunho" no formulário) e ser enviada depois (botão "Enviar Requisição") |
+| Só existiam os status até "Entregue" | Novos status: **Aguardando Estoque** / **Aguardando Compra** (a requisição cai automaticamente aqui na aprovação se nenhum item tiver saldo disponível — em "Aguardando Compra" quando já existe uma solicitação de compra pendente para o material), **Pronta p/ Retirada** (o almoxarife libera depois de separar) e **Encerrada** (fecha de vez, bloqueia qualquer entrega futura) |
+| Não existia um campo formal de "tipo" da requisição | Campo **Tipo** com 14 opções (Consumo, Ordem de Produção, Ordem de Serviço, Projeto, Montagem, Instalação Externa, Assistência Técnica, Manutenção, Desenvolvimento, Administrativo, Emergencial, Ferramenta, EPI, Material do Cliente) — requisições do tipo **Emergencial** exigem uma justificativa obrigatória no formulário |
+| Não existiam campos de Centro de Custo / Local de Entrega | Formulário ganhou os campos **Centro de Custo** (select) e **Local de Entrega** (texto) |
+| Quem entregava marcava como "entregue" e o ciclo parava aí | O **solicitante** confirma o recebimento (botão "Confirmar Recebimento", só aparece pra quem pediu — nem admin confirma no lugar de outra pessoa) |
+| Só existia aprovação simples (um perfil aprova/rejeita) e aprovação por valor, sem trava nenhuma | **Quem pediu a requisição não pode aprovar a própria** (nas duas aprovações — simples e por valor) — o botão de aprovar aparece pra qualquer outro usuário com permissão, mas o backend recusa (403) se for o próprio solicitante. Rejeitar a própria continua permitido (é desistência, não aprovação). **Rejeição sempre exige motivo** (o botão de confirmar no modal fica desabilitado até preencher). Toda decisão (aprovar, rejeitar, confirmar recebimento, encerrar) fica registrada com usuário, data e justificativa |
+| Não dava pra reaproveitar uma requisição antiga | Botão **"Copiar como Novo Rascunho"** — gera um novo rascunho com os mesmos itens/tipo/vínculos (sem as quantidades já entregues) |
 
-- **Corrigir um bug conhecido**: hoje é possível criar uma requisição com quantidade zero ou negativa em um item — isso vai passar a ser bloqueado.
-- **Requisição vai passar a baixar estoque pelo motor novo da Etapa 1.** Hoje a entrega de uma requisição usa um caminho separado que não passa pelas mesmas validações (bloqueio de localização, saldo negativo, etc.) — isso será unificado.
-- **Novos status da requisição**: hoje uma requisição nasce direto como "enviada". Vão existir status como Rascunho, Aguardando Estoque/Aguardando Compra, Pronta para Retirada e Encerrada (hoje só existe até "entregue").
-- **Tipos de requisição estruturados** (hoje não existe um campo formal para isso).
-- **Confirmação de recebimento pelo solicitante** — hoje quem entrega marca como entregue, mas quem pediu não confirma que recebeu; isso fecha o ciclo.
-- **Motor de aprovações de verdade**: hoje só existe aprovação simples (um perfil aprova/rejeita) e aprovação por valor. A Etapa 3 planeja regras configuráveis (por tipo de material, quantidade, projeto, urgência), a exigência de que **quem pediu não pode aprovar a própria requisição**, e justificativa obrigatória em pedidos emergenciais.
+O que a Etapa 3 **não** cobre (fica para etapas futuras — ver "Pendências conhecidas" no fim deste documento): anexos na requisição, assinatura digital na retirada, importar itens de uma lista técnica/ordem de produção, reserva automática de estoque com status próprio (Aguardando/Parcialmente/Totalmente Reservada — Etapa 4), registrar lote/série na entrega, e uma tela de configuração de regras de aprovação (hoje as regras — segregação e limite por valor — são fixas no código, não configuráveis pela interface).
+
+### Roteiro de teste manual (Etapa 3) — ciclo completo
+
+> **Importante: esta etapa precisa de DOIS usuários.** A regra de segregação bloqueia quem pediu a requisição de aprovar a própria — você vai precisar logar com um segundo usuário (perfil com permissão de aprovar requisições: Admin, Almoxarife ou Gestor) numa aba anônima ou outro navegador para aprovar a requisição do primeiro.
+
+Vá em **Almoxarifado → Requisições**.
+
+1. **Criar como rascunho.** Clique em "Nova Requisição", escolha um Tipo (ex.: "Consumo"), adicione pelo menos um item com quantidade, preencha Centro de Custo/Local de Entrega se quiser, e clique em **"Salvar Rascunho"** (em vez de "Enviar Requisição"). A requisição aparece na lista com o badge **Rascunho** e não dispara e-mail nenhum ainda.
+2. **Enviar o rascunho.** Abra o detalhe da requisição criada no passo 1 e clique em **"Enviar Requisição"**. O status passa para **Pendente** — só agora o e-mail ao almoxarifado e a avaliação de aprovação por valor (se configurada) entram em ação.
+3. **Aprovar com OUTRO usuário.** Faça login com um segundo usuário (perfil Admin/Almoxarife/Gestor, diferente de quem criou a requisição) numa aba anônima. Abra a mesma requisição e clique em **"Aprovar e Separar"** (ou "Só Aprovar"). Deve funcionar normalmente e o status avança (para **Em Separação**, ou para **Aguard. Estoque**/**Aguard. Compra** se nenhum item tiver saldo disponível).
+4. **Separar e liberar para retirada.** Ainda como o segundo usuário (ou almoxarife), registre a separação dos itens e clique em **"Liberar para Retirada"**. Status vira **Pronta p/ Retirada**.
+5. **Entregar.** Use a ação de entrega normal (como já funcionava antes), informando a quantidade atendida de cada item. Status vira **Entregue** (ou **Parcialmente Atendida** se sobrou saldo pendente).
+6. **Confirmar recebimento — volte para o PRIMEIRO usuário (o solicitante).** Faça login de novo com quem criou a requisição, abra o detalhe e clique em **"Confirmar Recebimento"**. (O caso de erro "Confirmar recebimento por quem não é o solicitante", logo abaixo, prova que só o solicitante consegue.)
+7. **Encerrar.** Com um usuário com permissão de aprovar requisições (Admin/Almoxarife/Gestor), clique em **"Encerrar Requisição"** no modal de confirmação. Status vira **Encerrada** e a requisição não aceita mais entregas.
+8. **Copiar.** Em qualquer requisição que não seja rascunho, clique em **"Copiar como Novo Rascunho"**. Confira que abre/gera um novo rascunho com os mesmos itens e tipo, mas sem nenhuma quantidade entregue.
+
+### Casos de erro esperados
+
+- **Aprovar a própria requisição.** Logado como quem criou a requisição, tente aprovar. Deve ser recusado (403) e o status não muda — só um usuário diferente do solicitante pode aprovar.
+- **Rejeitar sem motivo.** Abra o modal de "Rejeitar", deixe o campo de motivo vazio. O botão de confirmar fica desabilitado — não dá nem para tentar enviar sem preencher.
+- **Item com quantidade zero (ou negativa).** No formulário de criação, tente salvar um item com quantidade 0. A criação é bloqueada com mensagem de erro, tanto ao salvar rascunho quanto ao enviar direto.
+- **Entrega acima do disponível quando há reserva de terceiro.** Se o material tiver parte do saldo reservado para outra requisição/projeto, tentar entregar mais do que o disponível (saldo físico menos o reservado de terceiros) é recusado (400) e nada muda no estoque — mesmo que o saldo físico total pareça suficiente.
+- **Confirmar recebimento por quem não é o solicitante.** Logado como outro usuário (inclusive admin), tentar confirmar o recebimento de uma requisição que não é sua é recusado (403) — não existe bypass de admin aqui.
+- **Requisição Emergencial sem justificativa.** Escolha o tipo "Emergencial" no formulário e tente enviar sem preencher a justificativa — bloqueado.
 
 ---
 
 ## O que observar de regressão (sempre)
 
-- O fluxo de requisição de materiais que já existia (criar → aprovar → separar → entregar) continua funcionando normalmente — nada foi removido nessa tela.
+- O fluxo de requisição de materiais que já existia (criar → aprovar → separar → entregar) continua funcionando normalmente — nada foi removido nessa tela; requisições antigas continuam com o comportamento de sempre (criadas sem tipo/centro de custo ganham o padrão "Consumo").
 - Movimentações antigas (de antes da Etapa 1) continuam visíveis e com os dados corretos no livro.
 - O Mapa de Localizações carrega normalmente e mostra as posições que já existiam, agora todas vinculadas ao almoxarifado "ALM-GERAL".
 
@@ -109,4 +138,9 @@ O fluxo de requisição de materiais (o funcionário pede material, o almoxarifa
 
 - Consulta de "posições vazias" e "materiais sem endereço": a API já existe, mas não há tela para usá-la.
 - Criar subfamílias: só via API, sem formulário na interface.
-- Reservas de estoque (separar material para uma OS/projeto antes da entrega): ainda não implementado — é uma etapa futura (Etapa 4).
+- Reservas de estoque (separar material para uma OS/projeto antes da entrega, com status "Aguardando/Parcialmente/Totalmente Reservada" na requisição): ainda não implementado — é uma etapa futura (Etapa 4).
+- Anexos na requisição (desenho/documento) e assinatura digital na retirada: ainda não implementados.
+- Importar itens de uma lista técnica ou ordem de produção na requisição: ainda não implementado (depende da integração com Engenharia/Produção).
+- Registrar lote/série entregue por item na requisição: ainda não implementado (depende do controle de lotes, etapa futura).
+- Regras de aprovação configuráveis (por tipo de material, valor, quantidade, projeto, urgência) com tela própria: hoje as regras (segregação do solicitante + limite por valor) são fixas no código — sem tela de configuração.
+- Encerramento não dispara e-mail de resumo.
