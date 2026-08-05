@@ -10,19 +10,44 @@ import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './Almo
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
-  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign
+  FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
+  FiSend, FiArchive, FiShoppingCart, FiUserCheck, FiBox, FiEdit3, FiCopy, FiCheckSquare
 } from 'react-icons/fi';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
+  RASCUNHO:              { label: 'Rascunho',              cls: 'almox-badge-zerado',    icon: FiEdit3 },
   PENDENTE:              { label: 'Pendente',              cls: 'almox-badge-aberto',    icon: FiClock },
-  APROVADO:              { label: 'Aprovado',              cls: 'almox-badge-ok',        icon: FiCheck },
   AGUARDANDO_APROVACAO_VALOR: { label: 'Aguard. Aprov. Valor', cls: 'almox-badge-baixo', icon: FiDollarSign },
+  APROVADO:              { label: 'Aprovado',              cls: 'almox-badge-ok',        icon: FiCheck },
+  AGUARDANDO_ESTOQUE:    { label: 'Aguard. Estoque',        cls: 'almox-badge-critico',  icon: FiAlertTriangle },
+  AGUARDANDO_COMPRA:     { label: 'Aguard. Compra',         cls: 'almox-badge-devolucao', icon: FiShoppingCart },
   EM_SEPARACAO:          { label: 'Em Separação',          cls: 'almox-badge-ajuste',    icon: FiPackage },
+  PRONTA_PARA_RETIRADA:  { label: 'Pronta p/ Retirada',     cls: 'almox-badge-entrada',  icon: FiBox },
   PARCIALMENTE_ATENDIDA: { label: 'Parcialmente Atendida', cls: 'almox-badge-baixo',     icon: FiTruck },
   ENTREGUE:              { label: 'Entregue',              cls: 'almox-badge-concluido', icon: FiCheckCircle },
+  ENCERRADA:             { label: 'Encerrada',             cls: 'almox-badge-cancelado', icon: FiArchive },
   REJEITADO:             { label: 'Rejeitado',             cls: 'almox-badge-saida',     icon: FiX },
   CANCELADO:             { label: 'Cancelado',             cls: 'almox-badge-cancelado', icon: FiX },
+};
+
+// Etapa 3 (design, seção "Dados"): 14 valores fixos de tipo_requisicao — labels amigáveis
+// só existem no client (server trata como enum de texto puro), usados em filtro e coluna.
+const TIPO_REQUISICAO_LABELS = {
+  CONSUMO: 'Consumo',
+  ORDEM_PRODUCAO: 'Ordem de Produção',
+  ORDEM_SERVICO: 'Ordem de Serviço',
+  PROJETO: 'Projeto',
+  MONTAGEM: 'Montagem',
+  INSTALACAO_EXTERNA: 'Instalação Externa',
+  ASSISTENCIA_TECNICA: 'Assistência Técnica',
+  MANUTENCAO: 'Manutenção',
+  DESENVOLVIMENTO: 'Desenvolvimento',
+  ADMINISTRATIVO: 'Administrativo',
+  EMERGENCIAL: 'Emergencial',
+  FERRAMENTA: 'Ferramenta',
+  EPI: 'EPI',
+  MATERIAL_CLIENTE: 'Material do Cliente',
 };
 
 const getEntregue = (item) => Number(item.quantidade_entregue ?? item.quantidade_atendida) || 0;
@@ -73,6 +98,7 @@ const RequisicoesList = () => {
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroStatus, setFiltroStatus] = useState(searchParams.get('status') || '');
+  const [filtroTipo, setFiltroTipo] = useState(searchParams.get('tipo') || '');
   const [filtroAprovacoesValor, setFiltroAprovacoesValor] = useState(
     searchParams.get('aprovacoes_valor') === '1'
   );
@@ -99,6 +125,9 @@ const RequisicoesList = () => {
   const [showExcluir, setShowExcluir] = useState(false);
   const [excluirTarget, setExcluirTarget] = useState(null);
   const [justificativaExclusao, setJustificativaExclusao] = useState('');
+  const [showEncerrar, setShowEncerrar] = useState(false);
+  const [motivoEncerramento, setMotivoEncerramento] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [quantidadesEntrega, setQuantidadesEntrega] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
@@ -113,9 +142,10 @@ const RequisicoesList = () => {
       params.status = filtroStatus;
     }
     if (filtroMinha) params.minha = '1';
+    if (filtroTipo) params.tipo = filtroTipo;
     if (id) params.id = String(id);
     return params;
-  }, [filtroStatus, filtroMinha, filtroAprovacoesValor]);
+  }, [filtroStatus, filtroMinha, filtroAprovacoesValor, filtroTipo]);
 
   const syncSearchParams = useCallback((id) => {
     const params = buildSearchParams(id);
@@ -158,7 +188,7 @@ const RequisicoesList = () => {
   useEffect(() => {
     syncSearchParams(selectedIdRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroStatus, filtroMinha, filtroAprovacoesValor]);
+  }, [filtroStatus, filtroMinha, filtroAprovacoesValor, filtroTipo]);
 
   const aplicarDetalhe = useCallback((data, id) => {
     setDetalhe(data);
@@ -530,6 +560,90 @@ const RequisicoesList = () => {
     setShowExcluir(true);
   };
 
+  // Ações do ciclo completo (Task 6) — todas exclusivas de /almoxarifado/requisicoes;
+  // /requisicoes-material não tem essas rotas, por isso os botões só aparecem em
+  // warehouseMode (ver JSX abaixo).
+  const closeConfirmDialog = () => setConfirmDialog(null);
+
+  const handleEnviar = async (id) => {
+    setSaving(true);
+    try {
+      await api.post(`/almoxarifado/requisicoes/${id}/enviar`);
+      toast.success('Requisição enviada para aprovação!');
+      closeConfirmDialog();
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao enviar requisição');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLiberarRetirada = async (id) => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${id}/liberar-retirada`);
+      toast.success('Requisição liberada para retirada!');
+      closeConfirmDialog();
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao liberar retirada');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleConfirmarRecebimento = async (id) => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${id}/confirmar-recebimento`);
+      toast.success('Recebimento confirmado!');
+      closeConfirmDialog();
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao confirmar recebimento');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEncerrar = async () => {
+    if (!detalhe) return;
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${detalhe.id}/encerrar`, {
+        motivo: motivoEncerramento.trim() || undefined,
+      });
+      toast.success('Requisição encerrada!');
+      setShowEncerrar(false);
+      setMotivoEncerramento('');
+      await abrirDetalhe(detalhe.id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao encerrar requisição');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopiar = async (id) => {
+    setSaving(true);
+    try {
+      const res = await api.post(`/almoxarifado/requisicoes/${id}/copiar`);
+      toast.success(`Rascunho ${res.data.numero} criado a partir desta requisição!`);
+      closeConfirmDialog();
+      await loadRequisicoes();
+      await abrirDetalhe(res.data.id, { force: true });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao copiar requisição');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 
   const StatusBadge = ({ status }) => {
@@ -548,13 +662,19 @@ const RequisicoesList = () => {
     );
   };
 
+  // Filtro por tipo é só local (GET /almoxarifado/requisicoes não tem query param
+  // tipo_requisicao no server) — filtra o array já carregado, sem round-trip.
+  const requisicoesExibidas = filtroTipo
+    ? requisicoes.filter((r) => r.tipo_requisicao === filtroTipo)
+    : requisicoes;
+
   return (
     <div className="almox-page">
       <AlmoxPageHeader
         title={warehouseMode ? 'Requisições de Material' : 'Minhas Requisições de Material'}
         subtitle={warehouseMode
-          ? `${requisicoes.length} requisição${requisicoes.length !== 1 ? 'ões' : ''}`
-          : `Setor: ${ctx.setor} · ${requisicoes.length} registro${requisicoes.length !== 1 ? 's' : ''}`}
+          ? `${requisicoesExibidas.length} requisição${requisicoesExibidas.length !== 1 ? 'ões' : ''}`
+          : `Setor: ${ctx.setor} · ${requisicoesExibidas.length} registro${requisicoesExibidas.length !== 1 ? 's' : ''}`}
         breadcrumbs={[{ label: warehouseMode ? 'Requisições' : 'Minhas Requisições' }]}
         flowSteps={warehouseMode ? REQUISICAO_FLOW : undefined}
         currentStep={warehouseMode && detalhe ? getRequisicaoStepIndex(detalhe.status) : undefined}
@@ -589,12 +709,16 @@ const RequisicoesList = () => {
           <option value="">Todos os status</option>
           {Object.entries(STATUS_INFO).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
+        <select className="almox-select" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
+          <option value="">Todos os tipos</option>
+          {Object.entries(TIPO_REQUISICAO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>
           <input type="checkbox" checked={filtroMinha} onChange={e => setFiltroMinha(e.target.checked)} />
           {warehouseMode ? 'Apenas minhas' : 'Somente minhas solicitações'}
         </label>
-        {(filtroStatus || filtroMinha || filtroAprovacoesValor) && (
-          <button className="btn-almox-secondary" onClick={() => { setFiltroStatus(''); setFiltroMinha(false); setFiltroAprovacoesValor(false); }}>
+        {(filtroStatus || filtroMinha || filtroAprovacoesValor || filtroTipo) && (
+          <button className="btn-almox-secondary" onClick={() => { setFiltroStatus(''); setFiltroMinha(false); setFiltroAprovacoesValor(false); setFiltroTipo(''); }}>
             <FiFilter size={13} /> Limpar
           </button>
         )}
@@ -603,7 +727,7 @@ const RequisicoesList = () => {
       <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '1fr 420px' : '1fr', gap: 20 }}>
         {/* Tabela */}
         <div className="almox-table-container">
-          {loading ? <SkeletonTable rows={8} columns={6} /> : requisicoes.length === 0 ? (
+          {loading ? <SkeletonTable rows={8} columns={6} /> : requisicoesExibidas.length === 0 ? (
             <div className="almox-empty"><p>Nenhuma requisição encontrada</p></div>
           ) : (
             <table className="almox-table">
@@ -611,6 +735,7 @@ const RequisicoesList = () => {
                 <tr>
                   <th>Número</th>
                   <th>Solicitante</th>
+                  <th>Tipo</th>
                   <th>Urgência</th>
                   <th>OS / Ref.</th>
                   <th>Itens</th>
@@ -621,7 +746,7 @@ const RequisicoesList = () => {
                 </tr>
               </thead>
               <tbody>
-                {requisicoes.map(r => (
+                {requisicoesExibidas.map(r => (
                   <tr key={r.id} style={{ cursor: 'pointer', background: selectedId === r.id ? 'rgba(79,172,254,0.06)' : '' }}
                     onClick={() => abrirDetalhe(r.id, { force: true })}>
                     <td>
@@ -631,6 +756,7 @@ const RequisicoesList = () => {
                       <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{r.solicitante_nome}</div>
                       {r.departamento && <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{r.departamento}</div>}
                     </td>
+                    <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{TIPO_REQUISICAO_LABELS[r.tipo_requisicao] || r.tipo_requisicao || '—'}</td>
                     <td><UrgenciaBadge urgencia={r.urgencia} /></td>
                     <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{r.os_referencia || '—'}</td>
                     <td style={{ fontWeight: 700 }}>{r.total_itens}</td>
@@ -694,6 +820,7 @@ const RequisicoesList = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                   {[
                     ['Solicitante', detalhe.solicitante_nome],
+                    ['Tipo', TIPO_REQUISICAO_LABELS[detalhe.tipo_requisicao] || detalhe.tipo_requisicao || '—'],
                     ['Departamento', detalhe.departamento || '—'],
                     ['OS / Referência', detalhe.os_referencia || '—'],
                     ['Urgência', URGENCIA_INFO[detalhe.urgencia]?.label || detalhe.urgencia],
@@ -716,6 +843,12 @@ const RequisicoesList = () => {
                 {detalhe.rejeicao_motivo && (
                   <div style={{ background: 'rgba(229,25,58,0.06)', border: '1px solid rgba(229,25,58,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: '0.85rem', color: 'var(--gmp-error)' }}>
                     ❌ Motivo: {detalhe.rejeicao_motivo}
+                  </div>
+                )}
+                {detalhe.recebimento_confirmado_em && (
+                  <div style={{ background: 'rgba(26,163,74,0.08)', border: '1px solid rgba(26,163,74,0.25)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: '0.85rem', color: 'var(--gmp-success)' }}>
+                    <FiUserCheck size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    Recebimento confirmado pelo solicitante em {formatDate(detalhe.recebimento_confirmado_em)}
                   </div>
                 )}
                 {detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (
@@ -796,6 +929,27 @@ const RequisicoesList = () => {
                   </div>
                 )}
 
+                {/* Ação — rascunho: só sai do rascunho quando o solicitante (ou admin) envia */}
+                {warehouseMode && detalhe.status === 'RASCUNHO' && (
+                  <div style={{ marginTop: 20 }}>
+                    <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
+                      Rascunho — a requisição só entra no fluxo de aprovação (e-mails, avaliação de valor) depois de enviada.
+                    </div>
+                    {(detalhe.solicitante_id === user?.id || isAdmin) && (
+                      <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={() => setConfirmDialog({
+                          title: 'Enviar Requisição',
+                          message: `Enviar a requisição ${detalhe.numero} para aprovação? Ela sai do rascunho e entra no fluxo normal.`,
+                          confirmLabel: 'Enviar',
+                          onConfirm: () => handleEnviar(detalhe.id),
+                        })}
+                        disabled={saving}>
+                        <FiSend size={14} /> Enviar Requisição
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Ações — somente almoxarifado (aprovação/separação/entrega) */}
                 {warehouseMode && detalhe.status === 'PENDENTE' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
@@ -813,10 +967,12 @@ const RequisicoesList = () => {
                     </button>
                   </div>
                 )}
-                {warehouseMode && detalhe.status === 'APROVADO' && (
+                {warehouseMode && ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'].includes(detalhe.status) && (
                   <div style={{ marginTop: 20 }}>
                     <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
-                      Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.
+                      {detalhe.status === 'AGUARDANDO_ESTOQUE' && 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.'}
+                      {detalhe.status === 'AGUARDANDO_COMPRA' && 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.'}
+                      {detalhe.status === 'APROVADO' && 'Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.'}
                     </div>
                     <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                       onClick={abrirModalSeparacao} disabled={saving}>
@@ -830,6 +986,35 @@ const RequisicoesList = () => {
                       onClick={abrirModalSeparacao}>
                       <FiPackage size={14} /> Ajustar Separação
                     </button>
+                    {detalhe.itens.some((i) => getSeparado(i) > 0) && (
+                      <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={() => setConfirmDialog({
+                          title: 'Liberar para Retirada',
+                          message: `Liberar a requisição ${detalhe.numero} para retirada? O solicitante poderá buscar os itens já separados.`,
+                          confirmLabel: 'Liberar',
+                          onConfirm: () => handleLiberarRetirada(detalhe.id),
+                        })}
+                        disabled={saving}>
+                        <FiCheckSquare size={14} /> Liberar para Retirada
+                      </button>
+                    )}
+                    {temEntregavel(detalhe.itens) ? (
+                      <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={() => handleConfirmarEntrega({ direto: true })} disabled={saving}>
+                        <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
+                      </button>
+                    ) : (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
+                        Nenhuma quantidade separada disponível para entrega no momento.
+                      </div>
+                    )}
+                  </div>
+                )}
+                {warehouseMode && detalhe.status === 'PRONTA_PARA_RETIRADA' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
+                    <div className="almox-hint-banner" style={{ fontSize: '0.8rem' }}>
+                      Pronta para retirada — aguardando o solicitante buscar o material separado.
+                    </div>
                     {temEntregavel(detalhe.itens) ? (
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={() => handleConfirmarEntrega({ direto: true })} disabled={saving}>
@@ -865,7 +1050,34 @@ const RequisicoesList = () => {
                     </div>
                   );
                 })()}
-                {['PENDENTE', 'APROVADO'].includes(detalhe.status) && (
+
+                {/* Encerramento — a partir de ENTREGUE/PARCIALMENTE_ATENDIDA (design: "cancela
+                    saldos pendentes, nenhuma entrega futura"). */}
+                {warehouseMode && ['ENTREGUE', 'PARCIALMENTE_ATENDIDA'].includes(detalhe.status) && (
+                  <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
+                    onClick={() => setShowEncerrar(true)} disabled={saving}>
+                    <FiArchive size={14} /> Encerrar Requisição
+                  </button>
+                )}
+
+                {/* Confirmação de recebimento — só o solicitante, não é status (design). */}
+                {warehouseMode
+                  && ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'].includes(detalhe.status)
+                  && detalhe.solicitante_id === user?.id
+                  && !detalhe.recebimento_confirmado_em && (
+                  <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => setConfirmDialog({
+                      title: 'Confirmar Recebimento',
+                      message: `Confirmar que você recebeu os materiais da requisição ${detalhe.numero}?`,
+                      confirmLabel: 'Confirmar Recebimento',
+                      onConfirm: () => handleConfirmarRecebimento(detalhe.id),
+                    })}
+                    disabled={saving}>
+                    <FiUserCheck size={14} /> Confirmar Recebimento
+                  </button>
+                )}
+
+                {['RASCUNHO', 'PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'].includes(detalhe.status) && (
                   detalhe.solicitante_id === user?.id || isAdmin
                 ) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
@@ -873,6 +1085,22 @@ const RequisicoesList = () => {
                     Cancelar Requisição
                   </button>
                 )}
+
+                {/* Copiar — qualquer requisição não-rascunho vira um novo rascunho fiel
+                    (itens/tipo/vínculos), atalho de preenchimento (design). */}
+                {warehouseMode && detalhe.status !== 'RASCUNHO' && (
+                  <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => setConfirmDialog({
+                      title: 'Copiar Requisição',
+                      message: `Criar um novo rascunho com os mesmos itens da requisição ${detalhe.numero}?`,
+                      confirmLabel: 'Copiar',
+                      onConfirm: () => handleCopiar(detalhe.id),
+                    })}
+                    disabled={saving}>
+                    <FiCopy size={14} /> Copiar como Novo Rascunho
+                  </button>
+                )}
+
                 {isAdmin && (
                   <button className="btn-almox-danger" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
                     onClick={() => abrirExcluirModal(detalhe, {
@@ -897,15 +1125,15 @@ const RequisicoesList = () => {
             </div>
             <div className="almox-modal-body">
               <div className="almox-field">
-                <label className="almox-label">Justificativa da reprovação</label>
-                <textarea className="almox-textarea" rows={3} value={motivoRejeicaoValor}
+                <label className="almox-label">Justificativa da reprovação<span className="required">*</span></label>
+                <textarea className="almox-textarea" rows={3} value={motivoRejeicaoValor} required
                   onChange={e => setMotivoRejeicaoValor(e.target.value)}
                   placeholder="Informe o motivo para o solicitante..." />
               </div>
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowRejeitarValor(false)}>Cancelar</button>
-              <button className="btn-almox-danger" onClick={handleRejeitarValor} disabled={saving}>
+              <button className="btn-almox-danger" onClick={handleRejeitarValor} disabled={saving || !motivoRejeicaoValor.trim()}>
                 {saving ? 'Reprovando...' : 'Confirmar Reprovação'}
               </button>
             </div>
@@ -923,16 +1151,67 @@ const RequisicoesList = () => {
             </div>
             <div className="almox-modal-body">
               <div className="almox-field">
-                <label className="almox-label">Motivo da rejeição</label>
-                <textarea className="almox-textarea" rows={3} value={motivoRejeicao}
+                <label className="almox-label">Motivo da rejeição<span className="required">*</span></label>
+                <textarea className="almox-textarea" rows={3} value={motivoRejeicao} required
                   onChange={e => setMotivoRejeicao(e.target.value)}
                   placeholder="Informe o motivo para o solicitante..." />
               </div>
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowRejeitar(false)}>Cancelar</button>
-              <button className="btn-almox-danger" onClick={handleRejeitar} disabled={saving}>
+              <button className="btn-almox-danger" onClick={handleRejeitar} disabled={saving || !motivoRejeicao.trim()}>
                 {saving ? 'Rejeitando...' : 'Confirmar Rejeição'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal encerrar (motivo opcional, design: "body {motivo} opcional") */}
+      {showEncerrar && detalhe && (
+        <div className="almox-modal-overlay" onClick={() => !saving && setShowEncerrar(false)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>🔒 Encerrar Requisição</h2>
+              <button className="almox-modal-close" onClick={() => setShowEncerrar(false)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ color: 'var(--gmp-text-light)', marginBottom: 12, fontSize: '0.875rem' }}>
+                Encerrar a requisição <strong>{detalhe.numero}</strong> cancela qualquer saldo pendente — não será mais possível
+                entregar itens desta requisição depois disso.
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Motivo (opcional)</label>
+                <textarea className="almox-textarea" rows={3} value={motivoEncerramento}
+                  onChange={e => setMotivoEncerramento(e.target.value)}
+                  placeholder="Observação sobre o encerramento (opcional)..." />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setShowEncerrar(false)} disabled={saving}>Cancelar</button>
+              <button className="btn-almox-primary" onClick={handleEncerrar} disabled={saving}>
+                {saving ? 'Encerrando...' : 'Confirmar Encerramento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação simples — Enviar, Liberar Retirada, Confirmar Recebimento, Copiar */}
+      {confirmDialog && (
+        <div className="almox-modal-overlay" onClick={() => !saving && setConfirmDialog(null)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>{confirmDialog.title}</h2>
+              <button className="almox-modal-close" onClick={() => setConfirmDialog(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem' }}>{confirmDialog.message}</p>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setConfirmDialog(null)} disabled={saving}>Cancelar</button>
+              <button className="btn-almox-primary" onClick={confirmDialog.onConfirm} disabled={saving}>
+                {saving ? 'Processando...' : (confirmDialog.confirmLabel || 'Confirmar')}
               </button>
             </div>
           </div>

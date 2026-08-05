@@ -56,21 +56,35 @@ const AlmoxPageHeader = ({ title, subtitle, breadcrumbs = [], flowSteps, current
   </>
 );
 
+// Etapa 3 (design, "Frontend": "Stepper do AlmoxPageHeader atualizado" — Criar→Aprovar→
+// Separar→Retirada→Entregar→Encerrar). "Retirada" e "Encerrar" são as duas etapas novas
+// (PRONTA_PARA_RETIRADA e ENCERRADA) que a máquina de estados ganhou nesta etapa.
 export const REQUISICAO_FLOW = [
   { key: 'criar', label: 'Criar' },
   { key: 'aprovar', label: 'Aprovar' },
   { key: 'separar', label: 'Separar' },
+  { key: 'retirada', label: 'Retirada' },
   { key: 'entregar', label: 'Entregar' },
+  { key: 'encerrar', label: 'Encerrar' },
 ];
 
+// idx = quantidade de etapas já concluídas (não o índice do próprio status) — mesma
+// convenção da versão anterior deste mapa: ex. EM_SEPARACAO aponta para o índice da etapa
+// "Separar" (ainda separando, retirada não liberada); PRONTA_PARA_RETIRADA já marca
+// "Separar" como concluída e ativa "Retirada".
 export const getRequisicaoStepIndex = (status) => {
   const map = {
+    RASCUNHO: 0,
     PENDENTE: 1,
     AGUARDANDO_APROVACAO_VALOR: 1,
     APROVADO: 2,
-    EM_SEPARACAO: 3,
-    PARCIALMENTE_ATENDIDA: 3,
-    ENTREGUE: 4,
+    AGUARDANDO_ESTOQUE: 2,
+    AGUARDANDO_COMPRA: 2,
+    EM_SEPARACAO: 2,
+    PRONTA_PARA_RETIRADA: 3,
+    PARCIALMENTE_ATENDIDA: 4,
+    ENTREGUE: 5,
+    ENCERRADA: 6,
     REJEITADO: -1,
     CANCELADO: -1,
   };
