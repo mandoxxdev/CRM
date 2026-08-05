@@ -260,6 +260,20 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   }
 
+  // Subfamílias (Etapa 2, Task 3): quando informada, a subfamília do material precisa ser
+  // filha (parent_id = familiaId) e ativa. familiaId pode ser null (família omitida no PUT
+  // full-replace) — nesse caso nenhuma subfamília bate no WHERE e a validação falha, o que é
+  // o comportamento correto (não existe família válida para amarrar a subfamília).
+  function validateSubfamilia(subfamiliaId, familiaId, callback) {
+    if (!subfamiliaId) return callback(null, null);
+    db.get('SELECT id FROM familias_material_almoxarifado WHERE id = ? AND parent_id = ? AND ativo = 1',
+      [subfamiliaId, familiaId], (err, row) => {
+        if (err) return callback(err);
+        if (!row) return callback(new Error('Subfamília inválida para a família selecionada'));
+        callback(null, row);
+      });
+  }
+
   // POST /api/almoxarifado/materiais — criar
   app.post('/api/almoxarifado/materiais',(req, res) => {
     const {
@@ -269,15 +283,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       ncm, especificacoes, observacoes,
       descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
       fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado,
-      familia_id,
+      familia_id, subfamilia_id,
     } = req.body;
 
     if (!codigo || !nome) return res.status(400).json({ error: 'Código e nome são obrigatórios' });
     if (!familia_id) return res.status(400).json({ error: 'Família é obrigatória para novos materiais' });
 
     const familiaId = parseInt(familia_id, 10);
+    const subfamiliaId = subfamilia_id ? parseInt(subfamilia_id, 10) : null;
     validateFamiliaAtiva(familiaId, (errFam, familia) => {
       if (errFam) return res.status(400).json({ error: errFam.message });
+
+      validateSubfamilia(subfamiliaId, familiaId, (errSub) => {
+        if (errSub) return res.status(400).json({ error: errSub.message });
 
       resolveLocalizacaoFromFk(localizacao_padrao_id, (errLoc, locId, locText) => {
         if (errLoc) return res.status(500).json({ error: errLoc.message });
@@ -287,8 +305,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
          quantidade_minima, quantidade_maxima, custo_unitario, fornecedor_principal,
          codigo_fornecedor, ncm, especificacoes, observacoes,
          descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
-         fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado, familia_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado, familia_id, subfamilia_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
            locText, quantidade_atual || 0, quantidade_minima || 0,
            quantidade_maxima || 0, custo_unitario || 0, fornecedor_principal || null,
@@ -296,7 +314,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
            descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
            locId, fornecedor_id || null, tipo_material || null,
            material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0,
-           familiaId],
+           familiaId, subfamiliaId],
           function (err) {
             if (err) {
               if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
@@ -325,6 +343,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           }
         );
       });
+      });
     });
   });
 
@@ -336,10 +355,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       fornecedor_principal, codigo_fornecedor, ncm, especificacoes, observacoes, ativo,
       descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
       fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado,
-      familia_id,
+      familia_id, subfamilia_id,
     } = req.body;
 
+    const subfamiliaId = subfamilia_id ? parseInt(subfamilia_id, 10) : null;
+
     const applyUpdate = (familiaIdVal) => {
+      const proceedWithUpdate = () => {
       resolveLocalizacaoFromFk(localizacao_padrao_id, (errLoc, locId, locText) => {
         if (errLoc) return res.status(500).json({ error: errLoc.message });
 
@@ -350,7 +372,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         observacoes = ?, ativo = ?,
         descricao_tecnica = ?, categoria_id = ?, subcategoria_id = ?, localizacao_padrao_id = ?,
         fornecedor_id = ?, tipo_material = ?, material_critico = ?, controle_lote = ?, controle_certificado = ?,
-        familia_id = ?,
+        familia_id = ?, subfamilia_id = ?,
         updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`,
           [codigo, nome, descricao || null, categoria || 'OUTROS', unidade || 'UN',
@@ -361,7 +383,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
            descricao_tecnica || null, categoria_id || null, subcategoria_id || null,
            locId, fornecedor_id || null, tipo_material || null,
            material_critico ? 1 : 0, controle_lote ? 1 : 0, controle_certificado ? 1 : 0,
-           familiaIdVal || null,
+           familiaIdVal || null, subfamiliaId,
            req.params.id],
           function (err) {
             if (err) {
@@ -382,6 +404,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           }
         );
       });
+      };
+
+      if (subfamiliaId) {
+        validateSubfamilia(subfamiliaId, familiaIdVal, (errSub) => {
+          if (errSub) return res.status(400).json({ error: errSub.message });
+          proceedWithUpdate();
+        });
+      } else {
+        proceedWithUpdate();
+      }
     };
 
     if (familia_id) {
@@ -1114,11 +1146,29 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     tryCodigo(0);
   }
 
+  // Subfamílias (Etapa 2, Task 3): valida o pai informado em POST/PUT de família.
+  // Regras: pai deve existir (senão 400 genérico), estar ativo e ser RAIZ (parent_id IS
+  // NULL) — subfamília não pode ter filhos (máximo 2 níveis). Os dois casos de "pai
+  // inválido" (inativo / já é subfamília) compartilham a mesma mensagem de erro.
+  function validateParentFamilia(parentId, callback) {
+    if (!parentId) return callback(null, null);
+    db.get('SELECT id, ativo, parent_id FROM familias_material_almoxarifado WHERE id = ?', [parentId], (err, row) => {
+      if (err) return callback(err);
+      if (!row) return callback(new Error('Família pai não encontrada'));
+      if (row.ativo !== 1 || row.parent_id !== null) {
+        return callback(new Error('Subfamília não pode ter filhos (máximo 2 níveis)'));
+      }
+      callback(null, row);
+    });
+  }
+
   app.get('/api/almoxarifado/familias',(req, res) => {
     const { ativo } = req.query;
-    let sql = `SELECT f.*,
+    let sql = `SELECT f.*, p.nome as parent_nome,
                  (SELECT COUNT(*) FROM materiais_almoxarifado m WHERE m.familia_id = f.id AND m.ativo = 1) as qtd_itens
-               FROM familias_material_almoxarifado f WHERE 1=1`;
+               FROM familias_material_almoxarifado f
+               LEFT JOIN familias_material_almoxarifado p ON f.parent_id = p.id
+               WHERE 1=1`;
     const params = [];
     if (ativo === '0') { sql += ' AND f.ativo = 0'; }
     else if (ativo !== 'all') { sql += ' AND f.ativo = 1'; }
@@ -1131,9 +1181,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   app.get('/api/almoxarifado/familias/:id',(req, res) => {
-    db.get(`SELECT f.*,
+    db.get(`SELECT f.*, p.nome as parent_nome,
               (SELECT COUNT(*) FROM materiais_almoxarifado m WHERE m.familia_id = f.id AND m.ativo = 1) as qtd_itens
-            FROM familias_material_almoxarifado f WHERE f.id = ?`, [req.params.id], (err, row) => {
+            FROM familias_material_almoxarifado f
+            LEFT JOIN familias_material_almoxarifado p ON f.parent_id = p.id
+            WHERE f.id = ?`, [req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(404).json({ error: 'Família não encontrada' });
       res.json(row);
@@ -1154,14 +1206,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.post('/api/almoxarifado/familias',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    const { nome, descricao, categoria_id, codigo, tipo_uso } = req.body;
+    const { nome, descricao, categoria_id, codigo, tipo_uso, parent_id } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
+    const parentId = parent_id ? parseInt(parent_id, 10) : null;
 
     const insertFamilia = (codigoVal) => {
-      db.run(`INSERT INTO familias_material_almoxarifado (codigo, nome, descricao, categoria_id, tipo_uso)
-              VALUES (?,?,?,?,?)`,
-        [codigoVal, nome.trim(), descricao || null, categoria_id || null, tipoUsoVal],
+      db.run(`INSERT INTO familias_material_almoxarifado (codigo, nome, descricao, categoria_id, tipo_uso, parent_id)
+              VALUES (?,?,?,?,?,?)`,
+        [codigoVal, nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, parentId],
         function (err) {
           if (err) {
             if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
@@ -1171,28 +1224,72 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         });
     };
 
-    if (codigo?.trim()) {
-      insertFamilia(codigo.trim().toUpperCase());
-    } else {
-      generateFamiliaCodigo(nome, (err, autoCodigo) => {
-        if (err) return res.status(500).json({ error: err.message });
-        insertFamilia(autoCodigo);
+    const proceed = () => {
+      if (codigo?.trim()) {
+        insertFamilia(codigo.trim().toUpperCase());
+      } else {
+        generateFamiliaCodigo(nome, (err, autoCodigo) => {
+          if (err) return res.status(500).json({ error: err.message });
+          insertFamilia(autoCodigo);
+        });
+      }
+    };
+
+    if (parentId) {
+      validateParentFamilia(parentId, (errParent) => {
+        if (errParent) return res.status(400).json({ error: errParent.message });
+        proceed();
       });
+    } else {
+      proceed();
     }
   });
 
   app.put('/api/almoxarifado/familias/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    const { nome, descricao, categoria_id, ativo, tipo_uso } = req.body;
+    const { nome, descricao, categoria_id, ativo, tipo_uso, parent_id } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
+    const familiaId = parseInt(req.params.id, 10);
+    const parentId = parent_id ? parseInt(parent_id, 10) : null;
+    const ativoVal = ativo !== undefined ? ativo : 1;
 
-    db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=? WHERE id=?`,
-      [nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, ativo !== undefined ? ativo : 1, req.params.id],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [req.params.id], (e, r) => res.json(r));
-      });
+    if (parentId && parentId === familiaId) {
+      return res.status(400).json({ error: 'Família não pode ser pai de si mesma' });
+    }
+
+    const applyUpdate = () => {
+      db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=?, parent_id=? WHERE id=?`,
+        [nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, ativoVal, parentId, familiaId],
+        function (err) {
+          if (err) return res.status(500).json({ error: err.message });
+          db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => res.json(r));
+        });
+    };
+
+    // Subfamílias ativas da família sendo editada (só existem se ela for raiz — subfamília
+    // não pode ter filhos). Usadas para bloquear (a) virar subfamília de outra família e
+    // (b) ser inativada enquanto ainda tem filhas ativas.
+    db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1', [familiaId], (errChildren, childrenRow) => {
+      if (errChildren) return res.status(500).json({ error: errChildren.message });
+      const hasActiveChildren = childrenRow.c > 0;
+
+      if (Number(ativoVal) === 0 && hasActiveChildren) {
+        return res.status(400).json({ error: 'Não é possível inativar: família possui subfamília(s) ativa(s)' });
+      }
+      if (parentId && hasActiveChildren) {
+        return res.status(400).json({ error: 'Família com subfamília(s) ativa(s) não pode virar subfamília' });
+      }
+
+      if (parentId) {
+        validateParentFamilia(parentId, (errParent) => {
+          if (errParent) return res.status(400).json({ error: errParent.message });
+          applyUpdate();
+        });
+      } else {
+        applyUpdate();
+      }
+    });
   });
 
   app.delete('/api/almoxarifado/familias/:id',(req, res) => {
@@ -1202,9 +1299,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (row.c > 0) {
         return res.status(400).json({ error: `Não é possível remover: família possui ${row.c} item(ns) ativo(s)` });
       }
-      db.run('UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [req.params.id], function (err2) {
-        if (err2) return res.status(500).json({ error: err2.message });
-        res.json({ success: true });
+      db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1', [req.params.id], (errSub, subRow) => {
+        if (errSub) return res.status(500).json({ error: errSub.message });
+        if (subRow.c > 0) {
+          return res.status(400).json({ error: `Não é possível remover: família possui ${subRow.c} subfamília(s) ativa(s)` });
+        }
+        db.run('UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [req.params.id], function (err2) {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ success: true });
+        });
       });
     });
   });

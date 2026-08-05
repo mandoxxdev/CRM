@@ -367,6 +367,10 @@ async function initSchema(db) {
     }
   }
 
+  // Subfamílias (Etapa 2, Task 3): NULL = família raiz; preenchido = subfamília.
+  // Máximo 2 níveis (subfamília não pode ter filhos) — validado na rota, não no schema.
+  await safeAlter(db, 'ALTER TABLE familias_material_almoxarifado ADD COLUMN parent_id INTEGER REFERENCES familias_material_almoxarifado(id)');
+
   await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN familia_id INTEGER REFERENCES familias_material_almoxarifado(id)');
 
   // ── Unidades de medida ──
@@ -399,6 +403,7 @@ async function initSchema(db) {
     'quantidade_em_inspecao REAL DEFAULT 0',
     'custo_medio REAL DEFAULT 0',
     'permite_saldo_negativo INTEGER DEFAULT 0',
+    'subfamilia_id INTEGER',
   ];
   for (const col of materialCols) await safeAlter(db, `ALTER TABLE materiais_almoxarifado ADD COLUMN ${col}`);
 
