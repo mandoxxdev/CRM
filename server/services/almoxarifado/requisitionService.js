@@ -257,6 +257,11 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
 
   const itens = await carregarItensRequisicao(db, requisicaoId);
   const estornos = [];
+  // Calculado antes do loop (achado do fix round): o motor grava `justificativa` no livro/
+  // auditoria do estorno — sem isto o ENTRADA de estorno saía sem justificativa (ENTRADA não
+  // exige vínculo em movementRules.js, então passava despercebido, mas a rastreabilidade da
+  // exclusão ficava incompleta).
+  const motivo = justificativa?.trim() || 'Excluída pelo administrador';
 
   for (const item of itens) {
     const qtyEstorno = getEntregue(item);
@@ -270,6 +275,7 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
         quantidade: qtyEstorno,
         motivo: `Estorno exclusão requisição ${reqRow.numero}`,
         referencia: reqRow.os_referencia || reqRow.numero,
+        justificativa: justificativa || motivo,
         requisicao_id: requisicaoId,
         projeto_id: reqRow.projeto_id || undefined,
         cliente_id: reqRow.cliente_id || undefined,
@@ -284,7 +290,6 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
     estornos.push({ material_id: item.material_id, quantidade: qtyEstorno });
   }
 
-  const motivo = justificativa?.trim() || 'Excluída pelo administrador';
   await dbRun(db,
     `UPDATE requisicoes_almoxarifado
      SET ativo=0, status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL

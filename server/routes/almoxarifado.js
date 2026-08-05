@@ -1716,7 +1716,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (!req_row) return res.status(404).json({ error: 'Requisição não encontrada' });
 
       db.all(`SELECT ir.*, ma.nome as material_nome, ma.codigo as material_codigo,
-                     ma.unidade, ma.quantidade_atual as saldo_atual, ma.foto,
+                     ma.unidade,
+                     (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
+                       - COALESCE(ma.quantidade_em_inspecao,0)) as saldo_atual,
+                     ma.foto,
                      ma.localizacao, ma.localizacao_padrao_id,
                      tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura
               FROM itens_requisicao_almoxarifado ir

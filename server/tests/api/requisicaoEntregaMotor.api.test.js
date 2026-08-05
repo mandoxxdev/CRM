@@ -8,6 +8,12 @@
  * UPDATE+INSERT cru — baixavam pelo FÍSICO (ignorando quantidade_reservada de terceiros),
  * não gravavam auditoria e não respeitavam localização bloqueada. Os cenários abaixo
  * provam isso (ver task-3-brief.md, Step 1) e travam o comportamento correto pós-fix.
+ *
+ * Fix round (review pós-Task 3): GET /requisicoes/:id ainda expunha saldo_atual/
+ * quantidade_entregavel pelo FÍSICO (SELECT próprio em routes/almoxarifado.js e
+ * routes/requisicoesMaterial.js, fora de carregarItensRequisicao) — front podia anunciar
+ * um "entregável" maior do que a entrega de fato aceita quando há reserva de terceiro.
+ * Cenário "[GET detalhe]" abaixo prova a correção.
  */
 const assert = require('assert');
 const request = require('supertest');
@@ -127,6 +133,29 @@ async function criarLocalizacao(app, codigo, overrides = {}) {
 
     const mov = await dbGet(db, `SELECT * FROM movimentacoes_almoxarifado WHERE requisicao_id = ?`, [reqId]);
     assert.ok(!mov, 'nenhuma movimentação deveria ter sido gravada');
+  });
+
+  // ── detalhe da requisição expõe saldo/entregável pelo DISPONÍVEL, não pelo físico ──
+  // (fix round: routes/almoxarifado.js:1719 e routes/requisicoesMaterial.js:257 faziam
+  // SELECT próprio com ma.quantidade_atual as saldo_atual — físico — que alimentava
+  // normalizarItem e mostrava um "entregável" maior do que a entrega de fato aceita.)
+  await test('[GET detalhe] saldo_atual/quantidade_entregavel refletem o DISPONÍVEL com reserva de terceiro', async () => {
+    const matId = await criarMaterial(db, 'MOTOR-MAT-F', { qtd: 50, reservada: 45 }); // disponível = 5
+    const { id: reqId, itemIds } = await criarRequisicao(db, {
+      status: 'EM_SEPARACAO', itens: [{ material_id: matId, quantidade: 10, quantidade_separada: 10 }],
+    });
+
+    const res = await request(app).get(`/api/almoxarifado/requisicoes/${reqId}`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const item = res.body.itens.find((i) => Number(i.id) === Number(itemIds[0]));
+    assert.ok(item, 'item deveria estar no detalhe');
+    assert.strictEqual(item.saldo_atual, 5, 'saldo_atual deveria carregar o disponível (50-45), não o físico (50)');
+    assert.strictEqual(item.quantidade_entregavel, 5, 'entregável deveria respeitar o disponível');
+
+    // Coerência: o que o detalhe anuncia como entregável (5) a entrega aceita; acima disso, rejeita.
+    const aceito = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/entregar`)
+      .send({ itens_atendidos: [{ item_id: itemIds[0], quantidade_atendida: 5 }] });
+    assert.strictEqual(aceito.status, 200, JSON.stringify(aceito.body));
   });
 
   // ── entregas concorrentes não estouram o disponível ──

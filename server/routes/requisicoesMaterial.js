@@ -254,7 +254,12 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
           `SELECT ir.*, ma.nome as material_nome, ma.codigo as material_codigo,
 
-                  ma.unidade, ma.quantidade_atual as saldo_atual, ma.foto,
+                  ma.unidade,
+
+                  (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
+                    - COALESCE(ma.quantidade_em_inspecao,0)) as saldo_atual,
+
+                  ma.foto,
 
                   tm.icone as tipo_icone
 
