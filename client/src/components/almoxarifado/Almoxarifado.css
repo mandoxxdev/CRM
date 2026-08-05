@@ -497,6 +497,27 @@
   cursor: pointer;
 }
 
+/* Checkbox de flag/controle dentro de um cartão de seção do formulário (Task 6) */
+.almox-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--gmp-bg);
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--gmp-text);
+  cursor: pointer;
+}
+.almox-checkbox-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--gmp-primary, #4facfe);
+  flex-shrink: 0;
+}
+
 /* ── Seção do formulário ── */
 .almox-section-title {
   font-size: 0.8rem;
