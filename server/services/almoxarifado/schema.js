@@ -225,6 +225,45 @@ async function ensureBaseTables(db) {
   )`);
 }
 
+const MIGRATION_CRIAR_ALMOXARIFADO_GERAL = 'criar_almoxarifado_geral';
+
+/**
+ * Ledger de migração: cria o almoxarifado "ALM-GERAL" (idempotente via INSERT OR IGNORE)
+ * e vincula a ele todas as localizações ainda sem almoxarifado_id — incluindo as seedadas
+ * no próprio initSchema. Roda uma única vez (marcada em schema_migrations_almoxarifado);
+ * chamadas seguintes do initSchema são no-op. Segue o padrão de migrateHistoricoNullableMaterial.
+ */
+async function migrateCriarAlmoxarifadoGeral(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const applied = await dbGet(db,
+    'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_CRIAR_ALMOXARIFADO_GERAL]);
+  if (applied) return;
+
+  const tableRow = await dbGet(db,
+    `SELECT name FROM sqlite_master WHERE type='table' AND name='localizacoes_almoxarifado'`);
+  if (!tableRow) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_CRIAR_ALMOXARIFADO_GERAL]);
+    return;
+  }
+
+  await dbRun(db, `INSERT OR IGNORE INTO almoxarifados (codigo, nome, descricao)
+    VALUES ('ALM-GERAL', 'Almoxarifado Geral', 'Almoxarifado padrão criado automaticamente na migração inicial')`);
+  const geral = await dbGet(db, `SELECT id FROM almoxarifados WHERE codigo = 'ALM-GERAL'`);
+  if (geral) {
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET almoxarifado_id = ? WHERE almoxarifado_id IS NULL', [geral.id]);
+  }
+
+  await dbRun(db, 'INSERT INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_CRIAR_ALMOXARIFADO_GERAL]);
+  console.log('✅ Migração criar_almoxarifado_geral aplicada (ALM-GERAL criado e localizações vinculadas)');
+}
+
 const MIGRATION_HISTORICO_NULLABLE = 'alertas_historico_nullable_material';
 
 async function migrateHistoricoNullableMaterial(db) {
@@ -383,8 +422,19 @@ async function initSchema(db) {
     console.warn('[almoxarifado-schema] Seed ignorado:', e.message);
   }
 
+  // ── Almoxarifados (entidade raiz — multi-almoxarifado) ──
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS almoxarifados (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT UNIQUE NOT NULL,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // ── Extend localizações ──
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN tipo TEXT DEFAULT \'Almoxarifado\'');
+  await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN almoxarifado_id INTEGER REFERENCES almoxarifados(id)');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN parent_id INTEGER');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_x REAL');
   await safeAlter(db, 'ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_y REAL');
@@ -405,6 +455,9 @@ async function initSchema(db) {
   } catch (e) { /* tabela com schema mínimo (harness de teste) — seed ignorado com segurança */
     console.warn('[almoxarifado-schema] Seed ignorado:', e.message);
   }
+
+  // ── Migração: cria ALM-GERAL e vincula localizações existentes (incl. as seedadas acima) ──
+  await migrateCriarAlmoxarifadoGeral(db);
 
   // ── Setores e áreas do almoxarifado ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS setores_almoxarifado (

@@ -6,7 +6,7 @@ const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO }
 const { requirePermission } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const receiptService = require('../../services/almoxarifado/receiptService');
@@ -87,6 +87,47 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
       await dbRun(db, 'UPDATE centros_custo_almoxarifado SET codigo=?, nome=?, ativo=? WHERE id=?', [codigo, nome, ativo, req.params.id]);
       res.json({ id: Number(req.params.id), codigo, nome, ativo });
     } catch (e) { handleError(res, e); }
+  });
+
+  // ── Almoxarifados (entidade raiz — multi-almoxarifado) ──
+  app.get('/api/almoxarifado/almoxarifados', auth, async (req, res) => {
+    try {
+      const where = req.query.todos === '1' ? '1=1' : 'ativo = 1';
+      res.json(await dbAll(db, `SELECT * FROM almoxarifados WHERE ${where} ORDER BY codigo`));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/almoxarifados', auth, requirePermission('configurar'), validate(AlmoxarifadoSchema), async (req, res) => {
+    try {
+      const { codigo, nome, descricao } = req.body;
+      const r = await dbRun(db, 'INSERT INTO almoxarifados (codigo, nome, descricao) VALUES (?,?,?)',
+        [codigo.trim(), nome.trim(), descricao || null]);
+      res.status(201).json({ id: r.lastID, codigo, nome, descricao: descricao || null, ativo: 1 });
+    } catch (e) {
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(409).json({ error: 'Código de almoxarifado já existe' });
+      handleError(res, e);
+    }
+  });
+
+  app.put('/api/almoxarifado/almoxarifados/:id', auth, requirePermission('configurar'), validate(AlmoxarifadoSchema.partial()), async (req, res) => {
+    try {
+      const atual = await dbGet(db, 'SELECT * FROM almoxarifados WHERE id = ?', [req.params.id]);
+      if (!atual) return res.status(404).json({ error: 'Almoxarifado não encontrado' });
+      const { codigo = atual.codigo, nome = atual.nome, descricao = atual.descricao, ativo = atual.ativo } = req.body;
+      if (Number(ativo) === 0 && Number(atual.ativo) === 1) {
+        const localizacoesAtivas = await dbGet(db,
+          'SELECT COUNT(*) as c FROM localizacoes_almoxarifado WHERE almoxarifado_id = ? AND ativo = 1', [req.params.id]);
+        if (localizacoesAtivas.c > 0) {
+          return res.status(400).json({ error: 'Não é possível inativar: existem localizações ativas vinculadas a este almoxarifado' });
+        }
+      }
+      await dbRun(db, 'UPDATE almoxarifados SET codigo=?, nome=?, descricao=?, ativo=? WHERE id=?',
+        [codigo, nome, descricao, ativo, req.params.id]);
+      res.json({ id: Number(req.params.id), codigo, nome, descricao, ativo });
+    } catch (e) {
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(409).json({ error: 'Código de almoxarifado já existe' });
+      handleError(res, e);
+    }
   });
 
   // ── Mapa de localizações ──

@@ -108,6 +108,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     );
   }
 
+  // Resolve o almoxarifado_id a persistir numa localização: usa o valor informado,
+  // ou (ausente) o id do ALM-GERAL como default — tolera a tabela almoxarifados ainda
+  // não existir/estar vazia (fallback null, sem quebrar a criação da localização).
+  function resolveAlmoxarifadoId(providedId, callback) {
+    const id = providedId ? parseInt(providedId, 10) : null;
+    if (id) return callback(null, id);
+    db.get(`SELECT id FROM almoxarifados WHERE codigo = 'ALM-GERAL'`, [], (err, row) => {
+      if (err) return callback(null, null);
+      callback(null, row ? row.id : null);
+    });
+  }
+
   function checkSubgrupoDuplicado(dbConn, { subgrupo, setor, parent_id, excludeId }, callback) {
     if (!subgrupo || !String(subgrupo).trim()) return callback(null, false);
     dbConn.get(
@@ -815,8 +827,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/almoxarifado/localizacoes',(req, res) => {
-    db.all(`SELECT * FROM localizacoes_almoxarifado WHERE ativo = 1
-            ORDER BY setor, parent_id, subgrupo, codigo`, [], (err, rows) => {
+    let sql = `SELECT * FROM localizacoes_almoxarifado WHERE ativo = 1`;
+    const params = [];
+    if (req.query.almoxarifado_id) {
+      sql += ' AND almoxarifado_id = ?';
+      params.push(req.query.almoxarifado_id);
+    }
+    sql += ` ORDER BY setor, parent_id, subgrupo, codigo`;
+    db.all(sql, params, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
     });
@@ -824,73 +842,77 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.post('/api/almoxarifado/localizacoes',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura } = req.body;
+    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id } = req.body;
     if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
-    checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal }, (dupErr, isDup) => {
-      if (dupErr) return res.status(500).json({ error: dupErr.message });
-      if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
+    resolveAlmoxarifadoId(almoxarifado_id, (_rErr, almoxarifadoIdVal) => {
+      checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal }, (dupErr, isDup) => {
+        if (dupErr) return res.status(500).json({ error: dupErr.message });
+        if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
 
-      // O código tem constraint UNIQUE, mas a exclusão é "soft" (ativo = 0): a linha
-      // permanece e continua ocupando o código. Para não bloquear a recriação de um
-      // código que foi excluído, reativamos/reescrevemos a linha inativa existente.
-      db.get(`SELECT id, ativo FROM localizacoes_almoxarifado WHERE codigo = ?`, [codigo], (selErr, existente) => {
-        if (selErr) return res.status(500).json({ error: selErr.message });
+        // O código tem constraint UNIQUE, mas a exclusão é "soft" (ativo = 0): a linha
+        // permanece e continua ocupando o código. Para não bloquear a recriação de um
+        // código que foi excluído, reativamos/reescrevemos a linha inativa existente.
+        db.get(`SELECT id, ativo FROM localizacoes_almoxarifado WHERE codigo = ?`, [codigo], (selErr, existente) => {
+          if (selErr) return res.status(500).json({ error: selErr.message });
 
-        // Já existe uma localização ATIVA com este código → realmente duplicado.
-        if (existente && existente.ativo) {
-          return res.status(400).json({ error: 'Código já existe' });
-        }
+          // Já existe uma localização ATIVA com este código → realmente duplicado.
+          if (existente && existente.ativo) {
+            return res.status(400).json({ error: 'Código já existe' });
+          }
 
-        // Existe uma localização EXCLUÍDA com este código → reativa e atualiza os dados.
-        if (existente) {
-          db.run(`UPDATE localizacoes_almoxarifado
-                  SET descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, ativo=1
-                  WHERE id=?`,
-            [descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
-             pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, existente.id],
-            function (updErr) {
-              if (updErr) return res.status(500).json({ error: updErr.message });
-              db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [existente.id], (e, r) => res.status(201).json(r));
+          // Existe uma localização EXCLUÍDA com este código → reativa e atualiza os dados.
+          if (existente) {
+            db.run(`UPDATE localizacoes_almoxarifado
+                    SET descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=?, ativo=1
+                    WHERE id=?`,
+              [descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+               pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdVal, existente.id],
+              function (updErr) {
+                if (updErr) return res.status(500).json({ error: updErr.message });
+                db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [existente.id], (e, r) => res.status(201).json(r));
+              });
+            return;
+          }
+
+          // Código livre → insere normalmente.
+          db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+             pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdVal],
+            function (err) {
+              if (err) {
+                if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+                return res.status(500).json({ error: err.message });
+              }
+              db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => res.status(201).json(r));
             });
-          return;
-        }
-
-        // Código livre → insere normalmente.
-        db.run(`INSERT INTO localizacoes_almoxarifado (codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-          [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
-           pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80],
-          function (err) {
-            if (err) {
-              if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-              return res.status(500).json({ error: err.message });
-            }
-            db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [this.lastID], (e, r) => res.status(201).json(r));
-          });
+        });
       });
     });
   });
 
   app.put('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo } = req.body;
+    const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo, almoxarifado_id } = req.body;
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
     if (parentVal && parseInt(req.params.id, 10) === parentVal) {
       return res.status(400).json({ error: 'Uma localização não pode ser pai de si mesma' });
     }
-    checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal, excludeId: req.params.id }, (dupErr, isDup) => {
-      if (dupErr) return res.status(500).json({ error: dupErr.message });
-      if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
-      db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, ativo=? WHERE id=?`,
-        [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
-         pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80,
-         ativo !== undefined ? ativo : 1, req.params.id],
-        function (err) {
-          if (err) return res.status(500).json({ error: err.message });
-          db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
-        });
+    resolveAlmoxarifadoId(almoxarifado_id, (_rErr, almoxarifadoIdVal) => {
+      checkSubgrupoDuplicado(db, { subgrupo: subgrupoVal, setor, parent_id: parentVal, excludeId: req.params.id }, (dupErr, isDup) => {
+        if (dupErr) return res.status(500).json({ error: dupErr.message });
+        if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
+        db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=?, ativo=? WHERE id=?`,
+          [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+           pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdVal,
+           ativo !== undefined ? ativo : 1, req.params.id],
+          function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => res.json(r));
+          });
+      });
     });
   });
 

@@ -7,6 +7,13 @@ const CentroCustoSchema = z.object({
   ativo: z.union([z.literal(0), z.literal(1)]).optional(),
 });
 
+const AlmoxarifadoSchema = z.object({
+  codigo: z.string().min(1, 'codigo é obrigatório'),
+  nome: z.string().min(1, 'nome é obrigatório'),
+  descricao: z.string().optional(),
+  ativo: z.union([z.literal(0), z.literal(1)]).optional(),
+});
+
 const MovimentacaoSchema = z.object({
   material_id: z.number().int().positive(),
   tipo: z.string().min(1),
@@ -47,4 +54,4 @@ const CancelamentoSchema = z.object({
   motivo: z.string().min(1, 'motivo é obrigatório'),
 });
 
-module.exports = { CentroCustoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema };
+module.exports = { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema };
