@@ -9,6 +9,11 @@
  * -> ok; liberar-retirada sem separado -> 400 / com separado -> PRONTA_PARA_RETIRADA;
  * entregar de PRONTA_PARA_RETIRADA -> ok; transição direta inválida -> 400 (via ações,
  * não existe rota de PUT status genérico).
+ *
+ * Cobertura extra do fix-report (review pós-Task 2): /aprovar grava o status final
+ * (APROVADO/AGUARDANDO_ESTOQUE/AGUARDANDO_COMPRA) num único UPDATE — sem janela
+ * transitória com status=APROVADO; /enviar exige que quem envia seja o solicitante do
+ * rascunho ou admin (mesmo gate do /cancelar) — 403 para terceiros.
  */
 const assert = require('assert');
 const request = require('supertest');
@@ -28,10 +33,10 @@ function numero() {
   return `REQ-ESTADO-${seq}`;
 }
 
-async function criarRequisicao(db, { status, itens }) {
+async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
   const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
-    (numero, solicitante_id, solicitante_nome, status) VALUES (?, 1, 'Solicitante Teste', ?)`,
-    [numero(), status]);
+    (numero, solicitante_id, solicitante_nome, status) VALUES (?, ?, 'Solicitante Teste', ?)`,
+    [numero(), solicitanteId, status]);
   const reqId = reqRes.lastID;
   const itemIds = [];
   for (const item of itens) {
@@ -59,9 +64,8 @@ async function criarRequisicao(db, { status, itens }) {
     assert.ok(r.erro.includes('ENTREGUE'), r.erro);
   });
 
-  const { app, db, close } = await createTestApp({
-    user: { id: 1, nome: 'Admin Teste', role: 'admin', is_superadmin: 1, email: 'admin@test.com' },
-  });
+  const ADMIN_USER = { id: 1, nome: 'Admin Teste', role: 'admin', is_superadmin: 1, email: 'admin@test.com' };
+  const { app, db, close, setUser } = await createTestApp({ user: ADMIN_USER });
 
   const fam = await request(app).post('/api/almoxarifado/familias')
     .send({ codigo: 'FAMESTADO', nome: 'Família Estados Teste' });
@@ -123,6 +127,54 @@ async function criarRequisicao(db, { status, itens }) {
   await test('[enviar] requisição inexistente -> 404', async () => {
     const res = await request(app).post('/api/almoxarifado/requisicoes/999999/enviar').send({});
     assert.strictEqual(res.status, 404, JSON.stringify(res.body));
+  });
+
+  // ── /enviar: gate de dono/admin, mesmo padrão do /cancelar (Finding 2 do review) ──
+  await test('[enviar] usuário que não é o solicitante nem admin -> 403', async () => {
+    const matId = await criarMaterial('MATEST-14', 10);
+    const { id: reqId } = await criarRequisicao(db, {
+      status: 'RASCUNHO', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 77,
+    });
+
+    setUser({ id: 88, nome: 'Outro Usuário', role: 'user', email: 'outro@test.com' });
+    try {
+      const res = await request(app).post(`/api/almoxarifado/requisicoes/${reqId}/enviar`).send({});
+      assert.strictEqual(res.status, 403, JSON.stringify(res.body));
+      assert.strictEqual(res.body.error, 'Apenas o solicitante pode enviar o rascunho');
+
+      const row = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+      assert.strictEqual(row.status, 'RASCUNHO', 'status não deveria ter mudado');
+    } finally {
+      setUser(ADMIN_USER);
+    }
+  });
+
+  await test('[enviar] pelo próprio solicitante -> 200', async () => {
+    const matId = await criarMaterial('MATEST-15', 10);
+    const { id: reqId } = await criarRequisicao(db, {
+      status: 'RASCUNHO', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 77,
+    });
+
+    setUser({ id: 77, nome: 'Solicitante Dono', role: 'user', email: 'dono@test.com' });
+    try {
+      const res = await request(app).post(`/api/almoxarifado/requisicoes/${reqId}/enviar`).send({});
+      assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+      assert.strictEqual(res.body.status, 'PENDENTE');
+    } finally {
+      setUser(ADMIN_USER);
+    }
+  });
+
+  await test('[enviar] por admin que não é o solicitante -> 200', async () => {
+    const matId = await criarMaterial('MATEST-16', 10);
+    const { id: reqId } = await criarRequisicao(db, {
+      status: 'RASCUNHO', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 77,
+    });
+
+    setUser(ADMIN_USER);
+    const res = await request(app).post(`/api/almoxarifado/requisicoes/${reqId}/enviar`).send({});
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.status, 'PENDENTE');
   });
 
   // ── aprovar sem estoque em nada -> AGUARDANDO_ESTOQUE ──

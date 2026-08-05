@@ -1791,6 +1791,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
       if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
 
+      // Mesmo gate de dono/admin do /cancelar (linha ~1968) — sem isso, qualquer usuário
+      // com acesso ao módulo poderia enviar o rascunho de outro (disparando e-mails,
+      // avaliação de valor e possível auto-aprovação em nome do dono).
+      if (reqRow.solicitante_id !== req.user.id && !isSystemAdmin(req.user)) {
+        return res.status(403).json({ error: 'Apenas o solicitante pode enviar o rascunho' });
+      }
+
       const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PENDENTE');
       if (!check.ok) return res.status(400).json({ error: check.erro });
 
@@ -1851,20 +1858,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: `Transição inválida: ${reqRow.status} → APROVADO` });
       }
 
-      await dbRun(db,
-        `UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-         WHERE id=?`,
-        [req.user.id, req.user.nome || req.user.email, req.params.id]);
-
       // Pós-aprovação: se nenhum item tem saldo disponível, a requisição não fica em
       // APROVADO — vai para AGUARDANDO_COMPRA/AGUARDANDO_ESTOQUE (design, seção "Máquina
-      // de estados").
+      // de estados"). Calculado ANTES do UPDATE (calcularStatusPosAprovacao só depende
+      // dos itens/materiais, não do status da requisição) para gravar tudo num único
+      // UPDATE — evita uma janela transitória com status=APROVADO visível a leitores
+      // concorrentes entre dois writes.
       const statusFinal = await requisitionStateMachine.calcularStatusPosAprovacao(db, req.params.id);
-      if (statusFinal !== 'APROVADO') {
-        await dbRun(db,
-          `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [statusFinal, req.params.id]);
-      }
+
+      await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status=?, aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+         WHERE id=?`,
+        [statusFinal, req.user.id, req.user.nome || req.user.email, req.params.id]);
 
       res.json({ success: true, status: statusFinal });
     } catch (e) {
