@@ -411,6 +411,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (['RESERVA', 'LIBERACAO_RESERVA'].includes(mov.tipo)) {
     throw Object.assign(new Error('Use a liberação de reserva para desfazer reservas'), { status: 400 });
   }
+  if (mov.requisicao_id) {
+    throw Object.assign(new Error('Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)'), { status: 400 });
+  }
 
   // Claim atômico ANTES de aplicar qualquer efeito inverso (achado do review final: double-cancel
   // race). O UPDATE...WHERE cancelado = 0 é a própria seção crítica sob o lock de linha do SQLite:

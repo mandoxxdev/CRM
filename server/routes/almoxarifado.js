@@ -1787,10 +1787,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // dispara as notificações + avaliação de valor que o rascunho pulou na criação (mesmo
   // bloco pós-criação do POST /requisicoes, reaproveitado aqui — ver requisitionCreateService
   // .dispararNotificacoesCriacao, Task 1).
-  // Nota: TRANSICOES também permite AGUARDANDO_APROVACAO_VALOR -> PENDENTE (seta reservada
-  // ao /aprovar-valor no design); esta rota aceitá-la via validarTransicao é inofensivo —
-  // não seta APROVADO nem pula nenhuma permissão, e aplicarAvaliacaoNaCriacao (chamada
-  // logo abaixo) recoloca em AGUARDANDO_APROVACAO_VALOR se o valor ainda excede o limite.
+  // Nota (review final da Etapa 3): a rota exige status === 'RASCUNHO' explicitamente, em
+  // vez de delegar a validarTransicao — TRANSICOES também lista AGUARDANDO_APROVACAO_VALOR
+  // -> PENDENTE (seta reservada ao /aprovar-valor no design); aceitá-la aqui permitiria
+  // reenviar e-mails/avaliação de valor em loop para uma requisição já pendente de
+  // aprovação por valor.
   app.post('/api/almoxarifado/requisicoes/:id/enviar', async (req, res) => {
     try {
       const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
@@ -1803,8 +1804,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(403).json({ error: 'Apenas o solicitante pode enviar o rascunho' });
       }
 
-      const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PENDENTE');
-      if (!check.ok) return res.status(400).json({ error: check.erro });
+      if (reqRow.status !== 'RASCUNHO') {
+        return res.status(400).json({ error: 'Apenas rascunhos podem ser enviados' });
+      }
 
       await dbRun(db,
         `UPDATE requisicoes_almoxarifado SET status='PENDENTE', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
@@ -1900,7 +1902,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // Motivo obrigatório na rejeição (design, "Decisões aprovadas" #1) — vale para as duas
   // lanes (rejeitar e rejeitar-valor). Zod inline, padrão validation.js.
   const RejeicaoSchema = z.object({
-    motivo: z.string().min(1, 'Motivo da rejeição é obrigatório'),
+    motivo: z.string().trim().min(1, 'Motivo da rejeição é obrigatório'),
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/rejeitar — rejeitar (sem segregação: reprovar a
@@ -2216,11 +2218,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (err2) return res.status(500).json({ error: err2.message });
         db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado`, [], (err3, emitidas) => {
           if (err3) return res.status(500).json({ error: err3.message });
-          db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'ENTREGUE'`, [], (err4, encerradas) => {
+          db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status IN ('ENTREGUE','ENCERRADA')`, [], (err4, encerradas) => {
             if (err4) return res.status(500).json({ error: err4.message });
             db.all(`SELECT r.*, (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens
                     FROM requisicoes_almoxarifado r
-                    WHERE r.status IN ('PENDENTE','APROVADO','EM_SEPARACAO','PARCIALMENTE_ATENDIDA')
+                    WHERE r.status IN ('PENDENTE','APROVADO','EM_SEPARACAO','PARCIALMENTE_ATENDIDA',
+                                        'AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR')
                     ORDER BY CASE r.urgencia WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at ASC
                     LIMIT 5`, [], (err5, abertas) => {
               if (err5) return res.status(500).json({ error: err5.message });

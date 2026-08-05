@@ -137,6 +137,19 @@ async function setupLiberacaoValor(db, { limite = 100, aprovadorIds = [] } = {})
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
   });
 
+  await test('[rejeitar] motivo só espaços -> 400 (RejeicaoSchema faz trim antes do min)', async () => {
+    const matId = await criarMaterial('MATAPR-17');
+    const { id: reqId } = await criarRequisicao(db, {
+      status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 42,
+    });
+
+    const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/rejeitar`).send({ motivo: '   ' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+
+    const row = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+    assert.strictEqual(row.status, 'PENDENTE', 'status não deveria ter mudado');
+  });
+
   await test('[rejeitar] com motivo -> 200, motivo gravado em rejeicao_motivo', async () => {
     const matId = await criarMaterial('MATAPR-06');
     const { id: reqId } = await criarRequisicao(db, {

@@ -119,9 +119,31 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
     assert.strictEqual(row.status, 'PENDENTE');
   });
 
-  await test('[enviar] já PENDENTE -> 400 (transição inválida via ação, sem rota de PUT status genérico)', async () => {
+  await test('[enviar] já PENDENTE -> 400 (só rascunhos podem ser enviados)', async () => {
     const res = await request(app).post(`/api/almoxarifado/requisicoes/${idRascunhoEnviado}/enviar`).send({});
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Apenas rascunhos podem ser enviados');
+  });
+
+  // ── /enviar: exige RASCUNHO explicitamente — evita reenvio de e-mails/avaliação de
+  // valor em loop quando a requisição já está AGUARDANDO_APROVACAO_VALOR (review final) ──
+  await test('[enviar] AGUARDANDO_APROVACAO_VALOR -> 400 (não reenviar em loop)', async () => {
+    const matId = await criarMaterial('MATEST-19', 10);
+    const { id: reqId } = await criarRequisicao(db, {
+      status: 'AGUARDANDO_APROVACAO_VALOR', itens: [{ material_id: matId, quantidade: 1 }], solicitanteId: 77,
+    });
+
+    setUser({ id: 77, nome: 'Solicitante Dono', role: 'user', email: 'dono@test.com' });
+    try {
+      const res = await request(app).post(`/api/almoxarifado/requisicoes/${reqId}/enviar`).send({});
+      assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+      assert.strictEqual(res.body.error, 'Apenas rascunhos podem ser enviados');
+
+      const row = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+      assert.strictEqual(row.status, 'AGUARDANDO_APROVACAO_VALOR', 'status não deveria ter mudado');
+    } finally {
+      setUser(ADMIN_USER);
+    }
   });
 
   await test('[enviar] requisição inexistente -> 404', async () => {

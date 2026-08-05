@@ -56,6 +56,7 @@ Colunas existem; falta garantir que TODAS as operações (saída, reserva, inspe
 | Reservado/bloqueado/inspeção reduzem o disponível | `disponivel = fisico - bloqueado - inspecao - reservado` |
 | Movimentação confirmada não pode ser excluída — só estornada | `DELETE de movimentacao inexiste; estorno cria movimento inverso vinculado` |
 | Estorno exige motivo | `estorno sem motivo falha` |
+| Movimentações vinculadas a requisição não são estornáveis pelo cancelamento avulso (usar exclusão/encerramento da requisição) | `estorno de SAIDA vinculada a requisição é bloqueado (use os fluxos da requisição)` |
 | Saída exige requisito mínimo por tipo (regra crítica) | `saida sem projeto/OS quando obrigatorio falha` |
 | Saldo anterior/posterior corretos e sequenciais | `livro registra saldo_anterior e saldo_posterior consistentes` |
 | Duas movimentações concorrentes não corrompem saldo | `movimentacoes concorrentes mantem saldo correto` (usar padrão de `sqliteConcurrency.test.js`) |

@@ -52,16 +52,18 @@ function validarTransicao(statusAtual, novoStatus) {
 }
 
 /**
- * Regra pós-aprovação (design, seção "Máquina de estados"): calculada depois que o
- * handler `aprovar` já gravou status=APROVADO. Se NENHUM item da requisição tem saldo
- * disponível (quantidade_atual − reservada − bloqueada − em_inspecao) > 0, a requisição
- * não permanece em APROVADO — vai para AGUARDANDO_COMPRA quando existe
- * `solicitacoes_compra_almoxarifado` com status PENDENTE para algum material envolvido
- * (mesmo status usado por purchaseService.verificarEstoqueMinimo), senão
- * AGUARDANDO_ESTOQUE. Se ao menos um item tem disponível > 0, permanece APROVADO.
+ * Regra pós-aprovação (design, seção "Máquina de estados"): calculada ANTES do handler
+ * `aprovar` gravar qualquer coisa — depende só dos itens/materiais da requisição, não do
+ * status dela. Se NENHUM item da requisição tem saldo disponível (quantidade_atual −
+ * reservada − bloqueada − em_inspecao) > 0, a requisição não fica em APROVADO — vai para
+ * AGUARDANDO_COMPRA quando existe `solicitacoes_compra_almoxarifado` com status PENDENTE
+ * para algum material envolvido (mesmo status usado por
+ * purchaseService.verificarEstoqueMinimo), senão AGUARDANDO_ESTOQUE. Se ao menos um item
+ * tem disponível > 0, permanece APROVADO.
  *
- * Não persiste nada — apenas calcula o status final; quem chama decide se precisa
- * de um UPDATE adicional (evita escrever APROVADO duas vezes no caso comum).
+ * Não persiste nada — apenas calcula o status final; o handler grava o resultado num
+ * único UPDATE (status + aprovador_id + data_aprovacao), evitando uma janela transitória
+ * com status=APROVADO visível a leitores concorrentes entre dois writes.
  *
  * @returns {Promise<'APROVADO'|'AGUARDANDO_ESTOQUE'|'AGUARDANDO_COMPRA'>}
  */

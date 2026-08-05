@@ -15,6 +15,23 @@ async function criarMaterial(db, codigo, qtd = 100) {
   return r.lastID;
 }
 
+let reqSeq = 0;
+function reqNumero() {
+  reqSeq += 1;
+  return `EST-REQ-${reqSeq}`;
+}
+async function criarRequisicaoEmSeparacao(db, materialId, quantidade) {
+  const reqRes = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+    (numero, solicitante_id, solicitante_nome, status) VALUES (?, 1, 'Solicitante Teste', 'EM_SEPARACAO')`,
+    [reqNumero()]);
+  const reqId = reqRes.lastID;
+  const itemRes = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+    (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)
+    VALUES (?, ?, ?, ?, 0, 0)`,
+    [reqId, materialId, quantidade, quantidade]);
+  return { reqId, itemId: itemRes.lastID };
+}
+
 (async () => {
   const { app, db, close } = await createTestApp();
 
@@ -127,6 +144,32 @@ async function criarMaterial(db, codigo, qtd = 100) {
 
     const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
     assert.strictEqual(m.quantidade_atual, 100, 'saldo deveria ter sido revertido exatamente uma vez');
+  });
+
+  await test('estorno de SAIDA vinculada a requisição é bloqueado (use os fluxos da requisição)', async () => {
+    const mat = await criarMaterial(db, 'EST-009', 50);
+    const { reqId, itemId } = await criarRequisicaoEmSeparacao(db, mat, 10);
+
+    const entrega = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/entregar`)
+      .send({ itens_atendidos: [{ item_id: itemId, quantidade_atendida: 10 }] });
+    assert.strictEqual(entrega.status, 200, JSON.stringify(entrega.body));
+
+    const mov = await dbGet(db,
+      `SELECT * FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND tipo = 'SAIDA'`, [reqId]);
+    assert.ok(mov, 'deveria existir movimentação SAIDA vinculada à requisição');
+
+    const est = await request(app).post(`/api/almoxarifado/movimentacoes/${mov.id}/cancelar`)
+      .send({ motivo: 'tentando estornar avulso' });
+    assert.strictEqual(est.status, 400, JSON.stringify(est.body));
+
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 40, 'saldo não deveria ter sido alterado pela tentativa de estorno bloqueada');
+
+    const item = await dbGet(db, 'SELECT quantidade_entregue FROM itens_requisicao_almoxarifado WHERE id = ?', [itemId]);
+    assert.strictEqual(item.quantidade_entregue, 10, 'quantidade_entregue não deveria ter sido alterada');
+
+    const movDepois = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [mov.id]);
+    assert.strictEqual(movDepois.cancelado, 0, 'movimentação não deveria estar marcada como cancelada');
   });
 
   await close();

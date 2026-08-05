@@ -542,11 +542,14 @@ const RequisicaoForm = () => {
               style={{ justifyContent: 'center', padding: '12px' }}>
               <FiSend size={14} /> {saving ? 'Enviando...' : 'Enviar Requisição'}
             </button>
-            <button type="button" className="btn-almox-secondary" disabled={saving || savingDraft || itens.length === 0}
-              style={{ justifyContent: 'center' }}
-              onClick={handleSalvarRascunho}>
-              <FiSave size={14} /> {savingDraft ? 'Salvando...' : 'Salvar Rascunho'}
-            </button>
+            {/* Rascunho depende das rotas /enviar e /cancelar, exclusivas do almoxarifado. */}
+            {warehouseMode && (
+              <button type="button" className="btn-almox-secondary" disabled={saving || savingDraft || itens.length === 0}
+                style={{ justifyContent: 'center' }}
+                onClick={handleSalvarRascunho}>
+                <FiSave size={14} /> {savingDraft ? 'Salvando...' : 'Salvar Rascunho'}
+              </button>
+            )}
             <button type="button" className="btn-almox-secondary" style={{ justifyContent: 'center' }}
               onClick={() => navigate(listPath)}>
               Cancelar

@@ -1059,7 +1059,10 @@ const RequisicoesList = () => {
                   </button>
                 )}
 
-                {['RASCUNHO', 'PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'].includes(detalhe.status) && (
+                {(warehouseMode
+                  ? ['RASCUNHO', 'PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA']
+                  : ['PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA']
+                ).includes(detalhe.status) && (
                   detalhe.solicitante_id === user?.id || isAdmin
                 ) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}

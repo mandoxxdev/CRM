@@ -352,10 +352,13 @@ export default function RequisicaoMaterialCesta() {
           <button className="engc-btn engc-btn--primary" type="button" onClick={() => submit(false)} disabled={sending || savingDraft || !cartItems.length}>
             {sending ? 'Enviando…' : 'Enviar solicitação'}
           </button>
-          <button className="engc-btn engc-btn--ghost" type="button" onClick={() => submit(true)} disabled={sending || savingDraft || !cartItems.length}
-            style={{ marginTop: 8, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <FiSave size={14} /> {savingDraft ? 'Salvando…' : 'Salvar rascunho'}
-          </button>
+          {/* Rascunho depende das rotas /enviar e /cancelar, exclusivas do almoxarifado. */}
+          {ctx.warehouseMode && (
+            <button className="engc-btn engc-btn--ghost" type="button" onClick={() => submit(true)} disabled={sending || savingDraft || !cartItems.length}
+              style={{ marginTop: 8, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FiSave size={14} /> {savingDraft ? 'Salvando…' : 'Salvar rascunho'}
+            </button>
+          )}
         </aside>
       </div>
     </div>

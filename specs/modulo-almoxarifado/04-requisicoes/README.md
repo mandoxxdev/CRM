@@ -49,6 +49,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - [ ] Reprogramar saldo pendente (redistribuir/ajustar fino, além do cancelamento simples do encerramento) — fora da Etapa 3
 - [ ] Assinatura digital na retirada (Etapa 15 — mobilidade; deixar campo previsto)
 - [ ] Encerramento com e-mail de resumo — não implementado (`/encerrar` só audita e muda status, sem notificação)
+- [ ] Rascunho nos módulos consumidores (rotas enviar/cancelar em /requisicoes-material + botões) — hoje exclusivo do almoxarifado
 
 ### Frontend
 - [x] Novos status no `RequisicoesList.js` + `AlmoxPageHeader.js` (stepper `REQUISICAO_FLOW`) (Etapa 3, Task 6 — badges/filtros dos status e tipos novos, stepper com 6 passos)
