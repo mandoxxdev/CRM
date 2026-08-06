@@ -11,6 +11,9 @@
     "test:validation": "node tests/validation.test.js",
     "test:api": "node tests/api/run-all.js",
     "test:safealter": "node tests/safeAlter.test.js",
+    "test:familias": "node tests/familiaApagadaSomeDosSeletores.test.js",
+    "test:familias-recriar": "node tests/recriarFamiliaApagada.test.js",
+    "test:proposta-variaveis": "node tests/propostaNaoImprimeVariavelApagada.test.js",
     "test:sqlite": "node tests/sqliteConcurrency.test.js",
     "test:permissions": "node tests/permissionsCacheAdmin.test.js",
     "check-db": "node scripts/check-db.js"

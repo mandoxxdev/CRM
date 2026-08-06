@@ -132,8 +132,14 @@ const ConfigTemplateProposta = ({ embedded = false }) => {
   };
 
   // Familias que ja tem uma ordem gravada e servem de origem para copia.
+  // A ordem e gravada por NOME de familia; apagar a familia nao limpa a config,
+  // entao sem este cruzamento com a lista atual a familia apagada continuaria
+  // sendo oferecida aqui. Enquanto a lista nao carregou (length 0) nao filtra,
+  // para nao piscar vazio.
+  const nomesDeFamiliaAtivos = new Set(familiasList.map((f) => String(f.nome || '').trim()));
   const familiasComOrdem = Object.entries(config.variaveis_proposta_por_familia || {})
     .filter(([fam, arr]) => fam !== familiaEquipamentoSelecionada && Array.isArray(arr) && arr.length > 0)
+    .filter(([fam]) => familiasList.length === 0 || nomesDeFamiliaAtivos.has(String(fam).trim()))
     .map(([fam, arr]) => ({ fam, total: arr.length }))
     .sort((a2, b2) => a2.fam.localeCompare(b2.fam, 'pt-BR'));
 
