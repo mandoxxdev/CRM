@@ -39,6 +39,12 @@ const formatDate = (d) => (d ? new Date(d).toLocaleDateString('pt-BR', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
 }) : '—');
 
+// Campos DATE puros (data_necessidade, expira_em). O T12:00 evita o clássico "um dia a
+// menos": `new Date('2026-08-10')` é meia-noite UTC, que em UTC-3 cai no dia 09.
+const formatDateOnly = (d) => (d
+  ? new Date(`${String(d).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')
+  : '—');
+
 const formatMoney = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 // Mesma prioridade OS > projeto > centro de custo usada no livro principal.
@@ -242,23 +248,44 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                       <tr>
                         <th>Quantidade</th>
                         <th>Utilizada</th>
-                        <th>Vínculo</th>
+                        <th>Saldo</th>
+                        <th>Origem / Vínculo</th>
                         <th>Solicitante</th>
+                        <th>Prazos</th>
                         <th>Data</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.reservas.map(r => (
+                      {data.reservas.map(r => {
+                        // Saldo é o que a reserva AINDA segura. Depois que a entrega de
+                        // requisição passou a baixar contra a reserva (Etapa 4), uma reserva
+                        // consumida pela metade é o caso normal — e só "quantidade" faria
+                        // parecer que ela ainda prende o dobro do real.
+                        const utilizada = r.quantidade_utilizada || 0;
+                        const saldo = r.quantidade - utilizada;
+                        const daRequisicao = r.origem === 'REQUISICAO';
+                        return (
                         <tr key={r.id}>
                           <td style={{ fontWeight: 600 }}>{r.quantidade} {material.unidade}</td>
-                          <td>{r.quantidade_utilizada || 0} {material.unidade}</td>
+                          <td>{utilizada} {material.unidade}</td>
+                          <td style={{ fontWeight: 700 }}>{saldo} {material.unidade}</td>
                           <td style={{ fontSize: '0.8rem' }}>
-                            {r.os_referencia || (r.os_id ? `OS #${r.os_id}` : (r.projeto_id ? `Projeto #${r.projeto_id}` : '—'))}
+                            <span className={`almox-badge almox-badge-${daRequisicao ? 'ajuste' : 'vazio'}`}>
+                              {daRequisicao ? `REQ #${r.requisicao_id ?? '—'}` : 'MANUAL'}
+                            </span>
+                            <div style={{ marginTop: 4 }}>
+                              {r.os_referencia || (r.os_id ? `OS #${r.os_id}` : (r.projeto_id ? `Projeto #${r.projeto_id}` : '—'))}
+                            </div>
                           </td>
                           <td style={{ fontSize: '0.8rem' }}>{r.solicitante_nome || '—'}</td>
+                          <td style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)' }}>
+                            {r.data_necessidade && <div>Necessidade: {formatDateOnly(r.data_necessidade)}</div>}
+                            {r.expira_em ? <div>Expira: {formatDateOnly(r.expira_em)}</div> : <div>Sem prazo</div>}
+                          </td>
                           <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(r.created_at)}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

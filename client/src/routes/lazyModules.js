@@ -147,6 +147,7 @@ export const RequisicoesMaterialListaPage = page(
 export const ConfiguracoesAlmoxarifado = page(() => import('../components/almoxarifado/ConfiguracoesAlmoxarifado'));
 export const MapaLocalizacoesAlmoxarifado = page(() => import('../components/almoxarifado/MapaLocalizacoesAlmoxarifado'));
 export const RecebimentosAlmoxarifado = page(() => import('../components/almoxarifado/RecebimentosAlmoxarifado'));
+export const ReservasAlmoxarifado = page(() => import('../components/almoxarifado/ReservasAlmoxarifado'));
 export const ChatPage = page(() => import('../components/chat/ChatPage'));
 export const TodolistBoard = page(() => import('../components/todolist/TodolistBoard'));
 

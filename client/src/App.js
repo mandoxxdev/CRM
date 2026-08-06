@@ -102,6 +102,7 @@ import {
   ConfiguracoesAlmoxarifado,
   MapaLocalizacoesAlmoxarifado,
   RecebimentosAlmoxarifado,
+  ReservasAlmoxarifado,
   ChatPage,
   MinhaConta,
   TodolistBoard,
@@ -478,6 +479,7 @@ function AppRoutes() {
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="almoxarifado" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="almoxarifado" />} />
         <Route path="recebimentos" element={<RecebimentosAlmoxarifado />} />
+        <Route path="reservas" element={<ReservasAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
         <Route path="configuracoes" element={<ProtectedAlmoxConfigRoute><ConfiguracoesAlmoxarifado /></ProtectedAlmoxConfigRoute>} />
       </Route>
