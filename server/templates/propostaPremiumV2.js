@@ -556,23 +556,31 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       // Só filtra quando a família do item casa com uma família cadastrada. Sem
       // casar não dá para saber o que ela deveria ter, e derrubar o Escopo por
       // uma divergência de nome seria pior que o excesso.
+      // UNIÃO de todas as famílias que casam, não a primeira. O banco aceita
+      // "DISCO DISPERSOR" e "Disco Dispersor" como cadastros distintos (o UNIQUE
+      // de nome diferencia caixa), e pegar só a primeira podia cair justamente na
+      // duplicata vazia e apagar a ficha técnica inteira do item.
       const chavesDoCadastro = (() => {
         if (!cadastroFamiliaMap) return null;
         const famNorm = normalizarFamiliaComparacao(familiaDoItem);
         if (!famNorm) return null;
         const nomes = Object.keys(cadastroFamiliaMap);
-        let match = nomes.find((n) => normalizarFamiliaComparacao(n) === famNorm) || null;
-        if (!match) {
+
+        let casadas = nomes.filter((n) => normalizarFamiliaComparacao(n) === famNorm);
+        if (casadas.length === 0) {
           const codeFam = normalizarCodigoFamilia(extrairCodigoFamiliaParens(familiaDoItem));
           if (codeFam) {
-            match = nomes.find((n) => {
+            casadas = nomes.filter((n) => {
               const codeKey = normalizarCodigoFamilia(extrairCodigoFamiliaParens(n));
               return codeKey && codeKey === codeFam;
-            }) || null;
+            });
           }
         }
-        if (!match) return null;
-        return new Set(cadastroFamiliaMap[match] || []);
+        if (casadas.length === 0) return null;
+
+        const uniao = new Set();
+        casadas.forEach((n) => (cadastroFamiliaMap[n] || []).forEach((k) => uniao.add(k)));
+        return uniao;
       })();
 
       // Guarda a lista antes do filtro de família: é o que permite o diagnóstico
@@ -627,7 +635,18 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           // Duas causas diferentes para a mesma tela vazia, e telas diferentes
           // para resolver. Mandar o vendedor para a errada custa o dobro do tempo.
           if (cortadasPeloCadastroDaFamilia) {
-            return `<p class="dica-editor">A família <strong>${familia}</strong> está sem variáveis no cadastro, então nada é impresso aqui — mesmo havendo variáveis escolhidas no template. Configure em Configurações → Famílias → “Variáveis desta família”.</p>`;
+            // Dizer QUAIS chaves estão de cada lado: "não bateu" sem mostrar o quê
+            // deixa o usuário sem saber se o erro está no template, no cadastro da
+            // família, ou numa configuração que ele esqueceu de salvar.
+            // Mesma caixa de frase do resto do documento — o cadastro grava a
+            // maioria dos rótulos em CAIXA ALTA e a dica ficaria gritando.
+            const nomeOuChave = (k) => semCapsLock((variaveisLabels[k] || {}).nome || k);
+            const escolhidas = variaveisListConfigurada.map(nomeOuChave).join(', ');
+            const doCadastro = Array.from(chavesDoCadastro || []).map(nomeOuChave);
+            if (doCadastro.length === 0) {
+              return `<p class="dica-editor">A família <strong>${familia}</strong> está sem nenhuma variável no cadastro, então nada é impresso aqui — mesmo com ${variaveisListConfigurada.length} escolhida(s) no template (${esc(escolhidas)}). Configure em Configurações → Famílias → “Variáveis desta família”.</p>`;
+            }
+            return `<p class="dica-editor">Nada é impresso porque as variáveis escolhidas no template para <strong>${familia}</strong> (${esc(escolhidas)}) não são as que estão no cadastro da família (${esc(doCadastro.join(', '))}). Acerte os dois lados: Configurações → Famílias → “Variáveis desta família” e Configurações → Template da Proposta → “Variáveis por equipamento (família)” — lembrando de salvar a configuração do template depois de mexer nela.</p>`;
           }
           return `<p class="dica-editor">Nenhuma variável técnica está selecionada para a família <strong>${familia}</strong>. Configure em Configurações → Template da Proposta → “Variáveis por equipamento (família)”. Se já configurou, confira se a família escolhida ali é exatamente esta.</p>`;
         }

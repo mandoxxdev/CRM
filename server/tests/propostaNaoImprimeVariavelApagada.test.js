@@ -235,6 +235,51 @@ function renderEditor(opts) {
   });
   checar(html.includes('Variáveis por equipamento'), 'aqui sim a causa é o template, e a mensagem antiga se mantém');
 }
+{
+  // Os dois lados preenchidos, mas com chaves diferentes: a mensagem tem que
+  // mostrar o que há de cada lado, senão não dá para descobrir o que corrigir.
+  const html = renderEditor({
+    chaves: ['acabamento_do_disco'],
+    labels: {
+      acabamento_do_disco: { nome: 'ACABAMENTO DO DISCO', ativo: 1 },
+      acabamento: { nome: 'ACABAMENTO', ativo: 1 }
+    },
+    specs: { acabamento_do_disco: 'Escovado' },
+    cadastroFamilia: { [FAMILIA]: ['acabamento'] }
+  });
+  checar(html.includes('Acabamento do disco'), 'diz qual variável está no template');
+  checar(html.includes('Acabamento<') || html.includes('Acabamento)'), 'e qual está no cadastro da família');
+  checar(html.includes('salvar a configuração'), 'lembra de salvar o template, causa comum do descasamento');
+}
+
+/* ── família duplicada só por caixa ──────────────────────────────────── */
+console.log('\nFamília duplicada no banco (difere só na caixa)');
+{
+  // "DISCO DISPERSOR" e "Disco Dispersor" são cadastros distintos. Pegar só o
+  // primeiro podia cair na duplicata vazia e apagar a ficha técnica inteira.
+  const html = render({
+    chaves: ['furacao'],
+    labels: { furacao: { nome: 'FURAÇÃO', ativo: 1 } },
+    specs: { furacao: '15mm Central' },
+    labelsOk: true,
+    cadastroFamilia: {
+      'Disco Dispersor': [],                 // duplicata vazia, vem antes
+      'DISCO DISPERSOR': ['furacao']         // a que realmente tem a variável
+    }
+  });
+  checar(html.includes('15mm Central'), 'une as duplicatas em vez de parar na primeira');
+}
+{
+  // Se TODAS as duplicatas estiverem vazias, aí sim não imprime.
+  const html = render({
+    chaves: ['furacao'],
+    labels: { furacao: { nome: 'FURAÇÃO', ativo: 1 } },
+    specs: { furacao: '15mm Central' },
+    labelsOk: true,
+    cadastroFamilia: { 'Disco Dispersor': [], 'DISCO DISPERSOR': [] }
+  });
+  checar(!html.includes('15mm Central'), 'todas vazias continua não imprimindo');
+}
 
 console.log(falhas === 0 ? '\n0 failed' : `\n${falhas} failed`);
 process.exit(falhas === 0 ? 0 : 1);
