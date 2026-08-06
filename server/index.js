@@ -3623,25 +3623,66 @@ app.get('/api/familias', authenticateToken, (req, res) => {
     res.json(rows || []);
   });
 });
-app.post('/api/familias', authenticateToken, (req, res) => {
+// Criação de família, usada por /api/familias e por /familias (mesma regra).
+//
+// Apagar família é exclusão lógica (ativo = 0), mas familias_produto.nome é
+// UNIQUE — a linha apagada continua ocupando o nome. Sem tratar isso, recriar
+// uma família apagada devolvia "Já existe uma família com este nome" sem que
+// ela aparecesse em lugar nenhum na tela, o que não tinha como o usuário
+// resolver sozinho.
+//
+// A saída é reativar a MESMA linha em vez de inserir outra: preserva o id e,
+// com ele, os vínculos em familia_variaveis e a ordem gravada na configuração
+// da proposta (que referencia a família pelo nome). Recriar a família traz de
+// volta a configuração que ela tinha.
+function criarOuReativarFamilia(req, res) {
   var body = req.body || {};
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
   var ordem = parseInt(body.ordem, 10) || 0;
   var grupoId = body.grupo_id != null ? parseInt(body.grupo_id, 10) : null;
   if (grupoId === 0 || isNaN(grupoId)) grupoId = null;
-  db.get('SELECT COALESCE(MAX(codigo), 0) + 10 AS proximo FROM familias_produto', [], function(err, row) {
-    if (err) return res.status(500).json({ error: err.message });
-    var codigo = row && row.proximo != null ? row.proximo : 10;
-    db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo, grupo_id) VALUES (?, ?, ?, 1, ?)', [nome, ordem, codigo, grupoId], function(insertErr) {
-      if (insertErr) {
-        if (insertErr.message && insertErr.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
-        return res.status(500).json({ error: insertErr.message });
-      }
-      res.json({ id: this.lastID, nome: nome, ordem: ordem, codigo: codigo });
+
+  // Comparação exata, igual à do UNIQUE: "Disco Dispersor" e "DISCO DISPERSOR"
+  // são nomes distintos para o banco, e precisam continuar sendo aqui também.
+  db.get('SELECT id, ativo FROM familias_produto WHERE nome = ?', [nome], function(errBusca, existente) {
+    if (errBusca) return res.status(500).json({ error: errBusca.message });
+
+    if (existente && existente.ativo === 1) {
+      return res.status(400).json({ error: 'Já existe uma família com este nome' });
+    }
+
+    if (existente) {
+      db.run(
+        'UPDATE familias_produto SET ativo = 1, ordem = ?, grupo_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [ordem, grupoId, existente.id],
+        function(errUp) {
+          if (errUp) return res.status(500).json({ error: errUp.message });
+          db.get('SELECT * FROM familias_produto WHERE id = ?', [existente.id], function(e, row) {
+            if (e) return res.status(500).json({ error: e.message });
+            // reativada avisa a tela de que a configuração anterior voltou junto.
+            res.json(Object.assign({}, row || {}, { reativada: true }));
+          });
+        }
+      );
+      return;
+    }
+
+    db.get('SELECT COALESCE(MAX(codigo), 0) + 10 AS proximo FROM familias_produto', [], function(err, row) {
+      if (err) return res.status(500).json({ error: err.message });
+      var codigo = row && row.proximo != null ? row.proximo : 10;
+      db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo, grupo_id) VALUES (?, ?, ?, 1, ?)', [nome, ordem, codigo, grupoId], function(insertErr) {
+        if (insertErr) {
+          if (insertErr.message && insertErr.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+          return res.status(500).json({ error: insertErr.message });
+        }
+        res.json({ id: this.lastID, nome: nome, ordem: ordem, codigo: codigo, grupo_id: grupoId, reativada: false });
+      });
     });
   });
-});
+}
+
+app.post('/api/familias', authenticateToken, criarOuReativarFamilia);
 app.get('/familias', authenticateToken, (req, res) => {
   var grupoId = req.query.grupo_id;
   var sql = 'SELECT * FROM familias_produto WHERE ativo = 1';
@@ -3656,25 +3697,7 @@ app.get('/familias', authenticateToken, (req, res) => {
     res.json(rows || []);
   });
 });
-app.post('/familias', authenticateToken, (req, res) => {
-  var body = req.body || {};
-  var nome = (body.nome || '').trim();
-  if (!nome) return res.status(400).json({ error: 'Nome da família é obrigatório' });
-  var ordem = parseInt(body.ordem, 10) || 0;
-  var grupoId = body.grupo_id != null ? parseInt(body.grupo_id, 10) : null;
-  if (grupoId === 0 || isNaN(grupoId)) grupoId = null;
-  db.get('SELECT COALESCE(MAX(codigo), 0) + 10 AS proximo FROM familias_produto', [], function(err, row) {
-    if (err) return res.status(500).json({ error: err.message });
-    var codigo = row && row.proximo != null ? row.proximo : 10;
-    db.run('INSERT INTO familias_produto (nome, ordem, codigo, ativo, grupo_id) VALUES (?, ?, ?, 1, ?)', [nome, ordem, codigo, grupoId], function(insertErr) {
-      if (insertErr) {
-        if (insertErr.message && insertErr.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
-        return res.status(500).json({ error: insertErr.message });
-      }
-      res.json({ id: this.lastID, nome: nome, ordem: ordem, codigo: codigo, grupo_id: grupoId });
-    });
-  });
-});
+app.post('/familias', authenticateToken, criarOuReativarFamilia);
 
 // ========== ROTAS DE USUÁRIOS ==========
 // Lista apenas usuários com acesso ao módulo Comercial (para filtros do comercial: responsáveis).
@@ -4600,7 +4623,22 @@ app.put('/api/familias/:id', authenticateToken, (req, res) => {
   params.push(id);
   db.run(sql, params, function(err) {
     if (err) {
-      if (err.message && err.message.indexOf('UNIQUE') !== -1) return res.status(400).json({ error: 'Já existe uma família com este nome' });
+      if (err.message && err.message.indexOf('UNIQUE') !== -1) {
+        // O nome pode estar preso a uma família APAGADA (exclusão é lógica, e o
+        // nome segue UNIQUE). Dizer só "já existe" deixava o usuário procurando
+        // na tela uma família que não está lá. Renomear não reativa sozinho:
+        // seriam duas linhas com vínculos próprios para fundir, e essa escolha
+        // é de quem está cadastrando.
+        return db.get('SELECT id, ativo FROM familias_produto WHERE nome = ?', [nome], function(e2, conflito) {
+          if (!e2 && conflito && conflito.ativo !== 1) {
+            return res.status(400).json({
+              error: 'Este nome pertence a uma família apagada. Recrie a família com esse nome (ela volta com a configuração antiga) ou escolha outro nome.',
+              conflito_com_familia_apagada: true
+            });
+          }
+          res.status(400).json({ error: 'Já existe uma família com este nome' });
+        });
+      }
       return res.status(500).json({ error: err.message });
     }
     if (this.changes === 0) return res.status(404).json({ error: 'Família não encontrada' });

@@ -9,6 +9,7 @@
     "seed-variaveis": "node scripts/seed-variaveis-from-excel.js",
     "test:almoxarifado": "node tests/almoxarifado.test.js",
     "test:familias": "node tests/familiaApagadaSomeDosSeletores.test.js",
+    "test:familias-recriar": "node tests/recriarFamiliaApagada.test.js",
     "test:sqlite": "node tests/sqliteConcurrency.test.js",
     "test:permissions": "node tests/permissionsCacheAdmin.test.js",
     "check-db": "node scripts/check-db.js"
