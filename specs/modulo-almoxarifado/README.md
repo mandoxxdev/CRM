@@ -1,7 +1,7 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-05
+> **Última atualização:** 2026-08-06
 > **Regra de ouro:** toda regra essencial de funcionamento nasce com teste de API. Nenhuma feature é marcada como ✅ sem teste passando.
 
 ## Como usar esta pasta
@@ -11,7 +11,7 @@
 - Quando uma feature entrar em desenvolvimento, escrever o plano detalhado de implementação (tarefas TDD passo a passo) em `docs/superpowers/plans/` e linkar no README da feature.
 - Status: ✅ completo (com testes) · 🟡 parcial · ❌ ausente
 
-## Mapa de features e status atual (2026-08-05)
+## Mapa de features e status atual (2026-08-06)
 
 | # | Feature | Backend | Frontend | Testes | Status |
 |---|---------|---------|----------|--------|--------|

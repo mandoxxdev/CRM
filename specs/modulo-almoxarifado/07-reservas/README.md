@@ -2,7 +2,7 @@
 
 > **Status:** 🟢 backend da Etapa 4 entregue (2026-08-05) · falta a **tela de reservas** ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-08-05
+> **Última atualização:** 2026-08-06
 > **Design da etapa:** `docs/superpowers/specs/2026-08-05-almoxarifado-etapa4-reservas-design.md`
 
 > ⚠️ **Correção de uma afirmação errada que estava aqui.** Este arquivo dizia
@@ -18,8 +18,12 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 
 ## O que já existe
 
-- Tabela `reservas_material_almoxarifado` (`schema.js:398`): material, quantidade, quantidade_utilizada, projeto_id, os_id, cliente_id, equipamento, submontagem, status.
-- Rotas: `GET/POST /reservas`, `POST /reservas/:id/liberar` (`extended.js:122-141`), permissões `reservar` e `reservar_outra_os`.
+- Tabela `reservas_material_almoxarifado` (`schema.js:569`): material, quantidade, quantidade_utilizada, projeto_id, os_id, cliente_id, equipamento, submontagem, status.
+- Rotas (`extended.js:337-375`) — 5, sob `/api/almoxarifado`:
+  `GET /reservas` (filtros `status`/`material_id`/`projeto_id` + campo derivado `saldo`) ·
+  `POST /reservas` (`reservar`) · `POST /reservas/:id/liberar` (`reservar`) ·
+  `PUT /reservas/:id/transferir` (`reservar_outra_os`) ·
+  `POST /reservas/processar-expiracao` (`configurar`).
 - `quantidade_reservada` no material e no saldo por localização; mapa 2D exibe reservas.
 - **Consumo contra reserva** (`0e37dea`): saída com `reserva_id` valida contra a própria reserva
   (não contra o disponível), reivindica a reserva em UPDATE condicional, baixa físico+reservado
@@ -55,14 +59,30 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 
 ## Regras essenciais + testes de API exigidos
 
-| Regra | Teste |
-|-------|-------|
-| Reservar acima do disponível falha | `reserva acima do disponivel falha` |
-| Reserva reduz o disponível imediatamente | `apos reserva, disponivel diminui e fisico permanece` |
-| Saída de outro projeto não consome reserva alheia | `saida projeto B nao consome reserva do projeto A` |
-| Liberação devolve ao disponível | `liberar reserva restaura disponivel` |
-| Reserva expirada libera saldo automaticamente | `job de expiracao libera reservas vencidas` |
-| Aprovação de requisição reserva automaticamente | `aprovar requisicao cria reservas dos itens com saldo` |
+Todos em `server/tests/api/` (**42 casos** nos 4 arquivos), rodam com `npm run test:api`.
+Os nomes abaixo são os reais — copiáveis para localizar o caso.
+
+| Regra | Arquivo · teste |
+|-------|-----------------|
+| Reservar acima do disponível falha | `reservaConsumo` · *reservar acima do disponível → erro* |
+| Reserva reduz o disponível imediatamente, sem tocar no físico | `reservaConsumo` · *após reservar, disponível cai e o físico permanece* |
+| Saída de outro projeto não consome reserva alheia | `reservaConsumo` · *saída SEM reserva_id não consome reserva de terceiro* |
+| Saída **com** `reserva_id` consome a própria reserva e não é barrada pelo disponível | `reservaConsumo` · *saída COM reserva_id consome a reserva e NÃO é barrada pelo disponível* |
+| Consumo acima do saldo da reserva falha sem efeito colateral | `reservaConsumo` · *consumir mais que o saldo da reserva → 400 e nada muda* |
+| Reserva totalmente consumida vira CONSUMIDA | `reservaConsumo` · *reserva totalmente consumida vira CONSUMIDA e libera o reservado* |
+| Consumo deixa rastro (`reserva_id` na movimentação) | `reservaConsumo` · *a movimentação de consumo fica registrada com o reserva_id (rastro)* |
+| Liberação devolve ao disponível e registra quem/quando/por quê | `reservaConsumo` · *liberar reserva devolve ao disponível* · `reservaTransferenciaExpiracao` · *liberar grava liberado_por, liberado_em e motivo_liberacao* |
+| Aprovação de requisição reserva automaticamente | `requisicaoReservaAutomatica` · *[aprovar] saldo total em todos os itens -> TOTALMENTE_RESERVADA com uma reserva por item* |
+| Aprovação com saldo parcial reserva só o disponível | `requisicaoReservaAutomatica` · *[aprovar] saldo parcial -> PARCIALMENTE_RESERVADA e reserva só do disponível* |
+| Sem saldo nenhum, segue para AGUARDANDO_ESTOQUE/COMPRA (não regride) | `requisicaoReservaAutomatica` · *[aprovar] nenhum item com saldo -> AGUARDANDO_ESTOQUE e nenhuma reserva (regressão)* |
+| Entrega consome a reserva da própria requisição, debitando uma vez só | `requisicaoReservaAutomatica` · *[entregar] consome a reserva da requisição: CONSUMIDA e disponível debitado UMA vez* |
+| Entrega acima do reservado divide a saída (reserva + excedente) | `requisicaoReservaAutomatica` · *[entregar] quantidade acima da reserva: consome a reserva + o excedente sem reserva* |
+| Transferência muda dono sem mover saldo; exige `reservar_outra_os` | `reservaTransferenciaExpiracao` · *transferir muda o dono da reserva e NÃO move saldo nenhum* · *transferir exige reservar_outra_os: perfil sem a permissão → 403 e nada muda* |
+| Expiração libera vencidas, marca EXPIRADA e devolve ao disponível | `reservaTransferenciaExpiracao` · *expiração libera só as vencidas, marca EXPIRADA e devolve ao disponível* |
+| Expiração é **opt-in** (sem config e sem `expira_em`, não expira) | `reservaCicloIntegracao` · *sem config e sem valor explícito, a reserva NÃO ganha expira_em (opt-in)* |
+| Cancelar requisição libera as reservas dela | `reservaCicloIntegracao` · *cancelar requisição libera as reservas dela e devolve ao disponível* |
+| Cancelar não mexe em reserva manual de terceiro | `reservaCicloIntegracao` · *cancelar NÃO mexe em reserva manual de outro dono do mesmo material* |
+| Idempotência: liberar/consumir reserva já finalizada → 400 | `reservaConsumo` · *consumir reserva já CONSUMIDA → 400* · `reservaTransferenciaExpiracao` · *liberar reserva já liberada → 400 (idempotência)* · *expiração é idempotente: rodar de novo não libera nem desconta duas vezes* |
 
 ## Dependências
 
