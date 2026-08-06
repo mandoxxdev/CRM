@@ -230,7 +230,13 @@ async function setupLiberacaoValor(db, { limite = 100, aprovadorIds = [] } = {})
     }
   });
 
-  await test('[aprovar-valor] aprovador diferente do solicitante -> 200 APROVADO, auditado', async () => {
+  // Status esperado atualizado na Task 6, pelo mesmo motivo que os três testes ajustados em
+  // 6690c1a: a lane /aprovar-valor passou a RESERVAR, e o material tem saldo (criarMaterial
+  // nasce com 50), então o destino correto é TOTALMENTE_RESERVADA. Nenhuma regra afrouxada —
+  // a segregação e a auditoria seguem asseguradas, e o teste ganhou a asserção NOVA de que o
+  // hold realmente saiu. (O caso "aprovar por valor sem saldo continua APROVADO" está em
+  // reservaPontasFaltantes.api.test.js.)
+  await test('[aprovar-valor] aprovador diferente do solicitante -> 200 com reserva, auditado', async () => {
     await setupLiberacaoValor(db, { limite: 100, aprovadorIds: [66] });
     const matId = await criarMaterial('MATAPR-10');
     const { id: reqId } = await criarRequisicao(db, {
@@ -242,7 +248,12 @@ async function setupLiberacaoValor(db, { limite = 100, aprovadorIds = [] } = {})
     try {
       const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar-valor`).send({});
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-      assert.strictEqual(res.body.status, 'APROVADO');
+      assert.strictEqual(res.body.status, 'TOTALMENTE_RESERVADA');
+
+      const reserva = await dbGet(db,
+        `SELECT * FROM reservas_material_almoxarifado WHERE requisicao_id = ? AND status = 'ATIVA'`, [reqId]);
+      assert.ok(reserva, 'aprovação por valor não criou o hold');
+      assert.strictEqual(reserva.quantidade, 1);
 
       const log = await dbGet(db,
         `SELECT * FROM auditoria_log_almoxarifado WHERE entidade = 'requisicao' AND entidade_id = ? AND acao = 'APROVACAO_VALOR'`,

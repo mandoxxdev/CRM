@@ -19,7 +19,13 @@ const STATUS_TOTALMENTE_RESERVADA = 'TOTALMENTE_RESERVADA';
 const TRANSICOES = {
   RASCUNHO: ['PENDENTE', 'CANCELADO'],
   PENDENTE: ['APROVADO', 'REJEITADO', 'AGUARDANDO_APROVACAO_VALOR', 'CANCELADO'],
-  AGUARDANDO_APROVACAO_VALOR: ['PENDENTE', 'APROVADO', 'REJEITADO', 'CANCELADO'],
+  // Task 6: os dois status de reserva também são destino daqui. A lane /aprovar-valor passou a
+  // reservar como a /aprovar faz — sem estas setas, aprovar por valor com saldo ficaria com o
+  // hold criado mas o status recusado pela máquina, e o mesmo fato (aprovada COM reserva) teria
+  // dois status conforme a rota que aprovou. APROVADO continua: é o destino quando não há nada
+  // a reservar.
+  AGUARDANDO_APROVACAO_VALOR: ['PENDENTE', 'APROVADO', 'REJEITADO', 'CANCELADO',
+    'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'],
   APROVADO: ['EM_SEPARACAO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
     'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA', 'CANCELADO'],
   AGUARDANDO_ESTOQUE: ['EM_SEPARACAO', 'CANCELADO'],

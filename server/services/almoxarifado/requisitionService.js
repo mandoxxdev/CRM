@@ -4,6 +4,8 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const valueApprovalService = require('./requisitionValueApprovalService');
 const stockService = require('./stockService');
+// Sem ciclo: reservationService importa db/audit/stockService, nunca este arquivo.
+const reservationService = require('./reservationService');
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
 } = require('./requisitionStateMachine');
@@ -437,7 +439,21 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
      WHERE id=?`,
     [motivo, requisicaoId]);
 
-  return { success: true, estornos };
+  // Task 6 — a exclusão deixava o hold preso. O /cancelar solta as reservas desde a Etapa 4;
+  // o DELETE não soltava, e as duas rotas terminam no mesmo status CANCELADO. Como a expiração
+  // é opt-in por config, na configuração padrão o saldo ficava reservado para uma requisição
+  // morta PARA SEMPRE — a mesma armadilha de saldo inutilizável que a etapa fecha.
+  //
+  // Best-effort, como no /cancelar: falha ao liberar não desfaz a exclusão, que é a ação que o
+  // usuário pediu (e cujo estorno de estoque já aconteceu acima).
+  const liberacao = await reservationService
+    .liberarReservasDaRequisicao(db, user, requisicaoId, motivo)
+    .catch((e) => {
+      console.warn(`[almoxarifado-reservas] Falha ao liberar reservas da requisição ${requisicaoId} na exclusão: ${e.message}`);
+      return { liberadas: [], erros: [{ erro: e.message }] };
+    });
+
+  return { success: true, estornos, reservas_liberadas: liberacao.liberadas };
 }
 
 module.exports = {

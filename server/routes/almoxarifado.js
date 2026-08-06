@@ -2050,10 +2050,30 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     try {
       const result = await valueApprovalService.aprovarValor(db, req.params.id, req.user);
 
+      // Task 6 — esta lane não reservava. `aprovarValor` grava APROVADO direto, então a
+      // requisição liberada por valor saía sem o hold e o material podia ser levado por outra
+      // saída antes da entrega: exatamente a corrida que a Etapa 4 fechou na lane /aprovar.
+      // Pior aqui do que lá, porque quem passa pela liberação por valor é justamente a
+      // requisição de valor alto.
+      //
+      // Reserva DEPOIS do serviço (e não dentro dele) porque a segregação e a validação de
+      // status vivem lá, e não faz sentido segurar saldo de uma aprovação que vai ser recusada.
+      // Se nada for reservado, `status` vem null e o APROVADO gravado pelo serviço permanece —
+      // o comportamento anterior sobrevive intacto quando não há o que reservar.
+      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+      const reserva = await requisitionService.reservarItensAprovacao(db, req.params.id, req.user, reqRow);
+      if (reserva.status) {
+        await dbRun(db,
+          `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [reserva.status, req.params.id]);
+        result.status = reserva.status;
+      }
+      result.reservas = reserva.reservas;
+
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_VALOR',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_novos: { status: result.status },
+        dados_novos: { status: result.status, reservas: reserva.reservas },
       });
 
       res.json(result);
