@@ -2,7 +2,9 @@
 
 > Atualizado em 2026-08-05 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1, 2 e 3) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 4) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+
+> **Onde o desenvolvimento parou (2026-08-05):** Etapas 1, 2 e 3 completas. Etapa 4 (reservas) com o **backend entregue** e a **tela de reservas pendente** — é a próxima tarefa. Ver a seção da Etapa 4 e `specs/modulo-almoxarifado/07-reservas/README.md` para o checklist com o que falta.
 
 ## Tabela consolidada — todas as alterações (Etapas 1 a 3)
 
@@ -155,6 +157,38 @@ Vá em **Almoxarifado → Requisições**.
 
 ---
 
+## Etapa 4 — Reservas de Estoque (BACKEND ENTREGUE — 2026-08-05 · falta a tela)
+
+Reservar material é "separar no sistema" antes de entregar: o saldo continua fisicamente lá, mas deixa de estar disponível para outra pessoa pegar.
+
+**O problema que esta etapa consertou é importante entender.** Antes dela, reservar era uma armadilha: reservar 10 unidades para um projeto tornava essas 10 indisponíveis para **todo mundo, inclusive o projeto que reservou**. Não existia jeito de consumir o que você mesmo reservou — a única saída era cancelar a reserva, devolvendo o material ao bolo geral, e correr para dar baixa antes que outro consumisse. Era por isso que essa função nunca tinha ganhado tela.
+
+| Antes | Agora |
+|---|---|
+| Reservar tornava o material inutilizável até para quem reservou | A saída pode citar a reserva e consumir o que foi separado para ela; a reserva vai baixando conforme o consumo e fecha quando zera |
+| Aprovar requisição não separava nada — o material podia ser consumido por outro antes da entrega | Aprovar **reserva automaticamente** os itens que têm saldo; a requisição passa a **Totalmente Reservada** ou **Parcialmente Reservada** |
+| Entregar disputava o estoque com todo mundo | A entrega consome a reserva da própria requisição — acabou a corrida entre aprovar e entregar |
+| Reserva de um projeto não podia ser passada para outro | **Transferência** de reserva entre projetos/OS (exige perfil que possa reservar para outra OS) |
+| Reserva esquecida segurava saldo para sempre | **Expiração**: reserva com prazo vencido é liberada e devolve o saldo. É **opt-in** — só expira se você preencher a configuração `reserva_dias_validade` ou informar a data na reserva, senão as reservas que já existem não somem sozinhas |
+| Cancelar requisição deixava o material reservado preso | Cancelar **solta as reservas** daquela requisição e devolve ao disponível |
+
+### Roteiro de teste manual (Etapa 4)
+
+> **Ainda não há tela de reservas** — esta etapa entregou só o backend. Por enquanto o teste é pelo efeito nas telas que já existem.
+
+1. **Veja o disponível cair sem o físico mudar.** Escolha um material com saldo e olhe o **Extrato** (Materiais → ícone Extrato): anote "Físico" e "Disponível".
+2. **Aprove uma requisição.** Crie uma requisição desse material com um usuário, aprove com **outro** (a segregação continua valendo). O status deve virar **Totalmente Reservada** (ou **Parcialmente Reservada**, se o saldo não cobrir tudo).
+3. **Volte ao Extrato.** O "Físico" deve estar igual e o "Disponível" deve ter caído pela quantidade da requisição. Na lista de reservas do extrato deve aparecer a reserva nova.
+4. **Caso de erro esperado — outro consumir o reservado.** Em Movimentações, tente uma **Saída** desse material acima do disponível (mas abaixo do físico). Deve ser recusado: o saldo está reservado para a requisição.
+5. **Entregue a requisição.** Separe e entregue normalmente. A entrega deve funcionar — ela consome a reserva, não disputa o disponível. Depois confira no Extrato que o físico caiu e o reservado voltou a zero (a reserva foi consumida).
+6. **Cancele uma requisição reservada.** Crie e aprove outra requisição do mesmo material (para gerar a reserva) e então **cancele**. O "Disponível" no Extrato deve voltar ao valor de antes — o material não fica preso.
+
+### O que a Etapa 4 não cobre
+
+Tela de reservas (listar/criar/liberar/transferir) — **é a próxima tarefa**. Reserva por lote/série (depende do controle de lotes). Prioridade na reserva. E-mail de aviso de reserva vencida. A liberação por valor (`/aprovar-valor`) ainda não reserva: requisição liberada por valor não ganha o hold.
+
+---
+
 ## O que observar de regressão (sempre)
 
 - O fluxo de requisição de materiais que já existia (criar → aprovar → separar → entregar) continua funcionando normalmente — nada foi removido nessa tela; requisições antigas continuam com o comportamento de sempre (criadas sem tipo/centro de custo ganham o padrão "Consumo").
@@ -173,7 +207,7 @@ Vá em **Almoxarifado → Requisições**.
 
 - Consulta de "posições vazias" e "materiais sem endereço": a API já existe, mas não há tela para usá-la.
 - Criar subfamílias: só via API, sem formulário na interface.
-- Reservas de estoque (separar material para uma OS/projeto antes da entrega, com status "Aguardando/Parcialmente/Totalmente Reservada" na requisição): ainda não implementado — é uma etapa futura (Etapa 4).
+- Reservas de estoque: **backend entregue na Etapa 4** (ver seção da Etapa 4 acima) — falta a **tela de reservas**, que é a próxima tarefa do módulo.
 - Anexos na requisição (desenho/documento) e assinatura digital na retirada: ainda não implementados.
 - Importar itens de uma lista técnica ou ordem de produção na requisição: ainda não implementado (depende da integração com Engenharia/Produção).
 - Registrar lote/série entregue por item na requisição: ainda não implementado (depende do controle de lotes, etapa futura).
