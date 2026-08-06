@@ -9088,6 +9088,45 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
 // Proteções para evitar 502: timeout de resposta, guarda de resposta única, não exige dbReady.
 const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Traefik) devolva 502 por timeout
 
+// Monta { nome da família -> chaves cadastradas nela } e pendura no templateConfig.
+//
+// A proposta imprimia variáveis que o cadastro da família não tinha mais: a ordem em
+// variaveis_proposta_por_familia guarda chaves e não é limpa quando a variável sai da
+// família. O resultado era a tela do produto dizer "nenhuma variável definida para esta
+// família" enquanto a proposta saía com seis linhas — dados que o vendedor não conseguia
+// nem ver nem editar indo parar na frente do cliente.
+//
+// LEFT JOIN de propósito: família sem nenhuma variável precisa aparecer no mapa com lista
+// vazia. Só assim o template distingue "família esvaziada" (não imprime nada) de "família
+// que não bate com nenhum cadastro" (não dá para filtrar, imprime como antes).
+function carregarVariaveisDasFamilias(templateConfig, callback) {
+  if (!templateConfig) return callback();
+  db.all(
+    `SELECT f.nome AS familia, fv.variavel_chave AS chave
+     FROM familias_produto f
+     LEFT JOIN familia_variaveis fv ON fv.familia_id = f.id AND fv.ativo = 1
+     WHERE f.ativo = 1`,
+    [],
+    (err, rows) => {
+      if (err) {
+        // Falha aqui não pode derrubar a proposta: sem o mapa, o template mantém
+        // o comportamento antigo em vez de imprimir um Escopo vazio.
+        console.error('Erro ao carregar variáveis das famílias (proposta segue sem o filtro):', err.message);
+        return callback();
+      }
+      const mapa = {};
+      (rows || []).forEach((r) => {
+        const fam = String(r.familia || '').trim();
+        if (!fam) return;
+        if (!mapa[fam]) mapa[fam] = [];
+        if (r.chave) mapa[fam].push(r.chave);
+      });
+      templateConfig.variaveis_da_familia = mapa;
+      callback();
+    }
+  );
+}
+
 // Escolhe a linha de proposta_template_config a usar e MESCLA o mapa
 // `variaveis_proposta_por_familia` de TODAS as linhas.
 //
@@ -9462,15 +9501,23 @@ app.get('/api/propostas/:id/premium', (req, res) => {
             return;
           }
           const placeholders = chavesUnicas.map(() => '?').join(',');
-          db.all('SELECT chave, nome, prefixo, sufixo, tipo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err2, rows) => {
+          // Sem filtrar por ativo, e trazendo a coluna: o template precisa
+          // distinguir "variável apagada do cadastro" (não pode sair na proposta)
+          // de "consulta falhou" (aí é melhor manter o comportamento antigo do
+          // que emudecer a proposta inteira).
+          db.all('SELECT chave, nome, prefixo, sufixo, tipo, ativo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ')', chavesUnicas, (err2, rows) => {
             if (err2) console.error('Erro ao buscar variaveis_tecnicas (ignorado, preview segue):', err2.message);
+            if (templateConfig && !err2) {
+              // Consulta respondeu: o que não veio aqui é chave órfã de verdade.
+              templateConfig.variaveis_proposta_labels_ok = true;
+            }
             if (templateConfig && rows && Array.isArray(rows) && rows.length) {
               templateConfig.variaveis_proposta_labels = {};
               rows.forEach(function (r) {
-                if (r && r.chave != null) templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, prefixo: (r.prefixo || '').trim(), sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim() };
+                if (r && r.chave != null) templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, prefixo: (r.prefixo || '').trim(), sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim(), ativo: r.ativo === 1 ? 1 : 0 };
               });
             }
-            runGerarSafe();
+            carregarVariaveisDasFamilias(templateConfig, runGerarSafe);
           });
         }); // fecha db.all clausulas
         }); // fecha db.all variaveis manuais
@@ -9684,20 +9731,27 @@ app.get('/api/propostas/:id/pdf', async (req, res) => {
     const porFamiliaKeys = Object.values(porFamilia || {}).reduce((acc, v) => acc.concat(parseKeysArrayServer(v)), []);
     const chavesUnicas = [...new Set(chaves.concat(porFamiliaKeys))].filter(Boolean);
     if (chavesUnicas.length > 0) {
+      // Mesma regra do preview: traz também as inativas, com a coluna ativo, para
+      // o template poder descartar variável apagada em vez de imprimir a chave crua.
       const rows = await new Promise((resolve, reject) => {
         const placeholders = chavesUnicas.map(() => '?').join(',');
-        db.all('SELECT chave, nome, prefixo, sufixo, tipo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ') AND ativo = 1', chavesUnicas, (err, r) => {
+        db.all('SELECT chave, nome, prefixo, sufixo, tipo, ativo FROM variaveis_tecnicas WHERE chave IN (' + placeholders + ')', chavesUnicas, (err, r) => {
           if (err) reject(err);
           else resolve(r || []);
         });
       });
+      templateConfig.variaveis_proposta_labels_ok = true;
       if (rows && rows.length) {
         rows.forEach((r) => {
-          templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, prefixo: (r.prefixo || '').trim(), sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim() };
+          templateConfig.variaveis_proposta_labels[r.chave] = { nome: r.nome || r.chave, prefixo: (r.prefixo || '').trim(), sufixo: (r.sufixo || '').trim(), tipo: (r.tipo || '').trim(), ativo: r.ativo === 1 ? 1 : 0 };
         });
       }
     }
-    
+
+    // O PDF precisa do mesmo filtro do preview, senão o documento entregue ao
+    // cliente sairia diferente do que o vendedor conferiu na tela.
+    await new Promise((resolve) => carregarVariaveisDasFamilias(templateConfig, resolve));
+
     // Aplicar customizações de campos editáveis no PDF
     const customizacoes = await new Promise((resolve) => {
       db.get('SELECT * FROM proposta_customizacoes WHERE proposta_id = ?', [id], (err, row) => resolve(row || null));

@@ -378,6 +378,13 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     const baseKeys = toKeysArray(config.variaveis_proposta_tecnica);
     const porFamiliaMap = toFamiliesMap(config.variaveis_proposta_por_familia);
 
+    // Cadastro atual da família (familia_variaveis). Diferente de porFamiliaMap,
+    // que é só a ORDEM escolhida para a proposta e não é limpa quando a variável
+    // sai da família.
+    const cadastroFamiliaMap = (config.variaveis_da_familia && typeof config.variaveis_da_familia === 'object')
+      ? config.variaveis_da_familia
+      : null;
+
     const extrairCodigoFamiliaParens = (s) => {
       const m = String(s || '').match(/\(([^)]+)\)/);
       return m && m[1] ? m[1] : '';
@@ -524,7 +531,57 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       } else if (variaveisLabelsRaw && typeof variaveisLabelsRaw === 'object') {
         variaveisLabels = variaveisLabelsRaw;
       }
-      const variaveisList = getVariaveisListForFamilia(it.familia_produto || it.produto_familia || it.familia || '');
+      // A ordem gravada em variaveis_proposta_por_familia guarda CHAVES e não é
+      // limpa quando a variável é apagada do cadastro nem quando sai da família.
+      // Sem este filtro, a chave órfã saía na proposta com o nome cru
+      // ("material_de_fabricao_do_disco: Aço Inox 304") na frente do cliente.
+      //
+      // Sem metadados há dois casos diferentes: variável realmente apagada, ou a
+      // consulta de rótulos não respondeu. Só descarta no primeiro — deixar de
+      // imprimir a ficha técnica inteira por causa de uma falha de banco seria
+      // pior do que o nome feio.
+      const rotulosConfiaveis = config.variaveis_proposta_labels_ok === true;
+      const variavelSaiNaProposta = (k) => {
+        const meta = variaveisLabels[k];
+        if (meta) return meta.ativo !== 0;
+        return !rotulosConfiaveis;
+      };
+
+      const familiaDoItem = it.familia_produto || it.produto_familia || it.familia || '';
+
+      // Segundo filtro: a proposta respeita o cadastro atual da família. Se a
+      // variável não está mais em "Variáveis desta família", ela não sai — é o
+      // que faz a proposta concordar com a tela do produto.
+      //
+      // Só filtra quando a família do item casa com uma família cadastrada. Sem
+      // casar não dá para saber o que ela deveria ter, e derrubar o Escopo por
+      // uma divergência de nome seria pior que o excesso.
+      const chavesDoCadastro = (() => {
+        if (!cadastroFamiliaMap) return null;
+        const famNorm = normalizarFamiliaComparacao(familiaDoItem);
+        if (!famNorm) return null;
+        const nomes = Object.keys(cadastroFamiliaMap);
+        let match = nomes.find((n) => normalizarFamiliaComparacao(n) === famNorm) || null;
+        if (!match) {
+          const codeFam = normalizarCodigoFamilia(extrairCodigoFamiliaParens(familiaDoItem));
+          if (codeFam) {
+            match = nomes.find((n) => {
+              const codeKey = normalizarCodigoFamilia(extrairCodigoFamiliaParens(n));
+              return codeKey && codeKey === codeFam;
+            }) || null;
+          }
+        }
+        if (!match) return null;
+        return new Set(cadastroFamiliaMap[match] || []);
+      })();
+
+      // Guarda a lista antes do filtro de família: é o que permite o diagnóstico
+      // do editor apontar a tela certa quando nada é impresso.
+      const variaveisListConfigurada = (getVariaveisListForFamilia(familiaDoItem) || [])
+        .filter(variavelSaiNaProposta);
+      const variaveisList = variaveisListConfigurada
+        .filter((k) => (chavesDoCadastro ? chavesDoCadastro.has(k) : true));
+      const cortadasPeloCadastroDaFamilia = variaveisListConfigurada.length > 0 && variaveisList.length === 0;
       // Sempre respeitar a seleção do admin (por família) — inclusive para as variáveis
       // "Manual na Proposta": elas só aparecem nos itens de famílias em que o admin as
       // selecionou (a diferença é que aparecem MESMO sem valor, como campo em branco).
@@ -567,6 +624,11 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         const lista = (Array.isArray(variaveisList) ? variaveisList : [])
           .filter((k) => k && String(k).indexOf('_cond') === -1);
         if (lista.length === 0) {
+          // Duas causas diferentes para a mesma tela vazia, e telas diferentes
+          // para resolver. Mandar o vendedor para a errada custa o dobro do tempo.
+          if (cortadasPeloCadastroDaFamilia) {
+            return `<p class="dica-editor">A família <strong>${familia}</strong> está sem variáveis no cadastro, então nada é impresso aqui — mesmo havendo variáveis escolhidas no template. Configure em Configurações → Famílias → “Variáveis desta família”.</p>`;
+          }
           return `<p class="dica-editor">Nenhuma variável técnica está selecionada para a família <strong>${familia}</strong>. Configure em Configurações → Template da Proposta → “Variáveis por equipamento (família)”. Se já configurou, confira se a família escolhida ali é exatamente esta.</p>`;
         }
         const semValor = lista
