@@ -1,6 +1,6 @@
 # 07 — Reservas de Estoque
 
-> **Status:** 🟢 backend da Etapa 4 entregue (2026-08-05) · falta a **tela de reservas** ·
+> **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
 > **Última atualização:** 2026-08-06
 > **Design da etapa:** `docs/superpowers/specs/2026-08-05-almoxarifado-etapa4-reservas-design.md`
@@ -43,19 +43,45 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
 - [x] Transferência de reserva entre projetos (`PUT /reservas/:id/transferir`, `reservar_outra_os`) — `6690c1a`
 - [x] Bloqueio de consumo por outro projeto — consequência do consumo contra reserva, com teste explícito — `0e37dea`
-- [ ] Consulta "quem reservou" (histórico por material) — o `GET /reservas` já filtra por material e traz solicitante; falta a visão de histórico dedicada
+- [x] Consulta "quem reservou" (histórico por material) — `43cd367`. A tela filtra por material com status "Todos", mostrando solicitante, destino e o consumido de cada reserva; o extrato do material traz as ativas
 - [x] Reserva parcial com registro do atendido (`quantidade_utilizada`) — `0e37dea`
 
 ### Frontend
-- [ ] **Tela de reservas (listar/criar/liberar/transferir) — ainda não existe. É a próxima tarefa desta feature.** O backend que ela consome já está pronto: `GET /reservas` (filtros `status`/`projeto_id`/`material_id` + campo derivado `saldo`), `POST /reservas` (aceita `data_necessidade`/`expira_em`), `POST /reservas/:id/liberar` (aceita `motivo`), `PUT /reservas/:id/transferir`
-- [ ] Indicador de reservas no detalhe do material — o extrato já lista reservas ativas; falta mostrar quem reservou, para qual projeto/OS, quanto foi consumido e a data de necessidade
+- [x] **Tela de reservas** (`ReservasAlmoxarifado.js`, rota `/almoxarifado/reservas`, menu "Reservas") — `43cd367`. Lista com filtros de status/material/projeto, criação, liberação total ou parcial com motivo, transferência entre projetos/OS e o botão do job de expiração (só `configurar`). Testes: `client/src/components/almoxarifado/ReservasAlmoxarifado.test.js` (10 casos)
+- [x] Indicador de reservas no detalhe do material (`ExtratoMaterialModal`) — `43cd367`. A tabela de reservas ativas passou a mostrar saldo, origem (REQ #id ou MANUAL) e os prazos, além de quem reservou e o vínculo que já tinha
+
+### Decisões da tela (não mexer sem ler)
+
+Três coisas que parecem detalhe e não são — cada uma faz a tela **mentir sobre saldo**:
+
+1. **Mostra `saldo` (quantidade − utilizada), não `quantidade`.** Reserva consumida pela metade
+   é o caso normal desde que a entrega passou a baixar contra a reserva.
+2. **O disponível vem de `GET /almoxarifado/estoque`, não de `/materiais`.** Só o primeiro traz
+   `quantidade_disponivel` calculado pelo servidor; `/materiais` devolve o **físico**. Oferecer
+   físico como disponível numa tela de reserva convida a reservar saldo já reservado. Não
+   recalcular a fórmula no front — seria uma segunda fonte de verdade.
+3. **Transferir envia os quatro campos de dono sempre, inclusive vazios.** O servidor trata
+   `undefined` como "manter" e `''` como "limpar" (`transferirReserva`, CAMPOS_DONO). Enviar só
+   o preenchido faz trocar de projeto para OS **manter o projeto antigo junto**.
+
+As três têm teste; as três foram validadas por mutação (controle positivo).
 
 ### Pendências conhecidas desta feature
-- **A lane `/aprovar-valor` não reserva.** `valueApprovalService.aprovarValor` grava `APROVADO`
-  direto, então requisição liberada por valor não ganha o hold. Funciona pelo caminho antigo,
-  só fica sem a proteção que o resto da etapa criou.
-- Excluir requisição (DELETE) não libera as reservas — só o `/cancelar` faz. Mesma classe de
-  armadilha, mesmo remédio (`reservationService.liberarReservasDaRequisicao`).
+
+Ambas verificadas em 2026-08-06. São a mesma classe: caminho que altera a requisição sem passar
+pelo hold.
+
+- **A lane `/aprovar-valor` não reserva.** O serviço é `requisitionValueApprovalService.js`
+  (esta spec dizia `valueApprovalService.js`, que **não existe**). `aprovarValor` faz
+  `UPDATE ... SET status = 'APROVADO'` direto, sem `reservarItensAprovacao`. Funciona pelo
+  caminho antigo, só sem a proteção que o resto da etapa criou — e justamente para as
+  requisições de valor alto.
+- **Excluir requisição não libera as reservas** — só o `/cancelar` faz.
+  `requisitionService.excluirRequisicao` é soft delete (`ativo=0, status='CANCELADO'`) e não
+  chama `reservationService.liberarReservasDaRequisicao`, que hoje tem um único chamador
+  (`routes/almoxarifado.js:2309`). Duas rotas chegam ao mesmo status com efeitos diferentes no
+  saldo; pela exclusão o hold fica preso até a expiração, que é opt-in — ou seja, para sempre
+  na configuração padrão.
 
 ## Regras essenciais + testes de API exigidos
 

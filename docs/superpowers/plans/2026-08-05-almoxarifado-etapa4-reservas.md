@@ -3,9 +3,11 @@
 > Design: `docs/superpowers/specs/2026-08-05-almoxarifado-etapa4-reservas-design.md`
 > Spec e checklist: `specs/modulo-almoxarifado/07-reservas/README.md`
 
-## Estado (2026-08-05)
+## Estado (2026-08-06)
 
-Backend **entregue**. Falta a tela. Se você está retomando o trabalho, comece pela Task 4.
+Etapa 4 **completa**: backend (Tasks 1–3) e tela (Tasks 4–5). Se você está retomando, a decisão
+aberta é a **Task 6** — as duas pendências de backend abaixo — ou seguir para a Etapa 5
+(Recebimento + Inspeção) do planejamento mestre.
 
 ### ✅ Task 1 — Consumo contra reserva (`0e37dea`)
 
@@ -44,45 +46,60 @@ roubava o hold de outras reservas do mesmo material; liberação parcial não re
 
 ---
 
-## ⬜ Task 4 — Tela de reservas (PRÓXIMA TAREFA)
+### ✅ Task 4 — Tela de reservas (`43cd367`)
 
-Novo `client/src/components/almoxarifado/ReservasAlmoxarifado.js` + rota e entrada de menu
-(`client/src/App.js`, `client/src/components/Layout.js`, e o lazy em
-`client/src/routes/lazyModules.js` se for o padrão do módulo).
+`client/src/components/almoxarifado/ReservasAlmoxarifado.js`, rota `/almoxarifado/reservas`
+(`App.js` + `lazyModules.js`) e entrada "Reservas" no menu do módulo (`Layout.js`). Lista com
+filtros de status/material/projeto, criação, liberação total ou parcial com motivo,
+transferência e o botão do job de expiração (gate `configurar`).
 
-**Backend já pronto, nada a fazer nele:**
-- `GET /api/almoxarifado/reservas` — filtros `status`, `projeto_id`, `material_id`, `os_id`;
-  cada linha traz `saldo` (quantidade − utilizada), `material_codigo`, `material_nome`,
-  `material_unidade`, solicitante, `data_necessidade`, `expira_em`, `origem`.
-- `POST /api/almoxarifado/reservas` — aceita `material_id`, `quantidade`, `projeto_id`,
-  `os_id`, `os_referencia`, `cliente_id`, `equipamento`, `submontagem`, `observacoes`,
-  `data_necessidade`, `expira_em`. Exige `reservar`.
-- `POST /api/almoxarifado/reservas/:id/liberar` — aceita `motivo`.
-- `PUT /api/almoxarifado/reservas/:id/transferir` — exige `reservar_outra_os`.
+**Três decisões que a tela não podia errar** — cada uma faz a tela mentir sobre saldo, e as três
+têm teste validado por mutação:
 
-**Pontos de atenção da UI:**
-- Guardar os botões com `useAlmoxPermissoes` (`bloquearSeNaoPode('reservar', e)` e
-  `'reservar_outra_os'` no transferir), como as outras telas do módulo fazem — o padrão é botão
-  visível, tooltip explicando, toast no clique quando não pode.
-- Mostrar `saldo` e `quantidade_utilizada`, não só `quantidade`: uma reserva parcialmente
-  consumida é o caso normal e a diferença é o que importa operacionalmente.
-- Distinguir `origem`: reserva `REQUISICAO` tem dono (a requisição) e liberar à mão pode
-  atrapalhar o fluxo dela — vale ao menos um aviso, ou linkar para a requisição.
-- Status `EXPIRADA` é diferente de `LIBERADA` de propósito; a tela deve refletir isso.
+1. Exibe `saldo` (quantidade − utilizada), não `quantidade`. Reserva consumida pela metade é o
+   caso normal desde que a entrega passou a baixar contra a reserva.
+2. O disponível vem de `GET /almoxarifado/estoque`, **não** de `/materiais` — só o primeiro traz
+   `quantidade_disponivel` calculado pelo servidor; `/materiais` devolve o físico. Recalcular a
+   fórmula no front criaria uma segunda fonte de verdade (mesmo motivo de `useAlmoxPermissoes`
+   não espelhar `ACAO_PERFIS`).
+3. Transferir envia os quatro campos de dono sempre, inclusive vazios: o servidor lê `undefined`
+   como "manter" e `''` como "limpar", então enviar só o preenchido faz o dono antigo grudar.
 
-## ⬜ Task 5 — Indicador de reservas no detalhe do material
+Achado no caminho: o toast do job precisava reportar `erros` além de `processadas` — o job não
+aborta o lote quando uma reserva falha, e engolir esse campo esconderia o saldo que ficou preso.
 
-O extrato (`ExtratoMaterialModal.js`) já lista reservas ativas. Falta mostrar quem reservou,
-para qual projeto/OS, quanto já foi consumido e a data de necessidade — os campos já vêm do
-backend.
+Teste: `client/src/components/almoxarifado/ReservasAlmoxarifado.test.js` (10 casos). Controle
+positivo rodado: 4 mutações deliberadas derrubaram exatamente os 4 testes correspondentes.
 
-## ⬜ Task 6 — Pendências registradas (decidir se entram nesta etapa)
+### ✅ Task 5 — Indicador de reservas no detalhe do material (`43cd367`)
 
-- **`/aprovar-valor` não reserva.** `valueApprovalService.aprovarValor` grava `APROVADO` direto,
-  então requisição liberada por valor não ganha o hold. É a lacuna mais relevante do backend.
-- **DELETE de requisição não libera reservas** — só o `/cancelar` faz. Mesmo remédio:
-  `reservationService.liberarReservasDaRequisicao`.
-- Consulta "quem reservou" como histórico dedicado por material.
+`ExtratoMaterialModal.js`: a tabela de reservas ativas ganhou **saldo**, **origem** (REQ #id ou
+MANUAL) e os **prazos** (necessidade/expiração). Os campos já vinham do backend (`SELECT *`),
+só não eram exibidos. `formatDateOnly` novo para os campos DATE puros — `new Date('2026-08-10')`
+é meia-noite UTC e em UTC-3 cairia no dia 9.
+
+---
+
+## ⬜ Task 6 — Pendências registradas (PRÓXIMA DECISÃO)
+
+São as duas últimas pontas da Etapa 4. Ambas pequenas, ambas da mesma classe: um caminho de
+saída que não passa pelo hold.
+
+- **`/aprovar-valor` não reserva** (verificado 2026-08-06). O serviço é
+  `requisitionValueApprovalService.js` — **não** `valueApprovalService.js`, como este plano
+  dizia antes. `aprovarValor` faz `UPDATE ... SET status = 'APROVADO'` direto, sem passar por
+  `reservarItensAprovacao`. Requisição liberada por valor não ganha o hold: é a lacuna mais
+  relevante do backend, porque justamente as requisições de valor alto ficam sem proteção.
+- **Excluir requisição não libera reservas** (verificado 2026-08-06).
+  `requisitionService.excluirRequisicao` é soft delete —
+  `UPDATE ... SET ativo=0, status='CANCELADO'` — e não chama
+  `reservationService.liberarReservasDaRequisicao`, que hoje tem **um único chamador**
+  (`routes/almoxarifado.js:2309`, a rota `/cancelar`). Ou seja: duas rotas levam ao mesmo
+  status `CANCELADO` com efeitos diferentes sobre o saldo, e pela exclusão o hold fica preso
+  até a expiração — que é opt-in, isto é, para sempre na configuração padrão.
+- ~~Consulta "quem reservou" como histórico dedicado por material~~ — coberto pela tela
+  (`43cd367`): filtro por material + status "Todos" mostra o histórico com solicitante, destino
+  e o que cada reserva consumiu.
 
 ## Fora da Etapa 4 (registrado na spec)
 
