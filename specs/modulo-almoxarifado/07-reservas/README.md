@@ -66,26 +66,28 @@ Três coisas que parecem detalhe e não são — cada uma faz a tela **mentir so
 
 As três têm teste; as três foram validadas por mutação (controle positivo).
 
-### Pendências conhecidas desta feature
+### Pendências desta feature — RESOLVIDAS (`ad0c831`)
 
-Ambas verificadas em 2026-08-06. São a mesma classe: caminho que altera a requisição sem passar
-pelo hold.
+Eram a mesma classe: rota que alterava a requisição sem passar pelo hold. As duas foram
+fechadas na Task 6; ficam registradas porque explicam decisões do código atual.
 
-- **A lane `/aprovar-valor` não reserva.** O serviço é `requisitionValueApprovalService.js`
-  (esta spec dizia `valueApprovalService.js`, que **não existe**). `aprovarValor` faz
-  `UPDATE ... SET status = 'APROVADO'` direto, sem `reservarItensAprovacao`. Funciona pelo
-  caminho antigo, só sem a proteção que o resto da etapa criou — e justamente para as
-  requisições de valor alto.
-- **Excluir requisição não libera as reservas** — só o `/cancelar` faz.
-  `requisitionService.excluirRequisicao` é soft delete (`ativo=0, status='CANCELADO'`) e não
-  chama `reservationService.liberarReservasDaRequisicao`, que hoje tem um único chamador
-  (`routes/almoxarifado.js:2309`). Duas rotas chegam ao mesmo status com efeitos diferentes no
-  saldo; pela exclusão o hold fica preso até a expiração, que é opt-in — ou seja, para sempre
-  na configuração padrão.
+- [x] **A lane `/aprovar-valor` agora reserva.** O serviço é `requisitionValueApprovalService.js`
+  (esta spec já disse `valueApprovalService.js`, que **não existe** — corrigido em `7ab91e3`).
+  `aprovarValor` continua gravando `APROVADO`; a reserva acontece **depois** dele, na rota, e
+  sobrescreve o status para `PARCIALMENTE/TOTALMENTE_RESERVADA`. Depois e não dentro porque a
+  segregação e a validação de status vivem no serviço, e não faz sentido segurar saldo de uma
+  aprovação que vai ser recusada. Sem nada a reservar, o `APROVADO` permanece.
+- [x] **Excluir requisição libera as reservas.** `excluirRequisicao` (soft delete
+  `ativo=0, status='CANCELADO'`) passou a chamar `reservationService.liberarReservasDaRequisicao`,
+  que agora tem dois chamadores — antes só o `/cancelar`. Best-effort: falha ao liberar não
+  desfaz a exclusão. A justificativa da exclusão vira o motivo da liberação.
+
+A máquina de estados ganhou `PARCIALMENTE/TOTALMENTE_RESERVADA` como destinos de
+`AGUARDANDO_APROVACAO_VALOR` — sem essas setas o hold nasceria e o status seria recusado.
 
 ## Regras essenciais + testes de API exigidos
 
-Todos em `server/tests/api/` (**42 casos** nos 4 arquivos), rodam com `npm run test:api`.
+Todos em `server/tests/api/` (**51 casos** em 5 arquivos), rodam com `npm run test:api`.
 Os nomes abaixo são os reais — copiáveis para localizar o caso.
 
 | Regra | Arquivo · teste |
@@ -109,6 +111,10 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | Cancelar requisição libera as reservas dela | `reservaCicloIntegracao` · *cancelar requisição libera as reservas dela e devolve ao disponível* |
 | Cancelar não mexe em reserva manual de terceiro | `reservaCicloIntegracao` · *cancelar NÃO mexe em reserva manual de outro dono do mesmo material* |
 | Idempotência: liberar/consumir reserva já finalizada → 400 | `reservaConsumo` · *consumir reserva já CONSUMIDA → 400* · `reservaTransferenciaExpiracao` · *liberar reserva já liberada → 400 (idempotência)* · *expiração é idempotente: rodar de novo não libera nem desconta duas vezes* |
+| Aprovação **por valor** também reserva | `reservaPontasFaltantes` · *[aprovar-valor] com saldo total reserva os itens e derruba o disponível* |
+| Aprovação por valor sem saldo continua APROVADO (regressão) | `reservaPontasFaltantes` · *[aprovar-valor] sem saldo nenhum continua APROVADO e não cria reserva (regressão)* |
+| Excluir requisição libera as reservas dela | `reservaPontasFaltantes` · *excluir requisição libera as reservas dela e devolve ao disponível* |
+| Excluir não toca reserva manual de terceiro | `reservaPontasFaltantes` · *excluir NÃO mexe em reserva manual de outro dono do mesmo material* |
 
 ## Dependências
 

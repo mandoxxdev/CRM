@@ -4,7 +4,7 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 4) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> **Onde o desenvolvimento parou (2026-08-06):** Etapas 1, 2, 3 e 4 completas — a Etapa 4 fechou com a **tela de reservas** em Almoxarifado → Reservas. Próxima decisão: as duas pendências registradas da Etapa 4 (a lane `/aprovar-valor` não reserva; excluir requisição não solta reservas) ou seguir para a **Etapa 5 — Recebimento + Inspeção**. Ver `specs/modulo-almoxarifado/07-reservas/README.md` e o planejamento mestre.
+> **Onde o desenvolvimento parou (2026-08-06):** Etapas 1, 2, 3 e 4 **completas e sem pendência**. A Etapa 4 fechou com a tela de reservas (Almoxarifado → Reservas) e com as duas rotas que escapavam do hold. A próxima é a **Etapa 5 — Recebimento + Inspeção**. Ver o planejamento mestre em `specs/modulo-almoxarifado/README.md`.
 
 ## Tabela consolidada — todas as alterações (Etapas 1 a 3)
 
@@ -191,7 +191,9 @@ A tela fica em **Almoxarifado → Reservas**. Os passos 1 a 6 testam a automaç�
 
 ### O que a Etapa 4 não cobre
 
-Reserva por lote/série (depende do controle de lotes). Prioridade na reserva. E-mail de aviso de reserva vencida. **A liberação por valor (`/aprovar-valor`) ainda não reserva:** requisição liberada por valor não ganha o hold — funciona pelo caminho antigo, só sem a proteção que o resto da etapa criou. **Excluir** uma requisição (em vez de cancelar) também não solta as reservas dela.
+Reserva por lote/série (depende do controle de lotes). Prioridade na reserva. E-mail de aviso de reserva vencida.
+
+> **Fechado em 2026-08-06:** a liberação por valor (`/aprovar-valor`) passou a reservar como a aprovação normal, e **excluir** uma requisição passou a soltar as reservas dela (antes só cancelar soltava). Se você usa liberação por valor, o material aprovado por essa via agora fica reservado — a requisição aparece como **Totalmente/Parcialmente Reservada** em vez de só **Aprovada**.
 
 ---
 
@@ -213,7 +215,7 @@ Reserva por lote/série (depende do controle de lotes). Prioridade na reserva. E
 
 - Consulta de "posições vazias" e "materiais sem endereço": a API já existe, mas não há tela para usá-la.
 - Criar subfamílias: só via API, sem formulário na interface.
-- Reservas de estoque: **completo na Etapa 4** — backend e tela (Almoxarifado → Reservas). Restam duas pontas registradas: a liberação por valor (`/aprovar-valor`) não cria o hold, e excluir uma requisição não solta as reservas dela (cancelar solta).
+- Reservas de estoque: **completo na Etapa 4** — backend, tela (Almoxarifado → Reservas) e as duas rotas que escapavam do hold (liberação por valor e exclusão de requisição). Sem pendência.
 - Anexos na requisição (desenho/documento) e assinatura digital na retirada: ainda não implementados.
 - Importar itens de uma lista técnica ou ordem de produção na requisição: ainda não implementado (depende da integração com Engenharia/Produção).
 - Registrar lote/série entregue por item na requisição: ainda não implementado (depende do controle de lotes, etapa futura).

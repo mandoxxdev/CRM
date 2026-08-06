@@ -5,9 +5,9 @@
 
 ## Estado (2026-08-06)
 
-Etapa 4 **completa**: backend (Tasks 1–3) e tela (Tasks 4–5). Se você está retomando, a decisão
-aberta é a **Task 6** — as duas pendências de backend abaixo — ou seguir para a Etapa 5
-(Recebimento + Inspeção) do planejamento mestre.
+Etapa 4 **encerrada** — Tasks 1 a 6, sem pendência aberta na feature 07. Backend, tela e as duas
+rotas que escapavam do hold. Quem retomar o módulo vai para a **Etapa 5 — Recebimento +
+Inspeção** (`08-recebimento` + `09-inspecao-qualidade`) no planejamento mestre.
 
 ### ✅ Task 1 — Consumo contra reserva (`0e37dea`)
 
@@ -80,10 +80,27 @@ só não eram exibidos. `formatDateOnly` novo para os campos DATE puros — `new
 
 ---
 
-## ⬜ Task 6 — Pendências registradas (PRÓXIMA DECISÃO)
+### ✅ Task 6 — As duas pontas fechadas (`ad0c831`)
 
-São as duas últimas pontas da Etapa 4. Ambas pequenas, ambas da mesma classe: um caminho de
-saída que não passa pelo hold.
+Eram a mesma classe: rota que altera a requisição sem passar pelo hold.
+
+**`/aprovar-valor` agora reserva.** A chamada a `reservarItensAprovacao` fica na rota, **depois**
+do serviço — a segregação e a validação de status vivem lá, e não faz sentido segurar saldo de
+uma aprovação que vai ser recusada. Sem nada a reservar, o `APROVADO` do serviço permanece
+(regressão coberta). A máquina de estados ganhou `PARCIALMENTE/TOTALMENTE_RESERVADA` como
+destinos de `AGUARDANDO_APROVACAO_VALOR`: sem essas setas o hold nasceria e o status seria
+recusado, e deixar `APROVADO` faria o mesmo fato ter dois status conforme a rota que aprovou.
+
+**Excluir requisição agora libera.** `excluirRequisicao` chama
+`liberarReservasDaRequisicao` (que passou de um para dois chamadores), best-effort como no
+`/cancelar`; a justificativa da exclusão vira o motivo da liberação.
+
+Teste: `reservaPontasFaltantes.api.test.js` (9 casos), escritos antes e vistos falhando. O único
+que passou no RED é o de regressão — validado à parte por mutação. Um teste existente
+(`requisicaoAprovacao`) foi ajustado porque assertava `APROVADO`, e ganhou asserção nova de que o
+hold sai.
+
+<details><summary>Contexto original da Task 6 (antes de ser feita)</summary>
 
 - **`/aprovar-valor` não reserva** (verificado 2026-08-06). O serviço é
   `requisitionValueApprovalService.js` — **não** `valueApprovalService.js`, como este plano
@@ -100,6 +117,8 @@ saída que não passa pelo hold.
 - ~~Consulta "quem reservou" como histórico dedicado por material~~ — coberto pela tela
   (`43cd367`): filtro por material + status "Todos" mostra o histórico com solicitante, destino
   e o que cada reserva consumiu.
+
+</details>
 
 ## Fora da Etapa 4 (registrado na spec)
 
