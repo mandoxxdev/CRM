@@ -71,23 +71,32 @@ const CLAUSULAS_HELICES = [
     titulo: 'REAJUSTE DE PREÇO',
     conteudo: '<p>Havendo alterações na legislação tributária vigente na época, a CONTRATADA se resguarda ao direito de atualizar os preços apresentados, de acordo com a nova tributação, com prévia aprovação do CONTRATANTE.</p><p>Para vendas fora do território nacional (BRASIL), os preços apresentados nesta proposta técnica comercial, poderão ser reajustados pela taxa do Dólar Americano, valor comercial de venda, até a data do faturamento, utilizando como taxa base USD 1,00 = VALOR DA COTAÇÃO NA DATA DA PROPOSTA.</p>',
   },
+  // Mesma limitacao de responsabilidade do contrato de equipamentos (la e a 5.14),
+  // com texto identico: vender peca nao expoe a CONTRATADA a lucro cessante e parada
+  // de linha do cliente. Fica antes do bloco de preco, na mesma posicao relativa que
+  // ocupa no modelo completo.
+  {
+    numero: '5.8',
+    titulo: 'DANOS OU PREJUÍZOS',
+    conteudo: '<p>A responsabilidade civil da CONTRATADA está limitada ao produto fornecido, não se responsabilizando por danos indiretos ou emergentes, tais como lucros cessantes, perdas de receitas, produtividade ou de dados, reclamações, paralizações, despesas, danos pessoais.</p>',
+  },
   // Estas duas sao renderizadas em SLOT FIXO, em volta da tabela de precos — nao na
   // sequencia das 5.x. O template as reconhece pelo TITULO (ehTextoDa524), entao a
-  // numeracao pode seguir a deste modelo (5.8) em vez de saltar para 5.24.
+  // numeracao pode seguir a deste modelo em vez de saltar para 5.24.
   // Sem elas aqui, o documento caia no texto de EQUIPAMENTOS: parcelas de 40/30/30 com
   // multa e juros, no lugar do faturamento simples que vale para pecas.
   {
-    numero: '5.8',
+    numero: '5.9',
     titulo: 'PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS',
     conteudo: '<p>A CONTRATANTE pagará pelas peças e acessórios indicados no ESCOPO DE FORNECIMENTO desta proposta comercial, os valores informados na tabela de preços a seguir.</p>',
   },
   {
-    numero: '5.8.1',
+    numero: '5.9.1',
     titulo: 'CONDIÇÃO DE PAGAMENTO:',
     conteudo: '<p>Faturado 28/42/56 DDL, via boleto bancário, a contar da emissão da nota fiscal.</p>',
   },
   {
-    numero: '5.9',
+    numero: '5.10',
     titulo: 'CONSIDERAÇÃO FINAL',
     conteudo: '<p>Em caso de aceite e que não seja emitido um pedido de compra oficial formal, esta proposta torna-se apenas válida como pedido de compra mediante assinatura do responsável e com carimbo da empresa no campo destacado abaixo:</p>',
   },
