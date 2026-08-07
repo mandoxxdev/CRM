@@ -80,6 +80,24 @@
   border-color: #1d4ed8;
 }
 
+/* Emitir revisão muda o número que o cliente enxerga — é mais sério que salvar,
+   e por isso tem peso visual próprio, sem competir com o verde do salvar. */
+.ppe-btn-revisao {
+  background: #1d4ed8;
+  color: #fff;
+  border-color: #1d4ed8;
+}
+
+.ppe-btn-revisao:hover:not(:disabled) {
+  background: #1e40af;
+  border-color: #1e40af;
+}
+
+.ppe-btn-revisao:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .ppe-btn-salvar {
   background: #15803d;
   color: #fff;

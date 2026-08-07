@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FiSave, FiClock, FiX, FiDownload, FiRefreshCw, FiImage } from 'react-icons/fi';
+import { FiSave, FiClock, FiX, FiDownload, FiRefreshCw, FiImage, FiTag } from 'react-icons/fi';
 import api from '../../services/api';
 import HistoricoEdicoes from './HistoricoEdicoes';
 import {
@@ -39,6 +39,7 @@ export default function PropostaPreviewEditavel() {
   const [clausulasIsDefault, setClausulasIsDefault] = useState(true);
   const [mudancasPendentes, setMudancasPendentes] = useState(false);
   const [baixandoPdf, setBaixandoPdf] = useState(false);
+  const [emitindoRevisao, setEmitindoRevisao] = useState(false);
   const [enviandoFotos, setEnviandoFotos] = useState(false);
   const fotoInputRef = useRef(null);
   const repaginacaoTimerRef = useRef(null);
@@ -1269,18 +1270,12 @@ export default function PropostaPreviewEditavel() {
     return (m ? parseInt(m[1], 10) : 0) + 1;
   }
 
+  // Salvar NÃO emite revisão. Antes emitia, e como quase toda proposta é ajustada
+  // algumas vezes antes de ir para o cliente, o número subia sem que existisse uma
+  // versão de fato enviada — REV05 sem que ninguém tivesse visto a REV04.
+  // Emitir revisão virou ato explícito, no botão ao lado.
   async function salvar() {
     if (!mudancasPendentes) return;
-
-    const rev = proximaRevisao();
-    const revFormatada = `REV${String(rev).padStart(2, '0')}`;
-    const confirmado = window.confirm(
-      'Deseja salvar esta alteração?\n\n'
-      + 'Ela será registrada no histórico e a proposta será emitida como '
-      + `revisão ${rev} (${revFormatada}).`
-    );
-    if (!confirmado) return;
-
     setSalvando(true);
     try {
       const doc = iframeRef.current?.contentDocument;
@@ -1298,16 +1293,52 @@ export default function PropostaPreviewEditavel() {
       if (Object.keys(camposEditados).length > 0) {
         await api.put(`/propostas/${id}/customizacoes`, camposEditados);
       }
-      // A revisão é emitida só DEPOIS de tudo gravar: se algum passo acima falhasse,
-      // o número avançaria sem que a alteração correspondente existisse.
-      const { data } = await api.post(`/propostas/${id}/revisao`);
       setMudancasPendentes(false);
-      toast.success(`Alterações salvas. Proposta emitida como ${data?.numero_proposta || revFormatada}.`);
+      toast.success('Alterações salvas.');
       carregarPreview();
+      return true;
     } catch (e) {
       toast.error('Erro ao salvar alterações.');
+      return false;
     } finally {
       setSalvando(false);
+    }
+  }
+
+  // Emitir revisão é o ato de fechar uma versão para o cliente: incrementa o REV do
+  // número da proposta e registra no histórico. Fica separado do salvar de propósito.
+  async function emitirRevisao() {
+    const rev = proximaRevisao();
+    const revFormatada = `REV${String(rev).padStart(2, '0')}`;
+
+    // Salvar antes, se houver pendência: emitir uma revisão que não contém a
+    // alteração aberta na tela produziria um número novo com conteúdo velho.
+    if (mudancasPendentes) {
+      const salvarAntes = window.confirm(
+        'Há alterações não salvas.\n\n'
+        + 'Elas precisam ser salvas antes de emitir a revisão, senão a '
+        + `${revFormatada} sairia sem elas.\n\nSalvar agora e emitir?`
+      );
+      if (!salvarAntes) return;
+      const salvou = await salvar();
+      if (!salvou) return; // o toast de erro já apareceu; não emite em cima de falha
+    }
+
+    const confirmado = window.confirm(
+      `Emitir a proposta como revisão ${rev} (${revFormatada})?\n\n`
+      + 'O número da proposta muda e o evento fica no histórico.'
+    );
+    if (!confirmado) return;
+
+    setEmitindoRevisao(true);
+    try {
+      const { data } = await api.post(`/propostas/${id}/revisao`);
+      toast.success(`Proposta emitida como ${data?.numero_proposta || revFormatada}.`);
+      carregarPreview();
+    } catch (e) {
+      toast.error('Erro ao emitir revisão.');
+    } finally {
+      setEmitindoRevisao(false);
     }
   }
 
@@ -1397,9 +1428,18 @@ export default function PropostaPreviewEditavel() {
             <FiDownload /> {baixandoPdf ? 'Gerando...' : 'Baixar PDF'}
           </button>
           <button
+            className="ppe-btn ppe-btn-revisao"
+            onClick={emitirRevisao}
+            disabled={emitindoRevisao || salvando}
+            title="Fecha a versão atual para o cliente: avança o número da proposta e registra no histórico"
+          >
+            <FiTag /> {emitindoRevisao ? 'Emitindo...' : 'Emitir revisão'}
+          </button>
+          <button
             className={`ppe-btn ppe-btn-salvar ${!mudancasPendentes ? 'ppe-btn-disabled' : ''}`}
             onClick={salvar}
             disabled={!mudancasPendentes || salvando}
+            title="Grava as alterações sem mexer no número da proposta"
           >
             <FiSave /> {salvando ? 'Salvando...' : 'Salvar alterações'}
           </button>
