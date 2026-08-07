@@ -31,6 +31,14 @@ server/data/.runtime-secrets.json
 *.sqlite-wal
 server/database.sqlite*
 
+# A rotina de backup grava "database-2026-08-06T14-36-25-wal", SEM o .sqlite no
+# nome — os padroes acima nao pegavam, e 211 arquivos com dado de cliente
+# (e-mail, CNPJ) acabaram versionados num repositorio publico.
+# A pasta inteira de backup fica de fora: nada ali deve ir para o Git.
+server/data/backups/
+*-wal
+*-shm
+
 # Logs
 logs/
 *.log
