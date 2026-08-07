@@ -9102,9 +9102,10 @@ const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Tr
 function carregarVariaveisDasFamilias(templateConfig, callback) {
   if (!templateConfig) return callback();
   db.all(
-    `SELECT f.nome AS familia, fv.variavel_chave AS chave
+    `SELECT f.nome AS familia, g.nome AS grupo, fv.variavel_chave AS chave
      FROM familias_produto f
      LEFT JOIN familia_variaveis fv ON fv.familia_id = f.id AND fv.ativo = 1
+     LEFT JOIN grupos_produto g ON g.id = f.grupo_id
      WHERE f.ativo = 1`,
     [],
     (err, rows) => {
@@ -9115,13 +9116,18 @@ function carregarVariaveisDasFamilias(templateConfig, callback) {
         return callback();
       }
       const mapa = {};
+      const grupos = {};
       (rows || []).forEach((r) => {
         const fam = String(r.familia || '').trim();
         if (!fam) return;
         if (!mapa[fam]) mapa[fam] = [];
         if (r.chave) mapa[fam].push(r.chave);
+        // Grupo da família: a capa usa para escolher o título ("equipamentos
+        // industriais" x "peças e acessórios").
+        if (r.grupo && !grupos[fam]) grupos[fam] = String(r.grupo).trim();
       });
       templateConfig.variaveis_da_familia = mapa;
+      templateConfig.grupo_por_familia = grupos;
       callback();
     }
   );

@@ -385,6 +385,48 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
       ? config.variaveis_da_familia
       : null;
 
+    // ── Título da faixa azul da capa ───────────────────────────────────────
+    // Disco, hélice, eixo e tela não são equipamentos: são peça de reposição, e
+    // a capa dizer "EQUIPAMENTOS INDUSTRIAIS" descaracterizava a proposta.
+    //
+    // A regra está no código a pedido: grupo de peças -> título de peças. Se um
+    // grupo novo precisar do mesmo tratamento, é acrescentar aqui — não há tela
+    // para configurar isso.
+    const GRUPOS_DE_PECAS = ['helices e acessorios', 'pecas e acessorios'];
+    const grupoPorFamilia = (config.grupo_por_familia && typeof config.grupo_por_familia === 'object')
+      ? config.grupo_por_familia
+      : null;
+
+    // Proposta INTEIRA de peças. Mista continua tratada como equipamento —
+    // vender um tanque junto com um disco não vira "fornecimento de peças".
+    const propostaDePecas = (() => {
+      if (!grupoPorFamilia || itens.length === 0) return false;
+
+      const grupoDoItem = (it) => {
+        const fam = String(it.familia_produto || it.produto_familia || it.familia || '').trim();
+        if (!fam) return null;
+        const famNorm = normalizarFamiliaComparacao(fam);
+        const achado = Object.keys(grupoPorFamilia)
+          .find((n) => normalizarFamiliaComparacao(n) === famNorm);
+        return achado ? grupoPorFamilia[achado] : null;
+      };
+
+      const ehPeca = (g) => {
+        if (!g) return false;
+        const n = String(g).trim().toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '');
+        return GRUPOS_DE_PECAS.indexOf(n) !== -1;
+      };
+
+      const grupos = itens.map(grupoDoItem);
+      if (grupos.some((g) => !g)) return false;
+      return grupos.every(ehPeca);
+    })();
+
+    const tituloCapa = propostaDePecas
+      ? 'PROPOSTA PARA FORNECIMENTO DE PEÇAS E ACESSÓRIOS'
+      : 'PROPOSTA PARA FORNECIMENTO DE EQUIPAMENTOS INDUSTRIAIS';
+
     const extrairCodigoFamiliaParens = (s) => {
       const m = String(s || '').match(/\(([^)]+)\)/);
       return m && m[1] ? m[1] : '';
@@ -947,6 +989,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         ${blocos524.slice(1).map((c, i) => render524Bloco(c, i + 1)).join('')}
       </section>
 
+      ${propostaDePecas ? '' : `
       <section class="block stack-md allow-break finame-compact">
           <div class="table-caption">Tabela Ref. FINAME / Ref. Cartão BNDES</div>
           <table class="table table-dark">
@@ -974,6 +1017,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
             </tbody>
           </table>
       </section>
+      `}
 
       <section class="block stack-md allow-break">
           <p><strong>IMPOSTOS E CLASSIFICAÇÕES FISCAIS</strong></p>
@@ -1936,7 +1980,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         </div>
       </div>
       <div class="cover-blue-strip">
-        <p>PROPOSTA PARA FORNECIMENTO DE EQUIPAMENTOS INDUSTRIAIS</p>
+        <p>${esc(tituloCapa)}</p>
         ${(proposta.titulo && String(proposta.titulo).trim()) ? `<p class="cover-strip-titulo">${esc(String(proposta.titulo).trim())}</p>` : ''}
       </div>
       <div class="cover-info-area">
