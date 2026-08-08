@@ -133,6 +133,19 @@ async function itemRetido(db, qtd) {
     assert.strictEqual(await disponivel(db, mat), 45, 'desbloqueou apesar de faltar justificativa');
   });
 
+  await test('POST desbloquear sem permissao retorna 403 e nao devolve o saldo', async () => {
+    const mat = await novoMaterial(db, 50);
+    await request(app).post(`/api/almoxarifado/materiais/${mat}/bloquear`)
+      .send({ quantidade: 5, justificativa: 'avaria' });
+    setUser(PRODUCAO);
+    try {
+      const res = await request(app).post(`/api/almoxarifado/materiais/${mat}/desbloquear`)
+        .send({ quantidade: 5, justificativa: 'quero de volta' });
+      assert.strictEqual(res.status, 403, JSON.stringify(res.body));
+    } finally { setUser(ADMIN); }
+    assert.strictEqual(await disponivel(db, mat), 45, 'desbloqueou apesar do 403');
+  });
+
   await test('POST desbloquear acima do bloqueado retorna 400', async () => {
     const mat = await novoMaterial(db, 50);
     await request(app).post(`/api/almoxarifado/materiais/${mat}/bloquear`)
@@ -141,6 +154,38 @@ async function itemRetido(db, qtd) {
       .send({ quantidade: 40, justificativa: 'engano' });
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     assert.strictEqual(await disponivel(db, mat), 45, 'saturou e devolveu saldo errado');
+  });
+
+  // ── Quantidade não numérica (achado do review final da Etapa 5) ───────────────
+  // `Number('dez')` é NaN e `Math.abs(NaN - retido) > 1e-6` é FALSE: a guarda de fechamento
+  // deixava passar, o retido inteiro ia para o disponível e a inspeção era gravada com
+  // quantidade_aprovada NULL. Em bloquear/desbloquear, `'dez' <= 0` também é false e o SQLite
+  // coagia o valor para 0 — bloqueio de zero, gravado no livro como se fosse um bloqueio.
+  await test('POST inspecionar com quantidade nao numerica retorna 400 e nao mexe no saldo', async () => {
+    const { mat, itemId } = await itemRetido(db, 10);
+    const res = await request(app).post(`/api/almoxarifado/recebimentos/itens/${itemId}/inspecionar`)
+      .send({ quantidade_aprovada: 'dez', quantidade_reprovada: 0 });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    const m = await material(db, mat);
+    assert.strictEqual(m.quantidade_em_inspecao, 10, 'liberou a quarentena com quantidade NaN');
+    const item = await dbGet(db,
+      'SELECT quantidade_em_inspecao FROM recebimentos_material_itens_almoxarifado WHERE id = ?', [itemId]);
+    assert.strictEqual(item.quantidade_em_inspecao, 10, 'baixou o retido do item com quantidade NaN');
+  });
+
+  await test('POST bloquear/desbloquear com quantidade nao numerica retorna 400', async () => {
+    const mat = await novoMaterial(db, 50);
+    const blq = await request(app).post(`/api/almoxarifado/materiais/${mat}/bloquear`)
+      .send({ quantidade: 'dez', justificativa: 'avaria' });
+    assert.strictEqual(blq.status, 400, JSON.stringify(blq.body));
+    assert.strictEqual((await material(db, mat)).quantidade_bloqueada || 0, 0, 'gravou bloqueio NaN');
+
+    await request(app).post(`/api/almoxarifado/materiais/${mat}/bloquear`)
+      .send({ quantidade: 5, justificativa: 'avaria' });
+    const des = await request(app).post(`/api/almoxarifado/materiais/${mat}/desbloquear`)
+      .send({ quantidade: 'cinco', justificativa: 'engano' });
+    assert.strictEqual(des.status, 400, JSON.stringify(des.body));
+    assert.strictEqual((await material(db, mat)).quantidade_bloqueada, 5, 'desbloqueou com quantidade NaN');
   });
 
   await test('GET inspecoes/pendentes lista o retido com material e recebimento', async () => {

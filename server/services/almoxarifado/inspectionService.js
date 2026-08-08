@@ -50,6 +50,17 @@ async function decidirInspecao(db, user, itemId, data = {}) {
   const aprovada = Number(data.quantidade_aprovada || 0);
   const reprovada = Number(data.quantidade_reprovada || 0);
 
+  // Quantidade nao numerica tem de recusar ANTES da guarda de fechamento (achado do review
+  // final): `Number('dez')` e NaN, e TODA comparacao com NaN e false — inclusive
+  // `Math.abs(NaN - retido) > 1e-6`. Ou seja, a guarda de fechamento abaixo NAO recusa NaN: ela
+  // deixava passar, o retido inteiro ia para o disponivel e a inspecao era gravada com
+  // quantidade_aprovada NULL. Negativo tambem entra aqui: `-10 + 110 === 100` fecharia a conta.
+  if (!Number.isFinite(aprovada) || !Number.isFinite(reprovada) || aprovada < 0 || reprovada < 0) {
+    throw Object.assign(
+      new Error('quantidade_aprovada e quantidade_reprovada têm de ser números não negativos'),
+      { status: 400 });
+  }
+
   // Fechar a conta e obrigatorio: se aprovado + reprovado nao bater com o retido, sobra saldo
   // preso em quarentena que ninguem mais vai olhar — a reserva zumbi da Etapa 4 em outra roupa.
   // Validado ANTES de qualquer INSERT/movimentacao — o saldo nao pode mudar quando isto recusa.
@@ -121,11 +132,28 @@ async function decidirInspecao(db, user, itemId, data = {}) {
   return { id: ins.lastID, quantidade_aprovada: aprovada, quantidade_reprovada: reprovada };
 }
 
-async function bloquearMaterial(db, user, materialId, data = {}) {
-  const { quantidade, justificativa } = data;
-  if (!quantidade || quantidade <= 0) {
-    throw Object.assign(new Error('Quantidade é obrigatória para bloqueio'), { status: 400 });
+/**
+ * Converte a quantidade do payload para numero e recusa o que nao for numero finito positivo.
+ *
+ * Achado do review final: `!quantidade || quantidade <= 0` NAO pega `'dez'` — a string e truthy
+ * e `'dez' <= 0` e false. O motor tambem nao pegava (`Number.isNaN('dez')` e false, porque a
+ * string nao E o valor NaN), e o SQLite coagia o texto para 0: gravava um BLOQUEIO de zero no
+ * livro como se fosse um bloqueio de verdade. `Number('5')` continua aceito de proposito —
+ * quantidade vinda de <input> pode chegar como string.
+ */
+function quantidadePositiva(valor, acao) {
+  const qtd = Number(valor);
+  if (!Number.isFinite(qtd) || qtd <= 0) {
+    throw Object.assign(
+      new Error(`Quantidade é obrigatória para ${acao} e tem de ser um número maior que zero`),
+      { status: 400 });
   }
+  return qtd;
+}
+
+async function bloquearMaterial(db, user, materialId, data = {}) {
+  const { justificativa } = data;
+  const quantidade = quantidadePositiva(data.quantidade, 'bloqueio');
   if (!justificativa) {
     throw Object.assign(new Error('Justificativa é obrigatória para bloqueio'), { status: 400 });
   }
@@ -137,10 +165,8 @@ async function bloquearMaterial(db, user, materialId, data = {}) {
 }
 
 async function desbloquearMaterial(db, user, materialId, data = {}) {
-  const { quantidade, justificativa } = data;
-  if (!quantidade || quantidade <= 0) {
-    throw Object.assign(new Error('Quantidade é obrigatória para desbloqueio'), { status: 400 });
-  }
+  const { justificativa } = data;
+  const quantidade = quantidadePositiva(data.quantidade, 'desbloqueio');
   if (!justificativa) {
     throw Object.assign(new Error('Justificativa é obrigatória para desbloqueio'), { status: 400 });
   }
