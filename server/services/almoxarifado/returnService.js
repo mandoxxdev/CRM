@@ -29,6 +29,7 @@ async function registrarDevolucao(db, user, data) {
     if (destino === 'QUARENTENA') {
       await registrarMovimentacao(db, user, {
         material_id, tipo: 'BLOQUEIO', quantidade, motivo: 'Devolução para quarentena',
+        justificativa: 'Devolução recebida em quarentena para inspeção',
       });
     }
   } else if (destino === 'SUCATA') {

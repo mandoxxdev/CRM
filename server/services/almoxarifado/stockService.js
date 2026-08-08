@@ -281,8 +281,17 @@ async function registrarMovimentacao(db, user, params) {
       [quantidade, material_id]);
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'DESBLOQUEIO') {
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = MAX(0, COALESCE(quantidade_bloqueada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [quantidade, material_id]);
+    // Guarda no WHERE em vez de MAX(0,...): saturar em silencio devolve ao disponivel menos do
+    // que o pedido sem ninguem saber, e foi exatamente o bug corrigido em liberarReserva.
+    const claim = await dbGet(db, `UPDATE materiais_almoxarifado
+      SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) - ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ?
+      RETURNING id`, [quantidade, material_id, quantidade]);
+    if (!claim) {
+      throw Object.assign(
+        new Error(`Quantidade bloqueada insuficiente: ${material.quantidade_bloqueada || 0}`),
+        { status: 400 });
+    }
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'QUARENTENA') {
     await dbRun(db, `UPDATE materiais_almoxarifado

@@ -18,6 +18,12 @@ const REGRAS_VINCULO = {
   AJUSTE_NEGATIVO: { vinculo: 'nenhum', justificativa: true },
   SUCATA: { vinculo: 'nenhum', justificativa: true },
   PERDA: { vinculo: 'nenhum', justificativa: true },
+
+  // Etapa 5: tirar material do disponivel sem dizer por que e estorno sem motivo. Vale para o
+  // bloqueio avulso, o desbloqueio e a reprovacao de inspecao.
+  BLOQUEIO: { vinculo: 'nenhum', justificativa: true },
+  DESBLOQUEIO: { vinculo: 'nenhum', justificativa: true },
+  REPROVACAO_INSPECAO: { vinculo: 'nenhum', justificativa: true },
 };
 
 function avaliarRegrasVinculo(tipo, params) {
