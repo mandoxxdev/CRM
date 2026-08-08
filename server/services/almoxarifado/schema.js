@@ -658,6 +658,14 @@ async function initSchema(db) {
     FOREIGN KEY (recebimento_item_id) REFERENCES recebimentos_material_itens_almoxarifado(id)
   )`);
 
+  // Etapa 5 — a decisao da inspecao passa a ter quantidade, porque "aprovar parcialmente" e
+  // requisito original (secao 9). `encaminhamento` registra o destino pretendido do material
+  // reprovado (requisito "Solicitar devolucao ao fornecedor / analise da Engenharia /
+  // substituicao"); a SAIDA em si e da feature 12.
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN quantidade_aprovada REAL');
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN quantidade_reprovada REAL');
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN encaminhamento TEXT');
+
   const recebCols = [
     "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'",
     'fornecedor_cnpj TEXT',

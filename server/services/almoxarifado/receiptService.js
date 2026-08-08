@@ -403,28 +403,6 @@ async function processarNota(db, user, recebimentoId, { localizacao_id } = {}) {
   return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId };
 }
 
-async function inspecionarItem(db, user, itemId, data) {
-  const item = await dbGet(db, 'SELECT ri.*, m.material_critico FROM recebimentos_material_itens_almoxarifado ri JOIN materiais_almoxarifado m ON ri.material_id = m.id WHERE ri.id = ?', [itemId]);
-  if (!item) throw Object.assign(new Error('Item não encontrado'), { status: 404 });
-
-  const r = await dbRun(db, `INSERT INTO inspecoes_recebimento_almoxarifado
-    (recebimento_item_id, conforme, divergencia_quantidade, divergencia_dimensional, certificado_ausente,
-     dano_fisico, material_incorreto, acao, responsavel_id, responsavel_nome, observacoes)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [
-    itemId, data.conforme ? 1 : 0, data.divergencia_quantidade ? 1 : 0,
-    data.divergencia_dimensional ? 1 : 0, data.certificado_ausente ? 1 : 0,
-    data.dano_fisico ? 1 : 0, data.material_incorreto ? 1 : 0,
-    data.acao || null, user.id, user.nome || user.email, data.observacoes || null,
-  ]);
-
-  if (data.acao === 'BLOQUEAR') {
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ? WHERE id = ?',
-      [item.quantidade_recebida || 0, item.quantidade_recebida || 0, item.material_id]);
-  }
-
-  return { id: r.lastID };
-}
-
 async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
   const rec = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) throw Object.assign(new Error('Recebimento não encontrado'), { status: 404 });
@@ -506,7 +484,6 @@ module.exports = {
   ETAPAS,
   criarRecebimento,
   conferirRecebimento,
-  inspecionarItem,
   aprovarRecebimento,
   avancarWorkflow,
   salvarDadosFiscal,

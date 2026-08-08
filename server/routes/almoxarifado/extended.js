@@ -11,6 +11,7 @@ const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const reservationService = require('../../services/almoxarifado/reservationService');
 const receiptService = require('../../services/almoxarifado/receiptService');
+const inspectionService = require('../../services/almoxarifado/inspectionService');
 const returnService = require('../../services/almoxarifado/returnService');
 const scrapService = require('../../services/almoxarifado/scrapService');
 const toolService = require('../../services/almoxarifado/toolService');
@@ -447,9 +448,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 5, Task 4: aponta para inspectionService.decidirInspecao (motor), que substitui
+  // receiptService.inspecionarItem (removida — UPDATE direto que dobrava o saldo retido).
+  // Rotas dedicadas de bloqueio/desbloqueio/fila avulsos ficam para a Task 5.
   app.post('/api/almoxarifado/recebimentos/itens/:itemId/inspecionar', auth, requirePermission('inspecionar'), async (req, res) => {
     try {
-      res.status(201).json(await receiptService.inspecionarItem(db, req.user, req.params.itemId, req.body));
+      res.status(201).json(await inspectionService.decidirInspecao(db, req.user, req.params.itemId, req.body));
     } catch (e) { handleError(res, e); }
   });
 
