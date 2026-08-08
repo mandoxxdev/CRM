@@ -23,12 +23,26 @@ async function getSaldoDisponivel(material) {
   return material.quantidade_atual - reservado - bloqueado - inspecao;
 }
 
+/**
+ * Recalcula o TOTAL FÍSICO do material a partir da soma das linhas de saldo por localização.
+ *
+ * Recalcula SOMENTE `quantidade_atual` — de propósito (achado do review final da Etapa 5).
+ * A retenção (`quantidade_reservada`, `quantidade_bloqueada`, `quantidade_em_inspecao`) mora
+ * EXCLUSIVAMENTE em `materiais_almoxarifado` e só muda pelos ramos do motor
+ * (RESERVA/LIBERACAO_RESERVA, BLOQUEIO/DESBLOQUEIO, QUARENTENA/DECISAO_INSPECAO/...).
+ * `estoque_saldo_almoxarifado` TEM colunas de retenção no CREATE TABLE, mas NADA no sistema
+ * escreve nelas: a soma é sempre 0. Recalcular retenção a partir dessa soma — como esta função
+ * fazia — ZERAVA as três colunas do material a cada AJUSTE com localização (e a cada estorno
+ * desse AJUSTE), que são os dois únicos chamadores. Efeitos reais:
+ *   - material em quarentena virava disponível sem movimentação e sem rastro, e o item do
+ *     recebimento (que mantém o próprio retido) ficava indecidível para sempre: decidirInspecao
+ *     recusava com "Quantidade em inspeção insuficiente: 0";
+ *   - reserva ATIVA perdia o hold no material (mesmo bug, vindo da Etapa 4), liberando para
+ *     terceiros saldo que já estava prometido a uma OS.
+ */
 async function syncMaterialTotals(db, materialId) {
   const saldos = await dbGet(db, `
-    SELECT COALESCE(SUM(quantidade),0) as total,
-           COALESCE(SUM(quantidade_reservada),0) as reservado,
-           COALESCE(SUM(quantidade_bloqueada),0) as bloqueado,
-           COALESCE(SUM(quantidade_em_inspecao),0) as inspecao
+    SELECT COALESCE(SUM(quantidade),0) as total
     FROM estoque_saldo_almoxarifado WHERE material_id = ?`, [materialId]);
 
   // Antes: só atualizava com total > 0, então zerar todas as localizações de um material
@@ -39,9 +53,8 @@ async function syncMaterialTotals(db, materialId) {
 
   if (linhas && linhas.n > 0) {
     await dbRun(db, `UPDATE materiais_almoxarifado SET
-      quantidade_atual = ?, quantidade_reservada = ?, quantidade_bloqueada = ?, quantidade_em_inspecao = ?,
-      updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [saldos.total, saldos.reservado, saldos.bloqueado, saldos.inspecao, materialId]);
+      quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [saldos.total, materialId]);
   }
 }
 
