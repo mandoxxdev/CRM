@@ -284,11 +284,35 @@ async function registrarMovimentacao(db, user, params) {
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = MAX(0, COALESCE(quantidade_bloqueada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantidade, material_id]);
     saldoPosterior = saldoAnterior;
+  } else if (tipo === 'QUARENTENA') {
+    await dbRun(db, `UPDATE materiais_almoxarifado
+      SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`, [quantidade, material_id]);
+    saldoPosterior = saldoAnterior;
+  } else if (tipo === 'LIBERACAO_INSPECAO' || tipo === 'REPROVACAO_INSPECAO') {
+    // Guarda no proprio WHERE, como o resto do motor: liberar/reprovar mais do que esta retido
+    // criaria saldo do nada (na liberacao) ou bloqueio sem lastro (na reprovacao). MAX(0,...)
+    // saturaria em silencio e esconderia o erro — e o "aprovar duas vezes nao duplica" que a
+    // spec 09 cobra sai justamente deste UPDATE nao casar na segunda vez.
+    const bloqueiaTambem = tipo === 'REPROVACAO_INSPECAO' ? quantidade : 0;
+    const claim = await dbGet(db, `UPDATE materiais_almoxarifado
+      SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) - ?,
+          quantidade_bloqueada   = COALESCE(quantidade_bloqueada,0) + ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ?
+      RETURNING id`, [quantidade, bloqueiaTambem, material_id, quantidade]);
+    if (!claim) {
+      throw Object.assign(
+        new Error(`Quantidade em inspeção insuficiente: ${material.quantidade_em_inspecao || 0}`),
+        { status: 400 });
+    }
+    saldoPosterior = saldoAnterior;
   }
 
   let saldoAnteriorReal = saldoAnterior;
 
-  if (!['TRANSFERENCIA', 'BLOQUEIO', 'DESBLOQUEIO', 'RESERVA', 'LIBERACAO_RESERVA'].includes(tipo)) {
+  if (!['TRANSFERENCIA', 'BLOQUEIO', 'DESBLOQUEIO', 'RESERVA', 'LIBERACAO_RESERVA',
+        'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO'].includes(tipo)) {
     if (tiposSaida.includes(tipo)) {
       // Decremento atômico: o próprio UPDATE valida o disponível sob o lock de linha do
       // SQLite, fechando a janela de corrida entre a leitura acima e a escrita. RETURNING
