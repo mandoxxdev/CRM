@@ -1,12 +1,12 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-05 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-08 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 4) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 5) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> **Onde o desenvolvimento parou (2026-08-06):** Etapas 1, 2, 3 e 4 **completas e sem pendência**. A Etapa 4 fechou com a tela de reservas (Almoxarifado → Reservas) e com as duas rotas que escapavam do hold. A próxima é a **Etapa 5 — Recebimento + Inspeção**. Ver o planejamento mestre em `specs/modulo-almoxarifado/README.md`.
+> **Onde o desenvolvimento parou (2026-08-08):** Etapas 1, 2, 3, 4 e 5 **completas**. A Etapa 5 fechou a quarentena de recebimento: material que precisa de inspeção (ex.: peça crítica) entra no estoque mas fica **retido**, fora do que pode ser usado, até alguém aprovar ou reprovar na tela nova (Almoxarifado → Inspeções). A pendência que ela cria (material reprovado fica bloqueado até alguém desbloquear e dar baixa manual — não sai sozinho para o fornecedor) está registrada no fim deste documento. A próxima é a **Etapa 6 — Lotes e Séries**. Ver o planejamento mestre em `specs/modulo-almoxarifado/README.md`.
 
-## Tabela consolidada — todas as alterações (Etapas 1 a 3)
+## Tabela consolidada — todas as alterações (Etapas 1 a 5)
 
 Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha estão nas seções da etapa correspondente, mais abaixo.
 
@@ -34,6 +34,10 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 3 | Requisições | Ciclo parava na entrega | **Solicitante confirma o recebimento** (só ele — nem admin confirma no lugar) |
 | 3 | Requisições | Aprovação sem trava | **Quem pediu não aprova a própria** (403); rejeição exige motivo; toda decisão auditada |
 | 3 | Requisições | Não dava pra reaproveitar requisição antiga | **"Copiar como Novo Rascunho"** com os mesmos itens/tipo/vínculos |
+| 5 | Recebimento | Aprovar recebimento de material crítico **sem inspeção prévia dava erro** — o material não entrava no sistema mesmo já estando no galpão | Entra sempre. Se exige inspeção, entra **retido** (fora do disponível) até alguém decidir |
+| 5 | Inspeções (tela nova) | Não existia fila de inspeção nem forma de aprovar/reprovar pela tela | Tela **Inspeções**: lista o que está retido, aprova (total ou parcial) ou reprova com motivo e destino (devolver / engenharia / substituição) |
+| 5 | Inspeções / Materiais | Bloquear um material achado com defeito na prateleira não tinha botão nem exigia justificativa | Botões **Bloquear/Desbloquear Material** na tela de Inspeções, com justificativa obrigatória e rastro no livro de movimentações |
+| 5 | Movimentações | Desbloquear mais do que estava bloqueado "funcionava" e devolvia menos do que o pedido ao disponível, sem avisar | Desbloquear acima do bloqueado é **recusado** com erro — nunca mais silencioso |
 
 ## Etapa 0 — Fundação (resumo)
 
@@ -197,6 +201,109 @@ Reserva por lote/série (depende do controle de lotes). Prioridade na reserva. E
 
 ---
 
+## Etapa 5 — Quarentena e Bloqueio de Qualidade (ENTREGUE — 2026-08-08)
+
+Esta etapa mexe em como o almoxarifado lida com material que **precisa de inspeção antes de
+poder ser usado** (peça crítica, que exige conferência de qualidade) e com material que alguém
+**bloqueia na prateleira** por ter achado um problema (avaria, defeito).
+
+**A mudança mais visível: aprovar o recebimento de um material crítico deixou de dar erro.**
+Antes, se o material estivesse marcado como "crítico" (Materiais → editar → seção
+Classificação → checkbox "Material crítico") e ainda não tivesse sido inspecionado, o sistema
+**recusava** processar a nota fiscal — mesmo o caminhão já tendo descarregado o material no
+galpão. Ou seja: o sistema fingia que o material não existia. Agora o recebimento é sempre
+processado — o físico sobe normalmente — mas, se o material exige inspeção, ele entra **retido**:
+fora do que pode ser usado (reservado, requisitado, consumido), até alguém decidir na tela nova
+se aprova, aprova em parte, ou reprova.
+
+| Antes | Agora |
+|---|---|
+| Aprovar/processar recebimento de material crítico sem inspeção prévia dava erro — a mercadoria não entrava no sistema mesmo já estando fisicamente no galpão | O recebimento é sempre processado. Se o material exige inspeção, ele entra no estoque físico mas fica **retido** (não aparece no "Disponível") até ser decidido |
+| Não existia uma tela para ver o que está esperando inspeção nem para decidir | Nova tela **Almoxarifado → Inspeções**: lista tudo que está retido, com material, recebimento de origem e há quantos dias está esperando |
+| Decidir a inspeção era "tudo ou nada" pelo formulário antigo de recebimento, e o cálculo de saldo tinha um bug: bloquear 10 unidades tirava 20 do disponível | Decisão nova aprova o lote inteiro ou só uma parte (ex.: recebeu 100, 10 vieram amassadas: aprova 90, reprova 10) — a conta é validada (aprovado + reprovado tem que fechar com o que estava retido) e o saldo sai certo |
+| Reprovar um material não registrava para onde ele deveria ir | Reprovar pede uma observação (obrigatória) e um encaminhamento: Devolver ao fornecedor / Análise da Engenharia / Substituição |
+| Bloquear um material achado com defeito na prateleira (fora do fluxo de recebimento) não tinha botão nem exigia motivo | Botões **Bloquear Material** / **Desbloquear Material** na tela de Inspeções, com justificativa sempre obrigatória, e fica registrado no livro de movimentações |
+| Desbloquear uma quantidade maior do que estava bloqueada "funcionava" e devolvia menos material ao disponível do que o pedido, sem avisar ninguém | Desbloquear acima do que está bloqueado é **recusado** com mensagem de erro — nunca mais silencioso |
+
+### Roteiro de teste manual (Etapa 5)
+
+**A) Preparar um material crítico**
+
+1. Vá em **Almoxarifado → Materiais**, edite um material (ou crie um novo). Na seção
+   **Classificação**, marque o checkbox **"Material crítico"** e salve. Anote o código dele.
+
+**B) Levar um recebimento até a entrada em estoque**
+
+2. Vá em **Almoxarifado → Recebimentos NF**, clique em **"Novo Recebimento"**. Deixe "Somente pela
+   Nota Fiscal", preencha um número de nota e fornecedor, e em "Materiais recebidos" busque e
+   adicione o material crítico do passo 1 com uma quantidade. Salve.
+3. Abra o recebimento criado e avance o fluxo clicando nos botões que aparecem, na ordem: **Iniciar
+   Conferência (Almoxarifado)** → **Finalizar Conferência** → **Encaminhar para Compras** →
+   **Encaminhar para Faturamento**.
+4. Clique em **"Preencher Dados da NF (Faturamento)"**, preencha número/data de emissão/data de
+   entrada/valor total da nota, e salve.
+5. Clique em **"Processar Nota — Estoque + Contas a Pagar"** e confirme. **Isto é o que antes dava
+   erro** ("Item crítico requer inspeção") — agora conclui normalmente.
+
+**C) Ver o material retido**
+
+6. Vá em **Materiais**, abra o **Extrato** do material crítico. O cartão **"Físico"** já mostra a
+   quantidade recebida, mas **"Em inspeção"** mostra a mesma quantidade e **"Disponível"** está
+   zerado (ou não subiu) — o material está no galpão, mas ninguém consegue reservar ou requisitar
+   ele ainda.
+
+**D) Decidir a inspeção**
+
+7. Vá em **Almoxarifado → Inspeções**. O item aparece na fila, com o material, a quantidade
+   retida, o recebimento de origem e há quantos dias está esperando.
+8. Clique no ícone de decisão (✓). O formulário já vem com "Quantidade aprovada" = tudo o que está
+   retido e "Quantidade reprovada" = 0 (aprovar o lote inteiro é o caso mais comum). Para testar a
+   aprovação parcial, mude para aprovar uma parte e reprovar outra (ex.: recebeu 20 → aprova 15,
+   reprova 5). **Caso de erro esperado:** se a soma de aprovado + reprovado não bater exatamente
+   com o retido, o formulário recusa antes de chamar o servidor.
+9. Ao reprovar qualquer quantidade, o campo **Encaminhamento** aparece (Devolver ao fornecedor /
+   Análise da Engenharia / Substituição) e o campo **Observações** passa a ser obrigatório — é o
+   único registro de por que aquele material foi barrado.
+10. Salve. Volte ao Extrato do material (passo 6): a parte aprovada some de "Em inspeção" e entra
+    em "Disponível"; a parte reprovada some de "Em inspeção" e aparece em "Bloqueado".
+
+**E) Bloqueio avulso (fora do fluxo de recebimento)**
+
+11. Ainda em **Almoxarifado → Inspeções**, clique em **"Bloquear Material"** no topo da página.
+    Escolha qualquer material com saldo, informe uma quantidade e uma justificativa (obrigatória —
+    tente salvar sem preencher para ver a recusa), e confirme. Confira no Extrato que o
+    "Disponível" caiu e "Bloqueado" subiu.
+12. Clique em **"Desbloquear Material"**, escolha o mesmo material e a mesma quantidade, informe
+    justificativa e confirme. O disponível volta.
+13. **Caso de erro esperado.** Bloqueie uma quantidade pequena (ex.: 5) e tente desbloquear mais do
+    que isso (ex.: 30). O sistema recusa com uma mensagem — nada muda no saldo. Antes desta etapa,
+    isso "funcionava" e devolvia menos material do que o pedido ao disponível, sem avisar.
+
+> **Quem pode fazer o quê:** decidir uma inspeção (aprovar/reprovar) exige o mesmo perfil de
+> Almoxarife de sempre. **Bloquear/desbloquear material avulso pela tela nova exige um perfil
+> diferente** (Administrador ou Gestor) — um Almoxarife comum consegue decidir inspeções, mas não
+> vai ver os botões de bloqueio avulso habilitados.
+
+### O que a Etapa 5 não cobre
+
+- **Plano de inspeção com medidas e instrumento** (o que medir, critérios técnicos, qual
+  paquímetro/instrumento foi usado) — depende de calibração de ferramentas, que é uma etapa futura.
+- **Não conformidade formal numerada** (um registro tipo "NC #123" com fluxo próprio) — o que
+  existe é o encaminhamento (Devolver/Engenharia/Substituição) anotado na decisão, mais simples.
+- **Liberação sob desvio autorizado** ("aceitar mesmo fora do padrão, com autorização de alguém
+  responsável e histórico") — não implementado.
+- **A devolução ao fornecedor não acontece sozinha.** Reprovar deixa o material **bloqueado** —
+  alguém ainda precisa desbloquear manualmente e lançar a saída à parte. O encaminhamento
+  registrado ("Devolver ao fornecedor", por exemplo) é uma anotação de intenção, não uma ação
+  automática. Isso fica para uma etapa futura (Devoluções).
+- **Perfil "Qualidade" separado do Almoxarife** — a spec original previa um perfil próprio para
+  quem faz inspeção; hoje continua sendo Almoxarife/Administrador.
+- Tipos de entrada além de nota fiscal de compra (material de cliente, consignado, devolução de
+  produção etc.) e conferência física estruturada (contagem, pesagem, fotos) continuam fora —
+  eram pendências antigas da tela de Recebimentos, não desta etapa.
+
+---
+
 ## O que observar de regressão (sempre)
 
 - O fluxo de requisição de materiais que já existia (criar → aprovar → separar → entregar) continua funcionando normalmente — nada foi removido nessa tela; requisições antigas continuam com o comportamento de sempre (criadas sem tipo/centro de custo ganham o padrão "Consumo").
@@ -221,3 +328,17 @@ Reserva por lote/série (depende do controle de lotes). Prioridade na reserva. E
 - Registrar lote/série entregue por item na requisição: ainda não implementado (depende do controle de lotes, etapa futura).
 - Regras de aprovação configuráveis (por tipo de material, valor, quantidade, projeto, urgência) com tela própria: hoje as regras (segregação do solicitante + limite por valor) são fixas no código — sem tela de configuração.
 - Encerramento não dispara e-mail de resumo.
+- **Inspeção/quarentena: completo na Etapa 5** para o que estava no escopo — quarentena real na
+  entrada, decisão de inspeção (aprovar/reprovar/parcial), bloqueio/desbloqueio avulso, tela
+  própria. Pendência que a etapa **cria** (não é falta de implementação, é consequência): material
+  reprovado na inspeção fica **bloqueado até alguém desbloquear manualmente e lançar a saída à
+  parte** — não existe hoje nenhuma devolução automática ao fornecedor vinculada ao recebimento de
+  origem. O campo "encaminhamento" (Devolver/Engenharia/Substituição) registrado na reprovação é
+  só uma anotação de intenção; quem vai efetivamente *usar* essa anotação para gerar a devolução é
+  uma etapa futura (Devoluções).
+- Estornar uma movimentação de quarentena/inspeção (tipos `QUARENTENA`, `LIBERACAO_INSPECAO`,
+  `REPROVACAO_INSPECAO`, `DECISAO_INSPECAO`) não desfaz o efeito no saldo retido/bloqueado — o
+  botão de estornar aparece habilitado para essas linhas no livro de movimentações, mas hoje só
+  marca a linha original como cancelada, sem devolver `quantidade_em_inspecao`/
+  `quantidade_bloqueada`. Mesma limitação que já existia para outros tipos de movimentação
+  especiais antes da Etapa 4. Evite estornar essas linhas até isso ser corrigido.

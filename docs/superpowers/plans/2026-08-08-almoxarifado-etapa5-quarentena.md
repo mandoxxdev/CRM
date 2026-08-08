@@ -46,7 +46,7 @@
 - Consumes: `registrarMovimentacao(db, user, params)` — já existente.
 - Produces: três tipos aceitos por `registrarMovimentacao`: `QUARENTENA` (`em_inspecao += q`), `LIBERACAO_INSPECAO` (`em_inspecao −= q`), `REPROVACAO_INSPECAO` (`em_inspecao −= q` e `bloqueada += q`). Nenhum altera `quantidade_atual`; todos gravam linha no livro com `saldo_anterior === saldo_posterior`.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Crie `server/tests/api/quarentenaMotor.api.test.js` no padrão dos outros arquivos de `tests/api/` (runner próprio com `test()`, contador e `process.exit`; veja `reservaConsumo.api.test.js` como modelo):
 
@@ -153,12 +153,12 @@ const disponivel = async (db, id) => stockService.getSaldoDisponivel(await mater
 })();
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha pelo motivo certo**
+- [x] **Step 2: Rodar e confirmar que falha pelo motivo certo**
 
 Run: `cd server && node tests/api/quarentenaMotor.api.test.js`
 Expected: FAIL com "Tipo de movimento inválido" — os tipos ainda não existem em `TIPOS_MOVIMENTO`. Se falhar por erro de setup (coluna NOT NULL, tabela ausente), conserte o setup e rode de novo até falhar pelo motivo acima.
 
-- [ ] **Step 3: Registrar os tipos**
+- [x] **Step 3: Registrar os tipos**
 
 Em `server/services/almoxarifado/schema.js`, `TIPOS_MOVIMENTO`:
 
@@ -174,7 +174,7 @@ const TIPOS_MOVIMENTO = [
 ];
 ```
 
-- [ ] **Step 4: Implementar o efeito no motor**
+- [x] **Step 4: Implementar o efeito no motor**
 
 Em `stockService.js`, logo após o bloco `else if (tipo === 'DESBLOQUEIO')` (linha ~286), acrescente:
 
@@ -212,7 +212,7 @@ E inclua os três na lista de tipos que não mexem no físico (linha ~291):
         'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO'].includes(tipo)) {
 ```
 
-- [ ] **Step 5: Rodar e confirmar verde**
+- [x] **Step 5: Rodar e confirmar verde**
 
 Run: `cd server && node tests/api/quarentenaMotor.api.test.js`
 Expected: PASS, 6 casos.
@@ -220,7 +220,7 @@ Expected: PASS, 6 casos.
 Depois: `cd server && npm run test:api && npm run test:almoxarifado`
 Expected: tudo verde. Se algum teste existente quebrar, **não relaxe a asserção** — entenda por que quebrou e corrija a causa, ou ajuste o teste explicando no comentário o que mudou de propósito.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add server/services/almoxarifado/schema.js server/services/almoxarifado/stockService.js server/tests/api/quarentenaMotor.api.test.js
@@ -243,7 +243,7 @@ git commit -m "Almoxarifado Etapa 5: motor ganha os tres tipos da quarentena"
 
 **Por que:** `DESBLOQUEIO` usa `MAX(0, bloqueada − q)`, que satura em silêncio — desbloquear 100 de um bloqueio de 10 "funciona" e devolve 10 ao disponível sem avisar. É o mesmo defeito que a Etapa 4 corrigiu em `liberarReserva` ("liberar acima do que a reserva segurava roubava o hold de outras reservas"). E bloquear material sem dizer por quê é estorno sem motivo.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Crie `server/tests/api/bloqueioGuardas.api.test.js` com o mesmo cabeçalho de runner da Task 1 e estes casos:
 
@@ -290,12 +290,12 @@ Crie `server/tests/api/bloqueioGuardas.api.test.js` com o mesmo cabeçalho de ru
 
 > **Antes de escrever o último caso:** abra `server/services/almoxarifado/returnService.js` e use o nome e a assinatura reais da função que contém o `BLOQUEIO` da linha 31. O nome `devolverParaQuarentena` acima é ilustrativo — se divergir, corrija o teste para a função real, não invente uma nova.
 
-- [ ] **Step 2: Rodar e confirmar que falha pelo motivo certo**
+- [x] **Step 2: Rodar e confirmar que falha pelo motivo certo**
 
 Run: `cd server && node tests/api/bloqueioGuardas.api.test.js`
 Expected: os dois primeiros falham (bloqueio sem justificativa passa; desbloqueio satura). O de regressão deve **passar** agora — é comportamento existente, e o valor dele aparece no Step 4.
 
-- [ ] **Step 3: Implementar as guardas**
+- [x] **Step 3: Implementar as guardas**
 
 Em `movementRules.js`, dentro de `REGRAS_VINCULO`:
 
@@ -325,7 +325,7 @@ Em `stockService.js`, substitua o ramo `DESBLOQUEIO`:
     saldoPosterior = saldoAnterior;
 ```
 
-- [ ] **Step 4: Ajustar o chamador existente**
+- [x] **Step 4: Ajustar o chamador existente**
 
 Em `returnService.js:31`, acrescente `justificativa` ao payload (mantendo o `motivo`, que alimenta o livro):
 
@@ -334,14 +334,14 @@ Em `returnService.js:31`, acrescente `justificativa` ao payload (mantendo o `mot
         justificativa: 'Devolução recebida em quarentena para inspeção',
 ```
 
-- [ ] **Step 5: Rodar e confirmar verde**
+- [x] **Step 5: Rodar e confirmar verde**
 
 Run: `cd server && node tests/api/bloqueioGuardas.api.test.js`
 Expected: PASS, 4 casos — inclusive o de regressão, que prova que o chamador antigo sobreviveu.
 
 Depois: `cd server && npm run test:api && npm run test:almoxarifado`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add server/services/almoxarifado/stockService.js server/services/almoxarifado/movementRules.js server/services/almoxarifado/returnService.js server/tests/api/bloqueioGuardas.api.test.js
@@ -362,7 +362,7 @@ git commit -m "Almoxarifado Etapa 5: desbloqueio com guarda e justificativa obri
 
 **Por que:** hoje `darEntradaEstoque` **recusa** aprovar recebimento com item crítico sem inspeção (linhas 315-322), e pula o item se a inspeção disse `DEVOLVER` (linha 321). Isso inverte: entra sempre, retido quando aplicável. A linha do `DEVOLVER` some daqui — vira decisão da inspeção, na Task 4.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Crie `server/tests/api/recebimentoQuarentena.api.test.js`. Monte um recebimento com dois itens — um material crítico e um comum — e aprove:
 
@@ -421,12 +421,12 @@ Crie `server/tests/api/recebimentoQuarentena.api.test.js`. Monte um recebimento 
 
 > Escreva os helpers `novoMaterial(db, qtd, { critico })`, `recebimentoComItem(db, materialId, qtd)` e `setConfig` no próprio arquivo. Para o recebimento, insira direto em `recebimentos_material_almoxarifado` e `recebimentos_material_itens_almoxarifado` — inspecione o schema (`schema.js:419-502`) para as colunas `NOT NULL`, e confira o status inicial que `aprovarRecebimento` aceita (não pode ser `PROCESSADO`/`APROVADO`, nem `EM_ENTRADA_NF`/`ENCAMINHADO_FATURAMENTO`, que desviam para `processarNota`).
 
-- [ ] **Step 2: Rodar e confirmar que falha pelo motivo certo**
+- [x] **Step 2: Rodar e confirmar que falha pelo motivo certo**
 
 Run: `cd server && node tests/api/recebimentoQuarentena.api.test.js`
 Expected: o primeiro e o segundo falham com "Item crítico #N requer inspeção" — o gate antigo. O terceiro (regressão do material comum) deve passar.
 
-- [ ] **Step 3: Implementar a entrada retida**
+- [x] **Step 3: Implementar a entrada retida**
 
 Em `receiptService.js`, substitua o bloco `if (item.material_critico) { ... }` (linhas 315-322) e acrescente a retenção após a entrada:
 
@@ -469,7 +469,7 @@ Em `receiptService.js`, substitua o bloco `if (item.material_critico) { ... }` (
 
 > Use o helper de config que o arquivo já usa. Se `getConfig` não estiver disponível em `receiptService.js`, siga o padrão da linha 319 original (`SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?`) em vez de importar algo novo.
 
-- [ ] **Step 4: Rodar e confirmar verde**
+- [x] **Step 4: Rodar e confirmar verde**
 
 Run: `cd server && node tests/api/recebimentoQuarentena.api.test.js`
 Expected: PASS, 5 casos.
@@ -477,7 +477,7 @@ Expected: PASS, 5 casos.
 Depois: `cd server && npm run test:api && npm run test:almoxarifado`
 Expected: verde. **Espere quebra aqui** — algum teste existente pode assertar que aprovar recebimento crítico sem inspeção falha. Se acontecer, esse teste está codificando o comportamento que esta task substitui de propósito: atualize-o com um comentário explicando a mudança, e mantenha nele uma asserção nova provando que agora entra retido.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add server/services/almoxarifado/receiptService.js server/tests/api/recebimentoQuarentena.api.test.js
@@ -505,7 +505,7 @@ git commit -m "Almoxarifado Etapa 5: material que exige inspecao entra retido em
 
 **Por que arquivo novo:** `receiptService.js` tem 511 linhas e já responde pelo workflow fiscal de 4 etapas com 11 status. Recebimento e inspeção mudam por razões diferentes — mesma separação que `reservationService.js` recebeu na Etapa 4.
 
-- [ ] **Step 1: Adicionar as colunas**
+- [x] **Step 1: Adicionar as colunas**
 
 Em `schema.js`, junto dos outros `safeAlter` de `inspecoes_recebimento_almoxarifado`:
 
@@ -519,7 +519,7 @@ Em `schema.js`, junto dos outros `safeAlter` de `inspecoes_recebimento_almoxarif
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN encaminhamento TEXT');
 ```
 
-- [ ] **Step 2: Escrever o teste que falha**
+- [x] **Step 2: Escrever o teste que falha**
 
 Crie `server/tests/api/inspecaoDecisao.api.test.js`:
 
@@ -609,12 +609,12 @@ Crie `server/tests/api/inspecaoDecisao.api.test.js`:
 
 > `itemRetido(db, qtd)` deve criar material crítico, recebimento com item e aprovar o recebimento (reaproveitando o caminho da Task 3), devolvendo `{ mat, itemId, recId }`. Assim o teste exercita o fluxo real em vez de fabricar `quantidade_em_inspecao` na mão.
 
-- [ ] **Step 3: Rodar e confirmar que falha**
+- [x] **Step 3: Rodar e confirmar que falha**
 
 Run: `cd server && node tests/api/inspecaoDecisao.api.test.js`
 Expected: FAIL com "Cannot find module '../../services/almoxarifado/inspectionService'".
 
-- [ ] **Step 4: Implementar o serviço**
+- [x] **Step 4: Implementar o serviço**
 
 Crie `server/services/almoxarifado/inspectionService.js`. Pontos obrigatórios:
 
@@ -679,7 +679,7 @@ A guarda contra decidir duas vezes vem do motor: na segunda chamada `quantidade_
 
 `bloquearMaterial` e `desbloquearMaterial` são casca fina sobre `registrarMovimentacao` com `BLOQUEIO`/`DESBLOQUEIO`, exigindo `justificativa` (a Task 2 já obriga no motor; valide antes para devolver 400 com mensagem clara).
 
-- [ ] **Step 5: Remover `inspecionarItem` do `receiptService`**
+- [x] **Step 5: Remover `inspecionarItem` do `receiptService`**
 
 Apague a função (linhas ~398-418), **inclusive** o `UPDATE` direto que somava `bloqueada` e `em_inspecao` — é o defeito central que a etapa fecha. Ajuste a rota da Task 5 para o serviço novo. Confira que nada mais importa `inspecionarItem`:
 
@@ -687,12 +687,12 @@ Apague a função (linhas ~398-418), **inclusive** o `UPDATE` direto que somava 
 grep -rn "inspecionarItem" server/ client/src --include=*.js | grep -v node_modules
 ```
 
-- [ ] **Step 6: Rodar e confirmar verde**
+- [x] **Step 6: Rodar e confirmar verde**
 
 Run: `cd server && node tests/api/inspecaoDecisao.api.test.js`
 Expected: PASS, 10 casos. Depois as suítes todas.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add server/services/almoxarifado/inspectionService.js server/services/almoxarifado/receiptService.js server/services/almoxarifado/schema.js server/tests/api/inspecaoDecisao.api.test.js
@@ -715,7 +715,7 @@ git commit -m "Almoxarifado Etapa 5: inspectionService decide a inspecao pelo mo
   - `POST /api/almoxarifado/materiais/:id/bloquear` (`ajustar_estoque`)
   - `POST /api/almoxarifado/materiais/:id/desbloquear` (`ajustar_estoque`)
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Use `createTestApp` + `supertest`, como `reservaTransferenciaExpiracao.api.test.js`.
 
@@ -791,9 +791,9 @@ Use `createTestApp` + `supertest`, como `reservaTransferenciaExpiracao.api.test.
 
 > O harness roda o `requirePermission` **real**: `setUser` com usuário sem perfil retorna 403 (o fallback de perfil é `PRODUCAO`, que não tem `inspecionar`). Siga o padrão de `permissoesRotas.api.test.js`.
 
-- [ ] **Step 2: Rodar e confirmar que falha** — `cd server && node tests/api/inspecaoRotas.api.test.js` → 404 nas rotas novas.
+- [x] **Step 2: Rodar e confirmar que falha** — `cd server && node tests/api/inspecaoRotas.api.test.js` → 404 nas rotas novas.
 
-- [ ] **Step 3: Implementar as rotas** em `extended.js`, ao lado da rota de inspecionar existente, seguindo o padrão do arquivo (`auth`, `requirePermission`, `handleError`):
+- [x] **Step 3: Implementar as rotas** em `extended.js`, ao lado da rota de inspecionar existente, seguindo o padrão do arquivo (`auth`, `requirePermission`, `handleError`):
 
 ```js
   app.get('/api/almoxarifado/inspecoes/pendentes', auth, async (req, res) => {
@@ -809,8 +809,8 @@ Use `createTestApp` + `supertest`, como `reservaTransferenciaExpiracao.api.test.
 
 E troque o corpo da rota `inspecionar` para `inspectionService.decidirInspecao`.
 
-- [ ] **Step 4: Verde + suítes completas.**
-- [ ] **Step 5: Commit** — `"Almoxarifado Etapa 5: rotas de inspecao e bloqueio avulso"`
+- [x] **Step 4: Verde + suítes completas.**
+- [x] **Step 5: Commit** — `"Almoxarifado Etapa 5: rotas de inspecao e bloqueio avulso"`
 
 ---
 
@@ -830,7 +830,7 @@ E troque o corpo da rota `inspecionar` para `inspectionService.decidirInspecao`.
 - Classes `almox-page`, `almox-header`, `almox-filters`, `almox-table`, `almox-modal-*`, `btn-almox-primary`.
 - `SkeletonTable` no carregamento, `almox-empty` na lista vazia.
 
-- [ ] **Step 1: Escrever o teste que falha** — `InspecoesAlmoxarifado.test.js`, no padrão de `ReservasAlmoxarifado.test.js` (mock de `services/api`, de `react-toastify` e do hook de permissões). Cubra as regras, não o layout:
+- [x] **Step 1: Escrever o teste que falha** — `InspecoesAlmoxarifado.test.js`, no padrão de `ReservasAlmoxarifado.test.js` (mock de `services/api`, de `react-toastify` e do hook de permissões). Cubra as regras, não o layout:
 
 ```js
 const PENDENTE = {
@@ -890,11 +890,11 @@ test('encaminhamento só aparece quando há quantidade reprovada', async () => {
 
 > `renderizar`, `linhas`, `campoPorLabel`, `preencher` e `clicarBotaoModal` são os mesmos helpers de `ReservasAlmoxarifado.test.js` — copie-os. `campoPorLabelOuNull` é a variante que devolve `null` em vez de estourar quando o campo não existe.
 
-- [ ] **Step 2: Rodar e ver falhar** — `cd client && CI=true npx react-scripts test src/components/almoxarifado/InspecoesAlmoxarifado --watchAll=false`
-- [ ] **Step 3: Implementar a tela e ligar rota + menu** (o menu usa `FiCheckSquare` ou outro ícone já importado em `Layout.js`; se importar um novo, acrescente à lista do `react-icons/fi`).
-- [ ] **Step 4: Verde + `CI=true npx react-scripts build`** (CI=true faz warning virar erro).
-- [ ] **Step 5: Controle positivo** — mute uma das regras (ex.: deixe passar quando aprovado + reprovado não fecha) e confirme que o teste correspondente acusa. Restaure.
-- [ ] **Step 6: Commit** — `"Almoxarifado Etapa 5: tela da fila de inspecoes e bloqueio de material"`
+- [x] **Step 2: Rodar e ver falhar** — `cd client && CI=true npx react-scripts test src/components/almoxarifado/InspecoesAlmoxarifado --watchAll=false`
+- [x] **Step 3: Implementar a tela e ligar rota + menu** (o menu usa `FiCheckSquare` ou outro ícone já importado em `Layout.js`; se importar um novo, acrescente à lista do `react-icons/fi`).
+- [x] **Step 4: Verde + `CI=true npx react-scripts build`** (CI=true faz warning virar erro).
+- [x] **Step 5: Controle positivo** — mute uma das regras (ex.: deixe passar quando aprovado + reprovado não fecha) e confirme que o teste correspondente acusa. Restaure.
+- [x] **Step 6: Commit** — `"Almoxarifado Etapa 5: tela da fila de inspecoes e bloqueio de material"`
 
 ---
 
@@ -907,20 +907,28 @@ test('encaminhamento só aparece quando há quantidade reprovada', async () => {
 - Modify: `docs/almoxarifado-guia-etapas-e-testes.md`
 - Modify: `docs/superpowers/plans/2026-08-08-almoxarifado-etapa5-quarentena.md` (este arquivo)
 
-- [ ] **Step 1: Specs 08 e 09** — status no topo, checklist marcado item por item com o hash do commit correspondente, e o que ficou de fora **com o motivo**. Corrija qualquer afirmação que a implementação provou errada, dizendo que estava errada — não apague em silêncio.
-- [ ] **Step 2: Registrar a pendência criada** na spec 09: material reprovado fica bloqueado até desbloqueio + baixa manual, sem vínculo ao recebimento de origem; o `encaminhamento` é o que permitirá à feature 12 montar a fila.
-- [ ] **Step 3: Planejamento mestre** — linhas das features 08 e 09 no mapa de status.
-- [ ] **Step 4: Guia do usuário** — seção da Etapa 5 em linguagem de usuário, tabela "Antes → Agora", roteiro de teste manual clicável, e o cabeçalho "onde o desenvolvimento parou". **Destaque a mudança visível:** aprovar recebimento de material crítico deixou de exigir inspeção prévia — o material entra e fica retido.
-- [ ] **Step 5: Este plano** — tasks marcadas, e a próxima etapa apontada.
-- [ ] **Step 6: Commit** — `"Almoxarifado: documentacao da Etapa 5"`
+- [x] **Step 1: Specs 08 e 09** — status no topo, checklist marcado item por item com o hash do commit correspondente, e o que ficou de fora **com o motivo**. Corrija qualquer afirmação que a implementação provou errada, dizendo que estava errada — não apague em silêncio. Feito: `specs/modulo-almoxarifado/08-recebimento/README.md` e `specs/modulo-almoxarifado/09-inspecao-qualidade/README.md` reescritos com hash por item; correção registrada na spec 09 ("entrada inspecionável nasce em_inspecao" não era verdade antes desta etapa — o gate antigo recusava a entrada em vez de reter); `controle_qualidade` reverificada como ainda órfã (grep confirmado, nenhum INSERT/UPDATE em todo o repositório).
+- [x] **Step 2: Registrar a pendência criada** na spec 09: material reprovado fica bloqueado até desbloqueio + baixa manual, sem vínculo ao recebimento de origem; o `encaminhamento` é o que permitirá à feature 12 montar a fila. Feito em seção própria "Pendência criada por esta etapa" da spec 09, mais as três limitações verificadas em código (backfill ambíguo, split perdido no livro, estorno não reverte os tipos novos).
+- [x] **Step 3: Planejamento mestre** — linhas das features 08 e 09 no mapa de status. Feito em `specs/modulo-almoxarifado/README.md`.
+- [x] **Step 4: Guia do usuário** — seção da Etapa 5 em linguagem de usuário, tabela "Antes → Agora", roteiro de teste manual clicável, e o cabeçalho "onde o desenvolvimento parou". **Destaque a mudança visível:** aprovar recebimento de material crítico deixou de exigir inspeção prévia — o material entra e fica retido. Feito em `docs/almoxarifado-guia-etapas-e-testes.md`: seção "Etapa 5" completa com roteiro de 13 passos (A a E), tabela consolidada atualizada, pendências e "o que não cobre" no rodapé.
+- [x] **Step 5: Este plano** — tasks marcadas, e a próxima etapa apontada. Ver abaixo.
+- [x] **Step 6: Commit** — `"Almoxarifado: documentacao da Etapa 5"`
+
+**Próxima etapa: Etapa 6 — Lotes e Séries** (`10-lotes-series-etiquetas`, ver
+`specs/modulo-almoxarifado/README.md`). Ainda não tem plano detalhado nesta pasta. Contrato que ela
+herda desta etapa: `recebimentos_material_itens_almoxarifado.quantidade_em_inspecao` (por item,
+não pelo pool do material) é o padrão a seguir se lote precisar de retenção por item também;
+`cancelarMovimentacao` continua sem saber estornar `QUARENTENA`/`LIBERACAO_INSPECAO`/
+`REPROVACAO_INSPECAO`/`DECISAO_INSPECAO` — vale conferir se a Etapa 6 esbarra nisso antes de
+assumir que estornar qualquer movimentação é seguro.
 
 ---
 
 ## Verificação final
 
-- [ ] `cd server && npm run test:api` — todos os arquivos OK
-- [ ] `cd server && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`
-- [ ] `cd client && CI=true npx react-scripts test --watchAll=false`
-- [ ] `cd client && CI=true npx react-scripts build`
-- [ ] Nenhum teste passou de primeira sem controle positivo
-- [ ] `git status` limpo fora dos artefatos de runtime conhecidos
+- [x] `cd server && npm run test:api` — todos os arquivos OK
+- [x] `cd server && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`
+- [x] `cd client && CI=true npx react-scripts test --watchAll=false`
+- [x] `cd client && CI=true npx react-scripts build`
+- [x] Nenhum teste passou de primeira sem controle positivo — confirmado nos commits `91184ca` (3 rodadas de controle positivo na Task 4) e `dcee909` (controle positivo na Task 6, com correção do próprio controle antes de restaurar)
+- [x] `git status` limpo fora dos artefatos de runtime conhecidos
