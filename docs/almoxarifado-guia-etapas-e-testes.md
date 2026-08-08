@@ -234,7 +234,7 @@ se aprova, aprova em parte, ou reprova.
 
 **B) Levar um recebimento até a entrada em estoque**
 
-2. Vá em **Almoxarifado → Recebimentos NF**, clique em **"Novo Recebimento"**. Deixe "Somente pela
+2. Vá em **Almoxarifado → Recebimentos**, clique em **"Novo Recebimento"**. Deixe "Somente pela
    Nota Fiscal", preencha um número de nota e fornecedor, e em "Materiais recebidos" busque e
    adicione o material crítico do passo 1 com uma quantidade. Salve.
 3. Abra o recebimento criado e avance o fluxo clicando nos botões que aparecem, na ordem: **Iniciar
