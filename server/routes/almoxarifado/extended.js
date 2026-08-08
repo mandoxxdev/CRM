@@ -450,11 +450,29 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
 
   // Etapa 5, Task 4: aponta para inspectionService.decidirInspecao (motor), que substitui
   // receiptService.inspecionarItem (removida — UPDATE direto que dobrava o saldo retido).
-  // Rotas dedicadas de bloqueio/desbloqueio/fila avulsos ficam para a Task 5.
   app.post('/api/almoxarifado/recebimentos/itens/:itemId/inspecionar', auth, requirePermission('inspecionar'), async (req, res) => {
     try {
       res.status(201).json(await inspectionService.decidirInspecao(db, req.user, req.params.itemId, req.body));
     } catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 5, Task 5: fila de inspecao (por item, nao pelo pool do material — ver
+  // inspectionService.listarInspecoesPendentes) e bloqueio/desbloqueio avulso de material,
+  // fora do fluxo de recebimento (ex.: avaria em prateleira). ajustar_estoque porque bloquear/
+  // desbloquear tira/devolve saldo do disponivel sem passar por requisicao nem recebimento.
+  app.get('/api/almoxarifado/inspecoes/pendentes', auth, async (req, res) => {
+    try { res.json(await inspectionService.listarInspecoesPendentes(db, req.query)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/materiais/:id/bloquear', auth, requirePermission('ajustar_estoque'), async (req, res) => {
+    try { res.json(await inspectionService.bloquearMaterial(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/materiais/:id/desbloquear', auth, requirePermission('ajustar_estoque'), async (req, res) => {
+    try { res.json(await inspectionService.desbloquearMaterial(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
   });
 
   app.post('/api/almoxarifado/recebimentos/:id/aprovar', auth, requirePermission('receber_material'), async (req, res) => {
