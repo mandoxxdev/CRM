@@ -72,15 +72,29 @@ cruzar `materiais_almoxarifado.quantidade_bloqueada` com o histórico de `inspec
   divisão entre aprovado e reprovado só existe em `inspecoes_recebimento_almoxarifado`
   (`quantidade_aprovada`/`quantidade_reprovada`), não como colunas na própria movimentação.
   Trade-off aceito para fechar o claim atômico do material num único `UPDATE` — ver `91184ca`.
-- **`cancelarMovimentacao` (estorno) não sabe estornar os tipos novos.** Verificado em
-  `stockService.js`: os ramos de reversão tratam `BLOQUEIO`/`DESBLOQUEIO` explicitamente, mas não
-  têm nenhum `else if` para `QUARENTENA`, `LIBERACAO_INSPECAO`, `REPROVACAO_INSPECAO` nem
-  `DECISAO_INSPECAO` — estornar uma dessas movimentações grava a linha `ESTORNO` no livro (marca a
-  original como cancelada) **sem desfazer** `quantidade_em_inspecao`/`quantidade_bloqueada`. É um
-  gap pré-existente do motor (o mesmo padrão faltava para os tipos de reserva antes da Etapa 4) que
-  os quatro tipos novos herdaram. No front, `MovimentacoesAlmoxarifado.js` (`podeEstornar`) não
-  exclui esses tipos — o botão de estornar aparece habilitado para eles como qualquer outra
-  movimentação, sem aviso de que o efeito é parcial.
+- **Movimento de inspeção não é estornável pelo livro** (decidido no review final da etapa). Antes,
+  `cancelarMovimentacao` não tinha ramo de reversão para `QUARENTENA`, `LIBERACAO_INSPECAO`,
+  `REPROVACAO_INSPECAO` nem `DECISAO_INSPECAO`: estornar gravava a linha `ESTORNO` e marcava a
+  original cancelada **sem desfazer** `quantidade_em_inspecao`/`quantidade_bloqueada` — o livro
+  afirmava uma reversão que não acontecera. A correção **recusa com 400** em vez de implementar a
+  reversão, porque o retido pertence ao ITEM do recebimento
+  (`recebimentos_material_itens_almoxarifado.quantidade_em_inspecao`), que `stockService` não
+  conhece: devolver só o pool do material recriaria o descasamento item × material que a Task 4
+  fechou. A porta para rever uma decisão é a tela de Inspeções. `podeEstornar`
+  (`MovimentacoesAlmoxarifado.js`) espelha a lista, para a tela não oferecer um botão que só
+  devolveria 400.
+- **Retenção não pode nascer da rota genérica de movimentação.** `POST /movimentacoes/v2` tem gate
+  `movimentar` (o mais amplo do módulo) e aceitava qualquer tipo do motor, o que tornava decorativo
+  o gate das rotas específicas — um `ALMOXARIFE` que toma 403 em `POST /materiais/:id/bloquear`
+  (`ajustar_estoque`) conseguia o mesmo efeito com `{tipo:'BLOQUEIO'}` na v2, e `{tipo:'LIBERACAO_INSPECAO'}`
+  soltava quarentena sem `inspecionar`, sem registro de inspeção e sem baixar o retido do item (que
+  ficava indecidível). A rota agora valida contra `TIPOS_MOVIMENTO_ROTA` (`schemas.js`) =
+  `TIPOS_MOVIMENTO` − `ESTORNO` − `TIPOS_RETENCAO` (`schema.js`). É whitelist **da rota**: os
+  serviços internos continuam criando os tipos de retenção pelo motor, que é onde mora o gate certo.
+- **`LIBERACAO_INSPECAO` e `REPROVACAO_INSPECAO` ficaram sem chamador de produção.** A decisão é um
+  único `DECISAO_INSPECAO` atômico, e a rota v2 não os aceita mais. Os ramos e seus testes
+  (`quarentenaMotor.api.test.js`) foram mantidos de propósito: são o contrato do motor (guarda no
+  `WHERE` em vez de `MAX(0,...)`, retenção nunca toca o físico) que o `DECISAO_INSPECAO` herda.
 
 ## Regras essenciais + testes de API exigidos
 
@@ -96,7 +110,12 @@ cruzar `materiais_almoxarifado.quantidade_bloqueada` com o histórico de `inspec
 | Bloquear/desbloquear avulso exige justificativa e gera movimentação no livro | `BLOQUEIO sem justificativa e recusado`, `bloqueio avulso tira do disponivel e deixa rastro` — `bloqueioGuardas.api.test.js` e `inspecaoDecisao.api.test.js` |
 | Desbloquear devolve ao disponível e não passa do que estava bloqueado | `DESBLOQUEIO acima do bloqueado falha em vez de saturar` — `bloqueioGuardas.api.test.js` |
 | Decisão concorrente para o mesmo item não duplica saldo nem libera material reprovado | `decisao parcial concorrente nao duplica saldo nem libera material reprovado` — `inspecaoDecisao.api.test.js` (`91184ca`) |
-| Rotas exigem a permissão correta (`inspecionar` / `ajustar_estoque`) e 403 não altera saldo | `POST inspecionar sem permissao retorna 403...`, `POST bloquear sem permissao retorna 403...` — `server/tests/api/inspecaoRotas.api.test.js` |
+| Rotas exigem a permissão correta (`inspecionar` / `ajustar_estoque`) e 403 não altera saldo | `POST inspecionar sem permissao retorna 403...`, `POST bloquear sem permissao retorna 403...`, `POST desbloquear sem permissao retorna 403...` — `server/tests/api/inspecaoRotas.api.test.js` |
+| A rota genérica de movimentação não pode criar retenção (o gate das rotas específicas não é decorativo) | `v2 recusa os tipos de retencao (so nascem dos servicos com o gate certo)` + `v2 continua aceitando os tipos operacionais do formulario` — `server/tests/api/movimentacoes.api.test.js` |
+| Movimento de inspeção não é estornável pelo livro, e a recusa não deixa o movimento preso como cancelado | `estorno de QUARENTENA e recusado...`, `estorno de DECISAO_INSPECAO e recusado...` — `server/tests/api/estorno.api.test.js`; na tela, `MovimentacoesAlmoxarifado.test.js` |
+| Estorno de `BLOQUEIO` já desfeito recusa em vez de saturar (não cria bloqueado sem lastro) | `estorno de BLOQUEIO ja desfeito recusa em vez de saturar (bloqueio fantasma)` — `server/tests/api/estorno.api.test.js` |
+| `AJUSTE` por localização (e seu estorno) não zera a retenção do material | `AJUSTE por localizacao nao evapora a quarentena do material` + `estorno de AJUSTE por localizacao nao evapora a reserva do material` — `server/tests/api/ajusteLocalizacao.api.test.js` |
+| Quantidade não numérica é recusada com 400 (NaN não pode contornar a guarda de fechamento) | `POST inspecionar com quantidade nao numerica retorna 400...` + `POST bloquear/desbloquear com quantidade nao numerica retorna 400` — `server/tests/api/inspecaoRotas.api.test.js` |
 | Lote reprovado não sai para consumo | não implementado — depende do controle de lote/série (feature 10), que ainda não existe |
 | Desvio autorizado exige responsável + justificativa e fica registrado | não implementado — fora do escopo da Etapa 5 |
 
