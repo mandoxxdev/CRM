@@ -286,6 +286,82 @@ async function migrateCriarAlmoxarifadoGeral(db) {
   console.log('✅ Migração criar_almoxarifado_geral aplicada (ALM-GERAL criado e localizações vinculadas)');
 }
 
+const MIGRATION_BACKFILL_ITEM_EM_INSPECAO = 'backfill_quantidade_em_inspecao_item';
+
+/**
+ * Backfill (correcao de review, Etapa 5): `quantidade_em_inspecao` em
+ * `recebimentos_material_itens_almoxarifado` nasceu com DEFAULT 0. Num banco onde a Task 3/4 ja
+ * rodou ANTES desta coluna existir, um item retido em quarentena fica com 0 na coluna nova
+ * enquanto o pool do material (`materiais_almoxarifado.quantidade_em_inspecao`) ainda segura a
+ * retencao — o item some da fila (`listarInspecoesPendentes`) e `decidirInspecao` recusa com 400
+ * mesmo havendo saldo retido esperando por ele. So sai por SQL cru sem este backfill.
+ *
+ * Criterio: para cada item, soma as movimentacoes `QUARENTENA` que citam o MESMO
+ * (`recebimento_id`, `material_id`) do item — e exatamente isso que `darEntradaEstoque` grava
+ * quando o item retem. So aplica quando esse par e INEQUIVOCO (exatamente um item daquele
+ * recebimento tem aquele material) — se dois itens do MESMO recebimento compartilharem o MESMO
+ * material (incomum: um recebimento normalmente tem um item por material), a movimentacao nao
+ * carrega `recebimento_item_id` para desambiguar quem reteve o que, e esses casos ficam de fora
+ * (permanecem em 0 — limitacao conhecida, documentada no relatório da task, não um critério
+ * inventado). Itens que já têm decisão registrada (linha em
+ * `inspecoes_recebimento_almoxarifado`) NÃO recebem backfill: já foram decididos por um caminho
+ * anterior que baixou o pool do material por conta própria, então continuar em 0 está correto.
+ *
+ * Idempotente pelo ledger (roda uma única vez) — mas o próprio UPDATE também é seguro de
+ * reexecutar: a cláusula `NOT EXISTS` já exclui itens legitimamente decididos.
+ */
+async function migrateBackfillItemQuantidadeEmInspecao(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const applied = await dbGet(db,
+    'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_BACKFILL_ITEM_EM_INSPECAO]);
+  if (applied) return;
+
+  const colInfo = await dbGet(db,
+    `SELECT name FROM pragma_table_info('recebimentos_material_itens_almoxarifado') WHERE name = 'quantidade_em_inspecao'`);
+  if (!colInfo) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_BACKFILL_ITEM_EM_INSPECAO]);
+    return;
+  }
+
+  const result = await dbRun(db, `
+    UPDATE recebimentos_material_itens_almoxarifado
+    SET quantidade_em_inspecao = (
+      SELECT SUM(mov.quantidade) FROM movimentacoes_almoxarifado mov
+      WHERE mov.tipo = 'QUARENTENA'
+        AND mov.recebimento_id = recebimentos_material_itens_almoxarifado.recebimento_id
+        AND mov.material_id = recebimentos_material_itens_almoxarifado.material_id
+    )
+    WHERE COALESCE(quantidade_em_inspecao, 0) = 0
+      AND EXISTS (
+        SELECT 1 FROM movimentacoes_almoxarifado mov
+        WHERE mov.tipo = 'QUARENTENA'
+          AND mov.recebimento_id = recebimentos_material_itens_almoxarifado.recebimento_id
+          AND mov.material_id = recebimentos_material_itens_almoxarifado.material_id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM inspecoes_recebimento_almoxarifado insp
+        WHERE insp.recebimento_item_id = recebimentos_material_itens_almoxarifado.id
+      )
+      AND 1 = (
+        SELECT COUNT(*) FROM recebimentos_material_itens_almoxarifado ri2
+        WHERE ri2.recebimento_id = recebimentos_material_itens_almoxarifado.recebimento_id
+          AND ri2.material_id = recebimentos_material_itens_almoxarifado.material_id
+      )
+  `);
+
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_BACKFILL_ITEM_EM_INSPECAO]);
+  if (result.changes > 0) {
+    console.log(`✅ Migração backfill_quantidade_em_inspecao_item aplicada (${result.changes} item(ns) retroativo(s))`);
+  }
+}
+
 const MIGRATION_HISTORICO_NULLABLE = 'alertas_historico_nullable_material';
 
 async function migrateHistoricoNullableMaterial(db) {
@@ -715,6 +791,7 @@ async function initSchema(db) {
     'quantidade_em_inspecao REAL DEFAULT 0',
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
+  await migrateBackfillItemQuantidadeEmInspecao(db);
 
   await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_pedido_compra (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -173,6 +173,37 @@ async function itemRetido(db, qtd) {
     assert.ok(!fila.some((l) => l.material_id === matComum), 'material nunca retido apareceu na fila');
   });
 
+  // Round 2 do review: os dois casos acima nao discriminam a query nova (por item) da antiga
+  // (por pool do material + NOT EXISTS) — "item decidido" ja saia pelo NOT EXISTS, e "item nunca
+  // retido" usa um material com pool 0, que a query antiga tambem excluia. O caso que discrimina
+  // e o cenario que motivou a mudanca de design: DOIS itens do MESMO material, um retido e outro
+  // nao (ex.: config de inspecao ligada num recebimento, desligada no proximo). Sob a query
+  // antiga, o item B "pegaria carona" no pool do material que pertence ao item A, apareceria na
+  // fila, e decidi-lo consumiria a quarentena de A.
+  await test('item que nao reteve nao aparece na fila so por o MESMO material ter pool retido de outro item', async () => {
+    await setConfig(db, 'inspecao_material_critico', '1');
+    const mat = await novoMaterial(db, 0, { critico: true });
+    const recIdA = await recebimentoComItem(db, mat, 10);
+    await receiptService.aprovarRecebimento(db, ADMIN, recIdA); // item A retem; pool do material = 10
+    const itemA = await dbGet(db,
+      'SELECT id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?', [recIdA]);
+
+    await setConfig(db, 'inspecao_material_critico', '0');
+    const recIdB = await recebimentoComItem(db, mat, 5);
+    await receiptService.aprovarRecebimento(db, ADMIN, recIdB); // item B NAO retem; pool continua 10 (de A)
+    const itemB = await dbGet(db,
+      'SELECT id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?', [recIdB]);
+
+    const fila = await inspectionService.listarInspecoesPendentes(db, {});
+    assert.ok(fila.some((l) => l.item_id === itemA.id), 'item A (retido de verdade) deveria estar na fila');
+    assert.ok(!fila.some((l) => l.item_id === itemB.id),
+      'item B (nunca reteve) nao pode aparecer so porque o material tem pool retido de OUTRO item');
+
+    await assert.rejects(() => inspectionService.decidirInspecao(db, ADMIN, itemB.id,
+      { quantidade_aprovada: 5, quantidade_reprovada: 0 }), /inspe/i,
+      'decidir o item B nao pode ser aceito consumindo a quarentena do item A');
+  });
+
   await test('aprovacao parcial fecha mesmo com imprecisao de ponto flutuante (material fracionado)', async () => {
     const { mat, itemId } = await itemRetido(db, 0.3);
     // 0.1 + 0.2 !== 0.3 em IEEE-754 (da 0.30000000000000004) — material fracionado (kg/m/L) nao
