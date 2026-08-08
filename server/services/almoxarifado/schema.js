@@ -59,6 +59,22 @@ const TIPOS_MOVIMENTO = [
   'ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO', 'ESTORNO',
 ];
 
+// Tipos de RETENCAO: nao mexem no fisico (quantidade_atual), so nas colunas de retencao de
+// materiais_almoxarifado (reservada/bloqueada/em_inspecao). Cada um tem um SERVICO dono, com o
+// gate de permissao proprio e o registro paralelo que da lastro ao numero:
+//   RESERVA / LIBERACAO_RESERVA        -> criarReserva/liberarReserva (`reservar`) + reservas_material_almoxarifado
+//   BLOQUEIO / DESBLOQUEIO             -> inspectionService (`ajustar_estoque`), exige justificativa
+//   QUARENTENA                         -> receiptService.aprovarRecebimento (`receber_material`) + retido no item
+//   LIBERACAO_/REPROVACAO_/DECISAO_INSPECAO -> inspectionService.decidirInspecao (`inspecionar`) + inspecoes_recebimento
+// Por isso a rota generica de movimentacao NAO pode aceita-los (ver TIPOS_MOVIMENTO_ROTA em
+// schemas.js): entrar por ela pula o gate certo E o registro paralelo, deixando o numero da
+// coluna sem nada por tras.
+const TIPOS_RETENCAO = [
+  'RESERVA', 'LIBERACAO_RESERVA',
+  'BLOQUEIO', 'DESBLOQUEIO',
+  'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO',
+];
+
 const FAMILIAS_SEED = [
   ['PAR', 'Parafusos e Porcas', 'Elementos de fixação — parafusos, porcas e arruelas'],
   ['ROL', 'Rolamentos', 'Rolamentos e mancais'],
@@ -1091,5 +1107,6 @@ module.exports = {
   UNIDADES_SEED,
   SETORES_REQUISICAO,
   TIPOS_MOVIMENTO,
+  TIPOS_RETENCAO,
   TIPOS_REQUISICAO,
 };

@@ -132,6 +132,36 @@ async function criarMaterial(db, codigo, qtd = 100) {
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
   });
 
+  // Achado do review final da Etapa 5: a v2 tem gate `movimentar`, mas aceitava QUALQUER tipo do
+  // motor. Um ALMOXARIFE que toma 403 em POST /materiais/:id/bloquear (gate `ajustar_estoque`)
+  // conseguia o MESMO efeito mandando {tipo:'BLOQUEIO'} aqui — o gate da rota específica virava
+  // decorativo. Pior com a quarentena: {tipo:'LIBERACAO_INSPECAO'} soltava retido sem permissão
+  // `inspecionar`, sem registro de inspeção e sem baixar o retido do item (que ficava indecidível).
+  await test('v2 recusa os tipos de retencao (so nascem dos servicos com o gate certo)', async () => {
+    const retencao = ['RESERVA', 'LIBERACAO_RESERVA', 'BLOQUEIO', 'DESBLOQUEIO',
+      'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO'];
+    for (const tipo of retencao) {
+      const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+        .send({ material_id: matId, tipo, quantidade: 1, justificativa: 'forjado' });
+      assert.strictEqual(res.status, 400, `${tipo} deveria ser recusado: ${JSON.stringify(res.body)}`);
+    }
+    const m = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [matId]);
+    assert.strictEqual(m.quantidade_reservada || 0, 0, 'v2 criou reserva');
+    assert.strictEqual(m.quantidade_bloqueada || 0, 0, 'v2 bloqueou material sem ajustar_estoque');
+    assert.strictEqual(m.quantidade_em_inspecao || 0, 0, 'v2 mexeu na quarentena sem inspecionar');
+  });
+
+  // A whitelist não pode fechar demais: os tipos que o formulário oferece e as variantes que
+  // outras telas/relatórios usam continuam passando pela v2.
+  await test('v2 continua aceitando os tipos operacionais do formulario', async () => {
+    const mat = await criarMaterial(db, 'MOV-WL', 100);
+    for (const tipo of ['ENTRADA', 'SAIDA', 'DEVOLUCAO', 'SAIDA_PRODUCAO', 'ENTRADA_COMPRA', 'SUCATA']) {
+      const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+        .send({ material_id: mat, tipo, quantidade: 1, justificativa: 'operacao normal', os_id: 1 });
+      assert.strictEqual(res.status, 201, `${tipo} deveria passar: ${JSON.stringify(res.body)}`);
+    }
+  });
+
   await test('livro registra saldo_anterior/saldo_posterior encadeados', async () => {
     const movs = await dbAll(db,
       `SELECT saldo_anterior, saldo_posterior FROM movimentacoes_almoxarifado

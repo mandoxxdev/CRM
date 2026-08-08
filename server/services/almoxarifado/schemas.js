@@ -1,6 +1,6 @@
 /** Schemas Zod compartilhados do almoxarifado (padrão da fundação — ver validation.js). */
 const { z } = require('zod');
-const { TIPOS_REQUISICAO } = require('./schema');
+const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
 
 const CentroCustoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
@@ -19,9 +19,41 @@ const AlmoxarifadoSchema = z.object({
   ativo: z.union([z.literal(0), z.literal(1)]).optional(),
 });
 
+/**
+ * Tipos que a ROTA genérica de movimentação (POST /movimentacoes/v2) aceita.
+ *
+ * É TIPOS_MOVIMENTO menos ESTORNO e menos TIPOS_RETENCAO. O porquê de cada exclusão:
+ *  - ESTORNO: linha de estorno só nasce dentro de cancelarMovimentacao, nunca de um POST
+ *    (já era recusado pelo motor; aqui a recusa passa a acontecer antes, na validação).
+ *  - TIPOS_RETENCAO: cada um tem um serviço dono com o gate de permissão certo e um registro
+ *    paralelo que dá lastro ao número (reserva, item de recebimento, inspeção — ver schema.js).
+ *    A v2 tem gate `movimentar`, o mais amplo do módulo: aceitar retenção aqui tornava DECORATIVO
+ *    o gate das rotas específicas (um ALMOXARIFE que toma 403 em POST /materiais/:id/bloquear,
+ *    gate `ajustar_estoque`, conseguia o mesmo efeito mandando {tipo:'BLOQUEIO'} para a v2) e
+ *    permitia soltar quarentena com {tipo:'LIBERACAO_INSPECAO'} sem permissão `inspecionar`, sem
+ *    registro de inspeção e sem baixar o retido do item — que ficava indecidível para sempre.
+ *
+ * O que SOBRA é o conjunto operacional: os quatro tipos do formulário (TIPOS_FORM em
+ * MovimentacoesAlmoxarifado.js: ENTRADA, SAIDA, AJUSTE, DEVOLUCAO), as variantes prefixadas
+ * `ENTRADA_`, `SAIDA_` e `AJUSTE_` usadas por outras telas e relatórios, TRANSFERENCIA (a rota
+ * /transferencias força esse tipo, mas a v2 também o aceita) e SUCATA, PERDA e RETRABALHO —
+ * todos mexem no físico e o gate `movimentar` é exatamente o que se espera deles.
+ *
+ * ATENÇÃO: esta lista é da ROTA, não do motor. Os serviços internos (returnService,
+ * receiptService, requisitionService, inspectionService, criarReserva/liberarReserva) chamam
+ * stockService.registrarMovimentacao DIRETO e continuam podendo criar os tipos de retenção —
+ * é lá que mora o gate correto.
+ */
+const TIPOS_MOVIMENTO_ROTA = TIPOS_MOVIMENTO.filter(
+  (t) => t !== 'ESTORNO' && !TIPOS_RETENCAO.includes(t),
+);
+
 const MovimentacaoSchema = z.object({
   material_id: z.number().int().positive(),
-  tipo: z.string().min(1),
+  tipo: z.string().min(1).refine((t) => TIPOS_MOVIMENTO_ROTA.includes(t), {
+    message: 'tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção '
+      + 'só podem ser criados pelas telas de Reservas e Inspeções)',
+  }),
   quantidade: z.number().min(0, 'quantidade deve ser maior que zero'),
   motivo: z.string().optional(),
   referencia: z.string().optional(),
@@ -229,6 +261,7 @@ const RequisicaoSchema = z.object({
 });
 
 module.exports = {
-  CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema,
+  CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
+  RegularizacaoSchema, CancelamentoSchema,
   MaterialSchema, MaterialUpdateSchema, RequisicaoSchema, ItemRequisicaoSchema,
 };

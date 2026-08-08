@@ -1,3 +1,19 @@
+/**
+ * Contrato dos tipos de quarentena NO MOTOR (stockService.registrarMovimentacao) — chamada
+ * direta, de proposito: nao ha rota que aceite esses tipos.
+ *
+ * Depois do review final da Etapa 5, POST /movimentacoes/v2 tem whitelist (TIPOS_MOVIMENTO_ROTA
+ * em schemas.js) e recusa todo tipo de retencao — quem os cria sao os servicos com o gate certo:
+ * QUARENTENA nasce de receiptService.aprovarRecebimento e DECISAO_INSPECAO de
+ * inspectionService.decidirInspecao (ambos cobertos em recebimentoQuarentena/inspecaoDecisao).
+ *
+ * LIBERACAO_INSPECAO e REPROVACAO_INSPECAO ficaram SEM chamador de producao — a decisao passou a
+ * ser um unico DECISAO_INSPECAO atomico, justamente para nao ter a janela entre "liberar" e
+ * "reprovar". Os testes deles seguem valendo e NAO devem ser apagados: sao os ramos do motor que
+ * provam as invariantes que o DECISAO_INSPECAO herda (guarda no WHERE em vez de MAX(0,...),
+ * retencao nunca mexe no fisico, reprovar move de em_inspecao para bloqueada num movimento so).
+ * Se um dia a decisao voltar a ser fatiada, o contrato ja esta testado aqui.
+ */
 const assert = require('assert');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
