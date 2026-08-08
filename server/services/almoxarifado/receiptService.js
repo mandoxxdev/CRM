@@ -312,16 +312,12 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     WHERE ri.recebimento_id = ?`, [recebimentoId]);
 
   for (const item of itens) {
-    if (item.material_critico) {
-      const insp = await dbGet(db,
-        'SELECT * FROM inspecoes_recebimento_almoxarifado WHERE recebimento_item_id = ? ORDER BY id DESC LIMIT 1',
-        [item.id]);
-      const cfg = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'inspecao_material_critico'");
-      if (cfg?.valor === '1' && !insp) {
-        throw Object.assign(new Error(`Item crítico #${item.id} requer inspeção`), { status: 400 });
-      }
-      if (insp && insp.acao === 'DEVOLVER') continue;
-    }
+    // Etapa 5: a inspecao deixou de ser PRE-REQUISITO da entrada e passou a ser passo posterior.
+    // O material esta fisicamente no galpao desde o descarregamento — barrar a entrada fazia o
+    // sistema negar o que existe, e o bloqueio da inspecao recaia sobre saldo que ainda nao
+    // tinha entrado. Agora entra sempre; o que exige inspecao entra RETIDO.
+    const cfg = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'inspecao_material_critico'");
+    const reter = !!item.material_critico && cfg?.valor === '1';
 
     const qtd = item.quantidade_recebida || item.quantidade_esperada;
     if (qtd > 0) {
@@ -336,6 +332,17 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
         lote: item.lote,
         documento_vinculado: rec.numero,
       });
+
+      if (reter) {
+        await registrarMovimentacao(db, user, {
+          material_id: item.material_id,
+          tipo: 'QUARENTENA',
+          quantidade: qtd,
+          motivo: `Retido para inspeção — recebimento ${rec.numero}`,
+          justificativa: `Material crítico aguardando inspeção (recebimento ${rec.numero})`,
+          recebimento_id: recebimentoId,
+        });
+      }
     }
   }
 }
