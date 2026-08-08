@@ -16,20 +16,47 @@ const { registrarMovimentacao } = require('./stockService');
 
 const ENCAMINHAMENTOS = ['DEVOLVER', 'ANALISE_ENGENHARIA', 'SUBSTITUICAO'];
 
+/**
+ * `retido` vem de `recebimentos_material_itens_almoxarifado.quantidade_em_inspecao` — o quanto
+ * ESTE item especifico reteve (Task 3 grava isso em darEntradaEstoque), nao mais inferido de
+ * quantidade_recebida/esperada. quantidade_em_inspecao do MATERIAL e um pool compartilhado entre
+ * itens de recebimentos diferentes; a coluna por item e a fonte de verdade de quanto cada
+ * decisao pode reivindicar, e o que a fila de pendentes filtra.
+ *
+ * A decisao reivindica o saldo em DUAS fases, sem transacao (padrao do modulo — atomicidade via
+ * UPDATE condicional no proprio WHERE):
+ *   Fase 1 — reivindica o retido do ITEM (recurso especifico desta decisao).
+ *   Fase 2 — reivindica o saldo do MATERIAL via o tipo DECISAO_INSPECAO (baixa o retido inteiro
+ *            de quantidade_em_inspecao e soma a parte reprovada em quantidade_bloqueada no MESMO
+ *            UPDATE). Se falhar, compensa a Fase 1 (mesmo precedente do consumo de reserva em
+ *            stockService.js:361-367 — um passo posterior que falha tem de devolver o que o
+ *            passo anterior reivindicou).
+ * As duas fases evitam a janela que existia com LIBERACAO_INSPECAO + REPROVACAO_INSPECAO como
+ * chamadas independentes: uma decisao concorrente para o MESMO item nao pode mais "passar" só
+ * porque o pool do material ainda tinha saldo de OUTRO item retido.
+ */
 async function decidirInspecao(db, user, itemId, data = {}) {
-  const item = await dbGet(db, `SELECT ri.*, m.material_critico
-    FROM recebimentos_material_itens_almoxarifado ri
-    JOIN materiais_almoxarifado m ON ri.material_id = m.id WHERE ri.id = ?`, [itemId]);
+  const item = await dbGet(db,
+    'SELECT * FROM recebimentos_material_itens_almoxarifado WHERE id = ?', [itemId]);
   if (!item) throw Object.assign(new Error('Item não encontrado'), { status: 404 });
+
+  const retido = item.quantidade_em_inspecao || 0;
+  // Item sem retido (nunca reteve, ou ja foi decidido antes): recusa ANTES de qualquer efeito —
+  // sem isto, 0/0 passava a guarda de fechamento e gravava uma inspecao vazia sobre nada.
+  if (retido <= 0) {
+    throw Object.assign(new Error('Item não possui quantidade em inspeção retida'), { status: 400 });
+  }
 
   const aprovada = Number(data.quantidade_aprovada || 0);
   const reprovada = Number(data.quantidade_reprovada || 0);
-  const retido = item.quantidade_recebida || item.quantidade_esperada || 0;
 
-  // Fechar a conta e obrigatorio: se aprovado + reprovado for menor que o retido, sobra saldo
+  // Fechar a conta e obrigatorio: se aprovado + reprovado nao bater com o retido, sobra saldo
   // preso em quarentena que ninguem mais vai olhar — a reserva zumbi da Etapa 4 em outra roupa.
   // Validado ANTES de qualquer INSERT/movimentacao — o saldo nao pode mudar quando isto recusa.
-  if (aprovada + reprovada !== retido) {
+  // Epsilon porque quantidade e REAL: em material fracionado (kg, m, L) `10.2 + 0.3 === 10.5` e
+  // false em IEEE-754 (da 10.499999999999998) — igualdade estrita travaria aprovacao parcial
+  // valida com um erro que pareceria aleatorio.
+  if (Math.abs((aprovada + reprovada) - retido) > 1e-6) {
     throw Object.assign(
       new Error(`Aprovado + reprovado (${aprovada + reprovada}) tem de fechar com o retido (${retido})`),
       { status: 400 });
@@ -38,6 +65,47 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     throw Object.assign(new Error(`Encaminhamento inválido: ${data.encaminhamento}`), { status: 400 });
   }
 
+  // Fase 1 — reivindica o retido do ITEM. E o guarda real contra decidir o mesmo item duas
+  // vezes (inclusive concorrente): a segunda tentativa le quantidade_em_inspecao=0 e este UPDATE
+  // nao casa, ANTES de tocar no saldo do material.
+  const claimItem = await dbGet(db, `UPDATE recebimentos_material_itens_almoxarifado
+    SET quantidade_em_inspecao = quantidade_em_inspecao - ?
+    WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ?
+    RETURNING id`, [retido, itemId, retido]);
+  if (!claimItem) {
+    throw Object.assign(new Error('Item já foi decidido por outra inspeção'), { status: 400 });
+  }
+
+  let justificativaMovimento = data.observacoes;
+  if (!justificativaMovimento) {
+    if (reprovada > 0 && aprovada > 0) justificativaMovimento = 'Inspeção parcial — aprovado e reprovado';
+    else if (reprovada > 0) justificativaMovimento = `Inspeção reprovada${data.encaminhamento ? ` — ${data.encaminhamento}` : ''}`;
+    else justificativaMovimento = 'Inspeção aprovada';
+  }
+
+  // Fase 2 — reivindica o saldo do MATERIAL. DECISAO_INSPECAO baixa o retido inteiro de
+  // quantidade_em_inspecao e soma a parte reprovada em quantidade_bloqueada no MESMO UPDATE
+  // (ver stockService.js) — aprovar e reprovar deixaram de ser duas chamadas independentes.
+  try {
+    await registrarMovimentacao(db, user, {
+      material_id: item.material_id, tipo: 'DECISAO_INSPECAO', quantidade: retido,
+      quantidade_reprovada: reprovada,
+      motivo: reprovada > 0 ? (aprovada > 0 ? 'Inspeção parcial' : 'Inspeção reprovada') : 'Inspeção aprovada',
+      justificativa: justificativaMovimento,
+      recebimento_id: item.recebimento_id,
+    });
+  } catch (e) {
+    // Sem transacao neste modulo: se o claim do material falhar depois do claim do item,
+    // devolve o retido ao item para nao deixar saldo no limbo (nem preso, nem contabilizado
+    // duas vezes numa proxima tentativa).
+    await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
+      SET quantidade_em_inspecao = quantidade_em_inspecao + ? WHERE id = ?`, [retido, itemId]);
+    throw e;
+  }
+
+  // INSERT da decisao só DEPOIS que os dois claims (item + material) confirmaram — assim uma
+  // tentativa que falha (item ja decidido, ou material rejeitando o claim) nao deixa historico
+  // de uma decisao que nunca teve efeito no saldo.
   const ins = await dbRun(db, `INSERT INTO inspecoes_recebimento_almoxarifado
     (recebimento_item_id, conforme, divergencia_quantidade, divergencia_dimensional,
      certificado_ausente, dano_fisico, material_incorreto, acao, responsavel_id, responsavel_nome,
@@ -50,28 +118,7 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     data.acao || null, user.id, user.nome || user.email, data.observacoes || null,
     aprovada, reprovada, data.encaminhamento || null,
   ]);
-  const inspecaoId = ins.lastID;
-
-  if (aprovada > 0) {
-    await registrarMovimentacao(db, user, {
-      material_id: item.material_id, tipo: 'LIBERACAO_INSPECAO', quantidade: aprovada,
-      motivo: 'Inspeção aprovada', justificativa: data.observacoes || 'Inspeção aprovada',
-      recebimento_id: item.recebimento_id,
-    });
-  }
-  if (reprovada > 0) {
-    // A guarda que impede decidir a mesma inspecao duas vezes vem do proprio motor: na segunda
-    // chamada `quantidade_em_inspecao` ja e 0 e o UPDATE condicional de LIBERACAO_INSPECAO/
-    // REPROVACAO_INSPECAO (Task 1) nao casa, lancando 400. Nao existe flag `ja_decidido` aqui —
-    // seria uma segunda fonte de verdade que poderia divergir do saldo real.
-    await registrarMovimentacao(db, user, {
-      material_id: item.material_id, tipo: 'REPROVACAO_INSPECAO', quantidade: reprovada,
-      motivo: 'Inspeção reprovada',
-      justificativa: data.observacoes || `Inspeção reprovada${data.encaminhamento ? ` — ${data.encaminhamento}` : ''}`,
-      recebimento_id: item.recebimento_id,
-    });
-  }
-  return { id: inspecaoId, quantidade_aprovada: aprovada, quantidade_reprovada: reprovada };
+  return { id: ins.lastID, quantidade_aprovada: aprovada, quantidade_reprovada: reprovada };
 }
 
 async function bloquearMaterial(db, user, materialId, data = {}) {
@@ -105,24 +152,21 @@ async function desbloquearMaterial(db, user, materialId, data = {}) {
 }
 
 /**
- * Fila de inspecao: itens de recebimento cujo material ainda tem saldo em quarentena e que
- * ainda nao receberam decisao (nenhuma linha em inspecoes_recebimento_almoxarifado). Cada item
- * decidido some da fila mesmo que o material continue com OUTRO item ainda retido — a decisao
- * e por item de recebimento, nao por material.
+ * Fila de inspecao: itens de recebimento que ainda tem retido (quantidade_em_inspecao PRÓPRIO
+ * do item > 0). Filtrar pelo item (nao mais pelo pool do material) evita dois furos: um item de
+ * material que virou critico DEPOIS de outro recebimento nao aparece so por o material ter saldo
+ * em quarentena de outro item; e um item decidido (mesmo parcialmente) sai da fila porque
+ * decidirInspecao sempre baixa o retido do item por inteiro numa unica decisao.
  */
 async function listarInspecoesPendentes(db, filtros = {}) {
   let sql = `SELECT ri.id as item_id, ri.recebimento_id, ri.material_id,
-      COALESCE(ri.quantidade_recebida, ri.quantidade_esperada) as quantidade_retida,
+      ri.quantidade_em_inspecao as quantidade_retida,
       m.codigo as material_codigo, m.nome as material_nome, m.unidade as material_unidade,
       r.numero as recebimento_numero, r.nota_fiscal, r.created_at as data_entrada
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON ri.material_id = m.id
     JOIN recebimentos_material_almoxarifado r ON ri.recebimento_id = r.id
-    WHERE COALESCE(m.quantidade_em_inspecao, 0) > 0
-      AND NOT EXISTS (
-        SELECT 1 FROM inspecoes_recebimento_almoxarifado insp
-        WHERE insp.recebimento_item_id = ri.id
-      )`;
+    WHERE COALESCE(ri.quantidade_em_inspecao, 0) > 0`;
   const params = [];
   if (filtros.material_id) { sql += ' AND ri.material_id = ?'; params.push(filtros.material_id); }
   if (filtros.recebimento_id) { sql += ' AND ri.recebimento_id = ?'; params.push(filtros.recebimento_id); }

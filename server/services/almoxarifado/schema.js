@@ -50,6 +50,12 @@ const TIPOS_MOVIMENTO = [
   // Etapa 5 — quarentena. Simetria de BLOQUEIO/DESBLOQUEIO: mexem em coluna de retencao
   // sem tocar o fisico, porque o material esta no galpao o tempo todo.
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO',
+  // Etapa 5, correcao de review: uma decisao de inspecao pode aprovar parte e reprovar parte do
+  // MESMO retido. LIBERACAO_INSPECAO + REPROVACAO_INSPECAO como duas chamadas independentes
+  // abrem uma janela entre elas onde uma decisao concorrente pode consumir o em_inspecao pela
+  // metade — DECISAO_INSPECAO baixa o retido inteiro e soma a parte reprovada em bloqueada no
+  // MESMO UPDATE (ver stockService.js).
+  'DECISAO_INSPECAO',
   'ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO', 'ESTORNO',
 ];
 
@@ -701,6 +707,12 @@ async function initSchema(db) {
     'valor_icms REAL DEFAULT 0',
     'valor_ipi REAL DEFAULT 0',
     'reducao_icms_percent REAL DEFAULT 0',
+    // Etapa 5, correcao de review: quanto DESTE item especifico esta retido em quarentena.
+    // Antes a inspecao inferia o retido de quantidade_recebida (que conferirRecebimento pode
+    // sobrescrever sem guarda) e a fila filtrava por quantidade_em_inspecao do MATERIAL (um pool
+    // compartilhado entre itens de recebimentos diferentes). Rastrear por item e o mesmo rigor
+    // da Etapa 4, que vinculou a reserva ao item via item_requisicao_id.
+    'quantidade_em_inspecao REAL DEFAULT 0',
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
 

@@ -149,6 +149,64 @@ async function itemRetido(db, qtd) {
     assert.ok(fila.some((l) => l.material_id === mat), 'item retido fora da fila');
   });
 
+  // Correcao de review: a fila antes filtrava pelo POOL do material (quantidade_em_inspecao em
+  // materiais_almoxarifado), que e compartilhado entre itens de recebimentos diferentes. Um item
+  // que nunca reteve nada podia colar na fila so por o material ter saldo retido de OUTRO item,
+  // e um item decidido nao tinha garantia de sumir se outro item do mesmo material ainda
+  // estivesse retido. Agora filtra por recebimentos_material_itens_almoxarifado.quantidade_em_
+  // inspecao (por item), que decidirInspecao zera no ato da decisao.
+  await test('item decidido sai da fila de pendentes', async () => {
+    const { itemId } = await itemRetido(db, 6);
+    let fila = await inspectionService.listarInspecoesPendentes(db, {});
+    assert.ok(fila.some((l) => l.item_id === itemId), 'item recem retido deveria estar na fila');
+
+    await inspectionService.decidirInspecao(db, ADMIN, itemId, { quantidade_aprovada: 6, quantidade_reprovada: 0 });
+    fila = await inspectionService.listarInspecoesPendentes(db, {});
+    assert.ok(!fila.some((l) => l.item_id === itemId), 'item decidido continua na fila');
+  });
+
+  await test('item nunca retido (material comum) nao aparece na fila', async () => {
+    const matComum = await novoMaterial(db, 0, { critico: false });
+    const recId = await recebimentoComItem(db, matComum, 9);
+    await receiptService.aprovarRecebimento(db, ADMIN, recId);
+    const fila = await inspectionService.listarInspecoesPendentes(db, {});
+    assert.ok(!fila.some((l) => l.material_id === matComum), 'material nunca retido apareceu na fila');
+  });
+
+  await test('aprovacao parcial fecha mesmo com imprecisao de ponto flutuante (material fracionado)', async () => {
+    const { mat, itemId } = await itemRetido(db, 0.3);
+    // 0.1 + 0.2 !== 0.3 em IEEE-754 (da 0.30000000000000004) — material fracionado (kg/m/L) nao
+    // pode travar aprovacao parcial valida por causa de erro de ponto flutuante.
+    await inspectionService.decidirInspecao(db, ADMIN, itemId, { quantidade_aprovada: 0.1, quantidade_reprovada: 0.2 });
+    const m = await material(db, mat);
+    assert.strictEqual(m.quantidade_em_inspecao, 0);
+    assert.ok(Math.abs(m.quantidade_bloqueada - 0.2) < 1e-9, `bloqueada deveria ser ~0.2, veio ${m.quantidade_bloqueada}`);
+    assert.ok(Math.abs((await disponivel(db, mat)) - 0.1) < 1e-9, 'disponivel deveria ser ~0.1');
+  });
+
+  // CRITICAL (review da Task 4): decidir aprovado/reprovado como duas chamadas independentes
+  // (LIBERACAO_INSPECAO depois REPROVACAO_INSPECAO) abria uma janela entre as duas — uma decisao
+  // concorrente para o MESMO item podia consumir o em_inspecao pela metade, liberando material
+  // reprovado como bom ou deixando saldo preso em quarentena para sempre se o segundo passo
+  // falhasse. O claim em duas fases (item primeiro, depois material, no MESMO UPDATE via
+  // DECISAO_INSPECAO) fecha essa janela: das duas decisoes concorrentes para o mesmo item,
+  // exatamente uma pode vencer.
+  await test('decisao parcial concorrente nao duplica saldo nem libera material reprovado', async () => {
+    const { mat, itemId } = await itemRetido(db, 100);
+    const decidir = () => inspectionService.decidirInspecao(db, ADMIN, itemId, {
+      quantidade_aprovada: 50, quantidade_reprovada: 50, observacoes: 'metade avariada' });
+    const resultados = await Promise.allSettled([decidir(), decidir()]);
+    const sucesso = resultados.filter((r) => r.status === 'fulfilled');
+    const falha = resultados.filter((r) => r.status === 'rejected');
+    assert.strictEqual(sucesso.length, 1, 'duas decisoes concorrentes para o mesmo item nao podem ambas ter sucesso');
+    assert.strictEqual(falha.length, 1, 'a decisao perdedora tem de ser rejeitada, nao ignorada em silencio');
+
+    const m = await material(db, mat);
+    assert.strictEqual(m.quantidade_em_inspecao, 0, 'saldo ficou preso em quarentena para sempre');
+    assert.strictEqual(m.quantidade_bloqueada, 50, 'reprovado nao pode ter sido contado duas vezes nem sumido');
+    assert.strictEqual(await disponivel(db, mat), 50, 'material reprovado nao pode ter virado disponivel');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

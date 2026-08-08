@@ -342,6 +342,13 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
           justificativa: `Material crítico aguardando inspeção (recebimento ${rec.numero})`,
           recebimento_id: recebimentoId,
         });
+        // Etapa 5, correcao de review: quantidade_em_inspecao do MATERIAL e um pool
+        // compartilhado entre itens de recebimentos diferentes. Sem isto, inspectionService não
+        // tinha como saber quanto DESTE item especifico esta retido — inferia de
+        // quantidade_recebida, que conferirRecebimento pode sobrescrever sem guarda de status.
+        await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
+          SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ? WHERE id = ?`,
+          [qtd, item.id]);
       }
     }
   }

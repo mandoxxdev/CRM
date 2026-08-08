@@ -24,6 +24,7 @@ const REGRAS_VINCULO = {
   BLOQUEIO: { vinculo: 'nenhum', justificativa: true },
   DESBLOQUEIO: { vinculo: 'nenhum', justificativa: true },
   REPROVACAO_INSPECAO: { vinculo: 'nenhum', justificativa: true },
+  DECISAO_INSPECAO: { vinculo: 'nenhum', justificativa: true },
 };
 
 function avaliarRegrasVinculo(tipo, params) {

@@ -186,7 +186,7 @@ async function registrarMovimentacao(db, user, params) {
     material_id, tipo, quantidade, motivo, referencia, observacoes,
     localizacao_origem_id, localizacao_destino_id, lote, projeto_id, os_id, cliente_id,
     documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id, centro_custo_id,
-    emergencial, custo_unitario: custoInformado,
+    emergencial, custo_unitario: custoInformado, quantidade_reprovada,
   } = params;
 
   if (!user?.id) throw Object.assign(new Error('Usuário responsável obrigatório'), { status: 400 });
@@ -316,12 +316,39 @@ async function registrarMovimentacao(db, user, params) {
         { status: 400 });
     }
     saldoPosterior = saldoAnterior;
+  } else if (tipo === 'DECISAO_INSPECAO') {
+    // Correcao de review (Etapa 5): uma decisao de inspecao pode aprovar parte e reprovar parte
+    // do MESMO retido (`quantidade` = total decidido, `quantidade_reprovada` = a parte dele que
+    // vai para bloqueada). Fazer isso como duas chamadas independentes (LIBERACAO_INSPECAO
+    // seguida de REPROVACAO_INSPECAO) abre uma janela ENTRE as duas onde uma decisao concorrente
+    // pode consumir o em_inspecao pela metade — o resultado seria material reprovado liberado
+    // como bom, ou saldo preso em quarentena para sempre se o segundo passo falhar. Aqui os dois
+    // efeitos (baixa o retido inteiro, soma a parte reprovada em bloqueada) acontecem no MESMO
+    // UPDATE condicional, atomico.
+    const reprovadaQtd = Number(quantidade_reprovada || 0);
+    if (reprovadaQtd < 0 || reprovadaQtd > quantidade) {
+      throw Object.assign(
+        new Error('quantidade_reprovada não pode ser negativa nem maior que a quantidade decidida'),
+        { status: 400 });
+    }
+    const claim = await dbGet(db, `UPDATE materiais_almoxarifado
+      SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) - ?,
+          quantidade_bloqueada   = COALESCE(quantidade_bloqueada,0) + ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ?
+      RETURNING id`, [quantidade, reprovadaQtd, material_id, quantidade]);
+    if (!claim) {
+      throw Object.assign(
+        new Error(`Quantidade em inspeção insuficiente: ${material.quantidade_em_inspecao || 0}`),
+        { status: 400 });
+    }
+    saldoPosterior = saldoAnterior;
   }
 
   let saldoAnteriorReal = saldoAnterior;
 
   if (!['TRANSFERENCIA', 'BLOQUEIO', 'DESBLOQUEIO', 'RESERVA', 'LIBERACAO_RESERVA',
-        'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO'].includes(tipo)) {
+        'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO'].includes(tipo)) {
     if (tiposSaida.includes(tipo)) {
       // Decremento atômico: o próprio UPDATE valida o disponível sob o lock de linha do
       // SQLite, fechando a janela de corrida entre a leitura acima e a escrita. RETURNING
