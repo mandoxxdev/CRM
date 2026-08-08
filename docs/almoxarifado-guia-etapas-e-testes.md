@@ -161,7 +161,7 @@ Vá em **Almoxarifado → Requisições**.
 
 ---
 
-## Etapa 4 — Reservas de Estoque (BACKEND ENTREGUE — 2026-08-05 · falta a tela)
+## Etapa 4 — Reservas de Estoque (ENTREGUE — backend 2026-08-05, tela 2026-08-06)
 
 Reservar material é "separar no sistema" antes de entregar: o saldo continua fisicamente lá, mas deixa de estar disponível para outra pessoa pegar.
 
