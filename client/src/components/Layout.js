@@ -331,6 +331,7 @@ const Layout = () => {
     { path: '/almoxarifado/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/almoxarifado/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimentos' },
+    { path: '/almoxarifado/inspecoes', icon: FiCheckSquare, label: 'Inspeções' },
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
