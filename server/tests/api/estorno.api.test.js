@@ -2,6 +2,11 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const stockService = require('../../services/almoxarifado/stockService');
+
+// Mesmo usuário do stub de auth do harness — os movimentos de retenção nascem dos serviços
+// (a rota v2 não aceita tipo de retenção), então precisam de um `user` na chamada direta.
+const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin' };
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -170,6 +175,77 @@ async function criarRequisicaoEmSeparacao(db, materialId, quantidade) {
 
     const movDepois = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [mov.id]);
     assert.strictEqual(movDepois.cancelado, 0, 'movimentação não deveria estar marcada como cancelada');
+  });
+
+  // ── Estorno x tipos de retenção (achado do review final da Etapa 5) ───────────
+  // cancelarMovimentacao só sabia reverter BLOQUEIO/DESBLOQUEIO. Os tipos da quarentena caíam
+  // no vazio: gravava-se a linha ESTORNO e marcava-se a original cancelada, mas nenhuma coluna
+  // de retenção mudava — o livro afirmava uma reversão que não aconteceu.
+
+  await test('estorno de QUARENTENA e recusado sem marcar cancelado nem mexer no retido', async () => {
+    const mat = await criarMaterial(db, 'EST-010', 100);
+    const quar = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'QUARENTENA', quantidade: 40, justificativa: 'material critico' });
+
+    const est = await request(app).post(`/api/almoxarifado/movimentacoes/${quar.id}/cancelar`)
+      .send({ motivo: 'estornando a quarentena' });
+    assert.strictEqual(est.status, 400, JSON.stringify(est.body));
+    assert.match(est.body.error || '', /inspe/i, 'a mensagem tem de apontar a tela de Inspeções');
+
+    const m = await dbGet(db, 'SELECT quantidade_em_inspecao FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_em_inspecao, 40, 'a quarentena tem de continuar de pe');
+    const mov = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [quar.id]);
+    assert.strictEqual(mov.cancelado, 0, 'marcou cancelado sem reverter nada');
+    const estornos = await dbGet(db,
+      `SELECT COUNT(*) as n FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'ESTORNO'`, [mat]);
+    assert.strictEqual(estornos.n, 0, 'gravou ESTORNO de uma reversao que nao aconteceu');
+  });
+
+  await test('estorno de DECISAO_INSPECAO e recusado (reversao e pela tela de Inspecoes)', async () => {
+    const mat = await criarMaterial(db, 'EST-011', 100);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'QUARENTENA', quantidade: 20, justificativa: 'material critico' });
+    const dec = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'DECISAO_INSPECAO', quantidade: 20, quantidade_reprovada: 5,
+      justificativa: 'inspecao parcial' });
+
+    const est = await request(app).post(`/api/almoxarifado/movimentacoes/${dec.id}/cancelar`)
+      .send({ motivo: 'estornando a decisao' });
+    assert.strictEqual(est.status, 400, JSON.stringify(est.body));
+
+    const m = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_em_inspecao, 0);
+    assert.strictEqual(m.quantidade_bloqueada, 5, 'a decisao tem de continuar valendo');
+  });
+
+  await test('estorno de BLOQUEIO ja desfeito recusa em vez de saturar (bloqueio fantasma)', async () => {
+    const mat = await criarMaterial(db, 'EST-012', 100);
+    const blq = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'BLOQUEIO', quantidade: 10, justificativa: 'avaria' });
+    const des = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'DESBLOQUEIO', quantidade: 10, justificativa: 'peca recuperada' });
+
+    // O bloqueio já foi desfeito pelo DESBLOQUEIO: não há o que reverter. Com MAX(0,...) isto
+    // "passava" saturando em 0, e o estorno seguinte do DESBLOQUEIO ressuscitava 10 bloqueados
+    // sem NENHUM bloqueio vivo por trás — dois cliques na tela do livro.
+    const estBlq = await request(app).post(`/api/almoxarifado/movimentacoes/${blq.id}/cancelar`)
+      .send({ motivo: 'lancamento errado' });
+    assert.strictEqual(estBlq.status, 400, `estorno de bloqueio ja desfeito deveria recusar: ${JSON.stringify(estBlq.body)}`);
+    const blqRow = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [blq.id]);
+    assert.strictEqual(blqRow.cancelado, 0, 'o BLOQUEIO nao pode ficar preso como cancelado');
+
+    const estDes = await request(app).post(`/api/almoxarifado/movimentacoes/${des.id}/cancelar`)
+      .send({ motivo: 'desbloqueio errado' });
+    assert.strictEqual(estDes.status, 200, JSON.stringify(estDes.body));
+    const m1 = await dbGet(db, 'SELECT quantidade_bloqueada FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m1.quantidade_bloqueada, 10, 'o BLOQUEIO original voltou a valer, o bloqueado tem lastro');
+
+    // e agora, com o bloqueio de novo vivo, estornar o BLOQUEIO funciona e zera.
+    const estBlq2 = await request(app).post(`/api/almoxarifado/movimentacoes/${blq.id}/cancelar`)
+      .send({ motivo: 'agora sim' });
+    assert.strictEqual(estBlq2.status, 200, JSON.stringify(estBlq2.body));
+    const m2 = await dbGet(db, 'SELECT quantidade_bloqueada FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m2.quantidade_bloqueada, 0);
   });
 
   await close();

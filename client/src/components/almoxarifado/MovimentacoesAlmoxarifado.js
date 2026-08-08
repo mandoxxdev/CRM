@@ -23,10 +23,18 @@ const TIPOS = [
   { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
 
-// Tipos que não podem ser estornados pelo botão do livro: já são estorno, ou são
-// reserva/liberação de reserva (desfeitas pela própria tela de reservas, não pelo
-// cancelamento de movimentação — ver stockService.cancelarMovimentacao no servidor).
-const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !['RESERVA', 'LIBERACAO_RESERVA'].includes(m.tipo);
+// Tipos que não podem ser estornados pelo botão do livro (espelha as recusas de
+// stockService.cancelarMovimentacao no servidor — a lista aqui é só para não oferecer um botão
+// que sempre volta 400):
+//  - ESTORNO: estorno de estorno não existe;
+//  - RESERVA/LIBERACAO_RESERVA: desfeitas pela tela de Reservas;
+//  - QUARENTENA/LIBERACAO_INSPECAO/REPROVACAO_INSPECAO/DECISAO_INSPECAO: o retido pertence ao
+//    item do recebimento, então rever uma decisão é pela tela de Inspeções, não pelo livro.
+const TIPOS_SEM_ESTORNO = [
+  'RESERVA', 'LIBERACAO_RESERVA',
+  'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO',
+];
+const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !TIPOS_SEM_ESTORNO.includes(m.tipo);
 
 const MovimentacoesAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();

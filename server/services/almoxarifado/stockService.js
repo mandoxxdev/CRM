@@ -538,6 +538,18 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (['RESERVA', 'LIBERACAO_RESERVA'].includes(mov.tipo)) {
     throw Object.assign(new Error('Use a liberação de reserva para desfazer reservas'), { status: 400 });
   }
+  // Etapa 5 (achado do review final): os tipos da quarentena não têm ramo de reversão aqui —
+  // sem esta recusa, estornar uma QUARENTENA gravava a linha ESTORNO e marcava a original
+  // cancelada SEM tocar em quantidade_em_inspecao: o livro afirmava uma reversão que não
+  // aconteceu. Reverter de verdade também não caberia aqui: o retido de uma decisão pertence ao
+  // ITEM do recebimento (recebimentos_material_itens_almoxarifado.quantidade_em_inspecao), que
+  // este serviço não conhece — devolver só o pool do material recriaria o descasamento
+  // item x material que a Task 4 fechou. A porta certa é a tela de Inspeções.
+  if (['QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO'].includes(mov.tipo)) {
+    throw Object.assign(
+      new Error('Movimento de inspeção não pode ser estornado pelo livro — use a tela de Inspeções para rever a decisão'),
+      { status: 400 });
+  }
   if (mov.requisicao_id) {
     throw Object.assign(new Error('Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)'), { status: 400 });
   }
@@ -628,7 +640,21 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, destino.id]);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, origem.id]);
     } else if (mov.tipo === 'BLOQUEIO') {
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = MAX(0, COALESCE(quantidade_bloqueada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
+      // Guarda condicional em vez de MAX(0,...) — mesma correção do ramo DESBLOQUEIO de
+      // registrarMovimentacao (achado do review final). Com a saturação, estornar um BLOQUEIO
+      // que o DESBLOQUEIO já tinha desfeito "passava" (0 - 10 saturava em 0) e o estorno
+      // seguinte do DESBLOQUEIO somava 10 de volta: quantidade_bloqueada = 10 sem NENHUM
+      // bloqueio vivo por trás, a dois cliques na tela do livro. Recusando aqui, o BLOQUEIO
+      // continua vivo — e o catch abaixo desfaz o claim, então ele não fica preso como cancelado.
+      const claim = await dbGet(db, `UPDATE materiais_almoxarifado
+        SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) - ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ?
+        RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]);
+      if (!claim) {
+        throw Object.assign(new Error(
+          `Não é possível estornar: o bloqueio já foi desfeito (quantidade bloqueada: ${material.quantidade_bloqueada || 0})`),
+          { status: 400 });
+      }
     } else if (mov.tipo === 'DESBLOQUEIO') {
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
     }
