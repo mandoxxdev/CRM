@@ -80,9 +80,15 @@ cruzar `materiais_almoxarifado.quantidade_bloqueada` com o histórico de `inspec
   reversão, porque o retido pertence ao ITEM do recebimento
   (`recebimentos_material_itens_almoxarifado.quantidade_em_inspecao`), que `stockService` não
   conhece: devolver só o pool do material recriaria o descasamento item × material que a Task 4
-  fechou. A porta para rever uma decisão é a tela de Inspeções. `podeEstornar`
-  (`MovimentacoesAlmoxarifado.js`) espelha a lista, para a tela não oferecer um botão que só
-  devolveria 400.
+  fechou. `podeEstornar` (`MovimentacoesAlmoxarifado.js`) espelha a lista, para a tela não oferecer
+  um botão que só devolveria 400.
+- **Rever uma inspeção já concluída não tem caminho no produto** (achado do re-review final,
+  2026-08-08). A tela de Inspeções carrega apenas `GET /inspecoes/pendentes`, então o item decidido
+  some dela — e o livro recusa o estorno (item acima). O **saldo** continua recuperável por
+  `BLOQUEIO`/`DESBLOQUEIO` avulso, ambos com gate `ajustar_estoque` e rastro no livro; o que fica
+  imutável é o **registro** da inspeção em `inspecoes_recebimento_almoxarifado`. É feature
+  faltante, não inconsistência de saldo: uma correção de erro de inspeção hoje aparece como ajuste
+  avulso, sem vínculo com a decisão que a originou.
 - **Retenção não pode nascer da rota genérica de movimentação.** `POST /movimentacoes/v2` tem gate
   `movimentar` (o mais amplo do módulo) e aceitava qualquer tipo do motor, o que tornava decorativo
   o gate das rotas específicas — um `ALMOXARIFE` que toma 403 em `POST /materiais/:id/bloquear`

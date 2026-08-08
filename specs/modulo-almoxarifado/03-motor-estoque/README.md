@@ -75,3 +75,37 @@ Plano completo em [docs/superpowers/plans/2026-08-04-almoxarifado-etapa1-motor-e
 - Frontend: `client/src/components/almoxarifado/MovimentacoesAlmoxarifado.js` (form v2, filtro por tipo incl. ESTORNO, coluna Vínculo, badge "PENDENTE REGULARIZAÇÃO", ação Estornar, badge "ESTORNADA", link para o extrato), `client/src/components/almoxarifado/ExtratoMaterialModal.js` (novo), `client/src/components/almoxarifado/MateriaisAlmoxarifado.js` (botão Extrato).
 - Testes: `server/tests/api/estorno.api.test.js`, `movimentoRegras.api.test.js`, `livroExtrato.api.test.js`, `ajusteLocalizacao.api.test.js`, além de `movimentacoes.api.test.js` e `almoxarifado.test.js` (regressão). Todos verdes em `npm run test:api`, `test:almoxarifado`, `test:validation`, `test:safealter`.
 - Não entregue nesta etapa (fica para a feature 10): validação de saída de lote vencido/reprovado — depende de lote deixar de ser texto livre.
+
+## Follow-ups abertos no motor (achados no review final da Etapa 5, 2026-08-08)
+
+Nenhum é bug de saldo — os dois foram avaliados e liberados para merge —, mas ficam registrados
+porque somem da memória e não do código.
+
+- **O mapa de localizações mostra reservado sempre 0.** `MAPA_LOCALIZACOES_SQL`
+  (`stockService.js`) soma `estoque_saldo_almoxarifado.quantidade_reservada`, e **nada no sistema
+  escreve colunas de retenção nessa tabela** — só `quantidade`. A retenção (reservado, bloqueado,
+  em inspeção) vive exclusivamente em `materiais_almoxarifado`. É bug de exibição, pré-existente à
+  Etapa 5 e não introduzido por ela. O conserto honesto exige decidir se retenção passa a ser **por
+  localização** (mudança de modelo de dados), e não só trocar a query — por isso ficou de fora da
+  onda de correção do review final, que era escopada a quatro achados.
+  Foi o mesmo equívoco de premissa que gerou o Critical de `syncMaterialTotals` (abaixo): supor
+  que aquelas colunas são alimentadas.
+- **`TIPOS_MOVIMENTO_ROTA` falha aberto.** A whitelist da rota `/movimentacoes/v2` é derivada por
+  subtração (`TIPOS_MOVIMENTO` − `ESTORNO` − `TIPOS_RETENCAO`). Um tipo novo acrescentado a
+  `TIPOS_MOVIMENTO` entra na rota **automaticamente**: o default é certo para tipo operacional e
+  errado para tipo de retenção. Hoje a proteção é um comentário. O endurecimento barato é um teste
+  que quebre quando a whitelist contiver um tipo que ninguém classificou explicitamente.
+
+### Correção da Etapa 5 que pertence a este motor
+
+`syncMaterialTotals` recalculava `quantidade_reservada`, `quantidade_bloqueada` e
+`quantidade_em_inspecao` somando `estoque_saldo_almoxarifado` — colunas que nunca são escritas ali.
+A soma dava sempre 0, então a função **zerava as três** toda vez que rodava (`AJUSTE` com
+localização e o estorno desse ajuste). Efeito: um ajuste por localização evaporava a quarentena e
+deixava o item de recebimento indecidível para sempre, e fazia o mesmo com reservas.
+Corrigido em `c4c342b` — a função passou a recalcular **somente** `quantidade_atual`, que é o único
+total que aquela tabela realmente lastreia. Cobertura: `ajusteLocalizacao.api.test.js`
+(`AJUSTE por localizacao nao evapora a quarentena do material` e o equivalente para reserva).
+Nota de linhagem: o defeito atingia `quantidade_reservada` desde a Etapa 4, mas **nunca alcançou
+produção** — em `main` a função não tem chamador; quem a chama chegou nesta branch. Não há dado
+a reparar.
