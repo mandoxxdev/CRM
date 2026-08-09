@@ -200,7 +200,7 @@ async function consultarMapaLocalizacoes(db) {
 async function registrarMovimentacao(db, user, params) {
   const {
     material_id, tipo, quantidade, motivo, referencia, observacoes,
-    localizacao_origem_id, localizacao_destino_id, lote, projeto_id, os_id, cliente_id,
+    localizacao_origem_id, localizacao_destino_id, lote, lote_id, projeto_id, os_id, cliente_id,
     documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id, centro_custo_id,
     emergencial, custo_unitario: custoInformado, quantidade_reprovada,
   } = params;
@@ -237,6 +237,32 @@ async function registrarMovimentacao(db, user, params) {
   // carregam reserva_id, mas não consomem nada — são o lançamento da própria reserva.
   const consumindoReserva = !!reserva_id && tiposSaida.includes(tipo);
 
+  // ── Lote (Etapa 6) ──────────────────────────────────────────────────────────
+  // Aceita `lote_id` (numero) ou `lote` (codigo). O ledger guarda os DOIS: `lote_id` para juntar
+  // e `lote` com o codigo congelado, porque movimentacao e imutavel e precisa continuar legivel
+  // se o lote for renomeado.
+  const lotService = require('./lotService');
+  let loteResolvido = null;
+  if (lote_id) {
+    loteResolvido = await lotService.getLote(db, lote_id);
+    if (!loteResolvido) throw Object.assign(new Error('Lote nao encontrado'), { status: 400 });
+    if (loteResolvido.material_id !== material_id) {
+      throw Object.assign(new Error('O lote informado pertence a outro material'), { status: 400 });
+    }
+  } else if (lote && String(lote).trim()) {
+    loteResolvido = await lotService.getLotePorCodigo(db, material_id, lote);
+    // Entrada cria o lote que ainda nao existe; saida nao pode inventar lote.
+    if (!loteResolvido) {
+      if (tiposEntrada.includes(tipo)) {
+        loteResolvido = await lotService.criarOuObterLote(db, user, { material_id, codigo: lote });
+      } else {
+        throw Object.assign(new Error(`Lote nao encontrado para este material: ${String(lote).trim()}`), { status: 400 });
+      }
+    }
+  }
+  const loteIdFinal = loteResolvido ? loteResolvido.id : null;
+  const loteCodigoFinal = loteResolvido ? loteResolvido.codigo : (lote || null);
+
   const regras = avaliarRegrasVinculo(tipo, { os_id, projeto_id, centro_custo_id, justificativa, referencia, emergencial });
   if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
   const regularizacaoPendente = regras.pendente ? 1 : 0;
@@ -259,6 +285,19 @@ async function registrarMovimentacao(db, user, params) {
   if (tiposEntrada.includes(tipo)) {
     saldoPosterior = saldoAnterior + parseFloat(quantidade);
   } else if (tiposSaida.includes(tipo)) {
+    if (loteResolvido) {
+      if (loteResolvido.status !== 'ATIVO') {
+        throw Object.assign(
+          new Error(`Lote ${loteResolvido.codigo} esta ${loteResolvido.status.toLowerCase()} e nao pode ser utilizado`),
+          { status: 400 });
+      }
+      if (lotService.isVencido(loteResolvido)) {
+        throw Object.assign(
+          new Error(`Lote ${loteResolvido.codigo} vencido em ${loteResolvido.data_validade} e nao pode sair. `
+            + 'Libere o lote pela tela de lotes, com justificativa, se for usa-lo mesmo assim.'),
+          { status: 400 });
+      }
+    }
     // Saída citando uma reserva consome o que JÁ estava separado para ela, então não pode ser
     // barrada pelo disponível — o disponível justamente exclui o reservado. Sem esta exceção,
     // reservar material o tornava inutilizável até para quem reservou (ver o design da Etapa 4).
@@ -282,16 +321,16 @@ async function registrarMovimentacao(db, user, params) {
     if (!localizacao_origem_id || !localizacao_destino_id) {
       throw Object.assign(new Error('Transferência requer origem e destino'), { status: 400 });
     }
-    // lote_id null aqui de propósito: o motor ainda não resolve código de lote (`lote`, texto)
-    // para lotes_almoxarifado.id — isso é a Task 3. Até lá o saldo por lote fica igual ao saldo
-    // sem lote (mesma linha), o que é seguro porque não há dado de lote hoje (ver Etapa 6, Task 2).
-    const saldoOrigem = await getOrCreateSaldo(db, material_id, localizacao_origem_id, null);
+    // loteIdFinal (Etapa 6, Task 3): se a transferência citar um lote (`lote`/`lote_id`), move a
+    // linha DAQUELE lote entre localizações — sem citar lote, loteIdFinal é null e o comportamento
+    // é o de sempre (saldo sem lote).
+    const saldoOrigem = await getOrCreateSaldo(db, material_id, localizacao_origem_id, loteIdFinal);
     if (saldoOrigem.quantidade < quantidade) {
       throw Object.assign(new Error('Saldo insuficiente na localização de origem'), { status: 400 });
     }
     await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantidade, saldoOrigem.id]);
-    const saldoDestino = await getOrCreateSaldo(db, material_id, localizacao_destino_id, null);
+    const saldoDestino = await getOrCreateSaldo(db, material_id, localizacao_destino_id, loteIdFinal);
     await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantidade, saldoDestino.id]);
     saldoPosterior = saldoAnterior;
@@ -453,8 +492,9 @@ async function registrarMovimentacao(db, user, params) {
       // (não o total do material) e recalcula o total a partir da soma de todas as
       // localizações — inclui o caso de zerar (quantidade 0), daí o syncMaterialTotals
       // contar linhas em vez de exigir total > 0 (fix desta task).
-      // lote_id null: motor ainda não resolve lote (ver comentário do ramo TRANSFERENCIA acima).
-      const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, null);
+      // loteIdFinal (Etapa 6, Task 3): AJUSTE citando lote define o saldo daquela linha de lote
+      // específica; sem lote, loteIdFinal é null e o comportamento é o de sempre.
+      const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, loteIdFinal);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [parseFloat(quantidade), saldo.id]);
       await syncMaterialTotals(db, material_id);
@@ -480,17 +520,45 @@ async function registrarMovimentacao(db, user, params) {
     const locEntrada = tiposEntrada.includes(tipo) ? resolveLocalizacaoEntrada(material, localizacao_destino_id) : null;
     const locSaida = tiposSaida.includes(tipo) ? resolveLocalizacaoSaida(material, localizacao_origem_id) : null;
 
-    // lote_id null nos dois ramos abaixo: motor ainda não resolve lote (ver comentário da
-    // TRANSFERENCIA acima).
-    if (locEntrada) {
-      const saldo = await getOrCreateSaldo(db, material_id, locEntrada, null);
+    // A linha de saldo por lote é o ÚNICO lugar onde a quantidade POR LOTE mora
+    // (materiais_almoxarifado só guarda o total) — por isso ela precisa existir mesmo quando o
+    // material não tem localizacao_padrao_id definido e o movimento não citou localização
+    // explícita. Sem este `|| loteIdFinal`, um material "sem localização" nunca teria a linha do
+    // lote criada/atualizada e as guardas de status/validade/saldo do Step 4/5 não teriam contra
+    // o que comparar — silenciosamente reabrindo o mesmo -8 que esta task fecha.
+    if (locEntrada || (tiposEntrada.includes(tipo) && loteIdFinal)) {
+      const saldo = await getOrCreateSaldo(db, material_id, locEntrada, loteIdFinal);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
-    if (locSaida) {
-      const saldo = await getOrCreateSaldo(db, material_id, locSaida, null);
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [quantidade, saldo.id]);
+    if (locSaida || (tiposSaida.includes(tipo) && loteIdFinal)) {
+      const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
+      if (loteIdFinal && !permiteNegativo) {
+        // Guarda no WHERE, como o resto do motor. Sem isto a subtracao abaixo negativa a linha do
+        // lote em silencio: a guarda de saldo insuficiente la em cima compara com o disponivel do
+        // MATERIAL, e syncMaterialTotals soma a linha negativa de volta, entao o total continua
+        // coerente e nada denuncia (reproduzido em 2026-08-09: lote B com 2 aceitou saida de 10 e
+        // ficou em -8).
+        const claim = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
+          SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND quantidade >= ?
+          RETURNING id`, [quantidade, saldo.id, quantidade]);
+        if (!claim) {
+          // O físico do material já foi debitado acima (linha 421-429/rowRes) antes deste claim
+          // rodar — não há transação neste módulo, então recusar aqui sem devolver deixaria
+          // quantidade_atual debitado sem contrapartida (trocaria um bug pelo outro). Compensa
+          // devolvendo o físico antes de lançar o erro.
+          await dbRun(db, `UPDATE materiais_almoxarifado
+            SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [quantidade, material_id]);
+          throw Object.assign(
+            new Error(`Saldo insuficiente no lote ${loteCodigoFinal}. Disponível: ${saldo.quantidade} ${material.unidade}`),
+            { status: 400 });
+        }
+      } else {
+        await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [quantidade, saldo.id]);
+      }
     }
     if (tiposAjuste.includes(tipo) && !localizacao_destino_id) {
       // AJUSTE sem localização não mexe em localização (não é entrada nem saída) — mas sem
@@ -504,14 +572,14 @@ async function registrarMovimentacao(db, user, params) {
 
   const result = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
     (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
-     usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, unidade,
+     usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
      projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
      centro_custo_id, emergencial, regularizacao_pendente)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     material_id, tipo, quantidade, saldoAnteriorReal, saldoPosterior,
     motivo || null, referencia || null, observacoes || null,
     user.id, user.nome || user.email,
-    localizacao_origem_id || null, localizacao_destino_id || null, lote || null, material.unidade,
+    localizacao_origem_id || null, localizacao_destino_id || null, loteCodigoFinal, loteIdFinal, material.unidade,
     projeto_id || null, os_id || null, cliente_id || null,
     documento_vinculado || null, justificativa || null,
     reserva_id || null, recebimento_id || null, requisicao_id || null,
@@ -597,12 +665,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       if (!row) throw Object.assign(new Error('Não é possível estornar: saldo disponível insuficiente (material já consumido)'), { status: 400 });
       saldoDepois = row.quantidade_atual;
       saldoAntes = saldoDepois + parseFloat(mov.quantidade);
-      // reverter localização da entrada original
-      // lote_id null: motor ainda não resolve lote (ver comentário no ramo TRANSFERENCIA de
-      // registrarMovimentacao) — Task 3 preenche isso.
+      // reverter localização da entrada original — mov.lote_id (Etapa 6, Task 3) devolve para a
+      // MESMA linha de lote que a entrada creditou, lida do próprio ledger (imutável), não
+      // recalculada.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
       if (loc) {
-        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, null);
+        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote_id);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
       }
       // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
@@ -614,7 +682,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       saldoDepois = saldoAntes + parseFloat(mov.quantidade);
       const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
       if (loc) {
-        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, null);
+        // mov.lote_id (Etapa 6, Task 3): devolve para a linha do lote que a saída original debitou.
+        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote_id);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
       }
     } else if (mov.tipo === 'AJUSTE') {
@@ -626,7 +695,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         // (saldo_posterior - saldo_anterior do livro, ambos totais do material), então revertemos
         // SÓ a localização por esse delta e recalculamos o total a partir da soma real.
         const delta = mov.saldo_posterior - mov.saldo_anterior;
-        const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, null);
+        const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
         if (saldoLoc.quantidade - delta < 0) {
           throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
         }
@@ -643,10 +712,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         await syncSaldoLocalizacaoPadrao(db, mov.material_id);
       }
     } else if (mov.tipo === 'TRANSFERENCIA') {
-      // lote_id null: motor ainda não resolve lote (ver comentário no ramo TRANSFERENCIA de
-      // registrarMovimentacao) — Task 3 preenche isso.
-      const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, null);
-      const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, null);
+      // mov.lote_id (Etapa 6, Task 3): estorna a MESMA linha de lote que a transferência moveu.
+      const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote_id);
+      const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
       if (destino.quantidade < mov.quantidade) {
         throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
       }
@@ -674,13 +742,13 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
 
     const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
       (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
-       usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, unidade,
+       usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
        projeto_id, os_id, cliente_id, documento_vinculado, justificativa, centro_custo_id)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       mov.material_id, 'ESTORNO', mov.quantidade, saldoAntes, saldoDepois,
       `Estorno mov. #${movimentoId}`, mov.referencia, null,
       user.id, user.nome || user.email,
-      mov.localizacao_destino_id, mov.localizacao_origem_id, mov.lote, mov.unidade,
+      mov.localizacao_destino_id, mov.localizacao_origem_id, mov.lote, mov.lote_id, mov.unidade,
       mov.projeto_id, mov.os_id, mov.cliente_id, `ESTORNO-${movimentoId}`, motivo,
       mov.centro_custo_id,
     ]);

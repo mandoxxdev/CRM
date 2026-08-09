@@ -60,6 +60,9 @@ const MovimentacaoSchema = z.object({
   observacoes: z.string().optional(),
   justificativa: z.string().optional(),
   lote: z.string().optional(),
+  // Sem declarar aqui, o z.object descarta a chave em silencio e o motor nunca ve o lote_id
+  // vindo da v2 — foi exatamente o que aconteceu com reserva_id na Etapa 4.
+  lote_id: z.number().int().positive().optional(),
   localizacao_origem_id: z.number().int().optional(),
   localizacao_destino_id: z.number().int().optional(),
   projeto_id: z.number().int().optional(),
