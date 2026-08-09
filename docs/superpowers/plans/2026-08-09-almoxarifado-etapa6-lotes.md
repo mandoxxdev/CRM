@@ -666,7 +666,7 @@ git commit -m "Almoxarifado Etapa 6: saldo passa a referenciar lote por id e per
 ### Task 3: As três guardas da saída por lote — status, validade e o claim que fecha o −8
 
 > **Estado (2026-08-09): ENTREGUE, após quatro rodadas de review.** `65d78fd` (original), `920d10c`
-> (round 1), `f65758d`+`8d7773e` (round 2), `c2e31dc` (round 3), round 4 no commit desta rodada.
+> (round 1), `f65758d`+`8d7773e` (round 2), `c2e31dc` (round 3), `1effd07` (round 4).
 > Os Steps abaixo ficam sem marcar por padrão desta etapa (o checklist de feature é consolidado na
 > Task 8), mas o que os rounds mudaram **não** está no texto deles — leia
 > `.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-3-report.md` antes de mexer no motor.
