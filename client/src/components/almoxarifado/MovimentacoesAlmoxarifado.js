@@ -55,6 +55,7 @@ const MovimentacoesAlmoxarifado = () => {
   const [estornoMotivo, setEstornoMotivo] = useState('');
   const [estornoSaving, setEstornoSaving] = useState(false);
   const [extratoMaterialId, setExtratoMaterialId] = useState(null);
+  const [lotes, setLotes] = useState([]);
 
   const [form, setForm] = useState({
     material_id: '',
@@ -69,6 +70,7 @@ const MovimentacoesAlmoxarifado = () => {
     localizacao_origem_id: '',
     localizacao_destino_id: '',
     lote: '',
+    lote_id: '',
     custo_unitario: '',
     emergencial: false
   });
@@ -96,6 +98,25 @@ const MovimentacoesAlmoxarifado = () => {
     const t = setTimeout(loadMovimentacoes, 300);
     return () => clearTimeout(t);
   }, [tipoFilter, dataInicio, dataFim]);
+
+  // Lote só é escolhido (não digitado) na SAÍDA — é onde o motor decide de qual lote consumir,
+  // e a lista já vem em ordem FEFO com `elegivel` calculado no servidor.
+  useEffect(() => {
+    if (!form.material_id || form.tipo !== 'SAIDA') { setLotes([]); return; }
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${form.material_id}/lotes?com_saldo=1`)
+      .then((res) => {
+        if (cancelado) return;
+        const lista = res.data || [];
+        setLotes(lista);
+        // FEFO e SUGESTAO: pre-seleciona o primeiro elegivel (a API ja devolve em ordem) e deixa
+        // o operador trocar. Impor no motor travaria quem tem motivo para pegar outro lote.
+        const sugerido = lista.find((l) => l.elegivel);
+        setForm((f) => ({ ...f, lote_id: sugerido ? String(sugerido.id) : '' }));
+      })
+      .catch(() => { if (!cancelado) setLotes([]); });
+    return () => { cancelado = true; };
+  }, [form.material_id, form.tipo]);
 
   const loadMateriais = async () => {
     try {
@@ -137,7 +158,7 @@ const MovimentacoesAlmoxarifado = () => {
     setForm({
       material_id: '', tipo: 'ENTRADA', quantidade: '', motivo: '', referencia: '', observacoes: '',
       os_id: '', projeto_id: '', centro_custo_id: '', localizacao_origem_id: '', localizacao_destino_id: '',
-      lote: '', custo_unitario: '', emergencial: false
+      lote: '', lote_id: '', custo_unitario: '', emergencial: false
     });
     setShowModal(true);
   };
@@ -170,7 +191,10 @@ const MovimentacoesAlmoxarifado = () => {
       // trocado para AJUSTE) vaze para um tipo onde o campo nem aparece na tela.
       if (form.tipo === 'SAIDA' && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
       if (form.tipo === 'ENTRADA' && form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
-      if ((form.tipo === 'ENTRADA' || form.tipo === 'SAIDA') && form.lote) payload.lote = form.lote;
+      // Entrada: lote nasce aqui, texto livre. Saída: lote é escolhido de um já existente
+      // (lote_id), nunca digitado — evita saída registrada contra um lote que não existe.
+      if (form.tipo === 'ENTRADA' && form.lote) payload.lote = form.lote;
+      if (form.tipo === 'SAIDA' && form.lote_id) payload.lote_id = Number(form.lote_id);
       if (form.tipo === 'ENTRADA' && form.custo_unitario) {
         const custo = parseFloat(form.custo_unitario);
         if (!Number.isNaN(custo) && custo > 0) payload.custo_unitario = custo;
@@ -423,7 +447,8 @@ const MovimentacoesAlmoxarifado = () => {
                           localizacao_destino_id: novoTipo === 'ENTRADA' ? f.localizacao_destino_id : '',
                           custo_unitario: novoTipo === 'ENTRADA' ? f.custo_unitario : '',
                           localizacao_origem_id: novoTipo === 'SAIDA' ? f.localizacao_origem_id : '',
-                          lote: mostraLote ? f.lote : ''
+                          lote: mostraLote ? f.lote : '',
+                          lote_id: mostraLote ? f.lote_id : ''
                         }));
                       }}>
                       {TIPOS_FORM.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -546,10 +571,32 @@ const MovimentacoesAlmoxarifado = () => {
                   )}
                   {(form.tipo === 'ENTRADA' || form.tipo === 'SAIDA') && (
                     <div className="almox-field">
-                      <label className="almox-label">Lote</label>
-                      <input className="almox-input" value={form.lote}
-                        onChange={e => setForm(f => ({ ...f, lote: e.target.value }))}
-                        placeholder="Opcional" />
+                      <label className="almox-label" htmlFor="mov-lote">Lote</label>
+                      {form.tipo === 'SAIDA' ? (
+                        <select id="mov-lote" className="almox-input" value={form.lote_id}
+                          onChange={e => setForm(f => ({ ...f, lote_id: e.target.value }))}>
+                          <option value="">Sem lote</option>
+                          {lotes.map(l => {
+                            // Vencido-mas-liberado é elegível (o motor aceita a saída) — o rótulo
+                            // precisa dizer por que ele está disponível, senão o operador estranha
+                            // ver um lote vencido selecionável. Vencido sem liberação segue
+                            // barrado por `elegivel`, nunca deduzido de `vencido` sozinho aqui.
+                            const vencidoLiberado = l.vencido && l.vencimento_liberado;
+                            return (
+                              <option key={l.id} value={l.id} disabled={!l.elegivel}>
+                                {l.codigo} — saldo {l.saldo}
+                                {l.data_validade ? ` — vence ${l.data_validade}` : ''}
+                                {vencidoLiberado ? ' (vencido, liberado)' : l.vencido ? ' (vencido)' : ''}
+                                {l.status !== 'ATIVO' ? ` (${l.status.toLowerCase()})` : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <input id="mov-lote" className="almox-input" value={form.lote}
+                          onChange={e => setForm(f => ({ ...f, lote: e.target.value }))}
+                          placeholder="Opcional" />
+                      )}
                     </div>
                   )}
 

@@ -168,6 +168,9 @@ const RecebimentosAlmoxarifado = () => {
         reducao_icms_percent: item.reducao_icms_percent,
         conferencia_quantidade: item.conferencia_quantidade,
         conferencia_descricao: item.conferencia_descricao,
+        lote: item.lote,
+        data_validade_lote: item.data_validade_lote,
+        corrida_lote: item.corrida_lote,
       }));
       await api.put(`/almoxarifado/recebimentos/${detalhe.id}/fiscal`, {
         ...fiscalForm,
@@ -495,17 +498,33 @@ const RecebimentosAlmoxarifado = () => {
                       <div style={{ fontWeight: 700 }}>{item.quantidade_recebida || item.quantidade_esperada} {item.unidade}</div>
                     </div>
                     {['EM_ENTRADA_NF', 'ENCAMINHADO_FATURAMENTO'].includes(detalhe.status) && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
-                        <input className="almox-input" type="number" step="0.01" placeholder="Vlr. unit."
-                          value={item.valor_unitario ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
-                          onChange={(e) => atualizarItemDetalhe(item.id, 'valor_unitario', e.target.value)} />
-                        <input className="almox-input" type="number" step="0.01" placeholder="ICMS"
-                          value={item.valor_icms ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
-                          onChange={(e) => atualizarItemDetalhe(item.id, 'valor_icms', e.target.value)} />
-                        <input className="almox-input" type="number" step="0.01" placeholder="Red. ICMS %"
-                          value={item.reducao_icms_percent ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
-                          onChange={(e) => atualizarItemDetalhe(item.id, 'reducao_icms_percent', e.target.value)} />
-                      </div>
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
+                          <input className="almox-input" type="number" step="0.01" placeholder="Vlr. unit."
+                            value={item.valor_unitario ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'valor_unitario', e.target.value)} />
+                          <input className="almox-input" type="number" step="0.01" placeholder="ICMS"
+                            value={item.valor_icms ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'valor_icms', e.target.value)} />
+                          <input className="almox-input" type="number" step="0.01" placeholder="Red. ICMS %"
+                            value={item.reducao_icms_percent ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'reducao_icms_percent', e.target.value)} />
+                        </div>
+                        {/* Lote nasce aqui — na nota do fornecedor — não na movimentação. Sem estes
+                            três campos era o único ponto do sistema onde a coluna existia no banco
+                            (Task 5) e o motor a lia (Task 6), mas ninguém conseguia preenchê-la. */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
+                          <input className="almox-input" placeholder="Lote"
+                            value={item.lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'lote', e.target.value)} />
+                          <input className="almox-input" type="date" placeholder="Validade"
+                            value={item.data_validade_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'data_validade_lote', e.target.value)} />
+                          <input className="almox-input" placeholder="Corrida"
+                            value={item.corrida_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'corrida_lote', e.target.value)} />
+                        </div>
+                      </>
                     )}
                   </div>
                 ))}
