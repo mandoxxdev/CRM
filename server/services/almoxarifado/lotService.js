@@ -49,7 +49,13 @@ async function criarOuObterLote(db, user, dados) {
   const existente = await getLotePorCodigo(db, materialId, codigo);
   if (existente) return existente;
 
-  const status = dados.status && STATUS_LOTE.includes(dados.status) ? dados.status : 'ATIVO';
+  let status = 'ATIVO';
+  if (dados.status != null) {
+    if (!STATUS_LOTE.includes(dados.status)) {
+      throw erro(`status de lote invalido: ${dados.status}. Use ${STATUS_LOTE.join(', ')}`);
+    }
+    status = dados.status;
+  }
   const r = await dbRun(db, `INSERT INTO lotes_almoxarifado
     (material_id, codigo, fornecedor_id, fornecedor_nome, corrida, data_fabricacao, data_validade,
      status, status_motivo, recebimento_id, recebimento_item_id, nota_fiscal, observacoes, created_por)

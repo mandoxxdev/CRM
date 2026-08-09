@@ -59,6 +59,18 @@ async function novoMaterial(db, qtd = 100) {
       /codigo/i);
   });
 
+  await test('status invalido em criarOuObterLote e recusado; status ausente nasce ATIVO', async () => {
+    const mat = await novoMaterial(db);
+    await assert.rejects(() => lotService.criarOuObterLote(db, ADMIN,
+      { material_id: mat, codigo: 'L-STATUS-INVALIDO', status: 'CANCELADO' }), /status/i);
+    const linhas = await dbAll(db,
+      'SELECT id FROM lotes_almoxarifado WHERE material_id = ? AND codigo = ?', [mat, 'L-STATUS-INVALIDO']);
+    assert.strictEqual(linhas.length, 0, 'status invalido nao deveria ter criado o lote');
+
+    const semStatus = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'L-STATUS-AUSENTE' });
+    assert.strictEqual(semStatus.status, 'ATIVO', 'omitir status deveria nascer ATIVO');
+  });
+
   await test('vencido e derivado da data, nao e status gravado', async () => {
     const mat = await novoMaterial(db);
     const vencido = await lotService.criarOuObterLote(db, ADMIN, {
