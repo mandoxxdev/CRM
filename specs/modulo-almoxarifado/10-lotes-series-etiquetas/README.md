@@ -37,30 +37,39 @@ otimista demais em um ponto e incompleta em outros dois; as correções estão m
   `data_producao`), sem rota — não confundir. **Correção:** fica em `index.js:19554`, não em
   `19458` como esta spec dizia.
 
-### ⚠️ Correção: "o motor já segrega saldo por lote" é meia verdade
+### ⚠️ Correção: "o motor já segrega saldo por lote" é meia verdade (histórico — fechado na Task 3)
 
-A frase anterior — *"o motor já segrega saldo por lote — bom ponto de partida"* — está certa na
-letra e enganosa na prática. A segregação é **write-only**: escreve-se o lote, nunca se lê o
+> **Status deste achado: RESOLVIDO na Etapa 6, Task 3 (`65d78fd`+).** O texto abaixo descreve o
+> estado do motor **antes** da Task 3 — é o levantamento que justificou o design da etapa, mantido
+> como registro. Hoje o motor lê o lote (status e vencimento) antes de qualquer efeito de saldo e
+> reivindica o saldo do **próprio** lote com guarda no `WHERE`, não mais só o do material — ver a
+> seção "Saldos" em [03-motor-estoque](../03-motor-estoque/README.md). A citação de linha de
+> `syncMaterialTotals` abaixo (`stockService.js:43-59`) também não vale mais — a função está hoje
+> em `stockService.js:52-69` e foi restaurada depois de uma volta pela remoção (ver o review da
+> Task 3: a soma de todas as linhas é decisão de negócio do cliente, não bug).
+
+A frase anterior — *"o motor já segrega saldo por lote — bom ponto de partida"* — estava certa na
+letra e enganosa na prática. A segregação era **write-only**: escrevia-se o lote, nunca se lia o
 lote para decidir nada.
 
-1. **Saída por lote não valida o saldo daquele lote.** A guarda de saldo insuficiente
-   (`stockService.js:263-268`) compara com o disponível **do material**; logo depois,
-   `stockService.js:481-484` subtrai da linha do lote sem nenhuma verificação. Tirar 10 do lote
-   `A` quando `A` tem 2 e o material tem 100 passa, e a linha do lote fica **negativa em
-   silêncio**. `syncMaterialTotals` (`stockService.js:43-59`) soma essa linha negativa de volta,
-   então o total do material continua "certo" e o erro fica invisível.
+1. **Saída por lote não validava o saldo daquele lote.** A guarda de saldo insuficiente
+   (`stockService.js:263-268` no código da época) comparava com o disponível **do material**; logo
+   depois, `stockService.js:481-484` subtraía da linha do lote sem nenhuma verificação. Tirar 10 do
+   lote `A` quando `A` tinha 2 e o material tinha 100 passava, e a linha do lote ficava **negativa
+   em silêncio**. `syncMaterialTotals` somava essa linha negativa de volta, então o total do
+   material continuava "certo" e o erro ficava invisível.
 
    Reproduzido em 2026-08-09 (sonda descartável sobre `tests/helpers/testApp.js`, não versionada
-   — a versão definitiva vira teste de API na Etapa 6). Entrada de 100 no lote `A` e 2 no lote
-   `B`, depois SAÍDA de 10 no lote `B`:
+   — a versão definitiva virou teste de API na Etapa 6, Task 3: `loteGuardasSaida.api.test.js`).
+   Entrada de 100 no lote `A` e 2 no lote `B`, depois SAÍDA de 10 no lote `B`:
 
    | | lote A | lote B | `material.quantidade_atual` |
    |---|---|---|---|
    | antes | 100 | 2 | 102 |
    | depois da saída de 10 em `B` | 100 | **−8** | 92 |
 
-   O motor **não lançou erro nenhum**, e a soma das linhas (92) bate com o total do material —
-   por isso nenhuma consulta ao material denuncia o problema. Só olhando a linha do lote se vê.
+   O motor **não lançava erro nenhum**, e a soma das linhas (92) batia com o total do material —
+   por isso nenhuma consulta ao material denunciava o problema. Só olhando a linha do lote se via.
 2. **As colunas de retenção da linha por lote nunca são escritas.** `estoque_saldo_almoxarifado`
    tem `quantidade_reservada`, `quantidade_bloqueada` e `quantidade_em_inspecao`
    (`schema.js:637-639`), mas RESERVA, BLOQUEIO e QUARENTENA escrevem só em

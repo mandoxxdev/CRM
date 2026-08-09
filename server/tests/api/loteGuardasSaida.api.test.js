@@ -329,6 +329,46 @@ const saldoDoLote = (db, materialId, loteId) => dbGet(db,
       `esperado 3, ficou ${m.quantidade_atual} — ressuscitou o valor pre-ajuste (bug media 10)`);
   });
 
+  // ── Fix round 3 (review): decisão de negócio do cliente — contagem por localização REDEFINE ──
+  // o saldo do material, não soma ao que já existia sem endereço. A soma de todas as linhas
+  // (`syncMaterialTotals`) volta a ser a reconciliação certa; os dois testes abaixo são os que o
+  // coordenador pediu explicitamente.
+
+  await test('AJUSTE por localizacao REDEFINE o saldo do material (decisao de negocio do cliente)', async () => {
+    const mat = await novoMaterial(db);
+    // Material "legado": tem saldo no sistema, mas nenhuma linha de saldo e nenhuma
+    // localizacao_padrao_id — exatamente o perfil que o cliente descreveu ("praticamente todo o
+    // estoque legado dele").
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 100 WHERE id = ?', [mat]);
+
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('R3-A','loc A')`)).lastID;
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 40, localizacao_destino_id: loc, justificativa: 'primeira contagem da prateleira' });
+
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 40,
+      `esperado 40 (a contagem REDEFINE o saldo), ficou ${m.quantidade_atual} — somou ao saldo sem endereco em vez de redefinir (bug do delta: 140)`);
+  });
+
+  await test('dois AJUSTEs concorrentes na mesma linha nao divergem do resultado sequencial', async () => {
+    const mat = await novoMaterial(db);
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('R3-B','loc B')`)).lastID;
+
+    await Promise.all([
+      stockService.registrarMovimentacao(db, ADMIN, {
+        material_id: mat, tipo: 'AJUSTE', quantidade: 7, localizacao_destino_id: loc, justificativa: 'contagem concorrente 1' }),
+      stockService.registrarMovimentacao(db, ADMIN, {
+        material_id: mat, tipo: 'AJUSTE', quantidade: 7, localizacao_destino_id: loc, justificativa: 'contagem concorrente 2' }),
+    ]);
+
+    const saldo = await dbGet(db, 'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ?', [mat, loc]);
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(saldo.quantidade, 7,
+      `a linha deveria ficar em 7 (mesmo valor que uma execucao sequencial daria), ficou ${saldo.quantidade}`);
+    assert.strictEqual(m.quantidade_atual, 7,
+      `o total deveria ficar em 7 (mesmo valor que uma execucao sequencial daria), ficou ${m.quantidade_atual}`);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
