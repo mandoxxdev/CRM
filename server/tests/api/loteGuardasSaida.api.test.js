@@ -1,6 +1,6 @@
 const assert = require('assert');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
 
@@ -27,6 +27,22 @@ async function entrar(db, materialId, loteId, qtd) {
 }
 const saldoDoLote = (db, materialId, loteId) => dbGet(db,
   'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id IS ?', [materialId, loteId]);
+const linhasDeSaldo = (db, materialId) => dbAll(db,
+  'SELECT localizacao_id, lote_id, quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? ORDER BY id', [materialId]);
+const totalDoMaterial = async (db, materialId) => (await dbGet(db,
+  'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [materialId])).quantidade_atual;
+
+// Movimentação LEGADA: gravada direto no livro, sem passar pelo motor — é o formato de TODAS as
+// movimentações que já estão no banco de produção (o dump tem 3 linhas de saldo no total). Elas
+// nunca escreveram linha em `estoque_saldo_almoxarifado`, porque a criação incondicional da linha
+// só existe a partir desta etapa. Estornar uma delas é o cenário do round 4.
+async function movimentacaoLegada(db, materialId, tipo, quantidade, saldoAnterior, saldoPosterior) {
+  const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
+    (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, usuario_id, usuario_nome, unidade)
+    VALUES (?,?,?,?,?,'movimento anterior a Etapa 6',1,'Admin Teste','UN')`,
+    [materialId, tipo, quantidade, saldoAnterior, saldoPosterior]);
+  return r.lastID;
+}
 
 (async () => {
   const { db, close } = await createTestApp({ user: ADMIN });
@@ -275,8 +291,14 @@ const saldoDoLote = (db, materialId, loteId) => dbGet(db,
   // cancelarMovimentacao (estorno sem localizacao/lote) e no AJUSTE-sem-localizacao, a linha
   // "fantasma" (NULL,NULL) nao acompanhava, e a soma de todas as linhas (que virava a fonte de
   // verdade assim que a PRIMEIRA linha existia) ressuscitava ou evaporava quantidade real assim
-  // que um AJUSTE com localizacao rodava depois. O fix e a raiz: AJUSTE com localizacao agora
-  // aplica o DELTA local da propria linha em quantidade_atual, nao mais uma soma de tudo.
+  // que um AJUSTE com localizacao rodava depois.
+  // O round 2 fechou isso trocando a soma por um delta local; o round 3 DESFEZ essa troca (o
+  // cliente decidiu que contagem por localizacao REDEFINE o saldo, que e a semantica da soma) e
+  // fechou os mesmos tres cenarios pelo outro lado: a linha passou a ser mantida tambem no estorno
+  // e no AJUSTE-sem-localizacao. Hoje, portanto, AJUSTE com localizacao chama `syncMaterialTotals`
+  // e soma TUDO — o comentario anterior aqui, que dizia "aplica o DELTA local ... nao mais uma
+  // soma de tudo", esta desatualizado desde `c2e31dc`. As assercoes abaixo nao mudaram: os tres
+  // numeros (7, 10, 3) sao os mesmos nas duas arquiteturas.
 
   await test('estorno de ENTRADA sem localizacao/lote + AJUSTE numa localizacao nao ressuscita quantidade fantasma', async () => {
     const mat = await novoMaterial(db);
@@ -367,6 +389,96 @@ const saldoDoLote = (db, materialId, loteId) => dbGet(db,
       `a linha deveria ficar em 7 (mesmo valor que uma execucao sequencial daria), ficou ${saldo.quantidade}`);
     assert.strictEqual(m.quantidade_atual, 7,
       `o total deveria ficar em 7 (mesmo valor que uma execucao sequencial daria), ficou ${m.quantidade_atual}`);
+  });
+
+  // ── Fix round 4 (review): estorno NUNCA cria linha de saldo ────────────────────
+  // O round 3 tirou o gate dos dois ramos de estorno (reversão de ENTRADA/SAIDA) e passou a
+  // chamar `getOrCreateSaldo` incondicionalmente. Para movimentação LEGADA — que nunca escreveu
+  // linha — isso CRIAVA a linha em 0 e gravava ±quantidade: uma linha fantasma que a soma de
+  // `syncMaterialTotals` depois trata como verdade. Como o discriminador certo não é a
+  // localização e sim "a movimentação original chegou a escrever linha?", o estorno passou a só
+  // AJUSTAR linha existente.
+
+  await test('estorno de ENTRADA legada nao cria linha de saldo negativa fantasma', async () => {
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 10 WHERE id = ?', [mat]);
+    const mov = await movimentacaoLegada(db, mat, 'ENTRADA', 10, 0, 10);
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov, 'estorno de teste');
+
+    assert.strictEqual(await totalDoMaterial(db, mat), 0);
+    const linhas = await linhasDeSaldo(db, mat);
+    assert.strictEqual(linhas.length, 0,
+      `o estorno criou linha de saldo do nada: ${JSON.stringify(linhas)} (esperado nenhuma linha)`);
+  });
+
+  await test('primeira contagem numa localizacao depois de estornar ENTRADA legada devolve a contagem, nao o negativo', async () => {
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 10 WHERE id = ?', [mat]);
+    const mov = await movimentacaoLegada(db, mat, 'ENTRADA', 10, 0, 10);
+    await stockService.cancelarMovimentacao(db, ADMIN, mov, 'estorno de teste');
+
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('R4-A','loc A')`)).lastID;
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 5, localizacao_destino_id: loc, justificativa: 'primeira contagem da prateleira' });
+
+    const total = await totalDoMaterial(db, mat);
+    assert.strictEqual(total, 5,
+      `esperado 5 (a contagem REDEFINE o saldo), ficou ${total} — a linha fantasma do estorno legado inverteu a regra de negocio (bug media -5)`);
+  });
+
+  await test('estorno de SAIDA legada nao cria linha de saldo fantasma, e a contagem seguinte manda', async () => {
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 10 WHERE id = ?', [mat]);
+    const mov = await movimentacaoLegada(db, mat, 'SAIDA', 4, 14, 10);
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov, 'estorno de teste');
+
+    assert.strictEqual(await totalDoMaterial(db, mat), 14);
+    const linhas = await linhasDeSaldo(db, mat);
+    assert.strictEqual(linhas.length, 0,
+      `o estorno criou linha de saldo do nada: ${JSON.stringify(linhas)} (esperado nenhuma linha)`);
+
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('R4-B','loc B')`)).lastID;
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 5, localizacao_destino_id: loc, justificativa: 'primeira contagem da prateleira' });
+    const total = await totalDoMaterial(db, mat);
+    assert.strictEqual(total, 5,
+      `esperado 5 (a contagem REDEFINE o saldo), ficou ${total} — a linha fantasma do estorno legado somou 4 a mais (bug media 9)`);
+  });
+
+  await test('estorno de ENTRADA desta etapa continua debitando a linha que a entrada criou', async () => {
+    // Contra-prova do teste acima: quando a movimentação original ESCREVEU linha, o estorno tem
+    // de achá-la e debitar — "não criar" não pode virar "não fazer nada".
+    const mat = await novoMaterial(db);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'R4-LOTE' });
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, lote_id: lote.id, motivo: 'setup' });
+    assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, 10);
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'estorno de teste');
+
+    assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, 0,
+      'o estorno de um movimento COM linha deixou a linha intacta');
+    assert.strictEqual(await totalDoMaterial(db, mat), 0);
+  });
+
+  await test('material com saldo sem endereco continua visivel no mapa depois de ganhar localizacao padrao', async () => {
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_minima = 5 WHERE id = ?', [mat]);
+    // AJUSTE sem localização: `syncSaldoLocalizacaoPadrao` grava o residual na linha (NULL,NULL)
+    // — material com saldo e NENHUM endereço, o perfil do estoque legado do cliente.
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 100, justificativa: 'saldo inicial sem endereco' });
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('R4-MAPA','loc mapa')`)).lastID;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [loc, mat]);
+
+    const linha = (await stockService.consultarMapaLocalizacoes(db)).find((l) => l.id === loc);
+    assert.strictEqual(linha.quantidade_total, 100,
+      `esperado 100 no mapa, veio ${linha.quantidade_total} — a linha residual (NULL,NULL) derrubou o fallback e o saldo sumiu do mapa (bug media 0); 200 seria duplicacao`);
+    assert.strictEqual(linha.qtd_itens, 1, 'o material sumiu da contagem de itens da localizacao');
+    assert.strictEqual(linha.itens_criticos, 0,
+      'o material com 100 em estoque foi contado como critico porque o mapa leu a linha sem endereco como "tem endereco"');
   });
 
   await close();

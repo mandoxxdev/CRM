@@ -99,9 +99,11 @@ async function criarMaterial(db, codigo, qtd = 100) {
 
   // ── Costura com a retenção (achado do review final da Etapa 5) ────────────────
   // AJUSTE COM localização é o ÚNICO caminho que recalcula quantidade_atual fora do fluxo normal
-  // de entrada/saída (hoje: aplica o delta da própria linha — ver stockService.js; até a Etapa 6
-  // Task 3 round 2 isso passava por `syncMaterialTotals`, removida por somar todas as linhas do
-  // material). As colunas de retenção do saldo foram removidas na Etapa 6; antes disso ninguém
+  // de entrada/saída: ele grava a linha da localização contada e chama `syncMaterialTotals`, que
+  // refaz o total do material pela SOMA de todas as linhas. (Esse comentário já afirmou o
+  // contrário — "aplica o delta da própria linha", verdade só entre os rounds 2 e 3 da Task 3 da
+  // Etapa 6; o round 3 voltou para a soma, porque o cliente decidiu que contar uma prateleira
+  // REDEFINE o saldo do material.) As colunas de retenção do saldo foram removidas na Etapa 6; antes disso ninguém
   // escrevia nelas, então recalcular retenção a partir da soma das linhas zerava a
   // quarentena/reserva do material sem movimentação e sem rastro. Os testes de AJUSTE acima não
   // alcançavam isso porque nenhum deles tinha material retido.

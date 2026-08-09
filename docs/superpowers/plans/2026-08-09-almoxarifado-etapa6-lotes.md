@@ -665,6 +665,19 @@ git commit -m "Almoxarifado Etapa 6: saldo passa a referenciar lote por id e per
 
 ### Task 3: As três guardas da saída por lote — status, validade e o claim que fecha o −8
 
+> **Estado (2026-08-09): ENTREGUE, após quatro rodadas de review.** `65d78fd` (original), `920d10c`
+> (round 1), `f65758d`+`8d7773e` (round 2), `c2e31dc` (round 3), round 4 no commit desta rodada.
+> Os Steps abaixo ficam sem marcar por padrão desta etapa (o checklist de feature é consolidado na
+> Task 8), mas o que os rounds mudaram **não** está no texto deles — leia
+> `.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-3-report.md` antes de mexer no motor.
+> Em uma linha: a reconciliação `materiais_almoxarifado.quantidade_atual` × soma das linhas de
+> `estoque_saldo_almoxarifado` é **soma-das-linhas-é-a-verdade** (decisão de negócio do cliente:
+> contagem por localização REDEFINE o saldo); o estorno **ajusta** linha existente e **nunca cria**
+> (movimentação legada não tem linha); e existe um escritor conhecido fora do motor
+> (`routes/almoxarifado.js:868`, conclusão de inventário) — pendência nomeada na spec 03.
+> **Próxima:** Task 4 (`controle_lote` deixa de ser flag morta), que consome o `lote_id`/`lote`
+> resolvido por `registrarMovimentacao` já entregue aqui.
+
 **Files:**
 - Modify: `server/services/almoxarifado/stockService.js` (`registrarMovimentacao`: destructuring em `197-203`; bloco de saída em `481-485`; INSERT do ledger em `496-509`)
 - Modify: `server/services/almoxarifado/schemas.js` (`MovimentacaoSchema`, `51-80`)

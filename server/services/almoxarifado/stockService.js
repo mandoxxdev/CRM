@@ -33,13 +33,29 @@ async function getSaldoDisponivel(material) {
  * prateleira está dizendo o que existe ali, e o total do material é a soma do que existe em TODAS
  * as prateleiras/lotes conhecidos.
  *
- * Só é válida (a soma só bate com a realidade) porque, a partir do round 3, TODO ramo que muda
- * quantidade_atual também mantém a linha de saldo correspondente — inclusive `cancelarMovimentacao`
- * (reversão de ENTRADA/SAIDA, sem mais o gate condicional) e o AJUSTE-sem-localização
- * (via `syncSaldoLocalizacaoPadrao`, que agora escreve mesmo sem localização padrão). Antes do
- * round 3 esses dois caminhos podiam deixar uma linha desatualizada ("fantasma"), e somar tudo
- * ressuscitava ou evaporava quantidade real assim que este AJUSTE rodasse depois — é o Critical
- * que a Task 3 fechou nesta rodada.
+ * ATÉ ONDE A SOMA É CONFIÁVEL — e o comentário anterior aqui MENTIA sobre isso. Ele afirmava,
+ * desde o round 3, que "TODO ramo que muda quantidade_atual também mantém a linha de saldo
+ * correspondente". É falso, e a spec 03 repetia a mesma frase. A verdade:
+ *
+ *  - Vale para os ramos DESTE MOTOR: `registrarMovimentacao` (entrada/saída criam a linha sempre,
+ *    mesmo sem localização nem lote; TRANSFERENCIA e AJUSTE-com-localização escrevem a linha
+ *    citada; AJUSTE-sem-localização delega a `syncSaldoLocalizacaoPadrao`) e `cancelarMovimentacao`
+ *    (reversão de ENTRADA/SAIDA ajusta a linha que o movimento original escreveu — e SÓ ela: ver
+ *    `ajustarSaldoExistente`, porque movimentação legada não tem linha para manter).
+ *  - NÃO vale para um escritor conhecido FORA do motor: `PUT /api/almoxarifado/conferencias/:id/
+ *    concluir` com `aplicar_ajustes` faz `UPDATE materiais_almoxarifado SET quantidade_atual = ?`
+ *    direto (`routes/almoxarifado.js`, ~linha 868) e nunca toca em `estoque_saldo_almoxarifado`.
+ *    Consequência real: num material que JÁ tem linhas, a homologação do inventário muda o total
+ *    e deixa as linhas com o valor velho; a próxima contagem por localização (ou o estorno de um
+ *    AJUSTE) chama esta função e reconcilia a partir dessas linhas desatualizadas — o número
+ *    homologado no inventário evapora. Pendência nomeada na spec 03 (não é regressão da Etapa 6:
+ *    esse UPDATE cru é anterior a ela); rotear a rota pelo motor é task própria, com testes
+ *    próprios.
+ *
+ * Material legado (saldo em `quantidade_atual`, zero linhas) não é atingido enquanto não tiver
+ * nenhuma linha: o guard de contagem abaixo faz esta função não tocar no material. A soma só passa
+ * a mandar naquele material a partir da PRIMEIRA contagem por localização — que é exatamente a
+ * regra de negócio decidida pelo cliente.
  *
  * Recalcula SOMENTE `quantidade_atual` — de propósito (achado do review final da Etapa 5).
  * A retenção (`quantidade_reservada`, `quantidade_bloqueada`, `quantidade_em_inspecao`) mora
@@ -98,6 +114,33 @@ async function getOrCreateSaldo(db, materialId, localizacaoId, loteId = null) {
     }
   }
   return saldo;
+}
+
+/**
+ * Aplica um delta na linha de saldo (material + localização + lote) **se ela já existir**, e não
+ * faz nada quando não existe. É o oposto deliberado de `getOrCreateSaldo`, e existe por causa do
+ * estorno.
+ *
+ * Movimentação gravada a partir da Etapa 6 SEMPRE escreve linha de saldo (ver o bloco de
+ * entrada/saída em `registrarMovimentacao`). Movimentação LEGADA — todas as que já estão no banco
+ * de produção — nunca escreveu. "A linha existe?" é, portanto, o discriminador de "a movimentação
+ * original chegou a mexer em `estoque_saldo_almoxarifado`?", e é o que o estorno precisa saber:
+ * criar a linha do zero e gravar −quantidade (o que o round 3 desta task passou a fazer) inventava
+ * uma linha negativa que nunca existiu, e como `syncMaterialTotals` trata a soma das linhas como
+ * verdade, a PRIMEIRA contagem de prateleira daquele material passava a devolver o negativo
+ * (material com 10, estorno da entrada legada de 10, contagem "aqui tem 5" ⇒ −5 em vez de 5),
+ * furando de quebra a guarda de `permite_saldo_negativo`. Nada apaga linha de saldo neste módulo,
+ * então "não existe" só pode significar "nunca foi escrita".
+ *
+ * Guarda no WHERE com RETURNING, como o resto do motor — mas aqui "não casou" NÃO é erro: é
+ * exatamente o caso legado, e o silêncio é a correção. Por isso devolve booleano em vez de lançar.
+ */
+async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delta) {
+  const linha = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
+    SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP
+    WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?
+    RETURNING id`, [delta, materialId, localizacaoId || null, loteId || null]);
+  return !!linha;
 }
 
 /**
@@ -203,12 +246,20 @@ const MAPA_LOCALIZACOES_SQL = `
       FROM estoque_saldo_almoxarifado
       WHERE localizacao_id IS NOT NULL AND quantidade > 0
       UNION ALL
+      -- Fallback "material sem enderecamento": mostra o total do material na sua localizacao
+      -- padrao enquanto o saldo dele nao estiver quebrado por endereco. O localizacao_id IS NOT
+      -- NULL na condicao (achado do review round 4, Etapa 6 Task 3): a linha (NULL, ...) e
+      -- justamente saldo SEM endereco — conta-la como "ja tem endereco" derrubava este fallback e
+      -- o material sumia do mapa (nem aparece no ramo de cima, que filtra localizacao_id IS NOT
+      -- NULL). O relatorio materiais-sem-endereco (routes/almoxarifado/extended.js) ja usava essa
+      -- mesma qualificacao. Sem duplicar: quando ha linha COM endereco, o ramo de cima conta e
+      -- este fallback nao dispara.
       SELECT m.localizacao_padrao_id, m.id, m.quantidade_atual, 0
       FROM materiais_almoxarifado m
       WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NOT NULL AND m.quantidade_atual > 0
         AND NOT EXISTS (
           SELECT 1 FROM estoque_saldo_almoxarifado s
-          WHERE s.material_id = m.id AND s.quantidade > 0
+          WHERE s.material_id = m.id AND s.localizacao_id IS NOT NULL AND s.quantidade > 0
         )
     ) combined
     GROUP BY loc_id
@@ -223,8 +274,12 @@ const MAPA_LOCALIZACOES_SQL = `
           SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s
           WHERE s.material_id = m.id AND s.localizacao_id = m.localizacao_padrao_id AND s.quantidade > 0
         ),
+        -- mesmo fallback (e mesmo localizacao_id IS NOT NULL) do bloco de cima: sem isto, um
+        -- material com saldo so na linha sem endereco entrava aqui com qty = 0 e era contado como
+        -- item CRITICO da sua localizacao padrao, tendo estoque.
         CASE WHEN NOT EXISTS (
-          SELECT 1 FROM estoque_saldo_almoxarifado s2 WHERE s2.material_id = m.id AND s2.quantidade > 0
+          SELECT 1 FROM estoque_saldo_almoxarifado s2
+          WHERE s2.material_id = m.id AND s2.localizacao_id IS NOT NULL AND s2.quantidade > 0
         ) THEN m.quantidade_atual ELSE 0 END) as qty,
         m.quantidade_minima as qty_min
       FROM materiais_almoxarifado m
@@ -763,17 +818,15 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       saldoAntes = saldoDepois + parseFloat(mov.quantidade);
       // reverter localização da entrada original — mov.lote_id (Etapa 6, Task 3) devolve para a
       // MESMA linha de lote que a entrada creditou, lida do próprio ledger (imutável), não
-      // recalculada. SEM gate condicional desde o review round 3: `syncMaterialTotals` (chamada
-      // pelo AJUSTE-com-localização e pelo estorno de qualquer AJUSTE) soma TODAS as linhas do
-      // material — se este estorno pulasse a linha por não ter localização nem lote, ela ficaria
-      // "fantasma" com o valor de antes do estorno, e um AJUSTE-com-localização que rodasse
-      // depois ressuscitaria quantidade já removida (achado do review round 2/3, mesma classe do
-      // −8 original, pela porta do estorno). `getOrCreateSaldo` aceita `localizacaoId`/`loteId`
-      // null sem problema.
+      // recalculada. Sem gate por localização desde o review round 3: `syncMaterialTotals` soma
+      // TODAS as linhas do material, então uma linha sem localização nem lote também precisa
+      // acompanhar o estorno, senão fica "fantasma" com o valor de antes e um
+      // AJUSTE-com-localização posterior ressuscita quantidade já removida.
+      // Mas o estorno NUNCA cria linha (review round 4): se a movimentação original é legada e
+      // nunca escreveu linha, criar uma agora com −quantidade inventa uma linha negativa que
+      // inverte a primeira contagem daquele material — ver `ajustarSaldoExistente`.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
-      const saldoLinhaEntrada = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote_id);
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [mov.quantidade, saldoLinhaEntrada.id]);
+      await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade);
       // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
       // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
       // specs/modulo-almoxarifado/03-motor-estoque/README.md.
@@ -782,11 +835,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         [mov.quantidade, mov.material_id]);
       saldoDepois = saldoAntes + parseFloat(mov.quantidade);
       // mov.lote_id (Etapa 6, Task 3): devolve para a linha do lote que a saída original debitou.
-      // Sem gate condicional — mesmo motivo do ramo de ENTRADA acima (review round 3).
+      // Sem gate por localização (round 3) e sem CRIAR linha (round 4) — mesmos motivos do ramo
+      // de ENTRADA acima; aqui a linha inventada seria +quantidade, que soma ao próximo inventário
+      // uma quantidade que nunca teve endereço.
       const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
-      const saldoLinhaSaida = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote_id);
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [mov.quantidade, saldoLinhaSaida.id]);
+      await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
     } else if (mov.tipo === 'AJUSTE') {
       if (mov.localizacao_destino_id) {
         // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo

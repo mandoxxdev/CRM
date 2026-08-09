@@ -44,9 +44,10 @@ otimista demais em um ponto e incompleta em outros dois; as correções estão m
 > como registro. Hoje o motor lê o lote (status e vencimento) antes de qualquer efeito de saldo e
 > reivindica o saldo do **próprio** lote com guarda no `WHERE`, não mais só o do material — ver a
 > seção "Saldos" em [03-motor-estoque](../03-motor-estoque/README.md). A citação de linha de
-> `syncMaterialTotals` abaixo (`stockService.js:43-59`) também não vale mais — a função está hoje
-> em `stockService.js:52-69` e foi restaurada depois de uma volta pela remoção (ver o review da
-> Task 3: a soma de todas as linhas é decisão de negócio do cliente, não bug).
+> `syncMaterialTotals` abaixo (`stockService.js:43-59`) também não vale mais — procure a função
+> pelo nome (as rodadas de review a moveram de lugar mais de uma vez, e citar linha aqui só
+> apodrece): ela foi removida no round 2 e restaurada no round 3, porque a soma de todas as linhas
+> é decisão de negócio do cliente, não bug.
 
 A frase anterior — *"o motor já segrega saldo por lote — bom ponto de partida"* — estava certa na
 letra e enganosa na prática. A segregação era **write-only**: escrevia-se o lote, nunca se lia o
