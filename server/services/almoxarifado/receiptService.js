@@ -324,34 +324,40 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     const cfg = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'inspecao_material_critico'");
     const reter = !!item.material_critico && cfg?.valor === '1';
 
-    // Etapa 6: o lote nasce aqui, herdando o que a NF ja sabe. Ate esta etapa, `controle_certificado`
-    // era selecionado nesta query (linha do SELECT acima) e NUNCA usado — quem auditasse por grep
-    // concluia que a entrada verificava certificado. Agora verifica.
-    let loteId = null;
-    if (item.lote && String(item.lote).trim()) {
-      const semCertificado = !!item.controle_certificado && !item.certificado_arquivo;
-      const lote = await lotService.criarOuObterLote(db, user, {
-        material_id: item.material_id,
-        codigo: item.lote,
-        fornecedor_id: rec.fornecedor_id,
-        fornecedor_nome: rec.fornecedor_nome,
-        corrida: item.corrida_lote,
-        data_validade: item.data_validade_lote,
-        nota_fiscal: rec.nota_fiscal,
-        recebimento_id: recebimentoId,
-        recebimento_item_id: item.id,
-        // Entra bloqueado, nao barrado: o material esta fisicamente no galpao. Barrar a ENTRADA
-        // foi exatamente o erro corrigido na Etapa 5.
-        status: semCertificado ? 'BLOQUEADO' : 'ATIVO',
-        status_motivo: semCertificado ? 'Certificado do fornecedor nao anexado' : null,
-      });
-      loteId = lote.id;
-      await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET lote_id = ? WHERE id = ?',
-        [loteId, item.id]);
-    }
-
     const qtd = item.quantidade_recebida || item.quantidade_esperada;
     if (qtd > 0) {
+      // Etapa 6: o lote nasce aqui, herdando o que a NF ja sabe. Ate esta etapa, `controle_certificado`
+      // era selecionado nesta query (linha do SELECT acima) e NUNCA usado — quem auditasse por grep
+      // concluia que a entrada verificava certificado. Agora verifica. Dentro do `if (qtd > 0)` de
+      // proposito (fix round 1, achado do review): item com quantidade zero nao move estoque, entao
+      // nao devia criar lote nem gravar lote_id nele.
+      let loteId = null;
+      if (item.lote && String(item.lote).trim()) {
+        // So o controle do material decide o bloqueio. `certificado_arquivo` nao existe nesta
+        // query (as tres colunas de certificado vivem em lotes_almoxarifado, nao no item do
+        // recebimento) — testar por ele aqui sempre dava falso e acertava por constante, nao por
+        // semantica (fix round 1, achado do review).
+        const semCertificado = !!item.controle_certificado;
+        const lote = await lotService.criarOuObterLote(db, user, {
+          material_id: item.material_id,
+          codigo: item.lote,
+          fornecedor_id: rec.fornecedor_id,
+          fornecedor_nome: rec.fornecedor_nome,
+          corrida: item.corrida_lote,
+          data_validade: item.data_validade_lote,
+          nota_fiscal: rec.nota_fiscal,
+          recebimento_id: recebimentoId,
+          recebimento_item_id: item.id,
+          // Entra bloqueado, nao barrado: o material esta fisicamente no galpao. Barrar a ENTRADA
+          // foi exatamente o erro corrigido na Etapa 5.
+          status: semCertificado ? 'BLOQUEADO' : 'ATIVO',
+          status_motivo: semCertificado ? 'Certificado do fornecedor nao anexado' : null,
+        });
+        loteId = lote.id;
+        await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET lote_id = ? WHERE id = ?',
+          [loteId, item.id]);
+      }
+
       await registrarMovimentacao(db, user, {
         material_id: item.material_id,
         tipo: 'ENTRADA_COMPRA',

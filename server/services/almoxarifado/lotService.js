@@ -109,6 +109,44 @@ async function mudarStatusLote(db, user, loteId, novoStatus, justificativa) {
   return getLote(db, loteId);
 }
 
+/**
+ * Libera o BLOQUEIO especificamente causado por falta de certificado — usado pela rota de upload
+ * do certificado (Etapa 6, Task 5). NAO reaproveita mudarStatusLote aqui: aquela funcao guarda
+ * contra o status que ELA MESMA acabou de ler (correto para detectar concorrencia durante a
+ * PROPRIA execucao), mas nao protege contra um chamador que decidiu ANTES, com uma leitura
+ * separada, se deveria liberar. Achado do review (Task 5, fix round 1): a rota lia o lote, media
+ * outro `await` (gravar o arquivo), e SO DEPOIS chamava mudarStatusLote com base na leitura velha
+ * — se o lote fosse reprovado nesse intervalo, mudarStatusLote via o status ATUAL (REPROVADO),
+ * casava o proprio WHERE contra ele e aplicava a troca pra ATIVO mesmo assim, porque a pre-condicao
+ * de negocio ("estava bloqueado por falta de certificado") nunca fazia parte do WHERE. Aqui a
+ * pre-condicao INTEIRA mora no WHERE de um UNICO UPDATE — nao ha leitura-decide-escreve para
+ * uma mudanca de estado externo atravessar. Devolve null quando a condicao nao bate (lote
+ * reprovado, ou bloqueado por outro motivo, ou ja ativo) em vez de lancar: a rota so quer saber
+ * se liberou ou nao, e "nao liberou" nao e erro.
+ */
+async function liberarBloqueioPorCertificado(db, user, loteId, justificativa) {
+  const motivo = justificativa == null ? '' : String(justificativa).trim();
+  if (!motivo) throw erro('justificativa obrigatoria para liberar o lote');
+
+  const anterior = await getLote(db, loteId);
+  if (!anterior) throw erro('Lote nao encontrado', 404);
+
+  const claim = await dbGet(db, `UPDATE lotes_almoxarifado
+    SET status = 'ATIVO', status_motivo = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = 'BLOQUEADO' AND status_motivo LIKE '%certificado%'
+    RETURNING id`, [motivo, loteId]);
+  if (!claim) return null;
+
+  await registrarAuditoria(db, {
+    entidade: 'lote', entidade_id: loteId, acao: 'MUDANCA_STATUS',
+    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+    dados_anteriores: { status: anterior.status, status_motivo: anterior.status_motivo },
+    dados_novos: { status: 'ATIVO', status_motivo: motivo },
+    justificativa: motivo,
+  });
+  return getLote(db, loteId);
+}
+
 /** Vencimento liberado e um fato datado e assinado — NAO desvence o lote (isVencido nao olha isto). */
 function vencimentoLiberado(lote) {
   return !!(lote && lote.vencimento_liberado_em);
@@ -152,5 +190,5 @@ async function liberarVencimento(db, user, loteId, justificativa) {
 
 module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
-  vencimentoLiberado, liberarVencimento,
+  vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado,
 };

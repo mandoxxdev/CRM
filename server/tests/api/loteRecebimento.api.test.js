@@ -1,9 +1,11 @@
 const assert = require('assert');
+const fs = require('fs');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const lotService = require('../../services/almoxarifado/lotService');
+const stockService = require('../../services/almoxarifado/stockService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -67,7 +69,7 @@ async function recebimentoComItem(db, materialId, item = {}) {
     assert.strictEqual(mov.lote_id, lote.id);
   });
 
-  await test('sem certificado, o lote nasce BLOQUEADO e o material nao sai', async () => {
+  await test('sem certificado, o lote nasce BLOQUEADO: entra fisicamente mas a saida e recusada', async () => {
     const mat = await novoMaterial(db, { certificado: true });
     const recId = await recebimentoComItem(db, mat, { lote: 'SEM-CERT', qtd: 12 });
     await receiptService.processarNota(db, ADMIN, recId, {});
@@ -79,6 +81,18 @@ async function recebimentoComItem(db, materialId, item = {}) {
     const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
     assert.strictEqual(m.quantidade_atual, 12,
       'o material entrou fisicamente — bloquear a ENTRADA foi o erro corrigido na Etapa 5');
+
+    // O nome do teste promete "e a saida e recusada" — sem tentar a saida de verdade, a promessa
+    // nao e verificada (achado do review, Task 5 fix round 1). A guarda que recusa e a da Task 4
+    // (stockService), aqui so confirmamos que o lote nascido BLOQUEADO por esta task e enxergado
+    // por ela.
+    await assert.rejects(
+      () => stockService.registrarMovimentacao(db, ADMIN, {
+        material_id: mat, tipo: 'SAIDA', quantidade: 1, lote_id: lote.id, justificativa: 'teste',
+      }),
+      /bloquead/i,
+      'saida de lote bloqueado por falta de certificado deveria ser recusada',
+    );
   });
 
   await test('anexar o certificado libera o lote', async () => {
@@ -96,6 +110,30 @@ async function recebimentoComItem(db, materialId, item = {}) {
     const liberado = await lotService.getLote(db, lote.id);
     assert.strictEqual(liberado.status, 'ATIVO', 'anexar certificado deveria liberar o lote');
     assert.ok(liberado.certificado_arquivo, 'nome do arquivo nao foi gravado');
+  });
+
+  await test('lote REPROVADO continua bloqueado depois de anexar o certificado', async () => {
+    // Achado do review (Task 5, fix round 1): so o caminho positivo (BLOQUEADO por certificado ->
+    // libera) tinha teste. A regra de negocio que a rota promete no comentario — "lote reprovado no
+    // ensaio, ou bloqueado por outro motivo, continua bloqueado" — nao tinha nenhuma cobertura.
+    const mat = await novoMaterial(db, { certificado: true });
+    const recId = await recebimentoComItem(db, mat, { lote: 'REPROVADO-1', qtd: 3 });
+    await receiptService.processarNota(db, ADMIN, recId, {});
+    const lote = await lotService.getLotePorCodigo(db, mat, 'REPROVADO-1');
+    assert.strictEqual(lote.status, 'BLOQUEADO');
+
+    await lotService.mudarStatusLote(db, ADMIN, lote.id, 'REPROVADO', 'falhou no ensaio de qualidade');
+
+    const res = await request(app)
+      .post(`/api/almoxarifado/lotes/${lote.id}/certificado`)
+      .attach('certificado', Buffer.from('%PDF-1.4 certificado de qualidade'), 'cert.pdf');
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.status, 'REPROVADO',
+      'anexar certificado nao pode liberar um lote reprovado no ensaio');
+
+    const depois = await lotService.getLote(db, lote.id);
+    assert.strictEqual(depois.status, 'REPROVADO', 'o status no banco mudou apesar da reprovacao');
+    assert.ok(depois.certificado_arquivo, 'o arquivo em si deveria ser gravado normalmente');
   });
 
   await test('material sem controle_certificado nasce ATIVO mesmo sem anexo', async () => {
@@ -121,10 +159,25 @@ async function recebimentoComItem(db, materialId, item = {}) {
     const lote = await lotService.getLotePorCodigo(db, mat, 'PERM-1');
 
     const ctx = await createTestApp({ user: { id: 9, nome: 'Producao', perfil_almoxarifado: 'PRODUCAO' } });
+    // Achado do review (Task 5, fix round 1): o nome do teste promete "nao grava arquivo", mas so
+    // conferia o status HTTP. Com requirePermission DEPOIS do multer, o arquivo teria sido gravado
+    // em disco e o handler ainda devolveria 403 (o multer.single() so chama next(), quem responde e
+    // o proximo middleware) — o teste continuava verde com a ordem errada. Mesmo padrao ja usado em
+    // permissoesRotas.api.test.js:contarArquivosUpload.
+    const contarArquivos = () => {
+      try { return fs.readdirSync(ctx.uploadsAlmoxDir).length; } catch (e) { return 0; }
+    };
+    const arquivosAntes = contarArquivos();
+
     const res = await request(ctx.app)
       .post(`/api/almoxarifado/lotes/${lote.id}/certificado`)
       .attach('certificado', Buffer.from('%PDF-1.4'), 'cert.pdf');
     assert.strictEqual(res.status, 403, 'perfil PRODUCAO nao pode anexar certificado');
+    assert.strictEqual(contarArquivos(), arquivosAntes,
+      'multer gravou o certificado antes do 403 — requirePermission deve vir ANTES do upload');
+
+    const inalterado = await lotService.getLote(db, lote.id);
+    assert.strictEqual(inalterado.certificado_arquivo, null, 'certificado_arquivo gravado apesar do 403');
     await ctx.close();
   });
 

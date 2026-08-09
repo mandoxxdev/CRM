@@ -635,9 +635,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
         // So libera o que ESTE bloqueio travou. Lote reprovado no ensaio, ou bloqueado por outro
         // motivo, continua bloqueado — anexar PDF nao pode ser atalho para destravar qualquer coisa.
-        if (lote.status === 'BLOQUEADO' && /certificado/i.test(lote.status_motivo || '')) {
-          await lotService.mudarStatusLote(db, req.user, lote.id, 'ATIVO', 'Certificado do fornecedor anexado');
-        }
+        // A pre-condicao mora INTEIRA dentro de liberarBloqueioPorCertificado (WHERE atomico), nao
+        // aqui: decidir aqui com o `lote` lido em :628 e so chamar depois abriria a mesma corrida
+        // que liberou um lote REPROVADO por engano (achado do review, Task 5 fix round 1) — entre
+        // esta leitura e a chamada ha um `await` (a gravacao do arquivo acima), tempo de sobra para
+        // o lote mudar de status por outro caminho.
+        await lotService.liberarBloqueioPorCertificado(db, req.user, lote.id, 'Certificado do fornecedor anexado');
         const atualizado = await dbGet(db, 'SELECT * FROM lotes_almoxarifado WHERE id = ?', [lote.id]);
         res.json({ id: atualizado.id, certificado_arquivo: atualizado.certificado_arquivo, status: atualizado.status });
       } catch (e) {
