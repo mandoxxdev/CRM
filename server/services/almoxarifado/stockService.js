@@ -40,8 +40,10 @@ async function getSaldoDisponivel(material) {
  *  - Vale para os ramos DESTE MOTOR: `registrarMovimentacao` (entrada/saída criam a linha sempre,
  *    mesmo sem localização nem lote; TRANSFERENCIA e AJUSTE-com-localização escrevem a linha
  *    citada; AJUSTE-sem-localização delega a `syncSaldoLocalizacaoPadrao`) e `cancelarMovimentacao`
- *    (reversão de ENTRADA/SAIDA ajusta a linha que o movimento original escreveu — e SÓ ela: ver
- *    `ajustarSaldoExistente`, porque movimentação legada não tem linha para manter).
+ *    (reversão de ENTRADA/SAIDA ajusta a linha que o movimento original escreveu — `ajustarSaldoExistente`
+ *    —, e quando não acha essa linha reconcilia o residual se o material já tiver alguma linha:
+ *    `reconciliarEstornoSemLinha`. Só material com ZERO linhas fica de fora, que é justamente o
+ *    material legado sobre o qual esta função também não manda).
  *  - NÃO vale para um escritor conhecido FORA do motor: `PUT /api/almoxarifado/conferencias/:id/
  *    concluir` com `aplicar_ajustes` faz `UPDATE materiais_almoxarifado SET quantidade_atual = ?`
  *    direto (`routes/almoxarifado.js`, ~linha 868) e nunca toca em `estoque_saldo_almoxarifado`.
@@ -123,17 +125,17 @@ async function getOrCreateSaldo(db, materialId, localizacaoId, loteId = null) {
  *
  * Movimentação gravada a partir da Etapa 6 SEMPRE escreve linha de saldo (ver o bloco de
  * entrada/saída em `registrarMovimentacao`). Movimentação LEGADA — todas as que já estão no banco
- * de produção — nunca escreveu. "A linha existe?" é, portanto, o discriminador de "a movimentação
- * original chegou a mexer em `estoque_saldo_almoxarifado`?", e é o que o estorno precisa saber:
- * criar a linha do zero e gravar −quantidade (o que o round 3 desta task passou a fazer) inventava
- * uma linha negativa que nunca existiu, e como `syncMaterialTotals` trata a soma das linhas como
- * verdade, a PRIMEIRA contagem de prateleira daquele material passava a devolver o negativo
- * (material com 10, estorno da entrada legada de 10, contagem "aqui tem 5" ⇒ −5 em vez de 5),
- * furando de quebra a guarda de `permite_saldo_negativo`. Nada apaga linha de saldo neste módulo,
- * então "não existe" só pode significar "nunca foi escrita".
+ * de produção — nunca escreveu. Criar a linha do zero e gravar −quantidade (o que o round 3 desta
+ * task passou a fazer) inventava uma linha negativa que nunca existiu, e como `syncMaterialTotals`
+ * trata a soma das linhas como verdade, a PRIMEIRA contagem de prateleira daquele material passava
+ * a devolver o negativo (material com 10, estorno da entrada legada de 10, contagem "aqui tem 5"
+ * ⇒ −5 em vez de 5), furando de quebra a guarda de `permite_saldo_negativo`.
  *
- * Guarda no WHERE com RETURNING, como o resto do motor — mas aqui "não casou" NÃO é erro: é
- * exatamente o caso legado, e o silêncio é a correção. Por isso devolve booleano em vez de lançar.
+ * Guarda no WHERE com RETURNING, como o resto do motor — mas aqui "não casou" NÃO é erro nem é,
+ * por si só, o caso legado: é só "não achei ESTA chave". **O miss não decide nada sozinho** — quem
+ * decide é `reconciliarEstornoSemLinha`, que pergunta se o MATERIAL já tem alguma linha. O round 4
+ * tratou o miss como no-op incondicional e isso engolia estorno legítimo (ver lá). Por isso esta
+ * função devolve booleano em vez de lançar, e por isso os dois call sites são obrigados a olhar.
  */
 async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delta) {
   const linha = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
@@ -174,6 +176,38 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null) {
   await dbRun(db,
     'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [novaLinha, saldo.id]);
+}
+
+/**
+ * Decide o que fazer quando o estorno de ENTRADA/SAIDA não achou a linha de saldo que ele queria
+ * ajustar. **Este é o discriminador de verdade da reconciliação no estorno**, e o round 4 o errou:
+ * ele usou "existe linha para ESTA chave?" e tratou todo miss como no-op. A pergunta certa é
+ * **"o MATERIAL já tem alguma linha?"** — ou seja, ele já está sob o regime "a soma das linhas é a
+ * verdade"?
+ *
+ *  - **Zero linhas** → material legado puro: `quantidade_atual` é a única fonte de verdade dele, e
+ *    `syncMaterialTotals` nem toca em material sem linha. Não há nada para reconciliar, e criar
+ *    linha aqui é exatamente o Critical que o round 4 fechou (linha negativa fantasma que inverte a
+ *    primeira contagem). No-op, de propósito.
+ *  - **Já tem linha** → o material está sob o regime da soma. Ignorar o estorno faria
+ *    `quantidade_atual` desgarrar da soma, e a PRÓXIMA contagem por localização (que reconcilia
+ *    pela soma) apagaria o estorno silenciosamente. O residual precisa aterrissar em algum lugar —
+ *    e o lugar já existe: `syncSaldoLocalizacaoPadrao` grava `quantidade_atual − soma das outras
+ *    linhas` na linha "sem localização explícita" (ou na da localização padrão).
+ *
+ * Por que o miss acontece mesmo em movimento NÃO legado (Critical do round 5): a chave do estorno
+ * resolve `material.localizacao_padrao_id` **de hoje**, enquanto o forward escreveu a linha com o
+ * padrão vigente **na época** do movimento. O gatilho é o próprio rollout da Etapa 6 — material sem
+ * endereço recebe movimento e só depois ganha `localizacao_padrao_id` —, e também a simples troca
+ * de endereço padrão. Nesse caso o `WHERE` erra uma linha que EXISTE, e o miss fica indistinguível
+ * do caso legado olhando só a chave. Olhando o material, não fica: ele tem linha, então reconcilia.
+ */
+async function reconciliarEstornoSemLinha(db, materialId, loteId) {
+  const linhas = await dbGet(db,
+    'SELECT COUNT(*) as n FROM estoque_saldo_almoxarifado WHERE material_id = ?', [materialId]);
+  if (!linhas || linhas.n === 0) return false;
+  await syncSaldoLocalizacaoPadrao(db, materialId, loteId);
+  return true;
 }
 
 function resolveLocalizacaoEntrada(material, destinoId) {
@@ -822,11 +856,17 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // TODAS as linhas do material, então uma linha sem localização nem lote também precisa
       // acompanhar o estorno, senão fica "fantasma" com o valor de antes e um
       // AJUSTE-com-localização posterior ressuscita quantidade já removida.
-      // Mas o estorno NUNCA cria linha (review round 4): se a movimentação original é legada e
-      // nunca escreveu linha, criar uma agora com −quantidade inventa uma linha negativa que
-      // inverte a primeira contagem daquele material — ver `ajustarSaldoExistente`.
+      // Mas o estorno NUNCA cria a linha DESTA chave (review round 4): se a movimentação original é
+      // legada e nunca escreveu linha, criar uma agora com −quantidade inventa uma linha negativa
+      // que inverte a primeira contagem daquele material — ver `ajustarSaldoExistente`.
+      // Quando a chave não casa, quem decide é `reconciliarEstornoSemLinha` (round 5): material sem
+      // nenhuma linha segue no-op; material que já tem linha reconcilia o residual, senão
+      // `quantidade_atual` desgarra da soma e a contagem seguinte apaga este estorno. O miss também
+      // acontece sem nada de legado — a chave usa a localização padrão de HOJE, e o forward usou a
+      // da época.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
-      await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade);
+      const achouLinha = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade);
+      if (!achouLinha) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
       // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
       // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
       // specs/modulo-almoxarifado/03-motor-estoque/README.md.
@@ -835,11 +875,13 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         [mov.quantidade, mov.material_id]);
       saldoDepois = saldoAntes + parseFloat(mov.quantidade);
       // mov.lote_id (Etapa 6, Task 3): devolve para a linha do lote que a saída original debitou.
-      // Sem gate por localização (round 3) e sem CRIAR linha (round 4) — mesmos motivos do ramo
+      // Sem gate por localização (round 3), sem CRIAR a linha desta chave (round 4) e com
+      // reconciliação do residual quando o material já tem linha (round 5) — mesmos motivos do ramo
       // de ENTRADA acima; aqui a linha inventada seria +quantidade, que soma ao próximo inventário
       // uma quantidade que nunca teve endereço.
       const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
-      await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
+      const achouLinha = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
+      if (!achouLinha) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
     } else if (mov.tipo === 'AJUSTE') {
       if (mov.localizacao_destino_id) {
         // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo

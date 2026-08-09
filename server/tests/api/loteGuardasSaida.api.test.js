@@ -31,6 +31,10 @@ const linhasDeSaldo = (db, materialId) => dbAll(db,
   'SELECT localizacao_id, lote_id, quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? ORDER BY id', [materialId]);
 const totalDoMaterial = async (db, materialId) => (await dbGet(db,
   'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [materialId])).quantidade_atual;
+const somaDasLinhas = async (db, materialId) => (await dbGet(db,
+  'SELECT COALESCE(SUM(quantidade),0) as total FROM estoque_saldo_almoxarifado WHERE material_id = ?', [materialId])).total;
+const novaLocalizacao = async (db, codigo) =>
+  (await dbRun(db, 'INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES (?,?)', [codigo, codigo])).lastID;
 
 // Movimentação LEGADA: gravada direto no livro, sem passar pelo motor — é o formato de TODAS as
 // movimentações que já estão no banco de produção (o dump tem 3 linhas de saldo no total). Elas
@@ -479,6 +483,125 @@ async function movimentacaoLegada(db, materialId, tipo, quantidade, saldoAnterio
     assert.strictEqual(linha.qtd_itens, 1, 'o material sumiu da contagem de itens da localizacao');
     assert.strictEqual(linha.itens_criticos, 0,
       'o material com 100 em estoque foi contado como critico porque o mapa leu a linha sem endereco como "tem endereco"');
+  });
+
+  // ── Fix round 5 (review): o discriminador do estorno e "o MATERIAL ja tem linha?" ────────────
+  // O round 4 usou "existe linha para ESTA chave?" e tratou o miss como no-op sempre. Errado por
+  // dois motivos, que sao a mesma raiz: (a) a chave do estorno resolve
+  // `material.localizacao_padrao_id` de HOJE, enquanto o forward escreveu com o padrao vigente na
+  // epoca — mudou o padrao no meio, o WHERE erra uma linha que EXISTE e o miss vira indistinguivel
+  // do caso legado; (b) num material que ja esta sob o regime soma-e-verdade (ja tem linha), o
+  // no-op faz `quantidade_atual` desgarrar da soma e a contagem seguinte apaga o estorno.
+  // Correcao: no miss, material com ZERO linhas continua no-op (Critical do round 4 fechado);
+  // material que JA TEM linha reconcilia o residual por `syncSaldoLocalizacaoPadrao`.
+
+  await test('estorno de ENTRADA depois de o material GANHAR localizacao padrao nao perde o estorno', async () => {
+    const mat = await novoMaterial(db);
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, motivo: 'entrada antes de ter endereco' });
+    // O rollout da Etapa 6 e exatamente isto: o material so ganha endereco depois de ja ter saldo.
+    const padrao = await novaLocalizacao(db, 'R5-PAD-A');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [padrao, mat]);
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'estorno de teste');
+    assert.strictEqual(await totalDoMaterial(db, mat), 0);
+    assert.strictEqual(await somaDasLinhas(db, mat), 0,
+      'a soma das linhas desgarrou de quantidade_atual depois do estorno');
+
+    const loc = await novaLocalizacao(db, 'R5-A');
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 7, localizacao_destino_id: loc, justificativa: 'contagem' });
+    const total = await totalDoMaterial(db, mat);
+    assert.strictEqual(total, 7,
+      `esperado 7, ficou ${total} — o estorno errou a chave da linha (padrao de hoje != padrao da epoca) e foi engolido pelo no-op (bug media 17)`);
+  });
+
+  await test('estorno de SAIDA depois de o material GANHAR localizacao padrao nao evapora quantidade', async () => {
+    const mat = await novoMaterial(db);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, motivo: 'setup' });
+    const movSaida = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 4, ...JUST });
+    const padrao = await novaLocalizacao(db, 'R5-PAD-B');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [padrao, mat]);
+
+    await stockService.cancelarMovimentacao(db, ADMIN, movSaida.id, 'estorno de teste');
+    assert.strictEqual(await totalDoMaterial(db, mat), 10);
+    assert.strictEqual(await somaDasLinhas(db, mat), 10,
+      'a soma das linhas desgarrou de quantidade_atual depois do estorno');
+
+    const loc = await novaLocalizacao(db, 'R5-B');
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 0, localizacao_destino_id: loc, justificativa: 'contagem: nada aqui ainda' });
+    const total = await totalDoMaterial(db, mat);
+    assert.strictEqual(total, 10,
+      `esperado 10, ficou ${total} — o estorno da saida foi engolido pelo no-op (bug media 6)`);
+  });
+
+  await test('estorno depois de a localizacao padrao MUDAR (L1 para L2) nao perde o estorno', async () => {
+    const mat = await novoMaterial(db);
+    const l1 = await novaLocalizacao(db, 'R5-L1');
+    const l2 = await novaLocalizacao(db, 'R5-L2');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [l1, mat]);
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, motivo: 'entrada com padrao L1' });
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [l2, mat]);
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'estorno de teste');
+    assert.strictEqual(await somaDasLinhas(db, mat), await totalDoMaterial(db, mat),
+      'a soma das linhas desgarrou de quantidade_atual depois do estorno');
+
+    const loc = await novaLocalizacao(db, 'R5-C');
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 7, localizacao_destino_id: loc, justificativa: 'contagem' });
+    const total = await totalDoMaterial(db, mat);
+    assert.strictEqual(total, 7,
+      `esperado 7, ficou ${total} — o estorno procurou a linha em L2 e a entrada tinha escrito em L1 (bug media 17)`);
+  });
+
+  await test('estorno de ENTRADA legada em material JA CONTADO reconcilia o residual', async () => {
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 10 WHERE id = ?', [mat]);
+    const mov = await movimentacaoLegada(db, mat, 'ENTRADA', 10, 0, 10);
+    // A contagem coloca o material sob o regime soma-e-verdade: a partir daqui, ignorar o estorno
+    // nao e mais "nao mexer em nada", e sim deixar quantidade_atual sem lastro na soma.
+    const locA = await novaLocalizacao(db, 'R5-D1');
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 40, localizacao_destino_id: locA, justificativa: 'primeira contagem' });
+    assert.strictEqual(await totalDoMaterial(db, mat), 40);
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov, 'estorno de teste');
+    assert.strictEqual(await totalDoMaterial(db, mat), 30);
+    assert.strictEqual(await somaDasLinhas(db, mat), 30,
+      'a soma das linhas ficou em 40 enquanto quantidade_atual foi para 30 — o estorno nao aterrissou em lugar nenhum');
+
+    const locB = await novaLocalizacao(db, 'R5-D2');
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 5, localizacao_destino_id: locB, justificativa: 'segunda contagem' });
+    const total = await totalDoMaterial(db, mat);
+    assert.strictEqual(total, 35,
+      `esperado 35 (40 contados em A - 10 do estorno + 5 contados em B), ficou ${total} — a contagem seguinte apagou o estorno (bug media 45)`);
+  });
+
+  await test('estorno de SAIDA legada em material JA CONTADO reconcilia o residual', async () => {
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 10 WHERE id = ?', [mat]);
+    const mov = await movimentacaoLegada(db, mat, 'SAIDA', 4, 14, 10);
+    const locA = await novaLocalizacao(db, 'R5-E1');
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 40, localizacao_destino_id: locA, justificativa: 'primeira contagem' });
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov, 'estorno de teste');
+    assert.strictEqual(await totalDoMaterial(db, mat), 44);
+    assert.strictEqual(await somaDasLinhas(db, mat), 44,
+      'a soma das linhas ficou em 40 enquanto quantidade_atual foi para 44 — o estorno nao aterrissou em lugar nenhum');
+
+    const locB = await novaLocalizacao(db, 'R5-E2');
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 5, localizacao_destino_id: locB, justificativa: 'segunda contagem' });
+    const total = await totalDoMaterial(db, mat);
+    assert.strictEqual(total, 49,
+      `esperado 49 (40 em A + 5 em B + os 4 devolvidos pelo estorno, que nao tem endereco), ficou ${total} — a contagem seguinte apagou o estorno (bug media 45)`);
   });
 
   await close();

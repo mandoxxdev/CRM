@@ -666,15 +666,19 @@ git commit -m "Almoxarifado Etapa 6: saldo passa a referenciar lote por id e per
 ### Task 3: As três guardas da saída por lote — status, validade e o claim que fecha o −8
 
 > **Estado (2026-08-09): ENTREGUE, após quatro rodadas de review.** `65d78fd` (original), `920d10c`
-> (round 1), `f65758d`+`8d7773e` (round 2), `c2e31dc` (round 3), `1effd07` (round 4).
+> (round 1), `f65758d`+`8d7773e` (round 2), `c2e31dc` (round 3), `1effd07`+`4dd6169` (round 4),
+> round 5 no commit seguinte a estes.
 > Os Steps abaixo ficam sem marcar por padrão desta etapa (o checklist de feature é consolidado na
 > Task 8), mas o que os rounds mudaram **não** está no texto deles — leia
 > `.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-3-report.md` antes de mexer no motor.
 > Em uma linha: a reconciliação `materiais_almoxarifado.quantidade_atual` × soma das linhas de
 > `estoque_saldo_almoxarifado` é **soma-das-linhas-é-a-verdade** (decisão de negócio do cliente:
-> contagem por localização REDEFINE o saldo); o estorno **ajusta** linha existente e **nunca cria**
-> (movimentação legada não tem linha); e existe um escritor conhecido fora do motor
-> (`routes/almoxarifado.js:868`, conclusão de inventário) — pendência nomeada na spec 03.
+> contagem por localização REDEFINE o saldo); o estorno **ajusta** linha existente e **nunca cria** a
+> linha daquela chave, e quando a chave não casa reconcilia o residual **se o material já tiver
+> alguma linha** (material com zero linhas = legado, no-op); e existe um escritor conhecido fora do
+> motor (`routes/almoxarifado.js:868`, conclusão de inventário) — pendência nomeada na spec 03,
+> junto com a pendência de negócio sobre "a primeira contagem redefine o saldo" depois que a linha
+> residual sem endereço existe (medido 140, não 40 — decisão do cliente pendente).
 > **Próxima:** Task 4 (`controle_lote` deixa de ser flag morta), que consome o `lote_id`/`lote`
 > resolvido por `registrarMovimentacao` já entregue aqui.
 
