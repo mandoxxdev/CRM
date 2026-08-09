@@ -188,7 +188,51 @@ async function liberarVencimento(db, user, loteId, justificativa) {
   return atualizado;
 }
 
+/**
+ * Ordem FEFO: elegiveis primeiro, depois validade crescente com nulos por ultimo, depois codigo.
+ * Lote nao elegivel (bloqueado, reprovado, vencido) NAO some da lista — vai para o fim. Esconder
+ * faz o operador procurar material que o sistema decidiu nao mostrar.
+ *
+ * `elegivel` segue a MESMA ordem de checagem que o motor usa em stockService antes de aceitar uma
+ * SAIDA: status primeiro (BLOQUEADO/REPROVADO nunca elegivel, mesmo com vencimento liberado —
+ * sao eixos independentes, ver o comentario de liberarVencimento acima), vencimento depois (vencido
+ * SEM liberacao nao e elegivel; vencido COM liberacao passa a ser). A liberacao NAO desvence o
+ * lote — por isso `vencido` continua true na linha mesmo depois de liberado; `vencimento_liberado`
+ * e o campo que diz que a saida de consumo esta credenciada apesar do vencimento.
+ */
+async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } = {}) {
+  const linhas = await dbAll(db, `
+    SELECT l.*, COALESCE((
+      SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id
+    ), 0) as saldo
+    FROM lotes_almoxarifado l
+    WHERE l.material_id = ?`, [materialId]);
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  const comFlags = linhas
+    .map((l) => {
+      const vencido = isVencido(l, hoje);
+      const liberado = vencimentoLiberado(l);
+      return {
+        ...l,
+        vencido,
+        vencimento_liberado: liberado,
+        elegivel: l.status === 'ATIVO' && (!vencido || liberado),
+      };
+    })
+    .filter((l) => !apenasComSaldo || l.saldo > 0);
+
+  comFlags.sort((a, b) => {
+    if (a.elegivel !== b.elegivel) return a.elegivel ? -1 : 1;
+    const va = a.data_validade || '9999-12-31';
+    const vb = b.data_validade || '9999-12-31';
+    if (va !== vb) return va < vb ? -1 : 1;
+    return String(a.codigo).localeCompare(String(b.codigo));
+  });
+  return comFlags;
+}
+
 module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
-  vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado,
+  vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado, listarLotesDoMaterial,
 };

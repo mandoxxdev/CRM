@@ -486,6 +486,24 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     } catch (e) { handleError(res, e); }
   });
 
+  // ── Lotes (Etapa 6, Task 6) ──
+  app.get('/api/almoxarifado/materiais/:id/lotes', auth, requirePermission('visualizar'), async (req, res) => {
+    try {
+      const lotes = await lotService.listarLotesDoMaterial(db, Number(req.params.id), {
+        apenasComSaldo: req.query.com_saldo === '1',
+      });
+      res.json(lotes);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/lotes/:id/status', auth, requirePermission('inspecionar'), async (req, res) => {
+    try {
+      const { status, justificativa } = req.body || {};
+      const lote = await lotService.mudarStatusLote(db, req.user, Number(req.params.id), status, justificativa);
+      res.json(lote);
+    } catch (e) { handleError(res, e); }
+  });
+
   app.post('/api/almoxarifado/recebimentos/:id/aprovar', auth, requirePermission('receber_material'), async (req, res) => {
     try {
       res.json(await receiptService.aprovarRecebimento(db, req.user, req.params.id, req.body));
