@@ -2,7 +2,7 @@
  * Schema initialization and migrations for almoxarifado v3
  */
 
-const { dbRun, dbGet } = require('./db');
+const { dbRun, dbGet, dbAll } = require('./db');
 
 const CATEGORIAS_SEED = [
   'Aço carbono', 'Aço inox', 'Chapas', 'Tubos', 'Perfis estruturais', 'Barras e eixos',
@@ -434,6 +434,91 @@ async function migrateHistoricoNullableMaterial(db) {
   }
 }
 
+const MIGRATION_SALDO_LOTE_ID = 'estoque_saldo_lote_id_e_sem_retencao';
+
+/**
+ * Reconstroi estoque_saldo_almoxarifado (Etapa 6):
+ *   - `lote TEXT` -> `lote_id INTEGER` (FK para lotes_almoxarifado);
+ *   - remove quantidade_reservada/bloqueada/em_inspecao (nunca tiveram escritor);
+ *   - troca a UNIQUE de tabela pelo indice com COALESCE.
+ *
+ * Reconstruir e seguro porque a sonda no dump de producao (2026-08-09) achou 3 linhas, todas com
+ * lote IS NULL, e zero lotes em texto livre — nao ha dado a converter. Segue o padrao de
+ * migrateHistoricoNullableMaterial.
+ */
+async function migrateSaldoLoteId(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const applied = await dbGet(db,
+    'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?', [MIGRATION_SALDO_LOTE_ID]);
+  if (applied) return;
+
+  const tabela = await dbGet(db,
+    `SELECT name FROM sqlite_master WHERE type='table' AND name='estoque_saldo_almoxarifado'`);
+  const colLoteTexto = tabela && await dbGet(db,
+    `SELECT name FROM pragma_table_info('estoque_saldo_almoxarifado') WHERE name = 'lote'`);
+
+  // Banco novo (CREATE TABLE acima ja nasceu na forma nova) ou tabela ausente: nada a fazer.
+  if (!tabela || !colLoteTexto) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_SALDO_LOTE_ID]);
+    return;
+  }
+
+  await dbRun(db, 'PRAGMA foreign_keys=OFF');
+  try {
+    await dbRun(db, `CREATE TABLE estoque_saldo_almoxarifado_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      material_id INTEGER NOT NULL,
+      localizacao_id INTEGER,
+      lote_id INTEGER,
+      quantidade REAL DEFAULT 0,
+      custo_medio REAL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id),
+      FOREIGN KEY (localizacao_id) REFERENCES localizacoes_almoxarifado(id),
+      FOREIGN KEY (lote_id) REFERENCES lotes_almoxarifado(id)
+    )`);
+
+    // Converte o texto livre em lote de verdade. Em producao isto nao move nenhuma linha (zero
+    // lotes em texto), mas bancos de desenvolvimento podem ter — e perder o dado em silencio
+    // seria pior do que a coluna morta que estamos removendo.
+    const comTexto = await dbAll(db,
+      `SELECT DISTINCT material_id, TRIM(lote) as codigo FROM estoque_saldo_almoxarifado
+       WHERE lote IS NOT NULL AND TRIM(lote) <> ''`);
+    for (const linha of comTexto) {
+      await dbRun(db,
+        `INSERT OR IGNORE INTO lotes_almoxarifado (material_id, codigo, observacoes)
+         VALUES (?,?,'Migrado do texto livre em 2026-08-09 (Etapa 6)')`,
+        [linha.material_id, linha.codigo]);
+    }
+
+    // Soma ao consolidar: se duas linhas duplicadas existirem (a UNIQUE antiga nao impedia com
+    // NULL), somar preserva o saldo; descartar uma delas perderia quantidade.
+    await dbRun(db, `INSERT INTO estoque_saldo_almoxarifado_new
+      (material_id, localizacao_id, lote_id, quantidade, custo_medio, updated_at)
+      SELECT s.material_id, s.localizacao_id, l.id,
+             SUM(s.quantidade), MAX(COALESCE(s.custo_medio,0)), MAX(s.updated_at)
+      FROM estoque_saldo_almoxarifado s
+      LEFT JOIN lotes_almoxarifado l
+        ON l.material_id = s.material_id AND l.codigo = TRIM(s.lote)
+      GROUP BY s.material_id, COALESCE(s.localizacao_id,0), COALESCE(l.id,0)`);
+
+    await dbRun(db, 'DROP TABLE estoque_saldo_almoxarifado');
+    await dbRun(db, 'ALTER TABLE estoque_saldo_almoxarifado_new RENAME TO estoque_saldo_almoxarifado');
+    await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_almox_chave
+      ON estoque_saldo_almoxarifado(material_id, COALESCE(localizacao_id,0), COALESCE(lote_id,0))`);
+    await dbRun(db, 'INSERT INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_SALDO_LOTE_ID]);
+    console.log('✅ Migração estoque_saldo (lote_id + sem colunas de retenção) aplicada');
+  } finally {
+    await dbRun(db, 'PRAGMA foreign_keys=ON');
+  }
+}
+
 async function initSchema(db) {
   await ensureBaseTables(db);
 
@@ -628,21 +713,28 @@ async function initSchema(db) {
   }
 
   // ── Estoque por localização/lote ──
+  // Etapa 6: `lote TEXT` virou `lote_id` (FK). As tres colunas de retencao que existiam aqui
+  // (reservada/bloqueada/em_inspecao) foram REMOVIDAS: nada no sistema jamais escreveu nelas, a
+  // soma era sempre 0, e manter coluna sem escritor e o padrao que ja causou tres bugs neste
+  // modulo. A retencao mora exclusivamente em materiais_almoxarifado.
   await dbRun(db, `CREATE TABLE IF NOT EXISTS estoque_saldo_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     material_id INTEGER NOT NULL,
     localizacao_id INTEGER,
-    lote TEXT,
+    lote_id INTEGER,
     quantidade REAL DEFAULT 0,
-    quantidade_reservada REAL DEFAULT 0,
-    quantidade_bloqueada REAL DEFAULT 0,
-    quantidade_em_inspecao REAL DEFAULT 0,
     custo_medio REAL DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(material_id, localizacao_id, lote),
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id),
-    FOREIGN KEY (localizacao_id) REFERENCES localizacoes_almoxarifado(id)
+    FOREIGN KEY (localizacao_id) REFERENCES localizacoes_almoxarifado(id),
+    FOREIGN KEY (lote_id) REFERENCES lotes_almoxarifado(id)
   )`);
+  // O CREATE UNIQUE INDEX (idx_saldo_almox_chave) NAO vem aqui em seguida de propósito: numa base
+  // já existente esta CREATE TABLE IF NOT EXISTS é no-op (a tabela já existe na forma ANTIGA, sem
+  // `lote_id`), e criar o índice antes de migrateSaldoLoteId reconstruir a tabela quebraria o
+  // boot com "no such column: lote_id". O índice é criado mais abaixo, depois da migração —
+  // dentro da própria migração para quem reconstrói, e pela linha após a chamada para quem já
+  // nasceu na forma nova.
 
   // ── Lotes (Etapa 6) ──
   // `VENCIDO` NAO e status: vencimento e derivado de data_validade < date('now'), calculado na
@@ -673,11 +765,20 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
 
+  // Migração de estoque_saldo_almoxarifado (lote_id + sem colunas de retenção) — precisa rodar
+  // DEPOIS do CREATE TABLE de lotes_almoxarifado acima, porque reconstrução insere lotes nele.
+  await migrateSaldoLoteId(db);
+  // Índice idempotente: no-op se a migração acima já criou (banco antigo reconstruído); cria de
+  // fato quando a tabela já nasceu na forma nova (banco novo, migração saiu pelo early-return).
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_almox_chave
+    ON estoque_saldo_almoxarifado(material_id, COALESCE(localizacao_id,0), COALESCE(lote_id,0))`);
+
   // ── Extend movimentações ──
   const movCols = [
     'localizacao_origem_id INTEGER',
     'localizacao_destino_id INTEGER',
     'lote TEXT',
+    'lote_id INTEGER',
     'unidade TEXT',
     'projeto_id INTEGER',
     'os_id INTEGER',

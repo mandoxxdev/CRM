@@ -30,9 +30,10 @@ async function getSaldoDisponivel(material) {
  * A retenção (`quantidade_reservada`, `quantidade_bloqueada`, `quantidade_em_inspecao`) mora
  * EXCLUSIVAMENTE em `materiais_almoxarifado` e só muda pelos ramos do motor
  * (RESERVA/LIBERACAO_RESERVA, BLOQUEIO/DESBLOQUEIO, QUARENTENA/DECISAO_INSPECAO/...).
- * `estoque_saldo_almoxarifado` TEM colunas de retenção no CREATE TABLE, mas NADA no sistema
- * escreve nelas: a soma é sempre 0. Recalcular retenção a partir dessa soma — como esta função
- * fazia — ZERAVA as três colunas do material a cada AJUSTE com localização (e a cada estorno
+ * `estoque_saldo_almoxarifado` NAO tem colunas de retencao — elas existiam, nunca tiveram
+ * escritor, e foram removidas na Etapa 6 justamente para que ninguem volte a somar a partir
+ * delas. Recalcular retenção a partir dessa soma — como esta função fazia antes da Etapa 5 —
+ * ZERAVA as três colunas do material a cada AJUSTE com localização (e a cada estorno
  * desse AJUSTE), que são os dois únicos chamadores. Efeitos reais:
  *   - material em quarentena virava disponível sem movimentação e sem rastro, e o item do
  *     recebimento (que mantém o próprio retido) ficava indecidível para sempre: decidirInspecao
@@ -58,14 +59,14 @@ async function syncMaterialTotals(db, materialId) {
   }
 }
 
-async function getOrCreateSaldo(db, materialId, localizacaoId, lote = null) {
+async function getOrCreateSaldo(db, materialId, localizacaoId, loteId = null) {
   let saldo = await dbGet(db,
-    'SELECT * FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id IS ? AND lote IS ?',
-    [materialId, localizacaoId || null, lote || null]);
+    'SELECT * FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?',
+    [materialId, localizacaoId || null, loteId || null]);
   if (!saldo) {
     const r = await dbRun(db,
-      'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote) VALUES (?,?,?)',
-      [materialId, localizacaoId || null, lote || null]);
+      'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id) VALUES (?,?,?)',
+      [materialId, localizacaoId || null, loteId || null]);
     saldo = await dbGet(db, 'SELECT * FROM estoque_saldo_almoxarifado WHERE id = ?', [r.lastID]);
   }
   return saldo;
@@ -153,8 +154,10 @@ const MAPA_LOCALIZACOES_SQL = `
       SUM(qty) as quantidade_total,
       SUM(reservado) as quantidade_reservada
     FROM (
-      SELECT localizacao_id as loc_id, material_id, quantidade as qty,
-        COALESCE(quantidade_reservada, 0) as reservado
+      -- reservado fixo em 0: estoque_saldo_almoxarifado nao tem mais quantidade_reservada
+      -- (Etapa 6, Task 2 -- coluna sem escritor, a soma ja era sempre 0). A retencao mora
+      -- exclusivamente em materiais_almoxarifado; este mapa e so por localizacao fisica.
+      SELECT localizacao_id as loc_id, material_id, quantidade as qty, 0 as reservado
       FROM estoque_saldo_almoxarifado
       WHERE localizacao_id IS NOT NULL AND quantidade > 0
       UNION ALL
@@ -279,13 +282,16 @@ async function registrarMovimentacao(db, user, params) {
     if (!localizacao_origem_id || !localizacao_destino_id) {
       throw Object.assign(new Error('Transferência requer origem e destino'), { status: 400 });
     }
-    const saldoOrigem = await getOrCreateSaldo(db, material_id, localizacao_origem_id, lote);
+    // lote_id null aqui de propósito: o motor ainda não resolve código de lote (`lote`, texto)
+    // para lotes_almoxarifado.id — isso é a Task 3. Até lá o saldo por lote fica igual ao saldo
+    // sem lote (mesma linha), o que é seguro porque não há dado de lote hoje (ver Etapa 6, Task 2).
+    const saldoOrigem = await getOrCreateSaldo(db, material_id, localizacao_origem_id, null);
     if (saldoOrigem.quantidade < quantidade) {
       throw Object.assign(new Error('Saldo insuficiente na localização de origem'), { status: 400 });
     }
     await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantidade, saldoOrigem.id]);
-    const saldoDestino = await getOrCreateSaldo(db, material_id, localizacao_destino_id, lote);
+    const saldoDestino = await getOrCreateSaldo(db, material_id, localizacao_destino_id, null);
     await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantidade, saldoDestino.id]);
     saldoPosterior = saldoAnterior;
@@ -447,7 +453,8 @@ async function registrarMovimentacao(db, user, params) {
       // (não o total do material) e recalcula o total a partir da soma de todas as
       // localizações — inclui o caso de zerar (quantidade 0), daí o syncMaterialTotals
       // contar linhas em vez de exigir total > 0 (fix desta task).
-      const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, lote);
+      // lote_id null: motor ainda não resolve lote (ver comentário do ramo TRANSFERENCIA acima).
+      const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, null);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [parseFloat(quantidade), saldo.id]);
       await syncMaterialTotals(db, material_id);
@@ -473,13 +480,15 @@ async function registrarMovimentacao(db, user, params) {
     const locEntrada = tiposEntrada.includes(tipo) ? resolveLocalizacaoEntrada(material, localizacao_destino_id) : null;
     const locSaida = tiposSaida.includes(tipo) ? resolveLocalizacaoSaida(material, localizacao_origem_id) : null;
 
+    // lote_id null nos dois ramos abaixo: motor ainda não resolve lote (ver comentário da
+    // TRANSFERENCIA acima).
     if (locEntrada) {
-      const saldo = await getOrCreateSaldo(db, material_id, locEntrada, lote);
+      const saldo = await getOrCreateSaldo(db, material_id, locEntrada, null);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
     if (locSaida) {
-      const saldo = await getOrCreateSaldo(db, material_id, locSaida, lote);
+      const saldo = await getOrCreateSaldo(db, material_id, locSaida, null);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
@@ -589,9 +598,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       saldoDepois = row.quantidade_atual;
       saldoAntes = saldoDepois + parseFloat(mov.quantidade);
       // reverter localização da entrada original
+      // lote_id null: motor ainda não resolve lote (ver comentário no ramo TRANSFERENCIA de
+      // registrarMovimentacao) — Task 3 preenche isso.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
       if (loc) {
-        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote);
+        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, null);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
       }
       // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
@@ -603,7 +614,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       saldoDepois = saldoAntes + parseFloat(mov.quantidade);
       const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
       if (loc) {
-        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote);
+        const saldo = await getOrCreateSaldo(db, mov.material_id, loc, null);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
       }
     } else if (mov.tipo === 'AJUSTE') {
@@ -615,7 +626,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         // (saldo_posterior - saldo_anterior do livro, ambos totais do material), então revertemos
         // SÓ a localização por esse delta e recalculamos o total a partir da soma real.
         const delta = mov.saldo_posterior - mov.saldo_anterior;
-        const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);
+        const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, null);
         if (saldoLoc.quantidade - delta < 0) {
           throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
         }
@@ -632,8 +643,10 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         await syncSaldoLocalizacaoPadrao(db, mov.material_id);
       }
     } else if (mov.tipo === 'TRANSFERENCIA') {
-      const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote);
-      const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote);
+      // lote_id null: motor ainda não resolve lote (ver comentário no ramo TRANSFERENCIA de
+      // registrarMovimentacao) — Task 3 preenche isso.
+      const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, null);
+      const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, null);
       if (destino.quantidade < mov.quantidade) {
         throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
       }
