@@ -162,8 +162,9 @@ const colunas = (db) => dbAll(db, `SELECT name FROM pragma_table_info('estoque_s
     }
   });
 
-  // REGRESSAO da Etapa 5: AJUSTE com localizacao passa por syncMaterialTotals. A retencao mora
-  // em materiais_almoxarifado e tem de continuar intacta depois de mexer no saldo por localizacao.
+  // REGRESSAO da Etapa 5: AJUSTE com localizacao recalcula quantidade_atual (hoje: aplica o delta
+  // da propria linha — ver stockService.js). A retencao mora em materiais_almoxarifado e tem de
+  // continuar intacta depois de mexer no saldo por localizacao.
   await test('AJUSTE por localizacao continua nao evaporando a quarentena', async () => {
     const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('MIG-L','L')`)).lastID;
     const mat = await novoMaterial(db, 100);
