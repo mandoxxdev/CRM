@@ -1,7 +1,7 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-08
+> **Última atualização:** 2026-08-09 (Etapa 6 — lotes — entregue)
 > **Regra de ouro:** toda regra essencial de funcionamento nasce com teste de API. Nenhuma feature é marcada como ✅ sem teste passando.
 
 ## Como usar esta pasta
@@ -11,21 +11,21 @@
 - Quando uma feature entrar em desenvolvimento, escrever o plano detalhado de implementação (tarefas TDD passo a passo) em `docs/superpowers/plans/` e linkar no README da feature.
 - Status: ✅ completo (com testes) · 🟡 parcial · ❌ ausente
 
-## Mapa de features e status atual (2026-08-08)
+## Mapa de features e status atual (2026-08-09)
 
 | # | Feature | Backend | Frontend | Testes | Status |
 |---|---------|---------|----------|--------|--------|
 | 00 | [Fundação técnica](00-fundacao-tecnica/README.md) | ✅ | ✅ | ✅ | 🟡 quase completa (2026-08-03: Tasks 1-6 entregues; restam decisão SMTP e padrão de validação) |
 | 01 | [Cadastros de materiais](01-cadastros-materiais/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Etapa 2 entregue (2026-08-04): campos técnicos/reposição/controles/ABC/unidades, subfamílias (`parent_id`), auditoria de criação/edição, form em 6 seções; falta tabela de conversões, categorias hardcoded do front, `almoxarifadoApi.js` |
 | 02 | [Localizações e endereçamento](02-localizacoes-enderecamento/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Etapa 2 entregue (2026-08-04): multi-almoxarifado (entidade raiz + migração ledger), bloqueio/restrição de tipo aplicados no motor, exclusão com saldo bloqueada, consultas de vazias/sem-endereço; falta capacidade/peso enforcement, sugestão de localização, leitura por confirmação. **Decisão de negócio (2026-08-05): almoxarifado é área física de alocação dentro do mesmo site, não filial — o cliente tem uma única filial. Saldo global por material (sem recorte por almoxarifado) é intencional e NÃO é lacuna; não propor segregação de saldo nem seletor de almoxarifado em movimentação/requisição** |
-| 03 | [Motor de estoque](03-motor-estoque/README.md) | ✅ | ✅ | ✅ | 🟢 Etapa 1 entregue (2026-08-04); 🟡 resta validação de vencido/lote reprovado, que depende da feature 10 |
+| 03 | [Motor de estoque](03-motor-estoque/README.md) | ✅ | ✅ | ✅ | 🟢 Etapa 1 entregue (2026-08-04); a validação de vencido/lote reprovado que faltava **foi entregue na Etapa 6, Task 3** (`65d78fd`+) e a liberação de vencimento na Task 3b (`556f86d`). Pendência nomeada e ainda aberta: `PUT /conferencias/:id/concluir` escreve `quantidade_atual` por fora do motor (anterior à Etapa 6) |
 | 04 | [Requisições](04-requisicoes/README.md) | 🟢 | 🟢 | 🟢 | 🟢 Etapa 3 entregue (2026-08-05): ciclo ponta a ponta rascunho→envio→aprovação→separação→retirada→entrega→confirmação→encerramento; entrega/estorno via motor de estoque; máquina de estados explícita; falta reservas (Etapa 4), lote/série (10), anexos e importação de BOM/OP |
 | 05 | [Separação e picking](05-separacao-picking/README.md) | 🟡 | 🟡 | 🟡 | 🟡 básico |
 | 06 | [Motor de aprovações](06-aprovacoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Etapa 3 entregue (2026-08-05): segregação (solicitante não aprova a própria), rejeição justificada, emergencial com justificativa, decisões auditadas; falta motor de regras configuráveis por tipo/valor/quantidade/projeto (tabela `regras_aprovacao` + UI — fica para demanda real) |
 | 07 | [Reservas de estoque](07-reservas/README.md) | 🟢 | 🟢 | 🟢 | 🟢 **Etapa 4 completa (backend 2026-08-05, tela 2026-08-06)** — consumo contra reserva (o buraco central: antes reservar tornava o saldo inutilizável até para quem reservou), reserva automática na aprovação com os status PARCIALMENTE/TOTALMENTE_RESERVADA, transferência entre projetos, expiração por endpoint (opt-in), liberação no cancelamento da requisição e tela em `/almoxarifado/reservas`. **Task 6 fechada (2026-08-06)**: `/aprovar-valor` passou a reservar e excluir requisição passou a liberar — não há pendência aberta na feature |
 | 08 | [Recebimento](08-recebimento/README.md) | 🟡 | 🟡 | 🟡 | 🟡 **Etapa 5 entregue (2026-08-08)**: entrada de item que exige inspeção deixou de ser barrada — agora entra sempre, retida (`quantidade_em_inspecao`), via movimentação `QUARENTENA` vinculada ao recebimento; falta tipos de entrada (8.1) e conferência física estruturada (fora do escopo, decisão do design) |
 | 09 | [Inspeção e qualidade](09-inspecao-qualidade/README.md) | 🟡 | 🟡 | 🟡 | 🟡 **Etapa 5 entregue (2026-08-08)**: decisão de inspeção real (aprovar/reprovar/parcial) com claim atômico em duas fases, bloqueio/desbloqueio avulso com justificativa obrigatória, tela `/almoxarifado/inspecoes`; falta plano de inspeção com medidas, não conformidade formal, desvio autorizado e perfil QUALIDADE (fora do escopo). Pendência criada: material reprovado fica bloqueado sem vínculo ao recebimento de origem até a feature 12 consumir o `encaminhamento` registrado |
-| 10 | [Lotes, séries e etiquetas](10-lotes-series-etiquetas/README.md) | 🟡 | ❌ | ❌ | ❌ lote é texto livre. **Levantamento verificado em 2026-08-09** (antes da Etapa 6): o motor grava lote mas nunca o lê para decidir — saída deixa a linha do lote negativa em silêncio, as 3 colunas de retenção por lote nunca são escritas, as 5 flags `controle_*` são CRUD morto e o recebimento não tem campo de lote na tela. A spec 10 foi corrigida nesses pontos |
+| 10 | [Lotes, séries e etiquetas](10-lotes-series-etiquetas/README.md) | 🟢 lotes / ❌ série+etiqueta | 🟡 | 🟢 | 🟡 **Etapa 6 entregue (2026-08-09, `b7035dd..9406bff`)** — lote deixou de ser texto livre: tabela `lotes_almoxarifado` + `lotService` dono do ciclo de vida, saldo referenciando o lote por FK (`lote_id`) e sem as 3 colunas de retenção que nunca tiveram escritor, saída validando status/validade/saldo **do próprio lote** (o bug do −8 em silêncio), `controle_lote` e `controle_certificado` acesas, lote nascendo no recebimento, FEFO na API e na tela, e liberação de vencimento com justificativa auditada (Task 3b). **Série (6b) e etiquetas/QR (6c) continuam ausentes**, e as flags `controle_serie`/`controle_validade`/`controle_corrida` continuam mortas. Pendências abertas: nenhuma tela chama as 3 rotas de lote (status/vencimento/certificado), reprovação por lote não está ligada à inspeção, e 2 decisões de negócio aguardam o cliente — ver a spec 10 |
 | 11 | [Transferências](11-transferencias/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem trânsito |
 | 12 | [Devoluções](12-devolucoes/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem vínculo à saída |
 | 13 | [Materiais de clientes](13-materiais-clientes/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem UI |
@@ -68,8 +68,8 @@ Tipos de entrada; conferência física; quarentena e bloqueio efetivos no saldo.
 
 ### Etapa 6 — Lotes → `10-lotes-series-etiquetas`
 **Dividida em três em 2026-08-09** — a feature 10 é grande demais para uma etapa, e descrevê-la como item único fazia parecer que ficaria pronta de uma vez:
-- **Etapa 6 (em desenho, [design](../../docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md))** — tabela `lotes_almoxarifado` com validade/corrida/certificado; regras de saída (vencido, bloqueado, reprovado); FEFO como sugestão; guarda contra saldo negativo por lote; campo de lote no recebimento.
-- **Etapa 6b** — números de série (confirmado em 2026-08-09: a GMP rastreia série individualmente hoje, é rotina).
+- **Etapa 6 ✅ ENTREGUE (2026-08-09, `b7035dd..9406bff`)** — tabela `lotes_almoxarifado` com validade/corrida/certificado; regras de saída (vencido, bloqueado, reprovado); FEFO como sugestão; guarda contra saldo negativo por lote; campo de lote no recebimento. Mais uma task que não estava no plano: **3b, liberação de vencimento com justificativa** (`556f86d`) — a guarda tinha sido escrita sem o caminho de liberação que o cliente pedira no design, e mandava o operador "liberar pela tela de lotes", que não existia. [Plano](../../docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md) · [design](../../docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md).
+- **Etapa 6b — PRÓXIMA** — números de série (confirmado em 2026-08-09: a GMP rastreia série individualmente hoje, é rotina). Tarefa detalhada no fim do plano da Etapa 6. Ponto de atenção principal: série é **1 linha por unidade**, então o modelo de saldo por quantidade não serve.
 - **Etapa 6c** — etiquetas com QR Code em PDF.
 
 `6b`/`6c` e não `7`/`8` porque as etapas 7 e 8 abaixo já estão ocupadas.
@@ -108,7 +108,7 @@ O módulo só é considerado operacional quando TODOS estes itens forem verdade 
 - [ ] Identificar onde está cada material (02, 03)
 - [ ] Identificar quantidade física, reservada, bloqueada e disponível (03, 07, 09)
 - [ ] Identificar quem movimentou, quando e para qual projeto/OS (03, 23) — nota Etapa 3 (2026-08-05): entrega/estorno de requisição via motor já grava `projeto_id`, `centro_custo_id` e `requisicao_id` na movimentação (verificado em `requisicaoEntregaMotor.api.test.js`); OS continua só como texto livre (`os_referencia` na requisição, sem `os_id` estruturado) — critério ainda não 100% atendido
-- [ ] Rastrear lote e número de série (10)
+- [~] **Rastrear lote e número de série (10) — parcialmente atendido (2026-08-09).** **Lote: sim** — a Etapa 6 entregou a entidade real, o vínculo do saldo e do ledger por `lote_id`, validade/corrida/certificado/status, guardas de saída e FEFO. **Série: não** — `series_almoxarifado` não existe e `controle_serie` continua flag morta; é a Etapa 6b. Falta também a consulta agregada "tudo que aconteceu com este lote" (os dados existem em três tabelas, sem um extrato que os junte)
 - [ ] Separar materiais próprios dos de clientes (13)
 - [ ] Controlar materiais enviados a terceiros (14)
 - [ ] Registrar entradas/saídas sem permitir exclusão do histórico (03, 23)
@@ -116,7 +116,7 @@ O módulo só é considerado operacional quando TODOS estes itens forem verdade 
 - [ ] Inventários e ajustes aprovados (17, 06)
 - [ ] Histórico completo de qualquer material (03, 21)
 - [ ] Custo e consumo por projeto (22)
-- [ ] Bloquear materiais reprovados ou indisponíveis (09, 10)
+- [~] **Bloquear materiais reprovados ou indisponíveis (09, 10) — parcialmente atendido.** Por **material**: sim, desde a Etapa 5 (bloqueio/quarentena/decisão de inspeção). Por **lote**: o status `REPROVADO`/`BLOQUEADO` existe e o motor recusa a saída (Etapa 6), mas `inspectionService.decidirInspecao` ainda bloqueia o material inteiro e não marca o lote — ligar os dois é mudança na feature 09
 - [ ] Relatórios gerenciais e de auditoria (21, 23)
 
 ## Débitos técnicos críticos (resumo — detalhes em `00-fundacao-tecnica`)

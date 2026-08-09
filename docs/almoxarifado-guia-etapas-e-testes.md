@@ -1,12 +1,38 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-08 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-09 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 5) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 6) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> **Onde o desenvolvimento parou (2026-08-08):** Etapas 1, 2, 3, 4 e 5 **completas**. A Etapa 5 fechou a quarentena de recebimento: material que precisa de inspeção (ex.: peça crítica) entra no estoque mas fica **retido**, fora do que pode ser usado, até alguém aprovar ou reprovar na tela nova (Almoxarifado → Inspeções). A pendência que ela cria (material reprovado fica bloqueado até alguém desbloquear e dar baixa manual — não sai sozinho para o fornecedor) está registrada no fim deste documento. A próxima é a **Etapa 6 — Lotes e Séries**. Ver o planejamento mestre em `specs/modulo-almoxarifado/README.md`.
+> ## Onde o desenvolvimento parou — 2026-08-09
+>
+> **Etapas 1, 2, 3, 4, 5 e 6 completas.**
+>
+> A **Etapa 6 (Lotes)** acabou de fechar. Lote deixou de ser um campo de texto que o sistema
+> guardava e nunca olhava: virou um cadastro de verdade, com validade, corrida, certificado do
+> fornecedor e situação (ativo / bloqueado / reprovado). O lote agora **nasce no recebimento**, o
+> sistema recusa tirar de um lote mais do que aquele lote tem, recusa consumir lote vencido,
+> bloqueado ou reprovado, e sugere sozinho o lote que vence primeiro na hora da saída.
+>
+> **A Etapa 6 cobriu só a parte de LOTES.** Números de série (Etapa 6b) e etiquetas com QR Code
+> (Etapa 6c) **não** foram feitos — a feature foi dividida em três de propósito, porque era grande
+> demais para uma etapa só.
+>
+> **Três coisas ficaram faltando dentro da própria Etapa 6, e você vai esbarrar nelas:**
+> 1. **Não existe tela de lotes.** Bloquear/reprovar um lote, liberar um lote vencido para uso e
+>    anexar o certificado *depois* do recebimento só funcionam por chamada direta à API — não há
+>    botão em lugar nenhum. Inclusive, a mensagem de erro que aparece ao tentar usar um lote
+>    vencido cita um endereço técnico de API, porque é o único caminho que existe hoje.
+> 2. **Reprovar na inspeção não marca o lote** — continua bloqueando o material inteiro.
+> 3. **Duas decisões de negócio estão esperando você** (contagem de prateleira depois de um ajuste
+>    global; e certificado de fornecedor sendo servido sem exigir login). Ambas explicadas em
+>    "Pendências conhecidas", no fim deste documento.
+>
+> **A próxima é a Etapa 6b — Números de Série.** Ver o planejamento mestre em
+> `specs/modulo-almoxarifado/README.md` e a tarefa detalhada no fim de
+> `docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md`.
 
-## Tabela consolidada — todas as alterações (Etapas 1 a 5)
+## Tabela consolidada — todas as alterações (Etapas 1 a 6)
 
 Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha estão nas seções da etapa correspondente, mais abaixo.
 
@@ -38,6 +64,14 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 5 | Inspeções (tela nova) | Não existia fila de inspeção nem forma de aprovar/reprovar pela tela | Tela **Inspeções**: lista o que está retido, aprova (total ou parcial) ou reprova com motivo e destino (devolver / engenharia / substituição) |
 | 5 | Inspeções / Materiais | Bloquear um material achado com defeito na prateleira não tinha botão nem exigia justificativa | Botões **Bloquear/Desbloquear Material** na tela de Inspeções, com justificativa obrigatória e rastro no livro de movimentações |
 | 5 | Movimentações | Desbloquear mais do que estava bloqueado "funcionava" e devolvia menos do que o pedido ao disponível, sem avisar | Desbloquear acima do bloqueado é **recusado** com erro — nunca mais silencioso |
+| 6 | Movimentações | Dava para tirar 10 de um lote que tinha 2, e o sistema não reclamava — o saldo daquele lote ficava negativo em silêncio | Recusa e mostra o saldo real **daquele lote** |
+| 6 | Movimentações | Na saída, o lote era um campo de texto: você digitava o que quisesse, inclusive um lote que não existe | Na saída virou uma **lista** dos lotes que têm saldo, já ordenada pelo que vence primeiro. Na entrada continua texto livre, porque é ali que um lote novo nasce |
+| 6 | Movimentações | Material vencido saía normalmente para consumo | Lote vencido **não sai para consumo**. Continua podendo ser baixado como Sucata/Perda ou corrigido por Ajuste — vencido tem que poder sair do estoque |
+| 6 | Movimentações | Não existia "lote bloqueado" nem "lote reprovado" | Lote tem situação (Ativo / Bloqueado / Reprovado) e o sistema recusa a saída dos dois últimos, com o motivo na mensagem |
+| 6 | Materiais | A opção "Controle por lote" na ficha do material era decorativa: marcava e nada acontecia | Material com "Controle por lote" **exige lote** em toda entrada e saída. (Ajuste de inventário continua isento — é como você regulariza o estoque antigo que não tem lote) |
+| 6 | Materiais | A opção "Requer certificado" também era decorativa | Material com "Requer certificado" faz o lote **nascer bloqueado** no recebimento até o certificado do fornecedor ser anexado. O material **entra** no estoque normalmente — o que trava é a saída |
+| 6 | Recebimentos | Não havia onde digitar lote, validade ou corrida — justamente na tela onde o lote nasce | Três campos por item: **Lote**, **Validade** e **Corrida**. O lote é criado no processamento da nota, já com fornecedor e número da NF |
+| 6 | Movimentações / Extrato | Cada lote não tinha saldo próprio consultável | O saldo é por material **+ localização + lote**, e a coluna "Lote" do Extrato mostra o código do lote |
 
 ## Etapa 0 — Fundação (resumo)
 
@@ -57,7 +91,12 @@ Antes de qualquer coisa nova, foi criada uma base de testes automáticos para o 
 | Não existia uma tela de histórico por item | Nova tela de **Extrato** por material: saldo físico/reservado/bloqueado/em inspeção/disponível, custo médio, saldo por localização, últimas 100 movimentações e reservas ativas |
 | Formulário de movimentação era simples (material, tipo, quantidade) | Formulário rico: localização de origem/destino, lote, custo unitário, vínculo (OS/Projeto/Centro de custo) |
 
-O que ainda falta nesta frente (não é bug, é escopo futuro): validar saída de lote vencido ou reprovado — depende do controle de lotes ainda não implementado (Etapa futura). E a entrada/saída rápida que existe dentro da tela de Materiais ainda usa o caminho antigo (mais simples, sem localização/lote) — só a tela de Movimentações usa o formulário novo completo.
+O que ainda falta nesta frente: a entrada/saída rápida que existe dentro da tela de Materiais ainda usa o caminho antigo (mais simples, sem localização/lote) — só a tela de Movimentações usa o formulário novo completo.
+
+> **Correção de 2026-08-09:** este parágrafo dizia que ainda faltava "validar saída de lote vencido
+> ou reprovado — depende do controle de lotes ainda não implementado (Etapa futura)". **Isso foi
+> entregue na Etapa 6** (ver a seção da Etapa 6 abaixo). Deixamos o registro em vez de apagar,
+> porque a instrução do projeto é que uma afirmação que virou mentira seja corrigida às claras.
 
 ### Roteiro de teste manual (Etapa 1)
 
@@ -195,7 +234,12 @@ A tela fica em **Almoxarifado → Reservas**. Os passos 1 a 6 testam a automaç�
 
 ### O que a Etapa 4 não cobre
 
-Reserva por lote/série (depende do controle de lotes). Prioridade na reserva. E-mail de aviso de reserva vencida.
+Reserva por lote/série. Prioridade na reserva. E-mail de aviso de reserva vencida.
+
+> **Nota de 2026-08-09:** aqui estava escrito "reserva por lote/série (depende do controle de
+> lotes)". O controle de **lotes** passou a existir na Etapa 6 — a dependência caiu, mas a reserva
+> por lote **continua não implementada**: reservar continua sendo do material. Série segue sem
+> existir (Etapa 6b).
 
 > **Fechado em 2026-08-06:** a liberação por valor (`/aprovar-valor`) passou a reservar como a aprovação normal, e **excluir** uma requisição passou a soltar as reservas dela (antes só cancelar soltava). Se você usa liberação por valor, o material aprovado por essa via agora fica reservado — a requisição aparece como **Totalmente/Parcialmente Reservada** em vez de só **Aprovada**.
 
@@ -304,6 +348,138 @@ se aprova, aprova em parte, ou reprova.
 
 ---
 
+## Etapa 6 — Lotes de Verdade (ENTREGUE — 2026-08-09)
+
+Até esta etapa, "lote" era um campo de texto. Você digitava, o sistema guardava — e **nunca olhava
+de novo**. Não existia cadastro de lote, não existia validade, não existia certificado, e o sistema
+não sabia quanto tinha de cada lote. A Etapa 6 transformou lote numa coisa de verdade.
+
+**O problema mais grave que ela consertou, em uma frase:** o sistema deixava você tirar 10 de um
+lote que tinha 2. Não dava erro nenhum. O saldo daquele lote ficava **−8**, e como o total do
+material continuava batendo, nenhuma tela denunciava. Só quem fosse olhar a linha do lote no banco
+descobria.
+
+| Antes | Agora |
+|---|---|
+| Dava para tirar 10 de um lote que tinha 2, e o sistema não reclamava — a linha daquele lote ficava negativa em silêncio | **Recusa** e mostra o saldo real daquele lote na mensagem |
+| Lote era um campo de texto na saída: dava para digitar um lote que não existe, ou errar o código | Na **saída**, o lote virou uma **lista** dos lotes que têm saldo, com o código, o saldo e a data de validade de cada um. Na **entrada** continua texto livre, porque é ali que um lote novo nasce |
+| Você tinha que lembrar qual lote usar primeiro | O sistema **já vem com o lote que vence primeiro selecionado** (FEFO). É uma **sugestão** — você pode trocar por qualquer outro lote elegível |
+| Material vencido saía normalmente | Lote vencido **não sai para consumo**. Mas continua podendo ser baixado como **Sucata** ou **Perda**, ou corrigido por **Ajuste** — material vencido tem que poder sair do estoque, senão fica preso para sempre |
+| Não existia "lote bloqueado" ou "lote reprovado" | Lote tem situação: **Ativo**, **Bloqueado** ou **Reprovado**. Os dois últimos não saem, e a mensagem diz qual é o problema. Lotes não elegíveis **aparecem na lista, desabilitados, com o motivo** — não somem (esconder faria você procurar material que o sistema decidiu não mostrar) |
+| A opção "Controle por lote" na ficha do material não fazia nada | Material com essa opção marcada **exige lote em toda entrada e saída**. O **Ajuste** de inventário continua isento de propósito: é por ele que você regulariza o estoque antigo, que não tem lote nenhum |
+| A opção "Requer certificado" também não fazia nada | Material com essa opção faz o lote **nascer bloqueado** no recebimento, com o motivo "Certificado do fornecedor nao anexado". **O material entra no estoque normalmente** — o que fica travado é a saída, até o certificado chegar |
+| Na tela de Recebimentos não havia onde digitar lote, validade ou corrida — justo na tela onde o lote nasce | Três campos por item: **Lote**, **Validade** e **Corrida**. Ao processar a nota, o lote é criado sozinho já com fornecedor e número da NF |
+| Cada lote não tinha saldo próprio | O saldo passou a ser por material **+ localização + lote**. A coluna "Lote" do Extrato mostra o código do lote |
+
+### Uma regra que parece estranha e é de propósito: liberar um lote vencido **não** o "desvence"
+
+Um lote vencido pode ser **liberado para uso**, com justificativa (fica registrado quem liberou,
+quando e por quê). Depois disso, ele **continua marcado como vencido** em todas as telas — o que
+muda é só que o sistema passa a deixar consumi-lo. Isso é intencional: apagar a marca de vencido
+esconderia da auditoria que aquele material está fora da validade. Na lista de lotes ele aparece
+como "(vencido, liberado)".
+
+E se um lote estiver **bloqueado e vencido** ao mesmo tempo, liberar o vencimento não resolve — ele
+continua barrado por bloqueio, com a mensagem de bloqueio. Situação vem antes de validade.
+
+### Roteiro de teste manual (Etapa 6)
+
+**A) Preparar um material com controle por lote**
+
+1. Vá em **Almoxarifado → Materiais**, edite um material (ou crie um novo). Na seção **Controles**,
+   marque **"Controle por lote"** e salve. Anote o código dele.
+
+**B) Caso de erro esperado — movimentar material controlado sem lote**
+
+2. Vá em **Almoxarifado → Movimentações → Nova Movimentação**. Escolha esse material, tipo
+   **Entrada**, quantidade 10, e deixe o campo **Lote** vazio. Confirme. **Deve ser recusado** com
+   uma mensagem dizendo que o material exige lote em toda entrada e saída — e o saldo **não** pode
+   mudar (confira no Extrato).
+
+**C) Entrada com lote, e o lote nascendo**
+
+3. Repita a entrada, agora digitando um lote no campo **Lote** (ex.: `L-001`), quantidade 100.
+   Confirme. Faça uma segunda entrada do mesmo material com o lote `L-002`, quantidade 2.
+4. Abra o **Extrato** do material (Materiais → ícone Extrato). Na tabela de saldos, a coluna
+   **Lote** deve mostrar `L-001` e `L-002` em linhas separadas, com 100 e 2.
+
+**D) O bug principal — tirar mais do que o lote tem**
+
+5. Nova Movimentação, tipo **Saída**, mesmo material. Repare que o campo Lote agora é uma **lista**,
+   não um campo de texto, e que ela mostra o saldo de cada lote.
+6. Escolha o lote `L-002` (que tem 2) e peça quantidade **10**. Preencha o motivo e confirme.
+   **Caso de erro esperado:** recusado, com o saldo real do lote na mensagem. **Antes da Etapa 6
+   isso passava sem erro nenhum.** Volte ao Extrato e confira que `L-002` continua com 2 e o total
+   do material não mudou.
+7. Agora peça **1** do lote `L-002`. Deve passar, e só o `L-002` deve cair (para 1) — o `L-001`
+   continua com 100.
+
+**E) FEFO — o lote que vence primeiro vem sugerido**
+
+8. Faça duas entradas novas (ou use o **Recebimento**, passo F) criando dois lotes com validades
+   diferentes: um vencendo em 2030 e outro em 2031.
+9. Abra Nova Movimentação → **Saída** → escolha o material. O campo Lote deve vir **já preenchido
+   com o lote de validade mais próxima**, sem você escolher. Troque para outro lote da lista para
+   confirmar que a sugestão não é imposição.
+
+**F) O lote nascendo no recebimento (é onde ele deve nascer)**
+
+10. Vá em **Almoxarifado → Recebimentos → Novo Recebimento**. Preencha nota e fornecedor e adicione
+    o material com uma quantidade. Salve.
+11. Avance o fluxo até **"Preencher Dados da NF (Faturamento)"** (Iniciar Conferência → Finalizar
+    Conferência → Encaminhar para Compras → Encaminhar para Faturamento). Nos itens, agora aparecem
+    três campos novos: **Lote**, **Validade** e **Corrida**. Preencha os três e salve.
+12. Clique em **"Processar Nota — Estoque + Contas a Pagar"**. Volte ao **Extrato** do material: o
+    saldo entrou **no lote que você digitou**, e a validade/corrida ficaram guardadas nele.
+
+**G) Caso de erro esperado — lote vencido**
+
+13. Crie (pelo recebimento, passo F) um lote com **validade no passado** (ex.: `2020-01-01`) e
+    processe a nota para ele ganhar saldo.
+14. Nova Movimentação → **Saída** → escolha esse material. Na lista de lotes, o lote vencido deve
+    aparecer **desabilitado**, com "(vencido)" no rótulo. Se você conseguir selecioná-lo por outro
+    caminho, a saída é recusada com a mensagem de vencimento.
+15. **Mas o descarte passa:** mude o tipo para **Sucata** (ou **Perda**) e baixe o mesmo lote
+    vencido. **Deve funcionar** — material vencido precisa poder sair do estoque.
+
+**H) Certificado do fornecedor**
+
+16. Em **Materiais**, edite um material e marque **"Requer certificado"** na seção Controles.
+17. Faça um recebimento desse material com um lote (passos 10 a 12). Depois de processar, tente uma
+    **Saída** desse lote. **Caso de erro esperado:** recusado, porque o lote nasceu **bloqueado**
+    por falta de certificado. Confira no Extrato que o material **entrou** no estoque físico
+    normalmente — só a saída é que está travada.
+
+> **⚠️ Aqui você bate na parede, e é a limitação conhecida da etapa.** Anexar o certificado para
+> destravar esse lote **não tem botão em lugar nenhum**. A funcionalidade existe no servidor, mas
+> ninguém ligou a uma tela. O mesmo vale para bloquear/reprovar um lote e para liberar um lote
+> vencido para uso. Enquanto a tela de lotes não existir, esses três casos só se resolvem por
+> chamada direta à API. Ver "Pendências conhecidas", no fim deste documento.
+
+### O que a Etapa 6 **não** cobre
+
+- **Números de série.** Rastrear peça por peça (motor nº tal, instrumento nº tal) continua não
+  existindo, e a opção "Controle por número de série" na ficha do material continua decorativa. É a
+  **Etapa 6b**, que é a próxima.
+- **Etiquetas e QR Code.** Imprimir etiqueta de lote/material com código de barras ou QR não existe.
+  É a **Etapa 6c**.
+- **Reserva por lote.** Reservar material continua reservando do material, não de um lote
+  específico.
+- **Reprovar um lote pela tela de Inspeções.** A inspeção continua bloqueando o **material
+  inteiro**; ela não marca o lote como reprovado. A situação "Reprovado" do lote existe e funciona,
+  mas hoje só pode ser aplicada por fora da tela de Inspeções.
+- **Genealogia de lote** (ligar o lote de matéria-prima que comprou ao lote de produção que saiu).
+- **Reter só uma parte de um lote.** A retenção é do lote inteiro, pela situação dele. Reprovar 10
+  de um lote de 100 não tem representação — foi decisão consciente: retenção por lote é *situação*,
+  não *quantidade*.
+- **Extrato do lote** ("tudo que aconteceu com o lote X"). Os dados existem (movimentações,
+  auditoria, saldo), mas não há uma consulta que junte os três como o Extrato faz para o material.
+- **"Controle de validade" e "Controle de corrida"** na ficha do material continuam decorativos: os
+  campos de validade e corrida existem e funcionam no lote, mas o sistema não *obriga* preenchê-los
+  quando essas opções estão marcadas.
+
+---
+
 ## O que observar de regressão (sempre)
 
 - O fluxo de requisição de materiais que já existia (criar → aprovar → separar → entregar) continua funcionando normalmente — nada foi removido nessa tela; requisições antigas continuam com o comportamento de sempre (criadas sem tipo/centro de custo ganham o padrão "Consumo").
@@ -315,6 +491,16 @@ se aprova, aprova em parte, ou reprova.
 ## Decisões de negócio (não são pendências)
 
 - **Almoxarifado é área física, não filial.** Os almoxarifados representam áreas de alocação dentro do mesmo site (galpão, mezanino, área externa). O cliente tem uma única filial. Por isso o **saldo de cada material é um só**, somado em todas as áreas — o almoxarifado serve para você *achar onde o item está*, não para manter estoques separados. Uma saída consome o saldo total do material, independente da área em que ele está endereçado. Isso é intencional: se algum dia existir uma segunda filial, a regra muda, mas hoje tratar como dois estoques seria errado.
+- **A primeira contagem numa prateleira REDEFINE o saldo do material (decidido em 2026-08-09).**
+  Hoje praticamente todo o estoque tem saldo no sistema e **nenhum endereço registrado**. Quando
+  você conta esse material pela primeira vez numa localização e lança o ajuste, o sistema entende
+  que *"nesta prateleira tem 40"* significa **o material tem 40** — não 140. A partir daí, o total
+  do material passa a ser a soma do que está endereçado. É o comportamento correto para inventário
+  inicial, e é o que faz o endereçamento valer alguma coisa: se a contagem apenas somasse, o saldo
+  antigo sem endereço nunca sumiria. **Ressalva importante:** essa regra vale enquanto o material
+  ainda não tiver *nenhuma* linha de saldo registrada. Depois que um ajuste global já criou uma
+  linha "sem endereço", contar uma prateleira **soma** em vez de redefinir — ver a pendência sobre
+  isso logo abaixo, que está esperando decisão sua.
 
 ---
 
@@ -325,7 +511,45 @@ se aprova, aprova em parte, ou reprova.
 - Reservas de estoque: **completo na Etapa 4** — backend, tela (Almoxarifado → Reservas) e as duas rotas que escapavam do hold (liberação por valor e exclusão de requisição). Sem pendência.
 - Anexos na requisição (desenho/documento) e assinatura digital na retirada: ainda não implementados.
 - Importar itens de uma lista técnica ou ordem de produção na requisição: ainda não implementado (depende da integração com Engenharia/Produção).
-- Registrar lote/série entregue por item na requisição: ainda não implementado (depende do controle de lotes, etapa futura).
+- Registrar lote/série entregue por item na requisição: ainda não implementado. O controle de lotes
+  passou a existir na Etapa 6, mas a **entrega da requisição** ainda não pergunta de qual lote saiu.
+- **Lotes: completo na Etapa 6** para o motor, o recebimento e a saída — mas **sem tela de gestão de
+  lotes**. Três operações reais existem no servidor e não têm botão em nenhum lugar do sistema:
+  1. **Bloquear / reprovar / reativar um lote** (ex.: o ensaio de laboratório reprovou aquela
+     corrida);
+  2. **Liberar um lote vencido para uso**, com justificativa — a mensagem de erro que você vê ao
+     tentar consumir um lote vencido inclusive cita o endereço técnico dessa operação, porque não
+     há outro caminho;
+  3. **Anexar o certificado do fornecedor depois do recebimento**, que é o que destrava um lote que
+     nasceu bloqueado por falta dele.
+
+  Até essa tela existir, esses três casos precisam ser resolvidos por chamada direta à API (peça ao
+  desenvolvedor). É a lacuna mais visível que a Etapa 6 deixa.
+- **Reprovar na inspeção não marca o lote.** A tela de Inspeções continua bloqueando o **material
+  inteiro**, não o lote específico. Reprovar 10 unidades de um lote de 100 bloqueia 10 do material —
+  o lote em si continua "Ativo" e sai normalmente. Ligar as duas coisas é mudança na tela de
+  Inspeções, não no controle de lotes, e ficou de fora da Etapa 6 de propósito.
+- **⚠️ Decisão de negócio esperando você (1): contagem de prateleira depois de um ajuste global.**
+  A regra "a primeira contagem redefine o saldo" (ver Decisões de negócio acima) vale quando o
+  material nunca teve contagem. Mas se você fizer um **ajuste global de 100** (sem escolher
+  localização) e depois **contar 40 numa prateleira**, o resultado é **140**, não 40 — porque os 100
+  continuam registrados "sem endereço" e a soma inclui os dois. Qual dos dois é o certo é pergunta
+  de negócio, não técnica: *"100 sem endereço + 40 na prateleira A" é um material com 140 espalhado,
+  ou um material com 40 que acabou de ser inventariado?* Nada foi mudado até você decidir.
+- **⚠️ Decisão de negócio esperando você (2): certificado de fornecedor acessível sem login.** Os
+  arquivos enviados no módulo (fotos de material e, desde a Etapa 6, **certificados de fornecedor**)
+  ficam numa pasta servida diretamente pelo servidor, **fora da verificação de login**. Quem souber
+  o endereço do arquivo consegue baixá-lo sem estar autenticado. **Não é uma regressão da Etapa 6**
+  — é o mesmo tratamento que as fotos de material já tinham desde sempre —, mas certificado é
+  documento bem mais sensível que foto de prateleira. Se você quiser que passe a exigir login, é uma
+  mudança pequena e isolada.
+- **Ajuste de inventário homologado pode "evaporar".** Concluir uma conferência de estoque com
+  "aplicar ajustes" grava o total do material por um caminho antigo, que **não atualiza o saldo por
+  prateleira**. Se depois disso você contar uma prateleira, o sistema recalcula o total a partir das
+  prateleiras — e o número homologado no inventário se perde. **É anterior à Etapa 6** (não foi ela
+  que causou), e o conserto é rotear a conclusão da conferência pelo mesmo motor que todo o resto
+  usa. Enquanto isso não for feito, evite intercalar "concluir conferência com ajustes" e "contagem
+  por localização" no mesmo material.
 - Regras de aprovação configuráveis (por tipo de material, valor, quantidade, projeto, urgência) com tela própria: hoje as regras (segregação do solicitante + limite por valor) são fixas no código — sem tela de configuração.
 - Encerramento não dispara e-mail de resumo.
 - **Inspeção/quarentena: completo na Etapa 5** para o que estava no escopo — quarentena real na

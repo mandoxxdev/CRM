@@ -3,7 +3,8 @@
 > **Status:** 🟡 — quarentena e decisão de inspeção reais desde a Etapa 5; faltam plano de
 > inspeção com medidas, não conformidade formal numerada, desvio autorizado e perfil QUALIDADE ·
 > **Spec original:** seção 9
-> **Última atualização:** 2026-08-08 (Etapa 5 — quarentena e bloqueio efetivos no saldo)
+> **Última atualização:** 2026-08-09 (Etapa 6 — registra a pendência nova "reprovar por lote não
+> está ligado à inspeção" e corrige a linha da tabela que dizia que a feature 10 não existia)
 
 ## Objetivo
 
@@ -56,6 +57,33 @@ não estão amarrados um ao outro nem ao `recebimento_id` que originou a reprova
 (Devoluções)** montar a fila do que precisa voltar ao fornecedor — mas a feature 12 ainda não
 existe com esse consumo. Até lá, saber o que está bloqueado por reprovação de inspeção exige
 cruzar `materiais_almoxarifado.quantidade_bloqueada` com o histórico de `inspecoes_recebimento_almoxarifado`.
+
+## Pendência criada pela Etapa 6 (2026-08-09) — reprovar por LOTE não está ligado à inspeção
+
+**A Etapa 6 entregou metade do caminho, e a metade que falta é justamente esta feature.** O lote
+agora tem status `REPROVADO` (`lotService.mudarStatusLote`, `b7035dd`), a rota que o muda existe
+(`PUT /api/almoxarifado/lotes/:id/status`, perm. `inspecionar`, justificativa obrigatória,
+auditada — `8dfeb0c`) e o motor **recusa a saída de lote reprovado** (`65d78fd`).
+
+Mas `inspectionService.decidirInspecao` **não sabe que lotes existem**: reprovar continua movendo
+quantidade do material inteiro de `quantidade_em_inspecao` para `quantidade_bloqueada`, sem tocar
+em `lotes_almoxarifado`. Consequência prática: reprovar 10 de um lote de 100 bloqueia 10 unidades
+**do material**, não daquele lote — o lote específico continua `ATIVO` e sai normalmente, e é a
+guarda genérica de material bloqueado que segura a conta. Um operador que reprovou o lote `X` e vê
+o lote `X` ainda saindo pela tela de movimentação está vendo o comportamento correto do código e
+errado do negócio.
+
+**Não é regressão nem esquecimento:** o plano da Etapa 6 declarou isso explicitamente na
+auto-revisão ("uma decisão do design não virou task de código de propósito"), porque ligar os dois
+é mudança **nesta** feature (09) e não na 10 — mexe em `decidirInspecao`, no gate de permissão e no
+registro de inspeção, e precisa decidir o que acontece quando a decisão é **parcial** (aprovar 90 e
+reprovar 10 de um mesmo lote não tem representação hoje: status é do lote inteiro, e a Etapa 6
+decidiu de propósito que retenção por lote é **status, não quantidade**).
+
+O caminho natural: quando o item de recebimento tiver `lote_id`
+(`recebimentos_material_itens_almoxarifado.lote_id`, escrito desde `64686b1` e **ainda sem
+leitor**), a reprovação total daquele item chama `mudarStatusLote(..., 'REPROVADO', motivo)` junto
+do efeito de saldo. A reprovação parcial fica em aberto até alguém decidir se vira split de lote.
 
 ## Limitações verificadas (não são bugs, são trade-offs documentados)
 
@@ -122,9 +150,9 @@ cruzar `materiais_almoxarifado.quantidade_bloqueada` com o histórico de `inspec
 | Estorno de `BLOQUEIO` já desfeito recusa em vez de saturar (não cria bloqueado sem lastro) | `estorno de BLOQUEIO ja desfeito recusa em vez de saturar (bloqueio fantasma)` — `server/tests/api/estorno.api.test.js` |
 | `AJUSTE` por localização (e seu estorno) não zera a retenção do material | `AJUSTE por localizacao nao evapora a quarentena do material` + `estorno de AJUSTE por localizacao nao evapora a reserva do material` — `server/tests/api/ajusteLocalizacao.api.test.js` |
 | Quantidade não numérica é recusada com 400 (NaN não pode contornar a guarda de fechamento) | `POST inspecionar com quantidade nao numerica retorna 400...` + `POST bloquear/desbloquear com quantidade nao numerica retorna 400` — `server/tests/api/inspecaoRotas.api.test.js` |
-| Lote reprovado não sai para consumo | não implementado — depende do controle de lote/série (feature 10), que ainda não existe |
+| Lote reprovado não sai para consumo | ✅ **no motor**: `saida de lote reprovado falha` + `saida de lote bloqueado falha, e liberar o lote destrava` — `server/tests/api/loteGuardasSaida.api.test.js` (Etapa 6, `65d78fd`). **Correção de 2026-08-09:** esta linha dizia *"não implementado — depende do controle de lote/série (feature 10), que ainda não existe"*. A feature 10 (lotes) **existe** desde a Etapa 6 e o motor recusa a saída. O que continua faltando é a **inspeção marcar o lote** — ver a pendência abaixo |
 | Desvio autorizado exige responsável + justificativa e fica registrado | não implementado — fora do escopo da Etapa 5 |
 
 ## Dependências
 
-- 08 (recebimento dá entrada retida; este README decide o que a 08 apenas reteve) · 03 (efeitos no saldo via movimentação) · 10 (reprovação por lote/série, ainda não existe) · 12 (Devoluções — vai consumir o `encaminhamento` registrado aqui) · 16 (calibração de instrumentos — plano de inspeção com medidas depende disso).
+- 08 (recebimento dá entrada retida; este README decide o que a 08 apenas reteve) · 03 (efeitos no saldo via movimentação) · **10 (lotes existem desde a Etapa 6 e o motor recusa lote reprovado; ligar `decidirInspecao` ao lote é pendência DESTA feature — ver seção acima. Séries continuam ausentes, Etapa 6b)** · 12 (Devoluções — vai consumir o `encaminhamento` registrado aqui) · 16 (calibração de instrumentos — plano de inspeção com medidas depende disso).

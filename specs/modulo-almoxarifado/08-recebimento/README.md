@@ -1,7 +1,7 @@
 # 08 — Entrada e Recebimento de Materiais
 
-> **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5); faltam tipos de entrada e conferência física estruturada · **Spec original:** seção 8
-> **Última atualização:** 2026-08-08 (Etapa 5 — quarentena e bloqueio efetivos no saldo)
+> **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**; faltam tipos de entrada, conferência física estruturada e etiqueta · **Spec original:** seção 8
+> **Última atualização:** 2026-08-09 (Etapa 6 — o lote nasce no recebimento e `controle_certificado` deixou de ser `SELECT` morto)
 
 ## Objetivo
 
@@ -24,6 +24,33 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
   `quantidade_em_inspecao` juntos, via movimentação `QUARENTENA` vinculada ao recebimento
   (`recebimento_id`) — fora do disponível, mas dentro do físico. Item comum continua entrando
   direto no disponível, sem mudança (`4db5e11`).
+- **Etapa 6 (2026-08-09):** **é aqui que o lote nasce.** Antes, `RecebimentosAlmoxarifado.js` não
+  mencionava lote em lugar nenhum, embora a coluna `lote TEXT` existisse no item e o backend a
+  repassasse ao motor — ou seja, o ponto em que um lote naturalmente nasce (a NF do fornecedor) era
+  justamente o que não conseguia registrá-lo. Agora:
+  - o item de recebimento ganhou `lote_id`, `data_validade_lote` e `corrida_lote`
+    (`schema.js:949-951`), preenchíveis na tela por três campos por item
+    (`RecebimentosAlmoxarifado.js:518-525`, enviados em `171-173`) — `9406bff`;
+  - `receiptService.darEntradaEstoque` (`receiptService.js:329-359`) chama
+    `lotService.criarOuObterLote` **antes** do motor, herdando fornecedor, NF, corrida e validade,
+    e passa `lote_id` para a movimentação `ENTRADA_COMPRA`. A criação fica dentro do `if (qtd > 0)`
+    de propósito: item com quantidade zero não move estoque, então não cria lote — `64686b1`;
+  - **`controle_certificado` deixou de ser flag morta.** `receiptService.js:314` fazia
+    `SELECT … m.controle_certificado` e **nunca usava a coluna selecionada** — quem auditasse por
+    `grep controle_certificado` achava aquela linha e concluía que a entrada verificava
+    certificado. Não verificava. Agora, material com a flag ligada faz o lote **nascer
+    `BLOQUEADO`** com motivo "Certificado do fornecedor nao anexado" (`receiptService.js:340`).
+    A **entrada não é barrada** — barrar a entrada foi exatamente o erro corrigido na Etapa 5; o
+    material entra fisicamente e é a **saída** que fica travada até o certificado chegar;
+  - `POST /api/almoxarifado/lotes/:id/certificado` (`routes/almoxarifado.js:623`, perm.
+    `receber_material`, `requirePermission` **antes** do multer, aceita PDF e imagem) anexa o
+    arquivo e libera **só** o bloqueio que era de certificado — a pré-condição inteira mora dentro
+    do `WHERE` de `lotService.liberarBloqueioPorCertificado`, porque decidir fora dele abria uma
+    corrida que liberava lote `REPROVADO` por engano (`c11db85`).
+
+  Duas ressalvas honestas: **não há tela que chame essa rota de certificado** depois do
+  recebimento (ver pendência (a) da spec 10), e `recebimentos_material_itens_almoxarifado.lote_id`
+  tem escritor mas ainda nenhum leitor.
 
 ## Checklist
 
@@ -34,7 +61,7 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
 - [ ] Conferência física estruturada (spec 8.3): contagem, pesagem, medição, checklist configurável por tipo de material. **Fora do escopo da Etapa 5**, mesma decisão acima.
 - [ ] Fotos do recebimento (`anexos_documento_almoxarifado` entidade `recebimento`)
 - [ ] Divergências: registro formal (tipo, quantidade, ação) — parcial na inspeção
-- [ ] Ao aprovar: definir localização (sugestão da feature 02) + gerar etiqueta (feature 10) + **atualizar saldo via movimentação v2** (verificar se o processamento atual passa pelo stockService — se não, unificar) — a entrada já passa pelo motor (`registrarMovimentacao`) desde antes da Etapa 5; falta a etiqueta (feature 10) e a sugestão de localização
+- [ ] Ao aprovar: definir localização (sugestão da feature 02) + gerar etiqueta (feature 10) + **atualizar saldo via movimentação v2** — a entrada já passa pelo motor (`registrarMovimentacao`) desde antes da Etapa 5, e desde a Etapa 6 a movimentação vai com `lote_id` (`64686b1`). Continuam faltando a **etiqueta** (Etapa 6c, não a 6) e a sugestão de localização
 - [x] Quarentena: material aguardando inspeção não entra no disponível (`quantidade_em_inspecao`) — **Etapa 5 (2026-08-08)**. Três movimentos novos no motor (`QUARENTENA`, `LIBERACAO_INSPECAO`, `REPROVACAO_INSPECAO`) com guarda atômica (`c37b67e`); entrada retida em vez de barrada (`4db5e11`). A decisão de inspeção em si (aprovar/reprovar/parcial) é da feature 09 — ver aquele README para o motor real usado na decisão (`DECISAO_INSPECAO`, não os dois tipos separados acima).
 - [ ] E-mail automático na entrada confirmada (feature 19)
 - [ ] Duplicidade: mesma NF+fornecedor não entra duas vezes
@@ -55,9 +82,13 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
 | Item não crítico entra direto no disponível (regressão) | `item NAO critico entra direto no disponivel (regressao)` — mesmo arquivo |
 | Retenção fica registrada no livro, vinculada ao recebimento | `a retencao aparece no livro como QUARENTENA vinculada ao recebimento` — mesmo arquivo |
 | Processar recebimento gera movimentação de entrada com saldo anterior/posterior | `processar recebimento cria movimentacao v2 vinculada` |
+| Processar recebimento cria o lote com os dados da NF, e a entrada fica vinculada a ele | `processar recebimento cria o lote com dados da NF` + `a entrada de estoque fica vinculada ao lote criado` — `server/tests/api/loteRecebimento.api.test.js` (`64686b1`) |
+| Material com `controle_certificado` e sem anexo: lote nasce BLOQUEADO, mas o material **entra** | `sem certificado, o lote nasce BLOQUEADO: entra fisicamente mas a saida e recusada` — mesmo arquivo |
+| Anexar certificado libera o lote — mas nunca um lote REPROVADO | `anexar o certificado libera o lote` + `lote REPROVADO continua bloqueado depois de anexar o certificado` — mesmo arquivo (`c11db85`) |
+| Upload de certificado sem permissão não grava arquivo (permissão antes do multer) | `upload de certificado sem permissao nao grava arquivo` — mesmo arquivo |
 | Workflow não pula etapas | `avancar etapa fora de ordem falha` |
 | Recebimento parcial mantém pendência do pedido | `recebimento parcial atualiza saldo pendente do pedido` |
 
 ## Dependências
 
-- 03 (movimentação v2) · 02 (localização na entrada) · 09 (inspeção — decide o que este README apenas retém) · 10 (lote/etiqueta) · 19 (e-mail).
+- 03 (movimentação v2) · 02 (localização na entrada) · 09 (inspeção — decide o que este README apenas retém) · 10 (**lote ligado na Etapa 6**; etiqueta continua ausente — Etapa 6c) · 19 (e-mail).

@@ -11,6 +11,36 @@
 **Design de origem:** [`docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md`](../specs/2026-08-09-almoxarifado-etapa6-lotes-design.md)
 **Spec da feature:** `specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md`
 
+---
+
+## ✅ ETAPA CONCLUÍDA — 2026-08-09 · base `d369871` · 19 commits (`b7035dd..9406bff`)
+
+**Todas as tasks entregues, mais uma (3b) que não estava neste plano.** Os `- [ ]` dos Steps dentro
+de cada task ficaram sem marcar de propósito: o texto de vários Steps **não descreve mais o código
+final** (a Task 3 passou por cinco rodadas de review que mudaram decisões de fundo). Marcar Step a
+Step daria a impressão errada de que o plano literal foi seguido. O checklist consolidado — o que
+é fonte da verdade — está em
+[`specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md`](../../../specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md).
+
+| Task | Estado | Commits |
+|---|---|---|
+| **1** — tabela de lotes + `lotService` | ✅ | `b7035dd`, `d6e36e9` (fix: status inválido recusado, não coagido para ATIVO) |
+| **2** — reconstrução de `estoque_saldo_almoxarifado` | ✅ | `015e94c`, `b4e4858` (fix: teste vazio da migração + leitor órfão do lote no extrato) |
+| **3** — três guardas da saída por lote | ✅ | `65d78fd`, `920d10c`, `f65758d`, `8d7773e`, `c2e31dc`, `1effd07`, `4dd6169`, `2d6fec5`, `dee5378` (**cinco rodadas de review**) |
+| **3b** — liberação de vencimento *(não estava no plano)* | ✅ | `556f86d` — ver a seção própria, abaixo da Task 3 |
+| **4** — `controle_lote` deixa de ser flag morta | ✅ | `2dbbf60` |
+| **5** — lote nasce no recebimento + `controle_certificado` | ✅ | `64686b1`, `c11db85` (fix: corrida que liberava lote reprovado ao anexar certificado) |
+| **6** — rotas FEFO e mudança de status | ✅ | `8dfeb0c` |
+| **7** — telas (lote no recebimento, seletor FEFO na saída) | ✅ | `9406bff` |
+| **8** — documentação | ✅ | este commit |
+
+**Onde parar de ler o plano e ler o código:** a Task 3 é a única cujo texto ficou substancialmente
+desatualizado. Antes de mexer no motor, leia
+`.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-3-report.md` e a nota no cabeçalho da
+Task 3 abaixo.
+
+**➡️ A próxima etapa (6b — números de série) está detalhada no fim deste arquivo.**
+
 ## Global Constraints
 
 Toda task herda estas regras. Elas não são estilo — cada uma é cicatriz de um bug real desta base.
@@ -55,6 +85,13 @@ Um único arquivo de teste roda direto: `cd server && node tests/api/lotes.api.t
 ---
 
 ### Task 1: Tabela de lotes e o serviço que é dono dela
+
+> **✅ ENTREGUE — `b7035dd` + `d6e36e9`.** O fix `d6e36e9` mudou uma decisão do texto abaixo:
+> `criarOuObterLote` **recusa** status inválido em vez de coagir para `ATIVO` em silêncio (o código
+> do Step 4 abaixo ainda mostra a coerção). Também mudou depois: `lotService` ganhou
+> `liberarVencimento`/`vencimentoLiberado` na Task 3b (`556f86d`),
+> `liberarBloqueioPorCertificado` na Task 5 (`c11db85`) e `listarLotesDoMaterial` na Task 6
+> (`8dfeb0c`). A tabela ganhou `vencimento_liberado_em/_por/_motivo` via `safeAlter`.
 
 **Files:**
 - Create: `server/services/almoxarifado/lotService.js`
@@ -363,6 +400,19 @@ git commit -m "Almoxarifado Etapa 6: tabela de lotes e o servico dono dela"
 ---
 
 ### Task 2: Reconstruir `estoque_saldo_almoxarifado` — `lote_id`, sem colunas mortas, com chave que funciona
+
+> **✅ ENTREGUE — `015e94c` + `b4e4858`.** Duas divergências do texto abaixo, ambas corretas:
+> (a) o `CREATE UNIQUE INDEX` **não** fica logo depois do `CREATE TABLE` como o Step 3 manda — em
+> banco existente o `CREATE TABLE IF NOT EXISTS` é no-op e o índice referenciaria `lote_id` antes
+> da migração reconstruir a tabela, quebrando o boot; foi movido para **depois** de
+> `migrateSaldoLoteId` (comentário no próprio `schema.js:732-734` explica);
+> (b) `MAPA_LOCALIZACOES_SQL` lia `quantidade_reservada` do saldo direto em SQL, fora de qualquer
+> chamador de `getOrCreateSaldo` — não estava na lista de chamadores do Step 5.
+> O fix `b4e4858` fechou um **teste vazio**: o "migração idempotente" rodava sobre banco que já
+> nascia na forma nova e saía pelo early-return, sem entrar no corpo da migração; foi renomeado
+> honestamente e um teste real (com mutação `SUM`→`MIN` provada) entrou no lugar. O mesmo fix
+> devolveu `lt.codigo as lote` em `consultarSaldosPorLocalizacao`, senão a coluna "Lote" do extrato
+> ficaria em `—` para sempre, em silêncio.
 
 **Files:**
 - Modify: `server/services/almoxarifado/schema.js` (`CREATE TABLE` em `schema.js:631-645`; nova função de migração ao lado de `migrateHistoricoNullableMaterial`, `schema.js:381-435`; chamada dentro de `initSchema`)
@@ -679,8 +729,9 @@ git commit -m "Almoxarifado Etapa 6: saldo passa a referenciar lote por id e per
 > motor (`routes/almoxarifado.js:868`, conclusão de inventário) — pendência nomeada na spec 03,
 > junto com a pendência de negócio sobre "a primeira contagem redefine o saldo" depois que a linha
 > residual sem endereço existe (medido 140, não 40 — decisão do cliente pendente).
-> **Próxima:** Task 4 (`controle_lote` deixa de ser flag morta), que consome o `lote_id`/`lote`
-> resolvido por `registrarMovimentacao` já entregue aqui.
+> **Depois desta veio a Task 3b** (liberação de vencimento, `556f86d`), que **não estava neste
+> plano** — nasceu de um achado do review da própria Task 3 e foi aprovada pelo cliente em
+> 2026-08-09. Ver a seção logo abaixo. Depois dela, a Task 4.
 
 **Files:**
 - Modify: `server/services/almoxarifado/stockService.js` (`registrarMovimentacao`: destructuring em `197-203`; bloco de saída em `481-485`; INSERT do ledger em `496-509`)
@@ -991,7 +1042,64 @@ git commit -m "Almoxarifado Etapa 6: saida por lote valida status, validade e sa
 
 ---
 
+### Task 3b: Liberação de vencimento de lote para uso — **NÃO ESTAVA NESTE PLANO**
+
+> **✅ ENTREGUE — `556f86d`.** Relatório completo:
+> `.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-3b-report.md`.
+
+**Por que ela existiu.** O review da Task 3 achou que a guarda de vencimento tinha sido escrita
+**sem** o caminho de liberação que o próprio cliente pedira no design — e, pior, que a mensagem de
+erro mandava o operador *"liberar o lote pela tela de lotes, com justificativa"*, coisa que **não
+destravava nada**: não existia nem tela, nem rota, nem coluna. Era uma parede com placa de porta.
+O cliente aprovou a task no meio da etapa, em 2026-08-09.
+
+**O que ela entregou:**
+
+- `lotes_almoxarifado.vencimento_liberado_em` / `_por` / `_motivo` (via `safeAlter`, não reescrevendo
+  o `CREATE TABLE` que já existia desde a Task 1) — `schema.js:773-775`;
+- `lotService.vencimentoLiberado(lote)` → boolean, só olha se `vencimento_liberado_em` está
+  preenchido;
+- `lotService.liberarVencimento(db, user, loteId, justificativa)` — justificativa obrigatória (400),
+  lote inexistente 404, lote **não vencido** recusado (400, evita registro que confunde auditoria
+  depois), guarda no `WHERE` contra `data_validade` (a mesma coluna que `isVencido` acabou de ler →
+  409 se mudou no meio), auditado com `acao='LIBERACAO_VENCIMENTO'`;
+- `PUT /api/almoxarifado/lotes/:id/liberar-vencimento` (perm. `inspecionar` — nenhuma ação nova em
+  `ACAO_PERFIS`) — `extended.js:483`;
+- a guarda de saída em `stockService.js:451` passou a ser
+  `isVencido(lote) && !vencimentoLiberado(lote)`;
+- `server/tests/api/loteVencimentoLiberacao.api.test.js` — 8 casos, com controle positivo que provou
+  a mutação (removida a cláusula `&& !vencimentoLiberado`, exatamente 1 teste falhou).
+
+**A decisão contraintuitiva que alguém vai tentar "simplificar" — não simplifique:**
+
+> **Liberar o vencimento NÃO "desvence" o lote.** `isVencido` continua derivado **só** de
+> `data_validade` e continua devolvendo `true` depois da liberação. O que muda é a **decisão da
+> guarda de saída**, não o fato. Fundir as duas coisas num campo só (um `status = 'LIBERADO'`, ou
+> um `isVencido` que passa a considerar a liberação) destruiria a informação de que aquele material
+> está fora da validade — que é exatamente o que a auditoria precisa enxergar. Por isso a listagem
+> FEFO devolve `vencido: true` **e** `vencimento_liberado: true` lado a lado, e a tela escreve
+> "(vencido, liberado)". Há teste dedicado segurando isso: `lote continua marcado como vencido
+> depois da liberacao`.
+
+**Ordem das guardas — status antes de vencimento, de propósito.** Um lote `BLOQUEADO` **e** vencido,
+mesmo com o vencimento liberado, falha por **bloqueio**, com a mensagem de bloqueio. Falhar por
+vencimento mandaria o operador liberar de novo algo que já está liberado. Coberto por `liberacao
+nao destrava lote bloqueado` e, na listagem, por `bloqueado com vencimento liberado continua nao
+elegivel (status manda por cima)`.
+
+**O que a 3b NÃO resolveu, e virou pendência:** não existe **tela** que chame essa rota. A mensagem
+de erro do motor hoje cita o endpoint HTTP (`PUT /api/almoxarifado/lotes/:id/liberar-vencimento`)
+para um operador que só tem navegador. É a mesma classe de problema que a 3b nasceu para consertar,
+um nível acima — registrada como pendência (a) na spec 10.
+
+---
+
 ### Task 4: `controle_lote` deixa de ser flag morta
+
+> **✅ ENTREGUE — `2dbbf60`**, conforme o texto abaixo, sem divergências.
+> Detalhe de escopo que o texto não deixa explícito e que vale repetir: `AJUSTE_POSITIVO` e
+> `AJUSTE_NEGATIVO` estão em `tiposEntrada`/`tiposSaida`, então a guarda **exige** lote neles.
+> Só o `AJUSTE` puro é isento.
 
 **Files:**
 - Modify: `server/services/almoxarifado/stockService.js` (`registrarMovimentacao`, junto do bloco de resolução do lote da Task 3)
@@ -1133,6 +1241,20 @@ git commit -m "Almoxarifado Etapa 6: controle_lote passa a ser exigido na entrad
 ---
 
 ### Task 5: O lote nasce no recebimento, e o certificado passa a valer
+
+> **✅ ENTREGUE — `64686b1` + `c11db85`.** Três divergências reais do texto abaixo, todas
+> confirmadas por leitura do código antes de escrever o teste (o plano autoriza isso):
+> as funções chamam-se **`processarNota`** (não `processarRecebimento`) e **`salvarDadosFiscal`**
+> (não `atualizarDadosFiscais`); e `!item.certificado_arquivo` do Step 5 é **constante** — a coluna
+> não existe no item de recebimento (as três colunas de certificado vivem em `lotes_almoxarifado`),
+> então a condição virou só `!!item.controle_certificado`, que acerta por semântica e não por
+> acaso.
+> O fix `c11db85` corrigiu uma **corrida** que o Step 6 introduzia: a rota lia o lote, gravava o
+> arquivo (`await`) e **só então** decidia se liberava — janela suficiente para um lote virar
+> `REPROVADO` no meio e ser liberado por engano. A pré-condição foi inteira para dentro do `WHERE`
+> de `lotService.liberarBloqueioPorCertificado`, chamada incondicionalmente.
+> A criação do lote também foi para dentro do `if (qtd > 0)`: item com quantidade zero não move
+> estoque, então não deve criar lote nem gravar `lote_id`.
 
 **Files:**
 - Modify: `server/services/almoxarifado/schema.js` (`recebItemCols`, hoje `schema.js:795-809`)
@@ -1436,6 +1558,12 @@ git commit -m "Almoxarifado Etapa 6: lote nasce no recebimento e controle_certif
 
 ### Task 6: Rotas de consulta com ordem FEFO e mudança de status
 
+> **✅ ENTREGUE — `8dfeb0c`.** Uma adição sobre o texto abaixo, vinda da Task 3b: a listagem expõe
+> também `vencimento_liberado`, e `elegivel` é
+> `status === 'ATIVO' && (!vencido || vencimento_liberado)` — **na mesma ordem que o motor usa**
+> (status antes de vencimento), com teste para o caso `BLOQUEADO` + vencido + liberado, que sai
+> como **não** elegível.
+
 **Files:**
 - Modify: `server/services/almoxarifado/lotService.js` (adicionar `listarLotesDoMaterial`)
 - Modify: `server/routes/almoxarifado/extended.js` (novas rotas, junto das demais)
@@ -1646,6 +1774,16 @@ git commit -m "Almoxarifado Etapa 6: consulta de lotes em ordem FEFO e mudanca d
 
 ### Task 7: Frontend — o lote passa a existir na tela
 
+> **✅ ENTREGUE — `9406bff`.** Duas notas sobre o texto abaixo: o `disabled` da opção vem de
+> `elegivel` (**não** de `vencido`), senão um lote vencido-e-liberado apareceria desabilitado; e o
+> teste não usa `@testing-library/react` (que não está no projeto) — foi escrito com
+> `createRoot` + `act` + `querySelector`, como os testes vizinhos, preservando asserções de
+> **comportamento**.
+> **O que esta task NÃO cobriu e virou a pendência mais visível da etapa:** não existe tela de
+> **gestão** de lotes. `PUT /lotes/:id/status`, `PUT /lotes/:id/liberar-vencimento` e
+> `POST /lotes/:id/certificado` não têm nenhum consumidor no cliente (verificado por grep em
+> `client/src`). Ver pendência (a) na spec 10.
+
 **Files:**
 - Modify: `client/src/components/almoxarifado/RecebimentosAlmoxarifado.js` (envio dos itens em `161-171`; render dos itens em `488-511`)
 - Modify: `client/src/components/almoxarifado/MovimentacoesAlmoxarifado.js` (form em `71`, `140`, `168-173`, `415-426`; campo de lote em `549-551`)
@@ -1829,6 +1967,13 @@ git commit -m "Almoxarifado Etapa 6: campo de lote no recebimento e seletor FEFO
 
 ### Task 8: Documentação — sem ela a etapa não está terminada
 
+> **✅ ENTREGUE.** Além dos Steps abaixo, esta task corrigiu **quatro afirmações que tinham virado
+> mentira** nas specs (todas apontadas às claras no texto corrigido, conforme manda o `CLAUDE.md`):
+> a spec 03 dizia que a liberação de vencimento "não existe ainda" (existe desde `556f86d`); a
+> spec 03 citava a conclusão de inventário em "~linha 868" (é `894`/`917`); a spec 09 dizia que a
+> feature 10 "ainda não existe"; e o guia dizia que faltava "validar saída de lote vencido ou
+> reprovado". Acrescentou também a Task 3b a este plano, que não a tinha.
+
 **Files:**
 - Modify: `specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md`
 - Modify: `specs/modulo-almoxarifado/README.md`
@@ -1899,3 +2044,90 @@ git commit -m "Almoxarifado Etapa 6: atualiza specs, guia e plano com o que a et
 **Consistência de tipos.** `getOrCreateSaldo(db, materialId, localizacaoId, loteId)` é definida na Task 2 e usada com o mesmo nome e ordem nas Tasks 3 e 5. `criarOuObterLote`, `getLote`, `getLotePorCodigo`, `mudarStatusLote`, `isVencido` e `STATUS_LOTE` são definidas na Task 1 e consumidas com as mesmas assinaturas nas Tasks 3, 5 e 6. `listarLotesDoMaterial` nasce na Task 6 e só é usada lá e no cliente (Task 7). O campo `lote_id` é numérico em todas as camadas; `lote` é sempre texto.
 
 **Risco conhecido, declarado no lugar certo:** o claim atômico da Task 3 roda depois do débito em `quantidade_atual`, então precisa compensar ao falhar. Está escrito no Step 5 da Task 3, com o teste que prova a compensação.
+
+---
+
+# ➡️ PRÓXIMA TAREFA — Etapa 6b: números de série
+
+> Escrito em 2026-08-09, ao fechar a Etapa 6. **Isto ainda não é um plano de implementação** — é o
+> briefing que permite escrever um sem reler o código. O próximo passo formal é rodar
+> `superpowers:brainstorming` + `superpowers:writing-plans` sobre este texto.
+
+## O que já está decidido (não reabrir)
+
+- **Série é rotina na GMP, não exceção.** Confirmado com o cliente em **2026-08-09**: a empresa
+  rastreia número de série individualmente hoje, no papel/planilha. Não é "nice to have" nem
+  escopo especulativo.
+- **A flag `controle_serie` já existe** em `materiais_almoxarifado`, é gravada pelo CRUD e pelo
+  formulário, e **nunca é lida**. É uma das três flags mortas que a Etapa 6 deixou documentadas na
+  spec 10. Esta etapa acende ela — é o critério de "a etapa terminou".
+- **`6b` e não `7`**: as Etapas 7 e 8 do plano mestre já são transferências/devoluções e materiais
+  de clientes/terceiros.
+- Etiquetas com QR ficam para a **6c**, depois desta.
+
+## O contrato que a 6b consome (tudo já entregue e testado)
+
+| O quê | Onde | Observação |
+|---|---|---|
+| `lotService.criarOuObterLote/getLote/getLotePorCodigo/mudarStatusLote/isVencido/listarLotesDoMaterial` | `server/services/almoxarifado/lotService.js` | É o **modelo a copiar**: um serviço que é dono único da tabela, com guarda no `WHERE`, justificativa obrigatória e auditoria em `auditoria_log_almoxarifado` com `entidade='lote'`. `seriesService.js` deve nascer com a mesma forma (`entidade='serie'`) |
+| `estoque_saldo_almoxarifado.lote_id` (FK) + índice `idx_saldo_almox_chave` com `COALESCE` | `schema.js:720-731` e a migração `migrateSaldoLoteId` | **Cuidado:** este é o modelo de saldo que a série **não** deve usar — ver "ponto de atenção" abaixo |
+| `registrarMovimentacao(db, user, { …, lote_id, lote })` resolve o lote e grava as duas colunas | `stockService.js:371-404` (resolução + guarda de `controle_lote`) e o ramo de saída a partir de `428` | O ponto de extensão para série é o mesmo bloco: resolver → validar → efeito |
+| `GET /materiais/:id/lotes` (FEFO), `PUT /lotes/:id/status`, `PUT /lotes/:id/liberar-vencimento` | `routes/almoxarifado/extended.js:483-506` | Padrão de rota: `auth` + `requirePermission` + `handleError` |
+| Harness de teste de API | `server/tests/helpers/testApp.js` | Roda o `requirePermission` **real**; runner artesanal por arquivo (`test()`, contador, `process.exit`) |
+
+## O ponto de atenção que decide o desenho inteiro
+
+> **Série é 1 (uma) linha por unidade física. O modelo de saldo por quantidade NÃO serve.**
+
+Lote e série parecem o mesmo problema e não são:
+
+| | Lote | Série |
+|---|---|---|
+| Cardinalidade | 1 lote ↔ N unidades | 1 série ↔ **1** unidade |
+| Onde mora o saldo | `estoque_saldo_almoxarifado(material, localizacao, lote)` com `quantidade REAL` | **não existe "quantidade"** — a unidade está, ou não está |
+| Movimentar | subtrai um número | **muda o estado de uma linha** (em estoque → entregue → em terceiro → devolvido) |
+| Entrada de 10 | uma linha, `quantidade += 10` | **dez linhas**, uma por número de série |
+
+Consequências práticas que precisam estar no plano:
+
+1. **Não crie `serie_id` em `estoque_saldo_almoxarifado`.** Uma linha de saldo por série
+   transformaria a tabela de saldo num inventário unitário com `quantidade` sempre 0 ou 1 — é a
+   armadilha que a Etapa 6 removeu (coluna que existe e ninguém escreve direito). A tabela
+   `series_almoxarifado` **é** o registro de posse: material, número, status, `localizacao_id`,
+   `lote_id` (opcional — motor com série *e* corrida existe), projeto/OS atual.
+2. **A conta tem de fechar com o saldo agregado.** `materiais_almoxarifado.quantidade_atual`
+   continua sendo o físico. Para material com `controle_serie`, o invariante é
+   `COUNT(series EM_ESTOQUE) == quantidade_atual` — e **esse invariante precisa de teste**, senão
+   nasce mais uma coluna divergindo em silêncio, que é o padrão que este módulo já viu quatro
+   vezes.
+3. **Entrada exige N séries para N unidades; saída exige *quais* séries.** É validação de
+   cardinalidade, não de presença: `quantidade: 10` com 9 séries tem de falhar antes de qualquer
+   efeito de saldo, no mesmo lugar onde `controle_lote` falha hoje (`stockService.js:397-404`).
+4. **Série é única por material** (`UNIQUE(material_id, numero)`), e **não pode estar em dois
+   lugares**: reentrada de uma série que já está `EM_ESTOQUE` tem de falhar — é o teste
+   `entrada de serie ja em estoque falha` que a spec 10 já exige.
+5. **Reaproveite `ACAO_PERFIS`, não crie ação nova.** `visualizar` (ler), `receber_material`
+   (criar série na entrada), `inspecionar` (bloquear/reprovar), `editar_material` (corrigir dados).
+   Foi a regra da Etapa 6 e continua valendo.
+6. **A UI de digitar 10 números de série é o problema mais difícil desta etapa**, e é onde ela mais
+   arrisca virar inútil. Pense nisso no design, não no fim: digitar série a série numa tela web é
+   inviável em volume. Colar uma lista (uma por linha), sequência com prefixo+contador, e leitura
+   por código de barras (a 6c traz o QR) são os três caminhos — decidir **com o cliente** qual
+   antes de escrever a tela.
+
+## Dívidas da Etapa 6 que a 6b deveria absorver (são a mesma tela)
+
+A Etapa 6 deixou **três rotas de lote sem nenhuma tela** (`PUT /lotes/:id/status`,
+`PUT /lotes/:id/liberar-vencimento`, `POST /lotes/:id/certificado`) e **sem extrato de lote**. A
+Etapa 6b vai precisar de uma tela de rastreabilidade de qualquer forma (para listar séries de um
+material e o histórico de cada uma). **Fazer as duas na mesma tela é a decisão barata**; fazer a de
+série sozinha e deixar lote sem tela repetiria o problema um andar acima. Considerar seriamente
+abrir a 6b com essa tela em vez de com o backend.
+
+## Fora do escopo da 6b (declarar no plano, não deixar implícito)
+
+- Etiquetas e QR Code (**6c**).
+- Genealogia lote de compra ↔ lote de produção.
+- Reprovar por lote pela inspeção (é mudança na **feature 09**, ver o README dela).
+- Reserva por lote/série (**feature 07**, continua aberta).
+- Retenção parcial de lote em quantidade (a Etapa 6 decidiu: retenção é **status**, não quantidade).
