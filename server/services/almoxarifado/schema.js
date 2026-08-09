@@ -765,6 +765,15 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
 
+  // Etapa 6, Task 3b: liberacao de vencimento para uso. A tabela ja existe em producao desde a
+  // Task 1 — por isso ALTER, nao CREATE TABLE. `vencido` continua 100% derivado de data_validade
+  // (isVencido, em lotService); estas tres colunas nao mudam esse calculo, so registram QUEM
+  // liberou o uso de um lote vencido, QUANDO e POR QUE — um fato datado e assinado, nao um
+  // "desvencimento". Ver lotService.liberarVencimento e a guarda em stockService.
+  await safeAlter(db, 'ALTER TABLE lotes_almoxarifado ADD COLUMN vencimento_liberado_em DATETIME');
+  await safeAlter(db, 'ALTER TABLE lotes_almoxarifado ADD COLUMN vencimento_liberado_por INTEGER');
+  await safeAlter(db, 'ALTER TABLE lotes_almoxarifado ADD COLUMN vencimento_liberado_motivo TEXT');
+
   // Migração de estoque_saldo_almoxarifado (lote_id + sem colunas de retenção) — precisa rodar
   // DEPOIS do CREATE TABLE de lotes_almoxarifado acima, porque reconstrução insere lotes nele.
   await migrateSaldoLoteId(db);

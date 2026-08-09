@@ -109,6 +109,48 @@ async function mudarStatusLote(db, user, loteId, novoStatus, justificativa) {
   return getLote(db, loteId);
 }
 
+/** Vencimento liberado e um fato datado e assinado — NAO desvence o lote (isVencido nao olha isto). */
+function vencimentoLiberado(lote) {
+  return !!(lote && lote.vencimento_liberado_em);
+}
+
+/**
+ * Reaproveita o fluxo de bloqueio/desbloqueio da Etapa 5 (guarda no WHERE, justificativa
+ * obrigatoria, auditoria), mas NAO e mudanca de status: sao eixos independentes de proposito
+ * (regra 3 da task) — um lote BLOQUEADO ou REPROVADO continua barrado na saida mesmo com o
+ * vencimento liberado. Quem faz esse encadeamento e a guarda em stockService, checando status
+ * antes de vencimento.
+ */
+async function liberarVencimento(db, user, loteId, justificativa) {
+  const motivo = justificativa == null ? '' : String(justificativa).trim();
+  if (!motivo) throw erro('justificativa obrigatoria para liberar o vencimento do lote');
+
+  const anterior = await getLote(db, loteId);
+  if (!anterior) throw erro('Lote nao encontrado', 404);
+  if (!isVencido(anterior)) throw erro('Lote nao esta vencido; nao ha vencimento para liberar');
+
+  // Guarda no WHERE contra data_validade (a mesma fonte que isVencido leu acima), nao read-then-
+  // write: se o lote mudou entre a leitura e a escrita, o UPDATE nao casa e falha em vez de
+  // reportar sucesso sobre um estado que ja nao e o que foi checado.
+  const claim = await dbGet(db, `UPDATE lotes_almoxarifado
+    SET vencimento_liberado_em = CURRENT_TIMESTAMP, vencimento_liberado_por = ?,
+        vencimento_liberado_motivo = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND data_validade = ?
+    RETURNING id`, [user?.id || null, motivo, loteId, anterior.data_validade]);
+  if (!claim) throw erro('O lote mudou durante a operacao. Recarregue e tente de novo.', 409);
+
+  const atualizado = await getLote(db, loteId);
+  await registrarAuditoria(db, {
+    entidade: 'lote', entidade_id: loteId, acao: 'LIBERACAO_VENCIMENTO',
+    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+    dados_anteriores: { vencimento_liberado_em: anterior.vencimento_liberado_em },
+    dados_novos: { vencimento_liberado_em: atualizado.vencimento_liberado_em, vencimento_liberado_motivo: motivo },
+    justificativa: motivo,
+  });
+  return atualizado;
+}
+
 module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
+  vencimentoLiberado, liberarVencimento,
 };

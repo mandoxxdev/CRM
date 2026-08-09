@@ -9,6 +9,7 @@ const { validate } = require('../../services/almoxarifado/validation');
 const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
+const lotService = require('../../services/almoxarifado/lotService');
 const reservationService = require('../../services/almoxarifado/reservationService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
@@ -473,6 +474,16 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   app.post('/api/almoxarifado/materiais/:id/desbloquear', auth, requirePermission('ajustar_estoque'), async (req, res) => {
     try { res.json(await inspectionService.desbloquearMaterial(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }
+  });
+
+  // Task 3b (extra, Etapa 6): liberacao de vencimento para uso — reaproveita o fluxo de
+  // bloqueio/desbloqueio acima (mesma permissao `inspecionar`, mesma exigencia de justificativa).
+  // NAO "desvence" o lote: lotService.isVencido continua true depois; so registra que alguem
+  // assumiu a responsabilidade por usar um lote vencido, com justificativa auditada.
+  app.put('/api/almoxarifado/lotes/:id/liberar-vencimento', auth, requirePermission('inspecionar'), async (req, res) => {
+    try {
+      res.json(await lotService.liberarVencimento(db, req.user, req.params.id, req.body?.justificativa));
+    } catch (e) { handleError(res, e); }
   });
 
   app.post('/api/almoxarifado/recebimentos/:id/aprovar', auth, requirePermission('receber_material'), async (req, res) => {

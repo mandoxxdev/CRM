@@ -429,11 +429,20 @@ async function registrarMovimentacao(db, user, params) {
       // A guarda de STATUS acima continua valendo para descarte tambem, de proposito: um lote
       // BLOQUEADO/REPROVADO ainda precisa passar pelo fluxo de mudanca de status (com
       // justificativa) antes de qualquer saida, inclusive descarte.
+      //
+      // Task 3b (achado do review): a guarda tambem respeita lotService.vencimentoLiberado — o
+      // cliente decidiu no design que vencido usa via liberacao com justificativa, reaproveitando
+      // o fluxo de bloqueio/desbloqueio (lotService.liberarVencimento). A liberacao NAO desvence o
+      // lote (isVencido continua true); so destrava a saida de consumo. Por isso a checagem de
+      // STATUS roda ANTES desta: um lote bloqueado E vencido, mesmo com vencimento liberado,
+      // precisa falhar por bloqueio (mensagem certa), nao por vencimento (mensagem que mandaria o
+      // operador liberar de novo algo que ja esta liberado).
       const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO'];
-      if (!tiposDescarte.includes(tipo) && lotService.isVencido(loteResolvido)) {
+      if (!tiposDescarte.includes(tipo) && lotService.isVencido(loteResolvido) && !lotService.vencimentoLiberado(loteResolvido)) {
         throw Object.assign(
           new Error(`Lote ${loteResolvido.codigo} vencido em ${loteResolvido.data_validade} nao pode sair para consumo. `
-            + 'Lote vencido so pode ser baixado por SUCATA/PERDA ou corrigido por AJUSTE, com justificativa.'),
+            + 'Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, '
+            + 'ou baixe por SUCATA/PERDA ou corrija por AJUSTE.'),
           { status: 400 });
       }
     }
