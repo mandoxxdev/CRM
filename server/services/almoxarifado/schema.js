@@ -944,6 +944,11 @@ async function initSchema(db) {
     // compartilhado entre itens de recebimentos diferentes). Rastrear por item e o mesmo rigor
     // da Etapa 4, que vinculou a reserva ao item via item_requisicao_id.
     'quantidade_em_inspecao REAL DEFAULT 0',
+    // Etapa 6: o lote nasce aqui. `lote` TEXT ja existia e vira o codigo digitado na conferencia;
+    // estes tres completam o que a NF traz e o lote precisa.
+    'lote_id INTEGER',
+    'data_validade_lote DATE',
+    'corrida_lote TEXT',
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
   await migrateBackfillItemQuantidadeEmInspecao(db);

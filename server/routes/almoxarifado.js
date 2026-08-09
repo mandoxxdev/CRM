@@ -23,6 +23,7 @@ const {
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
 const { can, requirePermission } = require('../services/almoxarifado/permissions');
 const reservationService = require('../services/almoxarifado/reservationService');
+const lotService = require('../services/almoxarifado/lotService');
 const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
 const { validate } = require('../services/almoxarifado/validation');
 const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
@@ -56,6 +57,23 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype)) return cb(null, true);
       cb(new Error('Apenas imagens são permitidas'));
     }
+  });
+
+  // Etapa 6: certificado do fornecedor é PDF — reaproveitar uploadAlmox (só imagens) rejeitaria
+  // todo certificado.
+  const uploadCertificado = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `certificado-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
+      cb(new Error('Certificado deve ser PDF ou imagem'));
+    },
   });
 
   // ── Schema único — todo o DDL do módulo vive em services/almoxarifado/schema.js ──
@@ -598,6 +616,34 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         res.json({ foto: filename, foto_url: materialPhotoUrl(filename) });
       });
   });
+
+  // POST /api/almoxarifado/lotes/:id/certificado — anexa o certificado e libera o lote se ele
+  // estava bloqueado exatamente por falta dele.
+  // ORDEM IMPORTA: requirePermission ANTES do multer (mesmo motivo da rota de foto acima).
+  app.post('/api/almoxarifado/lotes/:id/certificado',
+    requirePermission('receber_material'), uploadCertificado.single('certificado'), async (req, res) => {
+      try {
+        if (!req.file) return res.status(400).json({ error: 'Nenhum certificado enviado' });
+
+        const lote = await dbGet(db, 'SELECT * FROM lotes_almoxarifado WHERE id = ?', [req.params.id]);
+        if (!lote) return res.status(404).json({ error: 'Lote nao encontrado' });
+
+        await dbRun(db, `UPDATE lotes_almoxarifado
+          SET certificado_arquivo = ?, certificado_em = CURRENT_TIMESTAMP, certificado_por = ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?`, [req.file.filename, req.user?.id || null, lote.id]);
+
+        // So libera o que ESTE bloqueio travou. Lote reprovado no ensaio, ou bloqueado por outro
+        // motivo, continua bloqueado — anexar PDF nao pode ser atalho para destravar qualquer coisa.
+        if (lote.status === 'BLOQUEADO' && /certificado/i.test(lote.status_motivo || '')) {
+          await lotService.mudarStatusLote(db, req.user, lote.id, 'ATIVO', 'Certificado do fornecedor anexado');
+        }
+        const atualizado = await dbGet(db, 'SELECT * FROM lotes_almoxarifado WHERE id = ?', [lote.id]);
+        res.json({ id: atualizado.id, certificado_arquivo: atualizado.certificado_arquivo, status: atualizado.status });
+      } catch (e) {
+        res.status(e.status || 500).json({ error: e.message });
+      }
+    });
 
   // POST /api/almoxarifado/materiais/gerar-codigo — gera próximo código
   app.get('/api/almoxarifado/proximo-codigo',(req, res) => {

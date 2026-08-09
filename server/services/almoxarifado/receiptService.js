@@ -1,6 +1,7 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const { registrarMovimentacao } = require('./stockService');
+const lotService = require('./lotService');
 
 const STATUS = {
   RECEBIDO: 'RECEBIDO',
@@ -279,12 +280,16 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
         valor_ipi = COALESCE(?, valor_ipi),
         reducao_icms_percent = COALESCE(?, reducao_icms_percent),
         conferencia_quantidade = COALESCE(?, conferencia_quantidade),
-        conferencia_descricao = COALESCE(?, conferencia_descricao)
+        conferencia_descricao = COALESCE(?, conferencia_descricao),
+        lote = COALESCE(?, lote),
+        data_validade_lote = COALESCE(?, data_validade_lote),
+        corrida_lote = COALESCE(?, corrida_lote)
         WHERE id = ? AND recebimento_id = ?`, [
         item.quantidade_recebida ?? null, vUnit || null, vTotal || null,
         item.valor_icms ?? null, item.valor_ipi ?? null, item.reducao_icms_percent ?? null,
         item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
         item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
+        item.lote ?? null, item.data_validade_lote ?? null, item.corrida_lote ?? null,
         item.id, recebimentoId,
       ]);
     }
@@ -319,6 +324,32 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     const cfg = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'inspecao_material_critico'");
     const reter = !!item.material_critico && cfg?.valor === '1';
 
+    // Etapa 6: o lote nasce aqui, herdando o que a NF ja sabe. Ate esta etapa, `controle_certificado`
+    // era selecionado nesta query (linha do SELECT acima) e NUNCA usado — quem auditasse por grep
+    // concluia que a entrada verificava certificado. Agora verifica.
+    let loteId = null;
+    if (item.lote && String(item.lote).trim()) {
+      const semCertificado = !!item.controle_certificado && !item.certificado_arquivo;
+      const lote = await lotService.criarOuObterLote(db, user, {
+        material_id: item.material_id,
+        codigo: item.lote,
+        fornecedor_id: rec.fornecedor_id,
+        fornecedor_nome: rec.fornecedor_nome,
+        corrida: item.corrida_lote,
+        data_validade: item.data_validade_lote,
+        nota_fiscal: rec.nota_fiscal,
+        recebimento_id: recebimentoId,
+        recebimento_item_id: item.id,
+        // Entra bloqueado, nao barrado: o material esta fisicamente no galpao. Barrar a ENTRADA
+        // foi exatamente o erro corrigido na Etapa 5.
+        status: semCertificado ? 'BLOQUEADO' : 'ATIVO',
+        status_motivo: semCertificado ? 'Certificado do fornecedor nao anexado' : null,
+      });
+      loteId = lote.id;
+      await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET lote_id = ? WHERE id = ?',
+        [loteId, item.id]);
+    }
+
     const qtd = item.quantidade_recebida || item.quantidade_esperada;
     if (qtd > 0) {
       await registrarMovimentacao(db, user, {
@@ -329,7 +360,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
         referencia: rec.nota_fiscal,
         recebimento_id: recebimentoId,
         localizacao_destino_id: localizacao_id,
-        lote: item.lote,
+        lote_id: loteId,
         documento_vinculado: rec.numero,
       });
 
