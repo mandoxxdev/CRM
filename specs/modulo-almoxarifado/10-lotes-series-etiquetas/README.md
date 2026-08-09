@@ -1,28 +1,100 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
 > **Status:** ❌ — lote hoje é texto livre; série e etiquetas não existem · **Spec original:** seção 10
-> **Última atualização:** 2026-08-02
+> **Última atualização:** 2026-08-09 (levantamento verificado contra o código antes da Etapa 6)
 
 ## Objetivo
 
 Controle real por lote (validade, corrida/heat number, certificado), número de série individual, e etiquetas com QR/código de barras.
 
-## O que já existe (pouco)
+## O que já existe — verificado no código em 2026-08-09
 
-- Coluna `lote` TEXT livre em `estoque_saldo_almoxarifado` e `movimentacoes_almoxarifado` (o motor já segrega saldo por lote — bom ponto de partida).
-- Flags `controle_lote` e `controle_certificado` no material — **gravadas mas nunca verificadas** em nenhuma operação.
-- Campo `lote` no item de recebimento.
-- Tabela órfã `lotes` (`index.js:19458`) é de lote de **produção**, sem rota — não confundir.
+Cada afirmação abaixo foi conferida no arquivo citado. A versão anterior desta seção estava
+otimista demais em um ponto e incompleta em outros dois; as correções estão marcadas.
+
+- Coluna `lote TEXT` livre em `estoque_saldo_almoxarifado` (`schema.js:635`) e em
+  `movimentacoes_almoxarifado` (`schema.js:651`). A chave do saldo é
+  `UNIQUE(material_id, localizacao_id, lote)` (`schema.js:642`).
+- O motor segrega saldo por lote em ENTRADA/SAÍDA (`stockService.js:476-485`), TRANSFERÊNCIA
+  (`stockService.js:282-290`) e AJUSTE com localização (`stockService.js:450-452`), sempre via
+  `getOrCreateSaldo(db, material, localizacao, lote)` (`stockService.js:61-70`).
+- Campo `lote` no item de recebimento (`schema.js:736`), gravado por `receiptService.js:111-115`
+  e repassado ao motor na entrada (`receiptService.js:332`).
+- Tabela órfã `lotes` é de lote de **produção** (`numero_lote`, `os_id`, `tipo_lote`,
+  `data_producao`), sem rota — não confundir. **Correção:** fica em `index.js:19554`, não em
+  `19458` como esta spec dizia.
+
+### ⚠️ Correção: "o motor já segrega saldo por lote" é meia verdade
+
+A frase anterior — *"o motor já segrega saldo por lote — bom ponto de partida"* — está certa na
+letra e enganosa na prática. A segregação é **write-only**: escreve-se o lote, nunca se lê o
+lote para decidir nada.
+
+1. **Saída por lote não valida o saldo daquele lote.** A guarda de saldo insuficiente
+   (`stockService.js:263-268`) compara com o disponível **do material**; logo depois,
+   `stockService.js:481-484` subtrai da linha do lote sem nenhuma verificação. Tirar 10 do lote
+   `A` quando `A` tem 2 e o material tem 100 passa, e a linha do lote fica **negativa em
+   silêncio**. `syncMaterialTotals` (`stockService.js:43-59`) soma essa linha negativa de volta,
+   então o total do material continua "certo" e o erro fica invisível.
+
+   Reproduzido em 2026-08-09 (sonda descartável sobre `tests/helpers/testApp.js`, não versionada
+   — a versão definitiva vira teste de API na Etapa 6). Entrada de 100 no lote `A` e 2 no lote
+   `B`, depois SAÍDA de 10 no lote `B`:
+
+   | | lote A | lote B | `material.quantidade_atual` |
+   |---|---|---|---|
+   | antes | 100 | 2 | 102 |
+   | depois da saída de 10 em `B` | 100 | **−8** | 92 |
+
+   O motor **não lançou erro nenhum**, e a soma das linhas (92) bate com o total do material —
+   por isso nenhuma consulta ao material denuncia o problema. Só olhando a linha do lote se vê.
+2. **As colunas de retenção da linha por lote nunca são escritas.** `estoque_saldo_almoxarifado`
+   tem `quantidade_reservada`, `quantidade_bloqueada` e `quantidade_em_inspecao`
+   (`schema.js:637-639`), mas RESERVA, BLOQUEIO e QUARENTENA escrevem só em
+   `materiais_almoxarifado` (`stockService.js:292-313`). Reter um lote específico é hoje
+   impossível: bloqueia-se o material inteiro.
+3. É **exatamente o padrão que já mordeu três vezes neste módulo** (coluna existe, fórmula
+   subtrai, ciclo nunca fecha — `reserva_id` e `expira_em` na Etapa 4, `quantidade_em_inspecao`
+   na Etapa 5). Quem ler "o motor já segrega por lote" e construir por cima sem checar vai
+   repetir o erro pela quarta vez.
+
+### ⚠️ Correção: são cinco flags mortas, não duas
+
+A spec listava `controle_lote` e `controle_certificado`. São cinco, todas gravadas pelo CRUD e
+**nunca lidas por nenhuma regra**: `controle_lote`, `controle_certificado` (`schema.js:508-509`),
+`controle_serie`, `controle_validade`, `controle_corrida` (`schema.js:529-531`). Existem no
+formulário do material (`MaterialAlmoxarifadoForm.js:28`), na rota de CRUD
+(`routes/almoxarifado.js:295-394`) e no Zod (`schemas.js:178-195`) — e em lugar nenhum mais.
+
+Pior que ausência: `receiptService.js:309` faz `SELECT ... m.controle_certificado` e **nunca usa
+a coluna selecionada**. Quem for auditar por `grep controle_certificado` encontra essa linha e
+conclui que a entrada verifica certificado. Não verifica.
+
+### Lacunas que a spec não registrava
+
+- **O recebimento não tem campo de lote na tela.** `RecebimentosAlmoxarifado.js` não menciona
+  lote em lugar nenhum, embora a coluna exista e o backend a repasse ao motor. O único lugar do
+  sistema onde se digita um lote é a movimentação manual, e só nos tipos ENTRADA e SAÍDA
+  (`MovimentacoesAlmoxarifado.js:173,415`). Ou seja: o ponto em que um lote naturalmente nasce —
+  a nota fiscal do fornecedor — é justamente o que não consegue registrá-lo.
+- **`UNIQUE(material_id, localizacao_id, lote)` não impede duplicata sem lote.** No SQLite dois
+  NULL são distintos para efeito de UNIQUE, então linhas com `lote IS NULL` (a maioria hoje)
+  podem duplicar numa corrida entre dois `getOrCreateSaldo`. A migração dos textos livres para a
+  tabela de lotes precisa deduplicar antes de criar a FK.
+- **Leitura por lote só existe no extrato**: `ExtratoMaterialModal.js:158,174` exibe a coluna.
+  Nenhuma consulta agrega, filtra ou ordena por lote.
 
 ## Checklist
 
 ### Backend — lotes
 - [ ] Tabela `lotes_almoxarifado`: material, código do lote, fornecedor, corrida/heat number, certificado (anexo), data de fabricação, validade, status (ativo/bloqueado/reprovado/vencido)
-- [ ] `estoque_saldo_almoxarifado.lote` passa a referenciar a tabela (migração dos textos existentes)
+- [ ] `estoque_saldo_almoxarifado.lote` passa a referenciar a tabela (migração dos textos existentes, **deduplicando as linhas `lote IS NULL`** — ver lacunas acima)
+- [ ] **Saída não pode deixar a linha do lote negativa** (hoje deixa, em silêncio — item 1 das correções). Guarda no `WHERE` do UPDATE, como o resto do motor
 - [ ] Aplicar `controle_lote`: material controlado exige lote em TODA entrada e saída
-- [ ] Aplicar `controle_certificado`: entrada sem certificado anexado falha (ou entra bloqueada)
+- [ ] Aplicar `controle_certificado`: entrada sem certificado anexado falha (ou entra bloqueada). Remover ou usar o `SELECT` morto em `receiptService.js:309`
 - [ ] Validade: bloquear saída de lote vencido; sugestão FEFO (primeiro que vence sai primeiro)
 - [ ] Rastreabilidade: consulta de tudo que aconteceu com um lote
+- [ ] **Decidir se retenção passa a ser por lote** (reserva/bloqueio/quarentena hoje só existem no material — as colunas por lote existem e ninguém escreve nelas). Se a decisão for "continua no material", **apagar as três colunas** de `estoque_saldo_almoxarifado` para não parecerem implementadas
 
 ### Backend — números de série
 - [ ] Tabela `series_almoxarifado`: material, número de série, status (em estoque/reservado/entregue/em terceiro/devolvido), localização, projeto/OS atual
@@ -36,6 +108,7 @@ Controle real por lote (validade, corrida/heat number, certificado), número de 
 - [ ] Regras por tipo (spec 10): motores/instrumentos → série; chapas/tubos certificados → lote+corrida; químicos → lote+validade
 
 ### Frontend
+- [ ] **Campo de lote no recebimento** — hoje inexistente na tela, apesar de coluna e backend prontos (ver lacunas acima). É onde o lote nasce
 - [ ] Cadastro/consulta de lotes e séries no detalhe do material
 - [ ] Seleção de lote/série na movimentação, separação e entrega
 - [ ] Botão imprimir etiqueta (recebimento, material, localização)
