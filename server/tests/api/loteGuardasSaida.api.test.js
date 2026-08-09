@@ -133,6 +133,142 @@ const saldoDoLote = (db, materialId, loteId) => dbGet(db,
       'a guarda por lote nao pode valer para material que permite saldo negativo');
   });
 
+  // ── Fix round 1 (review) ──────────────────────────────────────────────────────
+
+  await test('estornar ENTRADA com lote devolve a linha do lote (sem isso vira lote fantasma)', async () => {
+    const mat = await novoMaterial(db);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'EST-ENT' });
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, lote_id: lote.id, motivo: 'setup' });
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'estorno de teste');
+
+    assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, 0,
+      'a linha do lote continuou positiva depois do estorno da entrada — lote fantasma');
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 0);
+  });
+
+  await test('estornar SAIDA com lote devolve a linha do lote', async () => {
+    const mat = await novoMaterial(db);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'EST-SAI' });
+    await entrar(db, mat, lote.id, 20);
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 8, lote_id: lote.id, ...JUST });
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'estorno de teste');
+
+    assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, 20,
+      'a linha do lote nao voltou ao valor original depois do estorno da saida');
+  });
+
+  await test('saida com reserva e lote: claim do lote falha, e material/reserva/utilizada voltam exatamente como estavam', async () => {
+    const mat = await novoMaterial(db);
+    // 100 sem lote (agora tambem cria linha, ver fix do syncMaterialTotals) + 3 no lote-alvo:
+    // total 103 de disponivel para a reserva, mas o LOTE em si so tem 3.
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 100, motivo: 'setup sem lote' });
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'RES-LOTE' });
+    await entrar(db, mat, lote.id, 3);
+
+    const reserva = await stockService.criarReserva(db, ADMIN, { material_id: mat, quantidade: 10 });
+
+    await assert.rejects(() => stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 10, lote_id: lote.id, reserva_id: reserva.id, ...JUST }),
+      /saldo/i, 'o motor aceitou consumir 10 de um lote que so tem 3, mesmo com reserva de 10');
+
+    const m = await dbGet(db, 'SELECT quantidade_atual, quantidade_reservada FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 103, 'o fisico do material nao voltou ao valor original');
+    assert.strictEqual(m.quantidade_reservada, 10, 'o hold da reserva nao voltou ao material');
+
+    const resAfter = await dbGet(db, 'SELECT quantidade_utilizada, status FROM reservas_material_almoxarifado WHERE id = ?', [reserva.id]);
+    assert.strictEqual(resAfter.quantidade_utilizada, 0, 'a reserva ficou com utilizada > 0 sem nenhuma saida real');
+    assert.strictEqual(resAfter.status, 'ATIVA', 'a reserva nao voltou para ATIVA depois do claim do lote falhar');
+
+    assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, 3, 'a linha do lote foi tocada apesar do claim ter falhado');
+  });
+
+  await test('material misto (entrada sem lote + entrada com lote) nao perde quantidade num AJUSTE com localizacao', async () => {
+    const mat = await novoMaterial(db);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, motivo: 'setup sem lote' });
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'MISTO' });
+    await entrar(db, mat, lote.id, 5);
+    const antes = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(antes.quantidade_atual, 15);
+
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('MISTO-LOC','loc misto')`)).lastID;
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 7, localizacao_destino_id: loc, justificativa: 'contagem' });
+
+    const depois = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(depois.quantidade_atual, 22,
+      `quantidade evaporou: esperado 22 (10 sem lote + 5 do lote + 7 da nova localizacao), ficou ${depois.quantidade_atual}`);
+  });
+
+  await test('TRANSFERENCIA move a linha do lote certo entre localizacoes', async () => {
+    const mat = await novoMaterial(db);
+    const locOrigem = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('TRF-O','origem')`)).lastID;
+    const locDestino = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('TRF-D','destino')`)).lastID;
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'TRF-LOTE' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 20, lote_id: lote.id, localizacao_destino_id: locOrigem, motivo: 'setup' });
+
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'TRANSFERENCIA', quantidade: 8, lote_id: lote.id,
+      localizacao_origem_id: locOrigem, localizacao_destino_id: locDestino, justificativa: 'reorganizacao' });
+
+    const origemSaldo = await dbGet(db,
+      'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ? AND lote_id = ?', [mat, locOrigem, lote.id]);
+    const destinoSaldo = await dbGet(db,
+      'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ? AND lote_id = ?', [mat, locDestino, lote.id]);
+    assert.strictEqual(origemSaldo.quantidade, 12);
+    assert.strictEqual(destinoSaldo.quantidade, 8, 'a linha do lote na localizacao destino nao foi criada/creditada');
+  });
+
+  await test('TRANSFERENCIA acima do saldo do lote na origem falha (guarda atomica, nao read-then-write)', async () => {
+    const mat = await novoMaterial(db);
+    const locOrigem = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('TRF-O2','origem2')`)).lastID;
+    const locDestino = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('TRF-D2','destino2')`)).lastID;
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'TRF-LOTE2' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 3, lote_id: lote.id, localizacao_destino_id: locOrigem, motivo: 'setup' });
+
+    await assert.rejects(() => stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'TRANSFERENCIA', quantidade: 10, lote_id: lote.id,
+      localizacao_origem_id: locOrigem, localizacao_destino_id: locDestino, justificativa: 'reorganizacao' }),
+      /saldo/i);
+  });
+
+  await test('AJUSTE com localizacao e lote define o saldo daquela linha especifica do lote', async () => {
+    const mat = await novoMaterial(db);
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('ADJ-LOTE','adjloc')`)).lastID;
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'ADJ-LOTE-1' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, lote_id: lote.id, localizacao_destino_id: loc, motivo: 'setup' });
+
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 6, localizacao_destino_id: loc, lote_id: lote.id, justificativa: 'contagem do lote' });
+
+    const saldo = await dbGet(db,
+      'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id = ? AND lote_id = ?', [mat, loc, lote.id]);
+    assert.strictEqual(saldo.quantidade, 6);
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 6);
+  });
+
+  await test('SUCATA de lote vencido passa (descarte nao e bloqueado pela validade)', async () => {
+    const mat = await novoMaterial(db);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, {
+      material_id: mat, codigo: 'VENC-SUCATA', data_validade: '2020-01-01' });
+    await entrar(db, mat, lote.id, 10);
+
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SUCATA', quantidade: 10, lote_id: lote.id, ...JUST });
+
+    assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, 0);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

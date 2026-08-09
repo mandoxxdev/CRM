@@ -64,10 +64,27 @@ async function getOrCreateSaldo(db, materialId, localizacaoId, loteId = null) {
     'SELECT * FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?',
     [materialId, localizacaoId || null, loteId || null]);
   if (!saldo) {
-    const r = await dbRun(db,
-      'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id) VALUES (?,?,?)',
-      [materialId, localizacaoId || null, loteId || null]);
-    saldo = await dbGet(db, 'SELECT * FROM estoque_saldo_almoxarifado WHERE id = ?', [r.lastID]);
+    try {
+      const r = await dbRun(db,
+        'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id) VALUES (?,?,?)',
+        [materialId, localizacaoId || null, loteId || null]);
+      saldo = await dbGet(db, 'SELECT * FROM estoque_saldo_almoxarifado WHERE id = ?', [r.lastID]);
+    } catch (e) {
+      // Corrida: outra requisição concorrente criou a MESMA linha (mesmo material+localização+
+      // lote) entre o SELECT acima e este INSERT — o índice único idx_saldo_almox_chave rejeita o
+      // segundo INSERT (achado do review round 1 da Task 3, pego pela suíte de concorrência
+      // existente). Antes desta task, esta função só era chamada quando havia localização OU lote
+      // explícitos; a Task 3 passou a chamá-la SEMPRE (até para material "sem localização nem
+      // lote", para `syncMaterialTotals` somar o total certo — ver comentário em
+      // registrarMovimentacao), expondo esta corrida pré-existente numa população de materiais
+      // que os testes de concorrência batem com dezenas de requisições simultâneas no MESMO
+      // material. Sem este catch, a corrida virava SQLITE_CONSTRAINT não tratado e a requisição
+      // perdedora tomava 500 em vez de seguir com a linha que a vencedora acabou de criar.
+      saldo = await dbGet(db,
+        'SELECT * FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?',
+        [materialId, localizacaoId || null, loteId || null]);
+      if (!saldo) throw e; // não era a corrida esperada (linha ainda não existe) — propaga o erro original
+    }
   }
   return saldo;
 }
@@ -291,10 +308,18 @@ async function registrarMovimentacao(db, user, params) {
           new Error(`Lote ${loteResolvido.codigo} esta ${loteResolvido.status.toLowerCase()} e nao pode ser utilizado`),
           { status: 400 });
       }
-      if (lotService.isVencido(loteResolvido)) {
+      // Vencimento bloqueia consumo normal, mas NAO pode bloquear o proprio descarte do lote
+      // vencido — SUCATA/PERDA/AJUSTE_NEGATIVO sao como o vencido SAI do sistema. Sem esta
+      // isencao, um lote vencido ficava PRESO para sempre: nao pode sair como consumo (correto),
+      // mas tambem nao podia ser baixado como perda nem corrigido (bug, achado do review round 1).
+      // A guarda de STATUS acima continua valendo para descarte tambem, de proposito: um lote
+      // BLOQUEADO/REPROVADO ainda precisa passar pelo fluxo de mudanca de status (com
+      // justificativa) antes de qualquer saida, inclusive descarte.
+      const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO'];
+      if (!tiposDescarte.includes(tipo) && lotService.isVencido(loteResolvido)) {
         throw Object.assign(
-          new Error(`Lote ${loteResolvido.codigo} vencido em ${loteResolvido.data_validade} e nao pode sair. `
-            + 'Libere o lote pela tela de lotes, com justificativa, se for usa-lo mesmo assim.'),
+          new Error(`Lote ${loteResolvido.codigo} vencido em ${loteResolvido.data_validade} nao pode sair para consumo. `
+            + 'Lote vencido so pode ser baixado por SUCATA/PERDA ou corrigido por AJUSTE, com justificativa.'),
           { status: 400 });
       }
     }
@@ -325,11 +350,18 @@ async function registrarMovimentacao(db, user, params) {
     // linha DAQUELE lote entre localizações — sem citar lote, loteIdFinal é null e o comportamento
     // é o de sempre (saldo sem lote).
     const saldoOrigem = await getOrCreateSaldo(db, material_id, localizacao_origem_id, loteIdFinal);
-    if (saldoOrigem.quantidade < quantidade) {
+    // Guarda no WHERE, nunca read-then-write (achado do review round 1: este UPDATE passou a
+    // governar a linha do LOTE, que a task tornou load-bearing — antes disso ler `saldoOrigem`
+    // acima e só depois decrementar era inofensivo porque a linha nunca era a fonte de verdade de
+    // nada). Semântica preservada: assim como antes, não olha `permiteNegativo` — TRANSFERENCIA
+    // sempre exigiu saldo suficiente na origem, mesmo em material que permite saldo negativo.
+    const claimOrigem = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
+      SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND quantidade >= ?
+      RETURNING id`, [quantidade, saldoOrigem.id, quantidade]);
+    if (!claimOrigem) {
       throw Object.assign(new Error('Saldo insuficiente na localização de origem'), { status: 400 });
     }
-    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [quantidade, saldoOrigem.id]);
     const saldoDestino = await getOrCreateSaldo(db, material_id, localizacao_destino_id, loteIdFinal);
     await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantidade, saldoDestino.id]);
@@ -520,18 +552,22 @@ async function registrarMovimentacao(db, user, params) {
     const locEntrada = tiposEntrada.includes(tipo) ? resolveLocalizacaoEntrada(material, localizacao_destino_id) : null;
     const locSaida = tiposSaida.includes(tipo) ? resolveLocalizacaoSaida(material, localizacao_origem_id) : null;
 
-    // A linha de saldo por lote é o ÚNICO lugar onde a quantidade POR LOTE mora
-    // (materiais_almoxarifado só guarda o total) — por isso ela precisa existir mesmo quando o
-    // material não tem localizacao_padrao_id definido e o movimento não citou localização
-    // explícita. Sem este `|| loteIdFinal`, um material "sem localização" nunca teria a linha do
-    // lote criada/atualizada e as guardas de status/validade/saldo do Step 4/5 não teriam contra
-    // o que comparar — silenciosamente reabrindo o mesmo -8 que esta task fecha.
-    if (locEntrada || (tiposEntrada.includes(tipo) && loteIdFinal)) {
+    // A linha de saldo por localização/lote passa a ser criada SEMPRE numa entrada/saída — mesmo
+    // sem localização nem lote — e não mais só quando havia uma das duas (achado do review round
+    // 1 desta task). Motivo: `syncMaterialTotals` soma TODAS as linhas de estoque_saldo_almoxarifado
+    // do material e só é no-op quando não há NENHUMA linha; a partir da PRIMEIRA linha (ex.: a
+    // primeira entrada que citou lote) a soma passa a ser tratada como o total de verdade. Se só
+    // PARTE das entradas/saídas do material criasse linha, a soma ficaria PARCIAL, e um AJUSTE
+    // com localização (ou o estorno dele) sobrescreveria quantidade_atual com essa soma
+    // incompleta, evaporando a parte "invisível" — ex.: entrada de 10 sem lote + 5 no lote X,
+    // AJUSTE com localização somava só 5. Criar a linha sempre garante soma(linhas) ===
+    // quantidade_atual em qualquer momento em que syncMaterialTotals rodar.
+    if (tiposEntrada.includes(tipo)) {
       const saldo = await getOrCreateSaldo(db, material_id, locEntrada, loteIdFinal);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
-    if (locSaida || (tiposSaida.includes(tipo) && loteIdFinal)) {
+    if (tiposSaida.includes(tipo)) {
       const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
       if (loteIdFinal && !permiteNegativo) {
         // Guarda no WHERE, como o resto do motor. Sem isto a subtracao abaixo negativa a linha do
@@ -544,13 +580,36 @@ async function registrarMovimentacao(db, user, params) {
           WHERE id = ? AND quantidade >= ?
           RETURNING id`, [quantidade, saldo.id, quantidade]);
         if (!claim) {
-          // O físico do material já foi debitado acima (linha 421-429/rowRes) antes deste claim
-          // rodar — não há transação neste módulo, então recusar aqui sem devolver deixaria
-          // quantidade_atual debitado sem contrapartida (trocaria um bug pelo outro). Compensa
-          // devolvendo o físico antes de lançar o erro.
-          await dbRun(db, `UPDATE materiais_almoxarifado
-            SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [quantidade, material_id]);
+          // O físico do material já foi debitado acima (linha ~439-452/rowRes quando a saída
+          // consumia reserva, ou ~460-468 no caminho simples) antes deste claim rodar — não há
+          // transação neste módulo, então recusar aqui sem devolver deixaria quantidade_atual
+          // debitado sem contrapartida (trocaria um bug pelo outro). Compensa antes de lançar.
+          if (consumindoReserva) {
+            // Achado do review round 1: compensar só quantidade_atual não bastava quando a saída
+            // consumia reserva — o claim da reserva (linha ~421-426) e o débito de
+            // quantidade_reservada/quantidade_atual (linha ~439-452) já tinham acontecido. Sem
+            // desfazer os três, a reserva ficava "queimada" (quantidade_utilizada maior, e às
+            // vezes status CONSUMIDA) sem NENHUMA saída física real ter ocorrido — reserva de
+            // outra OS perdida, e o disponível do material inflado (quantidade_reservada a menos
+            // do que deveria). O precedente é a própria compensação em ~446-451, que já desfaz
+            // quantidade_utilizada à mão quando o claim físico falha; aqui espelhamos o mesmo
+            // padrão para o físico + a reserva juntos.
+            await dbRun(db, `UPDATE materiais_almoxarifado
+              SET quantidade_atual = quantidade_atual + ?,
+                  quantidade_reservada = COALESCE(quantidade_reservada,0) + ?,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?`, [quantidade, quantidade, material_id]);
+            await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = MAX(0, quantidade_utilizada - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [quantidade, reserva_id]);
+            // A reserva só vira CONSUMIDA DENTRO desta mesma chamada (linha ~456), quando zera —
+            // reverter para ATIVA aqui é seguro porque o claim atômico do topo (linha ~421-426)
+            // exigiu status = 'ATIVA' para a execução sequer chegar até aqui.
+            await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'ATIVA', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'CONSUMIDA'", [reserva_id]);
+          } else {
+            await dbRun(db, `UPDATE materiais_almoxarifado
+              SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+              [quantidade, material_id]);
+          }
           throw Object.assign(
             new Error(`Saldo insuficiente no lote ${loteCodigoFinal}. Disponível: ${saldo.quantidade} ${material.unidade}`),
             { status: 400 });
@@ -667,9 +726,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       saldoAntes = saldoDepois + parseFloat(mov.quantidade);
       // reverter localização da entrada original — mov.lote_id (Etapa 6, Task 3) devolve para a
       // MESMA linha de lote que a entrada creditou, lida do próprio ledger (imutável), não
-      // recalculada.
+      // recalculada. Gate `loc || mov.lote_id` (achado do review round 1): o gate antigo só
+      // olhava `loc`, então uma entrada sem localização mas COM lote (a mesma configuração que
+      // motivou registrarMovimentacao a criar a linha por lote mesmo sem localização) tinha o
+      // `if` pulado no estorno — quantidade_atual voltava, mas a linha do lote ficava "fantasma"
+      // com o valor antigo, e uma saída seguinte no mesmo lote tirava de saldo que não existe
+      // mais. É a mesma classe do −8 que esta task fecha, só que pela porta do estorno.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
-      if (loc) {
+      if (loc || mov.lote_id) {
         const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote_id);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
       }
@@ -680,9 +744,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [mov.quantidade, mov.material_id]);
       saldoDepois = saldoAntes + parseFloat(mov.quantidade);
+      // mov.lote_id (Etapa 6, Task 3): devolve para a linha do lote que a saída original debitou.
+      // Gate `loc || mov.lote_id` — mesmo achado do ramo de ENTRADA acima: sem isto, uma saída
+      // sem localização mas com lote não devolvia a linha do lote no estorno.
       const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
-      if (loc) {
-        // mov.lote_id (Etapa 6, Task 3): devolve para a linha do lote que a saída original debitou.
+      if (loc || mov.lote_id) {
         const saldo = await getOrCreateSaldo(db, mov.material_id, loc, mov.lote_id);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, saldo.id]);
       }
