@@ -269,6 +269,66 @@ const saldoDoLote = (db, materialId, loteId) => dbGet(db,
     assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, 0);
   });
 
+  // ── Fix round 2 (review): syncMaterialTotals somava parcial em material sem localizacao/lote ──
+  // Os tres cenarios abaixo reproduzem, com os numeros exatos, o achado do re-review: o fix
+  // round 1 (linha de saldo criada sempre) so era mantida em registrarMovimentacao. Em
+  // cancelarMovimentacao (estorno sem localizacao/lote) e no AJUSTE-sem-localizacao, a linha
+  // "fantasma" (NULL,NULL) nao acompanhava, e a soma de todas as linhas (que virava a fonte de
+  // verdade assim que a PRIMEIRA linha existia) ressuscitava ou evaporava quantidade real assim
+  // que um AJUSTE com localizacao rodava depois. O fix e a raiz: AJUSTE com localizacao agora
+  // aplica o DELTA local da propria linha em quantidade_atual, nao mais uma soma de tudo.
+
+  await test('estorno de ENTRADA sem localizacao/lote + AJUSTE numa localizacao nao ressuscita quantidade fantasma', async () => {
+    const mat = await novoMaterial(db);
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, motivo: 'setup sem lote nem localizacao' });
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'estorno de teste');
+
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('R2-A','loc A')`)).lastID;
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 7, localizacao_destino_id: loc, justificativa: 'contagem' });
+
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 7,
+      `esperado 7, ficou ${m.quantidade_atual} — a linha fantasma da entrada estornada ressuscitou quantidade (bug media 17)`);
+  });
+
+  await test('estorno de SAIDA sem localizacao/lote + AJUSTE zerando localizacao nova nao evapora quantidade', async () => {
+    const mat = await novoMaterial(db);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, motivo: 'setup' });
+    const movSaida = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 4, ...JUST });
+    await stockService.cancelarMovimentacao(db, ADMIN, movSaida.id, 'estorno de teste');
+
+    const antes = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(antes.quantidade_atual, 10, 'o total antes do AJUSTE deveria estar correto (10) mesmo com a linha fantasma em 6');
+
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('R2-B','loc B')`)).lastID;
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 0, localizacao_destino_id: loc, justificativa: 'contagem: nada aqui ainda' });
+
+    const depois = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(depois.quantidade_atual, 10,
+      `esperado 10, ficou ${depois.quantidade_atual} — a linha fantasma da saida estornada evaporou quantidade (bug media 6)`);
+  });
+
+  await test('AJUSTE global + AJUSTE numa localizacao nova nao ressuscita o valor pre-ajuste', async () => {
+    const mat = await novoMaterial(db);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, motivo: 'setup' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 3, justificativa: 'contagem geral' });
+
+    const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('R2-C','loc C')`)).lastID;
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 0, localizacao_destino_id: loc, justificativa: 'contagem: nada aqui ainda' });
+
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(m.quantidade_atual, 3,
+      `esperado 3, ficou ${m.quantidade_atual} — ressuscitou o valor pre-ajuste (bug media 10)`);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

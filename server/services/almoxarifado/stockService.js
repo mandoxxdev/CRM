@@ -23,42 +23,6 @@ async function getSaldoDisponivel(material) {
   return material.quantidade_atual - reservado - bloqueado - inspecao;
 }
 
-/**
- * Recalcula o TOTAL FÍSICO do material a partir da soma das linhas de saldo por localização.
- *
- * Recalcula SOMENTE `quantidade_atual` — de propósito (achado do review final da Etapa 5).
- * A retenção (`quantidade_reservada`, `quantidade_bloqueada`, `quantidade_em_inspecao`) mora
- * EXCLUSIVAMENTE em `materiais_almoxarifado` e só muda pelos ramos do motor
- * (RESERVA/LIBERACAO_RESERVA, BLOQUEIO/DESBLOQUEIO, QUARENTENA/DECISAO_INSPECAO/...).
- * `estoque_saldo_almoxarifado` NAO tem colunas de retencao — elas existiam, nunca tiveram
- * escritor, e foram removidas na Etapa 6 justamente para que ninguem volte a somar a partir
- * delas. Recalcular retenção a partir da soma das linhas de saldo — como esta função fazia
- * antes da Etapa 5 — ZERAVA as três colunas do material a cada AJUSTE com localização (e a
- * cada estorno desse AJUSTE), que são os dois únicos chamadores. Efeitos reais:
- *   - material em quarentena virava disponível sem movimentação e sem rastro, e o item do
- *     recebimento (que mantém o próprio retido) ficava indecidível para sempre: decidirInspecao
- *     recusava com "Quantidade em inspeção insuficiente: 0";
- *   - reserva ATIVA perdia o hold no material (mesmo bug, vindo da Etapa 4), liberando para
- *     terceiros saldo que já estava prometido a uma OS.
- */
-async function syncMaterialTotals(db, materialId) {
-  const saldos = await dbGet(db, `
-    SELECT COALESCE(SUM(quantidade),0) as total
-    FROM estoque_saldo_almoxarifado WHERE material_id = ?`, [materialId]);
-
-  // Antes: só atualizava com total > 0, então zerar todas as localizações de um material
-  // (ex.: AJUSTE para 0) nunca propagava para materiais_almoxarifado.quantidade_atual — o
-  // total ficava "preso" no último valor positivo. Contagem de linhas cobre o caso 0 mantendo
-  // o comportamento de não tocar no material quando ele não tem NENHUMA linha de saldo ainda.
-  const linhas = await dbGet(db, 'SELECT COUNT(*) as n FROM estoque_saldo_almoxarifado WHERE material_id = ?', [materialId]);
-
-  if (linhas && linhas.n > 0) {
-    await dbRun(db, `UPDATE materiais_almoxarifado SET
-      quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [saldos.total, materialId]);
-  }
-}
-
 async function getOrCreateSaldo(db, materialId, localizacaoId, loteId = null) {
   let saldo = await dbGet(db,
     'SELECT * FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?',
@@ -74,12 +38,13 @@ async function getOrCreateSaldo(db, materialId, localizacaoId, loteId = null) {
       // lote) entre o SELECT acima e este INSERT — o índice único idx_saldo_almox_chave rejeita o
       // segundo INSERT (achado do review round 1 da Task 3, pego pela suíte de concorrência
       // existente). Antes desta task, esta função só era chamada quando havia localização OU lote
-      // explícitos; a Task 3 passou a chamá-la SEMPRE (até para material "sem localização nem
-      // lote", para `syncMaterialTotals` somar o total certo — ver comentário em
-      // registrarMovimentacao), expondo esta corrida pré-existente numa população de materiais
-      // que os testes de concorrência batem com dezenas de requisições simultâneas no MESMO
-      // material. Sem este catch, a corrida virava SQLITE_CONSTRAINT não tratado e a requisição
-      // perdedora tomava 500 em vez de seguir com a linha que a vencedora acabou de criar.
+      // explícitos; a Task 3 passou a chamá-la SEMPRE, mesmo para material "sem localização nem
+      // lote" (ver comentário em registrarMovimentacao — hoje é para a linha do LOTE existir
+      // uniformemente, não mais para somar o total do material; isso mudou no round 2), expondo
+      // esta corrida pré-existente numa população de materiais que os testes de concorrência batem
+      // com dezenas de requisições simultâneas no MESMO material. Sem este catch, a corrida virava
+      // SQLITE_CONSTRAINT não tratado e a requisição perdedora tomava 500 em vez de seguir com a
+      // linha que a vencedora acabou de criar.
       saldo = await dbGet(db,
         'SELECT * FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?',
         [materialId, localizacaoId || null, loteId || null]);
@@ -520,17 +485,31 @@ async function registrarMovimentacao(db, user, params) {
         saldoPosterior = row.quantidade_atual;
       }
     } else if (tiposAjuste.includes(tipo) && localizacao_destino_id) {
-      // AJUSTE escopado a uma localização: define o saldo APENAS daquela localização
-      // (não o total do material) e recalcula o total a partir da soma de todas as
-      // localizações — inclui o caso de zerar (quantidade 0), daí o syncMaterialTotals
-      // contar linhas em vez de exigir total > 0 (fix desta task).
+      // AJUSTE escopado a uma localização: define o saldo APENAS daquela localização (não o
+      // total do material) e aplica o DELTA dessa mudança em quantidade_atual — não mais uma
+      // soma de todas as linhas do material (achado do review round 2 desta task).
+      // A soma-de-tudo era uma SEGUNDA fonte de verdade do físico, que só reconciliava com
+      // quantidade_atual quando TODAS as linhas do material estavam corretas e completas.
+      // Qualquer linha ausente ou desatualizada — um estorno sem localização nem lote
+      // (cancelarMovimentacao segue gateado em `if (loc || mov.lote_id)`, de propósito: reverter
+      // precisa ser sempre possível mesmo sem endereço), ou um AJUSTE-sem-localização (ramo
+      // abaixo, que só toca quantidade_atual e não mexe em estoque_saldo_almoxarifado) — fazia a
+      // soma "ressuscitar" um valor antigo ou "evaporar" quantidade real assim que este ramo
+      // rodasse. Aplicar só o DELTA da linha efetivamente tocada torna a operação local e correta
+      // independente de quantas outras linhas existem, faltam ou estão desatualizadas — a classe
+      // inteira de bug desaparece em vez de precisar ser tapada em cada lugar que mantém uma
+      // linha de saldo.
       // loteIdFinal (Etapa 6, Task 3): AJUSTE citando lote define o saldo daquela linha de lote
       // específica; sem lote, loteIdFinal é null e o comportamento é o de sempre.
       const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, loteIdFinal);
+      const valorAntigoLinha = saldo.quantidade;
+      const valorNovoLinha = parseFloat(quantidade);
+      const deltaLinha = valorNovoLinha - valorAntigoLinha;
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [parseFloat(quantidade), saldo.id]);
-      await syncMaterialTotals(db, material_id);
-      const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
+        [valorNovoLinha, saldo.id]);
+      const atual = await dbGet(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+        RETURNING quantidade_atual`, [deltaLinha, material_id]);
       saldoPosterior = atual.quantidade_atual;
     } else if (tiposAjuste.includes(tipo)) { // AJUSTE sem localização — define valor absoluto (last-writer-wins é aceitável para ajuste)
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -552,16 +531,19 @@ async function registrarMovimentacao(db, user, params) {
     const locEntrada = tiposEntrada.includes(tipo) ? resolveLocalizacaoEntrada(material, localizacao_destino_id) : null;
     const locSaida = tiposSaida.includes(tipo) ? resolveLocalizacaoSaida(material, localizacao_origem_id) : null;
 
-    // A linha de saldo por localização/lote passa a ser criada SEMPRE numa entrada/saída — mesmo
-    // sem localização nem lote — e não mais só quando havia uma das duas (achado do review round
-    // 1 desta task). Motivo: `syncMaterialTotals` soma TODAS as linhas de estoque_saldo_almoxarifado
-    // do material e só é no-op quando não há NENHUMA linha; a partir da PRIMEIRA linha (ex.: a
-    // primeira entrada que citou lote) a soma passa a ser tratada como o total de verdade. Se só
-    // PARTE das entradas/saídas do material criasse linha, a soma ficaria PARCIAL, e um AJUSTE
-    // com localização (ou o estorno dele) sobrescreveria quantidade_atual com essa soma
-    // incompleta, evaporando a parte "invisível" — ex.: entrada de 10 sem lote + 5 no lote X,
-    // AJUSTE com localização somava só 5. Criar a linha sempre garante soma(linhas) ===
-    // quantidade_atual em qualquer momento em que syncMaterialTotals rodar.
+    // A linha de saldo por localização/lote é criada SEMPRE numa entrada/saída — mesmo sem
+    // localização nem lote — desde o round 1 desta task (achado do review round 1). O motivo
+    // ORIGINAL era manter `syncMaterialTotals` (soma de todas as linhas do material) completa;
+    // isso deixou de existir no round 2: `syncMaterialTotals` foi REMOVIDA porque somar todas as
+    // linhas era, ela própria, uma segunda fonte de verdade do físico que só reconciliava com
+    // quantidade_atual quando TODAS as linhas estavam corretas — uma linha ausente ou
+    // desatualizada (estorno sem localização/lote, AJUSTE-sem-localização) fazia a soma
+    // "ressuscitar" ou "evaporar" quantidade real. O ramo AJUSTE-com-localização (abaixo) agora
+    // aplica um DELTA local em quantidade_atual em vez de somar — ver o comentário lá. Criar a
+    // linha sempre não é mais estritamente necessário para o total do material, mas permanece:
+    // é inofensivo (a linha não participa de soma nenhuma), mantém o comportamento uniforme entre
+    // entrada/saída, e é o que garante que a linha do LOTE específico exista para as guardas de
+    // status/validade/saldo da Task 3 (o motivo que continua de pé).
     if (tiposEntrada.includes(tipo)) {
       const saldo = await getOrCreateSaldo(db, material_id, locEntrada, loteIdFinal);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -572,7 +554,7 @@ async function registrarMovimentacao(db, user, params) {
       if (loteIdFinal && !permiteNegativo) {
         // Guarda no WHERE, como o resto do motor. Sem isto a subtracao abaixo negativa a linha do
         // lote em silencio: a guarda de saldo insuficiente la em cima compara com o disponivel do
-        // MATERIAL, e syncMaterialTotals soma a linha negativa de volta, entao o total continua
+        // MATERIAL, e o total do material (debitado direto, sem depender desta linha) continua
         // coerente e nada denuncia (reproduzido em 2026-08-09: lote B com 2 aceitou saida de 10 e
         // ficou em -8).
         const claim = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
@@ -754,12 +736,13 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       }
     } else if (mov.tipo === 'AJUSTE') {
       if (mov.localizacao_destino_id) {
-        // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
-        // global abaixo, ignoraria as OUTRAS localizações do material — a soma das linhas de
-        // estoque_saldo_almoxarifado deixaria de bater com quantidade_atual (achado do review
-        // pós-Task 6). O delta que o ajuste aplicou à localização é o mesmo que aplicou ao total
-        // (saldo_posterior - saldo_anterior do livro, ambos totais do material), então revertemos
-        // SÓ a localização por esse delta e recalculamos o total a partir da soma real.
+        // AJUSTE escopado a uma localização (Task 6): reverte SÓ a localização, pelo delta que o
+        // ajuste original aplicou (saldo_posterior - saldo_anterior do livro, ambos totais do
+        // material). Round 2 (achado do review): aplica esse MESMO delta direto em
+        // quantidade_atual, em vez de recalcular via soma de todas as linhas — espelha o ramo
+        // forward de registrarMovimentacao (ver comentário lá). A soma reintroduzia a mesma
+        // classe de bug no estorno: uma linha ausente/desatualizada em OUTRA localização ou lote
+        // fazia a soma divergir do total real assim que este ramo rodasse.
         const delta = mov.saldo_posterior - mov.saldo_anterior;
         const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
         if (saldoLoc.quantidade - delta < 0) {
@@ -767,8 +750,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         }
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [delta, saldoLoc.id]);
-        await syncMaterialTotals(db, mov.material_id);
-        const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+        const atual = await dbGet(db, `UPDATE materiais_almoxarifado
+          SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+          RETURNING quantidade_atual`, [delta, mov.material_id]);
         saldoDepois = atual.quantidade_atual;
       } else {
         // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
@@ -1031,7 +1015,6 @@ module.exports = {
   getConfig,
   getMaterial,
   getSaldoDisponivel,
-  syncMaterialTotals,
   syncSaldoLocalizacaoPadrao,
   getOrCreateSaldo,
   resolveLocalizacaoEntrada,
