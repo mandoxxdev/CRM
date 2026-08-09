@@ -644,6 +644,35 @@ async function initSchema(db) {
     FOREIGN KEY (localizacao_id) REFERENCES localizacoes_almoxarifado(id)
   )`);
 
+  // ── Lotes (Etapa 6) ──
+  // `VENCIDO` NAO e status: vencimento e derivado de data_validade < date('now'), calculado na
+  // leitura. Gravar exigiria um cron para virar o status a meia-noite e criaria um estado que
+  // diverge da data quando o cron falhasse — mais uma coluna mentindo. Derivado nao diverge.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS lotes_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER NOT NULL,
+    codigo TEXT NOT NULL,
+    fornecedor_id INTEGER,
+    fornecedor_nome TEXT,
+    corrida TEXT,
+    data_fabricacao DATE,
+    data_validade DATE,
+    certificado_arquivo TEXT,
+    certificado_em DATETIME,
+    certificado_por INTEGER,
+    status TEXT NOT NULL DEFAULT 'ATIVO',
+    status_motivo TEXT,
+    recebimento_id INTEGER,
+    recebimento_item_id INTEGER,
+    nota_fiscal TEXT,
+    observacoes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_por INTEGER,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(material_id, codigo),
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
   // ── Extend movimentações ──
   const movCols = [
     'localizacao_origem_id INTEGER',
