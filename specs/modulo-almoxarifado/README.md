@@ -66,8 +66,13 @@ Reserva automática pós-aprovação, liberação, expiração; integração com
 ### Etapa 5 — Recebimento + Inspeção → `08-recebimento` + `09-inspecao-qualidade`
 Tipos de entrada; conferência física; quarentena e bloqueio efetivos no saldo.
 
-### Etapa 6 — Lotes e séries → `10-lotes-series-etiquetas`
-Tabela de lotes com validade/corrida; números de série; regras de saída (FEFO/vencido/reprovado); etiquetas com QR.
+### Etapa 6 — Lotes → `10-lotes-series-etiquetas`
+**Dividida em três em 2026-08-09** — a feature 10 é grande demais para uma etapa, e descrevê-la como item único fazia parecer que ficaria pronta de uma vez:
+- **Etapa 6 (em desenho, [design](../../docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md))** — tabela `lotes_almoxarifado` com validade/corrida/certificado; regras de saída (vencido, bloqueado, reprovado); FEFO como sugestão; guarda contra saldo negativo por lote; campo de lote no recebimento.
+- **Etapa 6b** — números de série (confirmado em 2026-08-09: a GMP rastreia série individualmente hoje, é rotina).
+- **Etapa 6c** — etiquetas com QR Code em PDF.
+
+`6b`/`6c` e não `7`/`8` porque as etapas 7 e 8 abaixo já estão ocupadas.
 
 ### Etapa 7 — Transferências e devoluções → `11-transferencias` + `12-devolucoes`
 Estado "em trânsito"; devolução vinculada à saída original.

@@ -2,6 +2,19 @@
 
 > **Status:** ❌ — lote hoje é texto livre; série e etiquetas não existem · **Spec original:** seção 10
 > **Última atualização:** 2026-08-09 (levantamento verificado contra o código antes da Etapa 6)
+> **Design da Etapa 6 (só lotes):** [`docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md`](../../../docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md)
+
+**A feature 10 foi dividida em três etapas.** Ela é grande demais para uma só, e o mapa mestre a
+descrevia como um item único — o que fazia parecer que ficaria pronta de uma vez:
+
+| Parte | Entrega | Quando |
+|---|---|---|
+| **Etapa 6** | Lotes: tabela real, validade, corrida, certificado, FEFO, guarda contra saldo negativo por lote, campo de lote no recebimento | em desenho (2026-08-09) |
+| **Etapa 6b** | Números de série — confirmado em 2026-08-09 que a GMP rastreia série individualmente hoje (rotina, não exceção). Não é descarte de escopo, é sequência | depois da 6 |
+| **Etapa 6c** | Etiquetas com QR Code e impressão em PDF | depois da 6b |
+
+(`6b`/`6c` e não `7`/`8` de propósito: as etapas 7 e 8 do plano mestre já são
+transferências/devoluções e materiais de clientes/terceiros.)
 
 ## Objetivo
 
@@ -87,7 +100,13 @@ conclui que a entrada verifica certificado. Não verifica.
 ## Checklist
 
 ### Backend — lotes
-- [ ] Tabela `lotes_almoxarifado`: material, código do lote, fornecedor, corrida/heat number, certificado (anexo), data de fabricação, validade, status (ativo/bloqueado/reprovado/vencido)
+- [ ] Tabela `lotes_almoxarifado`: material, código do lote, fornecedor, corrida/heat number, certificado (anexo), data de fabricação, validade, status (ativo/bloqueado/reprovado)
+
+  > ⚠️ **Correção (2026-08-09): `VENCIDO` não é status.** Esta linha pedia
+  > `ativo/bloqueado/reprovado/vencido`. Vencimento é **derivado** de `data_validade <
+  > date('now')`, calculado na leitura. Gravar `VENCIDO` exigiria um cron para virar o status à
+  > meia-noite e criaria um estado que diverge da data toda vez que o cron falhasse — mais uma
+  > coluna mentindo, que é o problema que esta spec inteira documenta. Derivado não diverge.
 - [ ] `estoque_saldo_almoxarifado.lote` passa a referenciar a tabela (migração dos textos existentes, **deduplicando as linhas `lote IS NULL`** — ver lacunas acima)
 - [ ] **Saída não pode deixar a linha do lote negativa** (hoje deixa, em silêncio — item 1 das correções). Guarda no `WHERE` do UPDATE, como o resto do motor
 - [ ] Aplicar `controle_lote`: material controlado exige lote em TODA entrada e saída
