@@ -394,6 +394,16 @@ async function registrarMovimentacao(db, user, params) {
   const loteIdFinal = loteResolvido ? loteResolvido.id : null;
   const loteCodigoFinal = loteResolvido ? loteResolvido.codigo : (lote || null);
 
+  // Etapa 6: controle_lote deixa de ser flag morta. AJUSTE fica de fora de proposito — e o
+  // caminho de regularizacao de quem ligou a flag com estoque antigo sem lote em casa; exigir
+  // lote nele trancaria a porta de saida.
+  if (material.controle_lote && !loteIdFinal
+      && (tiposEntrada.includes(tipo) || tiposSaida.includes(tipo))) {
+    throw Object.assign(
+      new Error(`O material ${material.codigo} exige lote em toda entrada e saida (controle por lote ligado)`),
+      { status: 400 });
+  }
+
   const regras = avaliarRegrasVinculo(tipo, { os_id, projeto_id, centro_custo_id, justificativa, referencia, emergencial });
   if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
   const regularizacaoPendente = regras.pendente ? 1 : 0;
