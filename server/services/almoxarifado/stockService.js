@@ -32,9 +32,9 @@ async function getSaldoDisponivel(material) {
  * (RESERVA/LIBERACAO_RESERVA, BLOQUEIO/DESBLOQUEIO, QUARENTENA/DECISAO_INSPECAO/...).
  * `estoque_saldo_almoxarifado` NAO tem colunas de retencao — elas existiam, nunca tiveram
  * escritor, e foram removidas na Etapa 6 justamente para que ninguem volte a somar a partir
- * delas. Recalcular retenção a partir dessa soma — como esta função fazia antes da Etapa 5 —
- * ZERAVA as três colunas do material a cada AJUSTE com localização (e a cada estorno
- * desse AJUSTE), que são os dois únicos chamadores. Efeitos reais:
+ * delas. Recalcular retenção a partir da soma das linhas de saldo — como esta função fazia
+ * antes da Etapa 5 — ZERAVA as três colunas do material a cada AJUSTE com localização (e a
+ * cada estorno desse AJUSTE), que são os dois únicos chamadores. Efeitos reais:
  *   - material em quarentena virava disponível sem movimentação e sem rastro, e o item do
  *     recebimento (que mantém o próprio retido) ficava indecidível para sempre: decidirInspecao
  *     recusava com "Quantidade em inspeção insuficiente: 0";
@@ -876,11 +876,20 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
   // almoxarifado_codigo/nome vêm do almoxarifado da PRÓPRIA localização do saldo
   // (s.localizacao_id), não da localização padrão do material — cada linha de saldo
   // pode estar num almoxarifado diferente. Saldo sem localização => null nos dois.
+  //
+  // `lote` (achado de review, fix round 1 da Task 2): o cliente (ExtratoMaterialModal.js) lê
+  // `s.lote` como texto — sobrevivência da era pré-Etapa-6, quando a coluna era TEXT. `s.*`
+  // agora só traz `lote_id`, então sem este JOIN o campo simplesmente sumia da resposta (virou
+  // undefined, sem erro de SQL) e a coluna "Lote" do extrato ficaria em "—" para sempre assim
+  // que a Task 3 passasse a gravar o vínculo — silenciosamente morta. Devolvendo `lote` (o
+  // código, via lotes_almoxarifado) ao lado de `lote_id`, o cliente volta a funcionar sozinho.
   return dbAll(db, `SELECT s.*, l.codigo as localizacao_codigo, l.descricao as localizacao_descricao, l.tipo as localizacao_tipo,
-           a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
+           a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
+           lt.codigo as lote
     FROM estoque_saldo_almoxarifado s
     LEFT JOIN localizacoes_almoxarifado l ON s.localizacao_id = l.id
     LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+    LEFT JOIN lotes_almoxarifado lt ON s.lote_id = lt.id
     WHERE s.material_id = ?`, [materialId]);
 }
 

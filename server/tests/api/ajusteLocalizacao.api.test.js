@@ -98,11 +98,11 @@ async function criarMaterial(db, codigo, qtd = 100) {
   });
 
   // ── Costura com a retenção (achado do review final da Etapa 5) ────────────────
-  // AJUSTE COM localização é o ÚNICO caminho que passa por syncMaterialTotals. Nada no sistema
-  // escreve as colunas de retenção de estoque_saldo_almoxarifado (as colunas de retencao do saldo
-  // foram removidas na Etapa 6), então recalcular retenção a partir dessa soma zerava a
-  // quarentena/reserva do material sem movimentação e sem rastro. Os testes de AJUSTE acima não
-  // alcançavam isso porque nenhum deles tinha material retido.
+  // AJUSTE COM localização é o ÚNICO caminho que passa por syncMaterialTotals. As colunas de
+  // retenção do saldo foram removidas na Etapa 6; antes disso ninguém escrevia nelas, então
+  // recalcular retenção a partir da soma das linhas zerava a quarentena/reserva do material sem
+  // movimentação e sem rastro. Os testes de AJUSTE acima não alcançavam isso porque nenhum
+  // deles tinha material retido.
 
   await test('AJUSTE por localizacao nao evapora a quarentena do material', async () => {
     const loc = (await dbRun(db, `INSERT INTO localizacoes_almoxarifado (codigo, descricao) VALUES ('AJL-F','F')`)).lastID;
