@@ -1,7 +1,7 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:** 2026-08-09 (Etapa 6 fechada — Task 3b acrescentou a liberação de vencimento, e a afirmação desta spec de que ela "não existe ainda" foi corrigida; citação de linha da conclusão de inventário atualizada. Antes: Task 3, round 5 do review — o discriminador do estorno passa a ser "o material já tem linha?"; mais as correções do round 4: mapa mostra material sem endereço, e a afirmação errada desta spec sobre a invariante da linha de saldo)
+> **Última atualização:** 2026-08-10 (**review final do branch da Etapa 6**: o claim de saída por lote passou a ser contra o CONJUNTO de linhas do lote, não uma linha só; o estorno de ENTRADA com lote ganhou piso; o mostrador "Reservado" do mapa foi REMOVIDO — follow-up abaixo fechado; e três pendências novas declaradas no fim deste arquivo. Antes: 2026-08-09, Etapa 6 fechada — Task 3b acrescentou a liberação de vencimento, e a afirmação desta spec de que ela "não existe ainda" foi corrigida. Antes disso: Task 3, round 5 do review — o discriminador do estorno passa a ser "o material já tem linha?")
 > **📋 Plano de implementação pronto:** [docs/superpowers/plans/2026-08-04-almoxarifado-etapa1-motor-estoque.md](../../../docs/superpowers/plans/2026-08-04-almoxarifado-etapa1-motor-estoque.md) — 9 tasks TDD (todas concluídas)
 
 ## Objetivo
@@ -14,6 +14,31 @@ Um único caminho de movimentação, transacional, com livro imutável (estorno 
 - **Estorno:** `POST /movimentacoes/:id/cancelar` (`extended.js`, `stockService.cancelarMovimentacao`) com `movimento_estorno_id`, `cancelamento_motivo`; reverte saldo e localizações (entrada/saída/ajuste/transferência); NÃO reverte custo médio — decisão registrada em 2026-08-04; bloqueia estornar ESTORNO/RESERVA/LIBERACAO_RESERVA, os tipos de inspeção (QUARENTENA/LIBERACAO_INSPECAO/REPROVACAO_INSPECAO/DECISAO_INSPECAO — reversão é pela tela de Inspeções, ver feature 09) e movimentação já cancelada (claim atômico fecha a corrida entre cancelamentos concorrentes do mesmo movimento). Reverter BLOQUEIO usa guarda condicional (`WHERE bloqueada >= ?`), não `MAX(0,...)`: estornar um bloqueio já desfeito recusa em vez de saturar. Também zera `regularizacao_pendente` da movimentação estornada e dispara verificação de alertas de estoque. Exige perfil `ajustar_estoque`. UI: botão "Estornar" por linha em `MovimentacoesAlmoxarifado.js` (mini-modal com motivo obrigatório), escondido nos tipos que o servidor recusa.
 - **Extrato do item:** `GET /materiais/:id/extrato` (`extended.js`) agrega material (com `quantidade_disponivel`), saldos por localização, últimas 100 movimentações e reservas ativas. UI: `ExtratoMaterialModal.js`, aberto pelo nome do material no livro e pelo botão "Extrato" em `MateriaisAlmoxarifado.js`.
 - **Saldos:** `estoque_saldo_almoxarifado` por material + `localizacao_id` + `lote_id` (FK para `lotes_almoxarifado` — reconstruída na Etapa 6, Task 2; até então `lote` era texto livre na própria tabela). É espelho agregado do FÍSICO em `materiais_almoxarifado.quantidade_atual` (`syncMaterialTotals`, chamado pelo AJUSTE com localização e pelo estorno dele) — a tabela **não tem mais** colunas de retenção (`quantidade_reservada/bloqueada/em_inspecao` existiam no `CREATE TABLE`, nunca tiveram escritor, e foram removidas na Etapa 6 justamente para que ninguém volte a somar a partir delas); retenção mora só em `materiais_almoxarifado`, e é por isso que `syncMaterialTotals` recalcula **somente** `quantidade_atual` (recalcular retenção a partir da soma zerava quarentena/reserva a cada AJUSTE por localização — achado do review final da Etapa 5). A reconciliação por soma é uma decisão de negócio (Etapa 6, Task 3, round 3 do review): contagem por localização **redefine** o saldo — não soma ao que já existia sem endereço —, então o total do material tem de ser a soma de tudo que se sabe onde está. **Correção de uma afirmação errada que esta spec fez até 2026-08-09 (round 4 do review):** aqui estava escrito que "TODO ramo que muda `quantidade_atual` também mantém a linha correspondente". Não é verdade — os ramos do **motor** mantêm (entrada/saída, os dois lados do estorno, AJUSTE sem localização via `syncSaldoLocalizacaoPadrao`), mas existe **um escritor conhecido fora do motor**: a conclusão de inventário com `aplicar_ajustes` (ver "Pendência nomeada" abaixo), que escreve `quantidade_atual` direto e nunca toca na tabela de saldo. Duas ressalvas do próprio motor, ambas intencionais: material legado (zero linhas) não é reconciliado até a primeira contagem — `syncMaterialTotals` não toca em material sem nenhuma linha —, e o estorno **ajusta** linha existente mas nunca **cria** a linha daquela chave (`ajustarSaldoExistente`); criar uma com −quantidade invertia a primeira contagem seguinte (achado do round 4). Quando a chave não casa, quem decide é `reconciliarEstornoSemLinha` (round 5): **material com zero linhas** segue no-op, **material que já tem linha** reconcilia o residual por `syncSaldoLocalizacaoPadrao` — o discriminador é "o material já está sob o regime da soma?", não "existe linha para esta chave?". Isso importa porque o miss acontece sem nada de legado: a chave do estorno resolve `localizacao_padrao_id` de **hoje** e o movimento original usou o padrão **da época**, então ganhar ou trocar o endereço padrão entre o movimento e o estorno faz o `WHERE` errar uma linha que existe. Saída por lote (Etapa 6, Task 3) recusa lote `BLOQUEADO`/`REPROVADO` e lote vencido (`data_validade < hoje`, sempre derivado — nunca é uma coluna gravada) antes de qualquer efeito de saldo, exceto para os tipos de descarte (`SUCATA`/`PERDA`/`AJUSTE_NEGATIVO`), que podem baixar lote vencido, e exceto para lote cujo vencimento foi **liberado** com justificativa (Task 3b, `556f86d` — a liberação não desvence o lote, só destrava o consumo; a guarda de status roda antes e continua mandando); e reivindica o saldo do PRÓPRIO lote com `UPDATE ... WHERE quantidade >= ? RETURNING`, não mais só o saldo agregado do material — ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md) (a mesma etapa que fechou este ponto do checklist abaixo).
+
+  > **Correção do review final do branch (2026-08-10): o claim por lote é contra o CONJUNTO de
+  > linhas daquele lote, não contra uma linha.** Até aqui esta spec descrevia (e o motor fazia) um
+  > claim chaveado por `(material, localização resolvida, lote)`. A tela, porém, oferece o saldo
+  > **agregado** — `lotService.listarLotesDoMaterial` soma `quantidade` de todas as localizações
+  > daquele lote. Quando a localização resolvida da saída não era onde o lote estava, a tela dizia
+  > "saldo 25", o FEFO pré-selecionava, e o motor respondia *"Saldo insuficiente no lote L1.
+  > Disponível: 0"* — e isso contradizia a regra de negócio já escrita no guia do módulo (*uma
+  > saída consome o saldo total do material, independente da área em que ele está endereçado*;
+  > almoxarifado aqui é área física do mesmo site, não filial). Alinhado pelo lado do agregado:
+  > `stockService.claimSaldoDoLote` drena as linhas do lote, preferindo a localização resolvida e
+  > depois as maiores, cada uma por `UPDATE` condicional, **devolvendo explicitamente** o que já
+  > drenou se o total não fechar. E **não cria linha**: `getOrCreateSaldo` criava a linha antes do
+  > claim, então toda saída recusada deixava um `(loc, lote, 0)` para trás — lixo que ainda por
+  > cima alimentava o discriminador do estorno (ver a nota sobre `reconciliarEstornoSemLinha`, que
+  > conta linhas inclusive zeradas).
+  >
+  > **E o estorno de ENTRADA com lote ganhou piso.** Ele guardava o disponível do MATERIAL e
+  > aplicava o delta na linha do LOTE sem guarda nenhuma — o −8 na direção inversa. Medido: lote
+  > A=100, entrada de 10 no B, saída de 10 do B, estorno da entrada do B ⇒ linha do B em **−10**,
+  > `quantidade_atual` coerente em 90 e nada denunciando. `ajustarSaldoExistente` passou a aceitar
+  > `opcoes.minimo` no `WHERE` e a distinguir "linha não existe" (reconcilia) de "existe e não
+  > comporta" (recusa, compensando `quantidade_atual` à mão antes de lançar). O ramo de SAÍDA
+  > continua **sem teto**, de propósito: delta positivo não cria negativo e não há capacidade
+  > máxima modelada.
 - **Vínculo estruturado** na movimentação: `projeto_id`, `os_id`, `centro_custo_id` (+ `centros_custo_almoxarifado`), `cliente_id`, `requisicao_id`, `reserva_id`, `recebimento_id`, `documento_vinculado`, `justificativa`. Regra por tipo (`avaliarRegrasVinculo`/`REGRAS_VINCULO`) decide o que é obrigatório.
 - **Rota v1 legada:** `POST /movimentacoes` (`routes/almoxarifado.js:573`) — 4 tipos, sem lote/localização; delega para `stockService.registrarMovimentacao` desde a Etapa 0 (grava auditoria). A tela de Movimentações posta em `/movimentacoes/v2` desde a Etapa 1; a entrada/saída rápida de `MateriaisAlmoxarifado.js` ainda usa a rota v1 (que delega ao mesmo motor — migrar quando a tela for retrabalhada).
 - Testes de serviço: entrada/saída, saldo negativo bloqueado, transferência, bloqueio, material inativo (em `almoxarifado.test.js`); testes de API de estorno, regras de vínculo, livro/extrato (`server/tests/api/`).
@@ -95,13 +120,17 @@ Plano completo em [docs/superpowers/plans/2026-08-04-almoxarifado-etapa1-motor-e
 Nenhum é bug de saldo — os dois foram avaliados e liberados para merge —, mas ficam registrados
 porque somem da memória e não do código.
 
-- **O mapa de localizações mostra reservado sempre 0.** `MAPA_LOCALIZACOES_SQL`
-  (`stockService.js`) soma `estoque_saldo_almoxarifado.quantidade_reservada`, e **nada no sistema
-  escreve colunas de retenção nessa tabela** — só `quantidade`. A retenção (reservado, bloqueado,
-  em inspeção) vive exclusivamente em `materiais_almoxarifado`. É bug de exibição, pré-existente à
-  Etapa 5 e não introduzido por ela. O conserto honesto exige decidir se retenção passa a ser **por
-  localização** (mudança de modelo de dados), e não só trocar a query — por isso ficou de fora da
-  onda de correção do review final, que era escopada a quatro achados.
+- **~~O mapa de localizações mostra reservado sempre 0.~~ RESOLVIDO no review final do branch da
+  Etapa 6 (2026-08-10): o mostrador foi REMOVIDO.** `MAPA_LOCALIZACOES_SQL` (`stockService.js`)
+  somava `estoque_saldo_almoxarifado.quantidade_reservada`, e **nada no sistema escrevia colunas de
+  retenção nessa tabela** — só `quantidade`. A Etapa 6 (Task 2) apagou a coluna e o SQL passou a
+  devolver um `0 as reservado` fixo, o que era pior: um campo que só podia dizer zero, alimentando
+  a linha "Reservado" em `MapaLocalizacoesAlmoxarifado.js`. A decisão que faltava foi tomada: a
+  retenção **não** passa a ser por localização (ela vive em `materiais_almoxarifado`, por material,
+  ou no lote inteiro por status — ver a decisão registrada na feature 10), então o campo saiu do
+  SQL e a linha saiu da tela. Era o terceiro mostrador zerado do mesmo lote; os dois irmãos
+  ("Reservada"/"Bloqueada" na tabela por localização do Extrato) já tinham saído no fix round 1 da
+  Task 9.
   Foi o mesmo equívoco de premissa que gerou o Critical de `syncMaterialTotals` (abaixo): supor
   que aquelas colunas são alimentadas.
   *(Ajuste do round 4 da Task 3, 2026-08-09, no mesmo SQL mas em outro ponto: o fallback "material
@@ -125,10 +154,13 @@ porque somem da memória e não do código.
   já foi refeita uma vez por responder isso sozinha. Levar ao cliente antes de mexer.
 - **Pendência nomeada — a conclusão de inventário escreve `quantidade_atual` por fora do motor.**
   `PUT /api/almoxarifado/conferencias/:id/concluir` com `aplicar_ajustes` faz
-  `UPDATE materiais_almoxarifado SET quantidade_atual = ?` direto (rota em
-  `routes/almoxarifado.js:894`, o `UPDATE` em `routes/almoxarifado.js:917`; há um comentário no
-  próprio arquivo dizendo que é "o caminho mais destrutivo do arquivo" — **conferido em 2026-08-09;
-  esta spec dizia "~linha 868", que envelheceu**) e insere a linha `AJUSTE` no livro à mão. **Nunca toca em `estoque_saldo_almoxarifado`.** Com a
+  `UPDATE materiais_almoxarifado SET quantidade_atual = ?` direto (handler dessa rota em
+  `server/routes/almoxarifado.js`; há um comentário no próprio arquivo dizendo que é "o caminho
+  mais destrutivo do arquivo") e insere a linha `AJUSTE` no livro à mão.
+
+  > **Sem número de linha, de propósito.** Esta spec já citou "~linha 868" e depois "894/917"; o
+  > `UPDATE` andou de novo no review final. Número de linha em spec envelhece entre dois commits —
+  > procure pela rota e pelo `UPDATE materiais_almoxarifado SET quantidade_atual`. **Nunca toca em `estoque_saldo_almoxarifado`.** Com a
   reconciliação por soma, a consequência é concreta: num material que já tem linhas de saldo, a
   homologação do inventário muda o total e deixa as linhas com o valor antigo; a próxima contagem
   por localização (ou o estorno de um AJUSTE) chama `syncMaterialTotals`, que reconcilia a partir
@@ -144,6 +176,34 @@ porque somem da memória e não do código.
   `TIPOS_MOVIMENTO` entra na rota **automaticamente**: o default é certo para tipo operacional e
   errado para tipo de retenção. Hoje a proteção é um comentário. O endurecimento barato é um teste
   que quebre quando a whitelist contiver um tipo que ninguém classificou explicitamente.
+
+## Pendências declaradas no review final do branch da Etapa 6 (2026-08-10)
+
+Nenhuma foi corrigida nesta rodada — cada uma está aqui com arquivo e com o que acontece, para não
+ser redescoberta por acidente.
+
+- **A compensação da reserva é assimétrica — a Global Constraint 2 ainda viva no motor.**
+  Em `stockService.registrarMovimentacao`, quando o claim do lote falha numa saída que consome
+  reserva, a compensação devolve `quantidade_reservada + quantidade` **cheio**, enquanto o forward
+  debitou com `MAX(0, COALESCE(quantidade_reservada,0) - quantidade)`. Se o estado já estivesse
+  inconsistente (reservada menor do que a quantidade sendo consumida), o forward satura em 0 e a
+  compensação devolve o valor inteiro — inflando o hold. **Não é alcançável a partir de estado
+  consistente**, e a compensação pré-existente (`criarReserva`, `liberarReserva`) tem a mesma
+  assimetria pelo mesmo motivo. O ponto de fundo é que aquele `MAX(0, …)` viola a Global Constraint
+  2 do plano da Etapa 6 ("nunca `MAX(0, …)`"); trocá-lo por guarda no `WHERE` muda o comportamento
+  do consumo de reserva e precisa de teste próprio — **task separada**.
+- **Estorno de saída que drenou mais de uma localização volta consolidado.** Com o claim agregado
+  (`claimSaldoDoLote`), uma saída pode debitar linhas de duas ou mais localizações do mesmo lote. O
+  estorno devolve tudo na linha da chave `(localização de origem do movimento, lote)`. O **total**
+  volta exato — `quantidade_atual` e a soma das linhas continuam batendo —, mas o endereçamento
+  pode consolidar numa localização só. Corrigir exigiria o ledger guardar de quais linhas o claim
+  tirou (hoje a movimentação guarda uma localização de origem, não uma distribuição).
+- **`alertService` seleciona uma coluna `localizacao` que não existe.** Duas consultas em
+  `server/services/almoxarifado/alertService.js` pedem `localizacao` de `materiais_almoxarifado`
+  (a coluna é `localizacao_padrao_id`). O erro é engolido pelo `try/catch` que envolve a
+  verificação de alertas, e o efeito visível é o ruído `[almoxarifado-alertas] ... no such column:
+  localizacao` em toda saída de teste — mais o alerta que não sai. **Pré-existente**, anterior à
+  Etapa 6 e fora do escopo dela.
 
 ### Correção da Etapa 5 que pertence a este motor
 

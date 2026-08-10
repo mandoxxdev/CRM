@@ -15,6 +15,37 @@
 
 ## ✅ ETAPA CONCLUÍDA — 2026-08-09 · base `d369871` · 19 commits (`b7035dd..9406bff`) + Task 9 (`09c75d2`)
 
+> ## ⚠️ REVIEW FINAL DO BRANCH — 2026-08-10 · rodada única de correção
+>
+> A etapa foi revisada inteira antes de ser oferecida para integração. A revisão achou **2 Critical
+> + 3 Important + 9 minors**, todos corrigidos nesta rodada. O que mudou de fundo:
+>
+> 1. **`controle_lote` travava quatro fluxos internos.** A guarda exigia lote em todo tipo de
+>    entrada/saída, e entrega de requisição, exclusão de requisição, devolução e sucata de devolução
+>    chamam o motor sem ter DE ONDE tirar um lote. Decisão do cliente (2026-08-10): a exigência
+>    passa a ser **declarada pelo chamador** — `opcoes.exigeLote`, 4º argumento de
+>    `registrarMovimentacao`, nunca `params` (que é `req.body` inteiro e seria forjável). Os quatro
+>    ficam isentos, como **pendência (g)** da spec 10.
+> 2. **`darEntradaEstoque` era re-executável e duplicava estoque.** Ganhou pré-checagem de todos os
+>    itens antes de mover qualquer um, e a marca de idempotência `entrada_estoque_em` por item
+>    (claim no `WHERE`, devolvida só quando a falha é anterior à entrada física).
+> 3. **O claim de saída por lote passou a ser contra o CONJUNTO de linhas do lote**
+>    (`claimSaldoDoLote`), alinhando com o saldo agregado que a tela mostra — e **deixou de criar
+>    linha**, o que fechou junto o minor do discriminador do estorno contar linhas zeradas.
+> 4. **O estorno de ENTRADA com lote ganhou piso** (`ajustarSaldoExistente`, `opcoes.minimo`): era
+>    o −8 na direção inversa, medido em −10.
+> 5. **`data_fabricacao` deixou de ser coluna sem escritor nem leitor** — a Global Constraint 3
+>    deste plano, violada pela própria etapa que a escreveu e declarada como entregue na spec 10.
+>    Ganhou o campo no recebimento (escritor) e a exibição na tela de Lotes (leitor).
+>
+> Relatório completo, com as evidências RED→GREEN de cada achado:
+> `.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/final-fix-report.md`.
+>
+> **O texto da Task 3, que já estava desatualizado, ficou mais:** os Steps dela descrevem um claim
+> por linha única que não existe mais, e um `getOrCreateSaldo` antes do claim que foi justamente o
+> que saiu. Leia o código e o relatório final antes de mexer no motor.
+
+
 **Todas as tasks entregues, mais duas (3b e 9) que não estavam neste plano.** Os `- [ ]` dos Steps
 dentro de cada task ficaram sem marcar de propósito: o texto de vários Steps **não descreve mais o
 código final** (a Task 3 passou por cinco rodadas de review que mudaram decisões de fundo). Marcar

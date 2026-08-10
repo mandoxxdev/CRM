@@ -2,7 +2,11 @@
 
 > **Status:** 🟡 — **lote é entidade real desde a Etapa 6, com tela completa desde a Task 9
 > (2026-08-09)**; série e etiquetas não existem · **Spec original:** seção 10
-> **Última atualização:** 2026-08-09 (Task 9 entregue — tela de lotes + Sucata/Perda na Movimentação)
+> **Última atualização:** 2026-08-10 (**review final do branch**: o alcance real de `controle_lote`
+> foi restringido e está documentado abaixo — esta spec e o guia declaravam a flag como valendo em
+> "toda entrada e saída", o que travava quatro fluxos internos; mais `data_fabricacao` ganhando
+> escritor e leitor, e o claim de saída passando a ser contra o saldo agregado do lote.
+> Antes: 2026-08-09, Task 9 — tela de lotes + Sucata/Perda na Movimentação)
 > **Design da Etapa 6 (só lotes):** [`docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md`](../../../docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md)
 > **Plano executado:** [`docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md`](../../../docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md)
 > **Task 9 (correção pós-review):** [`.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-9-report.md`](../../../.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-9-report.md)
@@ -40,16 +44,21 @@ Controle real por lote (validade, corrida/heat number, certificado), número de 
   mais por texto. A chave é o índice `idx_saldo_almox_chave` com
   `COALESCE(localizacao_id,0), COALESCE(lote_id,0)` — porque no SQLite dois `NULL` são distintos
   para efeito de `UNIQUE` e a constraint de tabela não impedia duplicata justamente no caso comum.
-- **O motor lê o lote antes de qualquer efeito de saldo** (`stockService.js`, ramo de saída a
-  partir de ~`428`): recusa lote `BLOQUEADO`/`REPROVADO`, recusa lote vencido para consumo, e
+- **O motor lê o lote antes de qualquer efeito de saldo** (`stockService.registrarMovimentacao`,
+  ramo de saída): recusa lote `BLOQUEADO`/`REPROVADO`, recusa lote vencido para consumo, e
   reivindica o saldo do **próprio** lote com `UPDATE … WHERE quantidade >= ? RETURNING`,
-  compensando `quantidade_atual` se o claim falhar.
+  compensando `quantidade_atual` se o claim falhar. Desde o review final do branch (2026-08-10) o
+  claim é contra o **conjunto** de linhas daquele lote (`stockService.claimSaldoDoLote`), não
+  contra uma linha só — ver "O saldo do lote é agregado nas DUAS pontas", abaixo.
 - **`movimentacoes_almoxarifado` grava as duas colunas**: `lote_id` (para juntar) e `lote` (o
   código congelado — o ledger é imutável e precisa continuar legível se o lote for renomeado)
   — `schema.js:789-790`.
-- **O lote nasce no recebimento** (`receiptService.darEntradaEstoque`, `receiptService.js:329-359`),
-  herdando fornecedor, NF, corrida e validade do item. O item de recebimento ganhou
-  `lote_id`, `data_validade_lote` e `corrida_lote` (`schema.js:949-951`).
+- **O lote nasce no recebimento** (`receiptService.darEntradaEstoque`), herdando fornecedor, NF,
+  corrida, **data de fabricação** e validade do item. O item de recebimento ganhou `lote_id`,
+  `data_validade_lote`, `data_fabricacao_lote` e `corrida_lote` (bloco `recebItemCols` em
+  `schema.js`). A mesma função ganhou, no review final do branch, **pré-checagem de todos os itens
+  antes de mover qualquer um** e a marca de idempotência `entrada_estoque_em` por item — ver a
+  seção "A entrada do recebimento não é mais re-executável", abaixo.
 - **Rotas** (`routes/almoxarifado/extended.js:483-506` e `routes/almoxarifado.js:623`):
   - `GET /api/almoxarifado/materiais/:id/lotes` (perm. `visualizar`) — ordem FEFO, com `saldo`,
     `vencido`, `vencimento_liberado` e `elegivel`; `?com_saldo=1` filtra;
@@ -57,10 +66,12 @@ Controle real por lote (validade, corrida/heat number, certificado), número de 
   - `PUT /api/almoxarifado/lotes/:id/liberar-vencimento` (perm. `inspecionar`);
   - `POST /api/almoxarifado/lotes/:id/certificado` (perm. `receber_material`, `requirePermission`
     **antes** do multer) — anexa e libera o lote se ele estava bloqueado **por isto**.
-- **Telas:** campo de lote/validade/corrida por item no recebimento
-  (`RecebimentosAlmoxarifado.js:171-173,518-525`) e seletor FEFO na saída da movimentação
-  (`MovimentacoesAlmoxarifado.js:107-115,574-598`) — na entrada o lote continua texto livre, que é
-  onde um lote novo nasce.
+- **Telas:** campo de lote/validade/**fabricação**/corrida por item no recebimento
+  (`RecebimentosAlmoxarifado.js`) e seletor FEFO na saída da movimentação
+  (`MovimentacoesAlmoxarifado.js`) — na entrada o lote continua texto livre, que é onde um lote
+  novo nasce. A tela de lotes (`LotesAlmoxarifado.js`) exibe a data de fabricação e oferece um
+  **link para abrir o certificado** do fornecedor (até o review final do branch o arquivo era
+  gravado e nunca visualizável: a tela só o lia como booleano).
 - Tabela órfã `lotes` (sem sufixo) é de lote de **produção** (`numero_lote`, `os_id`, `tipo_lote`,
   `data_producao`), sem rota — não confundir com `lotes_almoxarifado`. Fica em
   `server/index.js:19554` (conferido em 2026-08-09; a spec já dizia `19458` antes e estava errado).
@@ -86,12 +97,83 @@ barrado. Sem essa isenção o lote vencido ficava preso para sempre — não pod
 A guarda de **status** continua valendo para o descarte: lote `BLOQUEADO`/`REPROVADO` precisa
 passar pela mudança de status, com justificativa, antes de qualquer saída.
 
+### ⚠️ O alcance REAL de `controle_lote` — esta spec e o guia estavam errados até 2026-08-10
+
+**A afirmação anterior era "material com `controle_lote` exige lote em TODA entrada e saída", com a
+única ressalva sendo o `AJUSTE` puro. Estava errada em consequência, e a consequência era grave.**
+A guarda de fato valia para todo tipo de entrada/saída, viesse a chamada de onde viesse — e
+**quatro chamadores internos chamam o motor sem ter de onde tirar um lote**: não existe campo na
+tela nem parâmetro na chamada. Efeito medido no review final do branch: ligar "Controle por lote"
+tornava o material **impossível de entregar por requisição e de devolver**. Pior que travar: a
+RESERVA da requisição nascia normalmente (`RESERVA` não é entrada nem saída), então o saldo ficava
+preso numa reserva que **nunca podia ser consumida**.
+
+**Decisão do cliente (2026-08-10): a exigência vale só onde existe COMO informar o lote.**
+
+| Caminho | Exige lote? | Onde |
+|---|---|---|
+| Movimentação manual — rota v2 (tela de Movimentações) | ✅ sim | `POST /movimentacoes/v2` declara `{ exigeLote: true }` |
+| Movimentação manual — rota v1 (modal rápido da tela de Materiais) | ✅ sim | `POST /movimentacoes` declara `{ exigeLote: true }` |
+| Recebimento (processar nota) | ✅ sim | `receiptService.darEntradaEstoque` declara, e a pré-checagem recusa a nota inteira antes de mover |
+| `AJUSTE` puro | ❌ isento **por tipo** | regularização de estoque antigo sem lote — vale para qualquer chamador |
+| Os quatro fluxos internos | ❌ isentos — **pendência (g)** | ver abaixo |
+
+**Como a exigência é declarada:** `stockService.registrarMovimentacao(db, user, params, opcoes)`
+lê `opcoes.exigeLote` — **4º argumento, nunca `params`**. As rotas repassam `req.body` inteiro como
+`params`, então qualquer chave lida dali seria forjável pelo cliente: uma exigência que o próprio
+cliente desligasse mandando `exigeLote: false` no JSON não seria exigência. É o mesmo motivo já
+documentado em `criarReserva`, e há teste dedicado provando que o body não desliga a guarda.
+Descartado deduzir pelo tipo do movimento (`SAIDA` vem tanto da tela quanto da entrega de
+requisição) e olhar a pilha de chamada (frágil e invisível). O default é "não exige" porque quem
+**não** declara é exatamente o conjunto dos fluxos internos — e um chamador novo que esqueça de
+declarar falha aberto (aceita sem lote) em vez de travar um fluxo inteiro em produção.
+
 ### Nota de escopo: `AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO` exigem lote; só o `AJUSTE` puro é isento
 
 `AJUSTE_POSITIVO` e `AJUSTE_NEGATIVO` estão classificados em `tiposEntrada`/`tiposSaida`
-(`stockService.js:364-365`), então a guarda de `controle_lote` **exige** lote neles. Só o `AJUSTE`
-puro fica de fora — é o caminho de regularização de quem ligou a flag com estoque antigo sem lote
-conhecido em casa. Exigir lote no `AJUSTE` trancaria a porta de saída dessa migração.
+(`stockService.registrarMovimentacao`), então a guarda de `controle_lote` **exige** lote neles —
+quando quem chama declara `exigeLote` (ver a tabela acima). Só o `AJUSTE` puro fica de fora por
+tipo, para qualquer chamador: é o caminho de regularização de quem ligou a flag com estoque antigo
+sem lote conhecido em casa. Exigir lote no `AJUSTE` trancaria a porta de saída dessa migração.
+
+### O saldo do lote é agregado nas DUAS pontas
+
+`lotService.listarLotesDoMaterial` sempre calculou `saldo` como a **soma** de `quantidade` em
+todas as localizações daquele lote — é o número que a tela de Movimentação mostra no seletor FEFO
+e que a tela de Lotes exibe na coluna "Saldo". O motor, até o review final do branch, reivindicava
+contra **uma** linha, chaveada por `(material, localização resolvida da saída, lote)`. Quando as
+duas não coincidiam, a tela dizia "saldo 25", o FEFO pré-selecionava o lote, e o motor respondia
+*"Saldo insuficiente no lote L1. Disponível: 0"*.
+
+Alinhado pelo lado do **agregado**, e não restringindo a tela: é o lado que concorda com a regra de
+negócio já escrita no guia — *uma saída consome o saldo total do material, independente da área em
+que ele está endereçado* —, porque almoxarifado aqui é **área física dentro do mesmo site**, não
+filial. `stockService.claimSaldoDoLote` drena as linhas do lote (a localização resolvida primeiro,
+depois as maiores), cada uma por `UPDATE` condicional, devolvendo explicitamente o que já drenou se
+o total não fechar. E **não cria linha**: `getOrCreateSaldo` criava a linha antes do claim, então
+toda saída recusada deixava um `(loc, lote, 0)` para trás — lixo que ainda alimentava o
+discriminador do estorno, que conta linhas inclusive zeradas (ver
+[03-motor-estoque](../03-motor-estoque/README.md)).
+
+### A entrada do recebimento não é mais re-executável
+
+`receiptService.darEntradaEstoque` percorria os itens chamando o motor um a um, sem pré-checagem e
+sem marca. Se o item B falhasse, os anteriores **já tinham entrado**, o recebimento continuava em
+`EM_ENTRADA_NF` e o botão "Processar Nota" continuava na tela. Reproduzido no review final: 1ª
+tentativa entrou 10 do item A e falhou no B; corrigido o B, a 2ª tentativa entrou **mais 10** do A
+— total 20.
+
+Como não há transação no módulo, a correção tem duas pontas:
+
+1. **Pré-checagem** de todos os itens antes de mover qualquer um — material inativo, `controle_lote`
+   sem lote digitado, localização de destino bloqueada ou que não aceita o tipo do material. Uma
+   nota com um item ruim é recusada **inteira**, sem ter movido nada.
+2. **Marca por item**, `recebimentos_material_itens_almoxarifado.entrada_estoque_em`: o item é
+   reclamado por `UPDATE … WHERE entrada_estoque_em IS NULL` **antes** de mover, e o
+   reprocessamento pula quem já entrou. A marca é devolvida se a falha acontecer **antes** da
+   entrada física; depois dela, não — creditar duas vezes é pior do que deixar a `QUARENTENA`
+   daquele item por fazer. A coluna nasce com escritor **e** leitor: o leitor é o próprio `WHERE`
+   do claim, que decide se o item entra.
 
 ### As cinco flags `controle_*`: duas acesas, três ainda mortas
 
@@ -101,26 +183,40 @@ sobre as outras três recriaria exatamente a confusão que esta spec existe para
 
 | Flag | Estado | Onde é lida | Acende em |
 |---|---|---|---|
-| `controle_lote` | ✅ **acesa** (`2dbbf60`) | `stockService.js:400` — exige lote em toda entrada e saída | Etapa 6 |
-| `controle_certificado` | ✅ **acesa** (`64686b1`, `c11db85`) | `receiptService.js:340` — lote sem certificado nasce `BLOQUEADO` | Etapa 6 |
+| `controle_lote` | ✅ **acesa** (`2dbbf60`, alcance corrigido em 2026-08-10) | `stockService.registrarMovimentacao` — exige lote **onde o operador tem como informá-lo**: movimentação manual (v1/v2) e recebimento. Ver "O alcance REAL", acima | Etapa 6 |
+| `controle_certificado` | ✅ **acesa** (`64686b1`, `c11db85`) | `receiptService.darEntradaEstoque` — lote sem certificado nasce `BLOQUEADO` | Etapa 6 |
 | `controle_serie` | ❌ **morta** — gravada pelo CRUD, nunca lida | — | **Etapa 6b** (números de série) |
 | `controle_validade` | ❌ **morta** — gravada pelo CRUD, nunca lida | — | sem etapa definida (ver nota abaixo) |
 | `controle_corrida` | ❌ **morta** — gravada pelo CRUD, nunca lida | — | sem etapa definida (ver nota abaixo) |
 
 > **Correção (fix round 1 da Task 9, 2026-08-09): a lista de arquivos abaixo estava incompleta.**
-> O review verificou por grep e achou três arquivos fora do texto anterior —
-> `routes/almoxarifado.js` tinha mais dois trechos além do range citado (`350` e `410-412`),
-> `MaterialAlmoxarifadoForm.js` tinha mais dois blocos (`102-106` e `268-272`, além de `28-32`), e
-> `server/tests/api/materialCompleto.api.test.js` não aparecia na lista — nem uma linha. Quatro
+> O review verificou por grep e achou três arquivos fora do texto anterior — `routes/almoxarifado.js`
+> tinha trechos além do range citado, `MaterialAlmoxarifadoForm.js` tinha mais dois blocos, e
+> `server/tests/api/materialCompleto.api.test.js` não aparecia na lista, nem uma linha. Poucas
 > linhas abaixo esta spec recomenda "apagar as duas colunas" (`controle_validade`/
 > `controle_corrida`): quem seguisse a lista incompleta apagaria as colunas do schema e quebraria
-> esse teste, que grava e lê as três flags de propósito. Lista corrigida:
+> esse teste, que grava e lê as três flags de propósito.
+>
+> **Correção (review final do branch, 2026-08-10): os números de linha SAÍRAM.** A versão anterior
+> desta lista citava `schemas.js:196-198` e `routes/almoxarifado.js:313,325,346` — linhas que, na
+> data em que o review olhou, continham as flags **vivas**, não as três mortas (`schemas.js` já
+> tinha deslocado para `198-200` no commit da própria Task 9). Isso é pior do que um número velho:
+> a seção é uma **instrução destrutiva** ("apagar as duas colunas") apontando para o alvo errado.
+> Ficam só arquivo e nome do símbolo — número de linha em spec envelhece entre dois commits, e
+> quem for apagar tem de rodar o grep de novo, que é o comportamento certo.
 
-As três mortas existem em `schema.js:614-616`, `schemas.js:196-198`,
-`routes/almoxarifado.js:313-314,325,330,346,350,410-412`, `MaterialAlmoxarifadoForm.js:28-32,102-106,268-272`
-e `server/tests/api/materialCompleto.api.test.js:54-56,80-82,234,274,282` — e em lugar nenhum mais
-(reverificado por grep em `server`/`client` — excluindo `client/build`, artefato gerado — em
-2026-08-09).
+As três mortas (`controle_serie`, `controle_validade`, `controle_corrida`) aparecem em:
+
+| Arquivo | Onde procurar |
+|---|---|
+| `server/services/almoxarifado/schema.js` | lista `materialCols` (as três colunas `INTEGER DEFAULT 0`) |
+| `server/services/almoxarifado/schemas.js` | `MaterialSchema` (as três como `FlagSchema`) |
+| `server/routes/almoxarifado.js` | handlers de `POST /materiais` e `PUT /materiais/:id` (destructuring do body, lista de colunas do INSERT e do UPDATE) |
+| `client/src/components/almoxarifado/MaterialAlmoxarifadoForm.js` | estado inicial do formulário, carga do material e os checkboxes da seção "Controles" |
+| `server/tests/api/materialCompleto.api.test.js` | grava e lê as três de propósito — **quebra se as colunas forem apagadas sem tocar aqui** |
+
+(Reverificado por grep em `server`/`client` — excluindo `client/build`, artefato gerado — em
+2026-08-10.)
 
 > **Sobre `controle_validade` e `controle_corrida`:** a Etapa 6 entregou os **dados** que essas
 > flags governariam (`data_validade` e `corrida` no lote, com a guarda de vencimento funcionando),
@@ -201,7 +297,19 @@ lote para decidir nada.
 ## Checklist
 
 ### Backend — lotes
-- [x] Tabela `lotes_almoxarifado`: material, código do lote, fornecedor, corrida/heat number, certificado (anexo), data de fabricação, validade, status (ativo/bloqueado/reprovado) — **`b7035dd`** (+ `d6e36e9`: status inválido passou a ser recusado em vez de coagido para `ATIVO` em silêncio; + `556f86d`: as três colunas de liberação de vencimento)
+- [x] Tabela `lotes_almoxarifado`: material, código do lote, fornecedor, corrida/heat number, certificado (anexo), data de fabricação, validade, status (ativo/bloqueado/reprovado) — **`b7035dd`** (+ `d6e36e9`: status inválido passou a ser recusado em vez de coagido para `ATIVO` em silêncio; + `556f86d`: as três colunas de liberação de vencimento; + review final do branch 2026-08-10: **data de fabricação ganhou escritor e leitor**, ver a correção abaixo)
+
+  > ⚠️ **Correção (2026-08-10): este item ficou marcado `[x]` incluindo "data de fabricação" quando
+  > `data_fabricacao` era uma coluna que NINGUÉM escrevia e NINGUÉM lia.** Nenhum chamador a passava
+  > para `criarOuObterLote`, nenhuma tela a exibia, nenhuma consulta a lia — a Global Constraint 3
+  > do próprio plano da Etapa 6 ("nunca crie coluna que ninguém escreve"), violada pela etapa que a
+  > escreveu, e declarada aqui como entregue. **Agora está de fato entregue**, pelo caminho que
+  > fecha o ciclo em vez de apagar a coluna: o item do recebimento ganhou `data_fabricacao_lote`
+  > (o quarto campo de lote da tela, ao lado de Lote/Validade/Corrida), `darEntradaEstoque` o leva
+  > para o lote, e a tela de Lotes mostra "Fabricado em …". Testes:
+  > `data_fabricacao chega na listagem do lote` (`loteRotas.api.test.js`), `processar recebimento
+  > cria o lote com dados da NF` (`loteRecebimento.api.test.js`) e dois casos em
+  > `LotesAlmoxarifado.test.js`.
 
   > ⚠️ **Correção (2026-08-09): `VENCIDO` não é status.** Esta linha pedia
   > `ativo/bloqueado/reprovado/vencido`. Vencimento é **derivado** de `data_validade <
@@ -212,7 +320,7 @@ lote para decidir nada.
   > status gravado` (`lotes.api.test.js`) segura a decisão.
 - [x] `estoque_saldo_almoxarifado.lote` passa a referenciar a tabela (migração dos textos existentes, **deduplicando as linhas `lote IS NULL`**) — **`015e94c`** (+ `b4e4858`: o teste "migração idempotente" era vazio — rodava sobre banco que já nascia na forma nova e saía pelo early-return; foi renomeado honestamente e um teste real do corpo da migração entrou no lugar)
 - [x] **Saída não pode deixar a linha do lote negativa.** Guarda no `WHERE` do UPDATE, com `RETURNING` e compensação de `quantidade_atual` — **`65d78fd`**, mais cinco rodadas de review (`920d10c`, `f65758d`, `c2e31dc`, `1effd07`, `2d6fec5`)
-- [x] Aplicar `controle_lote`: material controlado exige lote em TODA entrada e saída — **`2dbbf60`**. `AJUSTE` puro é isento de propósito (regularização); `AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO` **não** são (ver "Nota de escopo" acima)
+- [x] Aplicar `controle_lote`: material controlado exige lote **onde o operador tem como informá-lo** — movimentação manual (rotas v1 e v2) e recebimento — **`2dbbf60`**, alcance corrigido no review final do branch (2026-08-10). `AJUSTE` puro é isento por tipo (regularização); `AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO` **não** são. Os quatro fluxos internos são isentos e isso é **pendência (g)**, abaixo. Ver "O alcance REAL de `controle_lote`" — **esta linha dizia "em TODA entrada e saída", e essa redação descrevia um comportamento que travava a entrega e a devolução do material**
 - [x] Aplicar `controle_certificado`: entrada sem certificado **entra bloqueada** (não falha — barrar a entrada foi o erro corrigido na Etapa 5); o `SELECT` morto em `receiptService` passou a ser usado de verdade — **`64686b1`** (+ `c11db85`: anexar certificado podia liberar um lote `REPROVADO` por corrida entre a leitura e a escrita; a pré-condição foi inteira para dentro do `WHERE` em `liberarBloqueioPorCertificado`)
 - [x] Validade: bloquear saída de lote vencido; sugestão FEFO (primeiro que vence sai primeiro) — **`65d78fd`** (guarda), **`556f86d`** (liberação com justificativa — Task 3b, ver abaixo), **`8dfeb0c`** (ordem FEFO na API), **`9406bff`** (FEFO pré-selecionado na tela, como sugestão e não imposição)
 - [ ] Rastreabilidade: consulta de tudo que aconteceu com um lote — **parcial, e o que falta é a consulta agregada.** Os dados existem e são consultáveis (`movimentacoes_almoxarifado.lote_id` desde `65d78fd`, `auditoria_log_almoxarifado` com `entidade='lote'` desde `b7035dd`, saldo por lote em `GET /materiais/:id/lotes` desde `8dfeb0c`), mas não há um "extrato do lote" que junte as três fontes como `GET /materiais/:id/extrato` faz para o material. A tela de lotes **já existe** desde a Task 9 (2026-08-09) — o que falta é só o extrato agregado dentro dela. **Fica para a Etapa 6b**, junto com a tela de série (ver Frontend)
@@ -338,18 +446,69 @@ A Etapa 6 entrega o status `REPROVADO` no lote e a rota que o muda, mas
 Ligar os dois é mudança na feature 09 — registrado em
 [09-inspecao-qualidade](../09-inspecao-qualidade/README.md).
 
-### (f) `recebimentos_material_itens_almoxarifado.lote_id` tem escritor e nenhum leitor
+### (f) Colunas com escritor real e **nenhum leitor** — quatro, não uma
 
-Gravado por `receiptService.js:357-358`, ninguém lê ainda. É a coluna que vai ligar o item de
-recebimento ao lote nas consultas de rastreabilidade (pendência (a)). Anotado aqui porque é
-literalmente o padrão que esta spec existe para caçar — a diferença é que aqui o escritor existe,
-o que a torna dado real e não coluna mentindo.
+Anotadas aqui porque é literalmente o padrão que esta spec existe para caçar. A diferença para uma
+coluna morta é que aqui o **escritor existe**, o que as torna dado real e não coluna mentindo — mas
+quem auditar por `grep` vai achar o `INSERT`/`UPDATE` e concluir, errado, que existe consulta.
+**Não existe.** Verificado por grep em `server`/`client` em 2026-08-10.
+
+| Coluna | Quem escreve | Leitor |
+|---|---|---|
+| `recebimentos_material_itens_almoxarifado.lote_id` | `receiptService.darEntradaEstoque`, logo depois de criar o lote | nenhum |
+| `lotes_almoxarifado.observacoes` | `criarOuObterLote` (e a migração da Task 2, que marca lote convertido de texto livre) | nenhum — nem a tela de Lotes, nem a listagem FEFO a usa |
+| `lotes_almoxarifado.recebimento_item_id` | `criarOuObterLote`, a partir do item do recebimento | nenhum (`recebimento_id` também não tem consulta própria, só aparece no `SELECT l.*`) |
+| `lotes_almoxarifado.fornecedor_id` | `criarOuObterLote`, herdado de `rec.fornecedor_id` | nenhum — a tela mostra `fornecedor_nome`, que é texto |
+
+As quatro são o material da consulta de rastreabilidade que falta (pendência (a)): "tudo que
+aconteceu com o lote X" e "de qual item de qual nota este lote veio" se respondem exatamente com
+elas. Enquanto essa consulta não existir, elas continuam sendo dado gravado e nunca lido —
+registrado, não escondido.
+
+### (g) Quatro fluxos internos são ISENTOS da exigência de `controle_lote` — decisão do cliente, não lacuna esquecida
+
+Decidido pelo cliente em 2026-08-10, no review final do branch. Estes quatro chamam
+`stockService.registrarMovimentacao` **sem declarar `exigeLote`**, porque não têm de onde tirar um
+lote — não existe campo na tela nem parâmetro na chamada:
+
+| Fluxo | Arquivo | Tipo de movimento | O que acontece hoje |
+|---|---|---|---|
+| Entrega de requisição | `requisitionService.entregarRequisicao` | `SAIDA` | baixa sem lote; a linha de saldo debitada é a `(localização resolvida, lote NULL)` |
+| Exclusão administrativa de requisição | `requisitionService.excluirRequisicao` | `ENTRADA` (estorno) | devolve sem lote — não volta para o lote de onde saiu |
+| Devolução para estoque/quarentena | `returnService.registrarDevolucao` | `ENTRADA_DEVOLUCAO` | idem: entra sem lote |
+| Descarte de devolução | `returnService.registrarDevolucao` | `SUCATA` | baixa sem lote |
+
+**Consequência concreta de deixar assim:** num material com `controle_lote` ligado, o saldo
+movimentado por esses caminhos fica na linha "sem lote" e **não** aparece no saldo de nenhum lote —
+a tela de Lotes some com essa parte, e o seletor FEFO da saída também. Não há perda de saldo: o
+total do material continua correto, e a soma das linhas continua batendo. O que se perde é a
+**rastreabilidade por lote** nesses quatro caminhos.
+
+**O conteúdo natural da etapa seguinte** é dar lote automaticamente a eles, e o desenho já está
+claro: **FEFO na entrega** (a requisição escolhe o lote que vence primeiro, como o seletor da tela
+já sugere — ou o operador escolhe na tela de separação, que ainda não tem campo de lote) e
+**herdar da saída original na devolução** (a devolução cita a OS/projeto; a movimentação de saída
+correspondente já guarda `lote_id` no ledger). Enquanto isso não existir, deixar a guarda ligada
+nesses caminhos seria travar operação — foi exatamente o defeito corrigido.
+
+**Não confundir com a rota v1**: o modal rápido da tela de Materiais também não carrega lote no
+contrato, mas **continua exigindo** — ali o operador tem uma porta (a tela de Movimentações, que
+tem o campo). Os quatro acima não têm porta nenhuma.
 
 ## Regras essenciais + testes de API exigidos
 
 | Regra | Teste | Estado |
 |-------|-------|--------|
-| Material com `controle_lote` exige lote na movimentação | `entrada sem lote em material com controle_lote falha` / `saida sem lote…` — `loteControleObrigatorio.api.test.js` | ✅ `2dbbf60` |
+| Material com `controle_lote` exige lote na movimentação **manual** (v1 e v2) e no recebimento | `[rota v2] entrada sem lote…` / `[rota v2] saida sem lote…` / `[rota v1] o modal rapido…` / `[recebimento] nota com item sem lote…` — `loteControleObrigatorio.api.test.js` | ✅ `2dbbf60` + review final |
+| O corpo da requisição **não** desliga a exigência (`exigeLote` não vem do body) | `[rota v2] o corpo nao consegue desligar a exigencia` — mesmo arquivo | ✅ review final |
+| Os quatro fluxos internos passam **sem** lote em material controlado | `[requisicao] entrega…` / `[requisicao] exclusao administrativa…` / `[devolucao] ENTRADA_DEVOLUCAO…` / `[devolucao] SUCATA…` — mesmo arquivo | ✅ review final |
+| Saída consome o saldo **agregado** do lote, mesmo endereçado em outra localização | `saida consome o saldo do LOTE inteiro, mesmo endereçado em outra localizacao` + `saida acima do saldo AGREGADO do lote falha, com o numero que a tela mostra` — `loteGuardasSaida.api.test.js` | ✅ review final |
+| Saída recusada por lote não deixa linha zerada, e material legado continua no no-op do estorno | `saida recusada por lote NAO deixa linha zerada para tras` + `material legado continua no no-op do estorno depois de uma saida RECUSADA` — mesmo arquivo | ✅ review final |
+| Estorno de ENTRADA não negativa a linha do lote | `estorno de ENTRADA nao pode negativar a linha do lote (o -8 na direcao inversa)` + `…passa quando a linha comporta a reversao` + `material que permite negativo continua podendo negativar…` — mesmo arquivo | ✅ review final |
+| Nota com item inválido é recusada inteira; reprocessar não duplica | `nota com um item invalido e recusada INTEIRA…` + `A entra e B falha: reprocessar entra so o B, e o A continua em 10 (nao 20)` — `recebimentoEntradaAtomica.api.test.js` | ✅ review final |
+| `?com_saldo=1` esconde lote sem saldo (é o parâmetro que a tela de Movimentação usa) | `?com_saldo=1 esconde lote sem saldo e mantem quem tem` — `loteRotas.api.test.js` | ✅ review final |
+| `data_fabricacao` é gravada pelo recebimento e devolvida pela listagem | `data_fabricacao chega na listagem do lote` — `loteRotas.api.test.js` | ✅ review final |
+| Reanexar certificado não deixa arquivo órfão | `reanexar o certificado apaga o arquivo anterior (sem orfao em uploads)` — `loteRecebimento.api.test.js` | ✅ review final |
 | Saída acima do saldo do **lote** falha e não negativa a linha | `saida acima do saldo do lote falha e nao deixa a linha negativa` — `loteGuardasSaida.api.test.js` | ✅ `65d78fd` |
 | Saída de lote vencido falha | `saida de lote vencido falha` — `loteGuardasSaida.api.test.js` | ✅ `65d78fd` |
 | Lote vencido com vencimento liberado sai; sem liberação continua falhando | `saida de lote vencido com vencimento liberado passa` + `…sem liberacao continua falhando` — `loteVencimentoLiberacao.api.test.js` | ✅ `556f86d` |
