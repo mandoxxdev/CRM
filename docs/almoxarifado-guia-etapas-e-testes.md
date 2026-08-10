@@ -6,25 +6,27 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 
 > ## Onde o desenvolvimento parou — 2026-08-09
 >
-> **Etapas 1, 2, 3, 4, 5 e 6 completas.**
+> **Etapas 1, 2, 3, 4, 5 e 6 completas — e a Task 9 (correção da Etapa 6) também.**
 >
-> A **Etapa 6 (Lotes)** acabou de fechar. Lote deixou de ser um campo de texto que o sistema
-> guardava e nunca olhava: virou um cadastro de verdade, com validade, corrida, certificado do
-> fornecedor e situação (ativo / bloqueado / reprovado). O lote agora **nasce no recebimento**, o
-> sistema recusa tirar de um lote mais do que aquele lote tem, recusa consumir lote vencido,
-> bloqueado ou reprovado, e sugere sozinho o lote que vence primeiro na hora da saída.
+> A **Etapa 6 (Lotes)** fechou o motor: lote deixou de ser um campo de texto que o sistema
+> guardava e nunca olhava e virou um cadastro de verdade, com validade, corrida, certificado do
+> fornecedor e situação (ativo / bloqueado / reprovado). O lote nasce no recebimento, o sistema
+> recusa tirar de um lote mais do que aquele lote tem, recusa consumir lote vencido, bloqueado ou
+> reprovado, e sugere sozinho o lote que vence primeiro na hora da saída.
 >
-> **A Etapa 6 cobriu só a parte de LOTES.** Números de série (Etapa 6b) e etiquetas com QR Code
-> (Etapa 6c) **não** foram feitos — a feature foi dividida em três de propósito, porque era grande
-> demais para uma etapa só.
+> **O review da Etapa 6 achou três rotas prontas sem nenhuma tela** — a mais grave: com "Requer
+> certificado" ligado, o lote nascia bloqueado e só um desenvolvedor por API conseguia destravar.
+> A **Task 9**, aprovada pelo cliente em 2026-08-09, fechou essa lacuna: nova tela **Almoxarifado →
+> Lotes** (mudar status, liberar vencimento, anexar certificado) e **Sucata**/**Perda** agora
+> selecionáveis na tela de Movimentações. Ver a seção "Task 9", logo depois da Etapa 6 abaixo.
 >
-> **Três coisas ficaram faltando dentro da própria Etapa 6, e você vai esbarrar nelas:**
-> 1. **Não existe tela de lotes.** Bloquear/reprovar um lote, liberar um lote vencido para uso e
->    anexar o certificado *depois* do recebimento só funcionam por chamada direta à API — não há
->    botão em lugar nenhum. Inclusive, a mensagem de erro que aparece ao tentar usar um lote
->    vencido cita um endereço técnico de API, porque é o único caminho que existe hoje.
-> 2. **Reprovar na inspeção não marca o lote** — continua bloqueando o material inteiro.
-> 3. **Duas decisões de negócio estão esperando você** (contagem de prateleira depois de um ajuste
+> **A Etapa 6 (+ Task 9) cobriu a parte de LOTES.** Números de série (Etapa 6b) e etiquetas com QR
+> Code (Etapa 6c) **não** foram feitos — a feature foi dividida em três de propósito, porque era
+> grande demais para uma etapa só.
+>
+> **Duas coisas continuam faltando, e você vai esbarrar nelas:**
+> 1. **Reprovar na inspeção não marca o lote** — continua bloqueando o material inteiro.
+> 2. **Duas decisões de negócio estão esperando você** (contagem de prateleira depois de um ajuste
 >    global; e certificado de fornecedor sendo servido sem exigir login). Ambas explicadas em
 >    "Pendências conhecidas", no fim deste documento.
 >
@@ -72,6 +74,9 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 6 | Materiais | A opção "Requer certificado" também era decorativa | Material com "Requer certificado" faz o lote **nascer bloqueado** no recebimento até o certificado do fornecedor ser anexado. O material **entra** no estoque normalmente — o que trava é a saída |
 | 6 | Recebimentos | Não havia onde digitar lote, validade ou corrida — justamente na tela onde o lote nasce | Três campos por item: **Lote**, **Validade** e **Corrida**. O lote é criado no processamento da nota, já com fornecedor e número da NF |
 | 6 | Movimentações / Extrato | Cada lote não tinha saldo próprio consultável | O saldo é por material **+ localização + lote**, e a coluna "Lote" do Extrato mostra o código do lote |
+| 9 | Lotes (tela nova) | Bloquear/reprovar/reativar um lote, liberar vencimento e anexar certificado só existiam por API | Tela **Almoxarifado → Lotes**: escolhe o material, lista os lotes dele, e oferece as três ações |
+| 9 | Lotes | Lote bloqueado por falta de certificado ficava travado pela interface para sempre (só desenvolvedor destravava por API) | Botão **"Anexar certificado"** — se o bloqueio era por falta dele, libera sozinho ao anexar |
+| 9 | Movimentações | Sucata e Perda não estavam no seletor de tipo, mesmo o motor já aceitando as duas para descartar lote vencido | **Sucata** e **Perda** selecionáveis, com os mesmos campos que uma Saída pede |
 
 ## Etapa 0 — Fundação (resumo)
 
@@ -450,11 +455,10 @@ continua barrado por bloqueio, com a mensagem de bloqueio. Situação vem antes 
     por falta de certificado. Confira no Extrato que o material **entrou** no estoque físico
     normalmente — só a saída é que está travada.
 
-> **⚠️ Aqui você bate na parede, e é a limitação conhecida da etapa.** Anexar o certificado para
-> destravar esse lote **não tem botão em lugar nenhum**. A funcionalidade existe no servidor, mas
-> ninguém ligou a uma tela. O mesmo vale para bloquear/reprovar um lote e para liberar um lote
-> vencido para uso. Enquanto a tela de lotes não existir, esses três casos só se resolvem por
-> chamada direta à API. Ver "Pendências conhecidas", no fim deste documento.
+> **Atualização da Task 9:** o passo acima batia numa parede — não havia botão para anexar o
+> certificado. Agora existe: vá em **Almoxarifado → Lotes**, escolha o material, e no lote
+> bloqueado clique em **Anexar certificado** (ícone de upload). O roteiro completo está na seção
+> "Task 9", logo abaixo.
 
 ### O que a Etapa 6 **não** cobre
 
@@ -477,6 +481,72 @@ continua barrado por bloqueio, com a mensagem de bloqueio. Situação vem antes 
 - **"Controle de validade" e "Controle de corrida"** na ficha do material continuam decorativos: os
   campos de validade e corrida existem e funcionam no lote, mas o sistema não *obriga* preenchê-los
   quando essas opções estão marcadas.
+
+---
+
+## Task 9 — Tela de Lotes e Sucata/Perda (ENTREGUE — 2026-08-09)
+
+A Etapa 6 entregou as regras de lote inteiras no servidor, mas três operações só existiam por API
+— e uma delas travava material de verdade: com **"Requer certificado"** ligado, o lote nascia
+**bloqueado** e só um desenvolvedor destravava, chamando a API na mão. A Task 9 (não estava no
+plano original; nasceu do review da Etapa 6, aprovada pelo cliente em 2026-08-09) fechou isso.
+
+| Antes | Agora |
+|---|---|
+| Bloquear, reprovar ou reativar um lote só por API | Tela **Almoxarifado → Lotes**: escolha o material, cada lote tem o botão "Mudar status" |
+| Lote vencido só saía se alguém liberasse via API | Botão **"Liberar vencimento"** — só aparece em lote vencido, exige justificativa |
+| Lote bloqueado por falta de certificado ficava travado pela interface para sempre | Botão **"Anexar certificado"** (PDF ou imagem) — se o bloqueio era por falta dele, o lote **libera sozinho** ao anexar |
+| Sucata e Perda não apareciam no seletor de tipo da Movimentação, mesmo o motor já aceitando as duas para descartar lote vencido | **Sucata** e **Perda** selecionáveis, com os mesmos campos que uma Saída pede (localização de origem, lote por lista) |
+
+### Roteiro de teste manual (Task 9)
+
+**A) Destravar um lote bloqueado por falta de certificado (o caso mais importante)**
+
+1. Repita os passos H (16-17) da Etapa 6 acima: material com **"Requer certificado"**, recebimento
+   com lote, tentativa de Saída recusada porque o lote nasceu **Bloqueado**.
+2. Vá em **Almoxarifado → Lotes**. Escolha o material no seletor. O lote aparece com o badge
+   **Bloqueado** e o aviso "Bloqueado por falta de certificado".
+3. Clique no ícone de upload ("Anexar certificado do fornecedor"). O modal avisa que o lote está
+   bloqueado por falta de certificado. Escolha um arquivo PDF ou imagem e confirme.
+4. O lote deve voltar para **Ativo** sozinho. Volte à Movimentação de Saída: agora o lote aparece
+   habilitado na lista.
+
+**B) Mudar status manualmente (bloquear/reprovar/reativar)**
+
+5. Na tela de Lotes, clique no ícone de "Mudar status" (engrenagem/sliders) de um lote **Ativo**.
+6. Tente confirmar sem preencher a justificativa — o botão **Confirmar** deve estar desabilitado.
+7. Escolha o novo status (ex.: **Bloqueado**) e escreva a justificativa. Confirme. O badge do lote
+   muda na tabela.
+
+**C) Liberar um lote vencido para uso**
+
+8. Escolha um material com um lote **vencido** (validade no passado — ver passo G da Etapa 6).
+9. Na linha desse lote, o botão **"Liberar vencimento"** aparece (só aparece em lote vencido — em
+   lote não vencido, não há esse botão). Clique, preencha a justificativa e confirme.
+10. O lote continua marcado como **vencido** na tela (badge vermelho vira azul: "VENCIDO
+    (liberado)"), mostrando quem liberou e o motivo — liberar não apaga o fato de estar vencido, só
+    credencia o consumo.
+
+**D) Sucata e Perda na Movimentação**
+
+11. Vá em **Almoxarifado → Movimentações → Nova Movimentação**. No seletor **Tipo**, confira que
+    **Sucata** e **Perda** aparecem (ao lado de Entrada/Saída/Ajuste/Devolução).
+12. Escolha **Sucata**, um material com saldo. Confira que aparecem os mesmos campos de uma Saída:
+    **Localização de origem** e **Lote** (lista, não texto livre). Motivo é obrigatório.
+13. Baixe um lote **vencido** por Sucata ou Perda (repete o passo 15 da Etapa 6, agora com o tipo
+    corretamente no seletor) — deve funcionar, porque descarte é isento da guarda de vencimento.
+
+### O que a Task 9 não cobre
+
+- **Não é possível ver o histórico de mudanças de status de um lote pela tela** — a auditoria é
+  gravada (`auditoria_log_almoxarifado`, `entidade='lote'`), mas não há uma tela de "extrato do
+  lote" que a mostre. Continua na lista de pendências da Etapa 6.
+- **Quem liberou o vencimento aparece como "usuário #&lt;id&gt;", não pelo nome** — a API de lotes
+  não faz `JOIN` com a tabela de usuários (só o `stockService`/`movimentacoes` faz isso hoje).
+  Decisão desta task: não alterar o servidor (fora do escopo — "não mude nada no servidor" era
+  regra da task), então a tela mostra o que a API devolve.
+- **AJUSTE_NEGATIVO continua fora do seletor** — de propósito: é tipo interno de ajuste, e o
+  **Ajuste** puro já cobre a correção de contagem.
 
 ---
 
@@ -513,18 +583,10 @@ continua barrado por bloqueio, com a mensagem de bloqueio. Situação vem antes 
 - Importar itens de uma lista técnica ou ordem de produção na requisição: ainda não implementado (depende da integração com Engenharia/Produção).
 - Registrar lote/série entregue por item na requisição: ainda não implementado. O controle de lotes
   passou a existir na Etapa 6, mas a **entrega da requisição** ainda não pergunta de qual lote saiu.
-- **Lotes: completo na Etapa 6** para o motor, o recebimento e a saída — mas **sem tela de gestão de
-  lotes**. Três operações reais existem no servidor e não têm botão em nenhum lugar do sistema:
-  1. **Bloquear / reprovar / reativar um lote** (ex.: o ensaio de laboratório reprovou aquela
-     corrida);
-  2. **Liberar um lote vencido para uso**, com justificativa — a mensagem de erro que você vê ao
-     tentar consumir um lote vencido inclusive cita o endereço técnico dessa operação, porque não
-     há outro caminho;
-  3. **Anexar o certificado do fornecedor depois do recebimento**, que é o que destrava um lote que
-     nasceu bloqueado por falta dele.
-
-  Até essa tela existir, esses três casos precisam ser resolvidos por chamada direta à API (peça ao
-  desenvolvedor). É a lacuna mais visível que a Etapa 6 deixa.
+- **Lotes: completo na Etapa 6 + Task 9** — motor, recebimento, saída, e agora também a tela
+  **Almoxarifado → Lotes** (mudar status, liberar vencimento, anexar certificado). Sem pendência.
+  Falta só o "extrato do lote" (histórico agregado numa tela só) — ver "O que a Task 9 não cobre",
+  na seção da Task 9 acima.
 - **Reprovar na inspeção não marca o lote.** A tela de Inspeções continua bloqueando o **material
   inteiro**, não o lote específico. Reprovar 10 unidades de um lote de 100 bloqueia 10 do material —
   o lote em si continua "Ativo" e sai normalmente. Ligar as duas coisas é mudança na tela de

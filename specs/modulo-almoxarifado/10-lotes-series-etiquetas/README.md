@@ -1,10 +1,11 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
-> **Status:** 🟡 — **lote é entidade real desde a Etapa 6 (2026-08-09)**; série e etiquetas não
-> existem · **Spec original:** seção 10
-> **Última atualização:** 2026-08-09 (Etapa 6 entregue, `b7035dd..9406bff` — 19 commits)
+> **Status:** 🟡 — **lote é entidade real desde a Etapa 6, com tela completa desde a Task 9
+> (2026-08-09)**; série e etiquetas não existem · **Spec original:** seção 10
+> **Última atualização:** 2026-08-09 (Task 9 entregue — tela de lotes + Sucata/Perda na Movimentação)
 > **Design da Etapa 6 (só lotes):** [`docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md`](../../../docs/superpowers/specs/2026-08-09-almoxarifado-etapa6-lotes-design.md)
 > **Plano executado:** [`docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md`](../../../docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md)
+> **Task 9 (correção pós-review):** [`.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-9-report.md`](../../../.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-9-report.md)
 
 **A feature 10 foi dividida em três etapas.** Ela é grande demais para uma só, e o mapa mestre a
 descrevia como um item único — o que fazia parecer que ficaria pronta de uma vez:
@@ -12,6 +13,7 @@ descrevia como um item único — o que fazia parecer que ficaria pronta de uma 
 | Parte | Entrega | Quando |
 |---|---|---|
 | **Etapa 6** | Lotes: tabela real, validade, corrida, certificado, FEFO, guarda contra saldo negativo por lote, campo de lote no recebimento | ✅ **entregue em 2026-08-09** (`b7035dd..9406bff`) |
+| **Task 9** | Tela de lotes (status/vencimento/certificado) + Sucata/Perda selecionáveis na Movimentação — não estava no plano, nasceu do review da Task 8 | ✅ **entregue em 2026-08-09** (`09c75d2`) |
 | **Etapa 6b** | Números de série — confirmado em 2026-08-09 que a GMP rastreia série individualmente hoje (rotina, não exceção). Não é descarte de escopo, é sequência | **próxima** — tarefa detalhada no fim do plano da Etapa 6 |
 | **Etapa 6c** | Etiquetas com QR Code e impressão em PDF | depois da 6b |
 
@@ -190,7 +192,7 @@ lote para decidir nada.
 - [x] Aplicar `controle_lote`: material controlado exige lote em TODA entrada e saída — **`2dbbf60`**. `AJUSTE` puro é isento de propósito (regularização); `AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO` **não** são (ver "Nota de escopo" acima)
 - [x] Aplicar `controle_certificado`: entrada sem certificado **entra bloqueada** (não falha — barrar a entrada foi o erro corrigido na Etapa 5); o `SELECT` morto em `receiptService` passou a ser usado de verdade — **`64686b1`** (+ `c11db85`: anexar certificado podia liberar um lote `REPROVADO` por corrida entre a leitura e a escrita; a pré-condição foi inteira para dentro do `WHERE` em `liberarBloqueioPorCertificado`)
 - [x] Validade: bloquear saída de lote vencido; sugestão FEFO (primeiro que vence sai primeiro) — **`65d78fd`** (guarda), **`556f86d`** (liberação com justificativa — Task 3b, ver abaixo), **`8dfeb0c`** (ordem FEFO na API), **`9406bff`** (FEFO pré-selecionado na tela, como sugestão e não imposição)
-- [ ] Rastreabilidade: consulta de tudo que aconteceu com um lote — **parcial, e o que falta é a consulta agregada.** Os dados existem e são consultáveis (`movimentacoes_almoxarifado.lote_id` desde `65d78fd`, `auditoria_log_almoxarifado` com `entidade='lote'` desde `b7035dd`, saldo por lote em `GET /materiais/:id/lotes` desde `8dfeb0c`), mas não há um "extrato do lote" que junte as três fontes como `GET /materiais/:id/extrato` faz para o material. **Fica para a Etapa 6b**, junto com a tela de lotes que também falta (ver Frontend)
+- [ ] Rastreabilidade: consulta de tudo que aconteceu com um lote — **parcial, e o que falta é a consulta agregada.** Os dados existem e são consultáveis (`movimentacoes_almoxarifado.lote_id` desde `65d78fd`, `auditoria_log_almoxarifado` com `entidade='lote'` desde `b7035dd`, saldo por lote em `GET /materiais/:id/lotes` desde `8dfeb0c`), mas não há um "extrato do lote" que junte as três fontes como `GET /materiais/:id/extrato` faz para o material. A tela de lotes **já existe** desde a Task 9 (2026-08-09) — o que falta é só o extrato agregado dentro dela. **Fica para a Etapa 6b**, junto com a tela de série (ver Frontend)
 - [x] **Decidir se retenção passa a ser por lote** — **decidido: continua no material.** As três colunas de retenção de `estoque_saldo_almoxarifado` foram **apagadas** em **`015e94c`** para não parecerem implementadas. Reter um lote inteiro se faz por status (`BLOQUEADO`/`REPROVADO`); reter **parte** de um lote em quantidade continua não existindo, e é decisão consciente — o cliente pediu retenção por status, não por quantidade
 
 #### Task 3b — liberação de vencimento (não estava no plano; nasceu de um achado de review)
@@ -226,30 +228,45 @@ rota fazia isso. Era uma parede com placa de porta.
 
 ### Frontend
 - [x] **Campo de lote no recebimento** — **`9406bff`**: lote, validade e corrida por item, nos status em que os dados fiscais são editáveis
-- [x] Seleção de lote na movimentação de **saída** — **`9406bff`**: `<select>` em ordem FEFO alimentado por `GET /materiais/:id/lotes?com_saldo=1`, primeiro elegível pré-selecionado, não elegíveis aparecem `disabled` com o motivo no rótulo (esconder faria o operador procurar material que o sistema decidiu não mostrar). Na **entrada** continua texto livre, que é onde o lote nasce. Série fica para a 6b
-- [ ] **Cadastro/consulta de lotes no detalhe do material** — **NÃO entregue, e é a lacuna mais séria que a etapa deixa.** Ver a pendência (a) abaixo
+- [x] Seleção de lote na movimentação de **saída** (inclusive **Sucata**/**Perda**, Task 9) — **`9406bff`** + **`09c75d2`**: `<select>` em ordem FEFO alimentado por `GET /materiais/:id/lotes?com_saldo=1`, primeiro elegível pré-selecionado, não elegíveis aparecem `disabled` com o motivo no rótulo (esconder faria o operador procurar material que o sistema decidiu não mostrar). Na **entrada** continua texto livre, que é onde o lote nasce. Série fica para a 6b
+- [x] **Cadastro/consulta de lotes no detalhe do material** — **entregue na Task 9** (`09c75d2`, 2026-08-09):
+  `client/src/components/almoxarifado/LotesAlmoxarifado.js`, rota `/almoxarifado/lotes`. Escolhe o
+  material, lista os lotes dele (ordem da API preservada, não elegível continua aparecendo no fim),
+  e oferece mudar status, liberar vencimento (só para lote vencido) e anexar certificado (libera
+  sozinho o lote que estava bloqueado por falta dele). Ver pendência (a), abaixo, para o que ainda
+  falta (extrato agregado do lote)
 - [ ] Seleção de série na movimentação, separação e entrega — **Etapa 6b**
 - [ ] Botão imprimir etiqueta (recebimento, material, localização) — **Etapa 6c**
 
 ## Pendências abertas depois da Etapa 6
 
-### (a) Três rotas de lote existem e **nenhuma tela as chama**
+### (a) Três rotas de lote existiam e nenhuma tela as chamava — **RESOLVIDO na Task 9 (2026-08-09)**
+
+> **Status: RESOLVIDO.** `PUT /lotes/:id/status`, `PUT /lotes/:id/liberar-vencimento` e
+> `POST /lotes/:id/certificado` agora têm consumidor:
+> `client/src/components/almoxarifado/LotesAlmoxarifado.js` (rota `/almoxarifado/lotes`, também
+> no menu do módulo). O texto abaixo é o registro do problema como ele existia até a Task 9 — a
+> lacuna que motivou a task, mantida por não apagar em silêncio o que a spec já tinha afirmado.
 
 `PUT /lotes/:id/status`, `PUT /lotes/:id/liberar-vencimento` e `POST /lotes/:id/certificado` foram
-entregues com permissão, justificativa obrigatória e auditoria — e **não há nenhum componente no
-cliente que as consuma** (verificado por grep em `client/src` em 2026-08-09: a única rota de lote
-usada pelo front é o `GET` da listagem FEFO, dentro de `MovimentacoesAlmoxarifado.js`).
+entregues com permissão, justificativa obrigatória e auditoria — e **não havia nenhum componente no
+cliente que as consumisse** (verificado por grep em `client/src` em 2026-08-09: a única rota de lote
+usada pelo front era o `GET` da listagem FEFO, dentro de `MovimentacoesAlmoxarifado.js`).
 
-Consequência concreta: a mensagem de erro que o operador vê ao tentar consumir um lote vencido diz
-*"Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com
-justificativa"* — uma instrução de API para quem só tem um navegador. **É a mesma classe de
-problema que a Task 3b nasceu para consertar**, um nível acima: antes o caminho não existia; agora
-existe, mas só por `curl`. Bloquear, reprovar, liberar vencimento e anexar certificado depois do
-recebimento são, hoje, operações sem interface.
+Consequência concreta que existia: a mensagem de erro que o operador via ao tentar consumir um lote
+vencido dizia *"Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com
+justificativa"* — uma instrução de API para quem só tem um navegador. Era a mesma classe de
+problema que a Task 3b nasceu para consertar, um nível acima: antes o caminho não existia; passou a
+existir, mas só por `curl`. Bloquear, reprovar, liberar vencimento e anexar certificado depois do
+recebimento eram, até a Task 9, operações sem interface — e o caso mais grave era
+`controle_certificado`: com a flag ligada, o lote nascia `BLOQUEADO` e só um desenvolvedor por API
+destravava, inutilizando o material pela interface.
 
-A correção natural é uma tela de lotes (ou uma aba no detalhe do material) que liste
-`GET /materiais/:id/lotes` e ofereça as três ações. Vale casar com o "extrato do lote" que falta no
-checklist de rastreabilidade — é a mesma tela.
+A Task 9 entregou a tela (`LotesAlmoxarifado.js`) com as três ações. **O que ainda falta** — não
+fazia parte do escopo da Task 9 — é o "extrato do lote" agregado (movimentações + auditoria + saldo
+numa consulta só, como `GET /materiais/:id/extrato` faz para o material); continua registrado no
+checklist de rastreabilidade acima e é candidato natural para a Etapa 6b absorver junto com a tela
+de série (ver o plano da Etapa 6, seção "Dívidas da Etapa 6 que a 6b deveria absorver").
 
 ### (b) A conclusão de inventário escreve `quantidade_atual` por fora do motor
 

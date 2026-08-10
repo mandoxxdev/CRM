@@ -13,13 +13,13 @@
 
 ---
 
-## ✅ ETAPA CONCLUÍDA — 2026-08-09 · base `d369871` · 19 commits (`b7035dd..9406bff`)
+## ✅ ETAPA CONCLUÍDA — 2026-08-09 · base `d369871` · 19 commits (`b7035dd..9406bff`) + Task 9 (`09c75d2`)
 
-**Todas as tasks entregues, mais uma (3b) que não estava neste plano.** Os `- [ ]` dos Steps dentro
-de cada task ficaram sem marcar de propósito: o texto de vários Steps **não descreve mais o código
-final** (a Task 3 passou por cinco rodadas de review que mudaram decisões de fundo). Marcar Step a
-Step daria a impressão errada de que o plano literal foi seguido. O checklist consolidado — o que
-é fonte da verdade — está em
+**Todas as tasks entregues, mais duas (3b e 9) que não estavam neste plano.** Os `- [ ]` dos Steps
+dentro de cada task ficaram sem marcar de propósito: o texto de vários Steps **não descreve mais o
+código final** (a Task 3 passou por cinco rodadas de review que mudaram decisões de fundo). Marcar
+Step a Step daria a impressão errada de que o plano literal foi seguido. O checklist consolidado —
+o que é fonte da verdade — está em
 [`specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md`](../../../specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md).
 
 | Task | Estado | Commits |
@@ -33,11 +33,18 @@ Step daria a impressão errada de que o plano literal foi seguido. O checklist c
 | **6** — rotas FEFO e mudança de status | ✅ | `8dfeb0c` |
 | **7** — telas (lote no recebimento, seletor FEFO na saída) | ✅ | `9406bff` |
 | **8** — documentação | ✅ | este commit |
+| **9** — tela de lotes (status/vencimento/certificado) + Sucata/Perda na Movimentação *(não estava no plano, nasceu do review da Task 8)* | ✅ | `09c75d2` — ver `.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-9-report.md` |
 
 **Onde parar de ler o plano e ler o código:** a Task 3 é a única cujo texto ficou substancialmente
 desatualizado. Antes de mexer no motor, leia
 `.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-3-report.md` e a nota no cabeçalho da
 Task 3 abaixo.
+
+**Task 9 fechou a lacuna mais visível que a Task 8 (documentação) só registrou:** três rotas
+prontas (`PUT /lotes/:id/status`, `PUT /lotes/:id/liberar-vencimento`,
+`POST /lotes/:id/certificado`) sem nenhum consumidor no cliente — a mais grave porque
+`controle_certificado` ligado inutilizava o material pela interface. Ver o brief e o relatório em
+`.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/task-9-brief.md` e `task-9-report.md`.
 
 **➡️ A próxima etapa (6b — números de série) está detalhada no fim deste arquivo.**
 
@@ -2117,12 +2124,17 @@ Consequências práticas que precisam estar no plano:
 
 ## Dívidas da Etapa 6 que a 6b deveria absorver (são a mesma tela)
 
-A Etapa 6 deixou **três rotas de lote sem nenhuma tela** (`PUT /lotes/:id/status`,
-`PUT /lotes/:id/liberar-vencimento`, `POST /lotes/:id/certificado`) e **sem extrato de lote**. A
-Etapa 6b vai precisar de uma tela de rastreabilidade de qualquer forma (para listar séries de um
-material e o histórico de cada uma). **Fazer as duas na mesma tela é a decisão barata**; fazer a de
-série sozinha e deixar lote sem tela repetiria o problema um andar acima. Considerar seriamente
-abrir a 6b com essa tela em vez de com o backend.
+> **Atualização (Task 9, 2026-08-09):** as três rotas de lote sem tela (`PUT /lotes/:id/status`,
+> `PUT /lotes/:id/liberar-vencimento`, `POST /lotes/:id/certificado`) **foram resolvidas** —
+> `client/src/components/almoxarifado/LotesAlmoxarifado.js`, em `/almoxarifado/lotes`. **Ainda
+> falta o extrato do lote** (histórico agregado de movimentações + auditoria + saldo, o que
+> `GET /materiais/:id/extrato` já faz para o material — não existe o equivalente por lote).
+
+A Etapa 6b vai precisar de uma tela de rastreabilidade de série de qualquer forma (para listar
+séries de um material e o histórico de cada uma). A tela de lotes da Task 9 é o lugar natural para
+crescer: acrescentar uma aba/seção de série na mesma tela é a decisão barata — criar uma tela nova
+do zero para série, ao lado da de lote, duplicaria o padrão "escolher material → listar". Considerar
+abrir a 6b estendendo `LotesAlmoxarifado.js` em vez de partir do zero.
 
 ## Fora do escopo da 6b (declarar no plano, não deixar implícito)
 
