@@ -295,7 +295,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
 
   app.post('/api/almoxarifado/movimentacoes/v2', auth, requirePermission('movimentar'), validate(MovimentacaoSchema), async (req, res) => {
     try {
-      const result = await stockService.registrarMovimentacao(db, req.user, req.body);
+      // `exigeLote` no 4o argumento, NAO no body: esta rota repassa `req.body` inteiro, entao
+      // qualquer chave lida dele seria forjavel — o cliente desligaria a exigencia de lote
+      // mandando `exigeLote: false` no JSON. Esta e a movimentacao manual: o formulario TEM campo
+      // de lote (texto livre na entrada, seletor FEFO na saida), logo aqui a exigencia de
+      // `controle_lote` faz sentido e vale. Ver a nota da guarda em stockService.
+      const result = await stockService.registrarMovimentacao(db, req.user, req.body, { exigeLote: true });
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });

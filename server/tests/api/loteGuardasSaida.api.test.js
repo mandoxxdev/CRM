@@ -604,6 +604,161 @@ async function movimentacaoLegada(db, materialId, tipo, quantidade, saldoAnterio
       `esperado 49 (40 em A + 5 em B + os 4 devolvidos pelo estorno, que nao tem endereco), ficou ${total} — a contagem seguinte apagou o estorno (bug media 45)`);
   });
 
+  // ── Review final da Etapa 6 (2026-08-10) ────────────────────────────────────────────────────
+
+  // Achado 3: a tela oferece saldo AGREGADO (lotService soma todas as localizacoes), o motor
+  // reivindicava contra UMA linha. Quando a localizacao resolvida da saida nao e onde o lote esta,
+  // a tela mostrava "saldo 25" e o motor respondia "Disponivel: 0".
+  await test('saida consome o saldo do LOTE inteiro, mesmo endereçado em outra localizacao', async () => {
+    const mat = await novoMaterial(db);
+    const loc = await novaLocalizacao(db, 'AGR-1');
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'AGREGADO' });
+    // O lote entra endereçado em `loc`; a saida NAO cita localizacao (e o material nao tem padrao),
+    // entao a localizacao resolvida da saida e NULL — chave diferente da linha que tem o saldo.
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 25, lote_id: lote.id,
+      localizacao_destino_id: loc, motivo: 'setup endereçado' });
+
+    const lotes = await lotService.listarLotesDoMaterial(db, mat);
+    assert.strictEqual(lotes[0].saldo, 25, 'a tela precisa mostrar 25 para o cenario fazer sentido');
+
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 10, lote_id: lote.id, ...JUST });
+
+    assert.strictEqual(await totalDoMaterial(db, mat), 15);
+    assert.strictEqual(await somaDasLinhas(db, mat), 15,
+      'a soma das linhas desgarrou do total do material');
+    const depois = await lotService.listarLotesDoMaterial(db, mat);
+    assert.strictEqual(depois[0].saldo, 15, 'o saldo agregado do lote nao acompanhou a saida');
+  });
+
+  await test('saida acima do saldo AGREGADO do lote falha, com o numero que a tela mostra', async () => {
+    const mat = await novoMaterial(db);
+    const locA = await novaLocalizacao(db, 'AGR-2A');
+    const locB = await novaLocalizacao(db, 'AGR-2B');
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'AGREGADO-2' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 6, lote_id: lote.id, localizacao_destino_id: locA, motivo: 'setup' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 4, lote_id: lote.id, localizacao_destino_id: locB, motivo: 'setup' });
+
+    // 10 no lote, espalhados em duas localizacoes: 8 tem de passar drenando as duas.
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 8, lote_id: lote.id, localizacao_origem_id: locA, ...JUST });
+    assert.strictEqual(await somaDasLinhas(db, mat), 2);
+    assert.strictEqual(await totalDoMaterial(db, mat), 2);
+
+    await assert.rejects(() => stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 5, lote_id: lote.id, ...JUST }),
+      /Disponível: 2/, 'a mensagem tem de citar o saldo AGREGADO do lote, que e o numero da tela');
+    assert.strictEqual(await somaDasLinhas(db, mat), 2, 'a recusa nao devolveu o que ja tinha drenado');
+    assert.strictEqual(await totalDoMaterial(db, mat), 2);
+  });
+
+  // Achado 3, segunda metade + achado 14: getOrCreateSaldo criava a linha ANTES do claim, entao
+  // toda saida recusada deixava um (loc, lote, 0) para tras — e o discriminador do estorno conta
+  // linhas, inclusive zeradas, tirando do no-op um material que era legado ate a tentativa.
+  await test('saida recusada por lote NAO deixa linha zerada para tras', async () => {
+    const mat = await novoMaterial(db);
+    const loc = await novaLocalizacao(db, 'ZERO-1');
+    // Um lote GORDO garante que a guarda de saldo do MATERIAL deixe passar — senao a recusa
+    // aconteceria antes de o claim por lote sequer rodar, e o teste passaria pelo motivo errado.
+    const gordo = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'ZERO-GORDO' });
+    await entrar(db, mat, gordo.id, 100);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'ZERO' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 2, lote_id: lote.id, localizacao_destino_id: loc, motivo: 'setup' });
+    const antes = (await linhasDeSaldo(db, mat)).length;
+
+    await assert.rejects(() => stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 10, lote_id: lote.id, ...JUST }), /saldo/i);
+
+    const linhas = await linhasDeSaldo(db, mat);
+    assert.strictEqual(linhas.length, antes,
+      `a saida recusada criou linha nova: ${JSON.stringify(linhas)}`);
+    assert.ok(!linhas.some((l) => l.quantidade === 0),
+      `sobrou linha zerada de uma operacao recusada: ${JSON.stringify(linhas)}`);
+  });
+
+  await test('material legado continua no no-op do estorno depois de uma saida RECUSADA', async () => {
+    // O discriminador de `reconciliarEstornoSemLinha` e "o material ja tem alguma linha?". Uma
+    // saida recusada nao pode ser o que tira o material do regime legado — era o achado 14.
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 100 WHERE id = ?', [mat]);
+    const mov = await movimentacaoLegada(db, mat, 'ENTRADA', 10, 90, 100);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'LEGADO-REC' });
+
+    await assert.rejects(() => stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 5, lote_id: lote.id, ...JUST }), /saldo/i);
+    assert.strictEqual((await linhasDeSaldo(db, mat)).length, 0,
+      'a tentativa recusada materializou linha e tirou o material do regime legado');
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov, 'estorno de teste');
+    assert.strictEqual(await totalDoMaterial(db, mat), 90);
+    assert.strictEqual((await linhasDeSaldo(db, mat)).length, 0,
+      'o estorno de movimento legado criou linha — no-op quebrado');
+
+    const loc = await novaLocalizacao(db, 'LEG-REC-1');
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 40, localizacao_destino_id: loc, justificativa: 'primeira contagem' });
+    assert.strictEqual(await totalDoMaterial(db, mat), 40,
+      'a primeira contagem deveria REDEFINIR o saldo (regra do cliente); a saida recusada furou o no-op');
+  });
+
+  // Achado 4: o estorno de ENTRADA guardava o disponivel do MATERIAL e aplicava o delta na linha
+  // do LOTE sem guarda nenhuma — o -8 na direcao inversa.
+  await test('estorno de ENTRADA nao pode negativar a linha do lote (o -8 na direcao inversa)', async () => {
+    const mat = await novoMaterial(db);
+    const loteA = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'INV-A' });
+    const loteB = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'INV-B' });
+    await entrar(db, mat, loteA.id, 100);
+    const entradaB = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, lote_id: loteB.id, motivo: 'setup' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 10, lote_id: loteB.id, ...JUST });
+    assert.strictEqual((await saldoDoLote(db, mat, loteB.id)).quantidade, 0);
+
+    // O material tem 100 disponiveis (do lote A), entao a guarda do MATERIAL deixa passar. Quem
+    // tem de recusar e a guarda da LINHA do lote B, que esta em 0.
+    await assert.rejects(() => stockService.cancelarMovimentacao(db, ADMIN, entradaB.id, 'estorno de teste'),
+      /lote/i, 'o estorno aceitou tirar 10 de uma linha de lote que esta em 0');
+
+    assert.strictEqual((await saldoDoLote(db, mat, loteB.id)).quantidade, 0,
+      'a linha do lote B ficou negativa depois do estorno recusado');
+    assert.strictEqual(await totalDoMaterial(db, mat), 100,
+      'o estorno recusado deixou quantidade_atual debitado sem contrapartida');
+    assert.strictEqual(await somaDasLinhas(db, mat), 100, 'soma das linhas desgarrou do total');
+    const original = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [entradaB.id]);
+    assert.strictEqual(original.cancelado, 0, 'o movimento ficou preso como cancelado sem ter revertido nada');
+  });
+
+  await test('estorno de ENTRADA com lote passa quando a linha comporta a reversao', async () => {
+    const mat = await novoMaterial(db);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'INV-OK' });
+    await entrar(db, mat, lote.id, 30);
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, lote_id: lote.id, motivo: 'segunda entrada' });
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'estorno de teste');
+    assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, 30);
+    assert.strictEqual(await totalDoMaterial(db, mat), 30);
+  });
+
+  await test('material que permite negativo continua podendo negativar a linha no estorno', async () => {
+    // A guarda 10 do plano: `permite_saldo_negativo` continua mandando, inclusive por lote.
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET permite_saldo_negativo = 1 WHERE id = ?', [mat]);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'INV-NEG' });
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, lote_id: lote.id, motivo: 'setup' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 10, lote_id: lote.id, ...JUST });
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'estorno de teste');
+    assert.strictEqual((await saldoDoLote(db, mat, lote.id)).quantidade, -10,
+      'a guarda nova nao pode valer para material que permite saldo negativo');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

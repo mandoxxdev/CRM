@@ -46,7 +46,9 @@ async function getSaldoDisponivel(material) {
  *    material legado sobre o qual esta função também não manda).
  *  - NÃO vale para um escritor conhecido FORA do motor: `PUT /api/almoxarifado/conferencias/:id/
  *    concluir` com `aplicar_ajustes` faz `UPDATE materiais_almoxarifado SET quantidade_atual = ?`
- *    direto (`routes/almoxarifado.js`, ~linha 868) e nunca toca em `estoque_saldo_almoxarifado`.
+ *    direto (em `routes/almoxarifado.js`, dentro do handler dessa rota — sem número de linha de
+ *    propósito: a citação anterior dizia "~linha 868", o `UPDATE` já andou duas vezes desde então,
+ *    e número de linha em comentário apodrece) e nunca toca em `estoque_saldo_almoxarifado`.
  *    Consequência real: num material que JÁ tem linhas, a homologação do inventário muda o total
  *    e deixa as linhas com o valor velho; a próxima contagem por localização (ou o estorno de um
  *    AJUSTE) chama esta função e reconcilia a partir dessas linhas desatualizadas — o número
@@ -135,14 +137,104 @@ async function getOrCreateSaldo(db, materialId, localizacaoId, loteId = null) {
  * por si só, o caso legado: é só "não achei ESTA chave". **O miss não decide nada sozinho** — quem
  * decide é `reconciliarEstornoSemLinha`, que pergunta se o MATERIAL já tem alguma linha. O round 4
  * tratou o miss como no-op incondicional e isso engolia estorno legítimo (ver lá). Por isso esta
- * função devolve booleano em vez de lançar, e por isso os dois call sites são obrigados a olhar.
+ * função devolve um resultado em vez de lançar, e por isso os dois call sites são obrigados a olhar.
+ *
+ * `opcoes.minimo` (review final da Etapa 6) entra no `WHERE` como piso do saldo da linha ANTES do
+ * delta — é o que impede o estorno de ENTRADA com lote de negativar a linha em silêncio: era o −8
+ * na direção inversa (lote A=100, entrada de 10 no B, saída de 10 do B, estorno da entrada do B ⇒
+ * linha do B em **−10**, com `quantidade_atual` coerente em 90 e nada denunciando; a listagem FEFO
+ * passava a mostrar `B = −10` num material que não permite saldo negativo). Com o piso, "não
+ * casou" deixa de ser uma pergunta só — por isso o retorno distingue **`existe`** (a linha está
+ * lá, mas não comporta a reversão ⇒ o chamador RECUSA o estorno) de **não existe** (⇒
+ * `reconciliarEstornoSemLinha` decide).
  */
-async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delta) {
-  const linha = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
+async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delta, { minimo = null } = {}) {
+  const chave = [materialId, localizacaoId || null, loteId || null];
+  const params = [delta, ...chave];
+  let sql = `UPDATE estoque_saldo_almoxarifado
     SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP
-    WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?
-    RETURNING id`, [delta, materialId, localizacaoId || null, loteId || null]);
-  return !!linha;
+    WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`;
+  if (minimo != null) { sql += ' AND quantidade >= ?'; params.push(minimo); }
+  sql += ' RETURNING id';
+
+  const linha = await dbGet(db, sql, params);
+  if (linha) return { existe: true, aplicado: true };
+  // Sem piso, "não casou" só pode significar "linha inexistente" — mantém o discriminador antigo.
+  if (minimo == null) return { existe: false, aplicado: false };
+  const atual = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`, chave);
+  return { existe: !!atual, aplicado: false, quantidade: atual ? atual.quantidade : 0 };
+}
+
+/**
+ * Reivindica `quantidade` do LOTE — do conjunto de linhas daquele lote, em todas as localizações —
+ * e não de uma linha só.
+ *
+ * **Por que o conjunto e não a linha** (achado do review final da Etapa 6): a tela oferece saldo
+ * AGREGADO. `lotService.listarLotesDoMaterial` calcula `saldo` como `SUM(quantidade) WHERE
+ * lote_id = l.id`, somando todas as localizações; o motor reivindicava contra UMA linha, chaveada
+ * por `(material, localização resolvida, lote)`. Quando a localização resolvida da saída não é
+ * onde o lote está, a tela mostrava "saldo 25", o FEFO pré-selecionava aquele lote, e o motor
+ * respondia "Saldo insuficiente no lote L1. Disponível: 0" — as duas pontas discordando sobre o
+ * mesmo número. Alinhar pelo agregado (e não restringir a tela ao saldo da linha) é o lado que
+ * concorda com a regra de negócio já escrita no guia: *uma saída consome o saldo total do
+ * material, independente da área em que ele está endereçado* — almoxarifado aqui é área física
+ * dentro do mesmo site, não filial.
+ *
+ * **Ordem de consumo:** a localização resolvida da saída primeiro (assim o caso comum — lote todo
+ * numa linha só — se comporta exatamente como antes), depois as maiores. Consumir da menor
+ * fragmentaria o endereçamento sem ganho.
+ *
+ * **Sem transação, como o resto do módulo:** cada linha é debitada por um `UPDATE` condicional
+ * (`quantidade >= ?`, com `RETURNING`) e, se o total pedido não for alcançado, TODOS os débitos já
+ * aplicados são devolvidos explicitamente antes de a função reportar insucesso. Nunca
+ * `MAX(0, …)`: saturar em silêncio entregaria menos do que o pedido sem ninguém saber.
+ *
+ * **Não cria linha** — de propósito, e isso é a segunda metade do mesmo achado. `getOrCreateSaldo`
+ * criava a linha ANTES do claim, então toda saída RECUSADA deixava para trás uma linha
+ * `(localização, lote, 0)`. Além do lixo, essa linha alimentava o discriminador do estorno
+ * (`reconciliarEstornoSemLinha` conta linhas, inclusive as zeradas), tirando do no-op um material
+ * que era legado até a tentativa fracassada.
+ *
+ * Devolve `{ ok: true }` ou `{ ok: false, disponivel }` com o saldo agregado real do lote — o
+ * mesmo número que a tela mostra.
+ */
+const EPS = 1e-9; // tolerância de ponto flutuante: quantidade é REAL no SQLite
+
+async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade) {
+  const linhas = await dbAll(db, `
+    SELECT id, quantidade FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id IS ? AND quantidade > 0
+    ORDER BY (localizacao_id IS ?) DESC, quantidade DESC, id`,
+    [materialId, loteId, locPreferida || null]);
+
+  const aplicados = [];
+  let restante = quantidade;
+  for (const linha of linhas) {
+    if (restante <= EPS) break;
+    const take = Math.min(restante, linha.quantidade);
+    const claim = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
+      SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND quantidade >= ?
+      RETURNING id`, [take, linha.id, take]);
+    // Não casou = outra saída concorrente levou o saldo desta linha entre o SELECT e o UPDATE.
+    // Não é erro por si: segue para a próxima linha do lote e só falha se o total não fechar.
+    if (!claim) continue;
+    aplicados.push({ id: linha.id, quantidade: take });
+    restante -= take;
+  }
+
+  if (restante > EPS) {
+    for (const a of aplicados) {
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+        SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [a.quantidade, a.id]);
+    }
+    const total = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) as total
+      FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id IS ?`, [materialId, loteId]);
+    return { ok: false, disponivel: total.total };
+  }
+  return { ok: true, linhas: aplicados };
 }
 
 /**
@@ -201,6 +293,17 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null) {
  * endereço recebe movimento e só depois ganha `localizacao_padrao_id` —, e também a simples troca
  * de endereço padrão. Nesse caso o `WHERE` erra uma linha que EXISTE, e o miss fica indistinguível
  * do caso legado olhando só a chave. Olhando o material, não fica: ele tem linha, então reconcilia.
+ *
+ * **O `COUNT(*)` conta linhas com `quantidade = 0`, e isso deixou de ser um problema no review
+ * final da Etapa 6.** A objeção registrada como minor da Task 3 era concreta: `getOrCreateSaldo`
+ * criava a linha ANTES do claim, então uma saída por lote RECUSADA deixava um `(loc, lote, 0)`
+ * para trás e esse artefato tirava do no-op um material que era legado — a contagem seguinte
+ * devolvia 130 onde a regra do cliente diz 40. A fonte foi fechada na raiz: a saída por lote
+ * agora debita linhas existentes (`claimSaldoDoLote`) e não cria nenhuma. Não foi presumido —
+ * `loteGuardasSaida.api.test.js` tem o caso "material legado continua no no-op do estorno depois
+ * de uma saida RECUSADA", que mede o 40. A variante `AND quantidade != 0` continua **não** sendo
+ * usada de propósito: ela tem o canto errado simétrico (um material contado e zerado de verdade
+ * voltaria a ser tratado como legado).
  */
 async function reconciliarEstornoSemLinha(db, materialId, loteId) {
   const linhas = await dbGet(db,
@@ -259,24 +362,26 @@ async function validarLocalizacaoParaMovimento(db, localizacaoId, material, pape
   }
 }
 
+// `quantidade_reservada` SAIU deste mapa no review final da Etapa 6. A Task 2 removeu a coluna de
+// `estoque_saldo_almoxarifado` (nunca teve escritor) e este SQL passou a devolver `0 as reservado`
+// fixo — um numero que so podia ser zero, alimentando um mostrador "Reservado" na tela do mapa
+// (`MapaLocalizacoesAlmoxarifado.js`) que mentia por construcao. Retencao NAO existe por
+// localizacao: mora em `materiais_almoxarifado` (por material) ou no lote inteiro (por status).
+// Devolver o campo zerado era pior do que nao devolver — sugeria uma dimensao que o sistema nao
+// modela. Este mapa e so por localizacao fisica.
 const MAPA_LOCALIZACOES_SQL = `
   SELECT l.*,
     COALESCE(s.qtd_itens, 0) as qtd_itens,
     COALESCE(s.quantidade_total, 0) as quantidade_total,
-    COALESCE(s.quantidade_reservada, 0) as quantidade_reservada,
     COALESCE(m.itens_baixo_minimo, 0) as itens_baixo_minimo,
     COALESCE(m.itens_criticos, 0) as itens_criticos
   FROM localizacoes_almoxarifado l
   LEFT JOIN (
     SELECT loc_id,
       COUNT(DISTINCT material_id) as qtd_itens,
-      SUM(qty) as quantidade_total,
-      SUM(reservado) as quantidade_reservada
+      SUM(qty) as quantidade_total
     FROM (
-      -- reservado fixo em 0: estoque_saldo_almoxarifado nao tem mais quantidade_reservada
-      -- (Etapa 6, Task 2 -- coluna sem escritor, a soma ja era sempre 0). A retencao mora
-      -- exclusivamente em materiais_almoxarifado; este mapa e so por localizacao fisica.
-      SELECT localizacao_id as loc_id, material_id, quantidade as qty, 0 as reservado
+      SELECT localizacao_id as loc_id, material_id, quantidade as qty
       FROM estoque_saldo_almoxarifado
       WHERE localizacao_id IS NOT NULL AND quantidade > 0
       UNION ALL
@@ -288,7 +393,7 @@ const MAPA_LOCALIZACOES_SQL = `
       -- NULL). O relatorio materiais-sem-endereco (routes/almoxarifado/extended.js) ja usava essa
       -- mesma qualificacao. Sem duplicar: quando ha linha COM endereco, o ramo de cima conta e
       -- este fallback nao dispara.
-      SELECT m.localizacao_padrao_id, m.id, m.quantidade_atual, 0
+      SELECT m.localizacao_padrao_id, m.id, m.quantidade_atual
       FROM materiais_almoxarifado m
       WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NOT NULL AND m.quantidade_atual > 0
         AND NOT EXISTS (
@@ -328,7 +433,18 @@ async function consultarMapaLocalizacoes(db) {
   return dbAll(db, MAPA_LOCALIZACOES_SQL);
 }
 
-async function registrarMovimentacao(db, user, params) {
+/**
+ * `opcoes` é o 4º argumento de propósito, e NÃO vem do body — mesma razão documentada em
+ * `criarReserva`: as rotas de movimentação repassam `req.body` inteiro como `params`
+ * (`routes/almoxarifado/extended.js`, `POST /movimentacoes/v2`), então qualquer chave lida de
+ * `params` é forjável pelo cliente. Uma exigência de lote que o próprio cliente pudesse desligar
+ * mandando `exigeLote: false` no JSON não seria exigência nenhuma.
+ *
+ *  - `opcoes.exigeLote`: **este chamador está num caminho onde o operador tem como informar o
+ *    lote.** Ver a nota da guarda de `controle_lote`, mais abaixo, para por que a exigência é
+ *    declarada pelo chamador e não deduzida pelo motor.
+ */
+async function registrarMovimentacao(db, user, params, opcoes = {}) {
   const {
     material_id, tipo, quantidade, motivo, referencia, observacoes,
     localizacao_origem_id, localizacao_destino_id, lote, lote_id, projeto_id, os_id, cliente_id,
@@ -394,13 +510,33 @@ async function registrarMovimentacao(db, user, params) {
   const loteIdFinal = loteResolvido ? loteResolvido.id : null;
   const loteCodigoFinal = loteResolvido ? loteResolvido.codigo : (lote || null);
 
-  // Etapa 6: controle_lote deixa de ser flag morta. AJUSTE fica de fora de proposito — e o
-  // caminho de regularizacao de quem ligou a flag com estoque antigo sem lote em casa; exigir
-  // lote nele trancaria a porta de saida.
-  if (material.controle_lote && !loteIdFinal
+  // ── controle_lote: exigencia declarada pelo CHAMADOR, nao deduzida pelo motor ──────────────
+  // Ate o review final desta etapa a guarda valia para TODO tipo de entrada/saida, viesse a
+  // chamada de onde viesse. Efeito medido: ligar "Controle por lote" tornava o material
+  // impossivel de entregar por requisicao e de devolver — quatro chamadores internos
+  // (requisitionService entrega/estorno, returnService ENTRADA_DEVOLUCAO/SUCATA, receiptService
+  // sem lote digitado) chamam o motor sem ter DE ONDE tirar um lote: nao existe campo na tela nem
+  // parametro na chamada. Pior: a RESERVA da requisicao nasce normalmente (RESERVA nao e entrada
+  // nem saida), entao o saldo ficava preso numa reserva que nunca podia ser consumida.
+  //
+  // Decisao do cliente (2026-08-10): a exigencia vale SO onde existe como informar — movimentacao
+  // manual (rotas v1 e v2) e recebimento. Os quatro fluxos internos ficam ISENTOS e isso e
+  // pendencia declarada na spec 10, nomeando cada um. Dar-lhes lote automaticamente (FEFO na
+  // entrega, herdar da saida original na devolucao) e o conteudo natural de uma etapa seguinte.
+  //
+  // Por que `opcoes.exigeLote` e nao adivinhacao pelo tipo/pilha: o motor NAO tem como saber se
+  // quem chamou tinha um campo de lote na tela. Deduzir por tipo de movimento seria falso (SAIDA
+  // vem tanto da tela de Movimentacoes quanto da entrega de requisicao); olhar a pilha e fragil e
+  // invisivel. O chamador declara o que so ele sabe. O default e "nao exige" porque, hoje, quem
+  // NAO declara e exatamente o conjunto dos fluxos internos — e um chamador novo que esqueca de
+  // declarar falha aberto (aceita sem lote) em vez de travar um fluxo inteiro em producao.
+  //
+  // AJUSTE puro continua isento por outro motivo, independente deste: e o caminho de
+  // regularizacao de quem ligou a flag com estoque antigo sem lote em casa.
+  if (opcoes.exigeLote && material.controle_lote && !loteIdFinal
       && (tiposEntrada.includes(tipo) || tiposSaida.includes(tipo))) {
     throw Object.assign(
-      new Error(`O material ${material.codigo} exige lote em toda entrada e saida (controle por lote ligado)`),
+      new Error(`O material ${material.codigo} exige lote nesta movimentacao (controle por lote ligado)`),
       { status: 400 });
   }
 
@@ -693,8 +829,8 @@ async function registrarMovimentacao(db, user, params) {
     const locEntrada = tiposEntrada.includes(tipo) ? resolveLocalizacaoEntrada(material, localizacao_destino_id) : null;
     const locSaida = tiposSaida.includes(tipo) ? resolveLocalizacaoSaida(material, localizacao_origem_id) : null;
 
-    // A linha de saldo por localização/lote é criada SEMPRE numa entrada/saída — mesmo sem
-    // localização nem lote — desde o round 1 desta task (achado do review round 1). ESTRITAMENTE
+    // A linha de saldo por localização/lote é criada numa entrada/saída — mesmo sem localização
+    // nem lote — desde o round 1 desta task (achado do review round 1). ESTRITAMENTE
     // NECESSÁRIO de novo a partir do round 3: `syncMaterialTotals` (chamada pelo
     // AJUSTE-com-localização e pelo estorno de qualquer AJUSTE, ver mais abaixo) recalcula
     // quantidade_atual pela SOMA de TODAS as linhas do material — se só PARTE das entradas/saídas
@@ -703,26 +839,31 @@ async function registrarMovimentacao(db, user, params) {
     // (O round 2 chegou a trocar essa reconciliação por um delta local, que não dependia desta
     // linha sempre existir — mas o cliente decidiu que a soma É a semântica de negócio correta:
     // contagem por localização redefine o saldo, não soma ao que havia sem endereço. Ver o
-    // comentário no ramo AJUSTE-com-localização, abaixo.) Também é o que garante que a linha do
-    // LOTE específico exista para as guardas de status/validade/saldo desta task.
+    // comentário no ramo AJUSTE-com-localização, abaixo.)
+    //
+    // ÚNICA EXCEÇÃO, e ela não fura a invariante (review final da Etapa 6): a SAÍDA com lote em
+    // material que não permite negativo não cria linha nenhuma — ela DEBITA linhas que já existem
+    // (`claimSaldoDoLote`). O que `syncMaterialTotals` precisa é que `quantidade_atual` e a soma
+    // das linhas andem juntas, e andam: o claim tira do conjunto exatamente o mesmo que foi
+    // tirado do total. Criar a linha ali era o que deixava um `(loc, lote, 0)` para trás em toda
+    // saída RECUSADA.
     if (tiposEntrada.includes(tipo)) {
       const saldo = await getOrCreateSaldo(db, material_id, locEntrada, loteIdFinal);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
     }
     if (tiposSaida.includes(tipo)) {
-      const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
       if (loteIdFinal && !permiteNegativo) {
-        // Guarda no WHERE, como o resto do motor. Sem isto a subtracao abaixo negativa a linha do
-        // lote em silencio: a guarda de saldo insuficiente la em cima compara com o disponivel do
+        // Guarda no WHERE, como o resto do motor. Sem isto a subtracao negativa a linha do lote em
+        // silencio: a guarda de saldo insuficiente la em cima compara com o disponivel do
         // MATERIAL, e o total do material (debitado direto, sem depender desta linha) continua
         // coerente e nada denuncia (reproduzido em 2026-08-09: lote B com 2 aceitou saida de 10 e
         // ficou em -8).
-        const claim = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
-          SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND quantidade >= ?
-          RETURNING id`, [quantidade, saldo.id, quantidade]);
-        if (!claim) {
+        // O claim e contra o CONJUNTO de linhas do lote, nao contra uma linha so, e NAO cria linha
+        // — ver a docstring de `claimSaldoDoLote` para os dois motivos (alinhar com o saldo
+        // agregado que a tela mostra; e nao deixar linha zerada atras de toda saida recusada).
+        const claim = await claimSaldoDoLote(db, material_id, loteIdFinal, locSaida, quantidade);
+        if (!claim.ok) {
           // O físico do material já foi debitado acima (linha ~439-452/rowRes quando a saída
           // consumia reserva, ou ~460-468 no caminho simples) antes deste claim rodar — não há
           // transação neste módulo, então recusar aqui sem devolver deixaria quantidade_atual
@@ -754,10 +895,13 @@ async function registrarMovimentacao(db, user, params) {
               [quantidade, material_id]);
           }
           throw Object.assign(
-            new Error(`Saldo insuficiente no lote ${loteCodigoFinal}. Disponível: ${saldo.quantidade} ${material.unidade}`),
+            new Error(`Saldo insuficiente no lote ${loteCodigoFinal}. Disponível: ${claim.disponivel} ${material.unidade}`),
             { status: 400 });
         }
       } else {
+        // Sem lote (ou material que permite saldo negativo): a linha continua sendo criada, porque
+        // aqui ela PODE ficar negativa e precisa existir para `syncMaterialTotals` somar.
+        const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [quantidade, saldo.id]);
       }
@@ -883,9 +1027,32 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // `quantidade_atual` desgarra da soma e a contagem seguinte apaga este estorno. O miss também
       // acontece sem nada de legado — a chave usa a localização padrão de HOJE, e o forward usou a
       // da época.
+      //
+      // O PISO da linha (review final da Etapa 6): a guarda acima protege o disponível do
+      // MATERIAL, e a subtração acerta a linha do LOTE — exatamente a assimetria do −8 original,
+      // só que na direção inversa. Sem `minimo`, estornar a entrada de um lote cujo saldo já saiu
+      // deixava a linha daquele lote NEGATIVA em silêncio (medido: −10), com o total do material
+      // coerente e a listagem FEFO passando a exibir saldo negativo num material que não permite
+      // saldo negativo. Só vale quando há lote E o material não permite negativo — a mesma
+      // condição do ramo forward, e a que preserva `restricoesEndereco.api.test.js:213`.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
-      const achouLinha = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade);
-      if (!achouLinha) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+      const pisoLinha = (mov.lote_id && !permiteNegativo) ? mov.quantidade : null;
+      const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade,
+        { minimo: pisoLinha });
+      if (!r.aplicado && r.existe) {
+        // A linha existe e não comporta a reversão. `quantidade_atual` já foi debitado logo acima
+        // e não há transação aqui — o `catch` deste método desfaz o claim do cancelamento, mas
+        // NÃO devolve o físico. Compensa explicitamente antes de recusar, senão trocaríamos um
+        // bug (linha negativa) por outro (total debitado sem estorno nenhum).
+        await dbRun(db, `UPDATE materiais_almoxarifado
+          SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [mov.quantidade, mov.material_id]);
+        throw Object.assign(new Error(
+          `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${r.quantidade} `
+          + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`),
+          { status: 400 });
+      }
+      if (!r.aplicado) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
       // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
       // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
       // specs/modulo-almoxarifado/03-motor-estoque/README.md.
@@ -898,9 +1065,18 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // reconciliação do residual quando o material já tem linha (round 5) — mesmos motivos do ramo
       // de ENTRADA acima; aqui a linha inventada seria +quantidade, que soma ao próximo inventário
       // uma quantidade que nunca teve endereço.
+      //
+      // SEM piso aqui, e isso é decisão, não esquecimento (review final da Etapa 6): o delta é
+      // POSITIVO, então nenhum valor de `quantidade` da linha pode torná-lo inválido — devolver
+      // saldo não cria negativo. Um "teto" simétrico ao piso do ramo de ENTRADA precisaria de um
+      // limite superior por linha, que não existe: o almoxarifado não tem capacidade máxima
+      // modelada, e inventar uma aqui recusaria estornos legítimos. O que existe de assimetria
+      // real é de DISTRIBUIÇÃO: quando a saída original drenou linhas de mais de uma localização
+      // (`claimSaldoDoLote`), o estorno devolve tudo na linha desta chave. O total volta exato; o
+      // endereçamento pode consolidar. Pendência declarada na spec 10.
       const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
-      const achouLinha = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
-      if (!achouLinha) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+      const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
+      if (!r.aplicado) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
     } else if (mov.tipo === 'AJUSTE') {
       if (mov.localizacao_destino_id) {
         // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo

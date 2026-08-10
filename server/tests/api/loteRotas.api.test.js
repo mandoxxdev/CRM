@@ -131,6 +131,47 @@ async function loteComSaldo(db, materialId, codigo, validade, qtd) {
     assert.strictEqual(linha.elegivel, false, 'bloqueado nunca e elegivel, mesmo com vencimento liberado');
   });
 
+  // ── Review final da Etapa 6 (2026-08-10) ────────────────────────────────────────────────────
+
+  // `?com_saldo=1` e o parametro que a tela de Movimentacao usa para montar o seletor FEFO da
+  // saida, e nao tinha teste nenhum (minor deferido da Task 6). Sem cobertura, um erro no filtro
+  // esvaziaria o seletor de lotes em producao sem nada ficar vermelho.
+  await test('?com_saldo=1 esconde lote sem saldo e mantem quem tem', async () => {
+    const mat = await novoMaterial(db);
+    await loteComSaldo(db, mat, 'TEM-SALDO', '2030-01-01', 9);
+    await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'NUNCA-ENTROU' });
+    // Lote que ja teve saldo e voltou a zero tambem some do seletor — o filtro e "saldo > 0",
+    // nao "ja movimentou".
+    const zerado = await loteComSaldo(db, mat, 'ZEROU', '2030-01-01', 4);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA', quantidade: 4, lote_id: zerado.id, justificativa: 'consumiu tudo' });
+
+    const todos = await request(app).get(`/api/almoxarifado/materiais/${mat}/lotes`);
+    assert.deepStrictEqual(todos.body.map((l) => l.codigo).sort(),
+      ['NUNCA-ENTROU', 'TEM-SALDO', 'ZEROU'], 'sem o filtro, os tres lotes precisam aparecer');
+
+    const res = await request(app).get(`/api/almoxarifado/materiais/${mat}/lotes?com_saldo=1`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const codigos = res.body.map((l) => l.codigo);
+    assert.deepStrictEqual(codigos, ['TEM-SALDO'], `com_saldo=1 devolveu ${codigos.join(',') || '(vazio)'}`);
+    assert.strictEqual(res.body[0].saldo, 9);
+  });
+
+  // `data_fabricacao` era coluna sem escritor e sem leitor ate o review final. Agora o
+  // recebimento a escreve (via `data_fabricacao_lote` no item) e a listagem a devolve, que e o
+  // que a tela de Lotes exibe.
+  await test('data_fabricacao chega na listagem do lote', async () => {
+    const mat = await novoMaterial(db);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, {
+      material_id: mat, codigo: 'FAB-1', data_fabricacao: '2026-02-10', data_validade: '2030-02-10' });
+    assert.strictEqual(lote.data_fabricacao, '2026-02-10', 'criarOuObterLote nao gravou data_fabricacao');
+
+    const res = await request(app).get(`/api/almoxarifado/materiais/${mat}/lotes`);
+    const linha = res.body.find((l) => l.codigo === 'FAB-1');
+    assert.strictEqual(linha.data_fabricacao, '2026-02-10',
+      'a rota nao devolve data_fabricacao — a tela nao teria como exibir');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
