@@ -607,10 +607,17 @@ const MovimentacoesAlmoxarifado = () => {
                           onChange={e => setForm(f => ({ ...f, lote_id: e.target.value }))}>
                           <option value="">Sem lote</option>
                           {lotes.map(l => {
-                            // Vencido-mas-liberado é elegível (o motor aceita a saída) — o rótulo
-                            // precisa dizer por que ele está disponível, senão o operador estranha
-                            // ver um lote vencido selecionável. Vencido sem liberação segue
-                            // barrado por `elegivel`, nunca deduzido de `vencido` sozinho aqui.
+                            // Vencido-mas-liberado é elegível para uma SAÍDA de consumo (o motor
+                            // aceita) — o rótulo precisa dizer por que ele está disponível, senão
+                            // o operador estranha ver um lote vencido selecionável.
+                            //
+                            // Quem decide o `disabled` é `loteDisponivelParaTipo`, não `elegivel`
+                            // (o comentário anterior aqui dizia `elegivel` e contradizia a linha
+                            // logo abaixo desde o próprio fix round 1 da Task 9): `elegivel` vem do
+                            // servidor SEM conhecer o tipo do movimento, e em Sucata/Perda ele
+                            // barraria justamente o lote vencido que o descarte existe para tirar
+                            // do estoque. Na Saída, `loteDisponivelParaTipo` usa `elegivel`; no
+                            // descarte, só o status.
                             const vencidoLiberado = l.vencido && l.vencimento_liberado;
                             return (
                               <option key={l.id} value={l.id} disabled={!loteDisponivelParaTipo(l, form.tipo)}>

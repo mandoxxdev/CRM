@@ -768,7 +768,13 @@ const MapaLocalizacoesAlmoxarifado = () => {
                 <dt>Caminho</dt><dd style={{ fontSize: '0.8rem' }}>{buildLocalizacaoPath(selecionada, localizacoes) || '—'}</dd>
                 <dt>Itens distintos</dt><dd>{selecionada.qtd_itens || 0}</dd>
                 <dt>Quantidade total</dt><dd>{Number(selecionada.quantidade_total || 0).toLocaleString('pt-BR')}</dd>
-                <dt>Reservado</dt><dd>{Number(selecionada.quantidade_reservada || 0).toLocaleString('pt-BR')}</dd>
+                {/* "Reservado" SAIU no review final da Etapa 6: mostrava sempre 0. A Etapa 6
+                    removeu `quantidade_reservada` de `estoque_saldo_almoxarifado` (coluna que
+                    nunca teve escritor), e o servidor passou a devolver um `0 as reservado` fixo —
+                    um mostrador que só podia dizer zero. Retenção não existe por localização: ela
+                    mora em `materiais_almoxarifado`, por material, ou no lote inteiro por status.
+                    Este era o terceiro mostrador zerado do mesmo lote; os dois irmãos já tinham
+                    saído do Extrato pelo mesmo motivo (fix round 1 da Task 9). */}
                 <dt>Status</dt>
                 <dd>
                   <span className={`almox-badge almox-badge-${statusLocalizacao(selecionada)}`}>

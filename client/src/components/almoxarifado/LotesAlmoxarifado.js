@@ -4,6 +4,11 @@ import { toast } from 'react-toastify';
 import { FiRefreshCw, FiSliders, FiUnlock, FiUpload } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+// O certificado do lote vai para o MESMO diretório servido das fotos de material
+// (`uploads/almoxarifado`), então o resolvedor de URL é o mesmo — o nome do helper fala em foto
+// por origem histórica, não por restrição. Antes do review final da Etapa 6 o certificado era
+// gravado e nunca visualizável: a tela só o lia como booleano ("Certificado anexado").
+import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import './Almoxarifado.css';
 
 /**
@@ -234,8 +239,16 @@ const LotesAlmoxarifado = () => {
                           nada sobre `certificado_arquivo`, que o servidor já devolve no SELECT. */}
                       {l.certificado_arquivo && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-success)', marginTop: 4 }}>
-                          Certificado anexado
-                          {l.certificado_em ? ` em ${new Date(l.certificado_em).toLocaleDateString('pt-BR')}` : ''}
+                          {/* Review final da Etapa 6: o arquivo era gravado e NUNCA visualizável —
+                              a tela só o lia como booleano. Quem precisasse conferir o certificado
+                              do fornecedor tinha de adivinhar o nome do arquivo no servidor. */}
+                          <a href={resolveMaterialPhotoUrl(l.certificado_arquivo)}
+                            target="_blank" rel="noopener noreferrer"
+                            style={{ color: 'inherit', textDecoration: 'underline' }}
+                            title="Abrir o certificado do fornecedor">
+                            Ver certificado
+                          </a>
+                          {l.certificado_em ? ` (anexado em ${new Date(l.certificado_em).toLocaleDateString('pt-BR')})` : ''}
                         </div>
                       )}
                     </td>
@@ -264,6 +277,14 @@ const LotesAlmoxarifado = () => {
                           )}
                         </>
                       ) : <span style={{ color: 'var(--gmp-text-light)' }}>—</span>}
+                      {/* Review final da Etapa 6: `data_fabricacao` existia na tabela desde a
+                          Task 1 sem escritor NEM leitor. O escritor é o campo "Fabricação" do
+                          item no recebimento; este é o leitor. */}
+                      {l.data_fabricacao && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 4, whiteSpace: 'nowrap' }}>
+                          Fabricado em {formatData(l.data_fabricacao)}
+                        </div>
+                      )}
                     </td>
                     <td style={{ fontSize: '0.85rem' }}>{l.corrida || '—'}</td>
                     <td style={{ fontSize: '0.85rem' }}>{l.fornecedor_nome || '—'}</td>

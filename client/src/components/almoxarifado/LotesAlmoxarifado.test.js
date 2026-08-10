@@ -272,20 +272,43 @@ describe('LotesAlmoxarifado', () => {
   // Fix round 1: a tabela ignorava certificado_arquivo/certificado_em, que ja vem no SELECT l.*
   // do servidor — o operador nao distinguia "sem certificado" de "ja anexado" antes de abrir o
   // modal.
-  test('lote com certificado ja anexado mostra isso na linha', async () => {
+  // Review final da Etapa 6: nao basta AFIRMAR que ha certificado — ele tem de ser abrivel. Antes
+  // o arquivo era gravado e nunca visualizavel: a tela so o lia como booleano.
+  test('lote com certificado ja anexado oferece um link para abrir o arquivo', async () => {
     lotesDoBanco = [{
       ...LOTE_ATIVO, certificado_arquivo: 'certificado-123.pdf', certificado_em: '2026-08-01T10:00:00Z',
     }];
     await renderizar();
     await selecionarMaterial();
-    expect(linhas()[0].textContent).toMatch(/certificado anexado/i);
+    expect(linhas()[0].textContent).toMatch(/anexado em/i);
+
+    const link = linhas()[0].querySelector('a[href*="certificado-123.pdf"]');
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('href')).toBe('/api/uploads/almoxarifado/certificado-123.pdf');
+    expect(link.getAttribute('target')).toBe('_blank');
   });
 
   test('lote sem certificado nao afirma ter um anexado', async () => {
     await renderizar();
     await selecionarMaterial();
     // LOTE_ATIVO (linha 1) nao tem certificado_arquivo no fixture.
-    expect(linhas()[1].textContent).not.toMatch(/certificado anexado/i);
+    expect(linhas()[1].textContent).not.toMatch(/certificado/i);
+    expect(linhas()[1].querySelector('a[href*="uploads/almoxarifado"]')).toBeNull();
+  });
+
+  // Review final da Etapa 6: `data_fabricacao` era coluna sem escritor E sem leitor. O escritor
+  // e o campo "Fabricacao" do item no recebimento; este e o leitor.
+  test('data de fabricacao do lote aparece na tabela', async () => {
+    lotesDoBanco = [{ ...LOTE_ATIVO, data_fabricacao: '2026-02-10' }];
+    await renderizar();
+    await selecionarMaterial();
+    expect(linhas()[0].textContent).toMatch(/Fabricado em 10\/02\/2026/);
+  });
+
+  test('lote sem data de fabricacao nao inventa a linha', async () => {
+    await renderizar();
+    await selecionarMaterial();
+    expect(linhas()[1].textContent).not.toMatch(/Fabricado em/);
   });
 });
 

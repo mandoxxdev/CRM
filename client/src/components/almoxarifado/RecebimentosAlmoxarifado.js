@@ -170,6 +170,7 @@ const RecebimentosAlmoxarifado = () => {
         conferencia_descricao: item.conferencia_descricao,
         lote: item.lote,
         data_validade_lote: item.data_validade_lote,
+        data_fabricacao_lote: item.data_fabricacao_lote,
         corrida_lote: item.corrida_lote,
       }));
       await api.put(`/almoxarifado/recebimentos/${detalhe.id}/fiscal`, {
@@ -511,15 +512,21 @@ const RecebimentosAlmoxarifado = () => {
                             onChange={(e) => atualizarItemDetalhe(item.id, 'reducao_icms_percent', e.target.value)} />
                         </div>
                         {/* Lote nasce aqui — na nota do fornecedor — não na movimentação. Sem estes
-                            três campos era o único ponto do sistema onde a coluna existia no banco
-                            (Task 5) e o motor a lia (Task 6), mas ninguém conseguia preenchê-la. */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
+                            campos era o único ponto do sistema onde a coluna existia no banco
+                            (Task 5) e o motor a lia (Task 6), mas ninguém conseguia preenchê-la.
+                            "Fabricação" entrou no review final da Etapa 6: `lotes_almoxarifado.
+                            data_fabricacao` existia desde a Task 1 sem NENHUM escritor — este
+                            campo é o escritor, e a tela de Lotes é o leitor. */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
                           <input className="almox-input" placeholder="Lote"
                             value={item.lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'lote', e.target.value)} />
-                          <input className="almox-input" type="date" placeholder="Validade"
+                          <input className="almox-input" type="date" placeholder="Validade" title="Validade do lote"
                             value={item.data_validade_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'data_validade_lote', e.target.value)} />
+                          <input className="almox-input" type="date" placeholder="Fabricação" title="Data de fabricação do lote"
+                            value={item.data_fabricacao_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                            onChange={(e) => atualizarItemDetalhe(item.id, 'data_fabricacao_lote', e.target.value)} />
                           <input className="almox-input" placeholder="Corrida"
                             value={item.corrida_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'corrida_lote', e.target.value)} />
