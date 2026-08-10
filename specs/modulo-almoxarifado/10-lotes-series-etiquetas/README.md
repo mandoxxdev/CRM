@@ -2,7 +2,14 @@
 
 > **Status:** 🟡 — **lote é entidade real desde a Etapa 6, com tela completa desde a Task 9
 > (2026-08-09)**; série e etiquetas não existem · **Spec original:** seção 10
-> **Última atualização:** 2026-08-10 (**review final do branch**: o alcance real de `controle_lote`
+> **Última atualização:** 2026-08-10 (**fechamento dos 5 minors residuais do review final**:
+> documentado que o claim agregado por lote drena linhas de localização NÃO declarada — inclusive
+> bloqueada — na seção "Efeito colateral declarado", abaixo; três citações de linha que o próprio
+> commit de doc do review final tinha invalidado (`stockService.js:450-451`, `:1171`/`:1171-1178`,
+> `routes/almoxarifado.js:894`/`:917`) perderam o número, ficando só arquivo + símbolo. Documentação
+> e comentário apenas, sem mudança de comportamento — ver
+> [`.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/minors-report.md`](../../../.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/minors-report.md).
+> Antes: 2026-08-10, **review final do branch**: o alcance real de `controle_lote`
 > foi restringido e está documentado abaixo — esta spec e o guia declaravam a flag como valendo em
 > "toda entrada e saída", o que travava quatro fluxos internos; mais `data_fabricacao` ganhando
 > escritor e leitor, e o claim de saída passando a ser contra o saldo agregado do lote.
@@ -90,8 +97,11 @@ uma mensagem mandando liberar de novo algo que já está liberado.
 
 ### Descarte de lote vencido é permitido, de propósito
 
-`SUCATA`, `PERDA` e `AJUSTE_NEGATIVO` são **isentos** da guarda de vencimento
-(`stockService.js:450-451`): material vencido tem de poder sair do estoque. Só o **consumo** é
+`SUCATA`, `PERDA` e `AJUSTE_NEGATIVO` são **isentos** da guarda de vencimento (array `tiposDescarte`
+em `stockService.js`, dentro de `registrarMovimentacao` — sem número de linha de propósito: as
++136 linhas do review final da Etapa 6 (`a3afaa1`) já deslocaram esse trecho de `450-451` para
+`586` uma vez, e número de linha em spec envelhece entre dois commits): material vencido tem de
+poder sair do estoque. Só o **consumo** é
 barrado. Sem essa isenção o lote vencido ficava preso para sempre — não podia sair como consumo
 (correto) e também não podia ser baixado como perda (bug, achado no round 1 do review da Task 3).
 A guarda de **status** continua valendo para o descarte: lote `BLOQUEADO`/`REPROVADO` precisa
@@ -154,6 +164,26 @@ o total não fechar. E **não cria linha**: `getOrCreateSaldo` criava a linha an
 toda saída recusada deixava um `(loc, lote, 0)` para trás — lixo que ainda alimentava o
 discriminador do estorno, que conta linhas inclusive zeradas (ver
 [03-motor-estoque](../03-motor-estoque/README.md)).
+
+#### Efeito colateral declarado (review final, 2026-08-10): a validação de endereço só olha a localização DECLARADA
+
+`validarLocalizacaoParaMovimento` roda antes do claim e valida só a localização resolvida da saída
+(a declarada pelo operador, ou a padrão do material na ausência dela) — bloqueio e tipo permitido.
+As DEMAIS linhas do lote que `claimSaldoDoLote` decide drenar, quando a declarada não fecha o total
+sozinha, **não passam por essa validação de novo** — inclusive uma linha que está numa localização
+marcada `bloqueada = 1`.
+
+Reproduzido: lote com 10 unidades endereçadas numa localização; essa localização é marcada
+`bloqueada = 1`; uma saída de 5 declarando uma OUTRA localização de origem, não bloqueada, **passa**,
+e a linha bloqueada cai de 10 para 5 — sem nenhum erro.
+
+Isso é consequência direta, e coerente, da decisão de alinhar o claim pelo agregado do lote (a regra
+de negócio acima: uma saída consome o saldo total do material, independente da área física em que
+está endereçado — almoxarifado é área física dentro do mesmo site, não filial). **Não corrompe
+saldo**: o total do material e a soma das linhas continuam batendo. O que se perde é a garantia de
+que "bloqueada" protege a linha inteira contra qualquer saída — ela só protege contra saída que a
+declare como origem. Não é bug a corrigir (parked com ruling no review final da Etapa 6); é
+comportamento que não estava escrito em lugar nenhum até agora.
 
 ### A entrada do recebimento não é mais re-executável
 
@@ -269,7 +299,7 @@ lote para decidir nada.
    > **Correção (fix round 1 da Task 9, 2026-08-09): esta nota não citava os dois leitores que a
    > remoção deixou órfãos.** `ExtratoMaterialModal.js` tinha uma tabela "Saldos por localização"
    > com colunas "Reservada"/"Bloqueada" lendo `s.quantidade_reservada`/`s.quantidade_bloqueada` —
-   > como `consultarSaldosPorLocalizacao` (`stockService.js:1171`) faz `SELECT s.*`, essas chaves
+   > como `consultarSaldosPorLocalizacao` (`stockService.js`) faz `SELECT s.*`, essas chaves
    > nunca chegavam ao cliente depois de `015e94c`, e as duas colunas mostravam **0 para sempre**,
    > em silêncio, desde a migração. Corrigido: as duas colunas **saíram** da tabela por localização
    > (fix round 1 da Task 9) — retenção não existe por localização, só por lote (status) ou por
@@ -292,7 +322,9 @@ lote para decidir nada.
   > **Correção de 2026-08-09:** a migração da Task 2 removeu a coluna `lote TEXT` do saldo, e
   > `ExtratoMaterialModal.js:174` lê `s.lote` como texto. A coluna "Lote" do extrato teria ficado
   > em `—` para sempre, em silêncio. Fechado em `b4e4858`: `consultarSaldosPorLocalizacao`
-  > (`stockService.js:1171-1178`) devolve `lt.codigo as lote` via `LEFT JOIN`, ao lado de `lote_id`.
+  > (`stockService.js` — sem número de linha de propósito, ver a nota da correção acima sobre
+  > `a3afaa1`; hoje em `1336`, mas o número por si só apodrece) devolve `lt.codigo as lote` via
+  > `LEFT JOIN`, ao lado de `lote_id`.
 
 ## Checklist
 
@@ -401,9 +433,10 @@ de série (ver o plano da Etapa 6, seção "Dívidas da Etapa 6 que a 6b deveria
 
 ### (b) A conclusão de inventário escreve `quantidade_atual` por fora do motor
 
-`PUT /api/almoxarifado/conferencias/:id/concluir` com `aplicar_ajustes`
-(`server/routes/almoxarifado.js:894`, o `UPDATE materiais_almoxarifado SET quantidade_atual` em
-`routes/almoxarifado.js:917`) grava o total direto e **nunca toca em
+`PUT /api/almoxarifado/conferencias/:id/concluir` com `aplicar_ajustes` (handler dessa rota em
+`server/routes/almoxarifado.js` — sem número de linha de propósito: esta spec já citou `~868` e
+depois `894`/`917`, e o `UPDATE` andou de novo no review final; procure pela rota e por
+`UPDATE materiais_almoxarifado SET quantidade_atual`) grava o total direto e **nunca toca em
 `estoque_saldo_almoxarifado`** — nem gera movimentação pelo motor. Com a reconciliação por soma,
 aplicar um ajuste de inventário e depois contar uma prateleira **evapora a diferença**.
 

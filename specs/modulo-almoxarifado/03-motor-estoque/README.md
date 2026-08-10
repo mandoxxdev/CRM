@@ -1,7 +1,14 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:** 2026-08-10 (**review final do branch da Etapa 6**: o claim de saída por lote passou a ser contra o CONJUNTO de linhas do lote, não uma linha só; o estorno de ENTRADA com lote ganhou piso; o mostrador "Reservado" do mapa foi REMOVIDO — follow-up abaixo fechado; e três pendências novas declaradas no fim deste arquivo. Antes: 2026-08-09, Etapa 6 fechada — Task 3b acrescentou a liberação de vencimento, e a afirmação desta spec de que ela "não existe ainda" foi corrigida. Antes disso: Task 3, round 5 do review — o discriminador do estorno passa a ser "o material já tem linha?")
+> **Última atualização:** 2026-08-10 (**fechamento dos 5 minors residuais do review final**: a
+> citação da rota v1 [`routes/almoxarifado.js:573`, hoje `:752`] e a da guarda de vencimento
+> [`stockService.js:451`, hoje o destructuring de `params`] perderam o número de linha; e o piso do
+> estorno de ENTRADA ganhou a ressalva de que só vale quando a chave casa com a linha que a entrada
+> escreveu — quando não casa, a reconciliação pode negativar a linha, registrado como 4ª pendência
+> no fim do arquivo. Documentação e comentário apenas, sem mudança de comportamento — ver
+> [`.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/minors-report.md`](../../../.superpowers/sdd/2026-08-09-almoxarifado-etapa6-lotes/minors-report.md).
+> Antes: 2026-08-10, **review final do branch da Etapa 6**: o claim de saída por lote passou a ser contra o CONJUNTO de linhas do lote, não uma linha só; o estorno de ENTRADA com lote ganhou piso; o mostrador "Reservado" do mapa foi REMOVIDO — follow-up abaixo fechado; e três pendências novas declaradas no fim deste arquivo. Antes: 2026-08-09, Etapa 6 fechada — Task 3b acrescentou a liberação de vencimento, e a afirmação desta spec de que ela "não existe ainda" foi corrigida. Antes disso: Task 3, round 5 do review — o discriminador do estorno passa a ser "o material já tem linha?")
 > **📋 Plano de implementação pronto:** [docs/superpowers/plans/2026-08-04-almoxarifado-etapa1-motor-estoque.md](../../../docs/superpowers/plans/2026-08-04-almoxarifado-etapa1-motor-estoque.md) — 9 tasks TDD (todas concluídas)
 
 ## Objetivo
@@ -39,8 +46,20 @@ Um único caminho de movimentação, transacional, com livro imutável (estorno 
   > comporta" (recusa, compensando `quantidade_atual` à mão antes de lançar). O ramo de SAÍDA
   > continua **sem teto**, de propósito: delta positivo não cria negativo e não há capacidade
   > máxima modelada.
+  >
+  > **O piso só vale quando a chave do estorno CASA com a linha que a entrada escreveu — condição
+  > de contorno, não propriedade total (pré-existente, não é regressão desta rodada de review).**
+  > Quando não casa, `ajustarSaldoExistente` devolve `existe: false`, e quem decide o resto é
+  > `reconciliarEstornoSemLinha` → `syncSaldoLocalizacaoPadrao` (ver acima): essa função **cria** a
+  > linha em `(localizacao_padrao_id atual, lote)` e grava nela `quantidade_atual − soma das outras
+  > linhas`, sem piso nenhum — nem `opcoes.minimo`, nem checagem de `permite_saldo_negativo`.
+  > Reproduzido: ENTRADA de 10 com lote e sem destino ⇒ linha `(NULL, lote) = 10`; o material
+  > depois ganha `localizacao_padrao_id` (locX); o estorno da entrada procura a linha em
+  > `(locX, lote)`, não acha (a real está em `(NULL, lote)`), cai na reconciliação, que cria
+  > `(locX, lote)` e grava `quantidade_atual − outras = 0 − 10 = −10` — num material que não
+  > permite saldo negativo. Registrado como pendência nomeada, abaixo.
 - **Vínculo estruturado** na movimentação: `projeto_id`, `os_id`, `centro_custo_id` (+ `centros_custo_almoxarifado`), `cliente_id`, `requisicao_id`, `reserva_id`, `recebimento_id`, `documento_vinculado`, `justificativa`. Regra por tipo (`avaliarRegrasVinculo`/`REGRAS_VINCULO`) decide o que é obrigatório.
-- **Rota v1 legada:** `POST /movimentacoes` (`routes/almoxarifado.js:573`) — 4 tipos, sem lote/localização; delega para `stockService.registrarMovimentacao` desde a Etapa 0 (grava auditoria). A tela de Movimentações posta em `/movimentacoes/v2` desde a Etapa 1; a entrada/saída rápida de `MateriaisAlmoxarifado.js` ainda usa a rota v1 (que delega ao mesmo motor — migrar quando a tela for retrabalhada).
+- **Rota v1 legada:** `POST /movimentacoes` (`routes/almoxarifado.js`, handler `app.post('/api/almoxarifado/movimentacoes', ...)` — sem número de linha de propósito: esta spec já citou `:573` e a rota andou para `:752`; número de linha em spec envelhece entre dois commits) — 4 tipos, sem lote/localização; delega para `stockService.registrarMovimentacao` desde a Etapa 0 (grava auditoria). A tela de Movimentações posta em `/movimentacoes/v2` desde a Etapa 1; a entrada/saída rápida de `MateriaisAlmoxarifado.js` ainda usa a rota v1 (que delega ao mesmo motor — migrar quando a tela for retrabalhada).
 - Testes de serviço: entrada/saída, saldo negativo bloqueado, transferência, bloqueio, material inativo (em `almoxarifado.test.js`); testes de API de estorno, regras de vínculo, livro/extrato (`server/tests/api/`).
 - Concorrência SQLite tratada (`services/sqliteConcurrency.js` — WAL + retry BUSY).
 
@@ -67,7 +86,10 @@ Colunas existem; falta garantir que TODAS as operações (saída, reserva, inspe
   > justamente do achado de review que produziu aquela frase): `lotService.liberarVencimento`,
   > `lotService.vencimentoLiberado`, as colunas `vencimento_liberado_em/_por/_motivo` e a rota
   > `PUT /api/almoxarifado/lotes/:id/liberar-vencimento` (perm. `inspecionar`, justificativa
-  > obrigatória, auditada). A guarda em `stockService.js:451` respeita a liberação.
+  > obrigatória, auditada). A guarda em `stockService.registrarMovimentacao` (bloco que checa
+  > `lotService.isVencido`/`vencimentoLiberado` no ramo de saída, dentro de `stockService.js` — sem
+  > número de linha de propósito: esta nota já citou `:451`, que hoje é o destructuring de `params`,
+  > não a guarda) respeita a liberação.
   > **A liberação NÃO "desvence" o lote:** `isVencido` continua derivado de `data_validade` e
   > continua `true`; o que muda é a decisão da guarda. E a ordem é status-antes-de-vencimento, de
   > propósito — lote bloqueado com vencimento liberado falha por bloqueio, com a mensagem certa.
@@ -204,6 +226,22 @@ ser redescoberta por acidente.
   verificação de alertas, e o efeito visível é o ruído `[almoxarifado-alertas] ... no such column:
   localizacao` em toda saída de teste — mais o alerta que não sai. **Pré-existente**, anterior à
   Etapa 6 e fora do escopo dela.
+- **"Estorno de ENTRADA não negativa a linha do lote" só vale quando a chave do estorno casa com a
+  linha que a entrada escreveu — não é propriedade total.** O piso (`opcoes.minimo` em
+  `ajustarSaldoExistente`, ver acima) só entra em jogo quando `UPDATE ... WHERE material_id = ? AND
+  localizacao_id IS ? AND lote_id IS ?` acha a linha. Quando não acha (a resolução de localização do
+  estorno usa `localizacao_padrao_id` **de hoje**; o forward gravou usando o padrão **da época** —
+  o mesmo gatilho do miss já documentado para `reconciliarEstornoSemLinha`), o estorno cai no
+  caminho de reconciliação: `syncSaldoLocalizacaoPadrao` **cria** a linha na chave nova e grava nela
+  `quantidade_atual − soma das outras linhas`, sem piso e sem checar `permite_saldo_negativo`. Pode
+  sair negativa num material que não permite negativo. Reproduzido: ENTRADA de 10 com lote e sem
+  destino (linha `(NULL, lote) = 10`) → material ganha `localizacao_padrao_id` depois → estorno cria
+  `(locX, lote) = −10`. **Byte-idêntico ao commit anterior à rodada de correção do review final
+  (`c2b3da9`) — não é regressão desta etapa nem desta rodada de minors.** A correção natural é o
+  piso entrar também dentro de `syncSaldoLocalizacaoPadrao` quando ela está sendo chamada a partir
+  do estorno de uma ENTRADA com lote que não permite negativo — mas isso muda comportamento de
+  produção (ficaria fora do escopo "documentação apenas" desta rodada) e precisa de teste de API
+  próprio. **Task separada.**
 
 ### Correção da Etapa 5 que pertence a este motor
 

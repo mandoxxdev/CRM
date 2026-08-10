@@ -196,6 +196,20 @@ async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delt
  * (`reconciliarEstornoSemLinha` conta linhas, inclusive as zeradas), tirando do no-op um material
  * que era legado até a tentativa fracassada.
  *
+ * **Só a localização DECLARADA passa pela validação de endereço — as demais linhas que este claim
+ * decide drenar, não** (achado do review final da Etapa 6, parked com ruling). `validarLocalizacaoParaMovimento`
+ * roda ANTES deste claim e valida só a localização resolvida da saída (`locPreferida`, o parâmetro
+ * abaixo) — bloqueio, tipo permitido. Quando essa linha não fecha o total sozinha, o claim segue
+ * drenando as OUTRAS linhas do lote (as maiores primeiro) sem repetir aquela validação, inclusive
+ * linha em localização marcada `bloqueada = 1`: uma saída que declara origem numa localização não
+ * bloqueada pode reduzir o saldo de uma localização bloqueada do mesmo lote sem passar pela guarda de
+ * bloqueio. É consequência direta de alinhar pelo agregado (mesma decisão de negócio do parágrafo
+ * acima: uma saída consome o saldo total do material, área física não é filial) e **não corrompe
+ * saldo** — total do material e soma das linhas continuam consistentes —, mas é comportamento que
+ * ninguém tinha escrito em lugar nenhum até agora. Documentado também em
+ * `specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md`, seção "O saldo do lote é agregado
+ * nas DUAS pontas".
+ *
  * Devolve `{ ok: true }` ou `{ ok: false, disponivel }` com o saldo agregado real do lote — o
  * mesmo número que a tela mostra.
  */
@@ -1034,7 +1048,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // deixava a linha daquele lote NEGATIVA em silêncio (medido: −10), com o total do material
       // coerente e a listagem FEFO passando a exibir saldo negativo num material que não permite
       // saldo negativo. Só vale quando há lote E o material não permite negativo — a mesma
-      // condição do ramo forward, e a que preserva `restricoesEndereco.api.test.js:213`.
+      // condição do ramo forward, e a que preserva `loteGuardasSaida.api.test.js`
+      // (`material que permite negativo continua podendo negativar a linha no estorno`).
+      // NAO e restricoesEndereco.api.test.js:213 — aquele teste (achado do review final) e sobre
+      // DELETE de localizacao com SUM(quantidade) das linhas dando zero (net-zero), sem lote nem
+      // permite_saldo_negativo envolvidos.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
       const pisoLinha = (mov.lote_id && !permiteNegativo) ? mov.quantidade : null;
       const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade,
