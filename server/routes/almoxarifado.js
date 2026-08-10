@@ -633,6 +633,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ?`, [req.file.filename, req.user?.id || null, lote.id]);
 
+        // Apaga o certificado anterior, espelhando a rota de foto do material acima (achado do
+        // review final da Etapa 6): reanexar substituia a referencia no banco e deixava o arquivo
+        // velho para sempre em uploads/almoxarifado, sem nada apontando para ele. Depois do
+        // UPDATE de proposito — perder o arquivo novo por causa de uma falha no unlink seria pior
+        // do que deixar um orfao; e o `certificado_arquivo` que acabamos de gravar e a referencia
+        // que manda.
+        if (lote.certificado_arquivo && lote.certificado_arquivo !== req.file.filename) {
+          try {
+            const antigo = path.join(uploadsAlmoxDir, path.basename(lote.certificado_arquivo));
+            if (fs.existsSync(antigo)) fs.unlinkSync(antigo);
+          } catch (unlinkErr) {
+            console.warn('[almoxarifado] Falha ao remover certificado anterior:', unlinkErr.message);
+          }
+        }
+
         // So libera o que ESTE bloqueio travou. Lote reprovado no ensaio, ou bloqueado por outro
         // motivo, continua bloqueado — anexar PDF nao pode ser atalho para destravar qualquer coisa.
         // A pre-condicao mora INTEIRA dentro de liberarBloqueioPorCertificado (WHERE atomico), nao
@@ -745,10 +760,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
 
     try {
+      // `exigeLote: true` — esta rota tambem e movimentacao MANUAL (o modal rapido da tela de
+      // Materiais), entao um material com `controle_lote` continua sendo recusado aqui, como era
+      // antes do review final. O contrato v1 nao carrega lote: a recusa e o comportamento certo,
+      // e a saida do operador e a tela de Movimentacoes, que tem o campo. Tirar a exigencia daqui
+      // abriria um bypass silencioso da flag por um formulario que o usuario ja tem na mao — o
+      // oposto do que a isencao dos fluxos internos resolve (aqueles nao tem NENHUMA porta).
       const result = await stockService.registrarMovimentacao(db, req.user, {
         material_id, tipo, quantidade, motivo, referencia, observacoes,
         justificativa: motivo || null,
-      });
+      }, { exigeLote: true });
       res.status(201).json({
         id: result.id, material_id, tipo, quantidade,
         saldo_anterior: result.saldo_anterior, saldo_posterior: result.saldo_posterior,

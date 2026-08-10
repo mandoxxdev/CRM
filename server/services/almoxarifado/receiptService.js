@@ -1,6 +1,8 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
-const { registrarMovimentacao } = require('./stockService');
+const {
+  registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento,
+} = require('./stockService');
 const lotService = require('./lotService');
 
 const STATUS = {
@@ -283,13 +285,15 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
         conferencia_descricao = COALESCE(?, conferencia_descricao),
         lote = COALESCE(?, lote),
         data_validade_lote = COALESCE(?, data_validade_lote),
+        data_fabricacao_lote = COALESCE(?, data_fabricacao_lote),
         corrida_lote = COALESCE(?, corrida_lote)
         WHERE id = ? AND recebimento_id = ?`, [
         item.quantidade_recebida ?? null, vUnit || null, vTotal || null,
         item.valor_icms ?? null, item.valor_ipi ?? null, item.reducao_icms_percent ?? null,
         item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
         item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
-        item.lote ?? null, item.data_validade_lote ?? null, item.corrida_lote ?? null,
+        item.lote ?? null, item.data_validade_lote ?? null, item.data_fabricacao_lote ?? null,
+        item.corrida_lote ?? null,
         item.id, recebimentoId,
       ]);
     }
@@ -310,12 +314,78 @@ function validarDadosProcessamento(rec) {
   }
 }
 
+/**
+ * Quantidade que um item de recebimento leva para o estoque. Um lugar so — a pre-checagem e o
+ * laco de entrada TEM de concordar sobre quais itens movem estoque, senao a pre-checagem valida
+ * um conjunto e o laco move outro.
+ */
+function quantidadeDoItem(item) {
+  return item.quantidade_recebida || item.quantidade_esperada;
+}
+
+/**
+ * Da entrada no estoque dos itens de um recebimento.
+ *
+ * ── Por que ha pre-checagem E marca de idempotencia (achado do review final da Etapa 6) ──
+ * Antes, esta funcao percorria os itens chamando `registrarMovimentacao` um a um, sem nenhuma das
+ * duas coisas. Se o item B falhasse, o item A JA tinha entrado, o recebimento continuava em
+ * `EM_ENTRADA_NF` e o botao "Processar Nota" continuava na tela. Reproduzido pelo revisor: 1a
+ * tentativa entrou 10 do A e falhou no B; corrigido o B, a 2a tentativa entrou MAIS 10 do A
+ * (total 20). Nao ha transacao neste modulo, entao "tudo ou nada" nao sai de graca — as duas
+ * pontas sao corrigidas separadamente:
+ *
+ *  1. **Pre-checagem**: tudo que da para saber por item ANTES de mover qualquer coisa (material
+ *     inativo, `controle_lote` sem lote digitado, localizacao de destino bloqueada ou que nao
+ *     aceita o tipo do material) e verificado para TODOS os itens primeiro. Uma nota com um item
+ *     ruim e recusada inteira, sem ter movido nada.
+ *  2. **Marca por item** (`entrada_estoque_em`): mesmo assim um passo posterior pode falhar (o
+ *     motor tem guardas que dependem de estado concorrente). Entao cada item e RECLAMADO com um
+ *     UPDATE condicional antes de mover — `WHERE entrada_estoque_em IS NULL` —, e o reprocessamento
+ *     pula quem ja entrou em vez de creditar de novo. A marca e liberada de volta se a falha
+ *     acontecer ANTES da entrada fisica; depois dela, nao: creditar duas vezes e pior do que
+ *     deixar a QUARENTENA daquele item por fazer, e a marca e o que impede isso.
+ *
+ * Coberto por `server/tests/api/recebimentoEntradaAtomica.api.test.js`, que mede os numeros da
+ * reproducao acima (A continua em 10 depois do reprocessamento, nao 20).
+ */
 async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id } = {}) {
-  const itens = await dbAll(db, `SELECT ri.*, m.material_critico, m.controle_certificado
+  const itens = await dbAll(db, `SELECT ri.*, m.material_critico, m.controle_certificado,
+      m.controle_lote, m.ativo as material_ativo, m.codigo as material_codigo,
+      m.tipo_material, m.localizacao_padrao_id
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON ri.material_id = m.id
     WHERE ri.recebimento_id = ?`, [recebimentoId]);
 
+  // ── 1. Pre-checagem: nada se move enquanto houver item invalido ──
+  const problemas = [];
+  for (const item of itens) {
+    if (!(quantidadeDoItem(item) > 0)) continue; // item sem quantidade nao move estoque
+    if (item.entrada_estoque_em) continue;       // ja entrou numa tentativa anterior
+    if (!item.material_ativo) {
+      problemas.push(`${item.material_codigo}: material inativo nao pode ser movimentado`);
+      continue;
+    }
+    if (item.controle_lote && !(item.lote && String(item.lote).trim())) {
+      problemas.push(`${item.material_codigo}: preencha o campo Lote (o material tem controle por lote)`);
+      continue;
+    }
+    // Mesma resolucao e mesma validacao que o motor fara — antecipada aqui para que a nota seja
+    // recusada inteira em vez de parar no meio.
+    const material = { localizacao_padrao_id: item.localizacao_padrao_id, tipo_material: item.tipo_material };
+    try {
+      await validarLocalizacaoParaMovimento(
+        db, resolveLocalizacaoEntrada(material, localizacao_id), material, 'destino');
+    } catch (e) {
+      problemas.push(`${item.material_codigo}: ${e.message}`);
+    }
+  }
+  if (problemas.length) {
+    throw Object.assign(
+      new Error(`Nao foi possivel dar entrada no estoque: ${problemas.join('; ')}`),
+      { status: 400 });
+  }
+
+  // ── 2. Entrada item a item, cada um reclamado antes de mover ──
   for (const item of itens) {
     // Etapa 5: a inspecao deixou de ser PRE-REQUISITO da entrada e passou a ser passo posterior.
     // O material esta fisicamente no galpao desde o descarregamento — barrar a entrada fazia o
@@ -324,68 +394,98 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     const cfg = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'inspecao_material_critico'");
     const reter = !!item.material_critico && cfg?.valor === '1';
 
-    const qtd = item.quantidade_recebida || item.quantidade_esperada;
+    const qtd = quantidadeDoItem(item);
     if (qtd > 0) {
-      // Etapa 6: o lote nasce aqui, herdando o que a NF ja sabe. Ate esta etapa, `controle_certificado`
-      // era selecionado nesta query (linha do SELECT acima) e NUNCA usado — quem auditasse por grep
-      // concluia que a entrada verificava certificado. Agora verifica. Dentro do `if (qtd > 0)` de
-      // proposito (fix round 1, achado do review): item com quantidade zero nao move estoque, entao
-      // nao devia criar lote nem gravar lote_id nele.
-      let loteId = null;
-      if (item.lote && String(item.lote).trim()) {
-        // So o controle do material decide o bloqueio. `certificado_arquivo` nao existe nesta
-        // query (as tres colunas de certificado vivem em lotes_almoxarifado, nao no item do
-        // recebimento) — testar por ele aqui sempre dava falso e acertava por constante, nao por
-        // semantica (fix round 1, achado do review).
-        const semCertificado = !!item.controle_certificado;
-        const lote = await lotService.criarOuObterLote(db, user, {
-          material_id: item.material_id,
-          codigo: item.lote,
-          fornecedor_id: rec.fornecedor_id,
-          fornecedor_nome: rec.fornecedor_nome,
-          corrida: item.corrida_lote,
-          data_validade: item.data_validade_lote,
-          nota_fiscal: rec.nota_fiscal,
-          recebimento_id: recebimentoId,
-          recebimento_item_id: item.id,
-          // Entra bloqueado, nao barrado: o material esta fisicamente no galpao. Barrar a ENTRADA
-          // foi exatamente o erro corrigido na Etapa 5.
-          status: semCertificado ? 'BLOQUEADO' : 'ATIVO',
-          status_motivo: semCertificado ? 'Certificado do fornecedor nao anexado' : null,
-        });
-        loteId = lote.id;
-        await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET lote_id = ? WHERE id = ?',
-          [loteId, item.id]);
-      }
+      // Claim no WHERE, padrao do modulo: de duas execucoes (reprocessamento, ou dois cliques
+      // simultaneos em "Processar Nota") so uma casa `entrada_estoque_em IS NULL` e move estoque.
+      const claim = await dbGet(db, `UPDATE recebimentos_material_itens_almoxarifado
+        SET entrada_estoque_em = CURRENT_TIMESTAMP
+        WHERE id = ? AND entrada_estoque_em IS NULL
+        RETURNING id`, [item.id]);
+      if (!claim) continue; // este item ja entrou — reprocessar nao credita de novo
 
-      await registrarMovimentacao(db, user, {
-        material_id: item.material_id,
-        tipo: 'ENTRADA_COMPRA',
-        quantidade: qtd,
-        motivo: `Recebimento ${rec.numero}`,
-        referencia: rec.nota_fiscal,
-        recebimento_id: recebimentoId,
-        localizacao_destino_id: localizacao_id,
-        lote_id: loteId,
-        documento_vinculado: rec.numero,
-      });
+      let entrouFisicamente = false;
+      try {
+        // Etapa 6: o lote nasce aqui, herdando o que a NF ja sabe. Ate esta etapa, `controle_certificado`
+        // era selecionado nesta query (linha do SELECT acima) e NUNCA usado — quem auditasse por grep
+        // concluia que a entrada verificava certificado. Agora verifica. Dentro do `if (qtd > 0)` de
+        // proposito (fix round 1, achado do review): item com quantidade zero nao move estoque, entao
+        // nao devia criar lote nem gravar lote_id nele.
+        let loteId = null;
+        if (item.lote && String(item.lote).trim()) {
+          // So o controle do material decide o bloqueio. `certificado_arquivo` nao existe nesta
+          // query (as tres colunas de certificado vivem em lotes_almoxarifado, nao no item do
+          // recebimento) — testar por ele aqui sempre dava falso e acertava por constante, nao por
+          // semantica (fix round 1, achado do review).
+          const semCertificado = !!item.controle_certificado;
+          const lote = await lotService.criarOuObterLote(db, user, {
+            material_id: item.material_id,
+            codigo: item.lote,
+            fornecedor_id: rec.fornecedor_id,
+            fornecedor_nome: rec.fornecedor_nome,
+            corrida: item.corrida_lote,
+            // Review final da Etapa 6: `lotes_almoxarifado.data_fabricacao` existia desde a Task 1
+            // e NINGUEM a escrevia. Este e o escritor — o quarto campo de lote da tela do
+            // recebimento (Lote / Validade / Fabricacao / Corrida).
+            data_fabricacao: item.data_fabricacao_lote,
+            data_validade: item.data_validade_lote,
+            nota_fiscal: rec.nota_fiscal,
+            recebimento_id: recebimentoId,
+            recebimento_item_id: item.id,
+            // Entra bloqueado, nao barrado: o material esta fisicamente no galpao. Barrar a ENTRADA
+            // foi exatamente o erro corrigido na Etapa 5.
+            status: semCertificado ? 'BLOQUEADO' : 'ATIVO',
+            status_motivo: semCertificado ? 'Certificado do fornecedor nao anexado' : null,
+          });
+          loteId = lote.id;
+          await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET lote_id = ? WHERE id = ?',
+            [loteId, item.id]);
+        }
 
-      if (reter) {
         await registrarMovimentacao(db, user, {
           material_id: item.material_id,
-          tipo: 'QUARENTENA',
+          tipo: 'ENTRADA_COMPRA',
           quantidade: qtd,
-          motivo: `Retido para inspeção — recebimento ${rec.numero}`,
-          justificativa: `Material crítico aguardando inspeção (recebimento ${rec.numero})`,
+          motivo: `Recebimento ${rec.numero}`,
+          referencia: rec.nota_fiscal,
           recebimento_id: recebimentoId,
-        });
-        // Etapa 5, correcao de review: quantidade_em_inspecao do MATERIAL e um pool
-        // compartilhado entre itens de recebimentos diferentes. Sem isto, inspectionService não
-        // tinha como saber quanto DESTE item especifico esta retido — inferia de
-        // quantidade_recebida, que conferirRecebimento pode sobrescrever sem guarda de status.
-        await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
-          SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ? WHERE id = ?`,
-          [qtd, item.id]);
+          localizacao_destino_id: localizacao_id,
+          lote_id: loteId,
+          documento_vinculado: rec.numero,
+        // O recebimento E um dos caminhos onde o operador tem como informar o lote (a tela tem os
+        // campos Lote/Validade/Fabricacao/Corrida por item), entao a exigencia de `controle_lote`
+        // vale aqui. A pre-checagem acima ja recusou a nota inteira nesse caso — esta declaracao
+        // e a rede: se um item escapar da pre-checagem, o motor ainda barra.
+        }, { exigeLote: true });
+        entrouFisicamente = true;
+
+        if (reter) {
+          await registrarMovimentacao(db, user, {
+            material_id: item.material_id,
+            tipo: 'QUARENTENA',
+            quantidade: qtd,
+            motivo: `Retido para inspeção — recebimento ${rec.numero}`,
+            justificativa: `Material crítico aguardando inspeção (recebimento ${rec.numero})`,
+            recebimento_id: recebimentoId,
+          });
+          // Etapa 5, correcao de review: quantidade_em_inspecao do MATERIAL e um pool
+          // compartilhado entre itens de recebimentos diferentes. Sem isto, inspectionService não
+          // tinha como saber quanto DESTE item especifico esta retido — inferia de
+          // quantidade_recebida, que conferirRecebimento pode sobrescrever sem guarda de status.
+          await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
+            SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ? WHERE id = ?`,
+            [qtd, item.id]);
+        }
+      } catch (e) {
+        // Compensacao explicita (nao ha transacao): a marca so e devolvida se NADA entrou. Se a
+        // entrada fisica ja aconteceu e o passo seguinte falhou, a marca FICA — reprocessar nao
+        // pode creditar o mesmo saldo duas vezes, que e o defeito que esta funcao passou a evitar.
+        if (!entrouFisicamente) {
+          await dbRun(db,
+            'UPDATE recebimentos_material_itens_almoxarifado SET entrada_estoque_em = NULL WHERE id = ?',
+            [item.id]);
+        }
+        throw e;
       }
     }
   }
@@ -529,6 +629,10 @@ module.exports = {
   criarRecebimento,
   conferirRecebimento,
   aprovarRecebimento,
+  // Exportada para teste (review final da Etapa 6): a pre-checagem e a marca de idempotencia
+  // precisam ser exercitadas com um item que falha no meio, e chegar la pelo workflow inteiro do
+  // recebimento tornaria o teste sobre o workflow, nao sobre a entrada.
+  darEntradaEstoque,
   avancarWorkflow,
   salvarDadosFiscal,
   processarNota,

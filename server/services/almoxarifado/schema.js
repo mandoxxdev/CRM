@@ -945,10 +945,19 @@ async function initSchema(db) {
     // da Etapa 4, que vinculou a reserva ao item via item_requisicao_id.
     'quantidade_em_inspecao REAL DEFAULT 0',
     // Etapa 6: o lote nasce aqui. `lote` TEXT ja existia e vira o codigo digitado na conferencia;
-    // estes tres completam o que a NF traz e o lote precisa.
+    // estes quatro completam o que a NF traz e o lote precisa. `data_fabricacao_lote` entrou no
+    // review final: `lotes_almoxarifado.data_fabricacao` existia desde a Task 1 e NINGUEM a
+    // escrevia — coluna sem escritor, exatamente o padrao que esta etapa veio combater. Ou ganhava
+    // escritor, ou saia; ganhou (tela do recebimento -> item -> lote).
     'lote_id INTEGER',
     'data_validade_lote DATE',
+    'data_fabricacao_lote DATE',
     'corrida_lote TEXT',
+    // Etapa 6, review final: marca de idempotencia da entrada no estoque. `darEntradaEstoque`
+    // reclama o item aqui (UPDATE ... WHERE entrada_estoque_em IS NULL) ANTES de mover saldo, e
+    // pula quem ja entrou. Sem isto, uma nota que falhava no meio podia ser reprocessada e
+    // creditava DE NOVO os itens que ja tinham entrado (reproduzido: 10 viraram 20).
+    'entrada_estoque_em DATETIME',
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
   await migrateBackfillItemQuantidadeEmInspecao(db);

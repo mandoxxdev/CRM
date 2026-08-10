@@ -1,5 +1,6 @@
 const assert = require('assert');
 const fs = require('fs');
+const path = require('path');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
@@ -31,24 +32,29 @@ async function recebimentoComItem(db, materialId, item = {}) {
     VALUES (?, 'EM_ENTRADA_NF', ?, 'Acme Acos', '2026-08-01', '2026-08-02', 1000)`,
     [`REC-N-${seq}`, `NF-${seq}`]);
   await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
-    (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, data_validade_lote, corrida_lote)
-    VALUES (?,?,?,?,?,?,?)`, [
+    (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, data_validade_lote,
+     data_fabricacao_lote, corrida_lote)
+    VALUES (?,?,?,?,?,?,?,?)`, [
     rec.lastID, materialId, item.qtd ?? 10, item.qtd ?? 10,
-    item.lote ?? null, item.data_validade ?? null, item.corrida ?? null]);
+    item.lote ?? null, item.data_validade ?? null, item.data_fabricacao ?? null, item.corrida ?? null]);
   return rec.lastID;
 }
 
 (async () => {
-  const { app, db, close } = await createTestApp({ user: ADMIN });
+  const { app, db, close, uploadsAlmoxDir } = await createTestApp({ user: ADMIN });
 
   await test('processar recebimento cria o lote com dados da NF', async () => {
     const mat = await novoMaterial(db);
-    const recId = await recebimentoComItem(db, mat, { lote: 'NF-LOTE-1', data_validade: '2030-06-30', corrida: 'H-77' });
+    const recId = await recebimentoComItem(db, mat, {
+      lote: 'NF-LOTE-1', data_validade: '2030-06-30', data_fabricacao: '2026-06-30', corrida: 'H-77' });
     await receiptService.processarNota(db, ADMIN, recId, {});
 
     const lote = await lotService.getLotePorCodigo(db, mat, 'NF-LOTE-1');
     assert.ok(lote, 'o recebimento nao criou o lote');
     assert.strictEqual(lote.data_validade, '2030-06-30');
+    // Review final da Etapa 6: `data_fabricacao` era coluna sem escritor. Este e o escritor.
+    assert.strictEqual(lote.data_fabricacao, '2026-06-30',
+      'o recebimento nao levou a data de fabricacao do item para o lote');
     assert.strictEqual(lote.corrida, 'H-77');
     assert.strictEqual(lote.fornecedor_nome, 'Acme Acos');
     assert.strictEqual(lote.recebimento_id, recId);
@@ -110,6 +116,34 @@ async function recebimentoComItem(db, materialId, item = {}) {
     const liberado = await lotService.getLote(db, lote.id);
     assert.strictEqual(liberado.status, 'ATIVO', 'anexar certificado deveria liberar o lote');
     assert.ok(liberado.certificado_arquivo, 'nome do arquivo nao foi gravado');
+  });
+
+  await test('reanexar o certificado apaga o arquivo anterior (sem orfao em uploads)', async () => {
+    // Achado do review final da Etapa 6: a rota gravava o novo nome no banco e deixava o arquivo
+    // velho em uploads/almoxarifado para sempre, sem nada apontando para ele. A rota de foto do
+    // material ja fazia o unlink; esta nao fazia.
+    const mat = await novoMaterial(db, { certificado: true });
+    const recId = await recebimentoComItem(db, mat, { lote: 'CERT-TROCA', qtd: 5 });
+    await receiptService.processarNota(db, ADMIN, recId, {});
+    const lote = await lotService.getLotePorCodigo(db, mat, 'CERT-TROCA');
+
+    const primeiro = await request(app)
+      .post(`/api/almoxarifado/lotes/${lote.id}/certificado`)
+      .attach('certificado', Buffer.from('%PDF-1.4 primeiro'), 'cert-a.pdf');
+    assert.strictEqual(primeiro.status, 200, JSON.stringify(primeiro.body));
+    const arquivoAntigo = primeiro.body.certificado_arquivo;
+    assert.ok(fs.existsSync(path.join(uploadsAlmoxDir, arquivoAntigo)), 'o primeiro arquivo nao foi gravado');
+
+    const segundo = await request(app)
+      .post(`/api/almoxarifado/lotes/${lote.id}/certificado`)
+      .attach('certificado', Buffer.from('%PDF-1.4 segundo'), 'cert-b.pdf');
+    assert.strictEqual(segundo.status, 200, JSON.stringify(segundo.body));
+    assert.notStrictEqual(segundo.body.certificado_arquivo, arquivoAntigo);
+
+    assert.ok(fs.existsSync(path.join(uploadsAlmoxDir, segundo.body.certificado_arquivo)),
+      'o certificado novo tem de continuar em disco');
+    assert.ok(!fs.existsSync(path.join(uploadsAlmoxDir, arquivoAntigo)),
+      'o certificado anterior ficou orfao em uploads/almoxarifado');
   });
 
   await test('lote REPROVADO continua bloqueado depois de anexar o certificado', async () => {
