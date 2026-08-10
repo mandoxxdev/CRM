@@ -64,6 +64,16 @@ const LOTES_VENCIMENTO = [
   { id: 21, codigo: 'VENC-BLOQUEADO', data_validade: '2019-01-01', status: 'ATIVO', saldo: 3, vencido: true, vencimento_liberado: false, elegivel: false },
 ];
 
+// Fix round 1 da Task 9: `elegivel` vem do servidor SEM saber o tipo do movimento
+// (status === 'ATIVO' && (!vencido || vencimento_liberado)) — certo para SAIDA, errado para
+// SUCATA/PERDA, que o motor isenta da guarda de vencimento de proposito (stockService
+// tiposDescarte). Lote ATIVO, vencido, sem liberacao: elegivel:false, mas tem de ser
+// selecionavel em descarte.
+const LOTE_VENCIDO_DESCARTAVEL = {
+  id: 30, codigo: 'VENC-DESCARTE', data_validade: '2018-01-01', status: 'ATIVO', saldo: 12,
+  vencido: true, vencimento_liberado: false, elegivel: false,
+};
+
 let container;
 let root;
 let lotesDoBanco;
@@ -113,10 +123,10 @@ async function esperarEfeitos() {
   });
 }
 
-/** Abre o modal, escolhe o material e o tipo SAÍDA — o campo de lote só existe depois disso
+/** Abre o modal, escolhe o material e o tipo pedido — o campo de lote só existe depois disso
  * (nota do brief: adaptar o teste em vez de criar prop nova). Segue o setup de
  * MovimentacoesAlmoxarifado.test.js (createRoot + act, sem @testing-library/react). */
-async function abrirComMaterialESaida() {
+async function abrirComMaterialETipo(tipo) {
   await renderizar();
   const botaoNova = [...container.querySelectorAll('.almox-header-actions button')]
     .find((b) => b.textContent.includes('Nova Movimentação'));
@@ -125,8 +135,12 @@ async function abrirComMaterialESaida() {
   const selectMaterial = container.querySelector('.almox-modal select.almox-form-select');
   preencher(selectMaterial, '1');
   const selectTipo = [...container.querySelectorAll('.almox-modal select.almox-form-select')][1];
-  preencher(selectTipo, 'SAIDA');
+  preencher(selectTipo, tipo);
   await esperarEfeitos();
+}
+
+async function abrirComMaterialESaida() {
+  await abrirComMaterialETipo('SAIDA');
 }
 
 function seletorLote() {
@@ -178,5 +192,40 @@ describe('elegibilidade do lote vencido (carry-forward da Task 7)', () => {
     expect(opcao.disabled).toBe(true);
     expect(opcao.textContent).toMatch(/vencido/i);
     expect(opcao.textContent).not.toMatch(/liberado/i);
+  });
+});
+
+describe('elegibilidade sensivel ao tipo do movimento (fix round 1 da Task 9: descarte nao e barrado por vencimento)', () => {
+  test('em Sucata, lote vencido sem liberacao (mas ATIVO) fica selecionavel e vira pre-selecao', async () => {
+    lotesDoBanco = [LOTE_VENCIDO_DESCARTAVEL];
+    await abrirComMaterialETipo('SUCATA');
+    const opcao = opcaoPorTexto(/VENC-DESCARTE/);
+    expect(opcao.disabled).toBe(false);
+    // O rotulo continua avisando que o lote esta vencido — o operador precisa saber o que
+    // esta descartando, mesmo que a guarda de vencimento nao se aplique ao tipo.
+    expect(opcao.textContent).toMatch(/vencido/i);
+    expect(seletorLote().value).toBe('30');
+  });
+
+  test('em Perda, o mesmo lote vencido sem liberacao tambem fica selecionavel', async () => {
+    lotesDoBanco = [LOTE_VENCIDO_DESCARTAVEL];
+    await abrirComMaterialETipo('PERDA');
+    const opcao = opcaoPorTexto(/VENC-DESCARTE/);
+    expect(opcao.disabled).toBe(false);
+  });
+
+  test('em Saida, o mesmo lote continua desabilitado e a pre-selecao fica vazia (guarda de vencimento normal se aplica)', async () => {
+    lotesDoBanco = [LOTE_VENCIDO_DESCARTAVEL];
+    await abrirComMaterialETipo('SAIDA');
+    const opcao = opcaoPorTexto(/VENC-DESCARTE/);
+    expect(opcao.disabled).toBe(true);
+    expect(seletorLote().value).toBe('');
+  });
+
+  test('lote BLOQUEADO continua indisponivel mesmo em Sucata (descarte isenta vencimento, nao status)', async () => {
+    lotesDoBanco = [{ ...LOTE_VENCIDO_DESCARTAVEL, id: 31, codigo: 'VENC-BLOQ-DESCARTE', status: 'BLOQUEADO' }];
+    await abrirComMaterialETipo('SUCATA');
+    const opcao = opcaoPorTexto(/VENC-BLOQ-DESCARTE/);
+    expect(opcao.disabled).toBe(true);
   });
 });

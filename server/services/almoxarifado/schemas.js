@@ -33,11 +33,13 @@ const AlmoxarifadoSchema = z.object({
  *    permitia soltar quarentena com {tipo:'LIBERACAO_INSPECAO'} sem permissão `inspecionar`, sem
  *    registro de inspeção e sem baixar o retido do item — que ficava indecidível para sempre.
  *
- * O que SOBRA é o conjunto operacional: os quatro tipos do formulário (TIPOS_FORM em
- * MovimentacoesAlmoxarifado.js: ENTRADA, SAIDA, AJUSTE, DEVOLUCAO), as variantes prefixadas
- * `ENTRADA_`, `SAIDA_` e `AJUSTE_` usadas por outras telas e relatórios, TRANSFERENCIA (a rota
- * /transferencias força esse tipo, mas a v2 também o aceita) e SUCATA, PERDA e RETRABALHO —
- * todos mexem no físico e o gate `movimentar` é exatamente o que se espera deles.
+ * O que SOBRA é o conjunto operacional: os seis tipos do formulário (TIPOS_FORM em
+ * MovimentacoesAlmoxarifado.js: ENTRADA, SAIDA, AJUSTE, DEVOLUCAO, SUCATA e PERDA — os dois
+ * últimos entraram no seletor na Task 9 da Etapa 6; já eram aceitos aqui antes disso, só não
+ * tinham botão na tela), as variantes prefixadas `ENTRADA_`, `SAIDA_` e `AJUSTE_` usadas por
+ * outras telas e relatórios, TRANSFERENCIA (a rota /transferencias força esse tipo, mas a v2
+ * também o aceita) e RETRABALHO — todos mexem no físico e o gate `movimentar` é exatamente o
+ * que se espera deles.
  *
  * ATENÇÃO: esta lista é da ROTA, não do motor. Os serviços internos (returnService,
  * receiptService, requisitionService, inspectionService, criarReserva/liberarReserva) chamam

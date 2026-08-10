@@ -78,20 +78,27 @@ const LotesAlmoxarifado = () => {
       .catch(() => setMateriais([]));
   }, []);
 
-  const loadLotes = useCallback(async () => {
-    if (!materialId) { setLotes([]); return; }
-    setLoading(true);
-    try {
-      const res = await api.get(`/almoxarifado/materiais/${materialId}/lotes`);
-      setLotes(res.data || []);
-    } catch {
-      toast.error('Erro ao carregar lotes do material');
-    } finally {
-      setLoading(false);
-    }
-  }, [materialId]);
+  // `reloadToken` é o gatilho de "recarregar de novo com o mesmo materialId" (botão Atualizar e
+  // depois de cada ação bem-sucedida) — `materialId` sozinho não muda quando o operador clica
+  // Atualizar no mesmo material, então não dispararia o efeito.
+  const [reloadToken, setReloadToken] = useState(0);
+  const loadLotes = useCallback(() => setReloadToken((t) => t + 1), []);
 
-  useEffect(() => { loadLotes(); }, [loadLotes]);
+  // Fix round 1 (review da Task 9): troca rápida de material podia deixar a resposta de um GET
+  // anterior (ainda em voo) sobrescrever a lista depois que o operador já tinha escolhido outro
+  // material — mesmo problema que o `useEffect` de lotes de `MovimentacoesAlmoxarifado.js` já
+  // resolve com a flag `cancelado`. Aqui a guarda também cobre o próprio "Atualizar": clicar duas
+  // vezes rápido não deixa a primeira resposta pisar na segunda.
+  useEffect(() => {
+    if (!materialId) { setLotes([]); return undefined; }
+    let cancelado = false;
+    setLoading(true);
+    api.get(`/almoxarifado/materiais/${materialId}/lotes`)
+      .then((res) => { if (!cancelado) setLotes(res.data || []); })
+      .catch(() => { if (!cancelado) toast.error('Erro ao carregar lotes do material'); })
+      .finally(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; };
+  }, [materialId, reloadToken]);
 
   const materialSelecionado = materiais.find((m) => m.id === parseInt(materialId, 10));
 
@@ -220,6 +227,15 @@ const LotesAlmoxarifado = () => {
                       {bloqueadoPorCertificado(l) && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-warning)', marginTop: 4, maxWidth: 160 }}>
                           Bloqueado por falta de certificado
+                        </div>
+                      )}
+                      {/* Fix round 1: sem isto o operador só descobria se já havia certificado
+                          anexado depois de abrir o modal de anexar — a linha da tabela não dizia
+                          nada sobre `certificado_arquivo`, que o servidor já devolve no SELECT. */}
+                      {l.certificado_arquivo && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--gmp-success)', marginTop: 4 }}>
+                          Certificado anexado
+                          {l.certificado_em ? ` em ${new Date(l.certificado_em).toLocaleDateString('pt-BR')}` : ''}
                         </div>
                       )}
                     </td>

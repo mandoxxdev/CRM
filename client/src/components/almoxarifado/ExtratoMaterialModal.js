@@ -149,6 +149,17 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
               </div>
 
               <div className="almox-section-title">Saldos por localização</div>
+              {/* Achado de review (fix round 1, Task 9): esta tabela tinha colunas "Reservada" e
+                  "Bloqueada" lendo `s.quantidade_reservada`/`s.quantidade_bloqueada`. As duas
+                  colunas foram REMOVIDAS de `estoque_saldo_almoxarifado` na Etapa 6 (`015e94c`) —
+                  retenção é do lote inteiro por status ou do material, nunca por localização (ver
+                  spec 10, "Decidir se retenção passa a ser por lote"). `consultarSaldosPorLocalizacao`
+                  faz `SELECT s.*`, então as chaves nem chegavam mais no cliente: as duas colunas
+                  mostravam 0 para sempre, silenciosamente, desde a migração. A retenção de
+                  verdade já está nos cartões do topo (Reservado/Bloqueado), que leem do
+                  MATERIAL — o nível onde ela realmente mora. Repetir esses totais em toda linha
+                  de localização criaria a impressão de que a retenção é por localização, que
+                  nunca foi verdade. */}
               {data.saldos_localizacao?.length ? (
                 <div className="almox-table-container" style={{ marginBottom: 24 }}>
                   <table className="almox-table">
@@ -157,8 +168,6 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                         <th>Localização</th>
                         <th>Lote</th>
                         <th>Quantidade</th>
-                        <th>Reservada</th>
-                        <th>Bloqueada</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -173,8 +182,6 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                           </td>
                           <td>{s.lote || '—'}</td>
                           <td style={{ fontWeight: 600 }}>{s.quantidade} {material.unidade}</td>
-                          <td>{s.quantidade_reservada || 0}</td>
-                          <td>{s.quantidade_bloqueada || 0}</td>
                         </tr>
                       ))}
                     </tbody>

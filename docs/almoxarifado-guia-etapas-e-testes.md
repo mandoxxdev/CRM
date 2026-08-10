@@ -445,7 +445,9 @@ continua barrado por bloqueio, com a mensagem de bloqueio. Situação vem antes 
     aparecer **desabilitado**, com "(vencido)" no rótulo. Se você conseguir selecioná-lo por outro
     caminho, a saída é recusada com a mensagem de vencimento.
 15. **Mas o descarte passa:** mude o tipo para **Sucata** (ou **Perda**) e baixe o mesmo lote
-    vencido. **Deve funcionar** — material vencido precisa poder sair do estoque.
+    vencido. **Deve funcionar** — material vencido precisa poder sair do estoque. (Roteiro
+    detalhado clique a clique, incluindo o que confirma isto na tela: seção "Task 9", passo D-13,
+    mais abaixo.)
 
 **H) Certificado do fornecedor**
 
@@ -498,6 +500,15 @@ plano original; nasceu do review da Etapa 6, aprovada pelo cliente em 2026-08-09
 | Lote bloqueado por falta de certificado ficava travado pela interface para sempre | Botão **"Anexar certificado"** (PDF ou imagem) — se o bloqueio era por falta dele, o lote **libera sozinho** ao anexar |
 | Sucata e Perda não apareciam no seletor de tipo da Movimentação, mesmo o motor já aceitando as duas para descartar lote vencido | **Sucata** e **Perda** selecionáveis, com os mesmos campos que uma Saída pede (localização de origem, lote por lista) |
 
+> **Correção de 2026-08-09 (fix round 1):** a primeira versão desta task tinha um bug que
+> anulava a razão de Sucata/Perda existirem no seletor — o lote vencido continuava aparecendo
+> **desabilitado** mesmo com Sucata/Perda escolhido, porque a tela usava o mesmo cálculo de
+> "elegível" da Saída (que corretamente barra vencido) para os dois tipos de descarte (que
+> corretamente **não** barram). Corrigido: agora a tela decide por tipo — Sucata/Perda liberam
+> lote vencido (só continuam recusando lote `Bloqueado`/`Reprovado`), Saída continua exigindo o
+> vencimento resolvido. O passo 15 da Etapa 6 e o passo D-13 abaixo já refletem o comportamento
+> corrigido.
+
 ### Roteiro de teste manual (Task 9)
 
 **A) Destravar um lote bloqueado por falta de certificado (o caso mais importante)**
@@ -533,8 +544,18 @@ plano original; nasceu do review da Etapa 6, aprovada pelo cliente em 2026-08-09
     **Sucata** e **Perda** aparecem (ao lado de Entrada/Saída/Ajuste/Devolução).
 12. Escolha **Sucata**, um material com saldo. Confira que aparecem os mesmos campos de uma Saída:
     **Localização de origem** e **Lote** (lista, não texto livre). Motivo é obrigatório.
-13. Baixe um lote **vencido** por Sucata ou Perda (repete o passo 15 da Etapa 6, agora com o tipo
-    corretamente no seletor) — deve funcionar, porque descarte é isento da guarda de vencimento.
+13. Use o mesmo material com lote **vencido** do passo G da Etapa 6 (passos 13-14 acima). Com o
+    tipo em **Saída**, o lote vencido continua **desabilitado** na lista, como sempre. Troque o
+    tipo para **Sucata** (sem trocar material): o mesmo lote vencido agora aparece **habilitado**
+    — e normalmente já vem pré-selecionado, porque é o único disponível. O rótulo continua
+    dizendo "(vencido)": a tela não esconde o que está sendo descartado, só deixa de barrar por
+    causa da validade. Preencha o motivo e confirme. **Deve funcionar** — material vencido
+    precisa poder sair do estoque por descarte, mesmo continuando barrado para consumo normal.
+14. Repita o mesmo lote com um **novo** lote, desta vez também **Bloqueado** (mudança de status
+    pela tela de Lotes, seção A/B acima). Escolha Sucata: o lote bloqueado continua **desabilitado**
+    — descarte só é isento da guarda de **vencimento**, não da guarda de **status**. Um lote
+    bloqueado ou reprovado ainda precisa passar pela mudança de status antes de sair por
+    qualquer caminho.
 
 ### O que a Task 9 não cobre
 
@@ -555,6 +576,12 @@ plano original; nasceu do review da Etapa 6, aprovada pelo cliente em 2026-08-09
 - O fluxo de requisição de materiais que já existia (criar → aprovar → separar → entregar) continua funcionando normalmente — nada foi removido nessa tela; requisições antigas continuam com o comportamento de sempre (criadas sem tipo/centro de custo ganham o padrão "Consumo").
 - Movimentações antigas (de antes da Etapa 1) continuam visíveis e com os dados corretos no livro.
 - O Mapa de Localizações carrega normalmente e mostra as posições que já existiam, agora todas vinculadas ao almoxarifado "ALM-GERAL".
+- **Achado do fix round 1 da Task 9 (2026-08-09): o Extrato do material perdeu duas colunas que
+  mentiam.** A tabela "Saldos por localização" tinha colunas "Reservada"/"Bloqueada" que sempre
+  mostravam 0 desde a Etapa 6 (a coluna de origem foi removida do banco em `015e94c`, e ninguém
+  tinha percebido). As duas colunas saíram da tabela — retenção não existe por localização; os
+  cartões "Reservado"/"Bloqueado" no topo do Extrato (que leem do material, não da localização)
+  continuam mostrando o número certo, como sempre mostraram.
 
 ---
 

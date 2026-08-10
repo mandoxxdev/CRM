@@ -36,6 +36,20 @@ const TIPOS = [
 // SAIDA: motor não inventa lote numa saída).
 const TIPOS_SAIDA_LOTE = ['SAIDA', 'SUCATA', 'PERDA'];
 
+// Fix round 1 (review da Task 9): `elegivel`, que a API devolve por lote, e calculado SO a partir
+// do lote (status === 'ATIVO' && (!vencido || vencimento_liberado)) — o servidor nao sabe qual
+// tipo de movimento a tela esta montando. Isso e certo para SAIDA (consumo real precisa respeitar
+// a guarda de vencimento), mas errado para SUCATA/PERDA: o motor as isenta da guarda de
+// vencimento de proposito (stockService.js, tiposDescarte) para que material vencido possa ser
+// descartado. Usar `elegivel` cru para os dois travava exatamente o caso que os tornou
+// selecionaveis na Task 9 — lote vencido preso, sem lote_id, virando 400 (com controle_lote) ou
+// pior, passando sem lote_id e deixando a linha do lote vencido intocada (sem controle_lote).
+// Descarte continua respeitando STATUS (BLOQUEADO/REPROVADO nao saem por nenhum caminho sem
+// passar pela mudanca de status primeiro) — so a checagem de vencimento e que nao se aplica.
+const TIPOS_DESCARTE_LOTE = ['SUCATA', 'PERDA'];
+const loteDisponivelParaTipo = (lote, tipo) =>
+  TIPOS_DESCARTE_LOTE.includes(tipo) ? lote.status === 'ATIVO' : lote.elegivel;
+
 // Tipos que não podem ser estornados pelo botão do livro (espelha as recusas de
 // stockService.cancelarMovimentacao no servidor — a lista aqui é só para não oferecer um botão
 // que sempre volta 400):
@@ -122,9 +136,11 @@ const MovimentacoesAlmoxarifado = () => {
         if (cancelado) return;
         const lista = res.data || [];
         setLotes(lista);
-        // FEFO e SUGESTAO: pre-seleciona o primeiro elegivel (a API ja devolve em ordem) e deixa
-        // o operador trocar. Impor no motor travaria quem tem motivo para pegar outro lote.
-        const sugerido = lista.find((l) => l.elegivel);
+        // FEFO e SUGESTAO: pre-seleciona o primeiro disponivel PARA ESTE TIPO (a API ja devolve em
+        // ordem) e deixa o operador trocar. Impor no motor travaria quem tem motivo para pegar
+        // outro lote. `form.tipo` aqui e o mesmo valor que disparou este efeito (dependencia do
+        // useEffect) — nao muda por baixo entre o disparo e o resolve da promise.
+        const sugerido = lista.find((l) => loteDisponivelParaTipo(l, form.tipo));
         setForm((f) => ({ ...f, lote_id: sugerido ? String(sugerido.id) : '' }));
       })
       .catch(() => { if (!cancelado) setLotes([]); });
@@ -597,7 +613,7 @@ const MovimentacoesAlmoxarifado = () => {
                             // barrado por `elegivel`, nunca deduzido de `vencido` sozinho aqui.
                             const vencidoLiberado = l.vencido && l.vencimento_liberado;
                             return (
-                              <option key={l.id} value={l.id} disabled={!l.elegivel}>
+                              <option key={l.id} value={l.id} disabled={!loteDisponivelParaTipo(l, form.tipo)}>
                                 {l.codigo} — saldo {l.saldo}
                                 {l.data_validade ? ` — vence ${l.data_validade}` : ''}
                                 {vencidoLiberado ? ' (vencido, liberado)' : l.vencido ? ' (vencido)' : ''}

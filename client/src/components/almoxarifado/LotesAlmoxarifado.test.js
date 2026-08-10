@@ -34,6 +34,7 @@ jest.mock('../../hooks/useAlmoxPermissoes', () => ({
 }));
 
 const MATERIAL = { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' };
+const MATERIAL_2 = { id: 11, codigo: 'MAT-2', nome: 'Perfil L', unidade: 'PC' };
 
 // Ordem de propósito NÃO ordenada por validade/elegibilidade — se a tela reordenasse (por
 // validade, por elegível-primeiro como o servidor já faz), a ordem do DOM divergiria da ordem
@@ -100,11 +101,11 @@ async function esperarEfeitos() {
   });
 }
 
-async function selecionarMaterial() {
+async function selecionarMaterial(id = MATERIAL.id) {
   const select = container.querySelector('.almox-filters select.almox-select');
   const setValue = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
   await act(async () => {
-    setValue.call(select, String(MATERIAL.id));
+    setValue.call(select, String(id));
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
   await esperarEfeitos();
@@ -266,5 +267,58 @@ describe('LotesAlmoxarifado', () => {
     expect(toast.error).toHaveBeenCalledWith(
       'Sem permissão para inspecionar material — seu perfil é Produção. Solicite acesso a um administrador.'
     );
+  });
+
+  // Fix round 1: a tabela ignorava certificado_arquivo/certificado_em, que ja vem no SELECT l.*
+  // do servidor — o operador nao distinguia "sem certificado" de "ja anexado" antes de abrir o
+  // modal.
+  test('lote com certificado ja anexado mostra isso na linha', async () => {
+    lotesDoBanco = [{
+      ...LOTE_ATIVO, certificado_arquivo: 'certificado-123.pdf', certificado_em: '2026-08-01T10:00:00Z',
+    }];
+    await renderizar();
+    await selecionarMaterial();
+    expect(linhas()[0].textContent).toMatch(/certificado anexado/i);
+  });
+
+  test('lote sem certificado nao afirma ter um anexado', async () => {
+    await renderizar();
+    await selecionarMaterial();
+    // LOTE_ATIVO (linha 1) nao tem certificado_arquivo no fixture.
+    expect(linhas()[1].textContent).not.toMatch(/certificado anexado/i);
+  });
+});
+
+describe('LotesAlmoxarifado — troca rapida de material nao deixa resposta atrasada pintar a lista errada', () => {
+  test('resposta de um GET anterior, resolvida depois de trocar o material, e descartada', async () => {
+    let resolveMaterial1;
+    let resolveMaterial2;
+    const promiseMaterial1 = new Promise((resolve) => { resolveMaterial1 = resolve; });
+    const promiseMaterial2 = new Promise((resolve) => { resolveMaterial2 = resolve; });
+
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL, MATERIAL_2] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return promiseMaterial1;
+      if (url === `/almoxarifado/materiais/${MATERIAL_2.id}/lotes`) return promiseMaterial2;
+      return Promise.resolve({ data: [] });
+    });
+
+    await renderizar();
+    // Seleciona o material 1 (o GET dele fica pendente) e troca para o material 2 ANTES de
+    // resolver — é a corrida real: usuário troca de material rápido, enquanto a primeira
+    // requisição ainda está no ar.
+    await selecionarMaterial(MATERIAL.id);
+    await selecionarMaterial(MATERIAL_2.id);
+
+    // Resolve a resposta do material 2 (o selecionado agora) PRIMEIRO, e só depois a do
+    // material 1 (a atrasada). Se a tela não descartar a resposta velha, ela chega por ÚLTIMO e
+    // sobrescreve a lista certa com o lote do material errado — é assim que o teste pega a
+    // ausência do cancelamento (resolver na ordem "certa primeiro" mascararia o bug, porque a
+    // última chamada de setLotes seria sempre a certa por coincidência de ordem).
+    await act(async () => { resolveMaterial2({ data: [LOTE_VENC_LIBERADO] }); await Promise.resolve(); });
+    await act(async () => { resolveMaterial1({ data: [LOTE_ATIVO] }); await Promise.resolve(); });
+
+    const codigos = linhas().map((tr) => tr.querySelector('td').textContent.trim());
+    expect(codigos).toEqual(['L-VENC-LIB']); // só o lote do material 2, que é o selecionado agora
   });
 });

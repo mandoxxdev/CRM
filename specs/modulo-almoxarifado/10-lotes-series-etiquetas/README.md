@@ -107,8 +107,20 @@ sobre as outras três recriaria exatamente a confusão que esta spec existe para
 | `controle_validade` | ❌ **morta** — gravada pelo CRUD, nunca lida | — | sem etapa definida (ver nota abaixo) |
 | `controle_corrida` | ❌ **morta** — gravada pelo CRUD, nunca lida | — | sem etapa definida (ver nota abaixo) |
 
-As três mortas existem em `schema.js:614-616`, `schemas.js:196-198`, `routes/almoxarifado.js:313-330`
-e `MaterialAlmoxarifadoForm.js:29-31` — e em lugar nenhum mais (verificado por grep em 2026-08-09).
+> **Correção (fix round 1 da Task 9, 2026-08-09): a lista de arquivos abaixo estava incompleta.**
+> O review verificou por grep e achou três arquivos fora do texto anterior —
+> `routes/almoxarifado.js` tinha mais dois trechos além do range citado (`350` e `410-412`),
+> `MaterialAlmoxarifadoForm.js` tinha mais dois blocos (`102-106` e `268-272`, além de `28-32`), e
+> `server/tests/api/materialCompleto.api.test.js` não aparecia na lista — nem uma linha. Quatro
+> linhas abaixo esta spec recomenda "apagar as duas colunas" (`controle_validade`/
+> `controle_corrida`): quem seguisse a lista incompleta apagaria as colunas do schema e quebraria
+> esse teste, que grava e lê as três flags de propósito. Lista corrigida:
+
+As três mortas existem em `schema.js:614-616`, `schemas.js:196-198`,
+`routes/almoxarifado.js:313-314,325,330,346,350,410-412`, `MaterialAlmoxarifadoForm.js:28-32,102-106,268-272`
+e `server/tests/api/materialCompleto.api.test.js:54-56,80-82,234,274,282` — e em lugar nenhum mais
+(reverificado por grep em `server`/`client` — excluindo `client/build`, artefato gerado — em
+2026-08-09).
 
 > **Sobre `controle_validade` e `controle_corrida`:** a Etapa 6 entregou os **dados** que essas
 > flags governariam (`data_validade` e `corrida` no lote, com a guarda de vencimento funcionando),
@@ -157,6 +169,17 @@ lote para decidir nada.
    do checklist foi "retenção continua no material", e o plano manda apagar coluna sem escritor em
    vez de deixá-la parecendo implementada. Reter um lote específico em **quantidade** continua
    impossível — o que existe é reter o lote **inteiro** por status (`BLOQUEADO`/`REPROVADO`).
+
+   > **Correção (fix round 1 da Task 9, 2026-08-09): esta nota não citava os dois leitores que a
+   > remoção deixou órfãos.** `ExtratoMaterialModal.js` tinha uma tabela "Saldos por localização"
+   > com colunas "Reservada"/"Bloqueada" lendo `s.quantidade_reservada`/`s.quantidade_bloqueada` —
+   > como `consultarSaldosPorLocalizacao` (`stockService.js:1171`) faz `SELECT s.*`, essas chaves
+   > nunca chegavam ao cliente depois de `015e94c`, e as duas colunas mostravam **0 para sempre**,
+   > em silêncio, desde a migração. Corrigido: as duas colunas **saíram** da tabela por localização
+   > (fix round 1 da Task 9) — retenção não existe por localização, só por lote (status) ou por
+   > material, e os cartões de KPI no topo do extrato já mostram a retenção certa, lida direto de
+   > `materiais_almoxarifado`. Repetir esse total em toda linha de localização sugeriria que a
+   > retenção é por localização, o que nunca foi verdade.
 3. Era **exatamente o padrão que já mordeu três vezes neste módulo** (coluna existe, fórmula
    subtrai, ciclo nunca fecha — `reserva_id` e `expira_em` na Etapa 4, `quantidade_em_inspecao`
    na Etapa 5). É por isso que a Etapa 6 removeu as colunas em vez de "deixar para depois".
