@@ -115,3 +115,71 @@ describe('MovimentacoesAlmoxarifado — botão de estorno por tipo', () => {
     });
   });
 });
+
+/**
+ * Task 9 (Etapa 6): SUCATA e PERDA foram isentas da guarda de vencimento na Task 3 para que
+ * material vencido pudesse ser descartado, mas até aqui nenhuma das duas era selecionável no
+ * formulário — a regra "vencido não fica preso" era verdadeira da API e falsa da tela.
+ */
+async function abrirModalNovaMovimentacao() {
+  await renderizar();
+  const botaoNova = [...container.querySelectorAll('.almox-header-actions button')]
+    .find((b) => b.textContent.includes('Nova Movimentação'));
+  await act(async () => { botaoNova.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+}
+
+function preencher(elemento, valor) {
+  const proto = elemento.tagName === 'SELECT' ? window.HTMLSelectElement.prototype : window.HTMLInputElement.prototype;
+  const setValue = Object.getOwnPropertyDescriptor(proto, 'value').set;
+  act(() => {
+    setValue.call(elemento, valor);
+    elemento.dispatchEvent(new Event(elemento.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+  });
+}
+
+/** Um "tick" de macrotarefa: garante que a busca de lotes (efeito assíncrono) já rodou. */
+async function esperarEfeitos() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function seletorTipo() {
+  return [...container.querySelectorAll('.almox-modal select.almox-form-select')][1];
+}
+
+describe('MovimentacoesAlmoxarifado — SUCATA e PERDA no seletor de tipo', () => {
+  test('SUCATA e PERDA aparecem como opção no seletor de tipo', async () => {
+    await abrirModalNovaMovimentacao();
+    const valores = [...seletorTipo().querySelectorAll('option')].map((o) => o.value);
+    expect(valores).toEqual(expect.arrayContaining(['SUCATA', 'PERDA']));
+  });
+
+  test('AJUSTE_NEGATIVO não é oferecido (é tipo interno; AJUSTE puro cobre a correção de contagem)', async () => {
+    await abrirModalNovaMovimentacao();
+    const valores = [...seletorTipo().querySelectorAll('option')].map((o) => o.value);
+    expect(valores).not.toContain('AJUSTE_NEGATIVO');
+  });
+
+  test('Sucata mostra os campos que uma saída precisa: localização de origem e lote por seleção (não texto livre)', async () => {
+    await abrirModalNovaMovimentacao();
+    const selectMaterial = container.querySelector('.almox-modal select.almox-form-select');
+    preencher(selectMaterial, '10');
+    preencher(seletorTipo(), 'SUCATA');
+    await esperarEfeitos();
+
+    const rotulos = [...container.querySelectorAll('.almox-modal .almox-field label')].map((l) => l.textContent);
+    expect(rotulos).toEqual(expect.arrayContaining(['Localização de origem']));
+
+    const campoLote = container.querySelector('#mov-lote');
+    expect(campoLote.tagName).toBe('SELECT'); // não input de texto — motor não inventa lote numa saída
+  });
+
+  test('Perda também exige motivo (é o campo que carrega a justificativa da baixa)', async () => {
+    await abrirModalNovaMovimentacao();
+    preencher(seletorTipo(), 'PERDA');
+    const rotuloMotivo = [...container.querySelectorAll('.almox-modal .almox-field label')]
+      .find((l) => l.textContent.startsWith('Motivo'));
+    expect(rotuloMotivo.textContent).toContain('*');
+  });
+});

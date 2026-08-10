@@ -9,11 +9,17 @@ import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
+// SUCATA e PERDA foram isentos da guarda de vencimento na Task 3 (Etapa 6) justamente para que
+// material vencido pudesse ser descartado — mas até a Task 9 nenhum dos dois era selecionável
+// aqui, então a regra "vencido não fica preso" era verdadeira da API e falsa da tela. Não inclui
+// AJUSTE_NEGATIVO: é tipo interno de ajuste, e o AJUSTE puro já cobre correção de contagem.
 const TIPOS_FORM = [
   { value: 'ENTRADA', label: 'Entrada', cls: 'entrada' },
   { value: 'SAIDA', label: 'Saída', cls: 'saida' },
   { value: 'AJUSTE', label: 'Ajuste', cls: 'ajuste' },
   { value: 'DEVOLUCAO', label: 'Devolução', cls: 'devolucao' },
+  { value: 'SUCATA', label: 'Sucata', cls: 'saida' },
+  { value: 'PERDA', label: 'Perda', cls: 'saida' },
 ];
 
 // Lista completa para filtro e exibição no livro: inclui ESTORNO, que é gerado pelo
@@ -22,6 +28,13 @@ const TIPOS = [
   ...TIPOS_FORM,
   { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
+
+// SUCATA e PERDA são saídas para o motor (stockService.tiposSaida): baixam do disponível,
+// respeitam controle_lote e o guard de status do lote — mas ficam de fora da guarda de
+// vencimento (tiposDescarte), que é exatamente o ponto delas. Precisam dos mesmos campos que
+// SAIDA mostra: localização de origem e seleção de lote (nunca texto livre — mesma razão da
+// SAIDA: motor não inventa lote numa saída).
+const TIPOS_SAIDA_LOTE = ['SAIDA', 'SUCATA', 'PERDA'];
 
 // Tipos que não podem ser estornados pelo botão do livro (espelha as recusas de
 // stockService.cancelarMovimentacao no servidor — a lista aqui é só para não oferecer um botão
@@ -99,10 +112,10 @@ const MovimentacoesAlmoxarifado = () => {
     return () => clearTimeout(t);
   }, [tipoFilter, dataInicio, dataFim]);
 
-  // Lote só é escolhido (não digitado) na SAÍDA — é onde o motor decide de qual lote consumir,
-  // e a lista já vem em ordem FEFO com `elegivel` calculado no servidor.
+  // Lote só é escolhido (não digitado) numa saída (SAIDA/SUCATA/PERDA) — é onde o motor decide
+  // de qual lote consumir, e a lista já vem em ordem FEFO com `elegivel` calculado no servidor.
   useEffect(() => {
-    if (!form.material_id || form.tipo !== 'SAIDA') { setLotes([]); return; }
+    if (!form.material_id || !TIPOS_SAIDA_LOTE.includes(form.tipo)) { setLotes([]); return; }
     let cancelado = false;
     api.get(`/almoxarifado/materiais/${form.material_id}/lotes?com_saldo=1`)
       .then((res) => {
@@ -189,12 +202,13 @@ const MovimentacoesAlmoxarifado = () => {
       // Localização/lote só valem para o tipo que os exibe no form — evita que um valor
       // "grudado" de uma seleção anterior (ex.: destino escolhido em ENTRADA, depois
       // trocado para AJUSTE) vaze para um tipo onde o campo nem aparece na tela.
-      if (form.tipo === 'SAIDA' && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
+      if (TIPOS_SAIDA_LOTE.includes(form.tipo) && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
       if (form.tipo === 'ENTRADA' && form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
-      // Entrada: lote nasce aqui, texto livre. Saída: lote é escolhido de um já existente
-      // (lote_id), nunca digitado — evita saída registrada contra um lote que não existe.
+      // Entrada: lote nasce aqui, texto livre. Saída (inclusive SUCATA/PERDA): lote é escolhido
+      // de um já existente (lote_id), nunca digitado — evita saída registrada contra um lote que
+      // não existe.
       if (form.tipo === 'ENTRADA' && form.lote) payload.lote = form.lote;
-      if (form.tipo === 'SAIDA' && form.lote_id) payload.lote_id = Number(form.lote_id);
+      if (TIPOS_SAIDA_LOTE.includes(form.tipo) && form.lote_id) payload.lote_id = Number(form.lote_id);
       if (form.tipo === 'ENTRADA' && form.custo_unitario) {
         const custo = parseFloat(form.custo_unitario);
         if (!Number.isNaN(custo) && custo > 0) payload.custo_unitario = custo;
@@ -436,7 +450,7 @@ const MovimentacoesAlmoxarifado = () => {
                     <select className="almox-form-select" value={form.tipo}
                       onChange={e => {
                         const novoTipo = e.target.value;
-                        const mostraLote = novoTipo === 'ENTRADA' || novoTipo === 'SAIDA';
+                        const mostraLote = novoTipo === 'ENTRADA' || TIPOS_SAIDA_LOTE.includes(novoTipo);
                         // Limpa qualquer campo que só aparece para outro tipo — o estado nunca
                         // pode carregar um valor que o usuário não está mais vendo na tela
                         // (senão ele vaza escondido para o payload do tipo atual).
@@ -446,7 +460,7 @@ const MovimentacoesAlmoxarifado = () => {
                           emergencial: novoTipo === 'SAIDA' ? f.emergencial : false,
                           localizacao_destino_id: novoTipo === 'ENTRADA' ? f.localizacao_destino_id : '',
                           custo_unitario: novoTipo === 'ENTRADA' ? f.custo_unitario : '',
-                          localizacao_origem_id: novoTipo === 'SAIDA' ? f.localizacao_origem_id : '',
+                          localizacao_origem_id: TIPOS_SAIDA_LOTE.includes(novoTipo) ? f.localizacao_origem_id : '',
                           lote: mostraLote ? f.lote : '',
                           lote_id: mostraLote ? f.lote_id : ''
                         }));
@@ -462,7 +476,7 @@ const MovimentacoesAlmoxarifado = () => {
                     <input className="almox-input" type="number" min="0" step="1"
                       value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
                       placeholder="0" required />
-                    {selectedMaterial && form.tipo === 'SAIDA' && (
+                    {selectedMaterial && TIPOS_SAIDA_LOTE.includes(form.tipo) && (
                       <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
                         Disponível: {(
                           (selectedMaterial.quantidade_atual || 0)
@@ -476,12 +490,12 @@ const MovimentacoesAlmoxarifado = () => {
                   <div className="almox-field">
                     <label className="almox-label">
                       Motivo
-                      {(form.tipo === 'SAIDA' || form.tipo === 'AJUSTE') && <span className="required">*</span>}
+                      {(form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'SUCATA' || form.tipo === 'PERDA') && <span className="required">*</span>}
                     </label>
                     <input className="almox-input" value={form.motivo}
                       onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
                       placeholder="Compra, Uso produção, Retorno, etc."
-                      required={form.tipo === 'SAIDA' || form.tipo === 'AJUSTE'} />
+                      required={form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'SUCATA' || form.tipo === 'PERDA'} />
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">Referência (OS / NF)</label>
@@ -554,7 +568,7 @@ const MovimentacoesAlmoxarifado = () => {
                         placeholder="0,00" />
                     </div>
                   )}
-                  {form.tipo === 'SAIDA' && (
+                  {TIPOS_SAIDA_LOTE.includes(form.tipo) && (
                     <div className="almox-field">
                       <label className="almox-label">Localização de origem</label>
                       <select className="almox-form-select" value={form.localizacao_origem_id}
@@ -569,10 +583,10 @@ const MovimentacoesAlmoxarifado = () => {
                       </select>
                     </div>
                   )}
-                  {(form.tipo === 'ENTRADA' || form.tipo === 'SAIDA') && (
+                  {(form.tipo === 'ENTRADA' || TIPOS_SAIDA_LOTE.includes(form.tipo)) && (
                     <div className="almox-field">
                       <label className="almox-label" htmlFor="mov-lote">Lote</label>
-                      {form.tipo === 'SAIDA' ? (
+                      {TIPOS_SAIDA_LOTE.includes(form.tipo) ? (
                         <select id="mov-lote" className="almox-input" value={form.lote_id}
                           onChange={e => setForm(f => ({ ...f, lote_id: e.target.value }))}>
                           <option value="">Sem lote</option>

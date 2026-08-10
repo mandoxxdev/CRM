@@ -333,6 +333,7 @@ const Layout = () => {
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimentos' },
     { path: '/almoxarifado/inspecoes', icon: FiCheckSquare, label: 'Inspeções' },
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
+    { path: '/almoxarifado/lotes', icon: FiLayers, label: 'Lotes' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
