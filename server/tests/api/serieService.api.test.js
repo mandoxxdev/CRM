@@ -9,6 +9,7 @@ const assert = require('assert');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const seriesService = require('../../services/almoxarifado/seriesService');
+const lotService = require('../../services/almoxarifado/lotService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -85,6 +86,59 @@ async function novoMaterial(db, { controle_serie = 1, qtd = 0 } = {}) {
     await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-A'] });
     const aud = await dbGet(db, "SELECT * FROM auditoria_log_almoxarifado WHERE entidade = 'serie' AND acao = 'CRIACAO' ORDER BY id DESC LIMIT 1");
     assert.ok(aud, 'auditoria de criacao de serie ausente');
+  });
+
+  await test('claimSaidaSeries marca ENTREGUE e SUCATA marca SUCATEADA', async () => {
+    const mat = await novoMaterial(db);
+    const [a, b] = await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-S1', 'SN-S2'] });
+    const claimed = await seriesService.claimSaidaSeries(db, ADMIN, { material_id: mat, serie_ids: [a.linha.id], tipo: 'SAIDA' });
+    assert.strictEqual(claimed[0].linha.status, 'ENTREGUE');
+    const claimed2 = await seriesService.claimSaidaSeries(db, ADMIN, { material_id: mat, serie_ids: [b.linha.id], tipo: 'SUCATA' });
+    assert.strictEqual(claimed2[0].linha.status, 'SUCATEADA');
+  });
+
+  await test('claim de serie BLOQUEADA falha e desfaz os claims parciais', async () => {
+    const mat = await novoMaterial(db);
+    const [a, b] = await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-B1', 'SN-B2'] });
+    await dbRun(db, "UPDATE series_almoxarifado SET status = 'BLOQUEADA' WHERE id = ?", [b.linha.id]);
+    await assert.rejects(
+      () => seriesService.claimSaidaSeries(db, ADMIN, { material_id: mat, serie_ids: [a.linha.id, b.linha.id], tipo: 'SAIDA' }),
+      (e) => /SN-B2/.test(e.message) && /BLOQUEADA/.test(e.message)
+    );
+    const aDepois = await seriesService.getSerie(db, a.linha.id);
+    assert.strictEqual(aDepois.status, 'EM_ESTOQUE', 'claim parcial nao foi desfeito');
+  });
+
+  await test('claim exige pertencer ao lote informado quando lote_id vem junto', async () => {
+    const mat = await novoMaterial(db);
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'L-1' });
+    const [a] = await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-LT'], lote_id: lote.id });
+    await assert.rejects(
+      () => seriesService.claimSaidaSeries(db, ADMIN, { material_id: mat, serie_ids: [a.linha.id], lote_id: lote.id + 999, tipo: 'SAIDA' }),
+      (e) => /nao pertence ao lote/.test(e.message)
+    );
+  });
+
+  await test('reverterSaida devolve a EM_ESTOQUE; reverterEntrada marca ESTORNADA', async () => {
+    const mat = await novoMaterial(db);
+    const [a] = await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-E1'], movimentacao_id: 777 });
+    await seriesService.claimSaidaSeries(db, ADMIN, { material_id: mat, serie_ids: [a.linha.id], tipo: 'SAIDA', movimentacao_id: 888 });
+    const n1 = await seriesService.reverterSaida(db, ADMIN, 888);
+    assert.strictEqual(n1, 1);
+    assert.strictEqual((await seriesService.getSerie(db, a.linha.id)).status, 'EM_ESTOQUE');
+    const n2 = await seriesService.reverterEntrada(db, ADMIN, 777);
+    assert.strictEqual(n2, 1);
+    assert.strictEqual((await seriesService.getSerie(db, a.linha.id)).status, 'ESTORNADA');
+  });
+
+  await test('mudarStatusSerie exige justificativa, so alterna EM_ESTOQUE<->BLOQUEADA e detecta corrida', async () => {
+    const mat = await novoMaterial(db);
+    const [a] = await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-BLQ'] });
+    await assert.rejects(() => seriesService.mudarStatusSerie(db, ADMIN, a.linha.id, 'BLOQUEADA', ''), /justificativa/i);
+    await assert.rejects(() => seriesService.mudarStatusSerie(db, ADMIN, a.linha.id, 'ENTREGUE', 'x'), /invalido/i);
+    const blq = await seriesService.mudarStatusSerie(db, ADMIN, a.linha.id, 'BLOQUEADA', 'suspeita de dano');
+    assert.strictEqual(blq.status, 'BLOQUEADA');
+    assert.strictEqual((await seriesService.contarPresentes(db, mat)), 1);
   });
 
   await close();

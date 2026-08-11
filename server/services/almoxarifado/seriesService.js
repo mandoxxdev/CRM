@@ -116,6 +116,127 @@ async function desfazerEntrada(db, afetadas) {
   }
 }
 
+/**
+ * Claim atomico de saida, uma serie por vez, com a pre-condicao inteira no WHERE
+ * (padrao liberarBloqueioPorCertificado do lotService). Falha em qualquer serie desfaz
+ * os claims ja feitos desta chamada e nomeia a serie e o motivo.
+ */
+async function claimSaidaSeries(db, user, { material_id, serie_ids, lote_id = null, tipo, movimentacao_id = null }) {
+  const statusDestino = ['SUCATA', 'PERDA'].includes(tipo) ? 'SUCATEADA' : 'ENTREGUE';
+  const claimed = [];
+  for (const id of serie_ids) {
+    const linha = await dbGet(db, `
+      UPDATE series_almoxarifado
+         SET status = ?, movimentacao_saida_id = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND material_id = ? AND status = 'EM_ESTOQUE'
+         AND (? IS NULL OR lote_id = ?)
+       RETURNING *`,
+      [statusDestino, movimentacao_id, id, material_id, lote_id, lote_id]);
+    if (!linha) {
+      await desfazerSaida(db, claimed);
+      const atual = await getSerie(db, id);
+      if (!atual) throw erro(`serie id ${id} nao existe`);
+      if (Number(atual.material_id) !== Number(material_id)) throw erro(`serie ${atual.numero} nao pertence a este material`);
+      if (lote_id != null && Number(atual.lote_id) !== Number(lote_id)) throw erro(`serie ${atual.numero} nao pertence ao lote informado`);
+      throw erro(`serie ${atual.numero} nao esta disponivel (status ${atual.status})`);
+    }
+    claimed.push({ linha });
+    await registrarAuditoria(db, {
+      entidade: 'serie', entidade_id: linha.id, acao: 'SAIDA',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { status: 'EM_ESTOQUE' },
+      dados_novos: { status: statusDestino, movimentacao_id },
+    });
+  }
+  return claimed;
+}
+
+/** Compensacao do claim: enquanto EM_ESTOQUE, movimentacao_saida_id e sempre NULL. */
+async function desfazerSaida(db, claimed) {
+  for (const c of [...claimed].reverse()) {
+    await dbRun(db, `
+      UPDATE series_almoxarifado
+         SET status = 'EM_ESTOQUE', movimentacao_saida_id = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`, [c.linha.id]);
+  }
+}
+
+/** Estorno de saida: series daquela movimentacao voltam a EM_ESTOQUE. */
+async function reverterSaida(db, user, movimentacaoId) {
+  const linhas = await dbAll(db, `
+    SELECT * FROM series_almoxarifado
+     WHERE movimentacao_saida_id = ? AND status IN ('ENTREGUE','SUCATEADA')`, [movimentacaoId]);
+  for (const s of linhas) {
+    await dbRun(db, `
+      UPDATE series_almoxarifado
+         SET status = 'EM_ESTOQUE', movimentacao_saida_id = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = ?`, [s.id, s.status]);
+    await registrarAuditoria(db, {
+      entidade: 'serie', entidade_id: s.id, acao: 'ESTORNO_SAIDA',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { status: s.status }, dados_novos: { status: 'EM_ESTOQUE' },
+    });
+  }
+  return linhas.length;
+}
+
+/** Estorno de entrada: series ainda EM_ESTOQUE daquela movimentacao viram ESTORNADA. */
+async function reverterEntrada(db, user, movimentacaoId) {
+  const linhas = await dbAll(db, `
+    SELECT * FROM series_almoxarifado
+     WHERE movimentacao_entrada_id = ? AND status = 'EM_ESTOQUE'`, [movimentacaoId]);
+  for (const s of linhas) {
+    await dbRun(db, `
+      UPDATE series_almoxarifado
+         SET status = 'ESTORNADA', status_motivo = 'Entrada estornada', updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'EM_ESTOQUE'`, [s.id]);
+    await registrarAuditoria(db, {
+      entidade: 'serie', entidade_id: s.id, acao: 'ESTORNO_ENTRADA',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { status: 'EM_ESTOQUE' }, dados_novos: { status: 'ESTORNADA' },
+    });
+  }
+  return linhas.length;
+}
+
+/** Bloqueio/desbloqueio avulso — decisao humana: justificativa obrigatoria. */
+async function mudarStatusSerie(db, user, serieId, novoStatus, justificativa) {
+  if (!justificativa || !String(justificativa).trim()) {
+    throw erro('justificativa e obrigatoria para mudar o status da serie');
+  }
+  if (!['BLOQUEADA', 'EM_ESTOQUE'].includes(novoStatus)) {
+    throw erro(`status invalido para esta operacao: ${novoStatus}`);
+  }
+  const atual = await getSerie(db, serieId);
+  if (!atual) throw erro('serie nao encontrada', 404);
+  const transicaoOk = (atual.status === 'EM_ESTOQUE' && novoStatus === 'BLOQUEADA')
+    || (atual.status === 'BLOQUEADA' && novoStatus === 'EM_ESTOQUE');
+  if (!transicaoOk) {
+    throw erro(`transicao invalida: ${atual.status} -> ${novoStatus}`);
+  }
+  const linha = await dbGet(db, `
+    UPDATE series_almoxarifado
+       SET status = ?, status_motivo = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND status = ? RETURNING *`,
+    [novoStatus, String(justificativa).trim(), serieId, atual.status]);
+  if (!linha) throw erro('status da serie mudou durante a operacao — recarregue', 409);
+  await registrarAuditoria(db, {
+    entidade: 'serie', entidade_id: linha.id, acao: 'MUDANCA_STATUS',
+    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+    dados_anteriores: { status: atual.status, status_motivo: atual.status_motivo },
+    dados_novos: { status: novoStatus, status_motivo: linha.status_motivo },
+    justificativa: String(justificativa).trim(),
+  });
+  return linha;
+}
+
+async function contarPresentes(db, materialId) {
+  const r = await dbGet(db, `
+    SELECT COUNT(*) AS n FROM series_almoxarifado
+     WHERE material_id = ? AND status IN ('EM_ESTOQUE','BLOQUEADA')`, [materialId]);
+  return r.n;
+}
+
 module.exports = {
   STATUS_SERIE,
   STATUS_PRESENTES,
@@ -124,4 +245,10 @@ module.exports = {
   listarSeriesDoMaterial,
   entradaSeries,
   desfazerEntrada,
+  claimSaidaSeries,
+  desfazerSaida,
+  reverterSaida,
+  reverterEntrada,
+  mudarStatusSerie,
+  contarPresentes,
 };
