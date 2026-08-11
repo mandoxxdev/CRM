@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiRefreshCw, FiSliders, FiUnlock, FiUpload, FiLock } from 'react-icons/fi';
+import { FiRefreshCw, FiSliders, FiUnlock, FiUpload, FiLock, FiTag } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import EtiquetasPdfModal from './EtiquetasPdfModal';
+import { montarEtiquetaLote, montarEtiquetaSerie } from '../../utils/etiquetasPdf';
 // O certificado do lote vai para o MESMO diretório servido das fotos de material
 // (`uploads/almoxarifado`), então o resolvedor de URL é o mesmo — o nome do helper fala em foto
 // por origem histórica, não por restrição. Antes do review final da Etapa 6 o certificado era
@@ -41,6 +44,15 @@ import './Almoxarifado.css';
  * o resto). O efeito de carga das séries segue o mesmo molde do de lotes (guarda `cancelado`),
  * mas só dispara com a aba Séries selecionada — trocar de aba antes da resposta chegar precisa
  * descartá-la, senão a resposta atrasada da aba anterior pinta a aba atual.
+ *
+ * Etapa 6c — Task 4: esta tela é o DESTINO dos QRs que `utils/etiquetasPdf.js` (Tasks 1-3)
+ * codifica nas etiquetas de lote/série — `?material_id=X&aba=LOTES&lote=C` /
+ * `?material_id=X&aba=SERIES&serie=N`. `materialId`/`aba` nascem por lazy-init dos
+ * searchParams (molde de `ConfiguracoesAlmoxarifado.js`), e `destaque` (também lazy-init, mas
+ * NUNCA reavaliado depois — é um estado "one-shot" da visita) pinta a linha que o QR apontou, pra
+ * quem escaneou a etiqueta cair direto no item físico que tem na mão, não numa lista genérica.
+ * Os botões de etiqueta (por linha e o bulk "Etiquetas das séries em estoque") reaproveitam o
+ * `EtiquetasPdfModal` (Task 3) — esta tela só monta os descritores, quem desenha o PDF é o modal.
  */
 
 const STATUS_LOTE = [
@@ -79,10 +91,15 @@ const serieStatusInfo = (s) => STATUS_SERIE_INFO[s] || { label: s || '—', cls:
 
 const LotesAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const [searchParams] = useSearchParams();
 
   const [materiais, setMateriais] = useState([]);
-  const [materialId, setMaterialId] = useState('');
-  const [aba, setAba] = useState('LOTES');
+  const [materialId, setMaterialId] = useState(() => searchParams.get('material_id') || '');
+  const [aba, setAba] = useState(() => (searchParams.get('aba') === 'SERIES' ? 'SERIES' : 'LOTES'));
+  // One-shot: lido só na primeira renderização (o QR trouxe o operador até aqui) — trocar de
+  // material/aba depois não deve "perseguir" um destaque velho de outra visita.
+  const [destaque] = useState(() => ({ lote: searchParams.get('lote') || '', serie: searchParams.get('serie') || '' }));
+  const [etiquetas, setEtiquetas] = useState(null);
   const [series, setSeries] = useState([]);
   const [serieStatusTarget, setSerieStatusTarget] = useState(null);
   const [serieStatusJustificativa, setSerieStatusJustificativa] = useState('');
@@ -254,6 +271,19 @@ const LotesAlmoxarifado = () => {
           </p>
         </div>
         <div className="almox-header-actions">
+          {/* Task 4 (Etapa 6c): bulk só faz sentido na aba Séries — em Lotes a etiqueta é sempre
+              por linha (o lote carrega validade/corrida, não dá pra "imprimir todos" sem contexto
+              de qual). Desabilitado sem nenhuma série EM_ESTOQUE — não há o que imprimir. */}
+          {aba === 'SERIES' && (
+            <button className="btn-almox-secondary"
+              disabled={!series.some((s) => s.status === 'EM_ESTOQUE')}
+              onClick={() => setEtiquetas(
+                series.filter((s) => s.status === 'EM_ESTOQUE')
+                  .map((s) => montarEtiquetaSerie(materialSelecionado, s, window.location.origin))
+              )}>
+              <FiTag size={13} /> Etiquetas das séries em estoque
+            </button>
+          )}
           <button className="btn-almox-secondary" disabled={!materialId} onClick={loadLotes}>
             <FiRefreshCw size={13} /> Atualizar
           </button>
@@ -301,7 +331,7 @@ const LotesAlmoxarifado = () => {
                 const s = statusInfo(l.status);
                 const vencidoLiberado = l.vencido && l.vencimento_liberado;
                 return (
-                  <tr key={l.id}>
+                  <tr key={l.id} style={{ background: destaque.lote === l.codigo ? 'rgba(79,172,254,0.10)' : undefined }}>
                     <td>{l.codigo}</td>
                     <td>
                       <span className={`almox-badge almox-badge-${s.cls}`}>{s.label}</span>
@@ -384,6 +414,13 @@ const LotesAlmoxarifado = () => {
                           onClick={(e) => { if (!bloquearSeNaoPode('receber_material', e)) return; abrirCertificado(l); }}>
                           <FiUpload />
                         </button>
+                        <button className="almox-btn-icon" title="Imprimir etiqueta deste lote"
+                          onClick={(e) => {
+                            if (!bloquearSeNaoPode('visualizar', e)) return;
+                            setEtiquetas([montarEtiquetaLote(materialSelecionado, l, window.location.origin)]);
+                          }}>
+                          <FiTag />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -418,21 +455,28 @@ const LotesAlmoxarifado = () => {
                 const info = serieStatusInfo(s.status);
                 const podeMudarStatus = s.status === 'EM_ESTOQUE' || s.status === 'BLOQUEADA';
                 return (
-                  <tr key={s.id}>
+                  <tr key={s.id} style={{ background: destaque.serie === s.numero ? 'rgba(79,172,254,0.10)' : undefined }}>
                     <td>{s.numero}</td>
                     <td><span className={`almox-badge almox-badge-${info.cls}`}>{info.label}</span></td>
                     <td style={{ fontSize: '0.85rem' }}>{s.lote_codigo || '—'}</td>
                     <td style={{ fontSize: '0.85rem' }}>{s.localizacao_descricao || '—'}</td>
                     <td>
-                      {podeMudarStatus && (
-                        <div className="almox-actions">
+                      <div className="almox-actions">
+                        {podeMudarStatus && (
                           <button className="almox-btn-icon"
                             title={s.status === 'EM_ESTOQUE' ? 'Bloquear série' : 'Desbloquear série'}
                             onClick={(e) => { if (!bloquearSeNaoPode('inspecionar', e)) return; abrirSerieStatus(s); }}>
                             {s.status === 'EM_ESTOQUE' ? <FiLock /> : <FiUnlock />}
                           </button>
-                        </div>
-                      )}
+                        )}
+                        <button className="almox-btn-icon" title="Imprimir etiqueta desta série"
+                          onClick={(e) => {
+                            if (!bloquearSeNaoPode('visualizar', e)) return;
+                            setEtiquetas([montarEtiquetaSerie(materialSelecionado, s, window.location.origin)]);
+                          }}>
+                          <FiTag />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -588,6 +632,10 @@ const LotesAlmoxarifado = () => {
           </div>
         </div>
       )}
+
+      {/* Modal — etiquetas (Etapa 6c — Task 4): compartilhado, aberto pela ação por linha (lote
+          ou série) ou pelo bulk da aba Séries. `etiquetas: null` = fechado. */}
+      <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
     </div>
   );
 };

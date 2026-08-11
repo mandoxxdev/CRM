@@ -88,11 +88,15 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-async function renderizar() {
+async function renderizar(initialEntries = ['/']) {
   await act(async () => {
-    root.render(<MemoryRouter><LotesAlmoxarifado /></MemoryRouter>);
+    root.render(<MemoryRouter initialEntries={initialEntries}><LotesAlmoxarifado /></MemoryRouter>);
   });
 }
+
+/** A linha carrega o destaque de deep-link via `style` inline — o teste só verifica a cor, não o
+ * mecanismo (poderia ser className no futuro, mas hoje é style, molde do brief). */
+const temDestaque = (tr) => /79,\s*172,\s*254/.test(tr.getAttribute('style') || '');
 
 /** Um "tick" de macrotarefa: garante que a cadeia de microtarefas do fetch de lotes já rodou. */
 async function esperarEfeitos() {
@@ -490,5 +494,116 @@ describe('LotesAlmoxarifado — aba Series: resposta atrasada da aba anterior na
     const linhasSeries = linhas();
     expect(linhasSeries).toHaveLength(1);
     expect(linhasSeries[0].textContent).toMatch(/SN-002/);
+  });
+});
+
+// Etapa 6c — Task 4: a tela é o DESTINO dos QRs (a URL que Tasks 1-3 codificam dentro do PDF).
+// Deep-link inicializa material/aba a partir da querystring e destaca a linha que o QR aponta —
+// sem isto, escanear a etiqueta de uma série abre a tela "genérica", sem levar o operador até o
+// item específico que ele tem na mão.
+const LOTE_DEEPLINK = {
+  id: 610, codigo: 'L-1', status: 'ATIVO', status_motivo: null,
+  data_validade: '2030-01-01', vencido: false, vencimento_liberado: false,
+  corrida: 'COR-9', fornecedor_nome: 'Fornecedor X', nota_fiscal: 'NF-9', saldo: 5, elegivel: true,
+};
+const SERIE_DEEPLINK = {
+  id: 611, numero: 'SN-2', status: 'EM_ESTOQUE', lote_id: 610, lote_codigo: 'L-1',
+  localizacao_descricao: 'Prateleira B1', updated_at: '2026-08-01T10:00:00Z',
+};
+const SERIE_DEEPLINK_OUTRA = {
+  id: 612, numero: 'SN-3', status: 'EM_ESTOQUE', lote_id: 610, lote_codigo: 'L-1',
+  localizacao_descricao: 'Prateleira B2', updated_at: '2026-08-01T10:00:00Z',
+};
+
+describe('LotesAlmoxarifado — deep-link (destino dos QRs) e etiquetas', () => {
+  test('deep-link inicializa material e aba e destaca a linha da serie', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) {
+        return Promise.resolve({ data: [SERIE_DEEPLINK, SERIE_DEEPLINK_OUTRA] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    await renderizar([`/almoxarifado/lotes?material_id=${MATERIAL.id}&aba=SERIES&serie=SN-2`]);
+    await esperarEfeitos();
+
+    // Aba Séries já ativa, sem precisar clicar — é o material/aba que o QR codificou.
+    const linhasSeries = linhas();
+    expect(linhasSeries).toHaveLength(2);
+    const linhaDestaque = linhasSeries.find((tr) => tr.textContent.includes('SN-2'));
+    const linhaSemDestaque = linhasSeries.find((tr) => tr.textContent.includes('SN-3'));
+    expect(temDestaque(linhaDestaque)).toBe(true);
+    expect(temDestaque(linhaSemDestaque)).toBe(false);
+  });
+
+  test('deep-link de lote destaca a linha do lote', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) {
+        return Promise.resolve({ data: [LOTE_DEEPLINK, LOTE_ATIVO] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    await renderizar([`/almoxarifado/lotes?material_id=${MATERIAL.id}&aba=LOTES&lote=L-1`]);
+    await esperarEfeitos();
+
+    const linhasLotes = linhas();
+    const linhaDestaque = linhasLotes.find((tr) => tr.textContent.includes('L-1'));
+    const linhaSemDestaque = linhasLotes.find((tr) => tr.textContent.includes('L-ATIVO'));
+    expect(temDestaque(linhaDestaque)).toBe(true);
+    expect(temDestaque(linhaSemDestaque)).toBe(false);
+  });
+
+  test('acao Etiqueta na linha do lote abre o modal com o descritor do lote', async () => {
+    await renderizar();
+    await selecionarMaterial(); // fixture padrão: L-VENC-LIB, L-ATIVO, L-VENC-BLOQ, L-REPROVADO
+    await clicarAcao(1, 'etiqueta'); // linha 1 = L-ATIVO — title "Imprimir etiqueta deste lote"
+
+    expect(container.querySelector('.almox-modal-header h2').textContent).toBe('Imprimir etiquetas');
+    expect(container.textContent).toMatch(/1 etiqueta/);
+  });
+
+  test('botao Etiquetas das series em estoque monta 1 descritor por serie EM_ESTOQUE', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) {
+        return Promise.resolve({ data: [SERIE_EM_ESTOQUE, SERIE_BLOQUEADA, SERIE_ENTREGUE] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAba('Séries');
+
+    const botao = [...container.querySelectorAll('button')]
+      .find((b) => b.textContent.trim() === 'Etiquetas das séries em estoque');
+    expect(botao.disabled).toBe(false);
+    await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    expect(container.querySelector('.almox-modal-header h2').textContent).toBe('Imprimir etiquetas');
+    // Só SERIE_EM_ESTOQUE (das três) está EM_ESTOQUE — BLOQUEADA/ENTREGUE ficam de fora.
+    expect(container.textContent).toMatch(/1 etiqueta/);
+  });
+
+  test('botao Etiquetas das series em estoque fica desabilitado sem nenhuma serie EM_ESTOQUE', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) {
+        return Promise.resolve({ data: [SERIE_ENTREGUE] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAba('Séries');
+
+    const botao = [...container.querySelectorAll('button')]
+      .find((b) => b.textContent.trim() === 'Etiquetas das séries em estoque');
+    expect(botao.disabled).toBe(true);
   });
 });
