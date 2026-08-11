@@ -52,44 +52,47 @@ async function entradaSeries(db, user, { material_id, numeros, lote_id = null, l
     throw erro('numeros de serie repetidos na lista informada');
   }
   const afetadas = [];
-  for (const numero of lista) {
-    const existente = await getSeriePorNumero(db, material_id, numero);
-    if (!existente) {
+  try {
+    for (const numero of lista) {
+      const existente = await getSeriePorNumero(db, material_id, numero);
+      if (!existente) {
+        const linha = await dbGet(db, `
+          INSERT INTO series_almoxarifado
+            (material_id, numero, status, lote_id, localizacao_id, movimentacao_entrada_id, created_por)
+          VALUES (?, ?, 'EM_ESTOQUE', ?, ?, ?, ?) RETURNING *`,
+          [material_id, numero, lote_id, localizacao_id, movimentacao_id, user?.id || null]);
+        afetadas.push({ acao: 'CRIACAO', anterior: null, linha });
+        await registrarAuditoria(db, {
+          entidade: 'serie', entidade_id: linha.id, acao: 'CRIACAO',
+          usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+          dados_novos: { numero, material_id, status: 'EM_ESTOQUE', lote_id },
+        });
+        continue;
+      }
+      if (STATUS_PRESENTES.includes(existente.status)) {
+        throw erro(`serie ${numero} ja esta em estoque`);
+      }
       const linha = await dbGet(db, `
-        INSERT INTO series_almoxarifado
-          (material_id, numero, status, lote_id, localizacao_id, movimentacao_entrada_id, created_por)
-        VALUES (?, ?, 'EM_ESTOQUE', ?, ?, ?, ?) RETURNING *`,
-        [material_id, numero, lote_id, localizacao_id, movimentacao_id, user?.id || null]);
-      afetadas.push({ acao: 'CRIACAO', anterior: null, linha });
+        UPDATE series_almoxarifado
+           SET status = 'EM_ESTOQUE', status_motivo = NULL, lote_id = ?, localizacao_id = ?,
+               movimentacao_entrada_id = ?, movimentacao_saida_id = NULL,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status = ? RETURNING *`,
+        [lote_id, localizacao_id, movimentacao_id, existente.id, existente.status]);
+      if (!linha) {
+        throw erro(`serie ${numero} mudou durante a operacao — tente novamente`, 409);
+      }
+      afetadas.push({ acao: 'REATIVACAO', anterior: existente, linha });
       await registrarAuditoria(db, {
-        entidade: 'serie', entidade_id: linha.id, acao: 'CRIACAO',
+        entidade: 'serie', entidade_id: linha.id, acao: 'REATIVACAO',
         usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-        dados_novos: { numero, material_id, status: 'EM_ESTOQUE', lote_id },
+        dados_anteriores: { status: existente.status, status_motivo: existente.status_motivo, lote_id: existente.lote_id, localizacao_id: existente.localizacao_id },
+        dados_novos: { status: 'EM_ESTOQUE', status_motivo: null, lote_id, localizacao_id },
       });
-      continue;
     }
-    if (STATUS_PRESENTES.includes(existente.status)) {
-      await desfazerEntrada(db, afetadas);
-      throw erro(`serie ${numero} ja esta em estoque`);
-    }
-    const linha = await dbGet(db, `
-      UPDATE series_almoxarifado
-         SET status = 'EM_ESTOQUE', status_motivo = NULL, lote_id = ?, localizacao_id = ?,
-             movimentacao_entrada_id = ?, movimentacao_saida_id = NULL,
-             updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status = ? RETURNING *`,
-      [lote_id, localizacao_id, movimentacao_id, existente.id, existente.status]);
-    if (!linha) {
-      await desfazerEntrada(db, afetadas);
-      throw erro(`serie ${numero} mudou durante a operacao — tente novamente`, 409);
-    }
-    afetadas.push({ acao: 'REATIVACAO', anterior: existente, linha });
-    await registrarAuditoria(db, {
-      entidade: 'serie', entidade_id: linha.id, acao: 'REATIVACAO',
-      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-      dados_anteriores: { status: existente.status },
-      dados_novos: { status: 'EM_ESTOQUE', lote_id },
-    });
+  } catch (e) {
+    await desfazerEntrada(db, afetadas);
+    throw e;
   }
   return afetadas;
 }
