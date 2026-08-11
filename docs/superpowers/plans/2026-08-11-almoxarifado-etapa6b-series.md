@@ -1,5 +1,46 @@
 # Almoxarifado Etapa 6b — Números de Série: plano de implementação
 
+> ## ✅ ETAPA CONCLUÍDA — 2026-08-11
+>
+> Backend (Tasks 1-7), UI (Tasks 8-11) e documentação (Task 12) entregues. Range completo:
+> `418d617..b46d820`. Verificação final (Task 12): `test:api` 56/56, `test:almoxarifado` 43/43,
+> `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 3/3 (server); client 150/150 em 14
+> suítes, build `CI=true` limpo.
+>
+> | Task | O quê | Hash(es) | Fix round (por quê) |
+> |---|---|---|---|
+> | 1 | Tabela `series_almoxarifado` + `seriesService` núcleo (leitura, entrada) | `418d617` | fix `f592907` |
+> | 2 | `seriesService` — saída (claim), estorno, bloqueio | `aa0dbd0` | fix `f7a5fc3` |
+> | 3 | Motor — exigência + efeito de ENTRADA; Zod; rotas v1/v2 declaram `exigeSerie` | `2ab27ed` | — |
+> | 4 | Motor — efeito de SAÍDA (claim de séries + compensação) | `a5f7fad` | fix `70f4173` |
+> | 5 | Estorno e reentrada manual (`reverterSaida`/`reverterEntrada`) | `d77626d` | fix `5b1b04a` |
+> | 6 | Recebimento — séries por item da nota (pré-checagem + griffagem de origem) | `400bb15` | fix `bafc4c6` (griffagem de origem gated por `controle_serie` e não-fatal) |
+> | 7 | Rotas de série (listar + bloquear/desbloquear) | `fc33d59` | doc `eba5ff1`, fix `c6eff55` |
+> | 8 | Front — Movimentações (textarea+gerador na entrada; seletor na saída) | `4836d24` | fix `576fd61` |
+> | 9 | Front — Recebimentos (textarea de séries por item) | `597ec82` | — |
+> | 10 | Front — aba Séries em "Lotes e Séries" | `b46d820` | — |
+> | 11 | Front — hint da flag + KPI no extrato | `f11a3f0` | — |
+> | — | Fix conjunto Tasks 9/11 (achado de review pós-implementação) | — | `78631e1` |
+> | 12 | Documentação e verificação final (este arquivo, specs, guia) | (ver commit de docs) | — |
+>
+> **Nota sobre a tabela acima:** os hashes foram reconferidos com `git log -1 --format='%s' <hash>`
+> na Task 12, um a um — a numeração de task do plano bate com o conteúdo real dos commits
+> (a mensagem do commit do fix round já nomeia a task que corrige, ex. "fix round 1 da Task 4").
+> **Exceção corrigida na Task 12:** a spec 10 (`specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md`)
+> tinha atribuído `400bb15` (que é a Task 6, recebimento) à Task 6 mas descrito o conteúdo de
+> `mudarStatusSerie` (que é da Task 2, `aa0dbd0`) — atribuição de conteúdo trocada entre duas
+> tasks, herdada desde a documentação da própria Task 7 e só notada e corrigida agora, ao
+> reconferir hash por hash para fechar esta etapa.
+>
+> **Correção de rota importante entregue nesta etapa (Task 7, fix `c6eff55`):** o aviso que dizia
+> "não ligue `controle_serie` em produção até as Tasks 8-9 da UI existirem" está **superado** — as
+> Tasks 8-10 entregaram a UI (Movimentações v2, Recebimentos, aba Séries). A única ressalva que
+> sobra: o modal rápido de entrada/saída da tela de Materiais (rota v1) continua sem campo de série
+> e sempre recusa material controlado — use a tela de Movimentações para esses materiais.
+>
+> **Próxima etapa: 6c (etiquetas/QR).** Tarefa detalhada no fim deste arquivo, depois do
+> self-review original do plano.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** acender a flag `controle_serie` — material com a flag exige 1 número de série por unidade na entrada e na saída, com rastreabilidade por unidade e invariante `COUNT(séries presentes) == quantidade_atual` coberto por teste.
@@ -1129,11 +1170,11 @@ git commit -m "Almoxarifado Etapa 6b: hint da flag de serie e KPI de series no e
 - Modify: `docs/almoxarifado-guia-etapas-e-testes.md` (cabeçalho "onde parou"; seção "Etapa 6b" com Antes→Agora, roteiro de teste clicável — criar material com a flag, entrada com gerador de sequência, saída escolhendo séries, bloqueio na aba Séries, recebimento com séries — e "o que a 6b não cobre")
 - Modify: `docs/superpowers/plans/2026-08-11-almoxarifado-etapa6b-series.md` (marcar tasks; escrever a próxima tarefa detalhada — **Etapa 6c: etiquetas/QR** — contrato que consome: `lotes_almoxarifado`, `series_almoxarifado`, telas de lote/série; pontos de atenção: geração de PDF, biblioteca de QR, impressão térmica vs A4)
 
-- [ ] **Step 1: rodar TUDO e citar os números reais** — `cd server && npm run test:api && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`; `cd client && CI=true npx react-scripts test --watchAll=false && CI=true npx react-scripts build`.
+- [x] **Step 1: rodar TUDO e citar os números reais** — `cd server && npm run test:api && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`; `cd client && CI=true npx react-scripts test --watchAll=false && CI=true npx react-scripts build`. **Resultado real (2026-08-11):** `test:api` 56/56 arquivos, `test:almoxarifado` 43 passou/0 falhou, `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 3/3; client 14 suítes / 150 testes, todos verdes; `CI=true npx react-scripts build` concluído sem erro (nenhum warning virou erro).
 
-- [ ] **Step 2: atualizar os 4 documentos** (regra do CLAUDE.md: doc desatualizada é trabalho não terminado; item não entregue fica desmarcado **com o porquê ao lado**). Em particular na spec 10: série implementada ✅ (com hashes), etiquetas 6c ❌, `controle_validade`/`controle_corrida` continuam mortas (agora as duas únicas).
+- [x] **Step 2: atualizar os 4 documentos** (regra do CLAUDE.md: doc desatualizada é trabalho não terminado; item não entregue fica desmarcado **com o porquê ao lado**). Feito: spec 10 (checklist com hash por item, `controle_serie` saiu da lista de flags mortas, aviso da Task 7 corrigido, pendências (a)-(j) da 6b registradas, e uma atribuição task→hash errada desde a Task 7 corrigida — ver a nota no topo deste arquivo); README mestre (linha 10, seção Etapa 6b, critério de aceite "rastrear lote e série" atendido); guia do usuário (cabeçalho, tabela consolidada, seção Etapa 6b completa com roteiro clicável e "o que não cobre"); este plano (cabeçalho de conclusão + tarefa da 6c abaixo).
 
-- [ ] **Step 3: commit + push**
+- [x] **Step 3: commit + push** — commit feito nesta sessão; push **não** feito de propósito (fica para o controlador, depois do review final — instrução explícita da Task 12).
 
 ```bash
 git add specs/modulo-almoxarifado docs/almoxarifado-guia-etapas-e-testes.md docs/superpowers/plans/2026-08-11-almoxarifado-etapa6b-series.md
@@ -1149,4 +1190,112 @@ git push origin desenvolvimento-almoxarifado
 - **Sem placeholders:** os corpos de teste resumidos em T4/T5/T6/T10 têm o cenário, os asserts-chave e o molde nomeado — o implementador escreve o corpo no padrão do arquivo-molde citado; nenhum "TBD".
 - **Consistência de nomes:** `entradaSeries`/`desfazerEntrada`/`claimSaidaSeries`/`desfazerSaida`/`reverterSaida`/`reverterEntrada`/`mudarStatusSerie`/`listarSeriesDoMaterial`/`contarPresentes` — iguais em T1-T7; params `series`/`serie_ids`; opção `exigeSerie`.
 - **Riscos apontados ao executor:** (1) posição exata dos blocos no `stockService` — usar os âncoras nomeados (guarda `exigeLote`, `claimSaldoDoLote`, INSERT do ledger), não números de linha; (2) o rollback do claim `cancelado=1` no estorno (T5) — a guarda de série roda ANTES do claim ou desfaz no throw; (3) CRA com `CI=true` transforma warning em erro — variável não usada quebra o build.
+
+---
+
+# Próxima etapa: 6b → 6c — Etiquetas com QR Code
+
+> **Escrito na Task 12 (2026-08-11), ao fechar a 6b, para quem pegar a 6c.** Ainda não tem design
+> aprovado nem tasks quebradas — isto é o *briefing de origem* que a 6c consome para começar, no
+> mesmo formato que a seção final do plano da Etapa 6 (2026-08-09) gerou o design da 6b. A primeira
+> ação de quem pegar a 6c é abrir `superpowers:brainstorming` com este briefing, não sair
+> escrevendo código.
+
+## Por que já está decidida como etapa própria
+
+A divisão em 6a (lotes)/6b (série)/6c (etiquetas) é de **2026-08-09**, no plano da Etapa 6 —
+etiquetas com QR sempre foram o terceiro terço, não um adicional que apareceu depois. A spec 10
+(seção "Objetivo") já falava em "etiquetas com QR/código de barras" desde a criação da feature.
+Nada disso é novo; o que muda agora é que as duas dependências de dado que a etiqueta precisa
+**existem** — antes da 6b, uma etiqueta de série não tinha o que imprimir.
+
+## O problema
+
+Hoje não existe nenhum jeito de gerar uma etiqueta física (papel, térmica, adesivo) para colar num
+material, lote ou unidade com número de série. Tudo que existe é a tela — quem quiser saber o lote
+ou a série de um item físico no galpão precisa abrir o sistema e procurar. Uma etiqueta com QR Code
+fecha esse ciclo: aponta a câmera (ou um leitor), abre a tela do item.
+
+## Contrato que a 6c consome (já pronto, não precisa reabrir)
+
+- **`lotes_almoxarifado`** (`server/services/almoxarifado/schema.js`) — `lotService.getLote`/
+  `getLotePorCodigo`/`listarLotesDoMaterial`. Campos que uma etiqueta de lote provavelmente quer:
+  `codigo`, `data_fabricacao`, `data_validade`, `corrida`, `status`, `fornecedor_id` (a spec 10
+  registra que `fornecedor_id` tem escritor e nenhum leitor hoje — a etiqueta seria o primeiro
+  consumidor, se o design decidir usá-lo).
+- **`series_almoxarifado`** (mesmo arquivo) — `seriesService.getSerie`/`getSeriePorNumero`/
+  `listarSeriesDoMaterial`. Campos: `numero`, `status`, `lote_id` (para etiqueta combinada
+  lote+série), `localizacao_id`.
+- **`materiais_almoxarifado`** — código GMP, descrição, unidade; é o dado comum a toda etiqueta,
+  com ou sem lote/série.
+- **Telas que precisam ganhar o botão "Imprimir etiqueta"**: `RecebimentosAlmoxarifado.js` (depois
+  de processar a nota — é o ponto natural, o material acabou de chegar), `LotesAlmoxarifado.js`
+  ("Lotes e Séries", uma ação por linha de lote e por linha de série), e possivelmente
+  `MateriaisAlmoxarifado.js` (etiqueta avulsa de localização/prateleira, sem lote nem série).
+- **Infra de PDF já no projeto** (não é preciso adicionar dependência nova para o servidor):
+  `pdfkit` e `puppeteer` já são dependências de `server/package.json` e já geram PDF em produção —
+  `server/gerarPDFProposta.js` é o molde de `pdfkit` (documento programático, sem HTML) e
+  `server/index.js` (`navegadorPdf`, em torno da linha 276 e da rota de proposta ~21601) é o molde
+  de `puppeteer` (renderiza HTML/CSS existente para PDF). O client tem `jspdf` +
+  `jspdf-autotable` + `html2canvas` como terceira opção (gerar o PDF no navegador, sem round-trip
+  ao servidor) — útil se a etiqueta for simples e não precisar de dado que só o servidor tem.
+  **Nenhuma lib de QR existe ainda em nenhum dos dois `package.json`** — essa é a única dependência
+  nova que a 6c precisa avaliar e adicionar.
+
+## Pontos de atenção (para o design decidir, não para o implementador chutar)
+
+1. **O que a etiqueta imprime, e o que o QR codifica.** A spec 10 (seção "Objetivo") já lista:
+   código GMP, descrição, quantidade, lote/série, fornecedor, pedido, NF, projeto, localização,
+   status de inspeção — mas uma etiqueta física tem espaço para uma fração disso. Decisão real:
+   qual subconjunto é o "mínimo que cabe numa etiqueta pequena" vs. o que só o QR carrega (ex.:
+   etiqueta mostra código + série em texto grande e legível a olho nu; o QR aponta para uma URL
+   profunda tipo `/almoxarifado/materiais/:id?serie=SN-123` que abre a tela cheia com todo o
+   resto). Overload de informação numa etiqueta pequena é o erro mais fácil de cometer aqui.
+2. **QR aponta para quê.** Duas opções não excludentes: (a) uma URL que abre a tela do
+   material/lote/série dentro do próprio sistema (exige sessão logada — pensar no caso de alguém
+   sem login lendo o QR pelo celular pessoal); (b) um payload autocontido (JSON com os campos
+   principais, sem round-trip ao servidor) — mais rápido de ler, mas desatualiza se o dado mudar
+   depois de impressa. Provavelmente a resposta certa é (a), com um fallback de "faça login para
+   ver" — mas isso é decisão de design, não deste briefing.
+3. **Geração de QR: client ou servidor.** Se a etiqueta for gerada por `pdfkit` (documento
+   programático), o QR precisa ser gerado como imagem/SVG **antes** de entrar no PDF — alguma lib
+   Node de QR (nenhuma no projeto ainda) roda no servidor e devolve um PNG/SVG para o `pdfkit`
+   desenhar. Se for `puppeteer` (renderiza HTML), dá para gerar o QR como SVG inline direto no HTML
+   com uma lib de QR client-side, sem precisar de lib Node separada. Se o PDF for gerado 100% no
+   client com `jspdf`, o QR também precisa ser gerado no client. A escolha de client vs. servidor
+   para o PDF decide a escolha de onde gerar o QR — não são duas decisões independentes.
+4. **Etiqueta térmica vs. A4.** Impressora térmica de etiqueta (rolo, formato fixo tipo 50×30mm ou
+   100×50mm, sem margem de página) é um layout completamente diferente de uma folha A4 com N
+   etiquetas por página (para imprimir numa impressora comum e recortar/colar com adesivo). O
+   cliente (GMP) não foi consultado ainda sobre qual impressora física usa no galpão — **essa é a
+   primeira pergunta do brainstorming da 6c**, porque decide o formato de página do PDF antes de
+   qualquer linha de código.
+5. **Etiqueta de retalho** (mencionada na spec 10, linha do checklist "Backend — etiquetas":
+   "Etiqueta de retalho com dimensões/peso remanescente — feature 15") depende de retalho existir
+   como conceito — feature 15 (`15-retalhos-sucatas`) está `🟡 sem UI` hoje. Provavelmente fica de
+   fora do escopo inicial da 6c e vira sub-tarefa quando a 15 avançar; **não travar a 6c esperando
+   a 15**.
+6. **Regras por tipo de material** (spec 10: "motores/instrumentos → série; chapas/tubos
+   certificados → lote+corrida; químicos → lote+validade") é uma tabela de decisão que hoje não
+   existe em lugar nenhum do código — é conteúdo de negócio, não campo de banco. Decisão de design:
+   inferir automaticamente qual etiqueta oferecer a partir de `controle_lote`/`controle_serie` do
+   material (mais simples, já é o dado que existe) em vez de uma tabela nova por tipo de material
+   (mais fiel à spec original, mas exige modelagem nova). Recomendação: começar pela inferência via
+   flags — é o caminho que reaproveita o que a 6b já entregou sem inventar conceito novo.
+7. **Sem transação, de novo.** Se a etiqueta grava qualquer registro (ex.: "etiqueta impressa em
+   tal data, por tal usuário" para auditoria de reimpressão), segue o mesmo idioma do resto do
+   motor: sem transação real, compensação explícita se precisar.
+
+## O que já está decidido (não reabrir)
+
+- Etiquetas e QR são **escopo da 6c**, não pendência esquecida da 6b — decisão de 2026-08-09,
+  reafirmada aqui.
+- Nenhuma lib de QR existe ainda — vai precisar entrar como dependência nova (server e/ou client,
+  conforme o ponto 3 acima).
+- `pdfkit` e `puppeteer` (server) e `jspdf`/`jspdf-autotable`/`html2canvas` (client) já existem e
+  não precisam de avaliação de "vale a pena adicionar" — a escolha é **qual dos três usar**, não
+  se adicionar algum.
+- O dado que a etiqueta imprime já existe inteiro (lote e série são entidades reais desde a Etapa 6
+  e a Etapa 6b) — a 6c é a primeira etapa desta feature que não depende de nenhum modelo de dados
+  novo além do que a etiqueta em si precisar registrar (se precisar).
 

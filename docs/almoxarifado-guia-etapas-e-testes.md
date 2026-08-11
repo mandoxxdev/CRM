@@ -2,11 +2,20 @@
 
 > Atualizado em 2026-08-11 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 6) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 6b) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
 > ## Onde o desenvolvimento parou — 2026-08-11
 >
-> **Etapas 1, 2, 3, 4, 5 e 6 completas — a Task 9 (correção da Etapa 6) também, e o review final do branch inteiro já foi feito e corrigido. Etapa 6b (Números de Série) — backend completo (Tasks 1-7, 2026-08-11).**
+> **Etapas 1, 2, 3, 4, 5 e 6 completas — a Task 9 (correção da Etapa 6) também, e o review final do branch inteiro já foi feito e corrigido. Etapa 6b (Números de Série) — ENTREGUE (backend + UI + documentação, `418d617..b46d820`). Próxima etapa: 6c (etiquetas com QR Code).**
+>
+> **A Etapa 6b fechou nesta mesma data.** As Tasks 8-11 entregaram a UI que faltava: textarea com
+> gerador de sequência na entrada (Movimentações), seletor de séries em estoque na saída, campo de
+> séries no Recebimento, e a aba "Séries" dentro de "Lotes e Séries" com bloqueio justificado. O
+> aviso que existia aqui — "não ligue Controle por série até a interface existir" — está
+> **superado**: a interface existe. A única ressalva que sobra é local: o modal rápido de
+> entrada/saída dentro da tela de **Materiais** continua sem campo de série (e sempre recusa
+> material controlado) — use a tela **Movimentações** para esses materiais. Ver a seção "Etapa 6b",
+> mais abaixo, para o roteiro de teste completo e o que ainda não está coberto.
 >
 > **2026-08-11 — auditoria completa das 24 specs contra o código, e mais uma correção.** Todas as
 > specs de feature foram conferidas contra o que o sistema faz de verdade e corrigidas onde
@@ -29,9 +38,9 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > Lotes** (mudar status, liberar vencimento, anexar certificado) e **Sucata**/**Perda** agora
 > selecionáveis na tela de Movimentações. Ver a seção "Task 9", logo depois da Etapa 6 abaixo.
 >
-> **A Etapa 6 (+ Task 9) cobriu a parte de LOTES.** Números de série (Etapa 6b) e etiquetas com QR
-> Code (Etapa 6c) **não** foram feitos — a feature foi dividida em três de propósito, porque era
-> grande demais para uma etapa só.
+> **A Etapa 6 (+ Task 9) cobriu LOTES; a Etapa 6b cobriu SÉRIE.** Só falta etiquetas com QR Code
+> (Etapa 6c) — a feature foi dividida em três de propósito, porque era grande demais para uma etapa
+> só.
 >
 > **Duas coisas continuam faltando, e você vai esbarrar nelas:**
 > 1. **Reprovar na inspeção não marca o lote** — continua bloqueando o material inteiro.
@@ -55,11 +64,11 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 >    localização e a saída saía de outra, a tela dizia "saldo 25" e o sistema respondia "saldo
 >    insuficiente: 0". Agora as duas pontas usam o mesmo número — o saldo total daquele lote.
 >
-> **A próxima é a Etapa 6b — Números de Série.** Ver o planejamento mestre em
+> **A próxima é a Etapa 6c — Etiquetas com QR Code.** Ver o planejamento mestre em
 > `specs/modulo-almoxarifado/README.md` e a tarefa detalhada no fim de
-> `docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md`.
+> `docs/superpowers/plans/2026-08-11-almoxarifado-etapa6b-series.md`.
 
-## Tabela consolidada — todas as alterações (Etapas 1 a 6)
+## Tabela consolidada — todas as alterações (Etapas 1 a 6b)
 
 Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha estão nas seções da etapa correspondente, mais abaixo.
 
@@ -106,6 +115,12 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 9 | Lotes (tela nova) | Bloquear/reprovar/reativar um lote, liberar vencimento e anexar certificado só existiam por API | Tela **Almoxarifado → Lotes**: escolhe o material, lista os lotes dele, e oferece as três ações |
 | 9 | Lotes | Lote bloqueado por falta de certificado ficava travado pela interface para sempre (só desenvolvedor destravava por API) | Botão **"Anexar certificado"** — se o bloqueio era por falta dele, libera sozinho ao anexar |
 | 9 | Movimentações | Sucata e Perda não estavam no seletor de tipo, mesmo o motor já aceitando as duas para descartar lote vencido | **Sucata** e **Perda** selecionáveis, com os mesmos campos que uma Saída pede |
+| 6b | Materiais | A opção "Controle por número de série" era decorativa | Checkbox ganha texto explicando o efeito; material com a flag exige série na entrada e na saída |
+| 6b | Movimentações (Entrada) | Não existia onde digitar série | Caixa de texto "um por linha" + contador `N/quantidade` + botão "Gerar sequência" (prefixo + início) |
+| 6b | Movimentações (Saída/Sucata/Perda) | idem | Lista de séries em estoque com checkbox e filtro de texto; filtra pelo lote quando um lote está selecionado |
+| 6b | Recebimentos | Não havia onde digitar série na nota | Caixa "Séries (uma por linha)" por item, com contador contra a quantidade recebida |
+| 6b | Lotes (tela) | Só existiam lotes | Vira **"Lotes e Séries"**: aba nova lista as séries do material com Bloquear/Desbloquear justificado |
+| 6b | Extrato | Sem indicador de série | Cartão "Séries em estoque" para material com a flag |
 
 ## Etapa 0 — Fundação (resumo)
 
@@ -518,9 +533,9 @@ continua barrado por bloqueio, com a mensagem de bloqueio. Situação vem antes 
 
 ### O que a Etapa 6 **não** cobre
 
-- **Números de série.** Rastrear peça por peça (motor nº tal, instrumento nº tal) continua não
-  existindo, e a opção "Controle por número de série" na ficha do material continua decorativa. É a
-  **Etapa 6b**, que é a próxima.
+- **Números de série.** *(Corrigido em 2026-08-11: esta linha dizia que série continuava não
+  existindo — a Etapa 6b entregou. Ver a seção "Etapa 6b", mais abaixo, para o que mudou e o
+  roteiro de teste.)*
 - **Etiquetas e QR Code.** Imprimir etiqueta de lote/material com código de barras ou QR não existe.
   É a **Etapa 6c**.
 - **Lote na entrega, na exclusão de requisição e na devolução.** Estas quatro operações movimentam
@@ -652,34 +667,149 @@ plano original; nasceu do review da Etapa 6, aprovada pelo cliente em 2026-08-09
 
 ---
 
-## Etapa 6b — Números de Série (BACKEND COMPLETO — 2026-08-11)
+## Etapa 6b — Números de Série (ENTREGUE — 2026-08-11)
 
-A Etapa 6 entregou apenas lotes (texto com validade/corrida/certificado — agregado por localização e lote).
-A Etapa 6b traz números de série: rastreamento individual de cada unidade física (motor SN tal, instrumento
-nº tal).
+A Etapa 6 entregou lotes (texto com validade/corrida/certificado — agregado por localização e lote).
+A Etapa 6b traz números de série: rastreamento individual de cada unidade física (motor SN tal,
+instrumento nº tal), com telas próprias — não é mais só motor de servidor.
 
-> ⚠️ **AVISO CRÍTICO:** Ligar `Controle por série` num material **TRAVA o recebimento dele pela tela** até
-> a interface estar pronta (Tasks 8-9 pendentes). O motor recusa a nota inteira se não vierem as séries
-> (coluna `recebimentos_material_itens_almoxarifado.serie_numeros`) — e a tela de Recebimentos ainda não
-> tem campo para preenchê-las. Da mesma forma, a movimentação manual v1 (modal rápido) sempre recusa.
-> **Não ligue a flag em produção até a UI estar completa.** O motor está 100% pronto; é só a interface.
+> **Aviso anterior superado.** Até esta atualização, este bloco dizia "ligar Controle por série
+> trava o recebimento pela tela até a interface existir — Tasks 8-9 pendentes". A interface existe
+> desde esta mesma data (Tasks 8-10). A única ressalva que sobra: o modal rápido de entrada/saída
+> dentro da tela de **Materiais** continua sem campo de série e sempre recusa material com a flag
+> ligada — use a tela **Movimentações** para materiais com controle de série.
 
-| Antes | Agora |
-|---|---|
-| A opção "Controle por número de série" na ficha do material era decorativa | Material com "Controle por série" **exige um número de série para cada unidade** na entrada; o **motor recusa** a nota/movimentação — a **UI** ainda não as oferece |
-| Série não tinha nem tabela nem motor | Tabela `series_almoxarifado` com número único por material, status (EM_ESTOQUE / BLOQUEADA / ENTREGUE / SUCATEADA / ESTORNADA), lote, localização, movimentação de entrada/saída, e auditoria completa |
-| Nenhuma rota HTTP para série | Duas rotas: `GET /api/almoxarifado/materiais/:id/series?status=` (lista com lote_codigo) e `PUT /api/almoxarifado/series/:id/status` (bloqueia/desbloqueia com justificativa) |
-| Motor de movimentação não sabia lidar com série | Motor completo: `entradaSeries` (cria/reativa), `claimSaidaSeries` (marca ENTREGUE/SUCATA), `reverterEntrada` (marca ESTORNADA), `reverterSaida` (volta a EM_ESTOQUE), `mudarStatusSerie` (EM_ESTOQUE ↔ BLOQUEADA) |
-| Série não era integrada a requisições/recebimentos/inspeção | Motor ligado em todos os fluxos: recebimento exige `serie_numeros` se `controle_serie=1`, saída aceita `serie_ids` se vierem, inspeção e estorno usam a mesma guarda de reversão que lotes |
+### Tabela consolidada — Etapa 6b
 
-**Backend 100% pronto (Tasks 1-7).** UI de série (seleção na separação/entrega) fica para depois — é o
-passo natural da Etapa 6b (Tasks 8-9). Também não existem (ainda): extrato agregado do lote, integração
-da aprovação de série com o workflow.
+| Onde | Antes | Agora |
+|---|---|---|
+| Materiais | A opção "Controle por número de série" na ficha do material era decorativa — marcava e nada acontecia | Ao marcar, um texto explica o efeito: "Exigirá um número de série por unidade na entrada e na saída" |
+| Movimentações (Entrada) | Não existia onde digitar série nenhuma | Para material com a flag, aparece uma **caixa de texto** "Números de série (um por linha)" com contador `N/quantidade` ao vivo, e um botão **"Gerar sequência"** (prefixo + número inicial preenche a caixa sozinho) |
+| Movimentações (Saída/Sucata/Perda) | idem | Aparece uma **lista de séries em estoque** (com filtro de texto) para marcar quais saem; se você já escolheu um lote, a lista filtra só as séries daquele lote |
+| Movimentações | Trocar o tipo ou o material podia deixar série "grudada" de uma escolha anterior | Trocar tipo ou material **limpa** a seleção de série, igual já acontecia com lote |
+| Recebimentos | Não havia onde digitar série na nota | Caixa de texto "Séries (uma por linha)" por item, ao lado dos campos de lote, com contador contra a quantidade recebida |
+| Lotes (tela) | Só existiam lotes | Vira **"Lotes e Séries"**: uma aba nova lista as séries do material (número, status com badge, lote, localização, última entrada/saída) com ação **Bloquear/Desbloquear** (justificativa obrigatória) |
+| Extrato do material | Sem indicador de série | Material com a flag ganha o cartão "Séries em estoque" no Extrato |
+| Motor (servidor) | `controle_serie` nunca era lida — coluna com escritor e sem leitor | Entrada exige N séries para N unidades; saída aceita quais séries saem; estorno devolve/estorna série; bloquear/desbloquear série avulsa; tudo auditado (`entidade='serie'`) |
 
-**Foco principal:** série é **1 linha por unidade** (não quantidade agregada como lote). Cada unidade
-individual tem seu ciclo de vida. Para material com `controle_serie=1` e `controle_lote=1`, entrada
-pede "2 unidades do lote L-001 com números SN-1 e SN-2". Na saída, o motor **aceita** `serie_ids` se
-vierem — a **UI** não os oferece ainda.
+### Regra que já existia para lote e agora vale para série também: rota v1 não tem campo
+
+O modal rápido de entrada/saída dentro da tela de **Materiais** (a rota antiga, sem `/v2`) **não tem
+campo de série** e sempre recusa movimentar material com `controle_serie` ligado — mesma limitação
+que ele já tinha para lote. Use a tela **Almoxarifado → Movimentações**, que tem os dois campos.
+
+### Roteiro de teste manual (Etapa 6b)
+
+**A) Ligar a flag num material e ver o hint**
+
+1. Vá em **Almoxarifado → Materiais**, edite um material (ou crie um novo). Na seção **Controles**,
+   marque **"Controle por número de série"**. Repare no texto pequeno logo abaixo do checkbox
+   explicando o efeito. Salve. Anote o código do material.
+
+**B) Entrada com o gerador de sequência**
+
+2. Vá em **Almoxarifado → Movimentações → Nova Movimentação**. Escolha o material do passo 1, tipo
+   **Entrada**, quantidade **3**. Repare que aparece a caixa "Números de série (um por linha)" com
+   o contador `0/3`.
+3. Preencha **Prefixo** com `SN-` e **Nº inicial** com `1`, clique **"Gerar sequência"**. A caixa
+   deve se preencher com `SN-1`, `SN-2`, `SN-3`, e o contador virar `3/3`.
+4. Confirme a movimentação. Deve passar.
+
+**C) Caso de erro esperado — cardinalidade errada**
+
+5. Nova entrada do mesmo material, quantidade **2**, mas digite só **1** linha na caixa de série.
+   Confirme. **Deve ser recusado**, com mensagem dizendo quantas séries faltam — e o saldo não pode
+   mudar (confira no Extrato).
+
+**D) Caso de erro esperado — série duplicada**
+
+6. Tente uma nova entrada usando de novo o número `SN-1` (que já está em estoque desde o passo 4).
+   **Deve ser recusado**, dizendo que a série já está em estoque.
+
+**E) Saída escolhendo séries específicas**
+
+7. Nova Movimentação, tipo **Saída**, mesmo material, quantidade **2**. Em vez de campo de texto,
+   aparece uma **lista com checkbox** das séries em estoque (`SN-1`, `SN-2`, `SN-3`). Marque duas
+   delas — o contador deve acompanhar (`2/2`). Preencha o motivo e confirme. Deve passar, e as duas
+   séries marcadas saem de estoque (confira na aba Séries, passo H).
+
+**F) Trocar o lote limpa a seleção de série (material com as duas flags)**
+
+8. Se você tiver (ou criar) um material com **"Controle por lote" e "Controle por número de
+   série"** ligados ao mesmo tempo: na saída, escolha um lote, marque uma série da lista, e então
+   troque o lote selecionado. **A seleção de série deve zerar** — a lista de séries disponíveis
+   também deve reduzir para só as daquele novo lote.
+
+**G) Bloquear uma série na aba "Séries" e ver a saída recusar**
+
+9. Vá em **Almoxarifado → Lotes** (agora "Lotes e Séries"). Escolha o material do passo 1 e clique
+   na aba **"Séries"**. A série que sobrou em estoque (`SN-3`, se você seguiu os passos acima)
+   aparece na lista com status **EM_ESTOQUE**.
+10. Clique na ação de bloquear. Tente confirmar **sem** justificativa — deve ficar bloqueado
+    (botão desabilitado ou recusa). Preencha uma justificativa (ex.: "suspeita de avaria") e
+    confirme. O badge da série muda para **BLOQUEADA**.
+11. Volte em Movimentações, tente uma Saída desse material escolhendo a série bloqueada. **Deve ser
+    recusada**, com o status da série na mensagem.
+
+**H) Recebimento com séries + o aviso de salvar antes de processar**
+
+12. Vá em **Almoxarifado → Recebimentos → Novo Recebimento**. Adicione o material do passo 1 com
+    uma quantidade. Avance o fluxo até a etapa de conferência (mesmos passos do roteiro da Etapa 6,
+    seção F). No item, ao lado dos campos de lote, aparece a caixa **"Séries (uma por linha)"** com
+    contador contra a quantidade recebida.
+13. Digite as séries e **salve** antes de clicar em "Processar Nota" — há um aviso na tela lembrando
+    disso; se você digitar e processar sem salvar, o processamento usa os dados salvos, não o que
+    está digitado na hora. Processe a nota. Confira na aba Séries que as novas séries entraram
+    vinculadas ao lote e ao recebimento.
+
+**I) Estorno devolvendo séries**
+
+14. No livro de Movimentações, estorne a saída do passo 7 (ícone de estornar, motivo obrigatório).
+    Confira na aba Séries que as duas séries voltam para **EM_ESTOQUE**.
+15. Estorne também uma entrada com série (se ainda não tiver sido consumida). As séries dessa
+    entrada devem virar **ESTORNADA** (não voltam a ficar disponíveis — foi a entrada que nunca
+    devia ter acontecido).
+
+**J) KPI no Extrato**
+
+16. Abra o **Extrato** do material (Materiais → ícone Extrato). Deve aparecer o cartão **"Séries em
+    estoque"** mostrando a contagem atual.
+
+### Casos de erro esperados (resumo)
+
+- Entrada sem série nenhuma em material controlado — recusada.
+- Cardinalidade errada (menos ou mais séries que a quantidade) — recusada, nada muda no saldo.
+- Quantidade fracionária em material com controle de série — recusada ("exige quantidade inteira").
+- Série já em estoque tentando entrar de novo — recusada.
+- Saída pedindo uma série que já saiu, está bloqueada, ou é de outro material/lote — recusada, e as
+  séries que já tinham sido "reservadas" na mesma tentativa voltam para EM_ESTOQUE (nada fica
+  travado pela metade).
+- Modal rápido da tela de Materiais (rota v1) com material controlado — sempre recusado; use
+  Movimentações.
+
+### O que a Etapa 6b **não** cobre
+
+- **Etiquetas e QR Code.** Imprimir etiqueta com o número de série (ou de lote) não existe. É a
+  **Etapa 6c**, a próxima.
+- **Série na entrega, na exclusão de requisição e na devolução.** As mesmas quatro operações que já
+  não pedem lote (entrega de requisição, exclusão/estorno de requisição, devolução e sucata de
+  devolução) também não pedem série — nenhuma dessas telas tem campo para isso. Reentrada de uma
+  devolução com série se faz manualmente pela tela de Movimentações (ENTRADA citando a série que
+  volta). Transferência entre almoxarifados também não pede série, mesma lacuna já declarada para
+  lote.
+- **Reprovar uma série pela tela de Inspeções.** A inspeção continua decidindo por quantidade do
+  material, não por série individual — bloquear uma série específica só existe pela aba "Séries"
+  (ação manual avulsa).
+- **Reserva por número de série.** Reservar continua sendo do material, não de uma série (nem de um
+  lote) específico.
+- **Filtro por status na aba Séries.** A tabela lista todas as séries do material de uma vez — não
+  há um seletor "só EM_ESTOQUE" ou "só BLOQUEADA" ainda. Como a tabela por material costuma ser
+  pequena, não travou a etapa.
+- **"Salvar antes de processar" no Recebimento é um aviso, não uma trava.** Se você digitar séries
+  na tela e clicar direto em "Processar Nota" sem salvar, o processamento usa os dados **salvos**
+  — mesmo comportamento que os campos de lote já tinham.
+- **Extrato agregado do lote** ("tudo que aconteceu com este lote/série numa tela só") continua sem
+  existir — os dados estão espalhados em movimentações, auditoria e a própria tabela de série/lote.
 
 ### O que faltava era de verdade — série era só uma flag morta
 
@@ -690,9 +820,13 @@ test:api` rodava verde porque os testes não testavam série (ela estava marcada
 original). Era o mesmo padrão que a spec desta feature toda documenta como **"coluna com escritor,
 sem leitor"**.
 
-Implementação: Task 1 (tabela real + `seriesService` de leitura/entrada), Task 2 (entrada com
-compensação de erro), Task 3 (saída e reativação), Task 4 (reversões), Task 5 (bloqueio com mudança de
-status), Task 6 (integração com motor em todos os fluxos), Task 7 (rotas HTTP de leitura/bloqueio).
+Implementação: tabela `series_almoxarifado` + `seriesService` dono único (leitura, entrada com
+compensação de erro, claim de saída, reversões de estorno, bloqueio com justificativa), motor
+(`stockService`) integrado em movimentações/recebimento com o invariante `COUNT(séries presentes) ==
+quantidade_atual` protegido até sob falha do INSERT do ledger, duas rotas HTTP, e a UI descrita acima
+(Movimentações, Recebimentos, aba Séries, hint da flag, KPI no extrato). Detalhe task a task —
+incluindo os fix rounds e o porquê de cada um — no
+[plano de implementação](superpowers/plans/2026-08-11-almoxarifado-etapa6b-series.md).
 
 ---
 
@@ -720,10 +854,14 @@ status), Task 6 (integração com motor em todos os fluxos), Task 7 (rotas HTTP 
 - Anexos na requisição (desenho/documento) e assinatura digital na retirada: ainda não implementados.
 - Importar itens de uma lista técnica ou ordem de produção na requisição: ainda não implementado (depende da integração com Engenharia/Produção).
 - Registrar lote/série entregue por item na requisição: ainda não implementado. O controle de lotes
-  passou a existir na Etapa 6, mas a **entrega da requisição** ainda não pergunta de qual lote saiu.
+  e o de série passaram a existir (Etapas 6 e 6b), mas a **entrega da requisição** ainda não
+  pergunta de qual lote/série saiu — mesma isenção declarada para os dois.
 - **Lotes: completo na Etapa 6 + Task 9** — motor, recebimento, saída, e a tela **Almoxarifado →
   Lotes** (mudar status, liberar vencimento, anexar e agora **abrir** o certificado). Falta o
   "extrato do lote" (histórico agregado numa tela só) — ver "O que a Task 9 não cobre", acima.
+- **Série: completo na Etapa 6b** — motor, recebimento, saída e a aba **Séries** dentro de "Lotes e
+  Séries" (bloquear/desbloquear com justificativa). Falta reserva por série e reprovação por série
+  via inspeção — ver "O que a Etapa 6b não cobre", na seção da etapa, acima.
 - **Lote na entrega de requisição e na devolução (novo, 2026-08-10).** Quatro operações movimentam
   estoque sem lote mesmo em material com "Controle por lote": entrega de requisição, exclusão de
   requisição (estorno), devolução para estoque e sucata de devolução. Nenhuma tem campo de lote.

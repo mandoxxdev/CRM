@@ -1,8 +1,18 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
-> **Status:** 🟡 — **lote é entidade real desde a Etapa 6, com tela completa desde a Task 9
-> (2026-08-09)**; série e etiquetas não existem · **Spec original:** seção 10
-> **Última atualização:** 2026-08-11 (**auditoria spec×código: tudo confirmado; refs de linha
+> **Status:** 🟢 — **lote e série são entidades reais, ambas com tela completa** (lote desde a
+> Task 9, 2026-08-09; série desde a Etapa 6b, 2026-08-11); só faltam etiquetas com QR (Etapa 6c) ·
+> **Spec original:** seção 10
+> **Última atualização:** 2026-08-11 (**Etapa 6b fechada — Task 12 (documentação e verificação
+> final)**: checklist de número de série marcado `[x]` item por item com hash — backend Tasks 1-7
+> (`418d617..fc33d59`) + UI Tasks 8-11 (`4836d24..f11a3f0`); `controle_serie` sai da lista de flags
+> mortas, restam só `controle_validade`/`controle_corrida`; o aviso "não ligue `controle_serie` em
+> produção até a UI existir", gravado pela Task 7, está **superado** — a UI existe desde as Tasks
+> 8-10, ver a correção logo depois da tabela das cinco flags; pendências (a)-(j) específicas da 6b
+> registradas na seção de pendências, no fim deste documento; verificação final: `test:api` 56/56,
+> `test:almoxarifado` 43/43, `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 3/3, client
+> 150/150, build CI limpo.)
+> Antes: 2026-08-11 (**auditoria spec×código: tudo confirmado; refs de linha
 > trocadas por nomes** — as três citações numéricas que restavam (`consultarSaldosPorLocalizacao`,
 > as rotas de lote em `extended.js`, o registro do `express.static`/`almoxMiddleware` em
 > `routes/almoxarifado.js`) ficaram só com arquivo + símbolo/rota; a citação
@@ -30,8 +40,8 @@ descrevia como um item único — o que fazia parecer que ficaria pronta de uma 
 |---|---|---|
 | **Etapa 6** | Lotes: tabela real, validade, corrida, certificado, FEFO, guarda contra saldo negativo por lote, campo de lote no recebimento | ✅ **entregue em 2026-08-09** (`b7035dd..9406bff`) |
 | **Task 9** | Tela de lotes (status/vencimento/certificado) + Sucata/Perda selecionáveis na Movimentação — não estava no plano, nasceu do review da Task 8 | ✅ **entregue em 2026-08-09** (`09c75d2`) |
-| **Etapa 6b** | Números de série — confirmado em 2026-08-09 que a GMP rastreia série individualmente hoje (rotina, não exceção). Não é descarte de escopo, é sequência | **próxima** — tarefa detalhada no fim do plano da Etapa 6 |
-| **Etapa 6c** | Etiquetas com QR Code e impressão em PDF | depois da 6b |
+| **Etapa 6b** | Números de série — confirmado em 2026-08-09 que a GMP rastreia série individualmente hoje (rotina, não exceção). Não é descarte de escopo, é sequência | ✅ **entregue em 2026-08-11** (`418d617..b46d820`, backend + UI) |
+| **Etapa 6c** | Etiquetas com QR Code e impressão em PDF | **próxima** — tarefa detalhada no fim do [plano da Etapa 6b](../../../docs/superpowers/plans/2026-08-11-almoxarifado-etapa6b-series.md) |
 
 (`6b`/`6c` e não `7`/`8` de propósito: as etapas 7 e 8 do plano mestre já são
 transferências/devoluções e materiais de clientes/terceiros.)
@@ -211,17 +221,18 @@ Como não há transação no módulo, a correção tem duas pontas:
    daquele item por fazer. A coluna nasce com escritor **e** leitor: o leitor é o próprio `WHERE`
    do claim, que decide se o item entra.
 
-### As cinco flags `controle_*`: duas acesas, três ainda mortas
+### As cinco flags `controle_*`: três acesas, duas ainda mortas
 
 A versão anterior desta spec corrigiu "são cinco flags mortas, não duas". A Etapa 6 acendeu duas
-delas. Registrar quais continuam mortas é obrigatório aqui — acender duas e ficar em silêncio
-sobre as outras três recriaria exatamente a confusão que esta spec existe para documentar.
+delas, e a Etapa 6b (2026-08-11) acendeu a terceira (`controle_serie`). Registrar quais continuam
+mortas é obrigatório aqui — acender uma e ficar em silêncio sobre as outras duas recriaria
+exatamente a confusão que esta spec existe para documentar.
 
 | Flag | Estado | Onde é lida | Acende em |
 |---|---|---|---|
 | `controle_lote` | ✅ **acesa** (`2dbbf60`, alcance corrigido em 2026-08-10) | `stockService.registrarMovimentacao` — exige lote **onde o operador tem como informá-lo**: movimentação manual (v1/v2) e recebimento. Ver "O alcance REAL", acima | Etapa 6 |
 | `controle_certificado` | ✅ **acesa** (`64686b1`, `c11db85`) | `receiptService.darEntradaEstoque` — lote sem certificado nasce `BLOQUEADO` | Etapa 6 |
-| `controle_serie` | ❌ **morta** — gravada pelo CRUD, nunca lida | — | **Etapa 6b** (números de série) |
+| `controle_serie` | ✅ **acesa** (`2ab27ed` motor de entrada, `a5f7fad..70f4173` saída, `fc33d59` rotas) | `stockService.registrarMovimentacao` — exige N séries **onde o operador tem como informá-las**: mesmo alcance de `controle_lote` (movimentação manual v1/v2 e recebimento). UI completa desde as Tasks 8-10 (2026-08-11) | **Etapa 6b — entregue 2026-08-11** |
 | `controle_validade` | ❌ **morta** — gravada pelo CRUD, nunca lida | — | sem etapa definida (ver nota abaixo) |
 | `controle_corrida` | ❌ **morta** — gravada pelo CRUD, nunca lida | — | sem etapa definida (ver nota abaixo) |
 
@@ -241,18 +252,24 @@ sobre as outras três recriaria exatamente a confusão que esta spec existe para
 > Ficam só arquivo e nome do símbolo — número de linha em spec envelhece entre dois commits, e
 > quem for apagar tem de rodar o grep de novo, que é o comportamento certo.
 
-As três mortas (`controle_serie`, `controle_validade`, `controle_corrida`) aparecem em:
+> **Correção (Etapa 6b, 2026-08-11): `controle_serie` saiu desta lista — acendeu.** Continuava
+> nomeada como "morta" no cabeçalho da tabela acima até a Task 12 corrigir; a lista de arquivos
+> abaixo (`materialCols`, `MaterialSchema`, handlers de material, formulário) descreve onde a flag é
+> **gravada** — isso não mudou, ela continua uma coluna do cadastro do material — mas agora ela
+> também é **lida**, em `stockService.registrarMovimentacao` (ver a tabela das cinco flags, acima).
+
+As duas que continuam mortas (`controle_validade`, `controle_corrida`) aparecem em:
 
 | Arquivo | Onde procurar |
 |---|---|
-| `server/services/almoxarifado/schema.js` | lista `materialCols` (as três colunas `INTEGER DEFAULT 0`) |
-| `server/services/almoxarifado/schemas.js` | `MaterialSchema` (as três como `FlagSchema`) |
+| `server/services/almoxarifado/schema.js` | lista `materialCols` (as colunas `INTEGER DEFAULT 0`) |
+| `server/services/almoxarifado/schemas.js` | `MaterialSchema` (`FlagSchema`) |
 | `server/routes/almoxarifado.js` | handlers de `POST /materiais` e `PUT /materiais/:id` (destructuring do body, lista de colunas do INSERT e do UPDATE) |
 | `client/src/components/almoxarifado/MaterialAlmoxarifadoForm.js` | estado inicial do formulário, carga do material e os checkboxes da seção "Controles" |
-| `server/tests/api/materialCompleto.api.test.js` | grava e lê as três de propósito — **quebra se as colunas forem apagadas sem tocar aqui** |
+| `server/tests/api/materialCompleto.api.test.js` | grava e lê as três flags (`controle_serie` incluída, já acesa) de propósito — **quebra se as colunas forem apagadas sem tocar aqui** |
 
 (Reverificado por grep em `server`/`client` — excluindo `client/build`, artefato gerado — em
-2026-08-10.)
+2026-08-10; `controle_serie` reclassificada em 2026-08-11.)
 
 > **Sobre `controle_validade` e `controle_corrida`:** a Etapa 6 entregou os **dados** que essas
 > flags governariam (`data_validade` e `corrida` no lote, com a guarda de vencimento funcionando),
@@ -260,7 +277,8 @@ As três mortas (`controle_serie`, `controle_validade`, `controle_corrida`) apar
 > aceita lote sem validade sem reclamar. Não tem etapa marcada porque é um incremento pequeno
 > dentro de qualquer etapa futura de lotes, não uma etapa própria. Se ninguém pedir, a decisão
 > honesta é **apagar as duas colunas** em vez de deixá-las parecendo implementadas — foi
-> exatamente o que a Etapa 6 fez com as três colunas de retenção do saldo.
+> exatamente o que a Etapa 6 fez com as três colunas de retenção do saldo. `controle_serie` prova
+> que essa decisão é reversível: era a terceira flag desta mesma lista até a Etapa 6b acendê-la.
 
 ### ⚠️ Histórico — "o motor já segrega saldo por lote" era meia verdade (RESOLVIDO na Task 3)
 
@@ -379,16 +397,47 @@ rota fazia isso. Era uma parede com placa de porta.
 
 ### Backend — números de série
 
-**Etapa 6b** — Tasks 1-7 entregues em 2026-08-11 (design/tabela/motor/motor-rotas/recebimento/guards/rotas-http). **Range: `418d617..fc33d59`.**
+**Etapa 6b — ✅ ENTREGUE em 2026-08-11 (backend Tasks 1-7 + fix rounds, UI Tasks 8-11, docs Task 12). Range completo: `418d617..b46d820`.**
 
-> ⚠️ **ATENÇÃO CRÍTICA:** Ligar `controle_serie` num material **TRAVA o recebimento dele pela tela** até a UI estar pronta. O `receiptService.darEntradaEstoque` exige N séries para N unidades (lê `recebimentos_material_itens_almoxarifado.serie_numeros`) e recusa a nota inteira se elas não vierem — e a tela de Recebimentos ainda não tem campo de série (Tasks 8-9 da UI, pendentes). Da mesma forma, a movimentação manual v1 (modal rápido da tela de Materiais) recusa qualquer serie_ids que não seja `null` ou array. **Não ligue `controle_serie` em produção até a UI estar completa, ou faça entradas por API.** O motor de série está 100% pronto; é só a interface que falta.
+> ⚠️ **Aviso anterior superado — 2026-08-11.** Até o fim da Task 7 este bloco dizia: *"Ligar
+> `controle_serie` num material TRAVA o recebimento dele pela tela até a UI estar pronta (Tasks
+> 8-9 pendentes)... Não ligue `controle_serie` em produção até a UI estar completa"*. Isso estava
+> certo **naquele momento** (entre as Tasks 7 e 8) e está **errado agora**: as Tasks 8-10 entregaram
+> a UI — Movimentações (textarea com gerador de sequência na entrada, seletor com checkbox filtrado
+> por lote na saída), Recebimentos (textarea de séries por item) e a aba "Séries" dentro de
+> "Lotes e Séries" (bloquear/desbloquear com justificativa). **A ressalva que sobra, e é a única:**
+> o modal rápido de entrada/saída da tela de **Materiais** (rota v1, `POST /movimentacoes` sem
+> `/v2`) continua sem campo de série e **sempre recusa** material com `controle_serie` — não tem
+> onde digitar. Para material controlado, use a tela **Movimentações** (rota v2), que tem os
+> campos. Isso não é uma limitação nova desta correção: é o mesmo padrão que a rota v1 já tem para
+> `controle_lote` (ver "Não confundir com a rota v1" na seção de pendências, mais abaixo) — série
+> só estende a mesma regra.
 
-- [x] Tabela `series_almoxarifado`: material, número de série, status (EM_ESTOQUE/BLOQUEADA/ENTREGUE/SUCATEADA/ESTORNADA), localização, projeto/OS atual — **Tasks 1-2 (`418d617..f592907`)**: tabela real, `seriesService` (leitura e entrada), guarda de duplicata, ciclo de vida EM_ESTOQUE → BLOQUEADA ↔ (desbloqueio) → ENTREGUE/SUCATA/ESTORNO, auditoria com entidade='serie'
-- [x] `controle_serie` no material: entrada exige N séries para N unidades; saída exige quais séries — **Task 3** (`2ab27ed`) (motor de entrada `entradaSeries` com compensação de erro) + **Task 4** (`a5f7fad..70f4173`) (motor de saída `claimSaidaSeries` com reativação de ENTREGUE/SUCATA/ESTORNO) + **Task 5** (`d77626d..5b1b04a`) (reversões `reverterEntrada`/`reverterSaida` com snapshot de estado para compensação no estorno) + **Task 6** (`400bb15..bafc4c6`) (mudar status de série `mudarStatusSerie` com guarda de transição e justificativa obrigatória). A flag está acesa desde Task 3
+> **Correção da atribuição task→hash (Task 12, 2026-08-11): a linha abaixo estava errada desde a
+> própria Task 7.** Ela citava "Task 6 (`400bb15..bafc4c6`) — mudar status de série
+> `mudarStatusSerie`", mas conferido de novo contra `git log` na Task 12, `400bb15` é o commit
+> *"serie nasce no recebimento"* — não tem nada a ver com `mudarStatusSerie`. `mudarStatusSerie`
+> nasceu na **Task 2** (`aa0dbd0`, mensagem "claim de saida, estorno e bloqueio de series"), junto
+> com `claimSaidaSeries`/`reverterSaida`/`reverterEntrada` na camada de serviço. A tabela abaixo é
+> a atribuição real, reconferida hash a hash.
+
+- [x] Tabela `series_almoxarifado` + `seriesService` núcleo (leitura, entrada com compensação genérica e auditoria completa na reativação) — **Task 1 (`418d617`+fix `f592907`)**
+- [x] `seriesService` — saída/estorno/bloqueio: `claimSaidaSeries`, `reverterSaida`, `reverterEntrada`, `mudarStatusSerie` (guarda de transição e justificativa obrigatória), compensação genérica no claim e `RETURNING` nos estornos — **Task 2 (`aa0dbd0`+fix `f7a5fc3`)**
+- [x] `controle_serie` no material: entrada exige N séries para N unidades — motor (`stockService.registrarMovimentacao`), Zod (`MovimentacaoSchema`) e rotas v1/v2 declarando `exigeSerie` — **Task 3 (`2ab27ed`)**. A flag está acesa desde aqui
+- [x] Saída consome séries específicas via `serie_ids`, com claim e compensação se o crédito do ledger falhar depois — **Task 4 (`a5f7fad`+fix `70f4173`)**
+- [x] Estorno: `cancelarMovimentacao` chama `reverterSaida`/`reverterEntrada` nos mesmos pontos onde o saldo é devolvido/retirado; recusa estornar entrada com série já movimentada; compensa saldo e séries se o ledger falhar no meio do estorno — **Task 5 (`d77626d`+fix `5b1b04a`)**
+- [x] **Série nasce no recebimento** (`receiptService.darEntradaEstoque`) — pré-checagem da nota inteira (item com `controle_serie` sem N séries válidas recusa a nota inteira, antes de mover qualquer coisa, mesma régua do lote); griffagem de origem (`recebimento_id`/`recebimento_item_id`) é gated por `controle_serie` e **não-fatal** — ver pendência (g), abaixo — **Task 6 (`400bb15`+fix `bafc4c6`)**
 - [x] **Série é única por material; ciclo de vida rastreável** — implementado Tasks 1-7 — [`.superpowers/sdd/2026-08-11-almoxarifado-etapa6b-series/`](../../../.superpowers/sdd/2026-08-11-almoxarifado-etapa6b-series/) tem o design, plano e relatórios de cada task
-- [x] **Rotas HTTP** (Task 7, **`fc33d59`**): 
+- [x] **Rotas HTTP** (Task 7, **`fc33d59`**+doc `eba5ff1`+fix `c6eff55`, teste de corrida real e hashes corrigidos):
   - `GET /api/almoxarifado/materiais/:id/series?status=` (perm. `visualizar`) — lista com lote_codigo
   - `PUT /api/almoxarifado/series/:id/status` (perm. `inspecionar`) — muda de EM_ESTOQUE ↔ BLOQUEADA com justificativa obrigatória
+
+### Frontend — números de série
+
+- [x] **Movimentações** (Task 8, `4836d24`+fix `576fd61`): entrada com textarea "um por linha" + contador `N/quantidade` + botão "Gerar sequência" (prefixo + número inicial); saída/sucata/perda com seletor de checkboxes das séries `EM_ESTOQUE`, filtro de texto, e filtro automático pelo lote quando um lote está selecionado; troca de tipo ou de material limpa a seleção
+- [x] **Recebimentos** (Task 9, `597ec82`): textarea "Séries (uma por linha)" por item, ao lado dos campos de lote, com contador contra a quantidade recebida; aviso estático de "salve antes de processar" — ver pendência (i)
+- [x] **Aba "Séries" em "Lotes e Séries"** (Task 10, `b46d820`): `LotesAlmoxarifado.js` ganhou a aba (tabela: número, status com badge, lote, localização, última entrada/saída) e a ação Bloquear/Desbloquear com justificativa obrigatória (gate `inspecionar`); label do menu virou "Lotes e Séries"
+- [x] **Hint da flag + KPI no extrato** (Task 11, `f11a3f0`+fix `78631e1`): `MaterialAlmoxarifadoForm.js` explica o efeito de `controle_serie` no checkbox; `ExtratoMaterialModal.js` ganha o cartão "Séries em estoque" quando o material tem a flag
 
 ### Backend — etiquetas
 > Nada abaixo foi entregue: etiquetas são a **Etapa 6c**, depois da 6b.
@@ -407,7 +456,7 @@ rota fazia isso. Era uma parede com placa de porta.
   e oferece mudar status, liberar vencimento (só para lote vencido) e anexar certificado (libera
   sozinho o lote que estava bloqueado por falta dele). Ver pendência (a), abaixo, para o que ainda
   falta (extrato agregado do lote)
-- [ ] Seleção de série na movimentação, separação e entrega — **Etapa 6b**
+- [x] Seleção de série na movimentação — **Etapa 6b, Task 8 (`4836d24`+fix `576fd61`)**. Separação e entrega da requisição continuam sem campo de série — é um dos 4 fluxos internos isentos, pendência (a) da lista abaixo, mesmo padrão já declarado para lote
 - [ ] Botão imprimir etiqueta (recebimento, material, localização) — **Etapa 6c**
 
 ## Pendências abertas depois da Etapa 6
@@ -538,6 +587,60 @@ nesses caminhos seria travar operação — foi exatamente o defeito corrigido.
 contrato, mas **continua exigindo** — ali o operador tem uma porta (a tela de Movimentações, que
 tem o campo). Os quatro acima não têm porta nenhuma.
 
+## Pendências abertas depois da Etapa 6b (números de série)
+
+Letradas independentemente das pendências de lote acima ((a)-(g)), para não colidir com elas.
+Nenhuma é lacuna esquecida — são decisões de escopo tomadas no design da 6b ou débitos técnicos
+conhecidos, registrados de propósito em vez de ficarem implícitos.
+
+- **(a) Os mesmos 4 fluxos internos + transferência são isentos de série** (entrega de requisição,
+  exclusão administrativa de requisição, devolução para estoque, sucata de devolução; e
+  transferência entre almoxarifados) — espelho exato do padrão já declarado para `controle_lote`
+  (ver pendência (g) do lote, acima). Reentrada de uma devolução com série se faz hoje por
+  **ENTRADA manual** na tela de Movimentações (o motor reativa série `ENTREGUE` de volta a
+  `EM_ESTOQUE`), não por um campo de série na tela de Devolução, que não existe.
+- **(b) Reprovação por série via inspeção não está ligada** — espelho exato da pendência (e) do
+  lote: `inspectionService.decidirInspecao` continua bloqueando o **material inteiro**, não a série
+  individual. O status `BLOQUEADA` da série existe e funciona (via `mudarStatusSerie`, tela "Lotes
+  e Séries"), mas só por ação manual avulsa, não pela decisão de inspeção.
+- **(c) Reserva por número de série não existe** — mesma lacuna que reserva por lote (feature 07):
+  reservar continua sendo do material, não de uma série nem de um lote específico.
+- **(d) As compensações dentro dos `catch` do motor não são failure-safe** — é o mesmo débito
+  arquitetural que `claimSaldoDoLote` já tem: sem transação no SQLite, se o próprio `UPDATE`/`DELETE`
+  de compensação falhar (ex.: banco momentaneamente indisponível), o estado fica inconsistente.
+  Resolve com a migração para Postgres (ver memória do projeto `migracao-sqlite-para-postgres.md`),
+  não antes.
+- **(e) Estorno de entrada legada fracionária, com `controle_serie` ligado retroativamente, é
+  recusado com mensagem enganosa.** Se um material ganhou `controle_serie` depois de já ter saldo
+  fracionário sem série (estoque legado), o estorno dessa entrada antiga cai na guarda "há séries
+  desta entrada já movimentadas" mesmo quando nunca existiu série nenhuma vinculada — a mensagem
+  aponta para o caminho errado. Caso raro (requer religar a flag num material com saldo legado
+  fracionário), não corrigido nesta etapa.
+- **(f) Quarentena + série não tem teste automatizado.** Verificado por sonda manual: séries de um
+  item retido em `QUARENTENA` entram como `EM_ESTOQUE` normalmente (a retenção é por quantidade do
+  material, não por série individual — mesmo comportamento documentado para lote). Comportamento
+  correto e intencional, mas sem teste de API dedicado cobrindo o cruzamento dos dois.
+- **(g) Griffagem de origem da série é não-fatal.** Depois que o motor cria a série, o
+  `receiptService` roda um `UPDATE` separado para gravar `recebimento_id`/`recebimento_item_id` na
+  série — se esse `UPDATE` falhar (situação rara), a série já existe e está correta em estoque, só
+  fica sem o vínculo de origem. Reparo é manual, por SQL direto. Decisão: não vale travar a entrada
+  física por causa de um campo informativo.
+- **(h) Filtro por status na aba Séries não foi entregue.** O design (Task 10) mencionava um filtro
+  por status na aba "Séries" de "Lotes e Séries"; não entrou na implementação porque a tabela por
+  material é pequena (dezenas de linhas, não milhares) — a rolagem simples já resolve. Fica como
+  débito pequeno, não como bug.
+- **(i) Dirty-state do recebimento com séries digitadas e não salvas.** O botão "Processar Nota" lê
+  os dados **salvos** do recebimento, não o que está digitado na tela no momento do clique — se o
+  operador digitar séries e clicar direto em "Processar" sem salvar antes, elas não entram.
+  Mitigado com um aviso estático na tela ("salve antes de processar"), não com trava de fato — é o
+  mesmo comportamento que os campos de lote já tinham antes da 6b, só ficou mais visível com série
+  porque errar a cardinalidade é mais provável que errar um código de lote.
+- **(j) Minors de teste deferidos** (não bloqueiam a etapa, ficam anotados para quem pegar a 6c ou
+  mexer de novo nestas telas): assert do badge da série `cancelado`/`ESTORNADA` na aba Séries;
+  teste de corrida de troca-de-material na aba Séries (trocar o material selecionado enquanto o
+  fetch da lista anterior ainda está em voo); caso multi-linha do "claim" de lote quando a saída
+  teria de drenar mais de uma linha de saldo do mesmo lote com série simultaneamente.
+
 ## Regras essenciais + testes de API exigidos
 
 | Regra | Teste | Estado |
@@ -564,8 +667,10 @@ tem o campo). Os quatro acima não têm porta nenhuma.
 | Lotes vêm em ordem FEFO, não elegíveis no fim | `lotes vem em ordem FEFO, nulos por ultimo` + `lote nao elegivel aparece, mas no fim da lista` — `loteRotas.api.test.js` | ✅ `8dfeb0c` |
 | Mudar status de lote exige justificativa e permissão | `mudar status pela rota exige justificativa` + `perfil sem permissao nao muda status de lote` — `loteRotas.api.test.js` | ✅ `8dfeb0c` |
 | Saldo por lote soma o saldo do material | coberto indiretamente por `loteMigracaoSaldo.api.test.js` + `ajusteLocalizacao.api.test.js` (reconciliação por soma) | ✅ `015e94c` |
-| Série não pode estar em dois lugares | `entrada de serie ja em estoque falha` | ⏳ Etapa 6b |
-| Saída de material seriado exige séries válidas em estoque | `saida seriada com serie inexistente falha` | ⏳ Etapa 6b |
+| Série não pode estar em dois lugares | `entrada de serie ja em estoque falha sem efeito nas demais` — `serieService.api.test.js` | ✅ `418d617` |
+| Saída de material seriado exige séries válidas em estoque | `saida com serie de outro material e recusada sem efeito` / `saida com serie BLOQUEADA e recusada e nao deixa claim parcial` — `serieGuardasSaida.api.test.js` | ✅ `a5f7fad` |
+| Invariante `COUNT(séries presentes) == quantidade_atual` sobrevive até a falha do INSERT do ledger | fechamento de todo teste de série via `assertInvarianteSerie` (`tests/helpers/serieInvariante.js`) — `serieControleObrigatorio`/`serieGuardasSaida`/`serieEstornoDevolucao`/`serieRecebimento.api.test.js` | ✅ Tasks 3-6 |
+| Nota com item sem N séries válidas é recusada inteira; reprocessar não duplica série | `nota com item sem series em material controlado e recusada inteira` / `reprocessar a nota nao duplica series` — `serieRecebimento.api.test.js` | ✅ `597ec82` |
 
 ## Dependências
 
