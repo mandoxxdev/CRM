@@ -123,6 +123,36 @@ const seriesDoMaterial = (db, materialId) => dbAll(db,
     }
   });
 
+  await test('material sem controle_serie com texto em series nao reescreve serie orfa pre-existente do material', async () => {
+    // Fix round 1 (achado do review por sonda): a griffagem original olhava so
+    // `numerosSerie.length > 0`, sem checar `item.controle_serie`. Um item de material SEM
+    // controle de serie mas com texto residual no campo `series` (ex.: sobra de quando o
+    // material tinha controle_serie ligado, ou colado por engano) reescrevia
+    // recebimento_id/recebimento_item_id de uma serie ORFA pre-existente do MESMO material so
+    // porque o numero batia — mesmo o motor nao tendo tocado nela nesta chamada (controle_serie=0
+    // -> serieObrigatoria=false no motor -> entradaSeries nem roda).
+    const mat = await novoMaterial(db, { controleSerie: 0 });
+    const orfa = await dbRun(db, `INSERT INTO series_almoxarifado
+        (material_id, numero, status, recebimento_id, recebimento_item_id)
+      VALUES (?, 'SN-ORFA-1', 'ESTORNADA', 999, 888)`, [mat]);
+
+    const recId = await recebimentoCom(db, [
+      { material_id: mat, qtd: 5, series: 'SN-ORFA-1' }, // texto residual; material nao exige serie
+    ]);
+
+    const resultado = await receiptService.processarNota(db, ADMIN, recId, {});
+    assert.strictEqual(resultado.status, 'PROCESSADO', JSON.stringify(resultado));
+    assert.strictEqual(await totalDoMaterial(db, mat), 5,
+      'material sem controle_serie deveria ter entrado normalmente, texto em series e so residual');
+
+    const linha = await dbGet(db, 'SELECT * FROM series_almoxarifado WHERE id = ?', [orfa.lastID]);
+    assert.strictEqual(linha.recebimento_id, 999,
+      'a griffagem reescreveu recebimento_id de uma serie orfa que o motor nao tocou nesta chamada');
+    assert.strictEqual(linha.recebimento_item_id, 888,
+      'a griffagem reescreveu recebimento_item_id de uma serie orfa que o motor nao tocou nesta chamada');
+    assert.strictEqual(linha.status, 'ESTORNADA', 'status da serie orfa nao devia mudar');
+  });
+
   await test('reprocessar a nota nao duplica series', async () => {
     const mat = await novoMaterial(db, { controleSerie: 1 });
     const recId = await recebimentoCom(db, [

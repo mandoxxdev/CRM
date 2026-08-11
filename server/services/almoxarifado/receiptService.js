@@ -469,6 +469,8 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
             [loteId, item.id]);
         }
 
+        const numerosSerie = parseSeries(item.series);
+
         await registrarMovimentacao(db, user, {
           material_id: item.material_id,
           tipo: 'ENTRADA_COMPRA',
@@ -483,7 +485,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
           // numero em series_almoxarifado vinculado ao loteIdFinal e a localizacao de entrada —
           // o vinculo com ESTE recebimento/item e griffado logo abaixo, porque o motor nao
           // conhece recebimento_id/recebimento_item_id (so o chamador conhece).
-          series: parseSeries(item.series),
+          series: numerosSerie,
         // O recebimento E um dos caminhos onde o operador tem como informar o lote (a tela tem os
         // campos Lote/Validade/Fabricacao/Corrida por item), entao a exigencia de `controle_lote`
         // vale aqui. A pre-checagem acima ja recusou a nota inteira nesse caso — esta declaracao
@@ -492,17 +494,37 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
         }, { exigeLote: true, exigeSerie: true });
         entrouFisicamente = true;
 
-        // Griffa a origem: as series que o motor acabou de criar/reativar para este material
-        // ainda nao sabem de qual recebimento/item elas vieram (o motor so grava
-        // movimentacao_entrada_id). Casa por numero+material — o unico jeito de saber QUAIS
-        // linhas de series_almoxarifado pertencem a ESTE item, ja que series_almoxarifado nao
-        // tem FK direta para recebimentos_material_itens_almoxarifado no momento da criacao.
-        const numerosSerie = parseSeries(item.series);
-        if (numerosSerie.length > 0) {
-          await dbRun(db, `UPDATE series_almoxarifado
-              SET recebimento_id = ?, recebimento_item_id = ?
-            WHERE material_id = ? AND numero IN (${numerosSerie.map(() => '?').join(',')})`,
-            [recebimentoId, item.id, item.material_id, ...numerosSerie]);
+        // Griffa a origem (Etapa 6b, Task 6, fix round 1 do review): as series que o motor acabou
+        // de criar/reativar para este material ainda nao sabem de qual recebimento/item elas
+        // vieram (o motor so grava movimentacao_entrada_id). Casa por numero+material — o unico
+        // jeito de saber QUAIS linhas de series_almoxarifado pertencem a ESTE item, ja que
+        // series_almoxarifado nao tem FK direta para recebimentos_material_itens_almoxarifado no
+        // momento da criacao.
+        //
+        // Gate por `item.controle_serie` (achado do review por sonda): sem ele, um item de
+        // material SEM controle de serie mas com texto residual no campo `series` (ex.: colado
+        // por engano, ou sobra de quando o material tinha controle_serie ligado) reescrevia
+        // recebimento_id/recebimento_item_id de series ORFAS/antigas daquele material que o motor
+        // nem tocou nesta chamada — corrupcao silenciosa de rastreabilidade.
+        //
+        // Roda DEPOIS de `entrouFisicamente = true` de proposito: o motor precisa ter criado as
+        // series antes de poder griffa-las. Por isso, se este UPDATE falhar, e tratado como
+        // NAO-FATAL (nao rethrow): devolver o claim `entrada_estoque_em` aqui reabriria o item
+        // para reprocessamento, e a segunda passada chamaria o motor de novo com as MESMAS series
+        // ja EM_ESTOQUE — o motor recusa ("serie ja esta em estoque") e o item ficaria travado
+        // para sempre, sem nenhum jeito de sair pelo fluxo normal. Preferimos perder a
+        // rastreabilidade de origem de 1 item numa falha rara de UPDATE (reparavel por SQL manual
+        // depois) a travar o recebimento inteiro por causa dela.
+        if (item.controle_serie && numerosSerie.length > 0) {
+          try {
+            await dbRun(db, `UPDATE series_almoxarifado
+                SET recebimento_id = ?, recebimento_item_id = ?
+              WHERE material_id = ? AND numero IN (${numerosSerie.map(() => '?').join(',')})`,
+              [recebimentoId, item.id, item.material_id, ...numerosSerie]);
+          } catch (eGriffagem) {
+            console.warn(`[recebimento] griffagem de origem da serie falhou (item ${item.id}, `
+              + `recebimento ${recebimentoId}): ${eGriffagem.message}`);
+          }
         }
 
         if (reter) {
