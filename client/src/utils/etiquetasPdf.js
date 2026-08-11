@@ -1,6 +1,9 @@
 // Etapa 6c: etiquetas com QR. Montadores puros (testáveis sem DOM/PDF) + renderizador jspdf.
 // O descritor { codigo, nome, linhaControle, qrUrl } é a moeda entre telas, modal e PDF.
 
+import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
+
 export const FORMATOS_ETIQUETA = {
   A4_GRADE: {
     label: 'Folha A4 (10 etiquetas por página)',
@@ -64,4 +67,57 @@ export function montarEtiquetasDoRecebimento(itens, materiais, origin) {
     }
   }
   return out;
+}
+
+/** Gera o PDF e dispara o download. copias > 1 repete cada etiqueta. */
+export async function gerarEtiquetasPDF({ formato, etiquetas, copias = 1 }) {
+  const cfg = FORMATOS_ETIQUETA[formato];
+  if (!cfg) throw new Error(`formato de etiqueta desconhecido: ${formato}`);
+  const lista = etiquetas.flatMap((e) => Array.from({ length: copias }, () => e));
+  if (lista.length === 0) throw new Error('nenhuma etiqueta para gerar');
+
+  // QRs primeiro (async) — o desenho e sincrono depois disso.
+  const qrs = await Promise.all(
+    lista.map((e) => QRCode.toDataURL(e.qrUrl, { margin: 0, width: 256 }))
+  );
+
+  const doc = new jsPDF({ orientation: cfg.page.orientation, unit: 'mm', format: cfg.page.format });
+  const { colunas, linhas, largura, altura, margemX, margemY } = cfg.grade;
+  const porPagina = colunas * linhas;
+  const PAD = 4;
+
+  lista.forEach((e, i) => {
+    const slot = i % porPagina;
+    if (i > 0 && slot === 0) doc.addPage();
+    const x = margemX + (slot % colunas) * largura;
+    const y = margemY + Math.floor(slot / colunas) * altura;
+
+    if (porPagina > 1) { // borda pontilhada de recorte so faz sentido na grade A4
+      doc.setDrawColor(180);
+      doc.setLineDashPattern([1, 1], 0);
+      doc.rect(x, y, largura, altura);
+      doc.setLineDashPattern([], 0);
+    }
+
+    const ladoQr = Math.min(altura - 2 * PAD, 32);
+    const xQr = x + largura - PAD - ladoQr;
+    doc.addImage(qrs[i], 'PNG', xQr, y + (altura - ladoQr) / 2, ladoQr, ladoQr);
+
+    const larguraTexto = xQr - x - 2 * PAD;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(e.codigo, x + PAD, y + PAD + 5, { maxWidth: larguraTexto });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    const nome = doc.splitTextToSize(e.nome || '', larguraTexto).slice(0, 2);
+    doc.text(nome, x + PAD, y + PAD + 11);
+    if (e.linhaControle) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(e.linhaControle, x + PAD, y + altura - PAD - 1, { maxWidth: larguraTexto });
+    }
+  });
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  doc.save(`etiquetas-${hoje}.pdf`);
 }

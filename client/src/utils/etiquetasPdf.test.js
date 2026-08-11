@@ -1,6 +1,31 @@
+jest.mock('jspdf', () => {
+  const instancias = [];
+  function jsPDFMock(opts) {
+    const doc = { opts };
+    doc.addPage = jest.fn().mockReturnValue(doc);
+    doc.setFont = jest.fn().mockReturnValue(doc);
+    doc.setFontSize = jest.fn().mockReturnValue(doc);
+    doc.text = jest.fn().mockReturnValue(doc);
+    doc.addImage = jest.fn().mockReturnValue(doc);
+    doc.save = jest.fn().mockReturnValue(doc);
+    doc.setLineDashPattern = jest.fn().mockReturnValue(doc);
+    doc.rect = jest.fn().mockReturnValue(doc);
+    doc.setDrawColor = jest.fn().mockReturnValue(doc);
+    doc.splitTextToSize = jest.fn((t) => [t]);
+    instancias.push(doc);
+    return doc;
+  }
+  jsPDFMock.__instancias = instancias;
+  return { __esModule: true, default: jsPDFMock };
+});
+jest.mock('qrcode', () => ({
+  __esModule: true,
+  default: { toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,QQ==') },
+}));
+
 import {
   FORMATOS_ETIQUETA, montarEtiquetaMaterial, montarEtiquetaLote,
-  montarEtiquetaSerie, montarEtiquetasDoRecebimento,
+  montarEtiquetaSerie, montarEtiquetasDoRecebimento, gerarEtiquetasPDF,
 } from './etiquetasPdf';
 
 const ORIGIN = 'https://crm.gmp.ind.br';
@@ -62,5 +87,30 @@ describe('montarEtiquetasDoRecebimento', () => {
     const es = montarEtiquetasDoRecebimento(itens, MATERIAIS, ORIGIN);
     expect(es).toHaveLength(1);
     expect(es[0].codigo).toBe('MAT-7');
+  });
+});
+
+describe('gerarEtiquetasPDF', () => {
+  beforeEach(() => {
+    require('jspdf').default.__instancias.length = 0;
+    jest.clearAllMocks();
+  });
+
+  test('11 etiquetas em A4 (10 por pagina) geram 1 addPage e 11 addImage', async () => {
+    const etiquetas = Array.from({ length: 11 }, (_, i) => ({
+      codigo: `M-${i}`, nome: 'x', linhaControle: '', qrUrl: `u${i}`,
+    }));
+    await gerarEtiquetasPDF({ formato: 'A4_GRADE', etiquetas });
+    const doc = require('jspdf').default.__instancias.at(-1);
+    expect(doc.addPage).toHaveBeenCalledTimes(1);
+    expect(doc.addImage).toHaveBeenCalledTimes(11);
+    expect(doc.save).toHaveBeenCalledWith(expect.stringMatching(/^etiquetas-\d{4}-\d{2}-\d{2}\.pdf$/));
+  });
+
+  test('copias multiplica as etiquetas; termica cria 1 pagina por etiqueta', async () => {
+    await gerarEtiquetasPDF({ formato: 'TERMICA_100x50', etiquetas: [{ codigo: 'M', nome: 'x', linhaControle: 'SN: 1', qrUrl: 'u' }], copias: 3 });
+    const doc = require('jspdf').default.__instancias.at(-1);
+    expect(doc.addPage).toHaveBeenCalledTimes(2); // 3 etiquetas, 1 por pagina, a 1a pagina ja existe
+    expect(require('qrcode').default.toDataURL).toHaveBeenCalledWith('u', expect.any(Object));
   });
 });
