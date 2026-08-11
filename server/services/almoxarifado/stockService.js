@@ -756,6 +756,59 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   let seriesClaim = [];
   let result;
 
+  // ── Compensação do catch AMPLO para o efeito FÍSICO (Etapa 6b, Task 4, fix round 1) ──────────
+  // Achado do review: antes deste fix, o catch amplo só desfazia SÉRIE (`desfazerEntrada` na
+  // entrada; nada na saída) quando o INSERT do ledger falhava DEPOIS que o crédito/débito físico
+  // já tinha rodado. Na ENTRADA isso furava o próprio invariante que a etapa promete: a série
+  // sumia (desfeita) e `quantidade_atual` continuava creditada — `presentes=0 != quantidade_atual
+  // =N`. Na SAÍDA o mesmo buraco existe na direção oposta: sem isto, a série reivindicada e o
+  // débito físico ficavam órfãos do movimento que os causou.
+  //
+  // - `entradaCreditoAplicado`: null até a entrada creditar `quantidade_atual`; guarda o que foi
+  //   aplicado (quantidade e, se mexeu em custo médio, os valores ANTERIORES — capturados do
+  //   `material` lido no topo da função, antes de qualquer efeito) para o catch reverter
+  //   EXATAMENTE o que este movimento aplicou, não uma suposição.
+  // - `saldoLinhasSaidaParaReverter` / `saidaFisicoAplicado`: os equivalentes para a SAÍDA.
+  //   Setados pelo bloco de saída mais abaixo; ZERADOS por qualquer compensação que já rodou
+  //   (local, no catch do claim de série, ou no claim de lote) — o catch amplo lê o estado destas
+  //   variáveis e não repete uma compensação que já aconteceu.
+  let entradaCreditoAplicado = null;
+  let saldoLinhasSaidaParaReverter = [];
+  let saidaFisicoAplicado = false;
+  // Reverte SÓ o físico agregado (quantidade_atual [+ reserva]) desta saída — nunca a(s) linha(s)
+  // de saldo por localização/lote, que cada chamador reverte à sua maneira. Hoisted para escopo de
+  // função (fix round 1): tanto o catch LOCAL do claim de série quanto o catch AMPLO (INSERT do
+  // ledger falhando depois de um claim já bem-sucedido) precisam poder chamá-la. Idempotente via
+  // `saidaFisicoAplicado`: chamar duas vezes (uma localmente, outra no catch amplo) não desfaz o
+  // físico duas vezes.
+  const reverterFisicoDaSaida = async () => {
+    if (!saidaFisicoAplicado) return;
+    if (consumindoReserva) {
+      // Achado do review round 1 (claim de lote): compensar só quantidade_atual não bastava
+      // quando a saída consumia reserva — o claim da reserva e o débito de
+      // quantidade_reservada/quantidade_atual já tinham acontecido. Sem desfazer os três, a
+      // reserva ficava "queimada" (quantidade_utilizada maior, e às vezes status CONSUMIDA) sem
+      // NENHUMA saída física real ter ocorrido — reserva de outra OS perdida, e o disponível do
+      // material inflado (quantidade_reservada a menos do que deveria).
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual + ?,
+            quantidade_reservada = COALESCE(quantidade_reservada,0) + ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [quantidade, quantidade, material_id]);
+      await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = MAX(0, quantidade_utilizada - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [quantidade, reserva_id]);
+      // A reserva só vira CONSUMIDA dentro desta mesma chamada, quando zera — reverter para
+      // ATIVA aqui é seguro porque o claim atômico do topo já exigiu status = 'ATIVA' para a
+      // execução sequer chegar até este ponto.
+      await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'ATIVA', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'CONSUMIDA'", [reserva_id]);
+    } else {
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [quantidade, material_id]);
+    }
+    saidaFisicoAplicado = false;
+  };
+
   // Envolve aplicação física + linha de saldo + INSERT do ledger: se a série já foi criada
   // (entradaSeries rodou) e QUALQUER passo posterior falhar (custo médio, getOrCreateSaldo,
   // o próprio INSERT), a série tem de ser desfeita — senão fica uma série EM_ESTOQUE sem
@@ -807,6 +860,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           throw Object.assign(new Error(`Saldo físico insuficiente para consumir a reserva. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
         }
         saldoPosterior = rowRes.quantidade_atual;
+        saidaFisicoAplicado = true;
 
         // Reserva zerada não deve seguir ATIVA segurando saldo (reserva zumbi).
         if (reserva.quantidade - reserva.quantidade_utilizada <= 0) {
@@ -822,6 +876,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
       }
       saldoPosterior = row.quantidade_atual;
+      saidaFisicoAplicado = true;
       }
     } else if (tiposEntrada.includes(tipo)) {
       // Serie (Etapa 6b): cria/reativa as N series ANTES do credito fisico — se a lista tiver
@@ -847,12 +902,21 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           RETURNING quantidade_atual`,
           [quantidade, quantidade, custoInformado, quantidade, custoInformado, custoInformado, material_id]);
         saldoPosterior = row.quantidade_atual;
+        // `entradaCreditoAplicado` (fix round 1): guarda custo_medio/custo_unitario ANTERIORES
+        // (do `material` lido no topo da função) para o catch amplo poder restaurar os valores
+        // exatos, não só zerar a quantidade — este UPDATE mexeu nos três campos juntos.
+        entradaCreditoAplicado = {
+          quantidade: parseFloat(quantidade), custoAplicado: true,
+          custoMedioAnterior: material.custo_medio, custoUnitarioAnterior: material.custo_unitario,
+          saldoLinhaId: null,
+        };
       } else {
         // entrada sem custo informado: comportamento atual (só quantidade), inalterado
         const row = await dbGet(db, `UPDATE materiais_almoxarifado
           SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ? RETURNING quantidade_atual`, [quantidade, material_id]);
         saldoPosterior = row.quantidade_atual;
+        entradaCreditoAplicado = { quantidade: parseFloat(quantidade), custoAplicado: false, saldoLinhaId: null };
       }
     } else if (tiposAjuste.includes(tipo) && localizacao_destino_id) {
       // AJUSTE escopado a uma localização: define o saldo APENAS daquela localização (não o
@@ -917,45 +981,19 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       const saldo = await getOrCreateSaldo(db, material_id, locEntrada, loteIdFinal);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [quantidade, saldo.id]);
+      // fix round 1: guarda a linha para o catch amplo poder reverter esta linha especifica se o
+      // INSERT do ledger falhar depois — `entradaCreditoAplicado` so existe quando serieObrigatoria
+      // ou nao, entao a guarda aqui e so defensiva (este ramo sempre roda pra ENTRADA).
+      if (entradaCreditoAplicado) entradaCreditoAplicado.saldoLinhaId = saldo.id;
     }
     if (tiposSaida.includes(tipo)) {
-      // Reverte SÓ o físico agregado (quantidade_atual [+ reserva]) desta saída — nunca a(s)
-      // linha(s) de saldo por localização/lote, que cada chamador reverte à sua maneira (ver os
-      // dois usos abaixo). Fatorado do que já era a compensação do claim de lote (achado do
-      // round 1 daquela task) para servir também à compensação do claim de série (Etapa 6b,
-      // Task 4) sem duplicar o bloco reserva+material pela terceira vez.
-      const reverterFisicoDaSaida = async () => {
-        if (consumindoReserva) {
-          // Achado do review round 1 (claim de lote): compensar só quantidade_atual não bastava
-          // quando a saída consumia reserva — o claim da reserva e o débito de
-          // quantidade_reservada/quantidade_atual já tinham acontecido. Sem desfazer os três, a
-          // reserva ficava "queimada" (quantidade_utilizada maior, e às vezes status CONSUMIDA)
-          // sem NENHUMA saída física real ter ocorrido — reserva de outra OS perdida, e o
-          // disponível do material inflado (quantidade_reservada a menos do que deveria).
-          await dbRun(db, `UPDATE materiais_almoxarifado
-            SET quantidade_atual = quantidade_atual + ?,
-                quantidade_reservada = COALESCE(quantidade_reservada,0) + ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?`, [quantidade, quantidade, material_id]);
-          await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = MAX(0, quantidade_utilizada - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [quantidade, reserva_id]);
-          // A reserva só vira CONSUMIDA dentro desta mesma chamada, quando zera — reverter para
-          // ATIVA aqui é seguro porque o claim atômico do topo já exigiu status = 'ATIVA' para a
-          // execução sequer chegar até este ponto.
-          await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'ATIVA', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'CONSUMIDA'", [reserva_id]);
-        } else {
-          await dbRun(db, `UPDATE materiais_almoxarifado
-            SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [quantidade, material_id]);
-        }
-      };
-      // `saldoLinhasParaReverter` (Etapa 6b, Task 4): registra a(s) linha(s) de saldo que este
-      // bloco efetivamente debitou, para a compensação do claim de série logo abaixo poder
-      // devolver exatamente o que foi tirado. Diferente da compensação do claim de LOTE (que não
-      // precisa disto: `claimSaldoDoLote` já autocompensa as próprias linhas por dentro quando
-      // FALHA — ver a docstring dela), aqui o débito físico já teve SUCESSO quando o claim de
-      // série roda, então a reversão da(s) linha(s) é responsabilidade deste bloco.
-      let saldoLinhasParaReverter = [];
+      // `saldoLinhasSaidaParaReverter` (Etapa 6b, Task 4; hoisted no fix round 1): registra a(s)
+      // linha(s) de saldo que este bloco efetivamente debitou, para a compensação do claim de
+      // série logo abaixo (ou o catch amplo, se o INSERT do ledger falhar depois) poder devolver
+      // exatamente o que foi tirado. Diferente da compensação do claim de LOTE (que não precisa
+      // disto: `claimSaldoDoLote` já autocompensa as próprias linhas por dentro quando FALHA — ver
+      // a docstring dela), aqui o débito físico já teve SUCESSO quando o claim de série roda,
+      // então a reversão da(s) linha(s) é responsabilidade de quem debitou.
       if (loteIdFinal && !permiteNegativo) {
         // Guarda no WHERE, como o resto do motor. Sem isto a subtracao negativa a linha do lote em
         // silencio: a guarda de saldo insuficiente la em cima compara com o disponivel do
@@ -976,14 +1014,14 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
             new Error(`Saldo insuficiente no lote ${loteCodigoFinal}. Disponível: ${claim.disponivel} ${material.unidade}`),
             { status: 400 });
         }
-        saldoLinhasParaReverter = claim.linhas;
+        saldoLinhasSaidaParaReverter = claim.linhas;
       } else {
         // Sem lote (ou material que permite saldo negativo): a linha continua sendo criada, porque
         // aqui ela PODE ficar negativa e precisa existir para `syncMaterialTotals` somar.
         const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [quantidade, saldo.id]);
-        saldoLinhasParaReverter = [{ id: saldo.id, quantidade }];
+        saldoLinhasSaidaParaReverter = [{ id: saldo.id, quantidade }];
       }
 
       // Serie (Etapa 6b, Task 4): reivindica as series ESPECIFICAS depois que o debito fisico ja
@@ -1003,11 +1041,17 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
             material_id, serie_ids: serieIdsSaida, lote_id: loteIdFinal, tipo, movimentacao_id: null,
           });
         } catch (e) {
-          for (const l of saldoLinhasParaReverter) {
+          // Compensação LOCAL: o claim de série falhou aqui mesmo (não é o caso do INSERT do
+          // ledger falhando depois — esse é tratado pelo catch amplo, mais abaixo). Depois de
+          // compensar, ZERA `saldoLinhasSaidaParaReverter` (e `reverterFisicoDaSaida` já zera
+          // `saidaFisicoAplicado` sozinha) — fix round 1: sem isto, o catch amplo (que também olha
+          // essas variáveis) tentaria reverter de novo o que esta compensação local já reverteu.
+          for (const l of saldoLinhasSaidaParaReverter) {
             await dbRun(db, `UPDATE estoque_saldo_almoxarifado
               SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
               [l.quantidade, l.id]);
           }
+          saldoLinhasSaidaParaReverter = [];
           await reverterFisicoDaSaida();
           throw e;
         }
@@ -1041,11 +1085,55 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     centro_custo_id || null, emergencial ? 1 : 0, regularizacaoPendente,
   ]);
   } catch (e) {
-    // Compensa a serie ANTES de relançar — o caminho de entrada com serie termina aqui dentro
+    // Compensa ANTES de relançar — o caminho de entrada/saída com série termina aqui dentro
     // (aplicação física + linha de saldo + INSERT do ledger), então qualquer falha nesse trecho
-    // com seriesAfetadas não-vazio deixaria série EM_ESTOQUE sem crédito físico correspondente.
+    // (inclusive o próprio INSERT) precisa desfazer o que já rodou, senão fica série órfã do
+    // físico (ou o inverso) e o invariante COUNT(série) == quantidade_atual quebra.
+    //
+    // Fix round 1 (achado do review da Task 4): até aqui, este catch só desfazia SÉRIE
+    // (`desfazerEntrada`) e nunca o físico — se o INSERT do ledger falhasse DEPOIS que a entrada já
+    // tinha creditado `quantidade_atual`, a série era desfeita e o crédito físico ficava intacto:
+    // `presentes=0 != quantidade_atual=N`, o próprio invariante que a etapa promete. Do lado da
+    // saída, o mesmo buraco existia ao contrário (série reivindicada e débito físico órfãos do
+    // movimento). Compensa na ordem inversa de aplicação em cada lado.
+    //
+    // SAÍDA — ordem de aplicação foi (1) físico agregado, (2) linha de saldo, (3) claim de série;
+    // reverte (3), (2), (1). Quando o claim de série FALHOU (não o INSERT), o catch LOCAL logo
+    // acima já compensou e já zerou `saldoLinhasSaidaParaReverter`/`saidaFisicoAplicado` — os `if`
+    // abaixo viram no-op nesse caminho, evitando compensar em dobro. `seriesClaim` só fica
+    // populado quando o claim teve SUCESSO (se falhou, a atribuição nunca completou), então não há
+    // ambiguidade equivalente para ele.
+    if (seriesClaim.length > 0) {
+      await seriesService.desfazerSaida(db, seriesClaim);
+    }
+    for (const l of saldoLinhasSaidaParaReverter) {
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+        SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [l.quantidade, l.id]);
+    }
+    await reverterFisicoDaSaida();
+
+    // ENTRADA — ordem de aplicação foi (1) série criada/reativada, (2) crédito de quantidade_atual
+    // [+ custo médio], (3) linha de saldo; reverte (3), (2), depois (1).
+    if (entradaCreditoAplicado) {
+      if (entradaCreditoAplicado.saldoLinhaId) {
+        await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [entradaCreditoAplicado.quantidade, entradaCreditoAplicado.saldoLinhaId]);
+      }
+      if (entradaCreditoAplicado.custoAplicado) {
+        // Restaura os valores EXATOS de antes (não só subtrai a quantidade) — o UPDATE de crédito
+        // recalculou custo_medio/custo_unitario juntos com quantidade_atual num único statement.
+        await dbRun(db, `UPDATE materiais_almoxarifado
+          SET quantidade_atual = quantidade_atual - ?, custo_medio = ?, custo_unitario = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+          [entradaCreditoAplicado.quantidade, entradaCreditoAplicado.custoMedioAnterior, entradaCreditoAplicado.custoUnitarioAnterior, material_id]);
+      } else {
+        await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [entradaCreditoAplicado.quantidade, material_id]);
+      }
+    }
     // Para todo tipo que não seja entrada com série obrigatória, seriesAfetadas é [] e este
-    // bloco é um no-op — o catch só relança, igual a antes desta task.
+    // bloco é um no-op.
     if (seriesAfetadas.length > 0) {
       await seriesService.desfazerEntrada(db, seriesAfetadas);
     }
