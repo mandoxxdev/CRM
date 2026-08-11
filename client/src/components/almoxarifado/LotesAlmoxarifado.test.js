@@ -606,4 +606,49 @@ describe('LotesAlmoxarifado — deep-link (destino dos QRs) e etiquetas', () => 
       .find((b) => b.textContent.trim() === 'Etiquetas das séries em estoque');
     expect(botao.disabled).toBe(true);
   });
+
+  // Fix round 1 (review da Task 4): codigo de lote e texto livre do operador, e o UNIQUE e por
+  // material_id (material_id, codigo) — nada impede dois materiais terem um lote com o MESMO
+  // codigo. `destaque` e one-shot mas `materialId` nao era: sem travar o destaque ao material de
+  // origem, trocar de material depois de entrar pelo QR podia reacender o destaque numa linha
+  // coincidente de OUTRO material.
+  test('trocar de material apos deep-link nao reacende destaque num codigo coincidente de outro material', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL, MATERIAL_2] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [LOTE_DEEPLINK] });
+      if (url === `/almoxarifado/materiais/${MATERIAL_2.id}/lotes`) {
+        return Promise.resolve({ data: [{ ...LOTE_DEEPLINK, id: 620 }] }); // mesmo codigo L-1, material diferente
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    await renderizar([`/almoxarifado/lotes?material_id=${MATERIAL.id}&aba=LOTES&lote=L-1`]);
+    await esperarEfeitos();
+    expect(temDestaque(linhas().find((tr) => tr.textContent.includes('L-1')))).toBe(true);
+
+    // Troca para MATERIAL_2, cujo lote por coincidencia tem o MESMO codigo L-1 do deep-link.
+    await selecionarMaterial(MATERIAL_2.id);
+    const linhaOutroMaterial = linhas().find((tr) => tr.textContent.includes('L-1'));
+    expect(linhaOutroMaterial).toBeTruthy();
+    expect(temDestaque(linhaOutroMaterial)).toBe(false);
+  });
+
+  // Fix round 1: a celula de acoes da serie virou incondicional (o botao de etiqueta existe mesmo
+  // sem podeMudarStatus) — isto cobre o refactor estrutural numa serie em estado terminal.
+  test('botao de etiqueta funciona mesmo numa serie em estado terminal (ENTREGUE)', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) return Promise.resolve({ data: [SERIE_ENTREGUE] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAba('Séries');
+
+    // SERIE_ENTREGUE nao oferece bloquear/desbloquear (podeMudarStatus=false) — so o de etiqueta.
+    await clicarAcao(0, 'etiqueta');
+    expect(container.querySelector('.almox-modal-header h2').textContent).toBe('Imprimir etiquetas');
+    expect(container.textContent).toMatch(/1 etiqueta/);
+  });
 });

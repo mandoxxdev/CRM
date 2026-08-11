@@ -97,8 +97,16 @@ const LotesAlmoxarifado = () => {
   const [materialId, setMaterialId] = useState(() => searchParams.get('material_id') || '');
   const [aba, setAba] = useState(() => (searchParams.get('aba') === 'SERIES' ? 'SERIES' : 'LOTES'));
   // One-shot: lido só na primeira renderização (o QR trouxe o operador até aqui) — trocar de
-  // material/aba depois não deve "perseguir" um destaque velho de outra visita.
-  const [destaque] = useState(() => ({ lote: searchParams.get('lote') || '', serie: searchParams.get('serie') || '' }));
+  // material/aba depois não deve "perseguir" um destaque velho de outra visita. Guarda também o
+  // materialId de origem: código de lote/série é texto livre do operador e o UNIQUE é por
+  // material (material_id, codigo/numero), então dois materiais podem ter o MESMO código — sem
+  // travar o destaque ao material que o QR apontou, trocar de material no select depois de
+  // entrar pelo QR podia reacender o destaque numa linha coincidente de OUTRO material.
+  const [destaque] = useState(() => ({
+    materialId: searchParams.get('material_id') || '',
+    lote: searchParams.get('lote') || '',
+    serie: searchParams.get('serie') || '',
+  }));
   const [etiquetas, setEtiquetas] = useState(null);
   const [series, setSeries] = useState([]);
   const [serieStatusTarget, setSerieStatusTarget] = useState(null);
@@ -273,14 +281,20 @@ const LotesAlmoxarifado = () => {
         <div className="almox-header-actions">
           {/* Task 4 (Etapa 6c): bulk só faz sentido na aba Séries — em Lotes a etiqueta é sempre
               por linha (o lote carrega validade/corrida, não dá pra "imprimir todos" sem contexto
-              de qual). Desabilitado sem nenhuma série EM_ESTOQUE — não há o que imprimir. */}
+              de qual). Desabilitado sem nenhuma série EM_ESTOQUE — não há o que imprimir.
+              Fix round 1: o gate `bloquearSeNaoPode('visualizar', e)` faltava aqui — as ações por
+              linha já tinham o gate, e um botão sem ele vira precedente ruim (o próximo botão
+              copiado deste não teria gate "porque este não tinha"). */}
           {aba === 'SERIES' && (
             <button className="btn-almox-secondary"
               disabled={!series.some((s) => s.status === 'EM_ESTOQUE')}
-              onClick={() => setEtiquetas(
-                series.filter((s) => s.status === 'EM_ESTOQUE')
-                  .map((s) => montarEtiquetaSerie(materialSelecionado, s, window.location.origin))
-              )}>
+              onClick={(e) => {
+                if (!bloquearSeNaoPode('visualizar', e)) return;
+                setEtiquetas(
+                  series.filter((s) => s.status === 'EM_ESTOQUE')
+                    .map((s) => montarEtiquetaSerie(materialSelecionado, s, window.location.origin))
+                );
+              }}>
               <FiTag size={13} /> Etiquetas das séries em estoque
             </button>
           )}
@@ -331,7 +345,7 @@ const LotesAlmoxarifado = () => {
                 const s = statusInfo(l.status);
                 const vencidoLiberado = l.vencido && l.vencimento_liberado;
                 return (
-                  <tr key={l.id} style={{ background: destaque.lote === l.codigo ? 'rgba(79,172,254,0.10)' : undefined }}>
+                  <tr key={l.id} style={{ background: (destaque.materialId === materialId && destaque.lote === l.codigo) ? 'rgba(79,172,254,0.10)' : undefined }}>
                     <td>{l.codigo}</td>
                     <td>
                       <span className={`almox-badge almox-badge-${s.cls}`}>{s.label}</span>
@@ -455,7 +469,7 @@ const LotesAlmoxarifado = () => {
                 const info = serieStatusInfo(s.status);
                 const podeMudarStatus = s.status === 'EM_ESTOQUE' || s.status === 'BLOQUEADA';
                 return (
-                  <tr key={s.id} style={{ background: destaque.serie === s.numero ? 'rgba(79,172,254,0.10)' : undefined }}>
+                  <tr key={s.id} style={{ background: (destaque.materialId === materialId && destaque.serie === s.numero) ? 'rgba(79,172,254,0.10)' : undefined }}>
                     <td>{s.numero}</td>
                     <td><span className={`almox-badge almox-badge-${info.cls}`}>{info.label}</span></td>
                     <td style={{ fontSize: '0.85rem' }}>{s.lote_codigo || '—'}</td>
