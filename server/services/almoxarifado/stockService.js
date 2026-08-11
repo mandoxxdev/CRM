@@ -1206,6 +1206,28 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     throw Object.assign(new Error('Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)'), { status: 400 });
   }
 
+  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
+  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
+  const material = await getMaterial(db, mov.material_id);
+
+  // Serie (Etapa 6b, Task 5): guarda ANTES do claim `cancelado = 1` — antes de marcar a
+  // movimentação como cancelada, precisa ficar claro que a reversão é possível. Estornar uma
+  // ENTRADA de material com série só é seguro se TODAS as unidades daquela entrada ainda
+  // estiverem EM_ESTOQUE; se alguma já saiu (ENTREGUE/SUCATEADA), `reverterEntrada` marcaria
+  // ESTORNADA só as que sobraram e o par serie<->movimentação ficaria inconsistente com o
+  // saldo estornado (o invariante COUNT(serie)==quantidade_atual quebra do lado da série ficar
+  // "presente" numa entrada que o livro diz ter sido desfeita). Recusar aqui, antes do claim, é
+  // mais simples que reverter o claim no catch — nada foi tocado ainda.
+  if (tiposEntrada.includes(mov.tipo) && material.controle_serie) {
+    const presentes = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+      WHERE movimentacao_entrada_id = ? AND status = 'EM_ESTOQUE'`, [movimentoId]);
+    if (presentes.n < Math.round(mov.quantidade)) {
+      throw Object.assign(new Error(
+        'estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro'),
+        { status: 400 });
+    }
+  }
+
   // Claim atômico ANTES de aplicar qualquer efeito inverso (achado do review final: double-cancel
   // race). O UPDATE...WHERE cancelado = 0 é a própria seção crítica sob o lock de linha do SQLite:
   // de duas chamadas concorrentes para o mesmo movimentoId, só uma tem changes = 1 — essa é a
@@ -1216,12 +1238,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     WHERE id = ? AND cancelado = 0`, [user.id, motivo, movimentoId]);
   if (!claim.changes) throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
 
-  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
-  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
   let estornoId;
 
   try {
-    const material = await getMaterial(db, mov.material_id);
     let saldoAntes = material.quantidade_atual;
     let saldoDepois = saldoAntes;
 
@@ -1284,6 +1303,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
           { status: 400 });
       }
       if (!r.aplicado) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+      // Serie (Etapa 6b, Task 5): so depois que o saldo reverteu de verdade — a guarda lá em
+      // cima (antes do claim) já garantiu que todas as séries desta entrada seguem EM_ESTOQUE,
+      // então aqui é só marcar ESTORNADA. Condicionado a controle_serie para não gastar o
+      // SELECT + laço à toa em material sem série (reverterEntrada é no-op de qualquer forma,
+      // sem linha vinculada a este movimentacao_entrada_id).
+      if (material.controle_serie) await seriesService.reverterEntrada(db, user, mov.id);
       // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
       // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
       // specs/modulo-almoxarifado/03-motor-estoque/README.md.
@@ -1308,6 +1333,10 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
       const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
       if (!r.aplicado) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+      // Serie (Etapa 6b, Task 5): devolve a EM_ESTOQUE as series ENTREGUE/SUCATEADA desta saida,
+      // logo apos o saldo ja ter voltado. Sem guarda de disponibilidade aqui (diferente do ramo
+      // de ENTRADA acima) — devolver serie ao estoque nunca pode ficar "negativo".
+      if (material.controle_serie) await seriesService.reverterSaida(db, user, mov.id);
     } else if (mov.tipo === 'AJUSTE') {
       if (mov.localizacao_destino_id) {
         // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
