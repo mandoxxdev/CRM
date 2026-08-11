@@ -782,6 +782,34 @@ async function initSchema(db) {
   await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_almox_chave
     ON estoque_saldo_almoxarifado(material_id, COALESCE(localizacao_id,0), COALESCE(lote_id,0))`);
 
+  // Etapa 6b: series_almoxarifado — registro de posse por unidade fisica (1 linha = 1
+  // unidade). NAO existe serie_id em estoque_saldo_almoxarifado (decisao de design da 6b):
+  // o saldo agregado continua em quantidade_atual + estoque_saldo; o invariante
+  // COUNT(series presentes) == quantidade_atual e coberto por teste
+  // (tests/helpers/serieInvariante.js).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS series_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER NOT NULL,
+    numero TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'EM_ESTOQUE',
+    status_motivo TEXT,
+    lote_id INTEGER,
+    localizacao_id INTEGER,
+    recebimento_id INTEGER,
+    recebimento_item_id INTEGER,
+    movimentacao_entrada_id INTEGER,
+    movimentacao_saida_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_por INTEGER,
+    updated_at DATETIME,
+    UNIQUE (material_id, numero),
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id),
+    FOREIGN KEY (lote_id) REFERENCES lotes_almoxarifado(id),
+    FOREIGN KEY (localizacao_id) REFERENCES localizacoes_almoxarifado(id)
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_series_almox_material_status
+    ON series_almoxarifado (material_id, status)`);
+
   // ── Extend movimentações ──
   const movCols = [
     'localizacao_origem_id INTEGER',
