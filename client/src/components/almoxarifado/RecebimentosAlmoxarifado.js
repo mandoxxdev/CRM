@@ -490,6 +490,11 @@ const RecebimentosAlmoxarifado = () => {
                 <div style={{ fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: 10 }}>
                   Itens ({detalhe.itens?.length || 0})
                 </div>
+                {['EM_ENTRADA_NF', 'ENCAMINHADO_FATURAMENTO'].includes(detalhe.status) && (
+                  <div className="almox-hint-banner" style={{ marginBottom: 16, fontSize: '0.8rem' }}>
+                    Preencha lote e séries e clique em Salvar Dados Fiscais antes de Processar a Nota — o processamento lê o que está salvo, não o que está digitado.
+                  </div>
+                )}
                 {(detalhe.itens || []).map((item) => (
                   <div key={item.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.85rem' }}>
                     <div style={{ display: 'flex', gap: 10 }}>
@@ -532,14 +537,18 @@ const RecebimentosAlmoxarifado = () => {
                             value={item.corrida_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'corrida_lote', e.target.value)} />
                         </div>
-                        {materiais.find((m) => m.id === item.material_id)?.controle_serie === 1 && (
-                          <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
-                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Series (uma por linha) — {String(item.series || '').split(/\r?\n/).filter((s) => s.trim()).length}/{item.quantidade_recebida || item.quantidade_esperada || 0}</label>
-                            <textarea className="almox-textarea" rows={2} value={item.series || ''}
-                              style={{ fontSize: '0.75rem', padding: '4px 6px' }}
-                              onChange={(e) => atualizarItemDetalhe(item.id, 'series', e.target.value)} />
-                          </div>
-                        )}
+                        {materiais.find((m) => m.id === item.material_id)?.controle_serie === 1 && (() => {
+                          const seriesPreenchidas = String(item.series || '').split(/\r?\n/).filter((s) => s.trim()).length;
+                          const quantidadeEsperada = item.quantidade_recebida || item.quantidade_esperada || 0;
+                          return (
+                            <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-danger)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>
+                              <textarea className="almox-textarea" rows={2} value={item.series || ''}
+                                style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                                onChange={(e) => atualizarItemDetalhe(item.id, 'series', e.target.value)} />
+                            </div>
+                          );
+                        })()}
                       </>
                     )}
                   </div>
