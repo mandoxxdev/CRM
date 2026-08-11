@@ -99,9 +99,24 @@ const MovimentacoesAlmoxarifado = () => {
     lote: '',
     lote_id: '',
     custo_unitario: '',
-    emergencial: false
+    emergencial: false,
+    series: '',
+    serie_ids: []
   });
   const [saving, setSaving] = useState(false);
+  const [seriesDisponiveis, setSeriesDisponiveis] = useState([]);
+  const [seriePrefixo, setSeriePrefixo] = useState('');
+  const [serieInicio, setSerieInicio] = useState('');
+
+  // Helper puro: uma série por linha, sem vazias — molde para o textarea de entrada e para o
+  // payload.series (mesmo formato que o gerador de sequência produz).
+  const linhasSerie = (txt) => String(txt || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+
+  // Movido para antes dos efeitos (era calculado só antes do JSX): o efeito que busca séries
+  // depende de `selectedMaterial?.controle_serie`, e um `const` referenciado no array de
+  // dependências do useEffect é avaliado durante o render, não dentro do efeito — precisa já
+  // estar declarado neste ponto do corpo do componente (TDZ), senão quebra o build.
+  const selectedMaterial = materiais.find(m => m.id === parseInt(form.material_id));
 
   useEffect(() => {
     loadMateriais();
@@ -147,6 +162,25 @@ const MovimentacoesAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [form.material_id, form.tipo]);
 
+  // Série, como lote, só é escolhida (não digitada) numa saída — molde exato do efeito de lotes
+  // acima, mesma guarda `cancelado`. Só busca quando o material exige controle de série; senão
+  // a lista fica vazia e o bloco de checkboxes nem aparece no JSX.
+  useEffect(() => {
+    if (!form.material_id || !TIPOS_SAIDA_LOTE.includes(form.tipo) || !selectedMaterial?.controle_serie) {
+      setSeriesDisponiveis([]);
+      return;
+    }
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${form.material_id}/series?status=EM_ESTOQUE`)
+      .then((res) => {
+        if (cancelado) return;
+        setSeriesDisponiveis(res.data || []);
+      })
+      .catch(() => { if (!cancelado) setSeriesDisponiveis([]); });
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.material_id, form.tipo, selectedMaterial?.controle_serie]);
+
   const loadMateriais = async () => {
     try {
       const res = await api.get('/almoxarifado/materiais');
@@ -187,7 +221,8 @@ const MovimentacoesAlmoxarifado = () => {
     setForm({
       material_id: '', tipo: 'ENTRADA', quantidade: '', motivo: '', referencia: '', observacoes: '',
       os_id: '', projeto_id: '', centro_custo_id: '', localizacao_origem_id: '', localizacao_destino_id: '',
-      lote: '', lote_id: '', custo_unitario: '', emergencial: false
+      lote: '', lote_id: '', custo_unitario: '', emergencial: false,
+      series: '', serie_ids: []
     });
     setShowModal(true);
   };
@@ -197,6 +232,19 @@ const MovimentacoesAlmoxarifado = () => {
     if (!form.material_id || !form.quantidade || parseFloat(form.quantidade) <= 0) {
       toast.error('Selecione o material e informe a quantidade');
       return;
+    }
+    // Cardinalidade de série: o servidor é a autoridade (esta checagem não a substitui, só
+    // evita ida a ele quando o resultado já é sabido — cada linha/checkbox precisa virar uma
+    // série, nem a mais nem a menos).
+    if (selectedMaterial?.controle_serie === 1) {
+      if (form.tipo === 'ENTRADA' && linhasSerie(form.series).length !== Number(form.quantidade)) {
+        toast.error('A quantidade de números de série informados precisa ser igual à quantidade');
+        return;
+      }
+      if (TIPOS_SAIDA_LOTE.includes(form.tipo) && form.serie_ids.length !== Number(form.quantidade)) {
+        toast.error('Selecione exatamente a quantidade de séries informada');
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -225,6 +273,11 @@ const MovimentacoesAlmoxarifado = () => {
       // não existe.
       if (form.tipo === 'ENTRADA' && form.lote) payload.lote = form.lote;
       if (TIPOS_SAIDA_LOTE.includes(form.tipo) && form.lote_id) payload.lote_id = Number(form.lote_id);
+      // Série: mesma regra "só envia campo que o tipo exibe" — entrada manda a lista de texto
+      // (series), saída manda os ids escolhidos (serie_ids). Igual ao lote, nasce na entrada e é
+      // escolhida na saída.
+      if (selectedMaterial?.controle_serie === 1 && form.tipo === 'ENTRADA') payload.series = linhasSerie(form.series);
+      if (selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo)) payload.serie_ids = form.serie_ids;
       if (form.tipo === 'ENTRADA' && form.custo_unitario) {
         const custo = parseFloat(form.custo_unitario);
         if (!Number.isNaN(custo) && custo > 0) payload.custo_unitario = custo;
@@ -287,8 +340,6 @@ const MovimentacoesAlmoxarifado = () => {
   const formatDate = (d) => new Date(d).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
-
-  const selectedMaterial = materiais.find(m => m.id === parseInt(form.material_id));
 
   return (
     <div className="almox-page">
@@ -478,7 +529,9 @@ const MovimentacoesAlmoxarifado = () => {
                           custo_unitario: novoTipo === 'ENTRADA' ? f.custo_unitario : '',
                           localizacao_origem_id: TIPOS_SAIDA_LOTE.includes(novoTipo) ? f.localizacao_origem_id : '',
                           lote: mostraLote ? f.lote : '',
-                          lote_id: mostraLote ? f.lote_id : ''
+                          lote_id: mostraLote ? f.lote_id : '',
+                          series: novoTipo === 'ENTRADA' ? f.series : '',
+                          serie_ids: TIPOS_SAIDA_LOTE.includes(novoTipo) ? f.serie_ids : []
                         }));
                       }}>
                       {TIPOS_FORM.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -634,6 +687,52 @@ const MovimentacoesAlmoxarifado = () => {
                           onChange={e => setForm(f => ({ ...f, lote: e.target.value }))}
                           placeholder="Opcional" />
                       )}
+                    </div>
+                  )}
+
+                  {selectedMaterial?.controle_serie === 1 && form.tipo === 'ENTRADA' && (
+                    <div className="almox-field almox-form-full">
+                      <label>Números de série (um por linha) *</label>
+                      <textarea className="almox-textarea" rows={3} value={form.series}
+                        onChange={(e) => setForm({ ...form, series: e.target.value })} />
+                      <small style={{ color: linhasSerie(form.series).length === Number(form.quantidade) ? 'var(--gmp-text-light)' : 'var(--gmp-danger)' }}>
+                        {linhasSerie(form.series).length}/{form.quantidade || 0} série(s)
+                      </small>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                        <input className="almox-input" placeholder="Prefixo (ex.: GMP-)" value={seriePrefixo}
+                          onChange={(e) => setSeriePrefixo(e.target.value)} style={{ maxWidth: 140 }} />
+                        <input className="almox-input" type="number" placeholder="Nº inicial" value={serieInicio}
+                          onChange={(e) => setSerieInicio(e.target.value)} style={{ maxWidth: 110 }} />
+                        <button type="button" className="btn-almox-secondary" onClick={() => {
+                          const qtd = Number(form.quantidade) || 0;
+                          const inicio = Number(serieInicio) || 1;
+                          const linhas = Array.from({ length: qtd }, (_, i) => `${seriePrefixo}${inicio + i}`);
+                          setForm({ ...form, series: linhas.join('\n') });
+                        }}>Gerar sequência</button>
+                      </div>
+                    </div>
+                  )}
+                  {selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo) && (
+                    <div className="almox-field almox-form-full">
+                      <label>Séries a {form.tipo === 'SAIDA' ? 'entregar' : 'baixar'} *</label>
+                      <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: 6 }}>
+                        {seriesDisponiveis
+                          .filter((s) => !form.lote_id || Number(s.lote_id) === Number(form.lote_id))
+                          .map((s) => (
+                            <label key={s.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
+                              <input type="checkbox" checked={form.serie_ids.includes(s.id)}
+                                onChange={(e) => setForm({
+                                  ...form,
+                                  serie_ids: e.target.checked
+                                    ? [...form.serie_ids, s.id]
+                                    : form.serie_ids.filter((id) => id !== s.id),
+                                })} />
+                              {s.numero}{s.lote_codigo ? ` · lote ${s.lote_codigo}` : ''}
+                            </label>
+                          ))}
+                        {seriesDisponiveis.length === 0 && <small>Nenhuma série disponível em estoque.</small>}
+                      </div>
+                      <small>{form.serie_ids.length}/{form.quantidade || 0} série(s) selecionada(s)</small>
                     </div>
                   )}
 
