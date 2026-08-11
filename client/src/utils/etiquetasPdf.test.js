@@ -48,6 +48,11 @@ describe('montarEtiquetasDoRecebimento', () => {
     expect(es).toHaveLength(1);
     expect(es[0].linhaControle).toBe('Lote L-9 · Val 05/01/2027');
   });
+  test('sem quantidade_recebida usa quantidade_esperada como fallback', () => {
+    const itens = [{ material_id: 7, quantidade_esperada: 2 }];
+    const es = montarEtiquetasDoRecebimento(itens, MATERIAIS, ORIGIN);
+    expect(es).toHaveLength(1);
+  });
   test('item sem controle gera etiqueta simples; qtd 0 fica fora; material desconhecido fica fora', () => {
     const itens = [
       { material_id: 7, quantidade_recebida: 5 },
