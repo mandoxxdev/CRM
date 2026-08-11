@@ -516,7 +516,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   // ── Series (Etapa 6b, Task 7) ──
   app.get('/api/almoxarifado/materiais/:id/series', auth, requirePermission('visualizar'), async (req, res) => {
     try {
-      const series = await seriesService.listarSeriesDoMaterial(db, req.params.id, { status: req.query.status });
+      const series = await seriesService.listarSeriesDoMaterial(db, Number(req.params.id), { status: req.query.status });
       res.json(series);
     } catch (e) { handleError(res, e); }
   });
@@ -524,7 +524,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   app.put('/api/almoxarifado/series/:id/status', auth, requirePermission('inspecionar'), async (req, res) => {
     try {
       const { status, justificativa } = req.body || {};
-      const serie = await seriesService.mudarStatusSerie(db, req.user, req.params.id, status, justificativa);
+      const serie = await seriesService.mudarStatusSerie(db, req.user, Number(req.params.id), status, justificativa);
       res.json(serie);
     } catch (e) { handleError(res, e); }
   });

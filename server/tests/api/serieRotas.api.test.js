@@ -28,7 +28,7 @@ async function loteDoMaterial(db, materialId, codigo) {
 }
 
 (async () => {
-  const { app, db, close } = await createTestApp({ user: ADMIN });
+  const { app, db, close, setUser } = await createTestApp({ user: ADMIN });
 
   await test('GET lista series do material com lote_codigo e filtra por status', async () => {
     const mat = await novoMaterial(db);
@@ -66,12 +66,16 @@ async function loteDoMaterial(db, materialId, codigo) {
       .send({ status: 'BLOQUEADA' });
     assert.strictEqual(semJust.status, 400, `esperava 400 sem justificativa, got ${semJust.status}: ${JSON.stringify(semJust.body)}`);
 
-    // Testa com user PRODUCAO (sem permissao inspecionar)
-    const ctxProd = await createTestApp({ user: { id: 9, nome: 'Producao', perfil_almoxarifado: 'PRODUCAO' } });
-    const res403 = await request(ctxProd.app).put(`/api/almoxarifado/series/${serieId}/status`)
-      .send({ status: 'BLOQUEADA', justificativa: 'teste' });
-    assert.strictEqual(res403.status, 403, `esperava 403 com user PRODUCAO, got ${res403.status}`);
-    await ctxProd.close();
+    // Testa com user PRODUCAO (sem permissao inspecionar) — padrão: setUser sem criar novo app
+    const PRODUCAO = { id: 9, nome: 'Producao', perfil_almoxarifado: 'PRODUCAO' };
+    setUser(PRODUCAO);
+    try {
+      const res403 = await request(app).put(`/api/almoxarifado/series/${serieId}/status`)
+        .send({ status: 'BLOQUEADA', justificativa: 'teste' });
+      assert.strictEqual(res403.status, 403, `esperava 403 com user PRODUCAO, got ${res403.status}`);
+    } finally {
+      setUser(ADMIN);
+    }
   });
 
   await test('PUT status bloqueia e desbloqueia; transicao invalida 400; corrida 409', async () => {
@@ -100,20 +104,18 @@ async function loteDoMaterial(db, materialId, codigo) {
       .send({ status: 'ENTREGUE', justificativa: 'transicao invalida' });
     assert.strictEqual(transicaoInvalida.status, 400, `transicao invalida deveria retornar 400, got ${transicaoInvalida.status}`);
 
-    // Simula race condition: muda status via service 2x seguido (BLOQUEADA e depois EM_ESTOQUE)
-    // Se o service garante atomicidade, ambas as chamadas devem funcionar
-    try {
-      await seriesService.mudarStatusSerie(db, ADMIN, serieId, 'BLOQUEADA', 'mudanca 1');
-      const depois1 = await seriesService.mudarStatusSerie(db, ADMIN, serieId, 'EM_ESTOQUE', 'mudanca 2');
-      assert.strictEqual(depois1.status, 'EM_ESTOQUE', 'segunda mudanca nao funcionou');
-    } catch (e) {
-      // Se lancou erro com status 409, e race condition
-      if (e.status === 409) {
-        // ok, race condition detectada
-      } else {
-        throw e;
-      }
-    }
+    // Race condition real: duas mudancas para o mesmo status leem EM_ESTOQUE antes dos UPDATEs
+    // Uma vence na guarda (UPDATE com AND status = ?), a outra cai em 409
+    const results = await Promise.allSettled([
+      seriesService.mudarStatusSerie(db, ADMIN, serieId, 'BLOQUEADA', 'corrida 1'),
+      seriesService.mudarStatusSerie(db, ADMIN, serieId, 'BLOQUEADA', 'corrida 2')
+    ]);
+    const fulfilled = results.filter(r => r.status === 'fulfilled').length;
+    const rejected = results.filter(r => r.status === 'rejected').length;
+    assert.strictEqual(fulfilled, 1, `race condition: esperava 1 fulfilled, got ${fulfilled}`);
+    assert.strictEqual(rejected, 1, `race condition: esperava 1 rejected, got ${rejected}`);
+    const error = results.find(r => r.status === 'rejected')?.reason;
+    assert.strictEqual(error?.status, 409, `rejected deveria ser 409, got ${error?.status}`);
   });
 
   await close();

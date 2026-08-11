@@ -654,26 +654,32 @@ plano original; nasceu do review da Etapa 6, aprovada pelo cliente em 2026-08-09
 
 ## Etapa 6b — Números de Série (BACKEND COMPLETO — 2026-08-11)
 
-A Etapa 6 entreg ou apenas lotes (texto com validade/corrida/certificado — agregado por localização e lote).
+A Etapa 6 entregou apenas lotes (texto com validade/corrida/certificado — agregado por localização e lote).
 A Etapa 6b traz números de série: rastreamento individual de cada unidade física (motor SN tal, instrumento
 nº tal).
 
+> ⚠️ **AVISO CRÍTICO:** Ligar `Controle por série` num material **TRAVA o recebimento dele pela tela** até
+> a interface estar pronta (Tasks 8-9 pendentes). O motor recusa a nota inteira se não vierem as séries
+> (coluna `recebimentos_material_itens_almoxarifado.serie_numeros`) — e a tela de Recebimentos ainda não
+> tem campo para preenchê-las. Da mesma forma, a movimentação manual v1 (modal rápido) sempre recusa.
+> **Não ligue a flag em produção até a UI estar completa.** O motor está 100% pronto; é só a interface.
+
 | Antes | Agora |
 |---|---|
-| A opção "Controle por número de série" na ficha do material era decorativa | Material com "Controle por série" **exige um número de série para cada unidade** na entrada; a saída pergunta quais séries saem |
+| A opção "Controle por número de série" na ficha do material era decorativa | Material com "Controle por série" **exige um número de série para cada unidade** na entrada; o **motor recusa** a nota/movimentação — a **UI** ainda não as oferece |
 | Série não tinha nem tabela nem motor | Tabela `series_almoxarifado` com número único por material, status (EM_ESTOQUE / BLOQUEADA / ENTREGUE / SUCATEADA / ESTORNADA), lote, localização, movimentação de entrada/saída, e auditoria completa |
 | Nenhuma rota HTTP para série | Duas rotas: `GET /api/almoxarifado/materiais/:id/series?status=` (lista com lote_codigo) e `PUT /api/almoxarifado/series/:id/status` (bloqueia/desbloqueia com justificativa) |
 | Motor de movimentação não sabia lidar com série | Motor completo: `entradaSeries` (cria/reativa), `claimSaidaSeries` (marca ENTREGUE/SUCATA), `reverterEntrada` (marca ESTORNADA), `reverterSaida` (volta a EM_ESTOQUE), `mudarStatusSerie` (EM_ESTOQUE ↔ BLOQUEADA) |
-| Série não era integrada a requisições/recebimentos/inspeção | Motor ligado em todos os fluxos: recebimento com `serie_numeros`, requisição com `serie_ids`, inspeção e estorno com as mesmo guardar de reversão que lotes usam |
+| Série não era integrada a requisições/recebimentos/inspeção | Motor ligado em todos os fluxos: recebimento exige `serie_numeros` se `controle_serie=1`, saída aceita `serie_ids` se vierem, inspeção e estorno usam a mesma guarda de reversão que lotes |
 
 **Backend 100% pronto (Tasks 1-7).** UI de série (seleção na separação/entrega) fica para depois — é o
-passo natural da Etapa 6b na UI. Também não existem (ainda): extrato agregado do lote, e integração da
-aprovação de série com o workflow (hoje o motor aceita séries, a UI não as oferece).
+passo natural da Etapa 6b (Tasks 8-9). Também não existem (ainda): extrato agregado do lote, integração
+da aprovação de série com o workflow.
 
 **Foco principal:** série é **1 linha por unidade** (não quantidade agregada como lote). Cada unidade
 individual tem seu ciclo de vida. Para material com `controle_serie=1` e `controle_lote=1`, entrada
-pede "2 unidades do lote L-001 com números SN-1 e SN-2", saída pede "qual série sai" (e implicitamente,
-de qual lote).
+pede "2 unidades do lote L-001 com números SN-1 e SN-2". Na saída, o motor **aceita** `serie_ids` se
+vierem — a **UI** não os oferece ainda.
 
 ### O que faltava era de verdade — série era só uma flag morta
 
@@ -686,7 +692,7 @@ sem leitor"**.
 
 Implementação: Task 1 (tabela real + `seriesService` de leitura/entrada), Task 2 (entrada com
 compensação de erro), Task 3 (saída e reativação), Task 4 (reversões), Task 5 (bloqueio com mudança de
-status), Task 6 (integração com motor em todos os fluxos), Task 7 (rotas HTTP da UI).
+status), Task 6 (integração com motor em todos os fluxos), Task 7 (rotas HTTP de leitura/bloqueio).
 
 ---
 
