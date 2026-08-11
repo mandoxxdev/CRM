@@ -25,6 +25,10 @@ const STATUS_INFO = {
   APROVADO:              { label: 'Aprovado',              cls: 'almox-badge-ok',        icon: FiCheck },
   AGUARDANDO_ESTOQUE:    { label: 'Aguard. Estoque',        cls: 'almox-badge-critico',  icon: FiAlertTriangle },
   AGUARDANDO_COMPRA:     { label: 'Aguard. Compra',         cls: 'almox-badge-devolucao', icon: FiShoppingCart },
+  // Etapa 4: aprovação com saldo cai num destes dois em vez de APROVADO (máquina de estados,
+  // requisitionStateMachine.js) — são o estado normal de requisição aprovada, não exceção.
+  PARCIALMENTE_RESERVADA: { label: 'Parcialmente Reservada', cls: 'almox-badge-baixo',   icon: FiBox },
+  TOTALMENTE_RESERVADA:  { label: 'Totalmente Reservada',   cls: 'almox-badge-ok',       icon: FiCheckSquare },
   EM_SEPARACAO:          { label: 'Em Separação',          cls: 'almox-badge-ajuste',    icon: FiPackage },
   PRONTA_PARA_RETIRADA:  { label: 'Pronta p/ Retirada',     cls: 'almox-badge-entrada',  icon: FiBox },
   PARCIALMENTE_ATENDIDA: { label: 'Parcialmente Atendida', cls: 'almox-badge-baixo',     icon: FiTruck },
@@ -961,12 +965,14 @@ const RequisicoesList = () => {
                     </button>
                   </div>
                 )}
-                {warehouseMode && ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'].includes(detalhe.status) && (
+                {warehouseMode && ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'].includes(detalhe.status) && (
                   <div style={{ marginTop: 20 }}>
                     <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
                       {detalhe.status === 'AGUARDANDO_ESTOQUE' && 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.'}
                       {detalhe.status === 'AGUARDANDO_COMPRA' && 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.'}
                       {detalhe.status === 'APROVADO' && 'Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.'}
+                      {detalhe.status === 'PARCIALMENTE_RESERVADA' && 'Parte dos itens não tinha saldo e ficou sem reserva — separe o que está reservado e acompanhe a reposição do restante.'}
+                      {detalhe.status === 'TOTALMENTE_RESERVADA' && 'Todo o saldo desta requisição está reservado — inicie a separação.'}
                     </div>
                     <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                       onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; abrirModalSeparacao(); }} disabled={saving}
@@ -1080,8 +1086,8 @@ const RequisicoesList = () => {
                 )}
 
                 {(warehouseMode
-                  ? ['RASCUNHO', 'PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA']
-                  : ['PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA']
+                  ? ['RASCUNHO', 'PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']
+                  : ['PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']
                 ).includes(detalhe.status) && (
                   detalhe.solicitante_id === user?.id || isAdmin
                 ) && (

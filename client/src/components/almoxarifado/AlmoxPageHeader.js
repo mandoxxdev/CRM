@@ -80,6 +80,9 @@ export const getRequisicaoStepIndex = (status) => {
     APROVADO: 2,
     AGUARDANDO_ESTOQUE: 2,
     AGUARDANDO_COMPRA: 2,
+    // Etapa 4: entram entre APROVADO e EM_SEPARACAO — "Aprovar" concluída, "Separar" ativa.
+    PARCIALMENTE_RESERVADA: 2,
+    TOTALMENTE_RESERVADA: 2,
     EM_SEPARACAO: 2,
     PRONTA_PARA_RETIRADA: 3,
     PARCIALMENTE_ATENDIDA: 4,
