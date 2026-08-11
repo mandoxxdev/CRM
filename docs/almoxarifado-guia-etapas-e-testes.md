@@ -934,18 +934,24 @@ de verdade; o QR existe exatamente para carregar o resto.
 
 10. Abra o PDF gerado em qualquer um dos passos acima (num monitor ou impresso) e aponte a câmera
     do celular para o QR de qualquer etiqueta. Ele abre o navegador numa URL do sistema.
-11. **Se você não estiver logado no celular, cai na tela de login primeiro** — dado de estoque
-    exige sessão, o QR não pula essa trava. Faça login.
-12. Depois do login, você cai exatamente na tela "Lotes e Séries" (ou Materiais, para etiqueta de
-    material simples), já no material certo, na aba certa, e com a **linha daquele lote/série
-    destacada** (fundo azul claro) — sem precisar procurar.
+11. **Se você não estiver logado no celular, cai na tela de login** — dado de estoque exige sessão,
+    o QR não pula essa trava. **Sem sessão, o destino do QR se perde**: `App.js` manda para
+    `/login` sem guardar de onde você veio, e depois do login `Login.js` sempre navega para `/`
+    (a tela de seleção de módulos), não de volta para a URL do QR. Faça login primeiro e depois
+    **escaneie o QR de novo**, ou navegue manualmente até **Almoxarifado → Lotes e Séries**.
+12. Se você já estava logado, o QR abre direto na tela "Lotes e Séries" (ou Materiais, para
+    etiqueta de material simples), já no material certo, na aba certa, e com a **linha daquele
+    lote/série destacada** (fundo azul claro) — sem precisar procurar.
 
 **F) O modal lembra o formato escolhido**
 
-13. Abra qualquer modal de etiqueta e troque o formato para **Térmica 100×50mm**. Gere (ou feche o
-    modal sem gerar — tanto faz, a escolha é salva ao trocar o select).
-14. Abra outro modal de etiqueta (em qualquer tela, qualquer lote/série/material). Ele já deve abrir
-    com **Térmica 100×50mm** pré-selecionada — é lembrado por navegador, não por usuário do sistema.
+13. Abra qualquer modal de etiqueta e troque o formato para **Térmica 100×50mm**. Clique em
+    **Gerar** — a escolha só é gravada no `localStorage` dentro da ação de gerar
+    (`EtiquetasPdfModal.js`), não ao trocar o select. Se você fechar o modal **sem** gerar, a troca
+    não persiste.
+14. Abra outro modal de etiqueta (em qualquer tela, qualquer lote/série/material). Se você gerou no
+    passo 13, ele já deve abrir com **Térmica 100×50mm** pré-selecionada — é lembrado por
+    navegador, não por usuário do sistema.
 
 **G) Recortar a folha A4**
 

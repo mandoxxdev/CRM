@@ -770,7 +770,12 @@ de teste, registrados de propósito.
   texto é a fonte da verdade da entrada (Etapa 6b, pendência (g): a griffagem de origem é
   não-fatal). Se o texto digitado divergir do que o motor efetivamente criou (caso raro), a
   etiqueta segue o texto, não o banco. Uma rota "séries por recebimento_item" que lesse o dado
-  gravado em vez do texto fica registrada como robustez futura, não como bug.
+  gravado em vez do texto fica registrada como robustez futura, não como bug. Efeito colateral do
+  mesmo desenho: `montarEtiquetasDoRecebimento` cai silenciosamente em etiqueta **simples** de
+  material (sem linha de lote) quando o item tem `controle_lote` mas `item.lote` chega vazio —
+  hoje inalcançável numa nota `PROCESSADO` porque a pré-checagem do servidor já recusa a nota
+  inteira se um item com `controle_lote` não tiver lote preenchido; documentado aqui porque o
+  fallback existe no código e não tinha nota nenhuma.
 - **(e) Sem registro/auditoria de impressão** — decisão YAGNI **declarada** no design (decisão 6):
   reimpressão é livre, ninguém pediu auditoria de "quem imprimiu o quê e quando", e criar a coluna
   seria escritor sem leitor — exatamente o padrão que esta spec inteira existe para caçar.
@@ -782,6 +787,13 @@ de teste, registrados de propósito.
   o valor é fixo, não reage a tema; `material_id` inválido na URL degrada com mensagens
   contraditórias entre a busca vazia e o aviso de "material não encontrado" (aceitável — não
   quebra a tela, só confunde um pouco).
+- **(g) QR lido sem sessão perde o destino depois do login.** `App.js` redireciona para `/login`
+  sem gravar `state.from`, e `Login.js` sempre navega para `/` (tela de seleção de módulos) depois
+  de autenticar, fixo, independente de onde o usuário veio. Quem escaneia um QR de etiqueta sem
+  estar logado cai no login e, depois de entrar, perde o deep-link — precisa escanear de novo ou
+  navegar manualmente até "Lotes e Séries". Preservar o `from` no fluxo de login é uma melhoria
+  **global** de autenticação (afeta qualquer deep-link do sistema, não só etiquetas), fora do
+  escopo desta etapa, que é 100% client dentro do módulo Almoxarifado.
 
 ## Regras essenciais + testes de API exigidos
 

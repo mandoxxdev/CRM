@@ -14,7 +14,7 @@
 > | Task | O que entrega | Hash |
 > |---|---|---|
 > | 1 | Dependência `qrcode` + montadores puros de descritor (`FORMATOS_ETIQUETA`, `montarEtiquetaMaterial`/`Lote`/`Serie`/`montarEtiquetasDoRecebimento`) | `35967b9` |
-> | 1, fix round 1 | Lockfile do `npm install qrcode` tinha ficado fora do commit (esquecimento no `git add`, não gitignore) | `922e0ac` |
+> | 1, fix round 1 | Versionou à força `client/package-lock.json`, que está no `.gitignore` **por decisão deliberada** do dev para o deploy no Coolify (comentário "remover para evitar erro npm ci"). A causa anotada aqui esteve errada duas vezes: primeiro "o gitignore pegou o arquivo por engano" (falso — pegar era o comportamento correto, intencional); depois, "corrigida" para "esquecimento no `git add`, não gitignore" (também falso). Revertido no review final da 6c (`c87eee8`) com `git rm --cached` — o arquivo continua no disco, só sai do índice | `922e0ac` |
 > | 1, fix round 1 | Teste do fallback de quantidade (`quantidade_esperada` quando `quantidade_recebida` falta) + report com evidência do controle positivo | `5722799` |
 > | 2 | Renderizador `gerarEtiquetasPDF` — paginação pela grade do formato, QR via `qrcode`, borda pontilhada de recorte no A4 | `d526643` |
 > | 2, fix round 1 | Faltavam testes das validações de entrada do renderizador (formato desconhecido, lista vazia) | `b9b9bf4` |
@@ -25,14 +25,16 @@
 > | 5, fix round 1 | Posição do botão de etiqueta e `title` por comportamento (material controlado navega, sem controle abre modal — o texto do tooltip tinha ficado igual pros dois casos) | `0785119` |
 > | 6 | "Imprimir etiquetas dos itens" na nota `PROCESSADO`/`APROVADO` de Recebimentos | `4ebd1ce` |
 > | 7 | Documentação (specs, guia, este plano) + verificação final — esta atualização | (commit desta task) |
+> | 7, review final | Leitura de `?material_id=` em Materiais vira one-shot de verdade (ref `materialIdAplicado`, não lazy-init — a lista carrega async) e lockfile devolvido ao `.gitignore` (`git rm --cached`, ver linha da Task 1 acima) | `c87eee8` |
+> | 7, review final | Guia corrigido (passo F.13/14 — a escolha do formato é lembrada AO GERAR, não ao trocar o select; passo E.11/12 — deep-link do QR some depois do login, não cai na tela de origem) + pendência nova (g) e nota de fallback na (d), spec 10 | (commit desta task) |
 >
 > **Hashes de referência da etapa inteira:** design `4a32793` · plano `7a0454e` · range de código
-> `35967b9..0785119`.
+> `35967b9..0785119` · review final `c87eee8..`(commit docs desta task).
 >
 > **Verificação final (2026-08-11):** `test:api` 56/56 · `test:almoxarifado` 43/43 ·
 > `test:validation` 4/4 · `test:safealter` 3/3 · `test:sqlite` 3/3 (todos inalterados frente à
 > baseline da Etapa 6b — zero código de servidor tocado) · client 177/177 (16 suítes) · build CI
-> limpo.
+> limpo. Reconfirmado no review final (2026-08-11): client 177/177 + build CI limpo.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
