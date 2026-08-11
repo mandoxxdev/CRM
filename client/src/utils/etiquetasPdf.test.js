@@ -113,4 +113,11 @@ describe('gerarEtiquetasPDF', () => {
     expect(doc.addPage).toHaveBeenCalledTimes(2); // 3 etiquetas, 1 por pagina, a 1a pagina ja existe
     expect(require('qrcode').default.toDataURL).toHaveBeenCalledWith('u', expect.any(Object));
   });
+
+  test('formato desconhecido e lista vazia sao recusados', async () => {
+    await expect(gerarEtiquetasPDF({ formato: 'INEXISTENTE', etiquetas: [{ codigo: 'M', nome: 'x', linhaControle: '', qrUrl: 'u' }] }))
+      .rejects.toThrow(/formato de etiqueta desconhecido/);
+    await expect(gerarEtiquetasPDF({ formato: 'A4_GRADE', etiquetas: [] }))
+      .rejects.toThrow(/nenhuma etiqueta/);
+  });
 });
