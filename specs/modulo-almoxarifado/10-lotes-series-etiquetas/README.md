@@ -378,13 +378,15 @@ rota fazia isso. Era uma parede com placa de porta.
 - [x] `elegivel` da listagem FEFO usa a mesma ordem do motor (status antes de vencimento) — **`8dfeb0c`**
 
 ### Backend — números de série
-> Nada abaixo foi entregue, e **isso não é esquecimento**: a tabela de divisão no topo coloca série
-> na **Etapa 6b**, que é a próxima. A tarefa detalhada está no fim de
-> [`docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md`](../../../docs/superpowers/plans/2026-08-09-almoxarifado-etapa6-lotes.md).
 
-- [ ] Tabela `series_almoxarifado`: material, número de série, status (em estoque/reservado/entregue/em terceiro/devolvido), localização, projeto/OS atual — **Etapa 6b**
-- [ ] `controle_serie` no material: entrada exige N séries para N unidades; saída exige quais séries — **Etapa 6b** (a flag existe e está morta hoje — ver a tabela das cinco flags)
-- [ ] Série é única por material; ciclo de vida rastreável — **Etapa 6b**
+**Etapa 6b** — Tasks 1-7 entregues em 2026-08-11 (design/tabela/motor/motor-rotas/recebimento/guards/rotas-http).
+
+- [x] Tabela `series_almoxarifado`: material, número de série, status (EM_ESTOQUE/BLOQUEADA/ENTREGUE/SUCATEADA/ESTORNADA), localização, projeto/OS atual — **Tasks 1-2 (`e8b0a05..fceef09`)**: tabela real, `seriesService` (leitura e entrada), guarda de duplicata, ciclo de vida EM_ESTOQUE → BLOQUEADA ↔ (desbloqueio) → ENTREGUE/SUCATA/ESTORNO, auditoria com entidade='serie'
+- [x] `controle_serie` no material: entrada exige N séries para N unidades; saída exige quais séries — **Task 3** (motor de entrada `entradaSeries` com compensação de erro) + **Task 4** (motor de saída `claimSaidaSeries` com reativação de ENTREGUE/SUCATA/ESTORNO) + **Task 5** (reversões `reverterEntrada`/`reverterSaida` com snapshot de estado para compensação no estorno) + **Task 6** (mudar status de série `mudarStatusSerie` com guarda de transição e justificativa obrigatória). A flag está acesa desde Task 3
+- [x] **Série é única por material; ciclo de vida rastreável** — implementado Tasks 1-7 — [`.superpowers/sdd/2026-08-11-almoxarifado-etapa6b-series/`](../../../.superpowers/sdd/2026-08-11-almoxarifado-etapa6b-series/) tem o design, plano e relatórios de cada task
+- [x] **Rotas HTTP** (Task 7, **`fc33d59`**): 
+  - `GET /api/almoxarifado/materiais/:id/series?status=` (perm. `visualizar`) — lista com lote_codigo
+  - `PUT /api/almoxarifado/series/:id/status` (perm. `inspecionar`) — muda de EM_ESTOQUE ↔ BLOQUEADA com justificativa obrigatória
 
 ### Backend — etiquetas
 > Nada abaixo foi entregue: etiquetas são a **Etapa 6c**, depois da 6b.

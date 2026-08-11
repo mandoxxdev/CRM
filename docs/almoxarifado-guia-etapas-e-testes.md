@@ -6,7 +6,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 
 > ## Onde o desenvolvimento parou — 2026-08-11
 >
-> **Etapas 1, 2, 3, 4, 5 e 6 completas — a Task 9 (correção da Etapa 6) também, e o review final do branch inteiro já foi feito e corrigido.**
+> **Etapas 1, 2, 3, 4, 5 e 6 completas — a Task 9 (correção da Etapa 6) também, e o review final do branch inteiro já foi feito e corrigido. Etapa 6b (Números de Série) — backend completo (Tasks 1-7, 2026-08-11).**
 >
 > **2026-08-11 — auditoria completa das 24 specs contra o código, e mais uma correção.** Todas as
 > specs de feature foram conferidas contra o que o sistema faz de verdade e corrigidas onde
@@ -649,6 +649,44 @@ plano original; nasceu do review da Etapa 6, aprovada pelo cliente em 2026-08-09
   tinha percebido). As duas colunas saíram da tabela — retenção não existe por localização; os
   cartões "Reservado"/"Bloqueado" no topo do Extrato (que leem do material, não da localização)
   continuam mostrando o número certo, como sempre mostraram.
+
+---
+
+## Etapa 6b — Números de Série (BACKEND COMPLETO — 2026-08-11)
+
+A Etapa 6 entreg ou apenas lotes (texto com validade/corrida/certificado — agregado por localização e lote).
+A Etapa 6b traz números de série: rastreamento individual de cada unidade física (motor SN tal, instrumento
+nº tal).
+
+| Antes | Agora |
+|---|---|
+| A opção "Controle por número de série" na ficha do material era decorativa | Material com "Controle por série" **exige um número de série para cada unidade** na entrada; a saída pergunta quais séries saem |
+| Série não tinha nem tabela nem motor | Tabela `series_almoxarifado` com número único por material, status (EM_ESTOQUE / BLOQUEADA / ENTREGUE / SUCATEADA / ESTORNADA), lote, localização, movimentação de entrada/saída, e auditoria completa |
+| Nenhuma rota HTTP para série | Duas rotas: `GET /api/almoxarifado/materiais/:id/series?status=` (lista com lote_codigo) e `PUT /api/almoxarifado/series/:id/status` (bloqueia/desbloqueia com justificativa) |
+| Motor de movimentação não sabia lidar com série | Motor completo: `entradaSeries` (cria/reativa), `claimSaidaSeries` (marca ENTREGUE/SUCATA), `reverterEntrada` (marca ESTORNADA), `reverterSaida` (volta a EM_ESTOQUE), `mudarStatusSerie` (EM_ESTOQUE ↔ BLOQUEADA) |
+| Série não era integrada a requisições/recebimentos/inspeção | Motor ligado em todos os fluxos: recebimento com `serie_numeros`, requisição com `serie_ids`, inspeção e estorno com as mesmo guardar de reversão que lotes usam |
+
+**Backend 100% pronto (Tasks 1-7).** UI de série (seleção na separação/entrega) fica para depois — é o
+passo natural da Etapa 6b na UI. Também não existem (ainda): extrato agregado do lote, e integração da
+aprovação de série com o workflow (hoje o motor aceita séries, a UI não as oferece).
+
+**Foco principal:** série é **1 linha por unidade** (não quantidade agregada como lote). Cada unidade
+individual tem seu ciclo de vida. Para material com `controle_serie=1` e `controle_lote=1`, entrada
+pede "2 unidades do lote L-001 com números SN-1 e SN-2", saída pede "qual série sai" (e implicitamente,
+de qual lote).
+
+### O que faltava era de verdade — série era só uma flag morta
+
+Os dados sempre estiveram lá — a coluna `controle_serie` nasceu na Etapa 2 — mas ninguém nunca fazia
+nada com ela. Quando você marcava "Controle por série" num material e tentava entrar com 5 unidades,
+o sistema **não** perguntava os 5 números — simplesmente aceitava sem registrá-los. O comando `npm run
+test:api` rodava verde porque os testes não testavam série (ela estava marcada como Etapa 6b no plano
+original). Era o mesmo padrão que a spec desta feature toda documenta como **"coluna com escritor,
+sem leitor"**.
+
+Implementação: Task 1 (tabela real + `seriesService` de leitura/entrada), Task 2 (entrada com
+compensação de erro), Task 3 (saída e reativação), Task 4 (reversões), Task 5 (bloqueio com mudança de
+status), Task 6 (integração com motor em todos os fluxos), Task 7 (rotas HTTP da UI).
 
 ---
 
