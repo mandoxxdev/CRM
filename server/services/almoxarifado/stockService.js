@@ -4,6 +4,8 @@ const { can } = require('./permissions');
 const alertService = require('./alertService');
 const { avaliarRegrasVinculo } = require('./movementRules');
 const { TIPOS_MOVIMENTO } = require('./schema');
+// seriesService nao importa stockService de volta — sem ciclo.
+const seriesService = require('./seriesService');
 
 async function getConfig(db, chave) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
@@ -554,6 +556,29 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       { status: 400 });
   }
 
+  // ── Serie (Etapa 6b) ─────────────────────────────────────────────────────────
+  // Mesmo alcance e mesmas isencoes do exigeLote acima: so movimentacao manual
+  // (v1/v2) e recebimento declaram exigeSerie; entrega/exclusao de requisicao e
+  // devolucao/sucata de devolucao continuam isentas ate as telas deles terem campo
+  // de serie (pendencia declarada nas specs 04/12).
+  const seriesEntrada = Array.isArray(params.series)
+    ? params.series.map((s) => String(s).trim()).filter(Boolean) : [];
+  const serieIdsSaida = Array.isArray(params.serie_ids)
+    ? params.serie_ids.map(Number).filter((n) => Number.isInteger(n) && n > 0) : [];
+  const serieObrigatoria = !!(opcoes.exigeSerie && material.controle_serie
+    && (tiposEntrada.includes(tipo) || tiposSaida.includes(tipo)));
+  if (serieObrigatoria) {
+    if (!Number.isInteger(Number(quantidade))) {
+      const e = new Error('material com controle de serie exige quantidade inteira');
+      e.status = 400; throw e;
+    }
+    const informadas = tiposEntrada.includes(tipo) ? seriesEntrada.length : serieIdsSaida.length;
+    if (informadas !== Number(quantidade)) {
+      const e = new Error(`material com controle de serie: informe ${quantidade} serie(s) para ${quantidade} unidade(s) — recebidas ${informadas}`);
+      e.status = 400; throw e;
+    }
+  }
+
   const regras = avaliarRegrasVinculo(tipo, { os_id, projeto_id, centro_custo_id, justificativa, referencia, emergencial });
   if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
   const regularizacaoPendente = regras.pendente ? 1 : 0;
@@ -719,7 +744,17 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   }
 
   let saldoAnteriorReal = saldoAnterior;
+  // `seriesAfetadas` (Etapa 6b): populada só quando a entrada cria/reativa série. Escopo aberto
+  // aqui (fora do try) de propósito — o catch abaixo precisa dela para compensar; para qualquer
+  // tipo que não seja entrada com série ela permanece [] e a compensação vira no-op.
+  let seriesAfetadas = [];
+  let result;
 
+  // Envolve aplicação física + linha de saldo + INSERT do ledger: se a série já foi criada
+  // (entradaSeries rodou) e QUALQUER passo posterior falhar (custo médio, getOrCreateSaldo,
+  // o próprio INSERT), a série tem de ser desfeita — senão fica uma série EM_ESTOQUE sem
+  // contrapartida no físico, furando o invariante COUNT(série) == quantidade_atual.
+  try {
   if (!['TRANSFERENCIA', 'BLOQUEIO', 'DESBLOQUEIO', 'RESERVA', 'LIBERACAO_RESERVA',
         'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO'].includes(tipo)) {
     if (tiposSaida.includes(tipo)) {
@@ -783,6 +818,17 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       saldoPosterior = row.quantidade_atual;
       }
     } else if (tiposEntrada.includes(tipo)) {
+      // Serie (Etapa 6b): cria/reativa as N series ANTES do credito fisico — se a lista tiver
+      // duplicata ou serie ja em estoque, entradaSeries falha e NADA do credito abaixo roda.
+      // localizacao_id usa a MESMA resolucao que a linha de saldo vai usar mais abaixo
+      // (locEntrada, calculado de novo la por ser uma funcao pura sem efeito colateral).
+      if (serieObrigatoria) {
+        seriesAfetadas = await seriesService.entradaSeries(db, user, {
+          material_id, numeros: seriesEntrada, lote_id: loteIdFinal,
+          localizacao_id: resolveLocalizacaoEntrada(material, localizacao_destino_id) || null,
+          movimentacao_id: null,
+        });
+      }
       if (custoInformado && custoInformado > 0) {
         const row = await dbGet(db, `UPDATE materiais_almoxarifado SET
             quantidade_atual = quantidade_atual + ?,
@@ -932,7 +978,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     }
   }
 
-  const result = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
+  result = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
     (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
      usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
      projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
@@ -947,6 +993,28 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     reserva_id || null, recebimento_id || null, requisicao_id || null,
     centro_custo_id || null, emergencial ? 1 : 0, regularizacaoPendente,
   ]);
+  } catch (e) {
+    // Compensa a serie ANTES de relançar — o caminho de entrada com serie termina aqui dentro
+    // (aplicação física + linha de saldo + INSERT do ledger), então qualquer falha nesse trecho
+    // com seriesAfetadas não-vazio deixaria série EM_ESTOQUE sem crédito físico correspondente.
+    // Para todo tipo que não seja entrada com série obrigatória, seriesAfetadas é [] e este
+    // bloco é um no-op — o catch só relança, igual a antes desta task.
+    if (seriesAfetadas.length > 0) {
+      await seriesService.desfazerEntrada(db, seriesAfetadas);
+    }
+    throw e;
+  }
+
+  // Vínculo série → movimentação (Etapa 6b): só agora o id da movimentação existe. Feito fora do
+  // try acima de propósito — se este UPDATE falhar, a movimentação e o crédito físico já estão
+  // gravados; desfazer a série aqui reabriria a compensação depois do ledger já ter sido escrito
+  // (o que os testes do invariante rejeitam de outra forma: o vínculo é auxiliar, não afeta saldo
+  // nem o invariante COUNT(série) == quantidade_atual).
+  if (seriesAfetadas.length > 0) {
+    await dbRun(db, `UPDATE series_almoxarifado SET movimentacao_entrada_id = ?
+      WHERE id IN (${seriesAfetadas.map(() => '?').join(',')})`,
+      [result.lastID, ...seriesAfetadas.map((a) => a.linha.id)]);
+  }
 
   await registrarAuditoria(db, {
     entidade: 'movimentacao', entidade_id: result.lastID, acao: tipo,

@@ -300,7 +300,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
       // mandando `exigeLote: false` no JSON. Esta e a movimentacao manual: o formulario TEM campo
       // de lote (texto livre na entrada, seletor FEFO na saida), logo aqui a exigencia de
       // `controle_lote` faz sentido e vale. Ver a nota da guarda em stockService.
-      const result = await stockService.registrarMovimentacao(db, req.user, req.body, { exigeLote: true });
+      // `exigeSerie` (Etapa 6b): mesmo raciocinio — o body pode trazer `series`/`serie_ids`
+      // (declarados em MovimentacaoSchema), entao a exigencia de `controle_serie` tambem vale
+      // aqui, e tambem so no 4o argumento (nunca lida de `exigeSerie` no body).
+      const result = await stockService.registrarMovimentacao(db, req.user, req.body, { exigeLote: true, exigeSerie: true });
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });

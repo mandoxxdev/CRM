@@ -78,6 +78,10 @@ const MovimentacaoSchema = z.object({
   documento_vinculado: z.string().optional(),
   custo_unitario: z.number().gt(0).optional(),
   emergencial: z.boolean().optional(),
+  // Etapa 6b: chave nao declarada e descartada pelo validate() — series/serie_ids
+  // precisam estar aqui para chegarem ao motor.
+  series: z.array(z.string().trim().min(1)).max(1000).optional(),
+  serie_ids: z.array(z.coerce.number().int().positive()).max(1000).optional(),
 }).superRefine((d, ctx) => {
   // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização
   // e propaga o total do material — ver stockService.registrarMovimentacao). Para

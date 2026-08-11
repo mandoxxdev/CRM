@@ -766,10 +766,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // e a saida do operador e a tela de Movimentacoes, que tem o campo. Tirar a exigencia daqui
       // abriria um bypass silencioso da flag por um formulario que o usuario ja tem na mao — o
       // oposto do que a isencao dos fluxos internos resolve (aqueles nao tem NENHUMA porta).
+      // `exigeSerie: true` (Etapa 6b): mesma logica — este corpo tambem nao carrega `series`, entao
+      // material com `controle_serie` sempre recusa aqui (o operador tem a tela de Movimentacoes
+      // para informar as series).
       const result = await stockService.registrarMovimentacao(db, req.user, {
         material_id, tipo, quantidade, motivo, referencia, observacoes,
         justificativa: motivo || null,
-      }, { exigeLote: true });
+      }, { exigeLote: true, exigeSerie: true });
       res.status(201).json({
         id: result.id, material_id, tipo, quantidade,
         saldo_anterior: result.saldo_anterior, saldo_posterior: result.saldo_posterior,
