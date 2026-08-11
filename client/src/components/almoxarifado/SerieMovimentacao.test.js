@@ -49,16 +49,18 @@ let container;
 let root;
 let materiaisDoBanco;
 let seriesDoBanco;
+let lotesDoBanco;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   materiaisDoBanco = [MATERIAL_COM_SERIE];
   seriesDoBanco = [];
+  lotesDoBanco = [];
   // Implementações aqui, não na fábrica do jest.mock: clearAllMocks apaga implementações e só
   // o primeiro teste teria dados.
   api.get.mockImplementation((url) => {
     if (url.includes('/series')) return Promise.resolve({ data: seriesDoBanco });
-    if (url.includes('/lotes')) return Promise.resolve({ data: [] });
+    if (url.includes('/lotes')) return Promise.resolve({ data: lotesDoBanco });
     if (url === '/almoxarifado/materiais') return Promise.resolve({ data: materiaisDoBanco });
     return Promise.resolve({ data: [] });
   });
@@ -212,6 +214,56 @@ describe('série na movimentação — saída (checkboxes de EM_ESTOQUE)', () =>
 
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/v2', expect.objectContaining({
       serie_ids: [501],
+    }));
+  });
+
+  // Fix round 1 (review da Task 8): o filtro por lote no JSX só esconde o checkbox — sem o
+  // efeito que sincroniza `form.serie_ids` com o que está visível, a série marcada de um lote
+  // continuava no payload depois de trocar para outro lote (`{lote_id: 8, serie_ids: [501]}`,
+  // série do lote 5 com lote_id 8). A contagem sozinha não pega isso (1 marcada = 1 esperada,
+  // mesmo sendo a série errada) — só o conteúdo do array está errado.
+  test('trocar o lote selecionado limpa series marcadas que saem do filtro', async () => {
+    seriesDoBanco = [
+      { id: 501, numero: 'GMP-10', lote_id: 5, lote_codigo: 'L5', status: 'EM_ESTOQUE' },
+      { id: 502, numero: 'GMP-20', lote_id: 8, lote_codigo: 'L8', status: 'EM_ESTOQUE' },
+    ];
+    lotesDoBanco = [
+      { id: 5, codigo: 'L5', status: 'ATIVO', saldo: 10, vencido: false, elegivel: true },
+      { id: 8, codigo: 'L8', status: 'ATIVO', saldo: 10, vencido: false, elegivel: true },
+    ];
+    await abrirComMaterialETipo('SAIDA');
+
+    // FEFO pré-seleciona o lote 5 (primeiro elegível da lista) — só a série desse lote aparece.
+    const seletorLote = container.querySelector('#mov-lote');
+    expect(seletorLote.value).toBe('5');
+    let campoSaida = campoPorLabel(/Séries a entregar/);
+    let checkboxes = [...campoSaida.querySelectorAll('input[type="checkbox"]')];
+    expect(checkboxes).toHaveLength(1);
+    marcarCheckbox(checkboxes[0], true);
+    expect(campoPorLabel(/Séries a entregar/).querySelector('small').textContent).toMatch(/^1\//);
+
+    // Troca o lote para 8: a série 501 (do lote 5) sai do filtro — e não pode sobreviver
+    // escondida em form.serie_ids.
+    preencher(seletorLote, '8');
+    await esperarEfeitos();
+
+    campoSaida = campoPorLabel(/Séries a entregar/);
+    checkboxes = [...campoSaida.querySelectorAll('input[type="checkbox"]')];
+    expect(checkboxes).toHaveLength(1); // só a do lote 8 aparece agora
+    expect(checkboxes[0].checked).toBe(false); // nenhuma marcação sobrou escondida
+    expect(campoSaida.querySelector('small').textContent).toMatch(/^0\//);
+
+    // Marca a série do lote 8 (a única visível) e confirma que o payload leva só ela.
+    marcarCheckbox(checkboxes[0], true);
+    preencher(quantidadeInput(), '1');
+    preencher(motivoInput(), 'Consumo em produção');
+
+    await submeter();
+    await esperarEfeitos();
+
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/v2', expect.objectContaining({
+      lote_id: 8,
+      serie_ids: [502],
     }));
   });
 });

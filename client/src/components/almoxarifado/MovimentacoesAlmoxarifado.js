@@ -181,6 +181,29 @@ const MovimentacoesAlmoxarifado = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.material_id, form.tipo, selectedMaterial?.controle_serie]);
 
+  // Fix round 1 (review da Task 8): o JSX de checkboxes filtra por `form.lote_id`, mas isso só
+  // esconde a série visualmente — o id continua em `form.serie_ids` até algo limpar. Sem este
+  // efeito, marcar a série 501 (lote 5) e trocar o seletor de lote para 8 deixava a 501
+  // escondida da lista MAS ainda no payload: `{lote_id: 8, serie_ids: [501]}`, uma série de um
+  // lote com o lote_id de outro. A validação de cardinalidade (contagem) não pega isso porque a
+  // contagem não muda — só o conteúdo fica errado. Sincroniza `serie_ids` com o que está
+  // realmente visível sempre que o lote selecionado ou a lista de séries disponíveis mudar. O
+  // `every` evita um `setForm` (e portanto um re-render) quando nada precisa ser removido —
+  // sem essa guarda o efeito rodaria de novo a cada render mesmo sem mudança real.
+  useEffect(() => {
+    const visiveisIds = new Set(
+      seriesDisponiveis
+        .filter((s) => !form.lote_id || Number(s.lote_id) === Number(form.lote_id))
+        .map((s) => s.id)
+    );
+    setForm((f) => (
+      f.serie_ids.every((id) => visiveisIds.has(id))
+        ? f
+        : { ...f, serie_ids: f.serie_ids.filter((id) => visiveisIds.has(id)) }
+    ));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.lote_id, seriesDisponiveis]);
+
   const loadMateriais = async () => {
     try {
       const res = await api.get('/almoxarifado/materiais');
