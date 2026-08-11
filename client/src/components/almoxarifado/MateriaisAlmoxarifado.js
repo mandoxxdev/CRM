@@ -8,10 +8,12 @@ import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiImage, FiPackage,
-  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText
+  FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText, FiTag
 } from 'react-icons/fi';
 import AlmoxPageHeader from './AlmoxPageHeader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
+import EtiquetasPdfModal from './EtiquetasPdfModal';
+import { montarEtiquetaMaterial } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
 const CATEGORIAS = [
@@ -36,6 +38,7 @@ const MateriaisAlmoxarifado = () => {
   const [movRef, setMovRef] = useState('');
   const [savingMov, setSavingMov] = useState(false);
   const [extratoMaterialId, setExtratoMaterialId] = useState(null);
+  const [etiquetas, setEtiquetas] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -46,6 +49,16 @@ const MateriaisAlmoxarifado = () => {
     if (f) setFamiliaFilter(f);
     loadFamilias();
   }, []);
+
+  useEffect(() => {
+    const material_id = searchParams.get('material_id');
+    if (material_id && materiais.length > 0) {
+      const material = materiais.find(m => m.id === parseInt(material_id));
+      if (material) {
+        setSearch(material.codigo);
+      }
+    }
+  }, [materiais, searchParams]);
 
   const loadFamilias = async () => {
     try {
@@ -304,6 +317,17 @@ const MateriaisAlmoxarifado = () => {
                           onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleDelete(m.id, m.nome); }}>
                           <FiTrash2 />
                         </button>
+                        <button className="almox-btn-icon primary" title="Imprimir etiqueta do material"
+                          onClick={(e) => {
+                            if (!bloquearSeNaoPode('visualizar', e)) return;
+                            if (m.controle_serie === 1 || m.controle_lote === 1) {
+                              navigate(`/almoxarifado/lotes?material_id=${m.id}${m.controle_serie === 1 ? '&aba=SERIES' : ''}`);
+                            } else {
+                              setEtiquetas([montarEtiquetaMaterial(m, window.location.origin)]);
+                            }
+                          }}>
+                          <FiTag />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -376,6 +400,9 @@ const MateriaisAlmoxarifado = () => {
       {extratoMaterialId && (
         <ExtratoMaterialModal materialId={extratoMaterialId} onClose={() => setExtratoMaterialId(null)} />
       )}
+
+      {/* Etiquetas PDF */}
+      <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
     </div>
   );
 };
