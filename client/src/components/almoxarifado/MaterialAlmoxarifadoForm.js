@@ -26,7 +26,7 @@ const sectionCardStyle = { background: 'var(--gmp-surface)', border: '1px solid 
 // normaliza via MATERIAL_BOOL_FIELDS; aqui guardamos boolean puro no state do form.
 const CONTROLE_CHECKS = [
   { field: 'controle_lote', label: 'Controle por lote' },
-  { field: 'controle_serie', label: 'Controle por número de série' },
+  { field: 'controle_serie', label: 'Controle por número de série', hint: 'Exigirá um número de série por unidade na entrada e na saída' },
   { field: 'controle_validade', label: 'Controle de validade' },
   { field: 'controle_corrida', label: 'Controle de corrida' },
   { field: 'controle_certificado', label: 'Requer certificado' },
@@ -738,12 +738,15 @@ const MaterialAlmoxarifadoForm = () => {
             <div style={sectionCardStyle}>
               <div className="almox-section-title">Controles</div>
               <div className="almox-form-grid almox-form-grid-3">
-                {CONTROLE_CHECKS.map(({ field, label }) => (
-                  <label key={field} className="almox-checkbox-field">
-                    <input type="checkbox" checked={form[field]}
-                      onChange={e => set(field, e.target.checked)} />
-                    {label}
-                  </label>
+                {CONTROLE_CHECKS.map(({ field, label, hint }) => (
+                  <div key={field}>
+                    <label className="almox-checkbox-field">
+                      <input type="checkbox" checked={form[field]}
+                        onChange={e => set(field, e.target.checked)} />
+                      {label}
+                    </label>
+                    {hint && <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', display: 'block', marginTop: 2 }}>{hint}</small>}
+                  </div>
                 ))}
               </div>
             </div>

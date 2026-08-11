@@ -63,6 +63,7 @@ const vinculoLabel = (m) => {
 const ExtratoMaterialModal = ({ materialId, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [series, setSeries] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,6 +81,23 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
   useEffect(() => {
     if (materialId) load();
   }, [materialId, load]);
+
+  useEffect(() => {
+    if (!data?.material || !data.material.controle_serie) {
+      setSeries(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      try {
+        const res = await api.get(`/almoxarifado/materiais/${materialId}/series?status=EM_ESTOQUE`);
+        if (!cancelado) setSeries(res.data || []);
+      } catch {
+        if (!cancelado) setSeries(null);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [materialId, data?.material?.controle_serie]);
 
   if (!materialId) return null;
 
@@ -146,6 +164,15 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                     <div className="almox-kpi-label">Custo médio</div>
                   </div>
                 </div>
+                {material.controle_serie === 1 && (
+                  <div className="almox-kpi-card">
+                    <div className="almox-kpi-icon primary"><FiPackage /></div>
+                    <div className="almox-kpi-info">
+                      <div className="almox-kpi-value">{series !== null ? series.length : '—'}</div>
+                      <div className="almox-kpi-label">Séries em estoque</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="almox-section-title">Saldos por localização</div>
