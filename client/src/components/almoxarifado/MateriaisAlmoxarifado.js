@@ -301,6 +301,18 @@ const MateriaisAlmoxarifado = () => {
                             <FiMap />
                           </button>
                         )}
+                        <button className="almox-btn-icon primary"
+                          title={m.controle_serie === 1 || m.controle_lote === 1 ? 'Etiquetas de lote/série deste material (abre Lotes e Séries)' : 'Imprimir etiqueta do material'}
+                          onClick={(e) => {
+                            if (!bloquearSeNaoPode('visualizar', e)) return;
+                            if (m.controle_serie === 1 || m.controle_lote === 1) {
+                              navigate(`/almoxarifado/lotes?material_id=${m.id}${m.controle_serie === 1 ? '&aba=SERIES' : ''}`);
+                            } else {
+                              setEtiquetas([montarEtiquetaMaterial(m, window.location.origin)]);
+                            }
+                          }}>
+                          <FiTag />
+                        </button>
                         <button className="almox-btn-icon success" title="Entrada rápida de estoque neste material"
                           onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'ENTRADA'); }}>
                           <FiArrowUp />
@@ -316,17 +328,6 @@ const MateriaisAlmoxarifado = () => {
                         <button className="almox-btn-icon danger" title="Inativa o material (não apaga o histórico)"
                           onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleDelete(m.id, m.nome); }}>
                           <FiTrash2 />
-                        </button>
-                        <button className="almox-btn-icon primary" title="Imprimir etiqueta do material"
-                          onClick={(e) => {
-                            if (!bloquearSeNaoPode('visualizar', e)) return;
-                            if (m.controle_serie === 1 || m.controle_lote === 1) {
-                              navigate(`/almoxarifado/lotes?material_id=${m.id}${m.controle_serie === 1 ? '&aba=SERIES' : ''}`);
-                            } else {
-                              setEtiquetas([montarEtiquetaMaterial(m, window.location.origin)]);
-                            }
-                          }}>
-                          <FiTag />
                         </button>
                       </div>
                     </td>
