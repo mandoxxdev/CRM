@@ -1,5 +1,39 @@
 # Almoxarifado Etapa 6c — Etiquetas com QR Code: plano de implementação
 
+> ## ✅ ETAPA CONCLUÍDA — 2026-08-11
+>
+> As 7 tasks foram entregues. Feature 10 (lotes/séries/etiquetas) fica **completa por inteiro** —
+> lote (Etapa 6), série (Etapa 6b) e etiqueta com QR (Etapa 6c). Zero mudança de servidor: só
+> `client/` foi tocado, e as suítes de servidor (`test:api`/`test:almoxarifado`/`test:validation`/
+> `test:safealter`/`test:sqlite`) continuam nos mesmos números de antes da etapa. Documentação
+> fechada em `specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md`,
+> `specs/modulo-almoxarifado/README.md` e `docs/almoxarifado-guia-etapas-e-testes.md` (seção
+> "Etapa 6c"). **A próxima tarefa da ordem do plano mestre — Etapa 7, transferências e devoluções —
+> está detalhada no fim deste documento.**
+>
+> | Task | O que entrega | Hash |
+> |---|---|---|
+> | 1 | Dependência `qrcode` + montadores puros de descritor (`FORMATOS_ETIQUETA`, `montarEtiquetaMaterial`/`Lote`/`Serie`/`montarEtiquetasDoRecebimento`) | `35967b9` |
+> | 1, fix round 1 | Lockfile do `npm install qrcode` tinha ficado fora do commit (esquecimento no `git add`, não gitignore) | `922e0ac` |
+> | 1, fix round 1 | Teste do fallback de quantidade (`quantidade_esperada` quando `quantidade_recebida` falta) + report com evidência do controle positivo | `5722799` |
+> | 2 | Renderizador `gerarEtiquetasPDF` — paginação pela grade do formato, QR via `qrcode`, borda pontilhada de recorte no A4 | `d526643` |
+> | 2, fix round 1 | Faltavam testes das validações de entrada do renderizador (formato desconhecido, lista vazia) | `b9b9bf4` |
+> | 3 | `EtiquetasPdfModal` compartilhado — select de formato, cópias, contagem de páginas, `localStorage['almox_etiqueta_formato']` | `4b123a1` |
+> | 4 | Deep-link `?material_id=&aba=&lote=/&serie=` + destaque de linha + botões de etiqueta (lote/série/bulk) em "Lotes e Séries" | `fb59246` |
+> | 4, fix round 1 | Destaque de linha vazava para lotes/séries de OUTRO material quando o código colidia — preso ao `material_id` de origem da URL | `e929da6` |
+> | 5 | Etiqueta avulsa em Materiais (ícone por linha) + leitura one-shot de `?material_id=` pré-preenchendo a busca | `8b842ea` |
+> | 5, fix round 1 | Posição do botão de etiqueta e `title` por comportamento (material controlado navega, sem controle abre modal — o texto do tooltip tinha ficado igual pros dois casos) | `0785119` |
+> | 6 | "Imprimir etiquetas dos itens" na nota `PROCESSADO`/`APROVADO` de Recebimentos | `4ebd1ce` |
+> | 7 | Documentação (specs, guia, este plano) + verificação final — esta atualização | (commit desta task) |
+>
+> **Hashes de referência da etapa inteira:** design `4a32793` · plano `7a0454e` · range de código
+> `35967b9..0785119`.
+>
+> **Verificação final (2026-08-11):** `test:api` 56/56 · `test:almoxarifado` 43/43 ·
+> `test:validation` 4/4 · `test:safealter` 3/3 · `test:sqlite` 3/3 (todos inalterados frente à
+> baseline da Etapa 6b — zero código de servidor tocado) · client 177/177 (16 suítes) · build CI
+> limpo.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** gerar PDF de etiquetas (A4 em grade e térmica 100×50) com código do material legível a olho nu e QR Code que abre a tela "Lotes e Séries" já filtrada — fechando a feature 10 (lotes ✅ 6 · séries ✅ 6b · etiquetas = 6c).
@@ -479,9 +513,9 @@ git commit -m "Almoxarifado Etapa 6c: etiquetas dos itens da nota processada"
 - Modify: `docs/almoxarifado-guia-etapas-e-testes.md` (cabeçalho; seção 6c com Antes→Agora e roteiro clicável: imprimir da nota processada, da linha de lote/série, das séries em estoque, etiqueta avulsa de material, ler o QR com o celular e cair na tela filtrada com destaque, trocar o formato e ver o modal lembrar)
 - Modify: `docs/superpowers/plans/2026-08-11-almoxarifado-etapa6c-etiquetas.md` (✅ CONCLUÍDA + tabela task→hash + próxima tarefa detalhada: **Etapa 7** — briefing com contrato das specs 11/12 já auditadas em 2026-08-11)
 
-- [ ] **Step 1: rodar TUDO e citar números reais** — server: `npm run test:api && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`; client: suíte inteira + build CI.
-- [ ] **Step 2: atualizar os 4 documentos** (regra do CLAUDE.md; item não entregue desmarcado com o porquê).
-- [ ] **Step 3: commit** — `git commit -m "Almoxarifado Etapa 6c: atualiza specs, guia e plano com o que a etapa entregou"`. Push fica com o controlador após o review final.
+- [x] **Step 1: rodar TUDO e citar números reais** — `test:api` 56/56, `test:almoxarifado` 43/43, `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 3/3 (todos inalterados — zero código de servidor tocado pela etapa), client 177/177 (16 suítes), build CI limpo.
+- [x] **Step 2: atualizar os 4 documentos** — spec 10, README mestre, guia e este plano.
+- [x] **Step 3: commit** — `git commit -m "Almoxarifado Etapa 6c: atualiza specs, guia e plano com o que a etapa entregou"`. Push fica com o controlador após o review final.
 
 ---
 
@@ -490,3 +524,74 @@ git commit -m "Almoxarifado Etapa 6c: etiquetas dos itens da nota processada"
 - **Cobertura do design:** formatos+montadores (T1), renderizador (T2), modal com localStorage (T3), deep-link+destaque+botões em Lotes e Séries (T4), Materiais+destino do QR (T5), Recebimentos (T6), docs (T7). Erros (modal vazio, toast) em T3/T6. Decisão 6 (sem registro de impressão) não gera task — é ausência deliberada, registrada na spec via T7.
 - **Sem placeholders:** T3/T4 têm cenários resumidos com molde nomeado e asserts-chave; corpos completos são do implementador no padrão do arquivo-molde (mesma convenção validada na 6b).
 - **Consistência de nomes:** `FORMATOS_ETIQUETA`/`montarEtiqueta*`/`montarEtiquetasDoRecebimento`/`gerarEtiquetasPDF`/`EtiquetasPdfModal`/`almox_etiqueta_formato` idênticos em T1-T6; dialeto `material_id`/`aba`/`lote`/`serie` em T1/T4/T5.
+
+---
+
+## Próxima tarefa da ordem do plano mestre: Etapa 7 — Transferências e Devoluções
+
+Com a 6c fechada, a feature 10 (lotes/séries/etiquetas) está completa por inteiro e a **ordem do
+plano mestre** (`specs/modulo-almoxarifado/README.md`) segue para a Etapa 7: `11-transferencias` +
+`12-devolucoes`. Isso já estava decidido antes desta etapa — não é uma escolha nova, é seguir a
+sequência. As duas specs foram **auditadas em 2026-08-11** (mesma data desta etapa) e corrigidas
+contra o código real; o que segue é o contrato que uma sessão nova vai consumir ao começar essa
+etapa, não uma proposta de design.
+
+### O contrato que já existe (specs 11/12, pós-auditoria)
+
+- **`POST /transferencias`** (`extended.js`, permissão `movimentar`) já move saldo entre
+  localizações via `stockService`, atômico origem→destino. **Desde a Etapa 6**, `TRANSFERENCIA`
+  também move a **linha do lote** dentro de `estoque_saldo_almoxarifado` — achado da auditoria, a
+  spec 11 anterior só descrevia "move saldo entre localizações", sem a dimensão do lote.
+- **Duas lacunas nomeadas na auditoria** (ver `specs/modulo-almoxarifado/11-transferencias/README.md`):
+  a rota `POST /transferencias` **não declara `exigeLote`** (material com `controle_lote` transfere
+  sem citar lote — mesmo padrão de isenção já documentado na spec 10 para os 4 fluxos internos); e
+  `TRANSFERENCIA` **não está em `REGRAS_VINCULO`** (`movementRules`), então não há exigência de
+  vínculo nem de justificativa para transferir.
+- **`returnService.registrarDevolucao`** (`extended.js`, via `GET/POST /devolucoes`) já movimenta
+  pelo motor conforme o destino: `ESTOQUE`/`QUARENTENA` emite `ENTRADA_DEVOLUCAO` (quarentena emite
+  também `BLOQUEIO`), `SUCATA` emite `SUCATA` (com justificativa, exigida desde que `SUCATA` entrou
+  em `REGRAS_VINCULO`), `RETRABALHO` emite `RETRABALHO` — tipo **neutro ao saldo**, só registra no
+  livro sem alterar nada (ramo próprio no `stockService`, não documentado antes da auditoria).
+- **Devolução é isenta de `controle_lote`/`controle_serie`, declarado.** A entrada de devolução
+  grava `lote_id NULL` mesmo em material controlado — mesma isenção dos 4 fluxos internos da spec
+  10, mas aqui é o próprio objetivo da feature 12 fechar: "Devolução com lote" já está no checklist
+  da spec 12 como item aberto.
+
+### Pontos de atenção para quem pegar esta etapa
+
+- **"Em trânsito" pede um modelo de estado novo?** Hoje a transferência é instantânea
+  (origem→destino no mesmo `UPDATE`). A spec 11 pede um fluxo `SOLICITADA → APROVADA →
+  EM_TRANSITO → RECEBIDA → CONFIRMADA / CANCELADA`, com uma localização "virtual" onde o saldo não
+  é disponível nem na origem nem no destino enquanto está em trânsito. Decidir se isso é uma
+  entidade `transferencias_almoxarifado` nova (com sua própria máquina de estados, no molde do que
+  a Etapa 3 fez para requisição) ou se dá para reaproveitar alguma tabela existente é a primeira
+  pergunta de design da etapa.
+- **Vínculo devolução → saída original.** Hoje uma devolução não cita `movimentacao_saida_id` — não
+  há validação de "você não pode devolver mais do que foi entregue" nem rastro de qual saída aquela
+  devolução está desfazendo. É o item mais citado no checklist da spec 12.
+- **As duas telas não existem.** Nem transferências nem devoluções têm UI — hoje as duas rotas só
+  são alcançáveis por chamada direta à API. O padrão já validado nas Etapas 6/6b/6c (tela dedicada
+  em `/almoxarifado/...`, molde de modal `.almox-modal`) é o caminho natural.
+- **Série na devolução: reentrada manual já cobre — vale a pena integrar?** A pendência (a) da 6b
+  (spec 10) já registra que devolver material com série hoje se faz por uma ENTRADA manual comum na
+  tela de Movimentações (o motor reativa a série `ENTREGUE` de volta a `EM_ESTOQUE`), não por um
+  campo de série dentro da tela de Devolução — que não existe. Perguntar ao design da 7: vale a
+  pena um campo de série dedicado na tela de devolução (mais direto para o operador) ou o caminho
+  manual via Movimentações é suficiente e a etapa foca só em vincular a devolução à saída original?
+- **Isenção de `exigeLote`/`exigeSerie` na transferência é decisão pendente, não default óbvio.**
+  Diferente dos 4 fluxos internos (que são isentos porque não têm campo nenhum), a transferência
+  **poderia** ter campo de lote/série — ela já sabe a origem e o destino. Decidir se declara
+  `exigeLote`/`exigeSerie` (fechando a lacuna nomeada na auditoria) é uma escolha de design da 7,
+  não uma correção automática.
+
+### O que já está decidido (não reabrir)
+
+- **Etapa 7 é a próxima da ordem do plano mestre** — não é uma escolha desta sessão, é a sequência
+  já registrada em `specs/modulo-almoxarifado/README.md` (seção "Ordem de desenvolvimento
+  sugerida"). Depois dela vem a Etapa 8 (materiais de clientes/terceiros).
+- **Almoxarifado é área física, não filial** (regra de negócio já fixada em várias sessões,
+  inclusive no `CLAUDE.md` do projeto) — uma transferência entre almoxarifados move a localização
+  física do saldo, não separa "estoques" de filiais diferentes. Não propor segregação de saldo.
+- **O padrão de isenção de `exigeLote`/`exigeSerie` para chamadores sem campo** (o 4º argumento
+  `opcoes`, nunca `params` do body) já está estabelecido nas Etapas 6/6b — reaproveitar o mesmo
+  mecanismo em vez de inventar um novo, só decidir onde a transferência se encaixa nele.

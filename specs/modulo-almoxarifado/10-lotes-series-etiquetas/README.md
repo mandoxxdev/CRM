@@ -1,9 +1,27 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
-> **Status:** 🟢 — **lote e série são entidades reais, ambas com tela completa** (lote desde a
-> Task 9, 2026-08-09; série desde a Etapa 6b, 2026-08-11); só faltam etiquetas com QR (Etapa 6c) ·
-> **Spec original:** seção 10
-> **Última atualização:** 2026-08-11 (**review final do branch da Etapa 6b — 1 Critical + 3
+> **Status:** 🟢 — **as três partes da feature estão entregues**: lote (Etapa 6, 2026-08-09), série
+> (Etapa 6b, 2026-08-11) e etiquetas com QR (Etapa 6c, 2026-08-11). A feature 10 fica completa
+> **exceto pelas pendências declaradas** nas três etapas (ver as seções de pendências, mais abaixo
+> — nenhuma bloqueia o critério de aceite do módulo) · **Spec original:** seção 10
+> **Última atualização:** 2026-08-11 (**Etapa 6c fechada — etiquetas com QR Code em PDF, a última
+> parte da feature 10.** Checklist de etiquetas marcado item por item com hash (Tasks 1-6,
+> `35967b9..0785119`; docs desta atualização). **Zero mudança de servidor** — util client
+> `client/src/utils/etiquetasPdf.js` (`FORMATOS_ETIQUETA` com `A4_GRADE` 2×5/99×57mm e
+> `TERMICA_100x50`; montadores puros `montarEtiquetaMaterial`/`montarEtiquetaLote`/
+> `montarEtiquetaSerie`/`montarEtiquetasDoRecebimento`; `gerarEtiquetasPDF` gera o QR via lib
+> `qrcode` — única dependência nova da etapa — e baixa `etiquetas-YYYY-MM-DD.pdf`) +
+> `EtiquetasPdfModal` compartilhado (formato lembrado em `localStorage`, cópias para etiqueta
+> única, contagem de páginas) + botões em Materiais, "Lotes e Séries" (por linha de lote/série,
+> inclusive série em estado terminal — reimpressão — e bulk "Etiquetas das séries em estoque") e
+> Recebimentos ("Imprimir etiquetas dos itens" na nota PROCESSADO/APROVADO) + deep-link
+> `?material_id=&aba=&lote=/&serie=` em "Lotes e Séries" com destaque preso ao material de origem.
+> Testes: 11 no util + 9 no modal + 7 novos em "Lotes e Séries"; verificação final:
+> `test:api` 56/56, `test:almoxarifado` 43/43, `test:validation` 4/4, `test:safealter` 3/3,
+> `test:sqlite` 3/3 (todos inalterados — zero código de servidor tocado), client 177/177 (16
+> suítes), build CI limpo. Pendências específicas da 6c registradas em seção própria, no fim deste
+> documento.)
+> Antes: 2026-08-11 (**review final do branch da Etapa 6b — 1 Critical + 3
 > afirmações erradas de doc corrigidas.** Critical de costura, achado por sonda: estorno de saída
 > (`cancelarMovimentacao`) não tinha a mesma guarda de cardinalidade que o ramo de entrada já tinha
 > desde a Task 5 — se a série de uma saída reentrava manualmente (nova ENTRADA que anula
@@ -55,7 +73,7 @@ descrevia como um item único — o que fazia parecer que ficaria pronta de uma 
 | **Etapa 6** | Lotes: tabela real, validade, corrida, certificado, FEFO, guarda contra saldo negativo por lote, campo de lote no recebimento | ✅ **entregue em 2026-08-09** (`b7035dd..9406bff`) |
 | **Task 9** | Tela de lotes (status/vencimento/certificado) + Sucata/Perda selecionáveis na Movimentação — não estava no plano, nasceu do review da Task 8 | ✅ **entregue em 2026-08-09** (`09c75d2`) |
 | **Etapa 6b** | Números de série — confirmado em 2026-08-09 que a GMP rastreia série individualmente hoje (rotina, não exceção). Não é descarte de escopo, é sequência | ✅ **entregue em 2026-08-11** (`418d617..b46d820`, backend + UI) |
-| **Etapa 6c** | Etiquetas com QR Code e impressão em PDF | **próxima** — tarefa detalhada no fim do [plano da Etapa 6b](../../../docs/superpowers/plans/2026-08-11-almoxarifado-etapa6b-series.md) |
+| **Etapa 6c** | Etiquetas com QR Code e impressão em PDF (100% client, zero mudança de servidor) | ✅ **entregue em 2026-08-11** (`35967b9..0785119`) |
 
 (`6b`/`6c` e não `7`/`8` de propósito: as etapas 7 e 8 do plano mestre já são
 transferências/devoluções e materiais de clientes/terceiros.)
@@ -479,12 +497,39 @@ rota fazia isso. Era uma parede com placa de porta.
 - [x] **Hint da flag + KPI no extrato** (Task 11, `f11a3f0`+fix `78631e1`): `MaterialAlmoxarifadoForm.js` explica o efeito de `controle_serie` no checkbox; `ExtratoMaterialModal.js` ganha o cartão "Séries em estoque" quando o material tem a flag
 
 ### Backend — etiquetas
-> Nada abaixo foi entregue: etiquetas são a **Etapa 6c**, depois da 6b.
+> **Etapa 6c entregue em 2026-08-11 — mas 100% client, de propósito.** O design (decisão 4,
+> `docs/superpowers/specs/2026-08-11-almoxarifado-etapa6c-etiquetas-design.md`) rejeitou as duas
+> abordagens de servidor (puppeteer HTML→PDF, pdfkit) porque nada na etiqueta exige HTML e as duas
+> exigiam base-URL configurada no servidor para o QR só para um documento que é texto + 1 imagem.
+> **Nenhuma linha abaixo tem código de servidor** — os itens que fariam sentido como "endpoint"
+> foram implementados como função pura client + `jspdf`, e é isso que os itens marcados `[x]`
+> descrevem.
 
-- [ ] Geração de etiqueta (spec 10): código GMP, descrição, quantidade, lote/série, fornecedor, pedido, NF, projeto, localização, status inspeção + **QR Code** — **Etapa 6c**
-- [ ] Endpoint de etiqueta em PDF (aproveitar infra `pdfkit`/`puppeteer` existente) — **Etapa 6c**
-- [ ] Etiqueta de retalho com dimensões/peso remanescente (feature 15) — **Etapa 6c**
-- [ ] Regras por tipo (spec 10): motores/instrumentos → série; chapas/tubos certificados → lote+corrida; químicos → lote+validade — **Etapa 6c** (depende de série existir)
+- [x] Geração de etiqueta com **QR Code** — **`35967b9`+fix `922e0ac`,`5722799`** (montadores de
+  descritor em `utils/etiquetasPdf.js`) **+ `d526643`+fix `b9b9bf4`** (renderizador
+  `gerarEtiquetasPDF`, QR via lib `qrcode`). **Redução deliberada de campos frente à lista original
+  desta linha** (decisão 2 do design): a etiqueta impressa mostra só o essencial legível a olho nu —
+  código GMP grande, nome truncado, e a linha de controle (`Lote X · Val dd/mm/aaaa` ou `SN: Y`).
+  **Descrição completa, quantidade, fornecedor, pedido, NF, projeto, localização e status de
+  inspeção NÃO vão para o papel** — ficam atrás do QR, que abre a tela "Lotes e Séries" (ou
+  Materiais) já filtrada, com tudo isso disponível. Overload de informação na etiqueta era
+  exatamente o erro que o design mandava evitar
+- [ ] Endpoint de etiqueta em PDF no servidor (`pdfkit`/`puppeteer`) — **não entregue, por decisão
+  de design, não por falta de tempo.** O PDF é gerado inteiro no client (`jsPDF` + `qrcode`),
+  `window.location.origin` resolve a base da URL do QR sem configuração de servidor nenhuma, e a
+  etapa inteira roda sob a restrição "zero mudança de servidor" do próprio plano. O resultado
+  funcional (baixar um PDF de etiquetas) existe; só a camada servidor foi descartada, de propósito
+- [ ] Etiqueta de retalho com dimensões/peso remanescente (feature 15) — **não entregue**, fora de
+  escopo por decisão do design (decisão 7): a feature 15 ainda não tem UI nenhuma, então não há
+  onde a etiqueta de retalho nasceria. Fica para quando a feature 15 ganhar tela
+- [x] Regras por tipo — **implementadas como inferência pelas flags do material, não como tabela de
+  categoria** (decisão 5 do design, sem tabela nova): `controle_serie` → etiqueta de série; senão
+  `controle_lote` → etiqueta de lote; senão → etiqueta simples de material — `montarEtiquetasDoRecebimento`
+  em `utils/etiquetasPdf.js`, mesma regra usada pelo botão de Materiais (Task 5). **A redação
+  original desta linha** ("motores/instrumentos → série; chapas/tubos certificados → lote+corrida;
+  químicos → lote+validade", ou seja, regras por categoria de material) **foi substituída** — o
+  design achou que inferir pela flag já ligada no cadastro é equivalente na prática e não cria
+  tabela de regras nova para manter
 
 ### Frontend
 - [x] **Campo de lote no recebimento** — **`9406bff`**: lote, validade e corrida por item, nos status em que os dados fiscais são editáveis
@@ -496,7 +541,22 @@ rota fazia isso. Era uma parede com placa de porta.
   sozinho o lote que estava bloqueado por falta dele). Ver pendência (a), abaixo, para o que ainda
   falta (extrato agregado do lote)
 - [x] Seleção de série na movimentação — **Etapa 6b, Task 8 (`4836d24`+fix `576fd61`)**. Separação e entrega da requisição continuam sem campo de série — é um dos 4 fluxos internos isentos, pendência (a) da lista abaixo, mesmo padrão já declarado para lote
-- [ ] Botão imprimir etiqueta (recebimento, material, localização) — **Etapa 6c**
+- [x] **Botão imprimir etiqueta em Materiais e Recebimento** — **Etapa 6c**: Materiais (Task 5,
+  `8b842ea`+fix `0785119`) — ícone por linha; material com `controle_lote`/`controle_serie` navega
+  para "Lotes e Séries" filtrado em vez de abrir o modal (a etiqueta certa mora lá, etiqueta de
+  material sem lote/série seria meia-etiqueta); Recebimentos (Task 6, `4ebd1ce`) — botão largo
+  "Imprimir etiquetas dos itens" na nota `PROCESSADO`/`APROVADO`, usa `item.lote`/`item.series` do
+  payload do detalhe (texto digitado, sem rota nova — ver pendência (d) da 6c, abaixo). **Etiqueta
+  de localização/prateleira NÃO entrou** (decisão 7 do design): cortada de propósito — o mapa de
+  localizações já cumpre esse papel, e a etiqueta avulsa de material cobre o caso comum
+- [x] **Modal de impressão compartilhado + deep-link com destaque** — `EtiquetasPdfModal` (Task 3,
+  `4b123a1`; select de formato `FORMATOS_ETIQUETA`, cópias para etiqueta única, contagem de
+  etiquetas/páginas, último formato lembrado em `localStorage['almox_etiqueta_formato']`); "Lotes e
+  Séries" ganha botão de etiqueta por linha de lote e de série — inclusive série em estado terminal
+  (reimpressão) — e o bulk "Etiquetas das séries em estoque" na aba Séries (Task 4, `fb59246`+fix
+  `e929da6`); a tela aceita `?material_id=&aba=&lote=/&serie=` (o dialeto que os QRs codificam),
+  com a linha do lote/série destacada e colisão de código entre materiais diferentes tratada (o
+  destaque fica preso ao `material_id` de origem da URL, não repete por código)
 
 ## Pendências abertas depois da Etapa 6
 
@@ -686,7 +746,50 @@ conhecidos, registrados de propósito em vez de ficarem implícitos.
   fetch da lista anterior ainda está em voo); caso multi-linha do "claim" de lote quando a saída
   teria de drenar mais de uma linha de saldo do mesmo lote com série simultaneamente.
 
+## Pendências abertas depois da Etapa 6c (etiquetas)
+
+Letradas independentemente das pendências de lote ((a)-(g)) e de série ((a)-(j)), acima — mesma
+convenção. Nenhuma é lacuna esquecida: são decisões de escopo do design da 6c ou débitos pequenos
+de teste, registrados de propósito.
+
+- **(a) Impressora física do galpão não confirmada com o cliente.** O design (decisão 1) nomeava
+  esta como a primeira pergunta em aberto — o cliente confirmou em 2026-08-11 que a térmica é o
+  caminho **provável**, não o definitivo. Os dois formatos parametrizados (`A4_GRADE` 2×5/99×57mm,
+  `TERMICA_100x50` 1 por página) cobrem o intervalo razoável; se a impressora real do galpão exigir
+  outra dimensão, ajustar é acrescentar uma entrada em `FORMATOS_ETIQUETA` — uma constante, não um
+  redesenho.
+- **(b) Etiqueta de retalho não existe** — feature 15 ainda não tem UI (ver Backend — etiquetas,
+  acima). Fica para quando a feature 15 ganhar tela.
+- **(c) Etiqueta de localização/prateleira foi cortada de propósito** (decisão 7 do design): nasceu
+  como "possivelmente" no briefing de origem; descartada porque o mapa de localizações já cumpre
+  esse papel e a etiqueta avulsa de material cobre o caso comum.
+- **(d) Etiquetas do recebimento usam o TEXTO digitado, não uma consulta às séries/lotes reais.**
+  `montarEtiquetasDoRecebimento` lê `item.lote`/`item.series`/`item.data_validade_lote` do payload
+  do detalhe — o mesmo texto que o operador digitou na tela de Recebimentos, não uma consulta a
+  `series_almoxarifado`/`lotes_almoxarifado` pelo `recebimento_item_id`. Funciona porque hoje o
+  texto é a fonte da verdade da entrada (Etapa 6b, pendência (g): a griffagem de origem é
+  não-fatal). Se o texto digitado divergir do que o motor efetivamente criou (caso raro), a
+  etiqueta segue o texto, não o banco. Uma rota "séries por recebimento_item" que lesse o dado
+  gravado em vez do texto fica registrada como robustez futura, não como bug.
+- **(e) Sem registro/auditoria de impressão** — decisão YAGNI **declarada** no design (decisão 6):
+  reimpressão é livre, ninguém pediu auditoria de "quem imprimiu o quê e quando", e criar a coluna
+  seria escritor sem leitor — exatamente o padrão que esta spec inteira existe para caçar.
+- **(f) Minors de teste deferidos** (não bloqueiam a etapa): sanitizer do campo de cópias sem teste
+  de borda (ex.: valor negativo/decimal/muito grande); botões X/Cancelar de `EtiquetasPdfModal` sem
+  guarda contra fechar durante `gerando` — mesmo padrão já presente nos outros modais do módulo
+  inteiro, não uma lacuna nova desta etapa; guarda de duplo-clique no botão Gerar sem teste
+  dedicado; contraste do destaque de linha (`rgba(79,172,254,0.10)`) em dark mode não verificado —
+  o valor é fixo, não reage a tema; `material_id` inválido na URL degrada com mensagens
+  contraditórias entre a busca vazia e o aviso de "material não encontrado" (aceitável — não
+  quebra a tela, só confunde um pouco).
+
 ## Regras essenciais + testes de API exigidos
+
+> **Etapa 6c (etiquetas) não aparece nesta tabela — ela não tem teste de API, porque não tem
+> código de servidor.** As regras da 6c são testadas na suíte client: `utils/etiquetasPdf.test.js`
+> (11 casos — montadores + paginação/cópias do renderizador), `EtiquetasPdfModal.test.js` (9 casos)
+> e o describe novo em `LotesAlmoxarifado.test.js` (7 casos — deep-link, destaque, botões de
+> etiqueta). Ver o hash de cada task na seção "Backend/Frontend — etiquetas", acima.
 
 | Regra | Teste | Estado |
 |-------|-------|--------|

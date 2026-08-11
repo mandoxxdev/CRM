@@ -2,13 +2,25 @@
 
 > Atualizado em 2026-08-11 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 6b) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 6c) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
 > ## Onde o desenvolvimento parou — 2026-08-11
 >
-> **Etapas 1, 2, 3, 4, 5 e 6 completas — a Task 9 (correção da Etapa 6) também, e o review final do branch inteiro já foi feito e corrigido. Etapa 6b (Números de Série) — ENTREGUE (backend + UI + documentação, `418d617..b46d820`). Próxima etapa: 6c (etiquetas com QR Code).**
+> **Etapas 1, 2, 3, 4, 5 e 6 completas — a Task 9 (correção da Etapa 6) também, e o review final do
+> branch inteiro já foi feito e corrigido. Etapa 6b (Números de Série) — ENTREGUE. Etapa 6c
+> (Etiquetas com QR Code) — ENTREGUE (`35967b9..0785119`), e é a última parte da feature 10: lote +
+> série + etiqueta física fecham o ciclo. Próxima etapa da ordem: Etapa 7 — Transferências e
+> Devoluções.**
 >
-> **A Etapa 6b fechou nesta mesma data.** As Tasks 8-11 entregaram a UI que faltava: textarea com
+> **A Etapa 6c fechou nesta mesma data, sem tocar uma linha do servidor.** PDF de etiqueta (folha A4
+> em grade de 10, ou térmica 100×50mm) gerado inteiro no navegador, com QR Code que abre a tela do
+> item já filtrada e destacada — quem lê o QR com o celular cai direto na linha certa, e o app pede
+> login (é dado de estoque, exige sessão). Botão de imprimir aparece em três lugares: na nota de
+> Recebimento já processada, em cada linha de lote/série na tela "Lotes e Séries" (mais um botão em
+> massa para todas as séries em estoque), e em Materiais. Ver a seção "Etapa 6c", mais abaixo, para
+> o roteiro de teste completo e o que ainda não está coberto.
+>
+> **A Etapa 6b fechou em 2026-08-11.** As Tasks 8-11 entregaram a UI que faltava: textarea com
 > gerador de sequência na entrada (Movimentações), seletor de séries em estoque na saída, campo de
 > séries no Recebimento, e a aba "Séries" dentro de "Lotes e Séries" com bloqueio justificado. O
 > aviso que existia aqui — "não ligue Controle por série até a interface existir" — está
@@ -38,9 +50,9 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > Lotes** (mudar status, liberar vencimento, anexar certificado) e **Sucata**/**Perda** agora
 > selecionáveis na tela de Movimentações. Ver a seção "Task 9", logo depois da Etapa 6 abaixo.
 >
-> **A Etapa 6 (+ Task 9) cobriu LOTES; a Etapa 6b cobriu SÉRIE.** Só falta etiquetas com QR Code
-> (Etapa 6c) — a feature foi dividida em três de propósito, porque era grande demais para uma etapa
-> só.
+> **A Etapa 6 (+ Task 9) cobriu LOTES; a Etapa 6b cobriu SÉRIE; a Etapa 6c cobriu ETIQUETA.** A
+> feature 10 (lotes, séries e etiquetas) está completa por inteiro — foi dividida em três de
+> propósito, porque era grande demais para uma etapa só.
 >
 > **Duas coisas continuam faltando, e você vai esbarrar nelas:**
 > 1. **Reprovar na inspeção não marca o lote** — continua bloqueando o material inteiro.
@@ -64,11 +76,12 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 >    localização e a saída saía de outra, a tela dizia "saldo 25" e o sistema respondia "saldo
 >    insuficiente: 0". Agora as duas pontas usam o mesmo número — o saldo total daquele lote.
 >
-> **A próxima é a Etapa 6c — Etiquetas com QR Code.** Ver o planejamento mestre em
-> `specs/modulo-almoxarifado/README.md` e a tarefa detalhada no fim de
-> `docs/superpowers/plans/2026-08-11-almoxarifado-etapa6b-series.md`.
+> **A próxima é a Etapa 7 — Transferências e Devoluções** (specs 11 e 12, já auditadas em
+> 2026-08-11). Ver o planejamento mestre em `specs/modulo-almoxarifado/README.md` e a tarefa
+> detalhada no fim de
+> `docs/superpowers/plans/2026-08-11-almoxarifado-etapa6c-etiquetas.md`.
 
-## Tabela consolidada — todas as alterações (Etapas 1 a 6b)
+## Tabela consolidada — todas as alterações (Etapas 1 a 6c)
 
 Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha estão nas seções da etapa correspondente, mais abaixo.
 
@@ -121,6 +134,11 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 6b | Recebimentos | Não havia onde digitar série na nota | Caixa "Séries (uma por linha)" por item, com contador contra a quantidade recebida |
 | 6b | Lotes (tela) | Só existiam lotes | Vira **"Lotes e Séries"**: aba nova lista as séries do material com Bloquear/Desbloquear justificado |
 | 6b | Extrato | Sem indicador de série | Cartão "Séries em estoque" para material com a flag |
+| 6c | Recebimentos | Nota processada não tinha como gerar etiqueta dos itens | Botão **"Imprimir etiquetas dos itens"** na nota `PROCESSADO`/`APROVADO` — gera 1 etiqueta por série (material com controle de série) ou por lote (material com controle de lote), usando o texto digitado na nota |
+| 6c | Lotes e Séries | Não existia como imprimir etiqueta de um lote/série específico | Botão de etiqueta por linha (lote e série, inclusive série já `ESTORNADA`/`SUCATEADA` — reimpressão); aba Séries ganha o bulk **"Etiquetas das séries em estoque"** |
+| 6c | Lotes e Séries | Abrir a tela filtrada num lote/série exigia navegar manualmente | A tela aceita a URL `?material_id=&aba=&lote=/&serie=` (o que o QR da etiqueta codifica): abre já no material/aba certos, com a linha destacada |
+| 6c | Materiais | Não existia etiqueta avulsa de material | Botão de etiqueta por linha: material sem controle de lote/série abre o modal direto; material controlado navega para "Lotes e Séries" (a etiqueta certa mora lá) |
+| 6c | (novo) modal | — | **`EtiquetasPdfModal`**: escolhe o formato (folha A4 com 10 etiquetas, ou térmica 100×50mm 1 por página — o último escolhido fica lembrado), define cópias (etiqueta única) e gera o PDF com QR Code |
 
 ## Etapa 0 — Fundação (resumo)
 
@@ -536,8 +554,8 @@ continua barrado por bloqueio, com a mensagem de bloqueio. Situação vem antes 
 - **Números de série.** *(Corrigido em 2026-08-11: esta linha dizia que série continuava não
   existindo — a Etapa 6b entregou. Ver a seção "Etapa 6b", mais abaixo, para o que mudou e o
   roteiro de teste.)*
-- **Etiquetas e QR Code.** Imprimir etiqueta de lote/material com código de barras ou QR não existe.
-  É a **Etapa 6c**.
+- **Etiquetas e QR Code.** *(Corrigido em 2026-08-11: esta linha dizia que imprimir etiqueta de
+  lote/material com QR não existia — a Etapa 6c entregou. Ver a seção "Etapa 6c", mais abaixo.)*
 - **Lote na entrega, na exclusão de requisição e na devolução.** Estas quatro operações movimentam
   estoque **sem lote**, mesmo em material com "Controle por lote" ligado: entregar uma requisição,
   excluir uma requisição (que estorna o que foi entregue), devolver material para o estoque e
@@ -797,8 +815,9 @@ que ele já tinha para lote. Use a tela **Almoxarifado → Movimentações**, qu
 
 ### O que a Etapa 6b **não** cobre
 
-- **Etiquetas e QR Code.** Imprimir etiqueta com o número de série (ou de lote) não existe. É a
-  **Etapa 6c**, a próxima.
+- **Etiquetas e QR Code.** *(Corrigido em 2026-08-11: esta linha dizia que a etapa seguinte ainda
+  não tinha entregue isso — a Etapa 6c entregou. Ver a seção "Etapa 6c", mais abaixo, para o que
+  mudou e o roteiro de teste.)*
 - **Série na entrega, na exclusão de requisição e na devolução.** As mesmas quatro operações que já
   não pedem lote (entrega de requisição, exclusão/estorno de requisição, devolução e sucata de
   devolução) também não pedem série — nenhuma dessas telas tem campo para isso. Reentrada de uma
@@ -838,6 +857,122 @@ incluindo os fix rounds e o porquê de cada um — no
 
 ---
 
+## Etapa 6c — Etiquetas com QR Code (ENTREGUE — 2026-08-11)
+
+A Etapa 6 entregou lote, a 6b entregou série — mas nenhum dos dois saía do sistema. Um lote ou uma
+série ficavam sabidos na tela, sem nada que os identificasse fisicamente numa prateleira ou numa
+peça no galpão. A Etapa 6c fecha esse ciclo: um PDF de etiquetas, para imprimir e colar, com o
+código do material legível a olho nu e um QR Code que devolve quem lê direto para a tela do sistema
+— já filtrada na linha certa.
+
+**Decisão importante: a impressora do galpão ainda não foi confirmada com você.** O gerador vem com
+dois formatos prontos — folha A4 comum (10 etiquetas por página, para recortar) e etiqueta térmica
+100×50mm (uma por página, para rolo de impressora térmica) — e o formato escolhido no modal fica
+lembrado da próxima vez. Se a impressora real do galpão usar outra medida, é um ajuste pequeno
+(uma entrada na tabela de formatos), não um redesenho.
+
+### O que mudou
+
+| Onde | Antes | Agora |
+|---|---|---|
+| Recebimentos | Nota processada não tinha como gerar etiqueta dos itens que acabaram de entrar | Botão **"Imprimir etiquetas dos itens"** aparece na nota `PROCESSADO`/`APROVADO` — uma etiqueta por série (material com controle de série) ou por lote (material com controle de lote), lida do que foi digitado na nota |
+| Lotes e Séries | Não existia como imprimir etiqueta de um lote ou série específico | Ícone de etiqueta em cada linha de lote e de série (inclusive séries já `ESTORNADA`/`SUCATEADA` — serve para reimprimir); na aba Séries, botão **"Etiquetas das séries em estoque"** gera uma de cada `EM_ESTOQUE` de uma vez |
+| Lotes e Séries | Abrir a tela filtrada num lote/série exigia escolher manualmente o material e a aba | A tela aceita ser aberta com a URL que o QR codifica — já entra no material e na aba certos, com a linha do lote/série **destacada** |
+| Materiais | Não existia etiqueta avulsa de material | Ícone de etiqueta em cada linha: material **sem** controle de lote/série abre direto o modal de impressão; material **com** a flag te leva para "Lotes e Séries" (a etiqueta certa é a do lote/série, não a do material) |
+| (modal novo) | — | **Escolher formato e imprimir**: seleciona A4 ou térmica, define quantas cópias (só faz sentido numa etiqueta única), mostra quantas etiquetas/páginas o PDF vai ter, e baixa o arquivo |
+
+### O que vai para o papel (e o que fica só atrás do QR)
+
+De propósito, a etiqueta impressa mostra pouca coisa: **código do material em fonte grande**, o
+nome (cortado se for longo), e a linha de controle — `Lote L-001 · Val 31/12/2026` ou `SN: GMP-042`.
+Fornecedor, pedido, nota fiscal, projeto, localização e status de inspeção **não** vão para o papel
+— ficam na tela que o QR abre. Etiqueta cheia de informação pequena é difícil de ler numa prateleira
+de verdade; o QR existe exatamente para carregar o resto.
+
+### Roteiro de teste manual (Etapa 6c)
+
+**A) Imprimir da nota de recebimento já processada**
+
+1. Abra um recebimento que já esteja **Processado** (ou processe um agora — veja o roteiro da
+   Etapa 6, seção F, se precisar de um do zero). Se os itens tiverem lote ou série preenchidos, o
+   botão **"Imprimir etiquetas dos itens"** aparece embaixo do resumo da nota.
+2. Clique nele. O modal abre com a contagem de etiquetas. Escolha o formato **Folha A4** e clique
+   em **Gerar**. Um PDF é baixado (`etiquetas-AAAA-MM-DD.pdf`), com uma etiqueta por série (se o
+   material tiver controle de série) ou uma por lote (se tiver controle de lote apenas).
+3. **Caso de erro esperado.** Abra um recebimento processado cujos itens não tenham lote nem série
+   nem controle nenhum, ou cuja quantidade recebida seja zero: o botão aparece **desabilitado**,
+   com uma explicação curta ao passar o mouse — não há nada para etiquetar.
+
+**B) Etiqueta por linha de lote ou série**
+
+4. Vá em **Almoxarifado → Lotes e Séries**, escolha um material com lotes ou séries cadastrados.
+5. Na aba **Lotes**, clique no ícone de etiqueta de qualquer linha. O modal abre já com 1 etiqueta
+   (a daquele lote). Gere o PDF e confira: código do material, nome, `Lote <código> · Val
+   dd/mm/aaaa` (ou só `Lote <código>` se o lote não tiver validade), e o QR.
+6. Repita na aba **Séries**, numa série qualquer — inclusive uma que já esteja `ESTORNADA` ou
+   `SUCATEADA` (é a reimpressão: você ainda pode gerar a etiqueta de uma série que já saiu de
+   circulação, para reimprimir uma via danificada, por exemplo).
+
+**C) Etiquetas em massa das séries em estoque**
+
+7. Ainda na aba **Séries**, clique no botão **"Etiquetas das séries em estoque"**, no topo. O modal
+   abre com uma etiqueta para cada série `EM_ESTOQUE` daquele material — não entram as
+   `ESTORNADA`/`SUCATEADA`/`BLOQUEADA` neste botão específico (para essas, use a etiqueta individual
+   do passo 6). Gere e confira a contagem de páginas no modal antes de baixar.
+
+**D) Etiqueta avulsa em Materiais — e a diferença com/sem controle**
+
+8. Vá em **Almoxarifado → Materiais**. Clique no ícone de etiqueta de um material **sem** "Controle
+   por lote" nem "Controle por número de série" marcados. O modal abre direto, com a etiqueta do
+   material (sem linha de lote/série). Gere e confira.
+9. Agora clique no mesmo ícone de um material **com** uma das duas flags ligadas. **Não abre
+   modal** — a tela te leva direto para **Lotes e Séries**, já com esse material selecionado (e na
+   aba Séries, se for controle de série). É proposital: a etiqueta certa para um material
+   controlado é a do lote/série específico, não uma etiqueta genérica do material.
+
+**E) Ler o QR com o celular**
+
+10. Abra o PDF gerado em qualquer um dos passos acima (num monitor ou impresso) e aponte a câmera
+    do celular para o QR de qualquer etiqueta. Ele abre o navegador numa URL do sistema.
+11. **Se você não estiver logado no celular, cai na tela de login primeiro** — dado de estoque
+    exige sessão, o QR não pula essa trava. Faça login.
+12. Depois do login, você cai exatamente na tela "Lotes e Séries" (ou Materiais, para etiqueta de
+    material simples), já no material certo, na aba certa, e com a **linha daquele lote/série
+    destacada** (fundo azul claro) — sem precisar procurar.
+
+**F) O modal lembra o formato escolhido**
+
+13. Abra qualquer modal de etiqueta e troque o formato para **Térmica 100×50mm**. Gere (ou feche o
+    modal sem gerar — tanto faz, a escolha é salva ao trocar o select).
+14. Abra outro modal de etiqueta (em qualquer tela, qualquer lote/série/material). Ele já deve abrir
+    com **Térmica 100×50mm** pré-selecionada — é lembrado por navegador, não por usuário do sistema.
+
+**G) Recortar a folha A4**
+
+15. No PDF gerado em formato **Folha A4**, repare que cada etiqueta tem uma **borda pontilhada** ao
+    redor — é a linha de corte, para recortar com tesoura ou estilete numa folha adesiva.
+
+### O que a Etapa 6c **não** cobre
+
+- **A impressora física do galpão não foi confirmada.** Os dois formatos (A4 e térmica 100×50mm)
+  são a melhor suposição até você confirmar qual impressora/etiqueta o galpão usa de fato. Se for
+  outra medida, é um ajuste pequeno.
+- **Etiqueta de retalho** (sobra de chapa/tubo com dimensão e peso remanescente) não existe —
+  depende da feature de Retalhos e Sucatas (15) ganhar tela primeiro, o que ainda não aconteceu.
+- **Etiqueta de localização/prateleira** foi cortada de propósito — o **Mapa de Localizações** já
+  mostra onde cada posição fica, e a etiqueta avulsa de material cobre o caso comum de identificar
+  o que está numa prateleira.
+- **A etiqueta do recebimento usa o texto que você digitou na nota**, não uma nova consulta ao que
+  o sistema efetivamente gravou. Na prática isso não costuma divergir — mas se você digitar um
+  número de série errado e salvar, a etiqueta sai com o número errado, igual ao que ficou na nota.
+- **Não existe registro de "quem imprimiu o quê e quando".** Reimprimir uma etiqueta é livre, sem
+  rastro — decisão consciente (ninguém pediu essa auditoria, e criar sem uso é o mesmo erro de
+  "coluna que ninguém lê" que esta feature inteira existe para evitar).
+- **Sem coletor de código de barras nem app dedicado.** O "leitor" é a câmera do próprio celular,
+  pelo QR — não há hardware novo nem app específico do almoxarifado.
+
+---
+
 ## Decisões de negócio (não são pendências)
 
 - **Almoxarifado é área física, não filial.** Os almoxarifados representam áreas de alocação dentro do mesmo site (galpão, mezanino, área externa). O cliente tem uma única filial. Por isso o **saldo de cada material é um só**, somado em todas as áreas — o almoxarifado serve para você *achar onde o item está*, não para manter estoques separados. Uma saída consome o saldo total do material, independente da área em que ele está endereçado. Isso é intencional: se algum dia existir uma segunda filial, a regra muda, mas hoje tratar como dois estoques seria errado.
@@ -870,6 +1005,10 @@ incluindo os fix rounds e o porquê de cada um — no
 - **Série: completo na Etapa 6b** — motor, recebimento, saída e a aba **Séries** dentro de "Lotes e
   Séries" (bloquear/desbloquear com justificativa). Falta reserva por série e reprovação por série
   via inspeção — ver "O que a Etapa 6b não cobre", na seção da etapa, acima.
+- **Etiquetas: completo na Etapa 6c** — PDF com QR Code em Recebimentos, Lotes e Séries e
+  Materiais, formato A4 e térmica. Falta confirmar a impressora física do galpão com o cliente, e
+  a etiqueta de retalho (aguarda a feature 15 ganhar tela) — ver "O que a Etapa 6c não cobre", na
+  seção da etapa, acima.
 - **Lote na entrega de requisição e na devolução (novo, 2026-08-10).** Quatro operações movimentam
   estoque sem lote mesmo em material com "Controle por lote": entrega de requisição, exclusão de
   requisição (estorno), devolução para estoque e sucata de devolução. Nenhuma tem campo de lote.
