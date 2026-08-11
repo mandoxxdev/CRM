@@ -10,6 +10,7 @@ const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, Regularizacao
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
+const seriesService = require('../../services/almoxarifado/seriesService');
 const reservationService = require('../../services/almoxarifado/reservationService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
@@ -509,6 +510,22 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
       const { status, justificativa } = req.body || {};
       const lote = await lotService.mudarStatusLote(db, req.user, Number(req.params.id), status, justificativa);
       res.json(lote);
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Series (Etapa 6b, Task 7) ──
+  app.get('/api/almoxarifado/materiais/:id/series', auth, requirePermission('visualizar'), async (req, res) => {
+    try {
+      const series = await seriesService.listarSeriesDoMaterial(db, req.params.id, { status: req.query.status });
+      res.json(series);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/series/:id/status', auth, requirePermission('inspecionar'), async (req, res) => {
+    try {
+      const { status, justificativa } = req.body || {};
+      const serie = await seriesService.mudarStatusSerie(db, req.user, req.params.id, status, justificativa);
+      res.json(serie);
     } catch (e) { handleError(res, e); }
   });
 
