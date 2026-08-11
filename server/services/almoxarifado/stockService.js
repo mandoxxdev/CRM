@@ -558,11 +558,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
 
   // ── Serie (Etapa 6b) ─────────────────────────────────────────────────────────
   // Mesmo alcance e mesma decisao de desenho do exigeLote acima: exigeSerie so e
-  // declarado pelo CHAMADOR, nunca deduzido pelo motor. Hoje (Task 4) so a
-  // movimentacao manual (v1/v2) declara — recebimento ainda NAO declara exigeSerie
-  // (fica para a Task 6 desta etapa); entrega/exclusao de requisicao e
-  // devolucao/sucata de devolucao continuam isentas ate as telas deles terem campo
-  // de serie (pendencia declarada nas specs 04/12).
+  // declarado pelo CHAMADOR, nunca deduzido pelo motor. A movimentacao manual (v1/v2) e o
+  // recebimento (Task 6) declaram — os dois caminhos onde o operador tem como informar
+  // series na tela; entrega/exclusao de requisicao e devolucao/sucata de devolucao continuam
+  // isentas ate as telas deles terem campo de serie (pendencia declarada nas specs 04/12).
   const seriesEntrada = Array.isArray(params.series)
     ? params.series.map((s) => String(s).trim()).filter(Boolean) : [];
   const serieIdsSaida = Array.isArray(params.serie_ids)

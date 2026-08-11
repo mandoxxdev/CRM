@@ -986,6 +986,11 @@ async function initSchema(db) {
     // pula quem ja entrou. Sem isto, uma nota que falhava no meio podia ser reprocessada e
     // creditava DE NOVO os itens que ja tinham entrado (reproduzido: 10 viraram 20).
     'entrada_estoque_em DATETIME',
+    // Etapa 6b, Task 6: numeros de serie da NF para este item, um por linha (texto livre, igual
+    // ao campo `lote`). `darEntradaEstoque` faz o parse e declara `exigeSerie` ao motor; o motor
+    // e quem cria/reativa as linhas em series_almoxarifado. Este texto e so o que o operador
+    // digitou — a fonte de verdade de "quais series existem" continua sendo series_almoxarifado.
+    'series TEXT',
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
   await migrateBackfillItemQuantidadeEmInspecao(db);

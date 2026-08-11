@@ -111,11 +111,11 @@ async function criarRecebimento(db, user, data) {
     const vUnit = parseFloat(item.valor_unitario) || 0;
     const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
     await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
-      (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, observacoes,
+      (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, series, observacoes,
        valor_unitario, valor_total, valor_icms, valor_ipi, reducao_icms_percent)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [
       r.lastID, item.material_id, qtd,
-      item.quantidade_recebida || qtd, item.lote || null, item.observacoes || null,
+      item.quantidade_recebida || qtd, item.lote || null, item.series || null, item.observacoes || null,
       vUnit, vTotal, parseFloat(item.valor_icms) || 0, parseFloat(item.valor_ipi) || 0,
       parseFloat(item.reducao_icms_percent) || 0,
     ]);
@@ -148,10 +148,12 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   if (itens) {
     for (const item of itens) {
       await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
-        quantidade_recebida = ?, conferencia_quantidade = ?, conferencia_descricao = ?, observacoes = ?
+        quantidade_recebida = ?, conferencia_quantidade = ?, conferencia_descricao = ?, observacoes = ?,
+        series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
         item.quantidade_recebida, item.conferencia_quantidade ? 1 : 0,
         item.conferencia_descricao ? 1 : 0, item.observacoes || null,
+        item.series ?? null,
         item.id, recebimentoId,
       ]);
     }
@@ -286,14 +288,15 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
         lote = COALESCE(?, lote),
         data_validade_lote = COALESCE(?, data_validade_lote),
         data_fabricacao_lote = COALESCE(?, data_fabricacao_lote),
-        corrida_lote = COALESCE(?, corrida_lote)
+        corrida_lote = COALESCE(?, corrida_lote),
+        series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
         item.quantidade_recebida ?? null, vUnit || null, vTotal || null,
         item.valor_icms ?? null, item.valor_ipi ?? null, item.reducao_icms_percent ?? null,
         item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
         item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
         item.lote ?? null, item.data_validade_lote ?? null, item.data_fabricacao_lote ?? null,
-        item.corrida_lote ?? null,
+        item.corrida_lote ?? null, item.series ?? null,
         item.id, recebimentoId,
       ]);
     }
@@ -324,6 +327,15 @@ function quantidadeDoItem(item) {
 }
 
 /**
+ * Numeros de serie digitados no item, um por linha (mesmo formato do campo `lote` de texto
+ * livre). Etapa 6b, Task 6 — o parser vive aqui porque so o recebimento tem essa entrada em
+ * texto; o motor (`stockService.registrarMovimentacao`) recebe `params.series` ja como array.
+ */
+function parseSeries(txt) {
+  return String(txt || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+}
+
+/**
  * Da entrada no estoque dos itens de um recebimento.
  *
  * ── Por que ha pre-checagem E marca de idempotencia (achado do review final da Etapa 6) ──
@@ -350,7 +362,7 @@ function quantidadeDoItem(item) {
  */
 async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id } = {}) {
   const itens = await dbAll(db, `SELECT ri.*, m.material_critico, m.controle_certificado,
-      m.controle_lote, m.ativo as material_ativo, m.codigo as material_codigo,
+      m.controle_lote, m.controle_serie, m.ativo as material_ativo, m.codigo as material_codigo,
       m.tipo_material, m.localizacao_padrao_id
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON ri.material_id = m.id
@@ -368,6 +380,21 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     if (item.controle_lote && !(item.lote && String(item.lote).trim())) {
       problemas.push(`${item.material_codigo}: preencha o campo Lote (o material tem controle por lote)`);
       continue;
+    }
+    // Serie (Etapa 6b, Task 6): mesma cardinalidade que o motor vai exigir com `exigeSerie`,
+    // antecipada aqui pelo mesmo motivo do lote acima — a nota inteira e recusada de uma vez,
+    // em vez de entrar itens bons e travar no item ruim no meio do laco de efeito.
+    if (item.controle_serie) {
+      const qtdSerie = quantidadeDoItem(item);
+      if (!Number.isInteger(qtdSerie)) {
+        problemas.push(`${item.material_codigo}: quantidade fracionaria com controle de serie`);
+        continue;
+      }
+      const numerosInformados = parseSeries(item.series).length;
+      if (numerosInformados !== qtdSerie) {
+        problemas.push(`${item.material_codigo}: informe ${qtdSerie} serie(s) — recebidas ${numerosInformados}`);
+        continue;
+      }
     }
     // Mesma resolucao e mesma validacao que o motor fara — antecipada aqui para que a nota seja
     // recusada inteira em vez de parar no meio.
@@ -452,12 +479,31 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
           localizacao_destino_id: localizacao_id,
           lote_id: loteId,
           documento_vinculado: rec.numero,
+          // Etapa 6b, Task 6: a serie nasce aqui. O motor (com exigeSerie) cria/reativa cada
+          // numero em series_almoxarifado vinculado ao loteIdFinal e a localizacao de entrada —
+          // o vinculo com ESTE recebimento/item e griffado logo abaixo, porque o motor nao
+          // conhece recebimento_id/recebimento_item_id (so o chamador conhece).
+          series: parseSeries(item.series),
         // O recebimento E um dos caminhos onde o operador tem como informar o lote (a tela tem os
         // campos Lote/Validade/Fabricacao/Corrida por item), entao a exigencia de `controle_lote`
         // vale aqui. A pre-checagem acima ja recusou a nota inteira nesse caso — esta declaracao
-        // e a rede: se um item escapar da pre-checagem, o motor ainda barra.
-        }, { exigeLote: true });
+        // e a rede: se um item escapar da pre-checagem, o motor ainda barra. Mesma logica para
+        // `exigeSerie`: o recebimento e um caminho onde o operador tem como informar as series.
+        }, { exigeLote: true, exigeSerie: true });
         entrouFisicamente = true;
+
+        // Griffa a origem: as series que o motor acabou de criar/reativar para este material
+        // ainda nao sabem de qual recebimento/item elas vieram (o motor so grava
+        // movimentacao_entrada_id). Casa por numero+material — o unico jeito de saber QUAIS
+        // linhas de series_almoxarifado pertencem a ESTE item, ja que series_almoxarifado nao
+        // tem FK direta para recebimentos_material_itens_almoxarifado no momento da criacao.
+        const numerosSerie = parseSeries(item.series);
+        if (numerosSerie.length > 0) {
+          await dbRun(db, `UPDATE series_almoxarifado
+              SET recebimento_id = ?, recebimento_item_id = ?
+            WHERE material_id = ? AND numero IN (${numerosSerie.map(() => '?').join(',')})`,
+            [recebimentoId, item.id, item.material_id, ...numerosSerie]);
+        }
 
         if (reter) {
           await registrarMovimentacao(db, user, {
