@@ -117,7 +117,7 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 9 | Movimentações | Sucata e Perda não estavam no seletor de tipo, mesmo o motor já aceitando as duas para descartar lote vencido | **Sucata** e **Perda** selecionáveis, com os mesmos campos que uma Saída pede |
 | 6b | Materiais | A opção "Controle por número de série" era decorativa | Checkbox ganha texto explicando o efeito; material com a flag exige série na entrada e na saída |
 | 6b | Movimentações (Entrada) | Não existia onde digitar série | Caixa de texto "um por linha" + contador `N/quantidade` + botão "Gerar sequência" (prefixo + início) |
-| 6b | Movimentações (Saída/Sucata/Perda) | idem | Lista de séries em estoque com checkbox e filtro de texto; filtra pelo lote quando um lote está selecionado |
+| 6b | Movimentações (Saída/Sucata/Perda) | idem | Lista de séries em estoque com checkbox; filtra pelo lote quando um lote está selecionado |
 | 6b | Recebimentos | Não havia onde digitar série na nota | Caixa "Séries (uma por linha)" por item, com contador contra a quantidade recebida |
 | 6b | Lotes (tela) | Só existiam lotes | Vira **"Lotes e Séries"**: aba nova lista as séries do material com Bloquear/Desbloquear justificado |
 | 6b | Extrato | Sem indicador de série | Cartão "Séries em estoque" para material com a flag |
@@ -685,12 +685,19 @@ instrumento nº tal), com telas próprias — não é mais só motor de servidor
 |---|---|---|
 | Materiais | A opção "Controle por número de série" na ficha do material era decorativa — marcava e nada acontecia | Ao marcar, um texto explica o efeito: "Exigirá um número de série por unidade na entrada e na saída" |
 | Movimentações (Entrada) | Não existia onde digitar série nenhuma | Para material com a flag, aparece uma **caixa de texto** "Números de série (um por linha)" com contador `N/quantidade` ao vivo, e um botão **"Gerar sequência"** (prefixo + número inicial preenche a caixa sozinho) |
-| Movimentações (Saída/Sucata/Perda) | idem | Aparece uma **lista de séries em estoque** (com filtro de texto) para marcar quais saem; se você já escolheu um lote, a lista filtra só as séries daquele lote |
+| Movimentações (Saída/Sucata/Perda) | idem | Aparece uma **lista de séries em estoque** para marcar quais saem; se você já escolheu um lote, a lista filtra só as séries daquele lote |
 | Movimentações | Trocar o tipo ou o material podia deixar série "grudada" de uma escolha anterior | Trocar tipo ou material **limpa** a seleção de série, igual já acontecia com lote |
 | Recebimentos | Não havia onde digitar série na nota | Caixa de texto "Séries (uma por linha)" por item, ao lado dos campos de lote, com contador contra a quantidade recebida |
-| Lotes (tela) | Só existiam lotes | Vira **"Lotes e Séries"**: uma aba nova lista as séries do material (número, status com badge, lote, localização, última entrada/saída) com ação **Bloquear/Desbloquear** (justificativa obrigatória) |
+| Lotes (tela) | Só existiam lotes | Vira **"Lotes e Séries"**: uma aba nova lista as séries do material (número, status com badge, lote, localização) com ação **Bloquear/Desbloquear** (justificativa obrigatória) |
 | Extrato do material | Sem indicador de série | Material com a flag ganha o cartão "Séries em estoque" no Extrato |
 | Motor (servidor) | `controle_serie` nunca era lida — coluna com escritor e sem leitor | Entrada exige N séries para N unidades; saída aceita quais séries saem; estorno devolve/estorna série; bloquear/desbloquear série avulsa; tudo auditado (`entidade='serie'`) |
+
+> ⚠️ **Correção (review final do branch, 2026-08-11): duas células desta tabela afirmavam recursos
+> que não existem.** A linha de Movimentações (Saída) dizia que a lista de séries tinha "filtro de
+> texto" — não tem, só checkboxes e o filtro automático pelo lote. A linha de Lotes (tela) incluía
+> "última entrada/saída" entre as colunas da aba Séries — a tabela real é
+> Número/Status/Lote/Localização/Ações. Ambas eram escopo cortado de propósito (pendência (h) da
+> spec 10), não bugs — o erro era só a spec e este guia afirmarem que tinham sido entregues.
 
 ### Regra que já existia para lote e agora vale para série também: rota v1 não tem campo
 
@@ -759,8 +766,9 @@ que ele já tinha para lote. Use a tela **Almoxarifado → Movimentações**, qu
     contador contra a quantidade recebida.
 13. Digite as séries e **salve** antes de clicar em "Processar Nota" — há um aviso na tela lembrando
     disso; se você digitar e processar sem salvar, o processamento usa os dados salvos, não o que
-    está digitado na hora. Processe a nota. Confira na aba Séries que as novas séries entraram
-    vinculadas ao lote e ao recebimento.
+    está digitado na hora. Processe a nota. Confira na aba Séries que as novas séries entraram com
+    o **lote** e a **localização** corretos (a aba não mostra o vínculo com o recebimento em si —
+    isso só aparece no banco, via `recebimento_id`/`recebimento_item_id`, pendência (g) da spec 10).
 
 **I) Estorno devolvendo séries**
 

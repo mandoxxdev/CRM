@@ -3,7 +3,21 @@
 > **Status:** 🟢 — **lote e série são entidades reais, ambas com tela completa** (lote desde a
 > Task 9, 2026-08-09; série desde a Etapa 6b, 2026-08-11); só faltam etiquetas com QR (Etapa 6c) ·
 > **Spec original:** seção 10
-> **Última atualização:** 2026-08-11 (**Etapa 6b fechada — Task 12 (documentação e verificação
+> **Última atualização:** 2026-08-11 (**review final do branch da Etapa 6b — 1 Critical + 3
+> afirmações erradas de doc corrigidas.** Critical de costura, achado por sonda: estorno de saída
+> (`cancelarMovimentacao`) não tinha a mesma guarda de cardinalidade que o ramo de entrada já tinha
+> desde a Task 5 — se a série de uma saída reentrava manualmente (nova ENTRADA que anula
+> `movimentacao_saida_id`) antes de a saída original ser estornada, `reverterSaida` não achava a
+> série (o filtro exige o vínculo) e o cancelamento devolvia o saldo mesmo assim, dobrando a
+> unidade e quebrando `COUNT(série presente)==quantidade_atual` sem chance de correção posterior.
+> Guarda simétrica adicionada em `stockService.js`, teste novo reproduzindo a sonda exata em
+> `serieEstornoDevolucao.api.test.js` (5/5). Documentação: "filtro de texto" no seletor de série da
+> saída e coluna "última entrada/saída" na aba Séries — nenhum dos dois existe, corrigido no
+> checklist da Task 8/10 e na pendência (h); hash do teste de recebimento de série corrigido de
+> `597ec82` (Task 9, tela) para `400bb15` (Task 6, onde o teste nasceu, verificado por `git log
+> --follow`); README mestre corrigido — o motor não está integrado a requisições/inspeção, os dois
+> continuam isentos.)
+> Antes: 2026-08-11 (**Etapa 6b fechada — Task 12 (documentação e verificação
 > final)**: checklist de número de série marcado `[x]` item por item com hash — backend Tasks 1-7
 > (`418d617..fc33d59`) + UI Tasks 8-11 (`4836d24..f11a3f0`); `controle_serie` sai da lista de flags
 > mortas, restam só `controle_validade`/`controle_corrida`; o aviso "não ligue `controle_serie` em
@@ -426,6 +440,20 @@ rota fazia isso. Era uma parede com placa de porta.
 - [x] `controle_serie` no material: entrada exige N séries para N unidades — motor (`stockService.registrarMovimentacao`), Zod (`MovimentacaoSchema`) e rotas v1/v2 declarando `exigeSerie` — **Task 3 (`2ab27ed`)**. A flag está acesa desde aqui
 - [x] Saída consome séries específicas via `serie_ids`, com claim e compensação se o crédito do ledger falhar depois — **Task 4 (`a5f7fad`+fix `70f4173`)**
 - [x] Estorno: `cancelarMovimentacao` chama `reverterSaida`/`reverterEntrada` nos mesmos pontos onde o saldo é devolvido/retirado; recusa estornar entrada com série já movimentada; compensa saldo e séries se o ledger falhar no meio do estorno — **Task 5 (`d77626d`+fix `5b1b04a`)**
+
+  > ⚠️ **Correção (review final do branch, 2026-08-11, Critical achado por sonda): faltava a guarda
+  > simétrica no ramo de SAÍDA.** O ramo de ENTRADA de `cancelarMovimentacao` já recusava estornar
+  > quando havia série movimentada (linha acima); o ramo de SAÍDA não tinha o mesmo cuidado.
+  > Sequência que corrompia o invariante: entrada da série SN-1 → saída (ENTREGUE,
+  > `movimentacao_saida_id=M`) → reentrada manual via ENTRADA v2 (`entradaSeries` reativa e **anula**
+  > `movimentacao_saida_id`) → cancelar a saída M: `reverterSaida` filtra pelo vínculo com M e não
+  > acha a série (ela escapou do filtro), mas o cancelamento devolvia o saldo mesmo assim — HTTP
+  > 200, `quantidade_atual` dobrava a unidade que já estava presente desde a reentrada,
+  > `COUNT(série presente)==quantidade_atual` quebrado sem chance de correção depois (o claim já
+  > tinha marcado `cancelado=1`). Guarda adicionada no mesmo ponto (antes do claim): recusa com 400
+  > se a contagem de séries `ENTREGUE`/`SUCATEADA` vinculadas àquela saída for menor que a
+  > quantidade do movimento. Teste reproduzindo a sonda exata em
+  > `serieEstornoDevolucao.api.test.js`.
 - [x] **Série nasce no recebimento** (`receiptService.darEntradaEstoque`) — pré-checagem da nota inteira (item com `controle_serie` sem N séries válidas recusa a nota inteira, antes de mover qualquer coisa, mesma régua do lote); griffagem de origem (`recebimento_id`/`recebimento_item_id`) é gated por `controle_serie` e **não-fatal** — ver pendência (g), abaixo — **Task 6 (`400bb15`+fix `bafc4c6`)**
 - [x] **Série é única por material; ciclo de vida rastreável** — implementado Tasks 1-7 — [`.superpowers/sdd/2026-08-11-almoxarifado-etapa6b-series/`](../../../.superpowers/sdd/2026-08-11-almoxarifado-etapa6b-series/) tem o design, plano e relatórios de cada task
 - [x] **Rotas HTTP** (Task 7, **`fc33d59`**+doc `eba5ff1`+fix `c6eff55`, teste de corrida real e hashes corrigidos):
@@ -434,9 +462,20 @@ rota fazia isso. Era uma parede com placa de porta.
 
 ### Frontend — números de série
 
-- [x] **Movimentações** (Task 8, `4836d24`+fix `576fd61`): entrada com textarea "um por linha" + contador `N/quantidade` + botão "Gerar sequência" (prefixo + número inicial); saída/sucata/perda com seletor de checkboxes das séries `EM_ESTOQUE`, filtro de texto, e filtro automático pelo lote quando um lote está selecionado; troca de tipo ou de material limpa a seleção
+- [x] **Movimentações** (Task 8, `4836d24`+fix `576fd61`): entrada com textarea "um por linha" + contador `N/quantidade` + botão "Gerar sequência" (prefixo + número inicial); saída/sucata/perda com seletor de checkboxes das séries `EM_ESTOQUE` e filtro automático pelo lote quando um lote está selecionado; troca de tipo ou de material limpa a seleção
+
+  > ⚠️ **Correção (review final do branch, 2026-08-11): esta linha e o guia afirmavam "filtro de
+  > texto" no seletor de séries da saída, que não existe.** Conferido em
+  > `MovimentacoesAlmoxarifado.js:738-760`: o seletor só tem checkboxes das séries `EM_ESTOQUE` e o
+  > filtro automático pelo lote — não há campo de busca por texto. Registrado como não-entregue na
+  > pendência (h), abaixo.
 - [x] **Recebimentos** (Task 9, `597ec82`): textarea "Séries (uma por linha)" por item, ao lado dos campos de lote, com contador contra a quantidade recebida; aviso estático de "salve antes de processar" — ver pendência (i)
-- [x] **Aba "Séries" em "Lotes e Séries"** (Task 10, `b46d820`): `LotesAlmoxarifado.js` ganhou a aba (tabela: número, status com badge, lote, localização, última entrada/saída) e a ação Bloquear/Desbloquear com justificativa obrigatória (gate `inspecionar`); label do menu virou "Lotes e Séries"
+- [x] **Aba "Séries" em "Lotes e Séries"** (Task 10, `b46d820`): `LotesAlmoxarifado.js` ganhou a aba (tabela: número, status com badge, lote, localização) e a ação Bloquear/Desbloquear com justificativa obrigatória (gate `inspecionar`); label do menu virou "Lotes e Séries"
+
+  > ⚠️ **Correção (review final do branch, 2026-08-11): esta linha e o guia afirmavam uma coluna
+  > "última entrada/saída" na tabela, que não existe.** Conferido em
+  > `LotesAlmoxarifado.js:406-414`: as colunas reais são Número/Status/Lote/Localização/Ações.
+  > Registrado como não-entregue na pendência (h), abaixo.
 - [x] **Hint da flag + KPI no extrato** (Task 11, `f11a3f0`+fix `78631e1`): `MaterialAlmoxarifadoForm.js` explica o efeito de `controle_serie` no checkbox; `ExtratoMaterialModal.js` ganha o cartão "Séries em estoque" quando o material tem a flag
 
 ### Backend — etiquetas
@@ -625,10 +664,16 @@ conhecidos, registrados de propósito em vez de ficarem implícitos.
   série — se esse `UPDATE` falhar (situação rara), a série já existe e está correta em estoque, só
   fica sem o vínculo de origem. Reparo é manual, por SQL direto. Decisão: não vale travar a entrada
   física por causa de um campo informativo.
-- **(h) Filtro por status na aba Séries não foi entregue.** O design (Task 10) mencionava um filtro
-  por status na aba "Séries" de "Lotes e Séries"; não entrou na implementação porque a tabela por
-  material é pequena (dezenas de linhas, não milhares) — a rolagem simples já resolve. Fica como
-  débito pequeno, não como bug.
+- **(h) Filtros de conveniência não entregues: filtro por status na aba Séries e filtro de texto no
+  seletor da saída; escopo cortado, as listas são por material e tendem a ser curtas.** O design
+  (Task 10) mencionava um filtro por status na aba "Séries" de "Lotes e Séries"; não entrou na
+  implementação porque a tabela por material é pequena (dezenas de linhas, não milhares) — a
+  rolagem simples já resolve. **Correção (review final do branch, 2026-08-11): esta spec e o guia
+  também afirmavam um filtro de texto no seletor de séries da saída (`MovimentacoesAlmoxarifado.js`)
+  e uma coluna "última entrada/saída" na tabela da aba Séries (`LotesAlmoxarifado.js`) — nenhum dos
+  dois existe.** Mesma justificativa de escopo: as listas são por material, tendem a ser curtas, e
+  a rolagem/lista simples já resolve na prática. Fica como débito pequeno, não como bug — mas a
+  spec e o guia não podiam continuar afirmando o que não foi entregue.
 - **(i) Dirty-state do recebimento com séries digitadas e não salvas.** O botão "Processar Nota" lê
   os dados **salvos** do recebimento, não o que está digitado na tela no momento do clique — se o
   operador digitar séries e clicar direto em "Processar" sem salvar antes, elas não entram.
@@ -670,7 +715,14 @@ conhecidos, registrados de propósito em vez de ficarem implícitos.
 | Série não pode estar em dois lugares | `entrada de serie ja em estoque falha sem efeito nas demais` — `serieService.api.test.js` | ✅ `418d617` |
 | Saída de material seriado exige séries válidas em estoque | `saida com serie de outro material e recusada sem efeito` / `saida com serie BLOQUEADA e recusada e nao deixa claim parcial` — `serieGuardasSaida.api.test.js` | ✅ `a5f7fad` |
 | Invariante `COUNT(séries presentes) == quantidade_atual` sobrevive até a falha do INSERT do ledger | fechamento de todo teste de série via `assertInvarianteSerie` (`tests/helpers/serieInvariante.js`) — `serieControleObrigatorio`/`serieGuardasSaida`/`serieEstornoDevolucao`/`serieRecebimento.api.test.js` | ✅ Tasks 3-6 |
-| Nota com item sem N séries válidas é recusada inteira; reprocessar não duplica série | `nota com item sem series em material controlado e recusada inteira` / `reprocessar a nota nao duplica series` — `serieRecebimento.api.test.js` | ✅ `597ec82` |
+| Nota com item sem N séries válidas é recusada inteira; reprocessar não duplica série | `nota com item sem series em material controlado e recusada inteira` / `reprocessar a nota nao duplica series` — `serieRecebimento.api.test.js` | ✅ `400bb15` |
+| Estorno de saída é recusado quando a série já reentrou manualmente antes do cancelamento (achado Critical do review final, guarda simétrica à de entrada) | `reentrada manual apos saida bloqueia o estorno da saida (sonda do review final)` — `serieEstornoDevolucao.api.test.js` | ✅ review final do branch (Etapa 6b) |
+
+> ⚠️ **Correção (review final do branch, 2026-08-11): o hash acima estava errado desde a Task 12.**
+> A tabela atribuía esse teste a `597ec82` (Task 9, a tela de Recebimentos) — mas `597ec82` é UI, e
+> o teste é backend, nascido junto com `receiptService.darEntradaEstoque`. Conferido por
+> `git log --follow -- server/tests/api/serieRecebimento.api.test.js`: o arquivo nasce em `400bb15`
+> (Task 6, "serie nasce no recebimento"), corrigido pelo commit acima.
 
 ## Dependências
 
