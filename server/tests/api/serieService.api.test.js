@@ -123,12 +123,40 @@ async function novoMaterial(db, { controle_serie = 1, qtd = 0 } = {}) {
     const mat = await novoMaterial(db);
     const [a] = await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-E1'], movimentacao_id: 777 });
     await seriesService.claimSaidaSeries(db, ADMIN, { material_id: mat, serie_ids: [a.linha.id], tipo: 'SAIDA', movimentacao_id: 888 });
-    const n1 = await seriesService.reverterSaida(db, ADMIN, 888);
-    assert.strictEqual(n1, 1);
+    // fix round 1 (Task 5): reverterSaida/reverterEntrada devolvem afetadas[] = {anterior, linha},
+    // nao so a contagem — cancelarMovimentacao precisa do snapshot `anterior` para poder compensar
+    // via desfazerReverterSaida/desfazerReverterEntrada se o ledger do estorno falhar depois.
+    const afetadas1 = await seriesService.reverterSaida(db, ADMIN, 888);
+    assert.strictEqual(afetadas1.length, 1);
+    assert.strictEqual(afetadas1[0].anterior.status, 'ENTREGUE');
+    assert.strictEqual(afetadas1[0].linha.status, 'EM_ESTOQUE');
     assert.strictEqual((await seriesService.getSerie(db, a.linha.id)).status, 'EM_ESTOQUE');
-    const n2 = await seriesService.reverterEntrada(db, ADMIN, 777);
-    assert.strictEqual(n2, 1);
+    const afetadas2 = await seriesService.reverterEntrada(db, ADMIN, 777);
+    assert.strictEqual(afetadas2.length, 1);
+    assert.strictEqual(afetadas2[0].anterior.status, 'EM_ESTOQUE');
+    assert.strictEqual(afetadas2[0].linha.status, 'ESTORNADA');
     assert.strictEqual((await seriesService.getSerie(db, a.linha.id)).status, 'ESTORNADA');
+  });
+
+  await test('desfazerReverterSaida/desfazerReverterEntrada restauram o estado anterior (compensacao)', async () => {
+    const mat = await novoMaterial(db);
+    const [a] = await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-COMP1'], movimentacao_id: 991 });
+    await seriesService.claimSaidaSeries(db, ADMIN, { material_id: mat, serie_ids: [a.linha.id], tipo: 'SAIDA', movimentacao_id: 992 });
+
+    const afetadasSaida = await seriesService.reverterSaida(db, ADMIN, 992);
+    assert.strictEqual((await seriesService.getSerie(db, a.linha.id)).status, 'EM_ESTOQUE');
+    await seriesService.desfazerReverterSaida(db, afetadasSaida);
+    const depoisSaida = await seriesService.getSerie(db, a.linha.id);
+    assert.strictEqual(depoisSaida.status, 'ENTREGUE', 'compensacao devia restaurar ENTREGUE');
+    assert.strictEqual(depoisSaida.movimentacao_saida_id, 992, 'compensacao devia restaurar o vinculo com a saida');
+
+    // devolve ao estado EM_ESTOQUE (via reverterSaida de novo) pra testar o lado da entrada
+    await seriesService.reverterSaida(db, ADMIN, 992);
+    const afetadasEntrada = await seriesService.reverterEntrada(db, ADMIN, 991);
+    assert.strictEqual((await seriesService.getSerie(db, a.linha.id)).status, 'ESTORNADA');
+    await seriesService.desfazerReverterEntrada(db, afetadasEntrada);
+    const depoisEntrada = await seriesService.getSerie(db, a.linha.id);
+    assert.strictEqual(depoisEntrada.status, 'EM_ESTOQUE', 'compensacao devia restaurar EM_ESTOQUE');
   });
 
   await test('mudarStatusSerie exige justificativa, so alterna EM_ESTOQUE<->BLOQUEADA e detecta corrida', async () => {

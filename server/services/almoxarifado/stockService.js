@@ -1240,6 +1240,24 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
 
   let estornoId;
 
+  // Fix round 1 (Task 5, achado do review por sonda): rastreadores de compensação, populados
+  // só pelos ramos de ENTRADA/SAIDA (os únicos que tocam série). Até este fix, o `catch` abaixo
+  // só desfazia o CLAIM (`cancelado = 0`) — se o efeito inverso (saldo + série) já tinha
+  // aplicado com sucesso e só o INSERT do ledger de ESTORNO falhasse depois, saldo e série
+  // ficavam no estado REVERTIDO (como se o estorno tivesse acontecido) mas a movimentação
+  // original voltava a `cancelado = 0`, livre para ser cancelada de novo. Sonda do review:
+  // entrada de 2 séries -> saída das 2 -> cancelar a saída com o INSERT do ledger forçado a
+  // falhar -> saldo volta a 2 e séries a EM_ESTOQUE (efeito aplicado), mas `cancelado` volta a
+  // 0 -> um SEGUNDO `/cancelar` na mesma movimentação tem sucesso e soma o saldo de novo (2 ->
+  // 4) sem tocar série (que já estava EM_ESTOQUE, fora do filtro de `reverterSaida`) ->
+  // `presentes=2 != quantidade_atual=4`, invariante corrompido PERMANENTEMENTE (o segundo
+  // cancelamento é bem-sucedido, não há mais claim para tentar de novo).
+  let compensarQuantidadeMaterial = null; // delta a devolver em quantidade_atual, se o ledger falhar
+  let compensarLinha = null; // { loc, loteId, delta } — delta a reaplicar na linha específica de saldo
+  let compensarSyncLocalizacaoPadrao = null; // { loteId } — reconciliarEstornoSemLinha sincronizou a linha padrão; refazer DEPOIS de restaurar quantidade_atual
+  let seriesEntradaRevertidas = []; // afetadas[] de reverterEntrada, para desfazerReverterEntrada
+  let seriesSaidaRevertidas = []; // afetadas[] de reverterSaida, para desfazerReverterSaida
+
   try {
     let saldoAntes = material.quantidade_atual;
     let saldoDepois = saldoAntes;
@@ -1259,6 +1277,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       if (!row) throw Object.assign(new Error('Não é possível estornar: saldo disponível insuficiente (material já consumido)'), { status: 400 });
       saldoDepois = row.quantidade_atual;
       saldoAntes = saldoDepois + parseFloat(mov.quantidade);
+      // A partir daqui quantidade_atual JÁ foi debitado — se qualquer coisa adiante falhar
+      // (linha não comporta, ledger do estorno), o catch precisa devolver este delta (fix round
+      // 1, Task 5: antes deste fix, só a "linha não comporta" abaixo compensava isto — a
+      // falha do INSERT do ledger, mais adiante, não compensava nada).
+      compensarQuantidadeMaterial = mov.quantidade;
       // reverter localização da entrada original — mov.lote_id (Etapa 6, Task 3) devolve para a
       // MESMA linha de lote que a entrada creditou, lida do próprio ledger (imutável), não
       // recalculada. Sem gate por localização desde o review round 3: `syncMaterialTotals` soma
@@ -1291,24 +1314,37 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         { minimo: pisoLinha });
       if (!r.aplicado && r.existe) {
         // A linha existe e não comporta a reversão. `quantidade_atual` já foi debitado logo acima
-        // e não há transação aqui — o `catch` deste método desfaz o claim do cancelamento, mas
-        // NÃO devolve o físico. Compensa explicitamente antes de recusar, senão trocaríamos um
-        // bug (linha negativa) por outro (total debitado sem estorno nenhum).
-        await dbRun(db, `UPDATE materiais_almoxarifado
-          SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [mov.quantidade, mov.material_id]);
+        // e não há transação aqui — o `catch` deste método devolve o físico agora (fix round 1,
+        // Task 5: `compensarQuantidadeMaterial`, setado acima, cobre exatamente este caso; a
+        // compensação manual que existia aqui foi removida para não devolver em dobro).
         throw Object.assign(new Error(
           `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${r.quantidade} `
           + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`),
           { status: 400 });
       }
-      if (!r.aplicado) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+      if (r.aplicado) {
+        // Fix round 1 (Task 5): se o ledger falhar depois, a compensação é o delta oposto na
+        // MESMA chave (loc, lote) — espelha exatamente o que este `ajustarSaldoExistente` acabou
+        // de aplicar (−mov.quantidade), sem piso (a compensação está devolvendo, não retirando).
+        compensarLinha = { loc, loteId: mov.lote_id, delta: mov.quantidade };
+      } else {
+        const sincronizou = await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+        // Fix round 1 (Task 5): reconciliarEstornoSemLinha só mexeu em algo (via
+        // syncSaldoLocalizacaoPadrao) quando o material já tinha alguma linha — `sincronizou`
+        // distingue isso do no-op de material legado sem linha nenhuma, que não precisa de
+        // compensação. A compensação em si só pode rodar DEPOIS que quantidade_atual tiver
+        // voltado ao valor original (ver ordem no catch), porque syncSaldoLocalizacaoPadrao lê
+        // quantidade_atual para calcular o residual.
+        if (sincronizou) compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
+      }
       // Serie (Etapa 6b, Task 5): so depois que o saldo reverteu de verdade — a guarda lá em
       // cima (antes do claim) já garantiu que todas as séries desta entrada seguem EM_ESTOQUE,
       // então aqui é só marcar ESTORNADA. Condicionado a controle_serie para não gastar o
       // SELECT + laço à toa em material sem série (reverterEntrada é no-op de qualquer forma,
-      // sem linha vinculada a este movimentacao_entrada_id).
-      if (material.controle_serie) await seriesService.reverterEntrada(db, user, mov.id);
+      // sem linha vinculada a este movimentacao_entrada_id). Fix round 1 (Task 5): guarda o
+      // retorno (afetadas[], não mais a contagem) para o catch poder compensar via
+      // `desfazerReverterEntrada` se o ledger falhar depois.
+      if (material.controle_serie) seriesEntradaRevertidas = await seriesService.reverterEntrada(db, user, mov.id);
       // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
       // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
       // specs/modulo-almoxarifado/03-motor-estoque/README.md.
@@ -1316,6 +1352,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [mov.quantidade, mov.material_id]);
       saldoDepois = saldoAntes + parseFloat(mov.quantidade);
+      // Fix round 1 (Task 5): a partir daqui quantidade_atual JÁ foi creditado — se algo adiante
+      // falhar (ledger do estorno), o catch precisa devolver este delta (subtrair de volta).
+      compensarQuantidadeMaterial = -mov.quantidade;
       // mov.lote_id (Etapa 6, Task 3): devolve para a linha do lote que a saída original debitou.
       // Sem gate por localização (round 3), sem CRIAR a linha desta chave (round 4) e com
       // reconciliação do residual quando o material já tem linha (round 5) — mesmos motivos do ramo
@@ -1332,11 +1371,20 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // endereçamento pode consolidar. Pendência declarada na spec 10.
       const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
       const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
-      if (!r.aplicado) await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+      if (r.aplicado) {
+        // Fix round 1 (Task 5): compensação é o delta oposto na mesma chave (−mov.quantidade),
+        // espelhando o +mov.quantidade que este `ajustarSaldoExistente` acabou de aplicar.
+        compensarLinha = { loc, loteId: mov.lote_id, delta: -mov.quantidade };
+      } else {
+        const sincronizou = await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+        if (sincronizou) compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
+      }
       // Serie (Etapa 6b, Task 5): devolve a EM_ESTOQUE as series ENTREGUE/SUCATEADA desta saida,
       // logo apos o saldo ja ter voltado. Sem guarda de disponibilidade aqui (diferente do ramo
-      // de ENTRADA acima) — devolver serie ao estoque nunca pode ficar "negativo".
-      if (material.controle_serie) await seriesService.reverterSaida(db, user, mov.id);
+      // de ENTRADA acima) — devolver serie ao estoque nunca pode ficar "negativo". Fix round 1
+      // (Task 5): guarda o retorno (afetadas[]) para o catch poder compensar via
+      // `desfazerReverterSaida` se o ledger falhar depois.
+      if (material.controle_serie) seriesSaidaRevertidas = await seriesService.reverterSaida(db, user, mov.id);
     } else if (mov.tipo === 'AJUSTE') {
       if (mov.localizacao_destino_id) {
         // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
@@ -1409,6 +1457,46 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
 
     await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET movimento_estorno_id = ? WHERE id = ?', [estornoId, movimentoId]);
   } catch (err) {
+    // Fix round 1 (Task 5, achado do review por sonda): compensa os efeitos de SÉRIE e SALDO que
+    // os ramos de ENTRADA/SAIDA já tinham aplicado com sucesso, na ordem inversa da aplicação,
+    // ANTES de desfazer o claim — mesmo padrão do catch de `registrarMovimentacao` (Task 4). Até
+    // este fix, uma falha aqui (ex.: o INSERT do ledger de ESTORNO, mais abaixo) só desfazia o
+    // claim: saldo e série ficavam "revertidos" (como se o estorno tivesse valido) mas a
+    // movimentação original voltava a `cancelado = 0` — um segundo `/cancelar` bem-sucedido
+    // duplicava o efeito e corrompia o invariante COUNT(série)==quantidade_atual permanentemente
+    // (não há mais claim para barrar essa segunda chamada, ela é legítima do ponto de vista dela).
+    //
+    // Ordem (inversa da aplicação: série é sempre o ÚLTIMO efeito de cada ramo — ver os dois
+    // `if (material.controle_serie) ...Revertidas = await ...` acima):
+    //  1. série (desfazerReverterSaida / desfazerReverterEntrada)
+    //  2. linha específica de saldo (`compensarLinha`, quando `ajustarSaldoExistente` aplicou)
+    //  3. `quantidade_atual` do material (`compensarQuantidadeMaterial`) — precisa vir ANTES do
+    //     passo 4, porque `syncSaldoLocalizacaoPadrao` lê `quantidade_atual` para calcular o
+    //     residual da linha padrão.
+    //  4. linha padrão (`compensarSyncLocalizacaoPadrao`, quando `reconciliarEstornoSemLinha`
+    //     tinha sincronizado)
+    // Só um dos dois lados (entrada OU saída) tem estado não-vazio por chamada — a função só
+    // processa um `tipo` de cada vez —, então os blocos abaixo convivem sem se atrapalhar.
+    if (seriesSaidaRevertidas.length > 0) {
+      await seriesService.desfazerReverterSaida(db, seriesSaidaRevertidas);
+    }
+    if (seriesEntradaRevertidas.length > 0) {
+      await seriesService.desfazerReverterEntrada(db, seriesEntradaRevertidas);
+    }
+    if (compensarLinha) {
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+        SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP
+        WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
+        [compensarLinha.delta, mov.material_id, compensarLinha.loc || null, compensarLinha.loteId || null]);
+    }
+    if (compensarQuantidadeMaterial) {
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [compensarQuantidadeMaterial, mov.material_id]);
+    }
+    if (compensarSyncLocalizacaoPadrao) {
+      await syncSaldoLocalizacaoPadrao(db, mov.material_id, compensarSyncLocalizacaoPadrao.loteId);
+    }
+
     // Desfaz o claim: se a aplicação do efeito inverso falhar (ex.: saldo insuficiente para
     // reverter uma entrada já consumida), o movimento não pode ficar marcado como cancelado sem
     // ter revertido nada — senão fica "preso" (não pode ser estornado de novo) sem o saldo ter

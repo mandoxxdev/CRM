@@ -192,19 +192,26 @@ async function desfazerSaida(db, claimed) {
   }
 }
 
-/** Estorno de saida: series daquela movimentacao voltam a EM_ESTOQUE. */
+/**
+ * Estorno de saida: series daquela movimentacao voltam a EM_ESTOQUE.
+ * Devolve afetadas[] = { anterior, linha } (fix round 1, Task 5) — não só a contagem — para o
+ * chamador (`cancelarMovimentacao`) poder compensar com `desfazerReverterSaida` se o INSERT do
+ * ledger de ESTORNO falhar DEPOIS que isto já rodou com sucesso. Sem o snapshot de `anterior`
+ * (status ENTREGUE/SUCATEADA + `movimentacao_saida_id` original), não haveria como saber para
+ * onde voltar.
+ */
 async function reverterSaida(db, user, movimentacaoId) {
   const linhas = await dbAll(db, `
     SELECT * FROM series_almoxarifado
      WHERE movimentacao_saida_id = ? AND status IN ('ENTREGUE','SUCATEADA')`, [movimentacaoId]);
-  let contagem = 0;
+  const afetadas = [];
   for (const s of linhas) {
     const linha = await dbGet(db, `
       UPDATE series_almoxarifado
          SET status = 'EM_ESTOQUE', movimentacao_saida_id = NULL, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND status = ? RETURNING *`, [s.id, s.status]);
     if (linha) {
-      contagem += 1;
+      afetadas.push({ anterior: s, linha });
       await registrarAuditoria(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'ESTORNO_SAIDA',
         usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
@@ -212,22 +219,47 @@ async function reverterSaida(db, user, movimentacaoId) {
       });
     }
   }
-  return contagem;
+  return afetadas;
 }
 
-/** Estorno de entrada: series ainda EM_ESTOQUE daquela movimentacao viram ESTORNADA. */
+/** Compensacao de reverterSaida: series voltam ao status (ENTREGUE/SUCATEADA) e ao vinculo
+ * `movimentacao_saida_id` anteriores — usada quando o cancelamento que chamou reverterSaida
+ * falha DEPOIS (ex.: INSERT do ledger de ESTORNO), então o estorno de saida nunca aconteceu de
+ * verdade e a serie não pode ficar "presente" no estoque como se tivesse voltado. */
+async function desfazerReverterSaida(db, afetadas) {
+  for (const a of [...afetadas].reverse()) {
+    const linha = await dbGet(db, `
+      UPDATE series_almoxarifado
+         SET status = ?, movimentacao_saida_id = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? RETURNING *`,
+      [a.anterior.status, a.anterior.movimentacao_saida_id, a.linha.id]);
+    if (linha) {
+      await registrarAuditoria(db, {
+        entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',
+        usuario_id: null, usuario_nome: 'sistema',
+        dados_anteriores: { status: a.linha.status }, dados_novos: { status: a.anterior.status },
+        justificativa: 'compensacao automatica de operacao que falhou',
+      });
+    }
+  }
+}
+
+/**
+ * Estorno de entrada: series ainda EM_ESTOQUE daquela movimentacao viram ESTORNADA.
+ * Devolve afetadas[] = { anterior, linha } pelo mesmo motivo de `reverterSaida` acima.
+ */
 async function reverterEntrada(db, user, movimentacaoId) {
   const linhas = await dbAll(db, `
     SELECT * FROM series_almoxarifado
      WHERE movimentacao_entrada_id = ? AND status = 'EM_ESTOQUE'`, [movimentacaoId]);
-  let contagem = 0;
+  const afetadas = [];
   for (const s of linhas) {
     const linha = await dbGet(db, `
       UPDATE series_almoxarifado
          SET status = 'ESTORNADA', status_motivo = 'Entrada estornada', updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND status = 'EM_ESTOQUE' RETURNING *`, [s.id]);
     if (linha) {
-      contagem += 1;
+      afetadas.push({ anterior: s, linha });
       await registrarAuditoria(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'ESTORNO_ENTRADA',
         usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
@@ -235,7 +267,28 @@ async function reverterEntrada(db, user, movimentacaoId) {
       });
     }
   }
-  return contagem;
+  return afetadas;
+}
+
+/** Compensacao de reverterEntrada: series voltam a EM_ESTOQUE com o `status_motivo` anterior
+ * (tipicamente NULL) — mesma justificativa de `desfazerReverterSaida`, espelhada para o lado da
+ * entrada. */
+async function desfazerReverterEntrada(db, afetadas) {
+  for (const a of [...afetadas].reverse()) {
+    const linha = await dbGet(db, `
+      UPDATE series_almoxarifado
+         SET status = ?, status_motivo = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? RETURNING *`,
+      [a.anterior.status, a.anterior.status_motivo, a.linha.id]);
+    if (linha) {
+      await registrarAuditoria(db, {
+        entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',
+        usuario_id: null, usuario_nome: 'sistema',
+        dados_anteriores: { status: a.linha.status }, dados_novos: { status: a.anterior.status },
+        justificativa: 'compensacao automatica de operacao que falhou',
+      });
+    }
+  }
 }
 
 /** Bloqueio/desbloqueio avulso — decisao humana: justificativa obrigatoria. */
@@ -287,7 +340,9 @@ module.exports = {
   claimSaidaSeries,
   desfazerSaida,
   reverterSaida,
+  desfazerReverterSaida,
   reverterEntrada,
+  desfazerReverterEntrada,
   mudarStatusSerie,
   contarPresentes,
 };
