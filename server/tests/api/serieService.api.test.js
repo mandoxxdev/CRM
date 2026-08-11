@@ -141,6 +141,20 @@ async function novoMaterial(db, { controle_serie = 1, qtd = 0 } = {}) {
     assert.strictEqual((await seriesService.contarPresentes(db, mat)), 1);
   });
 
+  await test('claim rejeita serie_ids repetidos na lista informada', async () => {
+    const mat = await novoMaterial(db);
+    const [a, b] = await seriesService.entradaSeries(db, ADMIN, { material_id: mat, numeros: ['SN-DUP1', 'SN-DUP2'] });
+    await assert.rejects(
+      () => seriesService.claimSaidaSeries(db, ADMIN, { material_id: mat, serie_ids: [a.linha.id, a.linha.id], tipo: 'SAIDA' }),
+      (e) => /serie_ids repetidos/.test(e.message)
+    );
+    // validacao de duplicata nao deve afetar o estado: ambas devem continuar EM_ESTOQUE
+    const aDepois = await seriesService.getSerie(db, a.linha.id);
+    const bDepois = await seriesService.getSerie(db, b.linha.id);
+    assert.strictEqual(aDepois.status, 'EM_ESTOQUE', 'serie a nao deve ter sido afetada');
+    assert.strictEqual(bDepois.status, 'EM_ESTOQUE', 'serie b nao deve ter sido afetada');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
