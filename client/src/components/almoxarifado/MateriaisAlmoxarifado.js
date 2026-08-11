@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
@@ -41,6 +41,7 @@ const MateriaisAlmoxarifado = () => {
   const [etiquetas, setEtiquetas] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const materialIdAplicado = useRef(false);
 
   useEffect(() => {
     const s = searchParams.get('status');
@@ -51,11 +52,13 @@ const MateriaisAlmoxarifado = () => {
   }, []);
 
   useEffect(() => {
+    if (materialIdAplicado.current) return;
     const material_id = searchParams.get('material_id');
     if (material_id && materiais.length > 0) {
       const material = materiais.find(m => m.id === parseInt(material_id));
       if (material) {
         setSearch(material.codigo);
+        materialIdAplicado.current = true;
       }
     }
   }, [materiais, searchParams]);
