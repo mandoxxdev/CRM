@@ -1,7 +1,7 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
-> **Status:** 🟡 — 15 relatórios no backend, só 2 consumidos no front; sem tela de relatórios · **Spec original:** seção 27
-> **Última atualização:** 2026-08-02
+> **Status:** 🟡 — 16 relatórios no backend, só 2 consumidos no front; sem tela de relatórios · **Spec original:** seção 27
+> **Última atualização:** 2026-08-11 — auditoria de cauda: eram 15 tipos, a Etapa 2 acrescentou `materiais-sem-endereco` (16); "só 2 consumidos no front" segue verdade
 
 ## Objetivo
 
@@ -9,8 +9,8 @@ Tela de relatórios completa (estoque, movimentações, gestão) + indicadores g
 
 ## O que já existe
 
-- `reportService.js` (124 L) + `GET /relatorios/:tipo` (`extended.js:335`, 15 tipos mapeados em `:317-333`).
-- Relatórios v1: posição de estoque, movimentações por período (`routes/almoxarifado.js:819-830`).
+- `reportService.js` + `GET /relatorios/:tipo` (`extended.js`, 16 tipos no mapa `reports` do dispatcher). Nem todos vêm do `reportService`: `materiais-sem-endereco` (acrescentado na Etapa 2) é servido por SQL inline no próprio dispatcher, e há tipos servidos por `clientMaterialService` e `scrapService`.
+- Relatórios v1: posição de estoque, movimentações por período (rotas `/relatorio/*` em `routes/almoxarifado.js`).
 - Dashboard com KPIs + consumo por OS + materiais mais consumidos (`AlmoxarifadoDashboard.js`).
 - Referência de UI: telas `/frota/relatorios` e `/fabrica/relatorios` já existem em outros módulos (seguir o padrão).
 - Infra de exportação: `xlsx` e `pdfkit`/`puppeteer` já no projeto.
@@ -18,7 +18,7 @@ Tela de relatórios completa (estoque, movimentações, gestão) + indicadores g
 ## Checklist
 
 ### Levantamento (fazer primeiro)
-- [ ] Listar os 15 tipos do `reportService.js` e casar com a spec 27 — o que falta vira item abaixo
+- [ ] Listar os 16 tipos do mapa `reports` (`extended.js`) e casar com a spec 27 — o que falta vira item abaixo
 
 ### Relatórios de estoque (spec 27)
 - [ ] Saldo por item / localização / almoxarifado — verificar cobertura atual

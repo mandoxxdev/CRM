@@ -1,7 +1,7 @@
 # 06 — Motor de Aprovações
 
 > **Status:** 🟡 — segregação/emergencial/rejeição justificada/auditoria entregues (Etapa 3, 2026-08-05); regras configuráveis por tipo/valor/quantidade/projeto ainda não existem · **Spec original:** seção 6
-> **Última atualização:** 2026-08-05
+> **Última atualização:** 2026-08-11 (auditoria spec×código)
 
 ## Objetivo
 
@@ -13,7 +13,8 @@ Motor de aprovação configurável por tipo de material, valor, quantidade, proj
 - Aprovação por valor: `requisitionValueApprovalService.js` (399 L) — limite configurável em `configuracoes_almoxarifado`, fluxo aprovar-valor/rejeitar-valor, e-mails, testes.
 - Configuração "Liberação por Valor" no front (`ConfiguracoesAlmoxarifado.js`).
 - Aprovação de ajuste de inventário: aprovador registrado em `conferencias_almoxarifado` (`aprovador_*`, `justificativa_ajuste`).
-- **Etapa 3 (2026-08-05):** segregação nas duas lanes (aprovar e aprovar-valor) — o solicitante não pode aprovar a própria requisição (403); rejeitar a própria continua permitido nas duas lanes (desistência legítima, não é uma decisão de aprovação); rejeição (normal e por valor) exige motivo (`rejeicao_motivo`), 400 sem ele; tipo `EMERGENCIAL` exige justificativa na criação (`RequisicaoSchema.superRefine`, Task 1); toda decisão (aprovação, rejeição, confirmação de recebimento, encerramento) é auditada em `auditoria_log_almoxarifado` com `acao` (`APROVACAO`/`REJEICAO`/`CONFIRMACAO_RECEBIMENTO`/`ENCERRAMENTO`), usuário e justificativa.
+- **Etapa 3 (2026-08-05):** segregação nas duas lanes (aprovar e aprovar-valor) — o solicitante não pode aprovar a própria requisição (403); rejeitar a própria continua permitido nas duas lanes (desistência legítima, não é uma decisão de aprovação); rejeição (normal e por valor) exige motivo (`rejeicao_motivo`), 400 sem ele; tipo `EMERGENCIAL` exige justificativa na criação (`RequisicaoSchema.superRefine`, Task 1); toda decisão (aprovação, rejeição, confirmação de recebimento, encerramento) é auditada em `auditoria_log_almoxarifado` com `acao` (`APROVACAO`/`REJEICAO`/`APROVACAO_VALOR`/`REJEICAO_VALOR`/`CONFIRMACAO_RECEBIMENTO`/`ENCERRAMENTO`), usuário e justificativa — as duas ações de valor são gravadas na lane `/aprovar-valor` (anotadas aqui na auditoria de 2026-08-11).
+- **Etapa 4, Task 6 (2026-08-06) — anotado aqui na auditoria de 2026-08-11 (até então só a spec 07 documentava):** a lane `/aprovar-valor` também **reserva** depois de aprovar — a reserva acontece na rota, após `aprovarValor`, e sobrescreve o status para `PARCIALMENTE/TOTALMENTE_RESERVADA` (sem nada a reservar, o `APROVADO` permanece). Detalhes e testes na feature 07.
 - Decisão de escopo confirmada (design da Etapa 3): regras de aprovação ficam **fixas e declarativas em código** (segregação + limite por valor); a tabela `regras_aprovacao` configurável por tipo/valor/quantidade/projeto/urgência, com UI própria, fica para demanda real — não entrou nesta etapa.
 
 ## Checklist

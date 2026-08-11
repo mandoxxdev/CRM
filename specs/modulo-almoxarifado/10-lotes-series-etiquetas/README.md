@@ -2,7 +2,12 @@
 
 > **Status:** 🟡 — **lote é entidade real desde a Etapa 6, com tela completa desde a Task 9
 > (2026-08-09)**; série e etiquetas não existem · **Spec original:** seção 10
-> **Última atualização:** 2026-08-10 (**fechamento dos 5 minors residuais do review final**:
+> **Última atualização:** 2026-08-11 (**auditoria spec×código: tudo confirmado; refs de linha
+> trocadas por nomes** — as três citações numéricas que restavam (`consultarSaldosPorLocalizacao`,
+> as rotas de lote em `extended.js`, o registro do `express.static`/`almoxMiddleware` em
+> `routes/almoxarifado.js`) ficaram só com arquivo + símbolo/rota; a citação
+> `server/index.js:19554` foi conferida e está exata, então permanece.)
+> Antes: 2026-08-10 (**fechamento dos 5 minors residuais do review final**:
 > documentado que o claim agregado por lote drena linhas de localização NÃO declarada — inclusive
 > bloqueada — na seção "Efeito colateral declarado", abaixo; três citações de linha que o próprio
 > commit de doc do review final tinha invalidado (`stockService.js:450-451`, `:1171`/`:1171-1178`,
@@ -66,7 +71,8 @@ Controle real por lote (validade, corrida/heat number, certificado), número de 
   `schema.js`). A mesma função ganhou, no review final do branch, **pré-checagem de todos os itens
   antes de mover qualquer um** e a marca de idempotência `entrada_estoque_em` por item — ver a
   seção "A entrada do recebimento não é mais re-executável", abaixo.
-- **Rotas** (`routes/almoxarifado/extended.js:483-506` e `routes/almoxarifado.js:623`):
+- **Rotas** (as três primeiras em `routes/almoxarifado/extended.js`, a de certificado em
+  `routes/almoxarifado.js` — procure pelo caminho da rota):
   - `GET /api/almoxarifado/materiais/:id/lotes` (perm. `visualizar`) — ordem FEFO, com `saldo`,
     `vencido`, `vencimento_liberado` e `elegivel`; `?com_saldo=1` filtra;
   - `PUT /api/almoxarifado/lotes/:id/status` (perm. `inspecionar`) — justificativa obrigatória;
@@ -323,8 +329,7 @@ lote para decidir nada.
   > `ExtratoMaterialModal.js:174` lê `s.lote` como texto. A coluna "Lote" do extrato teria ficado
   > em `—` para sempre, em silêncio. Fechado em `b4e4858`: `consultarSaldosPorLocalizacao`
   > (`stockService.js` — sem número de linha de propósito, ver a nota da correção acima sobre
-  > `a3afaa1`; hoje em `1336`, mas o número por si só apodrece) devolve `lt.codigo as lote` via
-  > `LEFT JOIN`, ao lado de `lote_id`.
+  > `a3afaa1`) devolve `lt.codigo as lote` via `LEFT JOIN`, ao lado de `lote_id`.
 
 ## Checklist
 
@@ -463,9 +468,10 @@ decisão do cliente.**
 
 ### (d) O certificado do fornecedor é servido estaticamente **fora** do middleware de autenticação
 
-`routes/almoxarifado.js:84-85` registra `express.static(uploadsAlmoxDir)` em
+`routes/almoxarifado.js` registra `express.static(uploadsAlmoxDir)` em
 `/api/uploads/almoxarifado` e `/uploads/almoxarifado`, **antes** de
-`app.use('/api/almoxarifado', ...almoxMiddleware)` (linha 88-90) e fora do prefixo que ele protege.
+`app.use('/api/almoxarifado', ...almoxMiddleware)` e fora do prefixo que ele protege — procure
+pelos dois registros no topo do arquivo.
 A Etapa 6 passou a colocar **certificados de fornecedor** nesse diretório.
 
 **Não é regressão:** é o mesmo tratamento que as fotos de material já tinham. Mas certificado é

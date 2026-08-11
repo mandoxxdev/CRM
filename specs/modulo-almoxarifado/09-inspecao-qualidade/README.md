@@ -3,7 +3,9 @@
 > **Status:** 🟡 — quarentena e decisão de inspeção reais desde a Etapa 5; faltam plano de
 > inspeção com medidas, não conformidade formal numerada, desvio autorizado e perfil QUALIDADE ·
 > **Spec original:** seção 9
-> **Última atualização:** 2026-08-09 (Etapa 6 — registra a pendência nova "reprovar por lote não
+> **Última atualização:** 2026-08-11 (**auditoria spec×código: nenhuma divergência encontrada**;
+> adicionada à tabela de testes a regressão de devolução para quarentena, que existia e não estava
+> listada. Antes: 2026-08-09, Etapa 6 — registra a pendência nova "reprovar por lote não
 > está ligado à inspeção" e corrige a linha da tabela que dizia que a feature 10 não existia)
 
 ## Objetivo
@@ -143,6 +145,7 @@ do efeito de saldo. A reprovação parcial fica em aberto até alguém decidir s
 | Reprovar registra o encaminhamento pretendido; encaminhamento inválido é recusado | `reprovar registra o encaminhamento pretendido` + `encaminhamento invalido e recusado` — mesmo arquivo |
 | Bloquear/desbloquear avulso exige justificativa e gera movimentação no livro | `BLOQUEIO sem justificativa e recusado`, `bloqueio avulso tira do disponivel e deixa rastro` — `bloqueioGuardas.api.test.js` e `inspecaoDecisao.api.test.js` |
 | Desbloquear devolve ao disponível e não passa do que estava bloqueado | `DESBLOQUEIO acima do bloqueado falha em vez de saturar` — `bloqueioGuardas.api.test.js` |
+| Devolução para quarentena continua bloqueando (a retenção vale também para a entrada vinda de devolução) | `devolucao para quarentena continua bloqueando (regressao returnService)` — `bloqueioGuardas.api.test.js` |
 | Decisão concorrente para o mesmo item não duplica saldo nem libera material reprovado | `decisao parcial concorrente nao duplica saldo nem libera material reprovado` — `inspecaoDecisao.api.test.js` (`91184ca`) |
 | Rotas exigem a permissão correta (`inspecionar` / `ajustar_estoque`) e 403 não altera saldo | `POST inspecionar sem permissao retorna 403...`, `POST bloquear sem permissao retorna 403...`, `POST desbloquear sem permissao retorna 403...` — `server/tests/api/inspecaoRotas.api.test.js` |
 | A rota genérica de movimentação não pode criar retenção (o gate das rotas específicas não é decorativo) | `v2 recusa os tipos de retencao (so nascem dos servicos com o gate certo)` + `v2 continua aceitando os tipos operacionais do formulario` — `server/tests/api/movimentacoes.api.test.js` |

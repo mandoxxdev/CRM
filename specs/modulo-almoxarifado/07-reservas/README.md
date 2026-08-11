@@ -2,7 +2,7 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-08-06
+> **Última atualização:** 2026-08-11 (auditoria spec×código)
 > **Design da etapa:** `docs/superpowers/specs/2026-08-05-almoxarifado-etapa4-reservas-design.md`
 
 > ⚠️ **Correção de uma afirmação errada que estava aqui.** Este arquivo dizia
@@ -19,7 +19,7 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 ## O que já existe
 
 - Tabela `reservas_material_almoxarifado` (`schema.js:569`): material, quantidade, quantidade_utilizada, projeto_id, os_id, cliente_id, equipamento, submontagem, status.
-- Rotas (`extended.js:337-375`) — 5, sob `/api/almoxarifado`:
+- Rotas (`routes/almoxarifado/extended.js`) — 5, sob `/api/almoxarifado`:
   `GET /reservas` (filtros `status`/`material_id`/`projeto_id` + campo derivado `saldo`) ·
   `POST /reservas` (`reservar`) · `POST /reservas/:id/liberar` (`reservar`) ·
   `PUT /reservas/:id/transferir` (`reservar_outra_os`) ·
@@ -38,7 +38,7 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 
 ### Backend
 - [x] Reserva automática ao aprovar requisição (liga 04→07; status `PARCIALMENTE/TOTALMENTE_RESERVADA`) — `6690c1a`
-- [ ] Reserva por lote específico / número de série (depende da feature 10) — **fora da Etapa 4**
+- [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
 - [x] Transferência de reserva entre projetos (`PUT /reservas/:id/transferir`, `reservar_outra_os`) — `6690c1a`
@@ -49,6 +49,7 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 ### Frontend
 - [x] **Tela de reservas** (`ReservasAlmoxarifado.js`, rota `/almoxarifado/reservas`, menu "Reservas") — `43cd367`. Lista com filtros de status/material/projeto, criação, liberação total ou parcial com motivo, transferência entre projetos/OS e o botão do job de expiração (só `configurar`). Testes: `client/src/components/almoxarifado/ReservasAlmoxarifado.test.js` (10 casos)
 - [x] Indicador de reservas no detalhe do material (`ExtratoMaterialModal`) — `43cd367`. A tabela de reservas ativas passou a mostrar saldo, origem (REQ #id ou MANUAL) e os prazos, além de quem reservou e o vínculo que já tinha
+- ⚠️ **Ressalva (auditoria de 2026-08-11) — a Etapa 4 constava completa com um buraco de front na tela vizinha.** O item de tela desta spec cobria a tela de **reservas**, que estava ok; mas os status `PARCIALMENTE/TOTALMENTE_RESERVADA` que esta feature introduziu **não existiam na tela de requisições**: `RequisicoesList.js` mostrava o badge cru, o filtro não tinha as opções e os botões "Iniciar Separação"/"Cancelar Requisição" ficavam invisíveis nesses status; `AlmoxPageHeader.js` caía no fallback "Criar" do stepper. Corrigido em `92fe236`, com teste novo `client/src/components/almoxarifado/RequisicoesList.test.js` (badge, filtro, stepper, botões; controle positivo rodado)
 
 ### Decisões da tela (não mexer sem ler)
 

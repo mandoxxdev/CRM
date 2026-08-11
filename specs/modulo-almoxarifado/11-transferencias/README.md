@@ -1,7 +1,7 @@
 # 11 — Transferências Internas
 
-> **Status:** 🟡 — transferência direta existe; falta trânsito, aprovação e UI · **Spec original:** seção 15
-> **Última atualização:** 2026-08-02
+> **Status:** 🟡 — transferência direta existe (desde a Etapa 6 movendo a linha do lote); falta trânsito, aprovação, UI, exigência de lote e regra de vínculo · **Spec original:** seção 15
+> **Última atualização:** 2026-08-11 — auditoria de cauda: registrado que a TRANSFERENCIA move a linha do lote (Etapa 6) e nomeadas duas lacunas: rota sem `exigeLote` e tipo fora de `REGRAS_VINCULO`
 
 ## Objetivo
 
@@ -9,8 +9,14 @@ Transferências entre almoxarifados/endereços com fluxo solicitação → aprov
 
 ## O que já existe
 
-- `POST /transferencias` (`extended.js:114`, permissão `movimentar`) — via `stockService`, move saldo entre localizações imediatamente (origem→destino atômico). Teste de serviço existe.
+- `POST /transferencias` (`extended.js`, permissão `movimentar`) — via `stockService`, move saldo entre localizações imediatamente (origem→destino atômico). Teste de serviço existe.
 - Movimentação com `localizacao_origem_id`/`localizacao_destino_id`.
+- **Desde a Etapa 6 (registrado 2026-08-11):** `TRANSFERENCIA` move a **linha do lote** entre localizações em `estoque_saldo_almoxarifado` (`stockService`, com claim no WHERE para atomicidade) — a spec descrevia só "move saldo entre localizações", sem a dimensão do lote.
+
+### Lacunas achadas na auditoria de 2026-08-11 (pendências no checklist)
+
+1. A rota `POST /transferencias` **não declara `exigeLote`**: material com `controle_lote` transfere sem citar lote.
+2. `TRANSFERENCIA` **não está em `REGRAS_VINCULO`** (`movementRules`): não há exigência de vínculo nem de justificativa para transferir.
 
 ## Checklist
 
@@ -21,6 +27,8 @@ Transferências entre almoxarifados/endereços com fluxo solicitação → aprov
 - [ ] Recebimento no destino com conferência (quantidade recebida ≠ enviada → divergência)
 - [ ] Destinos especiais (spec 15): produção, kit de projeto, quarentena, inspeção, expedição, sucata, reservado, estoque de cliente, terceiro — validar restrições por tipo de destino
 - [ ] Transferência entre almoxarifados (depende da decisão multi-almoxarifado, feature 02)
+- [ ] Declarar `exigeLote` na rota `POST /transferencias` — hoje material com `controle_lote` transfere sem citar lote (lacuna nomeada em 2026-08-11)
+- [ ] Incluir `TRANSFERENCIA` em `REGRAS_VINCULO` (`movementRules`) — decidir se exige justificativa e/ou vínculo (lacuna nomeada em 2026-08-11)
 - [ ] E-mail nas transferências relevantes (feature 19) · alerta "transferência não recebida" (feature 20)
 
 ### Frontend

@@ -1,7 +1,7 @@
 # 04 — Requisições de Materiais
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
-> **Última atualização:** 2026-08-05
+> **Última atualização:** 2026-08-11 (auditoria spec×código)
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 ## O que já existe
 
 - Tabelas `requisicoes_almoxarifado` + `itens_requisicao_almoxarifado` (com `quantidade_solicitada/atendida/separada/entregue` — entrega parcial funciona).
-- Duas APIs: `/api/almoxarifado/requisicoes` (`routes/almoxarifado.js:1687-1964`) e `/api/requisicoes-material` (`routes/requisicoesMaterial.js`, cross-módulo com whitelist por setor e sanitização de campos).
+- Duas APIs: `/api/almoxarifado/requisicoes` (`routes/almoxarifado.js` — `GET`/`POST /requisicoes`, `GET /:id`, e as ações `/enviar`, `/aprovar`, `/rejeitar`, `/aprovar-valor`, `/rejeitar-valor`, `/separacao` (+alias `/separar`), `/liberar-retirada`, `/entregar`, `/confirmar-recebimento`, `/encerrar`, `/copiar`, `/cancelar`, `DELETE` administrativa) e `/api/requisicoes-material` (`routes/requisicoesMaterial.js`, cross-módulo com whitelist por setor e sanitização de campos).
 - Fluxo implementado: criar → aprovar/rejeitar → separação → entregar (parcial ok) → cancelar; delete admin com estorno de estoque.
 - Aprovação por valor (`requisitionValueApprovalService.js`, limite configurável, aprovar-valor/rejeitar-valor).
 - Notificações: e-mail ao almoxarifado na criação, e-mail a Compras para itens sem estoque, lembretes a cada 1 h (`requisitionReminderService.js`, log em `requisicao_lembretes_log`).
@@ -19,6 +19,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - Campos existentes: solicitante, departamento, setor, os_referencia (texto), urgencia, prioridade, data_necessidade, justificativa, projeto_id, cliente_id, equipamento, valor_total; + Etapa 3: `tipo_requisicao`, `centro_custo_id`, `local_entrega`, `recebimento_confirmado_por/em`, `encerrado_por/em`.
 - Testes de serviço: separação/entrega parcial em múltiplas rodadas, exclusão com estorno, lembretes, liberação por valor, filtro por setor.
 - **Etapa 3 (2026-08-05) — item mais importante: entrega e estorno passaram a baixar/estornar estoque pelo motor (`stockService.registrarMovimentacao`)**, fechando o bypass de SQL cru anotado desde a Etapa 1 (`requisitionService.entregarRequisicao/excluirRequisicao`). Ganho: atomicidade (sem race condition entre entregas concorrentes do mesmo material), auditoria (toda baixa/estorno grava linha em `auditoria_log_almoxarifado`), saldo por localização (padrão do material, com bloqueio de localização respeitado) e vínculos estruturados na movimentação (`requisicao_id`, `projeto_id`, `centro_custo_id`; OS continua só como referência em texto — a requisição não tem `os_id`, só `os_referencia`). `maxEntregar` e o GET de detalhe passaram a calcular pelo **disponível** (físico − reservado/bloqueado/inspeção), não mais pelo físico — semântica nova de `saldo_atual` no front.
+- **Etapa 4 (2026-08-06) — mudança que esta spec não contava (registrada na auditoria de 2026-08-11):** a entrega passou a **consumir a reserva da própria requisição**, dividindo a saída entre reserva e excedente sem reserva (`requisitionService.entregarRequisicao`); e separar/entregar somam o hold da própria requisição ao disponível — a própria reserva não barra mais a separação/entrega da requisição dona. Detalhes, decisões e testes na feature 07.
 - Decisões de escopo confirmadas (ver `docs/superpowers/specs/2026-08-05-almoxarifado-etapa3-requisicoes-design.md`): aprovações ficam com regras fixas declarativas em código (tabela configurável fica para demanda real — ver feature 06); tipo de requisição é campo único de fluxo operacional único (fluxos específicos de EPI/ferramenta vêm com as features donas); confirmação de recebimento não é status novo, são campos (`recebimento_confirmado_por/em`) setáveis pelo solicitante em ENTREGUE/PARCIALMENTE_ATENDIDA/ENCERRADA.
 
 ## Checklist
@@ -31,7 +32,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 ### Status faltantes (spec 5.4)
 - [x] `RASCUNHO` (Etapa 3, Task 2 — `salvar_rascunho: true` na criação; rota `POST /:id/enviar` para RASCUNHO→PENDENTE)
 - [x] `AGUARDANDO_ESTOQUE` / `AGUARDANDO_COMPRA` (Etapa 3, Task 2 — setados automaticamente na aprovação quando nenhum item tem disponível > 0; COMPRA quando há solicitação de compra pendente, senão ESTOQUE)
-- [ ] `PARCIALMENTE_RESERVADA` / `TOTALMENTE_RESERVADA` (decisão de escopo: adiado para a Etapa 4 — feature 07, junto com a reserva automática)
+- [x] `PARCIALMENTE_RESERVADA` / `TOTALMENTE_RESERVADA` — **backend entregue na Etapa 4 (2026-08-05/06)**: `requisitionStateMachine` é dono das strings, e os status são gravados nas lanes `/aprovar` e `/aprovar-valor` junto com a reserva automática (ver feature 07). **Front só fechou em 2026-08-11 (`92fe236`)**: a Etapa 4 tinha deixado a tela de requisições sem esses status — badge cru, filtro sem as opções, botões "Iniciar Separação"/"Cancelar Requisição" invisíveis, stepper no fallback "Criar" — apesar de o item de front constar completo (ver nota na seção Frontend)
 - [x] `PRONTA_PARA_RETIRADA` (Etapa 3, Task 2 — `PUT /:id/liberar-retirada`, exige ≥1 item separado)
 - [x] `ENCERRADA` (Etapa 3, Task 5 — `PUT /:id/encerrar`, perfil `aprovar_requisicao`, bloqueia novas entregas e registra `encerrado_por/em`)
 - [x] Máquina de estados explícita com transições válidas (Etapa 3, Task 2 — `requisitionStateMachine.js`, mesmo padrão do `movementRules`; transição inválida → 400)
@@ -44,7 +45,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - [x] Copiar requisição anterior (Etapa 3, Task 5 — `POST /:id/copiar`, gera novo RASCUNHO fiel com os mesmos itens/tipo/vínculos, sem quantidades entregues)
 - [ ] Importar itens de lista técnica / ordem de produção (depende da feature 22) — fora da Etapa 3
 - [x] Confirmação de recebimento pelo solicitante (fecha o ciclo) (Etapa 3, Task 5 — `PUT /:id/confirmar-recebimento`, só o solicitante, sem bypass de admin; campos `recebimento_confirmado_por/em`)
-- [ ] Registrar lote/série entregue por item (depende da feature 10) — fora da Etapa 3
+- [ ] Registrar lote/série entregue por item — **a dependência caiu (2026-08-11)**: a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então o item ficou implementável. Atenção: a entrega por requisição está deliberadamente **isenta** de `controle_lote` (decisão do review final de 2026-08-10 — ver spec 10); registrar lote na entrega exigiria dar à tela um campo de lote
 - [x] Cancelar saldo não utilizado — coberto pelo encerramento (Etapa 3, Task 5: `ENCERRADA` bloqueia novas entregas a partir de ENTREGUE/PARCIALMENTE_ATENDIDA)
 - [ ] Reprogramar saldo pendente (redistribuir/ajustar fino, além do cancelamento simples do encerramento) — fora da Etapa 3
 - [ ] Assinatura digital na retirada (Etapa 15 — mobilidade; deixar campo previsto)
@@ -52,7 +53,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - [ ] Rascunho nos módulos consumidores (rotas enviar/cancelar em /requisicoes-material + botões) — hoje exclusivo do almoxarifado
 
 ### Frontend
-- [x] Novos status no `RequisicoesList.js` + `AlmoxPageHeader.js` (stepper `REQUISICAO_FLOW`) (Etapa 3, Task 6 — badges/filtros dos status e tipos novos, stepper com 6 passos)
+- [x] Novos status no `RequisicoesList.js` + `AlmoxPageHeader.js` (stepper `REQUISICAO_FLOW`) (Etapa 3, Task 6 — badges/filtros dos status e tipos novos, stepper com 6 passos). **Nota (2026-08-11): este item constava completo, mas ficou incompleto depois da Etapa 4** — os status `PARCIALMENTE/TOTALMENTE_RESERVADA` não entraram nas telas (badge cru, filtro sem as opções, botões "Iniciar Separação"/"Cancelar Requisição" invisíveis nesses status, stepper caindo no fallback "Criar"). Fechado em `92fe236`, com teste novo `client/src/components/almoxarifado/RequisicoesList.test.js` (badge, filtro, stepper, botões; controle positivo rodado)
 - [x] Botão "copiar requisição" · confirmação de recebimento pelo solicitante (Etapa 3, Task 6)
 - [ ] Anexos no form — fora da Etapa 3
 

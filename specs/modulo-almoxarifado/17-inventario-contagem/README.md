@@ -1,7 +1,7 @@
 # 17 — Inventário e Contagem Cíclica
 
-> **Status:** 🟡 — inventário simples funciona; falta contagem cega, recontagem, tolerância e aprovação forte · **Spec original:** seção 21
-> **Última atualização:** 2026-08-02
+> **Status:** 🟡 — inventário simples funciona, mas o ajuste da conclusão corre **por fora do motor** (risco nomeado abaixo); falta contagem cega, recontagem e tolerância · **Spec original:** seção 21
+> **Última atualização:** 2026-08-11 — auditoria de cauda: o problema da conclusão estava subestimado (a spec só dizia "falta aprovação forte"); registrado como risco de dessincronização pós-Etapa 6 e registrado o ponto positivo da dupla permissão
 
 ## Objetivo
 
@@ -9,10 +9,29 @@ Inventário geral e contagens cíclicas (por material, endereço, criticidade, A
 
 ## O que já existe
 
-- `conferencias_almoxarifado` + `itens_conferencia_almoxarifado` (`schema.js:107-129,715-720`): número, status, responsável, tipo, projeto, localização, aprovador, justificativa de ajuste; itens com quantidade sistema/contada/divergência/ajustado.
-- Rotas `GET/POST/PUT /conferencias*` (`routes/almoxarifado.js:657-804`): criar por categoria, lançar contagem, concluir (gera ajustes), cancelar.
+- `conferencias_almoxarifado` + `itens_conferencia_almoxarifado` (`schema.js`): número, status, responsável, tipo, projeto, localização, aprovador, justificativa de ajuste; itens com quantidade sistema/contada/divergência/ajustado.
+- Rotas de `/conferencias` (`routes/almoxarifado.js`): criar por categoria, lançar contagem, `PUT /conferencias/:id/concluir` (gera ajustes), cancelar.
 - Front: `ConferenciaEstoque.js` (341 L).
 - Dado real: 2 conferências em produção.
+- **Ponto positivo não registrado antes (2026-08-11):** a conclusão exige **dupla permissão** — `inventario` no middleware para fechar a contagem e, se `aplicar_ajustes: true`, `ajustar_estoque` checado no handler (o ALMOXARIFE conta, mas quem homologa a divergência no saldo é ADMINISTRADOR/GESTOR); após aplicar, reavalia o alerta de mínimo por material (`alertService.verificarAlertaPorMaterialId`).
+
+## ⚠️ Risco: a conclusão corre por fora do motor de estoque (registrado 2026-08-11)
+
+Esta spec dizia apenas "falta aprovação forte" — **subestimava o problema**. A conclusão da
+conferência (`PUT /conferencias/:id/concluir` com `aplicar_ajustes`) faz **UPDATE direto** em
+`materiais_almoxarifado.quantidade_atual` + **INSERT manual** de movimentação tipo `AJUSTE`,
+por fora do `stockService` e **sem `registrarAuditoria`**. Consequências:
+
+- Sem validação de saldo, localização bloqueada ou custo médio.
+- **Depois da Etapa 6** (saldo por localização/lote em `estoque_saldo_almoxarifado` como fonte
+  por localização), esse caminho **dessincroniza** o saldo por localização/lote do saldo do
+  material: o ajuste muda `quantidade_atual` sem tocar nas linhas de `estoque_saldo_almoxarifado`.
+- É a **única exceção conhecida** à invariante do motor (todo write de saldo passa pelo
+  `stockService`) — a spec 03 já a nomeia; espelhada aqui.
+
+A correção é o item do checklist "Ajuste como movimentação específica (v2, tipo
+AJUSTE_INVENTARIO)" — enquanto ele não sai, todo inventário concluído com ajustes deixa o saldo
+por localização defasado.
 
 ## Checklist
 

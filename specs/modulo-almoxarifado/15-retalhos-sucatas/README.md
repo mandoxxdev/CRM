@@ -1,7 +1,7 @@
 # 15 — Retalhos, Sobras e Sucatas
 
-> **Status:** 🟡 — tabela e rotas de sobras existem; falta baixa dimensional, etiqueta e todo o fluxo de sucata · **Spec original:** seção 19
-> **Última atualização:** 2026-08-02
+> **Status:** 🟡 — tabela e rotas de sobras existem (CRUD sem auditoria); falta baixa dimensional, etiqueta e todo o fluxo de sucata · **Spec original:** seção 19
+> **Última atualização:** 2026-08-11 — auditoria de cauda: nomeada a pendência de auditoria do `scrapService` (único serviço de cauda sem `registrarAuditoria`) e registrado que `SUCATA` passou a exigir justificativa no motor
 
 ## Objetivo
 
@@ -9,13 +9,17 @@ Consumo parcial de chapa/tubo/barra gera retalho rastreável com dimensões rema
 
 ## O que já existe
 
-- `sobras_material_almoxarifado` (`schema.js:535`): material, tipo, dimensões originais/restantes, espessura, peso, localização, projeto/OS de origem, reutilizável, status.
-- `GET/POST/PUT /sobras` (`extended.js:230-241`) via `scrapService.js` (37 L). Teste de serviço existe.
+- `sobras_material_almoxarifado` (`schema.js`): material, tipo, dimensões originais/restantes, espessura, peso, localização, projeto/OS de origem, reutilizável, status.
+- `GET/POST/PUT /sobras` (`extended.js`) via `scrapService.js`. Teste de serviço existe.
 - Tipos de localização preveem área de sucata e de retalhos.
+- **Registrado na auditoria de 2026-08-11:**
+  - `scrapService` é **CRUD puro sem auditoria** — o único serviço de cauda sem nenhuma chamada a `registrarAuditoria` (todos os demais auditam). Pendência nomeada no checklist.
+  - O tipo `SUCATA` no motor **passou a exigir justificativa** (`REGRAS_VINCULO` em `movementRules`, Etapa 5/6) — afeta o caminho devolução→sucata (a feature 12 já envia justificativa) e qualquer fluxo futuro de sucateamento desta feature.
 
 ## Checklist
 
 ### Backend — retalhos
+- [ ] Auditar o CRUD de sobras: `scrapService` sem `registrarAuditoria` em criar/editar (pendência nomeada em 2026-08-11)
 - [ ] Fluxo de consumo parcial: dar baixa na dimensão/peso original + criar saldo do retalho **na mesma transação** (spec 19)
 - [ ] Vínculo com lote/corrida original (feature 10)
 - [ ] Campos completos: norma, diâmetro, largura, comprimento, foto, responsável, data (parcial na tabela)

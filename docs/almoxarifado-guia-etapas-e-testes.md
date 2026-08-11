@@ -1,12 +1,21 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-10 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-11 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 6) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-10
+> ## Onde o desenvolvimento parou — 2026-08-11
 >
 > **Etapas 1, 2, 3, 4, 5 e 6 completas — a Task 9 (correção da Etapa 6) também, e o review final do branch inteiro já foi feito e corrigido.**
+>
+> **2026-08-11 — auditoria completa das 24 specs contra o código, e mais uma correção.** Todas as
+> specs de feature foram conferidas contra o que o sistema faz de verdade e corrigidas onde
+> mentiam (as piores: a 23 dizia que a auditoria "não era usada em produção" — é usada desde a
+> Etapa 3; a 01 dizia que "Controle por lote" não fazia nada — faz desde a Etapa 6). A auditoria
+> também achou um **bug real**: a tela de Requisições não conhecia os status **Totalmente/
+> Parcialmente Reservada** da Etapa 4 — requisição aprovada com saldo aparecia com o código cru
+> no badge e **sem os botões "Iniciar Separação" e "Cancelar Requisição"**. Corrigido
+> (`92fe236`), com teste. Ver a linha nova na tabela da Etapa 4 abaixo.
 >
 > A **Etapa 6 (Lotes)** fechou o motor: lote deixou de ser um campo de texto que o sistema
 > guardava e nunca olhava e virou um cadastro de verdade, com validade, corrida, certificado do
@@ -78,6 +87,10 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 3 | Requisições | Ciclo parava na entrega | **Solicitante confirma o recebimento** (só ele — nem admin confirma no lugar) |
 | 3 | Requisições | Aprovação sem trava | **Quem pediu não aprova a própria** (403); rejeição exige motivo; toda decisão auditada |
 | 3 | Requisições | Não dava pra reaproveitar requisição antiga | **"Copiar como Novo Rascunho"** com os mesmos itens/tipo/vínculos |
+| 4 | Requisições / Reservas | Reservar tornava o material inutilizável até para quem reservou | A entrega **consome a reserva da própria requisição** — acabou a corrida entre aprovar e entregar |
+| 4 | Requisições | Aprovar não separava nada — o material podia ser consumido por outro antes da entrega | Aprovar **reserva automaticamente** os itens com saldo; a requisição vira **Totalmente/Parcialmente Reservada** |
+| 4 | Reservas (tela nova) | Reserva não tinha tela | Tela **Almoxarifado → Reservas**: reservar à mão, liberar com motivo, transferir de projeto/OS, expiração opt-in |
+| 4 | Requisições | *(correção de 2026-08-11)* A tela de requisições não conhecia os dois status de reserva: badge com o código cru, e a requisição aprovada ficava **sem** os botões "Iniciar Separação" e "Cancelar" | Badge, filtro e stepper mostram **Totalmente/Parcialmente Reservada**, e os botões aparecem — o caminho feliz pós-aprovação voltou a ser clicável |
 | 5 | Recebimento | Aprovar recebimento de material crítico **sem inspeção prévia dava erro** — o material não entrava no sistema mesmo já estando no galpão | Entra sempre. Se exige inspeção, entra **retido** (fora do disponível) até alguém decidir |
 | 5 | Inspeções (tela nova) | Não existia fila de inspeção nem forma de aprovar/reprovar pela tela | Tela **Inspeções**: lista o que está retido, aprova (total ou parcial) ou reprova com motivo e destino (devolver / engenharia / substituição) |
 | 5 | Inspeções / Materiais | Bloquear um material achado com defeito na prateleira não tinha botão nem exigia justificativa | Botões **Bloquear/Desbloquear Material** na tela de Inspeções, com justificativa obrigatória e rastro no livro de movimentações |
@@ -263,6 +276,13 @@ Reserva por lote/série. Prioridade na reserva. E-mail de aviso de reserva venci
 > existir (Etapa 6b).
 
 > **Fechado em 2026-08-06:** a liberação por valor (`/aprovar-valor`) passou a reservar como a aprovação normal, e **excluir** uma requisição passou a soltar as reservas dela (antes só cancelar soltava). Se você usa liberação por valor, o material aprovado por essa via agora fica reservado — a requisição aparece como **Totalmente/Parcialmente Reservada** em vez de só **Aprovada**.
+
+> **Corrigido em 2026-08-11 (`92fe236`):** desde a entrega desta etapa, a tela de **Requisições**
+> não conhecia os dois status de reserva — o passo 2 do roteiro acima mostrava o código cru
+> (`TOTALMENTE_RESERVADA`) no lugar do badge, o stepper voltava para "Criar" e, pior, a requisição
+> aprovada ficava **sem os botões "Iniciar Separação" e "Cancelar Requisição"** (o backend sempre
+> aceitou; era só a tela que não dava o caminho). Se você rodou o roteiro antes dessa data e viu
+> isso, era este bug.
 
 ---
 

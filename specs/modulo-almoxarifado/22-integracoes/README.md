@@ -1,7 +1,7 @@
 # 22 — Integrações (Engenharia, Produção, Compras, Projetos e Custos)
 
 > **Status:** ❌ — os módulos vizinhos existem mas estão vazios ou desconectados · **Spec original:** seções 23, 24, 25
-> **Última atualização:** 2026-08-02
+> **Última atualização:** 2026-08-11 — auditoria de cauda: corrigida a descrição do relatório "consumo por OS", que estava imprecisa (ele filtra pela coluna real `os_id`, não pelo campo texto)
 
 ## Contexto importante
 
@@ -10,9 +10,9 @@ As integrações dependem de dados que hoje **não existem em produção**: `pro
 ## O que já existe
 
 - Colunas de vínculo em movimentações, requisições, reservas, recebimentos (projeto/OS/cliente).
-- Compras: fornecedores + rotas de pedidos/cotações (`index.js:19657-19892`), workflow de recebimento NF integrado a contas a pagar (feature 08), `itens_pedido_compra`, solicitações automáticas por mínimo (feature 18), aviso por e-mail a Compras de itens sem estoque.
+- Compras: fornecedores + rotas de pedidos/cotações (`index.js`), workflow de recebimento NF integrado a contas a pagar (feature 08), `itens_pedido_compra`, solicitações automáticas por mínimo (feature 18), aviso por e-mail a Compras de itens sem estoque.
 - Produção (MES): módulo `services/producao/` com schema próprio (`producao_ops`) — sem ponte com almoxarifado.
-- Relatório "consumo por OS" no dashboard (baseado no campo texto `os_referencia` — frágil).
+- Relatório "consumo por OS" no dashboard: o dashboard usa `GET /relatorios/consumo-os`, que filtra por `m.os_id` (coluna real de vínculo, em `reportService.relatorioConsumoPorOS`). **Correção (2026-08-11):** a spec dizia "baseado no campo texto `os_referencia` — frágil", o que estava **impreciso**; o campo texto `os_referencia` sobrevive apenas no relatório de reservas (`relatorioReservadoPorOS`, como fallback ao lado de `os_id`).
 
 ## Checklist
 
