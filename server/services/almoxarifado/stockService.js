@@ -1227,6 +1227,26 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     }
   }
 
+  // Serie (Etapa 6b, review final do branch): guarda simétrica à de cima, para o ramo de SAÍDA.
+  // Sonda do review: entrada da série SN-1 -> saída (série ENTREGUE, movimentacao_saida_id=M) ->
+  // reentrada manual via ENTRADA v2 (`entradaSeries` reativa e ANULA movimentacao_saida_id, ver
+  // seriesService.js) -> cancelar a saída M: `reverterSaida` filtra por
+  // `movimentacao_saida_id = M AND status IN ('ENTREGUE','SUCATEADA')` e não acha nada (a série
+  // escapou do filtro porque a reentrada zerou o vínculo) — sem esta guarda o cancelamento seguia
+  // em frente e devolvia o saldo mesmo assim: quantidade_atual contava a unidade que já estava
+  // fisicamente presente de novo desde a reentrada, dobrada. Invariante COUNT(série presente) ==
+  // quantidade_atual quebrado pra sempre — não há segunda chance depois: o claim abaixo já teria
+  // marcado `cancelado=1`, não sobra estorno para desfazer isto.
+  if (tiposSaida.includes(mov.tipo) && material.controle_serie) {
+    const entregues = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+      WHERE movimentacao_saida_id = ? AND status IN ('ENTREGUE', 'SUCATEADA')`, [movimentoId]);
+    if (entregues.n < Math.round(mov.quantidade)) {
+      throw Object.assign(new Error(
+        'estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material'),
+        { status: 400 });
+    }
+  }
+
   // Claim atômico ANTES de aplicar qualquer efeito inverso (achado do review final: double-cancel
   // race). O UPDATE...WHERE cancelado = 0 é a própria seção crítica sob o lock de linha do SQLite:
   // de duas chamadas concorrentes para o mesmo movimentoId, só uma tem changes = 1 — essa é a

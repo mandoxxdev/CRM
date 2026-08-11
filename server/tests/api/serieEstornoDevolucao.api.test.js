@@ -146,6 +146,57 @@ async function entrarComSeries(app, db, materialId, numeros, extra = {}) {
     await assertInvarianteSerie(db, mat);
   });
 
+  await test('reentrada manual apos saida bloqueia o estorno da saida (sonda do review final)', async () => {
+    // Sequencia exata do achado: entrada da serie SN-1 -> saida (serie ENTREGUE,
+    // movimentacao_saida_id=M) -> reentrada manual via ENTRADA v2 (entradaSeries reativa e
+    // ANULA movimentacao_saida_id, ver seriesService.js) -> cancelar a saida M. Sem a guarda
+    // simetrica no ramo de SAIDA de cancelarMovimentacao, reverterSaida filtra por
+    // `movimentacao_saida_id = M AND status IN ('ENTREGUE','SUCATEADA')`, nao acha nada (a
+    // serie escapou do filtro), mas o cancelamento devolvia o saldo mesmo assim — HTTP 200,
+    // quantidade_atual=2, presentes=1, invariante quebrado pra sempre.
+    const mat = await novoMaterial(db);
+    const { series } = await entrarComSeries(app, db, mat, ['SN-1']);
+
+    const sai = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({
+        material_id: mat, tipo: 'SAIDA', quantidade: 1,
+        serie_ids: [series[0].id], justificativa: 'entregue ao tecnico',
+      });
+    assert.strictEqual(sai.status, 201, JSON.stringify(sai.body));
+    const movSaidaId = sai.body.id;
+
+    const entregue = await dbGet(db, 'SELECT status, movimentacao_saida_id FROM series_almoxarifado WHERE id = ?', [series[0].id]);
+    assert.strictEqual(entregue.status, 'ENTREGUE');
+    assert.strictEqual(entregue.movimentacao_saida_id, movSaidaId);
+
+    // reentrada manual: reativa a serie e ANULA o vinculo com a saida M
+    const reent = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'ENTRADA', quantidade: 1, motivo: 'devolucao do tecnico', series: ['SN-1'] });
+    assert.strictEqual(reent.status, 201, JSON.stringify(reent.body));
+
+    const reativada = await dbGet(db, 'SELECT status, movimentacao_saida_id, movimentacao_entrada_id FROM series_almoxarifado WHERE id = ?', [series[0].id]);
+    assert.strictEqual(reativada.status, 'EM_ESTOQUE');
+    assert.strictEqual(reativada.movimentacao_saida_id, null, 'reentrada devia ter anulado o vinculo com a saida original');
+
+    const antesQuantidade = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(antesQuantidade.quantidade_atual, 1);
+
+    // cancelar a saida M agora: a serie ja reentrou, entregar o saldo de novo dobraria a unidade
+    const est = await request(app).post(`/api/almoxarifado/movimentacoes/${movSaidaId}/cancelar`)
+      .send({ motivo: 'tentando estornar a saida ja devolvida manualmente' });
+    assert.strictEqual(est.status, 400, JSON.stringify(est.body));
+    assert.ok(/estorno de saida recusado/.test(est.body.error || ''),
+      `mensagem inesperada: ${JSON.stringify(est.body)}`);
+
+    const movOriginal = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [movSaidaId]);
+    assert.strictEqual(movOriginal.cancelado, 0, 'claim nao devia ter sido feito — a recusa e antes dele');
+
+    const depoisQuantidade = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mat]);
+    assert.strictEqual(depoisQuantidade.quantidade_atual, 1, 'saldo nao pode ter dobrado');
+
+    await assertInvarianteSerie(db, mat);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
