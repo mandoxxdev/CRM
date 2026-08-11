@@ -172,6 +172,7 @@ const RecebimentosAlmoxarifado = () => {
         data_validade_lote: item.data_validade_lote,
         data_fabricacao_lote: item.data_fabricacao_lote,
         corrida_lote: item.corrida_lote,
+        series: item.series,
       }));
       await api.put(`/almoxarifado/recebimentos/${detalhe.id}/fiscal`, {
         ...fiscalForm,
@@ -531,6 +532,14 @@ const RecebimentosAlmoxarifado = () => {
                             value={item.corrida_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'corrida_lote', e.target.value)} />
                         </div>
+                        {materiais.find((m) => m.id === item.material_id)?.controle_serie === 1 && (
+                          <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Series (uma por linha) — {String(item.series || '').split(/\r?\n/).filter((s) => s.trim()).length}/{item.quantidade_recebida || item.quantidade_esperada || 0}</label>
+                            <textarea className="almox-textarea" rows={2} value={item.series || ''}
+                              style={{ fontSize: '0.75rem', padding: '4px 6px' }}
+                              onChange={(e) => atualizarItemDetalhe(item.id, 'series', e.target.value)} />
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
