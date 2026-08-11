@@ -6,8 +6,10 @@ import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader from './AlmoxPageHeader';
 import {
   FiPlus, FiRefreshCw, FiPackage, FiCheck, FiTruck, FiSearch, FiX,
-  FiArrowRight, FiFileText, FiDollarSign,
+  FiArrowRight, FiFileText, FiDollarSign, FiTag,
 } from 'react-icons/fi';
+import EtiquetasPdfModal from './EtiquetasPdfModal';
+import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -54,6 +56,7 @@ const RecebimentosAlmoxarifado = () => {
   const [showNovo, setShowNovo] = useState(false);
   const [showFiscal, setShowFiscal] = useState(false);
   const [buscaMat, setBuscaMat] = useState('');
+  const [etiquetas, setEtiquetas] = useState(null);
   const [fiscalForm, setFiscalForm] = useState(EMPTY_FISCAL);
   const [form, setForm] = useState({
     tipo_recebimento: 'NOTA_FISCAL',
@@ -330,7 +333,24 @@ const RecebimentosAlmoxarifado = () => {
     : 0;
 
   const renderAcoes = () => {
-    if (!detalhe || ['PROCESSADO', 'APROVADO', 'REPROVADO'].includes(detalhe.status)) return null;
+    if (!detalhe) return null;
+
+    // Etiquetas dos itens processados/aprovados
+    if (['PROCESSADO', 'APROVADO'].includes(detalhe.status)) {
+      const etiquetasNota = montarEtiquetasDoRecebimento(detalhe.itens || [], materiais, window.location.origin);
+      return (
+        <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+          disabled={etiquetasNota.length === 0}
+          title={etiquetasNota.length === 0 ? 'Nenhum item com entrada para etiquetar' : 'Gera o PDF de etiquetas dos itens desta nota'}
+          onClick={() => setEtiquetas(etiquetasNota)}>
+          <FiTag size={14} /> Imprimir etiquetas dos itens
+        </button>
+      );
+    }
+
+    // Early return para status finais que não têm ações
+    if (['REPROVADO'].includes(detalhe.status)) return null;
+
     const s = detalhe.status;
 
     return (
@@ -769,6 +789,9 @@ const RecebimentosAlmoxarifado = () => {
           </div>
         </div>
       )}
+
+      {/* Etiquetas PDF */}
+      <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
     </div>
   );
 };
