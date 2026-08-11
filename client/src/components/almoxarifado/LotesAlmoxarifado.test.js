@@ -151,6 +151,13 @@ async function clicarBotaoModal(texto) {
   await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 }
 
+/** Troca de aba (Lotes/Séries) pelo texto do botão. */
+async function clicarAba(texto) {
+  const botao = [...container.querySelectorAll('button')].find((b) => b.textContent.trim() === texto);
+  await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  await esperarEfeitos();
+}
+
 describe('LotesAlmoxarifado', () => {
   test('lista os lotes do material selecionado, na ordem que a API devolveu', async () => {
     await renderizar();
@@ -343,5 +350,145 @@ describe('LotesAlmoxarifado — troca rapida de material nao deixa resposta atra
 
     const codigos = linhas().map((tr) => tr.querySelector('td').textContent.trim());
     expect(codigos).toEqual(['L-VENC-LIB']); // só o lote do material 2, que é o selecionado agora
+  });
+});
+
+// Task 10 (Etapa 6b): aba Séries na mesma tela — rastreabilidade por número de série e
+// bloqueio/desbloqueio avulso, molde do modal de status de lote acima.
+const SERIE_EM_ESTOQUE = {
+  id: 501, numero: 'SN-001', status: 'EM_ESTOQUE', lote_id: 200, lote_codigo: 'L-ATIVO',
+  localizacao_descricao: 'Prateleira A1', updated_at: '2026-08-01T10:00:00Z',
+};
+const SERIE_BLOQUEADA = {
+  id: 502, numero: 'SN-002', status: 'BLOQUEADA', lote_id: 200, lote_codigo: 'L-ATIVO',
+  localizacao_descricao: 'Prateleira A2', updated_at: '2026-08-01T10:00:00Z',
+};
+const SERIE_ENTREGUE = {
+  id: 503, numero: 'SN-003', status: 'ENTREGUE', lote_id: null, lote_codigo: null,
+  localizacao_descricao: null, updated_at: '2026-08-01T10:00:00Z',
+};
+
+describe('LotesAlmoxarifado — aba Séries', () => {
+  test('aba Series lista numero/status/lote e badge por status', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) {
+        return Promise.resolve({ data: [SERIE_EM_ESTOQUE, SERIE_BLOQUEADA, SERIE_ENTREGUE] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAba('Séries');
+
+    const linhasSeries = linhas();
+    expect(linhasSeries).toHaveLength(3);
+
+    expect(linhasSeries[0].textContent).toMatch(/SN-001/);
+    expect(linhasSeries[0].textContent).toMatch(/L-ATIVO/);
+    expect(linhasSeries[0].querySelector('.almox-badge').className).toMatch(/almox-badge-ok/);
+
+    expect(linhasSeries[1].querySelector('.almox-badge').className).toMatch(/almox-badge-critico/);
+
+    expect(linhasSeries[2].querySelector('.almox-badge').className).toMatch(/almox-badge-concluido/);
+  });
+
+  test('bloquear serie exige justificativa (nao chama a API sem motivo)', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) return Promise.resolve({ data: [SERIE_EM_ESTOQUE] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAba('Séries');
+
+    await clicarAcao(0, 'Bloquear');
+    const confirmar = [...container.querySelectorAll('.almox-modal-footer button')]
+      .find((b) => b.textContent.trim() === 'Confirmar');
+    expect(confirmar.disabled).toBe(true);
+
+    await clicarBotaoModal('Confirmar');
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  test('bloquear com justificativa chama PUT /almoxarifado/series/:id/status', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) return Promise.resolve({ data: [SERIE_EM_ESTOQUE] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAba('Séries');
+
+    await clicarAcao(0, 'Bloquear');
+    preencher(campoPorLabel('Justificativa'), 'Serie avariada na conferencia');
+    await clicarBotaoModal('Confirmar');
+
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/series/501/status', {
+      status: 'BLOQUEADA', justificativa: 'Serie avariada na conferencia',
+    });
+  });
+
+  test('desbloquear serie oferece a acao inversa e chama a API com EM_ESTOQUE', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) return Promise.resolve({ data: [SERIE_BLOQUEADA] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAba('Séries');
+
+    await clicarAcao(0, 'Desbloquear');
+    preencher(campoPorLabel('Justificativa'), 'Inspecao concluida, liberado');
+    await clicarBotaoModal('Confirmar');
+
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/series/502/status', {
+      status: 'EM_ESTOQUE', justificativa: 'Inspecao concluida, liberado',
+    });
+  });
+});
+
+describe('LotesAlmoxarifado — aba Series: resposta atrasada da aba anterior nao vaza para a atual', () => {
+  test('resposta atrasada da aba anterior nao vaza para a aba atual (corrida)', async () => {
+    let resolveSeries1;
+    let resolveSeries2;
+    const promiseSeries1 = new Promise((resolve) => { resolveSeries1 = resolve; });
+    const promiseSeries2 = new Promise((resolve) => { resolveSeries2 = resolve; });
+    let chamadasSeries = 0;
+
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/series`) {
+        chamadasSeries += 1;
+        return chamadasSeries === 1 ? promiseSeries1 : promiseSeries2;
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    await renderizar();
+    await selecionarMaterial();
+    // Entra na aba Series (1a chamada do GET de series, fica pendente).
+    await clicarAba('Séries');
+    // Sai para a aba Lotes ANTES da resposta chegar — o efeito de Series é limpo (cancelado).
+    await clicarAba('Lotes');
+    // Volta para Series — dispara a 2a chamada.
+    await clicarAba('Séries');
+
+    // Resolve a 2a (atual) primeiro, e só depois a 1a (atrasada) — se a tela não tivesse
+    // descartado a resposta velha, ela chegaria por último e pisaria na lista certa.
+    await act(async () => { resolveSeries2({ data: [SERIE_BLOQUEADA] }); await Promise.resolve(); });
+    await act(async () => { resolveSeries1({ data: [SERIE_EM_ESTOQUE] }); await Promise.resolve(); });
+
+    const linhasSeries = linhas();
+    expect(linhasSeries).toHaveLength(1);
+    expect(linhasSeries[0].textContent).toMatch(/SN-002/);
   });
 });

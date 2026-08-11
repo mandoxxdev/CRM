@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiRefreshCw, FiSliders, FiUnlock, FiUpload } from 'react-icons/fi';
+import { FiRefreshCw, FiSliders, FiUnlock, FiUpload, FiLock } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 // O certificado do lote vai para o MESMO diretório servido das fotos de material
@@ -34,6 +34,13 @@ import './Almoxarifado.css';
  * Lote não elegível (bloqueado, reprovado, vencido sem liberação) continua na lista — o servidor
  * já manda em ordem FEFO com os não elegíveis no fim, e esconder faria o operador procurar um
  * lote que o sistema decidiu não mostrar. A tela NÃO reordena o que a API devolveu.
+ *
+ * Task 10 (Etapa 6b) acrescenta a aba Séries: rastreabilidade por número de série
+ * (`GET /materiais/:id/series`) e bloqueio/desbloqueio avulso, com justificativa obrigatória
+ * (`PUT /series/:id/status` — só aceita as transições EM_ESTOQUE<->BLOQUEADA, o servidor recusa
+ * o resto). O efeito de carga das séries segue o mesmo molde do de lotes (guarda `cancelado`),
+ * mas só dispara com a aba Séries selecionada — trocar de aba antes da resposta chegar precisa
+ * descartá-la, senão a resposta atrasada da aba anterior pinta a aba atual.
  */
 
 const STATUS_LOTE = [
@@ -57,13 +64,32 @@ const bloqueadoPorCertificado = (l) => l.status === 'BLOQUEADO' && /certificado/
 
 const formatData = (d) => (d ? new Date(`${String(d).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : null);
 
+// Badges da aba Séries — molde de STATUS_LOTE/statusInfo acima. EM_ESTOQUE e BLOQUEADA são as
+// únicas duas transições que `mudarStatusSerie` (servidor) aceita; ENTREGUE/SUCATEADA/ESTORNADA
+// são estados terminais desta tela — só aparecem para leitura, sem ação de status.
+const STATUS_SERIE_INFO = {
+  EM_ESTOQUE: { label: 'Em estoque', cls: 'ok' },
+  BLOQUEADA: { label: 'Bloqueada', cls: 'critico' },
+  ENTREGUE: { label: 'Entregue', cls: 'concluido' },
+  SUCATEADA: { label: 'Sucateada', cls: 'cancelado' },
+  ESTORNADA: { label: 'Estornada', cls: 'cancelado' },
+};
+
+const serieStatusInfo = (s) => STATUS_SERIE_INFO[s] || { label: s || '—', cls: 'vazio' };
+
 const LotesAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
 
   const [materiais, setMateriais] = useState([]);
   const [materialId, setMaterialId] = useState('');
+  const [aba, setAba] = useState('LOTES');
+  const [series, setSeries] = useState([]);
+  const [serieStatusTarget, setSerieStatusTarget] = useState(null);
+  const [serieStatusJustificativa, setSerieStatusJustificativa] = useState('');
+  const [serieStatusSaving, setSerieStatusSaving] = useState(false);
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingSeries, setLoadingSeries] = useState(false);
 
   const [statusTarget, setStatusTarget] = useState(null);
   const [statusForm, setStatusForm] = useState({ status: '', justificativa: '' });
@@ -104,6 +130,20 @@ const LotesAlmoxarifado = () => {
       .finally(() => { if (!cancelado) setLoading(false); });
     return () => { cancelado = true; };
   }, [materialId, reloadToken]);
+
+  // Mesmo molde do efeito de lotes acima, mas só dispara com a aba Séries selecionada — trocar
+  // de aba (ou de material) antes da resposta chegar tem de descartá-la pela mesma guarda
+  // `cancelado`, senão a resposta atrasada de uma visita anterior pinta a aba/material atual.
+  useEffect(() => {
+    if (!materialId || aba !== 'SERIES') return undefined;
+    let cancelado = false;
+    setLoadingSeries(true);
+    api.get(`/almoxarifado/materiais/${materialId}/series`)
+      .then((res) => { if (!cancelado) setSeries(res.data || []); })
+      .catch(() => { if (!cancelado) toast.error('Erro ao carregar séries do material'); })
+      .finally(() => { if (!cancelado) setLoadingSeries(false); });
+    return () => { cancelado = true; };
+  }, [materialId, aba, reloadToken]);
 
   const materialSelecionado = materiais.find((m) => m.id === parseInt(materialId, 10));
 
@@ -174,15 +214,43 @@ const LotesAlmoxarifado = () => {
     }
   };
 
+  // "Bloquear" e "Desbloquear" são a única decisão que esta ação oferece — o servidor só aceita
+  // a transição EM_ESTOQUE<->BLOQUEADA (mudarStatusSerie), então o destino é sempre o inverso do
+  // status atual da série, sem precisar de um select como no modal de status do lote.
+  const abrirSerieStatus = (s) => {
+    setSerieStatusTarget(s);
+    setSerieStatusJustificativa('');
+  };
+
+  const confirmarSerieStatus = async () => {
+    if (!serieStatusJustificativa.trim()) return;
+    const novoStatus = serieStatusTarget.status === 'EM_ESTOQUE' ? 'BLOQUEADA' : 'EM_ESTOQUE';
+    setSerieStatusSaving(true);
+    try {
+      await api.put(`/almoxarifado/series/${serieStatusTarget.id}/status`, {
+        status: novoStatus,
+        justificativa: serieStatusJustificativa.trim(),
+      });
+      toast.success('Status da série atualizado!');
+      setSerieStatusTarget(null);
+      loadLotes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao mudar status da série');
+    } finally {
+      setSerieStatusSaving(false);
+    }
+  };
+
   return (
     <div className="almox-page">
       <div className="almox-header">
         <div>
-          <h1>Lotes</h1>
+          <h1>Lotes e Séries</h1>
           <p>
-            {materialSelecionado
-              ? `${lotes.length} lote${lotes.length !== 1 ? 's' : ''} de ${materialSelecionado.nome}`
-              : 'Selecione um material para ver os lotes'}
+            {!materialSelecionado ? 'Selecione um material para ver os lotes e séries'
+              : aba === 'SERIES'
+                ? `${series.length} série${series.length !== 1 ? 's' : ''} de ${materialSelecionado.nome}`
+                : `${lotes.length} lote${lotes.length !== 1 ? 's' : ''} de ${materialSelecionado.nome}`}
           </p>
         </div>
         <div className="almox-header-actions">
@@ -192,7 +260,7 @@ const LotesAlmoxarifado = () => {
         </div>
       </div>
 
-      {/* Filtro — escolher o material primeiro, o GET de lotes é por material */}
+      {/* Filtro — escolher o material primeiro, os GETs de lotes e séries são por material */}
       <div className="almox-filters">
         <select className="almox-select" value={materialId} onChange={(e) => setMaterialId(e.target.value)}>
           <option value="">Selecionar material...</option>
@@ -200,7 +268,15 @@ const LotesAlmoxarifado = () => {
         </select>
       </div>
 
-      {/* Tabela */}
+      {/* Abas — Task 10: a Etapa 6 só tinha Lotes; Séries entra aqui porque o filtro (material) é
+          o mesmo e as duas listas se complementam (um lote pode ter várias séries dentro). */}
+      <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
+        <button className={aba === 'LOTES' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('LOTES')}>Lotes</button>
+        <button className={aba === 'SERIES' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('SERIES')}>Séries</button>
+      </div>
+
+      {/* Tabela — Lotes */}
+      {aba === 'LOTES' && (
       <div className="almox-table-container">
         {!materialId ? (
           <div className="almox-empty"><p>Selecione um material para ver os lotes</p></div>
@@ -317,6 +393,55 @@ const LotesAlmoxarifado = () => {
           </table>
         )}
       </div>
+      )}
+
+      {/* Tabela — Séries (Task 10) */}
+      {aba === 'SERIES' && (
+      <div className="almox-table-container">
+        {!materialId ? (
+          <div className="almox-empty"><p>Selecione um material para ver as séries</p></div>
+        ) : loadingSeries ? <SkeletonTable rows={6} columns={5} /> : series.length === 0 ? (
+          <div className="almox-empty"><p>Nenhuma série cadastrada para este material</p></div>
+        ) : (
+          <table className="almox-table">
+            <thead>
+              <tr>
+                <th>Número</th>
+                <th>Status</th>
+                <th>Lote</th>
+                <th>Localização</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {series.map((s) => {
+                const info = serieStatusInfo(s.status);
+                const podeMudarStatus = s.status === 'EM_ESTOQUE' || s.status === 'BLOQUEADA';
+                return (
+                  <tr key={s.id}>
+                    <td>{s.numero}</td>
+                    <td><span className={`almox-badge almox-badge-${info.cls}`}>{info.label}</span></td>
+                    <td style={{ fontSize: '0.85rem' }}>{s.lote_codigo || '—'}</td>
+                    <td style={{ fontSize: '0.85rem' }}>{s.localizacao_descricao || '—'}</td>
+                    <td>
+                      {podeMudarStatus && (
+                        <div className="almox-actions">
+                          <button className="almox-btn-icon"
+                            title={s.status === 'EM_ESTOQUE' ? 'Bloquear série' : 'Desbloquear série'}
+                            onClick={(e) => { if (!bloquearSeNaoPode('inspecionar', e)) return; abrirSerieStatus(s); }}>
+                            {s.status === 'EM_ESTOQUE' ? <FiLock /> : <FiUnlock />}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+      )}
 
       {/* Modal — mudar status */}
       {statusTarget && (
@@ -425,6 +550,39 @@ const LotesAlmoxarifado = () => {
               <button className="btn-almox-primary" disabled={certificadoSaving || !certificadoArquivo}
                 onClick={confirmarCertificado}>
                 {certificadoSaving ? 'Enviando...' : 'Anexar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal — bloquear/desbloquear série (Task 10) */}
+      {serieStatusTarget && (
+        <div className="almox-modal-overlay" onClick={() => { if (!serieStatusSaving) setSerieStatusTarget(null); }}>
+          <div className="almox-modal almox-modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>{serieStatusTarget.status === 'EM_ESTOQUE' ? 'Bloquear série' : 'Desbloquear série'}</h2>
+              <button className="almox-modal-close" onClick={() => setSerieStatusTarget(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}>
+                Série <strong>{serieStatusTarget.numero}</strong> — status atual{' '}
+                <span className={`almox-badge almox-badge-${serieStatusInfo(serieStatusTarget.status).cls}`}>
+                  {serieStatusInfo(serieStatusTarget.status).label}
+                </span>
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Justificativa<span className="required">*</span></label>
+                <textarea className="almox-input" rows={2} value={serieStatusJustificativa}
+                  placeholder="Por que o status desta série está mudando?"
+                  onChange={(e) => setSerieStatusJustificativa(e.target.value)} />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setSerieStatusTarget(null)}>Cancelar</button>
+              <button className="btn-almox-primary" disabled={serieStatusSaving || !serieStatusJustificativa.trim()}
+                onClick={confirmarSerieStatus}>
+                {serieStatusSaving ? 'Salvando...' : 'Confirmar'}
               </button>
             </div>
           </div>
