@@ -557,8 +557,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   }
 
   // ── Serie (Etapa 6b) ─────────────────────────────────────────────────────────
-  // Mesmo alcance e mesmas isencoes do exigeLote acima: so movimentacao manual
-  // (v1/v2) e recebimento declaram exigeSerie; entrega/exclusao de requisicao e
+  // Mesmo alcance e mesma decisao de desenho do exigeLote acima: exigeSerie so e
+  // declarado pelo CHAMADOR, nunca deduzido pelo motor. Hoje (Task 4) so a
+  // movimentacao manual (v1/v2) declara — recebimento ainda NAO declara exigeSerie
+  // (fica para a Task 6 desta etapa); entrega/exclusao de requisicao e
   // devolucao/sucata de devolucao continuam isentas ate as telas deles terem campo
   // de serie (pendencia declarada nas specs 04/12).
   const seriesEntrada = Array.isArray(params.series)
@@ -748,6 +750,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // aqui (fora do try) de propósito — o catch abaixo precisa dela para compensar; para qualquer
   // tipo que não seja entrada com série ela permanece [] e a compensação vira no-op.
   let seriesAfetadas = [];
+  // `seriesClaim` (Etapa 6b, Task 4): o equivalente de `seriesAfetadas` para o lado da SAÍDA —
+  // populada quando a saída reivindica série(s) especificas. Mesmo escopo aberto: usada depois do
+  // INSERT do ledger para vincular `movimentacao_saida_id`, no mesmo padrão de `seriesAfetadas`.
+  let seriesClaim = [];
   let result;
 
   // Envolve aplicação física + linha de saldo + INSERT do ledger: se a série já foi criada
@@ -913,6 +919,43 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         [quantidade, saldo.id]);
     }
     if (tiposSaida.includes(tipo)) {
+      // Reverte SÓ o físico agregado (quantidade_atual [+ reserva]) desta saída — nunca a(s)
+      // linha(s) de saldo por localização/lote, que cada chamador reverte à sua maneira (ver os
+      // dois usos abaixo). Fatorado do que já era a compensação do claim de lote (achado do
+      // round 1 daquela task) para servir também à compensação do claim de série (Etapa 6b,
+      // Task 4) sem duplicar o bloco reserva+material pela terceira vez.
+      const reverterFisicoDaSaida = async () => {
+        if (consumindoReserva) {
+          // Achado do review round 1 (claim de lote): compensar só quantidade_atual não bastava
+          // quando a saída consumia reserva — o claim da reserva e o débito de
+          // quantidade_reservada/quantidade_atual já tinham acontecido. Sem desfazer os três, a
+          // reserva ficava "queimada" (quantidade_utilizada maior, e às vezes status CONSUMIDA)
+          // sem NENHUMA saída física real ter ocorrido — reserva de outra OS perdida, e o
+          // disponível do material inflado (quantidade_reservada a menos do que deveria).
+          await dbRun(db, `UPDATE materiais_almoxarifado
+            SET quantidade_atual = quantidade_atual + ?,
+                quantidade_reservada = COALESCE(quantidade_reservada,0) + ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?`, [quantidade, quantidade, material_id]);
+          await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = MAX(0, quantidade_utilizada - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [quantidade, reserva_id]);
+          // A reserva só vira CONSUMIDA dentro desta mesma chamada, quando zera — reverter para
+          // ATIVA aqui é seguro porque o claim atômico do topo já exigiu status = 'ATIVA' para a
+          // execução sequer chegar até este ponto.
+          await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'ATIVA', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'CONSUMIDA'", [reserva_id]);
+        } else {
+          await dbRun(db, `UPDATE materiais_almoxarifado
+            SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [quantidade, material_id]);
+        }
+      };
+      // `saldoLinhasParaReverter` (Etapa 6b, Task 4): registra a(s) linha(s) de saldo que este
+      // bloco efetivamente debitou, para a compensação do claim de série logo abaixo poder
+      // devolver exatamente o que foi tirado. Diferente da compensação do claim de LOTE (que não
+      // precisa disto: `claimSaldoDoLote` já autocompensa as próprias linhas por dentro quando
+      // FALHA — ver a docstring dela), aqui o débito físico já teve SUCESSO quando o claim de
+      // série roda, então a reversão da(s) linha(s) é responsabilidade deste bloco.
+      let saldoLinhasParaReverter = [];
       if (loteIdFinal && !permiteNegativo) {
         // Guarda no WHERE, como o resto do motor. Sem isto a subtracao negativa a linha do lote em
         // silencio: a guarda de saldo insuficiente la em cima compara com o disponivel do
@@ -928,42 +971,46 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           // consumia reserva, ou ~460-468 no caminho simples) antes deste claim rodar — não há
           // transação neste módulo, então recusar aqui sem devolver deixaria quantidade_atual
           // debitado sem contrapartida (trocaria um bug pelo outro). Compensa antes de lançar.
-          if (consumindoReserva) {
-            // Achado do review round 1: compensar só quantidade_atual não bastava quando a saída
-            // consumia reserva — o claim da reserva (linha ~421-426) e o débito de
-            // quantidade_reservada/quantidade_atual (linha ~439-452) já tinham acontecido. Sem
-            // desfazer os três, a reserva ficava "queimada" (quantidade_utilizada maior, e às
-            // vezes status CONSUMIDA) sem NENHUMA saída física real ter ocorrido — reserva de
-            // outra OS perdida, e o disponível do material inflado (quantidade_reservada a menos
-            // do que deveria). O precedente é a própria compensação em ~446-451, que já desfaz
-            // quantidade_utilizada à mão quando o claim físico falha; aqui espelhamos o mesmo
-            // padrão para o físico + a reserva juntos.
-            await dbRun(db, `UPDATE materiais_almoxarifado
-              SET quantidade_atual = quantidade_atual + ?,
-                  quantidade_reservada = COALESCE(quantidade_reservada,0) + ?,
-                  updated_at = CURRENT_TIMESTAMP
-              WHERE id = ?`, [quantidade, quantidade, material_id]);
-            await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = MAX(0, quantidade_utilizada - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-              [quantidade, reserva_id]);
-            // A reserva só vira CONSUMIDA DENTRO desta mesma chamada (linha ~456), quando zera —
-            // reverter para ATIVA aqui é seguro porque o claim atômico do topo (linha ~421-426)
-            // exigiu status = 'ATIVA' para a execução sequer chegar até aqui.
-            await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'ATIVA', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'CONSUMIDA'", [reserva_id]);
-          } else {
-            await dbRun(db, `UPDATE materiais_almoxarifado
-              SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-              [quantidade, material_id]);
-          }
+          await reverterFisicoDaSaida();
           throw Object.assign(
             new Error(`Saldo insuficiente no lote ${loteCodigoFinal}. Disponível: ${claim.disponivel} ${material.unidade}`),
             { status: 400 });
         }
+        saldoLinhasParaReverter = claim.linhas;
       } else {
         // Sem lote (ou material que permite saldo negativo): a linha continua sendo criada, porque
         // aqui ela PODE ficar negativa e precisa existir para `syncMaterialTotals` somar.
         const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [quantidade, saldo.id]);
+        saldoLinhasParaReverter = [{ id: saldo.id, quantidade }];
+      }
+
+      // Serie (Etapa 6b, Task 4): reivindica as series ESPECIFICAS depois que o debito fisico ja
+      // aconteceu acima (agregado + linha de saldo) — cardinalidade (N series para N unidades) ja
+      // foi validada mais cedo por `serieObrigatoria`, entao aqui e so o claim linha a linha.
+      // `claimSaidaSeries` JA se autocompensa por dentro (nao deixa claim parcial de series numa
+      // falha no meio da lista — ver a docstring dela), mas o debito FISICO desta saida (linha(s)
+      // de saldo + quantidade_atual [+ reserva]) e responsabilidade DESTE bloco reverter: nao ha
+      // transacao neste modulo, e sem isto uma serie de outro material, BLOQUEADA, ou fora do
+      // lote da saida deixaria quantidade_atual debitado sem contrapartida — exatamente o Critical
+      // do review da Task 3 (saida aceitava serie_ids, debitava o saldo, e nunca tocava
+      // series_almoxarifado; aqui e o inverso perigoso: se so o saldo fosse debitado e a serie
+      // recusada, o invariante COUNT(serie)==quantidade_atual quebraria do mesmo jeito).
+      if (serieObrigatoria) {
+        try {
+          seriesClaim = await seriesService.claimSaidaSeries(db, user, {
+            material_id, serie_ids: serieIdsSaida, lote_id: loteIdFinal, tipo, movimentacao_id: null,
+          });
+        } catch (e) {
+          for (const l of saldoLinhasParaReverter) {
+            await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+              SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+              [l.quantidade, l.id]);
+          }
+          await reverterFisicoDaSaida();
+          throw e;
+        }
       }
     }
     if (tiposAjuste.includes(tipo) && !localizacao_destino_id) {
@@ -1014,6 +1061,16 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     await dbRun(db, `UPDATE series_almoxarifado SET movimentacao_entrada_id = ?
       WHERE id IN (${seriesAfetadas.map(() => '?').join(',')})`,
       [result.lastID, ...seriesAfetadas.map((a) => a.linha.id)]);
+  }
+  // Vínculo série → movimentação de SAÍDA (Etapa 6b, Task 4): mesmo raciocínio e mesma janela que
+  // a entrada acima — `claimSaidaSeries` roda com `movimentacao_id: null` porque o id do ledger
+  // ainda não existia, então o vínculo é completado aqui, fora do try. É este UPDATE que fecha o
+  // Critical do review da Task 3: sem ele a saída debitava o saldo e nunca tocava
+  // `series_almoxarifado`.
+  if (seriesClaim.length > 0) {
+    await dbRun(db, `UPDATE series_almoxarifado SET movimentacao_saida_id = ?
+      WHERE id IN (${seriesClaim.map(() => '?').join(',')})`,
+      [result.lastID, ...seriesClaim.map((c) => c.linha.id)]);
   }
 
   await registrarAuditoria(db, {
