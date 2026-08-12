@@ -47,7 +47,7 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
 async function registrarDevolucao(db, user, data) {
   const {
     material_id, quantidade, motivo, condicao, destino, origem_os_id, origem_projeto_id,
-    observacoes, localizacao_id, movimentacao_saida_id, lote_id,
+    observacoes, localizacao_id, movimentacao_saida_id, lote_id, series,
   } = data;
   if (!material_id || !quantidade || !motivo) {
     throw Object.assign(new Error('material_id, quantidade e motivo são obrigatórios'), { status: 400 });
@@ -73,6 +73,38 @@ async function registrarDevolucao(db, user, data) {
   // com controle_lote — herdar num material sem controle criaria linhas de saldo quebradas por
   // lote sem que ninguem tenha pedido isso.
   const loteFinalId = lote_id || (material.controle_lote && saidaOriginal ? saidaOriginal.lote_id : null) || null;
+
+  // ── Serie na devolucao (Etapa 7, Task 5 — decisao 10 do design) ──────────────────────────────
+  // Coberta so nos destinos ESTOQUE e QUARENTENA, onde o motor sabe reativar a serie ENTREGUE de
+  // volta a EM_ESTOQUE por um caminho unico (seriesService.entradaSeries, com guarda no WHERE).
+  //
+  // POR QUE SUCATA E RETRABALHO FICAM DE FORA: suportar sucata direta exigiria encadear entrada
+  // de serie + saida de serie com compensacao no meio, e este modulo NAO TEM TRANSACAO — uma
+  // falha entre as duas pernas deixaria a serie num estado que ninguem desfaz (mesma familia de
+  // problema que obrigou a pre-validacao do lote de sucata logo abaixo). O caminho de dois passos
+  // ja funciona hoje e e seguro: devolver ao estoque e depois sucatear na tela Movimentacoes, que
+  // ja tem seletor de serie. Por isso o erro abaixo ENSINA esse caminho em vez de so negar —
+  // recusa que nao diz para onde ir transforma limitacao declarada em beco sem saida. E ignorar
+  // `series` em silencio seria pior ainda: o operador acharia que registrou a peca.
+  //
+  // A limitacao e "nao da para informar a serie nesses destinos", nao "material serializado nao
+  // pode ir para sucata": sem `series`, SUCATA continua passando — a ENTRADA_DEVOLUCAO entra sem
+  // serie e a SUCATA sai logo depois, saldo liquido zero, e o invariante da Etapa 6b
+  // (COUNT(series presentes) == quantidade_atual) fecha no fim da operacao.
+  const destinoAceitaSerie = destinoFinal === 'ESTOQUE' || destinoFinal === 'QUARENTENA';
+  const seriesInformadas = Array.isArray(series) ? series.map((s) => String(s).trim()).filter(Boolean) : [];
+  if (!destinoAceitaSerie && seriesInformadas.length > 0) {
+    throw erro400(`Devolução com número de série não é suportada no destino ${destinoFinal}. `
+      + 'Devolva ao estoque e, em seguida, registre a baixa na tela Movimentações, que tem seletor de série.');
+  }
+  // Cardinalidade conferida AQUI, antes do INSERT da devolucao — o motor tambem confere, mas ele
+  // so roda depois que a linha de `devolucoes_material_almoxarifado` ja existe, e uma devolucao
+  // gravada sem movimentacao nenhuma continuaria contando no `saldo_devolvivel` da saida citada,
+  // encolhendo para sempre o que ainda pode ser devolvido.
+  if (destinoAceitaSerie && material.controle_serie && seriesInformadas.length !== Number(quantidade)) {
+    throw erro400(`Material com controle de série: informe ${quantidade} número(s) de série para `
+      + `${quantidade} unidade(s) devolvida(s) — recebidos ${seriesInformadas.length}`);
+  }
 
   // ARMADILHA do destino SUCATA: ele faz ENTRADA_DEVOLUCAO e DEPOIS SUCATA (correcao do bug de
   // saldo). A guarda de status do lote vive no ramo de SAIDA do motor, entao um lote
@@ -108,14 +140,19 @@ async function registrarDevolucao(db, user, data) {
   // da saida quando ha vinculo, seletor na tela quando e avulsa). Continua no 4o argumento,
   // nunca no body.
   const opcoes = { exigeLote: true };
+  // `exigeSerie` so onde a serie e suportada — declarar nos destinos SUCATA/RETRABALHO travaria a
+  // devolucao de material serializado para eles sem oferecer caminho nenhum. Continua no 4o
+  // argumento, nunca no body.
+  const opcoesEntrada = { exigeLote: true, exigeSerie: destinoAceitaSerie };
 
   if (destinoFinal === 'ESTOQUE' || destinoFinal === 'QUARENTENA') {
     await registrarMovimentacao(db, user, {
       material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
       motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
       localizacao_destino_id: localizacao_id, lote_id: loteFinalId,
+      series: seriesInformadas,
       justificativa: observacoes, referencia,
-    }, opcoes);
+    }, opcoesEntrada);
     if (destinoFinal === 'QUARENTENA') {
       await registrarMovimentacao(db, user, {
         material_id, tipo: 'BLOQUEIO', quantidade, motivo: 'Devolução para quarentena',
@@ -134,8 +171,9 @@ async function registrarDevolucao(db, user, data) {
       material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
       motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
       localizacao_destino_id: localizacao_id, lote_id: loteFinalId,
+      series: seriesInformadas,
       justificativa: observacoes, referencia,
-    }, opcoes);
+    }, opcoesEntrada);
     await registrarMovimentacao(db, user, {
       material_id, tipo: 'SUCATA', quantidade, motivo, os_id: origem_os_id,
       localizacao_origem_id: localizacao_id, lote_id: loteFinalId,

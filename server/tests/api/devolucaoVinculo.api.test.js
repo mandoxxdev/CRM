@@ -20,6 +20,7 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
+const { assertInvarianteSerie } = require('../helpers/serieInvariante');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -393,6 +394,154 @@ async function entregar(db, materialId, qtd, extra = {}) {
   await test('saidas-elegiveis sem material_id responde 400', async () => {
     const res = await request(app).get('/api/almoxarifado/devolucoes/saidas-elegiveis');
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+  });
+
+  // ── Serie na devolucao (Task 5, decisao 10) ─────────────────────────────────────────────────
+
+  /** Entra com N series, entrega a primeira e devolve { saidaId, series }. */
+  async function entregarComSerie(materialId, numeros) {
+    const entrada = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: materialId, tipo: 'ENTRADA', quantidade: numeros.length, series: numeros, motivo: 'setup' });
+    assert.strictEqual(entrada.status, 201, JSON.stringify(entrada.body));
+    const series = await dbAll(db, 'SELECT id, numero FROM series_almoxarifado WHERE material_id = ? ORDER BY numero', [materialId]);
+    const saida = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: materialId, tipo: 'SAIDA', quantidade: 1, serie_ids: [series[0].id], justificativa: 'entregue' });
+    assert.strictEqual(saida.status, 201, JSON.stringify(saida.body));
+    return { saidaId: saida.body.id, series };
+  }
+  const serieRow = (id) => dbGet(db, 'SELECT * FROM series_almoxarifado WHERE id = ?', [id]);
+  const statusDaSerie = async (id) => (await serieRow(id)).status;
+
+  // "A rota respondeu 201" nao prova NADA sobre serie: o saldo pode ter voltado com a peca ainda
+  // marcada como entregue. Por isso este teste le a LINHA da serie no banco — status, vinculo de
+  // entrada e o vinculo de saida que tem de ser anulado — e ainda cobra o invariante da Etapa 6b.
+  await test('devolucao de material com serie reativa a serie da saida', async () => {
+    const mat = await novoMaterial(db, { serie: true });
+    const { saidaId, series } = await entregarComSerie(mat, ['SN-DEV-1', 'SN-DEV-2']);
+    assert.strictEqual(await statusDaSerie(series[0].id), 'ENTREGUE');
+
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 1, motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE',
+              movimentacao_saida_id: saidaId, series: ['SN-DEV-1'] });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+
+    const linha = await serieRow(series[0].id);
+    assert.strictEqual(linha.status, 'EM_ESTOQUE',
+      'a serie devolvida continuou ENTREGUE — o saldo voltou sem a peca correspondente');
+
+    // A entrada de devolucao TEM de ficar gravada na serie: sem isso a peca volta ao estoque sem
+    // dizer por qual lancamento voltou, e o estorno dessa entrada nao teria como encontra-la.
+    const movs = await movimentosDoMaterial(db, mat);
+    const entradaDevolucao = movs.filter((m) => m.tipo === 'ENTRADA_DEVOLUCAO').pop();
+    assert.ok(entradaDevolucao, 'nenhuma ENTRADA_DEVOLUCAO foi emitida');
+    assert.strictEqual(linha.movimentacao_entrada_id, entradaDevolucao.id,
+      `a serie nao aponta para a ENTRADA_DEVOLUCAO que a trouxe de volta: ${linha.movimentacao_entrada_id}`);
+    assert.strictEqual(linha.movimentacao_saida_id, null,
+      'a serie voltou ao estoque ainda apontando para a saida antiga');
+    await assertInvarianteSerie(db, mat);
+  });
+
+  await test('devolucao ao estoque de material com serie sem informar a serie e recusada', async () => {
+    const mat = await novoMaterial(db, { serie: true });
+    const { saidaId } = await entregarComSerie(mat, ['SN-DEV-3']);
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 1, motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE', movimentacao_saida_id: saidaId });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    // `s[ée]rie` e nao `serie`: a recusa vem do returnService, cujas mensagens sao acentuadas. O
+    // plano assumia a mensagem do motor (sem acento) — assert /serie/i sozinho quebraria aqui.
+    assert.match(res.body.error || '', /s[ée]rie/i);
+    // A recusa acontece ANTES do INSERT da devolucao. Uma linha gravada sem movimentacao nenhuma
+    // continuaria somando em `quantidade_devolvida` e encolheria para sempre o saldo devolvivel
+    // da saida citada.
+    const devs = await dbAll(db, 'SELECT id FROM devolucoes_material_almoxarifado WHERE material_id = ?', [mat]);
+    assert.strictEqual(devs.length, 0, 'a devolucao recusada por falta de serie ficou gravada na tabela');
+  });
+
+  await test('devolucao para quarentena tambem aceita serie', async () => {
+    const mat = await novoMaterial(db, { serie: true });
+    const { saidaId, series } = await entregarComSerie(mat, ['SN-DEV-4']);
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 1, motivo: 'ITEM_ERRADO', condicao: 'SUSPEITA', destino: 'QUARENTENA',
+              movimentacao_saida_id: saidaId, series: ['SN-DEV-4'] });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    assert.strictEqual(await statusDaSerie(series[0].id), 'EM_ESTOQUE');
+    await assertInvarianteSerie(db, mat);
+  });
+
+  // Decisao 10: sucatear peca serializada direto na devolucao esta FORA de escopo. O erro tem de
+  // ensinar o caminho de dois passos, nao so recusar.
+  await test('devolucao para sucata de material com serie recusa e explica o caminho', async () => {
+    const mat = await novoMaterial(db, { serie: true });
+    const { saidaId } = await entregarComSerie(mat, ['SN-DEV-5']);
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 1, motivo: 'DANIFICADO', destino: 'SUCATA',
+              movimentacao_saida_id: saidaId, series: ['SN-DEV-5'] });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.match(res.body.error || '', /Movimenta/i,
+      `o erro tem de apontar a tela de Movimentacoes como caminho: ${res.body.error}`);
+    // Recusa antes de QUALQUER efeito: a devolucao nao pode ficar gravada sem movimentacao.
+    const devs = await dbAll(db, 'SELECT id FROM devolucoes_material_almoxarifado WHERE material_id = ?', [mat]);
+    assert.strictEqual(devs.length, 0, 'a devolucao recusada ficou gravada na tabela');
+  });
+
+  await test('devolucao para retrabalho de material com serie recusa e explica o caminho', async () => {
+    const mat = await novoMaterial(db, { serie: true });
+    const { saidaId } = await entregarComSerie(mat, ['SN-DEV-6']);
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 1, motivo: 'RECUPERAVEL', destino: 'RETRABALHO',
+              movimentacao_saida_id: saidaId, series: ['SN-DEV-6'] });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.match(res.body.error || '', /Movimenta/i, res.body.error);
+  });
+
+  // A PORTA QUE A DECISAO 10 NAO PODE FECHAR: devolucao AVULSA (sem movimentacao_saida_id) de
+  // material serializado. Nao ha saida de onde herdar as series, entao os numeros vem digitados —
+  // e o motor aceita tanto numero novo quanto numero que voltou de ENTREGUE. Se `exigeSerie`
+  // tivesse sido declarado sem este caminho existir, devolver peca serializada sem citar entrega
+  // ficaria impossivel e a limitacao declarada viraria travamento.
+  await test('devolucao AVULSA de material com serie continua possivel com series digitadas', async () => {
+    const mat = await novoMaterial(db, { serie: true });
+    const entrada = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'ENTRADA', quantidade: 1, series: ['SN-AVU-1'], motivo: 'setup' });
+    assert.strictEqual(entrada.status, 201, JSON.stringify(entrada.body));
+    const [serieA] = await dbAll(db, 'SELECT id, numero FROM series_almoxarifado WHERE material_id = ?', [mat]);
+    // Sai por um caminho que a devolucao NAO cita (o caso real: entrega antiga, sem registro).
+    const saida = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'SAIDA', quantidade: 1, serie_ids: [serieA.id], justificativa: 'entregue' });
+    assert.strictEqual(saida.status, 201, JSON.stringify(saida.body));
+
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 1, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', series: ['SN-AVU-1'] });
+    assert.strictEqual(res.status, 201,
+      `devolucao avulsa de material serializado ficou impossivel: ${JSON.stringify(res.body)}`);
+    const linha = await serieRow(serieA.id);
+    assert.strictEqual(linha.status, 'EM_ESTOQUE', 'a serie da devolucao avulsa nao voltou ao estoque');
+    assert.strictEqual(linha.movimentacao_saida_id, null);
+    await assertInvarianteSerie(db, mat);
+  });
+
+  // A limitacao declarada NAO e "material serializado nao pode ir para sucata por devolucao": e
+  // "nao da para informar a serie ali". Sem `series`, o destino SUCATA continua passando — a
+  // entrada entra sem serie e a SUCATA sai logo depois, saldo liquido zero, invariante fechado.
+  await test('devolucao para sucata de material com serie SEM series passa e mantem o invariante', async () => {
+    const mat = await novoMaterial(db, { serie: true });
+    const { saidaId } = await entregarComSerie(mat, ['SN-DEV-7', 'SN-DEV-8']);
+    const antes = await totalDoMaterial(db, mat);
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 1, motivo: 'DANIFICADO', destino: 'SUCATA', movimentacao_saida_id: saidaId });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    assert.strictEqual(await totalDoMaterial(db, mat), antes, 'a sucata mexeu no saldo liquido');
+    await assertInvarianteSerie(db, mat);
+  });
+
+  // CONTROLE POSITIVO da guarda de serie: material SEM controle_serie continua devolvendo sem
+  // nada disso — se a exigencia tivesse ficado ampla demais, este teste falharia.
+  await test('[controle positivo] material sem controle de serie devolve sem informar serie', async () => {
+    const mat = await novoMaterial(db, { qtd: 20 });
+    const saidaId = await entregar(db, mat, 5);
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 2, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaId });
+    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
   });
 
   await close();

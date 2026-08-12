@@ -1512,7 +1512,7 @@ EOF
 > destinos `SUCATA`/`RETRABALHO`, e mandar `series` para eles tem de dar 400 **explicando o
 > caminho** — silenciosamente ignorar deixaria o operador achando que registrou a série.
 
-- [ ] **Step 1: escrever os testes que falham** — acrescentar em `server/tests/api/devolucaoVinculo.api.test.js`, antes do `await close();`:
+- [x] **Step 1: escrever os testes que falham** — acrescentar em `server/tests/api/devolucaoVinculo.api.test.js`, antes do `await close();`:
 
 ```js
   // ── Serie na devolucao (Task 5, decisao 10) ─────────────────────────────────────────────────
@@ -1586,12 +1586,33 @@ EOF
   });
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd server && node tests/api/devolucaoVinculo.api.test.js`
 Expected: falham `devolucao de material com serie reativa a serie da saida` (a série continua `ENTREGUE` — o `series` do body hoje é ignorado pelo `returnService`), `devolucao ao estoque ... sem informar a serie e recusada` (vem 201) e `devolucao para sucata ... recusa e explica o caminho` (vem 201).
 
-- [ ] **Step 3: implementar** — em `server/services/almoxarifado/returnService.js`:
+> **Executado em 2026-08-12 — estado inicial: `21 passed, 6 failed`.** Além dos três previstos,
+> falharam os três testes acrescentados nesta execução (ver correções abaixo): `devolucao para
+> quarentena tambem aceita serie` (série ficou `ENTREGUE`), `devolucao para retrabalho ... recusa
+> e explica o caminho` (veio 201) e `devolucao AVULSA de material com serie continua possivel com
+> series digitadas` (série não voltou ao estoque). O teste `devolucao para sucata de material com
+> serie SEM series passa e mantem o invariante` **passou desde já** — é preservação, não feature.
+>
+> **O que o plano não previa, e a execução mostrou (três pontos):**
+>
+> 1. **`RETRABALHO` precisava de teste próprio.** O plano só testava a recusa em `SUCATA`. Como
+>    `destinoAceitaSerie` é uma constante única, a recusa vale para os dois — mas sem teste isso
+>    era coincidência, não garantia. Teste acrescentado.
+> 2. **A devolução AVULSA de material serializado é a porta que a decisão 10 não pode fechar** —
+>    e o plano não tinha teste para ela. Sem `movimentacao_saida_id` não há saída de onde herdar as
+>    séries, então os números vêm digitados; `entradaSeries` aceita tanto número novo quanto número
+>    que voltou de `ENTREGUE`, então o caminho funciona. Teste acrescentado, e ele **falhava** no
+>    estado inicial (pelo mesmo motivo dos outros: `series` era ignorado).
+> 3. **`assert.match(res.body.error, /serie/i)` do plano é frágil.** Ele só casava porque a
+>    mensagem que vinha era a do **motor** (sem acento). Toda mensagem do `returnService` é
+>    acentuada (`série`), então a regex passou a ser `/s[ée]rie/i`.
+
+- [x] **Step 3: implementar** — em `server/services/almoxarifado/returnService.js`:
 
 3a. acrescentar `series` à desestruturação de `data` no topo de `registrarDevolucao`:
 
@@ -1649,19 +1670,50 @@ acrescentar `series: seriesInformadas` ao objeto de params e trocar o 4º argume
 (na do destino `SUCATA`, `opcoesEntrada` tem `exigeSerie: false` porque `destinoAceitaSerie` é
 falso ali — é a mesma constante, calculada uma vez; a saída `SUCATA` continua com `opcoes`.)
 
-- [ ] **Step 4: rodar e ver passar**
+- [x] **Step 4: rodar e ver passar**
 
 Run: `cd server && node tests/api/devolucaoVinculo.api.test.js`
 Expected: `21 passed, 0 failed`.
 
 Controle positivo (obrigatório, e desfazer depois): trocar `exigeSerie: destinoAceitaSerie` por `exigeSerie: false` e confirmar que `devolucao ao estoque de material com serie sem informar a serie e recusada` falha; restaurar.
 
-- [ ] **Step 5: suítes de servidor inteiras**
+> **Executado em 2026-08-12: `27 passed, 0 failed`** (não 21 — o plano contava a partir de um
+> arquivo com 16 testes; a Task 4 o deixou com 19, e esta task somou 8, não 5, pelos motivos do
+> Step 2).
+>
+> **O controle positivo do plano estava apontado para o alvo errado.** Trocar `exigeSerie:
+> destinoAceitaSerie` por `exigeSerie: false` **não** derruba `devolucao ao estoque ... sem
+> informar a serie e recusada`, porque a cardinalidade passou a ser conferida no próprio
+> `returnService` (ver correção 4 abaixo). O que essa neutralização derruba é o efeito real:
+> **`24 passed, 3 failed`** — `reativa a serie da saida`, `quarentena tambem aceita serie` e
+> `devolucao AVULSA ... com series digitadas`, os três lendo o **status da série no banco**, não o
+> status HTTP. Restaurado, `git diff` limpo no trecho.
+>
+> **Segundo controle positivo, do achado desta task** — neutralizar a pré-validação de
+> cardinalidade (`if (false && material.controle_serie && ...)`): **`26 passed, 1 failed`**, e a
+> falha é `a devolucao recusada por falta de serie ficou gravada na tabela`. Note que o HTTP
+> continua **400** nesse estado: o motor recusa igual. Só a leitura do banco mostra o estrago.
+> Restaurado.
+>
+> 4. **BUG QUE ESTA TASK ENCONTROU E CORRIGIU — linha órfã em `devolucoes_material_almoxarifado`.**
+>    O `INSERT` da devolução acontece **antes** das movimentações (precisa do `id` para montar
+>    `referencia: DEV-<id>`). Se a movimentação falhar depois, a linha da devolução **fica**. Isso
+>    não é cosmético: `validarSaidaOriginal` e `saldo_devolvivel` somam `quantidade` das devoluções
+>    daquela saída — uma devolução que nunca movimentou nada **encolhe para sempre** o que ainda
+>    pode ser devolvido da entrega citada. O plano mandava confiar na guarda de `exigeSerie` do
+>    motor, que roda tarde demais. Por isso a implementação confere a cardinalidade de séries
+>    **antes do INSERT**, no mesmo padrão da pré-validação do lote de sucata da Task 3.
+>    **Pendência declarada (fora do escopo desta task):** o mesmo buraco existe pelo lado do
+>    `exigeLote` da Task 3 — devolução de material com `controle_lote` sem lote informado também
+>    deixa a linha órfã. O conserto correto para os dois é gravar a devolução depois das
+>    movimentações (ou apagar a linha na compensação); fica para a Task 8 avaliar.
+
+- [x] **Step 5: suítes de servidor inteiras**
 
 Run: `cd server && npm run test:api` — atenção a `serieEstornoDevolucao.api.test.js` e `serieControleObrigatorio.api.test.js` (nenhum deles chama `returnService`, confirmado em 2026-08-12; se algum quebrar, é sinal de que o alcance de `exigeSerie` ficou maior do que esta task pediu).
 Run: `cd server && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`.
 
-- [ ] **Step 6: commit**
+- [x] **Step 6: commit**
 
 ```bash
 git add server/services/almoxarifado/returnService.js \
