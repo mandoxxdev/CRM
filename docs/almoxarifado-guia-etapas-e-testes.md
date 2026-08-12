@@ -2,10 +2,40 @@
 
 > Atualizado em 2026-08-12 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 8) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 8b) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-12
+> ## Onde o desenvolvimento parou — 2026-08-12 (Etapa 8b)
 >
+> **Etapas 1 a 8b completas.** A **Etapa 8b (Remessas a Terceiros) fechou em 2026-08-12**
+> (`0a01124..b176212`). **Próxima etapa da ordem: Etapa 8c — transformação** (chapa que sai e volta
+> como peças cortadas + sobra), que é a **outra metade da feature 14** e ainda não tem design.
+>
+> **A Etapa 8b fez o material que vai beneficiar fora parar de sumir do controle.** Antes, quando
+> uma chapa ia para o galvanizador, ou alguém dava baixa — e ela **desaparecia do patrimônio**,
+> embora continuasse sendo da empresa — ou não dava baixa nenhuma, e o sistema **afirmava que a
+> chapa estava na prateleira** com ela a 40 km. Agora existe a tela **Almoxarifado → Remessas a
+> Terceiros**: a remessa tem terceiro, tipo de serviço, prazo e itens; ao **enviar**, o material
+> **sai do disponível e continua no total**; o retorno pode ser **parcial**, quantas vezes for
+> preciso; e **encerrar deixando saldo lá fora exige dizer para onde ele foi** (perda no terceiro
+> ou consumido no processo), o que dá baixa de verdade em vez de deixar saldo preso. Tem **PDF do
+> documento de remessa** com duas linhas de assinatura. Ver a seção "Etapa 8b", mais abaixo, para as
+> regras demonstráveis e o roteiro completo.
+>
+> **✅ NADA A RODAR EM PRODUÇÃO POR CAUSA DESTA ETAPA.** Diferente das Etapas 7 e 8, a 8b só
+> **acrescenta** uma coluna e três tabelas novas — **nenhum dado existente é tocado ou
+> reinterpretado**, e não há passado a corrigir. Isso está dito explicitamente porque as duas
+> etapas anteriores deixaram consultas pendentes e você vai procurar a desta. (As consultas das
+> Etapas 7 e 8 **continuam pendentes** — ver os blocos abaixo.)
+>
+> **⚠️ DUAS COISAS DA ETAPA 8b QUE DEPENDEM DE VOCÊ, NÃO DO CÓDIGO** (detalhadas na seção da
+> Etapa 8b, em "O que depende de você"):
+> 1. **"Uma remessa não pode misturar materiais de donos diferentes" foi DEDUZIDO, não pedido.** O
+>    sistema hoje recusa. Se a GMP manda chapa de dois clientes na mesma viagem para o mesmo
+>    galvanizador, **a regra está errada** e precisa mudar. É pergunta, não requisito atendido.
+> 2. **Falta a conferida no navegador** dos cinco selos coloridos de status e do PDF baixando
+>    legível — teste automático não abre navegador e não valida nem cor nem PDF.
+>
+> **Antes: 2026-08-12 (Etapa 8).**
 > **Etapas 1 a 8 completas.** A **Etapa 8 (Materiais de Clientes) fechou em 2026-08-12**
 > (`f26b635..5b5eb55`). **Próxima etapa da ordem: Etapa 8b — Materiais em Terceiros** (a Etapa 8 do
 > planejamento foi **dividida**: 8 = clientes, entregue; 8b = terceiros, ainda sem design).
@@ -1528,7 +1558,8 @@ SELECT COUNT(*) AS total,
 ### O que a Etapa 8 **não** cobre
 
 - **Materiais enviados a terceiros** (a chapa **nossa** que vai para o fornecedor beneficiar) —
-  é a feature 14 e virou a **Etapa 8b**, próxima da ordem. Nada dela existe hoje.
+  é a feature 14 e virou a **Etapa 8b**, **entregue no mesmo dia** (ver a seção "Etapa 8b" logo
+  abaixo). O que continua fora é a **transformação** (chapa → peças cortadas), que é a Etapa 8c.
 - **E-mails específicos de material de cliente** (avisar gestor do projeto, comercial, engenharia)
   — feature 19.
 - **Sobras vinculadas ao proprietário** — o retalho que sobra da chapa do cliente ainda não fica
@@ -1543,6 +1574,199 @@ SELECT COUNT(*) AS total,
 - **Seleção de cliente na movimentação.** O dono vem da **linha do material**, não de um seletor na
   hora do lançamento — é assim de propósito: a chapa do Cliente X tem certificado e corrida
   próprios e não pode ser trocada pela do Cliente Y, então são duas linhas de catálogo.
+
+> **Correção declarada (2026-08-12):** o primeiro item desta lista dizia *"Materiais enviados a
+> terceiros … Nada dela existe hoje"*. Isso **envelheceu no mesmo dia** — a Etapa 8b foi entregue
+> logo depois e o ciclo de remessa e retorno existe. O item foi corrigido acima em vez de apagado,
+> porque a afirmação chegou a ser verdadeira e alguém pode tê-la lido.
+
+---
+
+## Etapa 8b — Remessas a Terceiros (ENTREGUE — 2026-08-12)
+
+**O que é:** o material **nosso** (ou do cliente) que sai do prédio para alguém beneficiar — corte,
+dobra, usinagem, tratamento, pintura, galvanização — e depois volta. É o **oposto** da Etapa 8: lá
+o material de **outro** estava **conosco**; aqui o material fica **fora**, e continua sendo nosso.
+
+**Não confundir com as duas telas vizinhas:**
+
+| Tela | O material está... | Etapa |
+|---|---|---|
+| **Devoluções** | voltando **para** o estoque, vindo do chão de fábrica | 7 |
+| **Materiais de Clientes** | **aqui**, mas é de outro dono | 8 |
+| **Remessas a Terceiros** | **fora do prédio**, e é nosso (ou de um cliente nosso) | **8b** |
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Chapa que vai galvanizar **some do controle**: ou baixa que apaga o patrimônio, ou nenhuma baixa e o sistema mente sobre a prateleira | Sai do **disponível** e **continua no total**, com documento, terceiro e prazo |
+| Não existia tela, tabela nem rota — a feature 14 estava vazia | Tela **Almoxarifado → Remessas a Terceiros**, com criar / enviar / receber retorno / encerrar / cancelar |
+| Não havia como saber o que está em cada terceiro | Lista com o terceiro, o serviço, o prazo e o status; filtro por status; e selo vermelho **Vencida** quando o prazo passou e ainda há material lá fora |
+| Retorno parcial não existia | Vários retornos por remessa, com teto que soma o que já voltou, **por item** |
+| O que não voltava ficava indefinido para sempre | Encerrar exige **destino** (Perda no terceiro / Consumido no processo) + justificativa, e dá **baixa de verdade** |
+| A contagem de inventário cobraria material que está a 40 km | O esperado da conferência **já vem descontado** — e bloqueado/quarentena **continuam** sendo contados |
+| Não havia documento para acompanhar o material | **PDF da remessa**, com o terceiro, os itens e **duas linhas de assinatura** |
+| Nada registrava que a chapa de um **cliente** saiu do prédio para beneficiar | A remessa registra o proprietário e o **PDF nomeia o cliente** |
+
+### Tabela consolidada — Etapa 8b
+
+| Onde | O que fazer | O que acontece |
+|---|---|---|
+| Almoxarifado → Remessas a Terceiros | **Nova remessa** | Escolhe terceiro (cadastrado em Compras **ou** nome digitado), tipo de serviço, prazo previsto, e acrescenta itens (material + quantidade + peso). Nasce **ABERTA** — nada saiu do estoque ainda |
+| Linha da remessa ABERTA | **Enviar** | O saldo é **retido**: sai do disponível, o total não muda. Vira **ENVIADA**. Recusa a remessa **inteira** se algum material não couber |
+| Linha ENVIADA / RETORNO PARCIAL | **Registrar retorno** | Escolhe o item, a quantidade e (opcional) a nota fiscal do retorno. Vira **RETORNO PARCIAL** — ou **ENCERRADA** direto, se não sobrou nada |
+| Linha ENVIADA / RETORNO PARCIAL | **Encerrar** | Se sobrou saldo lá fora, **exige destino + justificativa**; se não sobrou, encerra sem perguntar |
+| Linha ABERTA / ENVIADA / RETORNO PARCIAL | **Cancelar** | Exige motivo. Devolve ao disponível **só o que ainda estava lá fora** (se ainda não foi enviada, não mexe em saldo nenhum) |
+| Remessa aberta na tela | **PDF da remessa** | Baixa o documento no navegador |
+| Almoxarifado → Conferência de inventário | Abrir uma conferência | O **esperado** de cada material já vem **sem** o que está no terceiro |
+
+### Roteiro de teste manual (Etapa 8b)
+
+Faça na ordem — cada passo depende do anterior. Use um usuário **ADMINISTRADOR** ou
+**ALMOXARIFE** (só esses dois perfis têm a ação `remessar_terceiro`).
+
+**Preparação.** Em **Materiais**, escolha (ou crie) dois materiais com saldo: `CHP-3MM` com **100
+PC** e `MAT-002` com **5 UN**. Anote o **Disponível** dos dois.
+
+1. **Abrir a tela.** Menu **Almoxarifado → Remessas a Terceiros**. A tela abre com a lista vazia
+   ("Nenhuma remessa a terceiros") e os botões **Nova remessa**, **PDF da remessa** (desabilitado,
+   porque nenhuma remessa está aberta) e **Atualizar**.
+2. **Criar a remessa com dois itens.** Clique em **Nova remessa**. Preencha **Nome do terceiro** =
+   `Galvanizadora Sul LTDA`, **Tipo de serviço** = `Galvanização`, **Prazo previsto de retorno** =
+   uma data futura. Acrescente o item `CHP-3MM` com quantidade **30** e o item `MAT-002` com
+   quantidade **50** (mais do que ele tem — é de propósito). Confirme. A remessa aparece na lista
+   como **ABERTA**.
+3. **Tentar enviar e ver a recusa da remessa INTEIRA.** Clique em **Enviar** na linha da remessa. O
+   sistema recusa com:
+   > `Nao foi possivel enviar a remessa REM-…: MAT-002: disponivel 5 UN, a remessa pede 50`
+
+   **Agora volte a Materiais e confira o que mais importa:** o disponível do `CHP-3MM` **continua
+   100**. Nem o item que caberia saiu. É esse o ponto — o operador corrige a linha que falta e
+   reenvia, em vez de descobrir depois que metade da remessa saiu.
+4. **Duas linhas do mesmo material que juntas estouram.** *(Opcional, mas é a regra que mais custou
+   a acertar.)* Crie outra remessa com **duas linhas de `CHP-3MM`, de 60 cada** — é caso normal, uma
+   por lote. Envie:
+   > `Nao foi possivel enviar a remessa REM-…: CHP-3MM: disponivel 100 PC, a remessa pede 120 em 2 linhas`
+
+   Repare no **"em 2 linhas"**: sem ele, você olharia uma linha de 60, veria 100 disponíveis e
+   concluiria que o sistema está errado.
+5. **Corrigir e enviar de verdade.** Clique em **Nova remessa** e monte de novo, agora **só** com
+   `CHP-3MM` × **30** (a remessa criada no passo 2 não tem edição de itens depois de salva — o
+   caminho é criar a certa e **Cancelar** a errada, que estando ABERTA não mexe em saldo nenhum).
+   Clique em **Enviar** na remessa nova. O status vira **ENVIADA**.
+6. **Conferir o efeito no saldo — o ponto central da etapa.** Abra **Materiais** e procure o
+   `CHP-3MM`: o **total continua 100** e o **Disponível é 70**. Confirme pela porta dos fundos: em
+   **Movimentações**, lance uma **Saída** de **80** desse material. O sistema recusa com:
+   > `Saldo insuficiente. Disponível: 70 UN`
+7. **A contagem de inventário não cobra o que está no terceiro.** Abra **Almoxarifado →
+   Conferência de inventário** e crie uma conferência nova. Procure o `CHP-3MM`: o **esperado é
+   70**, não 100. Conte **70** → a **divergência é zero**.
+   *Antes desta etapa isso acusaria −30*, e o instinto seria "corrigir" o saldo para menos de
+   material que existe e vai voltar.
+8. **O controle da regra anterior — bloqueado e quarentena CONTINUAM sendo contados.** Num outro
+   material, bloqueie parte do saldo (tela de Movimentações ou Inspeções) e abra uma conferência: o
+   esperado dele é o **total cheio**, sem descontar o bloqueado. Aquele material **está** na
+   prateleira e tem de ser contado. Só o que está no terceiro sai da contagem.
+9. **Registrar um retorno parcial.** Volte a Remessas, clique em **Registrar retorno** na remessa
+   ENVIADA. Escolha o item, quantidade **20**, e confirme. O status vira **RETORNO PARCIAL**. Abra a
+   remessa: a coluna **Retornado** mostra 20 e **Ainda no terceiro** mostra 10. Em Materiais, o
+   disponível subiu para **90**.
+10. **Tentar receber de volta mais do que saiu.** Clique em **Registrar retorno** de novo e peça
+    **40**:
+    > `Retorno acima do enviado: o item CHP-3MM enviou 30 PC, ja retornaram 20 e ainda estao no terceiro 10 — este recebimento pede 40`
+
+    A mensagem dá os quatro números de propósito: sem eles você teria de adivinhar quanto ainda pode
+    receber.
+11. **Tentar encerrar deixando saldo lá fora, sem dizer para onde foi.** Clique em **Encerrar** e
+    confirme **sem escolher destino**:
+    > `A remessa REM-… tem 10 PC que nunca voltaram (CHP-3MM: 10 PC). Para encerrar, informe o destino desse saldo: PERDA_NO_TERCEIRO ou CONSUMIDO_NO_PROCESSO, mais a justificativa.`
+
+    A mensagem nomeia **a quantidade real que sobrou**, não um "informe o destino" seco.
+12. **Encerrar com destino, e ver o saldo em terceiros zerar.** No mesmo modal, escolha **Destino do
+    saldo que não voltou** = `Perda no terceiro`, escreva a justificativa e confirme. A remessa vai
+    para **ENCERRADA**. Em **Materiais**, o `CHP-3MM` fica com total **90** e disponível **90** — o
+    saldo em terceiros **zerou**, não ficou preso. No **Extrato do material**, o lançamento da perda
+    no terceiro aparece no livro.
+13. **Imprimir o documento.** Abra qualquer remessa e clique em **PDF da remessa**. Confira no
+    arquivo baixado: número, terceiro, itens com quantidades e as **duas linhas de assinatura**.
+14. **Remessa de material de cliente.** Crie uma remessa com um material que tenha **proprietário**
+    (Etapa 8). Ela **passa sem exigir OS nem projeto do cliente** — mandar galvanizar não é
+    *aplicar* a chapa no trabalho de ninguém. Gere o PDF: ele **nomeia o cliente proprietário**.
+    *Controle:* tentar uma **saída** normal daquele mesmo material sem a OS do dono continua sendo
+    recusada, como na Etapa 8.
+15. **Tentar misturar donos.** Monte uma remessa com uma chapa do **Cliente A** e outra do
+    **Cliente B**:
+    > `A remessa mistura materiais de donos diferentes (Cliente A LTDA e Cliente B LTDA). O documento de remessa nomeia UM proprietario — separe em remessas diferentes.`
+
+    ⚠️ **Esta regra foi deduzida, não pedida** — ver "O que depende de você", logo abaixo.
+16. **Sem a permissão, não dá.** Entre com um usuário de perfil **PRODUÇÃO** ou **CONSULTA** e
+    clique em **Enviar** (ou Registrar retorno / Encerrar / Cancelar): aparece o aviso de falta de
+    permissão **antes** de o formulário abrir, e nada é enviado. Forçando a chamada por fora, o
+    servidor responde **403** (`Sem permissão para esta operação`, dizendo a ação que faltou:
+    `remessar_terceiro`).
+    *Repare que os botões continuam visíveis:* é de propósito — se a consulta de permissões falhar,
+    a tela **deixa passar** e quem decide é o servidor. Esconder botão por erro de rede tiraria a
+    função de quem tem direito a ela.
+    **Ler** a lista de remessas continua liberado para qualquer usuário do módulo — quem consulta
+    precisa poder ver onde o material está.
+17. **Cancelar depois de enviar.** Crie e envie outra remessa de 100; registre o retorno de 60;
+    depois **Cancele** com motivo. Voltam ao disponível **só os 40** que ainda estavam lá fora, não
+    os 100.
+
+### O que depende de você (Etapa 8b)
+
+1. **"Uma remessa não pode misturar materiais de donos diferentes" foi DEDUZIDO, não confirmado.**
+   A regra saiu de uma frase do desenho — *"o documento de remessa nomeia o proprietário"*, no
+   singular — e virou recusa (passo 15). **Se na prática a GMP manda numa mesma viagem a chapa de
+   dois clientes para o mesmo galvanizador, isso está errado**: a regra teria de virar "o documento
+   **lista** os donos, por item". Nada é irreversível — o dono de cada item já é lido do próprio
+   material, não há dado a migrar, e a mudança é pequena.
+2. **Falta a verificação no navegador de duas coisas que teste automático não vê.** Os testes desta
+   tela leem o arquivo de estilos para garantir que as classes existem, mas **não abrem navegador**:
+   (a) confirmar que os **cinco selos de status** (ABERTA, ENVIADA, RETORNO PARCIAL, ENCERRADA,
+   CANCELADA) aparecem cada um **com cor**, e que o selo vermelho **Vencida** fica **ao lado** do
+   status e não no lugar dele; (b) confirmar que o **PDF baixa legível**, com número, terceiro,
+   itens, as duas assinaturas e — em remessa de material de cliente — o nome do proprietário. *Essa
+   lacuna já mordeu a Etapa 7: classe de estilo inventada sai sem cor e nenhum teste percebe.*
+3. **Uma pendência antiga ganhou um terceiro caminho.** O **Ajuste não reconcilia material
+   retido** — e agora isso alcança também o "em terceiros": mandar 30 chapas galvanizar e depois
+   ajustar o total do material para 10 deixa `em terceiros (30) > total (10)`, com **disponível
+   negativo e sem aviso**. O caminho mais provável é a própria **conferência de inventário**, que
+   grava `quantidade_atual` por fora do motor (o mesmo furo da Etapa 8). **A 8b reduziu a chance
+   sem resolver a causa:** o esperado da contagem agora vem certo (some o impulso de "corrigir"), e
+   o encerramento da remessa é o caminho controlado para zerar a retenção. **Enquanto a decisão de
+   negócio não vier: encerre as remessas em aberto antes de lançar um ajuste que reduz o total.**
+
+### O que a Etapa 8b **não** cobre
+
+- **Transformação** — a chapa que sai e volta como 40 peças cortadas mais uma sobra. É a
+  **Etapa 8c**, a outra metade da feature 14. **A fronteira é real, não um corte pela metade:**
+  tratamento, pintura e galvanização devolvem o **mesmo** material, e para eles o ciclo está
+  **completo** nesta etapa; só corte, dobra e usinagem devolvem material **diferente**. Hoje o
+  sistema **recusa** o retorno de material diferente, com mensagem que aponta para a 8c.
+- **E-mail** no envio e no retorno (feature 19) e **alerta automático** de atraso (feature 20). O
+  prazo é gravado, a leitura das remessas vencidas existe e a tela destaca — o **disparo** é das
+  outras features. Não há agendador no projeto, e introduzir um é decisão de infraestrutura.
+- **Anexo de desenhos** nos itens da remessa — o consumidor natural dele é a 8c.
+- **Estornar pelo livro uma baixa de perda/consumo no terceiro devolve o material ao disponível**,
+  e **não** à situação "em terceiros": a remessa já está encerrada, e recriar a retenção deixaria
+  saldo preso sem remessa viva por trás. Já o par **remessa/retorno não é estornável pelo livro** —
+  o caminho é a própria tela de Remessas, senão o livro registraria uma reversão que não aconteceu.
+- **Saldo por almoxarifado.** Continua valendo a decisão de negócio do módulo: almoxarifado é área
+  física do mesmo site. A segregação que esta etapa introduz é **estar ou não no prédio**, que é
+  outra coisa.
+- **Uma consequência conhecida da guarda de bloqueio:** material que tenha **ao mesmo tempo** saldo
+  bloqueado e saldo em terceiros pode ter o encerramento da remessa barrado pela guarda
+  "Material bloqueado não pode ser utilizado". Não foi mexido porque é a mesma pendência do Ajuste
+  (item 3 acima), e a decisão é de negócio.
+
+### O que fazer antes do deploy (Etapa 8b)
+
+**Nada.** A etapa só **acrescenta** uma coluna (`quantidade_em_terceiros`, que nasce zerada) e três
+tabelas novas; **nenhum dado existente é tocado ou reinterpretado**, e não há passado a corrigir.
+Isto está escrito explicitamente porque as Etapas 7 e 8 deixaram consultas para rodar em produção e
+você vai procurar a desta — **as daquelas duas continuam pendentes**, esta não acrescenta nenhuma.
 
 ---
 

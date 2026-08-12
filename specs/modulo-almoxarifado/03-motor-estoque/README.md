@@ -1,7 +1,17 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:** 2026-08-10 (**fechamento dos 5 minors residuais do review final**: a
+> **Última atualização:** 2026-08-12 (**Etapa 8b — a quarta coluna de retenção e a conta do
+> disponível numa fonte só.** Duas mudanças estruturais neste motor, detalhadas em "Fórmula de
+> disponibilidade" e "Tipos de movimento da Etapa 8b", abaixo: (1)
+> `materiais_almoxarifado.quantidade_em_terceiros` entrou na fórmula do disponível, e a subtração —
+> que estava **replicada 14 vezes**, em 8 arquivos — passou a existir **uma vez só**, em
+> `services/almoxarifado/availabilitySql.js` (`0a01124`); (2) quatro tipos de movimento novos
+> (`REMESSA_TERCEIRO`, `RETORNO_TERCEIRO`, `PERDA_TERCEIRO`, `CONSUMO_TERCEIRO`, `e0be211`), sendo
+> os dois primeiros de retenção pura e os dois últimos baixa de físico **e** retenção no mesmo
+> UPDATE. A pendência do `AJUSTE` que não reconcilia retenção **ganhou uma terceira instância** —
+> ver o fim deste arquivo.)
+> Antes: 2026-08-10 (**fechamento dos 5 minors residuais do review final**: a
 > citação da rota v1 [`routes/almoxarifado.js:573`, hoje `:752`] e a da guarda de vencimento
 > [`stockService.js:451`, hoje o destructuring de `params`] perderam o número de linha; e o piso do
 > estorno de ENTRADA ganhou a ressalva de que só vale quando a chave casa com a linha que a entrada
@@ -66,10 +76,94 @@ Um único caminho de movimentação, transacional, com livro imutável (estorno 
 ## Fórmula de disponibilidade (spec 7)
 
 ```
-Estoque físico − bloqueado − quarentena/inspeção − reservado = Estoque disponível
+Estoque físico − bloqueado − quarentena/inspeção − reservado − EM TERCEIROS = Estoque disponível
 ```
 
 Colunas existem; falta garantir que TODAS as operações (saída, reserva, inspeção, bloqueio) mantêm a fórmula e que consultas/relatórios usam "disponível" onde a spec exige.
+
+### A quarta retenção e a fonte única — Etapa 8b (2026-08-12, `0a01124`)
+
+**`materiais_almoxarifado.quantidade_em_terceiros` é a quarta coluna de retenção** (feature 14,
+Etapa 8b): material que saiu do prédio para beneficiamento externo sai do **disponível** sem sair do
+**patrimônio** — `quantidade_atual` não muda.
+
+> **A distinção que NÃO pode ser "uniformizada": das quatro retenções, `quantidade_em_terceiros` é a
+> única que significa "não está no prédio".** Reservada, bloqueada e em_inspeção são estados
+> **administrativos** de material que **está** na prateleira. É essa diferença que decide o
+> comportamento do **inventário**: a criação da conferência monta o esperado como
+> `quantidade_atual − quantidade_em_terceiros`, e **só ela** — bloqueado e quarentena **continuam
+> sendo cobrados na contagem**, porque aquele material tem de ser contado. Quem uniformizar as
+> quatro ali passa a esconder do inventário material que está no galpão. Comentado no código
+> (`routes/almoxarifado.js`, criação da conferência) e coberto nos dois sentidos por
+> `tests/api/conferenciaEmTerceiros.api.test.js`.
+
+**A conta do disponível deixou de ser replicada.** Até a Etapa 8b, `atual − reservada − bloqueada −
+em_inspecao` existia em **14 implementações**: a função `stockService.getSaldoDisponivel` mais **13
+queries escritas à mão**, espalhadas por **8 arquivos** — `stockService` (6 sítios, incluindo os
+claims atômicos de saída e a guarda do hold da reserva), `requisitionService` (2),
+`requisitionStateMachine`, `reportService`, `clienteEstoqueService` (**criado na própria Etapa 8**),
+`routes/almoxarifado.js`, `routes/almoxarifado/extended.js` e **`routes/requisicoesMaterial.js`, que
+nem pertence ao módulo**.
+
+**Por que isso é o ponto onde a etapa mais provavelmente falharia em silêncio:** acrescentar a
+coluna nova em 13 e esquecer 1 **não quebra nada** — o sistema passa a **recusar pela função e
+aceitar pelo SQL**. A listagem mostraria disponível a mais, a reserva nasceria sobre material que
+está no galvanizador, e a guarda atômica da saída deixaria passar. Nenhum erro, só o número errado.
+
+**O que foi feito:** a conta passou a existir num lugar só —
+`services/almoxarifado/availabilitySql.js`, com `COLUNAS_RETENCAO` e `disponivelSql(alias)` — e os
+13 sítios passaram a chamá-la. **A prova não é "editei os 14"** (isso depende de alguém ter contado
+certo): `tests/api/saldoEmTerceiros.api.test.js` **varre o código-fonte** e falha se a subtração
+voltar a aparecer escrita à mão, com controle positivo do próprio padrão de busca.
+
+> **Correção declarada:** o design da Etapa 8b dizia, na primeira versão, que a conta estava
+> replicada em **sete** lugares. **Estava errado** — são quatorze (corrigido em `742b9ea`). É o
+> **segundo** erro do mesmo tipo em duas etapas seguidas: a spec da Etapa 8 mandou auditar
+> `services/almoxarifado/*.js` + `routes/almoxarifado/*.js` e deixou de fora `routes/almoxarifado.js`,
+> onde estavam as duas piores leituras (`9d70d8c`). **Regra que fica: mudança em coluna de
+> `materiais_almoxarifado` exige varredura de `server/` inteiro, nunca de um subconjunto escolhido
+> por intuição.**
+
+**Um sítio ficou de fora DE PROPÓSITO:** `dispSemBloqueio` (`quantidade_atual −
+quantidade_bloqueada`, mensagem "Material bloqueado não pode ser utilizado") **não** é a conta do
+disponível — é uma guarda específica de bloqueio, com mensagem própria, e a guarda do disponível
+logo acima já recusou qualquer saída que invadisse a retenção nova. *Consequência conhecida:*
+material que tenha **ao mesmo tempo** saldo bloqueado e saldo em terceiros pode ter o encerramento
+da remessa barrado por essa guarda — não foi resolvido porque é a mesma pendência do `AJUSTE`
+(abaixo) e a decisão é do cliente.
+
+**Um 15º lugar que NÃO é a conta, mas depende da coluna:**
+`stockAvailabilityService.SENSITIVE_MATERIAL_FIELDS`. `GET /api/requisicoes-material/materiais` faz
+`SELECT m.*` e o sanitizador apaga as retenções por **lista explícita de exclusão** — ou seja, **toda
+coluna nova de `materiais_almoxarifado` vaza quantidade exata para o requisitante até ser nomeada
+ali**. `quantidade_em_terceiros` entrou na lista em `0a01124`. **O padrão continua: o default é
+expor.** Qualquer coluna criada pela Etapa 8c precisa repetir esta checagem.
+
+### Tipos de movimento da Etapa 8b (`e0be211`)
+
+Quatro tipos novos, em dois pares com semântica oposta:
+
+| Tipo | Efeito | Molde |
+|---|---|---|
+| `REMESSA_TERCEIRO` | `quantidade_em_terceiros` **sobe**; `quantidade_atual` **não muda** | `QUARENTENA` |
+| `RETORNO_TERCEIRO` | `quantidade_em_terceiros` **desce**; `quantidade_atual` **não muda** | `DESBLOQUEIO` |
+| `PERDA_TERCEIRO` | baixa **físico e retenção** no mesmo UPDATE | `DECISAO_INSPECAO` |
+| `CONSUMO_TERCEIRO` | idem, para material que virou cavaco/refugo no processo | `DECISAO_INSPECAO` |
+
+Os quatro estão em `TIPOS_ISENTOS_DONO` (`ownerRules.js`) — remessa de material de cliente é isenta
+da regra de OS/projeto, no mesmo espírito da `TRANSFERENCIA`, com a contrapartida de que o documento
+**nomeia o proprietário**. A isenção é **duplamente coberta** (os quatro também estão fora de
+`TIPOS_SAIDA_COM_DONO`), o que significa que apagar uma das listas não quebra teste nenhum — por
+isso o teste empurra os quatro para `TIPOS_SAIDA_COM_DONO` **em memória** e prova que a isenção
+segura mesmo assim. **A Etapa 8c tem de repetir isso para todo tipo novo que criar.**
+
+**`REMESSA_TERCEIRO`/`RETORNO_TERCEIRO` NÃO são estornáveis pelo livro**, e isso precisou de guarda
+explícita em `cancelarMovimentacao`: sem ela, o estorno gravaria a linha de `ESTORNO`, marcaria a
+original `cancelado = 1` e **não tocaria** em `quantidade_em_terceiros` — o livro afirmando uma
+reversão que não aconteceu, com a retenção presa. Recusado com a mensagem-molde dos tipos de
+quarentena, apontando para a tela de Remessas. **Contraste deliberado:**
+`PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` **continuam** estornáveis, e o estorno devolve ao **disponível**
+(a remessa já está encerrada; recriar a retenção deixaria saldo preso sem remessa viva por trás).
 
 ## Checklist
 
@@ -269,6 +363,31 @@ são defensáveis e levam a implementações diferentes:
 
 Enquanto a decisão não vier, nada foi mudado — o comportamento atual é o (3) **sem o aviso**, que é
 a pior das três. Registrado aqui e no guia de usuário para não ser redescoberto por acidente.
+
+### Terceira instância da mesma pendência — Etapa 8b (2026-08-12): `quantidade_em_terceiros`
+
+**A mesma decisão de negócio agora tem TRÊS caminhos, e é o mesmo defeito nos três: o que redefine
+o total físico não olha para as colunas de retenção.**
+
+1. **`AJUSTE` × `quantidade_bloqueada`** (Etapa 7, seção acima).
+2. **`PUT /conferencias/:id/concluir` com `aplicar_ajustes`** (nomeada desde antes da Etapa 6, e
+   agravada na Etapa 8): grava `UPDATE materiais_almoxarifado SET quantidade_atual = ?` **direto**,
+   fora do motor — sem validação de saldo, sem a permissão `ajustar_material_cliente`, e sem olhar
+   para nenhuma retenção.
+3. **`AJUSTE` × `quantidade_em_terceiros`** (Etapa 8b, novo): 30 unidades no galvanizador e um
+   ajuste levando o total para 10 deixam `em terceiros (30) > total (10)` — **disponível negativo,
+   sem guarda**.
+
+**O caminho 3 é mais provável através do caminho 2 do que através de um Ajuste manual:** homologar
+a divergência de um material que tem saldo em terceiros **baixa o físico e deixa a retenção órfã**.
+
+> **A Etapa 8b reduziu a probabilidade sem tocar na causa, e isso é deliberado.** A conferência
+> agora monta o esperado **já descontando** `quantidade_em_terceiros`, então o inventário de um
+> material com remessa aberta **não acusa mais divergência fantasma** — some o impulso de "corrigir"
+> o saldo, que era o gatilho realista. E o **encerramento de remessa** é o caminho controlado para
+> zerar a retenção. A 8b **não resolve e não piora**: a decisão (baixar a retenção / recusar /
+> avisar) continua sendo **do cliente**, é a mesma para as três instâncias, e está no bloco
+> "Leia antes de apresentar" de `docs/almoxarifado-novidades-por-etapa.md`.
 
 ### Correção da Etapa 5 que pertence a este motor
 

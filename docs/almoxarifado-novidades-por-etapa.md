@@ -1,7 +1,7 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 8 (02/08/2026 a 12/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 8b (02/08/2026 a 12/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
@@ -24,12 +24,14 @@
 | 6c | Etiquetas com QR Code | 2026-08-11 | Etiqueta em PDF (A4 ou térmica) com QR que abre a tela certa já filtrada e destacada |
 | 7 | Transferências e Devoluções | 2026-08-12 | As duas rotas que existiam sem tela ganharam tela e regra — e o bug que baixava o estoque duas vezes na devolução para sucata foi corrigido |
 | 8 | Materiais de Clientes | 2026-08-12 | A chapa do cliente saiu da lista à parte e virou material de verdade, com dono: fora de todo número do nosso estoque, e só sai no trabalho de quem é dela |
+| 8b | Remessas a Terceiros | 2026-08-12 | O material que vai beneficiar fora (galvanizar, pintar, usinar) para de sumir do controle: sai do disponível sem sair do patrimônio, com prazo, retorno parcial e baixa justificada do que não voltou |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
 clientes).
-Próxima etapa da ordem: **Etapa 8b — materiais enviados a terceiros** (a Etapa 8 foi dividida em
-**8 = clientes**, entregue, e **8b = terceiros**, ainda não iniciada).
+Com a 8b, a feature 14 (materiais enviados a terceiros) fica **parcialmente entregue** — falta a
+**transformação** (a chapa que sai e volta como peças cortadas), que é a **Etapa 8c**.
+Próxima etapa da ordem: **Etapa 8c — transformação**.
 
 ---
 
@@ -46,17 +48,39 @@ está detalhado na seção da etapa correspondente e no
 | **A1** | **O bug da Sucata pode ter deixado saldo a menos.** Devolver material para o destino Sucata baixava o estoque **duas vezes**. A correção **não conserta o passado**. No banco de desenvolvimento a checagem já foi feita: **0 devoluções, nenhum efeito lá**. | Ver a consulta exata no guia, seção "Etapa 7 → O bug da Sucata". Ela lista **só as devoluções anteriores à correção** (as que não têm a entrada correspondente no livro) — cada linha é um material cujo saldo está **a menos** pela quantidade devolvida. Uma consulta que filtrasse só `destino = 'SUCATA'` traria também as devoluções corretas feitas depois do deploy, e faria você caçar problema que não existe. |
 | **A2** | **A lista antiga de materiais de cliente foi aposentada** com base no banco de desenvolvimento (0 linhas). **Nada foi apagado** — a tabela foi preservada exatamente para este caso. | `SELECT COUNT(*) AS total, SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos FROM materiais_cliente_almoxarifado;` — se vier `0`, só anotar e fechar. Se vier `> 0`, **não reverte nada**: entra uma migração assistida antes de qualquer exclusão. |
 
-### B. Uma decisão de negócio esperando por você
+### B. Uma decisão de negócio esperando por você — agora em TRÊS caminhos
 
-**O Ajuste não reconcilia o material bloqueado.** Bloquear 8 unidades e depois ajustar o total
-para 1 deixa `bloqueado (8) > total (1)` — **disponível negativo, sem nenhuma guarda**. É
-plausível na operação real: o inventário acha menos do que o sistema dizia, com parte do material
-em quarentena.
+**O que muda o saldo total não olha para o material que está retido.** É sempre o mesmo defeito, e
+a Etapa 8b é a **terceira** vez que ele aparece — por isso ele está aqui, e não escondido na seção
+de uma etapa.
 
-Três respostas possíveis, e a escolha é sua: **(a)** o Ajuste baixa o bloqueado
-proporcionalmente; **(b)** o Ajuste recusa enquanto houver bloqueio maior que o novo total; ou
-**(c)** o Ajuste aceita e apenas avisa. Enquanto não for decidido, **resolva a quarentena antes de
-lançar um ajuste que reduz o total.**
+**B1 (desde a Etapa 7) — o Ajuste contra o material bloqueado.** Bloquear 8 unidades e depois
+lançar um Ajuste levando o total para 1 deixa `bloqueado (8) > total (1)`: **disponível negativo,
+sem nenhuma guarda**. É plausível na operação real — o inventário acha menos do que o sistema
+dizia, com parte do material em quarentena.
+
+**B2 (desde a Etapa 8) — a conferência de inventário grava o saldo por fora do motor.** Concluir
+uma conferência com **"aplicar ajustes"** (`PUT /conferencias/:id/concluir`) escreve
+`quantidade_atual` **direto**, sem passar pelo motor de estoque: sem validação de saldo, sem a
+permissão `ajustar_material_cliente` (é o furo C1 abaixo) e sem olhar para nenhuma coluna de
+retenção.
+
+**B3 (NOVO, da Etapa 8b) — o material que está no terceiro.** Mesmo defeito, com a coluna nova.
+Mandar 30 chapas galvanizar e depois ajustar o total do material para 10 deixa
+`em terceiros (30) > total (10)`. **O sistema aceita.** E o caminho mais provável é justamente o
+B2: homologar a divergência de um material que tem saldo em terceiros **baixa o físico e deixa a
+retenção órfã** — disponível negativo, sem aviso nenhum.
+
+> **A Etapa 8b reduziu a chance de isso acontecer, sem resolver a causa.** A contagem de inventário
+> agora **já desconta** o que está no terceiro (o esperado vem certo, então some o impulso de
+> "corrigir" o saldo), e o encerramento de remessa é o caminho controlado para zerar a retenção.
+> Mas se alguém lançar um Ajuste manual à revelia — ou homologar uma divergência de contagem de um
+> material que tem remessa aberta —, o buraco continua aberto.
+
+Três respostas possíveis, e a escolha é sua — a mesma para B1, B2 e B3: **(a)** o Ajuste baixa a
+retenção proporcionalmente; **(b)** o Ajuste recusa enquanto houver retenção maior que o novo
+total; ou **(c)** o Ajuste aceita e apenas avisa. Enquanto não for decidido: **resolva a quarentena
+e encerre as remessas em aberto antes de lançar um ajuste que reduz o total.**
 
 ### C. Dois furos conhecidos, que quem opera precisa saber
 
@@ -83,6 +107,53 @@ lançar um ajuste que reduz o total.**
 - **Os relatórios de materiais bloqueados e de materiais sem endereço mostram material de cliente
   sem o selo de propriedade** — eles misturam de propósito (a chapa do cliente ocupa a prateleira
   de verdade), mas ainda não identificam o dono.
+
+### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
+
+**"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
+uma remessa com chapa do Cliente A e chapa do Cliente B na mesma viagem, com esta mensagem:
+
+> `A remessa mistura materiais de donos diferentes (Cliente A LTDA e Cliente B LTDA). O documento de remessa nomeia UM proprietario — separe em remessas diferentes.`
+
+**Isso não veio de vocês.** Foi deduzido de uma frase do desenho — *"o documento de remessa nomeia
+o proprietário"*, no singular — e implementado como recusa. **Se na prática a GMP manda numa mesma
+viagem a chapa de dois clientes para o mesmo galvanizador, a regra está errada** e precisa virar
+"o documento **lista** os donos, por item".
+
+**A pergunta é literalmente esta: vocês mandam remessa mista?** Nada aqui é irreversível — o dono
+de cada item já é lido do próprio material, não há dado a migrar, e a mudança é pequena (o
+documento passa a imprimir o dono por linha).
+
+### F. Uma verificação manual que ainda não foi feita — vale 5 minutos no navegador
+
+A tela de Remessas a Terceiros tem 24 testes automáticos, mas **testes automáticos não abrem um
+navegador**: eles não sabem dizer se uma cor apareceu na tela nem se um PDF abre legível. Duas
+coisas ficaram, portanto, **sem prova**, e alguém precisa olhar antes da apresentação:
+
+1. **Os cinco selos de status têm cor?** Abrir **Almoxarifado → Remessas a Terceiros** e conferir
+   que ABERTA, ENVIADA, RETORNO PARCIAL, ENCERRADA e CANCELADA aparecem cada um com fundo e cor
+   próprios — e não como texto cinza sem formatação. O selo vermelho **Vencida** tem de aparecer
+   **ao lado** do status, nunca no lugar dele.
+2. **O PDF baixa e é legível?** Abrir uma remessa, clicar em **PDF da remessa** e conferir no
+   arquivo baixado: o número, o nome do terceiro, a lista de itens com quantidades, as **duas
+   linhas de assinatura** — e, numa remessa de material de cliente, o **nome do cliente
+   proprietário** impresso no papel.
+
+*Por que está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
+uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
+
+### G. Uma fragilidade estrutural que continua de pé (e a próxima etapa vai reencontrar)
+
+**Toda coluna nova da tabela de materiais vaza quantidade exata para o requisitante até alguém
+lembrar de escondê-la, uma por uma.** A tela em que o solicitante escolhe material
+(`GET /api/requisicoes-material/materiais`) lê a linha do material **inteira** (`SELECT m.*`) e
+depois apaga os campos sensíveis por uma **lista explícita de exclusão**
+(`SENSITIVE_MATERIAL_FIELDS`) — quem não está na lista, passa. O solicitante deve ver apenas
+"tem/não tem estoque", nunca o número.
+
+Aconteceu nesta etapa: `quantidade_em_terceiros` nasceu vazando e **foi corrigida** entrando na
+lista. Mas o padrão é o mesmo: **o comportamento padrão é expor, e a proteção depende de alguém
+lembrar.** Fica registrado porque a Etapa 8c cria colunas novas e vai cair exatamente aqui.
 
 ---
 
@@ -676,7 +747,8 @@ SQL exato e o que fazer com cada resultado estão no guia
 produção").
 
 **Limites declarados:** **materiais enviados a terceiros** (a chapa **nossa** que vai para o
-fornecedor beneficiar) é a feature 14 e virou a **Etapa 8b** — nada dela existe hoje; **e-mails**
+fornecedor beneficiar) é a feature 14 e virou a **Etapa 8b** — *quando esta seção foi escrita nada
+dela existia; foi entregue no mesmo dia, e está na seção "Etapa 8b" logo abaixo*; **e-mails**
 específicos de material de cliente ficam para a feature 19; **sobras vinculadas ao proprietário**
 (o retalho que sobra da chapa do cliente) dependem da tela de retalhos, feature 15; **relatórios de
 perdas, não conformes e reservados por cliente** e a **valorização** por cliente ficam para a
@@ -698,31 +770,246 @@ e materiais sem endereço) continuam **sem selo** — ele foi entregue nas três
 
 ---
 
+## Etapa 8b — Remessas a Terceiros (2026-08-12)
+
+**Em uma frase:** quando uma chapa vai para o galvanizador, ela deixa de sumir do controle — sai do
+disponível sem sair do patrimônio, com prazo, documento, retorno parcial e baixa justificada do que
+nunca voltou.
+
+**O problema que existia:** mandar material para fora beneficiar (corte, dobra, usinagem,
+tratamento, pintura, galvanização) **não tinha lugar nenhum no sistema**. Ou alguém dava baixa — e
+o material **desaparecia do patrimônio**, embora continuasse sendo da empresa — ou não dava baixa
+nenhuma, e o sistema **afirmava que a chapa estava na prateleira** com ela a 40 km. Não havia
+prazo, não havia retorno parcial, e não havia como amarrar a peça que voltou à chapa que saiu.
+
+**O que há de novo (visível para o usuário):**
+- Tela nova **Almoxarifado → Remessas a Terceiros**: criar remessa com vários itens, **Enviar**,
+  **Registrar retorno**, **Encerrar** e **Cancelar**, com a coluna do terceiro na lista e filtro
+  por status.
+- A remessa guarda **quem é o terceiro** (fornecedor cadastrado no módulo Compras ou nome
+  digitado), o **tipo de serviço** (galvanização, corte, dobra...), o **prazo previsto de retorno**
+  e as observações.
+- Selo vermelho **Vencida** ao lado do status, quando o prazo passou e ainda há material lá fora —
+  o selo **se soma** ao status, não o substitui.
+- Botão **PDF da remessa**: o documento que acompanha o material saindo do prédio, com o número, o
+  terceiro, os itens, e **duas linhas de assinatura** para o papel voltar assinado.
+- Ao abrir a remessa, a tabela de itens separa três colunas que são coisas diferentes: **Retornado**
+  (o que voltou de verdade para a prateleira), **Baixado (não voltou)** (o que foi liquidado por
+  perda/consumo no encerramento) e **Ainda no terceiro**.
+- Em **Materiais** e no **Extrato**, o material mandado para fora **continua no total** e some do
+  **disponível** — ele não sumiu do patrimônio, só não está à mão.
+
+**Por baixo do capô:**
+- Uma **quarta coluna de retenção** (`quantidade_em_terceiros`) ao lado das três que já existiam
+  (reservada, bloqueada, em inspeção). Ela é a única das quatro que significa **"não está no
+  prédio"** — e essa distinção decide o comportamento do inventário (regra 4 abaixo).
+- **A conta do "disponível" estava escrita à mão em 14 lugares diferentes do código**, espalhados
+  por 8 arquivos — inclusive um que nem pertence ao módulo. Acrescentar a coluna nova em 13 e
+  esquecer 1 não quebraria nada: o sistema passaria a **recusar por um caminho e aceitar por
+  outro**, com o número errado em silêncio. Em vez de acertar os 14 e torcer, a conta passou a
+  existir num **único lugar** (`availabilitySql.js`), e há um teste que varre o código-fonte e
+  falha se alguém voltar a copiá-la.
+- O efeito de saldo acontece **dentro do motor de estoque**, por quatro tipos de movimento novos —
+  dois de retenção (remessa/retorno, que não mexem no patrimônio) e dois de baixa definitiva
+  (perda/consumo no terceiro, que baixam físico e retenção no mesmo lançamento). Tudo fica no livro
+  de movimentações.
+- Envio e retorno usam a forma já validada no recebimento: **pré-checagem que recusa a operação
+  inteira antes de mover qualquer item**, depois efeito item a item com reivindicação atômica do
+  saldo. O módulo não tem transação de banco; essa é a compensação explícita que o substitui.
+- O PDF é gerado **no navegador**, como as etiquetas da Etapa 6c e a posição por cliente da Etapa 8
+  — **zero mudança de servidor**.
+
+### As regras, com o cenário exato
+
+Todas as mensagens abaixo são as **mensagens reais do sistema**, copiadas do código. Onde aparece
+`REM-4523900712`, é o número que o sistema gera sozinho para a remessa — o seu vai ser outro.
+
+**1. Enviar tira do disponível e NÃO tira do patrimônio.**
+*Cenário:* material com **100** no estoque; criar remessa de **30** para a Galvanizadora e clicar
+em **Enviar**. Depois, abrir **Materiais**: o **total continua 100** e o **disponível é 70**.
+Tentar uma **Saída** de 80 daquele material:
+> `Saldo insuficiente. Disponível: 70 UN`
+
+*Por que importa:* é a resposta exata para as duas maneiras erradas de fazer isso hoje. Dar baixa
+apagaria do patrimônio uma chapa que continua sendo da empresa; não dar baixa nenhuma deixaria o
+sistema oferecer para consumo um material que está a 40 km.
+
+**2. A remessa é enviada inteira, ou não é enviada.**
+*Cenário:* remessa com **dois itens**, um deles sem saldo (MAT-002 com disponível **5**, a remessa
+pede **50**). Clicar em **Enviar**:
+> `Nao foi possivel enviar a remessa REM-4523900712: MAT-002: disponivel 5 UN, a remessa pede 50`
+
+**Nenhum dos dois itens sai.** O item que tinha saldo continua com o disponível cheio — o operador
+corrige a linha que falta e reenvia, em vez de descobrir depois que metade da remessa saiu.
+
+**3. Duas linhas do MESMO material que juntas estouram o saldo também são recusadas.**
+*Cenário:* material com **100 PC** disponíveis; remessa com **duas linhas de 60** do mesmo material
+(é caso normal: cada linha tem lote, peso e observação próprios, para separar duas chapas do mesmo
+código). Clicar em **Enviar**:
+> `Nao foi possivel enviar a remessa REM-4523900712: CHP-3MM: disponivel 100 PC, a remessa pede 120 em 2 linhas`
+
+*Por que este cenário está aqui e não junto com o anterior:* **era um defeito real, encontrado
+durante o desenvolvimento e medido com o sistema rodando.** A checagem original olhava **cada linha
+sozinha** — 60 cabe em 100, duas vezes —, então as duas passavam, a primeira era enviada e a
+segunda batia numa trava mais funda. Resultado medido antes da correção: **60 unidades retidas, o
+primeiro item enviado, o segundo não, e a remessa parada no estado inicial**. É exatamente a
+remessa pela metade que a regra 2 existe para impedir. A mensagem diz **"em 2 linhas"** de
+propósito: sem isso o operador olha uma linha de 60, vê 100 disponíveis e conclui que o sistema
+está errado.
+
+**4. A contagem de inventário não cobra o que está no terceiro.**
+*Cenário:* material com **100** no total e **30** no galvanizador. Abrir **Conferência de
+inventário** → o esperado daquele item vem **70**. Contar 70 na prateleira dá **divergência zero**.
+*Antes desta etapa isso acusaria −30*, e o caminho natural seria "corrigir" o saldo para menos de
+material que existe e vai voltar.
+
+**5. Bloqueado e em quarentena CONTINUAM sendo contados — e isso é de propósito.**
+*Cenário (é o controle da regra 4):* material com **100** no total, **40 bloqueados** e **25 em
+quarentena**, nada em terceiros → o esperado da conferência é **100**, não 35.
+*Por quê:* aquele material **está** na prateleira e **tem** de ser contado; "bloqueado" é um estado
+administrativo, não uma ausência física. Só o que está no terceiro sai da contagem. Quem
+"uniformizar as quatro colunas" passa a esconder do inventário material que está no galpão.
+
+**6. Não dá para receber de volta mais do que saiu — e a mensagem diz quanto ainda está lá.**
+*Cenário:* remessa de **100**, já retornaram **70**; registrar mais **40**:
+> `Retorno acima do enviado: o item CHP-3MM enviou 100 PC, ja retornaram 70 e ainda estao no terceiro 30 — este recebimento pede 40`
+
+*Por que importa:* a mensagem dá os quatro números de propósito. Sem eles o operador teria de
+adivinhar quanto ainda pode receber — e essa lição já custou caro na Etapa 7.
+
+**7. Encerrar deixando saldo lá fora exige dizer PARA ONDE ele foi.**
+*Cenário:* remessa com dois itens pendentes, **30** de um e **45** de outro. Clicar em **Encerrar**
+sem escolher destino:
+> `A remessa REM-4523900712 tem 75 PC que nunca voltaram (CHP-3MM: 30 PC; CHP-5MM: 45 PC). Para encerrar, informe o destino desse saldo: PERDA_NO_TERCEIRO ou CONSUMIDO_NO_PROCESSO, mais a justificativa.`
+
+A mensagem nomeia o **total agregado** (75) **e** abre item a item — e a unidade só acompanha o
+total quando **todos** os itens usam a mesma; numa remessa com um item em KG e outro em UN, somar e
+anunciar "75 KG" seria um número inventado.
+
+- **Perda no terceiro** = sumiu ou foi danificado lá.
+- **Consumido no processo** = virou cavaco, refugo de processo.
+
+**8. Encerrar com destino ZERA o saldo em terceiros — o material não fica preso.**
+*Cenário:* a mesma remessa, agora escolhendo **Perda no terceiro** e escrevendo a justificativa.
+Os 75 **saem** de "em terceiros" **e** do patrimônio, com as movimentações correspondentes no
+livro, e a remessa vai para ENCERRADA.
+*Por que só justificativa não bastaria:* texto livre fecharia a remessa e deixaria as 75 unidades
+retidas para sempre num material cuja remessa já acabou — exatamente o tipo de saldo órfão que este
+módulo já teve de corrigir duas vezes (reserva presa na Etapa 6, linha órfã de devolução na
+Etapa 7).
+
+**9. Remessa que voltou inteira encerra sozinha, sem perguntar nada.**
+*Cenário:* registrar o retorno dos 100 de uma remessa de 100 → a remessa vai direto para
+**ENCERRADA**. Não sobrou pendência, então não há o que justificar — e o sistema **não** pede
+destino nesse caso.
+
+**10. Cancelar uma remessa já enviada devolve ao disponível só o que ainda está lá fora.**
+*Cenário:* remessa de 100 enviada, com 60 já retornados; cancelar com motivo → voltam ao disponível
+**os 40** que ainda estavam no terceiro, não os 100. Cancelar uma remessa que ainda **não** foi
+enviada não mexe em saldo nenhum.
+
+**11. A chapa do cliente pode ir para o terceiro — e o papel diz de quem ela é.**
+*Cenário:* material com dono (Etapa 8) numa remessa de galvanização. **Passa sem exigir OS nem
+projeto do cliente** — mandar galvanizar não é *aplicar* a chapa no trabalho de ninguém, é o mesmo
+espírito da transferência entre prateleiras. Em troca, a remessa **registra o proprietário** e o
+**PDF nomeia o cliente**.
+*Controle:* a regra da Etapa 8 continua valendo — tentar uma **saída** normal daquele material sem
+a OS do dono continua sendo recusada.
+*Por que a contrapartida é obrigatória:* sem o nome no papel, a isenção viraria um caminho para
+material de cliente sair do prédio sem rastro de propriedade — o oposto do que a Etapa 8 construiu.
+
+**12. Remessa não mistura donos — mas ver o item E de "Leia antes de apresentar".**
+*Cenário:* montar uma remessa com chapa do Cliente A e chapa do Cliente B:
+> `A remessa mistura materiais de donos diferentes (Cliente A LTDA e Cliente B LTDA). O documento de remessa nomeia UM proprietario — separe em remessas diferentes.`
+
+⚠️ **Esta regra foi deduzida, não pedida por vocês.** Ela está aqui como **pergunta**, não como
+requisito atendido — o detalhe está no item **E** do bloco "Leia antes de apresentar".
+
+**13. Quem pode mandar material para fora do prédio.**
+Ação de permissão nova **`remessar_terceiro`**, hoje concedida a **ADMINISTRADOR** e
+**ALMOXARIFE** — os mesmos perfis de "movimentar". Quem não tem e clica em **Enviar**,
+**Registrar retorno**, **Encerrar** ou **Cancelar** recebe um aviso na tela **antes** de o
+formulário abrir, com o mesmo texto que o servidor produziria; forçada a chamada por fora, o
+servidor responde **403**:
+> `Sem permissão para esta operação` *(a resposta também diz qual ação faltou: `remessar_terceiro`)*
+
+*Os botões continuam visíveis de propósito* — a tela barra a ação, mas não esconde nada: se a
+consulta de permissões falhar (rede, servidor lento), ela **deixa passar** e o 403 do servidor
+decide. Esconder botão por causa de um erro de rede tiraria a função de quem tem direito a ela.
+**Quem decide é sempre o backend.**
+
+*Por que uma permissão separada se hoje os perfis são os mesmos:* o ganho não é restringir hoje, é
+**poder restringir amanhã sem reescrever nada**. Mandar material para fora do site é um risco
+diferente de mover uma prateleira. **Ler** as remessas não exige a ação — quem consulta precisa
+poder ver onde o material está; só **agir** exige.
+
+**Antes → Agora:**
+
+| Antes | Agora |
+|---|---|
+| Chapa que vai galvanizar some do controle: ou baixa que apaga o patrimônio, ou nenhuma baixa e o sistema mente sobre a prateleira | Sai do disponível e **continua no patrimônio**, com documento, terceiro e prazo |
+| Não havia como saber o que está em cada terceiro | Tela listando as remessas com o terceiro, o prazo e o status, filtro por status e selo de **remessa vencida** |
+| Retorno parcial não existia | Vários retornos por remessa, com teto que soma o que já voltou, por item |
+| O que não voltava ficava indefinido para sempre | Encerrar exige **destino** (perda ou consumo) + justificativa, e dá baixa de verdade |
+| A contagem de inventário cobraria material que está a 40 km | O esperado já vem descontado — e bloqueado/quarentena **continuam** sendo contados |
+| Nada registrava que a chapa de um cliente saiu do prédio para beneficiar | A remessa registra o proprietário e o PDF nomeia o cliente |
+
+**O que esta etapa NÃO cobre (é decisão declarada, não esquecimento):**
+- **Transformação** — a chapa que sai e volta como 40 peças cortadas mais uma sobra. É a
+  **Etapa 8c**. A estrutura de dados já nasceu pronta para ela (o retorno é uma *lista de
+  resultados*, não um número), e hoje o sistema **recusa** o retorno de material diferente com uma
+  mensagem que aponta para a 8c. **Metade dos beneficiamentos já está completa nesta etapa** —
+  tratamento, pintura e galvanização devolvem o **mesmo** material; só corte, dobra e usinagem
+  devolvem material diferente.
+- **E-mail** no envio e no retorno (feature 19) e **alerta automático** de atraso (feature 20). O
+  prazo é gravado, existe a leitura das remessas vencidas e a tela destaca; o **disparo** é das
+  outras features.
+- **Anexo de desenhos** nos itens da remessa — o consumidor natural dele é a 8c.
+- **Estornar pelo livro uma baixa de perda no terceiro devolve o material ao disponível**, e não à
+  situação "em terceiros": a remessa já está encerrada, e recriar a retenção deixaria saldo preso
+  sem remessa viva por trás. Já o par remessa/retorno **não é estornável pelo livro** — o caminho é
+  a própria tela de Remessas, senão o livro registraria uma reversão que não aconteceu.
+- **Nada a medir em produção antes do deploy.** A etapa só **acrescenta** uma coluna e três tabelas
+  novas; **nenhum dado existente é tocado ou reinterpretado**. Diferente das Etapas 7 e 8, esta não
+  deixa nenhuma consulta para rodar em produção.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
-- **Concluído até aqui:** Etapas 0 a 8 — fundação, motor de estoque, cadastros,
-  requisições, reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções e
-  materiais de clientes. As features 10 (lotes/séries/etiquetas), 11 (transferências),
-  12 (devoluções) e 13 (materiais de clientes) estão completas no que cada etapa se propôs.
-- **Próxima etapa da ordem:** **Etapa 8b — materiais enviados a terceiros** (spec 14). A Etapa 8 do
-  planejamento foi **dividida**: **8 = clientes** (entregue) e **8b = terceiros**, mesmo
-  precedente da Etapa 6 (dividida em 6/6b/6c). A 8b é o outro lado da moeda: aqui o material de
-  **outro** estava **conosco**; lá o material **nosso** vai para **outro** beneficiar (corte,
-  dobra, usinagem, galvanização), com remessa, prazo, retorno parcial e a transformação
-  chapa→peças. **Ainda não tem design** — nada dela existe hoje.
+- **Concluído até aqui:** Etapas 0 a 8b — fundação, motor de estoque, cadastros,
+  requisições, reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções,
+  materiais de clientes e remessas a terceiros. As features 10 (lotes/séries/etiquetas),
+  11 (transferências), 12 (devoluções) e 13 (materiais de clientes) estão completas no que cada
+  etapa se propôs; a **14 (materiais em terceiros) fica parcial** — o ciclo de remessa e retorno
+  está completo, a transformação não.
+- **Próxima etapa da ordem:** **Etapa 8c — transformação** (a segunda metade da spec 14): a chapa
+  que sai e volta como peças cortadas mais uma sobra, com o vínculo de rastreabilidade "material
+  que saiu → componente que voltou". A 8b foi escrita para não fechar nenhuma porta dela — o
+  retorno já é uma *lista de resultados*, e não um número. As quatro perguntas que o desenho da 8c
+  precisa responder (como a chapa original é baixada, de onde vem o custo das peças, quem cadastra
+  o material resultante, e o que fazer com a sobra) estão no fim do plano da 8b.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
   2. rodar em produção a consulta que confirma a **lista antiga de materiais de cliente vazia**
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
   3. saber que a **conferência de inventário ajusta saldo fora da permissão de material de
-     cliente** (seção da Etapa 8) — é o ponto que mais importa contar a quem opera.
+     cliente** (seção da Etapa 8) — é o ponto que mais importa contar a quem opera;
+  4. **a Etapa 8b não acrescenta nenhuma consulta a esta lista** — ela só cria coluna e tabelas
+     novas, sem tocar em dado existente. Dito explicitamente porque as duas etapas anteriores
+     deixaram consultas pendentes e o leitor vai procurar a desta.
+- **Duas coisas da Etapa 8b que dependem de você, não do código:** confirmar se **remessa mista de
+  donos** deve mesmo ser recusada (item **E** do bloco de leitura), e fazer a **verificação no
+  navegador** dos selos coloridos e do PDF (item **F**).
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas
   pelo usuário (roteiros no guia); tela de subfamílias; telas para localizações
   vazias/materiais sem endereço; pendências declaradas (a)–(j) da 6b e (a)–(g) da 6c na
   spec 10; as duas da Etapa 7 — Ajuste não reconcilia o bloqueado (decisão de negócio
-  pendente) e o estado parcial da Sucata sem notificação; e as da Etapa 8 — conferência de
-  inventário fora do motor, e os relatórios que misturam material de cliente sem o selo.
+  pendente) e o estado parcial da Sucata sem notificação; as da Etapa 8 — conferência de
+  inventário fora do motor, e os relatórios que misturam material de cliente sem o selo; e as da
+  Etapa 8b — a mesma decisão do Ajuste agora alcançando a coluna "em terceiros" (item **B**), e a
+  lista de exclusão que protege as colunas novas por omissão (item **G**).
 - **Transversal (2026-08-11):** auditoria completa das 24 specs contra o código — specs
   que afirmavam coisas não entregues foram corrigidas com nota datada, e o bug de front dos
   status de reserva (`92fe236`) saiu dessa auditoria.

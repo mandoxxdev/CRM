@@ -1,5 +1,135 @@
 # Almoxarifado Etapa 8b — Remessas para Terceiros: plano de implementação
 
+## ✅ ETAPA CONCLUÍDA — 2026-08-12 (`4d7de25..`, código em `0a01124..b176212`)
+
+**As 10 tasks foram executadas.** O que a etapa entrega: o material que a GMP manda beneficiar fora
+deixou de sumir do controle — sai do **disponível** sem sair do **patrimônio**, com documento,
+prazo, retorno parcial e baixa justificada do que não voltou.
+
+### Task → o quê → hash
+
+| Task | O quê | Hash |
+|---|---|---|
+| — | design + as duas armadilhas + a correção do alcance (7→14) | `4d7de25` · `9626094` · `742b9ea` |
+| — | este plano | `2903308` |
+| **1** | coluna `quantidade_em_terceiros` + a conta do disponível centralizada em `availabilitySql.js` (14 sítios) | `0a01124` |
+| **2** | conferência de inventário desconta **só** essa retenção | `06e7333` |
+| **3** | três tabelas + `thirdPartyStateMachine.js` + ação `remessar_terceiro` + stub de `fornecedores` | `258f5d2` |
+| **4** | quatro tipos no motor (`REMESSA_TERCEIRO`/`RETORNO_TERCEIRO`/`PERDA_TERCEIRO`/`CONSUMO_TERCEIRO`) | `e0be211` |
+| **5** | `thirdPartyService`: criar e enviar, tudo-ou-nada | `257a444` |
+| **6** | retorno parcial com teto acumulado por item | `69d32a8` |
+| **7** | encerrar com destino obrigatório + cancelar com estorno | `519e471` |
+| **8** | sete rotas + schemas Zod + `GET /vencidas` | `11a73cb` |
+| **9** | tela `RemessasTerceirosAlmoxarifado` + `remessaPdf.js` | `b176212` |
+| **10** | documentação e verificação final | *este commit* |
+
+*(Os commits `4aea3d2`, `fbb3e8c`, `e859006`, `9cbeeec`, `5df424d`, `db118e6`, `e83a4de` registram
+neste plano o que cada execução achou que ele previa errado.)*
+
+### Gates — números REAIS, medidos na Task 10
+
+| Suíte | Esperado no plano | **Medido** |
+|---|---|---|
+| `server && npm run test:api` | 74/74 arquivos | **74/74 arquivos OK** ✅ |
+| `server && npm run test:almoxarifado` | 42 / 0 | **42 passou, 0 falhou** ✅ |
+| `server && npm run test:validation` | 4 / 0 | **4 passed, 0 failed** ✅ |
+| `server && npm run test:safealter` | 3 / 0 | **3 passed, 0 failed** ✅ |
+| `server && npm run test:sqlite` | 3 / 0 | **3 passed, 0 failed** ✅ |
+| `client && CI=true npx react-scripts test` | 255 testes / 24 suítes | **268 testes / 24 suítes** ⚠️ |
+| `client && CI=true npx react-scripts build` | `Compiled successfully.` | **`Compiled successfully.`** ✅ |
+
+> **A única divergência é o número de testes de client, e ela é para MAIS: 268 e não 255.** O Step 10
+> da Task 9 previa 21 testes novos (13 da tela + 8 do PDF) sobre os 234 da entrada; foram **34**.
+> A diferença vem do que a execução da Task 9 acrescentou e o plano não previa (o modal "Nova
+> remessa" com o par bilateral da recusa de donos misturados; a separação entre "Retornado" e
+> "Baixado (não voltou)", também bilateral; e o teste que lê `Almoxarifado.css` com `fs`). O número
+> de **suítes** bateu: 24. Registrado aqui em vez de ajustado no texto do Step, porque número
+> inventado em documento de fechamento é pior que número divergente explicado.
+
+### Correções de spec declaradas por esta etapa
+
+1. **A spec da feature 14 dizia que o envio seria "saída para localização virtual 'Em terceiros'
+   (saldo visível mas não disponível)". ERRADO** — `getSaldoDisponivel` calcula sobre o **escalar**
+   `quantidade_atual`, então material numa localização virtual **continuaria disponível para saída**:
+   a solução proposta não entregava o requisito que ela mesma enunciava. Corrigido na spec 14 com a
+   afirmação errada **escrita**, não apagada.
+2. **O design desta etapa dizia que a conta do disponível estava replicada em SETE lugares. São
+   QUATORZE**, em 8 arquivos (`742b9ea`). Segundo erro do mesmo tipo em duas etapas seguidas — a
+   spec da Etapa 8 mandou auditar um subconjunto de diretórios e deixou de fora as duas piores
+   leituras. **Regra registrada: mudança em coluna de `materiais_almoxarifado` exige varredura de
+   `server/` inteiro.**
+3. **A contagem de arquivos era 7 e é 8** (execução da Task 1) — o total de 14 implementações sempre
+   esteve certo; errado era o agrupamento.
+4. **O texto que este plano trazia pronto para o documento de novidades (Step 5c da Task 10, regra
+   11) dizia que "quem não tem a permissão recebe 403 e o botão nem aparece na tela". ERRADO** — os
+   botões **continuam visíveis**. `useAlmoxPermissoes.bloquearSeNaoPode` barra a ação no `onClick`,
+   com o mesmo texto que o backend produziria, e **falha aberto de propósito**: se
+   `GET /minhas-permissoes` não carregar, ela deixa clicar e quem recusa é o 403 do servidor —
+   esconder botão por erro de rede tiraria a função de quem tem direito a ela. Conferido no código
+   na Task 10 e corrigido nos dois documentos, em vez de copiado do plano. **É a razão pela qual o
+   Step 5c manda "conferir cada mensagem contra o arquivo antes de publicar" — e a checagem valeu.**
+5. **O self-review deste plano afirmava que "a listagem com filtro por fornecedor cobre o item do
+   checklist da feature 14". A TELA não tem esse filtro** — o único `select` dela é o de **status**.
+   O filtro por fornecedor existe na **rota** (`GET /remessas-terceiros?fornecedor_id=`) e ficou sem
+   consumidor na interface. Corrigido na spec 14 com as duas ressalvas escritas (não é tela de
+   posição por terceiro; o filtro por fornecedor é só de API), em vez de manter a afirmação
+   confortável. **Segunda vez na mesma etapa em que um texto pronto do plano descrevia a tela melhor
+   do que ela é** — as duas achadas só porque a Task 10 abriu o componente em vez de copiar.
+
+### Quatro defeitos que só a EXECUÇÃO achou — leitura e suíte verde não achavam
+
+Registrados porque são o mesmo padrão, quatro vezes: **o plano sabia da regra em outra seção e não a
+testou aqui.**
+
+1. **Task 5 — a pré-checagem do envio deixava a remessa sair pela metade.** Comparava **cada linha
+   sozinha**: duas linhas de 60 de um material com 100 passavam as duas. Estado **medido com sonda
+   executada**: `quantidade_em_terceiros = 60`, item 1 com `enviado_em`, item 2 não, remessa parada
+   em ABERTA. **Regra que fica: toda pré-checagem "tudo ou nada" agrega pelo recurso escasso, nunca
+   pela linha do documento.**
+2. **Task 6 — a mensagem do teto do retorno dizia o número ERRADO** quando o item aparecia em duas
+   linhas do mesmo recebimento: anunciava um teto que **cabia** e recusava mesmo assim. **Regra que
+   fica: quando a pré-checagem agrega, a mensagem tem de dizer o valor agregado** — teto sem o
+   pedido é um número que contradiz o próprio erro.
+3. **Task 7 — o encerramento com VÁRIOS itens pendentes baixava só o primeiro**, deixando retenção
+   presa nos demais: o saldo órfão pela metade, que é justamente o que a decisão 4 do design existe
+   para evitar. Todas as remessas de encerramento do plano tinham **um item só**.
+4. **Task 4 — o par de retenção precisava de guarda no estorno pelo livro**, e o plano não previa:
+   sem ela o estorno gravaria a linha e **não tocaria** em `quantidade_em_terceiros`.
+
+### Pendências que a etapa deixa registradas (não consertadas)
+
+1. **`AJUSTE` não reconcilia retenção — TERCEIRA instância.** Agora são três caminhos: o bloqueado
+   (Etapa 7), `aplicar_ajustes` da conferência gravando `quantidade_atual` fora do motor (Etapa 8), e
+   a coluna nova. **A decisão é do cliente** (baixar a retenção / recusar / avisar). A 8b **não
+   resolve e não piora**: a conferência agora vem descontada (some o impulso de "corrigir") e o
+   encerramento é o caminho controlado para zerar a retenção.
+2. **"Uma remessa não mistura donos" é DEDUZIDA e NÃO confirmada com a GMP.** Implementada como
+   recusa, com o comentário do código dizendo em voz alta que é dedução. **Precisa virar pergunta ao
+   cliente**, não requisito atendido.
+3. **Step 11 da Task 9 — verificação manual no navegador — NÃO EXECUTADO.** Cor dos cinco badges e
+   PDF baixando legível. JSDOM não valida CSS renderizado nem PDF binário.
+4. **`SENSITIVE_MATERIAL_FIELDS` protege por lista de exclusão.** Toda coluna nova de
+   `materiais_almoxarifado` vaza quantidade exata para o requisitante até ser nomeada ali —
+   aconteceu com `quantidade_em_terceiros` e foi corrigido, mas **o default continua sendo expor**.
+   A 8c cai aqui.
+5. **`quantidade_retornada = quantidade` no encerramento significa LIQUIDADO, não "voltou".**
+   Corrigir de vez custa uma coluna `quantidade_baixada` + `safeAlter` — a 8c decide junto com a
+   transformação.
+6. **Guarda `dispSemBloqueio` não foi tocada** (decisão declarada): material com saldo bloqueado
+   **e** saldo em terceiros ao mesmo tempo pode ter o encerramento da remessa barrado por ela. É a
+   mesma pendência do item 1.
+
+### Documentação atualizada nesta task
+
+`specs/modulo-almoxarifado/14-materiais-terceiros/README.md` · `specs/modulo-almoxarifado/README.md`
+· `specs/modulo-almoxarifado/03-motor-estoque/README.md` · `docs/almoxarifado-guia-etapas-e-testes.md`
+· `docs/almoxarifado-novidades-por-etapa.md` · este plano.
+
+**Próxima tarefa: Etapa 8c — transformação.** O briefing detalhado (contrato pronto que ela consome,
+os quatro pontos que o design precisa decidir) está no fim deste arquivo.
+
+---
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** o material que a GMP manda beneficiar fora (corte, dobra, usinagem, tratamento, pintura,
@@ -4533,7 +4663,7 @@ EOF
 > **nenhum teste pega**. Aconteceu na Etapa 7. `aberto`, `concluido` e `cancelado` já existem; os
 > cinco status da remessa precisam de nomes próprios porque não coincidem com os existentes.
 
-- [ ] **Step 1: Escrever o teste do PDF (falha)**
+- [x] **Step 1: Escrever o teste do PDF (falha)**
 
 Cria `client/src/utils/remessaPdf.test.js`:
 
@@ -4621,12 +4751,12 @@ describe('montarRemessaPDF', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd client && CI=true npx react-scripts test src/utils/remessaPdf --watchAll=false`
 Expected: FAIL — `Cannot find module './remessaPdf'`.
 
-- [ ] **Step 3: Implementar o PDF**
+- [x] **Step 3: Implementar o PDF**
 
 Cria `client/src/utils/remessaPdf.js`:
 
@@ -4726,12 +4856,12 @@ export function gerarRemessaPDF(dados) {
 }
 ```
 
-- [ ] **Step 4: Rodar o teste do PDF e ver passar**
+- [x] **Step 4: Rodar o teste do PDF e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test src/utils/remessaPdf --watchAll=false`
 Expected: PASS — 8 testes.
 
-- [ ] **Step 5: Escrever o teste da tela (falha)**
+- [x] **Step 5: Escrever o teste da tela (falha)**
 
 Cria `client/src/components/almoxarifado/RemessasTerceirosAlmoxarifado.test.js` (molde:
 `MateriaisClienteAlmoxarifado.test.js`):
@@ -4943,7 +5073,7 @@ describe('RemessasTerceirosAlmoxarifado', () => {
 });
 ```
 
-- [ ] **Step 6: Implementar a tela e o CSS**
+- [x] **Step 6: Implementar a tela e o CSS**
 
 Em `client/src/components/almoxarifado/Almoxarifado.css`, junto das outras regras `almox-badge-*`:
 
@@ -5313,7 +5443,7 @@ const RemessasTerceirosAlmoxarifado = () => {
 export default RemessasTerceirosAlmoxarifado;
 ```
 
-- [ ] **Step 7: Rota code-split e menu**
+- [x] **Step 7: Rota code-split e menu**
 
 `client/src/routes/lazyModules.js` (junto dos outros exports do almoxarifado):
 
@@ -5342,12 +5472,12 @@ rota, junto das outras rotas do almoxarifado:
     { path: '/almoxarifado/remessas-terceiros', icon: FiTruck, label: 'Remessas a Terceiros' },
 ```
 
-- [ ] **Step 8: Rodar os testes de client e ver passar**
+- [x] **Step 8: Rodar os testes de client e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test src/components/almoxarifado/RemessasTerceiros src/utils/remessaPdf --watchAll=false`
 Expected: PASS — 13 + 8 testes.
 
-- [ ] **Step 9: Sabotagens obrigatórias**
+- [x] **Step 9: Sabotagens obrigatórias**
 
 | # | Sabotagem | Falha esperada |
 |---|---|---|
@@ -5360,7 +5490,7 @@ Expected: PASS — 13 + 8 testes.
 | S7 | Remover a checagem de destino/justificativa antes do `api.put` | falha `encerrar com pendencia exige destino E justificativa antes de chamar o servidor` |
 | S8 | Importar o componente direto em `App.js` (sem `lazyModules`) | **nenhum teste falha** — verificação é ler o diff; declarado aqui porque já mordeu o projeto |
 
-- [ ] **Step 10: Suíte e build do client**
+- [x] **Step 10: Suíte e build do client**
 
 Run:
 ```
@@ -5370,7 +5500,16 @@ cd client && CI=true npx react-scripts build
 Expected: **255 testes / 24 suítes** (234 + 21 novos, 2 suítes novas), build `Compiled successfully.`
 `CI=true` faz warning virar erro — import não usado em `Layout.js` ou `App.js` quebra o build aqui.
 
-- [ ] **Step 11: Verificação manual (o que teste de JSDOM não cobre)**
+- [ ] **Step 11: Verificação manual (o que teste de JSDOM não cobre)** — ⚠️ **NÃO EXECUTADO**
+
+> **Este step continua desmarcado de propósito, e não por esquecimento.** Nenhuma sessão desta etapa
+> abriu um navegador: JSDOM não renderiza CSS (não sabe dizer se um badge tem cor) nem abre PDF
+> binário (não sabe dizer se o documento saiu legível). A Task 9 cobriu o que dava: o teste da tela
+> lê `Almoxarifado.css` com `fs` e exige `color` + `background` nas seis regras — o que prova que a
+> **regra existe**, não que ela **aparece**. Fingir cobertura aqui seria pior do que declarar o
+> buraco. **A pendência está registrada no guia do usuário** (`docs/almoxarifado-guia-etapas-e-testes.md`,
+> Etapa 8b → "O que depende de você", item 2) **e no documento de novidades** (item **F** do bloco
+> "Leia antes de apresentar"), com o que olhar.
 
 `npm run dev` na raiz, e no navegador:
 1. Menu **Almoxarifado → Remessas a Terceiros** abre a tela.
@@ -5379,7 +5518,7 @@ Expected: **255 testes / 24 suítes** (234 + 21 novos, 2 suítes novas), build `
 4. "PDF da remessa" baixa um PDF legível, com o número, o terceiro, os itens e as duas linhas de
    assinatura — e, numa remessa de material de cliente, com o **nome do cliente proprietário**.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add client/src/utils/remessaPdf.js \
@@ -5426,6 +5565,38 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
 ```
 
+#### O que a execução da Task 9 (`b176212`) achou que este plano previa errado
+
+Registrado aqui porque a Etapa 8c herda a mesma tela e o mesmo PDF.
+
+1. **O plano não previa CRIAR a remessa pela tela** — só enviar / retornar / encerrar / cancelar.
+   Com isso a rota `POST /remessas-terceiros` ficaria **sem nenhum consumidor** e o módulo inteiro
+   seria inutilizável pela interface (o design diz "tela: criar, enviar, receber retorno,
+   encerrar"). Foi acrescentado o modal **"Nova remessa"**, que também adianta na tela a recusa de
+   misturar donos que o servidor faz em `resolverProprietario` — **com teste dos dois lados**,
+   porque uma tela que recusasse o segundo item sempre impediria a remessa normal de duas chapas
+   nossas.
+2. **`FiTruck` JÁ estava importado em `Layout.js`** (usado em Compras). O plano mandava
+   acrescentá-lo ao import; o import duplicado **quebraria o build** com `CI=true`. Não foi
+   acrescentado.
+3. **O helper `preencher` que o plano trazia pronto no teste só tratava `input` e `select`** —
+   `justificativa` e `motivo` são `textarea`, e sem o protótipo certo o setter do React estoura.
+4. **A armadilha que a Task 7 deixou nomeada em comentário era real e chegou até aqui.** Ao encerrar
+   com destino (e ao cancelar), o serviço grava `quantidade_retornada = quantidade` nos itens
+   pendentes só para zerar a pendência: ali o número significa **LIQUIDADO**, não "voltou". A tela
+   **não podia** rotular aquela coluna como "Retornado" — uma chapa perdida no galvanizador apareceria
+   como devolvida. A tela lê `encerramento_destino` do cabeçalho e soma
+   `retornos_remessa_item_almoxarifado` (que só tem linha de retorno **real**) para separar
+   **Retornado** de **Baixado (não voltou)**; o PDF declara a baixa com o destino. As duas metades
+   têm teste.
+5. **O teste do CSS foi além do que o plano previa.** O plano declarava a sabotagem S1 como *"nenhum
+   teste falha — JSDOM não valida CSS"*. Verdade para CSS **renderizado**; mas dá para ler o arquivo
+   com `fs` e exigir `color` + `background` nas seis regras — mesmo truque que a Etapa 8 usou com
+   `.almox-badge-cliente`. Sabotado: apagar as regras derruba o teste (1 falha). **Isso prova que a
+   regra existe, não que ela aparece na tela** — o Step 11 continua devendo.
+6. **Contagem de testes:** o plano esperava 13 + 8 na Task 9 e **255 testes / 24 suítes** no total do
+   client. Foram **24 testes novos** e o total real ficou em **268 testes / 24 suítes**.
+
 ---
 
 ### Task 10: documentação e verificação final
@@ -5442,7 +5613,7 @@ EOF
 - Produces: documentação que não mente. **Documentação desatualizada é trabalho não terminado** —
   regra nº 1 do `CLAUDE.md`, e já falhou nesta base.
 
-- [ ] **Step 1: Rodar TODOS os gates e anotar os números reais**
+- [x] **Step 1: Rodar TODOS os gates e anotar os números reais**
 
 ```
 cd server && npm run test:api
@@ -5458,12 +5629,16 @@ Esperado: `test:api` **74/74 arquivos OK** (68 na entrada + 6 novos), `test:almo
 **42 passou / 0 falhou** (a etapa não removeu nem acrescentou caso lá), validation **4/0**,
 safealter **3/0**, sqlite **3/0**; client **255 testes / 24 suítes**, build `Compiled successfully.`
 
+> **MEDIDO na execução:** tudo bateu, **exceto o total de testes de client: 268, não 255** — e a
+> divergência é para **mais**, pelos testes que a Task 9 acrescentou além do plano. Suítes bateram
+> (24). Detalhe na tabela de gates do bloco de conclusão, no topo deste arquivo.
+
 > **Se algum número divergir, escreva o número REAL e explique a divergência** — foi assim que a
 > Etapa 8 registrou honestamente a queda de 43 para 42 em `test:almoxarifado` (um teste a menos
 > porque o código que ele testava deixou de existir). Número inventado em documento de fechamento é
 > pior que número ausente.
 
-- [ ] **Step 2: `specs/modulo-almoxarifado/14-materiais-terceiros/README.md`**
+- [x] **Step 2: `specs/modulo-almoxarifado/14-materiais-terceiros/README.md`**
 
 Trocar o cabeçalho inteiro (que hoje diz "❌ nada implementado" e "a 8b ainda não tem design
 aprovado nem tasks quebradas") por:
@@ -5517,7 +5692,7 @@ proposta não entregava o requisito que ela mesma enunciava. O que foi feito: qu
 retenção `quantidade_em_terceiros`, com a conferência de inventário descontando **só ela**.
 ```
 
-- [ ] **Step 3: `specs/modulo-almoxarifado/README.md`**
+- [x] **Step 3: `specs/modulo-almoxarifado/README.md`**
 
 Atualizar o cabeçalho `Última atualização` (empurrando o atual para o `Antes:`) com o resumo da 8b,
 e a **linha 14 do mapa de features** para 🟡 (8b entregue, 8c pendente). O cabeçalho novo precisa
@@ -5526,7 +5701,7 @@ conter, no mínimo: a correção das 14 leituras do disponível (e que o design 
 ação `remessar_terceiro`, os números reais das suítes, e a pendência do `AJUSTE` ganhando segunda
 instância.
 
-- [ ] **Step 4: `docs/almoxarifado-guia-etapas-e-testes.md`**
+- [x] **Step 4: `docs/almoxarifado-guia-etapas-e-testes.md`**
 
 Atualizar o bloco **"Onde o desenvolvimento parou"** (o atual vira "Antes:") e acrescentar a seção
 **"Etapa 8b — Remessas a Terceiros"**, com:
@@ -5545,7 +5720,7 @@ Atualizar o bloco **"Onde o desenvolvimento parou"** (o atual vira "Antes:") e a
    tabelas, sem tocar em dado existente. **Dizer isso explicitamente**, porque as Etapas 7 e 8
    deixaram consultas pendentes e o leitor vai procurar a desta.
 
-- [ ] **Step 5: `docs/almoxarifado-novidades-por-etapa.md` — o documento que vai à empresa**
+- [x] **Step 5: `docs/almoxarifado-novidades-por-etapa.md` — o documento que vai à empresa**
 
 Este é o documento que o usuário **apresenta**. Cada regra precisa de **cenário exato: o que
 digitar, o que o sistema recusa, e a mensagem esperada copiada do código** (não parafraseada).
@@ -5695,14 +5870,14 @@ recebe **403** e o botão nem aparece na tela.
   remessa viva por trás.
 ```
 
-- [ ] **Step 6: Fechar este plano**
+- [x] **Step 6: Fechar este plano**
 
 No topo deste arquivo, acrescentar o bloco de conclusão no molde do plano da Etapa 8: tabela
 `Task | O quê | Hash(es)`, tabela de gates com os **números reais** do Step 1, correções de spec
 declaradas, pendências que a etapa deixa registradas, e a próxima tarefa. Marcar todos os
 checkboxes `- [x]`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add specs/modulo-almoxarifado/14-materiais-terceiros/README.md \
