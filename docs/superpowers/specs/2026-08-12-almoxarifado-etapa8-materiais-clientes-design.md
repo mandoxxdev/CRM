@@ -95,24 +95,54 @@ alimentá-la, então a ilha pode ser aposentada sem migração de dados.
     proprietário (feature 15), relatórios de não conformes/perdas por cliente (feature 21),
     aprovação assíncrona de ajuste (feature 06).
 
+    **Precisões feitas ao escrever o plano (2026-08-12):**
+    - **Só UM PDF entra na etapa.** A decisão 10 fala em "os dois PDFs", mas o escopo acordado
+      nomeia só o de **posição por cliente**. O comprovante de devolução ao cliente fica **fora**,
+      declarado — a devolução em si (tipo `DEVOLUCAO_CLIENTE`) entra, só o documento impresso não.
+    - **Pendência nova, achada ao auditar as leituras e declarada fora de escopo:**
+      `server/routes/almoxarifado.js:941` (`aplicar_ajustes` da conferência de inventário) faz
+      `UPDATE materiais_almoxarifado SET quantidade_atual = ?` **direto, fora do motor** — logo
+      escapa da permissão `ajustar_material_cliente` da decisão 7. Fechar isso exige reescrever a
+      conferência para passar pelo motor, o que é uma etapa por si. **Enquanto não for fechado, a
+      conferência de inventário é um caminho por onde o saldo de material de cliente pode ser
+      alterado sem a permissão dedicada** — e isso tem de constar no guia do usuário, não só aqui.
+
 ## Arquitetura
 
 ### A coluna e a invariante
 
 `safeAlter`: `ALTER TABLE materiais_almoxarifado ADD COLUMN proprietario_cliente_id INTEGER`.
 
-**`proprietario_cliente_id IS NULL` = material nosso.** Todo o risco desta etapa está aqui: **19
-queries** leem `materiais_almoxarifado` hoje (`services/almoxarifado/*.js` +
-`routes/almoxarifado/*.js`), e uma esquecida faz a chapa do cliente contar como sua — em reposição
-de mínimo, sugestão de compra, relatório de posição, dashboard e seletor de requisição. **É uma
-falha silenciosa:** nada quebra, o número só fica errado. Nenhum teste existente pegaria.
+**`proprietario_cliente_id IS NULL` = material nosso.** Todo o risco desta etapa está aqui: uma
+leitura esquecida faz a chapa do cliente contar como sua — em reposição de mínimo, sugestão de
+compra, relatório de posição, dashboard e seletor de requisição. **É uma falha silenciosa:** nada
+quebra, o número só fica errado. Nenhum teste existente pegaria.
+
+> **CORREÇÃO (2026-08-12) — esta spec estava errada e a versão anterior mandava auditar o lugar
+> errado.** O texto original dizia "**19 queries** leem `materiais_almoxarifado`
+> (`services/almoxarifado/*.js` + `routes/almoxarifado/*.js`)". Esse grep varre só o
+> **subdiretório** `routes/almoxarifado/` e deixa de fora **`server/routes/almoxarifado.js`** — o
+> arquivo de rotas v1, que sozinho tem outras ~19 ocorrências. Entre as que ficaram de fora estão
+> as **duas piores**: o dashboard, que faz `SUM(quantidade_atual * custo_unitario)` e contabilizaria
+> **patrimônio de terceiro como nosso** (`routes/almoxarifado.js:229`), e
+> `GET /relatorio/posicao-estoque` (`routes/almoxarifado.js:991`), que é **literalmente a rota
+> nomeada pelo teste que a spec 13 exige** (`posicao de estoque proprio exclui material de
+> cliente`). Seguir a spec como estava escrita produziria uma auditoria que se declara completa
+> deixando passar exatamente o caso que o teste cobre. **A auditoria abrange os dois conjuntos.**
 
 Por isso a segregação **não** vai ser "lembrar de filtrar em cada query". Vai ser:
 
-1. **Auditoria nomeada das 19**, uma a uma, cada uma classificada em:
-   - *leitura de estoque próprio* → filtra `proprietario_cliente_id IS NULL`;
-   - *leitura de um material específico por id* → **não** filtra (quem pediu aquele material quer
-     aquele material, seja de quem for).
+1. **Auditoria nomeada de TODAS as leituras** — os dois conjuntos acima —, uma a uma, cada uma
+   classificada em:
+   - **A. leitura de estoque próprio** → filtra `proprietario_cliente_id IS NULL`;
+   - **B. leitura de um material específico por id** → **não** filtra (quem pediu aquele material
+     quer aquele material, seja de quem for);
+   - **C. leitura em que misturar é o correto** → **não** filtra, e o porquê fica escrito. A classe
+     C não estava nesta spec e foi achada ao escrever o plano: ocupação de prateleira, materiais
+     bloqueados e materiais sem endereço são conjuntos **físicos** — a chapa do cliente ocupa a
+     prateleira de verdade e é bloqueada de verdade. Filtrar ali esconderia fato real do
+     almoxarife. A classificação binária original teria forçado uma das duas respostas erradas.
+
    A classificação de cada uma fica escrita no plano — não como comentário solto no código.
 2. **Helper de invariante** em `server/tests/helpers/clienteInvariante.js`, no molde do
    `serieInvariante.js` que a Etapa 6b já usa.
