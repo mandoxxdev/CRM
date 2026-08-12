@@ -2736,7 +2736,54 @@ MSG
   - `montarPosicaoClientePDF({ cliente, itens, aplicacoes, geradoEm })` (função pura) e
     `gerarPosicaoClientePDF(dados)` (renderizador `jspdf`) em `client/src/utils/posicaoClientePdf.js`
 
-- [ ] **Step 1: escrever o teste que falha — `materialClientePosicao.api.test.js`**
+#### Correções feitas ao EXECUTAR a Task 8 (2026-08-12, commits `6e97715` e `5b5eb55`)
+
+Registrado aqui em vez de corrigido em silêncio. Cinco destas mudam o que o plano mandava fazer.
+
+1. **O plano quebra a Task 7 e não avisa.** O Step 4 manda recriar a chave `'materiais-cliente'`
+   do mapa de relatórios — e `materialClienteIlhaAposentada.api.test.js` (Task 7) afirma que essa
+   chave responde **404**. Rodar o plano como escrito derruba a suíte (`67/68`). O teste da Task 7
+   foi reescrito, e o que ele defende mudou de "a chave sumiu" para **"a chave não serve mais
+   dados da ilha"**: grava uma linha na tabela aposentada e prova que ela não aparece na resposta.
+   Sem esse par, "a chave existe" não distinguiria o serviço novo do antigo ressuscitado.
+2. **O cancelamento no teste do Step 1 usa a chave errada.** O plano manda
+   `.send({ justificativa: '...' })`, mas `POST /movimentacoes/:id/cancelar` valida com
+   `CancelamentoSchema`, que declara **`motivo`**. Como chave não declarada é descartada em
+   silêncio (constraint global desta etapa), o cancelamento voltaria 400, a movimentação
+   continuaria viva e o teste falharia acusando o serviço — pelo motivo errado. Corrigido para
+   `motivo`, e o teste passou a **assertar o status do cancelamento** antes de conferir a posição.
+3. **`projetos` e `ordens_servico` não existem no harness.** São tabelas core (criadas por
+   `server/index.js` no boot), e `posicaoPorCliente` faz `LEFT JOIN` nas duas. O teste do plano
+   insere nelas sem criá-las. Criadas à mão no teste, mesmo precedente de
+   `materialClienteGuardaSaida.api.test.js`. **O mesmo esbarrão pegou o teste da Task 7** depois da
+   correção 1 (`no such table: ordens_servico`).
+4. **`App.js` não importa tela do almoxarifado diretamente.** O Step 12 manda
+   `import MateriaisClienteAlmoxarifado from './components/...'`. Todas as páginas do módulo são
+   **code-split** em `client/src/routes/lazyModules.js` (`export const X = page(() => import(...))`)
+   e chegam ao `App.js` por destructuring. Feito pelo caminho real.
+5. **Classe CSS inexistente no JSX do plano.** O Step 11 usa `almox-page-header`, que **não existe**
+   em `Almoxarifado.css` — o header real é `.almox-header` + `.almox-header-actions`, e o filtro é
+   `.almox-filters` + `select.almox-select` (molde de `LotesAlmoxarifado`). Classe inventada sai sem
+   estilo e nenhum teste pega, que é exatamente a armadilha da Etapa 7. **Nenhuma classe nova foi
+   criada nesta task**: o selo reaproveita `.almox-badge-cliente` (Task 9) e o saldo usa
+   `.almox-badge-ok` / `.almox-badge-zerado`, todas já existentes.
+6. **O plano não previa teste de tela nenhum** — só o do montador de PDF. Como a exigência da casa é
+   controle positivo **bilateral**, foi criado `MateriaisClienteAlmoxarifado.test.js` (13 casos):
+   a posição de Alfa mostra o material de Alfa com os números certos **e** esconde o de Beta, e
+   trocar para Beta inverte os dois lados. Cobre também a resposta atrasada e o erro de carga.
+7. **Duas decisões acrescentadas ao que o plano especificava**, as duas por causa do que a tela
+   mostra a um terceiro: (a) o montador do PDF **descarta** aplicação sem OS e sem projeto em vez de
+   imprimir `—` (linha "aplicado em nada" no documento do cliente parece rastreabilidade perdida);
+   (b) falha ao carregar a posição **limpa** a tabela, porque deixar os números do cliente anterior
+   sob o nome do novo é a mesma mentira que a flag `cancelado` evita, por outro caminho.
+8. **Contagens reais:** o teste de API do Step 1 tem **8** casos (o plano previa 6 — somaram-se o
+   404 de cliente inexistente, a chave de relatório e a metade B do controle bilateral); o do PDF
+   tem **8** (o plano previa 6). Sabotagens executadas e restauradas byte a byte: 2 no serviço
+   (filtro do dono → "material do Cliente Beta vazou para a posicao do Cliente Alfa"; `cancelado`
+   da soma de consumido → "consumo cancelado continuou contando") e 2 na tela (flag `cancelado` do
+   efeito; limpeza da posição no erro), cada uma derrubando exatamente o seu teste.
+
+- [x] **Step 1: escrever o teste que falha — `materialClientePosicao.api.test.js`**
 
 ```js
 /**
@@ -2864,12 +2911,12 @@ async function novoMaterial(db, { qtd = 0, proprietario_cliente_id = null } = {}
 })();
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd server && node tests/api/materialClientePosicao.api.test.js`
 Expected: FAIL — as duas rotas devolvem 404.
 
-- [ ] **Step 3: implementar `clienteEstoqueService.js`**
+- [x] **Step 3: implementar `clienteEstoqueService.js`**
 
 ```js
 /**
@@ -2955,7 +3002,7 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
 module.exports = { listarClientesComMaterial, posicaoPorCliente, TIPOS_ENTRADA, TIPOS_CONSUMO };
 ```
 
-- [ ] **Step 4: rotas em `extended.js`**
+- [x] **Step 4: rotas em `extended.js`**
 
 Junto da rota de devolução (Task 6), e recriando a chave do mapa de relatórios que a Task 7 removeu:
 
@@ -2982,12 +3029,12 @@ No mapa `reports`, no lugar da linha que a Task 7 apagou:
 `const clienteEstoqueService = require('../../services/almoxarifado/clienteEstoqueService');` no
 topo, no lugar do require do `clientMaterialService` removido.
 
-- [ ] **Step 5: rodar e ver passar**
+- [x] **Step 5: rodar e ver passar**
 
 Run: `cd server && node tests/api/materialClientePosicao.api.test.js && npm run test:api`
 Expected: `6 passed, 0 failed`; suíte verde.
 
-- [ ] **Step 6: commit do backend da posição**
+- [x] **Step 6: commit do backend da posição**
 
 ```bash
 git add server/services/almoxarifado/clienteEstoqueService.js server/routes/almoxarifado/extended.js server/tests/api/materialClientePosicao.api.test.js
@@ -3010,7 +3057,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 MSG
 ```
 
-- [ ] **Step 7: PDF de posição — teste da função pura primeiro**
+- [x] **Step 7: PDF de posição — teste da função pura primeiro**
 
 `client/src/utils/posicaoClientePdf.test.js`:
 
@@ -3074,12 +3121,12 @@ test('item sem saldo continua na lista (o cliente precisa ver o que zerou)', () 
 });
 ```
 
-- [ ] **Step 8: rodar e ver falhar**
+- [x] **Step 8: rodar e ver falhar**
 
 Run: `cd client && CI=true npx react-scripts test src/utils/posicaoClientePdf --watchAll=false`
 Expected: FAIL — `Cannot find module './posicaoClientePdf'`.
 
-- [ ] **Step 9: implementar `posicaoClientePdf.js`**
+- [x] **Step 9: implementar `posicaoClientePdf.js`**
 
 ```js
 // Etapa 8, Task 8: PDF de posicao por cliente, gerado no NAVEGADOR — zero mudanca de servidor,
@@ -3169,12 +3216,12 @@ export function gerarPosicaoClientePDF(dados) {
 }
 ```
 
-- [ ] **Step 10: rodar e ver passar**
+- [x] **Step 10: rodar e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test src/utils/posicaoClientePdf --watchAll=false`
 Expected: 6 testes verdes.
 
-- [ ] **Step 11: a tela `MateriaisClienteAlmoxarifado.js`**
+- [x] **Step 11: a tela `MateriaisClienteAlmoxarifado.js`**
 
 Molde: `LotesAlmoxarifado.js` — escolher a entidade primeiro (aqui o **cliente**), depois listar,
 com `useEffect` de flag `cancelado` contra resposta atrasada.
@@ -3362,7 +3409,7 @@ export default function MateriaisClienteAlmoxarifado() {
 }
 ```
 
-- [ ] **Step 12: rota e menu**
+- [x] **Step 12: rota e menu**
 
 `client/src/App.js`, no bloco `path="/almoxarifado"`, junto de `lotes`:
 
@@ -3382,12 +3429,12 @@ no topo, no mesmo estilo dos demais imports do módulo).
 (`FiBriefcase` já é importado de `react-icons/fi` neste arquivo — se não estiver, acrescentar ao
 import existente.)
 
-- [ ] **Step 13: verificar o client**
+- [x] **Step 13: verificar o client**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false && CI=true npx react-scripts build`
 Expected: suíte verde, build limpo.
 
-- [ ] **Step 14: commit**
+- [x] **Step 14: commit**
 
 ```bash
 git add client/src/components/almoxarifado/MateriaisClienteAlmoxarifado.js client/src/utils/posicaoClientePdf.js client/src/utils/posicaoClientePdf.test.js client/src/App.js client/src/components/Layout.js
