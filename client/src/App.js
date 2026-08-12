@@ -105,6 +105,7 @@ import {
   ReservasAlmoxarifado,
   InspecoesAlmoxarifado,
   LotesAlmoxarifado,
+  DevolucoesAlmoxarifado,
   ChatPage,
   MinhaConta,
   TodolistBoard,
@@ -484,6 +485,7 @@ function AppRoutes() {
         <Route path="reservas" element={<ReservasAlmoxarifado />} />
         <Route path="inspecoes" element={<InspecoesAlmoxarifado />} />
         <Route path="lotes" element={<LotesAlmoxarifado />} />
+        <Route path="devolucoes" element={<DevolucoesAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
         <Route path="configuracoes" element={<ProtectedAlmoxConfigRoute><ConfiguracoesAlmoxarifado /></ProtectedAlmoxConfigRoute>} />
       </Route>
