@@ -107,6 +107,7 @@ import {
   LotesAlmoxarifado,
   DevolucoesAlmoxarifado,
   MateriaisClienteAlmoxarifado,
+  RemessasTerceirosAlmoxarifado,
   ChatPage,
   MinhaConta,
   TodolistBoard,
@@ -488,6 +489,7 @@ function AppRoutes() {
         <Route path="lotes" element={<LotesAlmoxarifado />} />
         <Route path="devolucoes" element={<DevolucoesAlmoxarifado />} />
         <Route path="materiais-cliente" element={<MateriaisClienteAlmoxarifado />} />
+        <Route path="remessas-terceiros" element={<RemessasTerceirosAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
         <Route path="configuracoes" element={<ProtectedAlmoxConfigRoute><ConfiguracoesAlmoxarifado /></ProtectedAlmoxConfigRoute>} />
       </Route>

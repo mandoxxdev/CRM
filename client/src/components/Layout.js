@@ -339,6 +339,10 @@ const Layout = () => {
     // AO cliente mora dentro desta tela, e é o movimento oposto. Nomes vizinhos de propósito
     // separados por rótulo — "Materiais de Clientes" é onde se olha o que é de terceiro.
     { path: '/almoxarifado/materiais-cliente', icon: FiBriefcase, label: 'Materiais de Clientes' },
+    // Etapa 8b: "Remessas a Terceiros" é material NOSSO que está FORA do prédio para beneficiar.
+    // Não confundir com "Devoluções" (Etapa 7, o material volta PARA o estoque) nem com "Materiais
+    // de Clientes" (Etapa 8, material que é de outro dono e está AQUI).
+    { path: '/almoxarifado/remessas-terceiros', icon: FiTruck, label: 'Remessas a Terceiros' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
