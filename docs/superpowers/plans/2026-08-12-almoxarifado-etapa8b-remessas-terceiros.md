@@ -2315,10 +2315,26 @@ antes/depois provando que o arquivo mudou e restauração conferida por `md5sum`
   - `getRemessa(db, id) => Promise<{...remessa, itens:[{...item, material_codigo, material_nome, unidade, pendente}], retornos:[...]} | null>`
   - `listarRemessas(db, filtros) => Promise<Array<remessa & {itens_total, vencida:0|1}>>`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha** — feito em `257a444`
 
 Cria `server/tests/api/remessaTerceiroCiclo.api.test.js` (as Tasks 6 e 7 **acrescentam** blocos a
-este mesmo arquivo — o ciclo é um só e separá-lo em três arquivos obrigaria a triplicar os helpers):
+este mesmo arquivo — o ciclo é um só e separá-lo em três arquivos obrigaria a triplicar os helpers).
+
+> **O arquivo commitado tem 20 testes, não os 14 do bloco abaixo.** Os seis a mais (e por que cada
+> um existe — todos derrubados por uma sabotagem própria, S8-S11):
+> 1. `[CONTROLE POSITIVO] remessa de material de cliente e ACEITA sem OS nem projeto` — a metade
+>    que faltava da decisão 5. O teste do plano só olha o dono **gravado**; sem este, "recusar toda
+>    remessa de material de cliente" passaria.
+> 2. `atomicidade real: item do MEIO sem saldo...` — o caso do plano tem o item ruim em **último**
+>    lugar; com ele no meio de três, um laço sem pré-checagem já teria movido o primeiro. Verifica
+>    saldo, `enviado_em` de cada item **e** o livro de movimentações, não só o status HTTP.
+> 3. `duas linhas do MESMO material que juntas passam do disponivel...` — **o defeito do plano**
+>    (ver o achado no fim desta task).
+> 4. `[CONTROLE POSITIVO] duas linhas do mesmo material que CABEM no disponivel são enviadas`.
+> 5. `falha DENTRO do motor devolve o claim do item` — a compensação do `catch` que o plano escreve
+>    não tinha teste nenhum; o motor é stubado porque a corrida não é reproduzível.
+> 6. `[CONTROLE POSITIVO] enviar EXATAMENTE o disponivel passa` — um `<=` na pré-checagem recusaria
+>    mandar a peça inteira galvanizar, o caso mais comum do galpão, e nenhum outro teste pegaria.
 
 ```js
 /**
@@ -2527,12 +2543,17 @@ async function remessaCom(db, itens, extra = {}) {
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar** — feito em `257a444`
 
 Run: `cd server && node tests/api/remessaTerceiroCiclo.api.test.js`
 Expected: FAIL no `require` — `Cannot find module '../../services/almoxarifado/thirdPartyService'`.
+**Foi exatamente isso** (`code: 'MODULE_NOT_FOUND'`, `Module._resolveFilename`).
 
-- [ ] **Step 3: Implementar `thirdPartyService` (criar, enviar, ler)**
+- [x] **Step 3: Implementar `thirdPartyService` (criar, enviar, ler)** — feito em `257a444`
+
+> **ATENÇÃO — o bloco de pré-checagem abaixo JÁ ESTÁ CORRIGIDO.** A versão original deste plano
+> comparava **cada linha sozinha** contra o disponível, e isso deixava a remessa sair pela metade.
+> Ver o achado no fim desta task.
 
 Cria `server/services/almoxarifado/thirdPartyService.js`:
 
@@ -2604,6 +2625,10 @@ async function resolverFornecedor(db, { fornecedor_id, fornecedor_nome }) {
 /**
  * Descobre o proprietario da remessa a partir dos materiais dos itens, e RECUSA remessa que mistura
  * donos diferentes (decisao 5 do design).
+ *
+ * ATENCAO — REGRA DEDUZIDA, NAO CONFIRMADA COM O CLIENTE (ver "decisões que eu tomei e o design não
+ * tomou", no fim deste plano). Se a GMP mandar remessas mistas, o documento passa a LISTAR OS DONOS
+ * POR ITEM em vez de nomear um so — o comentario completo esta no codigo commitado.
  *
  * A remessa e isenta da guarda de OS/projeto porque mandar galvanizar nao e aplicar a chapa em
  * ninguem — e a contrapartida dessa isencao e que o documento NOMEIA um proprietario. Um documento
@@ -2719,14 +2744,28 @@ async function enviarRemessa(db, user, remessaId) {
   if (itens.length === 0) throw erro('A remessa nao tem itens para enviar');
 
   // ── 1. Pre-checagem: a remessa INTEIRA e recusada antes de mover qualquer item ──
-  const problemas = [];
+  //
+  // A soma e POR MATERIAL, nao por linha (CORRECAO da execucao — a versao original deste plano
+  // checava linha a linha e deixava a remessa sair pela metade; ver o achado no fim da task).
+  // Item ja enviado num envio anterior fica FORA da soma de proposito: a quantidade dele ja esta
+  // retida, e `disponivel` ja a exclui — soma-la de novo recusaria um reenvio legitimo.
+  const pedidoPorMaterial = new Map();
   for (const item of itens) {
     if (item.enviado_em) continue; // ja enviado num envio anterior — nao entra na checagem
-    if (!item.ativo) { problemas.push(`${item.material_codigo}: material inativo`); continue; }
-    if (Number(item.disponivel) < Number(item.quantidade)) {
+    const acc = pedidoPorMaterial.get(item.material_id)
+      || { codigo: item.material_codigo, unidade: item.unidade, ativo: item.ativo,
+        disponivel: item.disponivel, pedido: 0, linhas: 0 };
+    acc.pedido += Number(item.quantidade);
+    acc.linhas += 1;
+    pedidoPorMaterial.set(item.material_id, acc);
+  }
+  const problemas = [];
+  for (const m of pedidoPorMaterial.values()) {
+    if (!m.ativo) { problemas.push(`${m.codigo}: material inativo`); continue; }
+    if (Number(m.disponivel) < m.pedido) {
       // A mensagem DIZ o numero: sem ele o operador tem de adivinhar quanto falta (licao da Etapa 7).
-      problemas.push(`${item.material_codigo}: disponivel ${item.disponivel} ${item.unidade}, `
-        + `a remessa pede ${item.quantidade}`);
+      problemas.push(`${m.codigo}: disponivel ${m.disponivel} ${m.unidade}, `
+        + `a remessa pede ${m.pedido}${m.linhas > 1 ? ` em ${m.linhas} linhas` : ''}`);
     }
   }
   if (problemas.length) {
@@ -2828,29 +2867,39 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Rodar o teste e ver passar**
+- [x] **Step 4: Rodar o teste e ver passar** — feito em `257a444`
 
 Run: `cd server && node tests/api/remessaTerceiroCiclo.api.test.js`
-Expected: PASS — 13 passed, 0 failed.
+Expected: PASS — 13 passed, 0 failed. **O número estava errado por dois motivos:** o bloco do Step 1
+tem **14** testes, não 13 (contagem do plano), e o arquivo commitado tem **20**. Resultado real:
+**20 passed, 0 failed** — e antes do conserto da pré-checagem foi **19 passed, 1 failed**.
 
-- [ ] **Step 5: Sabotagens obrigatórias**
+- [x] **Step 5: Sabotagens obrigatórias** — feito em `257a444` (11 executadas, todas derrubaram o
+teste previsto; âncora contada com `grep -cF` antes, script abortando com exit 3 se a âncora não
+aparecesse exatamente 1x, `md5sum` antes/depois e restauração conferida por `md5sum` + `git diff`)
 
 | # | Sabotagem | Falha esperada |
 |---|---|---|
-| S1 | Em `enviarRemessa`, mover o bloco de pré-checagem para **depois** do laço de efeito | falha `remessa com item sem saldo nao move NENHUM item` — o item bom fica com `em_terceiros = 50` |
+| S1 | Em `enviarRemessa`, mover a **recusa** da pré-checagem para **depois** do laço de efeito | falha `remessa com item sem saldo nao move NENHUM item` — o item bom fica com `em_terceiros = 50`. Derrubou **3** testes |
 | S2 | Em `assertPodeRemessar`, `if (false)` | falha `remessa sem a acao remessar_terceiro falha com 403` |
-| S3 | Em `assertPodeRemessar`, `throw` sempre | falha `[CONTROLE POSITIVO] ALMOXARIFE, que tem a acao, cria normalmente` |
+| S3 | Em `assertPodeRemessar`, `throw` sempre | falha `[CONTROLE POSITIVO] ALMOXARIFE, que tem a acao, cria normalmente` (derruba 19 de 20) |
 | S4 | Tirar `AND enviado_em IS NULL` do claim do item | falha `enviar duas vezes nao retem o dobro` com `em_terceiros = 60` |
 | S5 | Em `resolverProprietario`, `return { proprietario_cliente_id: null, ... }` sempre | falha `remessa registra o dono quando o material e de cliente` e `remessa que mistura donos diferentes e recusada` |
 | S6 | Em `resolverProprietario`, lançar sempre que `itens.length > 1` | falha `[CONTROLE POSITIVO] remessa so com material NOSSO e aceita` |
 | S7 | Em `listarRemessas`, `THEN 1 ELSE 1` no `CASE` da vencida | falha `listarRemessas marca vencida por prazo, e nao marca quem esta no prazo` |
+| S8 | **(acrescentada)** pré-checagem com `<=` no lugar de `<` | falha `[CONTROLE POSITIVO] enviar EXATAMENTE o disponivel passa` — mandar a peça inteira galvanizar seria recusado |
+| S9 | **(acrescentada)** reintroduzir em `enviarRemessa` a guarda de OS para material de cliente | falha `[CONTROLE POSITIVO] remessa de material de cliente e ACEITA sem OS nem projeto` — prova que a isenção da decisão 5 vale de verdade |
+| S10 | **(acrescentada)** apagar a compensação `enviado_em = NULL` do `catch` | falha `falha DENTRO do motor devolve o claim do item` — item reclamado sem retenção, nunca mais reenviável |
+| S11 | **(acrescentada)** `acc.pedido = ` no lugar de `acc.pedido +=` (= o código original deste plano) | falha `duas linhas do MESMO material...` com a mensagem `a primeira linha foi enviada e a segunda nao — a remessa saiu pela metade` |
 
-- [ ] **Step 6: Suítes de servidor**
+- [x] **Step 6: Suítes de servidor** — feito em `257a444`
 
 Run: `cd server && npm run test:api && npm run test:almoxarifado`
-Expected: `test:api` **73/73 arquivos OK**, `test:almoxarifado` **42/0**.
+Expected: `test:api` **73/73 arquivos OK**, `test:almoxarifado` **42/0**. **Bateu**, mais validation
+**4/0**, safealter **3/0**, sqlite **3/0**.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit** — `257a444` (a mensagem commitada é a de baixo mais dois parágrafos: o
+defeito da pré-checagem por linha e o aviso de que a regra de dono único é **deduzida**)
 
 ```bash
 git add server/services/almoxarifado/thirdPartyService.js \
@@ -2890,6 +2939,51 @@ criterio — duas contas dariam telas que discordam. E so remessa com material l
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
 ```
+
+#### O que a execução da Task 5 (`257a444`) achou que este plano previa errado
+
+1. **A pré-checagem do plano deixava a remessa sair pela metade — o defeito exato que ela existe
+   para impedir.** Ela comparava **cada linha, sozinha**, contra o disponível do material. Duas
+   linhas de 60 de um material com 100 passavam as **duas** (`60 <= 100`, duas vezes); a primeira
+   era enviada e a segunda batia no claim do motor. Estado **medido** com sonda executada, antes do
+   conserto: `quantidade_em_terceiros = 60`, item 1 com `enviado_em` preenchido, item 2 não, remessa
+   parada em `ABERTA`. Conserto: somar as linhas **por material** antes de comparar (código acima já
+   corrigido; sabotagem S11 é o guarda de regressão). Duas linhas do mesmo material **não** são caso
+   de laboratório — o item tem `lote_id`, `peso` e `observacoes` próprios justamente para separar
+   duas chapas do mesmo código.
+   > **E o plano SABIA disso.** A Task 6 acumula por item de propósito (`jaPedido`, com o comentário
+   > "cada um caberia sozinho") e até traz a sabotagem S3 para o caso. A mesma pré-checagem, escrita
+   > duas seções antes, esqueceu. **Regra que fica para a Task 7 e para a 8c:** toda pré-checagem
+   > "tudo ou nada" agrega pelo **recurso escasso** (o material, o pendente do item), nunca pela
+   > linha do documento — e quem executar deve conferir isso mesmo quando o plano trouxer o código
+   > pronto.
+   > **Isto também explica por que a suíte verde não bastou:** o defeito só aparece com duas linhas
+   > do mesmo material, e nenhum teste do plano tinha esse formato. É o quarto caso desta etapa em
+   > que **sonda executada** achou o que leitura e suíte verde não achavam.
+2. **A compensação do `catch` não tinha teste nenhum.** O plano escreve o `enviado_em = NULL` no
+   `catch` e o justifica bem, mas nenhum dos 14 testes chega lá — depois da pré-checagem correta, o
+   `catch` só é alcançável por corrida. Coberto stubando `stockService.registrarMovimentacao` para
+   falhar, e o teste vai além da coluna nula: **reenvia de verdade** e confere que a retenção
+   acontece. Sabotagem S10.
+3. **A regra "uma remessa não mistura donos" continua DEDUZIDA, e agora está escrita como tal no
+   código.** Ela não veio da GMP (ver "duas decisões que eu tomei e o design não tomou", no fim
+   deste plano). Implementada como o plano mandou, mas o comentário de `resolverProprietario`
+   registra que é dedução e **qual é a saída**: se a GMP mandar remessa mista, o documento passa a
+   listar os donos **por item**, lendo o dono do material de cada linha — que já é a fonte de
+   verdade. Nada aqui é irreversível.
+4. **A contagem de testes do Step 4 estava errada** (dizia 13 para um bloco de 14).
+5. **`registrarMovimentacao` devolve `{ id, saldo_anterior, saldo_posterior }`** — o
+   `mov?.id || mov?.movimentacao_id` do plano funciona pelo primeiro termo; o segundo é morto.
+   Mantido como está (defensivo e inócuo), registrado aqui para a Task 6 não achar que existe um
+   contrato `movimentacao_id`.
+
+**Números reais da execução:** o teste falhou primeiro no `require`
+(`Cannot find module '.../thirdPartyService'`); com o serviço criado, **19 passou / 1 falhou** (o
+teste das duas linhas do mesmo material), e **20/0** depois do conserto da pré-checagem. Gates:
+`test:api` **73/73 arquivos OK**, `test:almoxarifado` **42/0**, validation **4/0**, safealter
+**3/0**, sqlite **3/0**. Onze sabotagens executadas, cada uma com âncora contada antes (`grep -cF`,
+exatamente 1), script abortando com exit ≠ 0 se a âncora sumisse, `md5sum` antes/depois provando que
+o arquivo mudou e restauração conferida por `md5sum` **e** `git diff`.
 
 ---
 
@@ -5457,6 +5551,13 @@ diz **exatamente qual asserção ou qual leitura de diff** faz as vezes da prova
    isso implica **um** proprietário por remessa e transformei em recusa com mensagem. É uma
    restrição nova que o design não escreveu, e vale confirmar com o cliente antes de implementar —
    se ele mandar remessas mistas na prática, a regra vira "o documento lista os donos por item".
+   > **Status em `257a444` (Task 5): IMPLEMENTADA, e CONTINUA NÃO CONFIRMADA com a GMP.** Foi
+   > implementada como o plano manda, mas o comentário de `thirdPartyService.resolverProprietario`
+   > diz em voz alta que é dedução e descreve a saída, para que ninguém a leia como requisito do
+   > cliente. **Ainda precisa da confirmação.** Se a resposta for "mandamos remessas mistas": o
+   > ponto de mudança é só `resolverProprietario` + as colunas `proprietario_cliente_id/nome` do
+   > cabeçalho (que passam a ser derivadas ou nulas em remessa mista) + o PDF da Task 9, que passa a
+   > imprimir o dono por linha. O dono de cada item já é lido do material — não há dado a migrar.
 
 ---
 
