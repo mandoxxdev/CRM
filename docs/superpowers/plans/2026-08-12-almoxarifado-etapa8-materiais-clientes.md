@@ -1319,7 +1319,72 @@ MSG
 > deixaria a v1 aberta, e travar a rota inteira barraria ajuste de material **nosso**, que segue
 > sendo `ajustar_estoque`. A decisão é por material, e só o motor tem o material em mãos.
 
-- [ ] **Step 1: escrever o teste que falha — `materialClienteAjuste.api.test.js`**
+#### Correções feitas ao EXECUTAR a Task 4 (2026-08-12, commit `e171eaf`)
+
+Registrado aqui em vez de corrigido em silêncio — as duas primeiras mudam o que o plano mandava
+fazer, e a segunda desmente uma frase que este próprio plano repete três vezes.
+
+1. **O controle positivo do plano não podia passar: GESTOR não alcança as rotas v1/v2.** O Step 1
+   escrevia `CONTROLE POSITIVO: GESTOR continua ajustando material NOSSO` como um `POST
+   /movimentacoes/v2` esperando 201. O gate daquela rota é `requirePermission('movimentar')` =
+   `[ADMINISTRADOR, ALMOXARIFE]`, e **GESTOR não está lá** — o POST leva 403 do middleware, antes
+   de o motor ver o material. O teste falharia por um motivo sem nenhuma relação com a guarda nova,
+   e "consertá-lo" mexendo na guarda teria sido o caminho natural e errado. O arquivo commitado usa
+   **dois** controles positivos no lugar: (a) **ALMOXARIFE** — o mesmo usuário barrado no material
+   de cliente — ajustando material **nosso** pela mesma rota, mesmo payload, mudando só o
+   `proprietario_cliente_id` (é o controle mais afiado possível: uma variável de diferença); e (b)
+   **GESTOR chamando `stockService.registrarMovimentacao` direto**, que é onde a guarda mora e onde
+   `ajustar_estoque` ainda descreve a intenção.
+2. **`ajustar_estoque` NÃO é o gate do AJUSTE hoje — a frase "ajuste de material nosso segue sendo
+   `ajustar_estoque`" descreve a intenção, não o código.** `ajustar_estoque` gateia
+   `POST /movimentacoes/:id/cancelar`, `POST /materiais/:id/bloquear|desbloquear` e o
+   `aplicar_ajustes` da conferência. O AJUSTE pelas rotas v1/v2 é gateado por `movimentar` — ou
+   seja, **um ALMOXARIFE ajusta saldo de material nosso hoje**, e continua ajustando depois desta
+   task (o controle positivo (a) prova isso). Isso é anterior à Etapa 8 e **não foi mexido aqui**;
+   fica escrito porque quem ler o plano acredita no contrário.
+3. **10 casos, não 7.** Os 7 do plano (menos o do GESTOR, ver item 1), mais: **`[v1]`** — o plano só
+   testava a v2, justo a rota que *não* motiva a decisão de desenho; sem o caso da v1 o teste
+   inteiro ficaria verde se alguém movesse a checagem para um `requirePermission` na v2 —,
+   **`AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO` barrados** (o plano cobria só `AJUSTE` na negativa) e o
+   segundo controle positivo do item 1.
+4. **A prova da auditoria do plano era fraca.** Ele se contentava com
+   `/Cliente Alfa LTDA/.test(JSON.stringify(aud))` — regex sobre a linha inteira, que passaria com
+   o nome do cliente **errado** se a fixture tivesse um cliente só. A fixture commitada tem **dois**
+   (`Cliente Alfa LTDA` e `Cliente Beta SA`), o material auditado é do **Beta**, e o teste faz
+   `JSON.parse(dados_novos)` exigindo `proprietario_cliente_nome === 'Cliente Beta SA'`,
+   `proprietario_cliente_id`, `tipo`, `quantidade`, o `quantidade_atual` anterior, a justificativa
+   e o `usuario_id`.
+5. **Limitação declarada da auditoria (não é bug a corrigir):** ela é gravada **antes** do efeito
+   de saldo, dentro da guarda. Se a movimentação falhar depois (validação de endereço, saldo
+   negativo proibido), sobra uma linha de auditoria de um ajuste que não aconteceu. Aceito de
+   propósito e comentado no código: sem transação no motor, para material de terceiro registrar a
+   **tentativa autorizada** vale mais que perdê-la; o saldo real continua no livro de movimentações,
+   que só ganha linha quando o ajuste conclui.
+
+**Quatro sabotagens executadas**, todas restauradas byte a byte (`git diff` limpo, `grep SABOTAGEM`
+vazio antes do commit):
+
+| # | Sabotagem | Resultado |
+|---|---|---|
+| 1 | `ajustar_material_cliente: [ADMINISTRADOR, ALMOXARIFE]` (a do Step 7 do plano) | `6 passed, 4 failed` — as três negativas viram 201 e a `[v1]` junto |
+| 2 | chamada de `assertAjustePermitido` comentada no motor | `6 passed, 4 failed` — as três negativas **e** `auditoria nomeada ... ausente` |
+| 3 | **a que importa**: remover o `if (!material?.proprietario_cliente_id) return` (guarda larga demais) | `8 passed, 2 failed` — **as cinco negativas continuaram verdes**; quem falhou foram os DOIS controles positivos, com `a guarda nova vazou para material proprio` e o erro nomeando `cliente null`. É a prova de que um teste só de recusa teria aprovado uma guarda que barra tudo |
+| 4 | `proprietario_cliente_nome` fixo em `'Cliente Alfa LTDA'` | `9 passed, 1 failed` — `a auditoria nomeou o cliente errado` |
+
+**Pendência confirmada, não corrigida (leva para a spec 13 e o guia na Task 10):**
+`server/routes/almoxarifado.js:941` (`aplicar_ajustes` da conferência de inventário) faz
+`UPDATE materiais_almoxarifado SET quantidade_atual = ?` direto, fora do motor — logo **fora desta
+permissão**. Enquanto não for fechado, a conferência de inventário é um caminho por onde o saldo de
+material de cliente pode ser alterado sem `ajustar_material_cliente` (o gate de lá é
+`ajustar_estoque`, ADMINISTRADOR/GESTOR). Fechar exige reescrever a aplicação de ajustes da
+conferência para passar pelo motor — etapa própria.
+
+**Gates rodados antes do commit `e171eaf`:** `test:api` **63/63 arquivos OK** (62 + o arquivo novo),
+`test:almoxarifado` **43 passou, 0 falhou**, `test:validation` **4/0**, `test:safealter` **3/0**,
+`test:sqlite` **3/0**.
+
+- [x] **Step 1: escrever o teste que falha — `materialClienteAjuste.api.test.js`** (commit
+  `e171eaf`; 10 casos, ver correções 1, 3 e 4 acima — o arquivo commitado **não** é o daqui)
 
 ```js
 /**
@@ -1444,12 +1509,17 @@ const totalDoMaterial = async (db, id) =>
 })();
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar** — executado: **`4 passed, 6 failed`**. As falhas, na ordem:
+  `acao ajustar_material_cliente ausente de ACAO_PERFIS`; `minhas-permissoes` devolveu `undefined`
+  onde se esperava `false`; `[v2] ... 201 !== 403` com corpo
+  `{"id":1,"saldo_anterior":100,"saldo_posterior":55}`; `[v1] ... 201 !== 403` com
+  `"saldo_posterior":42`; `AJUSTE_NEGATIVO: ... 201 !== 403`; e
+  `auditoria nomeada do ajuste de material de cliente ausente`. **Os dois 201 são o retrato do
+  buraco**: antes desta task um ALMOXARIFE zerava o saldo da chapa de um cliente pelas duas rotas.
+  Os 4 que já passavam são os dois controles positivos, o `AJUSTE` isento de OS/projeto e a recusa
+  por justificativa (que já vinha de `REGRAS_VINCULO`).
 
-Run: `cd server && node tests/api/materialClienteAjuste.api.test.js`
-Expected: FAIL já no primeiro caso — `acao ajustar_material_cliente ausente de ACAO_PERFIS`.
-
-- [ ] **Step 3: criar a ação em `permissions.js`**
+- [x] **Step 3: criar a ação em `permissions.js`** (commit `e171eaf`)
 
 Em `ACAO_PERFIS`, logo abaixo de `ajustar_estoque`:
 
@@ -1465,7 +1535,7 @@ Em `ACAO_PERFIS`, logo abaixo de `ajustar_estoque`:
   ajustar_material_cliente: [PERFIS.ADMINISTRADOR],
 ```
 
-- [ ] **Step 4: implementar `assertAjustePermitido` em `ownerRules.js`**
+- [x] **Step 4: implementar `assertAjustePermitido` em `ownerRules.js`** (commit `e171eaf`)
 
 Acrescentar aos requires do topo:
 
@@ -1525,7 +1595,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 5: ligar no motor**
+- [x] **Step 5: ligar no motor** (commit `e171eaf`)
 
 Em `stockService.js`, o bloco da Task 3 passa a ter duas chamadas:
 
@@ -1537,18 +1607,17 @@ Em `stockService.js`, o bloco da Task 3 passa a ter duas chamadas:
   await ownerRules.assertAjustePermitido(db, material, tipo, { quantidade, justificativa }, user);
 ```
 
-- [ ] **Step 6: rodar e ver passar**
+- [x] **Step 6: rodar e ver passar** — **`10 passed, 0 failed`** (o plano previa `7 passed`; ver a
+  correção 3). Suíte inteira depois: `test:api` **63/63 arquivos OK**.
 
-Run: `cd server && node tests/api/materialClienteAjuste.api.test.js`
-Expected: `7 passed, 0 failed`. Depois `cd server && npm run test:api` inteiro.
+- [x] **Step 7: controle positivo** — feito, e **ampliado de uma sabotagem para quatro**. A do plano
+  (alargar a ação para incluir `ALMOXARIFE`) é a #1 da tabela acima e sozinha **não bastava**: ela
+  só prova que a recusa depende da lista de perfis. A que separa "guarda certa" de "guarda que barra
+  tudo" é a **#3** — e sob ela as cinco negativas ficaram **verdes**, com só os dois controles
+  positivos acusando. Um teste feito apenas de recusas teria aprovado uma guarda que bloqueia
+  também o ajuste de material nosso.
 
-- [ ] **Step 7: controle positivo**
-
-Trocar temporariamente `ajustar_material_cliente: [PERFIS.ADMINISTRADOR]` por
-`ajustar_material_cliente: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE]` e rodar: esperado falhar em
-`ajuste de material de cliente sem permissao falha com 403` (vira 201). Restaurar.
-
-- [ ] **Step 8: commit**
+- [x] **Step 8: commit** — `e171eaf`
 
 ```bash
 git add server/services/almoxarifado/permissions.js server/services/almoxarifado/ownerRules.js server/services/almoxarifado/stockService.js server/tests/api/materialClienteAjuste.api.test.js
