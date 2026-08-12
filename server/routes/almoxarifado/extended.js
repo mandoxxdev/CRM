@@ -734,6 +734,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     'epi-colaborador': reportService.relatorioEPIPorColaborador,
     'solicitacoes-compra': reportService.relatorioSolicitacoesCompraPendentes,
     'materiais-sem-endereco': async (db) => {
+      // Etapa 8, Task 1, classe C da auditoria: NAO filtra o dono de proposito. Enderecar
+      // material do cliente e tao necessario quanto enderecar o nosso — a chapa dele precisa
+      // de prateleira de verdade. Filtrar aqui esconderia trabalho real do almoxarife.
       return dbAll(db, `
         SELECT m.* FROM materiais_almoxarifado m
         WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NULL

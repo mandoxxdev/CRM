@@ -409,6 +409,11 @@ const MAPA_LOCALIZACOES_SQL = `
       -- NULL). O relatorio materiais-sem-endereco (routes/almoxarifado/extended.js) ja usava essa
       -- mesma qualificacao. Sem duplicar: quando ha linha COM endereco, o ramo de cima conta e
       -- este fallback nao dispara.
+      -- Etapa 8, Task 1, classe C: este ramo soma OCUPACAO FISICA por localizacao e por isso
+      -- NAO filtra o dono. A chapa do cliente ocupa a prateleira de verdade; esconde-la faria o
+      -- mapa mentir sobre espaco livre. O segundo subselect deste mesmo SQL (contadores de
+      -- baixo_minimo/critico) filtra, porque mede REPOSICAO. Os dois discordam porque medem
+      -- coisas diferentes — nao "uniformizar".
       SELECT m.localizacao_padrao_id, m.id, m.quantidade_atual
       FROM materiais_almoxarifado m
       WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NOT NULL AND m.quantidade_atual > 0
@@ -439,6 +444,10 @@ const MAPA_LOCALIZACOES_SQL = `
         m.quantidade_minima as qty_min
       FROM materiais_almoxarifado m
       WHERE m.ativo = 1 AND m.localizacao_padrao_id IS NOT NULL
+        -- Etapa 8, Task 1, classe A: este subselect conta REPOSICAO (abaixo do minimo /
+        -- critico), nao ocupacao fisica. O subselect de cima (soma de quantidade por
+        -- localizacao) NAO filtra o dono de proposito — ver a nota la. Nao "uniformizar".
+        AND m.proprietario_cliente_id IS NULL
     ) mat_loc
     GROUP BY loc_id
   ) m ON m.loc_id = l.id
@@ -1696,13 +1705,26 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
 }
 
 async function consultarEstoque(db, filters = {}) {
-  let sql = `SELECT m.*, c.nome as categoria_nome,
+  let sql = `SELECT m.*, c.nome as categoria_nome, cli.razao_social as proprietario_cliente_nome,
     (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0) - COALESCE(m.quantidade_em_inspecao,0)) as quantidade_disponivel,
     (m.quantidade_atual * COALESCE(m.custo_medio, m.custo_unitario, 0)) as valor_estoque
     FROM materiais_almoxarifado m
     LEFT JOIN categorias_material_almoxarifado c ON m.categoria_id = c.id
+    LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id
     WHERE m.ativo = 1`;
   const params = [];
+  // ── Etapa 8, Task 1 (classe A com opt-in) ────────────────────────────────────────────────
+  // Default = estoque PROPRIO. Quem quiser material de cliente pede explicitamente:
+  //   proprietario_cliente_id=N -> so daquele cliente (tela de Materiais de Clientes, Task 8)
+  //   incluir_clientes=1        -> tudo junto (a tela que mistura mostra o selo, Task 9)
+  //   material_id=N             -> leitura de UM material (classe B): nao filtra o dono, senao
+  //                                consultar o extrato de material de cliente devolveria vazio.
+  if (filters.proprietario_cliente_id) {
+    sql += ' AND m.proprietario_cliente_id = ?';
+    params.push(Number(filters.proprietario_cliente_id));
+  } else if (!filters.material_id && String(filters.incluir_clientes) !== '1') {
+    sql += ' AND m.proprietario_cliente_id IS NULL';
+  }
   if (filters.categoria_id) { sql += ' AND m.categoria_id = ?'; params.push(filters.categoria_id); }
   if (filters.below_minimum) { sql += ' AND m.quantidade_atual <= m.quantidade_minima AND m.quantidade_minima > 0'; }
   if (filters.material_id) { sql += ' AND m.id = ?'; params.push(filters.material_id); }

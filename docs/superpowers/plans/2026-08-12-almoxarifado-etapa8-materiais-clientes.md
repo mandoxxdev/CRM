@@ -215,7 +215,47 @@ não têm nada a ver com propriedade; `:1420`, `:1437` e `:1572` contam itens po
 > de ajustes da conferência para passar pelo motor, que é uma etapa própria. **Registrar como
 > pendência na spec 13 e no guia (Task 10), não corrigir aqui.**
 
-- [ ] **Step 1: `safeAlter` da coluna**
+#### Correções à própria auditoria, feitas ao EXECUTAR a Task 1 (2026-08-12)
+
+A auditoria acima estava certa na classificação e **errada em duas contagens**. Registrado aqui em
+vez de corrigido em silêncio, porque a Task 2 percorre esta mesma lista e o próximo leitor precisa
+saber que os números originais não fecham.
+
+1. **O grep do subdiretório devolve 21 linhas, não 19.** Faltavam na tabela
+   `returnService.js:57` (`SELECT id, codigo, controle_lote, controle_serie ... WHERE id = ?`) e
+   `returnService.js:292` (`listarSaidasElegiveis`). **Ambas classe B** — leitura por id, não
+   filtram, nenhuma mudança de código. Provavelmente entraram com a Etapa 7, depois de a spec ter
+   contado.
+2. **`routes/almoxarifado.js` tem 19 ocorrências, não 16.** A enumeração acima cobre 17 (6 que
+   mudam + 10 declaradas inalteradas + a pendência da conferência). Faltavam duas, **as duas
+   classe B**, sem mudança: `:473` (`SELECT *` do material no PUT, para o diff de edição) e
+   `:603` (`SELECT foto`, para apagar a foto antiga no upload).
+3. **Total real auditado: 40 leituras** (21 + 19), todas classificadas. Nenhuma leitura de classe A
+   ficou de fora — as 4 achadas a mais são todas classe B.
+
+**Duas armadilhas de fixture que o plano não previu** (as duas custaram falha de suíte se
+ignoradas, e a Task 2 esbarraria nas mesmas):
+
+- **`clientes` não existe no harness.** `tests/helpers/testApp.js` monta o banco só com o
+  `initSchema` do almoxarifado, e `clientes` é tabela **core** (criada por `server/index.js` no
+  boot) — o próprio código do módulo já documentava isso em `extended.js`, na rota
+  `aux/ordens-servico`, com um fallback para `no such table: clientes`. Como o `consultarEstoque`
+  desta task passa a fazer `LEFT JOIN clientes`, **todo** teste que bate em `GET /estoque`
+  quebraria por um erro que não existe em produção. Corrigido no harness (stub mínimo com
+  `razao_social`), não com fallback na query — a Task 2 depende disso para `INSERT INTO clientes`.
+- **`tests/almoxarifado.test.js` monta `materiais_almoxarifado` à mão**, sem `initSchema`. A coluna
+  nova precisou ser declarada lá também, senão `purchaseService`/`reportService`/`alertService`
+  estouram com `no such column: proprietario_cliente_id` na suíte `test:almoxarifado`.
+
+**Sonda executada** (script temporário, apagado depois): material de cliente e material próprio
+equivalentes lado a lado, 22 verificações — 15 de classe A (todas com controle positivo: o próprio
+aparece), 3 de classe B e 4 de classe C. `22/22 OK`. Sabotada em seguida nos dois pontos mais
+perigosos: remover o filtro do `purchaseService` (a sonda acusou `material_ids=1,2` — pedido de
+compra para material de terceiro) e trocar o do `valorTotalEstoque` por `= NULL` (a sonda acusou
+`total=0`, ou seja, **a metade do controle positivo é que pegou** — a checagem de exclusão sozinha
+teria aprovado a leitura zerada). A Task 2 transforma essa sonda em teste versionado.
+
+- [x] **Step 1: `safeAlter` da coluna**
 
 Em `server/services/almoxarifado/schema.js`, logo depois das três linhas de `safeAlter` de
 `materiais_almoxarifado` que já existem (`tipo_material_id`, `ponto_pedido`,
@@ -237,7 +277,7 @@ Em `server/services/almoxarifado/schema.js`, logo depois das três linhas de `sa
     ON materiais_almoxarifado (proprietario_cliente_id)`);
 ```
 
-- [ ] **Step 2: teste que falha — `materialClienteColuna.api.test.js`**
+- [x] **Step 2: teste que falha — `materialClienteColuna.api.test.js`**
 
 Cria `server/tests/api/materialClienteColuna.api.test.js`:
 
@@ -304,18 +344,18 @@ async function novoMaterial(db, { qtd = 0, proprietario_cliente_id = null, minim
 })();
 ```
 
-- [ ] **Step 3: rodar e ver falhar**
+- [x] **Step 3: rodar e ver falhar**
 
 Run: `cd server && node tests/api/materialClienteColuna.api.test.js`
 Expected: FAIL — `coluna proprietario_cliente_id ausente` e o INSERT com a coluna estoura
 `SQLITE_ERROR: table materiais_almoxarifado has no column named proprietario_cliente_id`.
 
-- [ ] **Step 4: rodar e ver passar (só o Step 1 já resolve este arquivo)**
+- [x] **Step 4: rodar e ver passar (só o Step 1 já resolve este arquivo)**
 
 Run: `cd server && node tests/api/materialClienteColuna.api.test.js`
 Expected: `4 passed, 0 failed`.
 
-- [ ] **Step 5: aplicar a classe A em `alertService.js` (3 leituras)**
+- [x] **Step 5: aplicar a classe A em `alertService.js` (3 leituras)**
 
 `sincronizarEstadoAcimaMinimo` (~linha 537) — o subselect ganha o filtro:
 
@@ -353,7 +393,7 @@ async function verificarAlertaPorMaterialId(db, materialId, opts = {}) {
 }
 ```
 
-- [ ] **Step 6: aplicar a classe A em `purchaseService.js` e `reportService.js`**
+- [x] **Step 6: aplicar a classe A em `purchaseService.js` e `reportService.js`**
 
 `purchaseService.js` (~linha 4):
 
@@ -402,7 +442,7 @@ async function relatorioMateriaisBloqueados(db) {
 }
 ```
 
-- [ ] **Step 7: aplicar a classe A em `stockService.js` (contador do mapa + `consultarEstoque`)**
+- [x] **Step 7: aplicar a classe A em `stockService.js` (contador do mapa + `consultarEstoque`)**
 
 No `MAPA_LOCALIZACOES_SQL`, **segundo** subselect (o de `itens_baixo_minimo`/`itens_criticos`,
 ~linha 440) — a última linha do `FROM materiais_almoxarifado m` daquele bloco:
@@ -449,7 +489,7 @@ async function consultarEstoque(db, filters = {}) {
 }
 ```
 
-- [ ] **Step 8: aplicar a classe A no `routes/almoxarifado.js` (dashboard × 5 + posição-estoque)**
+- [x] **Step 8: aplicar a classe A no `routes/almoxarifado.js` (dashboard × 5 + posição-estoque)**
 
 As cinco queries do dashboard (~linhas 217-241). Substituir cada `WHERE ativo = 1` por
 `WHERE ativo = 1 AND proprietario_cliente_id IS NULL`, com um comentário acima do bloco inteiro:
@@ -495,7 +535,7 @@ As cinco queries do dashboard (~linhas 217-241). Substituir cada `WHERE ativo = 
             ORDER BY categoria, nome`, [], (err, rows) => {
 ```
 
-- [ ] **Step 9: rodar a suíte inteira (regressão)**
+- [x] **Step 9: rodar a suíte inteira (regressão)**
 
 Run: `cd server && npm run test:api && npm run test:almoxarifado && npm run test:safealter`
 Expected: PASS em tudo. Se algum teste existente quebrar aqui, é porque ele criava material
@@ -504,7 +544,7 @@ INSERT direto sem a coluna nasce com `proprietario_cliente_id NULL` e **deve** c
 aparecendo. Se não aparecer, o filtro foi escrito errado (ex.: `= NULL` em vez de `IS NULL`, que
 nunca casa).
 
-- [ ] **Step 10: commit**
+- [x] **Step 10: commit**
 
 ```bash
 git add server/services/almoxarifado/schema.js server/services/almoxarifado/alertService.js server/services/almoxarifado/purchaseService.js server/services/almoxarifado/reportService.js server/services/almoxarifado/stockService.js server/routes/almoxarifado.js server/tests/api/materialClienteColuna.api.test.js

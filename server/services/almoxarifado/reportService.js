@@ -1,15 +1,23 @@
 const { dbAll, dbGet } = require('./db');
 
 async function relatorioEstoqueAtual(db) {
+  // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
+  // material de cliente contabilizaria patrimonio de terceiro como nosso. A posicao POR CLIENTE
+  // tem tela e rota proprias (clienteEstoqueService, Task 8).
   return dbAll(db, `SELECT m.*,
     (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0) - COALESCE(m.quantidade_em_inspecao,0)) as disponivel,
     (m.quantidade_atual * COALESCE(m.custo_medio, m.custo_unitario, 0)) as valor_total
-    FROM materiais_almoxarifado m WHERE m.ativo = 1 ORDER BY m.categoria, m.nome`);
+    FROM materiais_almoxarifado m
+    WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL
+    ORDER BY m.categoria, m.nome`);
 }
 
 async function relatorioAbaixoMinimo(db) {
+  // Etapa 8, Task 1 (classe A): mesma semantica de reposicao do alertService — material de
+  // cliente nao se repoe.
   return dbAll(db, `SELECT * FROM materiais_almoxarifado
     WHERE ativo = 1 AND quantidade_atual <= quantidade_minima AND quantidade_minima > 0
+      AND proprietario_cliente_id IS NULL
     ORDER BY (quantidade_atual / NULLIF(quantidade_minima, 0))`);
 }
 
@@ -43,6 +51,10 @@ async function relatorioRecebimentosPendentes(db) {
 }
 
 async function relatorioMateriaisBloqueados(db) {
+  // Etapa 8, Task 1, classe C da auditoria: NAO filtra o dono de proposito. E relatorio de
+  // QUALIDADE — material de cliente bloqueado e exatamente o que o almoxarife precisa ver, e
+  // esconde-lo aqui apagaria fato fisico real. O selo de propriedade (Task 9) e o que evita a
+  // confusao, nao o filtro. Nao "uniformizar" com relatorioEstoqueAtual logo acima.
   return dbAll(db, `SELECT * FROM materiais_almoxarifado
     WHERE ativo = 1 AND COALESCE(quantidade_bloqueada,0) > 0 ORDER BY nome`);
 }

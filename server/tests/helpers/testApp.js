@@ -18,6 +18,21 @@ async function createTestApp(options = {}) {
   const db = new sqlite3.Database(':memory:');
   await initSchema(db);
 
+  // `clientes` é tabela CORE (criada por server/index.js no boot), fora do initSchema do
+  // almoxarifado — que por isso nunca a criava aqui. A partir da Etapa 8 as rotas do módulo
+  // fazem LEFT JOIN nela para resolver o nome do proprietário do material
+  // (stockService.consultarEstoque), então o harness precisa refletir a produção: sem a tabela,
+  // GET /almoxarifado/estoque falharia com "no such table: clientes" em TODO teste, num erro que
+  // não existe em produção. Subconjunto mínimo das colunas de index.js — o módulo só lê
+  // razao_social (convenção fixada no plano da Etapa 8).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS clientes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    razao_social TEXT NOT NULL,
+    nome_fantasia TEXT,
+    cnpj TEXT,
+    status TEXT DEFAULT 'ativo'
+  )`);
+
   // Diretório temporário para uploads (multer do módulo exige um PERSISTENT_DATA_DIR)
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'almox-test-'));
 

@@ -630,6 +630,20 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN ponto_pedido REAL DEFAULT 0');
   await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN prazo_reposicao_dias INTEGER DEFAULT 0');
 
+  // Etapa 8: proprietario_cliente_id — o dono do material mora na linha do MATERIAL, nao na
+  // linha de saldo. NULL = material nosso; preenchido = material de cliente.
+  //
+  // Por que na linha do material e nao no saldo: o disponivel deriva de
+  // materiais_almoxarifado.quantidade_atual, um escalar POR MATERIAL
+  // (stockService.getSaldoDisponivel). Repartir propriedade dentro do saldo faria esse escalar
+  // misturar donos, e toda guarda de "saldo insuficiente" viraria cirurgia no nucleo do motor.
+  // Razao semantica, igualmente forte: a chapa do Cliente X tem certificado e corrida proprios e
+  // NAO pode ser trocada pela do Cliente Y — duas linhas de catalogo e o modelo correto.
+  // Custo aceito: o catalogo ganha uma linha por cliente do mesmo item fisico.
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN proprietario_cliente_id INTEGER REFERENCES clientes(id)');
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_materiais_almox_proprietario
+    ON materiais_almoxarifado (proprietario_cliente_id)`);
+
   // ── Seed de tipos_material_almoxarifado (só existia no callback do CREATE TABLE da
   // rota — diff de segurança Task 3). Protegido por try/catch: alguns harnesses de teste
   // pré-criam essa tabela com um subconjunto mínimo de colunas (id, nome); nesses casos o

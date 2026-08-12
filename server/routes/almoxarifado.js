@@ -168,6 +168,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // almoxarifado_codigo/nome: `m.localizacao` é um TEXT desnormalizado que não guarda o
       // almoxarifado; resolvemos pelo FK da localização padrão. LEFT JOIN em cadeia — material
       // sem localização (ou com localização sem almoxarifado) continua na lista, com null.
+      //
+      // Etapa 8, Task 1, classe C da auditoria: esta lista (tela de Materiais) NAO filtra o
+      // dono de proposito — e o catalogo operacional, e o almoxarife precisa achar a chapa do
+      // cliente para movimentar, endereçar e etiquetar. O que evita a confusao e o SELO de
+      // propriedade na listagem (Task 9), nao a exclusao. As leituras de estoque PROPRIO
+      // (dashboard, posicao-estoque) filtram — sao outra pergunta.
       let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
                         a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
                  FROM materiais_almoxarifado m
@@ -214,19 +220,25 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/dashboard',(req, res) => {
     const stats = {};
 
-    db.get(`SELECT COUNT(*) as total FROM materiais_almoxarifado WHERE ativo = 1`, [], (err, row) => {
+    // ── Etapa 8, Task 1 ──────────────────────────────────────────────────────────────────
+    // Todas as cinco leituras de materiais_almoxarifado deste dashboard sao de estoque PROPRIO
+    // (classe A da auditoria). valorTotalEstoque e a mais grave: sem o filtro,
+    // SUM(quantidade_atual * custo_unitario) contabiliza o patrimonio do cliente como nosso.
+    // Estas cinco NAO estavam na contagem de 19 da spec de design (que varreu
+    // routes/almoxarifado/ — o subdiretorio — e nao este arquivo).
+    db.get(`SELECT COUNT(*) as total FROM materiais_almoxarifado WHERE ativo = 1 AND proprietario_cliente_id IS NULL`, [], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       stats.totalMateriais = row.total;
 
-      db.get(`SELECT COUNT(*) as total FROM materiais_almoxarifado WHERE ativo = 1 AND quantidade_atual <= quantidade_minima AND quantidade_minima > 0`, [], (err2, row2) => {
+      db.get(`SELECT COUNT(*) as total FROM materiais_almoxarifado WHERE ativo = 1 AND proprietario_cliente_id IS NULL AND quantidade_atual <= quantidade_minima AND quantidade_minima > 0`, [], (err2, row2) => {
         if (err2) return res.status(500).json({ error: err2.message });
         stats.materiaisCriticos = row2.total;
 
-        db.get(`SELECT COUNT(*) as total FROM materiais_almoxarifado WHERE ativo = 1 AND quantidade_atual = 0`, [], (err3, row3) => {
+        db.get(`SELECT COUNT(*) as total FROM materiais_almoxarifado WHERE ativo = 1 AND proprietario_cliente_id IS NULL AND quantidade_atual = 0`, [], (err3, row3) => {
           if (err3) return res.status(500).json({ error: err3.message });
           stats.materiaisZerados = row3.total;
 
-          db.get(`SELECT COALESCE(SUM(quantidade_atual * custo_unitario), 0) as total FROM materiais_almoxarifado WHERE ativo = 1`, [], (err4, row4) => {
+          db.get(`SELECT COALESCE(SUM(quantidade_atual * custo_unitario), 0) as total FROM materiais_almoxarifado WHERE ativo = 1 AND proprietario_cliente_id IS NULL`, [], (err4, row4) => {
             if (err4) return res.status(500).json({ error: err4.message });
             stats.valorTotalEstoque = row4.total;
 
@@ -237,7 +249,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               // Materiais críticos (lista)
               db.all(`SELECT id, codigo, nome, quantidade_atual, quantidade_minima, unidade, categoria
                       FROM materiais_almoxarifado
-                      WHERE ativo = 1 AND quantidade_atual <= quantidade_minima AND quantidade_minima > 0
+                      WHERE ativo = 1 AND proprietario_cliente_id IS NULL
+                        AND quantidade_atual <= quantidade_minima AND quantidade_minima > 0
                       ORDER BY (quantidade_atual / NULLIF(quantidade_minima, 0)) ASC LIMIT 10`, [], (err6, criticos) => {
                 if (err6) return res.status(500).json({ error: err6.message });
                 stats.listaMateriaisCriticos = criticos;
@@ -989,9 +1002,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // GET /api/almoxarifado/relatorio/posicao-estoque
   app.get('/api/almoxarifado/relatorio/posicao-estoque',(req, res) => {
+    // Etapa 8, Task 1 (classe A): esta e a rota que o teste `posicao de estoque proprio exclui
+    // material de cliente` (spec 13) nomeia — e tambem NAO estava na contagem de 19 da spec de
+    // design. Sem o filtro, o relatorio de posicao somaria valor_total de patrimonio de
+    // terceiro. A posicao POR CLIENTE tem rota propria (Task 8).
     db.all(`SELECT *, (quantidade_atual * custo_unitario) as valor_total
             FROM materiais_almoxarifado
-            WHERE ativo = 1
+            WHERE ativo = 1 AND proprietario_cliente_id IS NULL
             ORDER BY categoria, nome`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);

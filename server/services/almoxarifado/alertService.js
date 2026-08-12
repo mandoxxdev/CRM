@@ -536,6 +536,10 @@ async function sincronizarEstadoAcimaMinimo(db) {
     WHERE material_id IN (
       SELECT m.id FROM materiais_almoxarifado m
       WHERE m.ativo = 1 AND m.quantidade_minima > 0 AND m.quantidade_atual > m.quantidade_minima
+        -- Etapa 8, Task 1 (classe A): alerta de estoque e maquina de REPOSICAO. Material de
+        -- cliente (proprietario_cliente_id NOT NULL) nao se repoe: quem manda mais chapa e o
+        -- dono dela.
+        AND m.proprietario_cliente_id IS NULL
     ) AND estado_estoque = ?`, [ESTADO_ACIMA, ESTADO_ABAIXO]);
 }
 
@@ -596,7 +600,11 @@ async function verificarAlertasEstoque(db, opts = {}) {
   await sincronizarEstadoAcimaMinimo(db);
   const materiais = await dbAll(db, `SELECT id, codigo, nome, localizacao, unidade, quantidade_atual, quantidade_minima
     FROM materiais_almoxarifado
-    WHERE ativo = 1 AND quantidade_minima > 0 AND quantidade_atual <= quantidade_minima`);
+    WHERE ativo = 1 AND quantidade_minima > 0 AND quantidade_atual <= quantidade_minima
+      -- Etapa 8, Task 1 (classe A): ver a nota em sincronizarEstadoAcimaMinimo. Disparar
+      -- "acabando, compre mais" sobre material de terceiro manda o alerta errado para a
+      -- pessoa errada.
+      AND proprietario_cliente_id IS NULL`);
   const resultados = [];
   for (const material of materiais) {
     resultados.push(await processarAlertaMaterial(db, material, opts));
@@ -605,8 +613,14 @@ async function verificarAlertasEstoque(db, opts = {}) {
 }
 
 async function verificarAlertaPorMaterialId(db, materialId, opts = {}) {
+  // Etapa 8, excecao declarada da auditoria da Task 1: pela FORMA esta e uma leitura por id
+  // (classe B, nao filtraria). Pela SEMANTICA e alerta de reposicao (classe A). Quem manda
+  // aqui e a semantica: chamada depois de editar material (routes/almoxarifado.js), ela existe
+  // so para disparar o alerta de minimo. Material de cliente devolve null e nenhum alerta sai.
+  // E o unico ponto do modulo onde forma e semantica discordam — quem revisar por grep vai
+  // estranhar um IS NULL numa busca por id, e este comentario e a resposta.
   const material = await dbGet(db, `SELECT id, codigo, nome, localizacao, unidade, quantidade_atual, quantidade_minima
-    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+    FROM materiais_almoxarifado WHERE id = ? AND proprietario_cliente_id IS NULL`, [materialId]);
   if (!material) return null;
   return processarAlertaMaterial(db, material, opts);
 }

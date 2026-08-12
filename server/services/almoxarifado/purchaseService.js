@@ -2,7 +2,11 @@ const { dbRun, dbGet, dbAll } = require('./db');
 
 async function verificarEstoqueMinimo(db) {
   const criticos = await dbAll(db, `SELECT * FROM materiais_almoxarifado
-    WHERE ativo = 1 AND quantidade_atual <= quantidade_minima AND quantidade_minima > 0`);
+    WHERE ativo = 1 AND quantidade_atual <= quantidade_minima AND quantidade_minima > 0
+      -- Etapa 8, Task 1 (classe A): sem este filtro o sistema abriria solicitacao de COMPRA
+      -- para repor material que nao e nosso. E o pior caso da falha silenciosa que a auditoria
+      -- da Task 1 caca — ninguem percebe ate chegar o pedido ao fornecedor.
+      AND proprietario_cliente_id IS NULL`);
 
   const criadas = [];
   for (const m of criticos) {

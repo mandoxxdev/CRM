@@ -42,7 +42,12 @@ async function setupDb() {
     quantidade_reservada REAL DEFAULT 0, quantidade_bloqueada REAL DEFAULT 0, quantidade_em_inspecao REAL DEFAULT 0,
     custo_unitario REAL DEFAULT 0, custo_medio REAL DEFAULT 0, ativo INTEGER DEFAULT 1, categoria TEXT DEFAULT 'OUTROS',
     material_critico INTEGER DEFAULT 0, controle_certificado INTEGER DEFAULT 0, permite_saldo_negativo INTEGER DEFAULT 0,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    -- Etapa 8: esta suíte monta materiais_almoxarifado à mão (não usa initSchema), então a
+    -- coluna nova precisa ser declarada aqui também — senão as leituras auditadas na Task 1
+    -- (purchaseService, reportService, alertService) estouram com "no such column".
+    -- NULL = material nosso, igual à produção.
+    proprietario_cliente_id INTEGER
   )`);
   await dbRun(db, `CREATE TABLE movimentacoes_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER, tipo TEXT, quantidade REAL,
