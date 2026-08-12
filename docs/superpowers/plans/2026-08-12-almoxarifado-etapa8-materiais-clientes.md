@@ -1675,7 +1675,63 @@ MSG
   e devolvido no GET; recebimento com item de material com dono recusa a nota inteira sem
   `nota_fiscal`.
 
-- [ ] **Step 1: escrever o teste que falha — `materialClienteEntrada.api.test.js`**
+#### Correções feitas ao EXECUTAR a Task 5 (2026-08-12)
+
+Registrado aqui em vez de corrigido em silêncio. Nenhuma muda a decisão 8 — todas são buracos de
+cobertura do plano.
+
+1. **O plano diz `7 passed`; o arquivo commitado tem 10.** Os 3 casos a mais existem porque cada
+   metade da Task 5 tinha uma asserção só, e uma asserção só aprova a implementação errada:
+   - **`POST /materiais sem a chave nasce material NOSSO (NULL, nao 0)`** — controle positivo da
+     persistência. Sem ele, um default `0` passaria: `0` não é `NULL`, e **toda** leitura de
+     estoque próprio da Task 1 testa `IS NULL`, então o material sumiria do dashboard, da
+     reposição e da posição sem nenhum erro.
+   - **`PUT que omite a chave PRESERVA o proprietario`** — o plano só testava trocar e limpar.
+     A implementação óbvia e errada (ler `req.body.proprietario_cliente_id || null` direto no
+     PUT, em vez de entrar em `MATERIAL_UPDATE_COLUMNS`) passaria nos dois testes do plano e
+     **apagaria o dono** sempre que alguém editasse o nome pela tela antiga, que não manda a
+     chave. Transformar a chapa do cliente em material nosso ao renomeá-la é exatamente a falha
+     muda que esta etapa caça.
+   - **`entrada de material de cliente com documento em BRANCO tambem falha`** — a guarda do
+     plano já usava `String(rec.nota_fiscal).trim()`, mas nada prendia isso. `''` e `'   '` são
+     o que um formulário manda quando o campo foi tocado e apagado; sem o teste, trocar por
+     `!= null` num refactor futuro cumpriria a nota de remessa com nada dentro.
+2. **O plano não previa teste de client para a Task 5** (o Step 7 só manda rodar a suíte). Foi
+   criado `client/src/components/almoxarifado/MaterialAlmoxarifadoForm.test.js` (7 testes), e ele
+   prende as duas armadilhas que o plano nomeia mas não verificava: o material de **cliente de id
+   1** na edição (onde o padrão `=== 1` / `!!valor` das flags deste mesmo formulário passaria
+   despercebido — `proprietario_cliente_id` é número ou `null`, não flag) e o `null` explícito no
+   payload (com `''` o servidor trata como ausente e o PUT **preserva** o dono antigo: escolher
+   "GMP (estoque próprio)" não limparia nada, em silêncio).
+3. **O snippet 6c do plano não dava `id` ao `<select>`.** Foi acrescentado `id="material-proprietario"`
+   (+ `htmlFor` no label), pelo mesmo motivo dos `id`s de `DevolucoesAlmoxarifado`: sem ele o teste
+   teria de achar o campo por posição entre os ~10 selects do formulário, e quebraria na primeira
+   seção nova.
+4. **O snippet 6e usava `m.proprietario_cliente_id ?? ''`, que devolve NÚMERO.** Funciona (React
+   coage o `value` do select), mas destoa de todos os outros FKs deste formulário
+   (`familia_id`, `subfamilia_id`, `localizacao_padrao_id` usam `? String(…) : ''`). Padronizado
+   para `String()` — a comparação do `<option value>` fica textual dos dois lados.
+5. **Nenhum estilo novo foi criado.** A seção reaproveita `sectionCardStyle`, `almox-section-title`,
+   `almox-form-grid`, `almox-field`, `almox-label` e `almox-form-select` — `Almoxarifado.css` não
+   foi tocado (estava em edição pela Task 9 em paralelo).
+
+**Sabotagens executadas — 4 no servidor, 2 no client, todas restauradas (`git diff` conferido):**
+
+| # | Sabotagem | Mensagem vista |
+|---|---|---|
+| 1 | tirar `item.proprietario_cliente_id &&` da guarda (guarda larga demais) | `9 passed, 1 failed` — `CONTROLE POSITIVO: material NOSSO continua entrando sem nota: ... T8-ENT-9: material do cliente #null exige numero de documento`. É a metade que prova que a guarda não travou o recebimento inteiro |
+| 2 | trocar `!(rec.nota_fiscal && trim())` por `rec.nota_fiscal == null` | `9 passed, 1 failed` — o caso do documento em branco |
+| 3 | remover `proprietario_cliente_id` do `MaterialShape` (o bug do Zod) | `4 passed, 6 failed` — exatamente o mesmo placar do vermelho inicial |
+| 4 | remover a coluna de `MATERIAL_UPDATE_COLUMNS` | `9 passed, 1 failed` — só o PUT de troca/limpeza |
+| 5 | client: payload sem normalizar (`form.proprietario_cliente_id` cru) | `4 failed, 3 passed` — os quatro casos de payload |
+| 6 | client: carga com padrão de flag (`=== 1`) | `1 failed, 6 passed` — só o material do cliente de id 1 |
+
+**Gates reais:** `test:api` **64/64 arquivos OK** (era 63 — este arquivo é o 64º) ·
+`test:almoxarifado` **43 passou, 0 falhou** · `test:validation` **4/0** · `test:safealter` **3/0** ·
+`test:sqlite` **3/0** · client **213 testes / 20 suítes, 0 falhas** (a suíte nova soma 7) ·
+`CI=true npx react-scripts build` OK.
+
+- [x] **Step 1: escrever o teste que falha — `materialClienteEntrada.api.test.js`**
 
 ```js
 /**
@@ -1809,13 +1865,30 @@ const codigo = () => { seq += 1; return `T8-ENT-${seq}`; };
 })();
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd server && node tests/api/materialClienteEntrada.api.test.js`
 Expected: FAIL — `o Zod descartou a chave em silencio (...)`; e o caso do documento passa sem
 recusar (a guarda não existe).
 
-- [ ] **Step 3: declarar o campo no Zod e nas colunas da rota**
+Executado: **`4 passed, 6 failed`**. As seis, na ordem:
+
+```
+✗ POST /materiais persiste proprietario_cliente_id: o Zod descartou a chave em silencio
+  (falta declarar no MaterialShape) ou o INSERT nao a gravou / null !== 1
+✗ PUT /materiais/:id troca e limpa o proprietario: null !== 1
+✗ PUT que omite a chave PRESERVA o proprietario (preserve-when-omitted): null !== 1
+✗ GET /materiais/:id devolve proprietario_cliente_id (a tela precisa dele para o selo): null !== 1
+✗ entrada de material de cliente sem documento falha: Missing expected rejection.
+✗ entrada de material de cliente com documento em BRANCO tambem falha: Missing expected rejection.
+```
+
+Os 4 que passaram no vermelho são os que **têm de** passar antes e depois: o material nosso
+nascendo `NULL`, a entrada com documento, o controle positivo do material nosso sem nota e a
+entrada sem projeto. É o formato que a etapa exige — a metade "continua funcionando" não pode
+depender da implementação nova.
+
+- [x] **Step 3: declarar o campo no Zod e nas colunas da rota**
 
 `server/services/almoxarifado/schemas.js`, em `MaterialShape`, logo depois de `fornecedor_id`:
 
@@ -1844,7 +1917,7 @@ E no `insertValues` do `POST /api/almoxarifado/materiais` (o objeto que monta o 
 Lembrar de acrescentar `proprietario_cliente_id` à desestruturação do `req.body` no início do
 handler (a mesma lista de onde saem `codigo`, `nome`, `fornecedor_id`).
 
-- [ ] **Step 4: guarda de documento no recebimento**
+- [x] **Step 4: guarda de documento no recebimento**
 
 `server/services/almoxarifado/receiptService.js`, em `darEntradaEstoque`. Primeiro o SELECT dos
 itens (~linha 364) precisa trazer o dono e o nome dele:
@@ -1882,16 +1955,18 @@ Depois, na pré-checagem (o laço `for (const item of itens)`), logo **antes** d
     }
 ```
 
-- [ ] **Step 5: rodar e ver passar**
+- [x] **Step 5: rodar e ver passar**
 
 Run: `cd server && node tests/api/materialClienteEntrada.api.test.js`
 Expected: `7 passed, 0 failed`. Depois `cd server && npm run test:api`.
+Executado: **`10 passed, 0 failed`** (10 e não 7 — ver o item 1 das correções acima) e
+`test:api` **64/64 arquivos OK**.
 
 Controle positivo da guarda: remover temporariamente `item.proprietario_cliente_id &&` da condição
 (guarda larga demais) e rodar — esperado falhar em `CONTROLE POSITIVO: material NOSSO continua
-entrando sem nota`. Restaurar.
+entrando sem nota`. Restaurar. Executado, mais 3 outras sabotagens — tabela nas correções acima.
 
-- [ ] **Step 6: seção "Propriedade" no formulário de material**
+- [x] **Step 6: seção "Propriedade" no formulário de material**
 
 `client/src/components/almoxarifado/MaterialAlmoxarifadoForm.js`.
 
@@ -1959,13 +2034,14 @@ que o usuário pediu ao escolher "GMP"):
       proprietario_cliente_id: m.proprietario_cliente_id ?? '',
 ```
 
-- [ ] **Step 7: verificar o client**
+- [x] **Step 7: verificar o client**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false && CI=true npx react-scripts build`
 Expected: suíte verde e build sem warning (CI=true transforma warning em erro — variável não usada
 quebra o build).
+Executado: **213 testes / 20 suítes, 0 falhas** (a suíte nova do formulário soma 7) e build OK.
 
-- [ ] **Step 8: commit**
+- [x] **Step 8: commit**
 
 ```bash
 git add server/services/almoxarifado/schemas.js server/services/almoxarifado/receiptService.js server/routes/almoxarifado.js client/src/components/almoxarifado/MaterialAlmoxarifadoForm.js server/tests/api/materialClienteEntrada.api.test.js
