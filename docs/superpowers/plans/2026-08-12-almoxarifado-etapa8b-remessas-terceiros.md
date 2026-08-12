@@ -1691,7 +1691,7 @@ que a decisão 4 existe para evitar. Por isso os dois tipos dedicados, que baixa
 retenção no mesmo UPDATE** — molde exato de `DECISAO_INSPECAO`, que baixa `em_inspecao` e sobe
 `bloqueada` atomicamente pela mesma razão (duas chamadas abrem janela para consumo concorrente).
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Cria `server/tests/api/remessaTerceiroMotor.api.test.js`:
 
@@ -1923,13 +1923,13 @@ const saldos = async (db, id) => dbGet(db,
 > (o material foi criado com `quantidade_atual = 100` **sem** nenhuma linha de saldo, então a única
 > linha existente depois da baixa é a que a própria saída criou, com `-30`).
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/remessaTerceiroMotor.api.test.js`
 Expected: FAIL em quase tudo, com `Tipo de movimento inválido` — `registrarMovimentacao` valida
 contra `TIPOS_MOVIMENTO` e nenhum dos quatro existe ainda.
 
-- [ ] **Step 3: Declarar os tipos em `schema.js`**
+- [x] **Step 3: Declarar os tipos em `schema.js`**
 
 Em `TIPOS_MOVIMENTO`, logo depois de `'DEVOLUCAO_CLIENTE'`:
 
@@ -1977,7 +1977,7 @@ precisam ser barrados explicitamente):
 const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
 ```
 
-- [ ] **Step 4: `movementRules.js` e `ownerRules.js`**
+- [x] **Step 4: `movementRules.js` e `ownerRules.js`**
 
 Em `REGRAS_VINCULO`:
 
@@ -2014,7 +2014,7 @@ const TIPOS_ISENTOS_DONO = ['DEVOLUCAO_CLIENTE', 'TRANSFERENCIA', 'AJUSTE', 'AJU
   'AJUSTE_NEGATIVO', 'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
 ```
 
-- [ ] **Step 5: O motor — as listas e a skip-list**
+- [x] **Step 5: O motor — as listas e a skip-list**
 
 Em `server/services/almoxarifado/stockService.js`, importar `TIPOS_RETENCAO` junto de
 `TIPOS_MOVIMENTO`:
@@ -2073,7 +2073,7 @@ A skip-list do bloco físico (~linha 857) deixa de ser array literal e passa a *
   if (!TIPOS_RETENCAO.includes(tipo) && tipo !== 'TRANSFERENCIA') {
 ```
 
-- [ ] **Step 6: O motor — os dois ramos de retenção**
+- [x] **Step 6: O motor — os dois ramos de retenção**
 
 Na cadeia de efeitos, logo depois do ramo `DECISAO_INSPECAO` (~linha 785):
 
@@ -2109,7 +2109,7 @@ Na cadeia de efeitos, logo depois do ramo `DECISAO_INSPECAO` (~linha 785):
   }
 ```
 
-- [ ] **Step 7: O motor — o claim da baixa e a compensação**
+- [x] **Step 7: O motor — o claim da baixa e a compensação**
 
 No bloco de saída (dentro do `try`, ~linha 859), o `if (consumindoReserva)` ganha um **terceiro**
 braço. Colocar **antes** do `else` simples:
@@ -2173,13 +2173,13 @@ dois tipos:
 > significaria um hold sem remessa viva por trás, que é exatamente o saldo órfão que a decisão 4
 > rejeita. Documentar no comentário ao lado da lista, e no guia do usuário (Task 10).
 
-- [ ] **Step 8: Rodar o teste e ver passar**
+- [x] **Step 8: Rodar o teste e ver passar**
 
 Run: `cd server && node tests/api/remessaTerceiroMotor.api.test.js`
 Expected: PASS — 21 passed, 0 failed (lembre de trocar o `assert` marcado pelo bloco da nota do
 Step 1 antes de rodar).
 
-- [ ] **Step 9: Sabotagens obrigatórias**
+- [x] **Step 9: Sabotagens obrigatórias**
 
 | # | Sabotagem | Falha esperada |
 |---|---|---|
@@ -2192,7 +2192,7 @@ Step 1 antes de rodar).
 | S7 | Esvaziar `TIPOS_SAIDA_COM_DONO` | falha `[CONTROLE POSITIVO] SAIDA de material de cliente sem OS continua recusada` — prova que a isenção nova não desfez a Etapa 8 |
 | S8 | Voltar a skip-list para o array literal antigo (sem os dois tipos novos) | falha `envio a terceiro ... mantem quantidade_atual` (o tipo cai no bloco físico e escreve linha de saldo) |
 
-- [ ] **Step 10: Suítes completas**
+- [x] **Step 10: Suítes completas**
 
 Run:
 ```
@@ -2205,7 +2205,7 @@ safealter **3/0**, sqlite **3/0**. `tests/api/movimentacaoTipos*.api.test.js` e
 `permissoesRotas.api.test.js` são os candidatos a quebrar se `TIPOS_MOVIMENTO_ROTA` mudou de
 tamanho — conferir se algum deles afirma um número de tipos.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add server/services/almoxarifado/schema.js \
@@ -2255,6 +2255,46 @@ por tras.
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
 ```
+
+#### O que a execução da Task 4 (`e0be211`) achou que este plano previa errado
+
+Registrado aqui porque as Tasks 5-7 consomem estes quatro tipos, e a 8c vai criar mais.
+
+1. **A sabotagem S8 estava errada sobre o efeito, e passou 29/0.** O plano dizia que voltar a
+   skip-list para o array literal faria `REMESSA_TERCEIRO` "cair no bloco físico e escrever linha
+   de saldo". **Não escreve.** A linha de saldo por localização é escrita mais abaixo, sob
+   `if (tiposSaida.includes(tipo))`, e um tipo de retenção que entra no bloco físico cai no `else`
+   final ("tipo neutro ao saldo"), que é um no-op declarado. A duplicação da skip-list é risco de
+   **manutenção**, não de comportamento — então o teste que a cobre assere o invariante *"existe
+   UMA lista"* por varredura do código-fonte (com controle positivo do próprio padrão de busca),
+   e não um efeito de saldo que não existe. **Regra que fica:** quando a sabotagem passa, a
+   resposta não é inventar asserção — é descobrir por que o efeito previsto não existe.
+2. **A sabotagem S6 também passou 29/0, e aí havia buraco de teste de verdade.** A isenção dos
+   quatro está **duplamente coberta** (estão em `TIPOS_ISENTOS_DONO` **e** fora de
+   `TIPOS_SAIDA_COM_DONO`), e `assertSaidaPermitida` sai cedo pelos dois caminhos — então apagar a
+   entrada da primeira lista não quebrava nada. É exatamente o caso que
+   `materialClienteDevolucao.api.test.js` já resolvera para `DEVOLUCAO_CLIENTE`, e o plano não
+   mandou repetir. O teste passou a **empurrar os quatro para `TIPOS_SAIDA_COM_DONO` em memória**
+   e provar que a isenção segura mesmo assim. **A 8c tem de repetir isto para todo tipo novo que
+   entrar em `TIPOS_ISENTOS_DONO`.**
+3. **O par de RETENÇÃO precisava de guarda no estorno pelo livro, e o plano não previa.**
+   `REMESSA_TERCEIRO`/`RETORNO_TERCEIRO` não têm ramo de reversão em `cancelarMovimentacao`: sem
+   guarda, o estorno gravaria a linha de `ESTORNO`, marcaria a original `cancelado = 1` e **não
+   tocaria** em `quantidade_em_terceiros` — o livro afirmando uma reversão que não aconteceu, com
+   a retenção presa. Recusado com a mesma mensagem-molde dos tipos de quarentena, apontando para a
+   tela de Remessas. **Contraste deliberado:** `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` **continuam**
+   estornáveis pelo livro, e o estorno devolve ao **disponível**.
+4. **Um sítio fica de fora, declarado:** a guarda `dispSemBloqueio` (`Material bloqueado não pode
+   ser utilizado`) não foi tocada, seguindo a decisão já registrada no topo deste plano. Consequência
+   conhecida: material que tenha **ao mesmo tempo** saldo bloqueado e saldo em terceiros pode ter o
+   encerramento da remessa barrado por aquela guarda. Não foi resolvido nesta task porque a
+   guarda é a mesma pendência `B` do `AJUSTE` (decisão 2 do design) e a decisão é do cliente.
+
+**Números reais da execução:** teste novo 22 falhou / 7 passou antes de implementar (`Tipo de
+movimento inválido`), **31 passou / 0 falhou** depois. Gates: `test:api` **72/72 arquivos OK**,
+`test:almoxarifado` **42/0**, validation **4/0**, safealter **3/0**, sqlite **3/0**. Dez sabotagens
+executadas (as 8 do plano + estorno da retenção + pré-checagem do disponível), cada uma com `md5sum`
+antes/depois provando que o arquivo mudou e restauração conferida por `md5sum` e `git diff`.
 
 ---
 
