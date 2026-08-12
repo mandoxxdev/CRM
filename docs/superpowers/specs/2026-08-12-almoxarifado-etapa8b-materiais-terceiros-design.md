@@ -82,20 +82,40 @@ em A/B/C** na Task 1 do plano da Etapa 8. **Reusar a lista, não refazer o grep.
 > ponto onde a etapa mais provavelmente falha em silêncio, e o design original não o nomeava.
 > `getSaldoDisponivel` (`stockService.js:22-27`) é só **uma** das implementações da conta
 > `atual − reservada − bloqueada − em_inspecao`. A mesma subtração aparece escrita à mão em SQL em
-> pelo menos **seis** outros lugares (levantados por varredura, 2026-08-12):
+> **13 outros lugares, espalhados por 7 arquivos** — 14 implementações no total.
 >
-> - `stockService.js:892` e `:912` — guarda atômica da saída (claim no `WHERE`);
-> - `stockService.js:1351`;
-> - `stockService.js:1631-1632` — guarda da criação de reserva;
-> - `stockService.js:1748` — `quantidade_disponivel` computada na listagem de estoque;
-> - `requisitionStateMachine.js:97-99` — `calcularStatusPosAprovacao`.
+> **Lista completa, verificada por varredura em 2026-08-12** com
+> `grep -rn "quantidade_atual - COALESCE(.*quantidade_reservada" --include=*.js services/ routes/`:
+>
+> | Arquivo | Linha(s) | O que calcula |
+> |---|---|---|
+> | `services/almoxarifado/stockService.js` | 892, 912, 1351 | guardas atômicas de saída (claim no `WHERE`) |
+> | `services/almoxarifado/stockService.js` | 1631 | guarda da criação de reserva |
+> | `services/almoxarifado/stockService.js` | 1748 | `quantidade_disponivel` da listagem de estoque |
+> | `services/almoxarifado/requisitionService.js` | 100, 114 | saldo disponível por item de requisição |
+> | `services/almoxarifado/requisitionStateMachine.js` | 97 | `calcularStatusPosAprovacao` |
+> | `services/almoxarifado/reportService.js` | 8 | relatório de estoque atual |
+> | `services/almoxarifado/clienteEstoqueService.js` | 48 | posição por cliente — **criado na Etapa 8** |
+> | `routes/almoxarifado/extended.js` | 455 | `quantidade_disponivel` |
+> | `routes/almoxarifado.js` | 1890 | — |
+> | `routes/requisicoesMaterial.js` | 259 | **fora do módulo almoxarifado** |
 >
 > Acrescentar a coluna só em `getSaldoDisponivel` faz o sistema **recusar pela função e aceitar
-> pelo SQL**: a listagem mostraria disponível a mais, a reserva seria criada sobre material que
-> está no galvanizador, e a guarda atômica da saída deixaria passar. Nada quebra — o número fica
-> errado. **A task da coluna tem de tratar as sete como um conjunto**, e o teste tem de provar cada
-> caminho separadamente (função, listagem, criação de reserva, guarda de saída, status pós-aprovação),
-> não só `getSaldoDisponivel`.
+> pelo SQL**: a listagem mostraria disponível a mais, a reserva nasceria sobre material que está no
+> galvanizador, e a guarda atômica da saída deixaria passar. Nada quebra — o número fica errado.
+> **A task da coluna tem de tratar as 14 como um conjunto**, e o teste tem de provar cada caminho
+> separadamente, não só `getSaldoDisponivel`.
+>
+> > **CORREÇÃO (2026-08-12) — a primeira versão desta spec dizia "sete", e estava errada.** O
+> > número saiu de uma varredura restrita a `stockService.js` + `requisitionStateMachine.js`. A
+> > varredura completa achou o dobro, em arquivos que a primeira nem olhou —
+> > `requisitionService.js`, `reportService.js`, `routes/almoxarifado.js`, `extended.js`,
+> > `clienteEstoqueService.js` (que **nós criamos na Etapa 8**) e `routes/requisicoesMaterial.js`
+> > (que nem pertence ao módulo). **É o segundo erro do mesmo tipo nesta sequência de etapas:** a
+> > spec da Etapa 8 mandou auditar `services/almoxarifado/*.js` + `routes/almoxarifado/*.js` e
+> > deixou de fora `routes/almoxarifado.js`, onde estavam as duas piores leituras. A lição que fica
+> > escrita aqui para a próxima etapa: **quando a mudança é numa coluna de `materiais_almoxarifado`,
+> > a varredura é `server/` inteiro — nunca um subconjunto escolhido por intuição.**
 
 ### Decisão 2b — fornecedor: `INTEGER` + nome espelhado, sem FK
 
