@@ -13,6 +13,7 @@ import {
 import AlmoxPageHeader from './AlmoxPageHeader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
+import SeloProprietario from './SeloProprietario';
 import { montarEtiquetaMaterial } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
@@ -250,7 +251,14 @@ const MateriaisAlmoxarifado = () => {
                       </span>
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600, color: 'var(--gmp-text)' }}>{m.nome}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--gmp-text)' }}>
+                        {m.nome}
+                        {/* Etapa 8: esta lista mistura material nosso e de cliente de propósito
+                            (classe C da auditoria da Task 1) — o selo é o que evita a confusão.
+                            Fica ao lado do NOME, e não do código, porque é o nome que o
+                            almoxarife lê ao procurar a chapa. */}
+                        <SeloProprietario material={m} />
+                      </div>
                       {m.fornecedor_principal && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{m.fornecedor_principal}</div>
                       )}

@@ -309,3 +309,57 @@ describe('MovimentacoesAlmoxarifado — TRANSFERENCIA no formulário e DEVOLUCAO
     expect(container.querySelector('.almox-modal').textContent).toMatch(/\/almoxarifado\/devolucoes|tela de Devolu/i);
   });
 });
+
+/**
+ * Etapa 8, Task 9: selo de propriedade no livro de movimentacoes e no seletor de material.
+ *
+ * O livro mistura material nosso e de cliente porque o motor e o mesmo (foi esse o ponto da
+ * unificacao da Etapa 8). Sem selo, "SAIDA 10 PC de Chapa 3mm" nao diz de quem era a chapa — e a
+ * saida de material de cliente e justamente a que tem regra propria (so com OS/projeto do dono).
+ *
+ * A resposta de GET /almoxarifado/movimentacoes NAO traz o dono (o SELECT lista colunas de `ma`
+ * uma a uma), entao a tela resolve a propriedade pelo catalogo que ela ja carregou em
+ * `materiais` — e prefere o dado da propria linha se um dia ele passar a vir do servidor.
+ */
+const MOV_MISTAS = [
+  { ...movimento(101, 'SAIDA'), material_id: 10, material_codigo: 'MAT-1', material_nome: 'Chapa 3mm nossa' },
+  { ...movimento(102, 'SAIDA'), material_id: 11, material_codigo: 'MAT-2', material_nome: 'Chapa 3mm do cliente' },
+];
+const CATALOGO_MISTO = [
+  { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm nossa', unidade: 'PC', quantidade_atual: 50, proprietario_cliente_id: null, proprietario_cliente_nome: null },
+  { id: 11, codigo: 'MAT-2', nome: 'Chapa 3mm do cliente', unidade: 'PC', quantidade_atual: 50, proprietario_cliente_id: 7, proprietario_cliente_nome: 'Cliente Alfa LTDA' },
+];
+
+describe('MovimentacoesAlmoxarifado — selo de propriedade', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOV_MISTAS });
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: CATALOGO_MISTO });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('a linha do material de cliente mostra o selo com a razão social', async () => {
+    await renderizar();
+    const linha = linhas().find((tr) => tr.textContent.includes('MAT-2'));
+    const selo = linha.querySelector('.almox-badge-cliente');
+    expect(selo).not.toBeNull();
+    expect(selo.textContent).toContain('Cliente Alfa LTDA');
+  });
+
+  test('[controle positivo] a linha do material nosso não mostra selo', async () => {
+    // Sem esta metade, um selo pintado em toda linha passaria como se identificasse propriedade.
+    await renderizar();
+    const linha = linhas().find((tr) => tr.textContent.includes('MAT-1'));
+    expect(linha.querySelector('.almox-badge-cliente')).toBeNull();
+  });
+
+  test('o seletor de material do formulário diz o dono no próprio rótulo (option não aceita markup)', async () => {
+    await abrirModalNovaMovimentacao();
+    const opcoes = [...container.querySelector('.almox-modal select.almox-form-select').querySelectorAll('option')];
+    const doCliente = opcoes.find((o) => o.value === '11');
+    const nossa = opcoes.find((o) => o.value === '10');
+    expect(doCliente.textContent).toContain('Cliente Alfa LTDA');
+    expect(nossa.textContent).not.toMatch(/cliente/i);
+  });
+});

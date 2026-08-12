@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
+import SeloProprietario from './SeloProprietario';
 import './Almoxarifado.css';
 
 // Tipos de movimento cobrem os 20 valores do motor v2 (ver stockService); mapeamos por
@@ -119,6 +120,11 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
             <>
               <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 16 }}>
                 {material.codigo}{material.categoria ? ` · ${material.categoria}` : ''}
+                {/* Etapa 8: o extrato é leitura por id (classe B da auditoria da Task 1) — NÃO
+                    filtra o dono de propósito, senão o extrato de material de cliente viria
+                    vazio. A contrapartida de não filtrar é dizer de quem é o saldo que está
+                    sendo lido, antes de alguém decidir movimentá-lo. */}
+                <SeloProprietario material={material} />
               </div>
 
               <div className="almox-kpis" style={{ marginBottom: 24 }}>

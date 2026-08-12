@@ -260,6 +260,16 @@
 .almox-badge-concluido { background: rgba(26,163,74,0.12); color: var(--gmp-success); }
 .almox-badge-cancelado { background: rgba(107,107,107,0.12); color: var(--gmp-text-light); }
 .almox-badge-estorno   { background: rgba(255,145,0,0.12);  color: #ff9100; }
+/* Etapa 8: selo de propriedade (SeloProprietario.js). Cor propria e NAO a paleta de status:
+   propriedade nao e status, e pintar material de cliente de verde/vermelho/laranja o faria
+   parecer material com problema. Indigo em vez do roxo de `devolucao` porque os dois aparecem
+   lado a lado no livro de movimentacoes (coluna Tipo x coluna Material) — dois roxos vizinhos
+   voltariam a ser indistinguiveis, que e o problema que este selo existe para resolver. A borda
+   e o unico badge da tela que tem uma: reforca, sem depender so do matiz, que este selo e de
+   outra natureza. Sem esta regra o selo sairia sem fundo nem cor (`almox-badge-${cls}` nao acha
+   a classe, o navegador nao reclama e nenhum teste de comportamento pega) — ja aconteceu nesta
+   base, por isso MateriaisAlmoxarifado.test.js checa a existencia desta regra. */
+.almox-badge-cliente   { background: rgba(99,102,241,0.12); color: #4338ca; border: 1px solid rgba(99,102,241,0.35); }
 
 /* ── Nome como link (abre extrato/detalhe sem sair da tela) ── */
 .almox-link-btn {

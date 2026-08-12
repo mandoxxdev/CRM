@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiRefreshCw, FiArrowUp, FiArrowDown, FiCornerUpLeft } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
+import SeloProprietario, { rotuloMaterialComDono } from './SeloProprietario';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
@@ -140,6 +141,22 @@ const MovimentacoesAlmoxarifado = () => {
   // dependências do useEffect é avaliado durante o render, não dentro do efeito — precisa já
   // estar declarado neste ponto do corpo do componente (TDZ), senão quebra o build.
   const selectedMaterial = materiais.find(m => m.id === parseInt(form.material_id));
+
+  // Etapa 8, Task 9: o livro mistura material nosso e de cliente porque o motor é o mesmo — e
+  // "SAIDA 10 PC de Chapa 3mm" não diz de quem era a chapa. `GET /almoxarifado/movimentacoes`
+  // não traz o dono (o SELECT lista as colunas de `ma` uma a uma), então a propriedade é
+  // resolvida pelo catálogo que esta tela já carregou para o seletor de material. Se um dia a
+  // linha do livro passar a trazer o dono, ele tem precedência: o dado da própria linha é o que
+  // vale, o catálogo é só o suprimento.
+  const materiaisPorId = useMemo(
+    () => new Map((materiais || []).map((m) => [m.id, m])),
+    [materiais]
+  );
+  const donoDaMovimentacao = (mov) => (
+    mov.proprietario_cliente_id === null || mov.proprietario_cliente_id === undefined
+      ? materiaisPorId.get(mov.material_id)
+      : mov
+  );
 
   useEffect(() => {
     loadMateriais();
@@ -478,6 +495,7 @@ const MovimentacoesAlmoxarifado = () => {
                       <button type="button" className="almox-link-btn" onClick={() => setExtratoMaterialId(m.material_id)}>
                         {m.material_nome}
                       </button>
+                      <SeloProprietario material={donoDaMovimentacao(m)} />
                       <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{m.material_codigo}</div>
                     </td>
                     <td>
@@ -552,9 +570,13 @@ const MovimentacoesAlmoxarifado = () => {
                     <select className="almox-form-select" value={form.material_id}
                       onChange={e => setForm(f => ({ ...f, material_id: e.target.value }))} required>
                       <option value="">Selecionar material...</option>
+                      {/* `<option>` não aceita markup, então o dono entra no próprio rótulo. Sem
+                          isso, escolher a chapa do cliente aqui seria indistinguível de escolher
+                          a nossa — e é justamente esta saída que tem regra própria (só com OS ou
+                          projeto do dono, recusada pelo motor em qualquer outro caso). */}
                       {materiais.map(m => (
                         <option key={m.id} value={m.id}>
-                          {m.codigo} — {m.nome} (Saldo: {m.quantidade_atual} {m.unidade})
+                          {rotuloMaterialComDono(m, `${m.codigo} — ${m.nome} (Saldo: ${m.quantidade_atual} ${m.unidade})`)}
                         </option>
                       ))}
                     </select>
