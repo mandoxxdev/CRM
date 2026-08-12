@@ -897,6 +897,51 @@ MSG
 > OS e para nomear os dois clientes na mensagem de erro. Misturar db num módulo puro derrubaria a
 > testabilidade que ele tem hoje.
 
+**Entregue em `da8ff21`.** `17 passed, 0 failed` no arquivo (o plano previa 12 — foram acrescentados
+5 casos, listados abaixo).
+
+#### Correções ao plano, feitas ao EXECUTAR a Task 3 (2026-08-12)
+
+Registrado aqui em vez de corrigido em silêncio, porque a Task 4 reaproveita este mesmo arquivo de
+teste como molde e esbarraria nos mesmos pontos.
+
+1. **O teste do plano não roda como escrito: `projetos` e `ordens_servico` não existem no
+   harness.** Mesma família de armadilha que `clientes` na Task 1 — são tabelas **core** (criadas
+   por `server/index.js` no boot), fora do `initSchema` do almoxarifado. Sem elas, os `INSERT` do
+   setup estouram antes do primeiro `test()`. **Decisão: criadas dentro do próprio arquivo de
+   teste**, não no harness — precedente de `livroExtrato.api.test.js`, que já faz isso para
+   `ordens_servico`. Motivo de não repetir o caminho do `clientes` da Task 1: lá o harness precisou
+   mudar porque uma rota de **produção** (`consultarEstoque`) passou a fazer `LEFT JOIN clientes` e
+   **todo** teste quebraria; aqui as duas tabelas só são lidas quando o material tem dono, coisa
+   que nenhum outro teste cria — mudar o harness seria custo sem regressão que o justifique.
+2. **`localizacoes_almoxarifado` não tem coluna `nome`.** O teste do plano faz
+   `INSERT INTO localizacoes_almoxarifado (codigo, nome, ativo)` no caso da TRANSFERENCIA; a coluna
+   é **`descricao`** (ver `schema.js`, ~linha 220). Corrigido no arquivo entregue.
+3. **`tiposSaida` está nas linhas 506 e 1228, não ~497 e ~1209** (o plano deu os números da Etapa 7,
+   antes dos commits seguintes). As **duas listas são idênticas** hoje
+   (`SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA, AJUSTE_NEGATIVO, SUCATA, PERDA`),
+   então `TIPOS_SAIDA_COM_DONO` espelha as duas de uma vez. **A guarda entra só na primeira**
+   (`registrarMovimentacao`): a segunda é a de `cancelarMovimentacao`, e o estorno **devolve** a
+   chapa ao estoque — o oposto de aplicá-la no cliente errado. Espelhar a guarda lá deixaria a
+   saída errada sem como ser desfeita. Isso está escrito **nos dois lugares** (comentário na
+   segunda declaração de `tiposSaida` + nota no `TIPOS_SAIDA_COM_DONO`) e coberto por teste, para
+   que "uniformizar por simetria" fique visível como regressão em vez de parecer conserto.
+4. **Cinco testes a mais que os 12 do plano**, cada um cobrindo um jeito de a guarda estar errada
+   sem que os 12 originais percebam: `PERDA` (o plano só testava `SUCATA`, e os dois entram na
+   guarda pelo mesmo motivo); **controle positivo** de material nosso saindo para projeto de
+   **outro** cliente (a guarda é sobre o dono do material, não sobre o cliente do vínculo — se
+   vazasse para material sem dono, nenhum dos 12 pegaria); vínculo **inexistente**
+   (`projeto_id: 999999`) recusado em vez de virar "saída sem dono"; projeto com `cliente_id`
+   **NULL** (projeto interno) não servindo de coringa — `NULL !== cliA` tem de barrar; e o estorno
+   da saída de material de cliente continuando possível (o item 3 acima).
+5. **Controle positivo executado em duas sabotagens, não uma.** A do plano (Step 6, desligar a
+   guarda inteira) deu `8 passed, 9 failed` — o mesmo vermelho de antes de implementar. A segunda,
+   **que o plano não pedia e é a que importa**, desliga **só** o ramo do `emergencial`
+   (`if (false && params.emergencial)`) e deu `15 passed, 2 failed`, exatamente os dois testes da
+   decisão 6. Sem ela, alguém que apagasse só aquele bloco veria 15 verdes e acharia que passou:
+   a decisão 6 é a mais fácil de desfazer sem perceber, e é a única que precisa de uma sabotagem
+   dela mesma.
+
 - [x] **Step 1: escrever os testes que falham — `materialClienteGuardaSaida.api.test.js`**
 
 ```js
