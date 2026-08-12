@@ -82,7 +82,7 @@ em A/B/C** na Task 1 do plano da Etapa 8. **Reusar a lista, não refazer o grep.
 > ponto onde a etapa mais provavelmente falha em silêncio, e o design original não o nomeava.
 > `getSaldoDisponivel` (`stockService.js:22-27`) é só **uma** das implementações da conta
 > `atual − reservada − bloqueada − em_inspecao`. A mesma subtração aparece escrita à mão em SQL em
-> **13 outros lugares, espalhados por 7 arquivos** — 14 implementações no total.
+> **13 outros lugares, espalhados por 8 arquivos** — 14 implementações no total.
 >
 > **Lista completa, verificada por varredura em 2026-08-12** com
 > `grep -rn "quantidade_atual - COALESCE(.*quantidade_reservada" --include=*.js services/ routes/`:
@@ -116,6 +116,20 @@ em A/B/C** na Task 1 do plano da Etapa 8. **Reusar a lista, não refazer o grep.
 > > deixou de fora `routes/almoxarifado.js`, onde estavam as duas piores leituras. A lição que fica
 > > escrita aqui para a próxima etapa: **quando a mudança é numa coluna de `materiais_almoxarifado`,
 > > a varredura é `server/` inteiro — nunca um subconjunto escolhido por intuição.**
+>
+> > **CORREÇÃO 2 (execução da Task 1, `0a01124`) — eram 8 arquivos, não 7.** O total de **14
+> > implementações** sempre esteve certo; errado era o agrupamento. Os 13 sítios em SQL moram em
+> > `stockService`, `requisitionService`, `requisitionStateMachine`, `reportService`,
+> > `clienteEstoqueService`, `routes/almoxarifado.js`, `routes/almoxarifado/extended.js` e
+> > `routes/requisicoesMaterial.js`. A Task 1 tornou a contagem irrelevante: a conta agora mora em
+> > `services/almoxarifado/availabilitySql.js` e o teste **varre o código-fonte** provando que
+> > sobrou zero réplica.
+> >
+> > **E apareceu um 15º lugar que NÃO é a conta, mas depende da coluna:**
+> > `stockAvailabilityService.SENSITIVE_MATERIAL_FIELDS`. `GET /api/requisicoes-material/materiais`
+> > faz `SELECT m.*`, então **toda coluna nova de `materiais_almoxarifado` vaza quantidade exata
+> > para o requisitante** até ser nomeada naquela lista. `quantidade_em_terceiros` entrou nela.
+> > **A Etapa 8c tem de repetir esta checagem para qualquer coluna que criar.**
 
 ### Decisão 2b — fornecedor: `INTEGER` + nome espelhado, sem FK
 

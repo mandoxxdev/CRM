@@ -10,7 +10,7 @@ patrimônio, um documento de remessa com máquina de estados
 enviado, encerramento com **destino obrigatório** para o que não voltou, e tela própria com PDF do
 documento de remessa.
 
-**Architecture:** a conta do disponível — hoje **replicada 13 vezes em SQL**, em 7 arquivos —
+**Architecture:** a conta do disponível — hoje **replicada 13 vezes em SQL**, em 8 arquivos —
 passa a existir num único lugar (`services/almoxarifado/availabilitySql.js`), e é *essa
 centralização* que torna a quarta coluna segura (Task 1). O ciclo da remessa mora em dois módulos
 novos no molde já validado do módulo: `thirdPartyStateMachine.js` (objeto declarativo +
@@ -58,7 +58,7 @@ plano foi escrito contra esse estado.
 
 ---
 
-## A conta do disponível: 14 implementações, em 7 arquivos
+## A conta do disponível: 14 implementações, em 8 arquivos
 
 O design nomeia a armadilha certa (a subtração do disponível está replicada em SQL, não
 centralizada). A primeira versão dele dizia **sete** sítios; a varredura completa achou
@@ -108,7 +108,27 @@ Dois sítios merecem destaque porque ninguém pensaria em olhar:
 (`dispSemBloqueio = quantidade_atual − quantidade_bloqueada`, mensagem "Material bloqueado não pode
 ser utilizado"). Não é a conta do disponível — é uma guarda específica de bloqueio, com mensagem
 própria. Ela continua correta com a coluna nova porque a guarda do disponível, logo acima, já
-recusou qualquer saída que invadisse `quantidade_em_terceiros`.
+recusou qualquer saída que invadisse `quantidade_em_terceiros`. **Confirmado na execução da Task 1
+(`0a01124`): não foi alterado.**
+
+### O que a execução da Task 1 (`0a01124`) achou que este plano não previa
+
+Três coisas, registradas aqui porque a **Etapa 8c reabre a mesma pergunta**:
+
+1. **A contagem de arquivos era 7 e é 8.** Os 13 sítios em SQL moram em `stockService`,
+   `requisitionService`, `requisitionStateMachine`, `reportService`, `clienteEstoqueService`,
+   `routes/almoxarifado.js`, `routes/almoxarifado/extended.js` e `routes/requisicoesMaterial.js`.
+   Corrigido no texto acima e no design. O número **14 sempre esteve certo** — o que estava errado
+   era só o agrupamento por arquivo.
+2. **Coluna nova de `materiais_almoxarifado` vaza para o requisitante até ser nomeada.**
+   `GET /api/requisicoes-material/materiais` faz `SELECT m.*` e passa o resultado por
+   `stockAvailabilityService.sanitizeMaterialForSector`, que apaga as três retenções antigas por
+   uma **lista explícita** (`SENSITIVE_MATERIAL_FIELDS`). `quantidade_em_terceiros` entrou na
+   lista na Task 1. **A 8c tem de repetir esta checagem para qualquer coluna nova.**
+3. **`projetos` e `ordens_servico` não estão no harness.** `clienteEstoqueService` faz `LEFT JOIN`
+   nelas e o `testApp.js` só stuba `clientes`. Padrão seguido (o mesmo de
+   `materialClientePosicao.api.test.js`): **stub no arquivo de teste, nunca fallback na query** —
+   fallback esconderia em teste um erro que existiria em produção.
 
 ---
 
@@ -213,7 +233,7 @@ recusou qualquer saída que invadisse `quantidade_em_terceiros`.
   - `materiais_almoxarifado.quantidade_em_terceiros REAL DEFAULT 0`.
   - `stockService.getSaldoDisponivel(material)` passa a subtrair a quarta coluna.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha** — feito em `0a01124`
 
 Cria `server/tests/api/saldoEmTerceiros.api.test.js`:
 
@@ -222,7 +242,7 @@ Cria `server/tests/api/saldoEmTerceiros.api.test.js`:
  * Etapa 8b, Task 1 — a quarta coluna de retencao e a conta do disponivel numa fonte so.
  *
  * O design nomeou a armadilha (a subtracao esta replicada em SQL) mas a primeira versao contou
- * SETE sitios; a varredura completa achou QUATORZE, em 7 arquivos. Acrescentar a coluna so em
+ * SETE sitios; a varredura completa achou QUATORZE, em 8 arquivos. Acrescentar a coluna so em
  * `getSaldoDisponivel` faria o sistema RECUSAR pela funcao e ACEITAR pelo SQL: a listagem
  * mostraria disponivel a mais, a reserva nasceria sobre material que esta no galvanizador e a
  * guarda atomica da saida deixaria passar. Nada quebra — o numero fica errado, que e a falha mais
@@ -456,13 +476,13 @@ async function requisicaoCom(db, materialId, quantidade) {
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar** — feito em `0a01124`
 
 Run: `cd server && node tests/api/saldoEmTerceiros.api.test.js`
 Expected: FAIL. A primeira falha é `SQLITE_ERROR: table materiais_almoxarifado has no column named
 quantidade_em_terceiros`, no helper `novoMaterial` — a coluna ainda não existe.
 
-- [ ] **Step 3: Criar a coluna**
+- [x] **Step 3: Criar a coluna** — feito em `0a01124`
 
 Em `server/services/almoxarifado/schema.js`, logo abaixo do `safeAlter` de
 `proprietario_cliente_id` (~linha 662):
@@ -478,7 +498,7 @@ Em `server/services/almoxarifado/schema.js`, logo abaixo do `safeAlter` de
   await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN quantidade_em_terceiros REAL DEFAULT 0');
 ```
 
-- [ ] **Step 4: Criar a fonte única da conta**
+- [x] **Step 4: Criar a fonte única da conta** — feito em `0a01124`
 
 Cria `server/services/almoxarifado/availabilitySql.js`:
 
@@ -486,7 +506,7 @@ Cria `server/services/almoxarifado/availabilitySql.js`:
 /**
  * A conta do saldo DISPONIVEL do material — em UM lugar so.
  *
- * Ate a Etapa 8b esta subtracao existia escrita a mao em **13 queries** espalhadas por 7 arquivos
+ * Ate a Etapa 8b esta subtracao existia escrita a mao em **13 queries** espalhadas por 8 arquivos
  * (services/almoxarifado/{stockService,requisitionService,requisitionStateMachine,reportService,
  * clienteEstoqueService}.js, routes/almoxarifado.js, routes/almoxarifado/extended.js e
  * routes/requisicoesMaterial.js — este ultimo NEM pertence ao modulo), mais a funcao
@@ -540,7 +560,7 @@ function disponivelSql(alias = '') {
 module.exports = { COLUNAS_RETENCAO, disponivelSql };
 ```
 
-- [ ] **Step 5: `stockService` — a função e os cinco SQLs**
+- [x] **Step 5: `stockService` — a função e os cinco SQLs** — feito em `0a01124`
 
 Em `server/services/almoxarifado/stockService.js`, no topo (junto dos outros `require`):
 
@@ -619,7 +639,7 @@ Linha ~1748 (`consultarEstoque`):
     WHERE m.ativo = 1`;
 ```
 
-- [ ] **Step 6: Os oito SQLs restantes**
+- [x] **Step 6: Os oito SQLs restantes** — feito em `0a01124`
 
 `server/services/almoxarifado/requisitionStateMachine.js` — `require` no topo
 (`const { disponivelSql } = require('./availabilitySql');`) e a query de
@@ -716,12 +736,12 @@ do detalhe da requisição (~1891):
                   ${disponivelSql('ma')} as saldo_atual,
 ```
 
-- [ ] **Step 7: Rodar o teste e ver passar**
+- [x] **Step 7: Rodar o teste e ver passar** — feito em `0a01124`
 
 Run: `cd server && node tests/api/saldoEmTerceiros.api.test.js`
 Expected: PASS — **14 passed, 0 failed**.
 
-- [ ] **Step 8: Sabotagens obrigatórias (controle positivo bilateral)**
+- [x] **Step 8: Sabotagens obrigatórias (controle positivo bilateral)** — feito em `0a01124`
 
 Cada uma: aplicar, rodar `node tests/api/saldoEmTerceiros.api.test.js`, conferir a falha esperada,
 **desfazer** antes da próxima.
@@ -733,7 +753,31 @@ Cada uma: aplicar, rodar `node tests/api/saldoEmTerceiros.api.test.js`, conferir
 | S3 | Em `stockService.js`, devolver o SQL literal antigo (sem `disponivelSql`) **só** no claim da saída (~912) | falham `[varredura] nenhum arquivo fora de availabilitySql.js...` **e** `[saida] saida acima do disponivel restante e recusada` — prova que a varredura pega regressão real, não só ausência |
 | S4 | Trocar `PADRAO_REPLICADO` por `/nunca-casa-com-nada/` | falha `[varredura][CONTROLE POSITIVO] o padrao SABE achar a conta replicada` — prova que a varredura sabe falhar |
 
-- [ ] **Step 9: Suítes completas**
+**Resultados medidos (`0a01124`), com o total verde em 33 passou / 0 falhou:**
+
+| # | Medido | Observação |
+|---|---|---|
+| S1 | **17 passou, 14 falhou** | falhou exatamente **uma por caminho** — os 14 dependem mesmo da fonte única |
+| S2 | **9 passou, 22 falhou** | falharam **todos** os controles positivos, não só o agregado que o plano previa |
+| S3 | **30 passou, 1 falhou** | ⚠️ **o plano estava errado** — ver correção abaixo |
+| S4 | **30 passou, 1 falhou** | só o controle positivo do padrão, como previsto |
+
+> ### Correção do plano — S3 previa duas falhas e só acontece uma
+>
+> A linha S3 acima afirmava que devolver o SQL literal no claim da saída normal (~925) quebraria
+> **também** `[saida] saida acima do disponivel restante e recusada`. **Não quebra.** A
+> pré-checagem em JS (`getSaldoDisponivel`, `stockService.js:~694`) recusa a saída **antes** de o
+> UPDATE condicional rodar, então o claim só age sob **concorrência** — que um teste sequencial
+> não alcança. Para aquele sítio a **varredura do código-fonte é a única guarda real**, o que
+> reforça a decisão de tê-la (e está anotado no próprio teste).
+>
+> Os outros dois claims **têm** prova comportamental, confirmada por sabotagem dirigida:
+> sabotar **só** o claim que consome reserva (~905) dá **29 passou / 2 falhou** (`[saida-reserva]`
+> + varredura), porque esse ramo **pula** a pré-checagem; sabotar **só** o claim do estorno
+> (~1364) dá **29 passou / 2 falhou** (`[estorno]` + varredura), porque `cancelarMovimentacao`
+> não tem pré-checagem nenhuma.
+
+- [x] **Step 9: Suítes completas** — feito em `0a01124`
 
 Run:
 ```
@@ -746,7 +790,7 @@ validation **4/0**, safealter **3/0**, sqlite **3/0**. Qualquer regressão aqui 
 das 13 substituições mudou semântica (o suspeito nº 1 é a ordem de placeholders do claim
 consumindo reserva) — investigar antes de seguir.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit** — feito em `0a01124`
 
 ```bash
 git add server/services/almoxarifado/availabilitySql.js \
@@ -769,7 +813,7 @@ afirmava que a chapa estava na prateleira, com ela a 40 km). A coluna quantidade
 resolve os dois: quantidade_atual nao muda (continua sendo nosso) e o disponivel cai.
 
 O risco real nao era criar a coluna, era acrescenta-la em UM lugar so. A subtracao
-atual - reservada - bloqueada - em_inspecao estava REPLICADA em SQL em 13 queries de 7 arquivos,
+atual - reservada - bloqueada - em_inspecao estava REPLICADA em SQL em 13 queries de 8 arquivos,
 mais a funcao getSaldoDisponivel. Com um sitio de fora nada quebra: o sistema recusa pela funcao e
 aceita pelo SQL, e o numero fica errado em silencio — a listagem mostra disponivel a mais, a
 reserva nasce sobre material que esta no galvanizador, a guarda atomica da saida deixa passar.
