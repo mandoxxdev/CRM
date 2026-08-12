@@ -33,6 +33,59 @@ Próxima etapa da ordem: **Etapa 8b — materiais enviados a terceiros** (a Etap
 
 ---
 
+## ⚠️ Leia antes de apresentar — tudo o que exige decisão ou ação sua
+
+Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, resumido, o que
+está detalhado na seção da etapa correspondente e no
+`docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
+
+### A. Duas consultas para rodar em produção ANTES do deploy
+
+| # | Por quê | Consulta |
+|---|---|---|
+| **A1** | **O bug da Sucata pode ter deixado saldo a menos.** Devolver material para o destino Sucata baixava o estoque **duas vezes**. A correção **não conserta o passado**. No banco de desenvolvimento a checagem já foi feita: **0 devoluções, nenhum efeito lá**. | Ver a consulta exata no guia, seção "Etapa 7 → O bug da Sucata". Ela lista **só as devoluções anteriores à correção** (as que não têm a entrada correspondente no livro) — cada linha é um material cujo saldo está **a menos** pela quantidade devolvida. Uma consulta que filtrasse só `destino = 'SUCATA'` traria também as devoluções corretas feitas depois do deploy, e faria você caçar problema que não existe. |
+| **A2** | **A lista antiga de materiais de cliente foi aposentada** com base no banco de desenvolvimento (0 linhas). **Nada foi apagado** — a tabela foi preservada exatamente para este caso. | `SELECT COUNT(*) AS total, SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos FROM materiais_cliente_almoxarifado;` — se vier `0`, só anotar e fechar. Se vier `> 0`, **não reverte nada**: entra uma migração assistida antes de qualquer exclusão. |
+
+### B. Uma decisão de negócio esperando por você
+
+**O Ajuste não reconcilia o material bloqueado.** Bloquear 8 unidades e depois ajustar o total
+para 1 deixa `bloqueado (8) > total (1)` — **disponível negativo, sem nenhuma guarda**. É
+plausível na operação real: o inventário acha menos do que o sistema dizia, com parte do material
+em quarentena.
+
+Três respostas possíveis, e a escolha é sua: **(a)** o Ajuste baixa o bloqueado
+proporcionalmente; **(b)** o Ajuste recusa enquanto houver bloqueio maior que o novo total; ou
+**(c)** o Ajuste aceita e apenas avisa. Enquanto não for decidido, **resolva a quarentena antes de
+lançar um ajuste que reduz o total.**
+
+### C. Dois furos conhecidos, que quem opera precisa saber
+
+1. **A conferência de inventário muda saldo de material de cliente sem a permissão especial.**
+   A Etapa 8 criou uma autorização dedicada para ajustar material de terceiro — mas a
+   **conferência de inventário grava o saldo por um caminho próprio, fora do motor**, e por isso
+   não passa por essa autorização. Na prática: *o mesmo usuário que é barrado no ajuste pela tela
+   de Movimentações consegue mudar o saldo pela conferência.* Fechar isso exige reescrever a
+   conferência inteira — é etapa própria, não foi feito. **É o ponto que mais importa contar a
+   quem opera.**
+2. **Devolução para Sucata pode parar no meio, sem avisar ninguém.** A devolução para sucata
+   lança duas movimentações (entrou / foi descartada). Se a segunda falhar depois de a primeira
+   ter entrado, a devolução fica marcada como **estado parcial** na auditoria e a correção é
+   manual, pela tela de Movimentações. **Ninguém é notificado.**
+
+### D. Limitações declaradas — são decisão, não esquecimento
+
+- **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
+  transferência é imediata. Volta a fazer sentido se houver obra externa ou segundo prédio.
+- **Devolver peça com número de série para sucata leva dois passos**: devolver ao estoque e depois
+  sucatear em Movimentações, que já tem seletor de série.
+- **Transferir lote bloqueado ou vencido é permitido** — é assim que um lote reprovado vai parar
+  na área de bloqueados.
+- **Os relatórios de materiais bloqueados e de materiais sem endereço mostram material de cliente
+  sem o selo de propriedade** — eles misturam de propósito (a chapa do cliente ocupa a prateleira
+  de verdade), mas ainda não identificam o dono.
+
+---
+
 ## Etapa 0 — Fundação (2026-08-03)
 
 **Em uma frase:** antes de construir qualquer tela nova, o módulo ganhou uma base técnica
