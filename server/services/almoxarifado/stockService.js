@@ -5,6 +5,7 @@ const alertService = require('./alertService');
 const { avaliarRegrasVinculo } = require('./movementRules');
 const ownerRules = require('./ownerRules');
 const { TIPOS_MOVIMENTO } = require('./schema');
+const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 // seriesService nao importa stockService de volta — sem ciclo.
 const seriesService = require('./seriesService');
 
@@ -19,11 +20,16 @@ async function getMaterial(db, materialId) {
   return m;
 }
 
+/**
+ * Disponivel = fisico menos TODA retencao (COLUNAS_RETENCAO, availabilitySql.js). A lista das
+ * colunas mora la, e nao aqui, para esta funcao e as 13 queries que fazem a mesma conta nao
+ * poderem divergir — divergirem foi o que a Etapa 8b teve de consertar.
+ */
 async function getSaldoDisponivel(material) {
-  const reservado = material.quantidade_reservada || 0;
-  const bloqueado = material.quantidade_bloqueada || 0;
-  const inspecao = material.quantidade_em_inspecao || 0;
-  return material.quantidade_atual - reservado - bloqueado - inspecao;
+  return COLUNAS_RETENCAO.reduce(
+    (saldo, coluna) => saldo - (material[coluna] || 0),
+    material.quantidade_atual,
+  );
 }
 
 /**
@@ -885,11 +891,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // estoque e deixa de estar reservada na mesma operação. A guarda exige apenas que o
         // disponível não fique negativo IGNORANDO a parte reservada que está sendo consumida —
         // por isso `+ ?` (a quantidade) no cálculo.
+        //
+        // Etapa 8b: o `+ ?` ficava DENTRO da subtração escrita à mão; agora a subtração vem de
+        // `disponivelSql()` e o `+ ?` ficou FORA dos parênteses. Soma e subtração comutam, e a
+        // ORDEM DOS PLACEHOLDERS no texto do statement não mudou (id, permiteNegativo, `+`, `>=`),
+        // então os parâmetros abaixo continuam os mesmos — é o único claim do motor onde a conta
+        // aparece somada, e trocar essa ordem faria a guarda comparar números invertidos em
+        // silêncio.
         const rowRes = await dbGet(db, `UPDATE materiais_almoxarifado
           SET quantidade_atual = quantidade_atual - ?,
               quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?),
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) + ? - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
+          WHERE id = ? AND (? = 1 OR (${disponivelSql()} + ?) >= ?)
           RETURNING quantidade_atual`,
           [quantidade, quantidade, material_id, permiteNegativo ? 1 : 0, quantidade, quantidade]);
         if (!rowRes) {
@@ -909,7 +922,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       } else {
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
+        WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ?)
         RETURNING quantidade_atual`,
         [quantidade, material_id, permiteNegativo ? 1 : 0, quantidade]);
       if (!row) {
@@ -1348,7 +1361,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       const permiteNegativo = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND (? = 1 OR (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0) - COALESCE(quantidade_em_inspecao,0)) >= ?)
+        WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ?)
         RETURNING quantidade_atual`,
         [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]);
       if (!row) throw Object.assign(new Error('Não é possível estornar: saldo disponível insuficiente (material já consumido)'), { status: 400 });
@@ -1627,9 +1640,7 @@ async function criarReserva(db, user, data, opcoes = {}) {
   // reserva IMPOSSÍVEL de consumir, porque a baixa contra reserva também exige saldo físico.
   const hold = await dbGet(db, `UPDATE materiais_almoxarifado
     SET quantidade_reservada = COALESCE(quantidade_reservada,0) + ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-      AND (quantidade_atual - COALESCE(quantidade_reservada,0) - COALESCE(quantidade_bloqueada,0)
-           - COALESCE(quantidade_em_inspecao,0)) >= ?
+    WHERE id = ? AND ${disponivelSql()} >= ?
     RETURNING id`, [qtd, material_id, qtd]);
   if (!hold) {
     const atual = await getMaterial(db, material_id);
@@ -1745,7 +1756,7 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
 
 async function consultarEstoque(db, filters = {}) {
   let sql = `SELECT m.*, c.nome as categoria_nome, cli.razao_social as proprietario_cliente_nome,
-    (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0) - COALESCE(m.quantidade_em_inspecao,0)) as quantidade_disponivel,
+    ${disponivelSql('m')} as quantidade_disponivel,
     (m.quantidade_atual * COALESCE(m.custo_medio, m.custo_unitario, 0)) as valor_estoque
     FROM materiais_almoxarifado m
     LEFT JOIN categorias_material_almoxarifado c ON m.categoria_id = c.id

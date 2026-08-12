@@ -2,6 +2,7 @@
  * Requisições de material — atendimento parcial com validação de estoque
  */
 const { dbRun, dbGet, dbAll } = require('./db');
+const { disponivelSql } = require('./availabilitySql');
 const valueApprovalService = require('./requisitionValueApprovalService');
 const stockService = require('./stockService');
 // Sem ciclo: reservationService importa db/audit/stockService, nunca este arquivo.
@@ -97,8 +98,7 @@ async function carregarItensRequisicao(db, requisicaoId) {
   return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo,
       COALESCE(ma.custo_medio, ma.custo_unitario, 0) as custo_unitario,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
-      (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
-        - COALESCE(ma.quantidade_em_inspecao,0) + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel
+      (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
     WHERE ir.requisicao_id = ?`, [requisicaoId]);
@@ -111,8 +111,7 @@ async function carregarItensRequisicao(db, requisicaoId) {
  */
 async function saldoDisponivelParaItem(db, item) {
   const row = await dbGet(db, `SELECT
-      (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
-        - COALESCE(ma.quantidade_em_inspecao,0)) as saldo_disponivel,
+      ${disponivelSql('ma')} as saldo_disponivel,
       COALESCE((
         SELECT SUM(r.quantidade - COALESCE(r.quantidade_utilizada,0))
         FROM reservas_material_almoxarifado r

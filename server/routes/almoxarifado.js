@@ -10,6 +10,7 @@ const { z } = require('zod');
 const alertService = require('../services/almoxarifado/alertService');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
@@ -1887,8 +1888,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // continua fora, como saldo de outro dono.
       db.all(`SELECT ir.*, ma.nome as material_nome, ma.codigo as material_codigo,
                      ma.unidade,
-                     (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
-                       - COALESCE(ma.quantidade_em_inspecao,0)
+                     (${disponivelSql('ma')}
                        + COALESCE((SELECT SUM(r.quantidade - COALESCE(r.quantidade_utilizada,0))
                                    FROM reservas_material_almoxarifado r
                                    WHERE r.item_requisicao_id = ir.id AND r.material_id = ir.material_id

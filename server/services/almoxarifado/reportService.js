@@ -1,11 +1,12 @@
 const { dbAll, dbGet } = require('./db');
+const { disponivelSql } = require('./availabilitySql');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
   // material de cliente contabilizaria patrimonio de terceiro como nosso. A posicao POR CLIENTE
   // tem tela e rota proprias (clienteEstoqueService, Task 8).
   return dbAll(db, `SELECT m.*,
-    (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0) - COALESCE(m.quantidade_em_inspecao,0)) as disponivel,
+    ${disponivelSql('m')} as disponivel,
     (m.quantidade_atual * COALESCE(m.custo_medio, m.custo_unitario, 0)) as valor_total
     FROM materiais_almoxarifado m
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL

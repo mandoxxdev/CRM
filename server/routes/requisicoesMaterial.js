@@ -18,6 +18,7 @@ const {
 
 const { enrichMaterialRow } = require('../services/almoxarifado/materialPhoto');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const alertService = require('../services/almoxarifado/alertService');
 const { canDeleteAlmoxRequisicao } = require('../services/systemPermissions');
@@ -256,8 +257,7 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
                   ma.unidade,
 
-                  (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
-                    - COALESCE(ma.quantidade_em_inspecao,0)) as saldo_atual,
+                  ${disponivelSql('ma')} as saldo_atual,
 
                   ma.foto,
 

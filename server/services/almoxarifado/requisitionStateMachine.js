@@ -7,6 +7,7 @@
  * movementRules.js (REGRAS_VINCULO + avaliarRegrasVinculo).
  */
 const { dbGet, dbAll } = require('./db');
+const { disponivelSql } = require('./availabilitySql');
 
 /**
  * Etapa 4: os dois status de reserva. Nomeados aqui porque a máquina de estados é a dona da
@@ -94,8 +95,7 @@ function validarTransicao(statusAtual, novoStatus) {
 async function calcularStatusPosAprovacao(db, requisicaoId) {
   const itens = await dbAll(db, `
     SELECT ir.material_id,
-      (ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0)
-        - COALESCE(ma.quantidade_bloqueada,0) - COALESCE(ma.quantidade_em_inspecao,0)) as disponivel
+      ${disponivelSql('ma')} as disponivel
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
     WHERE ir.requisicao_id = ?`, [requisicaoId]);

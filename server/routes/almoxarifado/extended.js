@@ -5,6 +5,7 @@ const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermi
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
+const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate } = require('../../services/almoxarifado/validation');
 const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
@@ -452,7 +453,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   app.get('/api/almoxarifado/materiais/:id/extrato', auth, async (req, res) => {
     try {
       const material = await dbGet(db, `SELECT m.*,
-        (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0) - COALESCE(m.quantidade_em_inspecao,0)) as quantidade_disponivel,
+        ${disponivelSql('m')} as quantidade_disponivel,
         a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
         cli.razao_social as proprietario_cliente_nome
         FROM materiais_almoxarifado m

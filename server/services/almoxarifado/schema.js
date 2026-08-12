@@ -663,6 +663,20 @@ async function initSchema(db) {
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_materiais_almox_proprietario
     ON materiais_almoxarifado (proprietario_cliente_id)`);
 
+  // Etapa 8b (decisao 2 do design): a QUARTA coluna de retencao. Material no galvanizador continua
+  // sendo nosso (quantidade_atual nao muda) mas nao esta disponivel para sair — igual as outras
+  // tres. O QUE A DIFERENCIA DAS OUTRAS TRES, e isto decide a conferencia de inventario:
+  // reservada/bloqueada/em_inspecao sao estados ADMINISTRATIVOS de material que ESTA na prateleira
+  // e TEM de ser contado; `quantidade_em_terceiros` e a unica que significa "nao esta no predio".
+  // Por isso so ela sai do esperado da contagem (routes/almoxarifado.js, POST /conferencias).
+  // Quem "uniformizar as quatro" aqui quebra a contagem de inventario.
+  //
+  // A conta do disponivel que a consome mora em UM lugar so — services/almoxarifado/
+  // availabilitySql.js. Ate esta etapa ela estava replicada a mao em 13 queries de 8 arquivos,
+  // e acrescentar a coluna em 12 delas nao quebraria nada: o sistema so passaria a recusar pela
+  // funcao e aceitar pelo SQL, com o numero errado em silencio.
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN quantidade_em_terceiros REAL DEFAULT 0');
+
   // ── Seed de tipos_material_almoxarifado (só existia no callback do CREATE TABLE da
   // rota — diff de segurança Task 3). Protegido por try/catch: alguns harnesses de teste
   // pré-criam essa tabela com um subconjunto mínimo de colunas (id, nome); nesses casos o

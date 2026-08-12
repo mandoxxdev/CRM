@@ -12,6 +12,7 @@
  * contar como consumo — senao o cliente ve baixa que foi estornada.
  */
 const { dbAll, dbGet } = require('./db');
+const { disponivelSql } = require('./availabilitySql');
 
 // Espelham os `tiposEntrada`/`tiposSaida` do motor (stockService, duas declaracoes) mais os tipos
 // legados de banco antigo. DEVOLUCAO_CLIENTE fica FORA de TIPOS_CONSUMO de proposito: sai do
@@ -45,8 +46,7 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
   const itens = await dbAll(db, `
     SELECT m.id AS material_id, m.codigo, m.nome, m.unidade,
            m.quantidade_atual AS saldo,
-           (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0)
-            - COALESCE(m.quantidade_em_inspecao,0)) AS saldo_disponivel,
+           ${disponivelSql('m')} AS saldo_disponivel,
            COALESCE((SELECT SUM(mv.quantidade) FROM movimentacoes_almoxarifado mv
                       WHERE mv.material_id = m.id AND COALESCE(mv.cancelado, 0) = 0
                         AND mv.tipo IN (${listaSql(TIPOS_ENTRADA)})), 0) AS recebido,
