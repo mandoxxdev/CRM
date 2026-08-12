@@ -19,27 +19,46 @@ async function registrarDevolucao(db, user, data) {
     user.id, user.nome || user.email, observacoes || null,
   ]);
 
+  // `referencia` em TODAS as movimentacoes de TODOS os destinos (Etapa 7, Task 1). Ate aqui so
+  // ESTOQUE/QUARENTENA gravavam: a devolucao que virava sucata ficava sem nenhum fio ligando o
+  // lancamento do livro ao registro da devolucao.
+  const referencia = `DEV-${r.lastID}`;
+
   if (destino === 'ESTOQUE' || destino === 'QUARENTENA') {
     await registrarMovimentacao(db, user, {
       material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
       motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
       localizacao_destino_id: localizacao_id,
-      justificativa: observacoes, referencia: `DEV-${r.lastID}`,
+      justificativa: observacoes, referencia,
     });
     if (destino === 'QUARENTENA') {
       await registrarMovimentacao(db, user, {
         material_id, tipo: 'BLOQUEIO', quantidade, motivo: 'Devolução para quarentena',
-        justificativa: 'Devolução recebida em quarentena para inspeção',
+        justificativa: 'Devolução recebida em quarentena para inspeção', referencia,
       });
     }
   } else if (destino === 'SUCATA') {
+    // BUG CORRIGIDO NA ETAPA 7 (medido com sonda executada, 2026-08-12): o material devolvido
+    // para sucata JA tinha saido do estoque na entrega. Emitir so o SUCATA (que e um tipo de
+    // SAIDA para o motor) descontava de novo um saldo que nunca voltou — 100 -> saida 10 -> 90
+    // -> devolucao 3 para sucata dava 87, quando o certo e 90. Agora entra e sai: o saldo fecha,
+    // e o livro conta as duas coisas (voltou, e foi sucateada). Descartado: nao movimentar nada
+    // no destino SUCATA — o saldo tambem ficaria certo, mas a sucata sumiria do livro, e a
+    // feature 15 (retalhos e sucatas) vai precisar dela la.
+    await registrarMovimentacao(db, user, {
+      material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
+      motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
+      localizacao_destino_id: localizacao_id,
+      justificativa: observacoes, referencia,
+    });
     await registrarMovimentacao(db, user, {
       material_id, tipo: 'SUCATA', quantidade, motivo, os_id: origem_os_id,
-      justificativa: observacoes || motivo,
+      localizacao_origem_id: localizacao_id,
+      justificativa: observacoes || motivo, referencia,
     });
   } else if (destino === 'RETRABALHO') {
     await registrarMovimentacao(db, user, {
-      material_id, tipo: 'RETRABALHO', quantidade, motivo, os_id: origem_os_id,
+      material_id, tipo: 'RETRABALHO', quantidade, motivo, os_id: origem_os_id, referencia,
     });
   }
 

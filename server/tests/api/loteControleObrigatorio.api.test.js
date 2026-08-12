@@ -157,6 +157,16 @@ async function criarRequisicao(db, materialId, quantidade) {
     assert.strictEqual(await totalDoMaterial(db, mat), 4);
   });
 
+  // Etapa 7, Task 1: o destino SUCATA passa a emitir ENTRADA_DEVOLUCAO seguida de SUCATA — o
+  // material devolvido para sucata JA tinha saido na entrega, e emitir so a saida descontava
+  // duas vezes. Por isso o saldo aqui fecha em 10 (10 + 3 - 3), nao mais em 7. O ponto deste
+  // teste nao mudou: nenhum dos dois movimentos exige lote (ate a Task 3 desta etapa).
+  //
+  // O 7 nao era "o certo" que a correcao quebrou: neste cenario NAO houve saida antes — houve
+  // uma ENTRADA de 10 e uma devolucao de 3 de material que nunca saiu do galpao. Depois da
+  // correcao, "devolver" significa ENTRA e depois SAI, entao devolver o que nunca saiu tem de
+  // ser neutro mesmo. Sucatear estoque que voce tem na mao e outra operacao: e o tipo SUCATA da
+  // tela de Movimentacoes, que baixa o saldo uma vez so e nao passa por aqui.
   await test('[devolucao] SUCATA em material com controle_lote passa SEM lote', async () => {
     const mat = await novoMaterial(db, true);
     const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'CTL-SUC' });
@@ -165,7 +175,7 @@ async function criarRequisicao(db, materialId, quantidade) {
 
     await returnService.registrarDevolucao(db, ADMIN, {
       material_id: mat, quantidade: 3, motivo: 'DANIFICADO', destino: 'SUCATA' });
-    assert.strictEqual(await totalDoMaterial(db, mat), 7);
+    assert.strictEqual(await totalDoMaterial(db, mat), 10);
   });
 
   // ── Comportamentos que nao mudaram ──────────────────────────────────────────────────────────
