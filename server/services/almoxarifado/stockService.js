@@ -549,8 +549,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   //
   // AJUSTE puro continua isento por outro motivo, independente deste: e o caminho de
   // regularizacao de quem ligou a flag com estoque antigo sem lote em casa.
+  // Etapa 7: `tipo === 'TRANSFERENCIA'` entrou na condicao porque TRANSFERENCIA e um ramo
+  // PROPRIO deste motor — nao esta em tiposEntrada nem em tiposSaida. Sem cita-lo aqui,
+  // declarar `exigeLote: true` na rota /transferencias nao tinha efeito nenhum: o material com
+  // controle_lote continuava transferindo sem dizer de qual lote saiu. Medido: com a rota ja
+  // declarando exigeLote e esta condicao ainda sem TRANSFERENCIA, o erro que voltava era
+  // "Saldo insuficiente na localizacao de origem" (a linha lote_id NULL nao existe), um 400 que
+  // enganava — parecia guarda funcionando e nao era. NAO copiar esta mudanca para o
+  // `serieObrigatoria` mais abaixo: serie na transferencia esta declarada FORA de escopo
+  // (decisao 9 do design da Etapa 7) justamente porque o claim de serie so existe para entrada
+  // e saida, e a transferencia nao tem caminho no motor para mover o vinculo da serie.
   if (opcoes.exigeLote && material.controle_lote && !loteIdFinal
-      && (tiposEntrada.includes(tipo) || tiposSaida.includes(tipo))) {
+      && (tiposEntrada.includes(tipo) || tiposSaida.includes(tipo) || tipo === 'TRANSFERENCIA')) {
     throw Object.assign(
       new Error(`O material ${material.codigo} exige lote nesta movimentacao (controle por lote ligado)`),
       { status: 400 });

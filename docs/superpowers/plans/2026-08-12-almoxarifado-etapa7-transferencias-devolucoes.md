@@ -68,7 +68,7 @@
 > (decisão da spec). Misturar com as features da etapa tornaria impossível reverter só o conserto —
 > ou só a feature — se algum deles der problema em produção.
 
-- [ ] **Step 1: escrever o teste que falha** — `server/tests/api/devolucaoDestinos.api.test.js`:
+- [x] **Step 1: escrever o teste que falha** — `server/tests/api/devolucaoDestinos.api.test.js`:
 
 ```js
 /**
@@ -199,12 +199,12 @@ async function entregar(db, materialId, qtd) {
 })();
 ```
 
-- [ ] **Step 2: rodar e VER FALHAR**
+- [x] **Step 2: rodar e VER FALHAR**
 
 Run: `cd server && node tests/api/devolucaoDestinos.api.test.js`
 Expected: **3 falhas** — `devolucao para SUCATA nao baixa estoque duas vezes` (saldo 87, esperado 90), `devolucao para SUCATA registra ENTRADA_DEVOLUCAO e SUCATA no livro` (veio `SAIDA,SUCATA`) e `todos os destinos gravam referencia DEV-<id>` (SUCATA e RETRABALHO com `referencia` nula). Os dois de controle (`ESTOQUE` soma, `RETRABALHO` neutro) **passam desde já** — é exatamente o que os torna controle: eles provam que o arquivo sabe medir.
 
-- [ ] **Step 3: implementar** — substituir o bloco de destinos em `server/services/almoxarifado/returnService.js` (linhas 22-44) por:
+- [x] **Step 3: implementar** — substituir o bloco de destinos em `server/services/almoxarifado/returnService.js` (linhas 22-44) por:
 
 ```js
   // `referencia` em TODAS as movimentacoes de TODOS os destinos (Etapa 7, Task 1). Ate aqui so
@@ -257,12 +257,12 @@ Expected: **3 falhas** — `devolucao para SUCATA nao baixa estoque duas vezes` 
 > linhas por endereço ficariam torcidas. Passar a mesma localização nas duas mantém a simetria;
 > quando `localizacao_id` é nulo, os dois lados caem no mesmo fallback (`localizacao_padrao_id`).
 
-- [ ] **Step 4: rodar e ver passar**
+- [x] **Step 4: rodar e ver passar**
 
 Run: `cd server && node tests/api/devolucaoDestinos.api.test.js`
 Expected: `5 passed, 0 failed`.
 
-- [ ] **Step 5: corrigir o teste existente que a correção invalida**
+- [x] **Step 5: corrigir o teste existente que a correção invalida**
 
 `server/tests/api/loteControleObrigatorio.api.test.js` afirma hoje que a devolução para sucata deixa
 o saldo em `7`. Com a correção o saldo fecha em `10`. Trocar o teste inteiro (linhas 160-169) por:
@@ -284,14 +284,14 @@ o saldo em `7`. Com a correção o saldo fecha em `10`. Trocar o teste inteiro (
   });
 ```
 
-- [ ] **Step 6: rodar as suítes de servidor inteiras**
+- [x] **Step 6: rodar as suítes de servidor inteiras**
 
 Run: `cd server && npm run test:api` — esperado: todos os arquivos OK, com `devolucaoDestinos` novo na lista.
 Run: `cd server && npm run test:almoxarifado` — esperado: OK (o teste `Devolução ao estoque` usa destino `ESTOQUE`, não afetado).
 Run: `cd server && npm run test:validation && npm run test:safealter && npm run test:sqlite` — esperado: OK.
 Anotar os números reais no relatório da task.
 
-- [ ] **Step 7: commit**
+- [x] **Step 7: commit** — `29524fc`
 
 ```bash
 git add server/services/almoxarifado/returnService.js \
@@ -346,7 +346,7 @@ EOF
 > transferência sem lote. É por isso que o Step 3 abaixo manda rodar o teste e VER FALHAR **depois**
 > de mexer na rota e **antes** de mexer no motor.
 
-- [ ] **Step 1: escrever o teste que falha** — `server/tests/api/transferenciaRegras.api.test.js`:
+- [x] **Step 1: escrever o teste que falha** — `server/tests/api/transferenciaRegras.api.test.js`:
 
 ```js
 /**
@@ -427,11 +427,20 @@ async function cenario(db, { controlado = true, comLote = true } = {}) {
 
   // O cliente nao pode desligar a exigencia pelo corpo: exigeLote mora no 4o argumento de
   // registrarMovimentacao, nunca em `params` (que e req.body inteiro).
+  //
+  // ATENCAO ao 400 deste teste: sem a guarda de lote a transferencia sem `lote_id` de um material
+  // controlado JA falhava com 400 "Saldo insuficiente na localizacao de origem" — porque a linha
+  // de saldo procurada (lote_id NULL) simplesmente nao existe, o estoque esta na linha do lote.
+  // Medido na execucao de 2026-08-12, ANTES de qualquer implementacao: este teste passava com
+  // `assert.strictEqual(res.status, 400)` sozinho, provando nada. Por isso a mensagem TAMBEM e
+  // verificada: so a guarda de lote produz um 400 que fala de lote.
   await test('o corpo nao consegue desligar a exigencia de lote na transferencia', async () => {
     const { mat, origem, destino } = await cenario(db, {});
     const res = await request(app).post('/api/almoxarifado/transferencias')
       .send({ material_id: mat, quantidade: 5, localizacao_origem_id: origem, localizacao_destino_id: destino, exigeLote: false });
     assert.strictEqual(res.status, 400, `o cliente desligou a guarda pelo body: ${JSON.stringify(res.body)}`);
+    assert.match(res.body.error || '', /lote/i,
+      `400 veio de outra guarda (saldo), nao da exigencia de lote: ${res.body.error}`);
   });
 
   await test('transferencia com lote move a linha do lote entre localizacoes', async () => {
@@ -525,12 +534,23 @@ async function cenario(db, { controlado = true, comLote = true } = {}) {
 })();
 ```
 
-- [ ] **Step 2: rodar e ver falhar (estado inicial)**
+- [x] **Step 2: rodar e ver falhar (estado inicial)**
 
 Run: `cd server && node tests/api/transferenciaRegras.api.test.js`
 Expected: falham `transferencia de material com controle de lote sem lote falha`, `o corpo nao consegue desligar a exigencia de lote na transferencia` (os dois retornam 201) e `transferencia nao exige vinculo nem justificativa` (o `deepStrictEqual` de `REGRAS_VINCULO.TRANSFERENCIA` bate contra `undefined`). Os demais passam — são o comportamento que a task **preserva**.
 
-- [ ] **Step 3: declarar `exigeLote` na rota — e rodar de novo para VER QUE NÃO BASTA**
+> **CORREÇÃO — o plano estava errado aqui (medido na execução de 2026-08-12).** Os dois primeiros
+> testes **não** retornam 201 no estado inicial: retornam **400 `Saldo insuficiente na localização
+> de origem`**. Motivo: a entrada de setup credita a linha `(material, origem, lote_id)`, e a
+> transferência sem `lote_id` procura a linha `(material, origem, NULL)`, que não existe. Ou seja,
+> a transferência sem lote de material controlado já falhava — **por saldo, não por lote**.
+> Consequência prática: `assert.strictEqual(res.status, 400)` sozinho **passa provando nada** — é
+> exatamente a armadilha de "teste vazio" do `CLAUDE.md`, e ela morava dentro do próprio plano. Por
+> isso o teste do Step 1 acima foi ajustado para checar **também a mensagem** (`assert.match(...,
+> /lote/i)`) nos dois casos. Com o ajuste, o estado inicial dá **6 passed, 3 failed** e as três
+> falhas são pelas razões certas.
+
+- [x] **Step 3: declarar `exigeLote` na rota — e rodar de novo para VER QUE NÃO BASTA**
 
 Em `server/routes/almoxarifado/extended.js`, substituir o corpo de `POST /api/almoxarifado/transferencias` (linhas 340-345):
 
@@ -552,7 +572,12 @@ Em `server/routes/almoxarifado/extended.js`, substituir o corpo de `POST /api/al
 Run: `cd server && node tests/api/transferenciaRegras.api.test.js`
 Expected: **`transferencia de material com controle de lote sem lote falha` CONTINUA FALHANDO** (ainda 201). Este passo existe só para você ver com os próprios olhos que declarar na rota não muda nada — é a armadilha nomeada no topo desta task. Se ele passar aqui, pare: alguém já mexeu no motor e o estado do repositório não é o que este plano assume.
 
-- [ ] **Step 4: estender a guarda no motor**
+> **Executado em 2026-08-12:** saída **byte a byte idêntica** à do Step 2 (`6 passed, 3 failed`,
+> mesmas mensagens — `Saldo insuficiente na localização de origem`, não 201, ver correção acima).
+> A prova da armadilha é justamente essa identidade: declarar `exigeLote` na rota não moveu **um
+> único** resultado.
+
+- [x] **Step 4: estender a guarda no motor**
 
 Em `server/services/almoxarifado/stockService.js`, substituir o `if` da guarda de `controle_lote` (~linha 552):
 
@@ -573,7 +598,7 @@ Em `server/services/almoxarifado/stockService.js`, substituir o `if` da guarda d
   }
 ```
 
-- [ ] **Step 5: declarar a regra de vínculo**
+- [x] **Step 5: declarar a regra de vínculo**
 
 Em `server/services/almoxarifado/movementRules.js`, acrescentar dentro de `REGRAS_VINCULO`, depois da linha de `DECISAO_INSPECAO`:
 
@@ -587,19 +612,26 @@ Em `server/services/almoxarifado/movementRules.js`, acrescentar dentro de `REGRA
   TRANSFERENCIA: { vinculo: 'nenhum' },
 ```
 
-- [ ] **Step 6: rodar e ver passar**
+- [x] **Step 6: rodar e ver passar**
 
 Run: `cd server && node tests/api/transferenciaRegras.api.test.js`
 Expected: `9 passed, 0 failed`.
 
 Controle positivo do motor (obrigatório, e desfazer depois): trocar temporariamente `tipo === 'TRANSFERENCIA'` por `tipo === 'TRANSFERENCIA_XX'` na condição do `if` e confirmar que `transferencia de material com controle de lote sem lote falha` volta a falhar; restaurar.
 
-- [ ] **Step 7: suítes inteiras**
+- [x] **Step 7: suítes inteiras**
 
 Run: `cd server && npm run test:api` — atenção especial a `loteGuardasSaida.api.test.js` (tem dois testes de `TRANSFERENCIA` com lote, que continuam passando) e a `tests/almoxarifado.test.js` (`Transferência entre locais`, material sem `controle_lote`, não afetado).
 Run: `cd server && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`.
 
-- [ ] **Step 8: commit**
+> **Executado em 2026-08-12 (números reais):** `test:api` **58/58 arquivos de teste OK**
+> (`transferenciaRegras` entrou como 9 passed, 0 failed); `test:almoxarifado` **43 passou, 0
+> falhou**; `test:validation` **4 passed, 0 failed**; `test:safealter` **3 passed, 0 failed**;
+> `test:sqlite` **3 passed, 0 failed**. Controle positivo do motor executado e desfeito: trocar
+> `tipo === 'TRANSFERENCIA'` por `TRANSFERENCIA_XX` derruba os dois testes de lote (7 passed, 3
+> failed → 2 failed no arquivo), provando que a guarda é o que os sustenta.
+
+- [x] **Step 8: commit**
 
 ```bash
 git add server/services/almoxarifado/movementRules.js \

@@ -339,7 +339,13 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
 
   app.post('/api/almoxarifado/transferencias', auth, requirePermission('movimentar'), async (req, res) => {
     try {
-      const result = await stockService.registrarMovimentacao(db, req.user, { ...req.body, tipo: 'TRANSFERENCIA' });
+      // `exigeLote` no 4o argumento, NAO no body — mesma razao da rota /movimentacoes/v2: esta
+      // rota repassa `req.body` inteiro, entao qualquer chave lida dele seria forjavel pelo
+      // cliente. A transferencia TEM onde informar o lote (o formulario de Movimentacoes mostra
+      // o seletor de lote quando o tipo e TRANSFERENCIA), logo a exigencia vale aqui — e precisa
+      // valer TAMBEM nesta rota, senao ela vira um bypass da guarda da rota v2.
+      const result = await stockService.registrarMovimentacao(db, req.user,
+        { ...req.body, tipo: 'TRANSFERENCIA' }, { exigeLote: true });
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });

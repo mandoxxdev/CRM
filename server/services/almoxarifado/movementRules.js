@@ -25,6 +25,14 @@ const REGRAS_VINCULO = {
   DESBLOQUEIO: { vinculo: 'nenhum', justificativa: true },
   REPROVACAO_INSPECAO: { vinculo: 'nenhum', justificativa: true },
   DECISAO_INSPECAO: { vinculo: 'nenhum', justificativa: true },
+
+  // Etapa 7 (decisao 5 do design): TRANSFERENCIA passa a estar DECLARADA aqui com 'nenhum'. Nao
+  // exige nada — mas a ausencia deixa de ser omissao e vira decisao escrita. Exigir
+  // justificativa em toda transferencia foi descartado: mover material de prateleira e rotina, e
+  // operador obrigado a justificar rotina escreve "ok". Exigir so quando muda de almoxarifado
+  // foi descartado por ser mais regra para explicar e testar do que valor entregue — a tela tem
+  // campo de motivo OPCIONAL, que vai para o livro.
+  TRANSFERENCIA: { vinculo: 'nenhum' },
 };
 
 function avaliarRegrasVinculo(tipo, params) {
