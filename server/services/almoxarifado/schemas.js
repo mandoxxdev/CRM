@@ -308,8 +308,85 @@ const RequisicaoSchema = z.object({
   }
 });
 
+// ── Remessa para terceiros (Etapa 8b, Task 8) ──────────────────────────────────
+/**
+ * TODO campo que o serviço usa precisa estar declarado aqui: `validate()` troca `req.body` pelo
+ * resultado do parse, e `z.object` DESCARTA chave não declarada EM SILÊNCIO — o serviço
+ * simplesmente nunca vê o campo, sem erro nenhum, e a regra de negócio correspondente nunca
+ * dispara. Já custou caro TRÊS vezes nesta base: `reserva_id` na Etapa 4, `lote_id` na Etapa 6 e
+ * `justificativa`/`motivo` do cancelamento na Etapa 8. `peso` e `observacoes` do item são os
+ * candidatos óbvios a serem esquecidos aqui — `remessaTerceiroRotas.api.test.js` relê cada um do
+ * banco depois do POST justamente por isso.
+ */
+const ItemRemessaTerceiroSchema = z.object({
+  material_id: z.number().int().positive(),
+  quantidade: z.number().gt(0, 'quantidade do item deve ser maior que zero'),
+  lote_id: z.number().int().positive().optional(),
+  peso: z.number().nonnegative().optional(),
+  observacoes: z.string().optional(),
+});
+
+/**
+ * `fornecedor_id` OU `fornecedor_nome`: o terceiro pode não estar cadastrado em Compras, e travar a
+ * remessa por isso pararia o galpão. Quem valida a existência do id é `thirdPartyService`
+ * (`resolverFornecedor`), que também protege a consulta com `sqlite_master` — `fornecedores` é
+ * criada em `server/index.js`, não pelo `initSchema` do almoxarifado, e pode não existir.
+ */
+const RemessaTerceiroSchema = z.object({
+  fornecedor_id: z.number().int().positive().optional(),
+  fornecedor_nome: z.string().min(1).optional(),
+  tipo_servico: z.string().optional(),
+  os_id: z.number().int().positive().optional(),
+  projeto_id: z.number().int().positive().optional(),
+  pedido_compra_id: z.number().int().positive().optional(),
+  prazo_previsto: z.string().optional(),
+  observacoes: z.string().optional(),
+  itens: z.array(ItemRemessaTerceiroSchema).min(1, 'a remessa precisa de ao menos um item'),
+}).refine((d) => d.fornecedor_id || (d.fornecedor_nome && d.fornecedor_nome.trim()), {
+  message: 'Informe o fornecedor (terceiro) da remessa',
+});
+
+/**
+ * Retorno: LISTA DE RESULTADOS, não um escalar (decisão 7 do design). `material_id` é opcional e,
+ * na 8b, só pode ser igual ao material do item enviado — o serviço recusa diferente apontando a
+ * Etapa 8c. Ele está declarado aqui DE PROPÓSITO: sem a chave, o campo chegaria como `undefined`
+ * ao serviço, a recusa da 8c nunca dispararia (o operador acharia que a transformação funcionou),
+ * e a 8c ainda teria de mexer no schema para destravá-la.
+ */
+const RetornoRemessaSchema = z.object({
+  nota_fiscal: z.string().optional(),
+  itens: z.array(z.object({
+    item_remessa_id: z.number().int().positive(),
+    quantidade: z.number().gt(0, 'quantidade do retorno deve ser maior que zero'),
+    material_id: z.number().int().positive().optional(),
+    lote_id: z.number().int().positive().optional(),
+    observacoes: z.string().optional(),
+  })).min(1, 'informe ao menos um item retornado'),
+});
+
+/**
+ * Encerramento. `destino` e `justificativa` são opcionais AQUI e obrigatórios NO SERVIÇO quando há
+ * pendência — a exigência depende do saldo que sobrou, que o schema não tem como saber (remessa que
+ * voltou inteira encerra sozinha, sem destino nenhum, e isso é correto). Deixar a regra só no
+ * serviço evita duas fontes da mesma verdade.
+ *
+ * O `enum` do `destino` fica aqui e a lista canônica é `thirdPartyService.DESTINOS_ENCERRAMENTO`:
+ * são as mesmas duas strings, e quem acrescentar um destino tem de mexer nos dois lugares — o
+ * serviço recusaria o valor novo mesmo com o schema aceitando.
+ */
+const EncerramentoRemessaSchema = z.object({
+  destino: z.enum(['PERDA_NO_TERCEIRO', 'CONSUMIDO_NO_PROCESSO']).optional(),
+  justificativa: z.string().optional(),
+});
+
+const CancelamentoRemessaSchema = z.object({
+  motivo: z.string().min(1, 'motivo é obrigatório'),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
   MaterialSchema, MaterialUpdateSchema, RequisicaoSchema, ItemRequisicaoSchema,
+  ItemRemessaTerceiroSchema, RemessaTerceiroSchema, RetornoRemessaSchema,
+  EncerramentoRemessaSchema, CancelamentoRemessaSchema,
 };

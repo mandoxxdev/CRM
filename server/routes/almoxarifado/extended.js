@@ -7,7 +7,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -24,6 +24,7 @@ const purchaseService = require('../../services/almoxarifado/purchaseService');
 // Etapa 8, Task 8: entra no lugar do clientMaterialService removido na Task 7. Nao e o mesmo
 // papel: aquele ERA a ilha (tabela propria, fora do motor); este so LE o que o motor ja gravou.
 const clienteEstoqueService = require('../../services/almoxarifado/clienteEstoqueService');
+const thirdPartyService = require('../../services/almoxarifado/thirdPartyService');
 
 function handleError(res, err) {
   const status = err.status || 500;
@@ -871,6 +872,91 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
       res.json(rows);
     } catch (e) { handleError(res, e); }
   });
+
+  // ── Remessas para terceiros (Etapa 8b, Task 8) ────────────────────────────────────────────
+  //
+  // Leitura só exige `auth` (quem consulta precisa ver onde está o material); toda AÇÃO exige
+  // `remessar_terceiro`. A ação é mais estreita que `movimentar` de propósito (decisão 6 do
+  // design): o material SAI DO SITE, risco diferente de mover prateleira. Hoje os dois gates têm
+  // os mesmos perfis — o ganho é poder restringir depois sem reescrever nada. É por isso que o
+  // teste do 403 assere o CAMPO `acao` da resposta e não só o status: trocar um gate pelo outro
+  // hoje não mudaria status nenhum, e a regressão passaria despercebida.
+  //
+  // Nenhuma rota abaixo tem `try/catch` próprio com mensagem inventada: todas caem em
+  // `handleError`, que respeita `err.status` e devolve `err.message` INTACTA. As mensagens deste
+  // serviço dizem os números (quanto há, quanto foi pedido, quanto sobrou) e um catch genérico as
+  // apagaria — foi a lição das Etapas 6 e 7.
+
+  // ATENÇÃO À ORDEM: /vencidas ANTES de /:id. Registrada depois, o Express casaria "vencidas"
+  // como :id e a rota do cron devolveria 404 sem nenhum erro que denunciasse a causa.
+  //
+  // Por que ROTA e não scheduler in-process: o único precedente do módulo é
+  // `POST /almoxarifado/reservas/processar-expiracao` (reservationService.processarExpiracao), e a
+  // decisão registrada lá vale aqui — o projeto não tem scheduler e introduzir um é decisão de
+  // infraestrutura. A varredura é chamada por cron externo. `referencia` existe para o cron ser
+  // testável sem viajar no tempo, e o filtro sai do MESMO SQL do `vencidas=1` da listagem: duas
+  // contas dariam uma tela que discorda do alerta.
+  //
+  // A 8b NÃO dispara e-mail nem alerta de atraso (decisão 10 do design): isso é das features 19 e
+  // 20. O que ela entrega é o prazo gravado, esta leitura e o destaque na tela.
+  app.get('/api/almoxarifado/remessas-terceiros/vencidas', auth, async (req, res) => {
+    try {
+      const remessas = await thirdPartyService.listarRemessas(db, {
+        vencidas: '1', referencia: req.query.referencia || null,
+      });
+      res.json({ total: remessas.length, referencia: req.query.referencia || null, remessas });
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/remessas-terceiros', auth, async (req, res) => {
+    try {
+      res.json(await thirdPartyService.listarRemessas(db, req.query || {}));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/remessas-terceiros/:id', auth, async (req, res) => {
+    try {
+      const r = await thirdPartyService.getRemessa(db, req.params.id);
+      // getRemessa devolve null (não lança) quando não acha — o 404 é montado aqui.
+      if (!r) return res.status(404).json({ error: 'Remessa nao encontrada' });
+      res.json(r);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/remessas-terceiros', auth, requirePermission('remessar_terceiro'),
+    validate(RemessaTerceiroSchema), async (req, res) => {
+      try {
+        res.status(201).json(await thirdPartyService.criarRemessa(db, req.user, req.body));
+      } catch (e) { handleError(res, e); }
+    });
+
+  app.post('/api/almoxarifado/remessas-terceiros/:id/enviar', auth, requirePermission('remessar_terceiro'),
+    async (req, res) => {
+      try {
+        res.json(await thirdPartyService.enviarRemessa(db, req.user, req.params.id));
+      } catch (e) { handleError(res, e); }
+    });
+
+  app.post('/api/almoxarifado/remessas-terceiros/:id/retornos', auth, requirePermission('remessar_terceiro'),
+    validate(RetornoRemessaSchema), async (req, res) => {
+      try {
+        res.json(await thirdPartyService.registrarRetorno(db, req.user, req.params.id, req.body));
+      } catch (e) { handleError(res, e); }
+    });
+
+  app.put('/api/almoxarifado/remessas-terceiros/:id/encerrar', auth, requirePermission('remessar_terceiro'),
+    validate(EncerramentoRemessaSchema), async (req, res) => {
+      try {
+        res.json(await thirdPartyService.encerrarRemessa(db, req.user, req.params.id, req.body));
+      } catch (e) { handleError(res, e); }
+    });
+
+  app.put('/api/almoxarifado/remessas-terceiros/:id/cancelar', auth, requirePermission('remessar_terceiro'),
+    validate(CancelamentoRemessaSchema), async (req, res) => {
+      try {
+        res.json(await thirdPartyService.cancelarRemessa(db, req.user, req.params.id, req.body));
+      } catch (e) { handleError(res, e); }
+    });
 
   console.log('✅ Rotas estendidas almoxarifado v3 registradas');
 };
