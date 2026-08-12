@@ -174,12 +174,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // cliente para movimentar, endereçar e etiquetar. O que evita a confusao e o SELO de
       // propriedade na listagem (Task 9), nao a exclusao. As leituras de estoque PROPRIO
       // (dashboard, posicao-estoque) filtram — sao outra pergunta.
+      // proprietario_cliente_nome (Etapa 8, Task 9): o selo da listagem precisa dizer DE QUAL
+      // cliente e a chapa, nao so que ela e de terceiro. Mesmo padrao de
+      // stockService.consultarEstoque. `clientes` e tabela CORE (criada por index.js, fora do
+      // initSchema do modulo) — o harness de teste replica um subconjunto dela de proposito;
+      // fallback sem o JOIN aqui esconderia um ambiente quebrado em vez de resolve-lo.
       let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
-                        a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
+                        a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
+                        cli.razao_social as proprietario_cliente_nome
                  FROM materiais_almoxarifado m
                  LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
                  LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
                  LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+                 LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id
                  WHERE 1=1`;
       const params = [];
 
@@ -284,11 +291,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // GET /api/almoxarifado/materiais/:id — detalhe
   app.get('/api/almoxarifado/materiais/:id',(req, res) => {
     db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
-                   a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
+                   a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
+                   cli.razao_social as proprietario_cliente_nome
             FROM materiais_almoxarifado m
             LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
             LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
             LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+            LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id
             WHERE m.id = ?`, [req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(404).json({ error: 'Material não encontrado' });
@@ -737,10 +746,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/movimentacoes',(req, res) => {
     const { material_id, tipo, data_inicio, data_fim, limit, os_id, projeto_id, centro_custo_id, usuario_id, pendentes_regularizacao } = req.query;
 
+    // Etapa 8, Task 9: este SELECT lista as colunas de `ma` UMA A UMA (nao e `ma.*`), entao
+    // ate aqui nem `proprietario_cliente_id` chegava ao client — o selo de propriedade do livro
+    // de movimentacoes ficava invisivel para sempre, e nenhum teste com dado mockado pegaria.
+    // Por isso vem o id E o nome: o client da precedencia ao dado da propria linha.
     let sql = `SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo, ma.unidade,
+               ma.proprietario_cliente_id, cli.razao_social as proprietario_cliente_nome,
                cc.codigo as centro_custo_codigo, cc.nome as centro_custo_nome
                FROM movimentacoes_almoxarifado m
                JOIN materiais_almoxarifado ma ON m.material_id = ma.id
+               LEFT JOIN clientes cli ON ma.proprietario_cliente_id = cli.id
                LEFT JOIN centros_custo_almoxarifado cc ON m.centro_custo_id = cc.id
                WHERE 1=1`;
     const params = [];
