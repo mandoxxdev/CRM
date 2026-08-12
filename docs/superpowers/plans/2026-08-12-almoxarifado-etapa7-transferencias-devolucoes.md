@@ -1713,7 +1713,7 @@ Controle positivo (obrigatório, e desfazer depois): trocar `exigeSerie: destino
 Run: `cd server && npm run test:api` — atenção a `serieEstornoDevolucao.api.test.js` e `serieControleObrigatorio.api.test.js` (nenhum deles chama `returnService`, confirmado em 2026-08-12; se algum quebrar, é sinal de que o alcance de `exigeSerie` ficou maior do que esta task pediu).
 Run: `cd server && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`.
 
-- [x] **Step 6: commit**
+- [x] **Step 6: commit** — `9e27bcb`
 
 ```bash
 git add server/services/almoxarifado/returnService.js \
