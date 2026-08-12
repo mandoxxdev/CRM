@@ -1,7 +1,7 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 7 (02/08/2026 a 12/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 8 (02/08/2026 a 12/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
@@ -23,11 +23,13 @@
 | 6b | Números de Série | 2026-08-11 | Rastreabilidade por unidade física: série exigida na entrada/saída, aba própria, bloqueio individual |
 | 6c | Etiquetas com QR Code | 2026-08-11 | Etiqueta em PDF (A4 ou térmica) com QR que abre a tela certa já filtrada e destacada |
 | 7 | Transferências e Devoluções | 2026-08-12 | As duas rotas que existiam sem tela ganharam tela e regra — e o bug que baixava o estoque duas vezes na devolução para sucata foi corrigido |
+| 8 | Materiais de Clientes | 2026-08-12 | A chapa do cliente saiu da lista à parte e virou material de verdade, com dono: fora de todo número do nosso estoque, e só sai no trabalho de quem é dela |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
-features 11 (transferências) e 12 (devoluções) também.
-Próxima etapa da ordem: **Etapa 8 — materiais de clientes** (a Etapa 8 foi dividida em
-**8 = clientes** e **8b = terceiros**).
+features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
+clientes).
+Próxima etapa da ordem: **Etapa 8b — materiais enviados a terceiros** (a Etapa 8 foi dividida em
+**8 = clientes**, entregue, e **8b = terceiros**, ainda não iniciada).
 
 ---
 
@@ -416,23 +418,258 @@ devolução, devolução ao fornecedor, estorno de custo de projeto e tipos de d
 
 ---
 
+## Etapa 8 — Materiais de Clientes (2026-08-12)
+
+**Em uma frase:** a chapa que o cliente manda para a GMP industrializar deixou de viver numa
+**lista à parte** — sem lote, sem série, sem endereço, sem extrato, sem etiqueta e fora do controle
+de estoque — e virou **material de verdade, com dono**: fica fora de todo número do nosso estoque,
+só sai no trabalho do próprio cliente, e tem tela e documento próprios.
+
+**O que há de novo (visível para o usuário):**
+- Na ficha do material, seção nova **Propriedade**: escolhe-se o **cliente proprietário** ou
+  **"GMP (estoque próprio)"**. Material sem proprietário é nosso — é o padrão.
+- **Selo com o nome do cliente** ao lado do material em **Materiais**, **Movimentações** e
+  **Extrato**. O selo diz *de qual cliente é*, não só *que é de alguém*; passando o mouse, ele
+  explica a consequência: "não entra no estoque próprio e só sai com OS ou projeto desse cliente".
+- **Saída de material de cliente exige OS ou projeto daquele mesmo cliente.** Antes, nada impedia
+  aplicar a chapa do Cliente A no equipamento do Cliente B.
+- **A saída emergencial não vale para material de cliente** — em todo o resto do módulo ela libera
+  a saída sem vínculo; aqui, não.
+- **Ajustar o saldo de material de cliente exige permissão própria** (`ajustar_material_cliente`,
+  só Administrador), com auditoria nomeando o cliente. Antes, qualquer Almoxarife zerava o saldo da
+  chapa do cliente — pelas **duas** rotas de movimentação.
+- **Recebimento de material de cliente exige o número da nota** (a nota de remessa). Sem ela, a
+  nota inteira é recusada. Material nosso continua entrando sem nota.
+- **Nada de material de cliente entra nos números do estoque próprio:** valor total do estoque,
+  materiais críticos, materiais zerados, reposição de mínimo, sugestão automática de compra, alerta
+  de estoque baixo e relatório de posição. Antes, o sistema chegaria a **abrir um pedido de compra
+  para repor a chapa de outra empresa**.
+- **Mas continua aparecendo onde ele realmente está:** na ocupação de prateleira do **Mapa de
+  Localizações** e no relatório de **materiais bloqueados**. É de propósito — a chapa ocupa a
+  prateleira de verdade e é bloqueada de verdade; o selo é o que evita a confusão, não escondê-la.
+- Nova tela **Almoxarifado → Materiais de Clientes**: escolhe o cliente e vê **recebido,
+  consumido, devolvido, saldo e saldo disponível** por material, mais **em quais OS/projetos** o
+  material dele foi aplicado. Com **PDF de posição** e botão **Devolver ao cliente**.
+- Tipo de movimento novo **Devolução ao cliente** — é **saída** (o material sai do prédio de volta
+  para o dono), com **número do documento obrigatório**. Não confundir com a tela de **Devoluções**
+  da Etapa 7, onde o material **volta** para o estoque.
+- Material de cliente agora aceita **lote, número de série, endereço, extrato e etiqueta** como
+  qualquer outro — é o ganho central da unificação.
+
+**Por baixo do capô:**
+- O dono mora na linha do **material** (`proprietario_cliente_id`), não na linha de saldo. Duas
+  razões: o disponível é um número **por material**, e repartir propriedade dentro dele faria toda
+  guarda de "saldo insuficiente" virar cirurgia no núcleo do motor; e a chapa do Cliente X tem
+  certificado e corrida próprios — **não pode ser trocada** pela do Cliente Y. Custo aceito: o
+  catálogo ganha uma linha por cliente do mesmo item físico.
+- **A segregação não foi "lembrar de filtrar".** O risco desta etapa não era quebrar: era **não
+  quebrar e o número ficar errado** — falha silenciosa que nenhum teste existente pegaria. Por isso
+  as **40 leituras** da tabela de materiais foram levantadas e classificadas uma a uma: as que leem
+  estoque próprio filtram; as que leem **um** material por código não filtram (filtrar ali pararia
+  o motor para material de cliente); e as que leem conjuntos **físicos** não filtram de propósito,
+  ganhando o selo em troca.
+- A auditoria achou que a especificação **mandava olhar o lugar errado**: a lista original varria
+  só um subdiretório e deixava de fora justamente o **dashboard** (onde o valor total somaria o
+  patrimônio do cliente ao nosso) e o **relatório de posição de estoque**. Corrigido, e a correção
+  ficou escrita na spec em vez de aplicada em silêncio.
+- A trava do ajuste foi posta **dentro do motor**, não na rota: o Ajuste chega por **duas** rotas,
+  ambas liberadas para quem pode movimentar — travar uma deixaria a outra aberta.
+- As rotas antigas da lista à parte foram **removidas** (enquanto vivas, eram um caminho paralelo
+  que escapava de todas as travas novas). **A tabela foi preservada** — nenhuma linha foi apagada.
+- Todo teste de segregação tem **controle positivo obrigatório**: além de provar que o material do
+  cliente sumiu, prova que o material **nosso equivalente continua aparecendo**. Sem essa metade,
+  um filtro escrito errado que zerasse a leitura passaria como se estivesse segregando — e foi
+  exatamente isso que uma das sabotagens de teste mostrou.
+- O PDF de posição é gerado **no navegador**, como as etiquetas da Etapa 6c — zero mudança de
+  servidor.
+
+**Antes → Agora:**
+- Antes: material de cliente era uma lista à parte com descrição em texto livre, sem lote, série, endereço, extrato ou etiqueta → Agora: é material normal com dono, e tudo que as Etapas 1 a 7 entregaram vale para ele.
+- Antes: **nada impedia** usar a chapa do Cliente A no equipamento do Cliente B → Agora: o sistema recusa, **nomeando os dois clientes**.
+- Antes: a saída emergencial liberava qualquer saída sem vínculo → Agora: material de cliente **não aceita** emergencial — única exceção deliberada do módulo.
+- Antes: qualquer Almoxarife zerava o saldo da chapa do cliente, pelas duas rotas → Agora: só Administrador, com permissão própria e auditoria nomeando o cliente.
+- Antes: material de cliente entrava sem documento nenhum → Agora: exige o número da nota de remessa, ou a nota inteira é recusada.
+- Antes: o material de terceiro contava como **patrimônio nosso** e o sistema abriria pedido de compra para repô-lo → Agora: fora do valor do estoque, da reposição, da sugestão de compra e da posição.
+- Antes: não existia tela nenhuma → Agora: tela com posição por cliente, aplicações por OS/projeto, PDF e devolução.
+- Antes: não havia como registrar o material saindo de volta para o dono → Agora: "Devolução ao cliente", com documento obrigatório e rastro no extrato.
+
+### Regras e validações desta etapa — cada uma demonstrável ao vivo
+
+Todas as mensagens abaixo são as **mensagens reais** do sistema. Para o roteiro: **Cliente Alfa
+LTDA** e **Cliente Beta SA**, material **CHP-002** (Chapa 3mm) pertencente ao **Alfa**, e
+**MAT-001** como material nosso de controle.
+
+**1. Material de cliente só é aplicado em trabalho do próprio cliente.**
+*Cenário:* cadastre o CHP-002 com **Propriedade = Cliente Alfa LTDA**. Em **Movimentações**, lance
+**Saída para Produção** de 10 PC informando o **projeto do Cliente Beta SA**.
+*O sistema recusa*, com:
+> `Material CHP-002 pertence ao cliente Cliente Alfa LTDA, mas o projeto Projeto Beta e do cliente Cliente Beta SA. Material de cliente so pode ser aplicado em trabalho do proprio dono — troque o vinculo, ou use o material equivalente do estoque proprio.`
+
+*Variações que também recusam:* **sem OS nem projeto** (`Material CHP-002 pertence ao cliente
+Cliente Alfa LTDA e so pode sair com OS ou projeto DESSE cliente. Informe a OS ou o projeto de
+Cliente Alfa LTDA.`) e com **projeto interno**, sem cliente — "nenhum cliente" não é coringa.
+*Controle positivo:* com um **projeto do Alfa**, a mesma saída **passa**; e material **nosso** sai
+para o projeto do Beta normalmente — a trava é sobre o dono do **material**, não sobre o vínculo.
+*Por que importa:* aplicar a chapa de um cliente no equipamento de outro é o erro mais caro
+possível — não é erro de estoque (o número fecha), é problema **contratual**: o cliente cobra onde
+foi parar o material dele.
+
+**2. A saída emergencial não vale para material de cliente.**
+*Cenário:* a mesma saída, agora marcando **"Saída emergencial"** e escrevendo a justificativa.
+*O sistema recusa*, com:
+> `Material CHP-002 pertence ao cliente Cliente Alfa LTDA: saida emergencial nao e permitida para material de terceiro. O emergencial regulariza o vinculo depois, e material de cliente exige saber na hora em qual OS ou projeto DESSE cliente ele foi aplicado. Informe a OS ou o projeto do proprio cliente.`
+
+*Por que importa:* esta é a **única exceção deliberada ao padrão do módulo** — em todo o resto, o
+emergencial libera a saída e marca "pendente de regularização". O emergencial existe para urgência
+no **nosso** estoque, onde dá para acertar depois porque o prejuízo de errar é interno. Com material
+de terceiro, **"regularizo depois" não é resposta para o dono**.
+
+**3. Ajustar o saldo de material de cliente exige permissão própria.**
+*Cenário:* com um usuário de perfil **GESTOR** (que ajusta o estoque próprio normalmente), lance um
+**Ajuste** no CHP-002.
+*O sistema recusa (403)*, com:
+> `Ajustar o saldo do material CHP-002, que pertence ao cliente Cliente Alfa LTDA, exige a permissao "ajustar_material_cliente" (seu perfil: GESTOR). Ajustar estoque de terceiro mexe no numero que o cliente vai cobrar.`
+
+*Repita pelo modal rápido da tela de Materiais* (a rota antiga de movimentação): **recusa igual** —
+a checagem está no motor, não na tela. *Controle positivo:* o **mesmo usuário** ajusta material
+**nosso** sem problema; só o dono do material muda entre os dois testes.
+*Por que importa:* antes desta etapa, **um Almoxarife zerava o saldo da chapa do cliente pelas duas
+rotas de movimentação**, sem nada registrar de quem era o material. Agora só Administrador, e todo
+ajuste fica auditado **com a razão social do proprietário**.
+
+**4. Recebimento de material de cliente exige número de documento.**
+*Cenário:* crie um recebimento com o CHP-002 e **deixe o campo de nota em branco**; processe.
+*O sistema recusa a nota inteira* (nenhum item entra), com:
+> `Nao foi possivel dar entrada no estoque: CHP-002: material do cliente Cliente Alfa LTDA exige numero de documento (nota de remessa) para dar entrada`
+
+*Campo só com espaços conta como em branco* — recusa igual. *Controle positivo:* material **nosso**
+continua entrando **sem** nota (entrada manual, devolução, ajuste de inventário) — travar isso para
+todo mundo quebraria todo o recebimento do módulo.
+*Por que importa:* a nota de remessa é o papel que prova **que a chapa chegou, de quem, e em que
+quantidade**. Sem ela, não há como responder ao cliente o que foi recebido.
+
+> **Nota sobre a especificação:** o requisito original dizia "entrada exige cliente **+ projeto** +
+> documento". **Isso estava errado, e a correção faz parte da entrega.** Um mesmo cliente manda a
+> mesma chapa para **dois projetos** — exigir o projeto na entrada obrigaria a cadastrar dois
+> materiais idênticos para o mesmo item físico do mesmo dono. **O projeto é exigido na saída**, que
+> é onde a aplicação importa (regra 1). A afirmação errada foi corrigida **dizendo que estava
+> errada**, e não apagada em silêncio.
+
+**5. Devolver ao cliente exige o número do documento de devolução.**
+*Cenário:* em **Materiais de Clientes**, escolha o Alfa, clique em **Devolver** na linha do
+CHP-002, informe 10 e **deixe o documento em branco**.
+*O sistema recusa*, com `Informe o número do documento de devolução` (a tela barra antes de enviar;
+forçado por fora, o servidor responde `documento_devolucao: informe o numero do documento de
+devolucao`). Com o documento preenchido, **o saldo baixa** e a linha "Devolução ao cliente" aparece
+no **extrato do material**.
+*Uma segunda trava, no mesmo lugar:* tentar devolver ao cliente um material **sem dono** é recusado
+com:
+> `O material MAT-001 nao pertence a nenhum cliente — nao ha para quem devolver. Para tirar material proprio do estoque use Movimentacoes (saida, sucata ou perda).`
+
+*E uma isenção proposital:* a devolução ao cliente **não** pede OS nem projeto — o destino é o
+próprio dono, e exigir a OS dele para devolver a ele não faria sentido.
+*Por que importa:* a devolução ao cliente é uma saída física do prédio. Sem número de documento não
+há como provar depois o que voltou, quando e para quem.
+
+**6. O material do cliente não entra em nenhum número do estoque próprio.**
+*Cenário:* anote o **"Valor total do estoque"** do Dashboard. Dê entrada de **100 PC** de CHP-002
+com custo **R$ 25** (com a nota preenchida, regra 4). Volte ao Dashboard.
+*O número não muda* — nem o valor total (os R$ 2.500 do cliente **não** entram), nem "materiais
+críticos", nem "materiais zerados", nem o relatório de **posição de estoque**.
+*Complete a demonstração:* ponha o CHP-002 **abaixo do mínimo** e rode a verificação de mínimos —
+**nenhuma solicitação de compra** é criada para ele e **nenhum alerta** de estoque baixo sai.
+*Controle positivo (a metade que prova que o filtro não zerou tudo):* faça o mesmo com um material
+**nosso** abaixo do mínimo — a solicitação **é** criada e o alerta **sai**.
+*Por que importa:* antes, um material de terceiro na base contaria como **patrimônio nosso** no
+balanço do estoque, e o sistema chegaria a **abrir pedido de compra para repor a chapa de outra
+empresa**.
+
+**7. Mas o material do cliente APARECE onde ele fisicamente está — de propósito.**
+*Cenário:* endereça o CHP-002 numa prateleira e abra o **Mapa de Localizações**: a quantidade dele
+**conta** na ocupação daquela posição. Bloqueie parte dele e abra o relatório de **materiais
+bloqueados**: ele **aparece**.
+*Por que importa:* esses dois são conjuntos **físicos**. A chapa do cliente ocupa a prateleira de
+verdade e é bloqueada de verdade — escondê-la faria o mapa mentir sobre o galpão e tiraria do
+almoxarife exatamente o que ele precisa ver na fila de qualidade. **O que evita a confusão é o
+selo, não o filtro.**
+
+**8. O selo diz de QUAL cliente é o material, nas três telas.**
+*Cenário:* abra **Materiais**, depois **Movimentações**, depois o **Extrato** do CHP-002. Nas três,
+ao lado do material, o selo **"Cliente Alfa LTDA"** — com o nome, não um rótulo genérico. Passe o
+mouse: *"não entra no estoque próprio e só sai com OS ou projeto desse cliente"*.
+*Controle positivo:* a linha do **MAT-001** (nosso) **não tem selo nenhum** nas mesmas três telas.
+*Por que importa:* a unificação pôs a chapa do cliente na mesma lista que a nossa. Um selo que só
+dissesse "material de cliente" resolveria metade do problema — quando há dois clientes com a mesma
+chapa, é o **nome** que evita pegar a errada.
+
+### ⚠️ O que fazer antes de subir a Etapa 8 para produção
+
+**1. A conferência de inventário escapa da permissão nova — e isso é um caminho real.** Concluir
+uma conferência de estoque com **"aplicar ajustes"** grava o saldo do material por um caminho
+antigo, **fora do motor** — e portanto **fora** da permissão `ajustar_material_cliente` da regra 3.
+Na prática: **o mesmo GESTOR barrado no ajuste pela tela de Movimentações consegue mudar o saldo da
+chapa do cliente pela conferência de inventário**, sem a autorização especial e sem a auditoria que
+nomeia o cliente. Não é hipótese — foi confirmado por dois revisores independentes durante a etapa.
+Não foi corrigido porque fechar isso significa reescrever a aplicação de ajustes da conferência
+para passar pelo motor, o que é uma etapa por si. **Enquanto isso: trate "concluir conferência com
+ajustes" como operação de Administrador quando houver material de cliente envolvido, e confira a
+posição do cliente depois de cada conferência.**
+
+**2. Confirmar em produção que a lista antiga está vazia.** As rotas da lista à parte foram
+removidas com base na medição do banco de **desenvolvimento** (0 linhas). **A tabela foi preservada
+de propósito e nenhuma linha foi apagada** — mas a mesma consulta precisa ser rodada em produção. O
+SQL exato e o que fazer com cada resultado estão no guia
+(`docs/almoxarifado-guia-etapas-e-testes.md`, seção "Etapa 8 → O que fazer ANTES de subir para
+produção").
+
+**Limites declarados:** **materiais enviados a terceiros** (a chapa **nossa** que vai para o
+fornecedor beneficiar) é a feature 14 e virou a **Etapa 8b** — nada dela existe hoje; **e-mails**
+específicos de material de cliente ficam para a feature 19; **sobras vinculadas ao proprietário**
+(o retalho que sobra da chapa do cliente) dependem da tela de retalhos, feature 15; **relatórios de
+perdas, não conformes e reservados por cliente** e a **valorização** por cliente ficam para a
+feature 21 (o PDF de posição traz quantidades, não valor); o **fluxo de aprovação assíncrono do
+ajuste** (solicitar → pendente → aprovar) foi descartado nesta etapa em favor da permissão
+dedicada, que é imediata — o fluxo fica na feature 06; o **comprovante de devolução ao cliente em
+PDF** não entrou (a devolução em si entrou); e **os relatórios que misturam** (materiais bloqueados
+e materiais sem endereço) continuam **sem selo** — ele foi entregue nas três telas operacionais.
+
+**Três pendências que continuam abertas (registradas, não consertadas):**
+1. **A conferência de inventário ajusta fora do motor** (ver acima) — a mais importante desta etapa.
+2. **Da Etapa 7: o Ajuste não acerta o "bloqueado".** Material com 8 unidades bloqueadas e um
+   Ajuste levando o total para 1 fica com bloqueado maior que o total — **Disponível negativo, sem
+   aviso**. A decisão é de negócio e continua esperando: o Ajuste deve baixar o bloqueado, recusar,
+   ou avisar? Enquanto isso, resolva a quarentena antes de lançar um ajuste que reduz o total.
+3. **Da Etapa 7: estado parcial na devolução para Sucata, sem notificação.** Se a segunda
+   movimentação falhar depois de a primeira ter entrado, a devolução fica marcada como estado
+   parcial na auditoria e a resolução é manual — **ninguém é notificado**.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
-- **Concluído até aqui:** Etapas 0 a 7 — fundação, motor de estoque, cadastros,
-  requisições, reservas, quarentena, lotes, séries, etiquetas, transferências e devoluções.
-  As features 10 (lotes/séries/etiquetas), 11 (transferências) e 12 (devoluções) estão
-  completas no que cada etapa se propôs.
-- **Próxima etapa da ordem:** **Etapa 8 — materiais de clientes** (spec 13). A Etapa 8 do
-  planejamento foi **dividida**: **8 = clientes** e **8b = terceiros** (spec 14), mesmo
-  precedente da Etapa 6 (dividida em 6/6b/6c). Design e plano das duas já escritos em
-  `docs/superpowers/`.
-- **Ação pendente antes do deploy:** rodar em produção a consulta do **bug da Sucata** (seção da
-  Etapa 7 no guia). No desenvolvimento deu 0 devoluções; produção precisa da mesma checagem.
+- **Concluído até aqui:** Etapas 0 a 8 — fundação, motor de estoque, cadastros,
+  requisições, reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções e
+  materiais de clientes. As features 10 (lotes/séries/etiquetas), 11 (transferências),
+  12 (devoluções) e 13 (materiais de clientes) estão completas no que cada etapa se propôs.
+- **Próxima etapa da ordem:** **Etapa 8b — materiais enviados a terceiros** (spec 14). A Etapa 8 do
+  planejamento foi **dividida**: **8 = clientes** (entregue) e **8b = terceiros**, mesmo
+  precedente da Etapa 6 (dividida em 6/6b/6c). A 8b é o outro lado da moeda: aqui o material de
+  **outro** estava **conosco**; lá o material **nosso** vai para **outro** beneficiar (corte,
+  dobra, usinagem, galvanização), com remessa, prazo, retorno parcial e a transformação
+  chapa→peças. **Ainda não tem design** — nada dela existe hoje.
+- **Ações pendentes antes do deploy:**
+  1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
+     desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
+  2. rodar em produção a consulta que confirma a **lista antiga de materiais de cliente vazia**
+     (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
+  3. saber que a **conferência de inventário ajusta saldo fora da permissão de material de
+     cliente** (seção da Etapa 8) — é o ponto que mais importa contar a quem opera.
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas
   pelo usuário (roteiros no guia); tela de subfamílias; telas para localizações
   vazias/materiais sem endereço; pendências declaradas (a)–(j) da 6b e (a)–(g) da 6c na
-  spec 10; e as duas da Etapa 7 — Ajuste não reconcilia o bloqueado (decisão de negócio
-  pendente) e o estado parcial da Sucata sem notificação.
+  spec 10; as duas da Etapa 7 — Ajuste não reconcilia o bloqueado (decisão de negócio
+  pendente) e o estado parcial da Sucata sem notificação; e as da Etapa 8 — conferência de
+  inventário fora do motor, e os relatórios que misturam material de cliente sem o selo.
 - **Transversal (2026-08-11):** auditoria completa das 24 specs contra o código — specs
   que afirmavam coisas não entregues foram corrigidas com nota datada, e o bug de front dos
   status de reserva (`92fe236`) saiu dessa auditoria.

@@ -2,6 +2,95 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+---
+
+# ✅ ETAPA CONCLUÍDA — 2026-08-12 (`f26b635..5b5eb55`)
+
+**As 10 tasks entregues.** Material de cliente saiu da ilha e virou material normal com dono, com
+saldo fora de toda leitura de estoque próprio, saída travada em OS/projeto do dono, ajuste sob
+permissão dedicada, devolução ao cliente como tipo de movimento, tela de posição por cliente com
+PDF e selo de propriedade nomeando o cliente nas listagens que misturam.
+
+| Task | O quê | Hash(es) | Fix round |
+|---|---|---|---|
+| — | design (spec) | `f26b635` | — |
+| — | plano | `323a5da` | — |
+| — | **correção da spec de design** — ela mandava auditar o lugar errado (varria só o subdiretório `routes/almoxarifado/` e deixava de fora o dashboard e o `posicao-estoque`) | `9d70d8c` | — |
+| 1 | coluna `proprietario_cliente_id` + auditoria nomeada de **40 leituras** (classes A/B/C) | `582bc04` | — |
+| 2 | helper de invariante + teste de segregação com controle positivo obrigatório | `faf20e7` | — |
+| 3 | guarda do dono na saída — a **emergencial não fura** | `da8ff21` | — |
+| 4 | ação `ajustar_material_cliente`, verificada dentro do motor | `e171eaf` | — |
+| 5 | seção "Propriedade" no cadastro + documento obrigatório no recebimento | `99c9f28` | — |
+| 6 | tipo `DEVOLUCAO_CLIENTE` com rota dedicada | `27eb9c9` | — |
+| 7 | aposentadoria da ilha (rotas e serviço saem, **tabela fica**) | `4a17921` | — |
+| 8 | posição por cliente (backend) + tela `/almoxarifado/materiais-cliente` e PDF | `6e97715` · `5b5eb55` | — |
+| 9 | selo de propriedade nas três telas (client) + servidor dizendo **de qual** cliente | `4eaba65` · `359a152` | `359a152` fecha o Step 1, que ficou pendente porque a Task 9 rodou com `server/` bloqueado por outro agente; entre os dois commits o selo dizia só "Material de cliente" |
+| 10 | documentação e verificação final | este commit | — |
+
+**Gates rodados na Task 10 (números reais, 2026-08-12):**
+
+| Suíte | Resultado |
+|---|---|
+| `cd server && npm run test:api` | **68/68 arquivos de teste OK** |
+| `cd server && npm run test:almoxarifado` | **42 passou, 0 falhou** |
+| `cd server && npm run test:validation` | **4 passed, 0 failed** |
+| `cd server && npm run test:safealter` | **3 passed, 0 failed** |
+| `cd server && npm run test:sqlite` | **3 passed, 0 failed** |
+| `cd client && CI=true npx react-scripts test --watchAll=false` | **234 testes, 22 suítes, 0 falhas** |
+| `cd client && CI=true npx react-scripts build` | **`Compiled successfully.`** |
+
+> **Por que `test:almoxarifado` caiu de 43 para 42 e isso está CORRETO.** A Etapa 7 fechou com
+> **43/0**. A Task 7 desta etapa removeu o `clientMaterialService.js` e, junto, o caso
+> `Material do cliente — consumo` de `tests/almoxarifado.test.js`, que exercitava o serviço
+> removido. **Um teste a menos porque o código que ele testava deixou de existir** — não porque a
+> suíte parou de descobrir arquivos. `test:api`, no caminho oposto, subiu de 59 (Etapa 7) para
+> **68**, com os arquivos novos desta etapa.
+
+**Duas correções de spec declaradas, não apagadas em silêncio:**
+1. **A spec de design mandava auditar o lugar errado** (`9d70d8c`). Ela contava "19 queries" varrendo
+   `services/almoxarifado/*.js` + `routes/almoxarifado/*.js` — o **subdiretório** — e deixava de
+   fora `server/routes/almoxarifado.js`, onde moram o **dashboard** (com o
+   `SUM(quantidade_atual * custo_unitario)` que contabilizaria patrimônio de terceiro como nosso) e
+   o `GET /relatorio/posicao-estoque`, **literalmente a rota nomeada pelo teste que a própria spec
+   13 exigia**. Seguir a spec como estava escrita produziria uma auditoria que se declara completa
+   deixando passar exatamente o caso coberto pelo teste. Total real auditado: **40 leituras**.
+2. **A spec 13 exigia projeto na entrada, e isso está errado.** Corrigido na spec 13 dizendo que
+   estava errada: um cliente manda a mesma chapa para **dois projetos**, e prender o projeto na
+   entrada obrigaria a criar dois materiais idênticos para o mesmo item físico do mesmo dono. O
+   projeto é exigido na **saída**.
+
+**Pendências que a etapa deixa registradas (não são falhas de entrega):**
+- **A conferência de inventário escapa da permissão nova.** `server/routes/almoxarifado.js:941`
+  (`aplicar_ajustes`) faz `UPDATE materiais_almoxarifado SET quantidade_atual = ?` **direto, fora do
+  motor** — o gate de lá é `ajustar_estoque`, não `ajustar_material_cliente`. **É um caminho real
+  por onde o saldo de material de cliente muda sem a autorização especial.** Confirmado por dois
+  executores independentes (Tasks 1 e 4). Está no guia do usuário, não só aqui.
+- **Confirmar produção antes do deploy.** A ilha foi aposentada com base em medição do banco de
+  desenvolvimento (0 linhas). A tabela **fica** exatamente por isso; nenhuma linha é apagada. SQL e
+  o que fazer com cada resultado: spec 13 e guia.
+- **Os relatórios que misturam continuam sem selo** (materiais bloqueados, materiais-sem-endereço) —
+  classe C da auditoria, decisão declarada.
+- **Verificação pendente da Task 2:** a sabotagem do par do `MAPA_LOCALIZACOES_SQL` não foi
+  executada (o arquivo estava sendo editado pela Task 3 em paralelo). Quem tocar naquele SQL deve
+  rodar as duas: filtrar o 1º subselect → `qtd_itens`/`quantidade_total` caem para 1/100; tirar o
+  filtro do 2º → `itens_baixo_minimo` sobe para 2.
+- **Da Etapa 7, continuam abertas:** `AJUSTE` não reconcilia `quantidade_bloqueada` (bloquear 8 +
+  ajustar para 1 = disponível negativo, sem guarda — decisão de negócio pendente) e o estado
+  parcial no destino SUCATA da devolução, sem notificação. Ambas seguem registradas no guia e nas
+  specs 03 e 12.
+
+**Próxima tarefa: Etapa 8b — materiais enviados a terceiros (feature 14).** O briefing detalhado
+está **no fim deste arquivo** ("Próxima tarefa da ordem do plano mestre"): o que já está decidido e
+não se reabre, o contrato pronto que a 8b consome (motor com `TRANSFERENCIA`, lote/série, guarda do
+dono, fornecedores, permissões, PDF no navegador, alertas) e os seis pontos de atenção que o design
+precisa decidir — sendo os dois maiores a **transformação** chapa→peças (sai 1 chapa, voltam 40
+peças e uma sobra; o motor de hoje não tem nenhum conceito de "material A vira material B") e a
+escolha entre localização virtual e coluna de retenção nova para o **saldo "em terceiros" visível
+mas não disponível**, que decide todo o resto. **A 8b não tem design aprovado nem tasks quebradas —
+a primeira ação é `superpowers:brainstorming` com aquele briefing, não escrever código.**
+
+---
+
 **Goal:** material de cliente deixa de ser uma ilha sem motor e vira material normal com dono
 (`materiais_almoxarifado.proprietario_cliente_id`), ganhando lote, série, endereço, extrato,
 etiqueta e livro de movimentações — com saldo do cliente **fora** de toda leitura de estoque
@@ -3749,7 +3838,7 @@ MSG
 - Modify: `docs/almoxarifado-novidades-por-etapa.md`
 - Modify: `docs/superpowers/plans/2026-08-12-almoxarifado-etapa8-materiais-clientes.md` (este arquivo)
 
-- [ ] **Step 1: rodar TUDO e anotar os números REAIS**
+- [x] **Step 1: rodar TUDO e anotar os números REAIS** — feito; os números reais estão na tabela de gates do bloco ✅ ETAPA CONCLUÍDA, no topo deste arquivo
 
 ```
 cd server && npm run test:api
@@ -3766,7 +3855,7 @@ caso a menos** que antes, porque o teste da ilha saiu na Task 7). **Não escreve
 sem o número**: o guia e o plano da 6b citam os números reais, e é assim que se detecta uma suíte
 que parou de descobrir arquivos.
 
-- [ ] **Step 2: `specs/modulo-almoxarifado/13-materiais-clientes/README.md`**
+- [x] **Step 2: `specs/modulo-almoxarifado/13-materiais-clientes/README.md`**
 
 Status no topo → `🟢` com a data e o range de commits da etapa. Cada item do checklist marcado
 `[x]` **com o hash do commit ao lado**. Os que ficam desmarcados levam o porquê na própria linha:
@@ -3811,7 +3900,7 @@ usuário respondeu); (b) a **classe C** da auditoria (leituras que misturam de p
 são; (c) as 6 leituras de `routes/almoxarifado.js` que a contagem de 19 da spec de design não
 cobria.
 
-- [ ] **Step 3: `specs/modulo-almoxarifado/14-materiais-terceiros/README.md`**
+- [x] **Step 3: `specs/modulo-almoxarifado/14-materiais-terceiros/README.md`**
 
 No topo: status continua `❌`, mas acrescentar
 > **Virou Etapa 8b.** A Etapa 8 do plano mestre cobria as features 13 e 14; foi dividida em
@@ -3819,13 +3908,13 @@ No topo: status continua `❌`, mas acrescentar
 > **Etapa 8b = terceiros (esta feature)**. Briefing de origem no fim de
 > `docs/superpowers/plans/2026-08-12-almoxarifado-etapa8-materiais-clientes.md`.
 
-- [ ] **Step 4: `specs/modulo-almoxarifado/README.md`**
+- [x] **Step 4: `specs/modulo-almoxarifado/README.md`**
 
 Linha da feature 13 → `🟢`, com o range de commits. Linha da feature 14 → `❌ (Etapa 8b)`. Na
 seção de etapas, registrar a divisão 8/8b com o motivo (subsistemas independentes; terceiros é
 construção do zero com máquina de estados, documento de remessa, retorno parcial e transformação).
 
-- [ ] **Step 5: `docs/almoxarifado-guia-etapas-e-testes.md`**
+- [x] **Step 5: `docs/almoxarifado-guia-etapas-e-testes.md`**
 
 Cabeçalho "Onde o desenvolvimento parou" atualizado (Etapa 8 entregue; próxima é a 8b) e seção
 nova "Etapa 8 — Materiais de Clientes" no molde das existentes, contendo:
@@ -3848,7 +3937,7 @@ nova "Etapa 8 — Materiais de Clientes" no molde das existentes, contendo:
   por cliente (feature 21); aprovação assíncrona de ajuste (feature 06); e a pendência do
   `aplicar_ajustes` da conferência de inventário, que ajusta fora do motor.
 
-- [ ] **Step 6: `docs/almoxarifado-novidades-por-etapa.md` — o documento apresentado na empresa**
+- [x] **Step 6: `docs/almoxarifado-novidades-por-etapa.md` — o documento apresentado na empresa**
 
 Seção `## Etapa 8 — Materiais de Clientes (2026-08-12)` no molde das existentes (que vão da Etapa 0
 à 6c). **Exigência específica desta task: cada regra de negócio nova aparece em linguagem de
@@ -3908,7 +3997,7 @@ Fechar a seção com o parágrafo "O que ainda não faz" (mesma lista do Step 5)
 "Onde estamos e o que vem a seguir", trocar a próxima etapa para **8b — materiais enviados a
 terceiros**.
 
-- [ ] **Step 7: fechar este plano**
+- [x] **Step 7: fechar este plano**
 
 No topo deste arquivo, o bloco de conclusão no molde do plano da 6b: `✅ ETAPA CONCLUÍDA`, range
 completo de commits, números reais das suítes, e a tabela `Task | O quê | Hash(es) | Fix round`.
@@ -3918,7 +4007,7 @@ teve de corrigir.
 
 Marcar todos os steps `[x]`.
 
-- [ ] **Step 8: commit**
+- [x] **Step 8: commit**
 
 ```bash
 git add specs/modulo-almoxarifado docs/almoxarifado-guia-etapas-e-testes.md docs/almoxarifado-novidades-por-etapa.md docs/superpowers/plans/2026-08-12-almoxarifado-etapa8-materiais-clientes.md
