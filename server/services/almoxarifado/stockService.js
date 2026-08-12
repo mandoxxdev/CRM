@@ -4,7 +4,7 @@ const { can } = require('./permissions');
 const alertService = require('./alertService');
 const { avaliarRegrasVinculo } = require('./movementRules');
 const ownerRules = require('./ownerRules');
-const { TIPOS_MOVIMENTO } = require('./schema');
+const { TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 // seriesService nao importa stockService de volta — sem ciclo.
 const seriesService = require('./seriesService');
@@ -515,11 +515,23 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // VOLTA para o estoque: direcoes opostas, nomes parecidos. Estando aqui, ela debita saldo, exige
   // lote/serie e resolve endereco de origem como qualquer outra saida — que e o ponto de faze-la
   // passar pelo motor em vez de ser mais uma ilha.
-  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE'];
+  // Etapa 8b: PERDA_TERCEIRO/CONSUMO_TERCEIRO entram em tiposSaida NOS DOIS lugares deste arquivo
+  // (aqui e em cancelarMovimentacao), e a decisao foi tomada olhando CADA ramo, nao por simetria.
+  // Aqui: sao saida de verdade — baixam quantidade_atual, escrevem a linha de saldo por
+  // localizacao e resolvem endereco de origem como qualquer outra. O que os diferencia e que a
+  // quantidade que eles baixam esta RETIDA em quantidade_em_terceiros, nao disponivel — por isso a
+  // flag `baixandoTerceiro` abaixo.
+  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO',
+    'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
   const tiposAjuste = ['AJUSTE'];
   // Consumo de reserva: só quando a saída cita `reserva_id`. RESERVA/LIBERACAO_RESERVA também
   // carregam reserva_id, mas não consomem nada — são o lançamento da própria reserva.
   const consumindoReserva = !!reserva_id && tiposSaida.includes(tipo);
+  // Saida que consome o que esta RETIDO em quantidade_em_terceiros. Mesmo papel de
+  // `consumindoReserva`: a quantidade nao esta no disponivel (o disponivel justamente a exclui),
+  // entao a guarda do disponivel nao pode barra-la; a validacao real acontece contra a propria
+  // coluna de retencao, atomicamente, no claim mais abaixo.
+  const baixandoTerceiro = ['PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'].includes(tipo);
 
   // ── Lote (Etapa 6) ──────────────────────────────────────────────────────────
   // Aceita `lote_id` (numero) ou `lote` (codigo). O ledger guarda os DOIS: `lote_id` para juntar
@@ -670,7 +682,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // STATUS roda ANTES desta: um lote bloqueado E vencido, mesmo com vencimento liberado,
       // precisa falhar por bloqueio (mensagem certa), nao por vencimento (mensagem que mandaria o
       // operador liberar de novo algo que ja esta liberado).
-      const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO'];
+      // Etapa 8b: PERDA_TERCEIRO/CONSUMO_TERCEIRO tambem sao descarte — lote vencido perdido no
+      // galvanizador tem de poder ser baixado, pelo mesmo motivo do resto da lista (senao o lote
+      // fica PRESO: nao pode sair como consumo, e tambem nao pode ser encerrado).
+      const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
       if (!tiposDescarte.includes(tipo) && lotService.isVencido(loteResolvido) && !lotService.vencimentoLiberado(loteResolvido)) {
         throw Object.assign(
           new Error(`Lote ${loteResolvido.codigo} vencido em ${loteResolvido.data_validade} nao pode sair para consumo. `
@@ -683,7 +698,12 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // barrada pelo disponível — o disponível justamente exclui o reservado. Sem esta exceção,
     // reservar material o tornava inutilizável até para quem reservou (ver o design da Etapa 4).
     // A validação real acontece contra a própria reserva, atomicamente, mais abaixo.
-    if (!consumindoReserva) {
+    // Etapa 8b: `baixandoTerceiro` entra aqui pela MESMA razao de `consumindoReserva` — a
+    // quantidade que PERDA_TERCEIRO/CONSUMO_TERCEIRO baixam esta retida em
+    // quantidade_em_terceiros, que o disponivel subtrai. Sem esta excecao, encerrar uma remessa
+    // que levou TODO o saldo do material seria impossivel (disponivel = 0). A validacao real
+    // acontece contra a propria coluna, atomicamente, no claim mais abaixo.
+    if (!consumindoReserva && !baixandoTerceiro) {
       const disponivel = await getSaldoDisponivel(material);
       if (disponivel < quantidade && !permiteNegativo) {
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
@@ -789,6 +809,34 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         { status: 400 });
     }
     saldoPosterior = saldoAnterior;
+  } else if (tipo === 'REMESSA_TERCEIRO') {
+    // Guarda no proprio WHERE, como o resto do motor: mandar para fora mais do que esta disponivel
+    // criaria retencao sem lastro fisico. `disponivelSql()` (sem alias) porque o UPDATE e de tabela
+    // unica — e usar o helper garante que a conta e A MESMA das outras leituras do disponivel.
+    const claim = await dbGet(db, `UPDATE materiais_almoxarifado
+      SET quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) + ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND ${disponivelSql()} >= ?
+      RETURNING id`, [quantidade, material_id, quantidade]);
+    if (!claim) {
+      throw Object.assign(
+        new Error(`Saldo disponível insuficiente para enviar ao terceiro: ${await getSaldoDisponivel(material)} ${material.unidade}`),
+        { status: 400 });
+    }
+    saldoPosterior = saldoAnterior; // o material continua sendo nosso: quantidade_atual nao muda
+  } else if (tipo === 'RETORNO_TERCEIRO') {
+    // Guarda no WHERE em vez de MAX(0,...), mesma razao do DESBLOQUEIO: saturar em silencio
+    // devolveria ao disponivel menos do que o pedido sem ninguem saber. E a mensagem DIZ o numero
+    // — sem ele o operador tem de adivinhar quanto ainda esta no terceiro (licao da Etapa 7).
+    const claim = await dbGet(db, `UPDATE materiais_almoxarifado
+      SET quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) - ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND COALESCE(quantidade_em_terceiros,0) >= ?
+      RETURNING id`, [quantidade, material_id, quantidade]);
+    if (!claim) {
+      throw Object.assign(
+        new Error(`Retorno acima do que está no terceiro: ainda há ${material.quantidade_em_terceiros || 0} ${material.unidade} lá fora`),
+        { status: 400 });
+    }
+    saldoPosterior = saldoAnterior;
   }
 
   let saldoAnteriorReal = saldoAnterior;
@@ -847,6 +895,16 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // ATIVA aqui é seguro porque o claim atômico do topo já exigiu status = 'ATIVA' para a
       // execução sequer chegar até este ponto.
       await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'ATIVA', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'CONSUMIDA'", [reserva_id]);
+    } else if (baixandoTerceiro) {
+      // Devolve os DOIS efeitos do claim de PERDA_TERCEIRO/CONSUMO_TERCEIRO. Compensar so
+      // quantidade_atual deixaria a retencao baixada sem a saida que a justificava — o oposto
+      // exato do saldo orfao, e igualmente errado: o material voltaria ao disponivel como se nunca
+      // tivesse ido para o terceiro.
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual + ?,
+            quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) + ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [quantidade, quantidade, material_id]);
     } else {
       await dbRun(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -860,8 +918,12 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // o próprio INSERT), a série tem de ser desfeita — senão fica uma série EM_ESTOQUE sem
   // contrapartida no físico, furando o invariante COUNT(série) == quantidade_atual.
   try {
-  if (!['TRANSFERENCIA', 'BLOQUEIO', 'DESBLOQUEIO', 'RESERVA', 'LIBERACAO_RESERVA',
-        'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO'].includes(tipo)) {
+  // A lista literal que existia aqui era, letra por letra, TIPOS_RETENCAO + TRANSFERENCIA — e
+  // manter as duas em paralelo significava que todo tipo de retencao novo tinha de ser lembrado
+  // em DOIS lugares, com a falha silenciosa de esquecer o segundo (o tipo cairia no bloco fisico e
+  // escreveria linha de saldo para um movimento que nao mexe no fisico). Derivar mata a
+  // duplicacao: REMESSA_TERCEIRO/RETORNO_TERCEIRO (Etapa 8b) entram sozinhos.
+  if (!TIPOS_RETENCAO.includes(tipo) && tipo !== 'TRANSFERENCIA') {
     if (tiposSaida.includes(tipo)) {
       // Decremento atômico: o próprio UPDATE valida o disponível sob o lock de linha do
       // SQLite, fechando a janela de corrida entre a leitura acima e a escrita. RETURNING
@@ -919,6 +981,29 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         if (reserva.quantidade - reserva.quantidade_utilizada <= 0) {
           await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'CONSUMIDA', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [reserva_id]);
         }
+      } else if (baixandoTerceiro) {
+        // Baixa fisico E retencao NO MESMO UPDATE — molde de DECISAO_INSPECAO, e pela mesma razao:
+        // como duas chamadas independentes, uma decisao concorrente poderia consumir o em_terceiros
+        // pela metade, e o resultado seria material baixado do fisico com retencao presa para
+        // sempre (ou o contrario). As duas guardas no WHERE: nao baixar mais do que esta la fora, e
+        // nao negativar o fisico. `permiteNegativo` NAO se aplica aqui de proposito — o que esta no
+        // terceiro e uma quantidade conhecida e finita; "perdi 40 de uma remessa de 30" e erro de
+        // digitacao, nao operacao com saldo negativo.
+        const rowT = await dbGet(db, `UPDATE materiais_almoxarifado
+          SET quantidade_atual = quantidade_atual - ?,
+              quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) - ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND COALESCE(quantidade_em_terceiros,0) >= ? AND quantidade_atual >= ?
+          RETURNING quantidade_atual`,
+          [quantidade, quantidade, material_id, quantidade, quantidade]);
+        if (!rowT) {
+          throw Object.assign(
+            new Error(`Baixa acima do que está no terceiro: há ${material.quantidade_em_terceiros || 0} `
+              + `${material.unidade} nessa situação (físico: ${material.quantidade_atual})`),
+            { status: 400 });
+        }
+        saldoPosterior = rowT.quantidade_atual;
+        saidaFisicoAplicado = true;
       } else {
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
@@ -1255,6 +1340,21 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       new Error('Movimento de inspeção não pode ser estornado pelo livro — use a tela de Inspeções para rever a decisão'),
       { status: 400 });
   }
+  // Etapa 8b (achado da Task 4, que o plano não previa): mesma recusa, mesmo motivo. O par de
+  // RETENÇÃO da remessa não tem ramo de reversão no if-chain abaixo — sem esta guarda, estornar
+  // uma REMESSA_TERCEIRO gravaria a linha de ESTORNO e marcaria a original cancelada SEM tocar em
+  // quantidade_em_terceiros: o livro afirmaria uma reversão que não aconteceu e a retenção ficaria
+  // presa. Reverter de verdade também não caberia aqui: o retido pertence ao ITEM da remessa
+  // (itens_remessa_terceiro_almoxarifado.quantidade_retornada e o status do documento), que este
+  // serviço não conhece — mexer só no pool do material recriaria o descasamento item x material.
+  // A porta certa é cancelar/encerrar a própria remessa.
+  // (Contraste deliberado com PERDA_TERCEIRO/CONSUMO_TERCEIRO, que SÃO estornáveis pelo livro:
+  // aqueles são saída de verdade e o estorno devolve ao disponível — ver tiposSaida abaixo.)
+  if (['REMESSA_TERCEIRO', 'RETORNO_TERCEIRO'].includes(mov.tipo)) {
+    throw Object.assign(
+      new Error('Movimento de remessa a terceiro não pode ser estornado pelo livro — use a tela de Remessas para cancelar ou encerrar a remessa'),
+      { status: 400 });
+  }
   if (mov.requisicao_id) {
     throw Object.assign(new Error('Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)'), { status: 400 });
   }
@@ -1276,8 +1376,18 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   // material NUNCA voltaria ao saldo. Assimetria silenciosa, do tipo que esta etapa inteira caca.
   // (Contraste deliberado com a guarda do dono acima, que fica SO em registrarMovimentacao: la o
   // motivo para nao espelhar e que o cancelamento devolve a chapa ao estoque.)
+  //
+  // Etapa 8b: PERDA_TERCEIRO/CONSUMO_TERCEIRO entram aqui tambem, e a decisao foi tomada olhando
+  // ESTE ramo. O ramo de saida abaixo credita quantidade_atual e NAO recria
+  // quantidade_em_terceiros — o que e exatamente o comportamento certo, e nao um efeito colateral
+  // aceito de ma vontade: quando alguem estorna a baixa, a remessa ja esta ENCERRADA, e recriar a
+  // retencao seria um hold sem remessa viva por tras — o saldo orfao que a decisao 4 do design
+  // rejeita. O material volta ao DISPONIVEL, que e o unico estado que sobra fazendo sentido.
+  // Deixa-los FORA seria o pior dos mundos: cairiam no if-chain sem ramo, marcados cancelado = 1
+  // com linha de ESTORNO de saldo_anterior == saldo_posterior, e o material baixado nunca voltaria.
   const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
-  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE'];
+  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO',
+    'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
   const material = await getMaterial(db, mov.material_id);
 
   // Serie (Etapa 6b, Task 5): guarda ANTES do claim `cancelado = 1` — antes de marcar a

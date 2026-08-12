@@ -47,6 +47,18 @@ const REGRAS_VINCULO = {
   // NAO CONFUNDIR com a devolucao da Etapa 7 (ENTRADA_DEVOLUCAO), onde o material VOLTA para o
   // estoque. Aqui ele SAI do predio.
   DEVOLUCAO_CLIENTE: { vinculo: 'nenhum' },
+
+  // Etapa 8b: os quatro exigem justificativa e nenhum exige vinculo com OS/projeto.
+  // Justificativa porque cada um deles muda a resposta a pergunta "onde esta esse material?" e a
+  // resposta tem de estar escrita: REMESSA_TERCEIRO tira do disponivel, RETORNO_TERCEIRO devolve,
+  // e os dois de baixa apagam material do patrimonio.
+  // Vinculo 'nenhum' porque o vinculo da remessa mora no DOCUMENTO (fornecedor, prazo, OS/projeto
+  // e proprietario ficam em remessas_terceiro_almoxarifado) — exigi-lo de novo na movimentacao
+  // duplicaria a regra em dois lugares que divergiriam na primeira mudanca.
+  REMESSA_TERCEIRO: { vinculo: 'nenhum', justificativa: true },
+  RETORNO_TERCEIRO: { vinculo: 'nenhum', justificativa: true },
+  PERDA_TERCEIRO: { vinculo: 'nenhum', justificativa: true },
+  CONSUMO_TERCEIRO: { vinculo: 'nenhum', justificativa: true },
 };
 
 function avaliarRegrasVinculo(tipo, params) {

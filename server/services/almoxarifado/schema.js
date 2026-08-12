@@ -63,6 +63,21 @@ const TIPOS_MOVIMENTO = [
   // metade — DECISAO_INSPECAO baixa o retido inteiro e soma a parte reprovada em bloqueada no
   // MESMO UPDATE (ver stockService.js).
   'DECISAO_INSPECAO',
+  // Etapa 8b: os quatro tipos da remessa a terceiros. Dois PARES com naturezas diferentes:
+  //  - REMESSA_TERCEIRO / RETORNO_TERCEIRO sao RETENCAO (entram em TIPOS_RETENCAO abaixo): mexem
+  //    so em quantidade_em_terceiros. quantidade_atual NAO muda porque o material continua sendo
+  //    nosso — ele so nao esta no predio.
+  //  - PERDA_TERCEIRO / CONSUMO_TERCEIRO sao SAIDA de verdade: baixam quantidade_atual E
+  //    quantidade_em_terceiros no MESMO UPDATE. Sao o destino obrigatorio do que nao voltou
+  //    (decisao 4 do design): PERDA_TERCEIRO = sumiu/foi danificado la; CONSUMO_TERCEIRO = virou
+  //    cavaco, refugo de processo.
+  //
+  // Por que NAO reusar PERDA/SUCATA para a baixa: os dois estao em ownerRules.TIPOS_SAIDA_COM_DONO,
+  // entao encerrar a remessa de uma chapa DE CLIENTE perdida no galvanizador passaria a exigir OS
+  // ou projeto daquele cliente — que pode nao existir, e que a decisao 5 justamente isenta. E PERDA
+  // baixaria so quantidade_atual, deixando quantidade_em_terceiros preso: o saldo orfao que a
+  // decisao 4 existe para evitar.
+  'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
   'ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO', 'ESTORNO',
 ];
 
@@ -73,13 +88,21 @@ const TIPOS_MOVIMENTO = [
 //   BLOQUEIO / DESBLOQUEIO             -> inspectionService (`ajustar_estoque`), exige justificativa
 //   QUARENTENA                         -> receiptService.aprovarRecebimento (`receber_material`) + retido no item
 //   LIBERACAO_/REPROVACAO_/DECISAO_INSPECAO -> inspectionService.decidirInspecao (`inspecionar`) + inspecoes_recebimento
+//   REMESSA_TERCEIRO / RETORNO_TERCEIRO -> thirdPartyService (`remessar_terceiro`)
+//                                          + remessas/itens/retornos_remessa_item
 // Por isso a rota generica de movimentacao NAO pode aceita-los (ver TIPOS_MOVIMENTO_ROTA em
 // schemas.js): entrar por ela pula o gate certo E o registro paralelo, deixando o numero da
 // coluna sem nada por tras.
+//
+// Etapa 8b: esta lista tambem DERIVA a skip-list do bloco fisico do motor (stockService.js). Ate
+// a 8b as duas existiam em paralelo, letra por letra iguais (esta + TRANSFERENCIA), e todo tipo
+// de retencao novo tinha de ser lembrado nos DOIS lugares — esquecer o segundo fazia o tipo cair
+// no bloco fisico em silencio.
 const TIPOS_RETENCAO = [
   'RESERVA', 'LIBERACAO_RESERVA',
   'BLOQUEIO', 'DESBLOQUEIO',
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO',
+  'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO',
 ];
 
 // Tipos que exigem ROTA DEDICADA e por isso NAO entram na rota generica de movimentacao (mesma
@@ -92,7 +115,14 @@ const TIPOS_RETENCAO = [
 // o mais amplo do modulo: aceitar o tipo la tornaria decorativas as exigencias proprias da rota
 // dedicada — bastaria mandar {tipo:'DEVOLUCAO_CLIENTE'} para a v2 e sair material de cliente sem
 // documento nenhum.
-const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE'];
+//   PERDA_TERCEIRO / CONSUMO_TERCEIRO -> PUT /remessas-terceiros/:id/encerrar (gate
+//     `remessar_terceiro`). Sao SAIDA, entao nao sao pegos por TIPOS_RETENCAO — precisam ser
+//     barrados aqui explicitamente. Aceita-los na v2 (gate `movimentar`, o mais amplo do modulo)
+//     permitiria baixar material que esta no terceiro sem remessa nenhuma por tras, e sem o
+//     destino/justificativa que o encerramento exige — o numero de quantidade_em_terceiros
+//     ficaria sem nada que o explique. Mesmo criterio de DEVOLUCAO_CLIENTE: o tipo tem exigencias
+//     proprias que a v2 tornaria decorativas.
+const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
 
 const FAMILIAS_SEED = [
   ['PAR', 'Parafusos e Porcas', 'Elementos de fixação — parafusos, porcas e arruelas'],

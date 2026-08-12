@@ -33,8 +33,22 @@ const { registrarAuditoria } = require('./audit');
  *  - TRANSFERENCIA: mover a chapa do cliente de prateleira nao e aplica-la.
  *  - AJUSTE/AJUSTE_POSITIVO/AJUSTE_NEGATIVO: isentos da regra de VINCULO, mas caem na permissao
  *    dedicada `ajustar_material_cliente` (decisao 7, Task 4).
+ *  - REMESSA_TERCEIRO/RETORNO_TERCEIRO/PERDA_TERCEIRO/CONSUMO_TERCEIRO (Etapa 8b, decisao 5):
+ *    mandar a chapa do cliente galvanizar nao e APLICA-LA em trabalho de ninguem — o material
+ *    continua sendo daquele cliente, so mudou de endereco. Mesmo espirito da TRANSFERENCIA.
+ *    A CONTRAPARTIDA E OBRIGATORIA e nao esta aqui: a remessa REGISTRA o dono
+ *    (remessas_terceiro_almoxarifado.proprietario_cliente_id, gravado por
+ *    thirdPartyService.criarRemessa a partir do material) e o documento de remessa NOMEIA o
+ *    cliente proprietario. Sem essa contrapartida esta isencao seria um caminho para material de
+ *    cliente sair do predio sem rastro de propriedade — o oposto do que a Etapa 8 construiu.
+ *    PERDA_TERCEIRO/CONSUMO_TERCEIRO entram junto porque so nascem do encerramento de uma remessa
+ *    que ja tem o dono registrado, sob o gate `remessar_terceiro` e com justificativa obrigatoria.
+ *    Foi por isso que a 8b criou tipos NOVOS em vez de reusar PERDA/SUCATA: aqueles dois estao em
+ *    TIPOS_SAIDA_COM_DONO abaixo, e encerrar a remessa de uma chapa de cliente perdida no
+ *    galvanizador passaria a exigir OS ou projeto daquele cliente.
  */
-const TIPOS_ISENTOS_DONO = ['DEVOLUCAO_CLIENTE', 'TRANSFERENCIA', 'AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO'];
+const TIPOS_ISENTOS_DONO = ['DEVOLUCAO_CLIENTE', 'TRANSFERENCIA', 'AJUSTE', 'AJUSTE_POSITIVO',
+  'AJUSTE_NEGATIVO', 'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
 
 /**
  * Tipos de saida que a guarda cobre. Espelha o `tiposSaida` do stockService menos os isentos.
