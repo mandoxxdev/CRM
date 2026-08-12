@@ -544,6 +544,114 @@ async function entregar(db, materialId, qtd, extra = {}) {
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));
   });
 
+  // ── Compensacao da devolucao recusada (conserto fora do plano, achado na Etapa 7) ───────────
+  //
+  // `registrarDevolucao` grava a linha de `devolucoes_material_almoxarifado` ANTES de emitir as
+  // movimentacoes, porque precisa do `id` para montar `referencia: DEV-<id>`. Se o motor recusar
+  // DEPOIS disso, a linha ficava gravada: uma devolucao registrada que nunca aconteceu. Os testes
+  // abaixo medem as duas consequencias (linha fantasma na listagem; saldo_devolvivel encolhido)
+  // e a fronteira da compensacao (movimentacao ja gravada => a linha TEM de ficar).
+  //
+  // Pre-validacao caso a caso (Tasks 3 e 5) continua sendo a primeira linha de defesa, mas nao
+  // fecha o buraco: QUALQUER erro do motor depois do INSERT cai aqui.
+
+  const devolucoesDoMaterial = (matId) => dbAll(db,
+    'SELECT * FROM devolucoes_material_almoxarifado WHERE material_id = ?', [matId]);
+
+  // Cenario EXATO da sonda que achou o bug (2026-08-12): material com controle_lote, entrada de
+  // 20 no lote L1, saida de 10, devolucao AVULSA de 3 sem informar lote.
+  // Medido antes do conserto: resposta 400 e `linhas antes: 0 | depois: 1`.
+  await test('[compensacao] devolucao avulsa sem lote recusada nao deixa linha gravada', async () => {
+    const mat = await novoMaterial(db, { lote: true });
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'DEV-COMP-L1' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 20, lote_id: lote.id, motivo: 'setup' });
+    await entregar(db, mat, 10, { lote_id: lote.id });
+
+    const antes = (await devolucoesDoMaterial(mat)).length;
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 3, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.match(res.body.error || '', /lote/i);
+    const depois = (await devolucoesDoMaterial(mat)).length;
+    assert.strictEqual(depois, antes,
+      `devolucao recusada ficou gravada: linhas antes ${antes} | depois ${depois}`);
+    // A mensagem do motor e o que o operador le — a compensacao nao pode masca-la.
+    assert.doesNotMatch(res.body.error || '', /compensa|desfaz/i,
+      `a compensacao mascarou o erro original do motor: ${res.body.error}`);
+  });
+
+  // A CONSEQUENCIA INVISIVEL, e a razao principal deste conserto: a linha fantasma de uma
+  // devolucao VINCULADA entra no SUM de `quantidade_devolvida`. Cada recusa encolhia para sempre
+  // o quanto ainda podia ser devolvido daquela entrega — e nada avisava.
+  //
+  // A recusa aqui e legitima e acontece DEPOIS do INSERT: a saida citada nao tem lote (o motor so
+  // exige lote em quem declara `exigeLote`, e a entrega direta nao declara), entao a devolucao nao
+  // tem de quem herdar e a ENTRADA_DEVOLUCAO — que declara — e recusada.
+  await test('[compensacao] devolucao vinculada recusada nao encolhe o saldo_devolvivel da entrega', async () => {
+    const mat = await novoMaterial(db, { lote: true, qtd: 20 });
+    const saidaId = await entregar(db, mat, 10);
+
+    const saldoDaSaida = async () => {
+      const r = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      const linha = r.body.find((s) => s.id === saidaId);
+      assert.ok(linha, 'a entrega sumiu da lista de saidas elegiveis');
+      return linha.saldo_devolvivel;
+    };
+
+    const antes = await saldoDaSaida();
+    assert.strictEqual(antes, 10, `cenario invalido: a entrega ja nascia com saldo ${antes}`);
+
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 3, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaId });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+
+    const depois = await saldoDaSaida();
+    assert.strictEqual(depois, antes,
+      `a devolucao RECUSADA encolheu o saldo devolvivel da entrega: ${antes} -> ${depois}`);
+    // E a validacao tem de continuar aceitando os 10 — a ponta de escrita nao pode discordar da
+    // leitura. Sem a compensacao, aqui voltaria "restam 7".
+    const tudo = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 10, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE',
+              movimentacao_saida_id: saidaId });
+    assert.strictEqual(tudo.status, 400, JSON.stringify(tudo.body));
+    assert.doesNotMatch(tudo.body.error || '', /acima do entregue/i,
+      `a recusa anterior consumiu saldo da entrega: ${tudo.body.error}`);
+  });
+
+  // A FRONTEIRA da compensacao: quando UMA movimentacao ja foi gravada, a linha da devolucao TEM
+  // de ficar. Apagar ali seria pior do que o bug — a linha passaria a ser o unico rastro de um
+  // movimento que de fato aconteceu no estoque.
+  //
+  // Cenario alcancavel so pela API: o destino SUCATA emite ENTRADA_DEVOLUCAO e depois SUCATA. Um
+  // BLOQUEIO seguido de AJUSTE para menos deixa `quantidade_bloqueada` MAIOR que
+  // `quantidade_atual` (inventario achou menos do que o sistema dizia, com parte em quarentena) —
+  // disponivel fica negativo, a entrada passa (entrada nao olha disponivel) e a saida da sucata
+  // falha. E exatamente o par meio-feito que a pre-validacao da Task 3 evita quando consegue.
+  await test('[compensacao] devolucao com movimentacao JA gravada mantem a linha (rastro do estoque)', async () => {
+    const mat = await novoMaterial(db, { qtd: 20 });
+    const saidaId = await entregar(db, mat, 10);
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'BLOQUEIO', quantidade: 8, justificativa: 'lote em analise' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE', quantidade: 1, justificativa: 'inventario achou menos' });
+
+    const res = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 3, motivo: 'DANIFICADO', destino: 'SUCATA', movimentacao_saida_id: saidaId });
+    assert.strictEqual(res.status, 400,
+      `cenario invalido: a sucata passou, o teste nao mede fronteira nenhuma: ${JSON.stringify(res.body)}`);
+
+    const linhas = await devolucoesDoMaterial(mat);
+    assert.strictEqual(linhas.length, 1,
+      'a compensacao apagou a devolucao cuja ENTRADA_DEVOLUCAO ja tinha mexido no estoque — '
+      + 'a linha era o unico rastro do movimento');
+    const movs = await movimentosDoMaterial(db, mat);
+    const entradaDev = movs.find((m) => m.referencia === `DEV-${linhas[0].id}`);
+    assert.ok(entradaDev, 'cenario invalido: nenhuma movimentacao chegou a ser gravada');
+    assert.strictEqual(entradaDev.tipo, 'ENTRADA_DEVOLUCAO');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

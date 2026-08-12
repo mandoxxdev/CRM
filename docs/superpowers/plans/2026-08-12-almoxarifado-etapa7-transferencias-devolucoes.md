@@ -2819,6 +2819,48 @@ EOF
 
 ---
 
+### Conserto fora do plano (2026-08-12): compensação da devolução recusada — ✅ FEITO
+
+**Não era task deste plano.** Foi achado durante a execução da Etapa 7, com sonda executada, e foi
+em commit próprio. Fica registrado aqui porque muda o contrato do `returnService` que as Tasks 4, 7
+e 8 descrevem.
+
+**O bug:** `registrarDevolucao` grava a linha de `devolucoes_material_almoxarifado` **antes** de
+emitir as movimentações (precisa do `id` para o `referencia: DEV-<id>`). Qualquer recusa do motor
+depois disso deixava a linha. Sonda: material com `controle_lote`, entrada de 20 no lote L1, saída
+de 10, devolução **avulsa** de 3 sem lote → `400 "exige lote nesta movimentacao"` e
+`linhas antes: 0 | depois: 1`. Consequências: (1) a tela da Task 7 lista uma devolução que não
+existe; (2) pior, quando a recusada cita uma saída, a linha fantasma entra no `SUM` de
+`quantidade_devolvida` que **as duas pontas** usam (`validarSaidaOriginal` e o `saldo_devolvivel` de
+`listarSaidasElegiveis`) — medido: `10 → 7` depois de uma devolução **recusada**.
+
+**A correção:** `try/catch` em volta da emissão. Se **nenhuma** movimentação chegou ao livro
+(`COUNT` por `referencia`), `DELETE` da linha + auditoria `COMPENSACAO`; se **alguma** já foi
+gravada (destino `SUCATA`, que emite `ENTRADA_DEVOLUCAO` e depois `SUCATA`), a linha **fica** com
+auditoria `ESTADO_PARCIAL` — apagar ali seria pior, a linha vira o único rastro de um movimento que
+de fato mexeu no estoque. O erro original é re-lançado **sem máscara** nos dois ramos: é a mensagem
+que o operador lê. Mesmo padrão de `seriesService.desfazerEntrada`/`desfazerSaida`; existe porque
+**não há transação neste módulo** (a migração para Postgres é que resolve de vez, e está fora desta
+etapa).
+
+**Por que compensação e não mais pré-validação caso a caso:** as pré-validações das Tasks 3 (status
+do lote no destino SUCATA) e 5 (cardinalidade de série) **continuam** e continuam sendo a primeira
+linha de defesa — são elas que impedem o par entrada+saída de ficar meio feito, coisa que
+compensação nenhuma desfaz. Mas elas fecham **casos**; o buraco é geral e a lista de erros do motor
+cresce sem o `returnService` saber.
+
+**Testes:** 3 novos em `server/tests/api/devolucaoVinculo.api.test.js` (27 → 30). TDD: antes de
+implementar, `28 passed, 2 failed` (os dois falhando com `1 !== 0` e `7 !== 10`); depois,
+`30 passed, 0 failed`. Controle positivo: `DELETE` neutralizado → `28 passed, 2 failed` (voltam os
+mesmos dois); controle inverso, `DELETE` incondicional → `29 passed, 1 failed` (cai o teste da
+fronteira). Gates: `test:api` 59/59 arquivos OK · `test:almoxarifado` 43 passou, 0 falhou ·
+`test:validation` 4/4 · `test:safealter` 3/3 · `test:sqlite` 3/3.
+
+**Para a Task 8:** a spec 12 já ganhou a seção "Compensação da devolução recusada" neste conserto —
+não reescrever, só conferir que continua verdadeira depois do resto da etapa.
+
+---
+
 ### Task 8: documentação e verificação final da etapa
 
 **Files:** os **6 documentos** listados na seção final da spec de design, cada um com o que muda:

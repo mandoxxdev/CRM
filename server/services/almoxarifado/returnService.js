@@ -145,45 +145,115 @@ async function registrarDevolucao(db, user, data) {
   // argumento, nunca no body.
   const opcoesEntrada = { exigeLote: true, exigeSerie: destinoAceitaSerie };
 
-  if (destinoFinal === 'ESTOQUE' || destinoFinal === 'QUARENTENA') {
-    await registrarMovimentacao(db, user, {
-      material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
-      motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
-      localizacao_destino_id: localizacao_id, lote_id: loteFinalId,
-      series: seriesInformadas,
-      justificativa: observacoes, referencia,
-    }, opcoesEntrada);
-    if (destinoFinal === 'QUARENTENA') {
+  // ── COMPENSACAO DA DEVOLUCAO (conserto da Etapa 7, fora do plano) ───────────────────────────
+  //
+  // POR QUE ISTO EXISTE: a linha da devolucao TEM de ser gravada antes das movimentacoes — o
+  // `referencia: DEV-<id>` acima depende do `id` que so o INSERT produz. E este modulo NAO TEM
+  // TRANSACAO: cada escrita no SQLite vale por si, entao toda escrita que pode falhar DEPOIS de
+  // outra precisa do seu desfazer explicito, escrito a mao. E o mesmo padrao de
+  // `seriesService.desfazerEntrada`/`desfazerSaida`. (Quem resolve isto de vez e a migracao para
+  // Postgres, com transacao de verdade — fora do escopo desta etapa.)
+  //
+  // O BUG, medido com sonda executada (2026-08-12): material com controle_lote, entrada de 20 no
+  // lote L1, saida de 10, e entao uma devolucao AVULSA de 3 sem informar lote respondia
+  // 400 "exige lote" e deixava `linhas em devolucoes_material_almoxarifado antes: 0 | depois: 1`.
+  // Duas consequencias:
+  //   1. `listarDevolucoes` (a tela da Etapa 7) mostrava uma devolucao que nunca aconteceu.
+  //   2. Pior, quando a recusada CITAVA uma saida: o SUM de `quantidade_devolvida` — usado tanto
+  //      por `validarSaidaOriginal` quanto pelo `saldo_devolvivel` de `listarSaidasElegiveis` —
+  //      contava a linha fantasma. Cada recusa encolhia PARA SEMPRE o quanto ainda podia ser
+  //      devolvido daquela entrega, e nada avisava.
+  //
+  // POR QUE COMPENSACAO E NAO MAIS PRE-VALIDACAO CASO A CASO: as pre-validacoes das Tasks 3
+  // (lote do destino SUCATA) e 5 (cardinalidade de serie) continuam acima e continuam sendo a
+  // PRIMEIRA linha de defesa — sao elas que impedem o par entrada+saida da sucata de ficar meio
+  // feito, coisa que compensacao nenhuma aqui conseguiria desfazer. Mas elas fecham CASOS, e o
+  // buraco e GERAL: qualquer erro do motor depois do INSERT deixa a linha, e a lista de erros do
+  // motor cresce sem este arquivo ficar sabendo. Perseguir cada um deles com mais uma checagem
+  // seria correr atras de um alvo que se move.
+  try {
+    if (destinoFinal === 'ESTOQUE' || destinoFinal === 'QUARENTENA') {
       await registrarMovimentacao(db, user, {
-        material_id, tipo: 'BLOQUEIO', quantidade, motivo: 'Devolução para quarentena',
-        justificativa: 'Devolução recebida em quarentena para inspeção', referencia,
+        material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
+        motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
+        localizacao_destino_id: localizacao_id, lote_id: loteFinalId,
+        series: seriesInformadas,
+        justificativa: observacoes, referencia,
+      }, opcoesEntrada);
+      if (destinoFinal === 'QUARENTENA') {
+        await registrarMovimentacao(db, user, {
+          material_id, tipo: 'BLOQUEIO', quantidade, motivo: 'Devolução para quarentena',
+          justificativa: 'Devolução recebida em quarentena para inspeção', referencia,
+        });
+      }
+    } else if (destinoFinal === 'SUCATA') {
+      // BUG CORRIGIDO NA ETAPA 7 (medido com sonda executada, 2026-08-12): o material devolvido
+      // para sucata JA tinha saido do estoque na entrega. Emitir so o SUCATA (que e um tipo de
+      // SAIDA para o motor) descontava de novo um saldo que nunca voltou — 100 -> saida 10 -> 90
+      // -> devolucao 3 para sucata dava 87, quando o certo e 90. Agora entra e sai: o saldo fecha,
+      // e o livro conta as duas coisas (voltou, e foi sucateada). Descartado: nao movimentar nada
+      // no destino SUCATA — o saldo tambem ficaria certo, mas a sucata sumiria do livro, e a
+      // feature 15 (retalhos e sucatas) vai precisar dela la.
+      await registrarMovimentacao(db, user, {
+        material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
+        motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
+        localizacao_destino_id: localizacao_id, lote_id: loteFinalId,
+        series: seriesInformadas,
+        justificativa: observacoes, referencia,
+      }, opcoesEntrada);
+      await registrarMovimentacao(db, user, {
+        material_id, tipo: 'SUCATA', quantidade, motivo, os_id: origem_os_id,
+        localizacao_origem_id: localizacao_id, lote_id: loteFinalId,
+        justificativa: observacoes || motivo, referencia,
+      }, opcoes);
+    } else if (destinoFinal === 'RETRABALHO') {
+      await registrarMovimentacao(db, user, {
+        material_id, tipo: 'RETRABALHO', quantidade, motivo, os_id: origem_os_id,
+        lote_id: loteFinalId, referencia,
       });
     }
-  } else if (destinoFinal === 'SUCATA') {
-    // BUG CORRIGIDO NA ETAPA 7 (medido com sonda executada, 2026-08-12): o material devolvido
-    // para sucata JA tinha saido do estoque na entrega. Emitir so o SUCATA (que e um tipo de
-    // SAIDA para o motor) descontava de novo um saldo que nunca voltou — 100 -> saida 10 -> 90
-    // -> devolucao 3 para sucata dava 87, quando o certo e 90. Agora entra e sai: o saldo fecha,
-    // e o livro conta as duas coisas (voltou, e foi sucateada). Descartado: nao movimentar nada
-    // no destino SUCATA — o saldo tambem ficaria certo, mas a sucata sumiria do livro, e a
-    // feature 15 (retalhos e sucatas) vai precisar dela la.
-    await registrarMovimentacao(db, user, {
-      material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
-      motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
-      localizacao_destino_id: localizacao_id, lote_id: loteFinalId,
-      series: seriesInformadas,
-      justificativa: observacoes, referencia,
-    }, opcoesEntrada);
-    await registrarMovimentacao(db, user, {
-      material_id, tipo: 'SUCATA', quantidade, motivo, os_id: origem_os_id,
-      localizacao_origem_id: localizacao_id, lote_id: loteFinalId,
-      justificativa: observacoes || motivo, referencia,
-    }, opcoes);
-  } else if (destinoFinal === 'RETRABALHO') {
-    await registrarMovimentacao(db, user, {
-      material_id, tipo: 'RETRABALHO', quantidade, motivo, os_id: origem_os_id,
-      lote_id: loteFinalId, referencia,
-    });
+  } catch (e) {
+    // A PERGUNTA QUE DECIDE: alguma movimentacao chegou ao LIVRO? Contar linhas por `referencia`
+    // responde exatamente isso — `DEV-<id>` e unica por devolucao, e o motor grava o ledger por
+    // ultimo, compensando os proprios efeitos de saldo quando falha antes disso (ver o catch
+    // amplo de `registrarMovimentacao`). Linha no livro = estoque mexido de verdade.
+    const { emitidas } = await dbGet(db,
+      'SELECT COUNT(*) AS emitidas FROM movimentacoes_almoxarifado WHERE referencia = ?', [referencia]);
+
+    if (emitidas === 0) {
+      // Nada aconteceu no estoque: a linha da devolucao e pura ficcao. Apaga.
+      await dbRun(db, 'DELETE FROM devolucoes_material_almoxarifado WHERE id = ?', [r.lastID]);
+      await registrarAuditoria(db, {
+        entidade: 'devolucao', entidade_id: r.lastID, acao: 'COMPENSACAO',
+        usuario_id: null, usuario_nome: 'sistema',
+        dados_anteriores: {
+          material_id, quantidade, destino: destinoFinal,
+          movimentacao_saida_id: movimentacao_saida_id || null, lote_id: loteFinalId,
+        },
+        dados_novos: null,
+        justificativa: `compensacao automatica de devolucao que falhou: ${e.message}`,
+      });
+    } else {
+      // A LINHA FICA, DE PROPOSITO. Alguma perna ja mexeu no estoque — o caso do destino SUCATA,
+      // que emite ENTRADA_DEVOLUCAO e so DEPOIS a SUCATA. Apagar aqui seria PIOR do que o bug:
+      // a linha da devolucao passaria a ser o unico rastro de um movimento que de fato aconteceu,
+      // e o livro ficaria com uma ENTRADA_DEVOLUCAO cuja `referencia` nao aponta para nada. O que
+      // este ramo pode fazer e deixar o estado parcial REGISTRADO, para ser resolvido a mao —
+      // desfazer a perna ja gravada daqui seria reimplementar o estorno pela metade.
+      await registrarAuditoria(db, {
+        entidade: 'devolucao', entidade_id: r.lastID, acao: 'ESTADO_PARCIAL',
+        usuario_id: user.id, usuario_nome: user.nome || user.email,
+        dados_novos: {
+          referencia, movimentacoes_emitidas: emitidas, destino: destinoFinal, quantidade,
+        },
+        justificativa: `devolucao ficou parcial: ${emitidas} movimentacao(oes) ja gravada(s) quando o motor `
+          + `recusou o restante (${e.message}). A linha foi MANTIDA porque e o rastro do que ja mexeu no estoque.`,
+      });
+    }
+    // Re-lanca o erro ORIGINAL, sem mascarar: a mensagem do motor e o que o operador le e o que
+    // diz o que corrigir ("exige lote", "saldo insuficiente"). Trocar por um "falha ao registrar
+    // devolucao" generico transformaria um erro acionavel em adivinhacao.
+    throw e;
   }
 
   await registrarAuditoria(db, { entidade: 'devolucao', entidade_id: r.lastID, acao: 'CRIACAO', usuario_id: user.id, usuario_nome: user.nome || user.email });
