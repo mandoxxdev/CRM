@@ -78,6 +78,41 @@ o encerramento de remessa é o caminho controlado para zerar `quantidade_em_terc
 leituras de `materiais_almoxarifado` — e a lista de **40 leituras já está levantada e classificada
 em A/B/C** na Task 1 do plano da Etapa 8. **Reusar a lista, não refazer o grep.**
 
+> **ARMADILHA — a subtração do disponível está REPLICADA em SQL, não centralizada.** Este é o
+> ponto onde a etapa mais provavelmente falha em silêncio, e o design original não o nomeava.
+> `getSaldoDisponivel` (`stockService.js:22-27`) é só **uma** das implementações da conta
+> `atual − reservada − bloqueada − em_inspecao`. A mesma subtração aparece escrita à mão em SQL em
+> pelo menos **seis** outros lugares (levantados por varredura, 2026-08-12):
+>
+> - `stockService.js:892` e `:912` — guarda atômica da saída (claim no `WHERE`);
+> - `stockService.js:1351`;
+> - `stockService.js:1631-1632` — guarda da criação de reserva;
+> - `stockService.js:1748` — `quantidade_disponivel` computada na listagem de estoque;
+> - `requisitionStateMachine.js:97-99` — `calcularStatusPosAprovacao`.
+>
+> Acrescentar a coluna só em `getSaldoDisponivel` faz o sistema **recusar pela função e aceitar
+> pelo SQL**: a listagem mostraria disponível a mais, a reserva seria criada sobre material que
+> está no galvanizador, e a guarda atômica da saída deixaria passar. Nada quebra — o número fica
+> errado. **A task da coluna tem de tratar as sete como um conjunto**, e o teste tem de provar cada
+> caminho separadamente (função, listagem, criação de reserva, guarda de saída, status pós-aprovação),
+> não só `getSaldoDisponivel`.
+
+### Decisão 2b — fornecedor: `INTEGER` + nome espelhado, sem FK
+
+O terceiro é um fornecedor cadastrado no módulo Compras. **Seguir o padrão do almoxarifado, não
+inventar:** nenhuma tabela do módulo tem `REFERENCES fornecedores` — é sempre `fornecedor_id
+INTEGER` solto **mais** um `fornecedor_nome TEXT` espelhado ao lado (`lotes_almoxarifado`,
+`recebimentos_material_almoxarifado`). A razão é concreta: `fornecedores` é criada em
+`server/index.js`, **não** pelo `initSchema` do almoxarifado, e por isso **pode não existir** —
+`receiptService` consulta `sqlite_master` antes de tocá-la.
+
+Consequência prática para o plano: qualquer `JOIN fornecedores` precisa da mesma proteção, e o
+harness de teste **não** tem a tabela por padrão. Isto já mordeu esta base uma vez nesta sessão,
+com `clientes` na Etapa 8 — e a lição registrada lá foi **stub no harness, nunca fallback na
+query**, porque o fallback esconde em teste um erro que existiria em produção.
+
+`resolverPedidoCompra` (`receiptService.js:52-62`) é o molde de resolução por id **ou** número.
+
 ### Decisão 3 — máquina de estados
 
 `ABERTA → ENVIADA → RETORNO_PARCIAL → ENCERRADA / CANCELADA`, no molde de
