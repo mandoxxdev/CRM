@@ -591,7 +591,38 @@ MSG
 - Produces: `assertSegregado(rows, { materialClienteId, materialProprioId, contexto })` —
   a asserção dupla (exclusão **e** controle positivo) usada em toda leitura de classe A.
 
-- [ ] **Step 1: escrever o helper**
+#### Correções feitas ao EXECUTAR a Task 2 (2026-08-12, commit `faf20e7`)
+
+Registrado aqui em vez de corrigido em silêncio — duas destas mudam o que o plano mandava fazer.
+
+1. **A ordem das asserções do dashboard estava errada no plano, e a sabotagem 2 é que mostrou.**
+   Como escrito abaixo, o `strictEqual` do `valorTotalEstoque` roda **antes** do controle
+   positivo. Com o filtro sabotado para `= NULL`, o total vai a zero e as duas asserções falham —
+   mas quem fala primeiro é a da igualdade, com a mensagem `valorTotalEstoque contabilizou
+   patrimonio de cliente como nosso`. **Diagnóstico invertido:** a leitura não contabilizou nada,
+   ela zerou; quem fosse consertar procuraria o bug oposto. O teste commitado põe o **controle
+   positivo primeiro**. Verificado com as duas sabotagens do mesmo ponto: `= NULL` → "os numeros
+   do dashboard zeraram"; filtro removido de vez → "contabilizou patrimonio de cliente como nosso".
+   O plano previa a segunda mensagem para a primeira sabotagem — não era o que acontecia.
+2. **O plano diz `11 passed`; o teste dele tem 10 casos.** O arquivo commitado tem **14**: os 10
+   do plano, mais `a fixture e valida` (usa o `assertDono`, que o plano criava e nunca chamava),
+   `incluir_clientes=1` (o terceiro ramo do `consultarEstoque` da Task 1 não tinha teste nenhum) e
+   mais duas de classe C — ver o item 3.
+3. **Classe C ganhou duas leituras além do relatório de bloqueados**, porque o risco simétrico
+   (alguém "consertar" filtrando) vale para as três da auditoria: `materiais-sem-endereco` e o
+   **par discordante do `MAPA_LOCALIZACOES_SQL`** — a soma de ocupação física inclui a chapa do
+   cliente e o contador de reposição no **mesmo SQL** a exclui. Esse é o ponto mais fácil de
+   "uniformizar" por engano, e agora um único teste prende os dois lados.
+4. **Quatro sabotagens executadas, não três.** As três do plano, mais o filtro do
+   `materiais-sem-endereco` (a classe C nova). Todas falharam com a mensagem certa e foram
+   restauradas byte a byte (`git diff` vazio).
+   **A do `MAPA_LOCALIZACOES_SQL` não foi executada**: `stockService.js` estava sendo editado em
+   paralelo pela Task 3 e sabotar arquivo em voo destruiria o trabalho do outro. Fica como
+   **verificação pendente** — quem tocar naquele SQL depois deve rodar as duas sabotagens do par
+   (filtrar o 1º subselect → `qtd_itens`/`quantidade_total` caem para 1/100; tirar o filtro do 2º
+   → `itens_baixo_minimo` sobe para 2).
+
+- [x] **Step 1: escrever o helper**
 
 `server/tests/helpers/clienteInvariante.js` — molde exato de `serieInvariante.js` (arquivo curto,
 `assert`, docstring dizendo qual invariante defende, um `module.exports`):
@@ -632,7 +663,7 @@ async function assertDono(db, materialId, clienteIdEsperado) {
 module.exports = { assertSegregado, assertDono };
 ```
 
-- [ ] **Step 2: escrever o teste que falha — `materialClienteSegregacao.api.test.js`**
+- [x] **Step 2: escrever o teste que falha — `materialClienteSegregacao.api.test.js`**
 
 ```js
 /**
@@ -790,13 +821,15 @@ async function novoMaterial(db, { qtd = 100, minima = 200, proprietario_cliente_
 })();
 ```
 
-- [ ] **Step 3: rodar e ver falhar ANTES de confiar**
+- [x] **Step 3: rodar e ver falhar ANTES de confiar**
 
 Run: `cd server && node tests/api/materialClienteSegregacao.api.test.js`
-Expected: **PASSA de primeira**, porque a Task 1 já implementou os filtros. **É exatamente o caso
+Executado: falhou antes do helper existir (`Cannot find module '../helpers/clienteInvariante'`,
+exit 1, zero casos rodados) e, com o helper no lugar, **passa de primeira** — porque a Task 1 já
+implementou os filtros. **É exatamente o caso
 que a regra da casa manda desconfiar.** Não siga adiante sem o Step 4.
 
-- [ ] **Step 4: controle positivo do próprio teste — provar que ele sabe falhar**
+- [x] **Step 4: controle positivo do próprio teste — provar que ele sabe falhar**
 
 Faça as três sabotagens abaixo, uma de cada vez, rodando o arquivo e **restaurando** depois:
 
@@ -814,12 +847,14 @@ Faça as três sabotagens abaixo, uma de cada vez, rodando o arquivo e **restaur
 Se qualquer uma das três **passar** com a sabotagem no lugar, o teste está cego — conserte o teste
 antes de continuar.
 
-- [ ] **Step 5: rodar limpo e a suíte inteira**
+- [x] **Step 5: rodar limpo e a suíte inteira**
 
 Run: `cd server && node tests/api/materialClienteSegregacao.api.test.js && npm run test:api`
-Expected: `11 passed, 0 failed` no arquivo; suíte inteira verde.
+Executado: `14 passed, 0 failed` no arquivo; `62/62 arquivos de teste OK` no `test:api`
+(60 antes da etapa + este + o da Task 3, em voo na mesma sessao); `test:almoxarifado` 43/0,
+`test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0.
 
-- [ ] **Step 6: commit**
+- [x] **Step 6: commit** — `faf20e7`
 
 ```bash
 git add server/tests/helpers/clienteInvariante.js server/tests/api/materialClienteSegregacao.api.test.js
@@ -862,7 +897,7 @@ MSG
 > OS e para nomear os dois clientes na mensagem de erro. Misturar db num módulo puro derrubaria a
 > testabilidade que ele tem hoje.
 
-- [ ] **Step 1: escrever os testes que falham — `materialClienteGuardaSaida.api.test.js`**
+- [x] **Step 1: escrever os testes que falham — `materialClienteGuardaSaida.api.test.js`**
 
 ```js
 /**
@@ -1039,14 +1074,14 @@ const totalDoMaterial = async (db, id) =>
 })();
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd server && node tests/api/materialClienteGuardaSaida.api.test.js`
 Expected: FAIL nos casos de recusa (devolvem 201 em vez de 400 — a guarda não existe). Os controles
 positivos e as isenções passam desde já; é isso que prova que o cenário está montado certo antes da
 implementação.
 
-- [ ] **Step 3: implementar `ownerRules.js`**
+- [x] **Step 3: implementar `ownerRules.js`**
 
 ```js
 /**
@@ -1150,7 +1185,7 @@ async function assertSaidaPermitida(db, material, tipo, params) {
 module.exports = { TIPOS_ISENTOS_DONO, TIPOS_SAIDA_COM_DONO, assertSaidaPermitida };
 ```
 
-- [ ] **Step 4: ligar a guarda no motor**
+- [x] **Step 4: ligar a guarda no motor**
 
 Em `server/services/almoxarifado/stockService.js`, no topo junto dos outros requires:
 
@@ -1170,7 +1205,7 @@ linhas `const regras = ...` / `if (!regras.ok) ...` / `const regularizacaoPenden
   await ownerRules.assertSaidaPermitida(db, material, tipo, { os_id, projeto_id, emergencial });
 ```
 
-- [ ] **Step 5: rodar e ver passar**
+- [x] **Step 5: rodar e ver passar**
 
 Run: `cd server && node tests/api/materialClienteGuardaSaida.api.test.js`
 Expected: `12 passed, 0 failed`.
@@ -1179,13 +1214,13 @@ Depois: `cd server && npm run test:api`. **Regressão esperada em zero testes** 
 existente cria material com dono, então `material.proprietario_cliente_id` é sempre `null` e a
 guarda retorna na primeira linha.
 
-- [ ] **Step 6: controle positivo da guarda**
+- [x] **Step 6: controle positivo da guarda**
 
 Trocar temporariamente, em `ownerRules.js`, `if (!material?.proprietario_cliente_id) return;` por
 `return;` (guarda desligada). Rodar o arquivo: esperado **6 falhas** (os casos de recusa).
 Restaurar e rodar de novo: 12 passed.
 
-- [ ] **Step 7: commit**
+- [x] **Step 7: commit**
 
 ```bash
 git add server/services/almoxarifado/ownerRules.js server/services/almoxarifado/stockService.js server/tests/api/materialClienteGuardaSaida.api.test.js
