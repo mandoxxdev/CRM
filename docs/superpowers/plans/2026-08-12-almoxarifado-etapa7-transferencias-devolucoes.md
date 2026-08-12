@@ -2086,7 +2086,7 @@ EOF
 - Produces: componente `DevolucoesAlmoxarifado` (default export), rota `/almoxarifado/devolucoes`, item de menu.
 - Permissão: `movimentar` (a mesma que a rota já exige). `useAlmoxPermissoes`/`bloquearSeNaoPode` só barram antes do formulário — quem decide é o backend.
 
-- [ ] **Step 1: escrever o teste que falha** — `client/src/components/almoxarifado/DevolucoesAlmoxarifado.test.js`:
+- [x] **Step 1: escrever o teste que falha** — `client/src/components/almoxarifado/DevolucoesAlmoxarifado.test.js`:
 
 ```js
 /**
@@ -2326,12 +2326,12 @@ describe('DevolucoesAlmoxarifado — lote e série', () => {
 });
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd client && CI=true npx react-scripts test src/components/almoxarifado/DevolucoesAlmoxarifado --watchAll=false`
 Expected: falha na importação — `Cannot find module './DevolucoesAlmoxarifado'`.
 
-- [ ] **Step 3: implementar a tela** — `client/src/components/almoxarifado/DevolucoesAlmoxarifado.js`:
+- [x] **Step 3: implementar a tela** — `client/src/components/almoxarifado/DevolucoesAlmoxarifado.js`:
 
 ```jsx
 import React, { useState, useEffect, useCallback } from 'react';
@@ -2728,7 +2728,7 @@ const DevolucoesAlmoxarifado = () => {
 export default DevolucoesAlmoxarifado;
 ```
 
-- [ ] **Step 4: registrar a rota e o menu**
+- [x] **Step 4: registrar a rota e o menu**
 
 Em `client/src/App.js`, junto do import dos outros componentes do almoxarifado:
 
@@ -2751,19 +2751,36 @@ Em `client/src/components/Layout.js`, no array `almoxarifadoMenuItems`, logo dep
 
 e acrescentar `FiCornerUpLeft` ao import de `react-icons/fi` do arquivo.
 
-- [ ] **Step 5: rodar e ver passar**
+> **CORREÇÃO — o plano estava errado aqui (executado em 2026-08-12).** `App.js` **não** importa as
+> telas diretamente: todas as páginas do almoxarifado são code-split em
+> `client/src/routes/lazyModules.js` (`export const LotesAlmoxarifado = page(() => import(...))`) e
+> chegam ao `App.js` pelo `import { ... } from './routes/lazyModules'`. Seguir o plano ao pé da
+> letra colocaria a tela de devoluções no bundle principal, fora do padrão de todas as vizinhas.
+> O que foi feito: `export const DevolucoesAlmoxarifado = page(...)` em `lazyModules.js`, o nome
+> acrescentado ao destructuring do `App.js`, e a `<Route path="devolucoes" ...>` no mesmo lugar que
+> o plano indicava. **Arquivo a mais no commit desta task:** `client/src/routes/lazyModules.js`.
+
+- [x] **Step 5: rodar e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test src/components/almoxarifado/DevolucoesAlmoxarifado --watchAll=false`
 Expected: `11 passed`.
 
 Controle positivo (obrigatório, e desfazer depois): trocar `destino: sugestao ? sugestao.destino : f.destino` por `destino: f.destino` em `escolherCondicao` e confirmar que `Boa sugere Estoque, Suspeita sugere Quarentena, Danificada sugere Sucata` falha; restaurar.
 
-- [ ] **Step 6: gates de cliente**
+- [x] **Step 6: gates de cliente**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false`
 Run: `cd client && CI=true npx react-scripts build`
 
-- [ ] **Step 7: commit**
+> **Executado em 2026-08-12 (números reais):** arquivo isolado **11 passed, 1 suíte** (antes de
+> implementar: `Cannot find module './DevolucoesAlmoxarifado'`, suíte inteira sem rodar). Suíte de
+> cliente completa: **196 testes em 17 suítes, 0 falhas** (era 185 em 16 — os 11 novos). Build:
+> `Compiled successfully.` sem warning com `CI=true`. Controle positivo executado e desfeito:
+> trocar `destino: sugestao ? sugestao.destino : f.destino` por `destino: f.destino` derruba
+> exatamente 1 teste (`Expected: "QUARENTENA" / Received: "ESTOQUE"` — **10 passed, 1 failed**),
+> provando que é a sugestão que o sustenta.
+
+- [x] **Step 7: commit** — `0722bfd`
 
 ```bash
 git add client/src/components/almoxarifado/DevolucoesAlmoxarifado.js \
