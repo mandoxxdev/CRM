@@ -23,7 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbAll } = require('../../services/almoxarifado/db');
+const { dbAll, dbRun } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -60,15 +60,44 @@ const RELATORIOS = '/api/almoxarifado/relatorios';
     assert.strictEqual(consumir.status, 404, `POST ${ILHA}/:id/consumir ainda responde ${consumir.status}`);
   });
 
-  await test('o relatorio materiais-cliente da ilha saiu do mapa (e o dispatcher continua de pe)', async () => {
-    // Mesmo par: o positivo primeiro, senao um dispatcher quebrado passaria como "chave removida".
+  await test('o relatorio materiais-cliente nao le mais a tabela da ilha', async () => {
+    // Mesmo par: o positivo primeiro, senao um dispatcher quebrado passaria como "chave trocada".
     const vivo = await request(app).get(`${RELATORIOS}/estoque-atual`);
     assert.strictEqual(vivo.status, 200,
       `CONTROLE POSITIVO: ${RELATORIOS}/estoque-atual respondeu ${vivo.status} — o dispatcher de `
-      + 'relatorios quebrou, o 404 abaixo nao prova nada');
-    const ilha = await request(app).get(`${RELATORIOS}/materiais-cliente`);
-    assert.strictEqual(ilha.status, 404,
-      `${RELATORIOS}/materiais-cliente ainda responde ${ilha.status} — a chave da ilha continua no mapa`);
+      + 'relatorios quebrou, a asercao abaixo nao prova nada');
+
+    // Etapa 8, Task 8: entre a Task 7 e a Task 8 esta chave respondia 404 (a da ilha saiu com o
+    // clientMaterialService e nada ocupou o lugar). Agora ela existe de novo, apontando para o
+    // clienteEstoqueService — que le o LIVRO de movimentacoes, nao a tabela aposentada. O que
+    // esta task defende, portanto, mudou: nao e mais "a chave sumiu", e "a chave nao serve mais
+    // dados da ilha". Sem cliente_id o relatorio recusa (400): posicao de todos os clientes de
+    // uma vez nao e relatorio, e lista (GET /materiais-cliente/clientes).
+    const semCliente = await request(app).get(`${RELATORIOS}/materiais-cliente`);
+    assert.strictEqual(semCliente.status, 400,
+      `${RELATORIOS}/materiais-cliente respondeu ${semCliente.status} — esperado 400 por falta de cliente_id`);
+
+    // A prova de que a ilha nao alimenta mais nada: uma linha gravada NA TABELA APOSENTADA nao
+    // pode aparecer na resposta. Sem isto, "a chave existe" nao distinguiria o servico novo do
+    // antigo ressuscitado.
+    // `projetos`/`ordens_servico` sao tabelas CORE (server/index.js no boot), fora do initSchema
+    // do almoxarifado — mesmo precedente de materialClienteGuardaSaida/Posicao. A posicao por
+    // cliente faz LEFT JOIN nas duas para dizer ONDE a chapa foi aplicada.
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS projetos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER, nome TEXT, status TEXT)`);
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS ordens_servico (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, numero_os TEXT, cliente_id INTEGER,
+      projeto_id INTEGER, status TEXT)`);
+    const cli = await dbRun(db, 'INSERT INTO clientes (razao_social) VALUES (?)', ['Cliente da Ilha LTDA']);
+    await dbRun(db, `INSERT INTO materiais_cliente_almoxarifado
+      (cliente_id, descricao, quantidade_recebida, quantidade_saldo)
+      VALUES (?, 'CHAPA FANTASMA DA ILHA', 99, 99)`, [cli.lastID]);
+    const res = await request(app).get(`${RELATORIOS}/materiais-cliente?cliente_id=${cli.lastID}`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.ok(!JSON.stringify(res.body).includes('CHAPA FANTASMA DA ILHA'),
+      'o relatorio voltou a servir dados de materiais_cliente_almoxarifado — a ilha ressuscitou');
+    assert.deepStrictEqual(res.body.itens, [],
+      'sem material com dono cadastrado a posicao tem de vir vazia, nao com o conteudo da ilha');
   });
 
   await test('o clientMaterialService.js foi removido do disco', async () => {

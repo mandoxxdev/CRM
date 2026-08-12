@@ -20,6 +20,9 @@ const toolService = require('../../services/almoxarifado/toolService');
 const reportService = require('../../services/almoxarifado/reportService');
 const sectorMaterialService = require('../../services/almoxarifado/sectorMaterialService');
 const purchaseService = require('../../services/almoxarifado/purchaseService');
+// Etapa 8, Task 8: entra no lugar do clientMaterialService removido na Task 7. Nao e o mesmo
+// papel: aquele ERA a ilha (tabela propria, fora do motor); este so LE o que o motor ja gravou.
+const clienteEstoqueService = require('../../services/almoxarifado/clienteEstoqueService');
 
 function handleError(res, err) {
   const status = err.status || 500;
@@ -704,8 +707,23 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
   // A TABELA continua no schema.js, marcada como aposentada: a medicao de 0 linhas cobriu so o
   // banco de desenvolvimento. Ver a Task 7 do plano da Etapa 8.
   //
-  // O que ficou no lugar: POST /materiais-cliente/devolucoes (Task 6, mais acima neste arquivo) e,
-  // para a leitura, GET /almoxarifado/estoque?proprietario_cliente_id=N (Task 1).
+  // O que ficou no lugar: POST /materiais-cliente/devolucoes (Task 6, mais acima neste arquivo),
+  // GET /almoxarifado/estoque?proprietario_cliente_id=N (Task 1) e as duas rotas de LEITURA
+  // abaixo, que alimentam a tela /almoxarifado/materiais-cliente (Task 8).
+  //
+  // Sao GETs sem `requirePermission`, como todas as leituras deste arquivo: o gate de leitura do
+  // modulo e o `auth` + checkModulePermission da camada de cima, e o perfil CONSULTA existe
+  // justamente para poder ver sem poder agir. Quem AGE sobre esta tela passa pelo POST de
+  // devolucao, que tem o gate `movimentar`.
+  app.get('/api/almoxarifado/materiais-cliente/clientes', auth, async (req, res) => {
+    try { res.json(await clienteEstoqueService.listarClientesComMaterial(db)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/materiais-cliente/posicao', auth, async (req, res) => {
+    try { res.json(await clienteEstoqueService.posicaoPorCliente(db, req.query)); }
+    catch (e) { handleError(res, e); }
+  });
 
   // ── Compras (integração preparada) ──
   app.post('/api/almoxarifado/compras/verificar-minimos', auth, requirePermission('configurar'), async (req, res) => {
@@ -778,11 +796,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     'historico-movimentacoes': (db, q) => reportService.relatorioHistoricoMovimentacoes(db, q),
     'inventario-divergencias': reportService.relatorioInventarioDivergencias,
     'consumo-periodo': (db, q) => reportService.relatorioConsumoPeriodo(db, q.data_inicio, q.data_fim, q.projeto_id, q.cliente_id),
-    // Etapa 8, Task 7: a chave 'materiais-cliente' apontava para clientMaterialService
-    // (a ilha aposentada) e saiu com ele. Enquanto a posicao por cliente nao tiver servico
-    // proprio (clienteEstoqueService, Task 8), o dispatcher responde 404 para este tipo — que e
-    // o comportamento correto de um relatorio que ainda nao existe, e nao um relatorio mentindo
-    // com dados de uma tabela sem escritor.
+    // Etapa 8, Task 7 -> Task 8: a chave apontava para clientMaterialService (a ilha aposentada)
+    // e saiu com ele; o dispatcher respondeu 404 enquanto a posicao por cliente nao teve servico
+    // proprio. Agora ela volta apontando para o clienteEstoqueService, que le o LIVRO em vez da
+    // tabela sem escritor. Passa a EXIGIR cliente_id (400 sem ele): posicao "de todos os clientes
+    // de uma vez" nao e relatorio, e lista — e para isso existe /materiais-cliente/clientes.
+    'materiais-cliente': (db, q) => clienteEstoqueService.posicaoPorCliente(db, q),
     'sobras-disponiveis': (db) => scrapService.listarSobras(db, { disponivel: true }),
     'ferramentas-emprestadas': reportService.relatorioFerramentasEmprestadas,
     'epi-colaborador': reportService.relatorioEPIPorColaborador,
