@@ -883,8 +883,24 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (err) return res.status(500).json({ error: err.message });
         const confId = this.lastID;
 
-        // Inserir todos os materiais ativos
-        let sql = `SELECT id, quantidade_atual FROM materiais_almoxarifado WHERE ativo = 1`;
+        // Inserir todos os materiais ativos.
+        //
+        // Etapa 8b (decisao 2 do design): o esperado desconta `quantidade_em_terceiros`, e SO ela.
+        // A conferencia e por MATERIAL, nao por localizacao — entao material que esta no
+        // galvanizador entraria no esperado e toda contagem acusaria uma diferenca fantasma, com o
+        // operador "corrigindo" o saldo para menos de material que existe e vai voltar.
+        //
+        // E SO ELA de proposito. quantidade_reservada, quantidade_bloqueada e quantidade_em_inspecao
+        // continuam somando porque aquele material ESTA na prateleira e TEM de ser contado:
+        // "bloqueado" e um estado administrativo, nao uma ausencia fisica. `quantidade_em_terceiros`
+        // e a unica das quatro que significa "nao esta no predio". Quem "uniformizar as quatro"
+        // aqui passa a esconder do inventario material que esta no galpao.
+        //
+        // NAO usar `disponivelSql` aqui: parece a mesma conta e nao e — o disponivel subtrai as
+        // quatro retencoes, a contagem so pode subtrair uma.
+        // Coberto nos dois sentidos por tests/api/conferenciaEmTerceiros.api.test.js.
+        let sql = `SELECT id, (quantidade_atual - COALESCE(quantidade_em_terceiros, 0)) AS quantidade_sistema
+                   FROM materiais_almoxarifado WHERE ativo = 1`;
         const params = [];
         if (categoria) { sql += ` AND categoria = ?`; params.push(categoria); }
         sql += ` ORDER BY nome`;
@@ -900,7 +916,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             new Promise((resolve, reject) => {
               db.run(`INSERT INTO itens_conferencia_almoxarifado (conferencia_id, material_id, quantidade_sistema)
                       VALUES (?, ?, ?)`,
-                [confId, m.id, m.quantidade_atual],
+                [confId, m.id, m.quantidade_sistema],
                 (e) => e ? reject(e) : resolve());
             })
           );
