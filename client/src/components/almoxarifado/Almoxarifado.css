@@ -250,6 +250,12 @@
 .almox-badge-saida    { background: rgba(229,25,58,0.12);  color: var(--gmp-error); }
 .almox-badge-ajuste   { background: rgba(79,172,254,0.12); color: #4facfe; }
 .almox-badge-devolucao { background: rgba(139,92,246,0.12); color: #8b5cf6; }
+/* Etapa 7: TRANSFERENCIA virou tipo selecionavel no formulario e ganhou badge no livro. Sem esta
+   regra o badge saia sem fundo nem cor (o `almox-badge-${cls}` nao acha a classe e o navegador
+   nao reclama) — os testes de tela conferem valores, nao CSS, entao nada pegaria. Ciano-petroleo
+   de proposito: transferencia nao soma nem subtrai saldo, so muda de lugar, entao nao pode usar
+   o verde de entrada nem o vermelho de saida. */
+.almox-badge-transferencia { background: rgba(6,182,212,0.12); color: #0891b2; }
 .almox-badge-aberto    { background: rgba(79,172,254,0.12); color: #4facfe; }
 .almox-badge-concluido { background: rgba(26,163,74,0.12); color: var(--gmp-success); }
 .almox-badge-cancelado { background: rgba(107,107,107,0.12); color: var(--gmp-text-light); }
