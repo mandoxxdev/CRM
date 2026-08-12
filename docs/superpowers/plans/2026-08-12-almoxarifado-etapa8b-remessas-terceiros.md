@@ -3005,9 +3005,28 @@ o arquivo mudou e restauração conferida por `md5sum` **e** `git diff`.
     `material_id` omitido = **o mesmo material do item enviado** (o único caso da 8b); informar um
     material diferente é recusado com a mensagem que aponta a Etapa 8c.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha** — feito em `69d32a8`
 
-Acrescentar a `server/tests/api/remessaTerceiroCiclo.api.test.js`, **antes** do `await close()`:
+Acrescentar a `server/tests/api/remessaTerceiroCiclo.api.test.js`, **antes** do `await close()`.
+**A versão autoritativa é o arquivo**: foram escritos **17** testes, e não os 11 abaixo. Os seis a
+mais, com o motivo de cada um (nenhum deles foi pedido pelo plano — os três primeiros vieram da
+lição da Task 5, os três últimos são as metades positivas que faltavam):
+
+| Teste acrescentado | Por que ele existe | Sabotagem que o prova |
+|---|---|---|
+| `dois resultados do MESMO item no MESMO recebimento que juntos estouram sao recusados` | é o teste que a própria S3 mandava acrescentar, e **não existia**. Verifica **estado** (saldo, `quantidade_retornada`, linhas de resultado) antes da mensagem | S3 |
+| `[CONTROLE POSITIVO] dois resultados do MESMO item ... que CABEM sao aceitos` | a metade que falta: recusar todo item repetido no recebimento passaria no de cima. 60+40=100 tem de virar **duas** linhas e encerrar | S5 |
+| `dois itens do MESMO material: o teto e por ITEM, nao pelo total retido do material` | o caso que **nenhum** teste do plano tinha: material com 100 retidos em dois itens (60+40); devolver 50 no item de 40 tem de ser recusado | **S8** |
+| `[CONTROLE POSITIVO] dois itens do mesmo material retornam cada um o seu e a remessa encerra` | a metade que falta do anterior | S5/S9 |
+| `[CONTROLE POSITIVO] retorno que REPETE o material_id do item enviado e aceito` | sem ele, recusar **todo** retorno que informa `material_id` passaria na recusa da 8c — e a tela, que manda o material da linha, nunca registraria retorno | S2 |
+| `falha DENTRO do motor no retorno devolve o claim do item` | o plano escreve a compensação do `catch` e **nenhum** teste dela — o mesmo buraco que a Task 5 achou no envio, repetido aqui. Stuba o motor e depois **registra de verdade** | **S10** |
+
+Dois testes do plano também ganharam asserção a mais: `retorno parcial devolve ao disponivel`
+confere `statusDa` (a metade **negativa** do encerramento automático: com pendência, **não** fecha),
+e `o retorno grava o vinculo` confere que `movimentacao_id` aponta para uma linha
+`RETORNO_TERCEIRO` do material e da quantidade certos — sem isso, gravar `1` fixo passaria.
+
+O bloco pedido pelo plano, mantido como referência:
 
 ```js
   // ══ Task 6 — retorno parcial ════════════════════════════════════════════════════════════════
@@ -3149,13 +3168,22 @@ Acrescentar a `server/tests/api/remessaTerceiroCiclo.api.test.js`, **antes** do 
   });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar** — feito em `69d32a8`
 
 Run: `cd server && node tests/api/remessaTerceiroCiclo.api.test.js`
 Expected: FAIL — `svc.registrarRetorno is not a function` nos 11 testes novos; os 13 da Task 5
 continuam passando.
+**Real: `20 passed, 17 failed`.** Dezesseis das falhas foram literalmente
+`svc.registrarRetorno is not a function`; a décima sétima (`dois resultados do MESMO item ... que
+juntos estouram`) falhou com `undefined !== 400`, porque ela captura o erro à mão para olhar o
+**estado** antes da mensagem, e um `TypeError` não tem `.status`. Os **20** da Task 5 (o plano dizia
+13 — número já corrigido na seção dela) continuaram passando.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar** — feito em `69d32a8`
+
+O código abaixo é o **implementado**, já com as três diferenças em relação ao que o plano trazia
+(mensagem que diz quanto o recebimento pede, `linhasPorItem`, e `mov?.id` sem o termo morto) — ver
+a seção de achados no fim da task.
 
 Em `server/services/almoxarifado/thirdPartyService.js`, antes do `module.exports`:
 
@@ -3165,8 +3193,12 @@ Em `server/services/almoxarifado/thirdPartyService.js`, antes do `module.exports
  * (Etapa 7): cada recusa nomeia a razao ESPECIFICA e o teto DIZ os numeros. Uma mensagem generica
  * de "quantidade invalida" deixa o operador sem saber se ele errou o item, se a remessa nao foi
  * enviada, ou se ja devolveu tudo.
+ *
+ * `quantidade` e o total ACUMULADO que o recebimento pede daquele item (ver registrarRetorno), nao
+ * a linha isolada; `linhas` so existe para a mensagem dizer que o item aparece em mais de uma.
+ * `remessaId` e OBRIGATORIO: e ele que impede retornar um item que pertence a outra remessa.
  */
-async function validarRetornoDoItem(db, { remessaId, itemRemessaId, quantidade, materialId }) {
+async function validarRetornoDoItem(db, { remessaId, itemRemessaId, quantidade, materialId, linhas = 1 }) {
   const item = await dbGet(db, `SELECT i.*, m.codigo AS material_codigo, m.unidade
     FROM itens_remessa_terceiro_almoxarifado i
     JOIN materiais_almoxarifado m ON i.material_id = m.id
@@ -3190,11 +3222,20 @@ async function validarRetornoDoItem(db, { remessaId, itemRemessaId, quantidade, 
       + 'sempre do mesmo material.');
   }
 
+  // O teto e do ITEM, nao do material: dois itens do MESMO material na mesma remessa (duas chapas
+  // do mesmo codigo, com lote e peso proprios) tem cada um o seu pendente. Comparar contra
+  // `quantidade_em_terceiros` do material deixaria um item devolver o que o outro mandou, e o
+  // documento passaria a discordar do saldo — e a Etapa 8c, que rastreia resultado POR ITEM
+  // enviado, herdaria o desalinhamento.
   const restante = Number(item.quantidade) - Number(item.quantidade_retornada || 0);
   if (qtd > restante) {
-    // A mensagem DIZ os tres numeros: sem eles o operador tem de adivinhar (licao da Etapa 7).
+    // A mensagem DIZ os numeros: sem eles o operador tem de adivinhar (licao da Etapa 7). E quando
+    // o item aparece em varias linhas do MESMO recebimento, diz isso tambem — senao o operador
+    // olha uma linha de 60, ve 100 no terceiro e conclui que o sistema esta errado (foi o que a
+    // Task 5 aprendeu no envio).
     throw erro(`Retorno acima do enviado: o item ${item.material_codigo} enviou ${item.quantidade} `
-      + `${item.unidade}, ja retornaram ${item.quantidade_retornada || 0} e ainda estao no terceiro ${restante}`);
+      + `${item.unidade}, ja retornaram ${item.quantidade_retornada || 0} e ainda estao no terceiro `
+      + `${restante} — este recebimento pede ${qtd}${linhas > 1 ? ` em ${linhas} linhas` : ''}`);
   }
   return item;
 }
@@ -3220,19 +3261,30 @@ async function registrarRetorno(db, user, remessaId, data) {
   if (itens.length === 0) throw erro('Informe ao menos um item retornado');
 
   // ── 1. Pre-checagem: o recebimento INTEIRO e recusado antes de creditar qualquer item ──
-  // Acumula por item para que dois resultados do MESMO item no mesmo recebimento nao passem
-  // somando acima do pendente — cada um caberia sozinho.
+  //
+  // A soma e POR ITEM, nao por linha do documento — a mesma regra que a Task 5 teve de consertar no
+  // envio: toda pre-checagem "tudo ou nada" agrega pelo RECURSO ESCASSO (aqui, o pendente do item),
+  // nunca pela linha. Sem o acumulador, dois resultados de 60 de um item de 100 passariam os DOIS
+  // (60 <= 100, duas vezes), o primeiro seria creditado e o segundo bateria no claim: o recebimento
+  // pela metade, que e exatamente o que esta pre-checagem existe para impedir.
+  const linhasPorItem = new Map();
+  for (const linha of itens) {
+    const k = Number(linha.item_remessa_id);
+    linhasPorItem.set(k, (linhasPorItem.get(k) || 0) + 1);
+  }
   const validados = [];
   const jaPedido = new Map();
   for (const linha of itens) {
-    const acumulado = jaPedido.get(Number(linha.item_remessa_id)) || 0;
+    const chave = Number(linha.item_remessa_id);
+    const acumulado = jaPedido.get(chave) || 0;
     const item = await validarRetornoDoItem(db, {
       remessaId,
       itemRemessaId: linha.item_remessa_id,
       quantidade: Number(linha.quantidade) + acumulado,
       materialId: linha.material_id,
+      linhas: linhasPorItem.get(chave) || 1,
     });
-    jaPedido.set(Number(linha.item_remessa_id), acumulado + Number(linha.quantidade));
+    jaPedido.set(chave, acumulado + Number(linha.quantidade));
     validados.push({ item, linha });
   }
 
@@ -3250,6 +3302,9 @@ async function registrarRetorno(db, user, remessaId, data) {
         + 'foi registrado ao mesmo tempo. Recarregue a remessa e tente de novo.');
     }
     try {
+      // `mov.id` e o contrato real de registrarMovimentacao ({ id, saldo_anterior, saldo_posterior }).
+      // O plano escrevia `mov?.id || mov?.movimentacao_id`; o segundo termo e morto e foi tirado —
+      // deixa-lo sugeriria um contrato `movimentacao_id` que nao existe.
       const mov = await stockService.registrarMovimentacao(db, user, {
         material_id: item.material_id,
         tipo: 'RETORNO_TERCEIRO',
@@ -3266,7 +3321,7 @@ async function registrarRetorno(db, user, remessaId, data) {
         VALUES (?,?,?,?,?,?,?,?,?,?)`, [
         remessaId, item.id, item.material_id, qtd, linha.lote_id || item.lote_id || null,
         data.nota_fiscal || null, linha.observacoes || null,
-        mov?.id || mov?.movimentacao_id || null, user.id, user.nome || user.email,
+        mov?.id || null, user.id, user.nome || user.email,
       ]);
     } catch (e) {
       // Sem transacao: devolve o claim, senao o item ficaria com quantidade_retornada maior que o
@@ -3315,29 +3370,52 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Rodar o teste e ver passar**
+- [x] **Step 4: Rodar o teste e ver passar** — feito em `69d32a8`
 
 Run: `cd server && node tests/api/remessaTerceiroCiclo.api.test.js`
-Expected: PASS — 24 passed, 0 failed.
+Expected: PASS — 24 passed, 0 failed. **O número estava errado de novo** (terceira vez nesta etapa):
+20 da Task 5 + 17 novos = **37 passed, 0 failed**, que foi o resultado real.
 
-- [ ] **Step 5: Sabotagens obrigatórias**
+- [x] **Step 5: Sabotagens obrigatórias** — feito em `69d32a8` (**10 executadas**, cada uma derrubou
+exatamente o que devia; nenhuma passou verde)
 
-| # | Sabotagem | Falha esperada |
+Arnês (`scratchpad/sabotar.js`, descartável): âncora **contada antes** de qualquer escrita
+(`exit 1` se o número de ocorrências não bater), `md5` antes/depois provando que o arquivo mudou
+(`exit 1` se não mudou), restauração a partir de uma cópia em memória feita **antes** da primeira
+escrita, conferida por `md5` **e** pelo hash do `git diff` do arquivo — `git checkout --` estava
+fora de questão, porque o arquivo já tinha alteração não commitada e o checkout apagaria a própria
+implementação (foi assim que a Task 4 corrompeu o `stockService`). **Auto-teste primeiro:** uma
+sabotagem `selftest` com âncora inexistente, que abortou com `0 ocorrencia(s), esperado 1` e
+`EXIT=1` sem escrever nada — sem essa prova, as outras dez não valeriam nada (lição da Task 3).
+As âncoras foram recontadas de forma independente com `grep -cF`: **todas com exatamente 1**.
+
+| # | Sabotagem | Resultado real |
 |---|---|---|
-| S1 | Em `validarRetornoDoItem`, trocar `if (qtd > restante)` por `if (qtd > item.quantidade)` (ignorar o já retornado) | falha `retorno maior que a remessa falha` — é o bug clássico: cada retorno cabe sozinho e a soma estoura |
-| S2 | Em `validarRetornoDoItem`, lançar sempre | falha `[CONTROLE POSITIVO] retorno EXATAMENTE do pendente e aceito` e `retorno parcial devolve ao disponivel` |
-| S3 | Tirar o `jaPedido` (acumulador) e validar cada linha isolada | mandar dois resultados de 60 do mesmo item de 100 num só recebimento passa a ser aceito — **acrescentar este teste se ele não existir**: `assert.rejects` com `itens: [{item, 60}, {item, 60}]` |
-| S4 | Mover a pré-checagem para depois do laço de efeito | falha `retorno com um item invalido nao aplica NENHUM item do lote` |
-| S5 | Trocar `novoStatus` por sempre `'RETORNO_PARCIAL'` | falha `retorno total encerra a remessa sozinho` |
-| S6 | Aceitar `material_id` diferente (remover a checagem) | falha `retorno com material DIFERENTE do enviado e recusado` |
-| S7 | Não gravar `movimentacao_id` no `INSERT` do resultado | falha `o retorno grava o vinculo item enviado -> resultado` |
+| S1 | `if (qtd > restante)` → `if (qtd > Number(item.quantidade))` (ignora o já retornado) | **36/1** — falhou `retorno maior que a remessa falha` |
+| S2 | `validarRetornoDoItem` lança sempre | **23/14** — falharam os dois controles positivos e mais 12 |
+| S3 | tirar o acumulador `jaPedido` | **36/1** — falhou `dois resultados do MESMO item ... juntos estouram`, com `40 !== 100`: **o primeiro resultado foi creditado e o segundo não** — o defeito da Task 5, reproduzido |
+| S4 | pré-checagem deixa de abortar o lote (erro adiado para depois do efeito) | **35/2** — falhou `retorno com um item invalido nao aplica NENHUM item do lote` (`90 !== 100`) |
+| S5 | `novoStatus` sempre `'RETORNO_PARCIAL'` | **34/3** — falhou `retorno total encerra a remessa sozinho` |
+| S6 | aceitar `material_id` diferente | **36/1** — `Missing expected rejection` |
+| S7 | não gravar `movimentacao_id` | **36/1** — falhou o teste do vínculo |
+| **S8** *(nova)* | teto pelo **material** da remessa em vez de pelo **item** | **36/1** — falhou `dois itens do MESMO material: o teto e por ITEM`. Nenhum teste do plano pegava isto |
+| **S9** *(nova)* | `novoStatus` sempre `'ENCERRADA'` | **32/5** — a metade **bilateral** de S5: falhou `retorno parcial devolve ao disponivel`. Sem ela, S5 sozinha aprovaria "nunca fecha" **ou** "sempre fecha" |
+| **S10** *(nova)* | `catch` não compensa o claim de `quantidade_retornada` | **36/1** — falhou `falha DENTRO do motor no retorno devolve o claim` (`40 !== 0`) |
 
-- [ ] **Step 6: Suítes de servidor**
+Detalhe de S8 que vale registrar: com o teto pelo material, a recusa ainda aconteceu — mas veio do
+**claim** (`WHERE (quantidade - quantidade_retornada) >= ?`), não do validador, e a mensagem virou a
+de corrida ("outro recebimento foi registrado ao mesmo tempo"), que é **mentira** para o operador.
+O claim é rede de segurança de corrida, não substituto do teto.
+
+- [x] **Step 6: Suítes de servidor** — feito em `69d32a8`
 
 Run: `cd server && npm run test:api && npm run test:almoxarifado`
-Expected: `test:api` **73/73 arquivos OK**, `test:almoxarifado` **42/0**.
+Expected: `test:api` **73/73 arquivos OK**, `test:almoxarifado` **42/0**. **Reais, iguais ao
+esperado:** `test:api` **73/73 arquivos OK**, `test:almoxarifado` **42 passou / 0 falhou**,
+`test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **3/0**.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit** — `69d32a8` (a mensagem commitada é a de baixo mais dois parágrafos: o do
+número que faltava na mensagem de erro e o do `mov.id`)
 
 ```bash
 git add server/services/almoxarifado/thirdPartyService.js \
@@ -3370,6 +3448,67 @@ dar.
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
 ```
+
+#### O que a execução da Task 6 (`69d32a8`) achou que este plano previa errado
+
+1. **O acumulador estava certo — mas a mensagem dele estava errada.** Confirmado por sonda
+   executada (S3) que a pré-checagem por item funciona, ao contrário da do envio. O que **não**
+   funcionava era a mensagem: com duas linhas de 60 de um item de 100, ela dizia *"enviou 100, ja
+   retornaram 0 e ainda estao no terceiro 100"* e recusava. O operador lê um número que **cabe** e
+   conclui que o sistema está errado. É a mesma falha que a Etapa 7 registrou ("mensagem sem o
+   número obriga o operador a adivinhar"), na forma mais traiçoeira: o número está lá, e é o número
+   errado. Conserto: a mensagem passa a dizer **quanto o recebimento está pedindo**
+   (`— este recebimento pede 120 em 2 linhas`), que é a forma que a Task 5 já tinha dado ao envio.
+   > **Regra que fica para a Task 7 e para a 8c:** quando a pré-checagem agrega por recurso escasso,
+   > a **mensagem** tem de dizer o valor **agregado**, não só o teto. Teto sem o pedido é um número
+   > que contradiz o próprio erro.
+2. **O teto por ITEM não tinha teste nenhum.** O plano nunca monta uma remessa com dois itens do
+   **mesmo** material — mas o envio permite (e a Task 5 tem teste positivo para isso: 60+40 de um
+   material com 100). Trocar o teto do item pelo do material passava nos 11 testes do plano
+   (sabotagem S8 prova). Coberto pelo par bilateral novo. É a **quinta** vez nesta etapa que sonda
+   executada acha o que leitura e suíte verde não achavam.
+3. **A compensação do `catch` continuava sem teste — de novo.** Achado idêntico ao item 2 da Task 5,
+   no mesmo formato, uma task depois: o plano escreve o `MAX(0, ... - qtd)` e justifica bem, e
+   nenhum teste chega lá. Coberto stubando o motor, e o teste vai além da coluna zerada: **registra
+   o retorno de verdade** depois. Sabotagem S10.
+4. **As sabotagens do plano não tinham par bilateral para o encerramento automático.** S5 ("sempre
+   `RETORNO_PARCIAL`") sozinha aprova tanto "nunca fecha" quanto "sempre fecha". S9 acrescentada, e
+   o teste `retorno parcial devolve ao disponivel` ganhou a asserção de status no banco.
+5. **A contagem de testes do Step 4 estava errada pela terceira vez** (dizia 24; foram 37). O Step 2
+   também herdava o "13 da Task 5" que a própria seção da Task 5 já tinha corrigido para 20.
+6. **`mov?.id || mov?.movimentacao_id` foi cortado para `mov?.id`.** A Task 5 registrou que o
+   segundo termo é morto e o manteve por ser inócuo; aqui ele foi tirado, porque num vínculo
+   **gravado em tabela** o termo morto sugere que existe um contrato `movimentacao_id` — e a 8c vai
+   ler esta coluna. O contrato real é `{ id, saldo_anterior, saldo_posterior }`.
+
+**Números reais da execução:** antes de implementar, `20 passed, 17 failed` (16 com
+`svc.registrarRetorno is not a function`; a 17ª com `undefined !== 400`, por capturar o erro à mão);
+depois, **37 passed, 0 failed**. Gates: `test:api` **73/73 arquivos OK**, `test:almoxarifado`
+**42/0**, validation **4/0**, safealter **3/0**, sqlite **3/0**. Dez sabotagens executadas, com
+auto-teste do arnês contra âncora inexistente antes de confiar nele.
+
+#### Próxima tarefa: **Task 7** (encerrar com destino obrigatório, e cancelar com estorno)
+
+O que ela consome desta task, já pronto e testado:
+
+- `sm.PODE_ENCERRAR = ['ENVIADA','RETORNO_PARCIAL']` e `sm.PODE_CANCELAR = ['ABERTA','ENVIADA','RETORNO_PARCIAL']`;
+- o cálculo do pendente, que a Task 6 usa para o encerramento automático e a Task 7 vai usar para
+  saber **o que exigir destino**:
+  `SELECT COALESCE(SUM(quantidade - COALESCE(quantidade_retornada,0)),0) FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?`;
+- `DESTINOS_ENCERRAMENTO` e `TIPO_MOVIMENTO_DESTINO` (já exportados desde a Task 5);
+- as colunas `encerramento_destino` / `encerramento_justificativa` / `cancelamento_motivo`, já no DDL.
+
+**Pontos de atenção herdados:**
+
+- Uma remessa que a Task 6 encerrou sozinha chega em `ENCERRADA` **sem** `encerramento_destino` — e
+  isso é correto (não sobrou pendência). O `encerrar` da Task 7 não pode assumir que
+  `status = 'ENCERRADA'` implica destino preenchido.
+- `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` baixam físico **e** retenção no mesmo UPDATE (Task 4): o
+  encerramento **não** deve zerar `quantidade_em_terceiros` por SQL próprio.
+- Repetir aqui a checagem do item 1 acima: a pré-checagem do encerramento agrega por recurso
+  escasso e a mensagem diz o valor agregado.
+- O cancelamento depois de `RETORNO_PARCIAL` estorna **o que ainda está lá fora**, não a quantidade
+  enviada — o pendente por item é a fonte, não `itens.quantidade`.
 
 ---
 
