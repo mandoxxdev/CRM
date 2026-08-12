@@ -182,6 +182,13 @@ const MaterialShape = z.object({
   subcategoria_id: numFromForm(z.number().int().nullable().optional()),
   localizacao_padrao_id: numFromForm(z.number().int().nullable().optional()),
   fornecedor_id: numFromForm(z.number().int().nullable().optional()),
+  // Etapa 8: sem declarar aqui, o z.object descarta a chave em SILENCIO (validation.js troca
+  // req.body pelo parsed) e o dono do material nunca chega a rota. Mesma familia de bug do
+  // reserva_id na Etapa 4 e do lote_id na Etapa 6.
+  // `null` explicito e o unico valor que significa "material nosso" e precisa ATRAVESSAR o
+  // numFromForm (que preserva null e colapsa '' para undefined/ausente) — senao escolher
+  // "GMP (estoque proprio)" num material que ja tinha dono preservaria o dono antigo no PUT.
+  proprietario_cliente_id: numFromForm(z.number().int().positive().nullable().optional()),
   tipo_material: z.string().nullable().optional(),
   material_critico: FlagSchema,
   controle_lote: FlagSchema,

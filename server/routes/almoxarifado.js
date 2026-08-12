@@ -335,7 +335,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     'quantidade_minima', 'quantidade_maxima', 'custo_unitario', 'fornecedor_principal',
     'codigo_fornecedor', 'ncm', 'especificacoes', 'observacoes', 'ativo',
     'descricao_tecnica', 'categoria_id', 'subcategoria_id', 'localizacao_padrao_id',
-    'fornecedor_id', 'tipo_material', 'material_critico', 'controle_lote', 'controle_certificado',
+    // Etapa 8: proprietario_cliente_id entra no merge generico do PUT como qualquer outra
+    // coluna — omitir preserva o dono (a tela antiga nao manda a chave), `null` explicito
+    // devolve o material ao estoque proprio.
+    'fornecedor_id', 'proprietario_cliente_id', 'tipo_material', 'material_critico', 'controle_lote', 'controle_certificado',
     'familia_id', 'subfamilia_id',
     // Cadastro completo (Etapa 2, Task 4)
     'fabricante', 'codigo_fabricante', 'peso_unitario', 'dimensoes', 'material_construtivo',
@@ -356,7 +359,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       custo_unitario, fornecedor_principal, codigo_fornecedor,
       ncm, especificacoes, observacoes,
       descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
-      fornecedor_id, tipo_material, material_critico, controle_lote, controle_certificado,
+      fornecedor_id, proprietario_cliente_id, tipo_material, material_critico, controle_lote, controle_certificado,
       familia_id, subfamilia_id,
       fabricante, codigo_fabricante, peso_unitario, dimensoes, material_construtivo,
       norma, marca, modelo, aplicacao, ponto_reposicao, lote_economico,
@@ -403,6 +406,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       subcategoria_id: subcategoria_id ?? null,
       localizacao_padrao_id: locId,
       fornecedor_id: fornecedor_id ?? null,
+      // Etapa 8: NULL = material nosso. O select da secao "Propriedade" manda '' quando ninguem
+      // e escolhido; `|| null` normaliza para o unico valor que significa "nosso" — 0 e ''
+      // NAO significam nada aqui (as leituras de estoque proprio testam IS NULL).
+      proprietario_cliente_id: proprietario_cliente_id || null,
       tipo_material: tipo_material || null,
       material_critico: bool01(material_critico),
       controle_lote: bool01(controle_lote),

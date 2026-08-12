@@ -58,6 +58,10 @@ const MaterialAlmoxarifadoForm = () => {
   const [fotoPreview, setFotoPreview] = useState(null);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [savedId, setSavedId] = useState(null);
+  // Etapa 8: lista de clientes da seção "Propriedade". Vem de /clientes (rota core, fora do
+  // módulo) — por isso a falha é silenciosa: sem a lista o select fica só com "GMP (estoque
+  // próprio)" e o cadastro de material continua funcionando, que é o caminho comum.
+  const [clientes, setClientes] = useState([]);
 
   const [form, setForm] = useState({
     codigo: '',
@@ -81,6 +85,11 @@ const MaterialAlmoxarifadoForm = () => {
     // ── Classificação adicional (Etapa 2, Task 4/6) ──
     tipo_material: '',
     material_critico: false,
+
+    // ── Propriedade (Etapa 8) ──
+    // '' = GMP (estoque próprio). O servidor guarda NULL nesse caso — proprietario_cliente_id
+    // é NÚMERO ou null, nunca uma flag 0/1 como os campos de controle acima.
+    proprietario_cliente_id: '',
 
     // ── Dados técnicos ──
     fabricante: '',
@@ -127,6 +136,16 @@ const MaterialAlmoxarifadoForm = () => {
       loadProximoCodigo();
     }
   }, [id]);
+
+  // Flag `cancelado` (padrão do módulo): o material pode ser trocado pela navegação antes da
+  // resposta chegar, e um setState depois do unmount é warning — e com CI=true, erro de build.
+  useEffect(() => {
+    let cancelado = false;
+    api.get('/clientes')
+      .then((r) => { if (!cancelado) setClientes(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => { if (!cancelado) setClientes([]); });
+    return () => { cancelado = true; };
+  }, []);
 
   const loadFamilias = async () => {
     setLoadingFamilias(true);
@@ -251,6 +270,10 @@ const MaterialAlmoxarifadoForm = () => {
         tipo_material: m.tipo_material || '',
         material_critico: !!m.material_critico,
 
+        // Etapa 8: número ou null — NUNCA `!!m.…` nem `=== 1` (o padrão das flags acima não
+        // vale aqui; cliente de id 1 viraria `true` e cairia no ramo errado do select).
+        proprietario_cliente_id: m.proprietario_cliente_id ? String(m.proprietario_cliente_id) : '',
+
         fabricante: m.fabricante || '',
         codigo_fabricante: m.codigo_fabricante || '',
         peso_unitario: m.peso_unitario ?? '',
@@ -360,6 +383,10 @@ const MaterialAlmoxarifadoForm = () => {
         // classe, ou editar qualquer material existente (nenhum tem classe ainda) — quebrava
         // com 400, porque o form sempre manda a chave (default '' no state).
         classe_abc: form.classe_abc || null,
+        // Etapa 8: null explícito (nunca ''), mesmo motivo dos FKs acima — '' cai no ramo
+        // "ausente" da coerção do servidor e o PUT PRESERVARIA o dono antigo, que é o oposto do
+        // que o usuário pediu ao escolher "GMP (estoque próprio)".
+        proprietario_cliente_id: form.proprietario_cliente_id ? Number(form.proprietario_cliente_id) : null,
       };
       delete payload.localizacao;
 
@@ -553,6 +580,33 @@ const MaterialAlmoxarifadoForm = () => {
                       onChange={e => set('material_critico', e.target.checked)} />
                     Material crítico
                   </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Propriedade (Etapa 8) — é AQUI que o material de cliente nasce. Não há tela
+                separada de "cadastrar material de cliente": ele é material normal com dono. */}
+            <div style={sectionCardStyle}>
+              <div className="almox-section-title">Propriedade</div>
+              <div className="almox-form-grid">
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="material-proprietario">Proprietário</label>
+                  <select
+                    id="material-proprietario"
+                    className="almox-form-select"
+                    value={form.proprietario_cliente_id}
+                    onChange={e => set('proprietario_cliente_id', e.target.value)}
+                  >
+                    <option value="">GMP (estoque próprio)</option>
+                    {clientes.map(c => (
+                      <option key={c.id} value={String(c.id)}>{c.razao_social || c.nome_fantasia}</option>
+                    ))}
+                  </select>
+                  <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', display: 'block', marginTop: 2 }}>
+                    Material de cliente só sai com OS ou projeto desse mesmo cliente, exige número
+                    de documento no recebimento e não entra na reposição, na sugestão de compra
+                    nem no valor do estoque próprio.
+                  </small>
                 </div>
               </div>
             </div>

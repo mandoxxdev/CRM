@@ -363,9 +363,13 @@ function parseSeries(txt) {
 async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id } = {}) {
   const itens = await dbAll(db, `SELECT ri.*, m.material_critico, m.controle_certificado,
       m.controle_lote, m.controle_serie, m.ativo as material_ativo, m.codigo as material_codigo,
-      m.tipo_material, m.localizacao_padrao_id
+      m.tipo_material, m.localizacao_padrao_id,
+      -- Etapa 8: o dono do material entra na pre-checagem (recebimento de material de cliente
+      -- exige numero de documento) e a razao social entra na MENSAGEM de recusa.
+      m.proprietario_cliente_id, cli.razao_social as proprietario_cliente_nome
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON ri.material_id = m.id
+    LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id
     WHERE ri.recebimento_id = ?`, [recebimentoId]);
 
   // ── 1. Pre-checagem: nada se move enquanto houver item invalido ──
@@ -375,6 +379,21 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     if (item.entrada_estoque_em) continue;       // ja entrou numa tentativa anterior
     if (!item.material_ativo) {
       problemas.push(`${item.material_codigo}: material inativo nao pode ser movimentado`);
+      continue;
+    }
+    // Etapa 8, decisao 8: material de cliente entra pelo Recebimento normal — a nota de remessa
+    // e o campo de nota que ja existe. O que muda e que para ele o documento e OBRIGATORIO: e o
+    // papel que prova que a chapa chegou, de quem, e em que quantidade. Material NOSSO continua
+    // podendo entrar sem nota (entrada manual, devolucao, ajuste de inventario) — travar isso
+    // para todo mundo quebraria todo recebimento do modulo, e ha teste de controle positivo
+    // exatamente para prender essa metade da guarda.
+    // Projeto NAO e exigido aqui: o mesmo cliente manda a mesma chapa para dois projetos, e
+    // exigir projeto na entrada obrigaria a criar dois materiais identicos para o mesmo item
+    // fisico do mesmo dono. O projeto e exigido na SAIDA (ownerRules.assertSaidaPermitida).
+    if (item.proprietario_cliente_id && !(rec.nota_fiscal && String(rec.nota_fiscal).trim())) {
+      problemas.push(`${item.material_codigo}: material do cliente `
+        + `${item.proprietario_cliente_nome || `#${item.proprietario_cliente_id}`} exige numero de `
+        + 'documento (nota de remessa) para dar entrada');
       continue;
     }
     if (item.controle_lote && !(item.lote && String(item.lote).trim())) {
