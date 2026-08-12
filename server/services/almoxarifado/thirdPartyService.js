@@ -325,7 +325,194 @@ async function listarRemessas(db, filtros = {}) {
   return dbAll(db, sql, params);
 }
 
+/**
+ * Valida o retorno de UM item e devolve a linha dele. Molde de returnService.validarSaidaOriginal
+ * (Etapa 7): cada recusa nomeia a razao ESPECIFICA e o teto DIZ os numeros. Uma mensagem generica
+ * de "quantidade invalida" deixa o operador sem saber se ele errou o item, se a remessa nao foi
+ * enviada, ou se ja devolveu tudo.
+ *
+ * `quantidade` e o total ACUMULADO que o recebimento pede daquele item (ver registrarRetorno), nao
+ * a linha isolada; `linhas` so existe para a mensagem dizer que o item aparece em mais de uma.
+ * `remessaId` e OBRIGATORIO: e ele que impede retornar um item que pertence a outra remessa.
+ */
+async function validarRetornoDoItem(db, { remessaId, itemRemessaId, quantidade, materialId, linhas = 1 }) {
+  const item = await dbGet(db, `SELECT i.*, m.codigo AS material_codigo, m.unidade
+    FROM itens_remessa_terceiro_almoxarifado i
+    JOIN materiais_almoxarifado m ON i.material_id = m.id
+    WHERE i.id = ?`, [itemRemessaId]);
+  if (!item) throw erro(`Item de remessa ${itemRemessaId} nao encontrado`);
+  if (Number(item.remessa_id) !== Number(remessaId)) {
+    throw erro(`O item ${itemRemessaId} pertence a outra remessa`);
+  }
+  if (!item.enviado_em) {
+    throw erro(`O item ${item.material_codigo} ainda nao foi enviado ao terceiro — nao ha o que retornar`);
+  }
+  const qtd = Number(quantidade);
+  if (!(qtd > 0)) throw erro('Quantidade do retorno deve ser maior que zero');
+
+  // Etapa 8c: aqui e onde `materialId` diferente do enviado passa a ser aceito (chapa -> pecas).
+  // Na 8b recusar e melhor que aceitar pela metade: creditar outro material sem baixar a chapa
+  // original criaria estoque do nada e quebraria a rastreabilidade que a 8c existe para dar.
+  if (materialId && Number(materialId) !== Number(item.material_id)) {
+    throw erro(`O retorno de material DIFERENTE do enviado (transformacao: ${item.material_codigo} `
+      + 'vira outro codigo) e a Etapa 8c e ainda nao esta implementado. Na Etapa 8b o retorno e '
+      + 'sempre do mesmo material.');
+  }
+
+  // O teto e do ITEM, nao do material: dois itens do MESMO material na mesma remessa (duas chapas
+  // do mesmo codigo, com lote e peso proprios) tem cada um o seu pendente. Comparar contra
+  // `quantidade_em_terceiros` do material deixaria um item devolver o que o outro mandou, e o
+  // documento passaria a discordar do saldo — e a Etapa 8c, que rastreia resultado POR ITEM
+  // enviado, herdaria o desalinhamento.
+  const restante = Number(item.quantidade) - Number(item.quantidade_retornada || 0);
+  if (qtd > restante) {
+    // A mensagem DIZ os numeros: sem eles o operador tem de adivinhar (licao da Etapa 7). E quando
+    // o item aparece em varias linhas do MESMO recebimento, diz isso tambem — senao o operador
+    // olha uma linha de 60, ve 100 no terceiro e conclui que o sistema esta errado (foi o que a
+    // Task 5 aprendeu no envio).
+    throw erro(`Retorno acima do enviado: o item ${item.material_codigo} enviou ${item.quantidade} `
+      + `${item.unidade}, ja retornaram ${item.quantidade_retornada || 0} e ainda estao no terceiro `
+      + `${restante} — este recebimento pede ${qtd}${linhas > 1 ? ` em ${linhas} linhas` : ''}`);
+  }
+  return item;
+}
+
+/**
+ * Registra um recebimento de retorno — possivelmente com varios itens de uma vez.
+ *
+ * O retorno NAO credita estoque: `quantidade_em_terceiros` desce e `quantidade_atual` nao muda,
+ * porque o material nunca saiu do patrimonio — ele so estava a 40 km. Creditar aqui contaria a
+ * mesma chapa duas vezes. Quem faz isso e o motor (RETORNO_TERCEIRO, Task 4); este servico so
+ * orquestra.
+ *
+ * Mesma forma do envio (decisao 9): PRE-CHECAGEM de todos os itens, depois efeito item a item. Um
+ * item acima do pendente recusa o recebimento INTEIRO — creditar metade deixaria o operador sem
+ * saber o que ja entrou.
+ *
+ * Encerra sozinha quando nao sobra pendencia: nao ha o que justificar, e exigir destino nesse caso
+ * obrigaria o operador a inventar uma perda que nao houve.
+ */
+async function registrarRetorno(db, user, remessaId, data) {
+  assertPodeRemessar(user);
+  const remessa = await getRemessaBase(db, remessaId);
+  if (!sm.PODE_RECEBER_RETORNO.includes(remessa.status)) {
+    throw erro(`Remessa em ${remessa.status} nao recebe retorno `
+      + `(recebem: ${sm.PODE_RECEBER_RETORNO.join(', ')})`);
+  }
+  const itens = Array.isArray(data?.itens) ? data.itens : [];
+  if (itens.length === 0) throw erro('Informe ao menos um item retornado');
+
+  // ── 1. Pre-checagem: o recebimento INTEIRO e recusado antes de creditar qualquer item ──
+  //
+  // A soma e POR ITEM, nao por linha do documento — a mesma regra que a Task 5 teve de consertar no
+  // envio: toda pre-checagem "tudo ou nada" agrega pelo RECURSO ESCASSO (aqui, o pendente do item),
+  // nunca pela linha. Sem o acumulador, dois resultados de 60 de um item de 100 passariam os DOIS
+  // (60 <= 100, duas vezes), o primeiro seria creditado e o segundo bateria no claim: o recebimento
+  // pela metade, que e exatamente o que esta pre-checagem existe para impedir.
+  const linhasPorItem = new Map();
+  for (const linha of itens) {
+    const k = Number(linha.item_remessa_id);
+    linhasPorItem.set(k, (linhasPorItem.get(k) || 0) + 1);
+  }
+  const validados = [];
+  const jaPedido = new Map();
+  for (const linha of itens) {
+    const chave = Number(linha.item_remessa_id);
+    const acumulado = jaPedido.get(chave) || 0;
+    const item = await validarRetornoDoItem(db, {
+      remessaId,
+      itemRemessaId: linha.item_remessa_id,
+      quantidade: Number(linha.quantidade) + acumulado,
+      materialId: linha.material_id,
+      linhas: linhasPorItem.get(chave) || 1,
+    });
+    jaPedido.set(chave, acumulado + Number(linha.quantidade));
+    validados.push({ item, linha });
+  }
+
+  // ── 2. Efeito item a item ──
+  for (const { item, linha } of validados) {
+    const qtd = Number(linha.quantidade);
+    const claim = await dbGet(db, `UPDATE itens_remessa_terceiro_almoxarifado
+      SET quantidade_retornada = COALESCE(quantidade_retornada,0) + ?
+      WHERE id = ? AND (quantidade - COALESCE(quantidade_retornada,0)) >= ?
+      RETURNING id`, [qtd, item.id, qtd]);
+    if (!claim) {
+      // Corrida com outro recebimento concorrente do mesmo item: a pre-checagem passou, o claim
+      // nao. Recusa em vez de saturar — saldo retornado a mais nao tem como ser desfeito depois.
+      throw erro(`Retorno acima do enviado no item ${item.material_codigo}: outro recebimento `
+        + 'foi registrado ao mesmo tempo. Recarregue a remessa e tente de novo.');
+    }
+    try {
+      // `mov.id` e o contrato real de registrarMovimentacao ({ id, saldo_anterior, saldo_posterior }).
+      // O plano escrevia `mov?.id || mov?.movimentacao_id`; o segundo termo e morto e foi tirado —
+      // deixa-lo sugeriria um contrato `movimentacao_id` que nao existe.
+      const mov = await stockService.registrarMovimentacao(db, user, {
+        material_id: item.material_id,
+        tipo: 'RETORNO_TERCEIRO',
+        quantidade: qtd,
+        lote_id: linha.lote_id || item.lote_id || undefined,
+        referencia: remessa.numero,
+        documento_vinculado: data.nota_fiscal || undefined,
+        justificativa: `Retorno da remessa ${remessa.numero}`
+          + (remessa.fornecedor_nome ? ` (${remessa.fornecedor_nome})` : ''),
+      });
+      await dbRun(db, `INSERT INTO retornos_remessa_item_almoxarifado
+        (remessa_id, item_remessa_id, material_id, quantidade, lote_id, nota_fiscal, observacoes,
+         movimentacao_id, recebido_por, recebido_por_nome)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`, [
+        remessaId, item.id, item.material_id, qtd, linha.lote_id || item.lote_id || null,
+        data.nota_fiscal || null, linha.observacoes || null,
+        mov?.id || null, user.id, user.nome || user.email,
+      ]);
+    } catch (e) {
+      // Sem transacao: devolve o claim, senao o item ficaria com quantidade_retornada maior que o
+      // que voltou de verdade e o pendente encolheria sem o saldo ter sido liberado.
+      await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
+        SET quantidade_retornada = MAX(0, COALESCE(quantidade_retornada,0) - ?) WHERE id = ?`, [qtd, item.id]);
+      throw e;
+    }
+  }
+
+  // ── 3. Status ──
+  const { pendente } = await dbGet(db, `SELECT
+      COALESCE(SUM(quantidade - COALESCE(quantidade_retornada,0)), 0) AS pendente
+    FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?`, [remessaId]);
+  const novoStatus = Number(pendente) <= 0 ? 'ENCERRADA' : 'RETORNO_PARCIAL';
+  const t = sm.validarTransicao(remessa.status, novoStatus);
+  if (!t.ok) throw erro(t.erro);
+  await dbRun(db, `UPDATE remessas_terceiro_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP,
+        encerrado_em = CASE WHEN ? = 'ENCERRADA' THEN CURRENT_TIMESTAMP ELSE encerrado_em END,
+        encerrado_por = CASE WHEN ? = 'ENCERRADA' THEN ? ELSE encerrado_por END
+    WHERE id = ?`, [novoStatus, novoStatus, novoStatus, user.id, remessaId]);
+
+  await registrarAuditoria(db, {
+    entidade: 'remessa_terceiro',
+    entidade_id: Number(remessaId),
+    acao: 'RETORNO',
+    usuario_id: user.id,
+    usuario_nome: user.nome || user.email,
+    dados_anteriores: { status: remessa.status },
+    dados_novos: {
+      status: novoStatus,
+      resultados: validados.length,
+      pendente_total: Number(pendente),
+      nota_fiscal: data.nota_fiscal || null,
+    },
+  }).catch(() => {});
+
+  return {
+    success: true,
+    remessa_id: Number(remessaId),
+    status: novoStatus,
+    resultados: validados.length,
+    pendente_total: Number(pendente),
+  };
+}
+
 module.exports = {
   DESTINOS_ENCERRAMENTO, TIPO_MOVIMENTO_DESTINO,
   criarRemessa, enviarRemessa, getRemessa, listarRemessas,
+  validarRetornoDoItem, registrarRetorno,
 };

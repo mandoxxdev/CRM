@@ -324,6 +324,282 @@ async function remessaCom(db, itens, extra = {}) {
       'toda remessa foi marcada como vencida — o destaque da tela viraria ruido');
   });
 
+  // ══ Task 6 — retorno parcial ════════════════════════════════════════════════════════════════
+
+  /** Remessa de 1 item, ja ENVIADA, com `qtd` retido. Devolve { remessa, itemId, materialId }. */
+  async function remessaEnviada(db, qtd = 100, opts = {}) {
+    const mat = await novoMaterial(db, { atual: qtd, ...opts });
+    const rem = await remessaCom(db, [{ material_id: mat, quantidade: qtd }]);
+    await svc.enviarRemessa(db, ADMIN, rem.id);
+    const item = await dbGet(db,
+      'SELECT id FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?', [rem.id]);
+    return { remessa: rem, itemId: item.id, materialId: mat };
+  }
+
+  /** Remessa ENVIADA com DUAS linhas do MESMO material (60 + 40 de um material com 100). */
+  async function remessaDuasLinhasMesmoMaterial(db) {
+    const mat = await novoMaterial(db, { atual: 100 });
+    const rem = await remessaCom(db, [
+      { material_id: mat, quantidade: 60 }, { material_id: mat, quantidade: 40 }]);
+    await svc.enviarRemessa(db, ADMIN, rem.id);
+    const itens = await dbAll(db,
+      'SELECT id FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ? ORDER BY id', [rem.id]);
+    return { remessa: rem, materialId: mat, itemGrande: itens[0].id, itemPequeno: itens[1].id };
+  }
+
+  await test('retorno parcial devolve ao disponivel e deixa o resto retido', async () => {
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    const r = await svc.registrarRetorno(db, ADMIN, remessa.id, {
+      nota_fiscal: 'NF-RET-1', itens: [{ item_remessa_id: itemId, quantidade: 40 }] });
+    assert.strictEqual(r.status, 'RETORNO_PARCIAL');
+    assert.strictEqual(r.pendente_total, 60);
+    // A metade negativa do encerramento automatico: sobrou pendencia, entao a remessa NAO fecha.
+    assert.strictEqual(await statusDa(db, remessa.id), 'RETORNO_PARCIAL',
+      'a remessa encerrou sozinha com material ainda no terceiro');
+    const s = await saldos(db, materialId);
+    assert.strictEqual(s.em_terceiros, 60);
+    assert.strictEqual(s.quantidade_atual, 100, 'o retorno CREDITOU estoque — o material nunca saiu do patrimonio');
+  });
+
+  await test('dois retornos parciais somam, e o segundo nao e recusado pela maquina de estados', async () => {
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 30 }] });
+    const r = await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 20 }] });
+    assert.strictEqual(r.pendente_total, 50);
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 50);
+    const cheia = await svc.getRemessa(db, remessa.id);
+    assert.strictEqual(cheia.itens[0].quantidade_retornada, 50);
+    assert.strictEqual(cheia.retornos.length, 2, 'os resultados nao viraram duas linhas rastreaveis');
+  });
+
+  await test('retorno maior que a remessa falha, e a mensagem diz quanto ainda esta la', async () => {
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 70 }] });
+    await assert.rejects(
+      () => svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 40 }] }),
+      (e) => {
+        assert.strictEqual(e.status, 400);
+        assert.match(e.message, /100/, 'a mensagem nao diz quanto foi enviado');
+        assert.match(e.message, /70/, 'a mensagem nao diz quanto ja voltou');
+        assert.match(e.message, /30/, 'a mensagem nao diz quanto ainda esta no terceiro');
+        return true;
+      });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 30, 'o retorno excedente moveu saldo');
+    const linhas = await dbAll(db,
+      'SELECT id FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ?', [itemId]);
+    assert.strictEqual(linhas.length, 1, 'o retorno recusado gravou linha de resultado');
+  });
+
+  await test('[CONTROLE POSITIVO] retorno EXATAMENTE do pendente e aceito', async () => {
+    // A metade que falta: uma validacao que recusasse todo retorno passaria no teste acima.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 70 }] });
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 30 }] });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 0);
+  });
+
+  await test('dois resultados do MESMO item no MESMO recebimento que juntos estouram sao recusados', async () => {
+    // ACHADO DA TASK 5, guardado aqui: a pre-checagem "tudo ou nada" tem de agregar pelo RECURSO
+    // ESCASSO (o pendente do item), nunca pela linha do documento. Sem o acumulador, dois
+    // resultados de 60 de um item de 100 passam os DOIS (60 <= 100, duas vezes), o primeiro e
+    // creditado e o segundo bate no claim — o recebimento pela metade. Foi exatamente o defeito
+    // que a Task 5 achou no envio, no codigo que o plano trazia pronto.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    let capturado = null;
+    try {
+      await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [
+        { item_remessa_id: itemId, quantidade: 60 },
+        { item_remessa_id: itemId, quantidade: 60 },
+      ] });
+    } catch (e) { capturado = e; }
+    assert.ok(capturado, 'dois resultados de 60 de um item de 100 foram aceitos');
+    // O ESTADO primeiro, a mensagem depois: o que importa e que nada foi creditado pela metade.
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100,
+      'o primeiro resultado foi creditado e o segundo nao — o recebimento entrou pela metade');
+    const item = await dbGet(db,
+      'SELECT quantidade_retornada FROM itens_remessa_terceiro_almoxarifado WHERE id = ?', [itemId]);
+    assert.strictEqual(item.quantidade_retornada, 0);
+    const linhas = await dbAll(db,
+      'SELECT id FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ?', [itemId]);
+    assert.strictEqual(linhas.length, 0, 'o recebimento recusado gravou resultado');
+    assert.strictEqual(capturado.status, 400);
+    assert.match(capturado.message, /120/,
+      'a mensagem nao diz o total que o recebimento pede somando as linhas do item');
+  });
+
+  await test('[CONTROLE POSITIVO] dois resultados do MESMO item no MESMO recebimento que CABEM sao aceitos', async () => {
+    // A metade que falta: somar errado (ou recusar todo item repetido no recebimento) passaria no
+    // teste acima. 60 + 40 = 100 = pendente: tem de passar, virar DUAS linhas de resultado e
+    // encerrar a remessa. Dois resultados do mesmo item nao sao caso de laboratorio — o retorno e
+    // uma LISTA de resultados (decisao 7), com lote e observacoes proprios por linha.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    const r = await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [
+      { item_remessa_id: itemId, quantidade: 60 },
+      { item_remessa_id: itemId, quantidade: 40 },
+    ] });
+    assert.strictEqual(r.resultados, 2);
+    assert.strictEqual(r.pendente_total, 0);
+    assert.strictEqual(r.status, 'ENCERRADA');
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 0);
+    const linhas = await dbAll(db,
+      'SELECT quantidade FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ? ORDER BY id', [itemId]);
+    assert.deepStrictEqual(linhas.map((l) => l.quantidade), [60, 40]);
+  });
+
+  await test('dois itens do MESMO material: o teto e por ITEM, nao pelo total retido do material', async () => {
+    // O material tem 100 retidos, mas o item pequeno so mandou 40. Aceitar 50 nele porque "o
+    // material tem 100 la fora" faria o item grande parecer com pendencia que nao existe e
+    // desalinharia o documento do saldo — e a Etapa 8c, que rastreia resultado POR ITEM enviado,
+    // herdaria o desalinhamento.
+    const { remessa, materialId, itemPequeno } = await remessaDuasLinhasMesmoMaterial(db);
+    await assert.rejects(
+      () => svc.registrarRetorno(db, ADMIN, remessa.id, {
+        itens: [{ item_remessa_id: itemPequeno, quantidade: 50 }] }),
+      (e) => {
+        assert.strictEqual(e.status, 400);
+        assert.match(e.message, /40/, 'a mensagem nao diz quanto aquele ITEM mandou');
+        return true;
+      });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100, 'o retorno recusado moveu saldo');
+    assert.strictEqual(await statusDa(db, remessa.id), 'ENVIADA');
+  });
+
+  await test('[CONTROLE POSITIVO] dois itens do mesmo material retornam cada um o seu e a remessa encerra', async () => {
+    // A metade que falta: um teto por item que confundisse os dois itens (ou recusasse material
+    // repetido) passaria no teste acima.
+    const { remessa, materialId, itemGrande, itemPequeno } = await remessaDuasLinhasMesmoMaterial(db);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemGrande, quantidade: 60 }] });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 40);
+    assert.strictEqual(await statusDa(db, remessa.id), 'RETORNO_PARCIAL');
+    const r = await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemPequeno, quantidade: 40 }] });
+    assert.strictEqual(r.status, 'ENCERRADA');
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 0);
+  });
+
+  await test('retorno total encerra a remessa sozinho, sem exigir destino', async () => {
+    // Nao sobrou pendencia: nao ha o que justificar. Exigir destino aqui obrigaria o operador a
+    // inventar uma perda que nao houve.
+    const { remessa, itemId } = await remessaEnviada(db, 100);
+    const r = await svc.registrarRetorno(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade: 100 }] });
+    assert.strictEqual(r.status, 'ENCERRADA');
+    assert.strictEqual(r.pendente_total, 0);
+    assert.strictEqual(await statusDa(db, remessa.id), 'ENCERRADA');
+  });
+
+  await test('retorno de item de OUTRA remessa e recusado', async () => {
+    const a = await remessaEnviada(db, 100);
+    const b = await remessaEnviada(db, 100);
+    await assert.rejects(
+      () => svc.registrarRetorno(db, ADMIN, a.remessa.id, { itens: [{ item_remessa_id: b.itemId, quantidade: 10 }] }),
+      /outra remessa|nao pertence/i);
+    assert.strictEqual((await saldos(db, b.materialId)).em_terceiros, 100);
+  });
+
+  await test('retorno em remessa que nunca foi enviada e recusado', async () => {
+    const mat = await novoMaterial(db);
+    const rem = await remessaCom(db, [{ material_id: mat, quantidade: 10 }]);
+    const item = await dbGet(db, 'SELECT id FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?', [rem.id]);
+    await assert.rejects(
+      () => svc.registrarRetorno(db, ADMIN, rem.id, { itens: [{ item_remessa_id: item.id, quantidade: 5 }] }),
+      /ABERTA/);
+    assert.strictEqual((await saldos(db, mat)).em_terceiros, 0);
+  });
+
+  await test('retorno sem a acao remessar_terceiro falha com 403', async () => {
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await assert.rejects(
+      () => svc.registrarRetorno(db, PRODUCAO, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 10 }] }),
+      (e) => { assert.strictEqual(e.status, 403); return true; });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100);
+  });
+
+  await test('retorno com material DIFERENTE do enviado e recusado, apontando a Etapa 8c', async () => {
+    // Decisao 7: a 8b nao faz transformacao. A tabela ja suporta (material_id proprio no
+    // resultado), mas aceitar material diferente AGORA seria entregar meia transformacao — sem
+    // baixa da chapa original, sem sobra, sem rastreabilidade fechada.
+    const { remessa, itemId } = await remessaEnviada(db, 100);
+    const outro = await novoMaterial(db);
+    await assert.rejects(
+      () => svc.registrarRetorno(db, ADMIN, remessa.id, {
+        itens: [{ item_remessa_id: itemId, quantidade: 10, material_id: outro }] }),
+      /8c|transforma/i);
+  });
+
+  await test('[CONTROLE POSITIVO] retorno que REPETE o material_id do item enviado e aceito', async () => {
+    // A metade que falta: recusar todo retorno que informa material_id passaria no teste acima, e
+    // a tela — que manda o material da linha — nunca conseguiria registrar retorno nenhum.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade: 10, material_id: materialId }] });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 90);
+  });
+
+  await test('o retorno grava o vinculo item enviado -> resultado, com o movimento do livro', async () => {
+    // E o que a Etapa 8c vai consumir.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, {
+      nota_fiscal: 'NF-RET-9', itens: [{ item_remessa_id: itemId, quantidade: 25 }] });
+    const linha = await dbGet(db,
+      'SELECT * FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ?', [itemId]);
+    assert.strictEqual(linha.remessa_id, remessa.id);
+    assert.strictEqual(linha.material_id, materialId);
+    assert.strictEqual(linha.quantidade, 25);
+    assert.strictEqual(linha.nota_fiscal, 'NF-RET-9');
+    assert.ok(linha.movimentacao_id, 'o resultado nao aponta para a movimentacao que o creditou');
+    // O vinculo tem de apontar para a movimentacao CERTA, e nao para um id qualquer: sem isto,
+    // gravar `1` fixo passaria.
+    const mov = await dbGet(db, 'SELECT tipo, material_id, quantidade FROM movimentacoes_almoxarifado WHERE id = ?',
+      [linha.movimentacao_id]);
+    assert.strictEqual(mov.tipo, 'RETORNO_TERCEIRO');
+    assert.strictEqual(mov.material_id, materialId);
+    assert.strictEqual(mov.quantidade, 25);
+  });
+
+  await test('retorno com um item invalido nao aplica NENHUM item do lote', async () => {
+    // Mesma pre-checagem do envio: um recebimento de retorno com dois itens, um deles acima do
+    // pendente, nao pode devolver metade.
+    const mat1 = await novoMaterial(db, { atual: 100 });
+    const mat2 = await novoMaterial(db, { atual: 100 });
+    const rem = await remessaCom(db, [{ material_id: mat1, quantidade: 100 }, { material_id: mat2, quantidade: 100 }]);
+    await svc.enviarRemessa(db, ADMIN, rem.id);
+    const itens = await dbAll(db,
+      'SELECT id, material_id FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ? ORDER BY id', [rem.id]);
+    await assert.rejects(() => svc.registrarRetorno(db, ADMIN, rem.id, { itens: [
+      { item_remessa_id: itens[0].id, quantidade: 10 },
+      { item_remessa_id: itens[1].id, quantidade: 999 },
+    ] }), /999|acima/i);
+    assert.strictEqual((await saldos(db, mat1)).em_terceiros, 100, 'o item bom foi creditado numa recusa');
+    assert.strictEqual((await saldos(db, mat2)).em_terceiros, 100);
+    assert.strictEqual(await statusDa(db, rem.id), 'ENVIADA', 'o status avancou com o recebimento recusado');
+  });
+
+  await test('falha DENTRO do motor no retorno devolve o claim do item', async () => {
+    // Sem transacao: se o motor falhar depois do claim, `quantidade_retornada` ficaria maior que o
+    // que voltou de verdade — o pendente encolheria sem o saldo ter sido liberado, e o operador
+    // nunca mais conseguiria registrar aquele retorno.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    const original = stockService.registrarMovimentacao;
+    stockService.registrarMovimentacao = async () => {
+      throw Object.assign(new Error('falha simulada do motor'), { status: 400 });
+    };
+    try {
+      await assert.rejects(
+        () => svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 40 }] }),
+        /falha simulada do motor/);
+    } finally {
+      stockService.registrarMovimentacao = original;
+    }
+    const item = await dbGet(db,
+      'SELECT quantidade_retornada FROM itens_remessa_terceiro_almoxarifado WHERE id = ?', [itemId]);
+    assert.strictEqual(item.quantidade_retornada, 0, 'o item ficou com retorno reclamado sem saldo liberado');
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100);
+    // E a prova de que "reclamavel de novo" nao e so uma coluna zerada: registrar de verdade funciona.
+    const r = await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 40 }] });
+    assert.strictEqual(r.pendente_total, 60);
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 60);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
