@@ -16,16 +16,21 @@ import './Almoxarifado.css';
 const TIPOS_FORM = [
   { value: 'ENTRADA', label: 'Entrada', cls: 'entrada' },
   { value: 'SAIDA', label: 'Saída', cls: 'saida' },
+  { value: 'TRANSFERENCIA', label: 'Transferência', cls: 'transferencia' },
   { value: 'AJUSTE', label: 'Ajuste', cls: 'ajuste' },
-  { value: 'DEVOLUCAO', label: 'Devolução', cls: 'devolucao' },
   { value: 'SUCATA', label: 'Sucata', cls: 'saida' },
   { value: 'PERDA', label: 'Perda', cls: 'saida' },
 ];
 
-// Lista completa para filtro e exibição no livro: inclui ESTORNO, que é gerado pelo
-// servidor ao cancelar uma movimentação e não é selecionável ao registrar manualmente.
+// Lista completa para filtro e exibição no livro. Inclui ESTORNO (gerado pelo servidor ao
+// cancelar) e DEVOLUCAO, que SAIU do formulário na Etapa 7 mas continua aqui: registrar
+// "Devolução" no formulário genérico criava uma movimentação solta — sem motivo, sem condição,
+// sem destino — e não criava registro nenhum em devolucoes_material_almoxarifado. O caminho certo
+// é a tela /almoxarifado/devolucoes. Tirar DEVOLUCAO desta lista faria o livro parar de exibir os
+// lançamentos antigos e o filtro perder a opção.
 const TIPOS = [
   ...TIPOS_FORM,
+  { value: 'DEVOLUCAO', label: 'Devolução', cls: 'devolucao' },
   { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
 
@@ -34,7 +39,18 @@ const TIPOS = [
 // vencimento (tiposDescarte), que é exatamente o ponto delas. Precisam dos mesmos campos que
 // SAIDA mostra: localização de origem e seleção de lote (nunca texto livre — mesma razão da
 // SAIDA: motor não inventa lote numa saída).
+//
+// Etapa 7: esta constante governa AGORA SÓ A SÉRIE (o seletor de séries a entregar/baixar e a
+// validação de cardinalidade). Antes ela dirigia quatro coisas ao mesmo tempo — lote, origem,
+// série e o rótulo "Disponível" —, e TRANSFERENCIA precisa de três delas mas NÃO da série
+// (decisão 9 do design: o claim de série só existe para entrada e saída no motor; a transferência
+// não tem caminho para mover o vínculo da série, e `serieObrigatoria` no stockService nem dispara
+// para ela). Enfiar TRANSFERENCIA aqui faria a tela exigir séries que o servidor não lê nesse
+// tipo. Por isso os três conjuntos separados abaixo.
 const TIPOS_SAIDA_LOTE = ['SAIDA', 'SUCATA', 'PERDA'];
+const TIPOS_COM_LOTE_EXISTENTE = ['SAIDA', 'SUCATA', 'PERDA', 'TRANSFERENCIA'];
+const TIPOS_COM_ORIGEM = ['SAIDA', 'SUCATA', 'PERDA', 'TRANSFERENCIA'];
+const TIPOS_COM_DESTINO = ['ENTRADA', 'TRANSFERENCIA'];
 
 // Fix round 1 (review da Task 9): `elegivel`, que a API devolve por lote, e calculado SO a partir
 // do lote (status === 'ATIVO' && (!vencido || vencimento_liberado)) — o servidor nao sabe qual
@@ -46,9 +62,16 @@ const TIPOS_SAIDA_LOTE = ['SAIDA', 'SUCATA', 'PERDA'];
 // pior, passando sem lote_id e deixando a linha do lote vencido intocada (sem controle_lote).
 // Descarte continua respeitando STATUS (BLOQUEADO/REPROVADO nao saem por nenhum caminho sem
 // passar pela mudanca de status primeiro) — so a checagem de vencimento e que nao se aplica.
+//
+// Etapa 7: TRANSFERENCIA aceita TODOS os lotes — nem status nem vencimento (decisão 8 do design).
+// Mover um lote reprovado de prateleira é legítimo: é assim que ele vai parar na área de
+// bloqueados. Oferecer só o lote elegível aqui contradiria o backend (que não checa nada no ramo
+// TRANSFERENCIA) e esconderia do operador exatamente o lote que ele precisa mover.
 const TIPOS_DESCARTE_LOTE = ['SUCATA', 'PERDA'];
-const loteDisponivelParaTipo = (lote, tipo) =>
-  TIPOS_DESCARTE_LOTE.includes(tipo) ? lote.status === 'ATIVO' : lote.elegivel;
+const loteDisponivelParaTipo = (lote, tipo) => {
+  if (tipo === 'TRANSFERENCIA') return true;
+  return TIPOS_DESCARTE_LOTE.includes(tipo) ? lote.status === 'ATIVO' : lote.elegivel;
+};
 
 // Tipos que não podem ser estornados pelo botão do livro (espelha as recusas de
 // stockService.cancelarMovimentacao no servidor — a lista aqui é só para não oferecer um botão
@@ -141,10 +164,11 @@ const MovimentacoesAlmoxarifado = () => {
     return () => clearTimeout(t);
   }, [tipoFilter, dataInicio, dataFim]);
 
-  // Lote só é escolhido (não digitado) numa saída (SAIDA/SUCATA/PERDA) — é onde o motor decide
-  // de qual lote consumir, e a lista já vem em ordem FEFO com `elegivel` calculado no servidor.
+  // Lote só é escolhido (não digitado) numa saída (SAIDA/SUCATA/PERDA) ou numa TRANSFERENCIA — é
+  // onde o motor decide de qual lote consumir/mover, e a lista já vem em ordem FEFO com
+  // `elegivel` calculado no servidor.
   useEffect(() => {
-    if (!form.material_id || !TIPOS_SAIDA_LOTE.includes(form.tipo)) { setLotes([]); return; }
+    if (!form.material_id || !TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo)) { setLotes([]); return; }
     let cancelado = false;
     api.get(`/almoxarifado/materiais/${form.material_id}/lotes?com_saldo=1`)
       .then((res) => {
@@ -289,13 +313,13 @@ const MovimentacoesAlmoxarifado = () => {
       // Localização/lote só valem para o tipo que os exibe no form — evita que um valor
       // "grudado" de uma seleção anterior (ex.: destino escolhido em ENTRADA, depois
       // trocado para AJUSTE) vaze para um tipo onde o campo nem aparece na tela.
-      if (TIPOS_SAIDA_LOTE.includes(form.tipo) && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
-      if (form.tipo === 'ENTRADA' && form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
+      if (TIPOS_COM_ORIGEM.includes(form.tipo) && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
+      if (TIPOS_COM_DESTINO.includes(form.tipo) && form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
       // Entrada: lote nasce aqui, texto livre. Saída (inclusive SUCATA/PERDA): lote é escolhido
       // de um já existente (lote_id), nunca digitado — evita saída registrada contra um lote que
       // não existe.
       if (form.tipo === 'ENTRADA' && form.lote) payload.lote = form.lote;
-      if (TIPOS_SAIDA_LOTE.includes(form.tipo) && form.lote_id) payload.lote_id = Number(form.lote_id);
+      if (TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo) && form.lote_id) payload.lote_id = Number(form.lote_id);
       // Série: mesma regra "só envia campo que o tipo exibe" — entrada manda a lista de texto
       // (series), saída manda os ids escolhidos (serie_ids). Igual ao lote, nasce na entrada e é
       // escolhida na saída.
@@ -540,7 +564,7 @@ const MovimentacoesAlmoxarifado = () => {
                     <select className="almox-form-select" value={form.tipo}
                       onChange={e => {
                         const novoTipo = e.target.value;
-                        const mostraLote = novoTipo === 'ENTRADA' || TIPOS_SAIDA_LOTE.includes(novoTipo);
+                        const mostraLote = novoTipo === 'ENTRADA' || TIPOS_COM_LOTE_EXISTENTE.includes(novoTipo);
                         // Limpa qualquer campo que só aparece para outro tipo — o estado nunca
                         // pode carregar um valor que o usuário não está mais vendo na tela
                         // (senão ele vaza escondido para o payload do tipo atual).
@@ -548,9 +572,9 @@ const MovimentacoesAlmoxarifado = () => {
                           ...f,
                           tipo: novoTipo,
                           emergencial: novoTipo === 'SAIDA' ? f.emergencial : false,
-                          localizacao_destino_id: novoTipo === 'ENTRADA' ? f.localizacao_destino_id : '',
+                          localizacao_destino_id: TIPOS_COM_DESTINO.includes(novoTipo) ? f.localizacao_destino_id : '',
                           custo_unitario: novoTipo === 'ENTRADA' ? f.custo_unitario : '',
-                          localizacao_origem_id: TIPOS_SAIDA_LOTE.includes(novoTipo) ? f.localizacao_origem_id : '',
+                          localizacao_origem_id: TIPOS_COM_ORIGEM.includes(novoTipo) ? f.localizacao_origem_id : '',
                           lote: mostraLote ? f.lote : '',
                           lote_id: mostraLote ? f.lote_id : '',
                           series: novoTipo === 'ENTRADA' ? f.series : '',
@@ -559,6 +583,15 @@ const MovimentacoesAlmoxarifado = () => {
                       }}>
                       {TIPOS_FORM.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
+                    {/* Devolução saiu daqui na Etapa 7: registrar "Devolução" neste formulário
+                        genérico criava uma movimentação solta — sem motivo, sem condição, sem
+                        destino — e nenhum registro em devolucoes_material_almoxarifado. Sem este
+                        aviso, quem procurasse a opção antiga concluiria que a função sumiu. */}
+                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Devolução de material entregue é registrada na tela de{' '}
+                      <a href="/almoxarifado/devolucoes">Devoluções</a> — lá a devolução fica ligada
+                      à entrega de origem, com condição, destino e lote.
+                    </small>
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">
@@ -568,7 +601,7 @@ const MovimentacoesAlmoxarifado = () => {
                     <input className="almox-input" type="number" min="0" step="1"
                       value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
                       placeholder="0" required />
-                    {selectedMaterial && TIPOS_SAIDA_LOTE.includes(form.tipo) && (
+                    {selectedMaterial && TIPOS_COM_ORIGEM.includes(form.tipo) && (
                       <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
                         Disponível: {(
                           (selectedMaterial.quantidade_atual || 0)
@@ -637,7 +670,7 @@ const MovimentacoesAlmoxarifado = () => {
                     </select>
                   </div>
 
-                  {form.tipo === 'ENTRADA' && (
+                  {TIPOS_COM_DESTINO.includes(form.tipo) && (
                     <div className="almox-field">
                       <label className="almox-label">Localização de destino</label>
                       <select className="almox-form-select" value={form.localizacao_destino_id}
@@ -660,7 +693,7 @@ const MovimentacoesAlmoxarifado = () => {
                         placeholder="0,00" />
                     </div>
                   )}
-                  {TIPOS_SAIDA_LOTE.includes(form.tipo) && (
+                  {TIPOS_COM_ORIGEM.includes(form.tipo) && (
                     <div className="almox-field">
                       <label className="almox-label">Localização de origem</label>
                       <select className="almox-form-select" value={form.localizacao_origem_id}
@@ -675,10 +708,10 @@ const MovimentacoesAlmoxarifado = () => {
                       </select>
                     </div>
                   )}
-                  {(form.tipo === 'ENTRADA' || TIPOS_SAIDA_LOTE.includes(form.tipo)) && (
+                  {(form.tipo === 'ENTRADA' || TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo)) && (
                     <div className="almox-field">
                       <label className="almox-label" htmlFor="mov-lote">Lote</label>
-                      {TIPOS_SAIDA_LOTE.includes(form.tipo) ? (
+                      {TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo) ? (
                         <select id="mov-lote" className="almox-input" value={form.lote_id}
                           onChange={e => setForm(f => ({ ...f, lote_id: e.target.value }))}>
                           <option value="">Sem lote</option>

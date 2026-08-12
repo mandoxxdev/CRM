@@ -183,3 +183,129 @@ describe('MovimentacoesAlmoxarifado — SUCATA e PERDA no seletor de tipo', () =
     expect(rotuloMotivo.textContent).toContain('*');
   });
 });
+
+/**
+ * Etapa 7, Task 6: TRANSFERENCIA entra no formulario (a rota existia desde sempre e nunca teve
+ * tela) e DEVOLUCAO sai dele — registrar "Devolucao" aqui criava uma movimentacao solta, sem
+ * motivo, sem condicao e sem destino, e NAO criava registro nenhum na tabela de devolucoes.
+ * DEVOLUCAO continua em TIPOS (a lista completa), senao o livro para de exibir os lancamentos
+ * antigos e o filtro perde a opcao.
+ */
+const LOTES_TRANSFERENCIA = [
+  { id: 41, codigo: 'L-OK', status: 'ATIVO', saldo: 10, elegivel: true, vencido: false, vencimento_liberado: false },
+  { id: 42, codigo: 'L-BLOQ', status: 'BLOQUEADO', saldo: 5, elegivel: false, vencido: false, vencimento_liberado: false },
+  { id: 43, codigo: 'L-VENC', status: 'ATIVO', saldo: 3, elegivel: false, vencido: true, vencimento_liberado: false },
+];
+
+describe('MovimentacoesAlmoxarifado — TRANSFERENCIA no formulário e DEVOLUCAO fora dele', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOVIMENTOS });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC', controle_lote: 1 }] });
+      }
+      if (url.startsWith('/almoxarifado/materiais/10/lotes')) return Promise.resolve({ data: LOTES_TRANSFERENCIA });
+      if (url === '/almoxarifado/localizacoes') {
+        return Promise.resolve({ data: [{ id: 1, codigo: 'A-01', descricao: 'Prateleira A' }, { id: 2, codigo: 'B-01', descricao: 'Prateleira B' }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('Transferência é opção do formulário e Devolução não é', async () => {
+    await abrirModalNovaMovimentacao();
+    const valores = [...seletorTipo().querySelectorAll('option')].map((o) => o.value);
+    expect(valores).toContain('TRANSFERENCIA');
+    expect(valores).not.toContain('DEVOLUCAO');
+  });
+
+  test('o filtro do livro continua oferecendo Devolução (TIPOS mantém o tipo)', async () => {
+    await renderizar();
+    const filtro = container.querySelector('.almox-filters select.almox-select');
+    const valores = [...filtro.querySelectorAll('option')].map((o) => o.value);
+    expect(valores).toContain('DEVOLUCAO');
+  });
+
+  test('Transferência mostra origem E destino e o seletor de lote', async () => {
+    await abrirModalNovaMovimentacao();
+    const selectMaterial = container.querySelector('.almox-modal select.almox-form-select');
+    preencher(selectMaterial, '10');
+    preencher(seletorTipo(), 'TRANSFERENCIA');
+    await esperarEfeitos();
+
+    const rotulos = [...container.querySelectorAll('.almox-modal .almox-field label')].map((l) => l.textContent);
+    expect(rotulos).toEqual(expect.arrayContaining(['Localização de origem', 'Localização de destino']));
+    expect(container.querySelector('#mov-lote').tagName).toBe('SELECT');
+  });
+
+  test('Transferência NÃO mostra seletor de série (decisão 9: fora do escopo)', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOVIMENTOS });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Motor 5cv', unidade: 'PC', controle_serie: 1 }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    preencher(seletorTipo(), 'TRANSFERENCIA');
+    await esperarEfeitos();
+
+    const rotulos = [...container.querySelectorAll('.almox-modal label')].map((l) => l.textContent);
+    expect(rotulos.some((t) => t.startsWith('Séries a '))).toBe(false);
+  });
+
+  // Decisão 8: transferência não checa status nem vencimento — TODOS os lotes servem.
+  test('na Transferência todos os lotes ficam selecionáveis, inclusive bloqueado e vencido', async () => {
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    preencher(seletorTipo(), 'TRANSFERENCIA');
+    await esperarEfeitos();
+
+    const opcoes = [...container.querySelector('#mov-lote').querySelectorAll('option')].filter((o) => o.value);
+    expect(opcoes).toHaveLength(3);
+    expect(opcoes.map((o) => o.disabled)).toEqual([false, false, false]);
+  });
+
+  // Controle positivo do disabled: numa SAIDA os mesmos três lotes NÃO ficam todos habilitados.
+  test('[controle positivo] na Saída o lote bloqueado e o vencido continuam desabilitados', async () => {
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    preencher(seletorTipo(), 'SAIDA');
+    await esperarEfeitos();
+
+    const opcoes = [...container.querySelector('#mov-lote').querySelectorAll('option')].filter((o) => o.value);
+    expect(opcoes.map((o) => o.disabled)).toEqual([false, true, true]);
+  });
+
+  test('Transferência posta origem, destino e lote no payload', async () => {
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    preencher(seletorTipo(), 'TRANSFERENCIA');
+    await esperarEfeitos();
+
+    const inputs = [...container.querySelectorAll('.almox-modal input.almox-input')];
+    preencher(inputs.find((i) => i.type === 'number'), '5');
+    const selects = [...container.querySelectorAll('.almox-modal select.almox-form-select')];
+    const origem = selects.find((s) => s.previousElementSibling?.textContent === 'Localização de origem')
+      || selects[selects.length - 2];
+    const destino = selects.find((s) => s.previousElementSibling?.textContent === 'Localização de destino')
+      || selects[selects.length - 1];
+    preencher(origem, '1');
+    preencher(destino, '2');
+
+    const form = container.querySelector('.almox-modal form');
+    await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/v2', expect.objectContaining({
+      tipo: 'TRANSFERENCIA', material_id: 10, quantidade: 5,
+      localizacao_origem_id: 1, localizacao_destino_id: 2, lote_id: 41,
+    }));
+  });
+
+  test('um hint aponta a tela nova de Devoluções', async () => {
+    await abrirModalNovaMovimentacao();
+    expect(container.querySelector('.almox-modal').textContent).toMatch(/Devolu/);
+    expect(container.querySelector('.almox-modal').textContent).toMatch(/\/almoxarifado\/devolucoes|tela de Devolu/i);
+  });
+});
