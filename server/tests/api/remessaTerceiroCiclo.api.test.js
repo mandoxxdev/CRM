@@ -600,6 +600,257 @@ async function remessaCom(db, itens, extra = {}) {
     assert.strictEqual((await saldos(db, materialId)).em_terceiros, 60);
   });
 
+  // ══ Task 7 — encerrar com destino obrigatorio, e cancelar com estorno ═══════════════════════
+
+  await test('encerrar remessa com pendencia sem destino falha, nomeando a quantidade pendente', async () => {
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 70 }] });
+    await assert.rejects(
+      () => svc.encerrarRemessa(db, ADMIN, remessa.id, {}),
+      (e) => {
+        assert.strictEqual(e.status, 400);
+        assert.match(e.message, /30/, 'a mensagem nao nomeia a quantidade pendente');
+        assert.match(e.message, /PERDA_NO_TERCEIRO/);
+        assert.match(e.message, /CONSUMIDO_NO_PROCESSO/);
+        return true;
+      });
+    assert.strictEqual(await statusDa(db, remessa.id), 'RETORNO_PARCIAL');
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 30, 'a retencao foi zerada sem destino');
+  });
+
+  await test('encerrar com destino mas SEM justificativa falha', async () => {
+    const { remessa, itemId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 70 }] });
+    await assert.rejects(
+      () => svc.encerrarRemessa(db, ADMIN, remessa.id, { destino: 'PERDA_NO_TERCEIRO' }),
+      /justificativa/i);
+    assert.strictEqual(await statusDa(db, remessa.id), 'RETORNO_PARCIAL');
+  });
+
+  await test('encerrar com destino invalido falha listando os validos', async () => {
+    const { remessa, itemId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 70 }] });
+    await assert.rejects(
+      () => svc.encerrarRemessa(db, ADMIN, remessa.id, { destino: 'SUMIU', justificativa: 'x' }),
+      /PERDA_NO_TERCEIRO/);
+  });
+
+  await test('encerrar com perda no terceiro zera o em_terceiros e baixa o fisico', async () => {
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 70 }] });
+    const r = await svc.encerrarRemessa(db, ADMIN, remessa.id, {
+      destino: 'PERDA_NO_TERCEIRO', justificativa: 'chapa danificada no banho de zinco' });
+    assert.strictEqual(r.status, 'ENCERRADA');
+    assert.strictEqual(r.baixado, 30);
+    const s = await saldos(db, materialId);
+    assert.strictEqual(s.em_terceiros, 0, 'sobrou retencao presa numa remessa encerrada — o saldo orfao');
+    assert.strictEqual(s.quantidade_atual, 70, 'o fisico nao baixou: o sistema ainda acha que a chapa existe');
+    // O tipo do livro tambem e verificado AQUI, e nao so no teste do consumo: sem esta assercao,
+    // trocar PERDA_NO_TERCEIRO por 'CONSUMO_TERCEIRO' no mapa passava em toda a suite (o teste do
+    // consumo olha o movimento DE OUTRO material). Par bilateral do S3 do plano, que so tinha metade.
+    const mov = await dbGet(db,
+      "SELECT tipo, quantidade FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo IN ('PERDA_TERCEIRO','CONSUMO_TERCEIRO')",
+      [materialId]);
+    assert.strictEqual(mov.tipo, 'PERDA_TERCEIRO');
+    assert.strictEqual(mov.quantidade, 30);
+    // O cabecalho tem de guardar o destino e o motivo: sem isso a auditoria do encerramento vira
+    // "alguem fechou e o saldo sumiu", que e metade do problema que a decisao 4 existe para evitar.
+    const cab = await dbGet(db,
+      'SELECT encerramento_destino, encerramento_justificativa FROM remessas_terceiro_almoxarifado WHERE id = ?',
+      [remessa.id]);
+    assert.strictEqual(cab.encerramento_destino, 'PERDA_NO_TERCEIRO');
+    assert.match(cab.encerramento_justificativa, /banho de zinco/);
+  });
+
+  await test('encerrar com consumo no processo usa o tipo CONSUMO_TERCEIRO no livro', async () => {
+    // Perda e consumo baixam igual, mas sao fatos DIFERENTES: um e o terceiro estragando material
+    // nosso, o outro e o processo comendo material de proposito. O livro tem de distinguir.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 90 }] });
+    await svc.encerrarRemessa(db, ADMIN, remessa.id, {
+      destino: 'CONSUMIDO_NO_PROCESSO', justificativa: 'sobra de corte virou cavaco' });
+    const mov = await dbGet(db,
+      "SELECT tipo, quantidade FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo LIKE '%TERCEIRO' AND tipo NOT IN ('REMESSA_TERCEIRO','RETORNO_TERCEIRO')",
+      [materialId]);
+    assert.strictEqual(mov.tipo, 'CONSUMO_TERCEIRO');
+    assert.strictEqual(mov.quantidade, 10);
+  });
+
+  await test('encerrar com VARIOS itens pendentes baixa TODOS, e a mensagem soma o pendente real', async () => {
+    // O teste que o plano nao tinha: todas as suas remessas de encerramento tem UM item so, entao
+    // um laco que baixasse apenas o primeiro (ou um `pendentes[0]` no lugar do total) passava na
+    // suite inteira — e deixaria retencao presa no segundo material, o saldo orfao pela metade.
+    // A mensagem tambem e conferida com dois itens: regra herdada da Task 6 — quando a checagem
+    // agrega por recurso escasso, a mensagem tem de dizer o valor AGREGADO (75), nao so as partes.
+    const m1 = await novoMaterial(db, { atual: 100 });
+    const m2 = await novoMaterial(db, { atual: 100 });
+    const rem = await remessaCom(db, [{ material_id: m1, quantidade: 50 }, { material_id: m2, quantidade: 45 }]);
+    await svc.enviarRemessa(db, ADMIN, rem.id);
+    const itens = await dbAll(db,
+      'SELECT id FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ? ORDER BY id', [rem.id]);
+    await svc.registrarRetorno(db, ADMIN, rem.id, { itens: [{ item_remessa_id: itens[0].id, quantidade: 20 }] });
+    const cods = await dbAll(db, 'SELECT codigo FROM materiais_almoxarifado WHERE id IN (?,?) ORDER BY id', [m1, m2]);
+
+    await assert.rejects(() => svc.encerrarRemessa(db, ADMIN, rem.id, {}), (e) => {
+      assert.match(e.message, /75 UN/, 'a mensagem nao diz o pendente TOTAL da remessa');
+      assert.ok(e.message.includes(`${cods[0].codigo}: 30`), 'a mensagem nao abre o pendente do item 1');
+      assert.ok(e.message.includes(`${cods[1].codigo}: 45`), 'a mensagem nao abre o pendente do item 2');
+      return true;
+    });
+
+    const r = await svc.encerrarRemessa(db, ADMIN, rem.id, {
+      destino: 'CONSUMIDO_NO_PROCESSO', justificativa: 'os dois viraram cavaco no corte' });
+    assert.strictEqual(r.baixado, 75, 'o encerramento nao baixou a soma dos itens pendentes');
+    for (const [id, atual] of [[m1, 70], [m2, 55]]) {
+      const s = await saldos(db, id);
+      assert.strictEqual(s.em_terceiros, 0, `sobrou retencao presa no material ${id} — a baixa parou no primeiro item`);
+      assert.strictEqual(s.quantidade_atual, atual, `o fisico do material ${id} nao baixou`);
+    }
+    const movs = await dbAll(db,
+      "SELECT id FROM movimentacoes_almoxarifado WHERE tipo = 'CONSUMO_TERCEIRO' AND material_id IN (?,?)", [m1, m2]);
+    assert.strictEqual(movs.length, 2, 'o livro registrou a baixa de um item so');
+  });
+
+  await test('[CONTROLE POSITIVO] encerrar SEM pendencia nao exige destino nem justificativa', async () => {
+    // A metade que falta: exigir destino sempre passaria em todos os testes de recusa acima e
+    // obrigaria o operador a inventar uma perda em toda remessa que voltou inteira.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 100 }] });
+    // ja encerrou sozinha no retorno total; a chamada explicita e recusada pela maquina, nao pela
+    // exigencia de destino
+    await assert.rejects(() => svc.encerrarRemessa(db, ADMIN, remessa.id, {}), /ENCERRADA/);
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 0);
+    // ARMADILHA HERDADA DA TASK 6, e NAO e um buraco: remessa que fecha SOZINHA no retorno total
+    // chega em ENCERRADA com encerramento_destino NULL, porque nao havia pendencia a destinar.
+    // Um teste que exigisse destino em TODA remessa encerrada estaria errado — nao "conserte" isto.
+    const cab = await dbGet(db,
+      'SELECT status, encerramento_destino FROM remessas_terceiro_almoxarifado WHERE id = ?', [remessa.id]);
+    assert.strictEqual(cab.status, 'ENCERRADA');
+    assert.strictEqual(cab.encerramento_destino, null);
+  });
+
+  await test('[CONTROLE POSITIVO] encerrar com pendencia ZERO passa sem destino e nao baixa nada', async () => {
+    // A prova DIRETA de que a exigencia e CONDICIONAL — o par bilateral que o proprio plano admitia
+    // nao ter (a linha S2 da tabela de sabotagens diz que "exigir destino sempre" nao falha em
+    // nenhum teste sozinha). Como o retorno total ja encerra a remessa por conta propria, o unico
+    // jeito de chamar encerrarRemessa com pendencia zero e forcar o status de volta — mesma tecnica
+    // que o teste de idempotencia do envio, neste arquivo, ja usa.
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 100 }] });
+    await dbRun(db, `UPDATE remessas_terceiro_almoxarifado
+      SET status = 'RETORNO_PARCIAL', encerrado_em = NULL WHERE id = ?`, [remessa.id]);
+    const r = await svc.encerrarRemessa(db, ADMIN, remessa.id, {});
+    assert.strictEqual(r.status, 'ENCERRADA');
+    assert.strictEqual(r.baixado, 0);
+    assert.strictEqual(r.destino, null);
+    const s = await saldos(db, materialId);
+    assert.strictEqual(s.quantidade_atual, 100, 'encerrar sem pendencia baixou material que voltou inteiro');
+    assert.strictEqual(s.em_terceiros, 0);
+    const baixas = await dbAll(db,
+      "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo IN ('PERDA_TERCEIRO','CONSUMO_TERCEIRO')",
+      [materialId]);
+    assert.strictEqual(baixas.length, 0, 'encerrar sem pendencia emitiu baixa de material que nao se perdeu');
+    const cab = await dbGet(db,
+      'SELECT encerramento_destino, encerramento_justificativa FROM remessas_terceiro_almoxarifado WHERE id = ?',
+      [remessa.id]);
+    assert.strictEqual(cab.encerramento_destino, null, 'gravou destino num encerramento sem pendencia');
+    assert.strictEqual(cab.encerramento_justificativa, null);
+  });
+
+  await test('[CONTROLE POSITIVO] encerrar direto de ENVIADA, com tudo pendente, funciona', async () => {
+    const { remessa, materialId } = await remessaEnviada(db, 100);
+    const r = await svc.encerrarRemessa(db, ADMIN, remessa.id, {
+      destino: 'PERDA_NO_TERCEIRO', justificativa: 'o galvanizador perdeu a carga inteira' });
+    assert.strictEqual(r.baixado, 100);
+    const s = await saldos(db, materialId);
+    assert.strictEqual(s.quantidade_atual, 0);
+    assert.strictEqual(s.em_terceiros, 0);
+  });
+
+  await test('encerrar remessa ABERTA e recusado pela maquina de estados', async () => {
+    // Sem a maquina de estados isto fecharia EM SILENCIO: nenhum item tem `enviado_em`, entao o
+    // pendente e zero e o encerramento nao encontraria nada para exigir destino.
+    const mat = await novoMaterial(db);
+    const rem = await remessaCom(db, [{ material_id: mat, quantidade: 30 }]);
+    await assert.rejects(() => svc.encerrarRemessa(db, ADMIN, rem.id, {}), /ABERTA/);
+    assert.strictEqual(await statusDa(db, rem.id), 'ABERTA');
+  });
+
+  await test('encerrar sem a acao remessar_terceiro falha com 403', async () => {
+    const { remessa, materialId } = await remessaEnviada(db, 100);
+    await assert.rejects(
+      () => svc.encerrarRemessa(db, PRODUCAO, remessa.id, { destino: 'PERDA_NO_TERCEIRO', justificativa: 'x' }),
+      (e) => { assert.strictEqual(e.status, 403); return true; });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100);
+  });
+
+  // ── Cancelamento ─────────────────────────────────────────────────────────────────────────────
+  await test('cancelar remessa ABERTA nao mexe em saldo nenhum', async () => {
+    const mat = await novoMaterial(db);
+    const rem = await remessaCom(db, [{ material_id: mat, quantidade: 30 }]);
+    const r = await svc.cancelarRemessa(db, ADMIN, rem.id, { motivo: 'pedido cancelado pelo cliente' });
+    assert.strictEqual(r.status, 'CANCELADA');
+    assert.strictEqual(r.estornado, 0);
+    const s = await saldos(db, mat);
+    assert.strictEqual(s.quantidade_atual, 100);
+    assert.strictEqual(s.em_terceiros, 0);
+  });
+
+  await test('cancelar remessa enviada restaura o disponivel', async () => {
+    const { remessa, materialId } = await remessaEnviada(db, 100);
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100);
+    const r = await svc.cancelarRemessa(db, ADMIN, remessa.id, { motivo: 'o terceiro devolveu sem fazer nada' });
+    assert.strictEqual(r.estornado, 100);
+    const s = await saldos(db, materialId);
+    assert.strictEqual(s.em_terceiros, 0, 'a retencao ficou presa numa remessa cancelada');
+    assert.strictEqual(s.quantidade_atual, 100, 'o cancelamento creditou estoque que nunca saiu');
+    const m = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+    assert.strictEqual(await stockService.getSaldoDisponivel(m), 100);
+    // O estorno e um RETORNO_TERCEIRO no livro (o material VOLTA), nunca uma baixa — e o motivo
+    // fica no cabecalho, senao o cancelamento vira saldo mudando sem explicacao.
+    const mov = await dbGet(db,
+      'SELECT tipo, quantidade FROM movimentacoes_almoxarifado WHERE material_id = ? ORDER BY id DESC', [materialId]);
+    assert.strictEqual(mov.tipo, 'RETORNO_TERCEIRO');
+    assert.strictEqual(mov.quantidade, 100);
+    const cab = await dbGet(db,
+      'SELECT cancelamento_motivo FROM remessas_terceiro_almoxarifado WHERE id = ?', [remessa.id]);
+    assert.match(cab.cancelamento_motivo, /sem fazer nada/);
+  });
+
+  await test('cancelar remessa com retorno parcial estorna SO o que ainda esta la fora', async () => {
+    const { remessa, itemId, materialId } = await remessaEnviada(db, 100);
+    await svc.registrarRetorno(db, ADMIN, remessa.id, { itens: [{ item_remessa_id: itemId, quantidade: 60 }] });
+    const r = await svc.cancelarRemessa(db, ADMIN, remessa.id, { motivo: 'contrato rescindido' });
+    assert.strictEqual(r.estornado, 40, 'o cancelamento estornou o que ja tinha voltado — retencao negativa');
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 0);
+    assert.strictEqual((await saldos(db, materialId)).quantidade_atual, 100,
+      'o cancelamento mexeu no patrimonio: o material nunca deixou de ser nosso');
+  });
+
+  await test('cancelar sem a acao remessar_terceiro falha com 403', async () => {
+    const { remessa, materialId } = await remessaEnviada(db, 100);
+    await assert.rejects(
+      () => svc.cancelarRemessa(db, PRODUCAO, remessa.id, { motivo: 'nao pode' }),
+      (e) => { assert.strictEqual(e.status, 403); return true; });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100);
+    assert.strictEqual(await statusDa(db, remessa.id), 'ENVIADA');
+  });
+
+  await test('cancelar sem motivo falha, e cancelar remessa ja finalizada falha', async () => {
+    const { remessa } = await remessaEnviada(db, 100);
+    await assert.rejects(() => svc.cancelarRemessa(db, ADMIN, remessa.id, {}), /motivo/i);
+    await svc.cancelarRemessa(db, ADMIN, remessa.id, { motivo: 'ok' });
+    await assert.rejects(() => svc.cancelarRemessa(db, ADMIN, remessa.id, { motivo: 'de novo' }), /CANCELADA/);
+    // A outra ponta final: remessa ENCERRADA tambem nao cancela — cancelar depois do encerramento
+    // com destino ressuscitaria a retencao ja baixada, saldo do nada.
+    const outra = await remessaEnviada(db, 50);
+    await svc.encerrarRemessa(db, ADMIN, outra.remessa.id, {
+      destino: 'PERDA_NO_TERCEIRO', justificativa: 'sumiu no terceiro' });
+    await assert.rejects(
+      () => svc.cancelarRemessa(db, ADMIN, outra.remessa.id, { motivo: 'tarde demais' }), /ENCERRADA/);
+    assert.strictEqual((await saldos(db, outra.materialId)).quantidade_atual, 0);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

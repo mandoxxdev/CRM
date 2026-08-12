@@ -511,8 +511,171 @@ async function registrarRetorno(db, user, remessaId, data) {
   };
 }
 
+/**
+ * Quanto ainda esta no terceiro, POR ITEM, com o codigo do material para as mensagens.
+ *
+ * `enviado_em IS NOT NULL` nao e detalhe: item que nunca saiu do galpao nao tem retencao nenhuma no
+ * material, entao baixa-lo (no encerramento) ou estorna-lo (no cancelamento) mexeria em saldo que
+ * nunca se moveu. E o que faz `cancelar remessa ABERTA` nao tocar em saldo algum.
+ */
+async function pendentesDaRemessa(db, remessaId) {
+  return dbAll(db, `SELECT i.id, i.material_id, i.lote_id, m.codigo AS material_codigo, m.unidade,
+      (i.quantidade - COALESCE(i.quantidade_retornada,0)) AS pendente
+    FROM itens_remessa_terceiro_almoxarifado i
+    JOIN materiais_almoxarifado m ON i.material_id = m.id
+    WHERE i.remessa_id = ? AND i.enviado_em IS NOT NULL
+      AND (i.quantidade - COALESCE(i.quantidade_retornada,0)) > 0
+    ORDER BY i.id`, [remessaId]);
+}
+
+/**
+ * Encerra a remessa. Se sobrou saldo que nunca voltou, EXIGE destino + justificativa (decisao 4).
+ *
+ * Por que destino, e nao "so justificativa": texto livre nao tira o saldo de
+ * quantidade_em_terceiros, e o saldo PRECISA sair — senao a remessa fica encerrada com retencao
+ * presa para sempre, que e o saldo orfao ja corrigido tres vezes nesta sequencia (reserva presa na
+ * Etapa 6, linha orfa de devolucao na Etapa 7, retencao orfa no PERDA generico da 8b). E para onde
+ * ele vai MUDA o estoque, entao quem decide e o operador, com o motivo escrito.
+ *
+ * A exigencia e CONDICIONAL, e isto tem par de teste dos dois lados: remessa que voltou inteira
+ * encerra SOZINHA no retorno total (registrarRetorno), e uma remessa assim chega em ENCERRADA com
+ * `encerramento_destino` NULL. **Isso e CORRETO, nao e buraco** — nao havia pendencia a destinar.
+ * Nao "conserte" exigindo destino em toda remessa encerrada: isso obrigaria o operador a inventar
+ * uma perda que nao houve, e passaria em todos os testes de recusa desta funcao.
+ *
+ * Item a item, e nao um movimento so: cada item pode ser de material diferente, e o livro registra
+ * por material. O laco cobre TODOS os pendentes — baixar so o primeiro deixaria retencao presa nos
+ * outros, o saldo orfao pela metade.
+ */
+async function encerrarRemessa(db, user, remessaId, data = {}) {
+  assertPodeRemessar(user);
+  const remessa = await getRemessaBase(db, remessaId);
+  const t = sm.validarTransicao(remessa.status, 'ENCERRADA');
+  if (!t.ok) throw erro(t.erro);
+
+  const pendentes = await pendentesDaRemessa(db, remessaId);
+  const total = pendentes.reduce((a, p) => a + Number(p.pendente), 0);
+  const { destino, justificativa } = data;
+
+  if (total > 0) {
+    if (!destino) {
+      // A mensagem nomeia A QUANTIDADE AGREGADA e as duas opcoes: "informe o destino" seco nao diz
+      // quanto esta em jogo nem o que digitar (regra herdada da Task 6 — teto sem o valor agregado
+      // e um numero que contradiz o proprio erro). A unidade so acompanha o total quando TODOS os
+      // itens usam a mesma: somar KG com UN e dizer "75 KG" seria um numero inventado; por isso a
+      // abertura item a item leva a unidade de cada um.
+      const unidades = [...new Set(pendentes.map((p) => p.unidade || ''))];
+      const unidadeTotal = unidades.length === 1 && unidades[0] ? ` ${unidades[0]}` : '';
+      throw erro(`A remessa ${remessa.numero} tem ${total}${unidadeTotal} que nunca voltaram `
+        + `(${pendentes.map((p) => `${p.material_codigo}: ${p.pendente} ${p.unidade || ''}`.trim()).join('; ')}). `
+        + `Para encerrar, informe o destino desse saldo: ${DESTINOS_ENCERRAMENTO.join(' ou ')}, `
+        + 'mais a justificativa.');
+    }
+    if (!DESTINOS_ENCERRAMENTO.includes(destino)) {
+      throw erro(`Destino de encerramento invalido: ${destino}. Validos: ${DESTINOS_ENCERRAMENTO.join(', ')}`);
+    }
+    if (!justificativa || !String(justificativa).trim()) {
+      throw erro('Encerrar remessa com saldo pendente exige justificativa alem do destino');
+    }
+
+    const tipo = TIPO_MOVIMENTO_DESTINO[destino];
+    for (const p of pendentes) {
+      // Cada baixa e um UPDATE atomico do motor (Task 4): baixa quantidade_atual E
+      // quantidade_em_terceiros juntos. O servico NAO zera a retencao por SQL proprio.
+      // Se uma falhar no meio, a remessa NAO e encerrada e as anteriores ficam baixadas —
+      // declarado, e o comportamento certo: o material realmente sumiu, e reencerrar so baixa o que
+      // ainda estiver pendente (pendentesDaRemessa releria menos itens). O que nao pode acontecer e
+      // a remessa fechar com saldo preso, e isso o `throw` garante.
+      await stockService.registrarMovimentacao(db, user, {
+        material_id: p.material_id,
+        tipo,
+        quantidade: Number(p.pendente),
+        lote_id: p.lote_id || undefined,
+        referencia: remessa.numero,
+        justificativa: `Encerramento da remessa ${remessa.numero} — ${destino}: ${String(justificativa).trim()}`,
+      });
+      // `quantidade_retornada` aqui significa QUANTIDADE LIQUIDADA, nao "voltou": o item deixa de
+      // ter pendencia porque foi baixado, nao porque chegou de volta. A tabela nao tem coluna
+      // separada para isso, e a distincao continua legivel em dois lugares — o cabecalho guarda
+      // `encerramento_destino`/`justificativa`, e retornos_remessa_item_almoxarifado so tem linha
+      // do que voltou de verdade. Quem for montar a tela/PDF (Task 9) tem de ler o destino do
+      // cabecalho antes de rotular esta coluna como "retornado".
+      await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
+        SET quantidade_retornada = quantidade WHERE id = ?`, [p.id]);
+    }
+  }
+
+  await dbRun(db, `UPDATE remessas_terceiro_almoxarifado
+    SET status = 'ENCERRADA', encerrado_em = CURRENT_TIMESTAMP, encerrado_por = ?,
+        encerramento_destino = ?, encerramento_justificativa = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?`, [user.id, total > 0 ? destino : null,
+    total > 0 ? String(justificativa).trim() : null, remessaId]);
+
+  await registrarAuditoria(db, {
+    entidade: 'remessa_terceiro', entidade_id: Number(remessaId), acao: 'ENCERRAMENTO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_anteriores: { status: remessa.status, pendente: total },
+    dados_novos: { status: 'ENCERRADA', destino: total > 0 ? destino : null },
+    justificativa: total > 0 ? String(justificativa).trim() : null,
+  }).catch(() => {});
+
+  return { success: true, remessa_id: Number(remessaId), status: 'ENCERRADA', baixado: total,
+    destino: total > 0 ? destino : null };
+}
+
+/**
+ * Cancela a remessa. De ABERTA nao ha o que estornar (nada saiu). Depois de ENVIADA, devolve ao
+ * disponivel SO o que ainda esta la fora — estornar o que ja voltou negativaria a retencao (o motor
+ * recusaria, com uma mensagem sobre "retorno acima do que esta no terceiro" que nao explicaria nada
+ * ao operador que so clicou em cancelar).
+ *
+ * Cancelar e diferente de encerrar com destino: aqui o material VOLTA (ou nunca saiu de verdade);
+ * la ele some do patrimonio. Nao unificar os dois foi decisao: a mesma tela oferece as duas acoes,
+ * e um botao so obrigaria a perguntar "voltou ou nao?" toda vez.
+ */
+async function cancelarRemessa(db, user, remessaId, data = {}) {
+  assertPodeRemessar(user);
+  const motivo = data?.motivo;
+  if (!motivo || !String(motivo).trim()) throw erro('Cancelar remessa exige motivo');
+
+  const remessa = await getRemessaBase(db, remessaId);
+  const t = sm.validarTransicao(remessa.status, 'CANCELADA');
+  if (!t.ok) throw erro(t.erro);
+
+  const pendentes = await pendentesDaRemessa(db, remessaId);
+  let estornado = 0;
+  for (const p of pendentes) {
+    await stockService.registrarMovimentacao(db, user, {
+      material_id: p.material_id,
+      tipo: 'RETORNO_TERCEIRO',
+      quantidade: Number(p.pendente),
+      lote_id: p.lote_id || undefined,
+      referencia: remessa.numero,
+      justificativa: `Cancelamento da remessa ${remessa.numero}: ${String(motivo).trim()}`,
+    });
+    await dbRun(db, 'UPDATE itens_remessa_terceiro_almoxarifado SET quantidade_retornada = quantidade WHERE id = ?', [p.id]);
+    estornado += Number(p.pendente);
+  }
+
+  await dbRun(db, `UPDATE remessas_terceiro_almoxarifado
+    SET status = 'CANCELADA', cancelado_em = CURRENT_TIMESTAMP, cancelado_por = ?,
+        cancelamento_motivo = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?`, [user.id, String(motivo).trim(), remessaId]);
+
+  await registrarAuditoria(db, {
+    entidade: 'remessa_terceiro', entidade_id: Number(remessaId), acao: 'CANCELAMENTO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_anteriores: { status: remessa.status },
+    dados_novos: { status: 'CANCELADA', estornado },
+    justificativa: String(motivo).trim(),
+  }).catch(() => {});
+
+  return { success: true, remessa_id: Number(remessaId), status: 'CANCELADA', estornado };
+}
+
 module.exports = {
   DESTINOS_ENCERRAMENTO, TIPO_MOVIMENTO_DESTINO,
   criarRemessa, enviarRemessa, getRemessa, listarRemessas,
   validarRetornoDoItem, registrarRetorno,
+  pendentesDaRemessa, encerrarRemessa, cancelarRemessa,
 };
