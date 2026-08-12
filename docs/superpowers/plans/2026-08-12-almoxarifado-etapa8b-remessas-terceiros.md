@@ -3528,7 +3528,9 @@ O que ela consome desta task, já pronto e testado:
   - `cancelarRemessa(db, user, remessaId, data) => Promise<{success:true, remessa_id, status:'CANCELADA', estornado:number}>`
     onde `data = { motivo: string }`.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha** — feito em `519e471`, com **três testes a mais** que os
+  do plano (ver o achado 1 abaixo): o encerramento com **vários itens pendentes**, o par bilateral
+  direto da exigência condicional, e a recusa de `encerrar` numa remessa `ABERTA`.
 
 Acrescentar a `remessaTerceiroCiclo.api.test.js`, antes do `await close()`:
 
@@ -3664,14 +3666,17 @@ Acrescentar a `remessaTerceiroCiclo.api.test.js`, antes do `await close()`:
 ```
 
 E acrescentar `const stockService = require('../../services/almoxarifado/stockService');` ao topo
-do arquivo de teste (usado no `getSaldoDisponivel` acima).
+do arquivo de teste (usado no `getSaldoDisponivel` acima). **Já estava lá desde a Task 5** — este
+passo do plano era obsoleto.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar** — `37 passed, 16 failed`, os 16 com
+  `svc.encerrarRemessa is not a function` / `svc.cancelarRemessa is not a function`.
 
 Run: `cd server && node tests/api/remessaTerceiroCiclo.api.test.js`
-Expected: FAIL — `svc.encerrarRemessa is not a function` nos 13 testes novos.
+Expected: FAIL — `svc.encerrarRemessa is not a function` nos 16 testes novos (o plano dizia 13,
+antes dos três acrescentados).
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar** — feito em `519e471`
 
 Em `thirdPartyService.js`, antes do `module.exports`:
 
@@ -3815,12 +3820,13 @@ async function cancelarRemessa(db, user, remessaId, data = {}) {
 
 e no `module.exports`, acrescentar `pendentesDaRemessa, encerrarRemessa, cancelarRemessa`.
 
-- [ ] **Step 4: Rodar o teste e ver passar**
+- [x] **Step 4: Rodar o teste e ver passar** — `53 passed, 0 failed`
 
 Run: `cd server && node tests/api/remessaTerceiroCiclo.api.test.js`
-Expected: PASS — 37 passed, 0 failed.
+Expected: PASS — **53 passed, 0 failed** (37 herdados + 16 novos). O plano dizia "37", que era o
+número **da Task 6** — quarta vez que a contagem de testes de um Step 4 vem errada nesta etapa.
 
-- [ ] **Step 5: Sabotagens obrigatórias**
+- [x] **Step 5: Sabotagens obrigatórias** — 12 executadas, todas detectadas
 
 | # | Sabotagem | Falha esperada |
 |---|---|---|
@@ -3832,7 +3838,37 @@ Expected: PASS — 37 passed, 0 failed.
 | S6 | Em `cancelarRemessa`, estornar também quando `status = 'ABERTA'` | falha `cancelar remessa ABERTA nao mexe em saldo nenhum` — na prática o motor já recusaria (`em_terceiros = 0`), o que torna a falha barulhenta e não silenciosa |
 | S7 | Remover a exigência de `motivo` | falha `cancelar sem motivo falha` |
 
-- [ ] **Step 6: Suítes completas**
+**Executadas (`519e471`), com o resultado real de cada uma.** Âncora contada com `grep -cF`
+(exatamente 1), arnês auto-testado contra âncora inexistente **antes** de qualquer sabotagem,
+`md5sum` antes/depois e restauração por cópia em memória conferida por `md5sum` **e** por `git diff`
+— nunca `git checkout --` (foi assim que a Task 4 corrompeu o `stockService.js`).
+
+| # | Sabotagem | Resultado real |
+|---|---|---|
+| S1 | `if (!destino)` vira `if (false)` | 51/2 — quebra `encerrar ... sem destino falha` (*a mensagem nao nomeia a quantidade pendente*) |
+| S2 | `if (total > 0)` vira `if (total >= 0)` (destino sempre) | 52/1 — quebra `[CONTROLE POSITIVO] encerrar com pendencia ZERO` |
+| S3a | `PERDA_NO_TERCEIRO` emite `CONSUMO_TERCEIRO` | 52/1 — quebra `encerrar com perda no terceiro...` |
+| S3b | `CONSUMIDO_NO_PROCESSO` emite `PERDA_TERCEIRO` | 51/2 — quebra `encerrar com consumo no processo...` |
+| S4 | encerrar só marca status, não emite movimento | 48/5 — *sobrou retencao presa numa remessa encerrada — o saldo orfao* |
+| S5 | cancelar estorna o total enviado, não o pendente | 52/1 — o motor recusa: *Retorno acima do que esta no terceiro: ainda ha 40 UN la fora* |
+| S6 | `pendentes` sem o filtro `enviado_em IS NOT NULL` | 52/1 — quebra `cancelar remessa ABERTA nao mexe em saldo` |
+| S7 | remover a exigência de `motivo` | 52/1 — `Missing expected rejection` |
+| S8 | cancelar não estorna nada (par bilateral de S5) | 51/2 — quebra `cancelar remessa enviada restaura o disponivel` |
+| S9 | encerrar baixa só o **primeiro** item pendente | 52/1 — *sobrou retencao presa no material N* |
+| S10 | mensagem diz `pendentes[0]` em vez do total | 52/1 — *a mensagem nao diz o pendente TOTAL* |
+| S11 | remover a exigência de justificativa | 52/1 — `Missing expected rejection` |
+
+Duas anotações sobre o **arnês**, porque ele foi o que falhou nas Tasks 3 e 4:
+
+- O auto-teste funcionou: a âncora inexistente deu `grep -cF = 0` e o arnês recusou sabotar **antes**
+  de rodar teste nenhum.
+- E ele **pegou um erro meu**: as âncoras originais de S5/S8 casaram **2 linhas** e a rodada foi
+  ABORTADA em vez de mostrar verde. Causa: `grep -F` casa **substring**, não linha inteira, então
+  `      quantidade: Number(p.pendente),` (6 espaços, do `cancelar`) também casa dentro da linha de
+  8 espaços do `encerrar`. **Indentação não serve para desambiguar âncora em `grep -cF`** — fica
+  registrado para a Task 8 e para a 8c.
+
+- [x] **Step 6: Suítes completas** — todas verdes (números reais abaixo)
 
 Run:
 ```
@@ -3841,9 +3877,9 @@ cd server && npm run test:almoxarifado
 cd server && npm run test:validation && npm run test:safealter && npm run test:sqlite
 ```
 Expected: `test:api` **73/73 arquivos OK**, `test:almoxarifado` **42/0**, validation **4/0**,
-safealter **3/0**, sqlite **3/0**.
+safealter **3/0**, sqlite **3/0**. **Medido:** exatamente isso.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit** — `519e471`
 
 ```bash
 git add server/services/almoxarifado/thirdPartyService.js \
@@ -3879,6 +3915,82 @@ validas: "informe o destino" seco nao diz quanto esta em jogo nem o que digitar.
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
 ```
+
+#### O que a execução da Task 7 (`519e471`) achou que este plano previa errado
+
+1. **O encerramento com VÁRIOS itens pendentes não tinha teste nenhum.** Todas as remessas de
+   encerramento do plano têm **um item só** — então baixar apenas o primeiro pendente
+   (`pendentes.slice(0,1)`) passava nos 13 testes do plano, deixando retenção presa nos demais
+   materiais: o saldo órfão **pela metade**, que é justamente o que a decisão 4 existe para evitar.
+   Coberto por `encerrar com VARIOS itens pendentes baixa TODOS...` (sabotagem S9 prova). É o mesmo
+   formato de achado da Task 5 (pré-checagem por linha) e da Task 6 (teto por item): **o plano sabia
+   da regra em outra seção e não a testou aqui**.
+2. **A mensagem agregada tinha o mesmo ponto cego.** Com um item só, dizer `pendentes[0].pendente`
+   em vez de `total` é **indistinguível** do certo. O teste novo usa 30 + 45 e exige `75` na
+   mensagem (S10). Era exatamente a regra que a própria Task 6 tinha deixado escrita para esta task
+   ("quando a pré-checagem agrega por recurso escasso, a mensagem tem de dizer o valor agregado") —
+   e o código do plano a cumpria, mas nenhum teste dele a checava.
+3. **O par bilateral do S3 estava pela metade.** Só o teste do consumo conferia o tipo no livro;
+   trocar `PERDA_NO_TERCEIRO` por `'CONSUMO_TERCEIRO'` no mapa **passava na suíte inteira** (o teste
+   do consumo olha o movimento de outro material). O teste da perda passou a conferir tipo e
+   quantidade também (S3a).
+4. **A exigência condicional (S2) não tinha prova direta — e o plano admitia isso na própria
+   tabela.** Como o retorno total encerra a remessa sozinho, não existe caminho natural que chegue
+   em `encerrarRemessa` com pendência zero, e "exigir destino sempre" passava em **todos** os testes
+   de recusa. Coberto por `[CONTROLE POSITIVO] encerrar com pendencia ZERO...`, que força o status de
+   volta para `RETORNO_PARCIAL` — mesma técnica que o teste de idempotência do envio já usa neste
+   arquivo — e verifica que **nenhuma** `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` foi emitida.
+5. **A unidade do total podia ser inventada.** O texto do plano montava `${total} ${pendentes[0].unidade}`:
+   numa remessa com um item em KG e outro em UN, isso anuncia um total numa unidade que não é a
+   dele. Agora a unidade só acompanha o total quando **todos** os itens compartilham a mesma, e a
+   abertura item a item leva a unidade de cada um.
+6. **`quantidade_retornada = quantidade` no encerramento é uma sobrecarga de significado, e ela
+   vaza para a Task 9.** A tabela não tem coluna de "liquidado", então o item baixado por perda fica
+   com `quantidade_retornada` cheia e `pendente = 0` — mas **não voltou nada**. Está comentado no
+   código. **A Task 9 (tela/PDF) não pode rotular essa coluna como "retornado" sem antes ler
+   `encerramento_destino` do cabeçalho**; a fonte do que voltou de verdade é
+   `retornos_remessa_item_almoxarifado`, que só tem linha de retorno real. Corrigir de vez custaria
+   uma coluna nova (`quantidade_baixada`) e um `safeAlter` — fora do escopo da Task 7, registrado
+   aqui para a 8c decidir junto com a transformação.
+7. **Dois passos do plano estavam obsoletos ou errados:** o Step 1 mandava acrescentar o `require`
+   do `stockService` ao teste (já estava lá desde a Task 5), e o Step 4 esperava **37** testes, que é
+   o número da Task 6 — **quarta** vez que a contagem de um Step 4 vem errada nesta etapa.
+8. **Lição de arnês:** `grep -F` casa **substring**, não linha inteira. Âncoras que se distinguem
+   só pela **indentação** casam mais de uma linha, e o arnês corretamente abortou S5/S8 na primeira
+   rodada em vez de mostrar verde. Vale para a Task 8 e a 8c.
+
+**Números reais da execução:** antes de implementar, **`37 passed, 16 failed`** (todas as 16 com
+`svc.encerrarRemessa is not a function` / `svc.cancelarRemessa is not a function`); depois,
+**`53 passed, 0 failed`**. Gates: `test:api` **73/73 arquivos OK**, `test:almoxarifado`
+**42 passou / 0 falhou**, validation **4/0**, safealter **3/0**, sqlite **3/0**. Doze sabotagens
+executadas, todas detectadas, com auto-teste do arnês antes de confiar nele e restauração conferida
+por `md5sum` **e** `git diff`.
+
+#### Próxima tarefa: **Task 8** (rotas, schemas Zod e a varredura de prazo vencido)
+
+O que ela consome desta task, já pronto e testado:
+
+- `encerrarRemessa(db, user, remessaId, { destino?, justificativa? })` →
+  `{ success, remessa_id, status:'ENCERRADA', baixado:number, destino:string|null }`;
+  400 quando há pendência e falta destino/justificativa (mensagem já nomeia o total e as opções),
+  400 quando o destino não está em `DESTINOS_ENCERRAMENTO`, 400 da máquina de estados quando a
+  remessa está `ABERTA`/`ENCERRADA`/`CANCELADA`, 403 sem a ação `remessar_terceiro`;
+- `cancelarRemessa(db, user, remessaId, { motivo })` →
+  `{ success, remessa_id, status:'CANCELADA', estornado:number }`; 400 sem `motivo`, 400 da máquina
+  de estados a partir de estado final, 403 sem a ação;
+- `pendentesDaRemessa(db, remessaId)` — útil para a tela mostrar o que falta **antes** de o operador
+  abrir o formulário de encerramento.
+
+**Pontos de atenção para as rotas:**
+
+- **Chave não declarada no schema Zod é descartada em silêncio** (`validation.js` troca `req.body`
+  pelo parsed): `destino`, `justificativa` e `motivo` **têm** de entrar nos schemas, senão o
+  encerramento com destino chega ao serviço como `{}` e é recusado por falta de destino — com o
+  operador olhando um formulário preenchido.
+- `destino` é **opcional** no schema (a remessa sem pendência encerra sem ele); quem decide se é
+  obrigatório é o serviço, que é o único que sabe se sobrou pendência.
+- Os erros do serviço já vêm com `.status` (400/403/404) — a rota só precisa propagar, no padrão das
+  rotas de requisição.
 
 ---
 
