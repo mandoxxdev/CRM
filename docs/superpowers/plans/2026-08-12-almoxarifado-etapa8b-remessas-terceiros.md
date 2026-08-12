@@ -1114,7 +1114,7 @@ EOF
     `GET /almoxarifado/minhas-permissoes`.
   - Harness com tabela `fornecedores` (`id`, `razao_social`, `nome_fantasia`, `cnpj`, `status`).
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Cria `server/tests/api/remessaTerceiroEstados.api.test.js`:
 
@@ -1314,13 +1314,13 @@ const PRODUCAO = { id: 3, nome: 'Chao de fabrica', email: 'prod@test.com', perfi
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/remessaTerceiroEstados.api.test.js`
 Expected: FAIL já no `require` —
 `Cannot find module '../../services/almoxarifado/thirdPartyStateMachine'`.
 
-- [ ] **Step 3: A máquina de estados**
+- [x] **Step 3: A máquina de estados**
 
 Cria `server/services/almoxarifado/thirdPartyStateMachine.js`:
 
@@ -1404,7 +1404,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: As três tabelas**
+- [x] **Step 4: As três tabelas**
 
 Em `server/services/almoxarifado/schema.js`, no bloco de `CREATE TABLE` do `initSchema` (junto das
 demais tabelas do módulo, depois de `devolucoes_material_almoxarifado`):
@@ -1497,7 +1497,7 @@ demais tabelas do módulo, depois de `devolucoes_material_almoxarifado`):
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_retornos_remessa_item ON retornos_remessa_item_almoxarifado(item_remessa_id)');
 ```
 
-- [ ] **Step 5: A ação de perfil**
+- [x] **Step 5: A ação de perfil**
 
 Em `server/services/almoxarifado/permissions.js`, dentro de `ACAO_PERFIS`, logo abaixo de
 `ajustar_material_cliente`:
@@ -1513,7 +1513,7 @@ Em `server/services/almoxarifado/permissions.js`, dentro de `ACAO_PERFIS`, logo 
   remessar_terceiro: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
 ```
 
-- [ ] **Step 6: Stub de `fornecedores` no harness**
+- [x] **Step 6: Stub de `fornecedores` no harness**
 
 Em `server/tests/helpers/testApp.js`, logo depois do `CREATE TABLE ... clientes`:
 
@@ -1534,12 +1534,12 @@ Em `server/tests/helpers/testApp.js`, logo depois do `CREATE TABLE ... clientes`
   )`);
 ```
 
-- [ ] **Step 7: Rodar o teste e ver passar**
+- [x] **Step 7: Rodar o teste e ver passar**
 
 Run: `cd server && node tests/api/remessaTerceiroEstados.api.test.js`
 Expected: PASS — 13 passed, 0 failed.
 
-- [ ] **Step 8: Sabotagens obrigatórias**
+- [x] **Step 8: Sabotagens obrigatórias**
 
 | # | Sabotagem | Falha esperada |
 |---|---|---|
@@ -1551,7 +1551,7 @@ Expected: PASS — 13 passed, 0 failed.
 | S6 | Remover o stub de `fornecedores` do harness | falha `[harness] a tabela fornecedores existe no harness` |
 | S7 | Trocar `remessar_terceiro: [ADMINISTRADOR, ALMOXARIFE]` por `Object.values(PERFIS)` | falha `[permissao][CONTROLE POSITIVO] quem nao movimenta tambem nao remessa` |
 
-- [ ] **Step 9: Suítes de servidor**
+- [x] **Step 9: Suítes de servidor**
 
 Run:
 ```
@@ -1562,7 +1562,7 @@ Expected: `test:api` **71/71 arquivos OK**, `test:almoxarifado` **42/0**, safeal
 sqlite **3/0**. `test:safealter` importa aqui: DDL novo no `initSchema` é exatamente o que ele
 cobre.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add server/services/almoxarifado/thirdPartyStateMachine.js \
@@ -1606,6 +1606,53 @@ o material SAI DO SITE, risco diferente de mover prateleira. Concedida aos mesmo
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
 ```
+
+#### O que a execução da Task 3 (`258f5d2`) achou que este plano não previa
+
+Entregue como planejado (as três tabelas, `thirdPartyStateMachine.js`, `remessar_terceiro`, stub de
+`fornecedores`). Quatro divergências, registradas porque **a Task 4 e a Etapa 8c repetem o padrão**:
+
+1. **A contagem do Step 7 estava errada: "13 passed" para um arquivo com 14 testes.** O arquivo
+   final tem **18** — quatro testes acrescentados porque o conjunto original tinha buracos reais,
+   não por zelo:
+   - **matriz completa 5×5** (`toda combinacao fora de TRANSICOES e recusada`): os testes do plano
+     verificam os caminhos felizes um a um e alguns recusados escolhidos a dedo. Uma **seta a mais**
+     colada por engano no objeto (`ENCERRADA: ['ENVIADA']`) não falha em nenhum deles a não ser no
+     de estado final — e uma seta a mais entre estados **não** finais (ex.: `ABERTA → ABERTA`) não
+     falharia em nenhum. A matriz compara validador × `TRANSICOES` em todas as 25 combinações.
+   - **controle positivo das listas auxiliares**: o teste do plano
+     (`for (const s of sm.PODE_ENCERRAR) …`) **passa trivialmente com as três listas vazias** — o
+     `for` não roda. É exatamente a metade que sozinha aprova "não pode nada". O teste novo fixa o
+     conteúdo exato das três e proíbe estado final dentro delas.
+   - **defaults e `UNIQUE`**: `quantidade_retornada` sem `DEFAULT 0` envenena a soma do retorno da
+     Task 6 (`NULL + 4 = NULL` em SQL), `status` sem `DEFAULT 'ABERTA'` faz a máquina de estados não
+     valer para linha criada por INSERT parcial, e `numero` sem `UNIQUE` deixa duas remessas com o
+     mesmo documento. Nenhum dos três aparecia em teste; sabotagem confirma que agora aparecem.
+   - **colunas do stub de `fornecedores`**: o teste do plano só checa que a tabela **existe** —
+     `CREATE TABLE fornecedores (id INTEGER)` passaria e quebraria no primeiro `LEFT JOIN` da
+     Task 8.
+2. **O "controle positivo" de permissão do plano passa ANTES de a ação existir.**
+   `can(user, 'remessar_terceiro')` é `false` porque `ACAO_PERFIS[acao] || []` — ou seja, o teste
+   `[CONTROLE POSITIVO] quem nao movimenta tambem nao remessa` foi **verde na rodada vermelha**
+   (10 passed / 8 failed). Quem é a metade positiva de verdade aqui é
+   `remessar_terceiro existe e vale para ADMINISTRADOR e ALMOXARIFE`. Acrescentado um terceiro
+   teste amarrando a lista à de `movimentar` (decisão 6): se alguém divergir as duas sem decidir,
+   o teste diz qual — e a resposta certa pode ser atualizar o teste com a razão escrita.
+3. **A primeira rodada de sabotagens não sabotou nada — e mostrou 18/0.** Duas causas, as duas do
+   tipo que esta base já registrou três vezes:
+   - **`python` não existe nesta máquina** (`Python was not found…` no stderr) e o script de
+     sabotagem era um heredoc python: as quatro sabotagens viraram no-op e o teste "passou". Só o
+     `md5sum` do arquivo revelou. **Sabotagem tem de falhar alto quando não se aplica** — o script
+     final (`sab.js`) sai com código 2 se o alvo não estiver no arquivo.
+   - **substituição de string pega a PRIMEIRA ocorrência, que pode ser de outra tabela.**
+     `numero TEXT UNIQUE NOT NULL` aparece **4 vezes** em `schema.js`; a sabotagem "tirar UNIQUE da
+     remessa" tirou de outra tabela e o teste seguiu 18/0. Âncora de sabotagem em `schema.js` tem
+     de incluir o `CREATE TABLE` da tabela alvo.
+4. **Gates medidos:** `test:api` **71/71 arquivos OK** (o número do Step 9 bateu — 69 na entrada,
+   mais este arquivo e o da Task 2), `test:almoxarifado` **42/0**, `test:validation` **4/0**,
+   `test:safealter` **3/0**, `test:sqlite` **3/0**. Rodada vermelha inicial: `Cannot find module
+   '../../services/almoxarifado/thirdPartyStateMachine'`; com a máquina pronta e o resto ainda não,
+   **10 passed / 8 failed**.
 
 ---
 
