@@ -690,7 +690,7 @@ EOF
 > `tiposDescarte` isenta só o **vencimento**, não o status. Por isso a implementação abaixo
 > **pré-valida o status do lote antes da entrada** quando `destino === 'SUCATA'`.
 
-- [ ] **Step 1: escrever o teste que falha** — `server/tests/api/devolucaoVinculo.api.test.js`:
+- [x] **Step 1: escrever o teste que falha** — `server/tests/api/devolucaoVinculo.api.test.js`:
 
 ```js
 /**
@@ -924,12 +924,23 @@ async function entregar(db, materialId, qtd, extra = {}) {
 })();
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd server && node tests/api/devolucaoVinculo.api.test.js`
 Expected: todos os testes de vínculo/lote falham (`movimentacao_saida_id` é ignorado hoje; a coluna nem existe, então `devolucaoRow(...).movimentacao_saida_id` vem `undefined`), e os de saldo puro (`quarentena`, `sucata`, controle positivo) passam. **Se `devolucao acima da quantidade entregue falha` passar aqui, pare** — significa que a validação já existia e o plano não corresponde ao repositório.
 
-- [ ] **Step 3: criar as duas colunas** — em `server/services/almoxarifado/schema.js`, logo depois do `CREATE TABLE IF NOT EXISTS devolucoes_material_almoxarifado (...)` (fecha na linha ~1026):
+> **Executado em 2026-08-12: `3 passed, 8 failed`**, exatamente a divisão prevista. As oito falhas,
+> textualmente: `devolucao acima da quantidade entregue falha: {"id":1}` / `201 !== 400`;
+> `devolucao parcial soma com a anterior no limite do entregue: 6 + 5 > 10 e passou: {"id":3}`;
+> `devolucao sem saida original valida falha: {"id":4}` / `201 !== 400`; `devolucao boa aumenta
+> saldo com movimentacao vinculada: o vinculo com a saida nao foi gravado` / `undefined !== 7`;
+> `devolucao herda o lote da saida original: a devolucao nao herdou o lote da saida` / `undefined
+> !== 1`; `devolucao avulsa de material com controle de lote exige lote informado` (veio 201);
+> `devolucao avulsa COM lote informado passa` / `undefined !== 2`; `devolucao para sucata com lote
+> bloqueado falha ANTES de creditar o estoque` (veio 201). Os três verdes eram `quarentena`,
+> `sucata` (regressão da Task 1) e o controle positivo — a medição do arquivo já sabia medir.
+
+- [x] **Step 3: criar as duas colunas** — em `server/services/almoxarifado/schema.js`, logo depois do `CREATE TABLE IF NOT EXISTS devolucoes_material_almoxarifado (...)` (fecha na linha ~1026):
 
 ```js
   // Etapa 7: vinculo da devolucao a entrega que ela desfaz, e o lote que voltou. Via safeAlter
@@ -942,7 +953,7 @@ Expected: todos os testes de vínculo/lote falham (`movimentacao_saida_id` é ig
   await safeAlter(db, 'ALTER TABLE devolucoes_material_almoxarifado ADD COLUMN lote_id INTEGER');
 ```
 
-- [ ] **Step 4: implementar as validações e a herança** — substituir o topo de `server/services/almoxarifado/returnService.js` (linhas 1-48, ou seja imports, constantes e a `registrarDevolucao` inteira) por:
+- [x] **Step 4: implementar as validações e a herança** — substituir o topo de `server/services/almoxarifado/returnService.js` (linhas 1-48, ou seja imports, constantes e a `registrarDevolucao` inteira) por:
 
 ```js
 const { dbRun, dbAll, dbGet } = require('./db');
@@ -1098,14 +1109,31 @@ E no `module.exports` do fim do arquivo, acrescentar a constante que a Task 4 co
 module.exports = { MOTIVOS, DESTINOS, TIPOS_SAIDA_DEVOLVIVEL, registrarDevolucao, listarDevolucoes };
 ```
 
-- [ ] **Step 5: rodar e ver passar**
+- [x] **Step 5: rodar e ver passar**
 
 Run: `cd server && node tests/api/devolucaoVinculo.api.test.js`
 Expected: `11 passed, 0 failed`.
 
 Controle positivo (obrigatório, e desfazer depois): comentar a linha `if (Number(quantidade) > restante)` e confirmar que `devolucao acima da quantidade entregue falha` e `devolucao parcial soma com a anterior no limite do entregue` falham; restaurar.
 
-- [ ] **Step 6: mover os dois testes de devolução de `loteControleObrigatorio` para o lado da exigência**
+> **Executado em 2026-08-12: `11 passed, 0 failed`.** Os **dois** controles positivos rodaram e
+> foram desfeitos:
+> 1. neutralizando `if (Number(quantidade) > restante)` → `9 passed, 2 failed`, exatamente os dois
+>    testes de quantidade previstos.
+> 2. **o que prova a pré-validação do lote na sucata** (não estava pedido no plano, e é o que
+>    torna a armadilha desta task verificável): neutralizando o `if (destinoFinal === 'SUCATA' &&
+>    loteFinalId)` → `10 passed, 1 failed`, com a mensagem `estado parcial: a entrada da sucata
+>    creditou o estoque e a saida falhou depois` e `7 !== 5`. O 7 é o estado parcial em números: a
+>    `ENTRADA_DEVOLUCAO` de 2 creditou e a `SUCATA` seguinte foi recusada pela guarda de status do
+>    motor. Sem a pré-validação, esse material entrava no estoque e nunca saía.
+>
+> O teste do Step 1 foi reforçado em relação ao plano: além do saldo, ele compara o **livro**
+> (lista de tipos em `movimentacoes_almoxarifado`) antes e depois da recusa e checa que nenhuma
+> linha ficou em `devolucoes_material_almoxarifado`. Só o saldo não bastaria — estado parcial é
+> justamente meia perna do par gravada no livro, e alguém poderia "consertar" o número sem
+> consertar o registro.
+
+- [x] **Step 6: mover os dois testes de devolução de `loteControleObrigatorio` para o lado da exigência**
 
 O arquivo tem uma seção "Lado 2: os quatro fluxos internos ISENTOS". A devolução deixa de ser um deles.
 Remover os dois testes `[devolucao] ENTRADA_DEVOLUCAO em material com controle_lote passa SEM lote` e
@@ -1141,13 +1169,27 @@ Remover os dois testes `[devolucao] ENTRADA_DEVOLUCAO em material com controle_l
 
 Atualizar também o cabeçalho de comentário do arquivo: onde ele diz "quatro chamadores internos ... returnService ENTRADA_DEVOLUCAO/SUCATA", acrescentar *"(a devolucao saiu desta lista na Etapa 7 — ver os testes marcados [devolucao] no lado 1)"*.
 
-- [ ] **Step 7: suítes inteiras**
+- [x] **Step 7: suítes inteiras**
 
 Run: `cd server && npm run test:api` — conferir em especial `loteControleObrigatorio`, `devolucaoDestinos` (Task 1 — o material dele **não** tem `controle_lote`, então continua verde), `bloqueioGuardas` (devolução para quarentena, material sem `controle_lote`) e `tests/almoxarifado.test.js`.
 Run: `cd server && npm run test:almoxarifado && npm run test:validation && npm run test:safealter && npm run test:sqlite`.
 `test:safealter` é o gate específico das duas colunas novas — se ele reclamar, é sinal de `ALTER` mal formado.
 
-- [ ] **Step 8: commit**
+> **Executado em 2026-08-12 (números reais):** `test:api` **59/59 arquivos de teste OK**
+> (`devolucaoVinculo` novo com 11 passed, 0 failed; `loteControleObrigatorio` 12 passed, 0 failed;
+> `devolucaoDestinos` 5 passed, 0 failed; `transferenciaRegras` da Task 2 já verde, 9 passed);
+> `test:almoxarifado` **43 passou, 0 falhou**; `test:safealter` **3 passed, 0 failed**;
+> `test:validation` **4 passed, 0 failed**; `test:sqlite` **3 passed, 0 failed**.
+
+> **Achado desta task que o plano não previa — mudança de comportamento embutida no `destinoFinal`.**
+> O código antigo comparava `destino` (o valor cru do body) nos `if` de destino, mas gravava
+> `destino || 'ESTOQUE'` na tabela. Logo, uma devolução **sem `destino`** gravava a linha dizendo
+> `ESTOQUE` e **não emitia movimentação nenhuma**: o material constava devolvido e o saldo nunca
+> voltava. Trocar os `if` para `destinoFinal` (como o plano manda, sem comentar o efeito) conserta
+> isso de passagem. Fica registrado aqui porque é conserto de bug entrando junto com feature —
+> nenhum teste cobria o caso, e a suíte inteira continua verde depois da mudança.
+
+- [x] **Step 8: commit** — `38d2391`
 
 ```bash
 git add server/services/almoxarifado/schema.js \
@@ -1621,7 +1663,7 @@ EOF
 > série (decisão 9). Enfiar `TRANSFERENCIA` na constante existente ligaria o seletor de série
 > junto, e o formulário exigiria séries que o motor nem lê nesse tipo.
 
-- [ ] **Step 1: escrever os testes que falham** — acrescentar ao fim de `client/src/components/almoxarifado/MovimentacoesAlmoxarifado.test.js`:
+- [x] **Step 1: escrever os testes que falham** — acrescentar ao fim de `client/src/components/almoxarifado/MovimentacoesAlmoxarifado.test.js`:
 
 ```js
 /**
@@ -1751,12 +1793,27 @@ describe('MovimentacoesAlmoxarifado — TRANSFERENCIA no formulário e DEVOLUCAO
 });
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd client && CI=true npx react-scripts test src/components/almoxarifado/MovimentacoesAlmoxarifado --watchAll=false`
 Expected: falham `Transferência é opção do formulário e Devolução não é`, os três de campos/lote da transferência, o do payload e o do hint. `o filtro do livro continua oferecendo Devolução` e o controle positivo da Saída **passam desde já** — é o comportamento que a task preserva.
 
-- [ ] **Step 3: implementar as constantes** — em `client/src/components/almoxarifado/MovimentacoesAlmoxarifado.js`, substituir o bloco `TIPOS_FORM`/`TIPOS` (linhas 16-30) por:
+> **Executado em 2026-08-12 (números reais): `5 failed, 10 passed, 15 total`.** As 5 falhas:
+> `Transferência é opção do formulário e Devolução não é` (o select não tem a opção),
+> `Transferência mostra origem E destino e o seletor de lote` (rótulos vieram sem nenhuma
+> localização — o tipo virou `""` porque a opção não existe), `na Transferência todos os lotes
+> ficam selecionáveis` (`#mov-lote` é `null`), `Transferência posta origem, destino e lote no
+> payload` (recebido `{material_id: 10, quantidade: 5, tipo: ""}`) e `um hint aponta a tela nova
+> de Devoluções`.
+>
+> **O plano previu 6 falhas e deu 5 — a diferença é informativa, não erro.** `Transferência NÃO
+> mostra seletor de série` passa desde já: como `TRANSFERENCIA` nem era opção do select, o tipo
+> ficava `""` e nenhum bloco de série renderizava. Ele é um teste de **regressão** (trava a
+> decisão 9 contra quem depois quiser enfiar `TRANSFERENCIA` em `TIPOS_SAIDA_LOTE`), não um teste
+> que a implementação faz virar verde. Quem contar só "falhou/passou" pode achar que o teste
+> mede algo que ele ainda não mede — ele só passa a medir de verdade **depois** do Step 3.
+
+- [x] **Step 3: implementar as constantes** — em `client/src/components/almoxarifado/MovimentacoesAlmoxarifado.js`, substituir o bloco `TIPOS_FORM`/`TIPOS` (linhas 16-30) por:
 
 ```js
 const TIPOS_FORM = [
@@ -1812,7 +1869,7 @@ const loteDisponivelParaTipo = (lote, tipo) => {
 };
 ```
 
-- [ ] **Step 4: trocar cada uso de `TIPOS_SAIDA_LOTE` pelo conjunto certo**
+- [x] **Step 4: trocar cada uso de `TIPOS_SAIDA_LOTE` pelo conjunto certo**
 
 Substituições exatas, uma a uma (as linhas se movem conforme você edita — case pelo texto, não pelo número):
 
@@ -1837,31 +1894,50 @@ Substituições exatas, uma a uma (as linhas se movem conforme você edita — c
 | select vs input do lote (~681) | `{TIPOS_SAIDA_LOTE.includes(form.tipo) ? (` | `{TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo) ? (` |
 | seletor de séries (~738) | `TIPOS_SAIDA_LOTE.includes(form.tipo)` | **não mexer** (série) |
 
-- [ ] **Step 5: acrescentar o hint da tela nova**
+- [x] **Step 5: acrescentar o hint da tela nova**
 
 No JSX do modal, logo abaixo do `<div className="almox-field">` do campo Tipo (depois do `</select>` de tipos e antes do fechamento daquele `div`), acrescentar:
 
 ```jsx
                     <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                      Devolução de material entregue é registrada na tela{' '}
+                      Devolução de material entregue é registrada na tela de{' '}
                       <a href="/almoxarifado/devolucoes">Devoluções</a> — lá a devolução fica ligada
                       à entrega de origem, com condição, destino e lote.
                     </small>
 ```
 
-- [ ] **Step 6: rodar e ver passar**
+> **CORREÇÃO — o plano se contradizia aqui (achado da execução de 2026-08-12).** O texto original
+> deste Step era `na tela{' '}<a>Devoluções</a>`, cujo `textContent` é `"na tela Devoluções"`. O
+> teste do Step 1 exige `/\/almoxarifado\/devolucoes|tela de Devolu/i`: o `href` **não** entra no
+> `textContent`, e `"na tela Devoluções"` **não** casa com `"tela de Devolu"` (falta o "de"). Ou
+> seja, seguir o Step 5 ao pé da letra deixava o Step 6 vermelho. Resolvido pelo lado da
+> implementação (`na tela de{' '}<a>Devoluções</a>`) e não afrouxando o teste: a asserção existe
+> para garantir que o operador leia **para onde ir**, e "na tela de Devoluções" é a frase que ele
+> lê. O bloco de código acima já está corrigido.
+
+- [x] **Step 6: rodar e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test src/components/almoxarifado/MovimentacoesAlmoxarifado --watchAll=false`
 Expected: todos os testes do arquivo passam (os antigos de estorno/SUCATA/PERDA inclusive).
 
 Controle positivo (obrigatório, e desfazer depois): remover `'TRANSFERENCIA'` de `TIPOS_COM_DESTINO` e confirmar que `Transferência mostra origem E destino e o seletor de lote` falha; restaurar.
 
-- [ ] **Step 7: gates de cliente**
+- [x] **Step 7: gates de cliente**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false` — suíte inteira.
 Run: `cd client && CI=true npx react-scripts build` — `CI=true` faz warning virar erro (constante não usada quebra o build; se você deixou `TIPOS_SAIDA_LOTE` sem uso, este passo pega).
 
-- [ ] **Step 8: commit**
+> **Executado em 2026-08-12 (números reais):** arquivo só — `15 passed, 15 total` (era `5 failed,
+> 10 passed`). Suíte inteira do cliente — **185 passed em 16 suítes**, 0 falhas (linha de base
+> antes desta task: 177 em 16; os 8 novos são os desta task). Build — `Compiled successfully.` com
+> `CI=true`, nenhum warning. Controle positivo executado e desfeito: remover `'TRANSFERENCIA'` de
+> `TIPOS_COM_DESTINO` derruba **2** testes (`Transferência mostra origem E destino e o seletor de
+> lote` e `Transferência posta origem, destino e lote no payload` → `2 failed, 13 passed`),
+> provando que é a constante que os sustenta. `TIPOS_SAIDA_LOTE` continua em uso (série: efeito de
+> busca, cardinalidade, `payload.serie_ids`, reset no onChange e o bloco de checkboxes), então o
+> build não acusa constante morta.
+
+- [x] **Step 8: commit**
 
 ```bash
 git add client/src/components/almoxarifado/MovimentacoesAlmoxarifado.js \
