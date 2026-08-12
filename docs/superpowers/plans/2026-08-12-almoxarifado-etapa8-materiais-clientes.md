@@ -3340,16 +3340,15 @@ MSG
 
 #### Correções feitas ao EXECUTAR a Task 9 (2026-08-12)
 
-Registrado aqui em vez de corrigido em silêncio. **O Step 1 (servidor) NÃO foi executado** — ver
-item 1; o resto da task está entregue e verde.
+Registrado aqui em vez de corrigido em silêncio. **O Step 1 (servidor) foi executado depois, em
+sessão separada** (ver "Fechamento do Step 1" abaixo); o resto da task saiu em `4eaba65`.
 
-1. **O Step 1 ficou pendente: a Task 9 rodou com o `server/` bloqueado.** Outro agente estava
+1. **O Step 1 ficou pendente na execução original: a Task 9 rodou com o `server/` bloqueado.** Outro agente estava
    editando `server/` em paralelo (Tasks 4-7) e a instrução desta execução foi não tocar em nada
-   lá. As três telas foram entregues sem o `LEFT JOIN clientes` das três rotas. **Consequência
-   real, não teórica:** hoje o selo aparece (todas as três respostas trazem
-   `proprietario_cliente_id`, porque os três SELECTs são `m.*`) mas **sem a razão social** — o
-   rótulo cai no genérico "Material de cliente". O delta que falta é exatamente o do Step 1 abaixo,
-   e enquanto ele não entrar o selo identifica *que é de cliente*, não *de qual*.
+   lá. As três telas foram entregues sem o `LEFT JOIN clientes` das rotas. **Consequência real,
+   não teórica:** entre `4eaba65` e `359a152` o selo aparecia mas **sem a razão social** — o rótulo
+   caía no genérico "Material de cliente", identificando *que é de cliente*, não *de qual*.
+   **Fechado em `359a152`** (ver "Fechamento do Step 1", abaixo).
 2. **O Step 1 do plano está incompleto: falta a query do livro de movimentações.** Ele nomeia três
    respostas (lista de materiais, detalhe do material, extrato) e esquece
    `GET /api/almoxarifado/movimentacoes` (`routes/almoxarifado.js:733`), que é a fonte da tela de
@@ -3382,8 +3381,37 @@ item 1; o resto da task está entregue e verde.
    `fs` e exige a regra `.almox-badge-cliente` com `color` e `background`: é o único teste da suíte
    que olha estilo e existe porque o badge sem cor já foi entregue nesta base uma vez.
 
-- [ ] **Step 1: backend — o nome do proprietário nas três respostas — NÃO FEITO (ver correção 1),
-  e incompleto como escrito (ver correção 2)**
+- [x] **Step 1: backend — o nome do proprietário nas QUATRO respostas — FEITO em `359a152`. O plano
+  escrevia três; a quarta (`GET /movimentacoes`) é a correção 2.**
+
+#### Fechamento do Step 1 (`359a152`, sessão posterior com `server/` livre)
+
+Quatro respostas alteradas, todas no padrão de `stockService.consultarEstoque`
+(`LEFT JOIN clientes cli ON …proprietario_cliente_id = cli.id`, `cli.razao_social as
+proprietario_cliente_nome`):
+
+| Resposta | Arquivo | O que mudou |
+| --- | --- | --- |
+| `GET /materiais` | `routes/almoxarifado.js` | `+ JOIN`, `+ razao_social` (o SELECT já era `m.*`) |
+| `GET /materiais/:id` | `routes/almoxarifado.js` | idem |
+| `GET /movimentacoes` | `routes/almoxarifado.js` | `+ JOIN`, `+ ma.proprietario_cliente_id` **e** `+ razao_social` — as colunas de `ma` são listadas uma a uma, então o **id** também precisou entrar (correção 2) |
+| `GET /materiais/:id/extrato` | `routes/almoxarifado/extended.js` | `+ JOIN`, `+ razao_social` |
+
+Nada mudou em `client/` — `SeloProprietario.js` já dava precedência ao dado da própria linha, então
+o nome do cliente passou a aparecer sozinho assim que o servidor começou a mandá-lo.
+
+**Sem fallback para "tabela `clientes` não existe".** `clientes` é core (criada por
+`server/index.js`, não pelo `initSchema` do módulo) e na Task 1 um JOIN novo quebrou testes com
+`no such table: clientes`. O harness (`tests/helpers/testApp.js`) **já** replica a tabela desde
+aquela task; o caminho certo é o harness refletir produção, não a query esconder o ambiente
+quebrado. (O `try/catch` que existe em `aux/ordens-servico` é de outra natureza: lá o JOIN é com
+`ordens_servico`, que pode faltar de verdade em ambiente parcial.)
+
+**Teste:** `tests/api/materialClienteSeloProprietario.api.test.js` (4 casos, um por resposta), com
+**controle positivo bilateral em cada um**: material de cliente traz a razão social **e** material
+nosso traz `null`. Verificado por sabotagem — trocar os quatro JOINs por `ON cli.id = 1` (que
+preenche todas as linhas) deixa os **quatro** casos vermelhos na metade do `null`. Um teste que só
+checasse a presença do nome seria aprovado por essa implementação errada.
 
 `routes/almoxarifado.js`, na lista `GET /api/almoxarifado/materiais` (~linha 171), acrescentar ao
 SELECT e ao JOIN:

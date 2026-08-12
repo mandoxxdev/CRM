@@ -29,7 +29,13 @@ Saldo de material de cliente totalmente segregado do próprio, com proprietário
 
 ### Frontend
 - [ ] Tela de materiais de cliente (hoje inexistente): posição por cliente, entradas, consumos, devoluções
-- [ ] Identificação visual de propriedade em todas as listagens que misturam materiais
+- [x] Identificação visual de propriedade em todas as listagens que misturam materiais — selo
+  `SeloProprietario` nas três listagens classificadas como "misturar é o correto" na auditoria da
+  Etapa 8 (catálogo de Materiais, livro de Movimentações, Extrato do item): UI em `4eaba65`, razão
+  social do dono vinda do servidor em `359a152` (entre os dois o selo dizia só "Material de
+  cliente", sem nomear quem). **Não coberto:** os relatórios que também misturam por decisão
+  (materiais bloqueados, materiais-sem-endereço) continuam sem selo — são leituras de relatório,
+  não as telas operacionais que a Task 9 delimitou; fica para quem fechar a feature decidir.
 
 ## Regras essenciais + testes de API exigidos
 
