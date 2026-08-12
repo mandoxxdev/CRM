@@ -3994,7 +3994,30 @@ O que ela consome desta task, já pronto e testado:
 
 ---
 
-### Task 8: rotas, schemas Zod e a varredura de prazo vencido
+### Task 8: rotas, schemas Zod e a varredura de prazo vencido — **FEITA (`11a73cb`)**
+
+> #### O que a execução da Task 8 achou que este plano dizia ERRADO
+>
+> 1. **A falha esperada da sabotagem S2 está errada no plano.** O plano diz que remover o
+>    `requirePermission` do POST faz falhar o teste do 403 — subentendendo que o *status* mudaria.
+>    **Não muda.** `thirdPartyService.assertPodeRemessar` também devolve 403 (defesa em
+>    profundidade), então sem o gate na rota o POST continua respondendo 403; o que muda é o
+>    **corpo**, que perde o campo `acao`. Medido: `+ undefined  - 'remessar_terceiro'`. Ou seja,
+>    **as sabotagens S1 e S2 são detectadas pela MESMA asserção** (`res.body.acao`), e um teste que
+>    só olhasse o status aprovaria as duas. Quem mexer nestas rotas não pode remover essa asserção.
+> 2. **`lote_id` do RETORNO não para no serviço — desce ao motor.** O teste que o plano trazia
+>    pronto não cobria `lote_id` no retorno; ao cobri-lo, um id fictício estoura com
+>    `Lote nao encontrado` (`stockService.js:544`, que resolve o lote e valida o material dele). O
+>    teste cria um lote real com `lotService.criarOuObterLote`. O `lote_id` do **item da remessa**
+>    não tem esse problema na criação (`criarRemessa` só o grava), mas terá **no envio**, pela mesma
+>    razão — a 8c precisa saber disso.
+> 3. **Contagem de testes do plano:** o Step 5 esperava "13 passed" e o arquivo que o plano trazia
+>    tinha **12** testes. A execução entregou **35**, porque o enunciado da task exigia prova campo
+>    a campo de que o schema não engole nada (o plano cobria só `peso` e `observacoes` do item).
+> 4. **Sabotagens executadas: 11**, não 6 — as 6 do plano (todas confirmadas, com a ressalva do
+>    item 1) mais 5 acrescentadas: `material_id` do retorno, `nota_fiscal` do retorno,
+>    `justificativa` do encerramento, `observacoes` do item (separada de `peso`) e a troca do
+>    `handleError` por um `catch` genérico de 500 na rota de encerrar.
 
 **Files:**
 - Modify: `server/services/almoxarifado/schemas.js` (4 schemas novos + export)
@@ -4018,7 +4041,7 @@ O que ela consome desta task, já pronto e testado:
   | PUT | `/api/almoxarifado/remessas-terceiros/:id/encerrar` | `remessar_terceiro` | `EncerramentoRemessaSchema` |
   | PUT | `/api/almoxarifado/remessas-terceiros/:id/cancelar` | `remessar_terceiro` | `CancelamentoRemessaSchema` |
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Cria `server/tests/api/remessaTerceiroRotas.api.test.js`:
 
@@ -4231,12 +4254,12 @@ const emTerceiros = async (db, id) => (await dbGet(db,
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/remessaTerceiroRotas.api.test.js`
 Expected: FAIL — todos os POST devolvem 404 (rota inexistente).
 
-- [ ] **Step 3: Schemas Zod**
+- [x] **Step 3: Schemas Zod**
 
 Em `server/services/almoxarifado/schemas.js`, antes do `module.exports`:
 
@@ -4319,7 +4342,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: As rotas**
+- [x] **Step 4: As rotas**
 
 Em `server/routes/almoxarifado/extended.js`, acrescentar ao bloco de imports:
 
@@ -4414,12 +4437,12 @@ As rotas (bloco novo, no fim do registrador):
     });
 ```
 
-- [ ] **Step 5: Rodar o teste e ver passar**
+- [x] **Step 5: Rodar o teste e ver passar**
 
 Run: `cd server && node tests/api/remessaTerceiroRotas.api.test.js`
 Expected: PASS — 13 passed, 0 failed.
 
-- [ ] **Step 6: Sabotagens obrigatórias**
+- [x] **Step 6: Sabotagens obrigatórias**
 
 | # | Sabotagem | Falha esperada |
 |---|---|---|
@@ -4430,7 +4453,7 @@ Expected: PASS — 13 passed, 0 failed.
 | S5 | Registrar `/vencidas` **depois** de `/:id` | falha `GET /vencidas lista so as atrasadas` com 404 |
 | S6 | Em `listarRemessas`, tirar `AND r.status IN ('ENVIADA','RETORNO_PARCIAL')` do filtro de vencidas | falha `GET /vencidas ...` na asserção da remessa **encerrada** |
 
-- [ ] **Step 7: Suítes completas**
+- [x] **Step 7: Suítes completas**
 
 Run:
 ```
@@ -4441,7 +4464,7 @@ cd server && npm run test:validation && npm run test:safealter && npm run test:s
 Expected: `test:api` **74/74 arquivos OK**, `test:almoxarifado` **42/0**, validation **4/0**,
 safealter **3/0**, sqlite **3/0**.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server/services/almoxarifado/schemas.js \
