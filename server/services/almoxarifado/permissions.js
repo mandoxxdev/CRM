@@ -27,6 +27,14 @@ const ACAO_PERFIS = {
   // A checagem real acontece no MOTOR (ownerRules.assertAjustePermitido), nao em requirePermission
   // na rota: o AJUSTE chega por duas rotas (v1 e v2) e as duas tem gate `movimentar`, o mais amplo.
   ajustar_material_cliente: [PERFIS.ADMINISTRADOR],
+  // Etapa 8b, decisao 6: acao propria porque a operacao tem RISCO PROPRIO — o material SAI DO
+  // SITE, o que e diferente de mover prateleira (`movimentar`). Mesmo criterio que a Etapa 8 usou
+  // para ajustar_material_cliente: quando a operacao muda a natureza do risco, ela ganha acao.
+  // Concedida hoje aos MESMOS perfis de `movimentar`: o ganho nao e restringir agora, e PODER
+  // restringir sem reescrever nada quando o cliente quiser (ex.: so ADMINISTRADOR manda material
+  // de cliente para fora). Exposta em GET /almoxarifado/minhas-permissoes automaticamente — a
+  // rota itera Object.keys(ACAO_PERFIS).
+  remessar_terceiro: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   aprovar_requisicao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   separar_emitir: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   requisitar: [PERFIS.ADMINISTRADOR, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.ALMOXARIFE],

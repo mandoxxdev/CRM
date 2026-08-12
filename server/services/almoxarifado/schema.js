@@ -1081,6 +1081,92 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE devolucoes_material_almoxarifado ADD COLUMN movimentacao_saida_id INTEGER');
   await safeAlter(db, 'ALTER TABLE devolucoes_material_almoxarifado ADD COLUMN lote_id INTEGER');
 
+  // ── Etapa 8b: remessas para terceiros ──────────────────────────────────────────────────────
+  // fornecedor_id e INTEGER SOLTO + fornecedor_nome espelhado, SEM FK. Padrao do modulo
+  // (lotes_almoxarifado, recebimentos_material_almoxarifado) e a razao e concreta: `fornecedores`
+  // e criada em server/index.js, NAO por este initSchema, e por isso pode nao existir — uma FK
+  // aqui faria a criacao da tabela falhar. O nome espelhado tambem preserva o documento se o
+  // fornecedor for renomeado depois.
+  //
+  // proprietario_cliente_id: quando a chapa que vai galvanizar e de um CLIENTE, a remessa e
+  // isenta da guarda de OS/projeto (ownerRules.TIPOS_ISENTOS_DONO) — mas com contrapartida
+  // OBRIGATORIA: o dono fica registrado aqui e o documento de remessa nomeia o cliente. Sem isso
+  // a isencao viraria um caminho para material de cliente sair do predio sem rastro de
+  // propriedade, o oposto do que a Etapa 8 construiu. Nao se cria conceito novo: e o mesmo
+  // proprietario_cliente_id de materiais_almoxarifado.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS remessas_terceiro_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE NOT NULL,
+    fornecedor_id INTEGER,
+    fornecedor_nome TEXT,
+    tipo_servico TEXT,
+    os_id INTEGER,
+    projeto_id INTEGER,
+    pedido_compra_id INTEGER,
+    proprietario_cliente_id INTEGER,
+    proprietario_cliente_nome TEXT,
+    prazo_previsto DATE,
+    status TEXT NOT NULL DEFAULT 'ABERTA',
+    observacoes TEXT,
+    criado_por INTEGER,
+    criado_por_nome TEXT,
+    enviado_em DATETIME,
+    enviado_por INTEGER,
+    encerrado_em DATETIME,
+    encerrado_por INTEGER,
+    encerramento_destino TEXT,
+    encerramento_justificativa TEXT,
+    cancelado_em DATETIME,
+    cancelado_por INTEGER,
+    cancelamento_motivo TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // `enviado_em` no ITEM (nao so no cabecalho) e o claim de idempotencia do envio, no molde
+  // exato de recebimentos_material_itens_almoxarifado.entrada_estoque_em: de duas execucoes
+  // (reprocessamento, dois cliques em "Enviar") so uma casa `enviado_em IS NULL` e move estoque.
+  // A Etapa 7 mostrou o custo de nao ter isso: reprocessar nota com falha no meio duplicava
+  // estoque.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_remessa_terceiro_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    remessa_id INTEGER NOT NULL REFERENCES remessas_terceiro_almoxarifado(id),
+    material_id INTEGER NOT NULL REFERENCES materiais_almoxarifado(id),
+    quantidade REAL NOT NULL,
+    quantidade_retornada REAL DEFAULT 0,
+    lote_id INTEGER,
+    peso REAL,
+    observacoes TEXT,
+    enviado_em DATETIME,
+    movimentacao_envio_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // O retorno e uma LISTA DE RESULTADOS, nao um escalar "quantidade que voltou" (decisao 7 do
+  // design). Na 8b `material_id` e SEMPRE igual ao material do item enviado; na Etapa 8c
+  // (transformacao chapa -> pecas cortadas + sobra) ele passa a poder ser OUTRO, e o vinculo de
+  // rastreabilidade item enviado -> resultado ja existe. Modelar como escalar agora obrigaria a
+  // 8c a reescrever a tabela.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS retornos_remessa_item_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    remessa_id INTEGER NOT NULL REFERENCES remessas_terceiro_almoxarifado(id),
+    item_remessa_id INTEGER NOT NULL REFERENCES itens_remessa_terceiro_almoxarifado(id),
+    material_id INTEGER NOT NULL REFERENCES materiais_almoxarifado(id),
+    quantidade REAL NOT NULL,
+    lote_id INTEGER,
+    nota_fiscal TEXT,
+    observacoes TEXT,
+    movimentacao_id INTEGER,
+    recebido_por INTEGER,
+    recebido_por_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_remessa_terceiro_status ON remessas_terceiro_almoxarifado(status)');
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_remessa_terceiro_prazo ON remessas_terceiro_almoxarifado(prazo_previsto)');
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_remessa_terceiro ON itens_remessa_terceiro_almoxarifado(remessa_id)');
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_retornos_remessa_item ON retornos_remessa_item_almoxarifado(item_remessa_id)');
+
   // ── Sobras/Scrap ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS sobras_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

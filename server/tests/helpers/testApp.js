@@ -33,6 +33,21 @@ async function createTestApp(options = {}) {
     status TEXT DEFAULT 'ativo'
   )`);
 
+  // `fornecedores` é tabela CORE (criada por server/index.js no boot), fora do initSchema do
+  // almoxarifado — mesmo caso de `clientes` na Etapa 8. A partir da Etapa 8b as rotas de remessa
+  // fazem LEFT JOIN nela para resolver o nome do terceiro, então o harness precisa refletir a
+  // produção. STUB AQUI, NUNCA FALLBACK NA QUERY: um `if (!tableExists) return []` na query
+  // esconderia em teste um erro que existiria em produção — foi a lição registrada na Etapa 8.
+  // Subconjunto mínimo das colunas de index.js: o módulo só lê razao_social, nome_fantasia, cnpj
+  // e filtra por status (ver receiptService.listarFornecedoresAux).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS fornecedores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    razao_social TEXT NOT NULL,
+    nome_fantasia TEXT,
+    cnpj TEXT,
+    status TEXT DEFAULT 'ativo'
+  )`);
+
   // Diretório temporário para uploads (multer do módulo exige um PERSISTENT_DATA_DIR)
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'almox-test-'));
 
