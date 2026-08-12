@@ -604,13 +604,21 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
   const regularizacaoPendente = regras.pendente ? 1 : 0;
 
-  // ── Guarda do dono (Etapa 8, decisoes 5 e 6) ────────────────────────────────────────────────
+  // ── Guarda do dono (Etapa 8, decisoes 5, 6 e 7) ─────────────────────────────────────────────
   // Depois de avaliarRegrasVinculo de proposito: as duas regras se somam, nao se substituem — um
   // SAIDA_PRODUCAO de material de cliente precisa passar nas DUAS (ter vinculo, e o vinculo ser
   // do dono). Antes de qualquer efeito de saldo, como todas as guardas deste motor.
   // O `emergencial` vai junto porque aqui ele NAO bypassa nada, ao contrario da linha acima —
   // ver o comentario longo em ownerRules.assertSaidaPermitida antes de "uniformizar".
   await ownerRules.assertSaidaPermitida(db, material, tipo, { os_id, projeto_id, emergencial });
+  // Ajuste de material de cliente exige a acao dedicada `ajustar_material_cliente` (decisao 7).
+  // A checagem vive AQUI, no motor, e nao em requirePermission na rota: o AJUSTE chega por DUAS
+  // rotas (POST /movimentacoes v1 e /movimentacoes/v2) e as duas tem gate `movimentar`, o mais
+  // amplo — proteger so uma deixaria a outra aberta, e travar a rota inteira barraria ajuste de
+  // material NOSSO, que segue sendo ajustar_estoque. A decisao e POR MATERIAL, e so o motor tem
+  // o material em maos. Depende de `avaliarRegrasVinculo` ter rodado antes: e ele que ja recusa
+  // AJUSTE sem justificativa, e a auditoria gravada aqui embute essa justificativa.
+  await ownerRules.assertAjustePermitido(db, material, tipo, { quantidade, justificativa }, user);
 
   // Restrições de endereço (Etapa 2, Task 2): validadas ANTES de qualquer efeito de saldo —
   // inclusive antes das UPDATEs da própria TRANSFERENCIA logo abaixo, que grava direto em

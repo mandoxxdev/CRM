@@ -19,6 +19,14 @@ const ACAO_PERFIS = {
   editar_material: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.ENGENHARIA],
   movimentar: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   ajustar_estoque: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
+  // Etapa 8, decisao 7: ajustar saldo de material que NAO e nosso mexe no numero que o cliente
+  // vai cobrar. Mais estreita que ajustar_estoque de proposito — GESTOR ajusta o nosso, so
+  // ADMINISTRADOR ajusta o de terceiro. Fluxo de aprovacao assincrono (solicita -> pendente ->
+  // alguem aprova -> efetiva) foi DESCARTADO no design: e maquina de estados nova com tela de
+  // pendencias e notificacao, do tamanho de uma etapa inteira (fica com a feature 06).
+  // A checagem real acontece no MOTOR (ownerRules.assertAjustePermitido), nao em requirePermission
+  // na rota: o AJUSTE chega por duas rotas (v1 e v2) e as duas tem gate `movimentar`, o mais amplo.
+  ajustar_material_cliente: [PERFIS.ADMINISTRADOR],
   aprovar_requisicao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   separar_emitir: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   requisitar: [PERFIS.ADMINISTRADOR, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.ALMOXARIFE],
