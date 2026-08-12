@@ -844,6 +844,25 @@ EOF
 
 ### Task 2: a conferência de inventário para de cobrar o que está no terceiro
 
+> **EXECUTADA em `06e7333`** — 7 testes (o plano previa 5; dois controles positivos foram
+> acrescentados, motivo abaixo). Gates medidos: `test:api` **70/70 arquivos OK**,
+> `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
+> `test:sqlite` **3/0**.
+>
+> **Dois testes a mais do que o plano pedia, e o motivo de cada um:**
+> 1. `material legado com em_terceiros NULL continua sendo cobrado pelo total` — o plano mandava
+>    provar o `COALESCE` **por sabotagem manual** (S3, com um `UPDATE ... = NULL` avulso). Sabotagem
+>    que só existe no roteiro não protege ninguém depois; virou teste do arquivo.
+> 2. `[CONTROLE POSITIVO] contar o total fisico de material no terceiro ACUSA divergencia` — o teste
+>    de divergência do plano só provava que contar 70 dá **zero**. Sozinho, ele seria aprovado por
+>    uma divergência que zerasse sempre. O par prova que contar 100 dá **+30**.
+>
+> **O plano errou a consequência de S3 (sem `COALESCE`), e para menos.** Ele previa
+> `quantidade_sistema` virando `null`. O real é pior:
+> `itens_conferencia_almoxarifado.quantidade_sistema` é `NOT NULL`, o `INSERT` falha e o
+> `POST /conferencias` **inteiro** volta 500 — uma única linha legada com a coluna `NULL` impede
+> abrir a conferência do almoxarifado todo, não só a daquele material. Verificado na sabotagem.
+
 **Files:**
 - Modify: `server/routes/almoxarifado.js` (handler `POST /api/almoxarifado/conferencias`, o
   `SELECT id, quantidade_atual FROM materiais_almoxarifado WHERE ativo = 1` ~linha 887)
@@ -861,7 +880,7 @@ uma diferença fantasma, e o operador "corrigiria" o saldo para menos. E **só**
 da contagem: quarentena e bloqueio continuam somando, porque aquele material **está** na prateleira
 e tem de ser contado.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Cria `server/tests/api/conferenciaEmTerceiros.api.test.js`:
 
@@ -964,7 +983,7 @@ async function esperadoNaConferencia(app, db, materialId) {
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/conferenciaEmTerceiros.api.test.js`
 Expected: FAIL em `conferencia desconta o que esta em terceiros do esperado` com
@@ -972,7 +991,7 @@ Expected: FAIL em `conferencia desconta o que esta em terceiros do esperado` com
 controle positivo já passam — e é isso que os torna úteis: eles têm de **continuar** passando
 depois da mudança.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `server/routes/almoxarifado.js`, no handler `POST /api/almoxarifado/conferencias`, trocar o
 SELECT que monta os itens:
@@ -1015,12 +1034,12 @@ e o `INSERT` correspondente (o campo lido muda de `m.quantidade_atual` para `m.q
 > retenções, e a contagem só pode subtrair uma. Chamar o helper aqui seria o jeito mais rápido de
 > introduzir exatamente o bug que o controle positivo desta task existe para pegar.
 
-- [ ] **Step 4: Rodar o teste e ver passar**
+- [x] **Step 4: Rodar o teste e ver passar**
 
 Run: `cd server && node tests/api/conferenciaEmTerceiros.api.test.js`
 Expected: PASS — 5 passed, 0 failed.
 
-- [ ] **Step 5: Sabotagens obrigatórias**
+- [x] **Step 5: Sabotagens obrigatórias**
 
 | # | Sabotagem | Falha esperada |
 |---|---|---|
@@ -1028,7 +1047,7 @@ Expected: PASS — 5 passed, 0 failed.
 | S2 | Trocar a expressão por `${disponivelSql()}` (descontar as quatro) | falha `[CONTROLE POSITIVO] conferencia continua cobrando material bloqueado e em quarentena` — é a sabotagem que prova que a task não é "descontar retenção", é "descontar ausência física" |
 | S3 | Trocar por `quantidade_atual - quantidade_em_terceiros` **sem `COALESCE`** | falha em material legado com a coluna `NULL`: `quantidade_sistema` vira `null` — rodar com `UPDATE materiais_almoxarifado SET quantidade_em_terceiros = NULL WHERE id = ?` antes de contar |
 
-- [ ] **Step 6: Suítes de servidor**
+- [x] **Step 6: Suítes de servidor**
 
 Run:
 ```
@@ -1039,7 +1058,7 @@ Expected: `test:api` **70/70 arquivos OK**, `test:almoxarifado` **42/0**. Atenç
 `tests/api/` que já exercitavam conferência — se algum quebrar, verificar se ele criava material
 com `quantidade_em_terceiros` diferente de zero (não deveria).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add server/routes/almoxarifado.js server/tests/api/conferenciaEmTerceiros.api.test.js
