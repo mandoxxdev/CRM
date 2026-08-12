@@ -3,6 +3,7 @@ const { registrarAuditoria } = require('./audit');
 const { can } = require('./permissions');
 const alertService = require('./alertService');
 const { avaliarRegrasVinculo } = require('./movementRules');
+const ownerRules = require('./ownerRules');
 const { TIPOS_MOVIMENTO } = require('./schema');
 // seriesService nao importa stockService de volta — sem ciclo.
 const seriesService = require('./seriesService');
@@ -602,6 +603,14 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   const regras = avaliarRegrasVinculo(tipo, { os_id, projeto_id, centro_custo_id, justificativa, referencia, emergencial });
   if (!regras.ok) throw Object.assign(new Error(regras.erro), { status: 400 });
   const regularizacaoPendente = regras.pendente ? 1 : 0;
+
+  // ── Guarda do dono (Etapa 8, decisoes 5 e 6) ────────────────────────────────────────────────
+  // Depois de avaliarRegrasVinculo de proposito: as duas regras se somam, nao se substituem — um
+  // SAIDA_PRODUCAO de material de cliente precisa passar nas DUAS (ter vinculo, e o vinculo ser
+  // do dono). Antes de qualquer efeito de saldo, como todas as guardas deste motor.
+  // O `emergencial` vai junto porque aqui ele NAO bypassa nada, ao contrario da linha acima —
+  // ver o comentario longo em ownerRules.assertSaidaPermitida antes de "uniformizar".
+  await ownerRules.assertSaidaPermitida(db, material, tipo, { os_id, projeto_id, emergencial });
 
   // Restrições de endereço (Etapa 2, Task 2): validadas ANTES de qualquer efeito de saldo —
   // inclusive antes das UPDATEs da própria TRANSFERENCIA logo abaixo, que grava direto em
@@ -1224,6 +1233,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     throw Object.assign(new Error('Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)'), { status: 400 });
   }
 
+  // SEGUNDA declaracao de tiposSaida deste arquivo (a outra esta em registrarMovimentacao). Sao
+  // duplicadas de proposito historico, e esquecer uma ao acrescentar tipo torna o motor
+  // assimetrico — a saida entra pela regra nova e o estorno dela nao.
+  //
+  // Etapa 8: a guarda do dono (ownerRules.assertSaidaPermitida) NAO e chamada aqui, e isso e
+  // decisao, nao esquecimento: o cancelamento DEVOLVE a chapa do cliente ao estoque — o oposto
+  // de aplica-la no cliente errado. Espelhar a guarda aqui deixaria a saida errada sem como ser
+  // desfeita, que e exatamente o contrario do que a guarda quer.
   const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
   const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
   const material = await getMaterial(db, mov.material_id);
