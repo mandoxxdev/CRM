@@ -1025,6 +1025,15 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
 
+  // Etapa 7: vinculo da devolucao a entrega que ela desfaz, e o lote que voltou. Via safeAlter
+  // porque a tabela ja existe em producao. `movimentacao_saida_id` e o que permite validar
+  // "nao devolver mais do que foi entregue" e dar rastro; `lote_id` e o lote herdado da saida
+  // (ou informado a mao numa devolucao avulsa) — sem ele, o saldo devolvido de material
+  // controlado ficava preso: entrava com lote NULL e a saida seguinte, que exige lote, nao
+  // achava nenhum.
+  await safeAlter(db, 'ALTER TABLE devolucoes_material_almoxarifado ADD COLUMN movimentacao_saida_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE devolucoes_material_almoxarifado ADD COLUMN lote_id INTEGER');
+
   // ── Sobras/Scrap ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS sobras_material_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
