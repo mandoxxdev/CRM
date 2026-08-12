@@ -335,6 +335,10 @@ const Layout = () => {
     { path: '/almoxarifado/movimentacoes', icon: FiActivity, label: 'Movimentações' },
     { path: '/almoxarifado/lotes', icon: FiLayers, label: 'Lotes e Séries' },
     { path: '/almoxarifado/devolucoes', icon: FiCornerUpLeft, label: 'Devoluções' },
+    // Etapa 8: "Devoluções" acima é a da Etapa 7 (o material VOLTA para o estoque); a devolução
+    // AO cliente mora dentro desta tela, e é o movimento oposto. Nomes vizinhos de propósito
+    // separados por rótulo — "Materiais de Clientes" é onde se olha o que é de terceiro.
+    { path: '/almoxarifado/materiais-cliente', icon: FiBriefcase, label: 'Materiais de Clientes' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
