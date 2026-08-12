@@ -3262,7 +3262,52 @@ MSG
   respostas.
 - Produces: nada consumido por tasks posteriores.
 
-- [ ] **Step 1: backend — o nome do proprietário nas três respostas**
+#### Correções feitas ao EXECUTAR a Task 9 (2026-08-12)
+
+Registrado aqui em vez de corrigido em silêncio. **O Step 1 (servidor) NÃO foi executado** — ver
+item 1; o resto da task está entregue e verde.
+
+1. **O Step 1 ficou pendente: a Task 9 rodou com o `server/` bloqueado.** Outro agente estava
+   editando `server/` em paralelo (Tasks 4-7) e a instrução desta execução foi não tocar em nada
+   lá. As três telas foram entregues sem o `LEFT JOIN clientes` das três rotas. **Consequência
+   real, não teórica:** hoje o selo aparece (todas as três respostas trazem
+   `proprietario_cliente_id`, porque os três SELECTs são `m.*`) mas **sem a razão social** — o
+   rótulo cai no genérico "Material de cliente". O delta que falta é exatamente o do Step 1 abaixo,
+   e enquanto ele não entrar o selo identifica *que é de cliente*, não *de qual*.
+2. **O Step 1 do plano está incompleto: falta a query do livro de movimentações.** Ele nomeia três
+   respostas (lista de materiais, detalhe do material, extrato) e esquece
+   `GET /api/almoxarifado/movimentacoes` (`routes/almoxarifado.js:733`), que é a fonte da tela de
+   Movimentações — uma das três telas que a própria task manda selar. Aquele SELECT lista as
+   colunas de `ma` **uma a uma** (`ma.nome as material_nome, ma.codigo as material_codigo,
+   ma.unidade`), então nem `proprietario_cliente_id` chega ao cliente: seguir o plano como escrito
+   deixaria o selo do livro **sempre invisível**, e nenhum teste com dado mockado pegaria isso.
+   **Resolvido sem servidor:** a tela já carrega o catálogo inteiro (`loadMateriais`, para o
+   seletor do formulário) e resolve o dono por `material_id`, preferindo o dado da própria linha se
+   um dia ele passar a vir do servidor. Se o Step 1 for feito depois, acrescentar
+   `cli.razao_social as proprietario_cliente_nome` **também** nessa query é o caminho direto — o
+   código do cliente já dá precedência a ele.
+3. **O selo virou componente (`SeloProprietario.js`), não JSX copiado três vezes.** O plano
+   escrevia o `<span className="almox-badge almox-badge-cliente">` inline em cada tela. O nome da
+   classe repetido em três arquivos é o caminho conhecido para o badge sem cor (Etapa 7): basta um
+   dos três divergir. O componente também elimina o `{m.proprietario_cliente_id && (...)}` do
+   plano, que **renderiza `0` na tela** se o id vier `0` — a Global Constraint da etapa diz que só
+   `NULL` é "nosso", então `0` é um dono, e o `&&` solto trata como falso.
+4. **A cor não é a do plano.** O plano propunha roxo (`rgba(139,92,246,…)`, `#7c3aed`), que é a
+   mesma família de `.almox-badge-devolucao` (`#8b5cf6`) — e as duas aparecem **lado a lado** no
+   livro (coluna Tipo com `DEVOLUCAO` roxo, coluna Material com o selo roxo). Usado indigo
+   (`#4338ca`) com **borda**, que nenhum outro badge tem: distingue por forma, não só por matiz.
+5. **Fallback de rótulo quando o nome não vem** (`DONO_SEM_NOME = 'Material de cliente'`). Sem
+   ele, o estado de hoje (item 1) renderizaria um selo com texto vazio — presente no DOM,
+   invisível na tela, exatamente a falha muda do badge sem CSS.
+6. **Testes além do que o plano pedia.** O plano pedia um teste na tela de Materiais. Foram
+   escritos os três (Materiais 5 casos, Movimentações 3, Extrato 2), cada tela com sua metade de
+   controle positivo — selar uma tela não prova nada sobre as outras duas, e as três consomem
+   fontes de dados **diferentes**. Um dos cinco casos de Materiais lê o `Almoxarifado.css` com
+   `fs` e exige a regra `.almox-badge-cliente` com `color` e `background`: é o único teste da suíte
+   que olha estilo e existe porque o badge sem cor já foi entregue nesta base uma vez.
+
+- [ ] **Step 1: backend — o nome do proprietário nas três respostas — NÃO FEITO (ver correção 1),
+  e incompleto como escrito (ver correção 2)**
 
 `routes/almoxarifado.js`, na lista `GET /api/almoxarifado/materiais` (~linha 171), acrescentar ao
 SELECT e ao JOIN:
@@ -3297,7 +3342,7 @@ Mesma adição em `GET /api/almoxarifado/materiais/:id` (~linha 273).
         WHERE m.id = ?`, [req.params.id]);
 ```
 
-- [ ] **Step 2: CSS do selo**
+- [x] **Step 2: CSS do selo** — indigo com borda, nao o roxo do plano (correcao 4)
 
 Em `client/src/components/almoxarifado/Almoxarifado.css`, junto das outras `almox-badge-*`:
 
@@ -3308,7 +3353,7 @@ Em `client/src/components/almoxarifado/Almoxarifado.css`, junto das outras `almo
 .almox-badge-cliente { background: rgba(139,92,246,0.14); color: #7c3aed; }
 ```
 
-- [ ] **Step 3: teste de client que falha**
+- [x] **Step 3: teste de client que falha** — tres arquivos, nao um (correcao 6)
 
 `client/src/components/almoxarifado/MateriaisAlmoxarifado.test.js` — novo `describe` (ou arquivo
 novo no molde de `LotesAlmoxarifado.test.js`: `jest.mock` de `../../services/api`,
@@ -3343,12 +3388,12 @@ test('material de cliente mostra o selo com a razao social', async () => {
 });
 ```
 
-- [ ] **Step 4: rodar e ver falhar**
+- [x] **Step 4: rodar e ver falhar**
 
 Run: `cd client && CI=true npx react-scripts test src/components/almoxarifado/MateriaisAlmoxarifado --watchAll=false`
 Expected: FAIL — `expect(received).not.toBeNull()` (o selo não existe).
 
-- [ ] **Step 5: implementar o selo nas três telas**
+- [x] **Step 5: implementar o selo nas três telas** — via `SeloProprietario.js` (correção 3)
 
 `MateriaisAlmoxarifado.js` — na célula do código (a que já renderiza `{m.codigo}`, ~linha 249),
 logo depois do código:
@@ -3390,7 +3435,7 @@ e na coluna da tabela (que recebe o objeto do material, não só o texto), o `<s
         )}
 ```
 
-- [ ] **Step 6: rodar e ver passar**
+- [x] **Step 6: rodar e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test --watchAll=false && CI=true npx react-scripts build`
 Expected: suíte verde (incluindo o teste novo), build limpo.
@@ -3399,7 +3444,22 @@ Controle positivo: remover temporariamente a condição `{m.proprietario_cliente
 toda linha) e rodar — esperado falhar no `expect(linhaNossa.querySelector(...)).toBeNull()`.
 Restaurar.
 
-- [ ] **Step 7: commit**
+**Executado (2026-08-12).** Antes de implementar: `3 failed suites, 7 failed / 18 passed` — os 7
+casos que exigem o selo, incluindo o que lê o CSS (`.almox-badge-cliente` não existia). Depois:
+`25 passed`. Gates: **206 testes em 19 suítes** (era 196/17: +10 casos, +2 arquivos) e
+`Compiled successfully.`
+
+Três sabotagens, uma de cada vez, restauradas com `git diff` limpo:
+1. condição de propriedade sempre falsa (selo em todo material) → **4 falhas**, uma em cada tela
+   (`[controle positivo] material nosso NÃO mostra selo` em Materiais, Movimentações e Extrato) mais
+   o rótulo do seletor. É a metade que prova que o selo *identifica* em vez de só *aparecer*;
+2. classe renomeada para `.almox-badge-proprietario` no CSS (o selo continua no DOM, sai sem cor —
+   a falha exata da Etapa 7) → falha só o caso que lê o CSS. Nenhum teste de comportamento pega
+   essa, e é por isso que esse caso existe;
+3. `|| DONO_SEM_NOME` removido → falha `material de cliente sem o nome do dono ainda é
+   identificado`, provando que o fallback não é decorativo enquanto o Step 1 não entrar.
+
+- [x] **Step 7: commit**
 
 ```bash
 git add server/routes/almoxarifado.js server/routes/almoxarifado/extended.js client/src/components/almoxarifado/MateriaisAlmoxarifado.js client/src/components/almoxarifado/MovimentacoesAlmoxarifado.js client/src/components/almoxarifado/ExtratoMaterialModal.js client/src/components/almoxarifado/Almoxarifado.css client/src/components/almoxarifado/MateriaisAlmoxarifado.test.js
