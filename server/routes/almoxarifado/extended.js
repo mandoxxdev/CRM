@@ -6,7 +6,7 @@ const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO }
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -349,6 +349,58 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });
+
+  // ── Devolucao AO CLIENTE (Etapa 8, decisao 9) ────────────────────────────────────────────────
+  // NAO CONFUNDIR com POST /api/almoxarifado/devolucoes (Etapa 7, returnService), logo abaixo
+  // neste mesmo arquivo: la o material VOLTA para o estoque (entrada, tela /almoxarifado/
+  // devolucoes); AQUI ele SAI do predio de volta para quem e dele. Sao movimentos de direcoes
+  // OPOSTAS com nomes parecidos — e a confusao mais provavel de quem ler este arquivo depois.
+  //
+  // Rota DEDICADA, nao a v2 generica, e isso e decisao tomada (ver TIPOS_DEDICADOS em schema.js):
+  // o documento de devolucao e obrigatorio (MovimentacaoSchema nao tem como exigi-lo sem exigir
+  // de TODOS os tipos) e a operacao so faz sentido para material com proprietario. A v2 tem gate
+  // `movimentar`, o mais amplo do modulo — aceitar o tipo la deixaria as duas exigencias
+  // decorativas. Mesmo precedente dos TIPOS_RETENCAO, tambem barrados na rota generica porque
+  // cada um tem servico dono com gate proprio.
+  //
+  // A guarda de OS/projeto do dono NAO se aplica: DEVOLUCAO_CLIENTE esta em
+  // ownerRules.TIPOS_ISENTOS_DONO (o destino E o proprio proprietario). Nao repetir a checagem
+  // aqui — o motor ja a roda, e duas fontes da mesma regra divergem na primeira mudanca.
+  app.post('/api/almoxarifado/materiais-cliente/devolucoes', auth, requirePermission('movimentar'),
+    validate(DevolucaoClienteSchema), async (req, res) => {
+      try {
+        const { material_id, quantidade, documento_devolucao, lote_id, serie_ids,
+          localizacao_origem_id, observacoes } = req.body;
+        const material = await dbGet(db,
+          `SELECT m.id, m.codigo, m.nome, m.proprietario_cliente_id, cli.razao_social as proprietario_cliente_nome
+             FROM materiais_almoxarifado m
+             LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id
+            WHERE m.id = ?`, [material_id]);
+        if (!material) return res.status(404).json({ error: 'Material nao encontrado' });
+        if (!material.proprietario_cliente_id) {
+          return res.status(400).json({
+            error: `O material ${material.codigo} nao pertence a nenhum cliente — nao ha para quem `
+              + 'devolver. Para tirar material proprio do estoque use Movimentacoes (saida, sucata '
+              + 'ou perda).',
+          });
+        }
+        const resultado = await stockService.registrarMovimentacao(db, req.user, {
+          material_id,
+          tipo: 'DEVOLUCAO_CLIENTE',
+          quantidade,
+          motivo: `Devolucao ao cliente ${material.proprietario_cliente_nome}`,
+          documento_vinculado: documento_devolucao,
+          cliente_id: material.proprietario_cliente_id,
+          lote_id: lote_id || null,
+          serie_ids: serie_ids || [],
+          localizacao_origem_id: localizacao_origem_id || null,
+          observacoes: observacoes || null,
+        // exigeLote/exigeSerie: esta rota tem como informar os dois (a tela da Task 8 oferece
+        // seletor de lote e de serie), entao declara a exigencia igual as rotas v1/v2.
+        }, { exigeLote: true, exigeSerie: true });
+        res.status(201).json(resultado);
+      } catch (e) { handleError(res, e); }
+    });
 
   // ── Reservas ──
   app.get('/api/almoxarifado/reservas', auth, async (req, res) => {

@@ -21,8 +21,15 @@ const { registrarAuditoria } = require('./audit');
  * Tipos ISENTOS da regra de OS/projeto para material de cliente. Cada um com o motivo, porque
  * uma lista de isencoes sem motivo vira lixo que ninguem ousa mexer:
  *  - DEVOLUCAO_CLIENTE: o destino E o proprio proprietario (decisao 9). Exigir OS do dono para
- *    devolver ao dono nao faz sentido. O tipo ainda NAO existe em TIPOS_MOVIMENTO — quem o criar
- *    (Task 6) nao precisa voltar aqui: a isencao ja esta preparada. Ate la a string e inerte.
+ *    devolver ao dono nao faz sentido. O tipo EXISTE desde a Task 6 (schema.js TIPOS_MOVIMENTO +
+ *    rota dedicada POST /materiais-cliente/devolucoes); ate ela a string era inerte, e este
+ *    comentario dizia isso — deixou de ser verdade.
+ *    Hoje a isencao esta duplamente coberta: o tipo esta aqui E fora de TIPOS_SAIDA_COM_DONO,
+ *    e os dois `if` de assertSaidaPermitida saem cedo. A entrada nesta lista continua sendo a
+ *    que MANDA, porque e testada antes: se alguem classificar DEVOLUCAO_CLIENTE como "saida com
+ *    dono" (o que ele literalmente e) e o acrescentar a TIPOS_SAIDA_COM_DONO, e esta linha que
+ *    impede a devolucao ao dono de passar a exigir OS do dono. Coberto por
+ *    tests/api/materialClienteDevolucao.api.test.js, que faz exatamente essa mutacao.
  *  - TRANSFERENCIA: mover a chapa do cliente de prateleira nao e aplica-la.
  *  - AJUSTE/AJUSTE_POSITIVO/AJUSTE_NEGATIVO: isentos da regra de VINCULO, mas caem na permissao
  *    dedicada `ajustar_material_cliente` (decisao 7, Task 4).

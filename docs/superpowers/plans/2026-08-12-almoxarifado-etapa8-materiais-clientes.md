@@ -2097,7 +2097,57 @@ MSG
 > guarda "só material com dono". O precedente do módulo é exatamente esse: `TIPOS_RETENCAO` já é
 > excluído de `TIPOS_MOVIMENTO_ROTA` porque cada um tem serviço dono com gate próprio.
 
-- [ ] **Step 1: escrever o teste que falha — `materialClienteDevolucao.api.test.js`**
+#### Correções e achados feitos ao EXECUTAR a Task 6 (2026-08-12)
+
+Registrado aqui em vez de corrigido em silêncio.
+
+1. **A isenção da guarda do dono era INDISTINGUÍVEL por teste de caixa-preta, e o plano não
+   percebia.** `DEVOLUCAO_CLIENTE` está em `ownerRules.TIPOS_ISENTOS_DONO` **e** fora de
+   `TIPOS_SAIDA_COM_DONO` — `assertSaidaPermitida` sai cedo pelos **dois** `if`. O teste do
+   plano (`POST` → espera 201) passaria **igual** com a entrada apagada de `TIPOS_ISENTOS_DONO`:
+   ele não prova nada sobre a isenção. Verificado por sabotagem. O teste commitado acrescenta,
+   dentro do mesmo caso, (a) asserção direta sobre a constante e (b) um bloco que **põe
+   `DEVOLUCAO_CLIENTE` em `TIPOS_SAIDA_COM_DONO` em memória** e repete a devolução — que é a
+   situação real contra a qual a isenção protege (alguém classificar o tipo como "saída com
+   dono", o que ele literalmente é). Sabotagem 3c confirmou que esse bloco sozinho pega:
+   `Material T8-DEV-4 pertence ao cliente Cliente Alfa LTDA e so pode sair com OS ou projeto
+   DESSE cliente`.
+2. **O plano previa 7 testes; o arquivo commitado tem 8.** O oitavo é
+   `estorno de uma DEVOLUCAO_CLIENTE devolve o material ao estoque`. Sem ele, a segunda edição
+   de `tiposSaida` (a de `cancelarMovimentacao`) ficaria **sem cobertura nenhuma** — o plano
+   mandava fazer a edição e justificá-la, mas nenhum dos 7 testes a tocava. Sabotagem 5 (tirar o
+   tipo só do segundo `tiposSaida`) deixa os outros 7 verdes.
+3. **A justificativa do plano para o segundo `tiposSaida` está imprecisa.** Ele diz "senão a
+   devolução credita em vez de debitar num deles". Não é o que acontece: o `if-chain` de
+   `cancelarMovimentacao` **não tem `else` final**, então um tipo ausente das listas não credita
+   nada — a movimentação é marcada `cancelado = 1` e ganha linha de `ESTORNO` com
+   `saldo_anterior == saldo_posterior`. Ou seja, o livro diz "desfeito" e o material **nunca
+   volta** ao saldo. Medido na sabotagem 5: saldo ficou em 18 depois do cancelamento de uma
+   devolução de 12 sobre 30. Pior que o descrito, e silencioso. O comentário no código conta a
+   versão correta.
+4. **`TIPOS_ISENTOS_DONO` continua a fonte única — nada foi duplicado.** A rota dedicada não
+   repete a checagem de OS/projeto; quem a roda é o motor. O comentário da Task 3 em
+   `ownerRules.js` dizia "o tipo ainda NÃO existe em `TIPOS_MOVIMENTO`", o que deixou de ser
+   verdade — foi corrigido no mesmo commit, com a nota de que a lista continua sendo a que manda
+   por ser testada antes de `TIPOS_SAIDA_COM_DONO`.
+5. **`REGRAS_VINCULO.DEVOLUCAO_CLIENTE` não muda comportamento** (`avaliarRegrasVinculo` já
+   devolve `ok` para tipo ausente do mapa) — entrou pelo mesmo motivo que `TRANSFERENCIA` na
+   Etapa 7: transformar ausência em decisão escrita. Está dito no comentário para ninguém
+   procurar o enforcement que não existe ali.
+6. **O primeiro teste passa antes E depois da implementação, por motivos diferentes.** Antes,
+   porque `DEVOLUCAO_CLIENTE` nem estava em `TIPOS_MOVIMENTO`; depois, porque o filtro
+   `TIPOS_DEDICADOS` o exclui. Sabotagem 1 (tirar `!TIPOS_DEDICADOS.includes(t)`) é o que separa
+   os dois casos — sem ela o teste seria decorativo.
+
+**Cinco sabotagens executadas, todas com vermelho na mensagem certa e restauração byte a byte
+(`diff` vazio):** (1) filtro `TIPOS_DEDICADOS` fora → `DEVOLUCAO_CLIENTE vazou para a lista da
+rota generica`; (2) `documento_devolucao` fora do `DevolucaoClienteSchema` → a devolução **sem
+documento** voltou **201 com saldo 100→90** (a armadilha do Zod, exatamente); (3) tipo fora de
+`TIPOS_ISENTOS_DONO`; (3b) ordem dos `if` da guarda invertida → **passou, e devia passar** — a
+lista de isentos continua retornando; (4) tipo fora do 1º `tiposSaida` → `4 passed, 4 failed`;
+(5) tipo fora do 2º `tiposSaida` → só o teste de estorno cai.
+
+- [x] **Step 1: escrever o teste que falha — `materialClienteDevolucao.api.test.js`**
 
 ```js
 /**
@@ -2222,12 +2272,12 @@ const totalDoMaterial = async (db, id) =>
 })();
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd server && node tests/api/materialClienteDevolucao.api.test.js`
 Expected: FAIL — a rota `/materiais-cliente/devolucoes` devolve 404 em todos os casos.
 
-- [ ] **Step 3: declarar o tipo em `schema.js`**
+- [x] **Step 3: declarar o tipo em `schema.js`**
 
 Em `TIPOS_MOVIMENTO`, junto de `SUCATA`/`PERDA`:
 
@@ -2252,7 +2302,7 @@ const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE'];
 
 Exportar `TIPOS_DEDICADOS` junto de `TIPOS_MOVIMENTO`/`TIPOS_RETENCAO`.
 
-- [ ] **Step 4: excluir da rota genérica e criar o schema dedicado (`schemas.js`)**
+- [x] **Step 4: excluir da rota genérica e criar o schema dedicado (`schemas.js`)**
 
 ```js
 const TIPOS_MOVIMENTO_ROTA = TIPOS_MOVIMENTO.filter(
@@ -2280,7 +2330,7 @@ const DevolucaoClienteSchema = z.object({
 
 Exportar `DevolucaoClienteSchema` no `module.exports`.
 
-- [ ] **Step 5: regra de vínculo e lista de saída**
+- [x] **Step 5: regra de vínculo e lista de saída**
 
 `movementRules.js`, em `REGRAS_VINCULO`, junto de `SUCATA`/`PERDA`:
 
@@ -2299,7 +2349,7 @@ senão a devolução credita em vez de debitar num deles e o estorno fica assim�
   const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE'];
 ```
 
-- [ ] **Step 6: rota dedicada em `extended.js`**
+- [x] **Step 6: rota dedicada em `extended.js`**
 
 Junto das outras rotas de movimentação:
 
@@ -2348,7 +2398,7 @@ Junto das outras rotas de movimentação:
 
 `DevolucaoClienteSchema` entra no require dos schemas no topo de `extended.js`.
 
-- [ ] **Step 7: rodar e ver passar**
+- [x] **Step 7: rodar e ver passar**
 
 Run: `cd server && node tests/api/materialClienteDevolucao.api.test.js`
 Expected: `7 passed, 0 failed`. Depois `cd server && npm run test:api`.
@@ -2357,7 +2407,7 @@ Controle positivo: remover temporariamente `!TIPOS_DEDICADOS.includes(t)` do fil
 `TIPOS_MOVIMENTO_ROTA` e rodar — esperado falhar em `DEVOLUCAO_CLIENTE nao e criavel pela rota v2
 generica`. Restaurar.
 
-- [ ] **Step 8: commit**
+- [x] **Step 8: commit**
 
 ```bash
 git add server/services/almoxarifado/schema.js server/services/almoxarifado/schemas.js server/services/almoxarifado/movementRules.js server/services/almoxarifado/stockService.js server/routes/almoxarifado/extended.js server/tests/api/materialClienteDevolucao.api.test.js

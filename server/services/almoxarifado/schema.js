@@ -47,6 +47,13 @@ const TIPOS_MOVIMENTO = [
   'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'SAIDA_PRODUCAO',
   'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'TRANSFERENCIA', 'RESERVA', 'LIBERACAO_RESERVA',
   'BLOQUEIO', 'DESBLOQUEIO', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'RETRABALHO',
+  // Etapa 8, decisao 9: devolver ao cliente e SAIDA — o material sai do predio de volta para quem
+  // e dele. NAO CONFUNDIR com a devolucao da Etapa 7 (tela /almoxarifado/devolucoes, tipo
+  // ENTRADA_DEVOLUCAO), onde o material VOLTA para o estoque. Sao movimentos de direcoes OPOSTAS
+  // com nomes parecidos — e a confusao mais provavel de quem ler este codigo depois.
+  // Passa pelo motor de proposito: assim lote, serie e endereco funcionam, que e justamente o
+  // que a ilha de materiais de cliente nao dava.
+  'DEVOLUCAO_CLIENTE',
   // Etapa 5 — quarentena. Simetria de BLOQUEIO/DESBLOQUEIO: mexem em coluna de retencao
   // sem tocar o fisico, porque o material esta no galpao o tempo todo.
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO',
@@ -74,6 +81,18 @@ const TIPOS_RETENCAO = [
   'BLOQUEIO', 'DESBLOQUEIO',
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO',
 ];
+
+// Tipos que exigem ROTA DEDICADA e por isso NAO entram na rota generica de movimentacao (mesma
+// logica de TIPOS_RETENCAO acima, motivo diferente):
+//   DEVOLUCAO_CLIENTE -> POST /materiais-cliente/devolucoes (gate `movimentar` + guarda do dono)
+// Ele exige numero de documento de devolucao, que MovimentacaoSchema nao tem como campo
+// obrigatorio, e so vale para material com proprietario. Entrar pela v2 significaria ou tornar o
+// documento obrigatorio para todos os tipos (quebra tudo), ou fazer o motor validar campo que so
+// existe para UM tipo (regra de um tipo espalhada pelo motor inteiro). A v2 tem gate `movimentar`,
+// o mais amplo do modulo: aceitar o tipo la tornaria decorativas as exigencias proprias da rota
+// dedicada — bastaria mandar {tipo:'DEVOLUCAO_CLIENTE'} para a v2 e sair material de cliente sem
+// documento nenhum.
+const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE'];
 
 const FAMILIAS_SEED = [
   ['PAR', 'Parafusos e Porcas', 'Elementos de fixação — parafusos, porcas e arruelas'],
@@ -1317,5 +1336,6 @@ module.exports = {
   SETORES_REQUISICAO,
   TIPOS_MOVIMENTO,
   TIPOS_RETENCAO,
+  TIPOS_DEDICADOS,
   TIPOS_REQUISICAO,
 };

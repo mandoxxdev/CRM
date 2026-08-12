@@ -504,7 +504,12 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   let saldoPosterior = saldoAnterior;
 
   const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
-  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
+  // Etapa 8: DEVOLUCAO_CLIENTE e SAIDA (decisao 9) — o material sai do predio de volta para o dono.
+  // NAO CONFUNDIR com a devolucao da Etapa 7 (ENTRADA_DEVOLUCAO, returnService), onde o material
+  // VOLTA para o estoque: direcoes opostas, nomes parecidos. Estando aqui, ela debita saldo, exige
+  // lote/serie e resolve endereco de origem como qualquer outra saida — que e o ponto de faze-la
+  // passar pelo motor em vez de ser mais uma ilha.
+  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE'];
   const tiposAjuste = ['AJUSTE'];
   // Consumo de reserva: só quando a saída cita `reserva_id`. RESERVA/LIBERACAO_RESERVA também
   // carregam reserva_id, mas não consomem nada — são o lançamento da própria reserva.
@@ -1249,8 +1254,17 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   // decisao, nao esquecimento: o cancelamento DEVOLVE a chapa do cliente ao estoque — o oposto
   // de aplica-la no cliente errado. Espelhar a guarda aqui deixaria a saida errada sem como ser
   // desfeita, que e exatamente o contrario do que a guarda quer.
+  //
+  // Etapa 8, Task 6: DEVOLUCAO_CLIENTE entra em tiposSaida NOS DOIS lugares, e a decisao foi
+  // tomada olhando este ramo, nao copiada do outro. Aqui nao ha "guarda a mais": o if-chain
+  // abaixo nao tem `else` final, entao tipo que nao esta em tiposEntrada/tiposSaida/AJUSTE/
+  // TRANSFERENCIA/BLOQUEIO/DESBLOQUEIO seria marcado `cancelado = 1` e ganharia linha de ESTORNO
+  // com saldo_anterior == saldo_posterior — o livro diria que a devolucao foi desfeita e o
+  // material NUNCA voltaria ao saldo. Assimetria silenciosa, do tipo que esta etapa inteira caca.
+  // (Contraste deliberado com a guarda do dono acima, que fica SO em registrarMovimentacao: la o
+  // motivo para nao espelhar e que o cancelamento devolve a chapa ao estoque.)
   const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
-  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA'];
+  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE'];
   const material = await getMaterial(db, mov.material_id);
 
   // Serie (Etapa 6b, Task 5): guarda ANTES do claim `cancelado = 1` — antes de marcar a

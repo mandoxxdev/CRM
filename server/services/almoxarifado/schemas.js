@@ -1,6 +1,6 @@
 /** Schemas Zod compartilhados do almoxarifado (padrão da fundação — ver validation.js). */
 const { z } = require('zod');
-const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
+const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS } = require('./schema');
 
 const CentroCustoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
@@ -32,6 +32,11 @@ const AlmoxarifadoSchema = z.object({
  *    gate `ajustar_estoque`, conseguia o mesmo efeito mandando {tipo:'BLOQUEIO'} para a v2) e
  *    permitia soltar quarentena com {tipo:'LIBERACAO_INSPECAO'} sem permissão `inspecionar`, sem
  *    registro de inspeção e sem baixar o retido do item — que ficava indecidível para sempre.
+ *  - TIPOS_DEDICADOS (Etapa 8): mesmo raciocínio dos de retenção, motivo diferente.
+ *    `DEVOLUCAO_CLIENTE` exige documento de devolução e material com dono, exigências que só
+ *    existem na rota dedicada (`POST /materiais-cliente/devolucoes`, `DevolucaoClienteSchema`).
+ *    Aceitá-lo aqui tornaria decorativas as duas: `documento_vinculado` é opcional no
+ *    `MovimentacaoSchema`, então sairia material de cliente sem documento nenhum.
  *
  * O que SOBRA é o conjunto operacional: os seis tipos do formulário (TIPOS_FORM em
  * MovimentacoesAlmoxarifado.js: ENTRADA, SAIDA, AJUSTE, DEVOLUCAO, SUCATA e PERDA — os dois
@@ -47,7 +52,7 @@ const AlmoxarifadoSchema = z.object({
  * é lá que mora o gate correto.
  */
 const TIPOS_MOVIMENTO_ROTA = TIPOS_MOVIMENTO.filter(
-  (t) => t !== 'ESTORNO' && !TIPOS_RETENCAO.includes(t),
+  (t) => t !== 'ESTORNO' && !TIPOS_RETENCAO.includes(t) && !TIPOS_DEDICADOS.includes(t),
 );
 
 const MovimentacaoSchema = z.object({
@@ -102,6 +107,33 @@ const RegularizacaoSchema = z.object({
 
 const CancelamentoSchema = z.object({
   motivo: z.string().min(1, 'motivo é obrigatório'),
+});
+
+/**
+ * Devolução ao cliente (Etapa 8, Task 6, decisão 9).
+ *
+ * NÃO é a devolução da Etapa 7 (`POST /devolucoes`, `returnService`), onde o material **volta**
+ * para o estoque. Aqui o material **sai** do prédio de volta para quem é dele — direções opostas,
+ * nomes parecidos.
+ *
+ * `documento_devolucao` é obrigatório **aqui e só aqui**, e é a razão de esta rota existir
+ * separada da v2 genérica: exigi-lo no `MovimentacaoSchema` obrigaria documento em toda
+ * movimentação do módulo.
+ *
+ * ATENÇÃO ao mexer: `validate()` troca `req.body` pelo objeto parseado, e `z.object` descarta
+ * chave não declarada **em silêncio** (já mordeu duas vezes: `reserva_id` na Etapa 4, `lote_id`
+ * na Etapa 6). Todo campo que a rota lê de `req.body` precisa estar declarado abaixo — inclusive
+ * `documento_devolucao`, que sem declaração sumiria e a rota recusaria toda devolução como se
+ * faltasse documento.
+ */
+const DevolucaoClienteSchema = z.object({
+  material_id: z.number().int().positive(),
+  quantidade: z.number().gt(0, 'quantidade deve ser maior que zero'),
+  documento_devolucao: z.string().trim().min(1, 'informe o numero do documento de devolucao'),
+  lote_id: z.number().int().positive().optional(),
+  serie_ids: z.array(z.coerce.number().int().positive()).max(1000).optional(),
+  localizacao_origem_id: z.number().int().optional(),
+  observacoes: z.string().optional(),
 });
 
 // Booleano tolerante: aceita 0/1 (como persistido no SQLite) ou true/false (como o front pode
@@ -278,6 +310,6 @@ const RequisicaoSchema = z.object({
 
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
-  RegularizacaoSchema, CancelamentoSchema,
+  RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
   MaterialSchema, MaterialUpdateSchema, RequisicaoSchema, ItemRequisicaoSchema,
 };

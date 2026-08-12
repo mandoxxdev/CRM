@@ -33,6 +33,20 @@ const REGRAS_VINCULO = {
   // foi descartado por ser mais regra para explicar e testar do que valor entregue — a tela tem
   // campo de motivo OPCIONAL, que vai para o livro.
   TRANSFERENCIA: { vinculo: 'nenhum' },
+
+  // Etapa 8, decisao 9: DEVOLUCAO_CLIENTE e isenta de vinculo com OS/projeto — o destino da
+  // devolucao E o proprio proprietario, entao exigir OS do dono para devolver ao dono nao faz
+  // sentido. A guarda do dono (ownerRules.TIPOS_ISENTOS_DONO) tambem a isenta, pelo mesmo motivo.
+  // O que substitui o vinculo como controle e o documento de devolucao, obrigatorio na rota
+  // dedicada (DevolucaoClienteSchema).
+  //
+  // Como TRANSFERENCIA acima: declarar com 'nenhum' nao muda comportamento (avaliarRegrasVinculo
+  // ja devolve ok para tipo ausente do mapa) — muda a LEITURA, porque a ausencia deixa de poder
+  // ser lida como esquecimento.
+  //
+  // NAO CONFUNDIR com a devolucao da Etapa 7 (ENTRADA_DEVOLUCAO), onde o material VOLTA para o
+  // estoque. Aqui ele SAI do predio.
+  DEVOLUCAO_CLIENTE: { vinculo: 'nenhum' },
 };
 
 function avaliarRegrasVinculo(tipo, params) {
