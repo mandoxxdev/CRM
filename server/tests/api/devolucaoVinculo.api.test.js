@@ -234,6 +234,167 @@ async function entregar(db, materialId, qtd, extra = {}) {
     assert.strictEqual(devolucao.n, 0, 'a devolucao recusada ficou gravada na tabela de devolucoes');
   });
 
+  // ── Rota de leitura: as saidas que uma devolucao pode citar (Task 4) ────────────────────────
+  //
+  // Estes testes moram no MESMO arquivo da validacao de proposito: a rota existe para ALIMENTAR
+  // a validacao acima, e o `saldo_devolvivel` que ela publica tem de ser exatamente o numero que
+  // `validarSaidaOriginal` usa para recusar. Em arquivos separados os dois lados poderiam
+  // divergir sem que nada percebesse — a tela ofereceria devolver 6 e o servidor responderia que
+  // so cabem 4, e o operador nao teria como saber quem esta certo.
+
+  await test('saidas-elegiveis lista as entregas do material com o saldo devolvivel', async () => {
+    const mat = await novoMaterial(db, { qtd: 100 });
+    const saidaA = await entregar(db, mat, 10);
+    const saidaB = await entregar(db, mat, 4);
+    await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 3, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaA });
+
+    const res = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const porId = Object.fromEntries(res.body.map((s) => [s.id, s]));
+    assert.strictEqual(porId[saidaA].quantidade_devolvida, 3);
+    assert.strictEqual(porId[saidaA].saldo_devolvivel, 7);
+    assert.strictEqual(porId[saidaB].quantidade_devolvida, 0);
+    assert.strictEqual(porId[saidaB].saldo_devolvivel, 4);
+    assert.ok(res.body[0].id > res.body[1].id, 'a lista tem de vir da mais recente para a mais antiga');
+  });
+
+  // O TESTE QUE AMARRA AS DUAS PONTAS, na MESMA execucao: le o saldo_devolvivel publicado pela
+  // rota e usa aquele numero — nao um literal — contra a validacao de registrarDevolucao. Se um
+  // dos lados mudar de definicao (contar devolucao de outro material, ignorar saida cancelada,
+  // arredondar diferente), este teste cai; dois testes com numeros escritos a mao nao cairiam.
+  await test('[duas pontas] o saldo_devolvivel da rota e exatamente o limite que a validacao aplica', async () => {
+    const mat = await novoMaterial(db, { qtd: 100 });
+    const saidaId = await entregar(db, mat, 9);
+    await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 2, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaId });
+
+    const lista = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+    assert.strictEqual(lista.status, 200, JSON.stringify(lista.body));
+    const linha = lista.body.find((s) => s.id === saidaId);
+    assert.ok(linha, 'a rota nao devolveu a saida que acabou de ser parcialmente devolvida');
+    const saldo = linha.saldo_devolvivel;
+    assert.ok(saldo > 0, `cenario invalido: a rota publicou saldo ${saldo}`);
+
+    // (a) saldo + 1 tem de ser RECUSADO — a rota nao pode prometer mais do que a validacao aceita.
+    const demais = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: saldo + 1, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaId });
+    assert.strictEqual(demais.status, 400,
+      `a rota publicou saldo ${saldo} e a validacao aceitou ${saldo + 1}: a tela promete mais do que o servidor cumpre`);
+
+    // (b) exatamente o saldo publicado tem de PASSAR — a rota nao pode prometer menos, senao a
+    //     tela bloqueia uma devolucao que o servidor aceitaria e o operador fica sem saida.
+    const exato = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: saldo, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaId });
+    assert.strictEqual(exato.status, 201,
+      `a rota publicou saldo ${saldo} e a validacao recusou esse mesmo numero: ${JSON.stringify(exato.body)}`);
+
+    // (c) depois de consumir o saldo inteiro, a rota tem de publicar 0 e a validacao recusar 1.
+    const depois = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+    assert.strictEqual(depois.body.find((s) => s.id === saidaId).saldo_devolvivel, 0,
+      'a rota continua oferecendo saldo depois de a saida ter sido devolvida por inteiro');
+    const maisUm = await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 1, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaId });
+    assert.strictEqual(maisUm.status, 400, `saldo 0 e a validacao aceitou mais 1: ${JSON.stringify(maisUm.body)}`);
+  });
+
+  // Linha zerada VOLTA na lista de proposito — "ja devolvido por inteiro" e informacao util, nao
+  // ruido; a tela a mostra desabilitada. Se ela sumisse, o operador procuraria uma entrega que o
+  // sistema decidiu esconder.
+  await test('saidas-elegiveis mantem a saida ja devolvida por inteiro, com saldo 0', async () => {
+    const mat = await novoMaterial(db, { qtd: 100 });
+    const saidaId = await entregar(db, mat, 5);
+    await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 5, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaId });
+
+    const res = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+    const linha = res.body.find((s) => s.id === saidaId);
+    assert.ok(linha, 'a saida totalmente devolvida sumiu da lista');
+    assert.strictEqual(linha.saldo_devolvivel, 0);
+  });
+
+  await test('saidas-elegiveis nao oferece descarte, ajuste, entrada nem saida cancelada', async () => {
+    const mat = await novoMaterial(db, { qtd: 100 });
+    const saidaBoa = await entregar(db, mat, 5);
+    const cancelada = await entregar(db, mat, 5);
+    await request(app).post(`/api/almoxarifado/movimentacoes/${cancelada}/cancelar`).send({ motivo: 'errada' });
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: mat, tipo: 'SUCATA', quantidade: 2, justificativa: 'quebrou' });
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: mat, tipo: 'PERDA', quantidade: 1, justificativa: 'sumiu' });
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: mat, tipo: 'ENTRADA', quantidade: 9, motivo: 'compra' });
+
+    const res = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+    assert.deepStrictEqual(res.body.map((s) => s.id), [saidaBoa],
+      `a lista precisa conter so a entrega devolvivel, veio ${JSON.stringify(res.body.map((s) => `${s.id}:${s.tipo}`))}`);
+  });
+
+  await test('saidas-elegiveis traz as series entregues naquela saida', async () => {
+    const mat = await novoMaterial(db, { serie: true });
+    const entrada = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'ENTRADA', quantidade: 2, series: ['SN-EL-1', 'SN-EL-2'], motivo: 'setup' });
+    assert.strictEqual(entrada.status, 201, JSON.stringify(entrada.body));
+    const series = await dbAll(db, 'SELECT id, numero FROM series_almoxarifado WHERE material_id = ? ORDER BY numero', [mat]);
+    const saida = await request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: mat, tipo: 'SAIDA', quantidade: 1, serie_ids: [series[0].id], justificativa: 'entregue ao tecnico' });
+    assert.strictEqual(saida.status, 201, JSON.stringify(saida.body));
+
+    const res = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+    const linha = res.body.find((s) => s.id === saida.body.id);
+    assert.ok(linha, 'a saida com serie nao apareceu na lista');
+    assert.deepStrictEqual(linha.series.map((s) => s.numero), ['SN-EL-1']);
+    assert.strictEqual(linha.series[0].id, series[0].id);
+  });
+
+  // A tela comeca pelo material e mostra a entrega: sem estes campos o operador ve uma lista de
+  // datas e quantidades iguais e nao sabe qual delas e a dele.
+  await test('saidas-elegiveis identifica a entrega: lote, requisicao, OS, projeto e quem retirou', async () => {
+    const mat = await novoMaterial(db, { lote: true });
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'ELEG-L1' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: 10, lote_id: lote.id, motivo: 'setup' });
+    const req1 = await dbRun(db,
+      `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome)
+       VALUES ('REQ-ELEG-1', 1, 'Solicitante Teste')`);
+    const saidaId = await entregar(db, mat, 4, {
+      lote_id: lote.id, requisicao_id: req1.lastID, os_id: 77, projeto_id: 88 });
+
+    const res = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+    const linha = res.body.find((s) => s.id === saidaId);
+    assert.ok(linha, 'a entrega nao apareceu na lista');
+    assert.strictEqual(linha.lote_id, lote.id);
+    assert.strictEqual(linha.lote, 'ELEG-L1', `o codigo do lote congelado nao veio: ${linha.lote}`);
+    assert.strictEqual(linha.requisicao_id, req1.lastID);
+    assert.strictEqual(linha.requisicao_numero, 'REQ-ELEG-1');
+    assert.strictEqual(linha.os_id, 77);
+    assert.strictEqual(linha.projeto_id, 88);
+    assert.strictEqual(linha.usuario_nome, ADMIN.nome);
+    assert.ok(linha.created_at, 'a data da entrega nao veio');
+    assert.strictEqual(linha.tipo, 'SAIDA');
+    assert.strictEqual(linha.quantidade, 4);
+  });
+
+  // CONTROLE POSITIVO da separacao por material: a soma de devolucoes e a lista tem de olhar
+  // SOMENTE a movimentacao citada. Se o SUM esquecesse o `WHERE movimentacao_saida_id`, o saldo
+  // de uma saida cairia por causa de devolucao de outra — e nenhum dos testes acima pegaria,
+  // porque todos usam um material com uma unica saida devolvida.
+  await test('[controle positivo] devolucao de uma saida nao baixa o saldo da outra', async () => {
+    const mat = await novoMaterial(db, { qtd: 100 });
+    const saidaA = await entregar(db, mat, 6);
+    const saidaB = await entregar(db, mat, 6);
+    await request(app).post('/api/almoxarifado/devolucoes')
+      .send({ material_id: mat, quantidade: 4, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE', movimentacao_saida_id: saidaA });
+
+    const res = await request(app).get(`/api/almoxarifado/devolucoes/saidas-elegiveis?material_id=${mat}`);
+    const porId = Object.fromEntries(res.body.map((s) => [s.id, s]));
+    assert.strictEqual(porId[saidaA].saldo_devolvivel, 2);
+    assert.strictEqual(porId[saidaB].saldo_devolvivel, 6,
+      'a devolucao da saida A baixou o saldo da saida B — a soma nao esta presa a movimentacao citada');
+  });
+
+  await test('saidas-elegiveis sem material_id responde 400', async () => {
+    const res = await request(app).get('/api/almoxarifado/devolucoes/saidas-elegiveis');
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

@@ -577,6 +577,17 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     catch (e) { handleError(res, e); }
   });
 
+  // Leitura, so `auth` — mesmo gate do GET /devolucoes logo acima: consultar de qual entrega o
+  // material saiu nao e agir sobre o estoque. Registrada colada nele para que nenhuma rota
+  // `/devolucoes/:id` futura capture este caminho antes (o Express casa na ordem de registro).
+  app.get('/api/almoxarifado/devolucoes/saidas-elegiveis', auth, async (req, res) => {
+    try {
+      const materialId = Number(req.query.material_id);
+      if (!materialId) return res.status(400).json({ error: 'material_id é obrigatório' });
+      res.json(await returnService.listarSaidasElegiveis(db, materialId));
+    } catch (e) { handleError(res, e); }
+  });
+
   app.post('/api/almoxarifado/devolucoes', auth, requirePermission('movimentar'), async (req, res) => {
     try {
       res.status(201).json(await returnService.registrarDevolucao(db, req.user, req.body));

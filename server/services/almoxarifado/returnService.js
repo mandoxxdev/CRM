@@ -162,4 +162,60 @@ async function listarDevolucoes(db, filters = {}) {
   return dbAll(db, sql, params);
 }
 
-module.exports = { MOTIVOS, DESTINOS, TIPOS_SAIDA_DEVOLVIVEL, registrarDevolucao, listarDevolucoes };
+/**
+ * As entregas daquele material que uma devolucao pode citar (Etapa 7, Task 4).
+ *
+ * Leitura agregada de tres tabelas: a movimentacao (a entrega), a soma das devolucoes que ja
+ * citam aquela movimentacao, e as series que sairam nela. Linha ja devolvida por inteiro VOLTA
+ * na lista, com saldo 0 — "ja devolvido por inteiro" e informacao util, nao ruido, e a tela a
+ * mostra desabilitada. As 30 mais recentes: quem devolve devolve o que saiu ha pouco; lista
+ * infinita rolando no modal atrapalha mais do que ajuda.
+ *
+ * O `saldo_devolvivel` publicado aqui e, DE PROPOSITO, a mesma conta de `validarSaidaOriginal`
+ * (`saida.quantidade - SUM(devolucoes daquela movimentacao)`), sobre a mesma lista de tipos
+ * (`TIPOS_SAIDA_DEVOLVIVEL`) e o mesmo filtro de cancelamento. Se as duas pontas divergirem, a
+ * tela oferece devolver 6 e o servidor responde que so cabem 4 — e o operador nao tem como saber
+ * quem esta certo. Por isso os testes das duas pontas moram no mesmo arquivo
+ * (`tests/api/devolucaoVinculo.api.test.js`) e um deles le o numero DAQUI para bater contra a
+ * validacao na mesma execucao.
+ */
+async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
+  const material = await dbGet(db,
+    'SELECT id, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  if (!material) throw erro400('Material não encontrado');
+
+  const marcadores = TIPOS_SAIDA_DEVOLVIVEL.map(() => '?').join(',');
+  const saidas = await dbAll(db, `
+    SELECT mv.id, mv.tipo, mv.quantidade, mv.created_at, mv.lote_id, mv.lote,
+           mv.requisicao_id, mv.os_id, mv.projeto_id, mv.usuario_nome,
+           req.numero AS requisicao_numero,
+           COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d
+                      WHERE d.movimentacao_saida_id = mv.id), 0) AS quantidade_devolvida
+      FROM movimentacoes_almoxarifado mv
+      LEFT JOIN requisicoes_almoxarifado req ON req.id = mv.requisicao_id
+     WHERE mv.material_id = ? AND COALESCE(mv.cancelado,0) = 0 AND mv.tipo IN (${marcadores})
+     ORDER BY mv.created_at DESC, mv.id DESC
+     LIMIT ?`, [materialId, ...TIPOS_SAIDA_DEVOLVIVEL, limite]);
+
+  const out = [];
+  for (const s of saidas) {
+    // Serie por saida e uma QUERY, nao estrutura nova: series_almoxarifado ja tem
+    // movimentacao_saida_id desde a Etapa 6b. Status ENTREGUE porque e o que a saida deixou —
+    // uma serie ja reentrada por outro caminho nao esta la fora para ser devolvida.
+    const series = material.controle_serie
+      ? await dbAll(db, `SELECT id, numero, status FROM series_almoxarifado
+                          WHERE movimentacao_saida_id = ? AND status = 'ENTREGUE' ORDER BY numero`, [s.id])
+      : [];
+    out.push({
+      ...s,
+      saldo_devolvivel: Number((s.quantidade - s.quantidade_devolvida).toFixed(4)),
+      series,
+    });
+  }
+  return out;
+}
+
+module.exports = {
+  MOTIVOS, DESTINOS, TIPOS_SAIDA_DEVOLVIVEL,
+  registrarDevolucao, listarDevolucoes, listarSaidasElegiveis,
+};

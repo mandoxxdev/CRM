@@ -1254,7 +1254,27 @@ leitura e a escrita. (O runner de API descobre por arquivo, então isso não mud
   `{ id, tipo, quantidade, created_at, lote_id, lote, requisicao_id, requisicao_numero, os_id, projeto_id, usuario_nome, quantidade_devolvida, saldo_devolvivel, series: [{ id, numero, status }] }`.
   A tela da Task 7 consome exatamente estes nomes.
 
-- [ ] **Step 1: escrever os testes que falham** — acrescentar em `server/tests/api/devolucaoVinculo.api.test.js`, antes do `await close();`:
+- [x] **Step 1: escrever os testes que falham** — acrescentar em `server/tests/api/devolucaoVinculo.api.test.js`, antes do `await close();`:
+
+> **O plano estava INCOMPLETO aqui (executado em 2026-08-12).** A justificativa de arquivo logo
+> acima diz que os dois lados moram juntos porque "o `saldo_devolvivel` que ela devolve tem de ser
+> exatamente o número que `validarSaidaOriginal` usa para recusar" — mas **nenhum** dos 5 testes
+> abaixo amarra os dois lados: todos comparam o `saldo_devolvivel` contra um **literal escrito à
+> mão** (`7`, `4`, `0`). Um literal em cada lado é exatamente o que deixa as duas pontas
+> divergirem em silêncio: bastaria alguém mudar a conta de um lado e ajustar o literal do teste.
+> Foram acrescentados **3 testes** aos 5 do plano (por isso o Step 5 fecha em **19**, não em 16):
+>
+> 1. `[duas pontas] o saldo_devolvivel da rota e exatamente o limite que a validacao aplica` — lê o
+>    número **da rota** e o usa contra `POST /devolucoes` na mesma execução: `saldo+1` recusado,
+>    `saldo` aceito, depois saldo 0 e mais 1 recusado. É o teste que a justificativa do arquivo
+>    prometia e não existia.
+> 2. `saidas-elegiveis identifica a entrega: lote, requisicao, OS, projeto e quem retirou` — o
+>    bloco **Interfaces** promete `lote`, `requisicao_numero`, `os_id`, `projeto_id`,
+>    `usuario_nome`, `created_at`, e nenhum teste do plano lia esses campos. A tela da Task 7
+>    depende deles pelo nome; sem teste, um `SELECT` incompleto passaria a suíte inteira.
+> 3. `[controle positivo] devolucao de uma saida nao baixa o saldo da outra` — todos os testes do
+>    plano usam material com **uma** saída devolvida, então um `SUM` sem `WHERE
+>    movimentacao_saida_id` passaria em todos eles.
 
 ```js
   // ── Rota de leitura: as saidas que uma devolucao pode citar (Task 4) ────────────────────────
@@ -1327,12 +1347,20 @@ leitura e a escrita. (O runner de API descobre por arquivo, então isso não mud
   });
 ```
 
-- [ ] **Step 2: rodar e ver falhar**
+- [x] **Step 2: rodar e ver falhar**
 
 Run: `cd server && node tests/api/devolucaoVinculo.api.test.js`
 Expected: os 5 testes novos falham com 404 (rota inexistente) — `res.body` vem vazio e os `assert` de campo estouram.
 
-- [ ] **Step 3: implementar a leitura** — acrescentar em `server/services/almoxarifado/returnService.js`, depois de `listarDevolucoes`:
+> **Executado em 2026-08-12: `11 passed, 8 failed`** (8 e não 5 por causa dos 3 testes
+> acrescentados no Step 1). Duas formas de falha, ambas pela razão certa — rota inexistente:
+> os 3 que checam `res.status` (`... lista as entregas ...`, `[duas pontas] ...`, `... sem
+> material_id responde 400`) estouram em `404 !== 200` / `404 !== 400`; os outros 5 estouram
+> antes, em **`res.body.find is not a function` / `res.body.map is not a function`** — o corpo do
+> 404 é um objeto, não o array que a rota vai devolver. O plano previa "os `assert` de campo
+> estouram"; na prática eles nem chegam a rodar.
+
+- [x] **Step 3: implementar a leitura** — acrescentar em `server/services/almoxarifado/returnService.js`, depois de `listarDevolucoes`:
 
 ```js
 /**
@@ -1390,7 +1418,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: registrar a rota** — em `server/routes/almoxarifado/extended.js`, **logo depois** de `app.get('/api/almoxarifado/devolucoes', ...)` (linha ~572):
+- [x] **Step 4: registrar a rota** — em `server/routes/almoxarifado/extended.js`, **logo depois** de `app.get('/api/almoxarifado/devolucoes', ...)` (linha ~572):
 
 ```js
   // Leitura, so `auth` — mesmo gate do GET /devolucoes logo acima. Precisa ser registrada perto
@@ -1404,14 +1432,32 @@ module.exports = {
   });
 ```
 
-- [ ] **Step 5: rodar e ver passar**
+- [x] **Step 5: rodar e ver passar**
 
 Run: `cd server && node tests/api/devolucaoVinculo.api.test.js`
 Expected: `16 passed, 0 failed`.
 
 Controle positivo (obrigatório, e desfazer depois): trocar `COALESCE(mv.cancelado,0) = 0` por `1=1` e confirmar que `saidas-elegiveis nao oferece descarte, ajuste, entrada nem saida cancelada` falha; restaurar.
 
-- [ ] **Step 6: commit**
+> **Executado em 2026-08-12: `19 passed, 0 failed`** (16 do plano + os 3 testes acrescentados no
+> Step 1). **Dois** controles positivos, os dois desfeitos e o arquivo conferido byte a byte
+> contra a cópia de antes (`diff` sem saída):
+>
+> - `COALESCE(mv.cancelado,0) = 0` → `1=1`: **18 passed, 1 failed** — `saidas-elegiveis nao oferece
+>   descarte, ajuste, entrada nem saida cancelada` cai com `[+34, 33]`, a saída estornada
+>   aparecendo na lista. É o controle que o plano pedia.
+> - `saldo_devolvivel: quantidade - quantidade_devolvida` → `quantidade` (a divergência que esta
+>   task inteira existe para impedir): **15 passed, 4 failed**, e o `[duas pontas]` cai com a
+>   mensagem exata do problema de produção — *"a rota publicou saldo 9 e a validacao recusou esse
+>   mesmo numero: Devolução acima do entregue: a saída 28 entregou 9, já foram devolvidos 2 e
+>   restam 7"*. Os 3 testes com literal escrito à mão também caem, mas dizem só `Expected values to
+>   be strictly equal` — nenhum deles **nomeia** a divergência entre as duas pontas.
+
+**Gates de servidor executados em 2026-08-12 (números reais):** `test:api` **59/59 arquivos de
+teste OK**; `test:almoxarifado` **43 passou, 0 falhou**; `test:validation` **4 passed, 0 failed**;
+`test:safealter` **3 passed, 0 failed**; `test:sqlite` **3 passed, 0 failed**.
+
+- [x] **Step 6: commit**
 
 ```bash
 git add server/services/almoxarifado/returnService.js \
