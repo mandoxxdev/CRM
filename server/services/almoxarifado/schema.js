@@ -1117,6 +1117,22 @@ async function initSchema(db) {
   )`);
 
   // ── Materiais do cliente ──
+  // ── APOSENTADA na Etapa 8 (decisao 4 do design, 2026-08-12) ──────────────────────────────────
+  // NAO tem escritor nem leitor no codigo: o clientMaterialService.js foi removido e as tres rotas
+  // /materiais-cliente sairam junto (Task 7). Material de cliente virou material normal com dono
+  // (materiais_almoxarifado.proprietario_cliente_id).
+  //
+  // Por que o CREATE TABLE continua aqui em vez de um DROP: a medicao de "0 linhas" foi feita no
+  // banco de DESENVOLVIMENTO, e apagar tabela com base em medicao que nao cobre producao nao tem
+  // volta. O CREATE IF NOT EXISTS e inofensivo (cria vazia num banco novo, nao toca num existente).
+  //
+  // Quem for remover de vez: (1) confirme em PRODUCAO
+  //     SELECT COUNT(*) AS total,
+  //            SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos
+  //       FROM materiais_cliente_almoxarifado;
+  // (2) se houver linha, migre para materiais_almoxarifado + movimentacao de entrada ANTES — o
+  // `descricao` e texto livre sem FK, entao a migracao e assistida, nao automatica; (3) so entao
+  // o DROP. As rotas de escrita ja sairam nos dois cenarios: eram o caminho sem guarda.
   await dbRun(db, `CREATE TABLE IF NOT EXISTS materiais_cliente_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cliente_id INTEGER NOT NULL,

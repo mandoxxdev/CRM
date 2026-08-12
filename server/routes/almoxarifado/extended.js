@@ -17,7 +17,6 @@ const inspectionService = require('../../services/almoxarifado/inspectionService
 const returnService = require('../../services/almoxarifado/returnService');
 const scrapService = require('../../services/almoxarifado/scrapService');
 const toolService = require('../../services/almoxarifado/toolService');
-const clientMaterialService = require('../../services/almoxarifado/clientMaterialService');
 const reportService = require('../../services/almoxarifado/reportService');
 const sectorMaterialService = require('../../services/almoxarifado/sectorMaterialService');
 const purchaseService = require('../../services/almoxarifado/purchaseService');
@@ -693,23 +692,20 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     catch (e) { handleError(res, e); }
   });
 
-  // ── Materiais do cliente ──
-  app.get('/api/almoxarifado/materiais-cliente', auth, async (req, res) => {
-    try { res.json(await clientMaterialService.listarMateriaisCliente(db, req.query)); }
-    catch (e) { handleError(res, e); }
-  });
-
-  app.post('/api/almoxarifado/materiais-cliente', auth, requirePermission('movimentar'), async (req, res) => {
-    try {
-      res.status(201).json(await clientMaterialService.registrarMaterialCliente(db, req.user, req.body));
-    } catch (e) { handleError(res, e); }
-  });
-
-  app.post('/api/almoxarifado/materiais-cliente/:id/consumir', auth, requirePermission('movimentar'), async (req, res) => {
-    try {
-      res.json(await clientMaterialService.consumirMaterialCliente(db, req.user, req.params.id, req.body.quantidade, req.body.observacoes));
-    } catch (e) { handleError(res, e); }
-  });
+  // ── Materiais de cliente: a ILHA foi aposentada na Etapa 8 (decisao 4) ───────────────────────
+  // Existiam aqui GET/POST /materiais-cliente e POST /materiais-cliente/:id/consumir, sobre
+  // materiais_cliente_almoxarifado — tabela separada, com descricao em texto livre, sem FK para
+  // materiais_almoxarifado e FORA do motor de estoque: sem lote, serie, endereco, extrato,
+  // etiqueta, livro de movimentacoes, requisicao nem reserva. consumirMaterialCliente nao validava
+  // cliente nem projeto, entao o primeiro item do checklist da spec 13 nao existia em forma
+  // nenhuma. Material de cliente agora e material normal com dono
+  // (materiais_almoxarifado.proprietario_cliente_id) e passa pelas mesmas guardas de todo o resto.
+  // As rotas sairam porque, vivas, seriam um caminho paralelo que ESCAPA dessas guardas.
+  // A TABELA continua no schema.js, marcada como aposentada: a medicao de 0 linhas cobriu so o
+  // banco de desenvolvimento. Ver a Task 7 do plano da Etapa 8.
+  //
+  // O que ficou no lugar: POST /materiais-cliente/devolucoes (Task 6, mais acima neste arquivo) e,
+  // para a leitura, GET /almoxarifado/estoque?proprietario_cliente_id=N (Task 1).
 
   // ── Compras (integração preparada) ──
   app.post('/api/almoxarifado/compras/verificar-minimos', auth, requirePermission('configurar'), async (req, res) => {
@@ -782,7 +778,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     'historico-movimentacoes': (db, q) => reportService.relatorioHistoricoMovimentacoes(db, q),
     'inventario-divergencias': reportService.relatorioInventarioDivergencias,
     'consumo-periodo': (db, q) => reportService.relatorioConsumoPeriodo(db, q.data_inicio, q.data_fim, q.projeto_id, q.cliente_id),
-    'materiais-cliente': (db, q) => clientMaterialService.listarMateriaisCliente(db, q),
+    // Etapa 8, Task 7: a chave 'materiais-cliente' apontava para clientMaterialService
+    // (a ilha aposentada) e saiu com ele. Enquanto a posicao por cliente nao tiver servico
+    // proprio (clienteEstoqueService, Task 8), o dispatcher responde 404 para este tipo — que e
+    // o comportamento correto de um relatorio que ainda nao existe, e nao um relatorio mentindo
+    // com dados de uma tabela sem escritor.
     'sobras-disponiveis': (db) => scrapService.listarSobras(db, { disponivel: true }),
     'ferramentas-emprestadas': reportService.relatorioFerramentasEmprestadas,
     'epi-colaborador': reportService.relatorioEPIPorColaborador,

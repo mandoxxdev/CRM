@@ -2460,7 +2460,38 @@ MSG
   Task 8 não existir**, a entrada é removida do mapa (o relatório responde 404, que é o
   comportamento correto de um relatório que ainda não existe) e a Task 8 a recria.
 
-- [ ] **Step 1: CONFIRMAR PRODUÇÃO VAZIA — antes de qualquer remoção**
+#### Correções e decisões feitas ao EXECUTAR a Task 7 (2026-08-12)
+
+1. **O Step 1 (confirmar produção) NÃO bloqueou a task, e o plano estava errado ao fazê-lo
+   bloquear.** O executor não tem acesso ao banco de produção e o usuário autorizou execução
+   autônoma. Mais importante: **a confirmação não é pré-requisito de nada que esta task faz.**
+   Remover as rotas é seguro nos dois cenários (não há consumidor — nem servidor, nem cliente: um
+   `grep` por `materiais-cliente` em `client/src` não devolve nada), e **manter a tabela é
+   exatamente a decisão que protege o caso "produção não está vazia"**. Nenhuma linha é apagada por
+   esta task. O plano condicionava a remoção a uma resposta que não muda o risco de nenhum dos
+   passos; o que a resposta muda é o **próximo** passo (o `DROP`), que não é desta etapa.
+   A instrução verificável ficou registrada em três lugares onde o usuário vai ler antes do deploy:
+   `specs/modulo-almoxarifado/13-materiais-clientes/README.md` (seção "⚠️ PENDENTE — confirmar
+   produção antes do deploy desta etapa", com o SQL pronto e o que fazer com cada resultado), no
+   comentário de aposentadoria do `schema.js` e aqui.
+2. **A leitura antiga não desaparece nem no cenário ruim.** O "plano B" do Step 1 dizia manter
+   `GET /materiais-cliente` viva enquanto houvesse dado. Foi **descartado ao executar**: manter uma
+   rota de leitura viva sobre uma tabela sem escritor não protege dado nenhum (a tabela continua lá,
+   consultável por SQL), e obriga a manter o `clientMaterialService` vivo — o mesmo arquivo cujo
+   `consumirMaterialCliente` é o caminho sem guarda. Trocar-se-ia risco real por conveniência de
+   leitura que o SQL já resolve.
+3. **Números da suíte:** `test:api` foi de **66/66** para **67/67 arquivos OK** (o arquivo novo);
+   `test:almoxarifado` foi de **43/0** para **42/0** — um caso a menos, o
+   `Material do cliente — consumo`, que exercitava o serviço removido. Os outros gates inalterados:
+   validation 4/0, safealter 3/0, sqlite 3/0.
+4. **O relatório `materiais-cliente` ganhou teste próprio, que o plano não previa.** O plano mandava
+   remover a chave do mapa `reports` mas o teste só cobria as três rotas. Um relatório que continua
+   servindo uma tabela sem escritor é a mesma classe de problema (dado velho apresentado como
+   corrente), então o arquivo de teste prende também esse 404 — com o controle positivo emparelhado
+   (`relatorios/estoque-atual` responde 200, provando que o dispatcher não caiu inteiro).
+
+- [x] **Step 1: CONFIRMAR PRODUÇÃO VAZIA — antes de qualquer remoção** — *convertido em instrução
+  verificável entregue ao usuário (ver a correção 1 acima), não em bloqueio*
 
 Esta é uma pergunta ao **usuário**, não uma medição que o executor possa fazer sozinho: consultar o
 banco de produção é dele. Pergunte, literalmente:
@@ -2488,7 +2519,7 @@ banco de produção é dele. Pergunte, literalmente:
 
 Registre a resposta recebida (o número e a data) na Task 10, no checklist da spec 13.
 
-- [ ] **Step 2: escrever o teste que falha — `materialClienteIlhaAposentada.api.test.js`**
+- [x] **Step 2: escrever o teste que falha — `materialClienteIlhaAposentada.api.test.js`**
 
 ```js
 /**
@@ -2556,13 +2587,28 @@ const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin', is_superadmin: 1, ema
 > exige 404 passaria se o arquivo de rotas inteiro tivesse quebrado (tudo vira 404). O caso final
 > prova que o resto do módulo continua respondendo.
 
-- [ ] **Step 3: rodar e ver falhar**
+> **O arquivo commitado (5 casos) é mais forte que o esboço acima (4), e a diferença importa.**
+> O esboço deixava dois buracos: (a) os caminhos eram strings soltas, então um erro de digitação no
+> prefixo produziria 404 e o teste passaria provando nada — no arquivo commitado **todos** os
+> caminhos saem da mesma constante `ILHA`, e o controle positivo (`POST ${ILHA}/devolucoes`) usa a
+> mesma, de modo que um prefixo errado derruba o controle positivo junto; (b) o controle positivo
+> vinha **por último** — no commitado ele vem **primeiro**, para que a mensagem de falha diga
+> "o prefixo não está montado" em vez de "a rota ainda responde". Acrescentado ainda o par do mapa
+> de relatórios (`relatorios/materiais-cliente` → 404 · `relatorios/estoque-atual` → 200) e uma
+> âncora no teste de disco (`stockService.js` **existe** no mesmo diretório — senão um caminho
+> errado faria `existsSync` devolver `false` para tudo e "o arquivo foi removido" passaria sozinho).
+> **Sabotagem executada:** trocar `ILHA` por `/api/almoxarifado/materiais-clientes` (plural) →
+> `4 passed, 1 failed`, e quem falha é o controle positivo enquanto o caso "rotas da ilha nao
+> existem mais" **continua passando** — a prova concreta de que só o pareamento salva o arquivo de
+> ser um teste vazio. Restaurado byte a byte (`diff` limpo).
+
+- [x] **Step 3: rodar e ver falhar**
 
 Run: `cd server && node tests/api/materialClienteIlhaAposentada.api.test.js`
 Expected: FAIL nos três primeiros casos (as rotas respondem 200/201/404-de-registro, e o arquivo
 existe).
 
-- [ ] **Step 4: remover as rotas e o serviço**
+- [x] **Step 4: remover as rotas e o serviço**
 
 Em `server/routes/almoxarifado/extended.js`:
 - apagar `const clientMaterialService = require('../../services/almoxarifado/clientMaterialService');` (~linha 20);
@@ -2593,7 +2639,7 @@ Apagar o arquivo:
 git rm server/services/almoxarifado/clientMaterialService.js
 ```
 
-- [ ] **Step 5: marcar a tabela como aposentada em `schema.js`**
+- [x] **Step 5: marcar a tabela como aposentada em `schema.js`**
 
 Acima do `CREATE TABLE IF NOT EXISTS materiais_cliente_almoxarifado` (~linha 1078):
 
@@ -2613,7 +2659,7 @@ Acima do `CREATE TABLE IF NOT EXISTS materiais_cliente_almoxarifado` (~linha 107
   await dbRun(db, `CREATE TABLE IF NOT EXISTS materiais_cliente_almoxarifado (
 ```
 
-- [ ] **Step 6: limpar o teste de serviço que exercitava a ilha**
+- [x] **Step 6: limpar o teste de serviço que exercitava a ilha**
 
 `server/tests/almoxarifado.test.js` (~linhas 205-209) — o caso que chama
 `clientMaterialService.registrarMaterialCliente`/`consumirMaterialCliente` e o `require` do topo
@@ -2626,13 +2672,13 @@ Acima do `CREATE TABLE IF NOT EXISTS materiais_cliente_almoxarifado` (~linha 107
   // que o consumo respeita o cliente proprietario.
 ```
 
-- [ ] **Step 7: rodar e ver passar**
+- [x] **Step 7: rodar e ver passar**
 
 Run: `cd server && node tests/api/materialClienteIlhaAposentada.api.test.js && npm run test:api && npm run test:almoxarifado`
 Expected: `4 passed, 0 failed` no arquivo; `test:almoxarifado` verde com **um caso a menos**
 (citar o número real no commit).
 
-- [ ] **Step 8: commit**
+- [x] **Step 8: commit**
 
 ```bash
 git add server/routes/almoxarifado/extended.js server/services/almoxarifado/schema.js server/tests/almoxarifado.test.js server/tests/api/materialClienteIlhaAposentada.api.test.js

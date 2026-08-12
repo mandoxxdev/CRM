@@ -9,7 +9,7 @@ Tela de relatórios completa (estoque, movimentações, gestão) + indicadores g
 
 ## O que já existe
 
-- `reportService.js` + `GET /relatorios/:tipo` (`extended.js`, 16 tipos no mapa `reports` do dispatcher). Nem todos vêm do `reportService`: `materiais-sem-endereco` (acrescentado na Etapa 2) é servido por SQL inline no próprio dispatcher, e há tipos servidos por `clientMaterialService` e `scrapService`.
+- `reportService.js` + `GET /relatorios/:tipo` (`extended.js`, **15** tipos no mapa `reports` do dispatcher). Nem todos vêm do `reportService`: `materiais-sem-endereco` (acrescentado na Etapa 2) é servido por SQL inline no próprio dispatcher, e há tipo servido por `scrapService`. **Eram 16:** o tipo `materiais-cliente` era servido pelo `clientMaterialService`, removido com a ilha na Etapa 8, Task 7 — o tipo responde **404** até a Task 8 recriar a chave sobre `clienteEstoqueService.posicaoPorCliente`.
 - Relatórios v1: posição de estoque, movimentações por período (rotas `/relatorio/*` em `routes/almoxarifado.js`).
 - Dashboard com KPIs + consumo por OS + materiais mais consumidos (`AlmoxarifadoDashboard.js`).
 - Referência de UI: telas `/frota/relatorios` e `/fabrica/relatorios` já existem em outros módulos (seguir o padrão).

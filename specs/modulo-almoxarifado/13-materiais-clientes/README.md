@@ -9,9 +9,57 @@ Saldo de material de cliente totalmente segregado do próprio, com proprietário
 
 ## O que já existe
 
-- `materiais_cliente_almoxarifado` (`schema.js:584`): cliente_id, projeto_id, os_id, descricao, nota_remessa, quantidade recebida/consumida/saldo.
-- Rotas `GET/POST /materiais-cliente` + `POST /:id/consumir` (`extended.js:275-286`) via `clientMaterialService.js` (50 L). Teste de serviço existe.
+- ~~`materiais_cliente_almoxarifado` (`schema.js:584`)~~ · ~~Rotas `GET/POST /materiais-cliente` +
+  `POST /:id/consumir` (`extended.js:275-286`) via `clientMaterialService.js` (50 L). Teste de
+  serviço existe.~~ — **a ilha foi aposentada na Etapa 8, Task 7** (decisão 4 do design). As três
+  rotas, o `clientMaterialService.js` e o teste de serviço saíram; a **tabela continua no
+  `schema.js`**, marcada como aposentada. Ver a seção "Aposentadoria da ilha" abaixo.
 - Tipo de material `Material de cliente` no enum; área "Estoque de materiais de clientes" prevista nos tipos de localização.
+
+## Aposentadoria da ilha (Etapa 8, Task 7)
+
+Material de cliente agora é **material normal com dono**: `materiais_almoxarifado.proprietario_cliente_id`
+(`NULL` = material nosso). O que existia em paralelo saiu, porque enquanto vivo era um caminho que
+**escapava de todas as guardas** construídas nesta etapa — `consumirMaterialCliente` não validava
+cliente nem projeto e não passava pelo motor.
+
+| Antes (ilha) | Agora |
+|---|---|
+| `GET /almoxarifado/materiais-cliente` | `GET /almoxarifado/estoque?proprietario_cliente_id=N` |
+| `POST /almoxarifado/materiais-cliente` | cadastro normal de material com `proprietario_cliente_id` + entrada pelo motor/recebimento |
+| `POST /almoxarifado/materiais-cliente/:id/consumir` | saída pelo motor, com a guarda do dono (`ownerRules`) |
+| `GET /almoxarifado/relatorios/materiais-cliente` | **404 até a Task 8** recriar a chave sobre `clienteEstoqueService.posicaoPorCliente` |
+
+Teste que prende a remoção: `server/tests/api/materialClienteIlhaAposentada.api.test.js`.
+
+### ⚠️ PENDENTE — confirmar produção antes do deploy desta etapa
+
+A medição de "0 linhas" na tabela cobriu **só** `server/data/database.sqlite` (banco de
+desenvolvimento). **Antes de subir a Etapa 8 para produção**, rode no banco de **produção**:
+
+```sql
+SELECT COUNT(*) AS total,
+       SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos
+  FROM materiais_cliente_almoxarifado;
+```
+
+- **`total = 0`** → nada a fazer. Registre aqui o número e a data e marque esta pendência como
+  fechada. A tabela continua no schema mesmo assim (só um `DROP` deliberado a remove, e ele não
+  faz parte da Etapa 8).
+- **`total > 0`** → **não é motivo para reverter o código desta task**, mas é dado real sem
+  migração, e a premissa da decisão 4 do design cai. O que muda:
+  1. As rotas de **escrita** ficam removidas de qualquer forma — eram o caminho paralelo sem
+     guarda, e é justamente com dado real em jogo que isso vira perigoso.
+  2. A **leitura** do dado antigo não volta como rota: use SQL direto na tabela (que continua lá)
+     enquanto a migração não acontece. Nada é perdido — nenhuma linha é apagada por esta task.
+  3. Entra uma **migração assistida** antes de qualquer `DROP`: cada linha vira um
+     `materiais_almoxarifado` com `proprietario_cliente_id` + uma movimentação de entrada
+     correspondente. É assistida, não automática: `descricao` é texto livre sem FK, então não há
+     como casar com material existente por chave.
+
+**Resposta recebida:** _(preencher — número e data)_ · Executor da Task 7 não tem acesso ao banco
+de produção; a task foi entregue com a tabela preservada exatamente para que este cenário não
+tenha custo.
 
 ## Checklist
 

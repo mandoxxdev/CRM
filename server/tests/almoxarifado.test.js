@@ -8,7 +8,6 @@ const { initSchema } = require('../services/almoxarifado/schema');
 const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
 const stockService = require('../services/almoxarifado/stockService');
 const returnService = require('../services/almoxarifado/returnService');
-const clientMaterialService = require('../services/almoxarifado/clientMaterialService');
 const receiptService = require('../services/almoxarifado/receiptService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
 const sectorMaterialService = require('../services/almoxarifado/sectorMaterialService');
@@ -205,15 +204,10 @@ async function run() {
     assert.strictEqual(erro, true);
   });
 
-  await test('Material do cliente — consumo', async () => {
-    await dbRun(db, `INSERT INTO clientes (id, razao_social) VALUES (1, 'Cliente Teste')`);
-    const r = await clientMaterialService.registrarMaterialCliente(db, userAlmox, {
-      cliente_id: 1, descricao: 'Chapa cliente', quantidade_recebida: 100,
-    });
-    await clientMaterialService.consumirMaterialCliente(db, userAlmox, r.id, 30);
-    const m = await dbGet(db, 'SELECT quantidade_saldo FROM materiais_cliente_almoxarifado WHERE id = ?', [r.id]);
-    assert.strictEqual(m.quantidade_saldo, 70);
-  });
+  // Etapa 8, Task 7: o teste de clientMaterialService saiu junto com o servico. O comportamento
+  // que ele cobria ("consumir baixa o saldo") virou saida pelo motor, coberta por
+  // tests/api/materialClienteGuardaSaida.api.test.js — que testa tambem o que a ilha NAO testava:
+  // que o consumo respeita o cliente proprietario (OS/projeto tem de ser do dono do material).
 
   await test('Permissões — produção pode requisitar', async () => {
     assert.strictEqual(can(userProd, 'requisitar'), true);
