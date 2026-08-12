@@ -2819,7 +2819,7 @@ EOF
 
 ---
 
-### Conserto fora do plano (2026-08-12): compensação da devolução recusada — ✅ FEITO
+### Conserto fora do plano (2026-08-12): compensação da devolução recusada — ✅ FEITO (`eabd848`)
 
 **Não era task deste plano.** Foi achado durante a execução da Etapa 7, com sonda executada, e foi
 em commit próprio. Fica registrado aqui porque muda o contrato do `returnService` que as Tasks 4, 7

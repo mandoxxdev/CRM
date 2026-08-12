@@ -19,7 +19,7 @@ Devoluções (da produção, de projeto, de ferramenta, ao fornecedor, de client
 - **`RETRABALHO` é tipo neutro ao saldo**: registra no livro mas não baixa nem aumenta nada (ramo de tipo neutro no `stockService`) — não estava dito nesta spec.
 - **`SUCATA` passou a exigir justificativa no motor** (`REGRAS_VINCULO` em `movementRules`); o `returnService` já envia `justificativa` no destino SUCATA, então o caminho devolução→sucata continua passando.
 
-### Compensação da devolução recusada (conserto de 2026-08-12, fora do plano da Etapa 7)
+### Compensação da devolução recusada (conserto de 2026-08-12, fora do plano da Etapa 7 — `eabd848`)
 
 `registrarDevolucao` grava a linha de `devolucoes_material_almoxarifado` **antes** de emitir as movimentações — precisa do `id` para montar `referencia: DEV-<id>`. Como **não há transação neste módulo** (SQLite; a migração para Postgres é que resolve de vez), qualquer recusa do motor depois desse `INSERT` deixava a linha gravada: uma devolução registrada que nunca aconteceu.
 
