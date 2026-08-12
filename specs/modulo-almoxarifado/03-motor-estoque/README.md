@@ -243,6 +243,33 @@ ser redescoberta por acidente.
   produção (ficaria fora do escopo "documentação apenas" desta rodada) e precisa de teste de API
   próprio. **Task separada.**
 
+## Pendência declarada na Etapa 7 (2026-08-12) — `AJUSTE` não reconcilia `quantidade_bloqueada`
+
+**Achada ao testar a compensação da devolução, com sonda executada. Não foi corrigida** — é outro
+assunto (mexe no `stockService`) e a decisão é **de negócio**, não técnica.
+
+**O que acontece:** um `BLOQUEIO` de 8 seguido de um `AJUSTE` que leva `quantidade_atual` para 1
+deixa o material com `quantidade_bloqueada (8) > quantidade_atual (1)`. Pela fórmula da spec 7, o
+**disponível fica negativo** — e **não há guarda nenhuma** contra isso: o `AJUSTE` redefine o total
+físico e não olha para as colunas de retenção.
+
+**Por que é plausível na vida real, e não um caso de laboratório:** é exatamente o inventário. A
+contagem acha menos do que o sistema dizia, e parte do que existia estava em quarentena ou
+bloqueado por defeito. O operador lança o ajuste para o número contado; ninguém pensa em mexer no
+bloqueado, que continua com o número antigo.
+
+**A pergunta de negócio que precisa ser respondida antes de qualquer código** — as três respostas
+são defensáveis e levam a implementações diferentes:
+
+1. o `AJUSTE` **baixa** o bloqueado proporcionalmente (o material sumiu; o que estava retido sumiu
+   junto);
+2. o `AJUSTE` é **recusado** enquanto houver retenção maior que o total pretendido (força o operador
+   a resolver a quarentena antes de inventariar);
+3. o `AJUSTE` passa e apenas **avisa**, deixando a reconciliação para uma tela de saneamento.
+
+Enquanto a decisão não vier, nada foi mudado — o comportamento atual é o (3) **sem o aviso**, que é
+a pior das três. Registrado aqui e no guia de usuário para não ser redescoberto por acidente.
+
 ### Correção da Etapa 5 que pertence a este motor
 
 `syncMaterialTotals` recalculava `quantidade_reservada`, `quantidade_bloqueada` e

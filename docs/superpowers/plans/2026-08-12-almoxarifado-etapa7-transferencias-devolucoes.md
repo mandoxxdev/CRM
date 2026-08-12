@@ -1,5 +1,51 @@
 # Almoxarifado Etapa 7 — Transferências e Devoluções: plano de implementação
 
+> ## ✅ ETAPA CONCLUÍDA — 2026-08-12
+>
+> **Range de hashes:** `c87ebd4` (design) · `1b026e1` (plano) · **`29524fc..0722bfd`** (Tasks 1-7)
+> · `eabd848` + `7fc1b7f` (conserto fora do plano) · `d117dc2` (fix de badge) · Task 8
+> (documentação) neste commit.
+>
+> | Task | O que entregou | Commit |
+> |---|---|---|
+> | — | Design aprovado (11 decisões numeradas) | `c87ebd4` |
+> | — | Este plano | `1b026e1` |
+> | **1** | **O bug do SUCATA**: destino SUCATA emite `ENTRADA_DEVOLUCAO` + `SUCATA` (entra e sai); `referencia: DEV-<id>` em **todos** os destinos | `29524fc` |
+> | **2** | `TRANSFERENCIA` em `REGRAS_VINCULO` (`vinculo: 'nenhum'`); guarda de `exigeLote` passa a alcançar o **ramo próprio** `TRANSFERENCIA`; `POST /transferencias` declara `exigeLote` | `5a1e188` |
+> | **3** | Colunas `movimentacao_saida_id`/`lote_id` (`safeAlter`), validação do vínculo, herança de lote, `exigeLote: true` na devolução | `38d2391` |
+> | **4** | `GET /almoxarifado/devolucoes/saidas-elegiveis?material_id=X` | `4d5f79f` |
+> | **5** | Série na devolução (destinos `ESTOQUE`/`QUARENTENA`), com 400 que ensina o caminho nos demais | `9e27bcb` |
+> | **6** | `TRANSFERENCIA` entra no formulário de Movimentações, `DEVOLUCAO` sai | `f8a3e34` (+ `d117dc2`, badge sem cor) |
+> | **7** | Tela `/almoxarifado/devolucoes` + `routes/lazyModules.js` (code-split como o resto do módulo) | `0722bfd` |
+> | — | **Fora do plano:** devolução recusada não deixa mais linha gravada (compensação) | `eabd848` + `7fc1b7f` |
+> | **8** | Documentação e verificação final (7 documentos) | este commit |
+>
+> **Verificação final executada em 2026-08-12 — números reais, não "passou":**
+>
+> | Gate | Resultado |
+> |---|---|
+> | `cd server && npm run test:api` | **59/59 arquivos de teste OK** |
+> | `cd server && npm run test:almoxarifado` | **43 passou, 0 falhou** |
+> | `cd server && npm run test:validation` | **4 passed, 0 failed** |
+> | `cd server && npm run test:safealter` | **3 passed, 0 failed** |
+> | `cd server && npm run test:sqlite` | **3 passed, 0 failed** |
+> | `cd client && CI=true npx react-scripts test --watchAll=false` | **196 passed, 17 suítes, 0 falhas** |
+> | `cd client && CI=true npx react-scripts build` | **`Compiled successfully.`**, sem warning |
+>
+> Idênticos à linha de base do fim da Task 7 — a Task 8 não tocou código de produção.
+>
+> **Duas pendências levantadas pela execução e registradas (não consertadas):**
+> 1. **`AJUSTE` não reconcilia `quantidade_bloqueada`** — `BLOQUEIO` de 8 seguido de `AJUSTE` para 1
+>    deixa `quantidade_bloqueada (8) > quantidade_atual (1)`: **disponível negativo, sem guarda**.
+>    Mexe no `stockService` e a decisão é **de negócio** (baixar o bloqueado / recusar / avisar).
+>    Registrada em `specs/modulo-almoxarifado/03-motor-estoque/README.md` e no guia.
+> 2. **`ESTADO_PARCIAL` do destino SUCATA não notifica ninguém** — a auditoria registra, a resolução
+>    é manual (estorno pela tela de Movimentações). Registrada na spec 12 e no guia.
+>
+> **Próxima etapa: Etapa 8 — materiais de clientes.** A Etapa 8 do plano mestre foi **dividida** em
+> **8 = clientes** (spec 13) e **8b = terceiros** (spec 14). Design e plano já escritos — ver a
+> seção final deste documento.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** dar tela e regra às duas rotas que só existiam por API — transferência passa a exigir lote e a estar declarada em `REGRAS_VINCULO`; devolução passa a citar a saída original (com validação de quantidade e herança de lote) e a ter tela dedicada; e o **bug do SUCATA** (baixa dupla de estoque) é corrigido em commit próprio, antes de tudo.
@@ -2863,7 +2909,14 @@ não reescrever, só conferir que continua verdadeira depois do resto da etapa.
 
 ### Task 8: documentação e verificação final da etapa
 
-**Files:** os **6 documentos** listados na seção final da spec de design, cada um com o que muda:
+**Files:** os 6 documentos listados na seção final da spec de design — **mais um sétimo, que a spec
+não previa e o usuário exigiu:** `docs/almoxarifado-novidades-por-etapa.md`, o documento que ele
+**apresenta na empresa** como melhorias entregues. Exigência específica dele: cada **regra de
+negócio** e cada **validação** tem de estar explícita e **testável à mão**, com o cenário exato (o
+que digitar, o que o sistema recusa, e a **mensagem real** esperada) — ele demonstra os cenários ao
+vivo. Texto genérico ("melhorou a rastreabilidade") não serve.
+
+Cada documento, e o que muda:
 
 1. **`specs/modulo-almoxarifado/11-transferencias/README.md`**
    - Status no topo: 🟡 → 🟢 nas colunas de backend/regra, com a data e o range de hashes.
@@ -2906,7 +2959,7 @@ não reescrever, só conferir que continua verdadeira depois do resto da etapa.
    - Cabeçalho `✅ ETAPA CONCLUÍDA` com tabela task → hash, range de hashes da etapa e a **verificação final com números reais**.
    - Seção "Próxima tarefa da ordem do plano mestre" atualizada com o que a Etapa 7 deixou de contrato para a Etapa 8.
 
-- [ ] **Step 1: rodar TUDO e anotar os números reais** (não escrever "passou" — escrever `N/N`)
+- [x] **Step 1: rodar TUDO e anotar os números reais** (não escrever "passou" — escrever `N/N`)
 
 ```
 cd server && npm run test:api
@@ -2918,16 +2971,43 @@ cd client && CI=true npx react-scripts test --watchAll=false
 cd client && CI=true npx react-scripts build
 ```
 
-- [ ] **Step 2: atualizar os 6 documentos** conforme a lista acima.
+> **Executado em 2026-08-12 — ver a tabela de gates no cabeçalho deste documento.** `test:api`
+> **59/59 arquivos**; `test:almoxarifado` **43 passou, 0 falhou**; `test:validation` **4 passed, 0
+> failed**; `test:safealter` **3 passed, 0 failed**; `test:sqlite` **3 passed, 0 failed**; client
+> **196 passed em 17 suítes**; build **`Compiled successfully.`** sem warning. Nenhuma linha de
+> código de produção foi tocada nesta task.
 
-- [ ] **Step 3: commit**
+- [x] **Step 2: atualizar os documentos** conforme a lista acima — **7, não 6.**
+
+Afirmações **erradas** encontradas e corrigidas (o `CLAUDE.md` exige dizer que estavam erradas, não
+apagar em silêncio):
+
+1. **spec 12** — *"destino SUCATA emite `SUCATA`"*: descrevia como correto um comportamento que
+   baixava o estoque duas vezes. Corrigida com a medição e a explicação do que estava errado.
+2. **spec 12, cabeçalho** — *"🟡 falta vínculo à saída original e devolução com lote"*: as duas
+   coisas foram entregues nesta etapa.
+3. **spec 10, pendência (a) da 6b** — *"a reentrada de uma devolução com série se faz por ENTRADA
+   manual na tela de Movimentações, não por um campo de série na tela de Devolução, que não
+   existe"*: a tela existe e a devolução exige série nos destinos `ESTOQUE`/`QUARENTENA`.
+4. **spec 10, pendência (g)** — *"quatro fluxos internos isentos"*: **são dois**. A devolução saiu
+   nesta etapa; e o plano da Task 8 pedia para deixar "três" citando o recebimento — **o recebimento
+   nunca foi isento** (a rota declara `exigeLote` e recusa a nota inteira). Conferido contra a seção
+   "Lado 2" de `loteControleObrigatorio.api.test.js`, que tem exatamente dois testes.
+5. **guia, pendências conhecidas** — *"quatro operações movimentam estoque sem lote"*: são duas
+   (entrega e exclusão de requisição).
+6. **spec 11** — o checklist listava o trânsito como pendência aberta; passou a `[~] CORTADO por
+   decisão do cliente`, com o motivo escrito e a condição de retorno.
+
+- [x] **Step 3: commit** — **7 arquivos, não 6** (e nenhum `git add -A`)
 
 ```bash
 git add specs/modulo-almoxarifado/11-transferencias/README.md \
         specs/modulo-almoxarifado/12-devolucoes/README.md \
         specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md \
+        specs/modulo-almoxarifado/03-motor-estoque/README.md \
         specs/modulo-almoxarifado/README.md \
         docs/almoxarifado-guia-etapas-e-testes.md \
+        docs/almoxarifado-novidades-por-etapa.md \
         docs/superpowers/plans/2026-08-12-almoxarifado-etapa7-transferencias-devolucoes.md
 git commit -m "$(cat <<'EOF'
 Almoxarifado Etapa 7: atualiza specs, guia e plano com o que a etapa entregou
@@ -3015,12 +3095,31 @@ não colidem com `TIPOS_SAIDA_LOTE`, que continua existindo e passa a governar s
 
 ---
 
-## Próxima tarefa da ordem do plano mestre: Etapa 8 — materiais de clientes e terceiros
+## Próxima tarefa detalhada: **Etapa 8 — materiais de clientes** (a Etapa 8 foi DIVIDIDA)
 
 Com a Etapa 7 fechada, as features 11 (transferências) e 12 (devoluções) ficam 🟢 no que esta etapa
 se propôs, e a **ordem do plano mestre** (`specs/modulo-almoxarifado/README.md`, seção "Ordem de
-desenvolvimento sugerida") segue para a **Etapa 8: `13-materiais-clientes` + `14-materiais-terceiros`**.
-Isso já estava decidido antes desta etapa — não é escolha nova, é seguir a sequência.
+desenvolvimento sugerida") segue para a Etapa 8. Isso já estava decidido antes desta etapa — não é
+escolha nova, é seguir a sequência.
+
+> **A Etapa 8 do plano mestre cobria as features 13 E 14. Foi DIVIDIDA em 2026-08-12:**
+> **Etapa 8 = clientes (feature 13)** e **Etapa 8b = terceiros (feature 14)**. Mesmo precedente da
+> Etapa 6, que virou 6/6b/6c. Motivo: são subsistemas independentes, e terceiros é construção do
+> zero (remessa com máquina de estados, documento, retorno parcial, transformação chapa→peças).
+> Cada um fecha com testes passando por conta própria.
+>
+> **O design e o plano da Etapa 8 JÁ EXISTEM — não escrever de novo:**
+> - design: [`docs/superpowers/specs/2026-08-12-almoxarifado-etapa8-materiais-clientes-design.md`](../specs/2026-08-12-almoxarifado-etapa8-materiais-clientes-design.md)
+> - plano: [`docs/superpowers/plans/2026-08-12-almoxarifado-etapa8-materiais-clientes.md`](2026-08-12-almoxarifado-etapa8-materiais-clientes.md)
+>
+> **O que a Etapa 8 vai fazer, em uma frase:** material de cliente deixa de ser uma **ilha**
+> (`materiais_cliente_almoxarifado`, `descricao` em texto livre, sem FK, fora do motor, **tabela
+> vazia**) e vira material normal **com dono** — `materiais_almoxarifado.proprietario_cliente_id` —
+> ganhando lote, série, endereço, extrato, etiqueta e livro; com o saldo do cliente **fora** de toda
+> leitura de estoque próprio, saída travada em OS/projeto do próprio dono, ajuste sob permissão
+> dedicada, `DEVOLUCAO_CLIENTE` como tipo de saída de rota dedicada, e tela de posição por cliente.
+> Como a tabela está vazia e nunca houve interface para alimentá-la, a ilha pode ser **aposentada
+> sem migração de dados**.
 
 ### O contrato que a Etapa 7 deixa pronto para a 8
 

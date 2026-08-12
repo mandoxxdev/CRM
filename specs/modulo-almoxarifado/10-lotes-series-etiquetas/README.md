@@ -4,7 +4,16 @@
 > (Etapa 6b, 2026-08-11) e etiquetas com QR (Etapa 6c, 2026-08-11). A feature 10 fica completa
 > **exceto pelas pendências declaradas** nas três etapas (ver as seções de pendências, mais abaixo
 > — nenhuma bloqueia o critério de aceite do módulo) · **Spec original:** seção 10
-> **Última atualização:** 2026-08-11 (**Etapa 6c fechada — etiquetas com QR Code em PDF, a última
+> **Última atualização:** 2026-08-12 (**Etapa 7 — a devolução SAIU da lista de fluxos internos
+> isentos de `exigeLote`.** Eram quatro; agora são **dois** (entrega e exclusão administrativa de
+> requisição). `returnService.registrarDevolucao` declara `{ exigeLote: true }` e herda o lote da
+> saída original (`38d2391`); a transferência também passou a exigir lote (`5a1e188`), o que obrigou
+> a citar `TRANSFERENCIA` na condição da guarda, porque é ramo próprio do motor. Série: a devolução
+> aos destinos `ESTOQUE`/`QUARENTENA` passou a declarar `exigeSerie` e a reativar `ENTREGUE →
+> EM_ESTOQUE` (`9e27bcb`) — a pendência (a) da 6b dizia o contrário e foi **corrigida**, não apagada.
+> Continua fora: série no **descarte** de devolução e série na **transferência**, as duas com o
+> motivo escrito.)
+> Antes: 2026-08-11 (**Etapa 6c fechada — etiquetas com QR Code em PDF, a última
 > parte da feature 10.** Checklist de etiquetas marcado item por item com hash (Tasks 1-6,
 > `35967b9..0785119`; docs desta atualização). **Zero mudança de servidor** — util client
 > `client/src/utils/etiquetasPdf.js` (`FORMATOS_ETIQUETA` com `A4_GRADE` 2×5/99×57mm e
@@ -173,8 +182,10 @@ preso numa reserva que **nunca podia ser consumida**.
 | Movimentação manual — rota v2 (tela de Movimentações) | ✅ sim | `POST /movimentacoes/v2` declara `{ exigeLote: true }` |
 | Movimentação manual — rota v1 (modal rápido da tela de Materiais) | ✅ sim | `POST /movimentacoes` declara `{ exigeLote: true }` |
 | Recebimento (processar nota) | ✅ sim | `receiptService.darEntradaEstoque` declara, e a pré-checagem recusa a nota inteira antes de mover |
+| Devolução (tela de Devoluções) | ✅ sim — **desde a Etapa 7** | `returnService.registrarDevolucao` declara `{ exigeLote: true }`; herda o lote da saída original ou usa o seletor da tela na devolução avulsa (`38d2391`) |
+| Transferência | ✅ sim — **desde a Etapa 7** | `POST /transferencias` e o formulário de Movimentações; exigiu citar `TRANSFERENCIA` na condição do `if`, porque é ramo próprio do motor (`5a1e188`) |
 | `AJUSTE` puro | ❌ isento **por tipo** | regularização de estoque antigo sem lote — vale para qualquer chamador |
-| Os quatro fluxos internos | ❌ isentos — **pendência (g)** | ver abaixo |
+| Os **dois** fluxos internos restantes (entrega e exclusão de requisição) | ❌ isentos — **pendência (g)** | ver abaixo — eram **quatro** até 2026-08-12 |
 
 **Como a exigência é declarada:** `stockService.registrarMovimentacao(db, user, params, opcoes)`
 lê `opcoes.exigeLote` — **4º argumento, nunca `params`**. As rotas repassam `req.body` inteiro como
@@ -407,7 +418,7 @@ lote para decidir nada.
   > status gravado` (`lotes.api.test.js`) segura a decisão.
 - [x] `estoque_saldo_almoxarifado.lote` passa a referenciar a tabela (migração dos textos existentes, **deduplicando as linhas `lote IS NULL`**) — **`015e94c`** (+ `b4e4858`: o teste "migração idempotente" era vazio — rodava sobre banco que já nascia na forma nova e saía pelo early-return; foi renomeado honestamente e um teste real do corpo da migração entrou no lugar)
 - [x] **Saída não pode deixar a linha do lote negativa.** Guarda no `WHERE` do UPDATE, com `RETURNING` e compensação de `quantidade_atual` — **`65d78fd`**, mais cinco rodadas de review (`920d10c`, `f65758d`, `c2e31dc`, `1effd07`, `2d6fec5`)
-- [x] Aplicar `controle_lote`: material controlado exige lote **onde o operador tem como informá-lo** — movimentação manual (rotas v1 e v2) e recebimento — **`2dbbf60`**, alcance corrigido no review final do branch (2026-08-10). `AJUSTE` puro é isento por tipo (regularização); `AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO` **não** são. Os quatro fluxos internos são isentos e isso é **pendência (g)**, abaixo. Ver "O alcance REAL de `controle_lote`" — **esta linha dizia "em TODA entrada e saída", e essa redação descrevia um comportamento que travava a entrega e a devolução do material**
+- [x] Aplicar `controle_lote`: material controlado exige lote **onde o operador tem como informá-lo** — movimentação manual (rotas v1 e v2) e recebimento — **`2dbbf60`**, alcance corrigido no review final do branch (2026-08-10). `AJUSTE` puro é isento por tipo (regularização); `AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO` **não** são. **Atualização de 2026-08-12 (Etapa 7):** a devolução (`38d2391`) e a transferência (`5a1e188`) passaram a exigir lote — sobram **dois** fluxos internos isentos (entrega e exclusão de requisição), **pendência (g)**, abaixo. Ver "O alcance REAL de `controle_lote`" — **esta linha dizia "em TODA entrada e saída", e essa redação descrevia um comportamento que travava a entrega e a devolução do material**
 - [x] Aplicar `controle_certificado`: entrada sem certificado **entra bloqueada** (não falha — barrar a entrada foi o erro corrigido na Etapa 5); o `SELECT` morto em `receiptService` passou a ser usado de verdade — **`64686b1`** (+ `c11db85`: anexar certificado podia liberar um lote `REPROVADO` por corrida entre a leitura e a escrita; a pré-condição foi inteira para dentro do `WHERE` em `liberarBloqueioPorCertificado`)
 - [x] Validade: bloquear saída de lote vencido; sugestão FEFO (primeiro que vence sai primeiro) — **`65d78fd`** (guarda), **`556f86d`** (liberação com justificativa — Task 3b, ver abaixo), **`8dfeb0c`** (ordem FEFO na API), **`9406bff`** (FEFO pré-selecionado na tela, como sugestão e não imposição)
 - [ ] Rastreabilidade: consulta de tudo que aconteceu com um lote — **parcial, e o que falta é a consulta agregada.** Os dados existem e são consultáveis (`movimentacoes_almoxarifado.lote_id` desde `65d78fd`, `auditoria_log_almoxarifado` com `entidade='lote'` desde `b7035dd`, saldo por lote em `GET /materiais/:id/lotes` desde `8dfeb0c`), mas não há um "extrato do lote" que junte as três fontes como `GET /materiais/:id/extrato` faz para o material. A tela de lotes **já existe** desde a Task 9 (2026-08-09) — o que falta é só o extrato agregado dentro dela. **Fica para a Etapa 6b**, junto com a tela de série (ver Frontend)
@@ -656,9 +667,18 @@ aconteceu com o lote X" e "de qual item de qual nota este lote veio" se responde
 elas. Enquanto essa consulta não existir, elas continuam sendo dado gravado e nunca lido —
 registrado, não escondido.
 
-### (g) Quatro fluxos internos são ISENTOS da exigência de `controle_lote` — decisão do cliente, não lacuna esquecida
+### (g) DOIS fluxos internos são ISENTOS da exigência de `controle_lote` — decisão do cliente, não lacuna esquecida
 
-Decidido pelo cliente em 2026-08-10, no review final do branch. Estes quatro chamam
+> **Eram QUATRO até 2026-08-12. A devolução saiu desta lista na Etapa 7** (`38d2391`): tanto a
+> `ENTRADA_DEVOLUCAO` quanto a `SUCATA` do descarte passaram a declarar `exigeLote: true`. A isenção
+> existia porque **não havia de onde tirar um lote** — agora há nos dois caminhos: herda da saída
+> original quando a devolução cita a entrega, e a tela de Devoluções tem seletor de lote quando é
+> avulsa. Os dois testes de `loteControleObrigatorio.api.test.js` que provavam a isenção **mudaram
+> de lado no arquivo**, do "lado 2: isentos" para o "lado 1: exige". **A transferência também saiu**
+> (`5a1e188`), mas ela nunca esteve nesta tabela — era lacuna nomeada na spec 11, não isenção
+> declarada aqui.
+
+Decidido pelo cliente em 2026-08-10, no review final do branch. Estes dois chamam
 `stockService.registrarMovimentacao` **sem declarar `exigeLote`**, porque não têm de onde tirar um
 lote — não existe campo na tela nem parâmetro na chamada:
 
@@ -666,21 +686,24 @@ lote — não existe campo na tela nem parâmetro na chamada:
 |---|---|---|---|
 | Entrega de requisição | `requisitionService.entregarRequisicao` | `SAIDA` | baixa sem lote; a linha de saldo debitada é a `(localização resolvida, lote NULL)` |
 | Exclusão administrativa de requisição | `requisitionService.excluirRequisicao` | `ENTRADA` (estorno) | devolve sem lote — não volta para o lote de onde saiu |
-| Devolução para estoque/quarentena | `returnService.registrarDevolucao` | `ENTRADA_DEVOLUCAO` | idem: entra sem lote |
-| Descarte de devolução | `returnService.registrarDevolucao` | `SUCATA` | baixa sem lote |
+
+**Conferido contra o código em 2026-08-12:** a seção "Lado 2: os fluxos internos que continuam
+ISENTOS" de `loteControleObrigatorio.api.test.js` tem exatamente estes **dois** testes. O
+recebimento **não** é isento (a rota declara `exigeLote` e recusa a nota inteira), e o `AJUSTE` puro
+é isento **por tipo**, não por ser fluxo interno — ele vale para qualquer chamador.
 
 **Consequência concreta de deixar assim:** num material com `controle_lote` ligado, o saldo
 movimentado por esses caminhos fica na linha "sem lote" e **não** aparece no saldo de nenhum lote —
 a tela de Lotes some com essa parte, e o seletor FEFO da saída também. Não há perda de saldo: o
 total do material continua correto, e a soma das linhas continua batendo. O que se perde é a
-**rastreabilidade por lote** nesses quatro caminhos.
+**rastreabilidade por lote** nesses caminhos.
 
-**O conteúdo natural da etapa seguinte** é dar lote automaticamente a eles, e o desenho já está
-claro: **FEFO na entrega** (a requisição escolhe o lote que vence primeiro, como o seletor da tela
-já sugere — ou o operador escolhe na tela de separação, que ainda não tem campo de lote) e
-**herdar da saída original na devolução** (a devolução cita a OS/projeto; a movimentação de saída
-correspondente já guarda `lote_id` no ledger). Enquanto isso não existir, deixar a guarda ligada
-nesses caminhos seria travar operação — foi exatamente o defeito corrigido.
+**O que sobra do "conteúdo natural da etapa seguinte":** a metade da devolução **foi feita** na
+Etapa 7 — "herdar da saída original na devolução" era exatamente o desenho previsto aqui, e é o que
+`38d2391` implementou. O que continua aberto é **FEFO na entrega da requisição**: a requisição
+escolheria o lote que vence primeiro, como o seletor da tela já sugere, ou o operador escolheria na
+tela de separação, que ainda não tem campo de lote. Enquanto isso não existir, deixar a guarda
+ligada nesse caminho seria travar operação — foi exatamente o defeito corrigido em 2026-08-10.
 
 **Não confundir com a rota v1**: o modal rápido da tela de Materiais também não carrega lote no
 contrato, mas **continua exigindo** — ali o operador tem uma porta (a tela de Movimentações, que
@@ -692,12 +715,22 @@ Letradas independentemente das pendências de lote acima ((a)-(g)), para não co
 Nenhuma é lacuna esquecida — são decisões de escopo tomadas no design da 6b ou débitos técnicos
 conhecidos, registrados de propósito em vez de ficarem implícitos.
 
-- **(a) Os mesmos 4 fluxos internos + transferência são isentos de série** (entrega de requisição,
-  exclusão administrativa de requisição, devolução para estoque, sucata de devolução; e
-  transferência entre almoxarifados) — espelho exato do padrão já declarado para `controle_lote`
-  (ver pendência (g) do lote, acima). Reentrada de uma devolução com série se faz hoje por
-  **ENTRADA manual** na tela de Movimentações (o motor reativa série `ENTREGUE` de volta a
-  `EM_ESTOQUE`), não por um campo de série na tela de Devolução, que não existe.
+- **(a) Dois fluxos internos + transferência continuam isentos de série** (entrega de requisição e
+  exclusão administrativa de requisição; e transferência) — espelho exato do padrão já declarado
+  para `controle_lote` (ver pendência (g) do lote, acima).
+  > **CORREÇÃO (2026-08-12, Etapa 7): esta pendência dizia que a devolução era isenta de série e
+  > que "a reentrada de uma devolução com série se faz hoje por ENTRADA manual na tela de
+  > Movimentações, não por um campo de série na tela de Devolução, que não existe". As duas
+  > afirmações deixaram de ser verdadeiras.** A tela de Devoluções existe (`0722bfd`) e a devolução
+  > declara `exigeSerie` nos destinos `ESTOQUE`/`QUARENTENA` (`9e27bcb`): devolver material
+  > serializado por lá exige informar as séries e reativa `ENTREGUE → EM_ESTOQUE`. Antes disso, a
+  > devolução voltava o **saldo sem voltar a peça**, quebrando o invariante
+  > `COUNT(séries presentes) == quantidade_atual` a cada devolução.
+  > **O que continua fora, declarado:** série no **descarte** de devolução (destinos `SUCATA` e
+  > `RETRABALHO`) — o caminho é de dois passos, devolver ao Estoque e baixar em Movimentações, e
+  > mandar `series` para esses destinos devolve 400 **ensinando o caminho** em vez de ignorar o
+  > campo. E série na **transferência**, pelo motivo do motor: o claim de série só existe para
+  > entrada e saída (decisão 9 da Etapa 7, spec 11).
 - **(b) Reprovação por série via inspeção não está ligada** — espelho exato da pendência (e) do
   lote: `inspectionService.decidirInspecao` continua bloqueando o **material inteiro**, não a série
   individual. O status `BLOQUEADA` da série existe e funciona (via `mudarStatusSerie`, tela "Lotes
@@ -807,7 +840,9 @@ de teste, registrados de propósito.
 |-------|-------|--------|
 | Material com `controle_lote` exige lote na movimentação **manual** (v1 e v2) e no recebimento | `[rota v2] entrada sem lote…` / `[rota v2] saida sem lote…` / `[rota v1] o modal rapido…` / `[recebimento] nota com item sem lote…` — `loteControleObrigatorio.api.test.js` | ✅ `2dbbf60` + review final |
 | O corpo da requisição **não** desliga a exigência (`exigeLote` não vem do body) | `[rota v2] o corpo nao consegue desligar a exigencia` — mesmo arquivo | ✅ review final |
-| Os quatro fluxos internos passam **sem** lote em material controlado | `[requisicao] entrega…` / `[requisicao] exclusao administrativa…` / `[devolucao] ENTRADA_DEVOLUCAO…` / `[devolucao] SUCATA…` — mesmo arquivo | ✅ review final |
+| Os **dois** fluxos internos restantes passam **sem** lote em material controlado | `[requisicao] entrega…` / `[requisicao] exclusao administrativa…` — mesmo arquivo | ✅ review final |
+| A **devolução EXIGE lote** em material controlado (era isenta até 2026-08-12) | `[devolucao] devolucao avulsa sem lote em material com controle_lote e recusada` + `[devolucao] devolucao com lote informado passa e o saldo entra COM lote` — mesmo arquivo, **lado 1** | ✅ `38d2391` |
+| A **transferência EXIGE lote** em material controlado | `transferencia de material com controle de lote sem lote falha` + `o corpo nao consegue desligar a exigencia de lote na transferencia` — `transferenciaRegras.api.test.js` | ✅ `5a1e188` |
 | Saída consome o saldo **agregado** do lote, mesmo endereçado em outra localização | `saida consome o saldo do LOTE inteiro, mesmo endereçado em outra localizacao` + `saida acima do saldo AGREGADO do lote falha, com o numero que a tela mostra` — `loteGuardasSaida.api.test.js` | ✅ review final |
 | Saída recusada por lote não deixa linha zerada, e material legado continua no no-op do estorno | `saida recusada por lote NAO deixa linha zerada para tras` + `material legado continua no no-op do estorno depois de uma saida RECUSADA` — mesmo arquivo | ✅ review final |
 | Estorno de ENTRADA não negativa a linha do lote | `estorno de ENTRADA nao pode negativar a linha do lote (o -8 na direcao inversa)` + `…passa quando a linha comporta a reversao` + `material que permite negativo continua podendo negativar…` — mesmo arquivo | ✅ review final |

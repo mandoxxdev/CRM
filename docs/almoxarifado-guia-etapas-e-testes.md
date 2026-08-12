@@ -1,16 +1,32 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-11 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-12 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 6c) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 7) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-11
+> ## Onde o desenvolvimento parou — 2026-08-12
 >
-> **Etapas 1, 2, 3, 4, 5 e 6 completas — a Task 9 (correção da Etapa 6) também, e o review final do
-> branch inteiro já foi feito e corrigido. Etapa 6b (Números de Série) — ENTREGUE. Etapa 6c
-> (Etiquetas com QR Code) — ENTREGUE (`35967b9..0785119`), e é a última parte da feature 10: lote +
-> série + etiqueta física fecham o ciclo. Próxima etapa da ordem: Etapa 7 — Transferências e
-> Devoluções.**
+> **Etapas 1 a 7 completas.** A **Etapa 7 (Transferências e Devoluções) fechou em 2026-08-12**
+> (`29524fc..0722bfd`, mais os consertos `eabd848`/`7fc1b7f` e `d117dc2`). **Próxima etapa da ordem:
+> Etapa 8 — Materiais de Clientes** (a Etapa 8 do planejamento foi **dividida**: 8 = clientes,
+> 8b = terceiros; design e plano das duas já escritos).
+>
+> **🚨 ANTES DE SUBIR PARA PRODUÇÃO, LEIA ISTO.** A Etapa 7 corrigiu um bug de saldo: **devolver
+> material para o destino "Sucata" baixava o estoque duas vezes**. Quem já usou o sistema pode ter
+> saldo errado em casa, e a correção **não** conserta o passado. A consulta que identifica os casos
+> afetados está na seção da Etapa 7, em "O bug da Sucata" — **no banco de desenvolvimento a
+> checagem já foi feita e deu 0 devoluções (nenhum efeito lá); produção precisa da mesma
+> checagem**.
+>
+> **A Etapa 7 fechou as duas rotas que existiam sem nenhuma tela.** Transferir material entre
+> prateleiras e devolver material do chão de fábrica só eram alcançáveis por chamada direta à API —
+> ninguém no galpão conseguia fazer nem uma coisa nem outra. Agora **Transferência** é um tipo do
+> formulário de Movimentações (com origem, destino e lote) e existe a tela nova **Almoxarifado →
+> Devoluções**, onde a devolução fica ligada à entrega que a originou. Ver a seção "Etapa 7", mais
+> abaixo, para o roteiro completo e o que a etapa não cobre.
+>
+> **Antes: 2026-08-11.** Etapa 6c (Etiquetas com QR Code) — ENTREGUE (`35967b9..0785119`), a última
+> parte da feature 10: lote + série + etiqueta física fecham o ciclo.
 >
 > **A Etapa 6c fechou nesta mesma data, sem tocar uma linha do servidor.** PDF de etiqueta (folha A4
 > em grade de 10, ou térmica 100×50mm) gerado inteiro no navegador, com QR Code que abre a tela do
@@ -76,12 +92,11 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 >    localização e a saída saía de outra, a tela dizia "saldo 25" e o sistema respondia "saldo
 >    insuficiente: 0". Agora as duas pontas usam o mesmo número — o saldo total daquele lote.
 >
-> **A próxima é a Etapa 7 — Transferências e Devoluções** (specs 11 e 12, já auditadas em
-> 2026-08-11). Ver o planejamento mestre em `specs/modulo-almoxarifado/README.md` e a tarefa
-> detalhada no fim de
-> `docs/superpowers/plans/2026-08-11-almoxarifado-etapa6c-etiquetas.md`.
+> **A próxima é a Etapa 8 — Materiais de Clientes** (spec 13). Ver o planejamento mestre em
+> `specs/modulo-almoxarifado/README.md` e o plano detalhado em
+> `docs/superpowers/plans/2026-08-12-almoxarifado-etapa8-materiais-clientes.md`.
 
-## Tabela consolidada — todas as alterações (Etapas 1 a 6c)
+## Tabela consolidada — todas as alterações (Etapas 1 a 7)
 
 Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha estão nas seções da etapa correspondente, mais abaixo.
 
@@ -139,6 +154,16 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 6c | Lotes e Séries | Abrir a tela filtrada num lote/série exigia navegar manualmente | A tela aceita a URL `?material_id=&aba=&lote=/&serie=` (o que o QR da etiqueta codifica): abre já no material/aba certos, com a linha destacada |
 | 6c | Materiais | Não existia etiqueta avulsa de material | Botão de etiqueta por linha: material sem controle de lote/série abre o modal direto; material controlado navega para "Lotes e Séries" (a etiqueta certa mora lá) |
 | 6c | (novo) modal | — | **`EtiquetasPdfModal`**: escolhe o formato (folha A4 com 10 etiquetas, ou térmica 100×50mm 1 por página — o último escolhido fica lembrado), define cópias (etiqueta única) e gera o PDF com QR Code |
+| 7 | Movimentações | Transferir material entre prateleiras só existia por API — nenhuma tela chamava | **Transferência** é um tipo do formulário, mostrando **origem E destino** ao mesmo tempo (Entrada mostrava só destino, Saída só origem) mais o seletor de lote |
+| 7 | Movimentações | Material com "Controle por lote" transferia **sem dizer de qual lote saiu** — o oposto do que a opção promete | A transferência **exige o lote**. Na transferência **todos** os lotes servem, inclusive **bloqueado e vencido** — mover um lote reprovado de prateleira é legítimo, é assim que ele vai para a área de bloqueados |
+| 7 | Movimentações | "Devolução" era uma opção do formulário que criava um lançamento **solto**: sem motivo, sem condição, sem destino, e **sem criar registro nenhum** de devolução | Saiu do formulário; um aviso embaixo do campo Tipo aponta a tela nova. Continua no **filtro do livro**, senão os lançamentos antigos sumiriam da consulta |
+| 7 | Movimentações (livro) | O badge de Transferência saía **sem cor nenhuma** (classe de estilo inexistente — falha silenciosa) | Badge ciano-petróleo próprio: transferência não soma nem subtrai saldo, então pintá-la de verde (entrada) ou vermelho (saída) ensinaria a coisa errada |
+| 7 | Devoluções (tela nova) | Devolver material só por API, sem dizer de qual entrega veio; qualquer quantidade de qualquer material passava | Tela **Almoxarifado → Devoluções**: escolhe o material, vê **as entregas dele** (data, quantidade, quem retirou, requisição/OS, quanto já foi devolvido) e devolve **limitado ao que ainda resta** |
+| 7 | Devoluções | Não havia como devolver "mais do que foi entregue" ser recusado — não existia o conceito | Recusa dizendo **quanto resta**: *"a saída 1 entregou 10, já foram devolvidos 4 e restam 6"*. Devolução **avulsa** (sem entrega registrada) continua possível, para sobra antiga ou material entregue antes do sistema |
+| 7 | Devoluções | Devolução de material com controle de lote entrava **sem lote** e o saldo ficava **preso** (a saída seguinte exige lote e não achava nenhum) | O lote é **herdado da entrega** escolhida (aparece em modo leitura); na devolução avulsa, seletor de lote obrigatório |
+| 7 | Devoluções | Devolver peça com número de série voltava o **saldo sem voltar a peça** — a série continuava "Entregue" | A série volta para **"Em estoque"** junto. Nos destinos Sucata/Retrabalho a tela **não** oferece as séries e explica o caminho de dois passos |
+| 7 | Devoluções | **Devolver para Sucata baixava o estoque duas vezes** (o material já tinha saído na entrega, e a sucata descontava de novo) | O saldo **não muda** e o livro registra as duas linhas (Entrada de devolução + Sucata). **Ver o aviso de produção na seção da Etapa 7** |
+| 7 | Devoluções | Devolução **recusada** deixava a linha gravada mesmo assim — e a linha fantasma encolhia **para sempre** o que ainda podia ser devolvido daquela entrega | Recusa não deixa registro; se metade já tiver mexido no estoque, a linha fica marcada como estado parcial na auditoria (resolução manual pela tela de Movimentações) |
 
 ## Etapa 0 — Fundação (resumo)
 
@@ -979,6 +1004,266 @@ de verdade; o QR existe exatamente para carregar o resto.
 
 ---
 
+## Etapa 7 — Transferências e Devoluções (ENTREGUE — 2026-08-12)
+
+Duas rotas existiam no sistema desde sempre e **nenhuma das duas tinha tela**: transferir material
+de um endereço para outro e devolver material que voltou do chão de fábrica só eram alcançáveis por
+chamada direta à API. Além de invisíveis, as duas eram frouxas — a transferência não pedia o lote
+(mesmo em material com "Controle por lote" ligado) e a devolução aceitava **qualquer quantidade de
+qualquer material**, sem dizer de qual entrega veio.
+
+E quando esta etapa foi sondada, apareceu um bug de saldo que ninguém tinha visto. Leia o aviso
+abaixo antes de subir para produção.
+
+### 🚨 O bug da Sucata — quem já usou o sistema pode ter saldo errado em casa
+
+**O que estava errado:** devolver material para o destino **Sucata** baixava o estoque **duas
+vezes**. O raciocínio do erro: o material já tinha saído do estoque quando foi **entregue**; ao
+registrar a devolução para sucata, o sistema lançava mais uma saída, descontando de novo um saldo
+que nunca tinha voltado.
+
+Medido com o sistema rodando (não por leitura de código — a leitura não mostrava o problema):
+
+```
+estoque inicial            => 100
+saída de 10 (entrega)      =>  90
+devolução de 3 → Sucata    =>  87     ← ERRADO: o certo é 90
+devolução de 2 → Estoque   =>  89     ← controle: prova que a medição sabe medir
+```
+
+**O que mudou:** o destino Sucata agora lança **duas** movimentações — uma **Entrada de devolução**
+(o material voltou) seguida de uma **Sucata** (e foi descartado). O saldo fecha certo e o livro
+continua contando as duas coisas. A alternativa de simplesmente não lançar nada foi descartada: o
+saldo também ficaria certo, mas a sucata sumiria do livro, e o controle de retalhos e sucatas
+(feature 15) vai precisar dela lá.
+
+**A correção NÃO conserta o passado.** Onde já houve devolução para sucata antes do deploy, o saldo
+daquele material está **a menos** — pela quantidade que foi devolvida.
+
+**Como verificar, antes de subir para produção.** Rode esta consulta no banco de produção. Ela lista
+exatamente as devoluções para sucata que foram gravadas pelo comportamento **antigo** (as novas
+sempre têm uma Entrada de devolução com a mesma referência; as antigas não têm):
+
+```sql
+SELECT d.id, d.material_id, d.quantidade, d.created_at
+  FROM devolucoes_material_almoxarifado d
+ WHERE d.destino = 'SUCATA'
+   AND NOT EXISTS (
+         SELECT 1 FROM movimentacoes_almoxarifado m
+          WHERE m.referencia = 'DEV-' || d.id
+            AND m.tipo = 'ENTRADA_DEVOLUCAO');
+```
+
+- **Voltou vazio (0 linhas):** nada a fazer, nenhum saldo foi afetado.
+- **Voltou com linhas:** cada linha é um material cujo `quantidade_atual` está **menor** do que
+  deveria, exatamente pelo valor da coluna `quantidade`. O acerto é uma **contagem física** com
+  lançamento de **Ajuste** naquele material — decisão sua, porque o número certo é o que está na
+  prateleira hoje, não o que a conta diz.
+
+**Medido no banco de desenvolvimento (2026-08-12): a tabela de devoluções tem 0 linhas** — lá o bug
+nunca chegou a produzir efeito. Isso **não** dispensa rodar a consulta em produção.
+
+### O que mudou
+
+| Onde | Antes | Agora |
+|---|---|---|
+| Movimentações | Transferir material entre prateleiras não tinha tela nenhuma | **Transferência** é um tipo do formulário, com **Localização de origem** e **Localização de destino** ao mesmo tempo, mais o seletor de lote |
+| Movimentações | Material com "Controle por lote" transferia sem citar o lote | A transferência **exige** o lote. E aceita **qualquer** lote — inclusive bloqueado e vencido |
+| Movimentações | "Devolução" no formulário criava um lançamento solto e nenhum registro de devolução | Saiu do formulário; um aviso aponta a tela nova. Continua no filtro do livro |
+| Devoluções | Não existia tela | Tela **Almoxarifado → Devoluções**: lista o que já foi devolvido e um formulário que começa pelo **material** |
+| Devoluções | Nada ligava a devolução à entrega que a originou | Você escolhe **de qual entrega** está devolvendo, e o sistema mostra quanto daquela entrega ainda pode voltar |
+| Devoluções | Devolver mais do que foi entregue passava | Recusado, com a conta na mensagem |
+| Devoluções | Devolução de material com lote entrava sem lote e o saldo ficava preso | Lote **herdado da entrega**, ou escolhido na devolução avulsa |
+| Devoluções | Devolver peça serializada voltava o saldo sem voltar a peça | A série volta para **Em estoque** |
+| Devoluções | Devolver para Sucata baixava o estoque duas vezes | O saldo não muda; o livro mostra Entrada de devolução + Sucata |
+| Devoluções | Uma devolução **recusada** deixava registro mesmo assim | Recusa não deixa registro nenhum |
+
+### Regras de negócio e validações — cada uma com o cenário exato para demonstrar
+
+Todas as mensagens abaixo são **as mensagens reais do sistema**, copiadas do código. Se o que
+aparecer na tela for diferente, é bug — reporte.
+
+| # | Regra | O que fazer para testar | O que o sistema faz | Mensagem esperada |
+|---|---|---|---|---|
+| R1 | **Não se devolve mais do que foi entregue** | Material com uma entrega de **10**, da qual já foram devolvidos **4**. Em Devoluções, escolha essa entrega e digite **7** | **Recusa** | `Devolução acima do entregue: a saída 1 entregou 10, já foram devolvidos 4 e restam 6` (o número da saída é o da sua entrega) |
+| R2 | **Devoluções parciais somam** — 6 + 5 não cabem em 10, mas 6 + 4 cabem | Devolva **6** da entrega de 10 (passa). Tente **5** (recusa). Devolva **4** (passa) | 1ª e 3ª passam, a 2ª é recusada | a mesma de R1, com `restam 4` |
+| R3 | **A tela avisa antes de mandar** | Escolha uma entrega com devolvível 7 e digite **9** | O botão envia, mas a tela **barra antes de chamar o servidor** | toast: `Esta entrega ainda aceita 7 de devolução` |
+| R4 | **A entrega já devolvida por inteiro continua aparecendo** — desabilitada | Devolva **tudo** de uma entrega e reabra o formulário nesse material | A linha continua na lista, com "já devolvido por inteiro", e **não é selecionável** | — (esconder faria você procurar uma entrega que o sistema decidiu não mostrar) |
+| R5 | **Não se devolve o que foi descartado ou corrigido** | Lance uma **Sucata**, uma **Perda**, um **Ajuste** e uma **Entrada** no material, depois abra Devoluções nele | Nenhum dos quatro aparece na lista de entregas — só as saídas de entrega | — |
+| R6 | **Saída estornada não pode ser devolvida** | Estorne uma saída no livro e tente devolvê-la (só alcançável por API — a tela nem a oferece) | **Recusa** | `A saída 12 foi cancelada (estornada) — o estorno já devolveu o material` |
+| R7 | **Transferência exige lote em material controlado** | Em Movimentações, tipo **Transferência**, material com "Controle por lote", origem e destino escolhidos, **sem escolher lote** | **Recusa** | `O material MAT-001 exige lote nesta movimentacao (controle por lote ligado)` |
+| R8 | **Transferir lote BLOQUEADO ou VENCIDO é PERMITIDO — de propósito** | Bloqueie um lote em "Lotes e Séries". Em Movimentações → Transferência, selecione esse lote e transfira | **Passa.** No seletor de lote da Transferência **todos** os lotes ficam habilitados | — (é assim que um lote reprovado vai parar na área de bloqueados) |
+| R9 | **Controle positivo do R8:** numa **Saída**, os mesmos lotes continuam barrados | Mesmo material, mude o tipo para **Saída** e abra o seletor de lote | Lote bloqueado e lote vencido aparecem **desabilitados**, com o motivo | — |
+| R10 | **Transferir mais do que existe na origem falha** | Transferência de 50 de uma prateleira que tem 20 | **Recusa** e a origem **não** é debitada | `Saldo insuficiente na localização de origem` |
+| R11 | **A transferência não mexe no total do material** | Transfira 8 de A para B e confira o saldo total no Extrato | O total continua igual; muda o **endereço** | — (almoxarifado é área física, não filial — ver "Decisões de negócio") |
+| R12 | **Devolução de material com lote precisa dizer de qual lote** | Devolução **avulsa** (sem escolher entrega) num material com "Controle por lote", sem escolher lote | A tela barra antes de enviar | toast: `Material com controle por lote: informe de qual lote é a devolução` |
+| R13 | **Com entrega escolhida, o lote vem sozinho** | Escolha uma entrega que saiu do lote L-001 | O campo **Lote (herdado da entrega)** aparece em **modo leitura**, sem seletor | — |
+| R14 | **Devolver peça serializada ao estoque exige a série** | Material com "Controle por número de série", devolução de 1 unidade ao **Estoque**, sem marcar série | **Recusa** | `Material com controle de série: informe 1 número(s) de série para 1 unidade(s) devolvida(s) — recebidos 0` |
+| R15 | **Sucata de peça serializada é recusada ENSINANDO o caminho** | Mesmo material, marque a série e escolha destino **Sucata** | A tela **não oferece** os checkboxes e mostra o aviso; se forçado por API, o servidor recusa | `Devolução com número de série não é suportada no destino SUCATA. Devolva ao estoque e, em seguida, registre a baixa na tela Movimentações, que tem seletor de série.` |
+| R16 | **Sucata de material serializado SEM informar série continua passando** | Mesmo material, destino Sucata, **sem** marcar série nenhuma | **Passa** — a limitação é "não dá para informar a série aí", não "peça com série não pode ir para sucata" | — |
+| R17 | **Sucata com lote bloqueado é recusada ANTES de mexer no estoque** | Bloqueie o lote e tente devolver aquela entrega para **Sucata** | **Recusa**, e o saldo do material **não se move** (nem meio movimento) | `Lote L-001 está bloqueado e não pode ser sucateado por devolução. Resolva o status do lote primeiro (tela Lotes e Séries) e repita a devolução.` |
+| R18 | **Devolução recusada não deixa registro nem encolhe o devolvível** | Entrega de 10; faça uma devolução de 3 que o sistema **recuse** (R12 serve). Reabra o formulário no mesmo material | A recusa **não** aparece na lista de devoluções, e a entrega continua oferecendo **10** de devolvível (não 7) | — |
+| R19 | **Quarentena devolve o físico, não o disponível** | Devolva 6 com condição **Suspeita** / destino **Quarentena** e olhe o Extrato | `quantidade_atual` sobe 6; `Disponível` **não** sobe (fica bloqueado até a inspeção decidir) | — |
+| R20 | **Retrabalho não mexe em saldo nenhum** | Devolva com destino **Retrabalho** e confira o Extrato | O saldo fica igual; só entra a linha no livro | — |
+| R21 | **A condição SUGERE o destino, não determina** | Escolha condição **Danificada** (destino vira Sucata sozinho) e depois troque o destino para **Retrabalho** | O destino fica **Retrabalho** — a sugestão não desfaz sua escolha | — |
+| R22 | **Devolução avulsa continua possível** | Não escolha entrega nenhuma ("Devolução avulsa"), preencha quantidade e motivo | **Passa** — é o caminho para sobra antiga ou material entregue antes do sistema. Sem entrega, não há limite de quantidade nem lote a herdar | — |
+| R23 | **Motivo é obrigatório** | Deixe o motivo em branco e envie | A tela barra | toast: `Informe o motivo da devolução` |
+
+### Roteiro de teste manual (Etapa 7)
+
+**A) Transferir um lote entre duas prateleiras**
+
+1. Vá em **Almoxarifado → Movimentações** e clique em **Nova Movimentação**.
+2. Escolha um material que tenha **saldo endereçado** em alguma localização e com "Controle por
+   lote" ligado. No campo **Tipo**, escolha **Transferência**.
+3. Repare que aparecem **os dois** campos de localização ao mesmo tempo — "Localização de origem" e
+   "Localização de destino". Entrada mostra só destino, Saída mostra só origem; a transferência é o
+   único tipo com os dois.
+4. Escolha o lote, a quantidade, a origem e o destino, e salve.
+5. Vá em **Almoxarifado → Mapa de Localizações** (ou no **Extrato** do material) e confira: o saldo
+   **mudou de endereço**, e o **total do material continua o mesmo** (regra R11).
+6. Volte ao livro de movimentações: a linha nova aparece com o badge **Transferência** em
+   ciano-petróleo — cor própria, nem verde de entrada nem vermelho de saída, porque a transferência
+   não soma nem subtrai.
+
+**B) Transferência sem lote é recusada (regra R7)**
+
+7. Repita o passo 2 no mesmo material controlado, mas **não escolha lote nenhum**. Preencha origem,
+   destino e quantidade e salve.
+8. O sistema recusa com `O material <código> exige lote nesta movimentacao (controle por lote
+   ligado)`. **Esta era a lacuna:** antes da Etapa 7 a transferência passava sem lote, e o saldo
+   aparecia na prateleira nova sem dizer de qual lote tinha vindo.
+
+**C) Transferir um lote bloqueado — tem que FUNCIONAR (regra R8)**
+
+9. Vá em **Almoxarifado → Lotes e Séries**, escolha o material e **bloqueie** um lote (informe o
+   motivo).
+10. Volte em Movimentações → Transferência, mesmo material. Abra o seletor de lote: **todos** os
+    lotes estão habilitados, inclusive o que você acabou de bloquear e qualquer um vencido.
+11. Transfira 4 desse lote bloqueado. **Passa** — e é isso mesmo: é assim que um lote reprovado é
+    levado para a área de bloqueados do galpão.
+12. **Controle (regra R9):** troque o tipo para **Saída**, mesmo material. Agora o lote bloqueado e
+    o vencido aparecem **desabilitados**, com o motivo ao lado. A guarda de situação vive na saída,
+    que é onde ela protege alguma coisa.
+
+**D) Devolver parte de uma entrega**
+
+13. Faça uma **Saída** de 10 unidades de um material (Movimentações → Nova Movimentação → Saída),
+    para ter uma entrega para devolver.
+14. Vá em **Almoxarifado → Devoluções** (item novo no menu) e clique em **Nova Devolução**.
+15. Escolha o **material**. A lista **Entrega de origem** se preenche com as saídas daquele material
+    — cada linha mostra data, tipo, quantidade, requisição/OS, quem retirou, lote e **quanto ainda é
+    devolvível**.
+16. Escolha a entrega de 10, digite quantidade **4**, motivo **Sobra de projeto**, condição **Boa**
+    (repare que o destino vira **Estoque** sozinho — regra R21) e registre.
+17. Confira o Extrato do material: o saldo **subiu 4**.
+18. Abra **Nova Devolução** de novo no mesmo material: a **mesma entrega** reaparece, agora dizendo
+    **devolvível 6**.
+
+**E) Tentar devolver mais do que resta (regras R1 e R3)**
+
+19. Ainda na mesma entrega (devolvível 6), digite **9** e envie. A tela barra antes de chamar o
+    servidor: `Esta entrega ainda aceita 6 de devolução`.
+20. Para ver a mensagem **do servidor**, use uma quantidade que passe pela tela mas não pelo
+    servidor — ou simplesmente confie no teste automático: a mensagem é
+    `Devolução acima do entregue: a saída N entregou 10, já foram devolvidos 4 e restam 6`. **O
+    número tem que estar na mensagem** — mensagem sem número obriga você a adivinhar.
+
+**F) Devolver para Quarentena (regra R19)**
+
+21. Nova devolução no mesmo material, condição **Suspeita** — o destino vira **Quarentena** sozinho.
+    Registre 3.
+22. No **Extrato** do material: `quantidade_atual` **subiu 3** (o material está fisicamente no
+    galpão), mas o **Disponível não subiu** — os 3 estão bloqueados esperando decisão.
+23. Vá em **Almoxarifado → Inspeções** para ver o que está retido.
+
+**G) Devolver para Sucata — o saldo NÃO pode mudar (o bug corrigido)**
+
+24. Anote o saldo atual do material.
+25. Nova devolução, condição **Danificada** — o destino vira **Sucata** sozinho. Registre 2.
+26. **Confira o saldo: tem que estar igual ao do passo 24.** Se tiver caído 2, a correção não está
+    no ar.
+27. Abra o **livro de movimentações** filtrando por esse material: aparecem **duas** linhas novas —
+    uma **Entrada de devolução** e uma **Sucata**, ambas de 2. É assim que o saldo fecha e a sucata
+    continua registrada.
+
+**H) Devolver peça com número de série (regras R14, R15, R16)**
+
+28. Escolha um material com "Controle por número de série" que tenha alguma série **Entregue**
+    (faça uma Saída com série, se precisar).
+29. Em Devoluções, escolha esse material e a entrega. Aparecem **checkboxes com os números de série
+    daquela entrega**. Marque um e registre com destino **Estoque**.
+30. Vá em **Lotes e Séries → aba Séries** e confira: aquela série voltou para **Em estoque**. Antes
+    da Etapa 7 o saldo voltava e a série ficava "Entregue" para sempre.
+31. **Agora o caminho de dois passos.** Repita, mas escolha destino **Sucata**: os checkboxes
+    **desaparecem** e a tela mostra o aviso explicando que você deve devolver ao Estoque e depois
+    baixar em **Movimentações**, que tem seletor de série. Faça isso e confirme que funciona.
+32. **Regra R16:** o mesmo material **sem** marcar série nenhuma vai para Sucata normalmente — o que
+    não dá é *informar a série* nesse destino.
+
+**I) Devolução avulsa e o lote (regras R12, R13, R22)**
+
+33. Em Devoluções, escolha um material com "Controle por lote" e **não** escolha entrega
+    (a opção "Devolução avulsa (sem entrega registrada)"). Preencha quantidade e motivo e envie sem
+    escolher lote: `Material com controle por lote: informe de qual lote é a devolução`.
+34. Escolha o lote no seletor e registre. Passa.
+35. Agora escolha uma **entrega** que tenha saído de um lote: o seletor some e aparece **Lote
+    (herdado da entrega)** em modo leitura, com o código do lote. Você não escolhe — o sistema já
+    sabe de onde saiu.
+
+**J) O aviso em Movimentações**
+
+36. Vá em Movimentações → Nova Movimentação e abra o campo **Tipo**: **"Devolução" não está mais
+    lá**. Embaixo do campo, um aviso explica que devolução de material entregue é registrada na
+    **tela de Devoluções**, com link.
+37. Feche o modal e olhe o **filtro** do livro: **"Devolução" continua lá**. É de propósito — os
+    lançamentos antigos de devolução precisam continuar visíveis e filtráveis.
+
+### Pendências que a Etapa 7 levantou (registradas, não consertadas)
+
+- **⚠️ Ajuste de inventário não acerta o "bloqueado" (achado ao testar esta etapa).** Se um material
+  tem 8 unidades **bloqueadas** (quarentena, defeito) e você lança um **Ajuste** levando o total
+  para 1, o sistema aceita e fica com `bloqueado (8) > total (1)` — o **Disponível fica negativo** e
+  **nada avisa**. É plausível no dia a dia: a contagem acha menos do que o sistema dizia, e parte do
+  que existia estava retida. **Não foi consertado porque a decisão é sua**, e as três respostas são
+  defensáveis: (1) o Ajuste baixa o bloqueado junto; (2) o Ajuste é **recusado** enquanto houver
+  retenção maior que o total pretendido; (3) o Ajuste passa e apenas **avisa**. Hoje o
+  comportamento é o (3) **sem o aviso**, que é a pior das três. Enquanto isso: **resolva a
+  quarentena antes de lançar um ajuste que reduz o total**.
+- **Estado parcial na devolução para Sucata, sem notificação.** O destino Sucata lança duas
+  movimentações; se a segunda falhar depois de a primeira ter entrado, a devolução fica registrada
+  como **estado parcial** na auditoria e a resolução é **manual** — estornar a Entrada de devolução
+  órfã pela tela de **Movimentações**. **Ninguém é notificado**: descobrir depende de alguém abrir a
+  auditoria. É o cenário mais raro possível (as validações de lote e de série rodam antes,
+  justamente para impedir isso), mas fica registrado em vez de implícito.
+- **Sucata/Retrabalho de peça serializada exige dois passos** (devolver ao Estoque, depois baixar em
+  Movimentações). É limitação **declarada**, não bug — ver a regra R15.
+
+### O que a Etapa 7 **não** cobre
+
+- **"Em trânsito" foi CORTADO por decisão sua, não esquecido.** O plano original previa
+  transferência com estados (solicitada → aprovada → **em trânsito** → recebida → confirmada), com
+  o material não disponível nem na origem nem no destino enquanto estivesse a caminho. Como os
+  almoxarifados são **áreas físicas do mesmo site** e existe **uma filial só**, alguém pega a caixa
+  e leva na hora: não há janela em que o material esteja "a caminho". Se um dia houver obra externa
+  ou um segundo prédio, o item volta.
+- **Aprovação de transferência, e-mail de transferência e alerta "transferência não recebida"** —
+  saíram junto com o trânsito (os dois últimos pressupõem que exista trânsito).
+- **Série na transferência.** A série continua mostrando a **localização antiga** depois de uma
+  transferência. Não há perda de saldo nem de rastreabilidade da peça — só o endereço da série fica
+  desatualizado. O saldo real, que a transferência move corretamente, mora em outro lugar.
+- **Série no descarte de devolução** (Sucata/Retrabalho) — caminho de dois passos, ver R15.
+- **Fotos/anexos da devolução** — não implementado.
+- **Devolução ao fornecedor** — é fluxo próprio, com documento fiscal e contraparte externa; não é
+  "a mesma devolução com outro destino".
+- **Estorno de custo de projeto** quando o material volta — depende da integração de custos.
+- **Tipos de devolução por origem** (de ferramenta, de cliente) — dependem das features 16 e 13.
+- **A quarentena da devolução não entra na fila formal de inspeção.** Devolver com destino
+  Quarentena bloqueia o saldo corretamente, mas não cria o item de inspeção com recebimento de
+  origem que a tela de Inspeções usa.
+
+---
+
 ## Decisões de negócio (não são pendências)
 
 - **Almoxarifado é área física, não filial.** Os almoxarifados representam áreas de alocação dentro do mesmo site (galpão, mezanino, área externa). O cliente tem uma única filial. Por isso o **saldo de cada material é um só**, somado em todas as áreas — o almoxarifado serve para você *achar onde o item está*, não para manter estoques separados. Uma saída consome o saldo total do material, independente da área em que ele está endereçado. Isso é intencional: se algum dia existir uma segunda filial, a regra muda, mas hoje tratar como dois estoques seria errado.
@@ -1015,14 +1300,20 @@ de verdade; o QR existe exatamente para carregar o resto.
   Materiais, formato A4 e térmica. Falta confirmar a impressora física do galpão com o cliente, e
   a etiqueta de retalho (aguarda a feature 15 ganhar tela) — ver "O que a Etapa 6c não cobre", na
   seção da etapa, acima.
-- **Lote na entrega de requisição e na devolução (novo, 2026-08-10).** Quatro operações movimentam
-  estoque sem lote mesmo em material com "Controle por lote": entrega de requisição, exclusão de
-  requisição (estorno), devolução para estoque e sucata de devolução. Nenhuma tem campo de lote.
-  Até 2026-08-10 o sistema **exigia** lote nelas — e o efeito era que o material com a opção ligada
-  não podia ser entregue nem devolvido, com a reserva da requisição presa segurando saldo. A
-  exigência foi retirada desses quatro caminhos; o que fica pendente é o oposto: **preencher o lote
-  sozinho** (o que vence primeiro na entrega, o lote de origem na devolução), que é o conteúdo
-  natural da próxima etapa de lotes.
+- **Lote na entrega de requisição (atualizado em 2026-08-12 — a metade da devolução foi resolvida).**
+  Até 2026-08-10 o sistema exigia lote em **quatro** operações que não têm campo de lote — e o
+  efeito era que material com "Controle por lote" ligado **não podia ser entregue nem devolvido**,
+  com a reserva da requisição presa segurando saldo. A exigência foi retirada dos quatro. **A Etapa
+  7 devolveu a exigência a dois deles, agora com onde informar o lote:** a devolução para
+  estoque/quarentena e a sucata de devolução **herdam o lote da entrega** (ou usam o seletor da tela
+  de Devoluções, na devolução avulsa). **Sobram duas**, e continuam sem campo de lote: **entrega de
+  requisição** e **exclusão de requisição (estorno)**. O pendente nelas é preencher o lote sozinho —
+  o que vence primeiro (FEFO) na entrega, e o lote de origem no estorno.
+- **⚠️ Decisão de negócio esperando você (3): Ajuste de inventário não acerta o "bloqueado"
+  (novo, 2026-08-12).** Material com 8 unidades bloqueadas e um Ajuste levando o total para 1 fica
+  com bloqueado maior que o total — **Disponível negativo, sem nenhum aviso**. Ver a seção da Etapa
+  7, em "Pendências que a Etapa 7 levantou", com as três respostas possíveis. Enquanto não houver
+  decisão: **resolva a quarentena antes de lançar um ajuste que reduz o total**.
 - **Reprovar na inspeção não marca o lote.** A tela de Inspeções continua bloqueando o **material
   inteiro**, não o lote específico. Reprovar 10 unidades de um lote de 100 bloqueia 10 do material —
   o lote em si continua "Ativo" e sai normalmente. Ligar as duas coisas é mudança na tela de

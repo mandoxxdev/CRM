@@ -1,7 +1,23 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-11 (**Etapa 6c fechada — etiquetas com QR Code em PDF,
+> **Última atualização:** 2026-08-12 (**Etapa 7 fechada — transferências e devoluções,
+> `29524fc..0722bfd` + os consertos `eabd848`/`7fc1b7f` e `d117dc2`.** Features **11 e 12 viram
+> 🟢**. Backend: `TRANSFERENCIA` em `REGRAS_VINCULO` e guarda de `exigeLote` alcançando o ramo
+> próprio do motor; devolução com `movimentacao_saida_id`/`lote_id`, validação do vínculo, herança
+> de lote, série nos destinos `ESTOQUE`/`QUARENTENA`, e a rota `GET /devolucoes/saidas-elegiveis`.
+> Cliente: `TRANSFERENCIA` entra no formulário de Movimentações e `DEVOLUCAO` sai dele; tela nova
+> `/almoxarifado/devolucoes` (code-split em `routes/lazyModules.js`). **Um bug de saldo corrigido em
+> commit próprio antes das features:** devolver para sucata baixava o estoque duas vezes — a spec 12
+> descrevia o comportamento errado como certo, e a correção da spec diz isso com todas as letras.
+> **O "em trânsito" da spec 11 foi CORTADO por decisão do cliente** (site único), não esquecido.
+> Números: `test:api` **59/59 arquivos**, `test:almoxarifado` **43/0**, `test:validation` **4/0**,
+> `test:safealter` **3/0**, `test:sqlite` **3/0**; client **196 testes em 17 suítes**, build
+> `Compiled successfully.` **Duas pendências novas registradas:** `AJUSTE` não reconcilia
+> `quantidade_bloqueada` (spec 03) e o `ESTADO_PARCIAL` da devolução não notifica ninguém (spec 12).
+> **Próxima etapa da ordem: Etapa 8 — materiais de clientes** (spec 13); a Etapa 8 original foi
+> **dividida** em 8 (clientes) e 8b (terceiros).)
+> Antes: 2026-08-11 (**Etapa 6c fechada — etiquetas com QR Code em PDF,
 > `35967b9..0785119`.** Feature 10 fica **completa por inteiro** (lote + série + etiqueta física
 > com QR) — as três partes entregues. Zero mudança de servidor: util client
 > `utils/etiquetasPdf.js` (formatos A4/térmica, montadores, renderizador `jspdf`+`qrcode`) + modal
@@ -39,8 +55,8 @@
 | 08 | [Recebimento](08-recebimento/README.md) | 🟡 | 🟡 | 🟡 | 🟡 **Etapa 5 entregue (2026-08-08)**: entrada de item que exige inspeção deixou de ser barrada — agora entra sempre, retida (`quantidade_em_inspecao`), via movimentação `QUARENTENA` vinculada ao recebimento; review final 2026-08-10 (`6bb455d`): entrada da nota **atômica e idempotente** (reprocessar não duplica estoque) — spec da feature atualizada em 2026-08-11, estava parada em 08-09; falta tipos de entrada (8.1) e conferência física estruturada (fora do escopo, decisão do design) |
 | 09 | [Inspeção e qualidade](09-inspecao-qualidade/README.md) | 🟡 | 🟡 | 🟡 | 🟡 **Etapa 5 entregue (2026-08-08)**: decisão de inspeção real (aprovar/reprovar/parcial) com claim atômico em duas fases, bloqueio/desbloqueio avulso com justificativa obrigatória, tela `/almoxarifado/inspecoes`; falta plano de inspeção com medidas, não conformidade formal, desvio autorizado e perfil QUALIDADE (fora do escopo). Pendência criada: material reprovado fica bloqueado sem vínculo ao recebimento de origem até a feature 12 consumir o `encaminhamento` registrado |
 | 10 | [Lotes, séries e etiquetas](10-lotes-series-etiquetas/README.md) | 🟢 | 🟢 | 🟢 | 🟢 **As três partes completas: Etapa 6 + Task 9 (2026-08-09, `b7035dd..9406bff` + `09c75d2`); Etapa 6b — série, backend + UI (2026-08-11, `418d617..b46d820`); Etapa 6c — etiquetas com QR, 100% client (2026-08-11, `35967b9..0785119`).** Lote deixou de ser texto livre: tabela `lotes_almoxarifado` + `lotService` dono do ciclo de vida, saldo referenciando o lote por FK (`lote_id`) e sem as 3 colunas de retenção que nunca tiveram escritor, saída validando status/validade/saldo **do próprio lote** (o bug do −8 em silêncio), `controle_lote` e `controle_certificado` acesas (Etapa 6), lote nascendo no recebimento, FEFO na API e na tela, e liberação de vencimento com justificativa auditada (Task 3b). **Série é entidade real, com UI completa** (Etapa 6b): tabela `series_almoxarifado`, `seriesService` completo (leitura/entrada/saída/reversões/bloqueio/mudança de status), motor integrado a movimentações manuais e recebimento — requisições e inspeção seguem isentos, ver pendências (a)/(b) da 6b na spec 10 —, duas rotas HTTP, e telas — Movimentações (textarea+gerador na entrada, seletor filtrado por lote na saída), Recebimentos (textarea de séries por item), aba "Séries" dentro de "Lotes e Séries" (bloquear/desbloquear com justificativa), hint da flag no formulário de material, KPI no extrato. **A ressalva que sobra:** o modal rápido de entrada/saída da tela de Materiais (rota v1) continua sem campo de série e sempre recusa material controlado — use Movimentações. **A Task 9 fechou a lacuna que a Etapa 6 deixou**: tela `/almoxarifado/lotes` (mudar status, liberar vencimento, anexar certificado — o caso que destravava material preso por `controle_certificado`) e Sucata/Perda selecionáveis na Movimentação. **A Etapa 6c fecha a feature**: PDF de etiqueta (A4 em grade ou térmica 100×50) gerado inteiro no client, com QR que abre a tela do item já filtrada e destacada — código GMP, nome truncado e a linha de lote/série vão para o papel; o resto fica atrás do QR de propósito (overload de informação era o erro a evitar). Zero mudança de servidor. **Faltam:** extrato agregado do lote, as flags `controle_validade`/`controle_corrida` continuam mortas, etiqueta de retalho (aguarda UI da feature 15), etiqueta de localização (cortada de propósito — o mapa já cobre). Pendências abertas: extrato agregado do lote, lote/série automáticos nos 4 fluxos internos + transferência, reprovação por lote/série não ligada à inspeção, reserva por lote/série inexistente, 4 colunas de lote com escritor e sem leitor, compensações do motor não failure-safe (débito arquitetural, resolve na migração Postgres), impressora física do galpão não confirmada, QR lido sem sessão perde o destino depois do login (melhoria global de auth, fora do escopo client da 6c), e 2 decisões de negócio aguardando o cliente — ver a spec 10 |
-| 11 | [Transferências](11-transferencias/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem trânsito |
-| 12 | [Devoluções](12-devolucoes/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem vínculo à saída |
+| 11 | [Transferências](11-transferencias/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd`)** — a transferência exige lote em material controlado (exigiu estender a guarda do motor: `TRANSFERENCIA` é **ramo próprio**, fora de `tiposEntrada`/`tiposSaida`, então declarar `exigeLote` na rota não bastava), está declarada em `REGRAS_VINCULO` com `{ vinculo: 'nenhum' }`, e ganhou tela **dentro do formulário de Movimentações** (origem + destino + seletor de lote), não tela dedicada — a transferência *é* uma movimentação origem→destino e o formulário já tinha 90% dela. **O "em trânsito" foi CORTADO por decisão do cliente, não é pendência**: os almoxarifados são áreas físicas do mesmo site, o cliente tem uma filial só, alguém pega a caixa e leva na hora; com ele saíram aprovação, recebimento com conferência e o alerta "não recebida". Intencional e testado: transferência **não** checa status nem vencimento do lote (mover lote reprovado de prateleira é como ele vai parar na área de bloqueados). Fora de escopo declarado: **série na transferência** (o claim de série no motor só existe para entrada e saída; o `localizacao_id` da série é informativo e o saldo real, que a transferência move certo, vive em `estoque_saldo_almoxarifado`) |
+| 12 | [Devoluções](12-devolucoes/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd` + `eabd848`)** — devolução cita a saída original (vínculo **opcional mas validado**: mesmo material, não cancelada, tipo devolvível, e `quantidade + já devolvido ≤ entregue` com a mensagem **dizendo quanto resta**), herda o `lote_id` da entrega, reativa a série `ENTREGUE → EM_ESTOQUE`, e tem tela dedicada em `/almoxarifado/devolucoes` (começa pelo **material**, porque pela requisição não se alcança saída manual). Duas colunas por `safeAlter` e a rota de leitura `GET /devolucoes/saidas-elegiveis`. **Bug de saldo corrigido em commit próprio (`29524fc`): devolver para sucata baixava o estoque DUAS vezes** — 100 → saída 10 → 90 → devolução 3 para sucata dava **87**; a spec 12 descrevia esse comportamento como se estivesse certo e foi corrigida dizendo que estava errada. Conserto fora do plano (`eabd848`): devolução recusada não deixa mais linha gravada (compensação), porque a linha fantasma encolhia **permanentemente** o devolvível da entrega citada. Fora de escopo declarado: série no **descarte** de devolução (caminho de dois passos, com 400 que ensina o caminho), fotos/anexos, devolução ao fornecedor, estorno de custo de projeto (22), tipos de devolução por origem (13/16) |
 | 13 | [Materiais de clientes](13-materiais-clientes/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem UI |
 | 14 | [Materiais em terceiros](14-materiais-terceiros/README.md) | ❌ | ❌ | ❌ | ❌ |
 | 15 | [Retalhos, sobras e sucatas](15-retalhos-sucatas/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem UI |
@@ -98,14 +114,46 @@ Tipos de entrada; conferência física; quarentena e bloqueio efetivos no saldo.
   [`docs/superpowers/plans/2026-08-11-almoxarifado-etapa6c-etiquetas.md`](../../docs/superpowers/plans/2026-08-11-almoxarifado-etapa6c-etiquetas.md).
 
 `6b`/`6c` e não `7`/`8` porque as etapas 7 e 8 abaixo já estão ocupadas. **Com a 6c fechada, a
-feature 10 está completa por inteiro — a próxima etapa da ordem deste plano mestre é a Etapa 7,
-logo abaixo: transferências e devoluções.**
+feature 10 ficou completa por inteiro; a Etapa 7 (transferências e devoluções) fechou em 2026-08-12,
+e a próxima da ordem é a Etapa 8 — materiais de clientes.**
 
-### Etapa 7 — Transferências e devoluções → `11-transferencias` + `12-devolucoes`
-Estado "em trânsito"; devolução vinculada à saída original.
+### Etapa 7 — ✅ ENTREGUE em 2026-08-12 → `11-transferencias` + `12-devolucoes`
+`29524fc..0722bfd`, mais os consertos `eabd848`/`7fc1b7f` (compensação da devolução recusada) e
+`d117dc2` (badge de `TRANSFERENCIA` sem cor no livro).
 
-### Etapa 8 — Materiais de clientes e terceiros → `13-materiais-clientes` + `14-materiais-terceiros`
-UI de materiais de cliente; remessas a terceiros com prazos e retornos.
+- **Transferência**: exige lote em material controlado, declarada em `REGRAS_VINCULO`
+  (`{ vinculo: 'nenhum' }`), e virou tipo do formulário de **Movimentações** com origem, destino e
+  seletor de lote. Não checa status nem vencimento do lote — **de propósito, com teste**.
+- **Devolução**: cita a saída original com validação de quantidade (a recusa diz **quanto resta**),
+  herda o lote, reativa a série, e tem tela dedicada `/almoxarifado/devolucoes`. `DEVOLUCAO` saiu do
+  formulário genérico de Movimentações — ali criava lançamento solto e nenhum registro de devolução.
+- **Bug de saldo corrigido em commit próprio (`29524fc`)**: devolver para sucata baixava o estoque
+  **duas vezes**. A spec 12 descrevia o comportamento errado como se fosse correto — corrigida
+  dizendo que estava errada.
+- **O estado "em trânsito" da spec 15/11 foi CORTADO por decisão do cliente** (site único; a
+  transferência é imediata). **Não é pendência esquecida** — se um dia houver obra externa ou
+  segundo prédio, o item volta com justificativa nova.
+
+Plano: [`docs/superpowers/plans/2026-08-12-almoxarifado-etapa7-transferencias-devolucoes.md`](../../docs/superpowers/plans/2026-08-12-almoxarifado-etapa7-transferencias-devolucoes.md) ·
+design: [`docs/superpowers/specs/2026-08-12-almoxarifado-etapa7-transferencias-devolucoes-design.md`](../../docs/superpowers/specs/2026-08-12-almoxarifado-etapa7-transferencias-devolucoes-design.md).
+
+### Etapa 8 — Materiais de clientes → `13-materiais-clientes` **(próxima da ordem)**
+
+**A Etapa 8 foi DIVIDIDA em 2026-08-12**, mesmo precedente da Etapa 6 (que virou 6/6b/6c): clientes
+e terceiros são subsistemas independentes, e terceiros é construção do zero (remessa com máquina de
+estados, documento, retorno parcial, transformação chapa→peças). Cada um fecha com testes passando
+por conta própria.
+
+- **Etapa 8 = clientes (feature 13).** Material de cliente deixa de ser ilha
+  (`materiais_cliente_almoxarifado`, texto livre, sem FK, sem motor, tabela **vazia**) e vira
+  material normal com dono: `materiais_almoxarifado.proprietario_cliente_id`. Ganha lote, série,
+  endereço, extrato, etiqueta e livro; saldo do cliente fica **fora** de toda leitura de estoque
+  próprio; saída travada em OS/projeto do próprio dono.
+  Design e plano prontos:
+  [`…etapa8-materiais-clientes-design.md`](../../docs/superpowers/specs/2026-08-12-almoxarifado-etapa8-materiais-clientes-design.md) ·
+  [`…etapa8-materiais-clientes.md`](../../docs/superpowers/plans/2026-08-12-almoxarifado-etapa8-materiais-clientes.md).
+- **Etapa 8b = terceiros (feature 14)** → `14-materiais-terceiros`: remessas com prazos e retornos,
+  plano e design próprios.
 
 ### Etapa 9 — Retalhos e ferramentas → `15-retalhos-sucatas` + `16-ferramentas-calibracao`
 UI de sobras; baixa dimensional; calibração com vencimento.
