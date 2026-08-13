@@ -509,7 +509,11 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   const saldoAnterior = material.quantidade_atual;
   let saldoPosterior = saldoAnterior;
 
-  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
+  // Etapa 8c: RETORNO_TRANSFORMACAO entra em tiposEntrada NOS DOIS lugares deste arquivo — aqui e
+  // em cancelarMovimentacao (~:1388). Esquecer o segundo torna o motor assimetrico: a entrada
+  // acontece e o estorno dela nao, marcando cancelado=1 com linha de ESTORNO de
+  // saldo_anterior == saldo_posterior. Foi o quarto defeito que so a EXECUCAO da 8b achou.
+  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO', 'RETORNO_TRANSFORMACAO'];
   // Etapa 8: DEVOLUCAO_CLIENTE e SAIDA (decisao 9) — o material sai do predio de volta para o dono.
   // NAO CONFUNDIR com a devolucao da Etapa 7 (ENTRADA_DEVOLUCAO, returnService), onde o material
   // VOLTA para o estoque: direcoes opostas, nomes parecidos. Estando aqui, ela debita saldo, exige
@@ -1385,7 +1389,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   // rejeita. O material volta ao DISPONIVEL, que e o unico estado que sobra fazendo sentido.
   // Deixa-los FORA seria o pior dos mundos: cairiam no if-chain sem ramo, marcados cancelado = 1
   // com linha de ESTORNO de saldo_anterior == saldo_posterior, e o material baixado nunca voltaria.
-  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
+  //
+  // Etapa 8c: RETORNO_TRANSFORMACAO entra aqui TAMBEM, e a decisao foi tomada olhando ESTE ramo e
+  // nao copiada do outro. O ramo de entrada abaixo subtrai quantidade_atual e NAO reverte custo
+  // (decisao explicita da Etapa 1, ~:1548) — comportamento aceito e testado como tal em
+  // tests/api/transformacaoMotor.api.test.js. Deixa-lo FORA seria o pior dos mundos: cairia no
+  // if-chain sem ramo (nao ha `else` final), marcado cancelado=1 com linha de ESTORNO de
+  // saldo_anterior == saldo_posterior, e a peca creditada nunca sairia do saldo.
+  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO', 'RETORNO_TRANSFORMACAO'];
   const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO',
     'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
   const material = await getMaterial(db, mov.material_id);

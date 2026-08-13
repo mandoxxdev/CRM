@@ -59,6 +59,14 @@ const REGRAS_VINCULO = {
   RETORNO_TERCEIRO: { vinculo: 'nenhum', justificativa: true },
   PERDA_TERCEIRO: { vinculo: 'nenhum', justificativa: true },
   CONSUMO_TERCEIRO: { vinculo: 'nenhum', justificativa: true },
+
+  // Etapa 8c: mesma forma dos quatro da 8b, e pela mesma razao. Justificativa porque o tipo muda a
+  // resposta a pergunta "de onde veio esse material?" e a resposta tem de estar escrita — no
+  // extrato da peca, sem ela, ela teria aparecido do nada. Vinculo 'nenhum' porque o vinculo mora
+  // no DOCUMENTO da remessa (fornecedor, prazo, OS/projeto e proprietario ficam em
+  // remessas_terceiro_almoxarifado); exigi-lo de novo aqui duplicaria a regra em dois lugares que
+  // divergiriam na primeira mudanca.
+  RETORNO_TRANSFORMACAO: { vinculo: 'nenhum', justificativa: true },
 };
 
 function avaliarRegrasVinculo(tipo, params) {

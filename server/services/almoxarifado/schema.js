@@ -78,6 +78,22 @@ const TIPOS_MOVIMENTO = [
   // baixaria so quantidade_atual, deixando quantidade_em_terceiros preso: o saldo orfao que a
   // decisao 4 existe para evitar.
   'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+  // Etapa 8c (decisao 2 do design): o credito das pecas cortadas. E ENTRADA de verdade — credita
+  // quantidade_atual e aceita custo_unitario, alimentando o custo medio pelo caminho que ja existe.
+  //
+  // Por que NAO reusar ENTRADA_MANUAL, em ordem de gravidade:
+  //  1. DONO: ENTRADA_MANUAL nao tem logica de proprietario. A peca cortada de uma chapa do cliente
+  //     X e do cliente X, e a Etapa 8 inteira existe para essa garantia nao depender de alguem
+  //     lembrar. A guarda que impede converter material de cliente em patrimonio da GMP
+  //     (ownerRules.assertMesmoDonoNaTransformacao) so tem onde se pendurar com tipo proprio.
+  //  2. LIVRO: no extrato, ENTRADA_MANUAL faz a peca parecer ter aparecido do nada — o motivo real
+  //     ("veio da chapa tal, remessa tal") some.
+  //  3. ESTORNO: cancelar uma entrada manual nao sabe que existe uma baixa de chapa do outro lado.
+  //
+  // NAO entra em TIPOS_RETENCAO: se entrasse, o motor pularia o bloco fisico (a skip-list deriva de
+  // TIPOS_RETENCAO) e a peca nunca seria creditada — com a movimentacao aparecendo no livro do
+  // mesmo jeito, que e o pior modo de falhar desta etapa.
+  'RETORNO_TRANSFORMACAO',
   'ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO', 'ESTORNO',
 ];
 
@@ -122,7 +138,13 @@ const TIPOS_RETENCAO = [
 //     destino/justificativa que o encerramento exige — o numero de quantidade_em_terceiros
 //     ficaria sem nada que o explique. Mesmo criterio de DEVOLUCAO_CLIENTE: o tipo tem exigencias
 //     proprias que a v2 tornaria decorativas.
-const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
+//   RETORNO_TRANSFORMACAO -> POST /remessas-terceiros/:id/transformacoes (gate
+//     `remessar_terceiro`). Mesmo criterio dos outros tres: aceita-lo na v2 (gate `movimentar`, o
+//     mais amplo do modulo) permitiria criar peca cortada SEM remessa nenhuma por tras e SEM baixar
+//     chapa alguma — estoque do nada, exatamente o que a mensagem de recusa da 8b dizia querer
+//     evitar. Entrar aqui ja o tira da rota generica: TIPOS_MOVIMENTO_ROTA e DERIVADO desta lista
+//     (schemas.js:54-56), nao ha segunda lista a lembrar.
+const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO', 'RETORNO_TRANSFORMACAO'];
 
 /**
  * Classificacao da linha de resultado de uma TRANSFORMACAO (Etapa 8c, decisao 8 do design).

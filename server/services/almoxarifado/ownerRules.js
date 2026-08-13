@@ -46,9 +46,17 @@ const { registrarAuditoria } = require('./audit');
  *    Foi por isso que a 8b criou tipos NOVOS em vez de reusar PERDA/SUCATA: aqueles dois estao em
  *    TIPOS_SAIDA_COM_DONO abaixo, e encerrar a remessa de uma chapa de cliente perdida no
  *    galvanizador passaria a exigir OS ou projeto daquele cliente.
+ *  - RETORNO_TRANSFORMACAO (Etapa 8c): DECLARATIVO. A guarda desta lista (assertSaidaPermitida) so
+ *    roda para SAIDA, e este tipo e ENTRADA — a ausencia nao mudaria comportamento nenhum hoje.
+ *    Esta aqui para a ausencia nao poder ser lida como esquecimento por quem mexer nesta lista
+ *    depois, exatamente como AJUSTE_POSITIVO, que tambem e entrada e tambem esta aqui.
+ *    A GUARDA DE VERDADE DA TRANSFORMACAO E OUTRA e mora neste mesmo arquivo:
+ *    assertMesmoDonoNaTransformacao (Task 5) — a peca tem de ter o MESMO dono da chapa, senao a
+ *    transformacao converteria material de cliente em patrimonio da GMP.
  */
 const TIPOS_ISENTOS_DONO = ['DEVOLUCAO_CLIENTE', 'TRANSFERENCIA', 'AJUSTE', 'AJUSTE_POSITIVO',
-  'AJUSTE_NEGATIVO', 'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
+  'AJUSTE_NEGATIVO', 'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+  'RETORNO_TRANSFORMACAO'];
 
 /**
  * Tipos de saida que a guarda cobre. Espelha o `tiposSaida` do stockService menos os isentos.
