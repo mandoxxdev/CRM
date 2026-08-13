@@ -1156,7 +1156,7 @@ MSG
 
 ### Task 2: o recebimento por NF passa a alimentar o custo médio
 
-> ## ✅ FEITA — 2026-08-13 (`be9b384` — **hash de outro assunto, ver abaixo**)
+> ## ✅ FEITA — 2026-08-13 (`8cd3fcf`)
 >
 > Steps 1 a 6 executados na ordem, com o teste vermelho antes da implementação
 > (`2 passed, 3 failed`: os dois principais mais o do `valor_unitario` da linha da nota; os dois
@@ -1164,13 +1164,22 @@ MSG
 > **`5 passed, 0 failed`** em `server/tests/api/recebimentoCustoMedio.api.test.js` e
 > **`77/77 arquivos OK`** em `npm run test:api`.
 >
-> **⚠ O commit desta task NÃO tem mensagem própria.** As Tasks 1, 2 e 6 rodaram em paralelo no
-> **mesmo working tree**, e o `git commit` do agente da Task 6 levou junto o que a Task 2 já tinha
-> em *stage*: `receiptService.js` e `recebimentoCustoMedio.api.test.js` entraram em `be9b384`
-> ("Task 6: o rateio…"), cuja mensagem não fala deles. Quem procurar o commit da Task 2 pela
-> mensagem **não acha**. Registrado aqui porque apagar o descompasso em silêncio é o que o
-> `CLAUDE.md` proíbe. **Lição para as próximas tasks paralelas: `git add` e `git commit` na mesma
-> linha de comando, ou stage nenhum entre execuções concorrentes.**
+> **⚠ Houve uma colisão de commit, e ela foi CORRIGIDA — o registro fica porque a lição vale.**
+> As Tasks 1, 2 e 6 rodaram em paralelo no **mesmo working tree**, e o `git commit` do agente da
+> Task 6 levou junto o que a Task 2 já tinha em *stage*: `receiptService.js` e
+> `recebimentoCustoMedio.api.test.js` foram parar no commit `be9b384` ("Task 6: o rateio…"), cuja
+> mensagem não falava deles — quem procurasse o commit da Task 2 pela mensagem **não achava**.
+>
+> **Conserto (2026-08-13, ainda sem push):** `be9b384` foi separado em dois — `8cd3fcf` (Task 2,
+> com mensagem própria) e `f6dbe39` (Task 6, mensagem original preservada literalmente). Os quatro
+> commits seguintes foram recriados por cherry-pick e as árvores foram comparadas: `git diff` entre
+> o HEAD antigo e o novo voltou **vazio**, então o conteúdo é idêntico byte a byte. O HEAD anterior
+> está preservado na tag `backup-8c-presplit`. Hashes novos: Task 1 = `028da1e`, notas de plano =
+> `db4fb6d`, `c876d97`, `c22d81d`.
+>
+> **Lição, que é o motivo de este parágrafo continuar aqui: não rodar agentes concorrentes que
+> commitam no mesmo working tree.** O `git add` de um vira o commit do outro, e o histórico mente
+> mesmo com o código certo. Ou tasks sequenciais, ou worktrees separados.
 >
 > **Duas correções ao plano, feitas na execução** (detalhadas nos Steps 1 e 5): a assinatura real é
 > `darEntradaEstoque(db, user, rec, recebimentoId, opcoes)` — corrigida no teste, não no serviço; e
@@ -2709,7 +2718,7 @@ MSG
 
 ### Task 6: `transformCost.js` — o rateio, função pura, com o invariante testado
 
-> ## ✅ FEITA — 2026-08-13 (`be9b384`, e o pré-requisito em `03c7ce5`)
+> ## ✅ FEITA — 2026-08-13 (`f6dbe39`, e o pré-requisito em `03c7ce5`)
 >
 > Steps 1 a 6 executados na ordem, com o teste vermelho antes da implementação
 > (`Cannot find module '../../services/almoxarifado/transformCost'`, sem rodapé). Resultado real:
@@ -3122,7 +3131,7 @@ cp "$SCRATCH/transformCost.bak.js" services/almoxarifado/transformCost.js   # NA
 md5sum services/almoxarifado/transformCost.js
 git diff --stat
 ```
-**⚠ O PLANO PREVIA ERRADO AQUI — corrigido na execução (2026-08-13, `be9b384`).** O plano dizia:
+**⚠ O PLANO PREVIA ERRADO AQUI — corrigido na execução (2026-08-13, `f6dbe39`).** O plano dizia:
 *"O `[INVARIANTE]` continua passando […] o invariante não detecta este bug, porque a soma continua
 fechando"*. **Executada, S1 DERRUBA o invariante.** Resultado real: **`7 passed, 5 failed`** —
 `✗ o caso da GMP` (41 ≠ 40), `✗ [INVARIANTE]` (**resíduo 24.392 acima da tolerância 0.002050001**),
