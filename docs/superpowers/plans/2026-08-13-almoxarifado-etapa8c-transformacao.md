@@ -2020,6 +2020,40 @@ MSG
 
 ### Task 4: `RETORNO_TRANSFORMACAO` dentro do motor
 
+> ✅ **FEITA — commit `9c7ec75`.** Gates medidos: `test:api` **79/79 arquivos OK** (o arquivo novo
+> `transformacaoMotor.api.test.js` com **12 passed, 0 failed**), `test:almoxarifado`
+> **42 passou, 0 falhou**, `test:validation` **4 passed, 0 failed**. Sabotagens S1/S2/S3 executadas,
+> as três derrubaram exatamente os testes previstos. Restauração por **cópia em scratchpad** com
+> `md5sum` conferido antes/depois/restauração — **não** por `git checkout --`.
+>
+> **Confirmação da contradição C5, medida e não assumida:** `stockService.js` tem **exatamente
+> duas** declarações de `tiposEntrada` (`:512` em `registrarMovimentacao`, `:1388` em
+> `cancelarMovimentacao`) e **exatamente duas** de `tiposSaida` (as mesmas duas funções). **As duas
+> de `tiposEntrada` foram editadas**; `grep -c "RETORNO_TRANSFORMACAO'];"` = **2**. `tiposSaida`
+> **não** foi tocado — o tipo é entrada.
+>
+> **Divergências deste plano (duas, nenhuma muda o resultado):**
+> 1. **A mensagem do Step 2 não é a prevista.** O plano esperava "creditou nada (`0 !== 40`)"
+>    porque o tipo não estaria em `tiposEntrada`. A mensagem real é **`Tipo de movimento inválido`**:
+>    a validação contra `TIPOS_MOVIMENTO` acontece **antes** do if-chain do bloco físico, então o
+>    tipo nem chega lá. Consequência prática: com o tipo fora de `TIPOS_MOVIMENTO` **nada** do motor
+>    é exercitado — é por isso que a sabotagem S1 (que deixa o tipo declarado e o tira **só** da
+>    segunda lista) é a única que prova a armadilha das duas listas.
+> 2. **Três testes passam vacuamente antes da implementação** (`NÃO está em TIPOS_RETENCAO`, `não
+>    está em TIPOS_MOVIMENTO_ROTA`, `a rota genérica RECUSA o tipo`): um tipo que não existe é
+>    trivialmente ausente das três listas. Não é teste vazio — é o par correto: S2 os derruba, e o
+>    controle positivo do `ENTRADA_MANUAL` impede que "recusa tudo" passe por acerto.
+>
+> **Achado fora do escopo da task, registrado para a Task 10 (não consertado aqui):**
+> `clienteEstoqueService.js:21-22` é um **terceiro** espelho das listas de tipos
+> (`TIPOS_ENTRADA`/`TIPOS_CONSUMO`, usados na posição de estoque **por cliente**) e
+> `RETORNO_TRANSFORMACAO` **não** entrou nele. Efeito: peça de cliente creditada por transformação
+> aparece no `saldo` daquele cliente mas com `recebido = 0`. Não é regressão desta task — a 8b já
+> tinha deixado `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` fora de `TIPOS_CONSUMO` do mesmo jeito, e o
+> mapa de arquivos da 8c não lista esse arquivo em task nenhuma. Mudar aquelas listas é decisão de
+> **relatório** (o que o cliente lê como "recebido" e "consumido"), não do motor, e por isso não foi
+> tomada em silêncio dentro de um commit de motor.
+
 **Por que um tipo novo e não `ENTRADA_MANUAL`** (decisão 2 do design), em ordem de gravidade:
 1. **Dono.** `ENTRADA_MANUAL` não tem lógica de proprietário. A peça cortada de uma chapa do cliente
    X é do cliente X, e a Etapa 8 inteira existe para essa garantia não depender de alguém lembrar.
@@ -2051,7 +2085,7 @@ volta**. É literalmente o quarto defeito que só a execução da 8b achou (ver 
 
 ---
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `server/tests/api/transformacaoMotor.api.test.js`:
 
@@ -2242,7 +2276,7 @@ const est = async (db, id) => dbGet(db,
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/transformacaoMotor.api.test.js`
 
@@ -2252,7 +2286,7 @@ Expected: FAIL. Os quatro `[declaracao]` falham por `includes` falso; os que cha
 ele e `saldoPosterior` fica `undefined`. **Anote a mensagem exata**: ela é o que o Step 4 tem de
 fazer desaparecer.
 
-- [ ] **Step 3: Declarar o tipo**
+- [x] **Step 3: Declarar o tipo**
 
 **(a)** Em `server/services/almoxarifado/schema.js`, dentro de `TIPOS_MOVIMENTO`, logo **depois** da
 linha `'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',`:
@@ -2341,7 +2375,7 @@ Na de `:1388` (dentro de `cancelarMovimentacao`):
  *    transformacao converteria material de cliente em patrimonio da GMP.
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `cd server && node tests/api/transformacaoMotor.api.test.js`
 Expected: `12 passed, 0 failed`
@@ -2349,7 +2383,7 @@ Expected: `12 passed, 0 failed`
 Run: `cd server && npm run test:api` · `npm run test:almoxarifado` · `npm run test:validation`
 Expected: todos OK.
 
-- [ ] **Step 5: SABOTAGEM**
+- [x] **Step 5: SABOTAGEM**
 
 **S1 — a armadilha das duas listas: remover o tipo SÓ da segunda `tiposEntrada`.**
 
@@ -2406,7 +2440,7 @@ git diff --stat
 ```
 Esperado: **`✗ RETORNO_TRANSFORMACAO exige justificativa`**.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
