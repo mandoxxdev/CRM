@@ -353,13 +353,18 @@ async function validarRetornoDoItem(db, { remessaId, itemRemessaId, quantidade, 
   const qtd = Number(quantidade);
   if (!(qtd > 0)) throw erro('Quantidade do retorno deve ser maior que zero');
 
-  // Etapa 8c: aqui e onde `materialId` diferente do enviado passa a ser aceito (chapa -> pecas).
-  // Na 8b recusar e melhor que aceitar pela metade: creditar outro material sem baixar a chapa
-  // original criaria estoque do nada e quebraria a rastreabilidade que a 8c existe para dar.
+  // `registrarRetorno` continua sendo SO retorno do mesmo material: creditar outro material por
+  // aqui, sem baixar a chapa original, criaria estoque do nada. O caminho de material diferente
+  // existe desde a Etapa 8c e e OUTRO servico (`registrarTransformacao`), que baixa a chapa antes
+  // de creditar as pecas. A mensagem passou a MANDAR PARA LA em vez de dizer "nao implementado" —
+  // ela dizia isso ate 2026-08-13, DEPOIS de a 8c ter sido entregue, e mandava o operador embora
+  // com informacao falsa.
   if (materialId && Number(materialId) !== Number(item.material_id)) {
-    throw erro(`O retorno de material DIFERENTE do enviado (transformacao: ${item.material_codigo} `
-      + 'vira outro codigo) e a Etapa 8c e ainda nao esta implementado. Na Etapa 8b o retorno e '
-      + 'sempre do mesmo material.');
+    throw erro(`O retorno de material DIFERENTE do enviado (${item.material_codigo} vira outro `
+      + 'codigo) nao e retorno simples: e transformacao. Use o botao "Transformar" na tela de '
+      + 'Remessas a Terceiros (POST /almoxarifado/remessas-terceiros/:id/transformacoes), '
+      + 'entregue na Etapa 8c — ele baixa a chapa e credita os resultados no mesmo evento. '
+      + 'O retorno simples e sempre do mesmo material.');
   }
 
   // O teto e do ITEM, nao do material: dois itens do MESMO material na mesma remessa (duas chapas
