@@ -2743,6 +2743,10 @@ e sem estado é um teste que não pode passar por acaso.
 
 Criar `server/tests/api/transformCost.api.test.js`:
 
+> **⚠ O bloco abaixo tem 11 testes; o arquivo entregue tem 12.** O 12º
+> (`[CONTROLE POSITIVO DA TOLERANCIA]`, acrescentado na execução) está **só no arquivo** — leia
+> `server/tests/api/transformCost.api.test.js`, não este bloco, se quiser a lista completa.
+
 ```js
 /**
  * Etapa 8c, Task 6 — o rateio de custo da transformacao, funcao PURA.
