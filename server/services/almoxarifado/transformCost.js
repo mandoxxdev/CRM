@@ -133,4 +133,55 @@ function ratearCusto({ custoUnitarioChapa, quantidadeConsumida, custoServico = 0
   };
 }
 
-module.exports = { ratearCusto, TOLERANCIA_RATEIO, CASAS };
+/**
+ * Rendimento da transformacao: peso que voltou / peso que saiu (Etapa 8c, decisao 7 do design).
+ *
+ * INFORMATIVO, NUNCA BLOQUEIA. `chapa consumida = pecas + sobra + perda` so e verificavel se TODOS
+ * os materiais envolvidos tiverem peso_unitario, e eles nao tem — o campo e opcional no cadastro.
+ * Bloquear com base num dado opcional travaria o operador por um campo em branco, e e a mesma razao
+ * que descartou o rateio por peso na decisao 4.
+ *
+ * Quando falta peso, devolve `calculavel: false` NOMEANDO OS MATERIAIS. "Nao calculavel" seco manda
+ * o operador procurar o cadastro faltante entre 41 linhas; e lista TODOS de uma vez, nao so o
+ * primeiro — senao ele conserta um, tenta de novo, descobre o segundo, e assim por diante (mesma
+ * licao da pre-checagem "tudo ou nada").
+ *
+ * peso_unitario ZERO conta como NAO cadastrado: peso zero nao existe fisicamente, e trata-lo como
+ * valido daria rendimento 0% com cara de resultado.
+ *
+ * Rendimento acima de 100% e CALCULADO e mostrado, nao recusado: significa cadastro de peso errado,
+ * e mostrar 116% e o que faz alguem ir conferir. Recusar esconderia o problema — e o sistema nao
+ * valida que os pesos fecham, por decisao.
+ */
+function calcularRendimento({ materialOrigem, quantidadeConsumida, resultados }) {
+  const semPeso = [];
+  const pesoDe = (m) => {
+    const p = Number(m?.peso_unitario);
+    if (!Number.isFinite(p) || p <= 0) { semPeso.push(m?.codigo || `material #${m?.id}`); return null; }
+    return p;
+  };
+  const pesoChapa = pesoDe(materialOrigem);
+  const lista = Array.isArray(resultados) ? resultados : [];
+  const pesos = lista.map((r) => ({ quantidade: Number(r.quantidade), peso: pesoDe(r.material) }));
+
+  if (semPeso.length > 0) {
+    return {
+      calculavel: false,
+      materiais_sem_peso: semPeso,
+      motivo: `rendimento nao calculavel — peso unitario nao cadastrado em: ${semPeso.join(', ')}`,
+    };
+  }
+
+  const pesoSaida = arredondar(pesoChapa * Number(quantidadeConsumida));
+  const pesoRetorno = arredondar(pesos.reduce((a, p) => a + p.quantidade * p.peso, 0));
+  // 2 casas no percentual (e nao 4): e numero de tela, nao de contabilidade.
+  const percentual = pesoSaida > 0 ? Math.round((pesoRetorno / pesoSaida) * 10000) / 100 : 0;
+  return {
+    calculavel: true,
+    peso_saida: pesoSaida,
+    peso_retorno: pesoRetorno,
+    rendimento_percentual: percentual,
+  };
+}
+
+module.exports = { ratearCusto, calcularRendimento, TOLERANCIA_RATEIO, CASAS };

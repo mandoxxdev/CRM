@@ -13,6 +13,7 @@
  * Executar: cd server && node tests/api/transformacaoTerceiro.api.test.js
  */
 const assert = require('assert');
+const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const { TIPOS_RESULTADO } = require('../../services/almoxarifado/schema');
@@ -74,7 +75,7 @@ async function remessaEnviada(db, { qtd = 100, custo = 0, dono = null, unidade =
 }
 
 (async () => {
-  const { db, close } = await createTestApp({ user: ADMIN });
+  const { app, db, close, setUser } = await createTestApp({ user: ADMIN });
 
   // ══ Task 3 — as tres colunas e a peca Zod ═══════════════════════════════════════════════════
 
@@ -753,6 +754,171 @@ async function remessaEnviada(db, { qtd = 100, custo = 0, dono = null, unidade =
     const linhas = await dbAll(db,
       'SELECT tipo_resultado FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ? ORDER BY id', [itemId]);
     assert.deepStrictEqual(linhas.map((l) => l.tipo_resultado), [null, 'PECA']);
+  });
+
+  // ══ Task 8 — rota, schema Zod e rendimento ══════════════════════════════════════════════════
+
+  const BASE = '/api/almoxarifado/remessas-terceiros';
+  const transformar = (remessaId, body) => request(app).post(`${BASE}/${remessaId}/transformacoes`).send(body);
+
+  await test('[rota] a transformacao acontece pela rota e devolve o custo rateado', async () => {
+    setUser(ADMIN);
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'ROTA-P' });
+    const r = await transformar(remessa.id, {
+      nota_fiscal: 'NF-ROTA-1',
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100,
+        resultados: [{ material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' }] }],
+    });
+    assert.strictEqual(r.status, 200, `a rota devolveu ${r.status}: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.status, 'ENCERRADA');
+    assert.strictEqual(r.body.custo[0].custo_unitario_peca, 25);
+    assert.strictEqual((await saldos(db, materialId)).quantidade_atual, 0);
+    assert.strictEqual((await saldos(db, pecaId)).quantidade_atual, 40);
+  });
+
+  await test('[rota] sem a acao remessar_terceiro: 403, e o campo `acao` na resposta', async () => {
+    // Assere o CAMPO e nao so o status: hoje `movimentar` e `remessar_terceiro` tem os mesmos
+    // perfis, entao trocar um gate pelo outro nao mudaria status nenhum e a regressao passaria
+    // despercebida. Licao registrada na Task 8 da 8b.
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { unidade: 'UN', cod: 'ROTA-403' });
+    setUser(PRODUCAO);
+    const r = await transformar(remessa.id, { itens: [{ item_remessa_id: itemId,
+      quantidade_consumida: 10, resultados: [{ material_id: pecaId, quantidade: 5, tipo_resultado: 'PECA' }] }] });
+    setUser(ADMIN);
+    assert.strictEqual(r.status, 403);
+    assert.strictEqual(r.body.acao, 'remessar_terceiro',
+      `o 403 veio de outro gate: ${JSON.stringify(r.body)}`);
+    assert.strictEqual((await saldos(db, materialId)).quantidade_atual, 100);
+  });
+
+  await test('[schema] tipo_resultado ATRAVESSA o Zod — a sobra chega como SOBRA no banco', async () => {
+    // A armadilha: z.object DESCARTA chave nao declarada EM SILENCIO. Sem `tipo_resultado`
+    // declarado, TODO resultado chegaria como undefined ao servico — o rateio recusaria tudo (ou,
+    // pior, com um default, a sobra viraria peca e entraria carregando rateio).
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'ZOD-P' });
+    const sobraId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'KG', cod: 'ZOD-S' });
+    const r = await transformar(remessa.id, { itens: [{ item_remessa_id: itemId,
+      quantidade_consumida: 100, resultados: [
+        { material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' },
+        { material_id: sobraId, quantidade: 10, tipo_resultado: 'SOBRA' },
+      ] }] });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const linhas = await dbAll(db,
+      'SELECT tipo_resultado, custo_unitario_aplicado FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ? ORDER BY id', [itemId]);
+    assert.deepStrictEqual(linhas.map((l) => l.tipo_resultado), ['PECA', 'SOBRA']);
+    assert.strictEqual(linhas[1].custo_unitario_aplicado, 0);
+  });
+
+  await test('[schema] custo_servico ATRAVESSA o Zod e muda o custo da peca', async () => {
+    // Campo de nivel de ITEM (nao de resultado) — o candidato obvio a ser esquecido no schema.
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'ZOD-SRV' });
+    const r = await transformar(remessa.id, { itens: [{ item_remessa_id: itemId,
+      quantidade_consumida: 100, custo_servico: 400,
+      resultados: [{ material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' }] }] });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await saldos(db, pecaId)).custo_medio, 35,
+      'custo_servico foi descartado pelo schema em silencio (custo ficou 25 e nao 35)');
+  });
+
+  await test('[schema] lote_id e observacoes do resultado ATRAVESSAM o Zod', async () => {
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'ZOD-LOTE' });
+    const r = await transformar(remessa.id, { itens: [{ item_remessa_id: itemId,
+      quantidade_consumida: 100, resultados: [{ material_id: pecaId, quantidade: 40,
+        tipo_resultado: 'PECA', observacoes: 'cortado em 4 chapas' }] }] });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const linha = await dbGet(db,
+      'SELECT observacoes FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ?', [itemId]);
+    assert.strictEqual(linha.observacoes, 'cortado em 4 chapas');
+  });
+
+  await test('[schema] resultado NAO declarado no Zod nao chega ao servico', async () => {
+    // A outra ponta da mesma armadilha: mandar `custo_unitario_aplicado` pela API nao pode deixar o
+    // cliente escolher o custo da peca. O rateio manda, e a chave estranha e descartada.
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'ZOD-EXTRA' });
+    const r = await transformar(remessa.id, { itens: [{ item_remessa_id: itemId,
+      quantidade_consumida: 100, resultados: [{ material_id: pecaId, quantidade: 40,
+        tipo_resultado: 'PECA', custo_unitario_aplicado: 999 }] }] });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const linha = await dbGet(db,
+      'SELECT custo_unitario_aplicado FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ?', [itemId]);
+    assert.strictEqual(linha.custo_unitario_aplicado, 25,
+      'o cliente conseguiu ditar o custo da peca pela API');
+  });
+
+  await test('[schema] documento sem `resultados` e recusado pelo Zod com 400', async () => {
+    const { remessa, itemId } = await chapaEnviada();
+    const r = await transformar(remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 10 }] });
+    assert.strictEqual(r.status, 400);
+  });
+
+  await test('[rota] a mensagem do servico chega INTACTA ao cliente', async () => {
+    // As mensagens desta etapa dizem os numeros e os codigos de proposito; um catch generico as
+    // apagaria. Nenhuma rota de remessa tem try/catch proprio com mensagem inventada — todas caem
+    // em handleError, que respeita err.status e devolve err.message.
+    const { remessa, itemId } = await chapaEnviada();
+    const r = await transformar(remessa.id, { itens: [{ item_remessa_id: itemId,
+      quantidade_consumida: 10, resultados: [{ material_id: 424242, quantidade: 5, tipo_resultado: 'PECA' }] }] });
+    assert.strictEqual(r.status, 400);
+    assert.match(r.body.error, /424242/);
+    assert.match(r.body.error, /cadastr/i);
+  });
+
+  await test('[rendimento] com todos os pesos, a resposta traz o percentual', async () => {
+    const { remessa, itemId } = await remessaEnviada(db, { qtd: 100, custo: 10, unidade: 'KG', peso: 7.85 });
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', peso: 15, cod: 'REND-P' });
+    const sobraId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'KG', peso: 120, cod: 'REND-S' });
+    const r = await transformar(remessa.id, { itens: [{ item_remessa_id: itemId,
+      quantidade_consumida: 100, resultados: [
+        { material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' },
+        { material_id: sobraId, quantidade: 1, tipo_resultado: 'SOBRA' },
+      ] }] });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.rendimento[0].calculavel, true);
+    assert.strictEqual(r.body.rendimento[0].peso_saida, 785);
+    assert.strictEqual(r.body.rendimento[0].rendimento_percentual, 91.72);
+  });
+
+  await test('[rendimento] NUNCA bloqueia: sem peso, a transformacao acontece do mesmo jeito', async () => {
+    // A decisao 7 inteira em um teste. Bloquear por um dado OPCIONAL travaria o operador por um
+    // campo de cadastro em branco.
+    const { remessa, itemId, materialId } = await chapaEnviada(); // sem peso
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'REND-SEMPESO' });
+    const r = await transformar(remessa.id, { itens: [{ item_remessa_id: itemId,
+      quantidade_consumida: 100, resultados: [{ material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' }] }] });
+    assert.strictEqual(r.status, 200, `a transformacao foi BLOQUEADA por falta de peso: ${JSON.stringify(r.body)}`);
+    assert.strictEqual((await saldos(db, materialId)).quantidade_atual, 0);
+    assert.strictEqual(r.body.rendimento[0].calculavel, false);
+    assert.match(r.body.rendimento[0].motivo, /peso/i);
+    assert.ok(r.body.rendimento[0].materiais_sem_peso.length > 0,
+      'disse "nao calculavel" sem dizer QUAL material falta');
+  });
+
+  await test('[leitura] getRemessa devolve os resultados JA classificados', async () => {
+    // A tela (Task 9) le daqui. getRemessa faz `SELECT rr.*`, entao as tres colunas novas viajam de
+    // graca — este teste e o que impede alguem "otimizar" o SELECT para uma lista de colunas e
+    // quebrar a tela em silencio.
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'GET-P' });
+    const sobraId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'KG', cod: 'GET-S' });
+    await transformar(remessa.id, { itens: [{ item_remessa_id: itemId, quantidade_consumida: 100,
+      resultados: [
+        { material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' },
+        { material_id: sobraId, quantidade: 5, tipo_resultado: 'SOBRA' },
+      ] }] });
+    const cheia = await svc.getRemessa(db, remessa.id);
+    assert.strictEqual(cheia.retornos.length, 2);
+    assert.deepStrictEqual(cheia.retornos.map((x) => x.tipo_resultado), ['PECA', 'SOBRA']);
+    assert.strictEqual(cheia.retornos[0].custo_unitario_aplicado, 25);
+    assert.strictEqual(cheia.retornos[0].material_codigo, 'GET-P',
+      'a leitura nao traz o codigo do material do RESULTADO');
+    void itemId;
   });
 
   await close();

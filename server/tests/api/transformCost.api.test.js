@@ -201,6 +201,82 @@ const sobra = (quantidade, material_id = 2) => ({ material_id, quantidade, tipo_
     assert.strictEqual(r.valorTotal, 0);
   });
 
+  // ── rendimento (decisao 7): informativo, nunca bloqueia ────────────────────────────────────
+  const { calcularRendimento } = require('../../services/almoxarifado/transformCost');
+  const comPeso = (codigo, peso_unitario) => ({ codigo, peso_unitario });
+
+  await test('rendimento: com todos os pesos, calcula peso que saiu, peso que voltou e o percentual', async () => {
+    const r = calcularRendimento({
+      materialOrigem: comPeso('CHP-001', 7.85),
+      quantidadeConsumida: 100,
+      resultados: [
+        { quantidade: 40, material: comPeso('PC-010', 15) },
+        { quantidade: 1, material: comPeso('SOB-001', 120) },
+      ],
+    });
+    assert.strictEqual(r.calculavel, true);
+    assert.strictEqual(r.peso_saida, 785);
+    assert.strictEqual(r.peso_retorno, 720);
+    assert.strictEqual(r.rendimento_percentual, 91.72);
+  });
+
+  await test('rendimento nao calculavel diz QUAL material nao tem peso', async () => {
+    // "nao calculavel" seco manda o operador procurar em 41 cadastros. A mensagem NOMEIA.
+    const r = calcularRendimento({
+      materialOrigem: comPeso('CHP-001', 7.85),
+      quantidadeConsumida: 100,
+      resultados: [
+        { quantidade: 40, material: comPeso('PC-010', null) },
+        { quantidade: 1, material: comPeso('SOB-001', 120) },
+      ],
+    });
+    assert.strictEqual(r.calculavel, false);
+    assert.deepStrictEqual(r.materiais_sem_peso, ['PC-010']);
+    assert.match(r.motivo, /PC-010/, 'a mensagem nao diz qual material falta');
+    assert.match(r.motivo, /peso/i);
+    assert.ok(!('rendimento_percentual' in r), 'estimou um rendimento sem ter os pesos');
+  });
+
+  await test('rendimento nao calculavel quando quem falta e a CHAPA', async () => {
+    const r = calcularRendimento({
+      materialOrigem: comPeso('CHP-SEMPESO', null),
+      quantidadeConsumida: 100,
+      resultados: [{ quantidade: 40, material: comPeso('PC-010', 15) }],
+    });
+    assert.strictEqual(r.calculavel, false);
+    assert.deepStrictEqual(r.materiais_sem_peso, ['CHP-SEMPESO']);
+  });
+
+  await test('rendimento lista TODOS os materiais sem peso, nao so o primeiro', async () => {
+    // Sem isto o operador conserta um cadastro, tenta de novo e descobre o segundo — e assim por
+    // diante. Mesma licao da pre-checagem "tudo ou nada": diga tudo o que falta de uma vez.
+    const r = calcularRendimento({
+      materialOrigem: comPeso('CHP-X', null),
+      quantidadeConsumida: 10,
+      resultados: [
+        { quantidade: 2, material: comPeso('A', null) },
+        { quantidade: 2, material: comPeso('B', 5) },
+        { quantidade: 2, material: comPeso('C', 0) },
+      ],
+    });
+    assert.strictEqual(r.calculavel, false);
+    // peso 0 conta como NAO cadastrado: peso zero nao existe fisicamente, e trata-lo como valido
+    // daria rendimento 0% com cara de resultado.
+    assert.deepStrictEqual(r.materiais_sem_peso, ['CHP-X', 'A', 'C']);
+  });
+
+  await test('[CONTROLE POSITIVO] rendimento acima de 100% e calculado, nao recusado', async () => {
+    // O sistema NAO valida que os pesos fecham (decisao 7). Rendimento > 100% significa cadastro de
+    // peso errado, e mostrar 116% e o que faz alguem ir conferir; recusar esconderia o problema.
+    const r = calcularRendimento({
+      materialOrigem: comPeso('CHP-001', 1),
+      quantidadeConsumida: 100,
+      resultados: [{ quantidade: 116, material: comPeso('PC', 1) }],
+    });
+    assert.strictEqual(r.calculavel, true);
+    assert.strictEqual(r.rendimento_percentual, 116);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();

@@ -881,6 +881,7 @@ async function registrarTransformacao(db, user, remessaId, data) {
 
   // ── 2. Efeito, item a item ──
   const efetivados = [];
+  const rendimentos = [];
   for (const v of validados) {
     const { item, linha, consumida, materialOrigem, rateio } = v;
 
@@ -982,6 +983,18 @@ async function registrarTransformacao(db, user, remessaId, data) {
       residuo: rateio.residuo,
       resultados: rateio.linhas.length,
     });
+
+    // Rendimento (decisao 7): calculado DEPOIS do efeito, porque ele nao decide nada — se decidisse,
+    // um campo de cadastro em branco travaria a transformacao. Vai na resposta e na tela.
+    rendimentos.push({
+      item_remessa_id: item.id,
+      material_codigo: materialOrigem.codigo,
+      ...transformCost.calcularRendimento({
+        materialOrigem,
+        quantidadeConsumida: consumida,
+        resultados: rateio.linhas,
+      }),
+    });
   }
 
   // ── 3. Status: MESMO criterio da 8b, e e por isso que a decisao 1 separou os dois numeros ──
@@ -1011,6 +1024,7 @@ async function registrarTransformacao(db, user, remessaId, data) {
       pendente_total: Number(pendente),
       nota_fiscal: data.nota_fiscal || null,
       custo: efetivados,
+      rendimento: rendimentos,
     },
   }).catch(() => {});
 
@@ -1022,6 +1036,7 @@ async function registrarTransformacao(db, user, remessaId, data) {
     resultados: efetivados.reduce((a, e) => a + e.resultados, 0),
     pendente_total: Number(pendente),
     custo: efetivados,
+    rendimento: rendimentos,
   };
 }
 

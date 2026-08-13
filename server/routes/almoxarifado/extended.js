@@ -7,7 +7,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -941,6 +941,27 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     validate(RetornoRemessaSchema), async (req, res) => {
       try {
         res.json(await thirdPartyService.registrarRetorno(db, req.user, req.params.id, req.body));
+      } catch (e) { handleError(res, e); }
+    });
+
+  // Etapa 8c: a transformacao (corte, dobra, usinagem) — sai UMA chapa, voltam N pecas e uma sobra.
+  //
+  // Rota IRMA de /retornos e nao um modo dele: os corpos sao diferentes (aqui ha
+  // `quantidade_consumida` + `resultados[]`, la ha `quantidade`), o efeito de estoque e de natureza
+  // oposta (aqui a chapa DEIXA DE EXISTIR e materiais novos ENTRAM; la nada entra e nada sai do
+  // patrimonio) e a compensacao na falha e diferente. Um modo obrigaria o schema a aceitar os dois
+  // formatos e o servico a decidir qual e qual por presenca de campo — a classe de bug que a
+  // Etapa 8 gastou uma etapa desfazendo.
+  //
+  // Fica sob /:id/, como /retornos: nao compete com /vencidas (que tem de continuar registrada
+  // ANTES de /:id, ver o comentario la em cima).
+  //
+  // Sem try/catch com mensagem propria: cai em handleError, que respeita err.status e devolve
+  // err.message INTACTA. As mensagens deste servico dizem os numeros e os codigos de proposito.
+  app.post('/api/almoxarifado/remessas-terceiros/:id/transformacoes', auth, requirePermission('remessar_terceiro'),
+    validate(TransformacaoRemessaSchema), async (req, res) => {
+      try {
+        res.json(await thirdPartyService.registrarTransformacao(db, req.user, req.params.id, req.body));
       } catch (e) { handleError(res, e); }
     });
 

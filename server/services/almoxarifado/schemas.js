@@ -399,6 +399,37 @@ const ResultadoTransformacaoSchema = z.object({
 });
 
 /**
+ * Transformacao: a chapa deixa de existir e as pecas entram (Etapa 8c).
+ *
+ * OS DOIS NUMEROS SEPARADOS (decisao 1 do design) sao a razao de existir deste schema em vez de um
+ * modo do RetornoRemessaSchema:
+ *  - `quantidade_consumida` esta SEMPRE na unidade do ENVIADO e e a unica coisa que conta no teto
+ *    do item — o teto da 8b continua valendo, intacto e comparavel;
+ *  - `resultados[]` tem cada um o SEU material, a SUA quantidade e a SUA unidade, e NENHUM deles
+ *    encosta no teto. Comparar 40 pecas (UN) com uma chapa de 100 (KG) seria somar laranja com maca.
+ *
+ * `custo_servico` e o valor TOTAL da nota do terceiro para AQUELA linha de transformacao — e ali
+ * que a nota chega. Opcional: se em branco, nao entra no rateio. Sem estimativa, sem default.
+ *
+ * TODO campo que o servico usa precisa estar declarado: `validate()` troca req.body pelo parsed e
+ * z.object DESCARTA chave nao declarada EM SILENCIO. `custo_servico` e `lote_id` sao os candidatos
+ * obvios a serem esquecidos — o arquivo de teste rele cada um do banco depois do POST por isso.
+ * E a outra ponta da mesma armadilha e boa: `custo_unitario_aplicado` NAO esta declarado, entao o
+ * cliente nao consegue ditar o custo da peca pela API. Quem manda e o rateio.
+ */
+const TransformacaoRemessaSchema = z.object({
+  nota_fiscal: z.string().optional(),
+  itens: z.array(z.object({
+    item_remessa_id: z.number().int().positive(),
+    quantidade_consumida: z.number().gt(0, 'quantidade consumida da chapa deve ser maior que zero'),
+    custo_servico: z.number().nonnegative().optional(),
+    lote_id: z.number().int().positive().optional(),
+    observacoes: z.string().optional(),
+    resultados: z.array(ResultadoTransformacaoSchema).min(1, 'informe ao menos um resultado (peca ou sobra)'),
+  })).min(1, 'informe ao menos um item transformado'),
+});
+
+/**
  * Encerramento. `destino` e `justificativa` são opcionais AQUI e obrigatórios NO SERVIÇO quando há
  * pendência — a exigência depende do saldo que sobrou, que o schema não tem como saber (remessa que
  * voltou inteira encerra sozinha, sem destino nenhum, e isso é correto). Deixar a regra só no
@@ -422,6 +453,6 @@ module.exports = {
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
   MaterialSchema, MaterialUpdateSchema, RequisicaoSchema, ItemRequisicaoSchema,
   ItemRemessaTerceiroSchema, RemessaTerceiroSchema, RetornoRemessaSchema,
-  ResultadoTransformacaoSchema,
+  ResultadoTransformacaoSchema, TransformacaoRemessaSchema,
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
 };
