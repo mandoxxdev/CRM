@@ -2491,6 +2491,34 @@ MSG
 ---
 ### Task 5: a guarda do dono na transformação (decisão 3) — com controle positivo obrigatório
 
+> ✅ **FEITA — commit `d791fe2`.** Gates medidos: `test:api` **79/79 arquivos OK**
+> (`transformacaoTerceiro.api.test.js` com **15 passed, 0 failed** — os 8 da Task 3 mais **7** desta),
+> `test:almoxarifado` **42 passou, 0 falhou**. Steps na ordem, com o vermelho antes: o Step 2 deu
+> exatamente o rodapé previsto (**`8 passed, 6 failed`**, todos com
+> `assertMesmoDonoNaTransformacao is not a function`). Restauração por **cópia em scratchpad** com
+> `md5sum` conferido antes/depois/restauração — **não** por `git checkout --`.
+>
+> **As três sabotagens do plano derrubaram exatamente o previsto**, sem nenhuma correção de rota:
+> S1 (`if (false) return;`) → **12 passed, 2 failed**, e os dois que caíram foram **os dois
+> controles positivos** — que é a prova de que eles não são decorativos; S2 (`return;` no topo) →
+> **10 passed, 4 failed**, as três recusas mais a do cliente inexistente; S3 (mensagem trocada por
+> `'Dono diferente entre a chapa e a peca resultante'`) → **11 passed, 3 failed**, as três que
+> conferem nomes. Foi a primeira task desta etapa em que **nenhuma** sabotagem prevista estava
+> errada.
+>
+> **ACHADO — uma sabotagem FORA do plano, e ela não derrubou nada.** Apagar o `|| null` dos **dois**
+> lados da comparação (`materialOrigem.proprietario_cliente_id || null` → sem normalização) deixou
+> os **14** testes verdes, embora o comentário da função afirme que essa normalização é justamente o
+> que impede um `0` mal gravado de recusar a transformação mais comum do dia a dia — a de material
+> nosso. Comentário que afirma o que nenhum teste sustenta é **mentira documentada**. Asserção
+> escrita (`[CONTROLE POSITIVO] dono gravado como 0 conta como NOSSO`, nos **dois** sentidos, com
+> `assert.strictEqual(chapaZero.proprietario_cliente_id, 0)` antes para a fixture não provar nada por
+> acidente), e a mesma sabotagem passou a derrubá-la (**14 passed, 1 failed**). Por isso a task
+> entrega **7** testes e **três** controles positivos, e não os 6 e dois do plano.
+>
+> **Nenhuma divergência de contrato:** a função ficou exatamente com a assinatura, a mensagem e o
+> `module.exports` que o Step 3 traz.
+
 **O que a guarda impede, em uma frase:** se a chapa é do cliente X e o material-peça está cadastrado
 como **nosso** (`proprietario_cliente_id` NULL), a transformação **converteria material de cliente
 em patrimônio da GMP** — em silêncio, com o número certo em todos os relatórios e sem nada errado
@@ -2518,7 +2546,7 @@ compara o dono do material com o cliente do **vínculo** (OS/projeto). Aqui os d
 
 ---
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Acrescentar a `server/tests/api/transformacaoTerceiro.api.test.js`, **antes** do `await close()`:
 
@@ -2605,14 +2633,14 @@ Acrescentar a `server/tests/api/transformacaoTerceiro.api.test.js`, **antes** do
   });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/transformacaoTerceiro.api.test.js`
 Expected: os 6 testes novos falham com
 `ownerRules.assertMesmoDonoNaTransformacao is not a function`; os **8** da Task 3 continuam
 passando. Rodapé esperado: `8 passed, 6 failed`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `server/services/almoxarifado/ownerRules.js`, antes do `module.exports` (`:189`):
 
@@ -2672,7 +2700,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `cd server && node tests/api/transformacaoTerceiro.api.test.js`
 Expected: `14 passed, 0 failed`
@@ -2680,7 +2708,7 @@ Expected: `14 passed, 0 failed`
 Run: `cd server && npm run test:api`
 Expected: todos OK.
 
-- [ ] **Step 5: SABOTAGEM**
+- [x] **Step 5: SABOTAGEM**
 
 **S1 — a guarda passa a barrar TUDO** (é a sabotagem que prova os **controles positivos**, e é a
 mais importante desta task):
@@ -2735,7 +2763,7 @@ Esperado: **`✗ transformacao para material de OUTRO dono falha: a mensagem nao
 **`✗ chapa DE CLIENTE virando peca NOSSA falha: ... a mensagem nao nomeia o lado NOSSO da comparacao`**
 e **`✗ a guarda nao depende de o cliente existir na tabela clientes`**.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
