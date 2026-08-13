@@ -1541,6 +1541,39 @@ MSG
 ---
 ### Task 3: as três colunas da linha de resultado (`safeAlter`) + a peça Zod que as acompanha
 
+> ✅ **FEITA — commit `3e1a8dd`.** Gates medidos: `test:api` **78/78 arquivos OK** (o arquivo novo
+> `transformacaoTerceiro.api.test.js` com **8 passed, 0 failed**), `test:safealter`
+> **3 passed, 0 failed**, `test:validation` **4 passed, 0 failed**, `test:almoxarifado`
+> **42 passou, 0 falhou**, `test:sqlite` **3 passed, 0 failed**. Sabotagens S1/S2/S3 executadas
+> (mais uma S1b criada aqui), todas derrubaram teste. Restauração por cópia em scratchpad com
+> `md5sum` conferido antes/depois/restauração — **não** por `git checkout --`.
+>
+> **Três divergências deste plano:**
+> 1. **`TIPOS_RESULTADO` já existia** — foi antecipada no commit `03c7ce5` porque a Task 6 não
+>    rodava sem ela. O Step 3 mandava declará-la; redeclarar um `const` no mesmo módulo é
+>    `SyntaxError` e derrubaria o servidor inteiro. Esta task **só consumiu** a constante. Por isso
+>    o vermelho do Step 2 deu **7 failed** e não 8: o teste de `TIPOS_RESULTADO` já nascia verde.
+> 2. **O Step 2 previa que o `require` do topo quebrasse.** Não quebra: `require` de um nome
+>    inexistente devolve `undefined`, não lança — o processo chegou ao rodapé e imprimiu
+>    `1 passed, 7 failed`. A previsão do plano estava errada, não o teste.
+> 3. **O índice `idx_retornos_remessa_consumo` não tinha asserção nenhuma** (o Step 3 mandava
+>    criá-lo, o bloco de teste do Step 1 o ignorava e a sabotagem S1 não o tocava). Apagar o
+>    `CREATE INDEX` não derrubava nada — deliverable sem rede. Foi acrescentada asserção por
+>    `sqlite_master` dentro do teste de PRAGMA e uma sabotagem extra (**S1b**: renomear o índice e
+>    trocar a coluna indexada) que a comprovou: `7 passed, 1 failed`.
+>
+> **Sabotagens (todas derrubaram o teste esperado):**
+> - **S1** (comenta o `safeAlter` de `custo_unitario_aplicado`): `6 passed, 2 failed` —
+>   `✗ ... tem as tres colunas novas: falta a coluna custo_unitario_aplicado` e, de brinde,
+>   `✗ ... as colunas novas nascem NULL` (a coluna ausente vem `undefined`, não `null`).
+> - **S1b** (índice novo, criada aqui): `7 passed, 1 failed` —
+>   `✗ ... falta o indice idx_retornos_remessa_consumo`.
+> - **S2** (`z.enum(TIPOS_RESULTADO)` → `z.string().optional()`): `6 passed, 2 failed` — as duas
+>   recusas do Zod, como o plano previa.
+> - **S3** (apaga `lote_id` de dentro de `ResultadoTransformacaoSchema`; feita com **Edit**, porque
+>   a âncora aparece **5** vezes em `schemas.js` e a regra 2 do harness proíbe `sed` aí):
+>   `7 passed, 1 failed` — `✗ ... PRESERVA os cinco campos declarados`.
+
 **Files:**
 - Modify: `server/services/almoxarifado/schema.js` — 3 `safeAlter` logo depois do CREATE de
   `retornos_remessa_item_almoxarifado` (`:1180-1193`); constante `TIPOS_RESULTADO`; export
@@ -1576,7 +1609,7 @@ valor certo, não um buraco. Nada a fazer no ledger `schema_migrations_almoxarif
 
 ---
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `server/tests/api/transformacaoTerceiro.api.test.js` (este arquivo cresce nas Tasks 5, 7 e 8;
 os blocos seguintes entram **antes** do `await close()`):
@@ -1744,7 +1777,7 @@ async function remessaEnviada(db, { qtd = 100, custo = 0, dono = null, unidade =
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/transformacaoTerceiro.api.test.js`
 
@@ -1757,7 +1790,7 @@ schema; os dois primeiros testes de coluna falham com `falta a coluna tipo_resul
 imprimir o rodapé, o `require` do topo quebrou — corrija o teste (não o código) para importar o que
 existe, e volte aqui depois do Step 3.
 
-- [ ] **Step 3: Acrescentar as colunas em `schema.js`**
+- [x] **Step 3: Acrescentar as colunas em `schema.js`**
 
 Em `server/services/almoxarifado/schema.js`, **logo depois** do `CREATE TABLE IF NOT EXISTS
 retornos_remessa_item_almoxarifado` (que termina em `:1193`) e **antes** dos quatro
@@ -1833,7 +1866,7 @@ E acrescentar `TIPOS_RESULTADO` ao `module.exports` de `schema.js`, junto de `TI
 > mesma linha** do export. Um `const` exportado só na declaração é `undefined` no `require` — e o
 > teste do Step 1 falharia com uma mensagem que não diz isso.
 
-- [ ] **Step 4: Acrescentar `ResultadoTransformacaoSchema` em `schemas.js`**
+- [x] **Step 4: Acrescentar `ResultadoTransformacaoSchema` em `schemas.js`**
 
 Em `server/services/almoxarifado/schemas.js`, logo depois de `RetornoRemessaSchema` (`:365`):
 
@@ -1870,7 +1903,7 @@ No topo de `schemas.js`, onde já existe
 mesmo), passar a importar `TIPOS_RESULTADO` também. E acrescentar `ResultadoTransformacaoSchema` ao
 `module.exports` (`:386-392`).
 
-- [ ] **Step 5: Rodar e ver passar**
+- [x] **Step 5: Rodar e ver passar**
 
 Run: `cd server && node tests/api/transformacaoTerceiro.api.test.js`
 Expected: `8 passed, 0 failed`
@@ -1881,7 +1914,7 @@ Expected: `3 passed, 0 failed`
 Run: `cd server && npm run test:api` e `cd server && npm run test:validation`
 Expected: todos OK.
 
-- [ ] **Step 6: SABOTAGEM**
+- [x] **Step 6: SABOTAGEM**
 
 **S1 — uma das três colunas some** (prova o teste de PRAGMA):
 
@@ -1932,7 +1965,7 @@ grep -cF "lote_id: z.number().int().positive().optional()," services/almoxarifad
 > ```
 Esperado: **`✗ [schema] ResultadoTransformacaoSchema PRESERVA os cinco campos declarados: o schema comeu algum campo declarado`**.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
