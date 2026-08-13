@@ -29,7 +29,6 @@ const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin', is_superadmin: 1, ema
 // "sem acesso" — e chao de fabrica. Usados a partir da Task 5.
 const ALMOXARIFE = { id: 2, nome: 'Almoxarife', email: 'almox@test.com', perfil_almoxarifado: 'ALMOXARIFE' };
 const PRODUCAO = { id: 3, nome: 'Chao de fabrica', email: 'prod@test.com', perfil_almoxarifado: 'PRODUCAO' };
-void ALMOXARIFE; void PRODUCAO;
 
 let seq = 0;
 /**
@@ -58,7 +57,6 @@ const valorDe = async (db, id) => {
     'SELECT quantidade_atual, COALESCE(custo_medio, custo_unitario, 0) AS custo FROM materiais_almoxarifado WHERE id = ?', [id]);
   return Number(m.quantidade_atual) * Number(m.custo);
 };
-void saldos; void valorDe;
 
 /** Remessa ENVIADA de 1 item. Devolve { remessa, itemId, materialId }. */
 async function remessaEnviada(db, { qtd = 100, custo = 0, dono = null, unidade = 'KG', peso = null } = {}) {
@@ -259,6 +257,502 @@ async function remessaEnviada(db, { qtd = 100, custo = 0, dono = null, unidade =
     await assert.rejects(
       () => ownerRules.assertMesmoDonoNaTransformacao(db, chapa, peca),
       (e) => { assert.match(e.message, /cliente #99999/); return true; });
+  });
+
+  // ══ Task 7 — registrarTransformacao ═════════════════════════════════════════════════════════
+
+  const stockService = require('../../services/almoxarifado/stockService');
+
+  /** Chapa de 100 KG a R$ 10, enviada. Devolve { remessa, itemId, materialId }. */
+  const chapaEnviada = (extra = {}) => remessaEnviada(db, { qtd: 100, custo: 10, unidade: 'KG', ...extra });
+
+  /**
+   * O texto auditavel da ULTIMA baixa de chapa.
+   *
+   * Le a coluna `justificativa`, e NAO `motivo`/`observacoes` — que e onde o bloco de testes do
+   * plano procurava. `registrarMovimentacao` grava o parametro `justificativa` na COLUNA
+   * `justificativa` (stockService.js:1217-1225) e nunca o copia para `motivo` nem para
+   * `observacoes`; as duas assercoes do plano (custo do servico e residuo) liam colunas que sao
+   * SEMPRE nulas neste caminho e teriam falhado para sempre. As tres colunas entram na
+   * concatenacao de proposito: o que o teste exige e que o numero esteja ESCRITO em algum lugar
+   * auditavel da baixa, nao em qual das tres.
+   */
+  const textoDaBaixa = async () => {
+    const b = await dbGet(db, `SELECT motivo, observacoes, justificativa
+      FROM movimentacoes_almoxarifado WHERE tipo = 'CONSUMO_TERCEIRO' ORDER BY id DESC LIMIT 1`);
+    return `${b.motivo || ''} ${b.observacoes || ''} ${b.justificativa || ''}`;
+  };
+
+  await test('transformacao baixa a chapa e credita as pecas', async () => {
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'PECA-A' });
+    const sobraId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'KG', cod: 'SOBRA-A' });
+
+    const r = await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      nota_fiscal: 'NF-TRF-1',
+      itens: [{
+        item_remessa_id: itemId, quantidade_consumida: 100,
+        resultados: [
+          { material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' },
+          { material_id: sobraId, quantidade: 12, tipo_resultado: 'SOBRA' },
+        ],
+      }],
+    });
+    assert.strictEqual(r.success, true);
+    assert.strictEqual(r.transformacoes, 1);
+    assert.strictEqual(r.resultados, 2);
+    assert.strictEqual(r.pendente_total, 0);
+    assert.strictEqual(r.status, 'ENCERRADA', 'consumo total nao encerrou a remessa');
+
+    // A chapa saiu do patrimonio E da retencao — as duas, no mesmo UPDATE do motor.
+    const chapa = await saldos(db, materialId);
+    assert.strictEqual(chapa.quantidade_atual, 0, 'a chapa continua no patrimonio');
+    assert.strictEqual(chapa.em_terceiros, 0, 'a retencao da chapa ficou presa');
+
+    // As pecas entraram.
+    assert.strictEqual((await saldos(db, pecaId)).quantidade_atual, 40);
+    assert.strictEqual((await saldos(db, sobraId)).quantidade_atual, 12);
+  });
+
+  await test('a transformacao grava as tres colunas novas e os DOIS vinculos de movimentacao', async () => {
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { unidade: 'UN', cod: 'PECA-B' });
+    const sobraId = await novoMaterial(db, { unidade: 'KG', cod: 'SOBRA-B' });
+    await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      nota_fiscal: 'NF-TRF-2',
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100, resultados: [
+        { material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' },
+        { material_id: sobraId, quantidade: 12, tipo_resultado: 'SOBRA' },
+      ] }],
+    });
+    const linhas = await dbAll(db,
+      'SELECT * FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ? ORDER BY id', [itemId]);
+    assert.strictEqual(linhas.length, 2);
+    assert.strictEqual(linhas[0].tipo_resultado, 'PECA');
+    assert.strictEqual(linhas[1].tipo_resultado, 'SOBRA');
+    assert.strictEqual(linhas[0].custo_unitario_aplicado, 25);
+    assert.strictEqual(linhas[1].custo_unitario_aplicado, 0);
+    assert.strictEqual(linhas[0].material_id, pecaId, 'o resultado gravou o material da CHAPA');
+    assert.strictEqual(linhas[0].nota_fiscal, 'NF-TRF-2');
+
+    // As DUAS pontas: movimentacao_id aponta para o credito, movimentacao_consumo_id para a baixa.
+    for (const l of linhas) {
+      const credito = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [l.movimentacao_id]);
+      assert.ok(credito, 'a linha nao aponta para a movimentacao que a creditou');
+      assert.strictEqual(credito.tipo, 'RETORNO_TRANSFORMACAO');
+      assert.strictEqual(credito.material_id, l.material_id);
+      const baixa = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [l.movimentacao_consumo_id]);
+      assert.ok(baixa, 'a linha nao aponta para a movimentacao que baixou a chapa');
+      assert.strictEqual(baixa.tipo, 'CONSUMO_TERCEIRO');
+      assert.strictEqual(baixa.material_id, materialId);
+      assert.strictEqual(baixa.quantidade, 100);
+    }
+    // O agrupador: as N linhas do MESMO evento compartilham o consumo. E por isso que nao ha coluna
+    // quantidade_consumida na linha — somar por linha contaria o mesmo consumo N vezes.
+    assert.strictEqual(linhas[0].movimentacao_consumo_id, linhas[1].movimentacao_consumo_id);
+    // A ORDEM (decisao 9), medida no unico lugar que a registra de verdade: os ids do ledger sao
+    // monotonicos, entao a baixa da chapa ter id MENOR que o credito da peca prova que ela veio
+    // ANTES. Sem esta assercao, inverter a ordem (creditar primeiro, baixar depois) nao derruba
+    // teste nenhum — e a ordem inversa e a que cria peca SEM baixa quando o credito falha no meio.
+    assert.ok(linhas[0].movimentacao_consumo_id < linhas[0].movimentacao_id,
+      'a baixa da chapa nao aconteceu ANTES do credito da peca (decisao 9): os ids do ledger '
+      + 'dizem a ordem real, e credito antes de baixa cria peca sem baixa na falha');
+  });
+
+  await test('[INVARIANTE] o valor que sai na chapa e o que entra nas pecas', async () => {
+    // Medido por UMA formula so (COALESCE(custo_medio, custo_unitario)) e com materiais de destino
+    // de saldo/custo ZERO. As duas restricoes sao reais e estao no plano (C1 e C2): o sistema tem
+    // DUAS familias de leitura de valor, e a sobra a custo zero entra carregando o custo que o
+    // material dela ja tinha (o motor nao escreve custo quando o custo informado nao e > 0).
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'PECA-INV' });
+    const sobraId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'KG', cod: 'SOBRA-INV' });
+
+    const antes = await valorDe(db, materialId);
+    assert.strictEqual(antes, 1000, 'a fixture da chapa nao vale R$ 1.000');
+
+    await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100, resultados: [
+        { material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' },
+        { material_id: sobraId, quantidade: 12, tipo_resultado: 'SOBRA' },
+      ] }],
+    });
+    const depois = (await valorDe(db, materialId)) + (await valorDe(db, pecaId)) + (await valorDe(db, sobraId));
+    assert.ok(Math.abs(depois - antes) < 0.01,
+      `o patrimonio se moveu: antes ${antes}, depois ${depois}`);
+    assert.strictEqual(await valorDe(db, materialId), 0);
+    assert.strictEqual(await valorDe(db, sobraId), 0, 'a sobra entrou com valor');
+  });
+
+  await test('sobra entra com custo zero e nao dilui as pecas', async () => {
+    // O caso que motivou a regra, medido no BANCO: 25 e nao 24,39.
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'PECA-DIL' });
+    const sobraId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'KG', cod: 'SOBRA-DIL' });
+    await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100, resultados: [
+        { material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' },
+        { material_id: sobraId, quantidade: 33, tipo_resultado: 'SOBRA' },
+      ] }],
+    });
+    assert.strictEqual((await saldos(db, pecaId)).custo_medio, 25,
+      'a sobra entrou no denominador do rateio');
+    const s = await saldos(db, sobraId);
+    assert.strictEqual(s.quantidade_atual, 33);
+    assert.strictEqual(s.custo_medio, 0);
+  });
+
+  await test('sobra a custo zero NAO apaga o custo que o material da sobra ja tinha', async () => {
+    // Consequencia do ramo `else` do motor (stockService.js:1043): credito com custo 0 nao escreve
+    // custo nenhum. E o comportamento certo — e e tambem o motivo pelo qual o invariante so fecha
+    // com sobra de custo previo zero (contradicao C2 do plano). Fixado aqui para nao virar surpresa.
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { unidade: 'UN', cod: 'PECA-C2' });
+    const sobraId = await novoMaterial(db, { atual: 5, custo: 3, unidade: 'KG', cod: 'SOBRA-C2' });
+    await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100, resultados: [
+        { material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' },
+        { material_id: sobraId, quantidade: 10, tipo_resultado: 'SOBRA' },
+      ] }],
+    });
+    const s = await saldos(db, sobraId);
+    assert.strictEqual(s.quantidade_atual, 15);
+    assert.strictEqual(s.custo_medio, 3, 'a sobra a custo zero apagou o custo cadastrado do material');
+  });
+
+  await test('custo_servico informado soma ao valor rateado', async () => {
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'PECA-SRV' });
+    const r = await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100, custo_servico: 400,
+        resultados: [{ material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' }] }],
+    });
+    assert.strictEqual((await saldos(db, pecaId)).custo_medio, 35, '1000 + 400 rateado em 40 = 35');
+    assert.strictEqual(r.custo[0].valor_servico, 400);
+    assert.strictEqual(r.custo[0].valor_total, 1400);
+    // O servico tem de ficar ESCRITO em algum lugar auditavel: nao ha coluna de custo no ledger, e
+    // nao ha coluna de servico na linha de resultado (seria repetida por linha). A justificativa do
+    // CONSUMO_TERCEIRO e esse lugar.
+    assert.match(await textoDaBaixa(), /400/,
+      'o custo do servico do terceiro nao ficou registrado em lugar nenhum');
+  });
+
+  await test('chapa com custo SO em custo_unitario (custo_medio = 0) rateia pelo custo REAL', async () => {
+    // NAO estava no bloco de testes do plano, e e o teste que pega o defeito que o codigo do plano
+    // trazia pronto: ele lia o custo da chapa com `COALESCE(custo_medio, custo_unitario, 0)`.
+    // `custo_medio` e REAL DEFAULT 0 (schema.js:647) e o cadastro de material grava SO
+    // `custo_unitario` (materialService.js:185) — entao COALESCE, que devolve o primeiro NAO-NULO,
+    // devolve ZERO para todo material cadastrado a mao. Sonda executada: material com
+    // custo_unitario = 10 lia 0 pela formula do plano e 10 pela do motor.
+    //
+    // As fixtures deste arquivo enchem AS DUAS colunas de proposito (ver C1), e e por isso que
+    // NENHUM dos outros 21 testes pegava isto: sem esta fixture assimetrica, a 8c inteira seria um
+    // no-op de custo para o caso comum, com a suite verde.
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET custo_medio = 0 WHERE id = ?', [materialId]);
+    const conferencia = await saldos(db, materialId);
+    assert.strictEqual(conferencia.custo_medio, 0, 'a fixture nao zerou custo_medio — provaria nada');
+    assert.strictEqual(conferencia.custo_unitario, 10, 'a fixture perdeu o custo_unitario');
+
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'PECA-LEGADO' });
+    await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100,
+        resultados: [{ material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' }] }],
+    });
+    assert.strictEqual((await saldos(db, pecaId)).custo_medio, 25,
+      'a chapa foi transformada a custo ZERO porque custo_medio estava em 0 e a leitura usou '
+      + 'COALESCE em vez da convencao do motor (custo_medio > 0 ? custo_medio : custo_unitario)');
+  });
+
+  await test('[CONTROLE POSITIVO] chapa com custo zero credita peca com custo zero, sem erro', async () => {
+    // Prova que o rateio nao inventa numero. Material sem custo cadastrado e caso comum (todo o
+    // acervo anterior a Task 2), e a transformacao dele tem de funcionar — com zero, que e a
+    // verdade.
+    const { remessa, itemId } = await remessaEnviada(db, { qtd: 50, custo: 0, unidade: 'KG' });
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'PECA-ZERO' });
+    await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 50,
+        resultados: [{ material_id: pecaId, quantidade: 10, tipo_resultado: 'PECA' }] }],
+    });
+    const p = await saldos(db, pecaId);
+    assert.strictEqual(p.quantidade_atual, 10);
+    assert.strictEqual(p.custo_medio, 0);
+  });
+
+  await test('so SOBRA: o valor sem destino fica ESCRITO na baixa da chapa', async () => {
+    // Caso-limite decidido no plano (C3): permitido, e o valor evapora de proposito. O que nao pode
+    // e evaporar em silencio.
+    const { remessa, itemId } = await chapaEnviada();
+    const sobraId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'KG', cod: 'SOBRA-SO' });
+    const r = await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100,
+        resultados: [{ material_id: sobraId, quantidade: 30, tipo_resultado: 'SOBRA' }] }],
+    });
+    assert.strictEqual(r.custo[0].residuo, 1000);
+    assert.match(await textoDaBaixa(), /1000/, 'o valor que evaporou nao ficou escrito na baixa');
+  });
+
+  await test('peca de material inexistente falha ensinando o caminho', async () => {
+    // Decisao 6: o motor NAO cria material. Precedente do modulo: o recebimento tambem nao
+    // (receiptService.js:44-50). Criar material implicitamente a partir de um formulario de retorno
+    // produziria cadastro-lixo a cada erro de digitacao, e cadastro-lixo em almoxarifado nao se
+    // apaga — ele ganha saldo.
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    await assert.rejects(
+      () => svc.registrarTransformacao(db, ADMIN, remessa.id, {
+        itens: [{ item_remessa_id: itemId, quantidade_consumida: 10,
+          resultados: [{ material_id: 987654, quantidade: 5, tipo_resultado: 'PECA' }] }] }),
+      (e) => {
+        assert.strictEqual(e.status, 400);
+        assert.match(e.message, /987654/, 'a mensagem nao diz QUAL material nao existe');
+        assert.match(e.message, /cadastr/i, 'a mensagem nao ensina o caminho (cadastrar antes)');
+        return true;
+      });
+    // Nada se moveu: a recusa e na PRE-CHECAGEM, antes de qualquer efeito.
+    const c = await saldos(db, materialId);
+    assert.strictEqual(c.quantidade_atual, 100);
+    assert.strictEqual(c.em_terceiros, 100);
+  });
+
+  await test('material de destino INATIVO tambem falha', async () => {
+    const { remessa, itemId } = await chapaEnviada();
+    const morto = await novoMaterial(db, { unidade: 'UN', cod: 'PECA-MORTA' });
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET ativo = 0 WHERE id = ?', [morto]);
+    await assert.rejects(
+      () => svc.registrarTransformacao(db, ADMIN, remessa.id, {
+        itens: [{ item_remessa_id: itemId, quantidade_consumida: 10,
+          resultados: [{ material_id: morto, quantidade: 5, tipo_resultado: 'PECA' }] }] }),
+      /inativ/i);
+  });
+
+  await test('resultado com o MESMO material da chapa e recusado, apontando o retorno simples', async () => {
+    // Chapa que volta como ela mesma nao e transformacao — e o retorno da 8b, e ele tem rota
+    // propria. Aceitar aqui daria dois caminhos para a mesma operacao, com contabilidades de custo
+    // diferentes (um rateia, o outro nao).
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    await assert.rejects(
+      () => svc.registrarTransformacao(db, ADMIN, remessa.id, {
+        itens: [{ item_remessa_id: itemId, quantidade_consumida: 10,
+          resultados: [{ material_id: materialId, quantidade: 10, tipo_resultado: 'PECA' }] }] }),
+      (e) => {
+        assert.strictEqual(e.status, 400);
+        assert.match(e.message, /retorno/i, 'a mensagem nao aponta o caminho do retorno simples');
+        return true;
+      });
+  });
+
+  await test('quantidade_consumida acima do pendente falha, com os numeros na mensagem', async () => {
+    // O teto da 8b continua valendo, INTACTO: `quantidade_consumida` esta na unidade do ENVIADO, e
+    // e por isso que a decisao 1 separou os dois numeros. Comparar peca (UN) com chapa (KG) seria
+    // somar laranja com maca.
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { unidade: 'UN', cod: 'PECA-TETO' });
+    await assert.rejects(
+      () => svc.registrarTransformacao(db, ADMIN, remessa.id, {
+        itens: [{ item_remessa_id: itemId, quantidade_consumida: 140,
+          resultados: [{ material_id: pecaId, quantidade: 40, tipo_resultado: 'PECA' }] }] }),
+      (e) => {
+        assert.strictEqual(e.status, 400);
+        assert.match(e.message, /100/, 'a mensagem nao diz quanto foi enviado');
+        assert.match(e.message, /140/, 'a mensagem nao diz quanto este documento pede');
+        return true;
+      });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100, 'moveu saldo numa recusa');
+  });
+
+  await test('resultado em unidade diferente NAO conta no teto', async () => {
+    // O erro que o desenho evita. A chapa saiu em KG; 400 pecas em UN nao estouram teto nenhum,
+    // porque o teto e sobre `quantidade_consumida` (KG) e os resultados nao encostam nele.
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'PECA-UN' });
+    const r = await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 60,
+        resultados: [{ material_id: pecaId, quantidade: 400, tipo_resultado: 'PECA' }] }],
+    });
+    assert.strictEqual(r.status, 'RETORNO_PARCIAL');
+    assert.strictEqual(r.pendente_total, 40, 'o teto contou as 400 pecas em UN');
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 40);
+    assert.strictEqual((await saldos(db, pecaId)).quantidade_atual, 400);
+  });
+
+  await test('transformacao com um item invalido NAO aplica NENHUM item do lote', async () => {
+    // Pre-checagem TOTAL, a forma da 8b: um documento com dois itens, um deles com material de
+    // destino inexistente, nao pode transformar metade.
+    const matA = await novoMaterial(db, { atual: 100, custo: 10, unidade: 'KG', cod: 'LOTE-A' });
+    const matB = await novoMaterial(db, { atual: 100, custo: 10, unidade: 'KG', cod: 'LOTE-B' });
+    const rem = await svc.criarRemessa(db, ADMIN, { fornecedor_nome: 'Corte Oeste',
+      itens: [{ material_id: matA, quantidade: 100 }, { material_id: matB, quantidade: 100 }] });
+    await svc.enviarRemessa(db, ADMIN, rem.id);
+    const its = await dbAll(db,
+      'SELECT id FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ? ORDER BY id', [rem.id]);
+    const pecaId = await novoMaterial(db, { unidade: 'UN', cod: 'PECA-LOTE' });
+
+    await assert.rejects(() => svc.registrarTransformacao(db, ADMIN, rem.id, { itens: [
+      { item_remessa_id: its[0].id, quantidade_consumida: 50,
+        resultados: [{ material_id: pecaId, quantidade: 10, tipo_resultado: 'PECA' }] },
+      { item_remessa_id: its[1].id, quantidade_consumida: 50,
+        resultados: [{ material_id: 555555, quantidade: 10, tipo_resultado: 'PECA' }] },
+    ] }), /555555/);
+
+    assert.strictEqual((await saldos(db, matA)).quantidade_atual, 100, 'o item bom foi consumido numa recusa');
+    assert.strictEqual((await saldos(db, matA)).em_terceiros, 100);
+    assert.strictEqual((await saldos(db, pecaId)).quantidade_atual, 0);
+  });
+
+  await test('transformacao sem a acao remessar_terceiro falha com 403', async () => {
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { unidade: 'UN', cod: 'PECA-403' });
+    await assert.rejects(
+      () => svc.registrarTransformacao(db, PRODUCAO, remessa.id, {
+        itens: [{ item_remessa_id: itemId, quantidade_consumida: 10,
+          resultados: [{ material_id: pecaId, quantidade: 5, tipo_resultado: 'PECA' }] }] }),
+      (e) => { assert.strictEqual(e.status, 403); return true; });
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 100);
+  });
+
+  await test('[CONTROLE POSITIVO] ALMOXARIFE, que tem a acao, transforma normalmente', async () => {
+    // Sem isto, `throw 403 sempre` passaria no teste acima e a funcao nunca funcionaria.
+    const { remessa, itemId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, unidade: 'UN', cod: 'PECA-ALMOX' });
+    const r = await svc.registrarTransformacao(db, ALMOXARIFE, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 100,
+        resultados: [{ material_id: pecaId, quantidade: 20, tipo_resultado: 'PECA' }] }] });
+    assert.strictEqual(r.status, 'ENCERRADA');
+  });
+
+  await test('transformacao em remessa que nunca foi enviada e recusada', async () => {
+    const m = await novoMaterial(db, { atual: 10, unidade: 'KG', cod: 'ABERTA-CHAPA' });
+    const rem = await svc.criarRemessa(db, ADMIN, { fornecedor_nome: 'Corte Oeste',
+      itens: [{ material_id: m, quantidade: 10 }] });
+    const it = await dbGet(db,
+      'SELECT id FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?', [rem.id]);
+    const pecaId = await novoMaterial(db, { unidade: 'UN', cod: 'PECA-ABERTA' });
+    await assert.rejects(
+      () => svc.registrarTransformacao(db, ADMIN, rem.id, {
+        itens: [{ item_remessa_id: it.id, quantidade_consumida: 5,
+          resultados: [{ material_id: pecaId, quantidade: 2, tipo_resultado: 'PECA' }] }] }),
+      /ABERTA/);
+    assert.strictEqual((await saldos(db, m)).quantidade_atual, 10);
+  });
+
+  await test('falha no credito da SEGUNDA peca devolve a chapa (patrimonio E retencao)', async () => {
+    // A compensacao da decisao 9, e o teste mais importante desta task. Stuba o motor para falhar
+    // no SEGUNDO RETORNO_TRANSFORMACAO — depois do consumo e depois do primeiro credito.
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const p1 = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'COMP-P1' });
+    const p2 = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'COMP-P2' });
+
+    const original = stockService.registrarMovimentacao;
+    let creditos = 0;
+    stockService.registrarMovimentacao = async (dbx, u, params, opts) => {
+      if (params.tipo === 'RETORNO_TRANSFORMACAO') {
+        creditos += 1;
+        if (creditos === 2) throw Object.assign(new Error('falha simulada no segundo credito'), { status: 500 });
+      }
+      return original(dbx, u, params, opts);
+    };
+    try {
+      await assert.rejects(() => svc.registrarTransformacao(db, ADMIN, remessa.id, {
+        itens: [{ item_remessa_id: itemId, quantidade_consumida: 100, resultados: [
+          { material_id: p1, quantidade: 20, tipo_resultado: 'PECA' },
+          { material_id: p2, quantidade: 20, tipo_resultado: 'PECA' },
+        ] }] }), /falha simulada/);
+    } finally {
+      stockService.registrarMovimentacao = original;
+    }
+
+    // A chapa voltou INTEIRA: patrimonio E retencao.
+    const chapa = await saldos(db, materialId);
+    assert.strictEqual(chapa.quantidade_atual, 100, 'a chapa nao voltou ao patrimonio');
+    assert.strictEqual(chapa.em_terceiros, 100,
+      'a retencao NAO voltou — o estorno do livro nao a recria (stockService.js:1380-1387) e a '
+      + 'compensacao precisa do UPDATE suplementar');
+    // O credito que passou foi desfeito, e o custo dele tambem.
+    const q1 = await saldos(db, p1);
+    assert.strictEqual(q1.quantidade_atual, 0, 'a primeira peca ficou creditada');
+    assert.strictEqual(q1.custo_medio, 0,
+      'o custo medio da primeira peca ficou movido por uma transformacao que nao aconteceu');
+    // O claim do item voltou.
+    const it = await dbGet(db,
+      'SELECT quantidade_retornada FROM itens_remessa_terceiro_almoxarifado WHERE id = ?', [itemId]);
+    assert.strictEqual(Number(it.quantidade_retornada || 0), 0, 'o claim do item nao foi devolvido');
+    // Nenhuma linha de resultado orfa.
+    const n = await dbGet(db,
+      'SELECT COUNT(*) AS n FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ?', [itemId]);
+    assert.strictEqual(n.n, 0, 'sobrou linha de resultado de uma transformacao que falhou');
+  });
+
+  await test('depois da falha, a MESMA transformacao pode ser refeita e funciona', async () => {
+    // O teste decisivo da contradicao C6 do plano. "Os numeros voltaram" nao basta: se a retencao
+    // nao voltar, o item fica pendente com zero retencao e a proxima tentativa bate na guarda
+    // `COALESCE(quantidade_em_terceiros,0) >= ?` do claim duplo, PARA SEMPRE.
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const p1 = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'RETRY-P1' });
+    const p2 = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'RETRY-P2' });
+    const corpo = { itens: [{ item_remessa_id: itemId, quantidade_consumida: 100, resultados: [
+      { material_id: p1, quantidade: 20, tipo_resultado: 'PECA' },
+      { material_id: p2, quantidade: 20, tipo_resultado: 'PECA' },
+    ] }] };
+
+    const original = stockService.registrarMovimentacao;
+    let creditos = 0;
+    stockService.registrarMovimentacao = async (dbx, u, params, opts) => {
+      if (params.tipo === 'RETORNO_TRANSFORMACAO') {
+        creditos += 1;
+        if (creditos === 2) throw Object.assign(new Error('falha simulada'), { status: 500 });
+      }
+      return original(dbx, u, params, opts);
+    };
+    try {
+      await assert.rejects(() => svc.registrarTransformacao(db, ADMIN, remessa.id, corpo), /falha simulada/);
+    } finally {
+      stockService.registrarMovimentacao = original;
+    }
+
+    // Agora de verdade.
+    const r = await svc.registrarTransformacao(db, ADMIN, remessa.id, corpo);
+    assert.strictEqual(r.status, 'ENCERRADA');
+    assert.strictEqual((await saldos(db, materialId)).quantidade_atual, 0);
+    assert.strictEqual((await saldos(db, materialId)).em_terceiros, 0);
+    assert.strictEqual((await saldos(db, p1)).quantidade_atual, 20);
+    assert.strictEqual((await saldos(db, p2)).quantidade_atual, 20);
+  });
+
+  await test('transformacao parcial deixa o resto pendente e a remessa em RETORNO_PARCIAL', async () => {
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'PARC-P' });
+    const r = await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 30,
+        resultados: [{ material_id: pecaId, quantidade: 12, tipo_resultado: 'PECA' }] }] });
+    assert.strictEqual(r.status, 'RETORNO_PARCIAL');
+    assert.strictEqual(r.pendente_total, 70);
+    const c = await saldos(db, materialId);
+    assert.strictEqual(c.quantidade_atual, 70, 'baixou mais (ou menos) do que o consumido');
+    assert.strictEqual(c.em_terceiros, 70);
+    // 30 kg a R$ 10 = R$ 300 em 12 pecas = 25 cada.
+    assert.strictEqual((await saldos(db, pecaId)).custo_medio, 25);
+  });
+
+  await test('transformacao e RETORNO simples convivem no mesmo item', async () => {
+    // Metade da chapa volta inteira (RETORNO_TERCEIRO, 8b) e a outra metade e cortada. Os dois
+    // caminhos somam no MESMO teto do item, porque os dois estao na unidade do enviado.
+    const { remessa, itemId, materialId } = await chapaEnviada();
+    const pecaId = await novoMaterial(db, { atual: 0, custo: 0, unidade: 'UN', cod: 'MISTO-P' });
+    await svc.registrarRetorno(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade: 40 }] });
+    const r = await svc.registrarTransformacao(db, ADMIN, remessa.id, {
+      itens: [{ item_remessa_id: itemId, quantidade_consumida: 60,
+        resultados: [{ material_id: pecaId, quantidade: 24, tipo_resultado: 'PECA' }] }] });
+    assert.strictEqual(r.status, 'ENCERRADA');
+    assert.strictEqual(r.pendente_total, 0);
+    const c = await saldos(db, materialId);
+    // 40 voltaram (retencao desceu, patrimonio nao mudou) e 60 foram consumidos (as duas desceram).
+    assert.strictEqual(c.quantidade_atual, 40);
+    assert.strictEqual(c.em_terceiros, 0);
+    // As linhas de resultado convivem: a da 8b com tipo_resultado NULL, a da 8c com 'PECA'.
+    const linhas = await dbAll(db,
+      'SELECT tipo_resultado FROM retornos_remessa_item_almoxarifado WHERE item_remessa_id = ? ORDER BY id', [itemId]);
+    assert.deepStrictEqual(linhas.map((l) => l.tipo_resultado), [null, 'PECA']);
   });
 
   await close();

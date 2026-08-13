@@ -16,6 +16,8 @@ const { can } = require('./permissions');
 const { registrarAuditoria } = require('./audit');
 const { disponivelSql } = require('./availabilitySql');
 const stockService = require('./stockService');
+const ownerRules = require('./ownerRules');
+const transformCost = require('./transformCost');
 const sm = require('./thirdPartyStateMachine');
 
 const DESTINOS_ENCERRAMENTO = ['PERDA_NO_TERCEIRO', 'CONSUMIDO_NO_PROCESSO'];
@@ -673,9 +675,355 @@ async function cancelarRemessa(db, user, remessaId, data = {}) {
   return { success: true, remessa_id: Number(remessaId), status: 'CANCELADA', estornado };
 }
 
+/**
+ * Leitura do custo unitario de um material, na convencao DO MOTOR.
+ *
+ * `CASE WHEN COALESCE(custo_medio,0) > 0 THEN custo_medio ELSE COALESCE(custo_unitario,0) END` —
+ * e NAO `COALESCE(custo_medio, custo_unitario, 0)`, que era o que o plano trazia pronto.
+ *
+ * A diferenca nao e estilistica: `custo_medio` e `REAL DEFAULT 0` (schema.js:647) e o cadastro de
+ * material grava SO `custo_unitario` (materialService.js:185). Entao, para todo material cadastrado
+ * a mao — que e o acervo inteiro anterior a Task 2 desta etapa — `custo_medio` vale 0 e NAO NULL, e
+ * COALESCE devolve o PRIMEIRO NAO-NULO: zero. Sonda executada nesta task: material inserido com
+ * custo_unitario = 10 le `leitura_plano = 0` e `leitura_motor = 10`. Com a leitura do plano, toda
+ * chapa cadastrada a mao seria transformada a custo zero, em silencio, e o rateio inteiro da 8c
+ * seria um no-op para o caso comum — sem derrubar nenhum teste, porque as fixtures preenchem AS
+ * DUAS colunas de proposito (ver C1).
+ *
+ * Esta e a mesma convencao que o proprio motor usa para calcular a media ponderada
+ * (stockService.js:1039) e que requisitionValueApprovalService.js:63 usa para valorar requisicao.
+ * A outra familia de leitura (reportService.js:10) usa o COALESCE simples e tem o MESMO defeito —
+ * registrado na Task 10 como pendencia, nao consertado aqui: mexer na valoracao de relatorio e
+ * outro assunto e outro commit.
+ */
+const CUSTO_UNITARIO_SQL = 'CASE WHEN COALESCE(custo_medio,0) > 0 THEN custo_medio ELSE COALESCE(custo_unitario,0) END';
+
+/**
+ * Desfaz o que ja entrou quando uma transformacao falha no meio (decisao 9 do design).
+ *
+ * A ORDEM E A INVERSA DA APLICACAO, e ela e decidida no design: baixa a chapa primeiro, credita as
+ * pecas depois; entao a compensacao estorna os creditos e SO DEPOIS devolve a chapa. A ordem
+ * inversa na aplicacao (creditar primeiro) criaria, na falha, pecas SEM baixa — estoque do nada,
+ * que e o pior dos dois estados.
+ *
+ * ── Por que o estorno do livro NAO basta, e o que este UPDATE suplementar conserta ──
+ *
+ * cancelarMovimentacao de um CONSUMO_TERCEIRO credita `quantidade_atual` e NAO recria
+ * `quantidade_em_terceiros` — deliberadamente (stockService.js:1380-1387), porque LA a remessa ja
+ * esta ENCERRADA e recriar a retencao seria um hold sem remessa viva por tras.
+ *
+ * AQUI a premissa e falsa: a remessa esta VIVA e o claim do item esta voltando. Sem a retencao de
+ * volta, o item fica pendente com ZERO retencao, e a proxima tentativa bate na guarda
+ * `COALESCE(quantidade_em_terceiros,0) >= ?` do claim duplo (stockService.js:996) PARA SEMPRE — a
+ * remessa nunca mais poderia ser transformada. Por isso a compensacao e estorno-do-livro (que
+ * mantem o livro honesto, com linha de ESTORNO de verdade) MAIS o UPDATE que devolve so a retencao.
+ *
+ * ── Por que o custo e restaurado a mao ──
+ *
+ * O estorno NAO reverte custo, por decisao explicita da Etapa 1 (stockService.js:1548-1550), e essa
+ * decisao esta certa para um estorno de VERDADE (o evento aconteceu; reverter custo medio depois de
+ * movimentos intermediarios e mal-definido). Aqui e outra coisa: e a compensacao de um evento que
+ * NAO aconteceu. Deixar o custo movido faria uma transformacao que falhou mudar o custo medio da
+ * peca para sempre. O valor restaurado e o lido ANTES do primeiro credito daquele material — por
+ * isso `custosAnteriores` guarda por material e so na PRIMEIRA vez que o material aparece (um mesmo
+ * material pode aparecer em duas linhas de resultado).
+ *
+ * Todo passo e `.catch(() => {})` menos o ultimo: compensacao que falha no meio nao pode esconder o
+ * erro ORIGINAL, que e o que interessa a quem chamou. O ultimo (devolver o claim) fica sem catch de
+ * proposito — se ele falhar, o item ficaria com pendencia menor do que a real, e isso e pior do que
+ * mascarar o erro original.
+ */
+async function compensarTransformacao(db, user, { creditos, custosAnteriores, movConsumo, item, consumida }) {
+  const motivo = 'Compensacao automatica: a transformacao falhou no meio e foi desfeita';
+
+  for (const c of [...creditos].reverse()) {
+    if (c.linhaId) {
+      await dbRun(db, 'DELETE FROM retornos_remessa_item_almoxarifado WHERE id = ?', [c.linhaId]).catch(() => {});
+    }
+    await stockService.cancelarMovimentacao(db, user, c.movId, motivo).catch(() => {});
+  }
+  for (const [materialId, c] of custosAnteriores) {
+    await dbRun(db, `UPDATE materiais_almoxarifado
+      SET custo_medio = ?, custo_unitario = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`, [c.custo_medio, c.custo_unitario, materialId]).catch(() => {});
+  }
+  if (movConsumo && movConsumo.id) {
+    await stockService.cancelarMovimentacao(db, user, movConsumo.id, motivo).catch(() => {});
+    await dbRun(db, `UPDATE materiais_almoxarifado
+      SET quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) + ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`, [consumida, item.material_id]).catch(() => {});
+  }
+  await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
+    SET quantidade_retornada = MAX(0, COALESCE(quantidade_retornada,0) - ?) WHERE id = ?`,
+  [consumida, item.id]);
+}
+
+/**
+ * Registra uma TRANSFORMACAO: a chapa deixa de existir e as pecas entram (Etapa 8c).
+ *
+ * ── A diferenca de natureza em relacao a registrarRetorno ──
+ *
+ * O RETORNO da 8b nao credita estoque: `quantidade_em_terceiros` desce e `quantidade_atual` nao
+ * muda, porque o material nunca saiu do patrimonio — ele so estava a 40 km. AQUI a chapa DEIXA DE
+ * EXISTIR: sai do patrimonio E da retencao (CONSUMO_TERCEIRO, claim duplo no mesmo UPDATE) e as
+ * pecas ENTRAM como material novo (RETORNO_TRANSFORMACAO). Dois efeitos de sinais opostos em
+ * MATERIAIS DIFERENTES.
+ *
+ * ── Os dois numeros que a decisao 1 separa, e por que ──
+ *
+ * `quantidade_consumida` esta SEMPRE na unidade do ENVIADO e e a unica coisa que conta no teto do
+ * item — o teto da 8b continua valendo, intacto. `resultados[]` tem cada um a SUA unidade e NENHUM
+ * deles encosta no teto. Comparar 40 pecas (UN) com uma chapa de 100 (KG) seria somar laranja com
+ * maca, e o criterio de "liquidado" que decide ENCERRADA vs RETORNO_PARCIAL continua quantitativo
+ * sobre o item enviado. Zero mudanca na maquina de estados.
+ *
+ * `validarRetornoDoItem` e chamado SEM `materialId` de proposito: e nele que mora a recusa de
+ * material diferente (a mensagem que aponta esta etapa), e ela continua valendo para
+ * registrarRetorno. Quem abre a transformacao e ESTA funcao, com a baixa da chapa junto — que e
+ * justamente o que faltava para "creditar outro material" nao ser estoque do nada.
+ *
+ * ── Sem transacao (decisao 9) ──
+ *
+ * PRE-CHECAGEM de TUDO (todos os itens, todos os resultados, o dono de cada par, o rateio inteiro)
+ * antes de mover qualquer coisa; claim no WHERE do item; compensacao explicita no catch. A
+ * pre-checagem agrega pelo RECURSO ESCASSO (o pendente do item), nunca pela linha do documento —
+ * regra da Task 5 da 8b, onde duas linhas de 60 de um item de 100 passavam as duas.
+ *
+ * LIMITE DECLARADO (mesmo de registrarRetorno na 8b, nao uma regressao): a compensacao cobre o item
+ * QUE FALHOU. Num documento de N itens, se o item 2 falhar por erro de RUNTIME depois de o item 1
+ * ter sido aplicado, o item 1 fica aplicado e a remessa nao muda de status. A pre-checagem total
+ * existe justamente para que a unica falha possivel no meio seja de runtime (banco fora do ar,
+ * corrida no claim), nao de dado.
+ */
+async function registrarTransformacao(db, user, remessaId, data) {
+  assertPodeRemessar(user);
+  const remessa = await getRemessaBase(db, remessaId);
+  if (!sm.PODE_RECEBER_RETORNO.includes(remessa.status)) {
+    throw erro(`Remessa em ${remessa.status} nao recebe transformacao `
+      + `(recebem: ${sm.PODE_RECEBER_RETORNO.join(', ')})`);
+  }
+  const itens = Array.isArray(data?.itens) ? data.itens : [];
+  if (itens.length === 0) throw erro('Informe ao menos um item transformado');
+
+  // ── 1. Pre-checagem: o documento INTEIRO e recusado antes de mover qualquer coisa ──
+  const linhasPorItem = new Map();
+  for (const linha of itens) {
+    const k = Number(linha.item_remessa_id);
+    linhasPorItem.set(k, (linhasPorItem.get(k) || 0) + 1);
+  }
+  const validados = [];
+  const jaPedido = new Map();
+  for (const linha of itens) {
+    const chave = Number(linha.item_remessa_id);
+    const acumulado = jaPedido.get(chave) || 0;
+    const consumida = Number(linha.quantidade_consumida);
+    // materialId OMITIDO: ver o docstring. O teto e sobre a unidade do ENVIADO.
+    const item = await validarRetornoDoItem(db, {
+      remessaId,
+      itemRemessaId: linha.item_remessa_id,
+      quantidade: consumida + acumulado,
+      linhas: linhasPorItem.get(chave) || 1,
+    });
+    jaPedido.set(chave, acumulado + consumida);
+
+    const materialOrigem = await dbGet(db, `SELECT id, codigo, nome, unidade, peso_unitario,
+        proprietario_cliente_id, ${CUSTO_UNITARIO_SQL} AS custo
+      FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
+
+    const resultados = Array.isArray(linha.resultados) ? linha.resultados : [];
+    if (resultados.length === 0) {
+      throw erro(`A transformacao do item ${materialOrigem.codigo} precisa de ao menos um `
+        + 'resultado (peca ou sobra) — se a chapa voltou inteira, use o retorno simples');
+    }
+
+    const resolvidos = [];
+    for (const r of resultados) {
+      const matRes = await dbGet(db, `SELECT id, codigo, nome, unidade, peso_unitario, ativo,
+          proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?`, [r.material_id]);
+      // Decisao 6: o motor NAO cria material. Precedente do modulo — o recebimento tambem nao
+      // (receiptService.js:44-50). Criar material implicitamente a partir de um formulario de
+      // retorno produziria cadastro-lixo a cada erro de digitacao, e cadastro-lixo em almoxarifado
+      // nao se apaga: ele ganha saldo. A mensagem ENSINA O CAMINHO em vez de so recusar.
+      if (!matRes) {
+        throw erro(`O material ${r.material_id} do resultado nao existe. Cadastre o material `
+          + 'resultante primeiro (Almoxarifado > Materiais > Novo, ou o atalho "Criar material '
+          + 'resultante" na tela de Remessas) e refaca a transformacao — o sistema nao cria '
+          + 'material sozinho a partir de um formulario de retorno.');
+      }
+      if (!matRes.ativo) {
+        throw erro(`O material ${matRes.codigo} do resultado esta inativo — reative o cadastro `
+          + 'antes de transformar para ele');
+      }
+      if (Number(matRes.id) === Number(item.material_id)) {
+        throw erro(`O resultado ${matRes.codigo} e o MESMO material da chapa enviada. Chapa que `
+          + 'volta como ela mesma nao e transformacao: use o retorno simples da remessa.');
+      }
+      // Decisao 3: a peca tem de ter o mesmo dono da chapa. Sem excecao.
+      await ownerRules.assertMesmoDonoNaTransformacao(db, materialOrigem, matRes);
+      resolvidos.push({ ...r, material_id: matRes.id, material: matRes });
+    }
+
+    // O rateio roda AQUI, na pre-checagem: se ele recusar (quantidade zero, classificacao invalida),
+    // recusa antes de qualquer efeito. E o resultado ja fica pronto para a fase 2.
+    const rateio = transformCost.ratearCusto({
+      custoUnitarioChapa: Number(materialOrigem.custo || 0),
+      quantidadeConsumida: consumida,
+      custoServico: Number(linha.custo_servico || 0),
+      resultados: resolvidos,
+    });
+
+    validados.push({ item, linha, consumida, materialOrigem, rateio });
+  }
+
+  // ── 2. Efeito, item a item ──
+  const efetivados = [];
+  for (const v of validados) {
+    const { item, linha, consumida, materialOrigem, rateio } = v;
+
+    const claim = await dbGet(db, `UPDATE itens_remessa_terceiro_almoxarifado
+      SET quantidade_retornada = COALESCE(quantidade_retornada,0) + ?
+      WHERE id = ? AND (quantidade - COALESCE(quantidade_retornada,0)) >= ?
+      RETURNING id`, [consumida, item.id, consumida]);
+    if (!claim) {
+      // Corrida com outro documento concorrente do mesmo item: a pre-checagem passou, o claim nao.
+      throw erro(`Transformacao acima do enviado no item ${item.material_codigo}: outro documento `
+        + 'foi registrado ao mesmo tempo. Recarregue a remessa e tente de novo.');
+    }
+
+    const creditos = [];
+    const custosAnteriores = new Map();
+    let movConsumo = null;
+    try {
+      // 2a. BAIXA A CHAPA PRIMEIRO (decisao 9). CONSUMO_TERCEIRO ja existe desde a 8b e faz
+      // exatamente o que a chapa precisa: baixa quantidade_atual E quantidade_em_terceiros no MESMO
+      // UPDATE, com claim duplo (stockService.js:984-1006). Nenhuma alteracao no motor foi
+      // necessaria para esta metade.
+      //
+      // A justificativa carrega o que NAO tem coluna: o custo do servico do terceiro e o valor sem
+      // destino quando nao houve peca nenhuma. Nao ha coluna de custo no ledger (decisao 10) e nao
+      // ha coluna de servico na linha de resultado (seria repetida por linha, e qualquer SUM()
+      // ingenuo contaria N vezes) — a justificativa e o lugar auditavel que sobra.
+      const extras = [];
+      if (rateio.valorServico > 0) extras.push(`servico do terceiro R$ ${rateio.valorServico}`);
+      if (rateio.quantidadePecas === 0 && rateio.residuo > 0) {
+        extras.push(`R$ ${rateio.residuo} sem destino (nenhuma peca no resultado — so sobra)`);
+      }
+      movConsumo = await stockService.registrarMovimentacao(db, user, {
+        material_id: item.material_id,
+        tipo: 'CONSUMO_TERCEIRO',
+        quantidade: consumida,
+        lote_id: linha.lote_id || item.lote_id || undefined,
+        referencia: remessa.numero,
+        documento_vinculado: data.nota_fiscal || undefined,
+        justificativa: `Transformacao da remessa ${remessa.numero}: ${consumida} `
+          + `${materialOrigem.unidade || ''} de ${materialOrigem.codigo} viraram `
+          + `${rateio.linhas.length} resultado(s)`
+          + (extras.length ? ` — ${extras.join('; ')}` : ''),
+      });
+
+      // 2b. CREDITA OS RESULTADOS.
+      for (const l of rateio.linhas) {
+        const mid = Number(l.material_id);
+        // Guarda o custo ANTES do primeiro credito daquele material — e o que a compensacao
+        // restaura. So na primeira vez: o mesmo material pode aparecer em duas linhas.
+        if (!custosAnteriores.has(mid)) {
+          const c = await dbGet(db, `SELECT COALESCE(custo_medio,0) AS custo_medio,
+            COALESCE(custo_unitario,0) AS custo_unitario FROM materiais_almoxarifado WHERE id = ?`, [mid]);
+          custosAnteriores.set(mid, c);
+        }
+        const mov = await stockService.registrarMovimentacao(db, user, {
+          material_id: mid,
+          tipo: 'RETORNO_TRANSFORMACAO',
+          quantidade: Number(l.quantidade),
+          // `undefined` e nao 0 quando nao ha custo: o motor so mexe em custo com `custoInformado
+          // > 0` (stockService.js:1031), e mandar 0 explicitamente sugeriria que o custo foi
+          // zerado de proposito. A SOBRA passa por aqui — e por isso que ela NAO apaga o custo
+          // que o material dela ja tinha.
+          custo_unitario: l.custo_unitario_aplicado > 0 ? l.custo_unitario_aplicado : undefined,
+          lote_id: l.lote_id || undefined,
+          referencia: remessa.numero,
+          documento_vinculado: data.nota_fiscal || undefined,
+          justificativa: `Transformacao da remessa ${remessa.numero}: ${consumida} `
+            + `${materialOrigem.unidade || ''} de ${materialOrigem.codigo} viraram `
+            + `${l.quantidade} ${l.material.unidade || ''} de ${l.material.codigo} (${l.tipo_resultado})`,
+        });
+        const registro = { movId: mov.id, materialId: mid, linhaId: null };
+        creditos.push(registro);
+        const ins = await dbRun(db, `INSERT INTO retornos_remessa_item_almoxarifado
+          (remessa_id, item_remessa_id, material_id, quantidade, lote_id, nota_fiscal, observacoes,
+           movimentacao_id, recebido_por, recebido_por_nome,
+           tipo_resultado, custo_unitario_aplicado, movimentacao_consumo_id)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+          remessaId, item.id, mid, Number(l.quantidade), l.lote_id || null,
+          data.nota_fiscal || null, l.observacoes || null,
+          mov.id, user.id, user.nome || user.email,
+          l.tipo_resultado, l.custo_unitario_aplicado, movConsumo.id,
+        ]);
+        registro.linhaId = ins.lastID;
+      }
+    } catch (e) {
+      await compensarTransformacao(db, user, {
+        creditos, custosAnteriores, movConsumo, item, consumida,
+      });
+      throw e;
+    }
+
+    efetivados.push({
+      item_remessa_id: item.id,
+      material_codigo: materialOrigem.codigo,
+      valor_base: rateio.valorBase,
+      valor_servico: rateio.valorServico,
+      valor_total: rateio.valorTotal,
+      custo_unitario_peca: rateio.custoUnitarioPeca,
+      residuo: rateio.residuo,
+      resultados: rateio.linhas.length,
+    });
+  }
+
+  // ── 3. Status: MESMO criterio da 8b, e e por isso que a decisao 1 separou os dois numeros ──
+  const { pendente } = await dbGet(db, `SELECT
+      COALESCE(SUM(quantidade - COALESCE(quantidade_retornada,0)), 0) AS pendente
+    FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?`, [remessaId]);
+  const novoStatus = Number(pendente) <= 0 ? 'ENCERRADA' : 'RETORNO_PARCIAL';
+  const t = sm.validarTransicao(remessa.status, novoStatus);
+  if (!t.ok) throw erro(t.erro);
+  await dbRun(db, `UPDATE remessas_terceiro_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP,
+        encerrado_em = CASE WHEN ? = 'ENCERRADA' THEN CURRENT_TIMESTAMP ELSE encerrado_em END,
+        encerrado_por = CASE WHEN ? = 'ENCERRADA' THEN ? ELSE encerrado_por END
+    WHERE id = ?`, [novoStatus, novoStatus, novoStatus, user.id, remessaId]);
+
+  await registrarAuditoria(db, {
+    entidade: 'remessa_terceiro',
+    entidade_id: Number(remessaId),
+    acao: 'TRANSFORMACAO',
+    usuario_id: user.id,
+    usuario_nome: user.nome || user.email,
+    dados_anteriores: { status: remessa.status },
+    dados_novos: {
+      status: novoStatus,
+      transformacoes: efetivados.length,
+      resultados: efetivados.reduce((a, e) => a + e.resultados, 0),
+      pendente_total: Number(pendente),
+      nota_fiscal: data.nota_fiscal || null,
+      custo: efetivados,
+    },
+  }).catch(() => {});
+
+  return {
+    success: true,
+    remessa_id: Number(remessaId),
+    status: novoStatus,
+    transformacoes: efetivados.length,
+    resultados: efetivados.reduce((a, e) => a + e.resultados, 0),
+    pendente_total: Number(pendente),
+    custo: efetivados,
+  };
+}
+
 module.exports = {
-  DESTINOS_ENCERRAMENTO, TIPO_MOVIMENTO_DESTINO,
+  DESTINOS_ENCERRAMENTO, TIPO_MOVIMENTO_DESTINO, CUSTO_UNITARIO_SQL,
   criarRemessa, enviarRemessa, getRemessa, listarRemessas,
-  validarRetornoDoItem, registrarRetorno,
+  validarRetornoDoItem, registrarRetorno, registrarTransformacao,
   pendentesDaRemessa, encerrarRemessa, cancelarRemessa,
 };
