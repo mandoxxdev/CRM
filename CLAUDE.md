@@ -4,6 +4,10 @@ Stack: Express + SQLite (`server/`) e React CRA (`client/`). Rodar tudo: `npm ru
 
 ## Ao terminar qualquer etapa/tarefa, ATUALIZE A DOCUMENTAÇÃO antes de dizer que acabou
 
+> **Use a skill `fechar-etapa`** (`.claude/skills/fechar-etapa/SKILL.md`) — ela é a versão
+> executável desta seção, com o formato exato do documento de apresentação, as regras do harness
+> de sabotagem e o checklist final. O usuário não quer ter de revisar isto toda vez.
+
 Esta é a regra mais importante deste arquivo, porque já falhou: código foi entregue e as specs
 continuaram dizendo que a feature não existia. Uma sessão nova (ou outra máquina) lê os
 documentos primeiro e é **ativamente enganada** por eles.
