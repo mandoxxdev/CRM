@@ -1,7 +1,18 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:** 2026-08-12 (**Etapa 8b — a quarta coluna de retenção e a conta do
+> **Última atualização:** 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
+> deixando de ter um alimentador só.** Três mudanças deste motor, detalhadas abaixo: (1) o tipo
+> novo `RETORNO_TRANSFORMACAO` (`9c7ec75`), **entrada com custo**, dedicado (fora da rota genérica)
+> e presente nos **dois** ramos do motor — tem linha própria na tabela de efeitos, em "Tipos de
+> movimento das Etapas 8b e 8c" (seção renomeada: ela dizia só "da Etapa 8b"); (2) o **recebimento por NF passou a alimentar o custo médio**
+> (`8cd3fcf`) — até aqui o único alimentador era a movimentação manual com custo digitado à mão,
+> e esta spec, na prática, afirmava isso; **sem backfill, e por um motivo estrutural** (ver o item
+> de custo médio no checklist); (3) duas fontes únicas criadas por tarefas extras do mesmo dia —
+> `custoSql.js` (`a644ab7`) e `movementTypes.js` (`3ef0144`) —, **detalhadas nos itens próprios do
+> checklist, não repetidas aqui**. Os dois avisos que a Etapa 8b deixou endereçados à 8c foram **respondidos**
+> no ponto em que estavam escritos, e não apagados.)
+> Antes: 2026-08-12 (**Etapa 8b — a quarta coluna de retenção e a conta do
 > disponível numa fonte só.** Duas mudanças estruturais neste motor, detalhadas em "Fórmula de
 > disponibilidade" e "Tipos de movimento da Etapa 8b", abaixo: (1)
 > `materiais_almoxarifado.quantidade_em_terceiros` entrou na fórmula do disponível, e a subtração —
@@ -139,9 +150,20 @@ coluna nova de `materiais_almoxarifado` vaza quantidade exata para o requisitant
 ali**. `quantidade_em_terceiros` entrou na lista em `0a01124`. **O padrão continua: o default é
 expor.** Qualquer coluna criada pela Etapa 8c precisa repetir esta checagem.
 
-### Tipos de movimento da Etapa 8b (`e0be211`)
+> **RESPONDIDO pela Etapa 8c (2026-08-13) — e a pendência CONTINUA ABERTA.** A checagem foi feita e
+> deu **nada a fazer**: a 8c **não criou nenhuma coluna em `materiais_almoxarifado`**. As três
+> colunas novas da etapa (`tipo_resultado`, `custo_unitario_aplicado`, `movimentacao_consumo_id`)
+> são todas de `retornos_remessa_item_almoxarifado`, que o `SELECT m.*` de
+> `GET /api/requisicoes-material/materiais` não lê. **A 8c passou ao lado por escopo, não por
+> resolução:** o sanitizador continua funcionando por **lista de exclusão**, o default continua
+> sendo **expor**, e a próxima coluna de `materiais_almoxarifado` — de qualquer etapa — vaza
+> quantidade exata para o requisitante até ser nomeada em `SENSITIVE_MATERIAL_FIELDS`. Nada aqui
+> foi endurecido.
 
-Quatro tipos novos, em dois pares com semântica oposta:
+### Tipos de movimento das Etapas 8b (`e0be211`) e 8c (`9c7ec75`)
+
+Quatro tipos novos na 8b, em dois pares com semântica oposta, mais **um** na 8c — o único deles que
+**credita** saldo:
 
 | Tipo | Efeito | Molde |
 |---|---|---|
@@ -149,13 +171,57 @@ Quatro tipos novos, em dois pares com semântica oposta:
 | `RETORNO_TERCEIRO` | `quantidade_em_terceiros` **desce**; `quantidade_atual` **não muda** | `DESBLOQUEIO` |
 | `PERDA_TERCEIRO` | baixa **físico e retenção** no mesmo UPDATE | `DECISAO_INSPECAO` |
 | `CONSUMO_TERCEIRO` | idem, para material que virou cavaco/refugo no processo | `DECISAO_INSPECAO` |
+| `RETORNO_TRANSFORMACAO` (**8c**, `9c7ec75`) | **entrada**: credita `quantidade_atual` (`saldo_anterior < saldo_posterior`) e **aceita custo** | ramo de ENTRADA do motor |
 
-Os quatro estão em `TIPOS_ISENTOS_DONO` (`ownerRules.js`) — remessa de material de cliente é isenta
+**A linha de `RETORNO_TRANSFORMACAO` foi acrescentada nesta tabela em 2026-08-13, e a tabela não a
+tinha:** até aqui o tipo era citado só de passagem, mais abaixo, como se fosse detalhe da feature 14
+— ele é um tipo de movimento de primeira classe deste motor. Os fatos que importam para quem mexer
+no motor:
+
+- **É entrada, e é a única dos tipos de terceiros que credita saldo.** Os quatro da 8b ou só mexem
+  em retenção, ou baixam; este **credita `quantidade_atual`**. Sai 1 chapa (baixada por
+  `CONSUMO_TERCEIRO`) e entram N peças — **dois efeitos de sinais opostos, em materiais
+  diferentes, no mesmo evento**.
+- **Aceita `custo_unitario` no payload, e por isso alimenta a média ponderada do material de
+  destino** — é o que faz o rateio da chapa chegar ao custo da peça. `undefined` (e não `0`) quando
+  não há custo: o motor só mexe em custo com `custoInformado > 0`, e é por isso que a **SOBRA**, que
+  entra a custo zero, **não apaga** o custo que o material dela já tinha.
+- **Está em `TIPOS_DEDICADOS`** (`schema.js`), logo **fora** da rota genérica de movimentação —
+  `TIPOS_MOVIMENTO_ROTA` é **derivado** dessa lista, não há segunda lista a lembrar. Só o serviço da
+  transformação o emite (`thirdPartyService.registrarTransformacao`, via
+  `POST /remessas-terceiros/:id/transformacoes`, gate `remessar_terceiro`). Aceitá-lo na v2 (gate
+  `movimentar`, o mais amplo do módulo) permitiria criar peça cortada **sem remessa por trás e sem
+  baixar chapa alguma** — estoque do nada.
+- **Entra nas DUAS listas de entrada do motor** — `registrarMovimentacao` e `cancelarMovimentacao`
+  —, e a decisão do segundo ramo foi tomada **olhando aquele ramo**, não copiada do primeiro. O
+  próprio arquivo já avisava que esquecer uma torna o motor **assimétrico**, e o if-chain do
+  cancelamento **não tem `else`**: deixá-lo de fora marcaria a movimentação `cancelado = 1` com
+  linha de `ESTORNO` de `saldo_anterior == saldo_posterior`, e **a peça creditada nunca sairia do
+  saldo**. *(Desde `3ef0144`, no mesmo dia, as duas listas **derivam** de
+  `services/almoxarifado/movementTypes.js` — a duplicação que o aviso vigiava deixou de existir; o
+  aviso continua valendo para quem criar tipo novo, agora com um só lugar onde declarar.)*
+- **Está em `TIPOS_ISENTOS_DONO`** (`ownerRules.js`), e ali a entrada é **declarativa**: aquela
+  guarda (`assertSaidaPermitida`) só roda para saída, e este tipo é entrada — a ausência não mudaria
+  comportamento nenhum. Está na lista para não ser lida como esquecimento, exatamente como
+  `AJUSTE_POSITIVO`. **A guarda de dono da transformação é outra**:
+  `assertMesmoDonoNaTransformacao` (Task 5), aplicada na **pré-checagem do serviço**, não no motor —
+  a peça tem de ter o **mesmo** dono da chapa, senão a transformação converteria material de cliente
+  em patrimônio da GMP.
+
+> **RESPONDE o aviso escrito logo abaixo ("A Etapa 8c tem de repetir isso para todo tipo novo que
+> criar", 2026-08-12).** Foi repetido: o tipo foi classificado explicitamente em `TIPOS_ISENTOS_DONO`
+> **com o motivo escrito no código**, em `TIPOS_DEDICADOS`, e nos dois ramos do motor — cada
+> decisão tomada olhando o ramo em questão. **Aviso cumprido, não herdado.**
+
+Os quatro da 8b estão em `TIPOS_ISENTOS_DONO` (`ownerRules.js`) — remessa de material de cliente é isenta
 da regra de OS/projeto, no mesmo espírito da `TRANSFERENCIA`, com a contrapartida de que o documento
 **nomeia o proprietário**. A isenção é **duplamente coberta** (os quatro também estão fora de
 `TIPOS_SAIDA_COM_DONO`), o que significa que apagar uma das listas não quebra teste nenhum — por
 isso o teste empurra os quatro para `TIPOS_SAIDA_COM_DONO` **em memória** e prova que a isenção
-segura mesmo assim. **A Etapa 8c tem de repetir isso para todo tipo novo que criar.**
+segura mesmo assim. **A Etapa 8c tem de repetir isso para todo tipo novo que criar.** — ✅ **RESPONDIDO em 2026-08-13:**
+`RETORNO_TRANSFORMACAO` foi classificado explicitamente nas duas listas, com o motivo escrito no
+código (a entrada em `TIPOS_ISENTOS_DONO` é **declarativa**, porque a guarda só roda para saída);
+ver o bloco dele na tabela acima.
 
 **`REMESSA_TERCEIRO`/`RETORNO_TERCEIRO` NÃO são estornáveis pelo livro**, e isso precisou de guarda
 explícita em `cancelarMovimentacao`: sem ela, o estorno gravaria a linha de `ESTORNO`, marcaria a
@@ -194,6 +260,24 @@ quarentena, apontando para a tela de Remessas. **Contraste deliberado:**
 - [x] `permite_saldo_negativo` respeitado (default: bloquear; guarda atômica em `registrarMovimentacao` e em `cancelarMovimentacao`)
 - [x] Centro de custo como vínculo (`centros_custo_almoxarifado`, `CentroCustoSchema`, rota `/centros-custo`)
 - [x] Atualização de custo médio na entrada (`custo_medio` calculado atomicamente na mesma UPDATE da entrada; teste dedicado)
+- [x] **O recebimento por NF passou a ALIMENTAR o custo médio** — `8cd3fcf` (Etapa 8c, Task 2),
+  2026-08-13. `receiptService.darEntradaEstoque` passa `custo_unitario` no payload de
+  `ENTRADA_COMPRA`, usando o `valor_unitario` da linha da nota; `0` é normalizado para `undefined`,
+  e **a guarda real é a do motor** (`custoInformado > 0`) — sabotar a condicional do serviço para
+  passar o custo cegamente **não derruba teste**, porque quem recusa o zero é o motor.
+
+  > **Correção de uma afirmação que esta spec fazia na prática.** O item acima ("atualização de
+  > custo médio na entrada") descrevia o mecanismo e nunca disse quem o acionava — e quem o
+  > acionava era **um caminho só**: a movimentação **manual** com custo digitado à mão. O
+  > recebimento gravava `valor_unitario`/`valor_total` na linha do item e **não os passava
+  > adiante**. Ler esta spec dava a impressão de que material recebido por nota tinha custo médio;
+  > **não tinha**. Deixou de ser verdade em `8cd3fcf`.
+  >
+  > **NÃO há backfill, e não é preguiça — é impossível.** Recalcular custo médio retroativo exige o
+  > custo **por movimento**, e `movimentacoes_almoxarifado` **não tem coluna de custo nenhuma**
+  > (`schema.js`: a tabela nasce com `quantidade`/`saldo_anterior`/`saldo_posterior` e as extensões
+  > por `safeAlter` acrescentam lote, localização, vínculos e cancelamento — custo não está em
+  > nenhuma das duas). O dado não existe; a mudança vale **só daqui para frente**.
 - [x] **Listas de tipos que somam/subtraem saldo numa fonte única** —
   `services/almoxarifado/movementTypes.js` (`TIPOS_ENTRADA` / `TIPOS_SAIDA`), 2026-08-13, tarefa
   extra da Etapa 8c. Eram **quatro** cópias: duas dentro do `stockService` (`registrarMovimentacao`

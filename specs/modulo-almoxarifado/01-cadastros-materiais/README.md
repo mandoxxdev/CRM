@@ -2,7 +2,10 @@
 
 > **Status:** 🟡 — Etapa 2 entregue (2026-08-04): ~21 colunas novas no material (técnicos, reposição, controles, ABC, unidades compra/consumo + fatores), subfamílias via `parent_id` em famílias, `MaterialSchema`/`MaterialUpdateSchema` (Zod) com validação e auditoria de criação/atualização, form em 6 seções. Falta: tabela de conversões genérica, grupo acima de família, motivos/transportadoras/tipos de documento, remover categorias hardcoded do front, `almoxarifadoApi.js`.
 > **Spec original:** seções 4.1, 4.2, 4.3
-> **Última atualização:** 2026-08-11 (auditoria spec×código: corrigida a afirmação falsa sobre `controle_lote`/`controle_certificado`; refs de linha trocadas por nomes)
+> **Última atualização:** 2026-08-13 (**Etapa 8c, Task 1 (`028da1e`) — criar material virou serviço
+> e o gerador de código passou a aguentar lote.** Ver a seção "Entregue na Etapa 8c, Task 1", no
+> fim. Nada disso estava documentado nesta feature até agora.)
+> Antes: 2026-08-11 (auditoria spec×código: corrigida a afirmação falsa sobre `controle_lote`/`controle_certificado`; refs de linha trocadas por nomes)
 > **📋 Plano de implementação:** [docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastros.md](../../../docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastros.md) — Tasks 3, 4, 6 (subfamílias, campos do material, form) · Design: [docs/superpowers/specs/2026-08-04-almoxarifado-etapa2-cadastros-design.md](../../../docs/superpowers/specs/2026-08-04-almoxarifado-etapa2-cadastros-design.md)
 
 ## Objetivo
@@ -12,7 +15,7 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
 ## O que já existe
 
 - Tabela `materiais_almoxarifado` (criada em `services/almoxarifado/schema.js`; colunas v3 e as da Etapa 2 adicionadas via `safeAlter` no mesmo arquivo): codigo UNIQUE, nome, descricao, categoria/categoria_id, familia_id, subcategoria_id, subfamilia_id, unidade, foto, localizacao_padrao_id, quantidade_atual/minima/maxima, custo_unitario/custo_medio, fornecedor_id, ncm, tipo_material, material_critico, controle_lote, controle_certificado, controle_serie, controle_validade, controle_corrida, requer_inspecao, requer_foto, classe_abc, fabricante, codigo_fabricante, peso_unitario, dimensoes, material_construtivo, norma, marca, modelo, aplicacao, ponto_reposicao, lote_economico, unidade_compra/fator_conversao_compra, unidade_consumo/fator_conversao_consumo, permite_saldo_negativo, ativo.
-- CRUD completo: rotas GET/POST/PUT/DELETE de `/materiais` em `routes/almoxarifado.js` (validação de família ativa obrigatória, soft delete, foto ≤10 MB, código automático por família/setor); POST/PUT migrados para `validate(MaterialSchema)`/`validate(MaterialUpdateSchema)` (Zod, com coerção de strings do form) na Etapa 2; PUT preserva qualquer campo omitido do payload (inclusive os novos); toda criação/edição grava auditoria (`CRIACAO`/`ATUALIZACAO`) com diff dos campos alterados em `auditoria_log_almoxarifado`.
+- CRUD completo: rotas GET/POST/PUT/DELETE de `/materiais` em `routes/almoxarifado.js` (validação de família ativa obrigatória, soft delete, foto ≤10 MB, código automático por família/setor). **Desde a Etapa 8c, Task 1 (2026-08-13, `028da1e`), o POST é um chamador magro:** a criação mora em `services/almoxarifado/materialService.createMaterial` — ver a seção do fim; POST/PUT migrados para `validate(MaterialSchema)`/`validate(MaterialUpdateSchema)` (Zod, com coerção de strings do form) na Etapa 2; PUT preserva qualquer campo omitido do payload (inclusive os novos); toda criação/edição grava auditoria (`CRIACAO`/`ATUALIZACAO`) com diff dos campos alterados em `auditoria_log_almoxarifado`.
 - Famílias: `familias_material_almoxarifado` + CRUD (rotas de `/familias` em `routes/almoxarifado.js`) com `tipo_uso` (administrativo/industrial/ambos); ganhou `parent_id` na Etapa 2 (subfamílias, máx. 2 níveis, validação de hierarquia em POST/PUT/DELETE).
 - Categorias com hierarquia (`parent_id`), 27 seeds. Unidades de medida (12 seeds). Tipos de material (20 no enum + tabela com flags EPI/controlado/assinatura).
 - Front: `MateriaisAlmoxarifado.js`, `MaterialAlmoxarifadoForm.js` (reorganizado em 6 seções na Etapa 2: Identificação · Classificação com cascata família→subfamília · Dados Técnicos · Estoque e Reposição · Controles · Unidades e Custos), aba Famílias em `ConfiguracoesAlmoxarifado.js`.
@@ -46,14 +49,16 @@ Cadastro completo de materiais com todos os campos da spec, famílias/subfamíli
 
 ### Frontend
 - [x] Form de material com os novos campos, em seções (`MaterialAlmoxarifadoForm.js`: Identificação · Classificação com cascata família→subfamília · Dados Técnicos · Estoque e Reposição · Controles · Unidades e Custos)
-- [ ] Remover listas de categorias hardcoded duplicadas em `MateriaisAlmoxarifado.js` (`CATEGORIAS` em `:15`), `MaterialAlmoxarifadoForm.js`, `ConferenciaEstoque.js` → usar `/almoxarifado/categorias` — **ainda não feito**
+- [ ] Remover listas de categorias hardcoded duplicadas em `MateriaisAlmoxarifado.js` (`CATEGORIAS` em `:15`), `MaterialAlmoxarifadoForm.js`, `ConferenciaEstoque.js` → usar `/almoxarifado/categorias` — **ainda não feito**. **A Etapa 8c encostou nesta dívida e NÃO a resolveu (2026-08-13):** a sobra da transformação é material normal e usa a categoria "Sucata e sobras reaproveitáveis", que **já existe no `CATEGORIAS_SEED`** — a lista hardcoded do front não a tem, e é diferente da tabela seedada. Resolver mexe em **três telas** por um motivo que não era o da etapa, então ficou de fora **de propósito**; segue aberta, e cada etapa que cria material por caminho novo aumenta a chance de a lista do front mentir
 - [ ] Criar `client/src/services/almoxarifadoApi.js` (camada de service, padrão de `frotasApi.js`) — **não criado**
 
 ## Regras essenciais + testes de API exigidos
 
 | Regra | Teste |
 |-------|-------|
-| Código interno é único; duplicado → 409/400 | `materialCompleto.api.test.js`: "REGRESSÃO: POST código duplicado → 400 Código já existe" |
+| Código interno é único; duplicado → 409/400 | `materialCompleto.api.test.js`: "REGRESSÃO: POST código duplicado → 400 Código já existe" · `materialServiceCriacao.api.test.js`: "codigo repetido SEM codigo_auto continua dando 400 'Código já existe'" |
+| Com `codigo_auto`, colisão de código regera em vez de recusar (até 5 tentativas) e cadastro em lote não repete número | `materialServiceCriacao.api.test.js`: "proximo-codigo em LOTE nao repete: 5 criacoes concorrentes dao 5 codigos distintos" |
+| `GET /proximo-codigo` usa o MAIOR número, não o material de maior `id` | `materialServiceCriacao.api.test.js`: "proximo-codigo usa o MAIOR numero, nao o material de maior id" |
 | Material exige família ativa | regra existe na rota (`POST /materiais`); **sem teste de API dedicado** nesta etapa |
 | Subfamília deve ser filha da família do material; senão 400 | `subfamilias.api.test.js`: "POST material com familia A + subfamília de B → 400", "POST material com familia raiz + subfamília raiz (não filha) → 400" |
 | Fator de conversão ≤ 0 (com unidade compra/consumo informada) → 400 | `materialCompleto.api.test.js`: "POST fator_conversao_compra: 0 ... → 400", "POST unidade_consumo sem fator_conversao_consumo → 400" |
@@ -74,3 +79,57 @@ Plano completo em [docs/superpowers/plans/2026-08-04-almoxarifado-etapa2-cadastr
 - Frontend: `client/src/components/almoxarifado/MaterialAlmoxarifadoForm.js` (6 seções, cascata família→subfamília).
 - Testes: `server/tests/api/materialCompleto.api.test.js`, `server/tests/api/subfamilias.api.test.js`; regressão em `test:api`, `test:almoxarifado`, `test:validation`, `test:safealter`.
 - Não entregue nesta etapa: tabela genérica de conversão entre unidades, grupo acima de família, ficha técnica/anexos na tela, motivos/transportadoras/tipos de documento, remoção das categorias hardcoded do front, `almoxarifadoApi.js`, `prazo_reposicao_dias` no `MaterialSchema`.
+
+## Entregue na Etapa 8c, Task 1 (2026-08-13, `028da1e`)
+
+Esta feature não foi o **objetivo** da Etapa 8c — a etapa é a transformação no terceiro (feature
+14) —, mas foi ela que precisou criar material a partir de outro serviço, e o cadastro **não tinha
+por onde**. O que mudou aqui, e que até agora não estava documentado em lugar nenhum desta spec:
+
+- **A criação de material deixou de ser um `INSERT` inline no handler HTTP.** O único
+  `INSERT INTO materiais_almoxarifado` de produção vivia dentro do `app.post('/api/almoxarifado/materiais')`,
+  junto com **quatro efeitos que quem só olha o `INSERT` não enxerga**: a movimentação de saldo
+  inicial (só quando `quantidade_atual > 0`, para não sujar o extrato de todo material sem saldo),
+  o `syncSaldoLocalizacaoPadrao`, a auditoria `CRIACAO` e a releitura enriquecida com a família.
+  Qualquer outro caminho teria de fazer HTTP para o próprio servidor ou reimplementar os cinco
+  passos. Agora existe **`services/almoxarifado/materialService.createMaterial`** e a rota é um
+  chamador magro. **O gate `requirePermission('criar_material')` FICA NA ROTA**, de propósito: os
+  caminhos internos já passaram pelo gate deles, e duplicar a checagem recusaria chamada de serviço
+  para serviço.
+- **`GET /proximo-codigo` deixou de usar `ORDER BY id DESC`.** Aquilo devolvia o código do registro
+  de **maior `id`**, não o de **maior número**: cadastrar `CHP-010` e depois `CHP-002` fazia o
+  gerador olhar `CHP-002` (id maior) e propor `CHP-003`, que já podia existir. Passou a usar o
+  **MAX do sufixo numérico** (`MAX(CAST(substr(codigo, …) AS INTEGER))`, com `GLOB '[0-9]*'` além do
+  `LIKE` — sem ele, `CHP-ESPECIAL` viraria `0` em silêncio e `CHP-12A` viraria `12`, competindo com
+  os números de verdade).
+- **Campo novo e explícito `codigo_auto`** (`MaterialShape`/`MaterialSchema`). Quando verdadeiro, o
+  `codigo` recebido é **sugestão**: a colisão de UNIQUE faz o serviço **regerar pelo `proximoCodigo`
+  da família e tentar de novo**, até `TENTATIVAS_CODIGO_AUTO` = **5**. **Sem `codigo_auto`, o
+  comportamento é idêntico ao de sempre** — colisão continua sendo `400 "Código já existe"`, e a
+  tela de cadastro manual **não muda em nada** (quem digitou o código quer saber que ele já existe,
+  não ganhar outro). É isso que permite cadastrar **vários materiais em sequência**, o caso do modal
+  de transformação da 8c: `proximoCodigo` **só lê**, então N chamadas concorrentes devolveriam o
+  mesmo número — a colisão é resolvida onde ela de fato acontece, no `INSERT`.
+  *(Descartado: reservar o número numa tabela de sequência — custa tabela nova, caminho de limpeza
+  para números reservados e não usados, e uma segunda fonte de verdade sobre qual código existe,
+  para um problema que o retry resolve em 6 linhas. Descartado: tornar `codigo` opcional no
+  `MaterialSchema` quando há família — mudaria o contrato da API para todo mundo por causa de um
+  caso.)*
+- Testes: `server/tests/api/materialServiceCriacao.api.test.js` (13 casos), **três deles guardas de
+  refactor** que comparam a linha gravada pela **rota** com a gravada pelo **serviço**, coluna a
+  coluna — lista de campos escolhida a dedo aprovaria o refactor que esqueceu a coluna que ninguém
+  lembrou de listar.
+
+> **Correção de uma expectativa que virou afirmação em outros documentos:
+> `buildLocalizacaoPath`/`formatLocalizacaoLabel` NÃO ficaram duplicados.** O plano da 8c mandava
+> mantê-las em `routes/almoxarifado.js` alegando que tinham outros usos ali (listagem de
+> localizações) e registrar a duplicação como dívida conhecida. **O plano estava errado**: o único
+> chamador era o `resolveLocalizacaoFromFk` logo abaixo, que passou a delegar. As duas foram
+> **REMOVIDAS da rota** e vivem só em `materialService.js` — há um comentário no lugar delas em
+> `routes/almoxarifado.js` dizendo exatamente isso. **A dívida que se esperava registrar aqui não
+> existe.** *(Verificado por leitura do código em 2026-08-13: não há definição dessas funções em
+> `routes/almoxarifado.js`, só a menção no comentário.)* O que **de fato** foi divergência do plano
+> e vale como registro: as funções foram copiadas **literalmente** do handler em vez de reescritas —
+> reescrevê-las mudaria, calado, o rótulo gravado na coluna `localizacao` de todo material criado
+> pelo serviço, e a guarda de refactor não pegaria porque o corpo de teste não manda
+> `localizacao_padrao_id`.

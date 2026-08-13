@@ -1,13 +1,13 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 8b (02/08/2026 a 12/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 8c (02/08/2026 a 13/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Gerado em 2026-08-12.
+> `docs/superpowers/plans/`. Atualizado em 2026-08-13 (Etapa 8c).
 
 ## Visão geral
 
@@ -25,13 +25,14 @@
 | 7 | Transferências e Devoluções | 2026-08-12 | As duas rotas que existiam sem tela ganharam tela e regra — e o bug que baixava o estoque duas vezes na devolução para sucata foi corrigido |
 | 8 | Materiais de Clientes | 2026-08-12 | A chapa do cliente saiu da lista à parte e virou material de verdade, com dono: fora de todo número do nosso estoque, e só sai no trabalho de quem é dela |
 | 8b | Remessas a Terceiros | 2026-08-12 | O material que vai beneficiar fora (galvanizar, pintar, usinar) para de sumir do controle: sai do disponível sem sair do patrimônio, com prazo, retorno parcial e baixa justificada do que não voltou |
+| 8c | Transformação no Terceiro | 2026-08-13 | A chapa que sai para corte e volta como 40 peças e uma sobra para de mentir no estoque: a chapa é baixada de verdade e as peças entram com o custo dela rateado |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
 clientes).
-Com a 8b, a feature 14 (materiais enviados a terceiros) fica **parcialmente entregue** — falta a
-**transformação** (a chapa que sai e volta como peças cortadas), que é a **Etapa 8c**.
-Próxima etapa da ordem: **Etapa 8c — transformação**.
+**Com a 8c, a feature 14 (materiais enviados a terceiros) fica completa**: a 8b entregou a metade
+em que **o mesmo material volta** (galvanizar, pintar, tratar) e a 8c entrega a metade em que
+**volta outra coisa** (cortar, dobrar, usinar).
 
 ---
 
@@ -48,11 +49,16 @@ está detalhado na seção da etapa correspondente e no
 | **A1** | **O bug da Sucata pode ter deixado saldo a menos.** Devolver material para o destino Sucata baixava o estoque **duas vezes**. A correção **não conserta o passado**. No banco de desenvolvimento a checagem já foi feita: **0 devoluções, nenhum efeito lá**. | Ver a consulta exata no guia, seção "Etapa 7 → O bug da Sucata". Ela lista **só as devoluções anteriores à correção** (as que não têm a entrada correspondente no livro) — cada linha é um material cujo saldo está **a menos** pela quantidade devolvida. Uma consulta que filtrasse só `destino = 'SUCATA'` traria também as devoluções corretas feitas depois do deploy, e faria você caçar problema que não existe. |
 | **A2** | **A lista antiga de materiais de cliente foi aposentada** com base no banco de desenvolvimento (0 linhas). **Nada foi apagado** — a tabela foi preservada exatamente para este caso. | `SELECT COUNT(*) AS total, SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos FROM materiais_cliente_almoxarifado;` — se vier `0`, só anotar e fechar. Se vier `> 0`, **não reverte nada**: entra uma migração assistida antes de qualquer exclusão. |
 
-### B. Uma decisão de negócio esperando por você — agora em TRÊS caminhos
+**Continuam sendo duas — a 8b e a 8c não acrescentam nenhuma.** As duas etapas de terceiros só
+**criam** colunas e tabelas novas, que nascem vazias; **nenhum dado existente é tocado ou
+reinterpretado** por elas. Está dito explicitamente porque as Etapas 7 e 8 deixaram consultas
+pendentes e você vai procurar a das etapas novas.
 
-**O que muda o saldo total não olha para o material que está retido.** É sempre o mesmo defeito, e
-a Etapa 8b é a **terceira** vez que ele aparece — por isso ele está aqui, e não escondido na seção
-de uma etapa.
+### B. Decisões de negócio — duas esperando por você, uma já tomada
+
+**B1 a B3 — o que muda o saldo total não olha para o material que está retido.** É sempre o mesmo
+defeito, e a Etapa 8b foi a **terceira** vez que ele apareceu — por isso está aqui, e não escondido
+na seção de uma etapa.
 
 **B1 (desde a Etapa 7) — o Ajuste contra o material bloqueado.** Bloquear 8 unidades e depois
 lançar um Ajuste levando o total para 1 deixa `bloqueado (8) > total (1)`: **disponível negativo,
@@ -65,7 +71,7 @@ uma conferência com **"aplicar ajustes"** (`PUT /conferencias/:id/concluir`) es
 permissão `ajustar_material_cliente` (é o furo C1 abaixo) e sem olhar para nenhuma coluna de
 retenção.
 
-**B3 (NOVO, da Etapa 8b) — o material que está no terceiro.** Mesmo defeito, com a coluna nova.
+**B3 (da Etapa 8b) — o material que está no terceiro.** Mesmo defeito, com a coluna nova.
 Mandar 30 chapas galvanizar e depois ajustar o total do material para 10 deixa
 `em terceiros (30) > total (10)`. **O sistema aceita.** E o caminho mais provável é justamente o
 B2: homologar a divergência de um material que tem saldo em terceiros **baixa o físico e deixa a
@@ -76,13 +82,36 @@ retenção órfã** — disponível negativo, sem aviso nenhum.
 > "corrigir" o saldo), e o encerramento de remessa é o caminho controlado para zerar a retenção.
 > Mas se alguém lançar um Ajuste manual à revelia — ou homologar uma divergência de contagem de um
 > material que tem remessa aberta —, o buraco continua aberto.
+>
+> **A Etapa 8c não tocou nisto.** A transformação baixa a retenção pelo caminho controlado, como o
+> encerramento; o Ajuste manual continua sem reconciliar nada. É a **terceira instância registrada
+> e a decisão continua aberta.**
 
 Três respostas possíveis, e a escolha é sua — a mesma para B1, B2 e B3: **(a)** o Ajuste baixa a
 retenção proporcionalmente; **(b)** o Ajuste recusa enquanto houver retenção maior que o novo
 total; ou **(c)** o Ajuste aceita e apenas avisa. Enquanto não for decidido: **resolva a quarentena
 e encerre as remessas em aberto antes de lançar um ajuste que reduz o total.**
 
-### C. Dois furos conhecidos, que quem opera precisa saber
+**B4 (NOVO, da Etapa 8c) — a regra de custo da transformação. Esta você JÁ decidiu; está escrita
+aqui para você reconhecer o que foi implementado no seu nome.**
+
+Quando a chapa é cortada, o custo dela tem de ir para algum lugar. O que ficou valendo:
+
+| A regra | O que foi **escolhido** | O que foi **descartado**, e por quê |
+|---|---|---|
+| Como dividir o custo da chapa | **Pela quantidade** de cada resultado | **Ratear pelo peso.** Peso unitário é campo opcional do cadastro, que quase nenhum material tem preenchido — uma regra que dependesse dele falharia justamente no caso mais comum, e falharia em silêncio |
+| Quanto vale a sobra | **Zero** | Dar à sobra a mesma fatia por quantidade das peças. A sobra é **uma linha só** e uma fatia grande: rateá-la deixaria as peças aproximadamente **40% mais caras** num corte típico, sem que nada tivesse acontecido de verdade com elas |
+| A nota do cortador (serviço) | **Opcional**, e **soma** ao custo das peças quando informada | Estimar o serviço quando não informado. **O sistema não inventa número** |
+
+**Consequência declarada, e é decisão também:** se a chapa voltar **só como sobra** (nenhuma peça),
+não há entre quem ratear — o valor **evapora de propósito**, e o número fica **escrito na
+justificativa** da baixa da chapa, para não sumir sem rastro. Inflar o retalho para "fechar a
+conta" é exatamente o que a regra da sobra a zero recusa em voz alta.
+
+**Se a operação real for outra, isto é mudança de regra, não bug** — e é barato mudar, porque a
+conta vive numa função isolada (`transformCost.ratearCusto`).
+
+### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **A conferência de inventário muda saldo de material de cliente sem a permissão especial.**
    A Etapa 8 criou uma autorização dedicada para ajustar material de terceiro — mas a
@@ -95,6 +124,36 @@ e encerre as remessas em aberto antes de lançar um ajuste que reduz o total.**
    lança duas movimentações (entrou / foi descartada). Se a segunda falhar depois de a primeira
    ter entrado, a devolução fica marcada como **estado parcial** na auditoria e a correção é
    manual, pela tela de Movimentações. **Ninguém é notificado.**
+3. **🚨 O VALOR DO ESTOQUE VAI MUDAR — e muda para CERTO. Bug antigo, achado e corrigido durante a
+   8c.** Isto **não** é uma mudança da 8c: é um defeito que existia **antes** dela e que a 8c achou
+   por acidente, ao precisar ler o custo da chapa para ratear.
+   - **O que estava errado:** a conta do valor tentava usar *"o custo médio, ou, se não houver, o do
+     cadastro"*. Mas o custo médio de material que **nunca recebeu nota fiscal** não é "não existe"
+     — ele é **zero**. E "zero" não é "não existe": a conta parava no zero e **nunca chegava no
+     custo do cadastro**. Resultado: **material cujo custo foi digitado só no cadastro valia R$ 0,00**.
+     Como quase todo o acervo é anterior ao recebimento por NF, **isso valia para quase tudo.**
+   - **Medido, não deduzido:** material com custo de cadastro **R$ 10** e custo médio **0** — a
+     fórmula antiga devolvia **0**; a nova devolve **10**.
+   - **Antes → Agora:** o relatório **"estoque atual"** e a **consulta de estoque** mostravam
+     **R$ 0,00** e passam a mostrar **R$ 10,00 × a quantidade**. **Os números vão subir. Não é
+     inflação — é o número certo aparecendo pela primeira vez.**
+   - **O card "Valor em Estoque" do Dashboard também muda, por outro motivo:** ele **nunca** zerou;
+     ele somava pelo custo do **cadastro** e passa a somar pelo **custo médio**. Para material que
+     nunca recebeu nota com custo — **a maioria hoje** — o número é **exatamente o mesmo de antes**.
+   - **Nada a rodar em produção, nenhum dado foi tocado.** O custo sempre esteve certo no banco; só
+     a **leitura** estava errada.
+   - *Uma ressalva honesta:* as duas leituras que zeravam **não têm tela** — são API. A única
+     conferência clicável desta correção é o card do Dashboard. O guia tem o roteiro.
+4. **O QUE O CLIENTE LÊ COMO "CONSUMIDO" MUDA — outro bug antigo, achado e corrigido durante a 8c.**
+   Na tela **Materiais de Clientes → Posição**, a coluna **consumido** passa a incluir o material
+   **consumido no processo do terceiro** e o **perdido no terceiro** — que antes não entravam em
+   coluna nenhuma. E **recebido** passa a incluir a peça que voltou **transformada**.
+   - **O efeito prático:** antes, o material sumia do saldo **sem aparecer em consumido** ("para
+     onde foi isso?"), ou aparecia com **saldo e recebido zero** ("de onde saiu isso?"). A conta
+     *recebido − consumido − devolvido = saldo* simplesmente não fechava.
+   - **O saldo não muda** — ele nunca veio dessas somas. O que muda são as **colunas explicativas**.
+   - **Se você já apresentou essa tela a um cliente, os números da coluna "consumido" vão estar
+     maiores da próxima vez.** Vale avisar.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -107,6 +166,19 @@ e encerre as remessas em aberto antes de lançar um ajuste que reduz o total.**
 - **Os relatórios de materiais bloqueados e de materiais sem endereço mostram material de cliente
   sem o selo de propriedade** — eles misturam de propósito (a chapa do cliente ocupa a prateleira
   de verdade), mas ainda não identificam o dono.
+- **(8c) O custo médio dos recebimentos por NF vale só DAQUI PARA FRENTE.** A partir da 8c, dar
+  entrada por nota fiscal alimenta o custo médio do material. **Não há como recalcular o passado, e
+  isso não é preguiça: é impossível.** O livro de movimentações **não guarda o custo de cada
+  lançamento** — o dado necessário para refazer a conta simplesmente não existe. Quem quiser o
+  custo médio de um material antigo tem de esperar a próxima nota dele.
+- **(8c) O rendimento não fica guardado.** Ele aparece **num aviso, uma vez**, logo depois de
+  confirmar a transformação — e some. Não há coluna de rendimento; reabrir a remessa não o mostra.
+  Querer histórico de rendimento é etapa nova.
+- **(8c) A transformação registra, não planeja.** Não há lista de materiais, ordem de produção nem
+  aproveitamento de chapa (*nesting*), e o sistema **não valida** que os pesos fecham: rendimento de
+  300% não é recusado, só mostrado.
+- **(8c) Corte feito DENTRO da GMP continua sem caminho próprio.** A transformação vive dentro de
+  uma remessa a terceiro.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -124,36 +196,86 @@ viagem a chapa de dois clientes para o mesmo galvanizador, a regra está errada*
 de cada item já é lido do próprio material, não há dado a migrar, e a mudança é pequena (o
 documento passa a imprimir o dono por linha).
 
-### F. Uma verificação manual que ainda não foi feita — vale 5 minutos no navegador
+**A Etapa 8c apertou o mesmo eixo, e essa parte NÃO foi deduzida:** a peça cortada tem de ter o
+**mesmo dono da chapa**. Essa segunda regra é consequência direta da Etapa 8 (material de cliente
+não vira patrimônio da GMP) e não depende da resposta acima — mas, se a regra da remessa mista
+estiver errada, vale revisar as duas juntas.
 
-A tela de Remessas a Terceiros tem 24 testes automáticos, mas **testes automáticos não abrem um
-navegador**: eles não sabem dizer se uma cor apareceu na tela nem se um PDF abre legível. Duas
-coisas ficaram, portanto, **sem prova**, e alguém precisa olhar antes da apresentação:
+### F. Verificações manuais que ainda não foram feitas — valem 5 minutos no navegador
 
-1. **Os cinco selos de status têm cor?** Abrir **Almoxarifado → Remessas a Terceiros** e conferir
-   que ABERTA, ENVIADA, RETORNO PARCIAL, ENCERRADA e CANCELADA aparecem cada um com fundo e cor
-   próprios — e não como texto cinza sem formatação. O selo vermelho **Vencida** tem de aparecer
-   **ao lado** do status, nunca no lugar dele.
-2. **O PDF baixa e é legível?** Abrir uma remessa, clicar em **PDF da remessa** e conferir no
+Testes automáticos **não abrem um navegador**: eles não sabem dizer se uma cor apareceu na tela,
+se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **sem prova**:
+
+1. **(8b) Os cinco selos de status têm cor?** Abrir **Almoxarifado → Remessas a Terceiros** e
+   conferir que ABERTA, ENVIADA, RETORNO PARCIAL, ENCERRADA e CANCELADA aparecem cada um com fundo
+   e cor próprios — e não como texto cinza sem formatação. O selo vermelho **Vencida** tem de
+   aparecer **ao lado** do status, nunca no lugar dele.
+2. **(8b) O PDF baixa e é legível?** Abrir uma remessa, clicar em **PDF da remessa** e conferir no
    arquivo baixado: o número, o nome do terceiro, a lista de itens com quantidades, as **duas
    linhas de assinatura** — e, numa remessa de material de cliente, o **nome do cliente
    proprietário** impresso no papel.
+3. **(8c) O modal de transformação.** **Nenhum navegador foi aberto na entrega da 8c.** Falta
+   conferir quatro coisas, todas na tela de Remessas a Terceiros → **Transformar**:
+   - o modal renderiza **largo** e a tabela de resultados **não estoura** a largura;
+   - o material recém-criado pelo atalho **Criar material resultante** aparece **visivelmente
+     selecionado** no campo de material do resultado;
+   - os **avisos** (sucesso e rendimento) aparecem depois de confirmar;
+   - ao reabrir a remessa, a coluna **Transformado** mostra o número **vindo do servidor**.
 
-*Por que está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
+*Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
 
-### G. Uma fragilidade estrutural que continua de pé (e a próxima etapa vai reencontrar)
+### G. Fragilidades estruturais que continuam de pé
 
-**Toda coluna nova da tabela de materiais vaza quantidade exata para o requisitante até alguém
+**G1. Toda coluna nova da tabela de materiais vaza quantidade exata para o requisitante até alguém
 lembrar de escondê-la, uma por uma.** A tela em que o solicitante escolhe material
 (`GET /api/requisicoes-material/materiais`) lê a linha do material **inteira** (`SELECT m.*`) e
 depois apaga os campos sensíveis por uma **lista explícita de exclusão**
 (`SENSITIVE_MATERIAL_FIELDS`) — quem não está na lista, passa. O solicitante deve ver apenas
 "tem/não tem estoque", nunca o número.
 
-Aconteceu nesta etapa: `quantidade_em_terceiros` nasceu vazando e **foi corrigida** entrando na
-lista. Mas o padrão é o mesmo: **o comportamento padrão é expor, e a proteção depende de alguém
-lembrar.** Fica registrado porque a Etapa 8c cria colunas novas e vai cair exatamente aqui.
+Aconteceu na Etapa 8b: `quantidade_em_terceiros` nasceu vazando e **foi corrigida** entrando na
+lista. O padrão é o mesmo: **o comportamento padrão é expor, e a proteção depende de alguém
+lembrar.**
+
+> **⚠️ Correção de uma previsão errada deste próprio documento.** Este item dizia:
+> *"Fica registrado porque a Etapa 8c cria colunas novas e vai cair exatamente aqui."* **Estava
+> errado.** A 8c **não criou nenhuma coluna em `materiais_almoxarifado`** — as três colunas novas
+> dela são todas da tabela de resultados de retorno, que o requisitante não lê. **A 8c passou ao
+> lado do problema por sorte de escopo, não por tê-lo resolvido**, e a fragilidade continua
+> exatamente igual para a próxima etapa que criar coluna de material.
+
+**G2 (NOVO, medido na 8c). A suíte verde não prova o caso comum: as fixtures dos testes preenchem
+custos que nenhum material real tem.**
+
+Foi exatamente isto que escondeu o bug do custo do item **C3** por meses. Os testes que exercitam
+custo criam o material preenchendo **as duas** colunas — custo médio **e** custo de cadastro. **Nenhum
+material real é assim**: o cadastro grava só o custo de cadastro, e o custo médio nasce zerado. Com
+as duas colunas cheias, a fórmula errada e a certa dão **o mesmo resultado** — e o teste passa
+provando nada.
+
+**Não é teoria: foi medido.** Durante a 8c, a fórmula errada foi deliberadamente reintroduzida no
+código para ver quais testes cairiam. **Três arquivos de teste continuaram verdes.** O que fez o
+defeito aparecer foi um teste novo, com fixture **assimétrica** (custo médio 0, custo de cadastro
+10) — o único que sabe falhar.
+
+**O que isso significa na prática:** *"a suíte está verde"* é uma afirmação mais fraca do que parece
+sempre que a fixture for mais rica que o dado real. A lição virou uma guarda automática (um teste
+que varre o código e falha se a fórmula errada voltar), mas **a fragilidade da fixture continua** —
+ela é geral, não específica de custo.
+
+**G3 (da 8c). Uma coluna com três significados.** A coluna que o sistema usa para saber quanto de um
+item de remessa já foi "resolvido" (`quantidade_retornada`) hoje significa **três** coisas
+diferentes: *voltou como era*, *foi baixado no encerramento por perda/consumo* e, desde a 8c,
+*foi consumido numa transformação*.
+
+**Foi decidido NÃO separar agora, e o motivo está escrito:** separar exige uma coluna nova, migrar
+dois significados **já gravados** e mexer em três caminhos estáveis (encerrar, cancelar e a tela) —
+tudo isso por um problema de **rótulo, não de número**: o saldo pendente continua correto nos três
+casos. O que a 8c fez em vez disso foi tornar o terceiro significado **legível no dado** (cada linha
+de resultado agora diz se é peça ou sobra) e **desdobrar na tela** em *Retornado / Transformado /
+Baixado*. **A pendência continua aberta e está registrada na spec** — não foi apagada porque a 8c
+encostou nela.
 
 ---
 
@@ -955,16 +1077,18 @@ poder ver onde o material está; só **agir** exige.
 | Nada registrava que a chapa de um cliente saiu do prédio para beneficiar | A remessa registra o proprietário e o PDF nomeia o cliente |
 
 **O que esta etapa NÃO cobre (é decisão declarada, não esquecimento):**
-- **Transformação** — a chapa que sai e volta como 40 peças cortadas mais uma sobra. É a
-  **Etapa 8c**. A estrutura de dados já nasceu pronta para ela (o retorno é uma *lista de
-  resultados*, não um número), e hoje o sistema **recusa** o retorno de material diferente com uma
-  mensagem que aponta para a 8c. **Metade dos beneficiamentos já está completa nesta etapa** —
-  tratamento, pintura e galvanização devolvem o **mesmo** material; só corte, dobra e usinagem
-  devolvem material diferente.
+- **Transformação** — a chapa que sai e volta como 40 peças cortadas mais uma sobra. Era a
+  **Etapa 8c**, **entregue em 2026-08-13** (seção logo abaixo). A estrutura de dados desta etapa já
+  nasceu pronta para ela (o retorno é uma *lista de resultados*, não um número), e até a 8c o
+  sistema **recusava** o retorno de material diferente. **Metade dos beneficiamentos já estava
+  completa nesta etapa** — tratamento, pintura e galvanização devolvem o **mesmo** material; só
+  corte, dobra e usinagem devolvem material diferente, e são esses que a 8c passou a cobrir.
 - **E-mail** no envio e no retorno (feature 19) e **alerta automático** de atraso (feature 20). O
   prazo é gravado, existe a leitura das remessas vencidas e a tela destaca; o **disparo** é das
   outras features.
-- **Anexo de desenhos** nos itens da remessa — o consumidor natural dele é a 8c.
+- **Anexo de desenhos** nos itens da remessa — dizia-se aqui que "o consumidor natural dele é a
+  8c". **A 8c não o consumiu:** ela foi entregue sem anexo de desenho, e a pendência continua
+  aberta, agora sem etapa natural atribuída.
 - **Estornar pelo livro uma baixa de perda no terceiro devolve o material ao disponível**, e não à
   situação "em terceiros": a remessa já está encerrada, e recriar a retenção deixaria saldo preso
   sem remessa viva por trás. Já o par remessa/retorno **não é estornável pelo livro** — o caminho é
@@ -975,20 +1099,173 @@ poder ver onde o material está; só **agir** exige.
 
 ---
 
+## Etapa 8c — Transformação no Terceiro (2026-08-13)
+
+**Em uma frase:** a chapa que sai para o cortador e volta como 40 peças e uma sobra para de mentir
+no estoque — a chapa é baixada de verdade, as peças entram com o custo dela rateado, e o sistema
+diz quanto do peso voltou.
+
+**O problema que existia.** A Etapa 8b resolveu a metade fácil do beneficiamento: galvanizar,
+pintar e tratar devolvem **o mesmo material**. Cortar, dobrar e usinar devolvem **outra coisa** — e
+para essa metade o sistema **recusava o retorno**, com uma mensagem que literalmente dizia "isso é
+a Etapa 8c". Sobravam duas saídas, as duas ruins: registrar como se a chapa tivesse voltado inteira
+— e aí o estoque passa a ter uma chapa que não existe, enquanto a peça que existe não aparece em
+lugar nenhum — ou não registrar nada, e o material some do controle **exatamente na hora em que
+vira produto**. O galpão não tinha terceira opção.
+
+**O que há de novo (visível para o usuário):**
+- Botão **Transformar** dentro da remessa, ao lado de "Registrar retorno". O modal tem **dois
+  números que são coisas diferentes**: **quanto da chapa foi consumido** (na unidade da chapa) e
+  **o que voltou** — quantas linhas forem precisas, cada uma com **material**, **quantidade** e
+  **classificação** (Peça ou Sobra).
+- Campo **opcional** para o **custo do serviço** do terceiro (a nota do cortador).
+- Botão **Criar material resultante** dentro do próprio modal: cadastra a peça na hora, já
+  herdando a **família** e o **dono** da chapa, sem sair da tela e sem perder o que já foi digitado.
+- **Rendimento** logo depois de confirmar: *"Rendimento: 91.72% (saíram 785 kg, voltaram 720 kg)"*.
+  Quando falta peso cadastrado em algum material, o sistema **diz qual** — e **deixa registrar do
+  mesmo jeito**.
+- Coluna nova **Transformado** na tabela de itens da remessa, ao lado de "Retornado" e "Baixado
+  (não voltou)" — o que virou outra coisa não é a mesma coisa que o que voltou como era.
+- Na linha de retornos recebidos, cada resultado aparece classificado e com o custo aplicado:
+  `[peça, R$ 25/un]`, `[sobra]`.
+
+**Por baixo do capô:**
+- Um **tipo de movimento novo** (`RETORNO_TRANSFORMACAO`) dentro do motor de estoque, e não uma
+  entrada manual disfarçada. Entrada manual não sabe de dono (a peça cortada de uma chapa do
+  cliente X **é** do cliente X), faz a peça parecer ter aparecido do nada no extrato, e não sabe
+  que existe uma baixa de chapa do outro lado.
+- **A baixa da chapa acontece ANTES do crédito das peças.** Se o crédito falhar no meio, o estoque
+  fica **a menos** por alguns instantes, nunca **a mais** — material fantasma é pior que material
+  temporariamente faltando. Sem transação de banco, a compensação é explícita, e o teste que a
+  prova não é "os números voltaram": é **a remessa pode ser transformada de novo depois da falha**.
+- O rateio de custo é uma **função pura**, isolada, com um invariante testado: *o valor que sai na
+  chapa é o valor que entra nas peças*. Isolá-la é o que torna barato mudar a regra de rateio se a
+  operação pedir outra (ver item **B4** do bloco de leitura).
+- Duas **fontes únicas** nasceram de defeitos achados no caminho: a leitura do **custo** e as
+  **listas de tipos** que somam ou subtraem saldo. As duas estavam copiadas em vários arquivos,
+  divergindo em silêncio — e as duas cópias divergentes **eram bugs de produção** (itens **C3** e
+  **C4**). Cada uma ganhou um teste que varre o código-fonte e **falha se alguém voltar a copiar**.
+
+### As regras, com o cenário exato
+
+Todas as mensagens abaixo são as **mensagens reais do sistema**, copiadas do código.
+
+**1. Transformar baixa a chapa DE VERDADE.**
+*Cenário:* chapa com 100 KG, remessa de 100 enviada, transformação consumindo 100 e devolvendo 40
+peças e 1 sobra. Depois, em **Materiais**: a chapa fica com **total 0** e **em terceiros 0**; a peça
+fica com **40**; a sobra com **1**.
+*Isto foi medido, não deduzido:* no fechamento da etapa a operação foi executada contra um banco de
+teste e os saldos foram lidos direto na tabela. Bateram nos seis pontos conferidos.
+
+**2. O custo da chapa é rateado entre as peças, pela quantidade.**
+*Cenário:* chapa a **R$ 10/KG** × 100 KG = **R$ 1.000**. As 40 peças ficam a **R$ 25** cada
+(1.000 ÷ 40); a sobra fica a **R$ 0**.
+
+**3. A sobra entra a custo ZERO — e é decisão sua, não esquecimento.** Ver o item **B4** do bloco
+"Leia antes de apresentar", com o que foi escolhido e o que foi descartado.
+
+**4. O custo do serviço soma quando informado, e o sistema não estima.**
+*Cenário:* a mesma chapa de R$ 1.000 com **R$ 200** de nota do cortador → as peças ficam a **R$ 30**
+(1.200 ÷ 40). Em branco, ficam a R$ 25.
+
+**5. A peça tem de ter o MESMO dono da chapa.**
+*Cenário:* remessa com chapa do Cliente A, transformando para um material nosso:
+> `A peca resultante tem dono diferente da chapa: CHP-A e de Cliente A LTDA e PC-001 e de estoque proprio (material nosso). A transformacao nao pode mudar o proprietario do material — cadastre o material resultante com o mesmo proprietario da chapa, ou escolha outro material de destino.`
+
+*Por que a mensagem nomeia os dois lados:* sem isso o operador lê "dono diferente" e não sabe **qual
+dos dois cadastros** está errado, nem por qual caminho consertar. Sem a guarda, material de cliente
+viraria patrimônio da GMP **em silêncio** — o oposto do que a Etapa 8 inteira construiu.
+
+**6. O sistema NÃO cria o material resultante sozinho — e a recusa ensina o caminho.**
+> `O material 999 do resultado nao existe. Cadastre o material resultante primeiro (Almoxarifado > Materiais > Novo, ou o atalho "Criar material resultante" na tela de Remessas) e refaca a transformacao — o sistema nao cria material sozinho a partir de um formulario de retorno.`
+
+*Por quê:* cadastro-lixo em almoxarifado **não se apaga — ele ganha saldo**. Um erro de digitação
+viraria um material permanente com estoque. Em troca da recusa, a tela ganhou o atalho.
+
+**7. Chapa que volta como ela mesma não é transformação.**
+> `O resultado CHP-3MM e o MESMO material da chapa enviada. Chapa que volta como ela mesma nao e transformacao: use o retorno simples da remessa.`
+
+**8. Não dá para consumir mais do que está no terceiro.**
+> `Retorno acima do enviado: o item CHP-3MM enviou 100 KG, ja retornaram 70 e ainda estao no terceiro 30 — este recebimento pede 40`
+
+*Detalhe que importa:* o teto é sobre a **quantidade consumida da chapa**, na unidade da chapa. As
+quantidades dos **resultados** estão em outra unidade e **não** entram nessa conta — 40 peças (UN)
+não "cabem" nos 100 KG, são grandezas diferentes. Confundir as duas seria o erro mais fácil desta
+tela, e é por isso que a transformação é um **modal próprio**, e não um modo do modal de retorno.
+
+**9. Transformação é tudo ou nada.** Um item inválido no documento **não aplica nenhum** item do
+lote — mesma regra do envio da 8b.
+
+**10. O rendimento é informativo e NUNCA bloqueia.**
+*Cenário:* 100 chapas de 7,85 kg = **785 kg** saíram; 40 peças de 15 kg + 1 sobra de 120 kg =
+**720 kg** voltaram:
+> `Rendimento: 91.72% (saíram 785 kg, voltaram 720 kg)`
+
+Faltando peso em algum material:
+> `rendimento nao calculavel — peso unitario nao cadastrado em: <códigos>`
+
+**e a transformação acontece do mesmo jeito.** *Por que informativo e não trava:* não há nada de
+errado num material sem peso cadastrado, e um alerta amarelo nesse caso ensinaria o operador a
+ignorar alertas.
+
+**11. Cadastrar vários materiais em sequência parou de dar erro.**
+*Cenário:* cadastrar 5 peças cortadas seguidas, usando o código sugerido. Antes, o gerador olhava o
+material de **maior `id`** em vez do de **maior número**, e duas telas abertas ao mesmo tempo
+recebiam o **mesmo** código — dava `Código já existe`. Agora o gerador usa o **maior número da
+família** e o cadastro **tenta de novo sozinho** quando dois pedidos colidem.
+*Nada muda no cadastro manual:* quem digita o código continua recebendo o mesmo erro de sempre se
+ele já existir.
+
+**12. Quem pode transformar, e quem pode criar o material.**
+Transformar exige **`remessar_terceiro`** (ADMINISTRADOR e ALMOXARIFE). O atalho **Criar material
+resultante** tem gate **próprio**, `criar_material` — porque ENGENHARIA cadastra material e não
+transforma, e barrar pelo gate errado tiraria a função de quem tem direito a ela.
+*Os botões continuam VISÍVEIS de propósito:* a tela barra **no clique**, com o mesmo texto que o
+servidor produziria, e **falha aberto** se a consulta de permissões não carregar — esconder botão
+por causa de um erro de rede tiraria a função de quem tem direito. **Quem decide é sempre o
+backend**, que responde 403 se alguém forçar a chamada por fora.
+
+**Antes → Agora:**
+
+| Antes | Agora |
+|---|---|
+| Chapa mandada cortar não tinha como ser registrada: ou "voltou inteira" (chapa fantasma no estoque) ou nada (a peça não existe para o sistema) | Botão **Transformar**: a chapa é baixada e as peças entram, no mesmo evento |
+| Não havia custo de peça cortada | O custo da chapa é rateado entre as peças **pela quantidade**; a sobra entra a **zero** |
+| A nota do cortador não entrava em lugar nenhum | Campo opcional que **soma** ao custo das peças |
+| Material recebido por NF ficava com custo médio zerado | O recebimento por NF **alimenta o custo médio** — daqui para frente |
+| Nada garantia que a peça cortada de uma chapa de cliente continuasse do cliente | A peça **tem de ter o mesmo dono**, e a recusa nomeia os dois |
+| Não havia como conferir se o que voltou "fecha" com o que saiu | **Rendimento** por peso, informativo, dizendo qual material falta quando não dá para calcular |
+| Cadastrar peças em sequência dava "Código já existe" | Gerador pelo **maior número** + nova tentativa automática na colisão |
+
+**O que esta etapa NÃO cobre (é decisão declarada, não esquecimento):**
+- **Não planeja o corte.** Sem lista de materiais, sem ordem de produção, sem aproveitamento de
+  chapa (*nesting*). O sistema **registra o que voltou** — não diz o que deveria voltar.
+- **Não controla corte feito DENTRO da GMP.** A transformação vive dentro de uma remessa a terceiro.
+- **Não recalcula o custo do passado, e isso é impossível, não preguiça** — o livro de movimentações
+  não guarda o custo de cada lançamento (item **D**).
+- **Não valida que os pesos fecham** — rendimento de 300% é mostrado, não recusado.
+- **Não guarda o rendimento** — ele aparece uma vez, no aviso, e some.
+- **Não anexa desenho** ao item da remessa. A 8b registrou que "o consumidor natural disso é a 8c";
+  **a 8c não o consumiu**, e a pendência continua aberta.
+- **Não manda e-mail nem alerta** (features 19 e 20).
+- **Nada a rodar em produção por causa desta etapa.** As colunas novas nascem vazias e nenhum dado
+  existente é reinterpretado. **Mas dois números que você olha mudam**, por causa dos dois defeitos
+  antigos corrigidos no caminho — itens **C3** e **C4** do bloco de leitura.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
-- **Concluído até aqui:** Etapas 0 a 8b — fundação, motor de estoque, cadastros,
-  requisições, reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções,
-  materiais de clientes e remessas a terceiros. As features 10 (lotes/séries/etiquetas),
-  11 (transferências), 12 (devoluções) e 13 (materiais de clientes) estão completas no que cada
-  etapa se propôs; a **14 (materiais em terceiros) fica parcial** — o ciclo de remessa e retorno
-  está completo, a transformação não.
-- **Próxima etapa da ordem:** **Etapa 8c — transformação** (a segunda metade da spec 14): a chapa
-  que sai e volta como peças cortadas mais uma sobra, com o vínculo de rastreabilidade "material
-  que saiu → componente que voltou". A 8b foi escrita para não fechar nenhuma porta dela — o
-  retorno já é uma *lista de resultados*, e não um número. As quatro perguntas que o desenho da 8c
-  precisa responder (como a chapa original é baixada, de onde vem o custo das peças, quem cadastra
-  o material resultante, e o que fazer com a sobra) estão no fim do plano da 8b.
+- **Concluído até aqui:** Etapas 0 a 8c — fundação, motor de estoque, cadastros, requisições,
+  reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções, materiais de clientes,
+  remessas a terceiros e transformação no terceiro. As features 10 (lotes/séries/etiquetas),
+  11 (transferências), 12 (devoluções), 13 (materiais de clientes) e **14 (materiais em terceiros)**
+  estão completas no que cada etapa se propôs. A 14 fechou com a 8c: a 8b entregou "o mesmo material
+  volta", a 8c entregou "volta outra coisa".
+- **Próxima etapa:** **não está decidida.** A ordem do planejamento traz a feature 15 (retalhos e
+  sucatas) como candidata natural — a sobra que a 8c passou a creditar é literalmente um retalho, e
+  hoje ela entra como material comum, sem tela própria. Mas isso é **sugestão, não decisão**: a
+  escolha é sua.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
@@ -996,20 +1273,29 @@ poder ver onde o material está; só **agir** exige.
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
   3. saber que a **conferência de inventário ajusta saldo fora da permissão de material de
      cliente** (seção da Etapa 8) — é o ponto que mais importa contar a quem opera;
-  4. **a Etapa 8b não acrescenta nenhuma consulta a esta lista** — ela só cria coluna e tabelas
-     novas, sem tocar em dado existente. Dito explicitamente porque as duas etapas anteriores
-     deixaram consultas pendentes e o leitor vai procurar a desta.
-- **Duas coisas da Etapa 8b que dependem de você, não do código:** confirmar se **remessa mista de
-  donos** deve mesmo ser recusada (item **E** do bloco de leitura), e fazer a **verificação no
-  navegador** dos selos coloridos e do PDF (item **F**).
+  4. **nem a 8b nem a 8c acrescentam consulta a esta lista** — as duas só criam colunas e tabelas
+     novas, sem tocar em dado existente;
+  5. **avisar quem compara relatórios com o mês passado** de que dois números mudam de leitura
+     (itens **C3** e **C4**) — nenhum dado foi alterado, mas o número na tela vai ser outro.
+- **O que depende de você, não do código:** confirmar se **remessa mista de donos** deve mesmo ser
+  recusada (item **E**); reconhecer a **regra de rateio de custo** implementada no seu nome (item
+  **B4**); decidir o **Ajuste contra a retenção** (item **B**); e fazer as **verificações no
+  navegador** dos selos, do PDF e do modal de transformação (item **F**).
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas
   pelo usuário (roteiros no guia); tela de subfamílias; telas para localizações
   vazias/materiais sem endereço; pendências declaradas (a)–(j) da 6b e (a)–(g) da 6c na
   spec 10; as duas da Etapa 7 — Ajuste não reconcilia o bloqueado (decisão de negócio
   pendente) e o estado parcial da Sucata sem notificação; as da Etapa 8 — conferência de
-  inventário fora do motor, e os relatórios que misturam material de cliente sem o selo; e as da
+  inventário fora do motor, e os relatórios que misturam material de cliente sem o selo; as da
   Etapa 8b — a mesma decisão do Ajuste agora alcançando a coluna "em terceiros" (item **B**), e a
-  lista de exclusão que protege as colunas novas por omissão (item **G**).
+  lista de exclusão que protege as colunas novas por omissão (item **G1**); e as da Etapa 8c —
+  a **fragilidade das fixtures de teste** (item **G2**), a coluna com **três significados** (item
+  **G3**), as categorias de material ainda fixas no código do front, e o anexo de desenho na remessa.
 - **Transversal (2026-08-11):** auditoria completa das 24 specs contra o código — specs
   que afirmavam coisas não entregues foram corrigidas com nota datada, e o bug de front dos
   status de reserva (`92fe236`) saiu dessa auditoria.
+- **Transversal (2026-08-13):** o fechamento da 8c corrigiu **textos deste próprio conjunto de
+  documentos** que estavam errados — a previsão de que a 8c cairia na fragilidade **G1** (não caiu),
+  e três afirmações sobre **onde** o bug do custo aparecia (a tela citada não existe). As correções
+  ficaram **escritas como correções**, e não apagadas, porque afirmação errada apagada em silêncio
+  faz o próximo leitor confiar nela de novo.

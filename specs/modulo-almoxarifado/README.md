@@ -1,7 +1,55 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-12 (**Etapa 8b fechada — remessas a terceiros,
+> **Última atualização:** 2026-08-13 (**Etapa 8c fechada — transformação no terceiro,
+> `753d23b..61c6f52`.** Com ela a **feature 14 fica completa (🟢)**: a 8b entregou a metade em que
+> **o mesmo material volta** (galvanização, pintura, tratamento) e a 8c entrega a metade em que
+> **volta outra coisa** — corte, dobra, usinagem: sai 1 chapa e voltam N peças mais uma sobra.
+> **O que não existia até aqui:** toda movimentação do módulo é sobre **um** `material_id`, e o
+> retorno da 8b recusava material diferente por regra explícita. A 8c abriu o caso pelo único
+> caminho em que "creditar outro material" não é estoque do nada: a baixa da chapa e o crédito das
+> peças acontecem no **mesmo evento** — `CONSUMO_TERCEIRO` tira a chapa do patrimônio **e** da
+> retenção no mesmo UPDATE, e o tipo novo **`RETORNO_TRANSFORMACAO`** (`9c7ec75`) credita cada
+> resultado. `retornos_remessa_item_almoxarifado` ganhou três colunas
+> (`tipo_resultado` `PECA`/`SOBRA`, `custo_unitario_aplicado`, `movimentacao_consumo_id` — o
+> agrupador do evento), todas por `safeAlter`, com **`NULL` significando "retorno simples, não é
+> transformação"** (não é buraco de migração: é o valor certo, e é o que separa os dois mundos sem
+> tabela nova e sem backfill). Custo rateado por função **pura** (`services/almoxarifado/transformCost.js`,
+> `ratearCusto`/`calcularRendimento`): **peça recebe rateio, sobra entra a custo ZERO** (tratamento
+> conservador de retalho — o patrimônio nunca infla). Rota dedicada
+> `POST /remessas-terceiros/:id/transformacoes` (gate `remessar_terceiro`), tipo em
+> `TIPOS_DEDICADOS` — **fora** da rota genérica de movimentação —, guarda própria de dono
+> (`assertMesmoDonoNaTransformacao`: a peça tem de ter o **mesmo** dono da chapa, senão a
+> transformação converteria material de cliente em patrimônio da GMP), e modal de transformação com
+> N resultados, classificação e rendimento (`61c6f52`).
+> **Três correções de defeito ANTIGO, achadas pela execução e feitas em commits próprios:**
+> (1) o **recebimento por NF passou a alimentar o custo médio** (`8cd3fcf`) — até aqui o **único**
+> caminho que movia `custo_medio` no sistema inteiro era a movimentação manual com custo digitado à
+> mão, e com o custo médio quase nunca alimentado o rateio da 8c distribuiria R$ 0,00; (2) a leitura
+> de custo virou **fonte única** (`services/almoxarifado/custoSql.js`, `a644ab7`) porque
+> `COALESCE(custo_medio, custo_unitario, 0)` devolvia **0** (a coluna é `REAL DEFAULT 0`, não NULL)
+> e **valorava a zero o acervo inteiro** nos relatórios; (3) as listas de tipos que somam/subtraem
+> saldo viraram **fonte única** (`services/almoxarifado/movementTypes.js`, `3ef0144`) — eram quatro
+> cópias, e o espelho do `clienteEstoqueService` ficou para trás **duas vezes seguidas** (8b e 8c),
+> fazendo a posição por cliente mentir sem quebrar teste nenhum. **Números:** `test:api`
+> **81/81 arquivos OK**, `test:almoxarifado` **42 passou / 0 falhou**, `test:validation` **4/0**,
+> `test:safealter` **3/0**, `test:sqlite` **3/0**; client **283 testes em 25 suítes**, build
+> `Compiled successfully.`
+> **Pendências que continuam abertas:** "uma remessa não mistura donos" segue **deduzida e sem
+> resposta do cliente**; o `AJUSTE` (e o `aplicar_ajustes` da conferência) continua sem reconciliar
+> nenhuma das **quatro** retenções — a 8c **não piorou e não ajudou**; as categorias hardcoded do
+> front continuam duplicadas (a 8c **encostou** nelas e não resolveu — a sobra usa categoria que já
+> existe no seed); e o **rendimento é calculado, mostrado num toast e jogado fora** (não há coluna
+> que o guarde — `movimentacao_consumo_id` é o agrupador que um relatório futuro usaria).
+> **Próxima etapa da ordem — PRECISA SER DECIDIDA, e este arquivo sozinho não decide.** Pelo
+> roteiro abaixo, a próxima da fila é a **Etapa 9 — retalhos e ferramentas** (features 15 e 16), e a
+> 8c a aproximou (a sobra já nasce como material normal na categoria "Sucata e sobras
+> reaproveitáveis"). Mas o briefing de fecho da 8c
+> ([plano](../../docs/superpowers/plans/2026-08-13-almoxarifado-etapa8c-transformacao.md), seção
+> final) lista candidatas **concorrentes por dívida acumulada** — a decisão do cliente sobre
+> `AJUSTE` × retenção (pergunta de negócio, não código) e as categorias hardcoded. Seguir a ordem
+> ou pagar a dívida é escolha de quem pegar; **não presuma a Etapa 9 sem confirmar.**)
+> Antes: 2026-08-12 (**Etapa 8b fechada — remessas a terceiros,
 > `0a01124..b176212`.** A feature **14 vira 🟡** (ciclo de remessa/retorno completo; a
 > **transformação** é a Etapa 8c). O material que a GMP manda beneficiar fora deixou de sumir do
 > controle: ganhou a **quarta coluna de retenção** `materiais_almoxarifado.quantidade_em_terceiros`,
@@ -41,7 +89,8 @@
 > **não confirmada** com a GMP; o Step 11 da Task 9 (cor dos badges e PDF no navegador) **não foi
 > executado**; e toda coluna nova de `materiais_almoxarifado` **vaza** para o requisitante até ser
 > nomeada em `SENSITIVE_MATERIAL_FIELDS`.
-> **Próxima etapa da ordem: Etapa 8c — transformação** (chapa → peças cortadas + sobra).)
+> **Próxima etapa da ordem: Etapa 8c — transformação** (chapa → peças cortadas + sobra). *(Frase da
+> época; a 8c foi entregue em 2026-08-13 — ver a entrada mais recente, acima.)*)
 > Antes: 2026-08-12 (**Etapa 8 fechada — materiais de clientes,
 > `f26b635..5b5eb55`.** A feature **13 vira 🟢**; a **14 é a Etapa 8b**, próxima da ordem. Material
 > de cliente deixou de ser ilha (`materiais_cliente_almoxarifado`, texto livre, sem FK, sem motor)
@@ -108,14 +157,14 @@
 - Quando uma feature entrar em desenvolvimento, escrever o plano detalhado de implementação (tarefas TDD passo a passo) em `docs/superpowers/plans/` e linkar no README da feature.
 - Status: ✅ completo (com testes) · 🟡 parcial · ❌ ausente
 
-## Mapa de features e status atual (2026-08-12)
+## Mapa de features e status atual (2026-08-13)
 
 | # | Feature | Backend | Frontend | Testes | Status |
 |---|---------|---------|----------|--------|--------|
 | 00 | [Fundação técnica](00-fundacao-tecnica/README.md) | ✅ | ✅ | ✅ | 🟡 quase completa (2026-08-03: Tasks 1-6 entregues). Decisões já tomadas: validação = **Zod** (2026-08-03, express-validator removido), SMTP hardcoded **mantido por decisão do dev**. Auditoria 2026-08-11: o ledger de migrações (item 0.4) estava desmarcado mas em uso desde a Etapa 2; restam **21 `ALTER TABLE` residuais com erro engolido** em `routes/almoxarifado.js` — pendência nomeada na spec |
-| 01 | [Cadastros de materiais](01-cadastros-materiais/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Etapa 2 entregue (2026-08-04): campos técnicos/reposição/controles/ABC/unidades, subfamílias (`parent_id`), auditoria de criação/edição, form em 6 seções; falta tabela de conversões, categorias hardcoded do front, `almoxarifadoApi.js`. Correção 2026-08-11: a spec dizia que `controle_lote`/`controle_certificado` não tinham verificação efetiva — têm desde a Etapa 6 (`controle_validade`/`controle_serie`/`controle_corrida` seguem mortas, Etapas 6b/6c) |
+| 01 | [Cadastros de materiais](01-cadastros-materiais/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Etapa 2 entregue (2026-08-04): campos técnicos/reposição/controles/ABC/unidades, subfamílias (`parent_id`), auditoria de criação/edição, form em 6 seções; falta tabela de conversões, categorias hardcoded do front, `almoxarifadoApi.js`. Correção 2026-08-11: a spec dizia que `controle_lote`/`controle_certificado` não tinham verificação efetiva — têm desde a Etapa 6 (`controle_validade`/`controle_serie`/`controle_corrida` seguem mortas, Etapas 6b/6c). **Etapa 8c, Task 1 (2026-08-13, `028da1e`):** criar material **deixou de ser um `INSERT` inline no handler HTTP** e virou `services/almoxarifado/materialService.createMaterial` (o gate `criar_material` fica na rota, de propósito); e `GET /proximo-codigo` **deixou de usar `ORDER BY id DESC`** — que devolvia o código do registro de maior `id`, **não** o de maior número — passando ao **MAX do sufixo numérico**, com o campo novo `codigo_auto` + retry sob UNIQUE para cadastro em lote. A pendência das **categorias hardcoded no front continua aberta**: a 8c encostou nela e não resolveu |
 | 02 | [Localizações e endereçamento](02-localizacoes-enderecamento/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Etapa 2 entregue (2026-08-04): multi-almoxarifado (entidade raiz + migração ledger), bloqueio/restrição de tipo aplicados no motor, exclusão com saldo bloqueada, consultas de vazias/sem-endereço; falta capacidade/peso enforcement, sugestão de localização, leitura por confirmação. **Decisão de negócio (2026-08-05): almoxarifado é área física de alocação dentro do mesmo site, não filial — o cliente tem uma única filial. Saldo global por material (sem recorte por almoxarifado) é intencional e NÃO é lacuna; não propor segregação de saldo nem seletor de almoxarifado em movimentação/requisição** |
-| 03 | [Motor de estoque](03-motor-estoque/README.md) | ✅ | ✅ | ✅ | 🟢 Etapa 1 entregue (2026-08-04); a validação de vencido/lote reprovado que faltava **foi entregue na Etapa 6, Task 3** (`65d78fd`+) e a liberação de vencimento na Task 3b (`556f86d`). **Etapa 8b (2026-08-12):** a fórmula do disponível ganhou a **quarta retenção** (`quantidade_em_terceiros`) e deixou de ser replicada — a conta agora mora só em `services/almoxarifado/availabilitySql.js` (`0a01124`), e quatro tipos de movimento novos entraram no motor (`e0be211`). Pendência nomeada e ainda aberta: `PUT /conferencias/:id/concluir` escreve `quantidade_atual` por fora do motor (anterior à Etapa 6) — e agora isso alcança também a retenção nova |
+| 03 | [Motor de estoque](03-motor-estoque/README.md) | ✅ | ✅ | ✅ | 🟢 Etapa 1 entregue (2026-08-04); a validação de vencido/lote reprovado que faltava **foi entregue na Etapa 6, Task 3** (`65d78fd`+) e a liberação de vencimento na Task 3b (`556f86d`). **Etapa 8b (2026-08-12):** a fórmula do disponível ganhou a **quarta retenção** (`quantidade_em_terceiros`) e deixou de ser replicada — a conta agora mora só em `services/almoxarifado/availabilitySql.js` (`0a01124`), e quatro tipos de movimento novos entraram no motor (`e0be211`). **Etapa 8c (2026-08-13):** tipo de movimento novo **`RETORNO_TRANSFORMACAO`** (`9c7ec75`) — **entrada**, aceita custo (alimenta a média ponderada do material de destino), em `TIPOS_DEDICADOS` (fora da rota genérica) e em `TIPOS_ISENTOS_DONO`. Mais **duas fontes únicas** criadas por tarefas extras do mesmo dia, ambas nascidas da execução e não do plano: `services/almoxarifado/custoSql.js` (`a644ab7`) — a leitura de custo, que por `COALESCE(custo_medio, custo_unitario, 0)` valorava a **zero** o acervo inteiro (a coluna é `REAL DEFAULT 0`, não NULL) — e `services/almoxarifado/movementTypes.js` (`3ef0144`) — as listas de tipos que somam/subtraem saldo, que eram **quatro** cópias e faziam a posição por cliente mentir sem quebrar teste. Pendência nomeada e ainda aberta: `PUT /conferencias/:id/concluir` escreve `quantidade_atual` por fora do motor (anterior à Etapa 6) — e isso alcança também a retenção nova |
 | 04 | [Requisições](04-requisicoes/README.md) | 🟢 | 🟢 | 🟢 | 🟢 Etapa 3 entregue (2026-08-05): ciclo ponta a ponta rascunho→envio→aprovação→separação→retirada→entrega→confirmação→encerramento; entrega/estorno via motor de estoque; máquina de estados explícita; falta lote/série na entrega, anexos e importação de BOM/OP. Correção 2026-08-11 (`92fe236`): a tela não conhecia os status de reserva da Etapa 4 — requisição aprovada com saldo ficava com badge cru, sem "Iniciar Separação" e sem "Cancelar"; corrigido com teste (`RequisicoesList.test.js`) |
 | 05 | [Separação e picking](05-separacao-picking/README.md) | 🟡 | 🟡 | 🟡 | 🟡 básico (spec revisada 2026-08-11 — estava congelada em 2026-08-02: liberar-retirada já existia desde a Etapa 3, e desde a Etapa 4 o disponível baixa na **aprovação** via reserva, não na separação) |
 | 06 | [Motor de aprovações](06-aprovacoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Etapa 3 entregue (2026-08-05): segregação (solicitante não aprova a própria), rejeição justificada, emergencial com justificativa, decisões auditadas; falta motor de regras configuráveis por tipo/valor/quantidade/projeto (tabela `regras_aprovacao` + UI — fica para demanda real) |
@@ -126,7 +175,7 @@
 | 11 | [Transferências](11-transferencias/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd`)** — a transferência exige lote em material controlado (exigiu estender a guarda do motor: `TRANSFERENCIA` é **ramo próprio**, fora de `tiposEntrada`/`tiposSaida`, então declarar `exigeLote` na rota não bastava), está declarada em `REGRAS_VINCULO` com `{ vinculo: 'nenhum' }`, e ganhou tela **dentro do formulário de Movimentações** (origem + destino + seletor de lote), não tela dedicada — a transferência *é* uma movimentação origem→destino e o formulário já tinha 90% dela. **O "em trânsito" foi CORTADO por decisão do cliente, não é pendência**: os almoxarifados são áreas físicas do mesmo site, o cliente tem uma filial só, alguém pega a caixa e leva na hora; com ele saíram aprovação, recebimento com conferência e o alerta "não recebida". Intencional e testado: transferência **não** checa status nem vencimento do lote (mover lote reprovado de prateleira é como ele vai parar na área de bloqueados). Fora de escopo declarado: **série na transferência** (o claim de série no motor só existe para entrada e saída; o `localizacao_id` da série é informativo e o saldo real, que a transferência move certo, vive em `estoque_saldo_almoxarifado`) |
 | 12 | [Devoluções](12-devolucoes/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd` + `eabd848`)** — devolução cita a saída original (vínculo **opcional mas validado**: mesmo material, não cancelada, tipo devolvível, e `quantidade + já devolvido ≤ entregue` com a mensagem **dizendo quanto resta**), herda o `lote_id` da entrega, reativa a série `ENTREGUE → EM_ESTOQUE`, e tem tela dedicada em `/almoxarifado/devolucoes` (começa pelo **material**, porque pela requisição não se alcança saída manual). Duas colunas por `safeAlter` e a rota de leitura `GET /devolucoes/saidas-elegiveis`. **Bug de saldo corrigido em commit próprio (`29524fc`): devolver para sucata baixava o estoque DUAS vezes** — 100 → saída 10 → 90 → devolução 3 para sucata dava **87**; a spec 12 descrevia esse comportamento como se estivesse certo e foi corrigida dizendo que estava errada. Conserto fora do plano (`eabd848`): devolução recusada não deixa mais linha gravada (compensação), porque a linha fantasma encolhia **permanentemente** o devolvível da entrega citada. Fora de escopo declarado: série no **descarte** de devolução (caminho de dois passos, com 400 que ensina o caminho), fotos/anexos, devolução ao fornecedor, estorno de custo de projeto (22), tipos de devolução por origem (13/16) |
 | 13 | [Materiais de clientes](13-materiais-clientes/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 8 entregue (2026-08-12, `f26b635..5b5eb55`)** — material de cliente virou **material normal com dono** (`proprietario_cliente_id`, `NULL` = nosso) e ganhou tudo que as Etapas 1 a 7 construíram: lote, série, endereço, extrato, etiqueta e livro. **A segregação não foi "lembrar de filtrar"**: 40 leituras da tabela auditadas uma a uma e classificadas em A (estoque próprio → filtra), B (leitura por id → não filtra, senão o motor pararia de funcionar para material de cliente) e C (misturar é o correto → não filtra, e o **selo** é a contrapartida). **Guarda do dono** na saída, com a **emergencial NÃO furando** — única exceção deliberada ao padrão do módulo, porque "regularizo depois" não é resposta para o dono da chapa. **Ajuste** sob a ação nova `ajustar_material_cliente` (só ADMINISTRADOR), verificada **dentro do motor** porque o AJUSTE chega por duas rotas ambas gateadas por `movimentar`. Tipo `DEVOLUCAO_CLIENTE` (saída, rota dedicada, documento obrigatório) — **não confundir com a devolução da Etapa 7**, onde o material volta. Ilha aposentada (rotas e serviço removidos; **tabela preservada**). Tela `/almoxarifado/materiais-cliente` com posição por cliente + PDF no navegador. **Duas correções declaradas de spec:** a spec de design mandava auditar o lugar errado (`9d70d8c`), e o item "entrada exige cliente + **projeto** + documento" estava **ERRADO** quanto ao projeto — a linha diz isso em vez de sumir. **Fora do escopo, declarado:** e-mails (19), sobras (15), perdas/não conformes/valorização por cliente (21), aprovação assíncrona de ajuste (06). **Pendência aberta e grave o bastante para o guia do usuário:** a conferência de inventário (`routes/almoxarifado.js:941`) ajusta `quantidade_atual` fora do motor, logo fora da permissão nova |
-| 14 | [Materiais em terceiros](14-materiais-terceiros/README.md) | 🟡 | 🟡 | ✅ | 🟡 **Etapa 8b entregue (2026-08-12, `0a01124..b176212`)** — remessa e retorno do **MESMO** material, ciclo completo. Quarta coluna de retenção `quantidade_em_terceiros` (sai do disponível, **não** do patrimônio) com a conta do disponível **centralizada** em `availabilitySql.js`; conferência de inventário descontando **só ela**; três tabelas + `thirdPartyStateMachine` (`ABERTA → ENVIADA → RETORNO_PARCIAL → ENCERRADA/CANCELADA`); quatro tipos de movimento no motor; envio **tudo-ou-nada** agregando por material; retorno parcial com teto acumulado **por item**; encerramento com **destino obrigatório** (`PERDA_NO_TERCEIRO`/`CONSUMIDO_NO_PROCESSO`) + justificativa; cancelamento com estorno **do que ainda está lá fora**; ação de perfil `remessar_terceiro`; sete rotas + `GET /vencidas`; tela `/almoxarifado/remessas-terceiros` + PDF no navegador. **Correção declarada de spec:** o checklist dizia "envio = saída para localização virtual", e isso **estava errado** — o disponível é calculado sobre o escalar `quantidade_atual`, então localização virtual não tira nada do disponível. **Falta a `Etapa 8c` — transformação** (chapa → peças): corte deliberado, com a fronteira escrita (tratamento/pintura/galvanização devolvem o mesmo material e estão **completos**; corte/dobra/usinagem não). E-mail (19) e alerta de atraso (20) declarados fora do escopo. **Pendência que precisa de resposta do cliente:** "uma remessa não mistura donos" foi **deduzida**, não pedida |
+| 14 | [Materiais em terceiros](14-materiais-terceiros/README.md) | ✅ | ✅ | ✅ | 🟢 **COMPLETA — as duas metades entregues: Etapa 8b (2026-08-12, `0a01124..b176212`), o MESMO material volta; Etapa 8c (2026-08-13, `753d23b..61c6f52`), volta OUTRA coisa.** **8b** — remessa e retorno do **MESMO** material, ciclo completo. Quarta coluna de retenção `quantidade_em_terceiros` (sai do disponível, **não** do patrimônio) com a conta do disponível **centralizada** em `availabilitySql.js`; conferência de inventário descontando **só ela**; três tabelas + `thirdPartyStateMachine` (`ABERTA → ENVIADA → RETORNO_PARCIAL → ENCERRADA/CANCELADA`); quatro tipos de movimento no motor; envio **tudo-ou-nada** agregando por material; retorno parcial com teto acumulado **por item**; encerramento com **destino obrigatório** (`PERDA_NO_TERCEIRO`/`CONSUMIDO_NO_PROCESSO`) + justificativa; cancelamento com estorno **do que ainda está lá fora**; ação de perfil `remessar_terceiro`; sete rotas + `GET /vencidas`; tela `/almoxarifado/remessas-terceiros` + PDF no navegador. **Correção declarada de spec:** o checklist dizia "envio = saída para localização virtual", e isso **estava errado** — o disponível é calculado sobre o escalar `quantidade_atual`, então localização virtual não tira nada do disponível. **Correção declarada de status:** esta linha dizia *"**Falta a Etapa 8c — transformação**"* — **deixou de ser verdade em 2026-08-13**. **8c** (`753d23b..61c6f52`) — corte, dobra e usinagem: sai 1 chapa e voltam N peças mais uma sobra, no **mesmo evento** (a chapa baixa por `CONSUMO_TERCEIRO`, cada resultado entra pelo tipo novo `RETORNO_TRANSFORMACAO`, `9c7ec75`); três colunas em `retornos_remessa_item_almoxarifado` (`tipo_resultado` `PECA`/`SOBRA`, `custo_unitario_aplicado`, `movimentacao_consumo_id` como agrupador do evento), com `NULL` significando "retorno simples"; rateio de custo em função **pura** (`transformCost.js`) — **peça recebe rateio, sobra entra a custo ZERO**; rota dedicada `POST /remessas-terceiros/:id/transformacoes` (`remessar_terceiro`), tipo em `TIPOS_DEDICADOS` (fora da rota genérica); guarda própria `assertMesmoDonoNaTransformacao` (a peça tem de ter o **mesmo** dono da chapa); modal com N resultados, classificação e rendimento. E-mail (19) e alerta de atraso (20) seguem **fora do escopo**. **Pendência que continua aberta e precisa de resposta do cliente:** "uma remessa não mistura donos" foi **deduzida**, não pedida. Pendência menor da 8c: o **rendimento** é calculado, exibido e **jogado fora** — não há coluna que o guarde |
 | 15 | [Retalhos, sobras e sucatas](15-retalhos-sucatas/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem UI |
 | 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem calibração |
 | 17 | [Inventário e contagem cíclica](17-inventario-contagem/README.md) | 🟡 | 🟡 | ❌ | 🟡 só inventário simples |
@@ -183,8 +232,10 @@ Tipos de entrada; conferência física; quarentena e bloqueio efetivos no saldo.
 
 `6b`/`6c` e não `7`/`8` porque as etapas 7 e 8 abaixo já estão ocupadas. **Com a 6c fechada, a
 feature 10 ficou completa por inteiro; a Etapa 7 (transferências e devoluções) e a Etapa 8
-(materiais de clientes) fecharam em 2026-08-12, e a próxima da ordem é a Etapa 8b — materiais em
-terceiros.**
+(materiais de clientes) fecharam em 2026-08-12.** *(Este parágrafo terminava dizendo "e a próxima
+da ordem é a Etapa 8b — materiais em terceiros" — **envelheceu**: a 8b fechou em 2026-08-12 e a 8c
+em 2026-08-13. A próxima da ordem está discutida no cabeçalho deste arquivo, e **precisa ser
+decidida**.)*
 
 ### Etapa 7 — ✅ ENTREGUE em 2026-08-12 → `11-transferencias` + `12-devolucoes`
 `29524fc..0722bfd`, mais os consertos `eabd848`/`7fc1b7f` (compensação da devolução recusada) e
@@ -256,14 +307,54 @@ série, endereço, extrato, etiqueta e livro.
 Design: [`…etapa8-materiais-clientes-design.md`](../../docs/superpowers/specs/2026-08-12-almoxarifado-etapa8-materiais-clientes-design.md) ·
 plano: [`…etapa8-materiais-clientes.md`](../../docs/superpowers/plans/2026-08-12-almoxarifado-etapa8-materiais-clientes.md).
 
-### Etapa 8b — Materiais em terceiros → `14-materiais-terceiros` **(próxima da ordem)**
+### Etapa 8b — ✅ ENTREGUE em 2026-08-12 · Etapa 8c — ✅ ENTREGUE em 2026-08-13 → `14-materiais-terceiros`
 
-Remessas para beneficiamento externo com máquina de estados (`ABERTA → ENVIADA → RETORNO_PARCIAL →
-ENCERRADA / CANCELADA`), documento de remessa, retorno parcial e **transformação** chapa→peças —
-que é o item sem precedente no módulo: hoje toda movimentação é sobre **um** `material_id`, e sai 1
-chapa e voltam 40 peças mais uma sobra. **Sem design aprovado nem tasks quebradas**; o briefing de
-origem (contrato pronto que ela consome + pontos de atenção que o design precisa decidir) está no
-fim do plano da Etapa 8. Primeira ação de quem pegar: `superpowers:brainstorming` com o briefing.
+> **Correção declarada — esta seção estava DUPLAMENTE ERRADA e ficou assim por um dia.** Ela dizia
+> `### Etapa 8b — Materiais em terceiros **(próxima da ordem)**` e, no corpo, *"**Sem design
+> aprovado nem tasks quebradas** … Primeira ação de quem pegar: `superpowers:brainstorming` com o
+> briefing"*. As duas afirmações estão erradas: a **8b fechou em 2026-08-12** (`0a01124..b176212`),
+> e a **8c tem design e plano, ambos escritos e executados** — plano
+> [`2026-08-13-almoxarifado-etapa8c-transformacao.md`](../../docs/superpowers/plans/2026-08-13-almoxarifado-etapa8c-transformacao.md)
+> (o design foi corrigido em `601436d`, porque se contradizia sobre o invariante de custo). Quem
+> lesse esta seção sozinha começaria um brainstorming sobre trabalho já entregue. A frase errada
+> fica registrada aqui em vez de sumir.
+
+**8b (`0a01124..b176212`)** — remessas para beneficiamento externo com máquina de estados
+(`ABERTA → ENVIADA → RETORNO_PARCIAL → ENCERRADA / CANCELADA`), documento de remessa, retorno
+parcial e a quarta coluna de retenção `quantidade_em_terceiros`. É a metade em que **o mesmo
+material volta** (galvanizar, pintar, tratar).
+
+**8c (`753d23b..61c6f52`)** — a metade em que **volta outra coisa**: corte, dobra, usinagem. Era o
+item sem precedente no módulo — toda movimentação é sobre **um** `material_id`, e aqui sai 1 chapa e
+voltam N peças mais uma sobra. Resolvido pelo único caminho em que creditar outro material não é
+estoque do nada: baixa e crédito no **mesmo evento** (`CONSUMO_TERCEIRO` + `RETORNO_TRANSFORMACAO`),
+por **rota dedicada** (`POST /remessas-terceiros/:id/transformacoes`, gate `remessar_terceiro`), com
+o tipo novo em `TIPOS_DEDICADOS` para não cair na rota genérica de movimentação.
+
+| Task / tarefa | O quê | Hash |
+|---|---|---|
+| — | plano · correção do design que se contradizia sobre o invariante de custo | `d741846` · `601436d` |
+| 1 | criar material vira serviço (`materialService.createMaterial`) + `proximo-codigo` pelo **MAX** + `codigo_auto` | `028da1e` |
+| 2 | recebimento por NF passa a **alimentar o custo médio** | `8cd3fcf` |
+| 3 | `tipo_resultado` na linha de resultado (`TIPOS_RESULTADO` antecipado em `03c7ce5`) | `3e1a8dd` |
+| 4 | `RETORNO_TRANSFORMACAO` dentro do motor | `9c7ec75` |
+| 5 | a peça cortada tem de ter o **mesmo dono** da chapa | `d791fe2` |
+| 6 | rateio de custo — função **pura**, com invariante (`transformCost.js`) | `f6dbe39` |
+| 7 | `thirdPartyService.registrarTransformacao` | `a9fe371` |
+| 8 | rota, schema Zod e rendimento informativo | `31cf440` |
+| 9 | modal de transformação com N resultados, classificação e rendimento | `61c6f52` |
+| extra | leitura de custo vira fonte única (`custoSql.js`) — relatório valorava a **ZERO** | `a644ab7` |
+| extra | listas de tipos viram fonte única (`movementTypes.js`) — posição por cliente **mentia** | `3ef0144` |
+
+- **As duas tarefas "extra" não estavam no plano** — nasceram da execução das Tasks 4 e 7 e são
+  correções de defeito **antigo**, cada uma em commit próprio. Detalhe do mecanismo (e por que a
+  suíte verde não achava nenhuma das duas) na spec [03-motor-estoque](03-motor-estoque/README.md).
+- **Mudança de comportamento declarada, sem backfill:** material recebido por NF passa a ter custo
+  médio real, e **só daqui para frente** — `movimentacoes_almoxarifado` não tem coluna de custo
+  nenhuma, então recalcular o passado é impossível; o dado não existe.
+- **Pendências abertas que a 8c NÃO resolveu, de propósito:** "uma remessa não mistura donos"
+  (deduzida, sem resposta do cliente); `AJUSTE` × retenção, agora com **quatro** colunas; categorias
+  hardcoded do front; e o **rendimento** que é calculado, mostrado e jogado fora.
 
 ### Etapa 9 — Retalhos e ferramentas → `15-retalhos-sucatas` + `16-ferramentas-calibracao`
 UI de sobras; baixa dimensional; calibração com vencimento.
@@ -303,7 +394,14 @@ O módulo só é considerado operacional quando TODOS estes itens forem verdade 
   OS/projeto do próprio dono, e tem posição consolidada por cliente com PDF. **Ressalva
   registrada:** a conferência de inventário ainda ajusta `quantidade_atual` fora do motor, logo
   fora da permissão dedicada — ver a spec 13
-- [ ] Controlar materiais enviados a terceiros (14)
+- [x] **Controlar materiais enviados a terceiros (14) — atendido (Etapas 8b + 8c, 2026-08-12/13).**
+  O material que sai para beneficiamento externo sai do **disponível** sem sair do **patrimônio**
+  (`quantidade_em_terceiros`), tem remessa com máquina de estados, documento, prazo, retorno parcial
+  com teto por item e encerramento com destino obrigatório (8b); e quando o que volta **não é o
+  mesmo material** — corte, dobra, usinagem — a chapa é baixada e as peças entram no mesmo evento,
+  com o custo rateado (8c). **Ressalvas registradas, nenhuma bloqueia o critério:** "uma remessa não
+  mistura donos" foi **deduzida** e ainda espera resposta do cliente; e-mail (19) e alerta de atraso
+  (20) estão declarados fora do escopo — ver a spec 14
 - [ ] Registrar entradas/saídas sem permitir exclusão do histórico (03, 23)
 - [ ] E-mail automático de todas as entradas e saídas (19)
 - [ ] Inventários e ajustes aprovados (17, 06)

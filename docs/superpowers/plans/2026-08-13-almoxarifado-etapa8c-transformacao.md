@@ -9,6 +9,187 @@
 · **Feature:** [14 — Materiais em terceiros](../../../specs/modulo-almoxarifado/14-materiais-terceiros/README.md)
 · **Branch:** `desenvolvimento-almoxarifado`
 
+---
+
+## ✅ ETAPA CONCLUÍDA — 2026-08-13 (`753d23b..61c6f52`, mais o commit de documentação desta Task 10)
+
+**As 10 tasks foram executadas.** O que a etapa entrega: a chapa que a GMP manda cortar deixa de
+voltar mentindo — ela é **baixada de verdade** e os resultados (N peças + sobra) **entram no
+estoque** com o custo dela rateado, com guarda de dono, rendimento informativo e um atalho para
+cadastrar o material resultante sem sair do modal.
+
+### Task → o quê → hash
+
+| Task | O quê | Hash |
+|---|---|---|
+| — | Design da transformação | `753d23b`, corrigido em `601436d` (o design se contradizia sobre o invariante de custo) |
+| — | Este plano | `d741846` |
+| 1 | `materialService.createMaterial` extraído do handler HTTP; `proximo-codigo` por **MAX do sufixo**; `codigo_auto` com retry sob `UNIQUE` | `028da1e` |
+| 2 | O recebimento por NF passa a alimentar o **custo médio** | `8cd3fcf` |
+| — | `TIPOS_RESULTADO` em `schema.js`, **antecipado da Task 3** porque a Task 6 não roda sem ele | `03c7ce5` |
+| — | Separação do commit que misturava Task 2 e Task 6 (lição registrada: não rodar agentes concorrentes que commitam no mesmo repo) | `256fd0c` |
+| 3 | As três colunas da linha de resultado (`tipo_resultado`, `custo_unitario_aplicado`, `movimentacao_consumo_id`) + a peça Zod | `3e1a8dd` |
+| 4 | `RETORNO_TRANSFORMACAO` dentro do motor, nas **duas** listas `tiposEntrada` | `9c7ec75` |
+| 5 | `assertMesmoDonoNaTransformacao` — a peça tem o mesmo dono da chapa | `d791fe2` |
+| 6 | `transformCost.ratearCusto` — rateio, função pura, com invariante testado | `f6dbe39` |
+| 7 | `thirdPartyService.registrarTransformacao` — a baixa, os N créditos e a compensação | `a9fe371` |
+| — | **Extra, fora do plano:** a leitura de custo vira fonte única (`custoSql.js`) — nasceu do defeito achado na Task 7 | `a644ab7` |
+| — | **Extra, fora do plano:** as listas de tipos viram fonte única (`movementTypes.js`) — nasceu do achado registrado na Task 4 | `3ef0144` |
+| 8 | Rota `POST /remessas-terceiros/:id/transformacoes`, schema Zod e rendimento informativo | `31cf440` |
+| 9 | O modal de transformação com N resultados, classificação, atalho de criar material e rendimento | `61c6f52` |
+| 10 | Documentação, correções de spec e verificação final | este commit |
+
+Os commits de marcação de plano por task (`c22d81d`, `db4fb6d`, `c876d97`, `fc45867`, `bcfd7f9`,
+`7fc8b3a`, `1da529d`, `e1802d2`, `4fa0ff8`) registram os achados de cada execução e ficam onde
+estão — é onde o "o que divergiu do plano" mora, task a task.
+
+### Gates — números REAIS, medidos na Task 10 (2026-08-13)
+
+| Suíte | Previsto neste plano | **Medido** |
+|---|---|---|
+| `cd server && npm run test:api` | entrada + 4 arquivos novos | **81/81 arquivos de teste OK** |
+| `cd server && npm run test:almoxarifado` | igual à entrada | **42 passou, 0 falhou** |
+| `cd server && npm run test:validation` | `4 passed, 0 failed` | **4 passed, 0 failed** |
+| `cd server && npm run test:safealter` | `3 passed, 0 failed` | **3 passed, 0 failed** |
+| `cd server && npm run test:sqlite` | `3 passed, 0 failed` | **3 passed, 0 failed** |
+| `cd client && CI=true npx react-scripts test` | entrada + 14 testes, +1 suíte | **283 passed, 283 total · 25 suites passed, 25 total** |
+| `cd client && CI=true npx react-scripts build` | `Compiled successfully.` | **`Compiled successfully.`** |
+
+**Divergência do previsto, declarada:** o plano previa "entrada + **14** testes" no client, e a
+Task 9 entregou **15** em `RemessasTerceirosTransformacao.test.js` (duas sabotagens que não
+derrubaram nada viraram asserção nova). É a mesma classe de divergência que a Task 10 da 8b
+registrou quando o client deu 268 e o plano previa 255 — **número medido vale mais que número
+previsto**, e a divergência fica escrita em vez de arredondada.
+
+**Uma correção de código foi feita DENTRO da Task 10**, e por isso as suítes foram rodadas de novo
+depois dela: a mensagem de recusa de `validarRetornoDoItem` ainda dizia que o retorno de material
+diferente *"e a Etapa 8c e ainda nao esta implementado"* — **depois de a 8c ter sido entregue**. Ela
+passou a apontar o botão **Transformar** e a rota da transformação. Os dois testes que a cobrem
+casam por `/8c/` e o texto novo continua citando a etapa, então a asserção **não** foi afrouxada.
+`remessaTerceiroCiclo` **53 passed, 0 failed**, `remessaTerceiroRotas` **35 passed, 0 failed**,
+`transformacaoTerceiro` **48 passed, 0 failed** depois da mudança.
+
+### Sonda executada (Step 2) — o motor conferido por execução, não por leitura
+
+Rodada contra banco de teste descartável, com o script do Step 2. **Os sete pontos bateram:**
+
+| # | O que provava | Lido no banco |
+|---|---|---|
+| 1 | A chapa é baixada de verdade, patrimônio **e** retenção | `SONDA-CHP`: `quantidade_atual = 0`, `quantidade_em_terceiros = 0` |
+| 2 | O rateio chega ao material de destino | `SONDA-PC`: `quantidade_atual = 40`, `custo_medio = 25`, `custo_unitario = 25` |
+| 3 | O crédito a custo zero **não escreve** custo (não zera o cadastro da sobra) | `SONDA-SB`: `quantidade_atual = 1`, `custo_medio = 0` |
+| 4 | As N linhas são um **evento só** | duas linhas, `PECA`/`SOBRA`, `custo_unitario_aplicado` 25/0, **mesmo** `movimentacao_consumo_id = 2` |
+| 5 | A ordem da decisão 9: **baixa antes do crédito** | ledger: `CONSUMO_TERCEIRO` id **2** < `RETORNO_TRANSFORMACAO` ids **3** e **4** |
+| 6 | O consumo entra no teto do item | `quantidade_retornada = 100` |
+| 7 | O rendimento sai calculado | `rendimento_percentual = 91.72` (785 kg → 720 kg) |
+
+> Regra confirmada de novo (`almoxarifado-review-por-execucao`): **no motor de estoque, sonda
+> executada acha o que leitura e suíte verde não acham.** Nesta etapa foi literalmente isso — o
+> defeito do custo (abaixo) só apareceu porque a Task 7 rodou uma sonda em vez de confiar no plano.
+
+### Correções de spec e de plano declaradas por esta etapa
+
+Todas escritas no formato "isto dizia X; **estava errado**; o certo é Y" — apagar em silêncio é o
+que o `CLAUDE.md` proíbe, porque faz o próximo leitor confiar de novo na afirmação errada.
+
+1. **O design da 8c, decisão 4, dizia que o invariante de valor "fecha sozinho" porque "não há um
+   segundo lugar onde o patrimônio possa discordar". ERRADO** — e a decisão 11.1 do **mesmo**
+   documento nomeia os dois lugares: as famílias divergentes de leitura de valor, e o ramo de
+   entrada com custo escrevendo `custo_medio` e `custo_unitario` com valores **diferentes**. O
+   invariante fecha **na função pura** e fecha nas leituras **quando os materiais de destino não têm
+   custo prévio**. Corrigido em `specs/modulo-almoxarifado/14-materiais-terceiros/README.md`.
+2. **A pendência 5 da 8b** dizia *"a 8c decide junto com a transformação"* o problema de
+   `quantidade_retornada` significar LIQUIDADO e não "voltou". **A 8c NÃO criou `quantidade_baixada`,
+   e agora são TRÊS significados** (voltou / liquidado no encerramento / consumido na transformação).
+   A pendência foi **reescrita** com o motivo da adiação (migrar dois significados já gravados e
+   mexer em `encerrarRemessa`, `cancelarRemessa` e na tela, por um problema de **rótulo** e não de
+   número) e com o que a 8c entregou no lugar. **Continua ABERTA.**
+3. **A pendência 4 da 8b** dizia que *"a 8c cai aqui"* no `SENSITIVE_MATERIAL_FIELDS`. **A 8c NÃO
+   caiu:** não acrescentou nenhuma coluna em `materiais_almoxarifado` — as três colunas novas são de
+   `retornos_remessa_item_almoxarifado`. **Continua ABERTA**, e a 8c passou ao lado **por sorte de
+   escopo, não por resolução.**
+4. **O cabeçalho da Task 1 deste plano citava o commit `afcd5aa`, que não existe na branch.** O
+   commit real é `028da1e`. Corrigido acima, dizendo que estava errado.
+5. **O guia do usuário afirmava três coisas erradas sobre ONDE o bug do custo aparecia** — ver o
+   achado 1 abaixo. Corrigidas no próprio guia, com o texto errado citado.
+6. **O documento de novidades previa que "a Etapa 8c cria colunas novas e vai cair exatamente
+   aqui"** (na fragilidade do `SENSITIVE_MATERIAL_FIELDS`). **A previsão não se realizou** e o
+   texto foi corrigido dizendo isso.
+
+### O que só a EXECUÇÃO achou — leitura e suíte verde não achavam
+
+1. **Um bug de produção ANTERIOR à 8c: o valor do estoque era lido como ZERO.**
+   `COALESCE(custo_medio, custo_unitario, 0)` nunca chega em `custo_unitario`, porque `custo_medio`
+   é `REAL DEFAULT 0` — **zero é não-nulo**. Sonda executada: material com `custo_unitario = 10` e
+   `custo_medio = 0` → fórmula antiga devolve **0**, fórmula do motor devolve **10**. Efeito real:
+   o relatório `relatorios/estoque-atual`, a `consultarEstoque` e o custo por item da requisição
+   valoravam a **zero** todo material cujo custo foi digitado só no cadastro — **quase todo o
+   acervo**. Corrigido em `a644ab7`, com `custoSql.js` como fonte única e um teste que varre o
+   código-fonte. **Achado pela Task 7, que precisava ler o custo da chapa para ratear.**
+2. **As fixtures dos testes escondiam esse defeito, e isso foi MEDIDO.** Sob a sabotagem que devolve
+   a fórmula errada, **três arquivos continuaram verdes** — `recebimentoCustoMedio`, `transformCost`
+   e `requisicaoAprovacao` —, porque as fixtures deles preenchem **as duas** colunas de custo, o que
+   **nenhum material real tem**. É a mesma cegueira que deixou o defeito passar. Registrado como
+   fragilidade estrutural (item **G2** do documento de novidades): *a suíte verde não prova o caso
+   comum quando a fixture é mais rica que o dado real.*
+3. **Um segundo bug anterior à 8c: a posição por cliente não fechava a conta.**
+   `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` (da 8b) e `RETORNO_TRANSFORMACAO` (da 8c) não estavam nas
+   listas de tipos do `clienteEstoqueService` — um **terceiro** espelho das listas do motor. O
+   material sumia do saldo sem aparecer em "consumido", ou aparecia com saldo e "recebido" zero.
+   Corrigido em `3ef0144`, com `movementTypes.js` como fonte única. **Muda o que o cliente lê.**
+4. **Uma mensagem de erro que sobreviveu à própria etapa** — `validarRetornoDoItem` continuou
+   dizendo "a Etapa 8c ainda não está implementada" **depois** de a 8c estar implementada. Achada na
+   Task 10 ao reler a spec contra o código; corrigida no commit desta task. **Lição generalizável:
+   toda etapa que entrega o caminho novo tem de varrer as mensagens que diziam "isso ainda não
+   existe".**
+5. **Cinco tasks acharam defeito no código que este plano trazia pronto** (Tasks 1, 3, 4, 7, 8, 9 —
+   ver os cabeçalhos `✅ FEITA` de cada uma). O padrão se repetiu da 8b: **o plano é hipótese, a
+   execução é medida.**
+6. **Sabotagens que NÃO derrubaram nada viraram asserção nova**, em três tasks: o `|| null` da
+   guarda de dono (Task 5), e o gate do atalho e o `abrirDetalhe` do modal (Task 9). **Sabotagem que
+   não sabota é achado, não detalhe.**
+
+### Pendências que a etapa deixa registradas (não consertadas)
+
+1. **`quantidade_retornada` tem TRÊS significados** (contradição C7). Adiada de novo, com motivo
+   escrito. **Aberta.**
+2. **`SENSITIVE_MATERIAL_FIELDS` continua protegendo por lista de exclusão** — a 8c passou ao lado.
+   **Aberta.**
+3. **Categorias de material hardcoded no front** (`MateriaisAlmoxarifado.js`,
+   `MaterialAlmoxarifadoForm.js`, `ConferenciaEstoque.js`). A 8c **encostou** (a sobra usa categoria
+   que já existe no seed) e **não resolveu**. **Aberta.**
+4. **As duas famílias de leitura de valor** (decisão 11.1): `a644ab7` unificou a **leitura**, mas o
+   ramo de entrada com custo continua escrevendo as duas colunas com valores diferentes. **Aberta,
+   reduzida.**
+5. **O estorno não reverte custo** (decisão 11.2) e a compensação da transformação reverte **à mão**
+   — inconsistência **deliberada** entre os dois caminhos, documentada no código. **Aberta.**
+6. ~~**`buildLocalizacaoPath`/`formatLocalizacaoLabel` duplicados** entre `routes/almoxarifado.js` e
+   `materialService.js` (Task 1).~~ **ESTA PENDÊNCIA NÃO EXISTE — o plano estava errado.** Conferido
+   na Task 10: as duas funções existem **só** em `materialService.js` (`:61` e `:71`);
+   `routes/almoxarifado.js:100` tem apenas um **comentário** dizendo que elas moraram ali e **foram
+   removidas**, porque o único chamador passou a delegar. O que de fato aconteceu na Task 1 foi
+   outra coisa, e está registrada no cabeçalho dela: as funções foram **copiadas literalmente** em
+   vez de reescritas, de propósito, para não mudar em silêncio o rótulo gravado na coluna
+   `localizacao`. Registrar dívida que não existe é tão ruim quanto esconder a que existe: manda o
+   próximo gastar tempo procurando.
+7. **Verificação manual no navegador (Task 9, Step 10): PENDENTE — NÃO EXECUTADA.** Nenhum navegador
+   foi aberto nesta etapa. Falta conferir: o modal renderizando **largo** sem estourar a tabela de
+   resultados; o material recém-criado aparecendo **visivelmente selecionado** no `<select>`; os
+   **toasts** de sucesso e rendimento; e a coluna **Transformado** com dado real de servidor.
+   Registrada no item **F** do documento de novidades e na seção "O que depende de você" do guia.
+   **Vale ~5 minutos.**
+8. **`AJUSTE` continua sem reconciliar retenção** — pendência 1 da 8b, **terceira instância**. A 8c
+   não piorou e não ajudou. **É decisão de negócio do cliente antes de ser código.**
+9. **Anexo de desenho no item da remessa** — a 8b registrou que "o consumidor natural é a 8c"; a 8c
+   **não o consumiu**. **Aberta, e agora sem etapa natural atribuída.**
+10. **"Uma remessa não mistura materiais de donos diferentes" continua DEDUZIDA**, não confirmada
+    com o cliente. A 8c apertou o mesmo eixo (a peça tem o mesmo dono da chapa), mas essa segunda
+    regra é consequência direta da Etapa 8 e não depende da resposta. **Aberta.**
+11. **As duas consultas de produção das Etapas 7 e 8 continuam pendentes.** Nem a 8b nem a 8c
+    acrescentam uma terceira.
+
+---
+
 **Goal:** a chapa que a GMP manda cortar deixa de voltar mentindo. Sai **uma chapa em KG** e voltam
 **40 peças em UN mais uma sobra**: a chapa é baixada de verdade (patrimônio **e** retenção, no
 mesmo UPDATE, via `CONSUMO_TERCEIRO`), e as peças e a sobra **entram** como material próprio pelo
@@ -330,7 +511,12 @@ de custo no ledger está **fora de escopo** por decisão 10 do design.
 ---
 ### Task 1: `materialService.createMaterial` extraído do handler HTTP + `proximo-codigo` que aguenta lote
 
-> ✅ **FEITA — commit `afcd5aa`.** Gates medidos: `test:api` **77/77 arquivos OK** (incluindo
+> ✅ **FEITA — commit `028da1e`.** *(Este cabeçalho dizia `afcd5aa`. **Estava errado** — esse hash
+> não existe no histórico da branch; conferido com `git log` na Task 10. O commit real da Task 1 é
+> `028da1e`, "Almoxarifado Etapa 8c Task 1: criar material vira servico e o gerador de codigo
+> aguenta lote". Hash inventado num plano é pior que hash ausente: ele faz o próximo leitor procurar
+> um commit que nunca existiu e desconfiar do histórico, não do documento.)*
+> Gates medidos: `test:api` **77/77 arquivos OK** (incluindo
 > `materialServiceCriacao.api.test.js` com **13 passed, 0 failed**), `test:validation`
 > **4 passed, 0 failed**. Sabotagens S1/S2/S3 executadas, as três derrubaram teste.
 >
@@ -6072,6 +6258,39 @@ MSG
 ---
 ### Task 10: documentação e verificação final
 
+> ✅ **FEITA — este commit.** Gates medidos e citados no cabeçalho de conclusão, no topo do arquivo:
+> `test:api` **81/81 arquivos OK**, `test:almoxarifado` **42 passou, 0 falhou**, `test:validation`
+> **4 passed, 0 failed**, `test:safealter` **3 passed, 0 failed**, `test:sqlite`
+> **3 passed, 0 failed**, client **283 passed / 25 suites**, build **Compiled successfully.**
+> Sonda do Step 2 executada: os **sete** pontos bateram.
+>
+> **Divergências desta task, corrigidas em vez de obedecidas:**
+>
+> 1. **O Step 5(a) mandava "substituir" o cabeçalho do guia** dizendo que ele afirmava que a 8c era
+>    a próxima etapa e ainda não tinha design. Quando a task rodou, o cabeçalho **já tinha sido
+>    corrigido** durante a etapa (por `a644ab7`/`3ef0144`) e dizia outra coisa: que o código estava
+>    entregue e a seção do guia **ainda não escrita**. Foi substituído pelo bloco da 8c entregue.
+> 2. **A pendência 6 da lista do Step 7 não existe.** O plano mandava registrar
+>    `buildLocalizacaoPath`/`formatLocalizacaoLabel` como duplicadas entre `routes/almoxarifado.js` e
+>    `materialService.js`. **Não estão duplicadas** — elas existem só no serviço (`:61` e `:71`), e a
+>    rota tem apenas um comentário dizendo que foram removidas de lá. Corrigido dizendo que o plano
+>    estava errado.
+> 3. **O cabeçalho da Task 1 citava um commit inexistente** (`afcd5aa`). Corrigido para `028da1e`.
+> 4. **Uma correção de CÓDIGO entrou nesta task, e não estava no plano.** A recusa de
+>    `validarRetornoDoItem` continuava dizendo *"a Etapa 8c ainda não está implementada"* — depois de
+>    a 8c estar implementada. Não é cosmético: é a mensagem que o operador lê quando tenta o caminho
+>    novo pelo lugar errado, e ela **encerrava** a tentativa em vez de redirecioná-la. Passou a
+>    apontar o botão **Transformar** e a rota. Testes rodados de novo depois:
+>    `remessaTerceiroCiclo` **53/0**, `remessaTerceiroRotas` **35/0**, `transformacaoTerceiro` **48/0**.
+> 5. **Três afirmações do guia sobre o bug do custo estavam erradas** e foram corrigidas *dizendo
+>    que estavam erradas* — ver o item 5 das "Correções declaradas" no topo. Elas vieram do texto do
+>    commit `a644ab7`, que também as carrega; o histórico não se reescreve, mas a documentação agora
+>    diz o certo.
+>
+> **O que esta task NÃO fez:** a verificação manual no navegador (Task 9, Step 10) continua
+> **PENDENTE** — nenhum navegador foi aberto. Está registrada na pendência 7 do topo, no item **F**
+> do documento de novidades e na seção "O que depende de você" do guia.
+
 **Esta task não é burocracia — é a regra nº 1 do `CLAUDE.md`, e ela existe porque já falhou:**
 código foi entregue e as specs continuaram dizendo que a feature não existia. Uma sessão nova (ou
 outra máquina) lê os documentos primeiro e é **ativamente enganada** por eles.
@@ -6089,7 +6308,7 @@ outra máquina) lê os documentos primeiro e é **ativamente enganada** por eles
 
 ---
 
-- [ ] **Step 1: Medir os gates de verdade, e anotar os números REAIS**
+- [x] **Step 1: Medir os gates de verdade, e anotar os números REAIS**
 
 Rodar, **na ordem**, e **anotar a saída literal de cada um**:
 
@@ -6109,19 +6328,19 @@ foi a regra que a Task 10 da 8b fixou quando o client deu 268 testes e o plano p
 
 | Suíte | Previsto neste plano | **Medido** |
 |---|---|---|
-| `server && npm run test:api` | entrada + **4 arquivos novos** | *preencher* |
-| `server && npm run test:almoxarifado` | igual à entrada | *preencher* |
-| `server && npm run test:validation` | `4 passed, 0 failed` | *preencher* |
-| `server && npm run test:safealter` | `3 passed, 0 failed` | *preencher* |
-| `server && npm run test:sqlite` | `3 passed, 0 failed` | *preencher* |
-| `client && npx react-scripts test` | entrada + **14 testes**, +1 suíte | *preencher* |
-| `client && npx react-scripts build` | `Compiled successfully.` | *preencher* |
+| `server && npm run test:api` | entrada + **4 arquivos novos** | **81/81 arquivos de teste OK** |
+| `server && npm run test:almoxarifado` | igual à entrada | **42 passou, 0 falhou** |
+| `server && npm run test:validation` | `4 passed, 0 failed` | **4 passed, 0 failed** |
+| `server && npm run test:safealter` | `3 passed, 0 failed` | **3 passed, 0 failed** |
+| `server && npm run test:sqlite` | `3 passed, 0 failed` | **3 passed, 0 failed** |
+| `client && npx react-scripts test` | entrada + **14 testes**, +1 suíte | **283 passed / 25 suites** (a Task 9 entregou **15**, nao 14 — divergencia declarada) |
+| `client && npx react-scripts build` | `Compiled successfully.` | **Compiled successfully.** |
 
 Os quatro arquivos novos de `tests/api/`: `materialServiceCriacao` (12),
 `recebimentoCustoMedio` (5), `transformacaoMotor` (12), `transformCost` (17), mais o crescimento de
 `transformacaoTerceiro` (47). **Total previsto de testes novos no servidor: 93.**
 
-- [ ] **Step 2: Sonda executada — não confie em suíte verde para o estado do banco**
+- [x] **Step 2: Sonda executada — não confie em suíte verde para o estado do banco**
 
 Regra registrada da 8b (`almoxarifado-review-por-execucao`): **no motor de estoque, sonda executada
 acha o que leitura e suíte verde não acham.** Rodar este script uma vez, contra um banco de teste
@@ -6167,7 +6386,7 @@ formatação**):
 6. `ITEM`: `quantidade_retornada = 100`.
 7. `RESPOSTA.rendimento[0].rendimento_percentual = 91.72`.
 
-- [ ] **Step 3: `specs/modulo-almoxarifado/14-materiais-terceiros/README.md`**
+- [x] **Step 3: `specs/modulo-almoxarifado/14-materiais-terceiros/README.md`**
 
 Atualizar: **status no topo** (a feature 14 fecha com a 8c — as duas metades, retorno do mesmo
 material e transformação) e **cada item do checklist com o hash do commit**. Itens que ficarem de
@@ -6199,7 +6418,7 @@ Acrescentar ao final da spec 14 o **contrato novo** que a 8c produz e que a pró
 `registrarTransformacao`, as três colunas, `RETORNO_TRANSFORMACAO`, `transformCost.ratearCusto` e
 `calcularRendimento`, e a rota.
 
-- [ ] **Step 4: `specs/modulo-almoxarifado/README.md`, `03-motor-estoque` e a spec de cadastro**
+- [x] **Step 4: `specs/modulo-almoxarifado/README.md`, `03-motor-estoque` e a spec de cadastro**
 
 - **README mestre:** a linha da feature 14 no mapa de status passa a **completa**, com a data e a
   faixa de commits da 8c.
@@ -6215,7 +6434,7 @@ Acrescentar ao final da spec 14 o **contrato novo** que a 8c produz e que a pró
   **continua aberta** — a 8c a encostou (a sobra usa categoria que já existe no seed) e **não** a
   resolveu, porque resolvê-la mexe em três telas por um motivo que não é o desta etapa.
 
-- [ ] **Step 5: `docs/almoxarifado-guia-etapas-e-testes.md`**
+- [x] **Step 5: `docs/almoxarifado-guia-etapas-e-testes.md`**
 
 Este é o documento que o **usuário** lê. Três coisas:
 
@@ -6266,7 +6485,7 @@ feito **dentro** da GMP; **não recalcula** o custo de nada que entrou antes des
 que os pesos fecham; não conserta a divergência entre as telas de patrimônio (é anterior e está
 registrada); não manda e-mail nem alerta.
 
-- [ ] **Step 6: `docs/almoxarifado-novidades-por-etapa.md`**
+- [x] **Step 6: `docs/almoxarifado-novidades-por-etapa.md`**
 
 Acrescentar a linha da 8c na tabela "Visão geral":
 
@@ -6285,7 +6504,7 @@ frases desta etapa que são candidatas ao mesmo erro e precisam ser conferidas a
   depois de confirmar**. Não fica guardado em lugar nenhum (não há coluna de rendimento). Se quiser
   que fique, é etapa nova.
 
-- [ ] **Step 7: Fechar este plano**
+- [x] **Step 7: Fechar este plano**
 
 No topo deste arquivo, acrescentar o cabeçalho de conclusão, no molde do plano da 8b:
 
@@ -6323,7 +6542,7 @@ No topo deste arquivo, acrescentar o cabeçalho de conclusão, no molde do plano
 8. `AJUSTE` continua sem reconciliar retenção (pendência 1 da 8b, terceira instância).
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
