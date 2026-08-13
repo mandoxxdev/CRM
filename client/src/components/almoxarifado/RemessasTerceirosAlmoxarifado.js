@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiRefreshCw, FiSend, FiCornerDownLeft, FiCheckSquare, FiXCircle, FiFileText, FiEye, FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiRefreshCw, FiSend, FiCornerDownLeft, FiCheckSquare, FiXCircle, FiFileText, FiEye, FiPlus, FiTrash2, FiScissors } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { gerarRemessaPDF } from '../../utils/remessaPdf';
@@ -30,6 +30,20 @@ const STATUS_COM_ENVIO = ['ABERTA'];
 const STATUS_COM_RETORNO = ['ENVIADA', 'RETORNO_PARCIAL'];
 const STATUS_COM_ENCERRAR = ['ENVIADA', 'RETORNO_PARCIAL'];
 const STATUS_COM_CANCELAR = ['ABERTA', 'ENVIADA', 'RETORNO_PARCIAL'];
+
+/**
+ * Transformacao (Etapa 8c) tem os MESMOS status do retorno, e isto e afirmacao e nao coincidencia:
+ * as duas sao formas de o material voltar do terceiro, e as duas passam por
+ * sm.PODE_RECEBER_RETORNO no servidor. Duas listas com os mesmos valores divergiriam na primeira
+ * mudanca; uma constante propria existe para o dia em que elas DEVAM divergir.
+ */
+const STATUS_COM_TRANSFORMACAO = STATUS_COM_RETORNO;
+
+/** Classificacao da linha de resultado (schema.TIPOS_RESULTADO) em linguagem de tela. */
+const ROTULO_RESULTADO = {
+  PECA: 'Peça (recebe o custo rateado da chapa)',
+  SOBRA: 'Sobra / retalho (entra a custo zero)',
+};
 
 /**
  * Destinos do encerramento (thirdPartyService.DESTINOS_ENCERRAMENTO) em linguagem de tela.
@@ -84,6 +98,13 @@ const RemessasTerceirosAlmoxarifado = () => {
   const [novoItem, setNovoItem] = useState({ material_id: '', quantidade: '', peso: '' });
   const [itensNovos, setItensNovos] = useState([]);
 
+  // Linhas de resultado do modal de transformacao (N por documento) e o formulario da linha nova.
+  const [resultados, setResultados] = useState([]);
+  const [novoResultado, setNovoResultado] = useState({ material_id: '', quantidade: '', tipo_resultado: 'PECA' });
+  // Atalho de criar o material resultante (decisao 6): sub-formulario que aparece SOB DEMANDA,
+  // nunca junto — criar material tem gate PROPRIO (criar_material), diferente do da transformacao.
+  const [novoMaterial, setNovoMaterial] = useState(null); // null = fechado; {} = aberto
+
   useEffect(() => {
     let cancelado = false;
     setLoading(true);
@@ -97,19 +118,27 @@ const RemessasTerceirosAlmoxarifado = () => {
 
   const modalTipo = modal?.tipo || null;
 
-  // Materiais e terceiros so sao buscados quando o formulario de criacao abre: sao duas listas
-  // grandes que nenhuma outra parte da tela usa. Guarda `cancelado` no molde de LotesAlmoxarifado —
-  // fechar o modal antes da resposta chegar nao pode pintar estado numa tela que mudou.
+  // Materiais e terceiros so sao buscados quando o formulario que precisa deles abre: sao duas
+  // listas grandes que nenhuma outra parte da tela usa. Guarda `cancelado` no molde de
+  // LotesAlmoxarifado — fechar o modal antes da resposta chegar nao pode pintar estado numa tela
+  // que mudou.
+  //
+  // Etapa 8c: `transformacao` ENTROU nesta guarda. Sem isso o `<select>` de material do resultado
+  // nasceria vazio para sempre e `adicionarResultado` nunca acharia o material — a tela inteira
+  // seria inalcancavel, com a rota do servidor pronta e sem consumidor. Fornecedor continua so no
+  // `nova`: a transformacao nao escolhe terceiro, ela usa o da remessa que ja existe.
   useEffect(() => {
-    if (modalTipo !== 'nova') return undefined;
+    if (modalTipo !== 'nova' && modalTipo !== 'transformacao') return undefined;
     let cancelado = false;
     Promise.all([
       api.get('/almoxarifado/materiais').catch(() => ({ data: [] })),
-      api.get('/almoxarifado/recebimentos-aux/fornecedores').catch(() => ({ data: [] })),
+      modalTipo === 'nova'
+        ? api.get('/almoxarifado/recebimentos-aux/fornecedores').catch(() => ({ data: [] }))
+        : Promise.resolve(null),
     ]).then(([m, f]) => {
       if (cancelado) return;
       setMateriais(Array.isArray(m.data) ? m.data : []);
-      setFornecedores(Array.isArray(f.data) ? f.data : []);
+      if (f) setFornecedores(Array.isArray(f.data) ? f.data : []);
     });
     return () => { cancelado = true; };
   }, [modalTipo]);
@@ -143,10 +172,16 @@ const RemessasTerceirosAlmoxarifado = () => {
   const abrirModal = (tipo, remessa, evento) => {
     if (!bloquearSeNaoPode('remessar_terceiro', evento)) return;
     setForm({});
+    setResultados([]);
+    setNovoResultado({ material_id: '', quantidade: '', tipo_resultado: 'PECA' });
+    setNovoMaterial(null);
     setModal({ tipo, remessa });
-    // Retorno e encerramento decidem pelos ITENS (qual item voltou, se sobrou pendencia), entao o
-    // detalhe e recarregado ao abrir: a listagem em memoria pode estar velha.
-    if (tipo === 'retorno' || tipo === 'encerrar') abrirDetalhe(remessa);
+    // Retorno, transformacao e encerramento decidem pelos ITENS (qual item voltou, qual chapa foi
+    // consumida, se sobrou pendencia), entao o detalhe e recarregado ao abrir: a listagem em
+    // memoria pode estar velha. A transformacao entrou aqui na 8c pelo mesmo motivo do retorno —
+    // sem isto, quem clicasse em "Transformar" SEM ter clicado em "Abrir" veria o seletor de item
+    // vazio e nao teria como registrar nada.
+    if (tipo === 'retorno' || tipo === 'transformacao' || tipo === 'encerrar') abrirDetalhe(remessa);
   };
 
   const abrirNova = (evento) => {
@@ -188,6 +223,100 @@ const RemessasTerceirosAlmoxarifado = () => {
       peso: novoItem.peso === '' ? null : Number(novoItem.peso),
     }]);
     setNovoItem({ material_id: '', quantidade: '', peso: '' });
+  };
+
+  /** O item de remessa selecionado no modal de transformacao (a CHAPA). */
+  const itemDaTransformacao = useMemo(() => {
+    const id = String(form.item_remessa_id || '');
+    return (aberta?.itens || []).find((i) => String(i.id) === id) || null;
+  }, [aberta, form.item_remessa_id]);
+
+  /**
+   * Acrescenta uma linha de resultado.
+   *
+   * As duas recusas aqui ESPELHAM o servidor (thirdPartyService.registrarTransformacao e
+   * ownerRules.assertMesmoDonoNaTransformacao), adiantadas para o operador nao montar cinco linhas
+   * e perder tudo no Confirmar. Quem DECIDE continua sendo o backend — se estas duas sumissem, o
+   * 400 viria com a mesma frase.
+   */
+  const adicionarResultado = () => {
+    const material = materiais.find((m) => String(m.id) === String(novoResultado.material_id));
+    if (!material) { toast.error('Selecione o material do resultado'); return; }
+    const qtd = Number(novoResultado.quantidade);
+    if (!(qtd > 0)) { toast.error('Informe a quantidade do resultado'); return; }
+    if (itemDaTransformacao && Number(material.id) === Number(itemDaTransformacao.material_id)) {
+      toast.error(`${material.codigo} é a mesma chapa enviada. Chapa que volta como ela mesma não é `
+        + 'transformação — use "Retorno".');
+      return;
+    }
+    if (itemDaTransformacao) {
+      const chapa = materiais.find((m) => Number(m.id) === Number(itemDaTransformacao.material_id));
+      const donoChapa = donoDoMaterial(chapa);
+      const donoResultado = donoDoMaterial(material);
+      if (donoChapa !== donoResultado) {
+        toast.error(`${itemDaTransformacao.material_codigo} é de ${rotuloDono(chapa)} e `
+          + `${material.codigo} é de ${rotuloDono(material)}. A transformação não pode `
+          + 'mudar o proprietário do material.');
+        return;
+      }
+    }
+    setResultados((lista) => [...lista, {
+      material_id: Number(material.id),
+      codigo: material.codigo,
+      nome: material.nome,
+      unidade: material.unidade,
+      quantidade: qtd,
+      tipo_resultado: novoResultado.tipo_resultado || 'PECA',
+    }]);
+    setNovoResultado({ material_id: '', quantidade: '', tipo_resultado: 'PECA' });
+  };
+
+  /**
+   * Atalho EXPLICITO de criar o material resultante (decisao 6 do design).
+   *
+   * O motor NAO cria material — precedente do modulo (o recebimento tambem nao). Criar
+   * implicitamente a partir de um formulario de retorno produziria cadastro-lixo a cada erro de
+   * digitacao, e cadastro-lixo em almoxarifado nao se apaga: ele ganha saldo. Este atalho chama a
+   * criacao NORMAL (POST /almoxarifado/materiais), so pre-preenchendo o que ja se sabe.
+   *
+   * GATE PROPRIO: `criar_material`, NAO `remessar_terceiro`. Sao listas de perfis diferentes
+   * (ENGENHARIA cria material e nao transforma), e barrar pelo gate errado tiraria a funcao de quem
+   * tem direito a ela.
+   *
+   * `codigo_auto: 1` porque GET /proximo-codigo devolve o MESMO numero para N chamadas
+   * concorrentes: a colisao e resolvida no INSERT, com retry (materialService.createMaterial).
+   */
+  const abrirCriarMaterial = (evento) => {
+    if (!bloquearSeNaoPode('criar_material', evento)) return;
+    const chapa = materiais.find((m) => Number(m.id) === Number(itemDaTransformacao?.material_id));
+    setNovoMaterial({ nome: '', unidade: 'UN', familia_id: chapa?.familia_id ?? null,
+      proprietario_cliente_id: chapa?.proprietario_cliente_id ?? null });
+  };
+
+  const cadastrarMaterialResultante = async () => {
+    if (!String(novoMaterial?.nome || '').trim()) { toast.error('Informe o nome do novo material'); return; }
+    if (!novoMaterial.familia_id) {
+      toast.error('A chapa enviada não tem família cadastrada — cadastre o material resultante pela tela de Materiais');
+      return;
+    }
+    setSalvando(true);
+    try {
+      const prox = await api.get(`/almoxarifado/proximo-codigo?familia_id=${novoMaterial.familia_id}`);
+      const criado = await api.post('/almoxarifado/materiais', {
+        codigo: prox.data?.codigo,
+        codigo_auto: 1,
+        nome: String(novoMaterial.nome).trim(),
+        unidade: String(novoMaterial.unidade || 'UN').trim(),
+        familia_id: Number(novoMaterial.familia_id),
+        proprietario_cliente_id: novoMaterial.proprietario_cliente_id ?? null,
+      });
+      setMateriais((lista) => [...lista, criado.data]);
+      setNovoResultado((r) => ({ ...r, material_id: String(criado.data.id) }));
+      setNovoMaterial(null);
+      toast.success(`Material ${criado.data.codigo} criado — já selecionado como resultado`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao criar o material resultante');
+    } finally { setSalvando(false); }
   };
 
   const criar = async () => {
@@ -237,6 +366,16 @@ const RemessasTerceirosAlmoxarifado = () => {
     if (tipo === 'cancelar' && !String(form.motivo || '').trim()) {
       toast.error('Informe o motivo do cancelamento'); return undefined;
     }
+    if (tipo === 'transformacao') {
+      if (!form.item_remessa_id) { toast.error('Selecione a chapa que foi transformada'); return undefined; }
+      if (!(Number(form.quantidade_consumida) > 0)) {
+        toast.error('Informe quanto da chapa foi consumido'); return undefined;
+      }
+      if (resultados.length === 0) {
+        toast.error('Adicione ao menos um resultado (peça ou sobra) — se a chapa voltou inteira, use "Retorno"');
+        return undefined;
+      }
+    }
     if (tipo === 'retorno' && !(Number(form.quantidade) > 0)) {
       toast.error('Informe a quantidade retornada'); return undefined;
     }
@@ -245,7 +384,35 @@ const RemessasTerceirosAlmoxarifado = () => {
     }
     setSalvando(true);
     try {
-      if (tipo === 'retorno') {
+      if (tipo === 'transformacao') {
+        // OS DOIS NUMEROS SEPARADOS (decisao 1): `quantidade_consumida` esta na unidade da CHAPA e
+        // e a unica coisa que conta no teto do item; cada resultado tem a SUA quantidade, na SUA
+        // unidade, e nenhum deles encosta no teto. Trocar os dois aqui nao daria erro nenhum — 40
+        // (UN) cabe no teto de 100 (KG) — e a chapa seria baixada errado. Por isso ha teste.
+        const item = {
+          item_remessa_id: Number(form.item_remessa_id),
+          quantidade_consumida: Number(form.quantidade_consumida),
+          resultados: resultados.map((r) => ({
+            material_id: r.material_id, quantidade: r.quantidade, tipo_resultado: r.tipo_resultado,
+          })),
+        };
+        if (Number(form.custo_servico) > 0) item.custo_servico = Number(form.custo_servico);
+        const resp = await api.post(`/almoxarifado/remessas-terceiros/${remessa.id}/transformacoes`, {
+          nota_fiscal: form.nota_fiscal || undefined,
+          itens: [item],
+        });
+        toast.success('Transformação registrada — a chapa foi baixada e os resultados entraram no estoque');
+        // Rendimento (decisao 7): INFORMATIVO. `toast.info` e nao `warn`: nao ha nada errado em um
+        // material sem peso cadastrado, e um alerta amarelo ensinaria o operador a ignorar alertas.
+        // E ele NUNCA bloqueia: chega depois do sucesso, com a operacao ja gravada.
+        const rend = resp.data?.rendimento?.[0];
+        if (rend?.calculavel) {
+          toast.info(`Rendimento: ${rend.rendimento_percentual}% `
+            + `(saíram ${rend.peso_saida} kg, voltaram ${rend.peso_retorno} kg)`);
+        } else if (rend?.motivo) {
+          toast.info(rend.motivo);
+        }
+      } else if (tipo === 'retorno') {
         await api.post(`/almoxarifado/remessas-terceiros/${remessa.id}/retornos`, {
           nota_fiscal: form.nota_fiscal || undefined,
           itens: [{ item_remessa_id: Number(form.item_remessa_id), quantidade: Number(form.quantidade) }],
@@ -271,14 +438,36 @@ const RemessasTerceirosAlmoxarifado = () => {
     return undefined;
   };
 
-  /** Quanto VOLTOU de verdade, por item — a soma dos retornos registrados, nunca `quantidade_retornada`. */
+  /**
+   * O que voltou de verdade, por item, SEPARADO em duas naturezas.
+   *
+   * `quantidade_retornada` do item ja significava DUAS coisas (voltou / foi liquidado no
+   * encerramento). Com a 8c passa a significar TRES: a transformacao tambem soma nela. A coluna nao
+   * distingue e nao vai distinguir nesta etapa (a decisao de criar `quantidade_baixada` foi adiada
+   * de novo, com o motivo escrito no plano) — quem distingue e a linha de resultado, por
+   * `tipo_resultado`: NULL = retorno simples da 8b, PECA/SOBRA = transformacao.
+   */
   const retornadoPorItem = useMemo(() => {
     const mapa = {};
     for (const r of (aberta?.retornos || [])) {
+      if (r.tipo_resultado) continue; // linha de transformacao: conta no outro mapa
       const k = String(r.item_remessa_id);
       mapa[k] = (mapa[k] || 0) + Number(r.quantidade || 0);
     }
     return mapa;
+  }, [aberta]);
+
+  /**
+   * Transformado, por item: NAO e a soma das quantidades dos resultados — elas estao em OUTRA
+   * unidade (40 pecas em UN nao sao 40 kg de chapa). O que foi consumido da chapa e o que sobra em
+   * `quantidade_retornada` depois de tirar o que voltou de verdade e o que foi liquidado; como o
+   * detalhe nao carrega a movimentacao de consumo, a tela deriva pelo unico caminho honesto: itens
+   * que TEM linha de transformacao mostram a diferenca rotulada como "transformado".
+   */
+  const temTransformacao = useMemo(() => {
+    const set = new Set();
+    for (const r of (aberta?.retornos || [])) if (r.tipo_resultado) set.add(String(r.item_remessa_id));
+    return set;
   }, [aberta]);
 
   const rotuloBaixa = rotuloDaBaixa(aberta);
@@ -362,6 +551,13 @@ const RemessasTerceirosAlmoxarifado = () => {
                           <button className="btn-almox-secondary" title="Registrar retorno do terceiro"
                             onClick={(e) => abrirModal('retorno', r, e)}><FiCornerDownLeft size={13} /> Retorno</button>
                         )}
+                        {STATUS_COM_TRANSFORMACAO.includes(r.status) && (
+                          <button className="btn-almox-secondary"
+                            title="A chapa foi cortada: registrar as peças e a sobra que voltaram"
+                            onClick={(e) => abrirModal('transformacao', r, e)}>
+                            <FiScissors size={13} /> Transformar
+                          </button>
+                        )}
                         {STATUS_COM_ENCERRAR.includes(r.status) && (
                           <button className="btn-almox-secondary" title="Encerrar a remessa"
                             onClick={(e) => abrirModal('encerrar', r, e)}><FiCheckSquare size={13} /> Encerrar</button>
@@ -398,6 +594,7 @@ const RemessasTerceirosAlmoxarifado = () => {
               <tr>
                 <th>Código</th><th>Material</th><th>Un.</th><th>Enviado</th>
                 <th title="Soma dos retornos registrados — o que voltou de verdade para a prateleira">Retornado</th>
+                <th title="Consumido numa transformação: a chapa deixou de existir e voltou como outro material">Transformado</th>
                 <th title="Saldo que deixou de ser pendente sem voltar: baixa no encerramento ou estorno do cancelamento">Baixado (não voltou)</th>
                 <th>Ainda no terceiro</th>
               </tr>
@@ -407,12 +604,17 @@ const RemessasTerceirosAlmoxarifado = () => {
                 const retornado = retornadoPorItem[String(i.id)] || 0;
                 // `quantidade_retornada` e o TETO acumulado que o motor usa; a parte dele que nao
                 // tem retorno registrado foi liquidada (perda/consumo/estorno), nao devolvida.
-                const baixado = Math.max(0, Number(i.quantidade_retornada || 0) - retornado);
+                const semRetorno = Math.max(0, Number(i.quantidade_retornada || 0) - retornado);
+                // Se este item tem linha de transformacao, o que sobrou foi CONSUMIDO na
+                // transformacao; senao, foi liquidado no encerramento/cancelamento.
+                const transformado = temTransformacao.has(String(i.id)) ? semRetorno : 0;
+                const baixado = temTransformacao.has(String(i.id)) ? 0 : semRetorno;
                 return (
                   <tr key={i.id}>
                     <td>{i.material_codigo}</td><td>{i.material_nome}</td><td>{i.unidade}</td>
                     <td>{i.quantidade}</td>
                     <td data-col="retornado">{retornado}</td>
+                    <td data-col="transformado">{transformado > 0 ? transformado : '—'}</td>
                     <td data-col="baixado" title={baixado > 0 ? (rotuloBaixa || 'saldo baixado sem retorno') : undefined}>
                       {baixado > 0 ? `${baixado}${rotuloBaixa ? ` (${rotuloBaixa})` : ''}` : '—'}
                     </td>
@@ -426,7 +628,13 @@ const RemessasTerceirosAlmoxarifado = () => {
           </table>
           {(aberta.retornos || []).length > 0 && (
             <p style={{ margin: '8px 12px', fontSize: '0.85rem' }}>
-              Retornos recebidos: {aberta.retornos.map((r) => `${r.material_codigo} ${r.quantidade}${r.nota_fiscal ? ` (${r.nota_fiscal})` : ''}`).join(' · ')}
+              {/* A natureza da linha vem rotulada: `tipo_resultado` NULL e retorno simples da 8b,
+                  PECA/SOBRA e transformacao. Sem o rotulo a lista juntaria coisas diferentes com a
+                  mesma cara — e e justamente `tipo_resultado` que carrega a distincao que
+                  `quantidade_retornada` perdeu. */}
+              Retornos recebidos: {aberta.retornos.map((r) => `${r.material_codigo} ${r.quantidade}`
+                + (r.tipo_resultado ? ` [${r.tipo_resultado === 'SOBRA' ? 'sobra' : 'peça'}${r.custo_unitario_aplicado ? `, R$ ${r.custo_unitario_aplicado}/un` : ''}]` : '')
+                + (r.nota_fiscal ? ` (${r.nota_fiscal})` : '')).join(' · ')}
             </p>
           )}
         </div>
@@ -434,13 +642,14 @@ const RemessasTerceirosAlmoxarifado = () => {
 
       {modal && (
         <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>
-          <div className={`almox-modal ${modal.tipo === 'nova' ? 'almox-modal-lg' : 'almox-modal-sm'}`}
+          <div className={`almox-modal ${modal.tipo === 'nova' || modal.tipo === 'transformacao' ? 'almox-modal-lg' : 'almox-modal-sm'}`}
             onClick={(e) => e.stopPropagation()}>
             <div className="almox-modal-header">
               <h2>
                 {modal.tipo === 'nova' ? 'Nova remessa a terceiros'
-                  : modal.tipo === 'retorno' ? 'Registrar retorno'
-                    : modal.tipo === 'encerrar' ? 'Encerrar remessa' : 'Cancelar remessa'}
+                  : modal.tipo === 'transformacao' ? 'Registrar transformação (corte, dobra, usinagem)'
+                    : modal.tipo === 'retorno' ? 'Registrar retorno'
+                      : modal.tipo === 'encerrar' ? 'Encerrar remessa' : 'Cancelar remessa'}
               </h2>
               <button className="almox-modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
@@ -572,6 +781,152 @@ const RemessasTerceirosAlmoxarifado = () => {
                 </>
               )}
 
+              {modal.tipo === 'transformacao' && (
+                <>
+                  <p style={{ marginTop: 0, fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                    Use aqui quando <strong>voltou material diferente do que saiu</strong> (corte, dobra,
+                    usinagem). A chapa consumida sai do estoque de vez e os resultados entram como
+                    material próprio. Se a chapa voltou inteira, use <strong>Retorno</strong>.
+                  </p>
+
+                  <div className="almox-field">
+                    <label className="almox-label">Item transformado (a chapa)<span className="required">*</span></label>
+                    <select className="almox-form-select" value={form.item_remessa_id || ''}
+                      onChange={(e) => setForm((f) => ({ ...f, item_remessa_id: e.target.value }))}>
+                      <option value="">Selecionar item...</option>
+                      {(aberta?.id === modal.remessa.id ? (aberta.itens || []) : []).map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.material_codigo} — ainda no terceiro: {i.pendente} {i.unidade}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="almox-field">
+                    <label className="almox-label">
+                      Quantidade consumida da chapa{itemDaTransformacao ? ` (em ${itemDaTransformacao.unidade})` : ''}
+                      <span className="required">*</span>
+                    </label>
+                    <input className="almox-input" type="number" min="0" value={form.quantidade_consumida || ''}
+                      onChange={(e) => setForm((f) => ({ ...f, quantidade_consumida: e.target.value }))} />
+                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Na unidade da chapa. É só este número que desconta do que está no terceiro — as
+                      peças que voltaram têm a unidade delas e não entram nesta conta.
+                    </small>
+                  </div>
+
+                  <div className="almox-field">
+                    <label className="almox-label">Custo do serviço do terceiro (R$)</label>
+                    <input className="almox-input" type="number" min="0" value={form.custo_servico || ''}
+                      onChange={(e) => setForm((f) => ({ ...f, custo_servico: e.target.value }))} />
+                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Opcional. Se informado, soma ao custo das peças (a peça não é peça sem o corte).
+                      Em branco, não entra — o sistema não estima.
+                    </small>
+                  </div>
+
+                  <div className="almox-field">
+                    <label className="almox-label">Nota fiscal do retorno</label>
+                    <input className="almox-input" value={form.nota_fiscal || ''}
+                      onChange={(e) => setForm((f) => ({ ...f, nota_fiscal: e.target.value }))} />
+                  </div>
+
+                  <h3 style={{ fontSize: '0.9rem', margin: '12px 0 4px' }}>O que voltou</h3>
+                  <div className="almox-field">
+                    <label className="almox-label">Material do resultado</label>
+                    <select className="almox-form-select" value={novoResultado.material_id}
+                      onChange={(e) => setNovoResultado((r) => ({ ...r, material_id: e.target.value }))}>
+                      <option value="">Selecionar material...</option>
+                      {materiais.map((m) => (
+                        <option key={m.id} value={m.id}>{m.codigo} — {m.nome} ({m.unidade})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="almox-field">
+                    <label className="almox-label">Quantidade do resultado</label>
+                    <input className="almox-input" type="number" min="0" value={novoResultado.quantidade}
+                      onChange={(e) => setNovoResultado((r) => ({ ...r, quantidade: e.target.value }))} />
+                  </div>
+                  <div className="almox-field">
+                    <label className="almox-label">Classificação</label>
+                    <select className="almox-form-select" value={novoResultado.tipo_resultado}
+                      onChange={(e) => setNovoResultado((r) => ({ ...r, tipo_resultado: e.target.value }))}>
+                      <option value="PECA">{ROTULO_RESULTADO.PECA}</option>
+                      <option value="SOBRA">{ROTULO_RESULTADO.SOBRA}</option>
+                    </select>
+                  </div>
+                  <div className="almox-actions" style={{ marginBottom: 8 }}>
+                    <button type="button" className="btn-almox-secondary" onClick={adicionarResultado}>
+                      <FiPlus size={13} /> Adicionar resultado
+                    </button>
+                    {/* Gate PROPRIO: criar_material, e nao remessar_terceiro. ENGENHARIA cria
+                        material e nao transforma — barrar pelo gate errado tiraria a funcao de quem
+                        tem direito a ela. O botao continua VISIVEL: bloquearSeNaoPode barra no
+                        onClick, com o mesmo texto que o backend produziria, e FALHA ABERTO se
+                        GET /minhas-permissoes nao carregar. */}
+                    <button type="button" className="btn-almox-secondary"
+                      title="Cadastrar agora o material que voltou, já com a família e o dono da chapa"
+                      onClick={(e) => abrirCriarMaterial(e)}>
+                      <FiPlus size={13} /> Criar material resultante
+                    </button>
+                  </div>
+
+                  {novoMaterial && (
+                    // Sem a classe `almox-field` no CONTORNO, e de proposito: cada rotulo deste
+                    // sub-formulario tem de morar no seu proprio `.almox-field`, senao "nome" e
+                    // "unidade" ficam no MESMO campo e qualquer busca por rotulo (a da tela de
+                    // teste, e a de um leitor de tela) devolve sempre o primeiro input.
+                    <div style={{ border: '1px solid var(--gmp-border)', padding: 8, borderRadius: 6, marginBottom: 8 }}>
+                      <p style={{ marginTop: 0, fontSize: '0.8rem' }}>
+                        O código é gerado pela família da chapa e o proprietário é herdado dela — a
+                        peça cortada de uma chapa do cliente continua sendo do cliente.
+                      </p>
+                      <div className="almox-field">
+                        <label className="almox-label">Nome do novo material<span className="required">*</span></label>
+                        <input className="almox-input" value={novoMaterial.nome}
+                          onChange={(e) => setNovoMaterial((m) => ({ ...m, nome: e.target.value }))} />
+                      </div>
+                      <div className="almox-field">
+                        <label className="almox-label">Unidade do novo material</label>
+                        <input className="almox-input" value={novoMaterial.unidade}
+                          onChange={(e) => setNovoMaterial((m) => ({ ...m, unidade: e.target.value }))} />
+                      </div>
+                      <div className="almox-actions" style={{ marginTop: 8 }}>
+                        <button type="button" className="btn-almox-primary" disabled={salvando}
+                          onClick={cadastrarMaterialResultante}>Cadastrar e usar</button>
+                        <button type="button" className="btn-almox-secondary"
+                          onClick={() => setNovoMaterial(null)}>Cancelar cadastro</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <table className="almox-table">
+                    <thead>
+                      <tr><th>Código</th><th>Material</th><th>Qtd.</th><th>Un.</th><th>Classificação</th><th /></tr>
+                    </thead>
+                    <tbody>
+                      {resultados.map((r, idx) => (
+                        <tr key={`${r.material_id}-${idx}`}>
+                          <td>{r.codigo}</td><td>{r.nome}</td><td>{r.quantidade}</td><td>{r.unidade}</td>
+                          <td>{r.tipo_resultado === 'SOBRA' ? 'Sobra (custo zero)' : 'Peça'}</td>
+                          <td>
+                            <button type="button" className="btn-almox-secondary" title="Remover o resultado"
+                              onClick={() => setResultados((l) => l.filter((_, k) => k !== idx))}>
+                              <FiTrash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {resultados.length === 0 && (
+                    <p style={{ margin: '8px 0', fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                      Nenhum resultado ainda. A chapa só é baixada quando você confirmar.
+                    </p>
+                  )}
+                </>
+              )}
+
               {modal.tipo === 'encerrar' && (
                 <>
                   <div className="almox-field">
@@ -611,8 +966,9 @@ const RemessasTerceirosAlmoxarifado = () => {
               <button className="btn-almox-primary" onClick={confirmar} disabled={salvando}>
                 {salvando ? 'Salvando...'
                   : modal.tipo === 'nova' ? 'Criar remessa'
-                    : modal.tipo === 'retorno' ? 'Confirmar retorno'
-                      : modal.tipo === 'encerrar' ? 'Confirmar encerramento' : 'Confirmar cancelamento'}
+                    : modal.tipo === 'transformacao' ? 'Confirmar transformação'
+                      : modal.tipo === 'retorno' ? 'Confirmar retorno'
+                        : modal.tipo === 'encerrar' ? 'Confirmar encerramento' : 'Confirmar cancelamento'}
               </button>
             </div>
           </div>
