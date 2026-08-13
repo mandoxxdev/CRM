@@ -148,6 +148,15 @@ task foi entregue com a **tabela preservada** exatamente para que este cenário 
 - [~] Relatórios (spec 17) — **parcialmente** — `6e97715`+`5b5eb55` (Task 8). Entregues:
   **recebidos, consumidos, devolvidos e saldo por cliente**, e as **aplicações por OS/projeto**
   (`clienteEstoqueService.posicaoPorCliente`, `GET /materiais-cliente/posicao`, PDF no navegador).
+  > **Correção de 2026-08-13 (tarefa extra da Etapa 8c) — este item estava certo no que prometia e
+  > errado no que entregava.** As colunas existiam, mas as listas de tipos eram um **espelho
+  > copiado** das do motor, e o espelho ficou para trás **duas vezes**: a 8b criou
+  > `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` e a 8c criou `RETORNO_TRANSFORMACAO`, e nenhum dos três
+  > chegou aqui. Efeito: peça creditada por transformação aparecia com **saldo e `recebido = 0`**, e
+  > chapa consumida/perdida no terceiro **sumia do saldo sem aparecer em `consumido`** — a conta
+  > `recebido − consumido − devolvido = saldo` não fechava. As listas agora **derivam** de
+  > `services/almoxarifado/movementTypes.js`. `DEVOLUCAO_CLIENTE` continua fora de `consumido`, e
+  > continua sendo a **única** exclusão, porque tem coluna própria (`devolvido`).
   **Faltam:** reservados, sobras, perdas e não conformes por cliente — features 15 e 21.
 - [ ] E-mails específicos (spec 14.2: gestor do projeto, comercial, engenharia) — **fora do escopo,
   declarado** (decisão 11): **feature 19**.

@@ -6440,6 +6440,42 @@ tratamento/pintura/galvanização) e transformação (8c, corte/dobra/usinagem).
    > preencher `custo_medio` e, com isso, a **reduzi-la**. **Consertar `reportService.js:10` para a
    > convenção do motor não foi feito na Task 7 de propósito** (valoração de relatório é outro
    > assunto e outro commit), e é a parte concreta desta pendência nº 2.
+2b. **O terceiro espelho das listas de tipos — RESOLVIDO em 2026-08-13, na mesma tarefa extra.**
+   Também não estava neste plano; saiu da execução da Task 4.
+
+   - **O defeito:** `clienteEstoqueService` (posição de estoque POR CLIENTE) tinha
+     `TIPOS_ENTRADA`/`TIPOS_CONSUMO` **próprias**, copiadas à mão das do motor. O espelho ficou para
+     trás **duas vezes seguidas, do mesmo jeito**: a 8b criou `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` e
+     não os pôs lá; a Task 4 desta etapa criou `RETORNO_TRANSFORMACAO` e também não.
+   - **O sintoma não é erro, é mentira aritmética:** peça de cliente creditada por transformação
+     aparecia com **saldo e `recebido = 0`**; chapa consumida no terceiro **sumia do saldo sem
+     entrar em `consumido`**. A conta que o cliente faz de cabeça — recebido − consumido −
+     devolvido = saldo — não fechava, e não havia coluna onde procurar a diferença.
+   - **Decisão sobre `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO`: ENTRARAM.** Critério aplicado, o que o
+     cliente lê como recebido/consumido: **tudo que baixa o saldo tem de aparecer em alguma
+     coluna.** `DEVOLUCAO_CLIENTE` é a única exclusão legítima e **continua fora** — não porque não
+     conte, mas porque tem **coluna própria** (`devolvido`), e o cliente precisa separar "quanto
+     virou peça" de "quanto voltou pra mim". Perda e consumo no terceiro **não têm** coluna própria:
+     deixá-los de fora não os separa, os torna **invisíveis**. Há teste de controle positivo
+     fixando que `DEVOLUCAO_CLIENTE` não pode ser varrida junto — "acrescentar tudo que é saída"
+     passaria nos outros testes e quebraria a conferência da remessa do cliente.
+   - **Decisão sobre a duplicação: fonte única, `services/almoxarifado/movementTypes.js`.** Eram
+     **quatro** cópias (duas no `stockService` + a do `clienteEstoqueService`). Acrescentar três
+     strings consertaria o sintoma e deixaria o quarto esquecimento marcado para a próxima etapa.
+     `ownerRules.js` **já avisava em comentário** que as duas do motor tinham de andar juntas — o
+     aviso estava certo e não bastou: **aviso não é mecanismo.** `clienteEstoqueService` agora
+     **deriva** (`TIPOS_SAIDA.filter(t => t !== 'DEVOLUCAO_CLIENTE')`), e o teste escreve a exclusão
+     como **conta**, não como lista literal — uma lista literal no teste seria o **quinto** espelho.
+   - **A guarda que importa** não é "RETORNO_TRANSFORMACAO conta" (isso cobre só o tipo de hoje): é
+     a **equação**, exercitada com uma linha de **cada** tipo das listas do motor. Um tipo novo que
+     não chegue à leitura do cliente quebra a equação sem ninguém precisar lembrar de escrever um
+     teste para ele.
+   - **Sabotagem, duas:** (S1) tirar `RETORNO_TRANSFORMACAO` de `movementTypes` derruba 1 teste do
+     arquivo novo **e 5 de `transformacaoMotor`**; (S2) devolver `clienteEstoqueService` às listas
+     literais — o **estado exato de antes do conserto** — derruba **6 dos 8**, e os 2 que sobram são
+     justamente os controles positivos (`DEVOLUCAO_CLIENTE` fora, linha cancelada não conta), como
+     tem de ser.
+
 3. **Categorias hardcoded no front** (`MaterialAlmoxarifadoForm.js:13-16`): lista diferente da
    tabela seedada, sem a categoria da sobra. A 8c encostou e não resolveu; resolver mexe em três
    telas.

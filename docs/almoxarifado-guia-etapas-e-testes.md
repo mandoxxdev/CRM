@@ -12,9 +12,10 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > estado real, task por task. **Não conclua deste guia que a 8c não existe: ela existe, este
 > documento é que está atrasado.**
 >
-> **Já documentado aqui, porque muda um número que você olha:** a correção do
-> [valor do estoque que aparecia zerado nos relatórios](#correção--o-valor-do-estoque-aparecia-zerado-nos-relatórios-2026-08-13),
-> mais abaixo — defeito antigo, descoberto durante a 8c e corrigido na hora.
+> **Já documentado aqui, porque mudam números que você olha** — dois defeitos antigos, descobertos
+> durante a 8c e corrigidos na hora (seções logo antes de "Decisões de negócio"):
+> 1. [o valor do estoque aparecia ZERADO nos relatórios](#correção--o-valor-do-estoque-aparecia-zerado-nos-relatórios-2026-08-13);
+> 2. [a posição por cliente não fechava a conta](#correção--a-posição-por-cliente-não-fechava-a-conta-2026-08-13).
 >
 > **Antes: 2026-08-12 (Etapa 8b).**
 > **Etapas 1 a 8b completas.** A **Etapa 8b (Remessas a Terceiros) fechou em 2026-08-12**
@@ -1777,6 +1778,56 @@ PC** e `MAT-002` com **5 UN**. Anote o **Disponível** dos dois.
 tabelas novas; **nenhum dado existente é tocado ou reinterpretado**, e não há passado a corrigir.
 Isto está escrito explicitamente porque as Etapas 7 e 8 deixaram consultas para rodar em produção e
 você vai procurar a desta — **as daquelas duas continuam pendentes**, esta não acrescenta nenhuma.
+
+---
+
+## Correção — a posição por cliente não fechava a conta (2026-08-13)
+
+> Também **não é uma etapa**: é um defeito de leitura descoberto durante a Etapa 8c e corrigido na
+> hora. Afeta a tela **Almoxarifado → Materiais de Clientes → Posição** e o PDF dela.
+
+**O que estava acontecendo.** A posição por cliente mostra quatro números por material: **recebido,
+consumido, devolvido e saldo**. Eles vêm do histórico de movimentações — mas a lista de "o que conta
+como recebimento" e "o que conta como consumo" estava **desatualizada** em relação ao resto do
+sistema. Três tipos de lançamento criados nas etapas mais recentes não estavam nela:
+
+- **peça que voltou transformada** do terceiro (a chapa que foi cortada e virou peça);
+- **material consumido no processo do terceiro**;
+- **material perdido no terceiro**.
+
+Resultado: o material aparecia com **saldo, mas recebido zero** ("de onde saiu isso?"), ou **sumia do
+saldo sem aparecer em consumido** ("para onde foi isso?"). Em nenhum dos dois casos havia coluna onde
+procurar a diferença — a conta **recebido − consumido − devolvido = saldo** simplesmente não fechava.
+
+| | Antes | Agora |
+|---|---|---|
+| Peça que voltou cortada do terceiro | Saldo 40, **recebido 0** | Saldo 40, **recebido 40** |
+| Chapa consumida no processo do terceiro | Saldo caía, **consumido continuava 0** | Entra em **consumido** |
+| Chapa perdida no terceiro | Saldo caía, **sem registro visível** | Entra em **consumido** |
+| Material devolvido ao cliente | Aparece em **devolvido** | **Sem mudança** — continua só em devolvido |
+
+**Por que a devolução continua separada.** Ela tem coluna própria, e você precisa distinguir "quanto
+virou peça" de "quanto voltou pro cliente". Perda e consumo no terceiro **não têm** coluna própria —
+por isso eles precisam entrar em "consumido", senão ficam invisíveis. Se a GMP quiser **perda no
+terceiro numa coluna separada** na tela do cliente, isso é pedido novo, não defeito: diga e a coluna
+é criada.
+
+**Roteiro de teste (precisa de uma remessa a terceiros já usada):**
+1. **Almoxarifado → Materiais de Clientes → Posição**, escolha o cliente. Anote os quatro números de
+   um material.
+2. Confira **na mão**: `recebido − consumido − devolvido` tem de dar exatamente o **saldo**. Se um
+   material tiver histórico de remessa a terceiro, é justamente ele que antes não fechava.
+3. Se o cliente tem peça vinda de **transformação** (Etapa 8c), procure a linha da peça: ela tem de
+   ter **recebido igual ao saldo**, e não zero.
+4. Abra o **PDF** da posição e confira que os mesmos números aparecem lá.
+
+**O que esta correção NÃO faz:**
+- **Não muda nenhum saldo, nem lança nada.** O histórico sempre esteve certo; só a **leitura** que
+  monta a tela estava incompleta. Nada a rodar em produção.
+- **Não cria coluna nova** para perda no terceiro (ver acima) nem valoriza a posição por cliente em
+  R$ — o PDF continua trazendo **quantidades, não valores**.
+- **Não mexe nas aplicações por OS/projeto** da mesma tela: perda e consumo no terceiro não têm
+  OS/projeto, então continuam fora daquela lista, como todo lançamento sem vínculo.
 
 ---
 

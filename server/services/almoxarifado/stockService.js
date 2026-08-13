@@ -7,6 +7,7 @@ const ownerRules = require('./ownerRules');
 const { TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 const { custoUnitarioSql, valorEstoqueSql } = require('./custoSql');
+const movementTypes = require('./movementTypes');
 // seriesService nao importa stockService de volta — sem ciclo.
 const seriesService = require('./seriesService');
 
@@ -510,11 +511,13 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   const saldoAnterior = material.quantidade_atual;
   let saldoPosterior = saldoAnterior;
 
-  // Etapa 8c: RETORNO_TRANSFORMACAO entra em tiposEntrada NOS DOIS lugares deste arquivo — aqui e
-  // em cancelarMovimentacao (~:1388). Esquecer o segundo torna o motor assimetrico: a entrada
-  // acontece e o estorno dela nao, marcando cancelado=1 com linha de ESTORNO de
-  // saldo_anterior == saldo_posterior. Foi o quarto defeito que so a EXECUCAO da 8b achou.
-  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO', 'RETORNO_TRANSFORMACAO'];
+  // Etapa 8c (tarefa extra): as duas listas vinham de literais escritos NAS DUAS declaracoes deste
+  // arquivo (aqui e em cancelarMovimentacao, ~:1388) mais uma terceira em clienteEstoqueService.
+  // Esquecer a segunda torna o motor assimetrico: a entrada acontece e o estorno dela nao, marcando
+  // cancelado=1 com linha de ESTORNO de saldo_anterior == saldo_posterior (foi o quarto defeito que
+  // so a EXECUCAO da 8b achou); esquecer a TERCEIRA mente para o cliente. Hoje vem de
+  // `movementTypes`, e os comentarios de decisao de cada tipo moram la.
+  const tiposEntrada = movementTypes.TIPOS_ENTRADA;
   // Etapa 8: DEVOLUCAO_CLIENTE e SAIDA (decisao 9) — o material sai do predio de volta para o dono.
   // NAO CONFUNDIR com a devolucao da Etapa 7 (ENTRADA_DEVOLUCAO, returnService), onde o material
   // VOLTA para o estoque: direcoes opostas, nomes parecidos. Estando aqui, ela debita saldo, exige
@@ -526,8 +529,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // localizacao e resolvem endereco de origem como qualquer outra. O que os diferencia e que a
   // quantidade que eles baixam esta RETIDA em quantidade_em_terceiros, nao disponivel — por isso a
   // flag `baixandoTerceiro` abaixo.
-  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO',
-    'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
+  const tiposSaida = movementTypes.TIPOS_SAIDA;
   const tiposAjuste = ['AJUSTE'];
   // Consumo de reserva: só quando a saída cita `reserva_id`. RESERVA/LIBERACAO_RESERVA também
   // carregam reserva_id, mas não consomem nada — são o lançamento da própria reserva.
@@ -1397,9 +1399,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   // tests/api/transformacaoMotor.api.test.js. Deixa-lo FORA seria o pior dos mundos: cairia no
   // if-chain sem ramo (nao ha `else` final), marcado cancelado=1 com linha de ESTORNO de
   // saldo_anterior == saldo_posterior, e a peca creditada nunca sairia do saldo.
-  const tiposEntrada = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO', 'RETORNO_TRANSFORMACAO'];
-  const tiposSaida = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO',
-    'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
+  const tiposEntrada = movementTypes.TIPOS_ENTRADA;
+  const tiposSaida = movementTypes.TIPOS_SAIDA;
   const material = await getMaterial(db, mov.material_id);
 
   // Serie (Etapa 6b, Task 5): guarda ANTES do claim `cancelado = 1` — antes de marcar a

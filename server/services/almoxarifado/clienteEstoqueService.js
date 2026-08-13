@@ -13,13 +13,34 @@
  */
 const { dbAll, dbGet } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
+const movementTypes = require('./movementTypes');
 
-// Espelham os `tiposEntrada`/`tiposSaida` do motor (stockService, duas declaracoes) mais os tipos
-// legados de banco antigo. DEVOLUCAO_CLIENTE fica FORA de TIPOS_CONSUMO de proposito: sai do
-// saldo, mas nao foi consumido na fabrica — o cliente precisa ver as duas colunas separadas para
-// conferir a remessa dele ("quanto virou peca" x "quanto voltou pra mim").
-const TIPOS_ENTRADA = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'DEVOLUCAO', 'AJUSTE_POSITIVO'];
-const TIPOS_CONSUMO = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'SUCATA', 'PERDA', 'AJUSTE_NEGATIVO'];
+/**
+ * ── ISTO ERA UM ESPELHO COPIADO, E O ESPELHO FICOU PARA TRAS DUAS VEZES (corrigido na 8c) ──
+ *
+ * Estas listas eram literais escritos a mao, "espelhando" os `tiposEntrada`/`tiposSaida` do motor.
+ * O espelho nao acompanhou o motor:
+ *   - a 8b criou PERDA_TERCEIRO/CONSUMO_TERCEIRO e nao os acrescentou aqui;
+ *   - a 8c (Task 4) criou RETORNO_TRANSFORMACAO e tambem nao.
+ *
+ * O resultado nao era erro, era MENTIRA ARITMETICA na tela do cliente: a peca creditada por
+ * transformacao aparecia com SALDO e `recebido = 0`, e a chapa consumida no terceiro sumia do saldo
+ * sem aparecer em `consumido`. A conta que o cliente faz de cabeca — recebido - consumido -
+ * devolvido = saldo — nao fechava, e nao havia coluna nenhuma onde procurar a diferenca.
+ *
+ * Agora DERIVAM de `movementTypes`, que e a fonte do motor. Nao volte a escrever a lista aqui.
+ *
+ * ── A UNICA subtracao, e por que ela e legitima ──
+ *
+ * `DEVOLUCAO_CLIENTE` fica FORA de TIPOS_CONSUMO — nao porque nao conte, mas porque tem coluna
+ * PROPRIA (`devolvido`). O cliente precisa separar "quanto virou peca" de "quanto voltou pra mim"
+ * para conferir a remessa dele. Foi esse o criterio aplicado a PERDA_TERCEIRO/CONSUMO_TERCEIRO na
+ * 8c, e ele os coloca DENTRO: eles nao tem coluna propria, entao deixa-los de fora nao os separa —
+ * os torna invisiveis, com o saldo caindo sem contrapartida em lugar nenhum da tela. Perda no
+ * galvanizador e material que o cliente nao recebe de volta: ele tem de ver isso.
+ */
+const TIPOS_ENTRADA = movementTypes.TIPOS_ENTRADA;
+const TIPOS_CONSUMO = movementTypes.TIPOS_SAIDA.filter((t) => t !== 'DEVOLUCAO_CLIENTE');
 
 const listaSql = (arr) => arr.map(() => '?').join(',');
 

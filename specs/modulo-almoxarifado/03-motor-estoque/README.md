@@ -194,6 +194,15 @@ quarentena, apontando para a tela de Remessas. **Contraste deliberado:**
 - [x] `permite_saldo_negativo` respeitado (default: bloquear; guarda atômica em `registrarMovimentacao` e em `cancelarMovimentacao`)
 - [x] Centro de custo como vínculo (`centros_custo_almoxarifado`, `CentroCustoSchema`, rota `/centros-custo`)
 - [x] Atualização de custo médio na entrada (`custo_medio` calculado atomicamente na mesma UPDATE da entrada; teste dedicado)
+- [x] **Listas de tipos que somam/subtraem saldo numa fonte única** —
+  `services/almoxarifado/movementTypes.js` (`TIPOS_ENTRADA` / `TIPOS_SAIDA`), 2026-08-13, tarefa
+  extra da Etapa 8c. Eram **quatro** cópias: duas dentro do `stockService` (`registrarMovimentacao`
+  e `cancelarMovimentacao`) e uma terceira, com nome próprio, em `clienteEstoqueService` — que
+  ficou para trás na 8b (`PERDA_TERCEIRO`/`CONSUMO_TERCEIRO`) e de novo na 8c
+  (`RETORNO_TRANSFORMACAO`), mentindo na tela do cliente sem quebrar teste nenhum. `ownerRules.js`
+  já **avisava em comentário** que as duas do motor tinham de andar juntas: o aviso estava certo e
+  não bastou — aviso não é mecanismo. Guarda em `tests/api/clientePosicaoTipos.api.test.js`
+  (equação do cliente com uma linha de **cada** tipo das listas).
 - [x] **Leitura do custo unitário numa fonte única** — `services/almoxarifado/custoSql.js`
   (`custoUnitarioSql` / `valorEstoqueSql`), 2026-08-13, tarefa extra da Etapa 8c. `custo_medio` é
   `REAL DEFAULT 0` (**zero, não NULL**), então `COALESCE(custo_medio, custo_unitario, 0)` devolvia
