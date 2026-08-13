@@ -1132,6 +1132,28 @@ MSG
 
 ### Task 2: o recebimento por NF passa a alimentar o custo médio
 
+> ## ✅ FEITA — 2026-08-13 (`be9b384` — **hash de outro assunto, ver abaixo**)
+>
+> Steps 1 a 6 executados na ordem, com o teste vermelho antes da implementação
+> (`2 passed, 3 failed`: os dois principais mais o do `valor_unitario` da linha da nota; os dois
+> controles positivos passaram de primeira, como o plano previa). Depois:
+> **`5 passed, 0 failed`** em `server/tests/api/recebimentoCustoMedio.api.test.js` e
+> **`77/77 arquivos OK`** em `npm run test:api`.
+>
+> **⚠ O commit desta task NÃO tem mensagem própria.** As Tasks 1, 2 e 6 rodaram em paralelo no
+> **mesmo working tree**, e o `git commit` do agente da Task 6 levou junto o que a Task 2 já tinha
+> em *stage*: `receiptService.js` e `recebimentoCustoMedio.api.test.js` entraram em `be9b384`
+> ("Task 6: o rateio…"), cuja mensagem não fala deles. Quem procurar o commit da Task 2 pela
+> mensagem **não acha**. Registrado aqui porque apagar o descompasso em silêncio é o que o
+> `CLAUDE.md` proíbe. **Lição para as próximas tasks paralelas: `git add` e `git commit` na mesma
+> linha de comando, ou stage nenhum entre execuções concorrentes.**
+>
+> **Duas correções ao plano, feitas na execução** (detalhadas nos Steps 1 e 5): a assinatura real é
+> `darEntradaEstoque(db, user, rec, recebimentoId, opcoes)` — corrigida no teste, não no serviço; e
+> a sabotagem S3 do plano **não prova o que dizia provar** — quebrar só a guarda do motor deixa
+> `5 passed, 0 failed`, porque o Step 3 normaliza `0` para `undefined` e o motor nunca recebe 0.
+> Quem prova é a S3b, que quebra **as duas camadas** (`3 passed, 2 failed`).
+
 **Por que esta task existe, e por que ela vem antes do rateio.** A decisão 5 do design é uma
 **correção de pré-requisito**, achada durante o desenho: `receiptService.js:493-513` chama
 `registrarMovimentacao` com `ENTRADA_COMPRA` e **não passa `custo_unitario`**, apesar de gravar
@@ -1155,7 +1177,7 @@ task, o rateio da decisão 4 distribuiria **R$ 0,00** na maioria dos casos: a co
 
 ---
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `server/tests/api/recebimentoCustoMedio.api.test.js`:
 
@@ -1290,8 +1312,15 @@ async function receberEDarEntrada(db, materialId, { quantidade, valor_unitario }
 > corrija o TESTE lendo o serviço** (`sed -n '60,140p' server/services/almoxarifado/receiptService.js`
 > e `grep -n 'async function darEntradaEstoque' -A 20 server/services/almoxarifado/receiptService.js`),
 > **nunca o serviço.** Esta task não muda o contrato do recebimento.
+>
+> **⚠ Divergiu mesmo (corrigido no teste em 2026-08-13):** a assinatura real é
+> `darEntradaEstoque(db, user, rec, recebimentoId, opcoes)` — a **linha** do recebimento vem
+> **antes** do id (`receiptService.js:363`), porque a pré-checagem de material de cliente lê
+> `rec.nota_fiscal`. O bloco acima escrevia `darEntradaEstoque(db, ADMIN, rec.id, {})`. E
+> `criarRecebimento` lê `tipo_recebimento`, não `tipo` (`receiptService.js:64-70`) — `tipo` seria
+> ignorado em silêncio.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/recebimentoCustoMedio.api.test.js`
 
@@ -1300,7 +1329,7 @@ Os **três controles positivos passam de primeira**, e isso **é esperado**: ele
 comportamento que já existe (o motor não mexe em custo quando não recebe custo). Estão aqui para
 provar que a Task 2 não o destruiu — ver a sabotagem S2 do Step 5, que é o que dá valor a eles.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `server/services/almoxarifado/receiptService.js`, no bloco `await registrarMovimentacao(db, user, {`
 de `:493-513`, acrescentar **uma** propriedade logo abaixo de `quantidade: qtd,`:
@@ -1329,7 +1358,7 @@ de `:493-513`, acrescentar **uma** propriedade logo abaixo de `quantidade: qtd,`
             : undefined,
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `cd server && node tests/api/recebimentoCustoMedio.api.test.js`
 Expected: `5 passed, 0 failed`
@@ -1341,7 +1370,7 @@ ou `custo_unitario` **vai** mudar de resultado — se algum falhar, leia a asser
 motivo escrito no próprio teste (`// Etapa 8c, decisao 5: o recebimento passou a alimentar o
 custo medio — este teste afirmava o contrario`).
 
-- [ ] **Step 5: SABOTAGEM**
+- [x] **Step 5: SABOTAGEM**
 
 **S1 — o custo volta a não ser passado** (prova os dois testes principais):
 
@@ -1352,7 +1381,7 @@ md5sum services/almoxarifado/receiptService.js
 perl -0pi -e "s/custo_unitario: \(parseFloat\(item\.valor_unitario\) \|\| 0\) > 0\n\s*\? parseFloat\(item\.valor_unitario\)\n\s*: undefined,/custo_unitario: undefined,/" services/almoxarifado/receiptService.js
 md5sum services/almoxarifado/receiptService.js   # TEM de diferir
 node tests/api/recebimentoCustoMedio.api.test.js
-git checkout -- services/almoxarifado/receiptService.js
+cp "$SCRATCH/receiptService.bak.js" services/almoxarifado/receiptService.js   # NAO use `git checkout --`: a implementacao do Step 3 ainda nao esta commitada
 md5sum services/almoxarifado/receiptService.js
 git diff --stat
 ```
@@ -1370,7 +1399,7 @@ md5sum services/almoxarifado/receiptService.js
 perl -0pi -e "s/custo_unitario: \(parseFloat\(item\.valor_unitario\) \|\| 0\) > 0\n\s*\? parseFloat\(item\.valor_unitario\)\n\s*: undefined,/custo_unitario: parseFloat(item.valor_unitario) || 0,/" services/almoxarifado/receiptService.js
 md5sum services/almoxarifado/receiptService.js
 node tests/api/recebimentoCustoMedio.api.test.js
-git checkout -- services/almoxarifado/receiptService.js
+cp "$SCRATCH/receiptService.bak.js" services/almoxarifado/receiptService.js   # NAO use `git checkout --`: a implementacao do Step 3 ainda nao esta commitada
 md5sum services/almoxarifado/receiptService.js
 git diff --stat
 ```
@@ -1380,25 +1409,57 @@ manda registrar, e o plano já o registra aqui:** a proteção real mora no **mo
 (`stockService.js:1031`), não nesta linha — a expressão condicional é **legibilidade**, não guarda.
 Escreva isto no commit e **não** finja que a sabotagem provou algo que não provou.
 
-**S3 — a sabotagem que prova de verdade os controles positivos: quebrar a guarda do MOTOR:**
+**S3 — quebrar a guarda do MOTOR. ⚠ O PLANO ESTAVA ERRADO AQUI — corrigido na execução (2026-08-13).**
+
+O plano afirmava: *"Esperado: `✗ [CONTROLE POSITIVO] recebimento SEM valor_unitario nao zera o custo
+existente` (`0 !== 7.5`). […] É esta sabotagem que prova que os controles positivos sabem falhar"*.
+**Não prova: executada, ela deixa `5 passed, 0 failed`.** Motivo, achado só na execução: o Step 3
+normaliza `0` para `undefined` **antes** de chamar o motor, então o motor **nunca recebe 0** vindo do
+recebimento — e `undefined !== undefined` é falso, exatamente pelo mesmo argumento que o plano usou
+para o *outro* controle positivo. As duas camadas se **sombreiam**: quebrar uma só nunca aparece.
+
+**IMPORTANTE — `git checkout --` não pode ser usado aqui.** No Step 5 a implementação do Step 3
+ainda está **não commitada**; `git checkout -- services/almoxarifado/receiptService.js` a
+**destruiria** (foi o que corrompeu `stockService.js` numa sessão anterior). Restaure por cópia:
+`cp <arquivo> $SCRATCH/<arquivo>.bak` antes, `cp $SCRATCH/<arquivo>.bak <arquivo>` depois, e
+confira o md5. `git diff --stat` ao fim tem de voltar **igual ao de antes da sabotagem** (as
+alterações do Step 3), não vazio.
 
 ```bash
 cd server
+# S3a (a do plano, mantida como REGISTRO do achado): quebra SO o motor -> nao derruba nada.
 grep -cF "if (custoInformado && custoInformado > 0) {" services/almoxarifado/stockService.js   # TEM de dar 1
+cp services/almoxarifado/stockService.js "$SCRATCH/stockService.bak.js"
 md5sum services/almoxarifado/stockService.js
 sed -i "s|if (custoInformado \&\& custoInformado > 0) {|if (custoInformado !== undefined) {|" services/almoxarifado/stockService.js
-md5sum services/almoxarifado/stockService.js
+md5sum services/almoxarifado/stockService.js   # TEM de diferir
+node tests/api/recebimentoCustoMedio.api.test.js   # 5 passed, 0 failed  <- ACHADO
+cp "$SCRATCH/stockService.bak.js" services/almoxarifado/stockService.js
+
+# S3b (a que PROVA): quebra as DUAS camadas ao mesmo tempo.
+cp services/almoxarifado/receiptService.js "$SCRATCH/receiptService.bak.js"
+perl -0pi -e "s/custo_unitario: \(parseFloat\(item\.valor_unitario\) \|\| 0\) > 0\n\s*\? parseFloat\(item\.valor_unitario\)\n\s*: undefined,/custo_unitario: parseFloat(item.valor_unitario) || 0,/" services/almoxarifado/receiptService.js
+sed -i "s|if (custoInformado \&\& custoInformado > 0) {|if (custoInformado !== undefined) {|" services/almoxarifado/stockService.js
 node tests/api/recebimentoCustoMedio.api.test.js
-git checkout -- services/almoxarifado/stockService.js
-md5sum services/almoxarifado/stockService.js
+cp "$SCRATCH/receiptService.bak.js" services/almoxarifado/receiptService.js
+cp "$SCRATCH/stockService.bak.js"   services/almoxarifado/stockService.js
+md5sum services/almoxarifado/receiptService.js services/almoxarifado/stockService.js
 git diff --stat
 ```
-Esperado: **`✗ [CONTROLE POSITIVO] recebimento SEM valor_unitario nao zera o custo existente`**
-(`0 !== 7.5`). O outro controle positivo (`undefined`) continua passando — correto, porque
-`undefined !== undefined` é falso. **É esta sabotagem que prova que os controles positivos sabem
-falhar**, e é por isso que ela está no plano em vez de só a S1.
+Esperado em S3b: **`3 passed, 2 failed`** — caem os **dois** controles positivos
+(`a NF sem valor ZEROU o custo medio existente` e o irmão do `undefined`). **É S3b que prova que
+os controles positivos sabem falhar.**
 
-- [ ] **Step 6: Commit**
+**Conclusão registrada no teste (comentário do controle positivo) e no commit:** não existe
+asserção de comportamento capaz de separar as duas camadas — `movimentacoes_almoxarifado` não tem
+coluna de custo, então mandar `0` e mandar `undefined` são **indistinguíveis de fora**. O teste
+falha exatamente quando o sistema está quebrado de verdade (as duas camadas caídas), que é o
+comportamento certo; a condicional do recebimento é **legibilidade + redundância**, não a guarda
+única. Nenhuma asserção nova é possível aqui — e essa é a resposta à regra 5 do harness, não uma
+desculpa: a alternativa seria espionar `registrarMovimentacao`, que `receiptService` desestrutura
+**no `require`** (`receiptService.js:3-5`), tornando o monkeypatch do módulo inócuo.
+
+- [x] **Step 6: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
@@ -1426,10 +1487,18 @@ que e etapa propria (fora de escopo por decisao 10 do design).
 O par de testes e bilateral: nota SEM valor e caso normal (conserto, amostra, brinde, material de
 cliente) e nao pode zerar o custo existente. Achado registrado durante a sabotagem: a protecao real
 contra isso mora no MOTOR (`custoInformado > 0`, stockService.js:1031), nao na expressao condicional
-que este commit acrescenta — a condicional e legibilidade. A sabotagem que prova os controles
-positivos e a que quebra a guarda do motor, e foi essa que foi executada.
+que este commit acrescenta — a condicional e legibilidade e redundancia.
 
-Testes: 5 em tests/api/recebimentoCustoMedio.api.test.js.
+Segundo achado, este contra o proprio plano, que previa o contrario: quebrar SO a guarda do motor
+(`custoInformado !== undefined`) tambem NAO derruba nada, porque esta linha normaliza 0 para
+`undefined` e o motor nunca recebe 0 vindo do recebimento. As duas camadas se sombreiam. A
+sabotagem que PROVA os controles positivos e a que quebra AS DUAS ao mesmo tempo — 3 passed,
+2 failed, com o custo existente zerado — e foi essa que foi executada. Nao existe assercao capaz de
+separar as camadas por comportamento: movimentacoes_almoxarifado nao tem coluna de custo, entao
+mandar 0 e mandar `undefined` sao indistinguiveis de fora. Registrado no comentario do teste e no
+plano, que estava errado nesse ponto.
+
+Testes: 5 em tests/api/recebimentoCustoMedio.api.test.js; 77/77 arquivos em npm run test:api.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 MSG
@@ -2616,6 +2685,29 @@ MSG
 
 ### Task 6: `transformCost.js` — o rateio, função pura, com o invariante testado
 
+> ## ✅ FEITA — 2026-08-13 (`be9b384`, e o pré-requisito em `03c7ce5`)
+>
+> Steps 1 a 6 executados na ordem, com o teste vermelho antes da implementação
+> (`Cannot find module '../../services/almoxarifado/transformCost'`, sem rodapé). Resultado real:
+> **`12 passed, 0 failed`** em `server/tests/api/transformCost.api.test.js`.
+>
+> **Dependência que a execução descobriu:** esta task **não roda** sem `schema.TIPOS_RESULTADO`, que
+> é entregue pela **Task 3** — ainda não executada quando a 6 rodou. Sem a constante, o `require`
+> devolve `undefined` e os 12 testes morrem em `Cannot read properties of undefined (reading
+> 'includes')`, por um motivo que não é o que eles testam. Foi antecipada **só a constante + o
+> export** (`03c7ce5`), com o texto que o próprio plano já escrevia para ela; repetir a lista
+> literal dentro de `transformCost.js` foi descartado (é o que este plano proíbe). **Continuam
+> pendentes na Task 3:** as três colunas via `safeAlter`, o índice de `movimentacao_consumo_id` e o
+> `ResultadoTransformacaoSchema`. **Se a Task 3 for executada depois desta linha, ela deve PULAR a
+> constante — declará-la de novo é `SyntaxError` de `const` duplicado.**
+>
+> **Um teste a mais que o plano (11 → 12).** O plano listava 11 `await test(...)` e dizia
+> "Expected: 12 passed" — a conta do plano estava errada por um. Em vez de baixar o número, a
+> execução acrescentou o teste que faltava para o invariante valer alguma coisa:
+> `[CONTROLE POSITIVO DA TOLERANCIA]`. Sem ele, trocar `TOLERANCIA_RATEIO` por um número grande
+> demais deixaria o `[INVARIANTE]` verde para sempre e **nenhum** teste cairia — tolerância frouxa é
+> carimbo, não teto.
+
 **A decisão 4, em três frases.** Rateio **por quantidade** entre as peças, **sobra a zero**,
 `custo_servico` opcional somando ao valor rateado. Por quantidade e não por peso porque na GMP uma
 chapa vira N peças **iguais** (os dois critérios dão o mesmo número) e peso exigiria `peso_unitario`
@@ -2647,7 +2739,7 @@ e sem estado é um teste que não pode passar por acaso.
 
 ---
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `server/tests/api/transformCost.api.test.js`:
 
@@ -2833,13 +2925,13 @@ const sobra = (quantidade, material_id = 2) => ({ material_id, quantidade, tipo_
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/transformCost.api.test.js`
 Expected: FAIL — `Cannot find module '../../services/almoxarifado/transformCost'`, processo morre no
 `require` sem imprimir o rodapé.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Criar `server/services/almoxarifado/transformCost.js`:
 
@@ -2978,7 +3070,7 @@ function ratearCusto({ custoUnitarioChapa, quantidadeConsumida, custoServico = 0
 module.exports = { ratearCusto, TOLERANCIA_RATEIO, CASAS };
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `cd server && node tests/api/transformCost.api.test.js`
 Expected: `12 passed, 0 failed`
@@ -2986,7 +3078,7 @@ Expected: `12 passed, 0 failed`
 Run: `cd server && npm run test:api`
 Expected: todos OK (número de arquivos +1).
 
-- [ ] **Step 5: SABOTAGEM**
+- [x] **Step 5: SABOTAGEM**
 
 **S1 — a sobra entra no denominador** (prova o teste que motivou a regra inteira **e** o do
 `custo_servico`):
@@ -2998,15 +3090,42 @@ md5sum services/almoxarifado/transformCost.js
 sed -i "s|.filter((r) => r.tipo_resultado === 'PECA')|.filter(() => true)|" services/almoxarifado/transformCost.js
 md5sum services/almoxarifado/transformCost.js   # TEM de diferir
 node tests/api/transformCost.api.test.js
-git checkout -- services/almoxarifado/transformCost.js
+cp "$SCRATCH/transformCost.bak.js" services/almoxarifado/transformCost.js   # NAO use `git checkout --`: no Step 5 a implementacao ainda nao esta commitada
 md5sum services/almoxarifado/transformCost.js
 git diff --stat
 ```
-Esperado: **`✗ sobra entra com custo zero e NAO dilui as pecas: a presenca da sobra mudou o custo da peca — ela entrou no denominador`**
-(24.3902 ≠ 25) e **`✗ o caso da GMP: chapa de 100 kg a R$ 10 vira 40 pecas e 1 sobra`**. O
-`[INVARIANTE]` **continua passando** — correto e importante: o invariante **não** detecta este bug,
-porque a soma continua fechando; o que ele prova é que nada evaporou, não que o rateio foi justo.
-**Escreva isso no commit** — é o limite conhecido do invariante.
+**⚠ O PLANO PREVIA ERRADO AQUI — corrigido na execução (2026-08-13, `be9b384`).** O plano dizia:
+*"O `[INVARIANTE]` continua passando […] o invariante não detecta este bug, porque a soma continua
+fechando"*. **Executada, S1 DERRUBA o invariante.** Resultado real: **`7 passed, 5 failed`** —
+`✗ o caso da GMP` (41 ≠ 40), `✗ [INVARIANTE]` (**resíduo 24.392 acima da tolerância 0.002050001**),
+`✗ sobra entra com custo zero e NAO dilui as pecas` (24.3902 ≠ 25), `✗ custo_servico informado soma
+ao valor rateado` (34.1463 ≠ 35) e `✗ so SOBRA` (3 ≠ 0).
+
+O motivo: S1 mexe **só no denominador** e deixa o `map` creditando a sobra com 0. Isso não é "a
+sobra entrou no rateio" — é **valor evaporando** (a sobra engorda o divisor e não recebe nada), e
+evaporação é exatamente o que o invariante pega.
+
+**S1b — a sabotagem que prova mesmo a afirmação do plano** (sobra no denominador **E** creditada):
+
+```bash
+cd server
+A1=".filter((r) => r.tipo_resultado === 'PECA')"
+A2="custo_unitario_aplicado: r.tipo_resultado === 'PECA' ? custoUnitarioPeca : 0,"
+grep -cF "$A1" services/almoxarifado/transformCost.js   # TEM de dar 1
+grep -cF "$A2" services/almoxarifado/transformCost.js   # TEM de dar 1
+md5sum services/almoxarifado/transformCost.js
+sed -i "s|$A1|.filter(() => true)|" services/almoxarifado/transformCost.js
+sed -i "s|$A2|custo_unitario_aplicado: custoUnitarioPeca,|" services/almoxarifado/transformCost.js
+md5sum services/almoxarifado/transformCost.js   # TEM de diferir
+node tests/api/transformCost.api.test.js
+cp "$SCRATCH/transformCost.bak.js" services/almoxarifado/transformCost.js   # NAO use `git checkout --`
+md5sum services/almoxarifado/transformCost.js
+```
+Resultado real: **`8 passed, 4 failed`** — o **`[INVARIANTE]` passa VERDE** (a soma fecha: nada
+evaporou, só ficou mal distribuído) e quem cai é `✗ sobra entra com custo zero e NAO dilui as pecas`
+(24.3902 ≠ 25), junto de `o caso da GMP`, `custo_servico` e `so SOBRA`. **É esta a prova de que o
+invariante mede "nada evaporou" e NÃO "o rateio foi justo"** — e de que o teste separado tem de
+existir. **Escreva isso no commit** — é o limite conhecido do invariante.
 
 **S2 — o rateio passa a ser por LINHA e não por quantidade:**
 
@@ -3021,7 +3140,7 @@ md5sum services/almoxarifado/transformCost.js
 sed -i "s|const custoUnitarioPeca = quantidadePecas > 0 ? arredondar(valorTotal / quantidadePecas) : 0;|const custoUnitarioPeca = quantidadePecas > 0 ? arredondar(valorTotal / resultados.length) : 0;|" services/almoxarifado/transformCost.js
 md5sum services/almoxarifado/transformCost.js
 node tests/api/transformCost.api.test.js
-git checkout -- services/almoxarifado/transformCost.js
+cp "$SCRATCH/transformCost.bak.js" services/almoxarifado/transformCost.js   # NAO use `git checkout --`: no Step 5 a implementacao ainda nao esta commitada
 md5sum services/almoxarifado/transformCost.js
 git diff --stat
 ```
@@ -3029,6 +3148,11 @@ Esperado: **`✗ [INVARIANTE] o valor que sai na chapa e o que entra nas pecas`*
 tolerância), **`✗ o caso da GMP`**, **`✗ custo_servico informado soma ao valor rateado`** e
 **`✗ duas linhas de PECA com quantidades diferentes recebem o MESMO custo unitario`**. **Quatro**
 falhas — esta é a sabotagem que o invariante pega.
+
+**Resultado real (2026-08-13):** **`6 passed, 6 failed`** — as quatro previstas (`[INVARIANTE]` com
+resíduo −19000 contra tolerância 0.002000001) **mais** `✗ a funcao PRESERVA os campos das linhas de
+entrada` (100 ≠ 50, porque ali o rateio por linha também muda o custo) e o próprio
+`✗ sobra entra com custo zero...`. Seis, não quatro; a previsão do plano era conservadora.
 
 **S3 — o resíduo é sempre zero** (prova o caso "só sobra"):
 
@@ -3039,7 +3163,7 @@ md5sum services/almoxarifado/transformCost.js
 sed -i "s|const residuo = arredondar(valorTotal - valorDistribuido);|const residuo = 0;|" services/almoxarifado/transformCost.js
 md5sum services/almoxarifado/transformCost.js
 node tests/api/transformCost.api.test.js
-git checkout -- services/almoxarifado/transformCost.js
+cp "$SCRATCH/transformCost.bak.js" services/almoxarifado/transformCost.js   # NAO use `git checkout --`: no Step 5 a implementacao ainda nao esta commitada
 md5sum services/almoxarifado/transformCost.js
 git diff --stat
 ```
@@ -3048,7 +3172,11 @@ Esperado: **`✗ so SOBRA: o valor evapora, e o residuo DIZ quanto evaporou: o v
 exatamente por que a asserção "refazendo a conta pelas linhas" existe dentro dele. Confirme na saída
 que ela **não** caiu; se cair, ótimo (melhor ainda). Se o teste `so SOBRA` **não** cair, é achado.
 
-- [ ] **Step 6: Commit**
+**Resultado real (2026-08-13):** **`11 passed, 1 failed`**, exatamente como previsto — cai só
+`✗ so SOBRA ... : o valor que evaporou nao foi reportado` (`0 !== 1000`) e o `[INVARIANTE]` segue
+verde.
+
+- [x] **Step 6: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
@@ -4619,7 +4747,7 @@ md5sum services/almoxarifado/transformCost.js
 perl -0pi -e "s/if \(semPeso\.length > 0\) \{\n    return \{/if (semPeso.length > 0) {\n    throw erro(\`rendimento nao calculavel\`);\n    return {/" services/almoxarifado/transformCost.js
 md5sum services/almoxarifado/transformCost.js
 node tests/api/transformacaoTerceiro.api.test.js
-git checkout -- services/almoxarifado/transformCost.js
+cp "$SCRATCH/transformCost.bak.js" services/almoxarifado/transformCost.js   # NAO use `git checkout --`: no Step 5 a implementacao ainda nao esta commitada
 md5sum services/almoxarifado/transformCost.js
 git diff --stat
 ```
