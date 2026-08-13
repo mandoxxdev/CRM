@@ -330,6 +330,30 @@ de custo no ledger está **fora de escopo** por decisão 10 do design.
 ---
 ### Task 1: `materialService.createMaterial` extraído do handler HTTP + `proximo-codigo` que aguenta lote
 
+> ✅ **FEITA — commit `afcd5aa`.** Gates medidos: `test:api` **77/77 arquivos OK** (incluindo
+> `materialServiceCriacao.api.test.js` com **13 passed, 0 failed**), `test:validation`
+> **4 passed, 0 failed**. Sabotagens S1/S2/S3 executadas, as três derrubaram teste.
+>
+> **Quatro divergências deste plano, corrigidas em vez de obedecidas:**
+> 1. O Step 3 trazia `buildLocalizacaoPath`/`formatLocalizacaoLabel` **reescritas** (outra regra de
+>    montagem do caminho). Isso mudaria calado o rótulo gravado na coluna `localizacao` de todo
+>    material criado pelo serviço, e o guarda de refactor **não pegaria** — o corpo de teste não
+>    manda `localizacao_padrao_id`. Copiadas **literalmente** do handler.
+> 2. O Step 4 mandava mantê-las na rota alegando "outros usos no arquivo (listagem de
+>    localizações)". **Não têm**: o único chamador era o `resolveLocalizacaoFromFk`, que passou a
+>    delegar. Foram **removidas** da rota. **A dívida de duplicação que a Task 10 ia registrar não
+>    existe** — não a registre.
+> 3. O teste do Step 1 lia auditoria em `auditoria_almoxarifado`; a tabela é
+>    `auditoria_log_almoxarifado` (`schema.js:1314`). O `dbGet` estourava `SQLITE_ERROR` e o teste
+>    falhava pelo motivo errado, sem provar nada sobre a auditoria.
+> 4. São **13** testes, não 12 — o próprio bloco do Step 1 tem 13.
+>
+> **Achado da sabotagem S2:** ela derrubou **um** teste, não os dois previstos. O cenário do teste
+> da rota tinha **um material só**, e com um material só `MAX` e `ORDER BY id DESC` dão a mesma
+> resposta — "a rota e o serviço concordam" ficou barato demais no instante em que a rota passou a
+> delegar. O cenário foi corrigido (`ROT-007` e **depois** `ROT-003`) para a **rota** — o caminho
+> que a tela usa — provar o `MAX` por conta própria. Com a correção, S2 derruba os dois.
+
 **Por que esta é a Task 1 e não a última.** A decisão 6 do design diz que a transformação **recusa**
 material inexistente e que a tela oferece um atalho explícito de criar o material resultante. Esse
 atalho precisa de duas coisas que **não existem**: uma função de criar material (hoje o único
@@ -365,7 +389,7 @@ Fazer isso depois seria fazer a Task 9 duas vezes.
 
 ---
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `server/tests/api/materialServiceCriacao.api.test.js` com o conteúdo abaixo. **São 12 testes**
 e três deles são refactor-guards: rodam a **rota** e o **serviço** com a mesma entrada e comparam o
@@ -605,7 +629,7 @@ const VOLATEIS = new Set(['id', 'codigo', 'nome', 'created_at', 'updated_at']);
 })();
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/materialServiceCriacao.api.test.js`
 
@@ -615,7 +639,7 @@ antes de qualquer teste rodar, então o processo morre com stack trace e **sem**
 `N passed, M failed`. **Isso é esperado nesta etapa** e é diferente de "0 passed, 0 failed", que
 seria o teste vazio que esta base já produziu três vezes.
 
-- [ ] **Step 3: Criar `materialService.js`**
+- [x] **Step 3: Criar `materialService.js`**
 
 Criar `server/services/almoxarifado/materialService.js`:
 
@@ -894,7 +918,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Fazer a rota chamar o serviço (helpers viram delegações)**
+- [x] **Step 4: Fazer a rota chamar o serviço (helpers viram delegações)**
 
 Em `server/routes/almoxarifado.js`, acrescentar o `require` junto dos outros (logo abaixo de
 `const stockService = require('../services/almoxarifado/stockService');`):
@@ -979,7 +1003,7 @@ Substituir `GET /api/almoxarifado/proximo-codigo` (`:697-739`) inteiro por:
   });
 ```
 
-- [ ] **Step 5: Declarar `codigo_auto` no Zod (senão o campo é descartado em silêncio)**
+- [x] **Step 5: Declarar `codigo_auto` no Zod (senão o campo é descartado em silêncio)**
 
 Em `server/services/almoxarifado/schemas.js`, dentro de `MaterialShape`, logo abaixo de
 `codigo: z.string().min(1, 'codigo é obrigatório'),`:
@@ -996,12 +1020,12 @@ Em `server/services/almoxarifado/schemas.js`, dentro de `MaterialShape`, logo ab
   codigo_auto: FlagSchema,
 ```
 
-- [ ] **Step 6: Rodar o teste da task e ver passar**
+- [x] **Step 6: Rodar o teste da task e ver passar**
 
 Run: `cd server && node tests/api/materialServiceCriacao.api.test.js`
 Expected: `12 passed, 0 failed`
 
-- [ ] **Step 7: Rodar as suítes que este refactor pode ter quebrado**
+- [x] **Step 7: Rodar as suítes que este refactor pode ter quebrado**
 
 Run:
 ```
@@ -1017,7 +1041,7 @@ arquivo novo desta task — anote o número medido, não copie o desta linha); `
 > significa que o handler fazia algo que o serviço não faz. Conserte o **serviço** para igualar o
 > handler antigo (`git show HEAD:server/routes/almoxarifado.js | sed -n '365,490p'`), nunca o teste.
 
-- [ ] **Step 8: SABOTAGEM — provar que os testes sabem falhar**
+- [x] **Step 8: SABOTAGEM — provar que os testes sabem falhar**
 
 Três sabotagens. Para **cada uma**: contar a âncora, `md5sum` antes, sabotar, `md5sum` depois (tem
 de mudar), rodar, restaurar, `md5sum` de novo (tem de voltar), `git diff --stat` vazio.
@@ -1075,7 +1099,7 @@ Esperado: **`✗ proximo-codigo em LOTE nao repete: 5 criacoes concorrentes dao 
 — a mensagem traz os 5 códigos, e todos serão `LOT-001`, quatro deles com rejeição por
 `Código já existe`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
