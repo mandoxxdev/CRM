@@ -494,6 +494,29 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
           material_id: item.material_id,
           tipo: 'ENTRADA_COMPRA',
           quantidade: qtd,
+          // Etapa 8c, decisao 5 do design: o custo do item da nota passa a ALIMENTAR o custo medio.
+          //
+          // Ate aqui o recebimento gravava valor_unitario/valor_total na linha do item (linha ~112)
+          // e NAO os passava adiante, entao o unico caminho que movia custo_medio no sistema
+          // inteiro era a movimentacao manual com custo digitado a mao. A Etapa 8c rateia o custo
+          // da chapa entre as pecas cortadas — com o custo medio quase nunca alimentado, o rateio
+          // distribuiria R$ 0,00, a conta fecharia (zero = zero) e o resultado seria inutil.
+          //
+          // `|| undefined` NAO e cosmetico e tem teste bilateral: nota SEM valor e caso normal
+          // (conserto, amostra, brinde, material de cliente). O motor so mexe em custo quando
+          // `custoInformado > 0` (stockService.js:1031); mandar 0 cai no ramo `else` (:1043) e o
+          // custo fica intocado — que e o comportamento certo. Mandar `undefined` explicitamente
+          // deixa isso legivel em vez de depender de o motor tratar o 0. A GUARDA REAL, porem, e a
+          // do motor: sabotar esta condicional para passar o custo cegamente NAO derruba nenhum
+          // teste (sabotagem S2 da Task 2), porque quem recusa o 0 e o `custoInformado > 0`.
+          //
+          // MUDANCA DE COMPORTAMENTO DECLARADA: material recebido por NF passa a ter custo medio
+          // real, e vale SO daqui para frente. NAO ha backfill: recalcular custo medio retroativo
+          // exigiria o custo POR MOVIMENTO, e movimentacoes_almoxarifado nao tem nenhuma coluna de
+          // custo (schema.js:205-219).
+          custo_unitario: (parseFloat(item.valor_unitario) || 0) > 0
+            ? parseFloat(item.valor_unitario)
+            : undefined,
           motivo: `Recebimento ${rec.numero}`,
           referencia: rec.nota_fiscal,
           recebimento_id: recebimentoId,
