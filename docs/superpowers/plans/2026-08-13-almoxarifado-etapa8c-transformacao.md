@@ -3362,6 +3362,65 @@ MSG
 ---
 ### Task 7: `thirdPartyService.registrarTransformacao` — a baixa, os N créditos e a compensação
 
+> ## ✅ FEITA — 2026-08-13 (`a9fe371`)
+>
+> Steps 1 a 6 na ordem, teste vermelho antes da implementação (`15 passed, 21 failed`,
+> `svc.registrarTransformacao is not a function`). Resultado real:
+> **`37 passed, 0 failed`** em `transformacaoTerceiro.api.test.js` · **`test:api` 79/79 arquivos
+> OK** · **`test:almoxarifado` 42 passou, 0 falhou** · `test:validation` 4/0 · `test:safealter` 3/0
+> · `test:sqlite` 3/0. **22 testes novos**, não 21 (ver o achado 3 abaixo).
+>
+> **Três divergências deste plano, corrigidas em vez de obedecidas.**
+>
+> **1. O código do plano lia o custo da chapa errado, e o erro era SILENCIOSO.** O plano trazia
+> `COALESCE(custo_medio, custo_unitario, 0) AS custo`. `custo_medio` é `REAL DEFAULT 0`
+> (`schema.js:647`) e o cadastro de material grava **só** `custo_unitario`
+> (`materialService.js:185`) — `COALESCE` devolve o primeiro **não-nulo**, e `0` é não-nulo. **Sonda
+> executada** nesta task: material inserido com `custo_unitario = 10` lê `leitura_plano = 0` e
+> `leitura_motor = 10`. Ou seja: toda chapa cadastrada a mão — o acervo inteiro anterior à Task 2 —
+> seria transformada a **custo zero**, e o rateio inteiro da 8c seria um no-op para o caso comum,
+> **com a suíte verde**. Trocado pela convenção do próprio motor
+> (`CASE WHEN COALESCE(custo_medio,0) > 0 THEN custo_medio ELSE COALESCE(custo_unitario,0) END`,
+> `stockService.js:1039` e `requisitionValueApprovalService.js:63`), extraída em
+> `thirdPartyService.CUSTO_UNITARIO_SQL`. **Nenhum dos 21 testes do plano pegava isto**, porque as
+> fixtures deste arquivo enchem AS DUAS colunas de propósito (contradição C1) — entrou um **22º**
+> teste com fixture assimétrica (`custo_medio` 0, `custo_unitario` 10), e ele é o único que falha
+> com a fórmula do plano.
+>
+> **2. Duas assertivas do plano liam a coluna errada do ledger.** `custo_servico informado soma ao
+> valor rateado` e `so SOBRA: o valor sem destino fica ESCRITO na baixa` liam
+> `motivo`/`observacoes` da movimentação. `registrarMovimentacao` grava o parâmetro `justificativa`
+> na **coluna `justificativa`** (`stockService.js:1217-1225`) e **nunca** o copia para as outras
+> duas: as duas assertivas liam colunas sempre nulas e teriam falhado para sempre. O helper
+> `textoDaBaixa()` do teste passou a concatenar as três.
+>
+> **3. A ordem (decisão 9) não tinha teste próprio — como o Step 5 suspeitava.** Confirmado por
+> **S1b**: inverter a ordem **mantendo `movimentacao_consumo_id` preenchido** (baixa depois dos
+> créditos, INSERT das linhas depois da baixa) deixava os 21 testes do plano **inteiramente
+> verdes**. A asserção `movimentacao_consumo_id < movimentacao_id` (ids do ledger são monotônicos)
+> foi acrescentada e é a única que mede isso.
+>
+> **Sabotagens — seis rodadas, todas derrubaram teste** (cópia em scratchpad + `md5sum`
+> antes/depois/restauração; **nenhum `git checkout --`**):
+>
+> | # | O que quebrou | Falha real |
+> |---|---|---|
+> | S1 | ordem invertida, `movimentacao_consumo_id` vira `null` | `✗ a transformacao grava as tres colunas novas...: a linha nao aponta para a movimentacao que baixou a chapa` |
+> | S1b | ordem invertida **com o vínculo preenchido** | `✗ ...: a baixa da chapa nao aconteceu ANTES do credito da peca (decisao 9)` — **só a asserção nova pega** |
+> | S2 | compensação para de devolver a retenção | `✗ falha no credito da SEGUNDA peca...: a retencao NAO voltou` **e** `✗ depois da falha, a MESMA transformacao pode ser refeita: Baixa acima do que está no terceiro: há 0 KG nessa situação (físico: 100)` |
+> | S3 | compensação para de restaurar o custo | `✗ ...: o custo medio da primeira peca ficou movido por uma transformacao que nao aconteceu` |
+> | S4 | `if (!matRes) { continue; }` | `✗ peca de material inexistente falha ensinando o caminho` **e** `✗ transformacao com um item invalido NAO aplica NENHUM item do lote` |
+> | S5 | leitura do custo volta ao `COALESCE` do plano | `✗ chapa com custo SO em custo_unitario (custo_medio = 0) rateia pelo custo REAL` (os outros 21: verdes) |
+>
+> **A contradição C6 está PROVADA por execução, não por leitura.** S2 fez o teste de retry falhar
+> com a mensagem exata da guarda do claim duplo (`há 0 KG nessa situação`). O teste de retry **não
+> é decorativo**.
+>
+> **Limite declarado no código (não é regressão, é o mesmo de `registrarRetorno` na 8b):** a
+> compensação cobre o item **que falhou**. Num documento de N itens, falha de *runtime* no item 2
+> depois de o item 1 ter sido aplicado deixa o item 1 aplicado. A pré-checagem total existe para que
+> a única falha possível no meio seja de runtime, nunca de dado.
+
 **A forma, e por que ela é a da 8b.** SQLite, motor sem transação. A transformação é a operação mais
 composta do módulo até aqui: **uma baixa e N créditos**, em materiais diferentes, com sinais
 opostos. Copia letra por letra `registrarRetorno` (`thirdPartyService.js:395-512`): valida **tudo**
@@ -3412,7 +3471,7 @@ funciona**.
 
 ---
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Acrescentar a `server/tests/api/transformacaoTerceiro.api.test.js`, **antes** do `await close()`:
 
@@ -3868,13 +3927,13 @@ Acrescentar a `server/tests/api/transformacaoTerceiro.api.test.js`, **antes** do
   });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/transformacaoTerceiro.api.test.js`
 Expected: os 21 testes novos falham com `svc.registrarTransformacao is not a function`; os **14** das
 Tasks 3 e 5 continuam passando. Rodapé esperado: `14 passed, 21 failed`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `server/services/almoxarifado/thirdPartyService.js`, acrescentar aos `require` do topo
 (logo abaixo de `const stockService = require('./stockService');`):
@@ -4216,7 +4275,7 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `cd server && node tests/api/transformacaoTerceiro.api.test.js`
 Expected: `35 passed, 0 failed`
@@ -4224,7 +4283,7 @@ Expected: `35 passed, 0 failed`
 Run: `cd server && npm run test:api` · `npm run test:almoxarifado`
 Expected: todos OK.
 
-- [ ] **Step 5: SABOTAGEM**
+- [x] **Step 5: SABOTAGEM**
 
 **S1 — a ordem se inverte: credita primeiro, baixa depois** (a decisão 9 vira nada). Não há um
 `sed` limpo para trocar dois blocos de lugar — **use a ferramenta Edit** movendo o bloco
@@ -4302,7 +4361,7 @@ grep -cF "const resolvidos = [];" services/almoxarifado/thirdPartyService.js   #
 Esperado: **`✗ peca de material inexistente falha ensinando o caminho`** e
 **`✗ transformacao com um item invalido NAO aplica NENHUM item do lote`**.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
@@ -6320,9 +6379,21 @@ tratamento/pintura/galvanização) e transformação (8c, corte/dobra/usinagem).
    ajusta um material com saldo em terceiros, o ajuste baixa a retenção, recusa, ou avisa?
 2. **A divergência entre as telas de patrimônio (decisão 11.1).** Duas famílias de leitura de valor,
    e agora que o recebimento alimenta `custo_medio` de verdade (Task 2), **os números vão divergir
-   mais**, não menos — antes as duas leituras davam quase sempre o mesmo, porque `custo_medio` era
-   quase sempre zero e o `COALESCE` caía em `custo_unitario`. **Esta etapa tornou uma inconsistência
-   dormente em visível.** É a primeira coisa que alguém vai perguntar depois de usar a 8c.
+   mais**, não menos. **Esta etapa tornou uma inconsistência dormente em visível.** É a primeira
+   coisa que alguém vai perguntar depois de usar a 8c.
+
+   > ⚠ **ESTE PARÁGRAFO ESTAVA ERRADO e foi corrigido na Task 7 — não é edição de estilo.** O texto
+   > original afirmava: *"antes as duas leituras davam quase sempre o mesmo, porque `custo_medio`
+   > era quase sempre zero e o `COALESCE` caía em `custo_unitario`"*. **`COALESCE` NÃO cai em zero
+   > — ele cai em NULL.** `custo_medio` é `REAL DEFAULT 0`, então ele é `0` e **não-nulo**, e
+   > `COALESCE(custo_medio, custo_unitario, 0)` devolve **0**. Sonda executada na Task 7: material
+   > com `custo_unitario = 10` e `custo_medio = 0` lê **0** por essa fórmula. Ou seja, as duas
+   > famílias **já divergiam antes da Task 2, e no pior sentido possível**: `reportService.js:10`
+   > (a família do `COALESCE`) valora a **zero** todo material cujo custo só foi digitado no
+   > cadastro — que é o acervo inteiro. A Task 2 não criou a divergência; ela apenas começou a
+   > preencher `custo_medio` e, com isso, a **reduzi-la**. **Consertar `reportService.js:10` para a
+   > convenção do motor não foi feito na Task 7 de propósito** (valoração de relatório é outro
+   > assunto e outro commit), e é a parte concreta desta pendência nº 2.
 3. **Categorias hardcoded no front** (`MaterialAlmoxarifadoForm.js:13-16`): lista diferente da
    tabela seedada, sem a categoria da sobra. A 8c encostou e não resolveu; resolver mexe em três
    telas.
