@@ -4423,6 +4423,61 @@ MSG
 ---
 ### Task 8: rendimento informativo (decisão 7) + a rota + o schema Zod
 
+> ## ✅ FEITA — 2026-08-13 (`31cf440`)
+>
+> Steps 1 a 10 na ordem, teste vermelho antes da implementação: `transformCost.api.test.js`
+> **`12 passed, 5 failed`** (`calcularRendimento is not a function`) e
+> `transformacaoTerceiro.api.test.js` **`37 passed, 11 failed`** (todos os de rota com `404` — a
+> rota não existia). Resultado real depois: **`17 passed, 0 failed`** e
+> **`48 passed, 0 failed`** · **`test:api` 81/81 arquivos OK** · **`test:almoxarifado` 42 passou,
+> 0 falhou** · `test:validation` 4/0.
+>
+> **Duas divergências deste plano, corrigidas em vez de obedecidas.**
+>
+> **1. A aritmética dos totais estava errada, não o bloco de testes.** O Step 8 previa
+> `47 passed` em `transformacaoTerceiro.api.test.js` e o texto falava em "12 de rota/schema". O
+> bloco do Step 2 tem **11** testes (contados um a um) e a linha de base do arquivo era **37**
+> (Task 7), logo **48**. Nenhum teste foi omitido; o plano é que somou errado. Números reais no
+> commit.
+>
+> **2. `calcularRendimento` ganhou uma guarda que o código do plano não tinha.** O plano fazia
+> `resultados.map(...)` direto; com `resultados` ausente isso lança `TypeError`, e **uma função
+> cujo contrato é "NUNCA BLOQUEIA" não pode ter caminho que lança**. Trocado por
+> `const lista = Array.isArray(resultados) ? resultados : []`. É defesa barata contra o único jeito
+> de a decisão 7 ser violada por acidente — ver o achado abaixo, que mostra por que isso importa.
+>
+> **Achado da execução (S3): se `calcularRendimento` lançasse, o estrago seria pior do que 400.**
+> O Step 5 manda calcular o rendimento **depois** do `efetivados.push`, que está **fora** do
+> `try/catch` que dispara `compensarTransformacao`. A sabotagem S3 comprovou o efeito: a
+> transformação **é aplicada** (chapa baixada, peças creditadas) e a resposta ainda assim vem `400`
+> — sem compensação nenhuma. A posição está certa (o rendimento não pode decidir nada), e por isso
+> a defesa correta é a função **não ter como lançar**, e não mover o cálculo para dentro do `try`
+> — o que faria um cadastro em branco desfazer a transformação, exatamente o que a decisão 7
+> proíbe. Registrado aqui porque a leitura do plano não deixava isso visível.
+>
+> **Sabotagens — quatro rodadas, todas derrubaram teste** (cópia em scratchpad + `md5sum`
+> antes/depois/restauração; **nenhum `git checkout --`**; âncoras conferidas com `grep -cF` = 1
+> antes de cada `sed`):
+>
+> | # | O que quebrou | Falha real |
+> |---|---|---|
+> | S1 | `tipo_resultado` sai do `ResultadoTransformacaoSchema` | **11 testes** caem, entre eles `✗ [schema] tipo_resultado ATRAVESSA o Zod` com `Classificacao invalida no resultado do material N: undefined` |
+> | S2 | `custo_servico` sai do `TransformacaoRemessaSchema` | **1 único** teste cai: `✗ [schema] custo_servico ATRAVESSA o Zod e muda o custo da peca: custo_servico foi descartado pelo schema em silencio (custo ficou 25 e nao 35)` — o retrato exato da armadilha do `z.object` |
+> | S3 | o rendimento passa a **lançar** em vez de reportar | **20** testes em `transformacaoTerceiro` (entre eles `✗ [rendimento] NUNCA bloqueia`) **+ 3** em `transformCost` |
+> | S4 | o `motivo` para de nomear o material (`'rendimento nao calculavel'` seco) | `✗ rendimento nao calculavel diz QUAL material nao tem peso: a mensagem nao diz qual material falta` **e** `✗ [rendimento] NUNCA bloqueia: ... The input did not match the regular expression /peso/i` |
+>
+> **A previsão do S4 no plano estava errada, e errada para melhor.** O plano dizia que
+> `[rendimento] NUNCA bloqueia` **continuaria passando**, "porque `materiais_sem_peso` não foi
+> tocado". Ele **falha** — o mesmo teste também assere `assert.match(motivo, /peso/i)`, e a
+> mensagem genérica não tem a palavra. A cobertura da decisão 7 é **maior** do que o plano
+> supunha: a exigência de que a mensagem nomeie o material está sustentada por **dois** testes, em
+> dois arquivos, não por um.
+>
+> **A decisão 7 está provada por execução, nas duas metades:** `[rendimento] NUNCA bloqueia`
+> (POST com material sem peso devolve **200**, a chapa vai a saldo 0 e a resposta traz
+> `calculavel: false`) e `rendimento nao calculavel diz QUAL material nao tem peso`
+> (`materiais_sem_peso: ['PC-010']` e `motivo` casando `/PC-010/`).
+
 **A decisão 7, e por que ela não bloqueia.** `chapa consumida = peças + sobra + perda` só é
 verificável se **todos** os materiais envolvidos tiverem `peso_unitario`, e eles não têm. Bloquear
 com base num dado **opcional** trava o operador por um campo de cadastro em branco. Quando todos têm
@@ -4459,7 +4514,7 @@ para as duas irmãs ficarem juntas.
 
 ---
 
-- [ ] **Step 1: Escrever os testes que falham (parte A — a função pura)**
+- [x] **Step 1: Escrever os testes que falham (parte A — a função pura)**
 
 Acrescentar a `server/tests/api/transformCost.api.test.js`, **antes** do `console.log` final:
 
@@ -4541,7 +4596,7 @@ Acrescentar a `server/tests/api/transformCost.api.test.js`, **antes** do `consol
   });
 ```
 
-- [ ] **Step 2: Escrever os testes que falham (parte B — rotas e schema)**
+- [x] **Step 2: Escrever os testes que falham (parte B — rotas e schema)**
 
 Acrescentar a `server/tests/api/transformacaoTerceiro.api.test.js`, **antes** do `await close()`.
 Este bloco precisa do `app` e do `setUser`, então **a linha de abertura do arquivo tem de mudar** de
@@ -4726,7 +4781,7 @@ Bloco novo:
   });
 ```
 
-- [ ] **Step 3: Rodar e ver falhar**
+- [x] **Step 3: Rodar e ver falhar**
 
 Run: `cd server && node tests/api/transformCost.api.test.js`
 Expected: os 5 de rendimento falham com `calcularRendimento is not a function`.
@@ -4735,7 +4790,7 @@ Run: `cd server && node tests/api/transformacaoTerceiro.api.test.js`
 Expected: os 12 novos falham — os de rota com `404` (a rota não existe) e os de rendimento com
 `Cannot read properties of undefined (reading '0')`.
 
-- [ ] **Step 4: Implementar `calcularRendimento`**
+- [x] **Step 4: Implementar `calcularRendimento`**
 
 Em `server/services/almoxarifado/transformCost.js`, antes do `module.exports`:
 
@@ -4793,7 +4848,7 @@ function calcularRendimento({ materialOrigem, quantidadeConsumida, resultados })
 
 E o export: `module.exports = { ratearCusto, calcularRendimento, TOLERANCIA_RATEIO, CASAS };`
 
-- [ ] **Step 5: `registrarTransformacao` passa a devolver `rendimento`**
+- [x] **Step 5: `registrarTransformacao` passa a devolver `rendimento`**
 
 Em `server/services/almoxarifado/thirdPartyService.js`, dentro do laço da fase 2, **depois** do
 `efetivados.push({...})`, acrescentar um segundo acumulador. Declarar `const rendimentos = [];`
@@ -4816,7 +4871,7 @@ junto de `const efetivados = [];`, e depois do `efetivados.push`:
 E no `return` final, acrescentar `rendimento: rendimentos,` logo depois de `custo: efetivados,`.
 Acrescentar também `rendimento: rendimentos,` em `dados_novos` do `registrarAuditoria`.
 
-- [ ] **Step 6: `TransformacaoRemessaSchema`**
+- [x] **Step 6: `TransformacaoRemessaSchema`**
 
 Em `server/services/almoxarifado/schemas.js`, logo depois de `ResultadoTransformacaoSchema`:
 
@@ -4855,7 +4910,7 @@ const TransformacaoRemessaSchema = z.object({
 
 E acrescentar `TransformacaoRemessaSchema` ao `module.exports`.
 
-- [ ] **Step 7: A rota**
+- [x] **Step 7: A rota**
 
 Em `server/routes/almoxarifado/extended.js`, acrescentar `TransformacaoRemessaSchema` ao `require`
 de `:10`, e registrar a rota **logo depois** de `POST /:id/retornos`:
@@ -4883,7 +4938,7 @@ de `:10`, e registrar a rota **logo depois** de `POST /:id/retornos`:
     });
 ```
 
-- [ ] **Step 8: Rodar e ver passar**
+- [x] **Step 8: Rodar e ver passar**
 
 Run: `cd server && node tests/api/transformCost.api.test.js`
 Expected: `17 passed, 0 failed`
@@ -4894,7 +4949,7 @@ Expected: `47 passed, 0 failed`
 Run: `cd server && npm run test:api` · `npm run test:validation` · `npm run test:almoxarifado`
 Expected: todos OK.
 
-- [ ] **Step 9: SABOTAGEM**
+- [x] **Step 9: SABOTAGEM**
 
 **S1 — `tipo_resultado` sai do `ResultadoTransformacaoSchema`** (a armadilha do `z.object`):
 
@@ -4957,7 +5012,7 @@ Esperado: **`✗ rendimento nao calculavel diz QUAL material nao tem peso: a men
 e **`✗ [rendimento] NUNCA bloqueia ...`** na asserção de `materiais_sem_peso`… **não** — essa
 continua passando, porque `materiais_sem_peso` não foi tocado. Confirme na saída e registre.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
