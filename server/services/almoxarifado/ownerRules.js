@@ -194,7 +194,52 @@ async function assertAjustePermitido(db, material, tipo, params, user) {
   });
 }
 
+/**
+ * A peca cortada tem de ter o MESMO dono da chapa (Etapa 8c, decisao 3 do design). Sem excecao.
+ *
+ * O caso perigoso NAO e o de dois clientes diferentes — e chapa DE CLIENTE virando peca NOSSA: a
+ * transformacao converteria material de cliente em patrimonio da GMP, em silencio, com o numero
+ * certo em todo relatorio e sem nada errado aparecendo em lugar nenhum. A guarda e SIMETRICA
+ * porque o caminho inverso e igualmente errado (presentear o cliente com material nosso, e o
+ * inventario dele passando a contar uma peca que a GMP pagou).
+ *
+ * ISTO NAO E REGRA DEDUZIDA — e diferente de "uma remessa nao mistura donos" (thirdPartyService.
+ * resolverProprietario), que a 8b deduziu e deixou registrado como pergunta pendente ao cliente.
+ * Esta decorre direto da guarda de saida da Etapa 8, e e o mesmo raciocinio que fez a movimentacao
+ * emergencial nao furar a guarda do dono: "regularizo depois" nao e resposta para o dono da chapa.
+ *
+ * Por que funcao NOVA e nao assertSaidaPermitida: aquela so roda para tipo de SAIDA
+ * (stockService.js:636) e compara o dono do MATERIAL com o cliente do VINCULO (OS/projeto). Aqui os
+ * dois lados sao MATERIAIS, e a comparacao e material <-> material. Nenhuma das duas pecas serve.
+ *
+ * Recebe LINHAS de materiais_almoxarifado (precisam ter id, codigo e proprietario_cliente_id), e
+ * nao ids, porque quem chama (thirdPartyService.registrarTransformacao) ja leu as duas linhas na
+ * pre-checagem — reler aqui seria uma consulta por resultado, N+1 numa transformacao de 40 pecas.
+ *
+ * `|| null` nos dois lados normaliza antes de comparar: '' e 0 NAO significam nada aqui (todas as
+ * leituras de estoque proprio testam IS NULL), e sem a normalizacao um 0 mal gravado recusaria a
+ * transformacao mais comum do dia a dia — a de material nosso.
+ */
+async function assertMesmoDonoNaTransformacao(db, materialOrigem, materialResultado) {
+  const donoOrigem = materialOrigem.proprietario_cliente_id || null;
+  const donoResultado = materialResultado.proprietario_cliente_id || null;
+  if (donoOrigem === donoResultado) return;
+
+  const rotulo = async (id) => (id ? await nomeDoCliente(db, id) : 'estoque proprio (material nosso)');
+  const nomeOrigem = await rotulo(donoOrigem);
+  const nomeResultado = await rotulo(donoResultado);
+
+  // A mensagem NOMEIA OS DOIS LADOS e os DOIS CODIGOS: sem isso o operador ve "dono diferente" e
+  // nao sabe qual dos dois cadastros esta errado, nem por qual dos dois caminhos consertar
+  // (corrigir o dono do material de destino, ou usar outro material de destino). Mesmo criterio da
+  // mensagem de remessa mista na 8b.
+  throw erro(`A peca resultante tem dono diferente da chapa: ${materialOrigem.codigo} e de `
+    + `${nomeOrigem} e ${materialResultado.codigo} e de ${nomeResultado}. A transformacao nao pode `
+    + 'mudar o proprietario do material — cadastre o material resultante com o mesmo proprietario '
+    + 'da chapa, ou escolha outro material de destino.');
+}
+
 module.exports = {
   TIPOS_ISENTOS_DONO, TIPOS_SAIDA_COM_DONO, TIPOS_AJUSTE_DONO,
-  assertSaidaPermitida, assertAjustePermitido,
+  assertSaidaPermitida, assertAjustePermitido, assertMesmoDonoNaTransformacao,
 };

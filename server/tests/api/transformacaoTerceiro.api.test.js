@@ -163,6 +163,104 @@ async function remessaEnviada(db, { qtd = 100, custo = 0, dono = null, unidade =
     assert.strictEqual(r.success, true, JSON.stringify(r.error?.issues));
   });
 
+  // ══ Task 5 — a guarda do dono na transformacao ══════════════════════════════════════════════
+
+  const ownerRules = require('../../services/almoxarifado/ownerRules');
+  const mat = async (id) => dbGet(db,
+    'SELECT id, codigo, proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [id]);
+
+  const CLI_X = (await dbRun(db, "INSERT INTO clientes (razao_social) VALUES ('Metalurgica X LTDA')")).lastID;
+  const CLI_Y = (await dbRun(db, "INSERT INTO clientes (razao_social) VALUES ('Caldeiraria Y SA')")).lastID;
+
+  await test('transformacao para material de OUTRO dono falha', async () => {
+    const chapa = await mat(await novoMaterial(db, { dono: CLI_X, cod: 'DONO-CHAPA-X' }));
+    const peca = await mat(await novoMaterial(db, { dono: CLI_Y, cod: 'DONO-PECA-Y' }));
+    await assert.rejects(
+      () => ownerRules.assertMesmoDonoNaTransformacao(db, chapa, peca),
+      (e) => {
+        assert.strictEqual(e.status, 400);
+        // A mensagem NOMEIA OS DOIS. Sem isso o operador ve "dono diferente" e nao sabe qual dos
+        // dois cadastros esta errado — o mesmo criterio de resolverProprietario na 8b.
+        assert.match(e.message, /Metalurgica X LTDA/, 'a mensagem nao diz de quem e a chapa');
+        assert.match(e.message, /Caldeiraria Y SA/, 'a mensagem nao diz de quem e o material de destino');
+        assert.match(e.message, /DONO-CHAPA-X/, 'a mensagem nao diz QUAL chapa');
+        assert.match(e.message, /DONO-PECA-Y/, 'a mensagem nao diz QUAL material de destino');
+        return true;
+      });
+  });
+
+  await test('chapa DE CLIENTE virando peca NOSSA falha — o caso que a decisao 3 existe para impedir', async () => {
+    // ESTE e o caso perigoso, e nao o de dois clientes diferentes: material de cliente virando
+    // patrimonio da GMP em silencio, com numero certo em todo relatorio.
+    const chapa = await mat(await novoMaterial(db, { dono: CLI_X, cod: 'CONV-CHAPA' }));
+    const peca = await mat(await novoMaterial(db, { dono: null, cod: 'CONV-PECA' }));
+    await assert.rejects(
+      () => ownerRules.assertMesmoDonoNaTransformacao(db, chapa, peca),
+      (e) => {
+        assert.strictEqual(e.status, 400);
+        assert.match(e.message, /Metalurgica X LTDA/);
+        // O nosso estoque tem nome proprio na mensagem — "dono: null" nao diz nada a ninguem.
+        assert.match(e.message, /estoque proprio|material nosso/i,
+          'a mensagem nao nomeia o lado NOSSO da comparacao');
+        return true;
+      });
+  });
+
+  await test('chapa NOSSA virando peca DE CLIENTE tambem falha (a guarda e simetrica)', async () => {
+    // O caminho inverso e igualmente errado: presentear o cliente com material nosso, e o
+    // inventario dele passando a contar uma peca que a GMP pagou.
+    const chapa = await mat(await novoMaterial(db, { dono: null, cod: 'INV-CHAPA' }));
+    const peca = await mat(await novoMaterial(db, { dono: CLI_X, cod: 'INV-PECA' }));
+    await assert.rejects(
+      () => ownerRules.assertMesmoDonoNaTransformacao(db, chapa, peca),
+      (e) => { assert.strictEqual(e.status, 400); return true; });
+  });
+
+  await test('[CONTROLE POSITIVO] transformacao para material do MESMO dono passa', async () => {
+    // OBRIGATORIO: sem ele, uma guarda que recusasse TUDO passaria nos tres testes acima e a
+    // transformacao nunca funcionaria. Ja aconteceu cinco vezes nesta base.
+    const chapa = await mat(await novoMaterial(db, { dono: CLI_X, cod: 'OK-CHAPA' }));
+    const peca = await mat(await novoMaterial(db, { dono: CLI_X, cod: 'OK-PECA' }));
+    await ownerRules.assertMesmoDonoNaTransformacao(db, chapa, peca); // nao lanca
+  });
+
+  await test('[CONTROLE POSITIVO] os dois materiais NOSSOS passam', async () => {
+    // A outra metade do positivo: NULL === NULL e o caso mais comum do dia a dia da GMP, e uma
+    // implementacao que comparasse com `===` sobre valores vindos do SQLite (onde ausente e
+    // `null`, mas um `0` mal normalizado tambem aparece) poderia recusar justamente este.
+    const chapa = await mat(await novoMaterial(db, { dono: null, cod: 'NOSSO-CHAPA' }));
+    const peca = await mat(await novoMaterial(db, { dono: null, cod: 'NOSSO-PECA' }));
+    await ownerRules.assertMesmoDonoNaTransformacao(db, chapa, peca); // nao lanca
+  });
+
+  await test('[CONTROLE POSITIVO] dono gravado como 0 conta como NOSSO — a normalizacao `|| null`', async () => {
+    // NAO estava no bloco de testes do plano. Achado da sabotagem desta task: apagar o `|| null`
+    // dos dois lados de assertMesmoDonoNaTransformacao nao derrubava NENHUM dos 14 testes, embora
+    // o comentario da funcao afirme que a normalizacao e o que impede um `0` mal gravado de
+    // recusar a transformacao mais comum do dia a dia (material nosso). Sem esta assercao, quem
+    // "simplificasse" a normalizacao fora teria a suite inteira verde — e a afirmacao do
+    // comentario seria mentira documentada, que e o que o CLAUDE.md proibe.
+    // `0` chega aqui de verdade: a coluna e INTEGER sem NOT NULL e sem FK enforcada (o teste do
+    // cliente #99999 acima prova que id inexistente entra), entao um INSERT/importacao que mande
+    // 0 em vez de NULL grava 0.
+    const chapaZero = await mat(await novoMaterial(db, { dono: 0, cod: 'ZERO-CHAPA' }));
+    const pecaNula = await mat(await novoMaterial(db, { dono: null, cod: 'ZERO-PECA' }));
+    assert.strictEqual(chapaZero.proprietario_cliente_id, 0, 'a fixture nao gravou 0 — o teste provaria nada');
+    await ownerRules.assertMesmoDonoNaTransformacao(db, chapaZero, pecaNula); // nao lanca
+    await ownerRules.assertMesmoDonoNaTransformacao(db, pecaNula, chapaZero); // nem no sentido inverso
+  });
+
+  await test('a guarda nao depende de o cliente existir na tabela clientes', async () => {
+    // Robustez da MENSAGEM, nao da regra: cliente apagado (ou banco de teste sem a linha) nao pode
+    // fazer a guarda explodir com "cannot read razao_social of undefined" — nomeDoCliente ja cai
+    // para `cliente #N`, e este teste fixa isso.
+    const chapa = await mat(await novoMaterial(db, { dono: 99999, cod: 'FANTASMA-CHAPA' }));
+    const peca = await mat(await novoMaterial(db, { dono: null, cod: 'FANTASMA-PECA' }));
+    await assert.rejects(
+      () => ownerRules.assertMesmoDonoNaTransformacao(db, chapa, peca),
+      (e) => { assert.match(e.message, /cliente #99999/); return true; });
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
