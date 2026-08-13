@@ -5061,6 +5061,76 @@ MSG
 ---
 ### Task 9: a tela — modal de transformação com N linhas de resultado, classificação, atalho de criar material e rendimento
 
+> ## ✅ FEITA — 2026-08-13 (`61c6f52`)
+>
+> Steps na ordem, teste vermelho antes da implementação: o arquivo novo não **compilava** primeiro
+> (ver defeito 4 abaixo) e, depois de compilar, **`13 failed, 1 passed`** — só o teste da remessa
+> `ENCERRADA` passava, e passava por vazio (não há botão nenhum). Resultado real depois:
+> **`15 passed, 0 failed`** nesse arquivo, **`36 passed`** somando os 22 da 8b (nenhum dos 22
+> quebrou), **suíte inteira do client `25 suites / 283 tests, 0 falhas`** (linha de base medida
+> antes de começar: **24 suites / 268 tests**), **`CI=true npx react-scripts build` →
+> `Compiled successfully.`** e **`cd server && npm run test:api` → 81/81 arquivos OK** (igual à
+> linha de base: nenhuma regressão de servidor).
+>
+> **QUATRO DEFEITOS DO PLANO, consertados em vez de obedecidos.** Os três primeiros só apareceram
+> porque o componente foi **aberto e lido inteiro** antes de escrever — o texto do plano afirmava
+> coisas que o arquivo não confirmava.
+>
+> **1. `materiais` só era buscado com `modalTipo === 'nova'`** (`useEffect` do componente:
+> `if (modalTipo !== 'nova') return undefined;`). O plano **não menciona** esse efeito em nenhum
+> step. Implementado ao pé da letra, o `<select>` de "Material do resultado" nasceria **vazio para
+> sempre** e `adicionarResultado` nunca acharia material nenhum: a rota da Task 8 ficaria **sem
+> consumidor**, que é literalmente o defeito nº 2 que a 8b já cometeu. A guarda virou
+> `modalTipo !== 'nova' && modalTipo !== 'transformacao'`; fornecedores continuam só no `'nova'`
+> (a transformação não escolhe terceiro). **Sabotagem S5 (desfazer isto) derruba 8 dos 15 testes.**
+>
+> **2. `abrirModal` não recarregava o detalhe na transformação** (`if (tipo === 'retorno' ||
+> tipo === 'encerrar') abrirDetalhe(remessa);`). O plano manda acrescentar ali a limpeza dos três
+> estados novos e **para por aí**. Sem `'transformacao'` na condição, quem clica em "Transformar"
+> **sem** ter clicado em "Abrir" antes vê o seletor de item vazio.
+>
+> **3. O sub-formulário de criar material punha nome e unidade no MESMO `<div className="almox-field">`.**
+> Busca por rótulo — a do teste, e a de um leitor de tela — devolve o **primeiro** `input` do campo,
+> então `digitar(campo('Unidade do novo material'), 'UN')` escrevia no campo **nome** e apagava
+> `'Peca nova'`. Cada rótulo ganhou o seu `.almox-field` e o contorno ficou **sem** a classe, de
+> propósito (comentário no código explicando).
+>
+> **4. O arquivo de teste do plano não compila.** `jest.mock` só aceita variável de fora do escopo
+> quando o nome **começa** com `mock` (case-insensitive). `podeMock` não começa — o Babel aborta a
+> suíte inteira com `Invalid variable access: podeMock`, **zero testes rodam**. Renomeado para
+> `mockPode`.
+>
+> **DUAS SABOTAGENS NÃO DERRUBARAM NADA — as duas viraram asserção nova (regra: é ACHADO).**
+>
+> - **S2, o gate do atalho** (`criar_material` → `remessar_terceiro`): **`14 passed`**, incólume. O
+>   teste só olhava `api.post`, e clicar em "Criar material resultante" apenas **abre** o
+>   sub-formulário — o `POST /materiais` só sai no "Cadastrar e usar". A expectativa escrita no
+>   plano ("com o gate trocado […] o `POST /materiais` acontece") é **falsa**. Faltava o par
+>   bilateral do controle positivo: `expect(campo('Nome do novo material')).toBeFalsy()`. Com a
+>   asserção, S2 derruba o teste certo.
+> - **S6, tirar o `abrirDetalhe` da transformação** (o conserto 2): incólume, porque **todos** os
+>   testes passam por `abrirTransformacao`, que clica em "Abrir" primeiro. Entrou teste 15,
+>   *"Transformar carrega o detalhe sozinho"*, que abre o modal **direto da lista**.
+>
+> **Uma expectativa a mais do plano que estava errada (sem consequência).** S1 previa **duas**
+> falhas; derruba **uma**. O teste *"duas linhas de resultado (peca + sobra) viajam juntas"* não
+> asserta `quantidade_consumida` em lugar nenhum — só o comprimento e o `tipo_resultado` da segunda
+> linha —, então não tem como perceber a troca dos dois números. Quem pega é o teste principal, e
+> pega: `quantidade_consumida` chega **40** em vez de **100**.
+>
+> **Erro do `sed` do Step 9 (S3):** o plano usa `sed -i "s|…tipo_resultado || 'PECA',|…|"` — o
+> delimitador `|` colide com o `||` do próprio padrão e o `sed` aborta. Delimitador trocado para `#`.
+>
+> **Restauração das sabotagens por cópia em scratchpad + `md5sum`, nunca `git checkout --`.** Os
+> seis ciclos fecharam com o md5 de volta em `5a1d58bb749f40bd8149c49ff75edfba`.
+>
+> **⚠ PENDENTE — Step 10 (verificação no navegador) NÃO foi executado.** JSDOM não valida CSS
+> renderizado. Ficam **sem verificação**: o modal ser de fato largo (`almox-modal-lg`) e a tabela de
+> resultados não estourar a largura; o `<select>` de material mostrar o material recém-criado
+> selecionado **na tela**; os toasts aparecerem de verdade (o teste só checa a chamada de
+> `toast.info`); e a coluna "Transformado" com dado real vindo do servidor, não de mock. Mesma
+> situação do Step 11 da Task 9 da 8b — registrada aqui para a Task 10 carregar.
+
 **O que a tela de hoje não dá conta.** O modal de retorno (`RemessasTerceirosAlmoxarifado.js:550-573`)
 é **um item por vez, sem seletor de material**: um `<select>` de item, um `<input>` de quantidade e a
 NF. A transformação precisa de **N linhas de resultado**, cada uma com **material próprio**,
@@ -5087,7 +5157,7 @@ criar o material e **não** pode transformar.
 
 ---
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Criar `client/src/components/almoxarifado/RemessasTerceirosTransformacao.test.js`:
 
@@ -5394,13 +5464,13 @@ test('o erro do servidor chega ao operador INTACTO', async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd client && CI=true npx react-scripts test src/components/almoxarifado/RemessasTerceirosTransformacao --watchAll=false`
 Expected: FAIL — `porTexto('Transformar')` devolve `undefined` e `clicar(undefined)` explode em quase
 todos. O primeiro teste falha com `expect(received).toBeTruthy()`.
 
-- [ ] **Step 3: Implementar — constantes e estado**
+- [x] **Step 3: Implementar — constantes e estado**
 
 Em `client/src/components/almoxarifado/RemessasTerceirosAlmoxarifado.js`, logo abaixo de
 `const STATUS_COM_RETORNO = ...` (`:30`):
@@ -5441,7 +5511,7 @@ Em `abrirModal` (`:143`), acrescentar a limpeza dos três estados novos (dentro 
     setNovoMaterial(null);
 ```
 
-- [ ] **Step 4: Implementar — os handlers**
+- [x] **Step 4: Implementar — os handlers**
 
 Acrescentar, depois de `adicionarItem`:
 
@@ -5543,7 +5613,7 @@ Acrescentar, depois de `adicionarItem`:
   };
 ```
 
-- [ ] **Step 5: Implementar — a submissão**
+- [x] **Step 5: Implementar — a submissão**
 
 Em `confirmar`, **antes** do bloco `if (tipo === 'retorno' && ...)`, acrescentar as validações e, no
 `try`, o ramo novo. Validações:
@@ -5597,7 +5667,7 @@ E dentro do `try`, como primeiro ramo:
 > **Atenção:** o `if (tipo === 'retorno') {` que já existe passa a ser `} else if (tipo === 'retorno') {`.
 > Não duplique o bloco.
 
-- [ ] **Step 6: Implementar — o botão e o modal**
+- [x] **Step 6: Implementar — o botão e o modal**
 
 Botão, na coluna de ações, **logo depois** do botão `Retorno`:
 
@@ -5776,7 +5846,7 @@ Corpo do modal, **depois** do bloco `{modal.tipo === 'retorno' && (...)}`:
               )}
 ```
 
-- [ ] **Step 7: Implementar — a tabela de detalhe separa Retornado de Transformado**
+- [x] **Step 7: Implementar — a tabela de detalhe separa Retornado de Transformado**
 
 Substituir `retornadoPorItem` (`:274-282`) por **dois** mapas, e acrescentar a coluna:
 
@@ -5845,7 +5915,7 @@ Por fim, a lista de retornos abaixo da tabela passa a rotular a natureza:
                 + (r.nota_fiscal ? ` (${r.nota_fiscal})` : '')).join(' · ')}
 ```
 
-- [ ] **Step 8: Rodar e ver passar**
+- [x] **Step 8: Rodar e ver passar**
 
 Run: `cd client && CI=true npx react-scripts test src/components/almoxarifado/RemessasTerceiros --watchAll=false`
 Expected: os **14** testes novos passam e os **22** de `RemessasTerceirosAlmoxarifado.test.js`
@@ -5863,7 +5933,7 @@ Run: `cd client && CI=true npx react-scripts build`
 Expected: `Compiled successfully.` (com `CI=true`, **warning vira erro** — variável não usada quebra
 o build).
 
-- [ ] **Step 9: SABOTAGEM**
+- [x] **Step 9: SABOTAGEM**
 
 **S1 — os dois números trocam de lugar** (a decisão 1 vira nada). Use a ferramenta **Edit** para
 trocar, no ramo `tipo === 'transformacao'` de `confirmar`,
@@ -5930,7 +6000,7 @@ git diff --stat
 Esperado: **duas** falhas — `✕ mostra o rendimento NAO CALCULAVEL dizendo qual material falta` e
 `✕ [CONTROLE POSITIVO] mostra o rendimento quando ele E calculavel`.
 
-- [ ] **Step 10: Verificação manual no navegador (o que JSDOM não valida)**
+- [ ] **Step 10: Verificação manual no navegador (o que JSDOM não valida)** — ⚠ **NÃO EXECUTADO**, deixado desmarcado de propósito: nenhum navegador foi aberto nesta sessão. Registrado no cabeçalho da task e a carregar para a Task 10.
 
 `npm run dev` na raiz. Abrir **Almoxarifado → Remessas a Terceiros**. Roteiro mínimo:
 
@@ -5950,7 +6020,7 @@ Esperado: **duas** falhas — `✕ mostra o rendimento NAO CALCULAVEL dizendo qu
 > Task 10** — foi exatamente o que aconteceu com o Step 11 da Task 9 da 8b (cor dos badges e PDF),
 > que ficou pendente e está no plano dela dizendo isso.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 cd /c/Users/User/projetos/CRM
