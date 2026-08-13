@@ -15,6 +15,7 @@ const requisitionCreateService = require('../services/almoxarifado/requisitionCr
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 const stockService = require('../services/almoxarifado/stockService');
+const materialService = require('../services/almoxarifado/materialService');
 const {
   materialPhotoFilename,
   materialPhotoUrl,
@@ -95,42 +96,22 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // MATERIAIS — CRUD
   // ════════════════════════════════════════════════════════════════════════════
 
-  function buildLocalizacaoPath(loc, parent) {
-    if (!loc) return '';
-    const parts = [];
-    if (loc.setor) parts.push(loc.setor);
-    if (parent) parts.push(parent.subgrupo || parent.descricao || parent.codigo);
-    if (loc.subgrupo) parts.push(loc.subgrupo);
-    else if (loc.descricao && !parent) parts.push(loc.descricao);
-    return parts.join(' / ');
-  }
-
-  function formatLocalizacaoLabel(loc, parent) {
-    if (!loc) return null;
-    const path = buildLocalizacaoPath(loc, parent);
-    return path ? `${loc.codigo} — ${path}` : loc.codigo;
-  }
+  // Etapa 8c, Task 1: `buildLocalizacaoPath` e `formatLocalizacaoLabel` moraram aqui e foram
+  // REMOVIDAS, não duplicadas. O plano da 8c mandava mantê-las dizendo que tinham outros usos
+  // neste arquivo (listagem de localizações) — não tinham: o único chamador era o
+  // `resolveLocalizacaoFromFk` logo abaixo, que agora delega. Mantê-las deixaria duas cópias da
+  // mesma conta, que divergiriam na primeira mudança. Elas vivem em
+  // services/almoxarifado/materialService.js.
 
   // Resolve o par (id, rótulo formatado) de uma localização padrão a partir do FK — usado
   // no cadastro de materiais (POST/PUT). Retorna { locId, locText }; locId é null quando o FK
   // não foi informado, locText é null quando a localização não existe mais (FK órfão).
+  //
+  // Etapa 8c, Task 1: o corpo mudou de casa (services/almoxarifado/materialService.js) porque a
+  // criacao de material precisava sair do handler HTTP. Este wrapper existe para os outros usos
+  // deste arquivo (PUT de material, importacao) continuarem chamando com um argumento so.
   async function resolveLocalizacaoFromFk(localizacaoPadraoId) {
-    const id = localizacaoPadraoId ? parseInt(localizacaoPadraoId, 10) : null;
-    if (!id) return { locId: null, locText: null };
-    const row = await dbGet(db,
-      `SELECT l.id, l.codigo, l.descricao, l.setor, l.subgrupo, l.parent_id,
-              p.codigo as parent_codigo, p.descricao as parent_descricao, p.subgrupo as parent_subgrupo
-       FROM localizacoes_almoxarifado l
-       LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
-       WHERE l.id = ?`,
-      [id]);
-    if (!row) return { locId: id, locText: null };
-    const parent = row.parent_id ? {
-      codigo: row.parent_codigo,
-      descricao: row.parent_descricao,
-      subgrupo: row.parent_subgrupo,
-    } : null;
-    return { locId: id, locText: formatLocalizacaoLabel(row, parent) };
+    return materialService.resolveLocalizacaoFromFk(db, localizacaoPadraoId);
   }
 
   // Resolve o almoxarifado_id a persistir numa localização: usa o valor informado,
@@ -306,12 +287,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
+  // Etapa 8c, Task 1: os corpos destas tres mudaram de casa
+  // (services/almoxarifado/materialService.js). Os wrappers ficam porque o resto deste arquivo
+  // (PUT de material, importacao) chama sem passar `db`.
   async function validateFamiliaAtiva(familiaId) {
-    if (!familiaId) return null;
-    const row = await dbGet(db, 'SELECT id, ativo FROM familias_material_almoxarifado WHERE id = ?', [familiaId]);
-    if (!row) throw new Error('Família não encontrada');
-    if (row.ativo !== 1) throw new Error('Família inativa — não é possível vincular novos itens');
-    return row;
+    return materialService.validateFamiliaAtiva(db, familiaId);
   }
 
   // Subfamílias (Etapa 2, Task 3): quando informada, a subfamília do material precisa ser
@@ -319,15 +299,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // full-replace) — nesse caso nenhuma subfamília bate no WHERE e a validação falha, o que é
   // o comportamento correto (não existe família válida para amarrar a subfamília).
   async function validateSubfamilia(subfamiliaId, familiaId) {
-    if (!subfamiliaId) return null;
-    const row = await dbGet(db,
-      'SELECT id FROM familias_material_almoxarifado WHERE id = ? AND parent_id = ? AND ativo = 1',
-      [subfamiliaId, familiaId]);
-    if (!row) throw new Error('Subfamília inválida para a família selecionada');
-    return row;
+    return materialService.validateSubfamilia(db, subfamiliaId, familiaId);
   }
 
-  function bool01(v) { return v ? 1 : 0; }
+  const bool01 = materialService.bool01;
 
   // 'ativo' incluído aqui (fix pós-review — minor): o schema usa FlagSchema (tolera
   // true/false além de 0/1), então o merge precisa normalizar para 0/1 antes de gravar —
@@ -358,131 +333,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   ];
 
   // POST /api/almoxarifado/materiais — criar
-  // requirePermission('criar_material'): o gate global do módulo (linha ~71) só checa
-  // ACESSO, não perfil — sem isto qualquer usuário do módulo (fallback PRODUCAO em
-  // getPerfilFromUser) cadastrava material, contornando
-  // criar_material: [ADMINISTRADOR, ALMOXARIFE, ENGENHARIA].
+  //
+  // requirePermission('criar_material'): o gate global do módulo (linha ~71) só checa ACESSO, não
+  // perfil — sem isto qualquer usuário do módulo (fallback PRODUCAO em getPerfilFromUser)
+  // cadastrava material, contornando criar_material: [ADMINISTRADOR, ALMOXARIFE, ENGENHARIA].
+  //
+  // Etapa 8c, Task 1: o corpo virou materialService.createMaterial. O gate FICA AQUI de propósito
+  // — os caminhos internos que chamam o serviço já passaram pelo gate deles.
   app.post('/api/almoxarifado/materiais', requirePermission('criar_material'), validate(MaterialSchema), async (req, res) => {
-    const {
-      codigo, nome, descricao, categoria, unidade,
-      quantidade_atual, quantidade_minima, quantidade_maxima,
-      custo_unitario, fornecedor_principal, codigo_fornecedor,
-      ncm, especificacoes, observacoes,
-      descricao_tecnica, categoria_id, subcategoria_id, localizacao_padrao_id,
-      fornecedor_id, proprietario_cliente_id, tipo_material, material_critico, controle_lote, controle_certificado,
-      familia_id, subfamilia_id,
-      fabricante, codigo_fabricante, peso_unitario, dimensoes, material_construtivo,
-      norma, marca, modelo, aplicacao, ponto_reposicao, lote_economico,
-      controle_serie, controle_validade, controle_corrida, requer_inspecao, requer_foto,
-      classe_abc, unidade_compra, fator_conversao_compra, unidade_consumo, fator_conversao_consumo,
-    } = req.body;
-
     try {
-      await validateFamiliaAtiva(familia_id);
-    } catch (errFam) {
-      return res.status(400).json({ error: errFam.message });
-    }
-
-    try {
-      await validateSubfamilia(subfamilia_id || null, familia_id);
-    } catch (errSub) {
-      return res.status(400).json({ error: errSub.message });
-    }
-
-    let locId, locText;
-    try {
-      ({ locId, locText } = await resolveLocalizacaoFromFk(localizacao_padrao_id));
-    } catch (errLoc) {
-      return res.status(500).json({ error: errLoc.message });
-    }
-
-    const insertValues = {
-      codigo, nome,
-      descricao: descricao || null,
-      categoria: categoria || 'OUTROS',
-      unidade: unidade || 'UN',
-      localizacao: locText,
-      quantidade_atual: quantidade_atual || 0,
-      quantidade_minima: quantidade_minima || 0,
-      quantidade_maxima: quantidade_maxima || 0,
-      custo_unitario: custo_unitario || 0,
-      fornecedor_principal: fornecedor_principal || null,
-      codigo_fornecedor: codigo_fornecedor || null,
-      ncm: ncm || null,
-      especificacoes: especificacoes || null,
-      observacoes: observacoes || null,
-      descricao_tecnica: descricao_tecnica || null,
-      categoria_id: categoria_id ?? null,
-      subcategoria_id: subcategoria_id ?? null,
-      localizacao_padrao_id: locId,
-      fornecedor_id: fornecedor_id ?? null,
-      // Etapa 8: NULL = material nosso. O select da secao "Propriedade" manda '' quando ninguem
-      // e escolhido; `|| null` normaliza para o unico valor que significa "nosso" — 0 e ''
-      // NAO significam nada aqui (as leituras de estoque proprio testam IS NULL).
-      proprietario_cliente_id: proprietario_cliente_id || null,
-      tipo_material: tipo_material || null,
-      material_critico: bool01(material_critico),
-      controle_lote: bool01(controle_lote),
-      controle_certificado: bool01(controle_certificado),
-      familia_id,
-      subfamilia_id: subfamilia_id ?? null,
-      fabricante: fabricante || null,
-      codigo_fabricante: codigo_fabricante || null,
-      peso_unitario: peso_unitario ?? null,
-      dimensoes: dimensoes || null,
-      material_construtivo: material_construtivo || null,
-      norma: norma || null,
-      marca: marca || null,
-      modelo: modelo || null,
-      aplicacao: aplicacao || null,
-      ponto_reposicao: ponto_reposicao ?? null,
-      lote_economico: lote_economico ?? null,
-      controle_serie: bool01(controle_serie),
-      controle_validade: bool01(controle_validade),
-      controle_corrida: bool01(controle_corrida),
-      requer_inspecao: bool01(requer_inspecao),
-      requer_foto: bool01(requer_foto),
-      classe_abc: classe_abc || null,
-      unidade_compra: unidade_compra || null,
-      fator_conversao_compra: fator_conversao_compra ?? null,
-      unidade_consumo: unidade_consumo || null,
-      fator_conversao_consumo: fator_conversao_consumo ?? null,
-    };
-    const insertColumns = Object.keys(insertValues);
-
-    try {
-      const result = await dbRun(db, `INSERT INTO materiais_almoxarifado
-        (${insertColumns.join(', ')})
-        VALUES (${insertColumns.map(() => '?').join(',')})`,
-        insertColumns.map((c) => insertValues[c]));
-      const id = result.lastID;
-
-      // Registrar movimentação inicial se quantidade > 0
-      if ((quantidade_atual || 0) > 0) {
-        await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-          (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, usuario_id, usuario_nome)
-          VALUES (?, 'ENTRADA', ?, 0, ?, 'Saldo inicial de cadastro', ?, ?)`,
-          [id, quantidade_atual, quantidade_atual, req.user.id, req.user.nome || req.user.email]);
-      }
-
-      await stockService.syncSaldoLocalizacaoPadrao(db, id).catch((e) => {
-        console.warn('[almoxarifado] Falha ao sincronizar saldo por localização:', e.message);
-      });
-
-      await registrarAuditoria(db, {
-        entidade: 'material', entidade_id: id, acao: 'CRIACAO',
-        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_novos: { codigo, nome, familia_id },
-      });
-
-      const row = await dbGet(db, `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo
-              FROM materiais_almoxarifado m
-              LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
-              WHERE m.id = ?`, [id]);
+      const row = await materialService.createMaterial(db, req.user, req.body);
       res.status(201).json(row);
     } catch (err) {
-      if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
-      return res.status(500).json({ error: err.message });
+      res.status(err.status || 500).json({ error: err.message });
     }
   });
 
@@ -693,49 +556,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
     });
 
-  // POST /api/almoxarifado/materiais/gerar-codigo — gera próximo código
-  app.get('/api/almoxarifado/proximo-codigo',(req, res) => {
-    const { familia_id } = req.query;
-
-    if (familia_id) {
-      db.get('SELECT codigo FROM familias_material_almoxarifado WHERE id = ?', [familia_id], (err, fam) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!fam) return res.status(404).json({ error: 'Família não encontrada' });
-
-        const prefix = fam.codigo;
-        db.get(`SELECT codigo FROM materiais_almoxarifado
-                WHERE familia_id = ? AND codigo LIKE ?
-                ORDER BY id DESC LIMIT 1`,
-          [familia_id, `${prefix}-%`],
-          (err2, row) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            let nextCode = `${prefix}-001`;
-            if (row && row.codigo) {
-              const match = row.codigo.match(/-(\d+)$/);
-              if (match) {
-                const num = parseInt(match[1], 10) + 1;
-                nextCode = `${prefix}-${String(num).padStart(3, '0')}`;
-              }
-            }
-            res.json({ codigo: nextCode });
-          });
-      });
-      return;
+  // GET /api/almoxarifado/proximo-codigo — próximo código da família (ou geral)
+  //
+  // Etapa 8c, Task 1: passou a usar MAX do sufixo numérico em vez de ORDER BY id DESC LIMIT 1.
+  // O bug: cadastrar CHP-010 e depois CHP-002 fazia o gerador olhar CHP-002 (id maior) e propor
+  // CHP-003, que já podia existir. E em LOTE — o caso da 8c, uma chapa que vira N peças — N
+  // chamadas concorrentes devolvem o MESMO número, o que MAX não resolve e nem tem como: quem
+  // resolve é materialService.createMaterial, com retry sob UNIQUE quando `codigo_auto` está
+  // ligado. Duas mudanças, dois lugares, porque a colisão acontece no INSERT e não aqui.
+  app.get('/api/almoxarifado/proximo-codigo', async (req, res) => {
+    try {
+      const codigo = await materialService.proximoCodigo(db, req.query.familia_id || null);
+      res.json({ codigo });
+    } catch (err) {
+      res.status(err.status || 500).json({ error: err.message });
     }
-
-    db.get(`SELECT codigo FROM materiais_almoxarifado ORDER BY id DESC LIMIT 1`, [], (err, row) => {
-      if (err) return res.status(500).json({ error: err.message });
-
-      let nextCode = 'ALM-001';
-      if (row && row.codigo) {
-        const match = row.codigo.match(/(\d+)$/);
-        if (match) {
-          const num = parseInt(match[1]) + 1;
-          nextCode = `ALM-${String(num).padStart(3, '0')}`;
-        }
-      }
-      res.json({ codigo: nextCode });
-    });
   });
 
 

@@ -193,6 +193,15 @@ function refineUnidadesFator(d, ctx) {
 
 const MaterialShape = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
+  // Etapa 8c, decisão 6: quando verdadeiro, `codigo` é SUGESTÃO — colisão UNIQUE faz
+  // materialService.createMaterial regerar pelo proximoCodigo da família e tentar de novo. Existe
+  // porque a 8c cria N materiais-peça de uma vez a partir da MESMA sugestão, e o gerador de código
+  // (que só LÊ) devolve o mesmo número para as N chamadas concorrentes.
+  // SEM DECLARAR AQUI o z.object descarta a chave EM SILÊNCIO e o retry nunca liga: o lote falharia
+  // com 'Código já existe' e ninguém saberia por quê. Quarta vez que esta armadilha aparece nesta
+  // base (reserva_id, lote_id, justificativa do cancelamento, material_id do retorno).
+  // No PUT é inerte: o UPDATE é montado a partir de MATERIAL_UPDATE_COLUMNS, lista fixa.
+  codigo_auto: FlagSchema,
   nome: z.string().min(1, 'nome é obrigatório'),
   familia_id: numFromForm(z.number().int().positive()),
   subfamilia_id: numFromForm(z.number().int().positive().nullable().optional()),
