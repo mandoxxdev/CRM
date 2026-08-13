@@ -124,6 +124,23 @@ const TIPOS_RETENCAO = [
 //     proprias que a v2 tornaria decorativas.
 const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
 
+/**
+ * Classificacao da linha de resultado de uma TRANSFORMACAO (Etapa 8c, decisao 8 do design).
+ *
+ * PECA  — recebe o rateio do custo da chapa (decisao 4).
+ * SOBRA — entra a custo ZERO, o tratamento conservador que ERP da a retalho: o patrimonio nunca
+ *         infla, e se a sobra for vendida como sucata um dia, aparece como GANHO e nunca como
+ *         perda inventada.
+ *
+ * O que "virou cavaco" NAO e resultado e nao tem linha: e a diferenca entre o consumido e o que
+ * voltou, e ela ja esta baixada pelo CONSUMO_TERCEIRO da chapa. Nao precisa de destino novo em
+ * DESTINOS_ENCERRAMENTO.
+ *
+ * Lista literal repetida em dois lugares diverge na primeira mudanca — e daqui que o Zod
+ * (ResultadoTransformacaoSchema) e o servico (thirdPartyService.registrarTransformacao) leem.
+ */
+const TIPOS_RESULTADO = ['PECA', 'SOBRA'];
+
 const FAMILIAS_SEED = [
   ['PAR', 'Parafusos e Porcas', 'Elementos de fixação — parafusos, porcas e arruelas'],
   ['ROL', 'Rolamentos', 'Rolamentos e mancais'],
@@ -1483,5 +1500,6 @@ module.exports = {
   TIPOS_MOVIMENTO,
   TIPOS_RETENCAO,
   TIPOS_DEDICADOS,
+  TIPOS_RESULTADO,
   TIPOS_REQUISICAO,
 };
