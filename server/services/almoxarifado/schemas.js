@@ -1,6 +1,6 @@
 /** Schemas Zod compartilhados do almoxarifado (padrão da fundação — ver validation.js). */
 const { z } = require('zod');
-const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS } = require('./schema');
+const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPOS_RESULTADO } = require('./schema');
 
 const CentroCustoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
@@ -373,6 +373,31 @@ const RetornoRemessaSchema = z.object({
   })).min(1, 'informe ao menos um item retornado'),
 });
 
+// ── Transformacao no terceiro (Etapa 8c) ───────────────────────────────────────
+/**
+ * UMA linha de resultado de uma transformacao: a peca cortada, ou a sobra.
+ *
+ * `tipo_resultado` e OBRIGATORIO e NAO tem default. Um default 'PECA' pareceria conveniente e seria
+ * a pior escolha possivel: a sobra viraria peca por omissao e entraria carregando rateio — que e
+ * exatamente o que a decisao 4 do design existe para impedir (a sobra e UMA linha e uma FATIA
+ * GRANDE, e e ela que envenena a media).
+ *
+ * O enum le de schema.TIPOS_RESULTADO, e nao de uma lista literal aqui: duas listas divergem na
+ * primeira mudanca, e o servico recusaria um valor que o schema aceitou (ou o contrario).
+ *
+ * TODO campo que o servico usa precisa estar declarado: `validate()` troca req.body pelo parsed e
+ * z.object DESCARTA chave nao declarada EM SILENCIO — `lote_id` e `observacoes` sao os candidatos
+ * obvios a serem esquecidos aqui, e o teste `[schema] ... PRESERVA os cinco campos declarados`
+ * existe por causa disso.
+ */
+const ResultadoTransformacaoSchema = z.object({
+  material_id: z.number().int().positive(),
+  quantidade: z.number().gt(0, 'quantidade do resultado deve ser maior que zero'),
+  tipo_resultado: z.enum(TIPOS_RESULTADO),
+  lote_id: z.number().int().positive().optional(),
+  observacoes: z.string().optional(),
+});
+
 /**
  * Encerramento. `destino` e `justificativa` são opcionais AQUI e obrigatórios NO SERVIÇO quando há
  * pendência — a exigência depende do saldo que sobrou, que o schema não tem como saber (remessa que
@@ -397,5 +422,6 @@ module.exports = {
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
   MaterialSchema, MaterialUpdateSchema, RequisicaoSchema, ItemRequisicaoSchema,
   ItemRemessaTerceiroSchema, RemessaTerceiroSchema, RetornoRemessaSchema,
+  ResultadoTransformacaoSchema,
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
 };

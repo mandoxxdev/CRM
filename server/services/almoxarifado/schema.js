@@ -1209,10 +1209,53 @@ async function initSchema(db) {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // ── Etapa 8c: a linha de resultado passa a saber que TIPO de resultado ela e ────────────────
+  //
+  // Ate a 8b todo resultado tinha material_id igual ao do item enviado — o retorno era do MESMO
+  // material (tratamento termico, pintura, galvanizacao). Na transformacao (corte, dobra,
+  // usinagem) sai UMA chapa e voltam 40 pecas e uma sobra: material diferente, unidade diferente,
+  // e custo que precisa ser rateado.
+  //
+  // safeAlter e nao recriacao de tabela: as linhas ja gravadas nascem com NULL nas tres colunas, e
+  // NULL AQUI SIGNIFICA ALGUMA COISA — "retorno simples, nao e transformacao". Nao e buraco de
+  // migracao: e o valor correto, e e o que permite separar os dois mundos com
+  // `WHERE tipo_resultado IS NOT NULL` sem tabela nova e sem backfill.
+  //
+  // tipo_resultado: 'PECA' | 'SOBRA' (TIPOS_RESULTADO) | NULL. E a CLASSIFICACAO DA LINHA que
+  //   decide o rateio (decisao 4 e 8 do design): PECA recebe rateio, SOBRA entra a ZERO. A sobra
+  //   nao e material especial — e material normal, com codigo e cadastro, e a categoria
+  //   'Sucata e sobras reaproveitáveis' ja existe no CATEGORIAS_SEED deste arquivo.
+  //   Por que a sobra entra a zero: chapa de R$ 1.000 -> 40 pecas + 1 sobra que e um terco da
+  //   chapa; rateando por quantidade em 41 linhas a sobra carrega 2,4% do valor e as pecas ficam
+  //   ~40% caras. A sobra e UMA linha e uma FATIA GRANDE — e ela que envenena a media.
+  //
+  // custo_unitario_aplicado: o custo POR UNIDADE que foi creditado NESTA linha, no momento em que
+  //   ela foi criada. NAO e o custo atual do material (esse muda a cada entrada seguinte) — e o
+  //   registro do que o rateio decidiu, e e o unico lugar onde ele fica auditavel, porque
+  //   movimentacoes_almoxarifado NAO TEM coluna de custo (decisao 10 do design: acrescenta-la
+  //   exigiria decidir baixa valorizada/CMV para o modulo inteiro).
+  //
+  // movimentacao_consumo_id: aponta para a movimentacao CONSUMO_TERCEIRO que baixou a chapa.
+  //   Espelha `movimentacao_id`, que ja existe e aponta para o CREDITO desta linha. Um aponta para
+  //   a entrada da peca, o outro para a baixa da chapa — os dois lados da mesma transformacao.
+  //   E ELE E O AGRUPADOR DO EVENTO: as N linhas de uma transformacao compartilham o mesmo valor.
+  //   E por isso que NAO existe coluna `quantidade_consumida` nem `custo_servico` aqui: uma
+  //   transformacao e um EVENTO COM N LINHAS e esta tabela nao tem cabecalho de evento; grava-los
+  //   em cada linha faria qualquer SUM() ingenuo contar o mesmo consumo N vezes. O cabecalho ja
+  //   existe — e a propria movimentacao CONSUMO_TERCEIRO, cuja `quantidade` E o consumo.
+  await safeAlter(db, 'ALTER TABLE retornos_remessa_item_almoxarifado ADD COLUMN tipo_resultado TEXT');
+  await safeAlter(db, 'ALTER TABLE retornos_remessa_item_almoxarifado ADD COLUMN custo_unitario_aplicado REAL');
+  await safeAlter(db, 'ALTER TABLE retornos_remessa_item_almoxarifado ADD COLUMN movimentacao_consumo_id INTEGER');
+
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_remessa_terceiro_status ON remessas_terceiro_almoxarifado(status)');
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_remessa_terceiro_prazo ON remessas_terceiro_almoxarifado(prazo_previsto)');
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_remessa_terceiro ON itens_remessa_terceiro_almoxarifado(remessa_id)');
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_retornos_remessa_item ON retornos_remessa_item_almoxarifado(item_remessa_id)');
+  // O agrupador do evento (todas as N linhas de uma transformacao compartilham o mesmo
+  // movimentacao_consumo_id): sem indice, "quais linhas sairam desta baixa de chapa" e varredura
+  // da tabela inteira de resultados.
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_retornos_remessa_consumo
+    ON retornos_remessa_item_almoxarifado(movimentacao_consumo_id)`);
 
   // ── Sobras/Scrap ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS sobras_material_almoxarifado (
