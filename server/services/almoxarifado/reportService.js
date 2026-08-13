@@ -1,5 +1,6 @@
 const { dbAll, dbGet } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
+const { valorEstoqueSql } = require('./custoSql');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -7,7 +8,7 @@ async function relatorioEstoqueAtual(db) {
   // tem tela e rota proprias (clienteEstoqueService, Task 8).
   return dbAll(db, `SELECT m.*,
     ${disponivelSql('m')} as disponivel,
-    (m.quantidade_atual * COALESCE(m.custo_medio, m.custo_unitario, 0)) as valor_total
+    ${valorEstoqueSql('m')} as valor_total
     FROM materiais_almoxarifado m
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL
     ORDER BY m.categoria, m.nome`);

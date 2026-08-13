@@ -6377,10 +6377,56 @@ tratamento/pintura/galvanização) e transformação (8c, corte/dobra/usinagem).
    (`aplicar_ajustes` da conferência) e **não reconcilia nenhuma das quatro retenções**. A 8c não
    piorou, mas também não ajudou. **É pergunta ao cliente antes de ser código**: quando o inventário
    ajusta um material com saldo em terceiros, o ajuste baixa a retenção, recusa, ou avisa?
-2. **A divergência entre as telas de patrimônio (decisão 11.1).** Duas famílias de leitura de valor,
-   e agora que o recebimento alimenta `custo_medio` de verdade (Task 2), **os números vão divergir
-   mais**, não menos. **Esta etapa tornou uma inconsistência dormente em visível.** É a primeira
-   coisa que alguém vai perguntar depois de usar a 8c.
+2. ~~**A divergência entre as telas de patrimônio (decisão 11.1).**~~ **RESOLVIDA em 2026-08-13,
+   numa tarefa extra que não estava neste plano** — ela nasceu da execução das Tasks 4 e 7. Deixou
+   de ser candidata a próxima etapa. O que foi feito, e por quê:
+
+   - **O defeito era pior do que "divergência":** `COALESCE(custo_medio, custo_unitario, 0)` valorava
+     a **ZERO** o acervo inteiro, não dava um número diferente. Sonda executada no banco de teste
+     (`custo_unitario = 10`, `custo_medio = 0`, qtd 5): fórmula antiga → custo `0`, valor `0`;
+     fórmula do motor → custo `10`, valor `50`. Com as duas colunas preenchidas (12 e 10) as duas
+     fórmulas dão 12 — **é exatamente o que as fixtures dos testes construíam**, e é por isso que a
+     suíte verde não achava nada.
+   - **Varredura `grep -rn "COALESCE(.*custo" server/`: 29 ocorrências** (contagem real, sobre a
+     árvore do commit `deed48f`). A distribuição importa mais que o total:
+
+     | o que é | quantas | onde |
+     |---|---|---|
+     | fórmula **errada** em código (o defeito) | **3** | `reportService`, `stockService.consultarEstoque`, `requisitionService` |
+     | fórmula **certa** escrita à mão | **3** | `stockService` (média ponderada), `requisitionValueApprovalService`, `thirdPartyService` (`CUSTO_UNITARIO_SQL`) |
+     | terceira família (`custo_unitario` puro) | **1** | `routes/almoxarifado.js` (dashboard) |
+     | leitura legítima de coluna, não valoração | **3** | `schema.js` (tabela de saldos), `thirdPartyService` (lê as duas colunas em JS) |
+     | **comentários** que explicam o defeito | **3** | `thirdPartyService` ×2, `transformCost.js` |
+     | fixtures e asserções de teste | **9** | 5 arquivos em `tests/api/` |
+     | outros módulos (frotas, viagens) | **7** | `frotasService.js`, `index.js` |
+
+   - **⚠ O padrão `COALESCE(.*custo` NÃO acha o oitavo sítio.**
+     `routes/almoxarifado.js` `/relatorio/posicao-estoque` escreve `(quantidade_atual *
+     custo_unitario) as valor_total` — **sem `COALESCE` nenhum**, logo fora da varredura. Ele só
+     apareceu porque a task o nomeou explicitamente. **A varredura de regex sozinha teria deixado
+     passar exatamente o sítio que a task mandava decidir** — é o mesmo tipo de erro que fez a 8b
+     contar 7 em vez de 14. Por isso o teste novo varre por **duas** assinaturas e o critério real é
+     "quem responde à pergunta do custo", não "quem casa com o regex".
+   - **Decisão sobre as duas de `custo_unitario` puro em `routes/almoxarifado.js`: ENTRARAM no
+     conserto.** Não tinham o bug do `COALESCE` (não zeravam), mas respondiam a mesma pergunta com
+     outro número, e `/relatorio/posicao-estoque` é a **gêmea** de `relatorios/estoque-atual`
+     (`reportService.relatorioEstoqueAtual`): duas rotas, mesma pergunta, números diferentes é o
+     pior estado possível. **O `valorTotalEstoque` do dashboard muda de número** para material que
+     já recebeu NF com custo diferente do cadastro — passa a valorar pela média ponderada. Para
+     material sem custo médio (a maioria hoje) **não muda nada**. Isso está escrito no código, na
+     spec 21 e no guia porque é um número que o usuário olha.
+   - **Decisão sobre criar módulo compartilhado: SIM, `services/almoxarifado/custoSql.js`.** O
+     precedente é `availabilitySql.js` (Etapa 8b, criado porque a conta do disponível estava
+     replicada 14 vezes) e, antes dele, `RESERVADO_PARA_ITEM_SQL`. `CUSTO_UNITARIO_SQL`, extraído na
+     Task 7 dentro de `thirdPartyService.js`, **passou a delegar** em vez de virar a quarta cópia.
+     `tests/api/custoUnitarioFonteUnica.api.test.js` varre o código-fonte (ignorando **comentários**,
+     de propósito: os comentários que explicam o defeito têm de continuar existindo) e falha se
+     alguém replicar qualquer uma das duas fórmulas.
+   - **Sabotagem:** trocar `custoSql.custoUnitarioSql` de volta pelo `COALESCE` simples derruba
+     **5 testes** do arquivo novo (a sonda, as 3 leituras e o controle positivo do padrão de
+     varredura) **e 1 de `transformacaoTerceiro`**. Note que `recebimentoCustoMedio`,
+     `transformCost` e `requisicaoAprovacao` **continuam verdes sob essa sabotagem** — as fixtures
+     deles preenchem as duas colunas. É a mesma cegueira que deixou o defeito passar.
 
    > ⚠ **ESTE PARÁGRAFO ESTAVA ERRADO e foi corrigido na Task 7 — não é edição de estilo.** O texto
    > original afirmava: *"antes as duas leituras davam quase sempre o mesmo, porque `custo_medio`

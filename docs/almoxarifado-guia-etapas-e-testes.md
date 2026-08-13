@@ -1,14 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-12 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-13 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 8b) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-12 (Etapa 8b)
+> ## Onde o desenvolvimento parou — 2026-08-13 (Etapa 8c em andamento)
 >
+> **A Etapa 8c (transformação: chapa que sai e volta como peças cortadas + sobra) está com o código
+> entregue e a seção deste guia AINDA NÃO ESCRITA** — ela é a Task 10 do plano
+> `docs/superpowers/plans/2026-08-13-almoxarifado-etapa8c-transformacao.md`, e é lá que está o
+> estado real, task por task. **Não conclua deste guia que a 8c não existe: ela existe, este
+> documento é que está atrasado.**
+>
+> **Já documentado aqui, porque muda um número que você olha:** a correção do
+> [valor do estoque que aparecia zerado nos relatórios](#correção--o-valor-do-estoque-aparecia-zerado-nos-relatórios-2026-08-13),
+> mais abaixo — defeito antigo, descoberto durante a 8c e corrigido na hora.
+>
+> **Antes: 2026-08-12 (Etapa 8b).**
 > **Etapas 1 a 8b completas.** A **Etapa 8b (Remessas a Terceiros) fechou em 2026-08-12**
-> (`0a01124..b176212`). **Próxima etapa da ordem: Etapa 8c — transformação** (chapa que sai e volta
-> como peças cortadas + sobra), que é a **outra metade da feature 14** e ainda não tem design.
+> (`0a01124..b176212`), e era a **outra metade da feature 14**, junto com a 8c.
 >
 > **A Etapa 8b fez o material que vai beneficiar fora parar de sumir do controle.** Antes, quando
 > uma chapa ia para o galvanizador, ou alguém dava baixa — e ela **desaparecia do patrimônio**,
@@ -1767,6 +1777,51 @@ PC** e `MAT-002` com **5 UN**. Anote o **Disponível** dos dois.
 tabelas novas; **nenhum dado existente é tocado ou reinterpretado**, e não há passado a corrigir.
 Isto está escrito explicitamente porque as Etapas 7 e 8 deixaram consultas para rodar em produção e
 você vai procurar a desta — **as daquelas duas continuam pendentes**, esta não acrescenta nenhuma.
+
+---
+
+## Correção — o valor do estoque aparecia ZERADO nos relatórios (2026-08-13)
+
+> Isto **não é uma etapa**: é um defeito de leitura descoberto durante a Etapa 8c e corrigido na
+> hora. Está aqui porque muda um número que você olha.
+
+**O que estava acontecendo.** O cadastro do material tem um campo de custo. O sistema também mantém
+um **custo médio**, que só passa a existir depois que o material entra por uma nota fiscal com
+valor. Nos relatórios, o sistema tentava usar o custo médio "ou, se não houver, o do cadastro" — mas
+a conta estava escrita de um jeito que, para material que **nunca recebeu nota fiscal**, entendia o
+custo médio como "existe e vale zero" em vez de "não existe". Resultado: **o material valia zero no
+relatório**, mesmo com o custo preenchido no cadastro. Como quase todo o acervo é anterior ao
+recebimento por NF, isso valia para **quase tudo**.
+
+| | Antes | Agora |
+|---|---|---|
+| Material com custo só no cadastro (R$ 10) | Relatório de posição mostrava **R$ 0,00** | Mostra **R$ 10,00 × a quantidade** |
+| Item na tela de aprovação de requisição | Custo unitário **R$ 0,00** | Custo real |
+| "Valor total do estoque" no Dashboard | Somava pelo **último custo de compra** | Soma pelo **custo médio** (cai no custo do cadastro quando não há média) |
+| Dashboard × Relatório de posição | Podiam dar **números diferentes** | Dão o **mesmo** número |
+
+**Atenção ao número do Dashboard.** Ele **pode mudar** — para melhor. Antes ele usava o *último*
+preço pago; agora usa o custo *médio*, que é o que o relatório de posição e o valor das requisições
+já usavam. Para material que nunca recebeu nota com custo, **o número é exatamente o mesmo de
+antes**.
+
+**Roteiro de teste (5 minutos, sem depender de dado antigo):**
+1. **Almoxarifado → Materiais → Novo material.** Preencha código, nome, unidade e **Custo unitário
+   = 10**. Salve. **Não** faça recebimento nenhum.
+2. Dê entrada de **5 unidades** por **Almoxarifado → Movimentações → Entrada** (ou ajuste positivo).
+3. **Almoxarifado → Relatórios → Posição de estoque.** A linha desse material tem de mostrar valor
+   total **50,00** — antes mostrava **0,00**.
+4. **Almoxarifado → Dashboard.** O card "Valor total do estoque" tem de ter subido **50,00**.
+5. Crie uma **requisição** com 3 unidades desse material e abra a tela de aprovação: o custo
+   unitário do item tem de ser **10,00**, não **0,00**.
+
+**O que esta correção NÃO faz:**
+- **Não recalcula nada retroativamente.** Não havia o que recalcular: o custo estava sempre certo no
+  banco; só a **leitura** estava errada. Nenhum dado foi tocado, nenhuma migração precisa rodar.
+- **Não valoriza material de cliente.** Patrimônio de terceiro continua fora de todo total de
+  estoque próprio (Etapa 8), e o PDF de posição por cliente continua trazendo **quantidades, não
+  valores**.
+- **Não cria tela de relatório de valores.** A tela de relatórios continua sendo pendência antiga.
 
 ---
 

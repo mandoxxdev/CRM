@@ -6,6 +6,7 @@ const { avaliarRegrasVinculo } = require('./movementRules');
 const ownerRules = require('./ownerRules');
 const { TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
+const { custoUnitarioSql, valorEstoqueSql } = require('./custoSql');
 // seriesService nao importa stockService de volta — sem ciclo.
 const seriesService = require('./seriesService');
 
@@ -1036,7 +1037,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         const row = await dbGet(db, `UPDATE materiais_almoxarifado SET
             quantidade_atual = quantidade_atual + ?,
             custo_medio = CASE WHEN quantidade_atual > 0
-              THEN ROUND(((quantidade_atual * (CASE WHEN COALESCE(custo_medio,0) > 0 THEN custo_medio ELSE COALESCE(custo_unitario,0) END)) + (? * ?)) / (quantidade_atual + ?), 4)
+              THEN ROUND(((quantidade_atual * ${custoUnitarioSql()}) + (? * ?)) / (quantidade_atual + ?), 4)
               ELSE ? END,
             custo_unitario = ?,
             updated_at = CURRENT_TIMESTAMP
@@ -1878,7 +1879,7 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
 async function consultarEstoque(db, filters = {}) {
   let sql = `SELECT m.*, c.nome as categoria_nome, cli.razao_social as proprietario_cliente_nome,
     ${disponivelSql('m')} as quantidade_disponivel,
-    (m.quantidade_atual * COALESCE(m.custo_medio, m.custo_unitario, 0)) as valor_estoque
+    ${valorEstoqueSql('m')} as valor_estoque
     FROM materiais_almoxarifado m
     LEFT JOIN categorias_material_almoxarifado c ON m.categoria_id = c.id
     LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id

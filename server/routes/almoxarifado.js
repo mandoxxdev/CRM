@@ -11,6 +11,7 @@ const alertService = require('../services/almoxarifado/alertService');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
+const { valorEstoqueSql } = require('../services/almoxarifado/custoSql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
@@ -227,7 +228,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           if (err3) return res.status(500).json({ error: err3.message });
           stats.materiaisZerados = row3.total;
 
-          db.get(`SELECT COALESCE(SUM(quantidade_atual * custo_unitario), 0) as total FROM materiais_almoxarifado WHERE ativo = 1 AND proprietario_cliente_id IS NULL`, [], (err4, row4) => {
+          // `valorEstoqueSql` (tarefa extra da 8c): antes esta soma era `quantidade_atual *
+          // custo_unitario` pura, que valora pelo ULTIMO custo de compra e ignora a media
+          // ponderada que o recebimento mantem. Nao tinha o bug do COALESCE (nao zerava), mas
+          // divergia do relatorio de posicao de estoque, que responde a MESMA pergunta. O numero
+          // do dashboard MUDA para o material que ja recebeu NF com custo diferente do cadastro —
+          // e passa a ser o mesmo que a tela de relatorio mostra.
+          db.get(`SELECT COALESCE(SUM(${valorEstoqueSql()}), 0) as total FROM materiais_almoxarifado WHERE ativo = 1 AND proprietario_cliente_id IS NULL`, [], (err4, row4) => {
             if (err4) return res.status(500).json({ error: err4.message });
             stats.valorTotalEstoque = row4.total;
 
@@ -880,7 +887,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // material de cliente` (spec 13) nomeia — e tambem NAO estava na contagem de 19 da spec de
     // design. Sem o filtro, o relatorio de posicao somaria valor_total de patrimonio de
     // terceiro. A posicao POR CLIENTE tem rota propria (Task 8).
-    db.all(`SELECT *, (quantidade_atual * custo_unitario) as valor_total
+    // `valorEstoqueSql` (tarefa extra da 8c): mesmo motivo do dashboard acima — esta rota e a
+    // gemea de reportService.relatorioEstoqueAtual (servida em relatorios/estoque-atual) e as
+    // duas davam numeros diferentes para o mesmo material.
+    db.all(`SELECT *, ${valorEstoqueSql()} as valor_total
             FROM materiais_almoxarifado
             WHERE ativo = 1 AND proprietario_cliente_id IS NULL
             ORDER BY categoria, nome`, [], (err, rows) => {

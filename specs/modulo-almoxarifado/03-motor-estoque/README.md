@@ -194,6 +194,12 @@ quarentena, apontando para a tela de Remessas. **Contraste deliberado:**
 - [x] `permite_saldo_negativo` respeitado (default: bloquear; guarda atômica em `registrarMovimentacao` e em `cancelarMovimentacao`)
 - [x] Centro de custo como vínculo (`centros_custo_almoxarifado`, `CentroCustoSchema`, rota `/centros-custo`)
 - [x] Atualização de custo médio na entrada (`custo_medio` calculado atomicamente na mesma UPDATE da entrada; teste dedicado)
+- [x] **Leitura do custo unitário numa fonte única** — `services/almoxarifado/custoSql.js`
+  (`custoUnitarioSql` / `valorEstoqueSql`), 2026-08-13, tarefa extra da Etapa 8c. `custo_medio` é
+  `REAL DEFAULT 0` (**zero, não NULL**), então `COALESCE(custo_medio, custo_unitario, 0)` devolvia
+  **0** e valorava a zero todo material cadastrado à mão. Mesmo desenho de `availabilitySql.js`;
+  varredura de código-fonte em `tests/api/custoUnitarioFonteUnica.api.test.js` impede a terceira
+  cópia. Ver [21-relatorios-dashboards](../21-relatorios-dashboards/README.md).
 - [x] Consulta "livro de movimentações" com filtros (material, período, projeto, OS, centro de custo, usuário, tipo, pendentes de regularização) em `GET /movimentacoes`
 - [x] Histórico completo do item (spec 27): `GET /materiais/:id/extrato` agrega material (com disponível), saldos por localização, movimentações e reservas ativas — inspeções ainda não entram no agregado (feature 09 é embrião)
 

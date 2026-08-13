@@ -3,6 +3,7 @@
  */
 const { dbRun, dbGet, dbAll } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
+const { custoUnitarioSql } = require('./custoSql');
 const valueApprovalService = require('./requisitionValueApprovalService');
 const stockService = require('./stockService');
 // Sem ciclo: reservationService importa db/audit/stockService, nunca este arquivo.
@@ -96,7 +97,7 @@ const RESERVADO_PARA_ITEM_SQL = `COALESCE((
 
 async function carregarItensRequisicao(db, requisicaoId) {
   return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo,
-      COALESCE(ma.custo_medio, ma.custo_unitario, 0) as custo_unitario,
+      ${custoUnitarioSql('ma')} as custo_unitario,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel
     FROM itens_requisicao_almoxarifado ir

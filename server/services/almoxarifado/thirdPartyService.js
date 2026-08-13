@@ -15,6 +15,7 @@ const { dbRun, dbGet, dbAll } = require('./db');
 const { can } = require('./permissions');
 const { registrarAuditoria } = require('./audit');
 const { disponivelSql } = require('./availabilitySql');
+const { custoUnitarioSql } = require('./custoSql');
 const stockService = require('./stockService');
 const ownerRules = require('./ownerRules');
 const transformCost = require('./transformCost');
@@ -691,12 +692,15 @@ async function cancelarRemessa(db, user, remessaId, data = {}) {
  * DUAS colunas de proposito (ver C1).
  *
  * Esta e a mesma convencao que o proprio motor usa para calcular a media ponderada
- * (stockService.js:1039) e que requisitionValueApprovalService.js:63 usa para valorar requisicao.
- * A outra familia de leitura (reportService.js:10) usa o COALESCE simples e tem o MESMO defeito —
- * registrado na Task 10 como pendencia, nao consertado aqui: mexer na valoracao de relatorio e
- * outro assunto e outro commit.
+ * (stockService, entrada com custo informado) e que requisitionValueApprovalService usa para
+ * valorar requisicao.
+ *
+ * ATUALIZACAO (tarefa extra da 8c): a pendencia que este comentario registrava — a outra familia
+ * de leitura (reportService, consultarEstoque, itens da requisicao) usava o COALESCE simples e
+ * tinha o MESMO defeito — FOI CONSERTADA, e a formula saiu daqui para `custoSql.js`, que hoje e a
+ * fonte unica. Esta constante permanece so como o nome local usado nas queries abaixo.
  */
-const CUSTO_UNITARIO_SQL = 'CASE WHEN COALESCE(custo_medio,0) > 0 THEN custo_medio ELSE COALESCE(custo_unitario,0) END';
+const CUSTO_UNITARIO_SQL = custoUnitarioSql();
 
 /**
  * Desfaz o que ja entrou quando uma transformacao falha no meio (decisao 9 do design).

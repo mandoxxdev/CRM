@@ -136,10 +136,15 @@ task foi entregue com a **tabela preservada** exatamente para que este cenário 
   semântica: a chapa do Cliente X tem certificado e corrida próprios e **não pode ser trocada**
   pela do Cliente Y. Custo aceito: o catálogo ganha uma linha por cliente do mesmo item físico.
 - [~] Custo não se mistura ao estoque próprio — **parcialmente** — `582bc04` (Task 1). Já excluem
-  material de cliente: `valorTotalEstoque` do dashboard
-  (`SUM(quantidade_atual * custo_unitario)`), `relatorioEstoqueAtual` e
+  material de cliente: `valorTotalEstoque` do dashboard, `relatorioEstoqueAtual` e
   `GET /relatorio/posicao-estoque`. **Falta:** custo médio e valorização **por cliente** (o PDF de
   posição por cliente traz quantidades, não valor) — feature 21.
+  > **Correção de 2026-08-13 (tarefa extra da Etapa 8c):** este item dizia que o dashboard somava
+  > `SUM(quantidade_atual * custo_unitario)`. **Não soma mais** — as três leituras passaram a usar
+  > `custoSql.valorEstoqueSql`, porque `custo_unitario` puro ignora a média ponderada e a outra
+  > família (`COALESCE(custo_medio, custo_unitario, 0)`) valorava a **zero**. A segregação por dono,
+  > que é o que este item afirma, **continua intacta** — a mudança foi só na fórmula do valor. Ver
+  > [21-relatorios-dashboards](../21-relatorios-dashboards/README.md).
 - [~] Relatórios (spec 17) — **parcialmente** — `6e97715`+`5b5eb55` (Task 8). Entregues:
   **recebidos, consumidos, devolvidos e saldo por cliente**, e as **aplicações por OS/projeto**
   (`clienteEstoqueService.posicaoPorCliente`, `GET /materiais-cliente/posicao`, PDF no navegador).

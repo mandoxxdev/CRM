@@ -3,6 +3,7 @@
  */
 const { dbRun, dbGet, dbAll } = require('./db');
 const alertService = require('./alertService');
+const { custoUnitarioSql } = require('./custoSql');
 
 const CONFIG_KEYS = {
   ativo: 'liberacao_valor_ativo',
@@ -59,9 +60,7 @@ async function getAprovadoresDetalhes(db) {
 
 async function calcularValorTotal(db, requisicaoId) {
   const row = await dbGet(db, `SELECT COALESCE(SUM(
-      ir.quantidade_solicitada * (
-        CASE WHEN COALESCE(ma.custo_medio, 0) > 0 THEN ma.custo_medio ELSE COALESCE(ma.custo_unitario, 0) END
-      )
+      ir.quantidade_solicitada * ${custoUnitarioSql('ma')}
     ), 0) as valor_total
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
