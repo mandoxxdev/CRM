@@ -30,9 +30,14 @@ Nada nesta skill pode ser preenchido de memória ou por dedução.
 
 ---
 
-## Os 6 artefatos. Nenhum é opcional.
+## Os 7 artefatos. Nenhum é opcional.
 
 Crie uma tarefa por item e complete em ordem.
+
+**Dois documentos, dois públicos — não confunda.** `docs/almoxarifado-novidades-por-etapa.md` (item 1) é
+para **quem acompanha o desenvolvimento**: organizado por etapa, com bug, pendência e decisão.
+`docs/almoxarifado-manual-do-sistema.md` (item 7) é para **quem usa o sistema** e nunca ouviu falar
+de etapa nenhuma. Nunca misture os dois.
 
 ### 1. `docs/almoxarifado-novidades-por-etapa.md` — o documento de apresentação
 
@@ -99,6 +104,33 @@ A linha da feature na tabela, com o range de commits e o que a etapa mudou no es
 - **A próxima tarefa detalhada**: contrato de API que ela consome, pontos de atenção, o que já está
   pronto e ela não precisa reabrir. É o que permite retomar sem reler o código.
 
+### 7. `docs/almoxarifado-manual-do-sistema.md` — o manual de quem USA
+
+**Documento vivo, atualizado a cada feature entregue.** Não é changelog e não é histórico: é a
+descrição de **como o sistema é hoje**, para alguém que não participou do desenvolvimento e vai
+operar ou apresentar o sistema.
+
+Organize por **o que a pessoa faz**, nunca por quando foi construído. Ao entregar uma feature,
+**enxerte o comportamento novo na seção temática onde ele pertence** — não crie uma seção "novidades
+da etapa X". Se o comportamento novo contradiz o que o manual dizia, **reescreva a frase antiga**:
+aqui, ao contrário das specs, não se deixa a versão errada à vista, porque o leitor não tem contexto
+para interpretar uma correção — ele leria as duas e não saberia qual vale.
+
+**Proibido neste arquivo:**
+- número de etapa ("Etapa 8c", "na 6b"), hash de commit, nome de branch;
+- qualquer menção a bug, defeito, correção, ou "antes era assim";
+- nome de arquivo, função, tabela ou coluna do código.
+
+**Obrigatório neste arquivo:**
+- **regra de negócio explicada com precisão técnica** — fórmulas, condições, o que **bloqueia** e o
+  que só **avisa**. O leitor precisa conseguir explicar a terceiros *como o sistema decide*;
+- a **mensagem literal que aparece na tela** quando o sistema recusa algo, entre aspas e **lida do
+  código**, nunca aproximada;
+- português com acentuação normal (é documento, não mensagem de commit).
+
+**Regra de verdade:** se você não conseguir confirmar uma regra lendo o código, **não a escreva**.
+Manual de usuário que mente é pior que manual incompleto — o operador age com base nele.
+
 ### 6. Verificação final — medida, não presumida
 
 ```
@@ -162,6 +194,8 @@ aprendidas por falha silenciosa aqui:
 - [ ] O mapa de status e o guia do usuário foram atualizados, e o cabeçalho do guia mostra onde
       parou?
 - [ ] O plano tem as tasks marcadas, as divergências registradas e a **próxima tarefa detalhada**?
+- [ ] O **manual do sistema** recebeu o comportamento novo, **enxertado na seção temática** — sem
+      número de etapa, sem menção a bug, com as regras e mensagens conferidas no código?
 - [ ] As suítes foram **rodadas** e os números na resposta são os que você **leu**?
 - [ ] `git status` limpo e tudo commitado?
 
