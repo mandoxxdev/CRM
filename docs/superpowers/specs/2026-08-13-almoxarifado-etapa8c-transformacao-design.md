@@ -105,7 +105,29 @@ como ganho, nunca como perda inventada.
 **O invariante fecha sozinho, e é por isso que ele é confiável.** Não existe coluna de valor no
 sistema — valor é sempre `quantidade × custo`, calculado na leitura (`reportService.js:10`,
 `stockService.js:1870`). Chapa de 100 kg a R$ 10 sai e leva R$ 1.000; as peças entram com R$ 1.000
-no total. O patrimônio não se move porque não há um segundo lugar onde ele possa discordar.
+no total.
+
+> **CORREÇÃO (2026-08-13, achada ao escrever o plano — esta decisão estava ERRADA).**
+> A frase original terminava com *"o patrimônio não se move porque **não há um segundo lugar onde
+> ele possa discordar**"*. **Isso está errado, e o erro é interno a este documento:** há dois
+> lugares, e a **decisão 11.1, escrita abaixo, os nomeia**. Escrevi as duas coisas sem cruzar uma
+> com a outra.
+>
+> Existem **duas famílias de leitura de custo** convivendo: uma usa só `custo_unitario`
+> (`routes/almoxarifado.js:249` e `:1048`), a outra usa `COALESCE(custo_medio, custo_unitario)`
+> (`reportService.js:10`, `stockService.js:1870`, `requisitionValueApprovalService.js:61`). E o
+> ramo de entrada com custo escreve **as duas colunas com valores diferentes**
+> (`stockService.js:1032-1041`): `custo_medio` recebe a média ponderada, `custo_unitario` recebe o
+> custo desta entrada.
+>
+> **O que continua valendo:** o invariante é real, mas é relativo a **uma** fórmula, não absoluto.
+> Ele fecha para `COALESCE(custo_medio, custo_unitario)`, que é a família majoritária (3 leituras
+> contra 2) e a que representa custo de estoque de verdade.
+>
+> **O que muda na prática:** o teste do invariante **declara qual fórmula usa**, em vez de afirmar
+> que o número é o mesmo em toda parte. E a divergência entre as duas famílias — que é
+> **anterior a esta etapa** — continua registrada na decisão 11.1 como o que é: dívida herdada que
+> a 8c não cria nem conserta, e que vai fazer duas telas mostrarem números diferentes.
 
 **Custo do serviço do terceiro:** campo opcional `custo_servico` **na linha de transformação** (é
 ali que a nota do terceiro chega). Se preenchido, soma ao valor rateado — a peça não é peça sem o
@@ -113,6 +135,13 @@ corte. Se em branco, não entra. Sem estimativa, sem default.
 
 O rateio mora numa **função pura só** (`services/almoxarifado/transformCost.js`), para trocar a
 base ser uma linha se a GMP passar a cortar peças mistas.
+
+> **ACRÉSCIMO (2026-08-13, achado ao escrever o plano): "sobra a zero" não se implementa passando
+> zero.** O motor só escreve custo sob `if (custoInformado && custoInformado > 0)`
+> (`stockService.js:1031`); crédito com `custo_unitario = 0` cai no ramo `else`, que **não escreve
+> custo nenhum** — a sobra entraria carregando o custo antigo que o material dela já tivesse. O
+> efeito pretendido ("a sobra não recebe rateio") precisa ser **explícito**, e não pode depender de
+> passar 0 e torcer. O plano trata isso na Task 6; o design não tinha percebido.
 
 ### 5. **Correção de pré-requisito:** o recebimento passa a alimentar o custo médio
 
