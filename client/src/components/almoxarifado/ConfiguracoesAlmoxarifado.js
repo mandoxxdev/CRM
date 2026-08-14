@@ -2681,24 +2681,42 @@ const TabConfiguracoes = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // ATENÇÃO — `chave` aqui NÃO é rótulo interno: é a chave literal que o servidor semeia em
+  // `configuracoes_almoxarifado` e lê em tempo de execução. Esta lista já mentiu: declarava
+  // `permitir_saida_saldo_negativo` enquanto o motor de estoque lia
+  // `permite_saldo_negativo_global` (stockService, guarda de saída), e mais cinco chaves que
+  // simplesmente não existiam do lado do servidor. O administrador ligava a opção e nada
+  // acontecia — um controle que mente é pior do que controle nenhum.
+  //
+  // Regra para adicionar um campo aqui: a chave precisa (1) estar semeada em
+  // `server/services/almoxarifado/schema.js` e (2) ter um leitor de verdade no servidor.
+  // `server/tests/api/configuracoesGerais.api.test.js` lê ESTE arquivo e reprova as duas
+  // condições — não adiante inventar a chave só na tela.
   const CAMPOS = [
     { chave: 'aprovacao_automatica', label: 'Aprovação Automática', tipo: 'boolean', descricao: 'Requisições normais são aprovadas automaticamente (exceto CRÍTICO)' },
-    { chave: 'prazo_atendimento_horas', label: 'Prazo de Atendimento (horas)', tipo: 'number', descricao: 'Tempo máximo para atender uma requisição normal' },
-    { chave: 'prazo_urgente_horas', label: 'Prazo Urgente (horas)', tipo: 'number', descricao: 'Tempo máximo para atender uma requisição urgente' },
-    { chave: 'prazo_critico_horas', label: 'Prazo Crítico (horas)', tipo: 'number', descricao: 'Tempo máximo para atender uma requisição crítica' },
-    { chave: 'alerta_estoque_email', label: 'E-mail para Alertas de Estoque', tipo: 'text', descricao: 'Será notificado quando estoque crítico for detectado' },
-    { chave: 'prefixo_codigo_material', label: 'Prefixo do Código de Material', tipo: 'text', descricao: 'Prefixo usado na geração automática de códigos (ex: MAT, ALM)' },
-    { chave: 'permitir_saida_saldo_negativo', label: 'Permitir Saída com Saldo Negativo', tipo: 'boolean', descricao: 'Permite registrar saída mesmo sem saldo disponível' },
-    { chave: 'requer_os_requisicao', label: 'OS Obrigatória na Requisição', tipo: 'boolean', descricao: 'Exige referência de Ordem de Serviço em toda requisição' },
+    { chave: 'permite_saldo_negativo_global', label: 'Permitir Saída com Saldo Negativo', tipo: 'boolean', descricao: 'Permite registrar saída mesmo sem saldo disponível' },
   ];
+  // Saíram daqui por não ter leitor nenhum no servidor — nenhuma delas fazia coisa alguma:
+  // `prazo_atendimento_horas` (semeada, mas nada calcula prazo de atendimento),
+  // `prazo_urgente_horas` e `prazo_critico_horas` (nem semeadas), `alerta_estoque_email`
+  // (a aba "Alertas de Estoque" é quem configura destinatários, em `alertas_estoque_emails`),
+  // `prefixo_codigo_material` (a semeada chama-se `prefixo_material` e também não é lida por
+  // ninguém) e `requer_os_requisicao` (nenhuma validação exige OS). Voltar qualquer uma exige
+  // primeiro o leitor no servidor — senão o controle volta a mentir.
 
   useEffect(() => { loadConfigs(); }, []);
   const loadConfigs = async () => {
     setLoading(true);
     try {
+      // GET /almoxarifado/configuracoes devolve um MAPA { chave: { valor, descricao, id } },
+      // não um array. O `res.data.forEach` que estava aqui estourava TypeError em toda carga,
+      // caía no catch e a aba inteira aparecia vazia com "Erro ao carregar configurações" —
+      // por isso nem o campo de chave correta mostrava o valor gravado.
       const res = await api.get('/almoxarifado/configuracoes');
       const map = {};
-      res.data.forEach(c => { map[c.chave] = c.valor; });
+      Object.entries(res.data || {}).forEach(([chave, info]) => {
+        map[chave] = info && typeof info === 'object' ? info.valor : info;
+      });
       setConfigs(map);
     } catch { toast.error('Erro ao carregar configurações'); } finally { setLoading(false); }
   };
@@ -2706,7 +2724,15 @@ const TabConfiguracoes = () => {
   const handleSalvar = async () => {
     setSaving(true);
     try {
-      await api.put('/almoxarifado/configuracoes', { configuracoes: Object.entries(configs).map(([chave, valor]) => ({ chave, valor: String(valor) })) });
+      // PUT espera o corpo achatado { chave: valor }. O envelope `{ configuracoes: [...] }` que
+      // estava aqui fazia o servidor gravar UMA linha de chave 'configuracoes' com
+      // "[object Object],[object Object]" — nenhuma configuração era salva.
+      // Só as chaves desta tela vão no corpo: o mapa `configs` carrega tudo o que o GET trouxe
+      // (SMTP, WhatsApp, liberação por valor) e reenviar isso reescreveria configuração de
+      // outras abas sem ninguém ter pedido.
+      const payload = {};
+      CAMPOS.forEach(c => { payload[c.chave] = String(configs[c.chave] ?? ''); });
+      await api.put('/almoxarifado/configuracoes', payload);
       toast.success('Configurações salvas!');
     } catch (err) { toast.error(err.response?.data?.error || 'Erro'); } finally { setSaving(false); }
   };

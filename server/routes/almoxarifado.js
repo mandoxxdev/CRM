@@ -1503,21 +1503,44 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
-  app.put('/api/almoxarifado/configuracoes', authenticateToken, (req, res) => {
+  // Corpo esperado: { chave: valor, ... } achatado — o mesmo formato que o GET acima devolve.
+  //
+  // A rota GRAVA APENAS CHAVE QUE JÁ EXISTE (semeada em schema.js). Antes era
+  // `INSERT ... ON CONFLICT DO UPDATE`, e o INSERT era o problema: qualquer chave inventada
+  // virava linha nova em silêncio, com HTTP 200 e toast de sucesso. Foi exatamente assim que a
+  // tela de Configurações Gerais passou a gravar `permitir_saida_saldo_negativo` enquanto o
+  // motor de estoque lia `permite_saldo_negativo_global` — o administrador ligava a opção,
+  // recebia "Configurações salvas!", e continuava tomando recusa por saldo insuficiente.
+  // Com UPDATE puro, divergência de chave vira 400 na cara de quem introduziu.
+  // Quem precisa de chave nova cria a linha no seed, que é onde o valor padrão e a descrição
+  // moram — não pelo formulário.
+  app.put('/api/almoxarifado/configuracoes', authenticateToken, async (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const configs = req.body; // { chave: valor, ... }
-    const promises = Object.entries(configs).map(([chave, valor]) =>
-      new Promise((resolve, reject) => {
-        db.run(`INSERT INTO configuracoes_almoxarifado (chave, valor, updated_at, updated_by)
-                VALUES (?, ?, CURRENT_TIMESTAMP, ?)
-                ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor, updated_at=CURRENT_TIMESTAMP, updated_by=excluded.updated_by`,
-          [chave, String(valor), req.user.nome || req.user.email],
-          (e) => e ? reject(e) : resolve());
-      })
-    );
-    Promise.all(promises)
-      .then(() => res.json({ success: true }))
-      .catch(e => res.status(500).json({ error: e.message }));
+    if (!configs || typeof configs !== 'object' || Array.isArray(configs)) {
+      return res.status(400).json({ error: 'Corpo inválido — esperado um objeto { chave: valor }' });
+    }
+    const entradas = Object.entries(configs);
+    if (!entradas.length) return res.status(400).json({ error: 'Nenhuma configuração informada' });
+    try {
+      // Valida TODAS antes de gravar QUALQUER uma: sem transação neste módulo, rejeitar no meio
+      // do laço deixaria metade do formulário aplicada e a outra metade não.
+      const existentes = await dbAll(db, `SELECT chave FROM configuracoes_almoxarifado`);
+      const conhecidas = new Set(existentes.map(r => r.chave));
+      const desconhecidas = entradas.map(([chave]) => chave).filter(c => !conhecidas.has(c));
+      if (desconhecidas.length) {
+        return res.status(400).json({ error: `Configuração desconhecida: ${desconhecidas.join(', ')}` });
+      }
+      for (const [chave, valor] of entradas) {
+        await dbRun(db, `UPDATE configuracoes_almoxarifado
+                         SET valor = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?
+                         WHERE chave = ?`,
+          [String(valor), req.user.nome || req.user.email, chave]);
+      }
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get('/api/almoxarifado/configuracoes/alertas-estoque', authenticateToken, async (req, res) => {

@@ -1534,6 +1534,12 @@ async function initSchema(db) {
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
   }
+  // Lixo deixado pelo PUT /almoxarifado/configuracoes antigo: a tela mandava o corpo embrulhado
+  // em `{ configuracoes: [...] }` e a rota fazia Object.entries dele, gravando UMA linha de
+  // chave 'configuracoes' com valor "[object Object],[object Object]". Nenhum leitor procura
+  // essa chave — ela só suja a listagem de configurações. Não é chave semeada nem lida por
+  // ninguém, então o DELETE não tem como levar junto configuração legítima.
+  await dbRun(db, "DELETE FROM configuracoes_almoxarifado WHERE chave = 'configuracoes'");
 
   // ── Centros de custo ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS centros_custo_almoxarifado (
