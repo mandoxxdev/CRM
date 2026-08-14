@@ -613,6 +613,20 @@ O **cartão "Disponível"** que aparece no extrato do material já é essa conta
 
 Lembre-se, ao ler qualquer saldo, da regra permanente enunciada em 3.1: **o saldo de um material é um só**, somado em todas as áreas do almoxarifado, porque as áreas são do mesmo site.
 
+#### Saída sem saldo — e a única forma de permiti-la
+
+Por padrão, **uma saída maior que o disponível é recusada**, e o sistema diz quanto há:
+
+> *"Saldo insuficiente. Disponível: 8 UN"*
+
+Isso vale para todo tipo de saída, e a recusa acontece no servidor — não adianta a tela deixar digitar.
+
+Permitir saldo negativo é uma decisão **global**, tomada em **Configurações → Configurações Gerais**, na opção *Permitir Saída com Saldo Negativo*. Ela é restrita ao Administrador do módulo e vale para **todos** os materiais — não há como liberar saldo negativo para um material só.
+
+Ligá-la significa aceitar que o estoque do sistema pode ficar abaixo de zero. Isso só faz sentido quando a empresa sabe que o lançamento de entrada vai chegar atrasado — **não** é a forma de contornar divergência de contagem. Para divergência de contagem, o caminho é o inventário (seção 13) ou um Ajuste (6.2).
+
+Uma configuração dessa tela só existe se houver alguém no sistema que a consulte; opções que não governam comportamento nenhum não são oferecidas ali.
+
 ### 6.2 Os tipos que o operador lança na tela
 
 O formulário de **Nova Movimentação** oferece seis tipos:
