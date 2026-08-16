@@ -94,6 +94,28 @@ const TIPOS_MOVIMENTO = [
   // TIPOS_RETENCAO) e a peca nunca seria creditada — com a movimentacao aparecendo no livro do
   // mesmo jeito, que e o pior modo de falhar desta etapa.
   'RETORNO_TRANSFORMACAO',
+  // Etapa 9, Task 2: o credito do retalho/sobra aproveitavel gerado por um evento de corte. E'
+  // ENTRADA de verdade — credita quantidade_atual — mas por um caminho DIFERENTE de
+  // RETORNO_TRANSFORMACAO acima, porque a origem e' diferente: aquele nasce de uma remessa a
+  // terceiro (galvanizador cortando chapa fora do predio); este nasce de um corte feito AQUI,
+  // dentro do proprio almoxarifado, registrado pelo evento composto que a Task 3 constroi.
+  //
+  // Por que NAO reusar ENTRADA (nem ENTRADA_MANUAL), em ordem de gravidade:
+  //  1. CUSTO: ENTRADA_MANUAL aceita custo_unitario e alimenta o custo medio (stockService.js,
+  //     mesmo caminho de RETORNO_TRANSFORMACAO). O retalho tem de entrar a custo ZERO — mesmo
+  //     tratamento conservador que TIPOS_RESULTADO.SOBRA ja recebe na transformacao (decisao 4 do
+  //     design da 8c, comentario acima): o patrimonio nunca infla, e se o retalho for vendido como
+  //     sucata um dia aparece como GANHO, nunca como perda inventada. Um tipo que reusa o caminho
+  //     de custo de ENTRADA_MANUAL deixaria essa garantia dependendo de quem chama lembrar de
+  //     nunca passar custo_unitario — exatamente o tipo de "aviso nao e mecanismo" que
+  //     movementTypes.js documenta.
+  //  2. LIVRO: no extrato, ENTRADA_MANUAL faz o retalho parecer ter aparecido do nada — a chapa
+  //     que o originou, e a requisicao/OS onde a sobra ficou, somem.
+  //  3. EMISSOR UNICO: so o evento composto do retalho (Task 3) pode emitir este tipo — por isso
+  //     ele e' DEDICADO (TIPOS_DEDICADOS abaixo), nunca aceito pela rota generica de movimentacao.
+  //     ENTRADA_MANUAL e' publica (qualquer POST na v2 com o gate `movimentar` cria uma), e um
+  //     retalho tem de nascer sempre vinculado a origem que o evento composto registra.
+  'ENTRADA_RETALHO',
   'ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO', 'ESTORNO',
 ];
 
@@ -144,7 +166,13 @@ const TIPOS_RETENCAO = [
 //     chapa alguma — estoque do nada, exatamente o que a mensagem de recusa da 8b dizia querer
 //     evitar. Entrar aqui ja o tira da rota generica: TIPOS_MOVIMENTO_ROTA e DERIVADO desta lista
 //     (schemas.js:54-56), nao ha segunda lista a lembrar.
-const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO', 'RETORNO_TRANSFORMACAO'];
+//   ENTRADA_RETALHO (Etapa 9, Task 2) -> so o evento composto do retalho (Task 3) o emite. Mesmo
+//     criterio de RETORNO_TRANSFORMACAO: aceita-lo na v2 (gate `movimentar`, o mais amplo do
+//     modulo) permitiria creditar retalho do NADA — sem a chapa de origem baixada do outro lado,
+//     sem o vinculo com a sobra e sem a guarda de dono que o evento composto carrega (retalho tem
+//     de ter o MESMO dono da origem). Entrar aqui ja o tira da rota generica, pelo mesmo mecanismo
+//     de derivacao — nao ha segunda lista a editar em schemas.js.
+const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO', 'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO'];
 
 /**
  * Classificacao da linha de resultado de uma TRANSFORMACAO (Etapa 8c, decisao 8 do design).

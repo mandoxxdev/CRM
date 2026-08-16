@@ -36,10 +36,13 @@
  * `DEVOLUCAO` e `ENTRADA` sao legados de banco antigo e continuam aqui: o livro e imutavel e ainda
  * tem linhas com esses tipos. `RETORNO_TRANSFORMACAO` (Etapa 8c) credita a peca que voltou do
  * terceiro — a chapa que a originou ja foi baixada por `CONSUMO_TERCEIRO`, entao os dois aparecem
- * no mesmo evento, em materiais diferentes.
+ * no mesmo evento, em materiais diferentes. `ENTRADA_RETALHO` (Etapa 9, Task 2) credita o retalho
+ * de um corte feito AQUI dentro — mesma familia de "entrada que nasce de um evento composto" de
+ * RETORNO_TRANSFORMACAO, mas sem chapa saindo por remessa: a origem e' interna, registrada pelo
+ * evento composto da Task 3, nao por uma remessa a terceiro.
  */
 const TIPOS_ENTRADA = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO',
-  'DEVOLUCAO', 'AJUSTE_POSITIVO', 'RETORNO_TRANSFORMACAO'];
+  'DEVOLUCAO', 'AJUSTE_POSITIVO', 'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO'];
 
 /**
  * Tipos que DEBITAM `quantidade_atual`.

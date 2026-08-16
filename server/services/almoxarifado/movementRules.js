@@ -67,6 +67,14 @@ const REGRAS_VINCULO = {
   // remessas_terceiro_almoxarifado); exigi-lo de novo aqui duplicaria a regra em dois lugares que
   // divergiriam na primeira mudanca.
   RETORNO_TRANSFORMACAO: { vinculo: 'nenhum', justificativa: true },
+
+  // Etapa 9, Task 2: mesma forma e mesma razao de RETORNO_TRANSFORMACAO acima. Justificativa
+  // porque o tipo muda a resposta a pergunta "de onde veio esse retalho?" e a resposta tem de
+  // estar escrita — sem ela o retalho apareceria no extrato do mesmo jeito que uma peca do nada.
+  // Vinculo 'nenhum' porque o vinculo (chapa de origem, requisicao/OS onde a sobra ficou) mora na
+  // LINHA DA SOBRA (sobras_almoxarifado, Etapa 9 Task 1), nao na movimentacao — exigi-lo de novo
+  // aqui duplicaria a regra em dois lugares que divergiriam na primeira mudanca.
+  ENTRADA_RETALHO: { vinculo: 'nenhum', justificativa: true },
 };
 
 function avaliarRegrasVinculo(tipo, params) {

@@ -53,10 +53,16 @@ const { registrarAuditoria } = require('./audit');
  *    A GUARDA DE VERDADE DA TRANSFORMACAO E OUTRA e mora neste mesmo arquivo:
  *    assertMesmoDonoNaTransformacao (Task 5) — a peca tem de ter o MESMO dono da chapa, senao a
  *    transformacao converteria material de cliente em patrimonio da GMP.
+ *  - ENTRADA_RETALHO (Etapa 9, Task 2): mesmo caso de RETORNO_TRANSFORMACAO — DECLARATIVO, tipo de
+ *    ENTRADA, a guarda desta lista nao roda para ele hoje. Esta aqui pelo mesmo motivo: a ausencia
+ *    nao pode ser lida como esquecimento. O evento composto do retalho (Task 3) carrega guarda
+ *    PROPRIA — o retalho tem de ter o MESMO dono da chapa de origem, mesmo raciocinio de
+ *    assertMesmoDonoNaTransformacao, senao um corte converteria material de cliente em patrimonio
+ *    da GMP (ou o inverso) sem ninguem perceber.
  */
 const TIPOS_ISENTOS_DONO = ['DEVOLUCAO_CLIENTE', 'TRANSFERENCIA', 'AJUSTE', 'AJUSTE_POSITIVO',
   'AJUSTE_NEGATIVO', 'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
-  'RETORNO_TRANSFORMACAO'];
+  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO'];
 
 /**
  * Tipos de saida que a guarda cobre. Espelha o `tiposSaida` do stockService menos os isentos.
