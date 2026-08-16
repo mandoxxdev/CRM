@@ -1,6 +1,6 @@
 const { dbAll, dbGet } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
-const { valorEstoqueSql } = require('./custoSql');
+const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -129,10 +129,107 @@ async function relatorioSolicitacoesCompraPendentes(db) {
     WHERE s.status = 'PENDENTE' ORDER BY s.created_at`);
 }
 
+/**
+ * Relatorio financeiro de sucata (Etapa 9, Task 7 — consumidor declarado da spec 12).
+ *
+ * ── POR QUE ELE LE O LIVRO, E NAO SO `sucateamentos_almoxarifado` ────────────────────────────
+ *
+ * `sucateamentos_almoxarifado` (Task 6) so tem as sucatas do processo NOVO de dupla aprovacao.
+ * Mas ha outra origem: a devolucao ao cliente com destino SUCATA (returnService.registrarDevolucao,
+ * Etapa 7) TAMBEM emite uma linha `SUCATA` em `movimentacoes_almoxarifado` — o material ja tinha
+ * saido fisicamente na entrega, entao a devolucao nao passa (nem precisa passar) pelas duas
+ * assinaturas. Ela e sucata tao real quanto a outra, e um relatorio financeiro que so somasse
+ * `sucateamentos_almoxarifado` subcontaria o total. Por isso a fonte de `movimentacoes` aqui e o
+ * LIVRO (`tipo = 'SUCATA' AND cancelado = 0`), e o LEFT JOIN com `sucateamentos_almoxarifado` (por
+ * `movimentacao_sucata_id`) so serve para trazer a `classificacao` QUANDO ela existe — a devolucao
+ * nao tem esse campo, e fica `null` (agrupada como "SEM CLASSIFICACAO" abaixo).
+ *
+ * ── VALORACAO: custo ATUAL, nao historico (decisao 10 da 8c, deliberada) ────────────────────
+ *
+ * `valor_estimado = quantidade * custoUnitarioSql('ma')` — FONTE UNICA do custo unitario
+ * (custoSql.js; `tests/api/custoUnitarioFonteUnica.api.test.js` varre o codigo-fonte atras de
+ * quem reescrever essa conta a mao). A movimentacao NAO guarda o custo de quando saiu, entao o
+ * valor reportado e sempre pelo custo de HOJE — se o custo do material mudou desde a baixa, o
+ * relatorio de um periodo passado muda junto. A `nota` no retorno existe para a tela nao deixar
+ * isso implicito.
+ *
+ * `vendas` (sucateamentos VENDIDA, `valor_venda` somado) e o valor FINANCEIRO real, declarado por
+ * quem assinou a aprovacao — nao estimado. As duas somas nao sao a mesma pergunta: uma e "quanto
+ * valia pelo custo de hoje", a outra e "quanto realmente entrou".
+ */
+async function relatorioSucataFinanceiro(db, { de, ate } = {}) {
+  let sqlMov = `SELECT m.id, m.material_id, ma.codigo AS material_codigo, ma.nome AS material_nome,
+      ma.unidade, m.quantidade, m.created_at, m.referencia, s.classificacao,
+      (m.quantidade * ${custoUnitarioSql('ma')}) AS valor_estimado
+    FROM movimentacoes_almoxarifado m
+    JOIN materiais_almoxarifado ma ON ma.id = m.material_id
+    LEFT JOIN sucateamentos_almoxarifado s ON s.movimentacao_sucata_id = m.id
+    WHERE m.tipo = 'SUCATA' AND m.cancelado = 0`;
+  const paramsMov = [];
+  if (de) { sqlMov += ' AND DATE(m.created_at) >= ?'; paramsMov.push(de); }
+  if (ate) { sqlMov += ' AND DATE(m.created_at) <= ?'; paramsMov.push(ate); }
+  sqlMov += ' ORDER BY m.created_at DESC';
+  const movimentacoes = await dbAll(db, sqlMov, paramsMov);
+
+  let sqlVendas = `SELECT s.id, s.material_id, ma.codigo AS material_codigo, ma.nome AS material_nome,
+      s.quantidade, s.valor_venda, s.classificacao, s.destino_registrado_em
+    FROM sucateamentos_almoxarifado s
+    JOIN materiais_almoxarifado ma ON ma.id = s.material_id
+    WHERE s.status = 'VENDIDA'`;
+  const paramsVendas = [];
+  if (de) { sqlVendas += ' AND DATE(s.destino_registrado_em) >= ?'; paramsVendas.push(de); }
+  if (ate) { sqlVendas += ' AND DATE(s.destino_registrado_em) <= ?'; paramsVendas.push(ate); }
+  sqlVendas += ' ORDER BY s.destino_registrado_em DESC';
+  const vendas = await dbAll(db, sqlVendas, paramsVendas);
+
+  // Agrupamento por classificacao — feito em JS, nao em SQL: e a soma de DUAS consultas
+  // independentes (movimentacoes e vendas), e um GROUP BY so enxergaria uma das duas.
+  const porClassificacao = new Map();
+  const bucket = (classificacao) => {
+    const chave = classificacao || 'SEM CLASSIFICACAO';
+    if (!porClassificacao.has(chave)) {
+      porClassificacao.set(chave, {
+        classificacao: chave, quantidade: 0, valor_estimado: 0, valor_vendido: 0,
+      });
+    }
+    return porClassificacao.get(chave);
+  };
+
+  let quantidadeTotal = 0;
+  let valorEstimadoTotal = 0;
+  for (const m of movimentacoes) {
+    quantidadeTotal += Number(m.quantidade) || 0;
+    valorEstimadoTotal += Number(m.valor_estimado) || 0;
+    const b = bucket(m.classificacao);
+    b.quantidade += Number(m.quantidade) || 0;
+    b.valor_estimado += Number(m.valor_estimado) || 0;
+  }
+  let valorVendidoTotal = 0;
+  for (const v of vendas) {
+    valorVendidoTotal += Number(v.valor_venda) || 0;
+    bucket(v.classificacao).valor_vendido += Number(v.valor_venda) || 0;
+  }
+
+  return {
+    periodo: { de: de || null, ate: ate || null },
+    movimentacoes,
+    vendas,
+    totais: {
+      quantidade_sucateada: quantidadeTotal,
+      valor_estimado_total: valorEstimadoTotal,
+      valor_vendido_total: valorVendidoTotal,
+    },
+    por_classificacao: Array.from(porClassificacao.values()),
+    nota: 'Valor estimado calculado pelo custo ATUAL do material (custoUnitarioSql) — a movimentacao '
+      + 'nao guarda custo historico, entao a valoracao nao reflete necessariamente o custo de quando '
+      + 'o material saiu (decisao 10 da 8c). O valor vendido, esse sim, e o declarado na aprovacao.',
+  };
+}
+
 module.exports = {
   relatorioEstoqueAtual, relatorioAbaixoMinimo, relatorioReservadoPorOS,
   relatorioConsumoPorOS, relatorioMateriaisMaisConsumidos, relatorioRecebimentosPendentes,
   relatorioMateriaisBloqueados, relatorioHistoricoMovimentacoes, relatorioInventarioDivergencias,
   relatorioConsumoPeriodo, relatorioFerramentasEmprestadas, relatorioEPIPorColaborador,
-  relatorioSolicitacoesCompraPendentes,
+  relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro,
 };

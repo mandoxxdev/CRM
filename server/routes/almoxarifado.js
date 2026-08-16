@@ -2387,7 +2387,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // registro; o initSchema disparado acima pode ainda estar em andamento — é
   // idempotente e a extended roda runInitSchemaWithRetry por conta própria).
   db.run('SELECT 1', [], () => {
-    require('./almoxarifado/extended')(app, db, authenticateToken);
+    // `uploadsAlmoxDir` (declarado acima, :46) e passado adiante para a extended: o multer do
+    // comprovante de sucateamento (Task 7) mora la, e precisa do MESMO diretorio fisico que
+    // `uploadAlmox`/`uploadCertificado` usam aqui — nunca re-derivar PERSISTENT_DATA_DIR (isso
+    // duplicaria a resolucao de CRM_DATA_DIR de config/paths.js E, no harness de teste
+    // (tests/helpers/testApp.js), apontaria para o diretorio ERRADO — o harness passa um
+    // `dataDir` temporario como PERSISTENT_DATA_DIR so para ESTE arquivo, e `require('./config/paths')`
+    // dentro da extended nao veria esse temporario nenhum.
+    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir);
     console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
   });
 

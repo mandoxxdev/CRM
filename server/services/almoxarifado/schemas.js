@@ -596,6 +596,32 @@ const SucateamentoDestinoSchema = z.object({
   }
 });
 
+/**
+ * Variante de `SucateamentoDestinoSchema` para a ROTA multipart (Task 7 — POST
+ * /sucateamentos/:id/destino leva `comprovante` opcional via multer). O multer entrega TODO
+ * campo de formulario como STRING, `valor_venda` incluso — `z.number()` puro rejeitaria com 400
+ * QUALQUER submissao que viesse com arquivo anexado, mesmo com o valor certo digitado. `numFromForm`
+ * (criado pelo mesmo motivo para `MaterialSchema`/`MaterialUpdateSchema`, ver o comentario dela
+ * acima) resolve: `''`/`undefined` viram "ausente", string numerica vira `Number(...)`.
+ *
+ * `comprovante_arquivo` fica de fora deste schema de proposito: quem preenche esse campo e a
+ * ROTA, a partir de `req.file.filename` depois do upload — nunca um valor que veio do corpo do
+ * formulario. Aceitar um `comprovante_arquivo` arbitrario do cliente abriria a porta para
+ * referenciar (ou sobrescrever a referencia de) um arquivo que o usuario nao enviou.
+ */
+const SucateamentoDestinoFormSchema = z.object({
+  destino: z.enum(DESTINOS_FINAIS),
+  valor_venda: numFromForm(z.number().positive('valor de venda deve ser maior que zero').nullable().optional()),
+}).superRefine((data, ctx) => {
+  if (data.destino === 'VENDIDA' && !(data.valor_venda > 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['valor_venda'],
+      message: 'informe o valor da venda da sucata (destino VENDIDA)',
+    });
+  }
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -604,5 +630,5 @@ module.exports = {
   ResultadoTransformacaoSchema, TransformacaoRemessaSchema,
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
   SobraUpdateSchema, GerarRetalhoSchema,
-  SucateamentoCreateSchema, SucateamentoDestinoSchema,
+  SucateamentoCreateSchema, SucateamentoDestinoSchema, SucateamentoDestinoFormSchema,
 };

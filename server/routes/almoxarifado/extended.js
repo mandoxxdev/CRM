@@ -1,13 +1,16 @@
 /**
  * Extended API routes for almoxarifado v3
  */
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
-const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema } = require('../../services/almoxarifado/schemas');
+const { validate, formatZodError } = require('../../services/almoxarifado/validation');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -17,6 +20,7 @@ const receiptService = require('../../services/almoxarifado/receiptService');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
 const returnService = require('../../services/almoxarifado/returnService');
 const scrapService = require('../../services/almoxarifado/scrapService');
+const scrapDisposalService = require('../../services/almoxarifado/scrapDisposalService');
 const toolService = require('../../services/almoxarifado/toolService');
 const reportService = require('../../services/almoxarifado/reportService');
 const sectorMaterialService = require('../../services/almoxarifado/sectorMaterialService');
@@ -45,10 +49,42 @@ async function runInitSchemaWithRetry(db, retries = 3) {
   }
 }
 
-module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
+module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir) {
   runInitSchemaWithRetry(db).catch((e) => console.error('Falha definitiva schema almoxarifado v3:', e.message));
 
   const auth = authenticateToken;
+
+  // ── Upload do comprovante de destino do sucateamento (Etapa 9, Task 7) ───────────────────────
+  //
+  // Molde: `uploadCertificado` (routes/almoxarifado.js:65-72 — mesmo filtro PDF+imagem, mesmo
+  // limite de 10MB). Nao e REUSADO porque nao da para: aquela instancia vive dentro do closure de
+  // `module.exports` de almoxarifado.js e nunca foi exportada — a extended e registrada por um
+  // require() separado (almoxarifado.js:2390) sem acesso a variaveis daquele closure.
+  //
+  // A alternativa seria esta rota re-derivar PERSISTENT_DATA_DIR direto de `config/paths.js`, mas
+  // isso duplicaria a resolucao de CRM_DATA_DIR (a mesma armadilha que custoSql.js e
+  // availabilitySql.js existem para evitar em outras contas) E quebraria o harness de teste: o
+  // harness passa um `dataDir` TEMPORARIO como PERSISTENT_DATA_DIR so para almoxarifado.js
+  // (tests/helpers/testApp.js), e `config/paths.js` nunca veria esse valor — os arquivos gravados
+  // aqui iriam parar no diretorio de producao/dev real enquanto os testes rodam.
+  //
+  // Por isso `uploadsAlmoxDir` chega como PARAMETRO, ja calculado por quem registra esta rota
+  // (almoxarifado.js:46, propagado na chamada de :2390) — mesmo diretorio fisico do
+  // `uploadAlmox`/`uploadCertificado`, em producao e no harness, sem reescrever a resolucao.
+  const uploadComprovanteSucata = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `comprovante-sucata-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
+      cb(new Error('Comprovante deve ser PDF ou imagem'));
+    },
+  });
 
   // ── Metadata ──
   app.get('/api/almoxarifado/meta/tipos-material', auth, (req, res) => {
@@ -690,6 +726,139 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     catch (e) { handleError(res, e); }
   });
 
+  // ── Sucateamento (Etapa 9, Task 7 — a HTTP do processo entregue pela Task 6) ─────────────────
+  //
+  // `scrapDisposalService` ja tem TODA a regra de negocio (as tres barreiras da segregacao, a
+  // maquina de estados, a compensacao) — ver o cabecalho longo daquele arquivo. As rotas abaixo
+  // so traduzem HTTP: gate de rota QUANDO uma unica acao de `requirePermission` descreve o gate
+  // certo, e SO `auth` (deixando o servico decidir) quando nao descreve. Os tres casos em que ela
+  // NAO descreve estao comentados no lugar, e nao sao esquecimento.
+
+  // POST /sucateamentos — SOLICITAR. `requirePermission('movimentar')` e o gate PREVISTO pelo
+  // design (decisao 9): solicitar sucateamento e ato de quem tem o material na mao, e o servico
+  // (`scrapDisposalService.solicitar`) de proposito NAO checa permissao nenhuma — a rota e a UNICA
+  // barreira de perfil aqui. Consequencia que a Task 7 usa adiante: todo solicitante que passa por
+  // esta rota TEM `movimentar` (ADMINISTRADOR ou ALMOXARIFE) — ver o comentario de `/cancelar`.
+  app.post('/api/almoxarifado/sucateamentos', auth, requirePermission('movimentar'),
+    validate(SucateamentoCreateSchema), async (req, res) => {
+      try { res.status(201).json(await scrapDisposalService.solicitar(db, req.user, req.body)); }
+      catch (e) { handleError(res, e); }
+    });
+
+  // GET /sucateamentos?status=&material_id= — so `auth`, mesmo padrao de leitura do resto do
+  // modulo (GET /sobras, GET /remessas-terceiros etc.): CONSULTA ve sem poder agir.
+  app.get('/api/almoxarifado/sucateamentos', auth, async (req, res) => {
+    try { res.json(await scrapDisposalService.listar(db, req.query)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  // POST /:id/aprovar-almoxarifado e /:id/aprovar-gestao — as DUAS pernas da dupla aprovacao.
+  // `requirePermission` descreve bem o gate aqui porque cada rota e UMA acao so: a perna e
+  // propriedade da URL tanto quanto do servico, e `scrapDisposalService.aprovar` REPETE a mesma
+  // checagem por dentro (barreira 1 do cabecalho daquele arquivo) porque a acao tambem e
+  // propriedade da PERNA — uma rota nova ligada ao gate errado nao herdaria a decisao certa de
+  // graca. As barreiras 2 (solicitante) e 3 (identidade entre pernas) NAO cabem em
+  // `requirePermission` (que so sabe perfil, nunca quem pediu ou quem ja assinou) — moram so no
+  // servico, e sao elas que dao o 403 "voce nao pode assinar a propria solicitacao"/"ja assinou a
+  // outra perna" mesmo para quem tem o perfil certo.
+  app.post('/api/almoxarifado/sucateamentos/:id/aprovar-almoxarifado', auth,
+    requirePermission('aprovar_sucateamento'), async (req, res) => {
+      try { res.json(await scrapDisposalService.aprovar(db, req.user, req.params.id, 'almoxarifado')); }
+      catch (e) { handleError(res, e); }
+    });
+
+  app.post('/api/almoxarifado/sucateamentos/:id/aprovar-gestao', auth,
+    requirePermission('aprovar_sucateamento_gestao'), async (req, res) => {
+      try { res.json(await scrapDisposalService.aprovar(db, req.user, req.params.id, 'gestao')); }
+      catch (e) { handleError(res, e); }
+    });
+
+  // Middleware inline: passa quem aprova QUALQUER uma das duas pernas — um OU de duas acoes que
+  // `requirePermission` (uma acao so) nao sabe exprimir. Reusado por /rejeitar; `scrapDisposalService`
+  // usa o MESMO OU por dentro (`assertAprovaAlgumaPerna`) para /rejeitar e /destino — ver o
+  // cabecalho de scrapDisposalService.js.
+  function requerAprovarAlgumaPerna(req, res, next) {
+    if (can(req.user, 'aprovar_sucateamento') || can(req.user, 'aprovar_sucateamento_gestao')) return next();
+    return res.status(403).json({
+      error: 'Sem permissão para esta operação — exige poder aprovar alguma das duas pernas do sucateamento',
+      acao: 'aprovar_sucateamento ou aprovar_sucateamento_gestao',
+      perfil: getPerfilFromUser(req.user),
+    });
+  }
+
+  // POST /:id/rejeitar — motivo obrigatorio, checado pelo servico (que devolve 400 sem ele).
+  app.post('/api/almoxarifado/sucateamentos/:id/rejeitar', auth, requerAprovarAlgumaPerna, async (req, res) => {
+    try { res.json(await scrapDisposalService.rejeitar(db, req.user, req.params.id, req.body?.motivo)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  // POST /:id/cancelar — `requirePermission('movimentar')`, do jeito que o plano original previa.
+  //
+  // AJUSTE AVALIADO NA TASK 7 e MANTIDO como estava (o plano tinha levantado a duvida: "o
+  // solicitante tipico e PRODUCAO, que nao tem `movimentar` — ele nunca conseguiria cancelar o
+  // proprio pedido"). Essa duvida partia de uma premissa que NAO e verdade nesta base: o UNICO
+  // caminho HTTP para SOLICITAR e `POST /sucateamentos` logo acima, e ELA JA exige `movimentar`.
+  // Ou seja, todo solicitante que existe de verdade (via API) tem ADMINISTRADOR ou ALMOXARIFE —
+  // PRODUCAO so poderia aparecer como `solicitante_id` chamando `scrapDisposalService.solicitar`
+  // DIRETO (fora de rota, como os testes fazem), o que nao acontece na aplicacao real. Trocar o
+  // gate para so `auth` (como `/destino`) abriria `/cancelar` para QUALQUER usuario autenticado
+  // tentar — o servico ainda recusaria quem nao e o solicitante, mas sem motivo nenhum a mais
+  // documentado; manter `requirePermission('movimentar')` app uma barreira redundante que nao
+  // bloqueia ninguem legitimo e ainda corta de fora, na porta, quem nunca poderia ser solicitante.
+  app.post('/api/almoxarifado/sucateamentos/:id/cancelar', auth, requirePermission('movimentar'),
+    async (req, res) => {
+      try { res.json(await scrapDisposalService.cancelar(db, req.user, req.params.id)); }
+      catch (e) { handleError(res, e); }
+    });
+
+  // Apaga um upload que acabou de ficar sem dono — `/destino` e a UNICA rota multipart deste bloco
+  // sem `requirePermission` na frente (ver o comentario da rota, abaixo): o multer JA GRAVOU o
+  // arquivo em disco antes de sabermos se o pedido vai ser aceito, porque quem decide isso e o
+  // SERVICO. Toda saida que nao for 200 (400 do Zod, 403/404/409 do servico) tem de limpar o
+  // arquivo — senao ele fica orfao em uploads/almoxarifado, sem nada no banco apontando pra ele.
+  // Mesmo ESPIRITO do unlink em routes/almoxarifado.js:536-548 (apagar o certificado anterior ao
+  // substituir); aqui nao ha "anterior" para apagar — `registrarDestino` e transicao de UMA VIA SO
+  // (a maquina de estados nao volta de VENDIDA/DESCARTADA para APROVADO, entao nao existe re-anexar
+  // um comprovante ja aceito) — o arquivo que sobra e sempre de uma tentativa que FALHOU.
+  function limparUploadOrfao(req) {
+    if (!req.file) return;
+    try { fs.unlinkSync(path.join(uploadsAlmoxDir, req.file.filename)); }
+    catch (unlinkErr) {
+      console.warn('[almoxarifado] Falha ao limpar comprovante de sucata orfao:', unlinkErr.message);
+    }
+  }
+
+  // POST /:id/destino — SO `auth`, DE PROPOSITO (ajuste do review da Task 6, contrato final do
+  // plano). `registrarDestino` e gateado no SERVICO por `assertAprovaAlgumaPerna` — a uniao das
+  // DUAS acoes de aprovacao (ADMINISTRADOR, ALMOXARIFE, GESTOR) — e nao pela interseccao que
+  // `requirePermission('movimentar')` (ADMINISTRADOR, ALMOXARIFE) daria: essa interseccao excluiria
+  // SILENCIOSAMENTE o GESTOR, que e exatamente um dos perfis que o servico autoriza a registrar
+  // quanto a sucata rendeu. Como "uma das duas acoes" nao e exprimivel em `requirePermission`
+  // (mesmo caso de /rejeitar acima), a rota fica so com `auth` e deixa o servico decidir.
+  //
+  // NAO usa o middleware `validate()` da casa: aquele middleware responde 400 e ENCERRA a
+  // requisicao antes do handler — se o arquivo ja tivesse sido gravado pelo multer (que roda ANTES
+  // do validate, porque so ele sabe separar multipart em campos+arquivo), o 400 do Zod deixaria um
+  // orfao que o catch do handler jamais veria. Por isso a validacao roda aqui dentro, a mao, com
+  // `safeParse` — o MESMO `formatZodError` que `validate()` usa, para a mensagem de erro ficar no
+  // padrao da casa.
+  app.post('/api/almoxarifado/sucateamentos/:id/destino', auth,
+    uploadComprovanteSucata.single('comprovante'), async (req, res) => {
+      const parsed = SucateamentoDestinoFormSchema.safeParse(req.body);
+      if (!parsed.success) {
+        limparUploadOrfao(req);
+        return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
+      }
+      try {
+        const payload = { ...parsed.data };
+        if (req.file) payload.comprovante_arquivo = req.file.filename;
+        res.json(await scrapDisposalService.registrarDestino(db, req.user, req.params.id, payload));
+      } catch (e) {
+        limparUploadOrfao(req);
+        handleError(res, e);
+      }
+    });
+
   // ── Ferramentas ──
   app.get('/api/almoxarifado/ferramentas', auth, async (req, res) => {
     try { res.json(await toolService.listarFerramentas(db, req.query)); }
@@ -829,6 +998,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     'ferramentas-emprestadas': reportService.relatorioFerramentasEmprestadas,
     'epi-colaborador': reportService.relatorioEPIPorColaborador,
     'solicitacoes-compra': reportService.relatorioSolicitacoesCompraPendentes,
+    // Etapa 9, Task 7: le o LIVRO (movimentacoes tipo SUCATA), nao so `sucateamentos_almoxarifado`
+    // — a devolucao-destino-sucata (Etapa 7) tambem emite SUCATA e nao passa pelo processo de
+    // dupla aprovacao. Ver o cabecalho de relatorioSucataFinanceiro em reportService.js.
+    'sucata-financeiro': (db, q) => reportService.relatorioSucataFinanceiro(db, { de: q.de, ate: q.ate }),
     'materiais-sem-endereco': async (db) => {
       // Etapa 8, Task 1, classe C da auditoria: NAO filtra o dono de proposito. Enderecar
       // material do cliente e tao necessario quanto enderecar o nosso — a chapa dele precisa
