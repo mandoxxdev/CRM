@@ -1387,6 +1387,80 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN movimentacao_baixa_id INTEGER');
   await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN movimentacao_entrada_id INTEGER');
 
+  // ── Etapa 9, Task 6: sucateamento e um PROCESSO, nao uma baixa solta ────────────────────────
+  //
+  // Ate a Etapa 9 sucatear era escolher `SUCATA` no formulario generico de movimentacao: um clique
+  // de quem tem `movimentar` apagava material do patrimonio sem ninguem mais saber. A Task 5 fechou
+  // aquela porta (SUCATA entrou em TIPOS_DEDICADOS) e esta tabela e o que passa a existir no lugar:
+  // solicitacao -> duas assinaturas segregadas -> baixa emitida pelo motor -> destino final.
+  //
+  // AS DUAS PERNAS DE APROVACAO SAO COLUNAS, NAO ESTADOS (decisao 9 do design, e o docstring de
+  // scrapDisposalStateMachine.js explica por que). Cada perna guarda id + nome + hora, porque
+  // "quem assinou" e a pergunta que a dupla aprovacao existe para responder — e um status unico
+  // nao responde. O `status` so vira APROVADO quando a SEGUNDA assinatura chega, decidido pelo
+  // CASE do claim em scrapDisposalService.aprovar (UPDATE unico guardado no WHERE).
+  //
+  // lote_id: obrigatorio NO SERVICO quando o material tem controle_lote — a exigencia depende de
+  //   uma coluna do MATERIAL, que o DDL nao tem como olhar. Sem ele, a baixa da segunda assinatura
+  //   seria recusada pelo motor com as duas assinaturas ja gastas.
+  // sobra_id: sucatear um retalho REGISTRADO (a linha de sobras_material_almoxarifado da Task 1/3).
+  //   NULL e o caso comum — sucata que nunca foi retalho.
+  // justificativa NOT NULL: o motor EXIGE justificativa em SUCATA (movementRules.REGRAS_VINCULO).
+  //   Ela nasce obrigatoria aqui para a recusa acontecer na SOLICITACAO, e nao na segunda
+  //   assinatura, quando ja custou duas pessoas.
+  // projeto_origem_id / os_origem_id: o vinculo. Opcionais para material NOSSO e OBRIGATORIOS para
+  //   material de cliente — SUCATA esta em ownerRules.TIPOS_SAIDA_COM_DONO, entao a baixa exige OS
+  //   ou projeto DO DONO. Quem recusa (na solicitacao, com a mensagem da propria guarda) e
+  //   scrapDisposalService.solicitar.
+  // movimentacao_sucata_id: a baixa emitida na 2a aprovacao. NULL com status APROVADO NAO e estado
+  //   alcancavel — se o motor recusar, o servico compensa o claim e o processo volta a SOLICITADO.
+  // valor_venda / comprovante_arquivo / destino_registrado_*: o destino final (VENDIDA|DESCARTADA),
+  //   registrado DEPOIS da baixa. `valor_venda` alimenta o relatorio financeiro de sucata
+  //   (decisao 10), que cruza estas linhas com os lancamentos SUCATA do livro.
+  //
+  // SEM FK para materiais/lotes/sobras, seguindo o padrao das tabelas vizinhas desta etapa
+  // (sobras_material_almoxarifado, devolucoes_material_almoxarifado): o modulo usa INTEGER solto
+  // e valida no servico, onde a mensagem de erro pode ensinar o caminho em vez de estourar
+  // SQLITE_CONSTRAINT.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS sucateamentos_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    material_id INTEGER NOT NULL,
+    lote_id INTEGER,
+    sobra_id INTEGER,
+    quantidade REAL NOT NULL,
+    classificacao TEXT,
+    peso_estimado REAL,
+    projeto_origem_id INTEGER,
+    os_origem_id INTEGER,
+    justificativa TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'SOLICITADO',
+    solicitante_id INTEGER,
+    solicitante_nome TEXT,
+    aprovador_almox_id INTEGER,
+    aprovador_almox_nome TEXT,
+    aprovado_almox_em DATETIME,
+    aprovador_gestao_id INTEGER,
+    aprovador_gestao_nome TEXT,
+    aprovado_gestao_em DATETIME,
+    rejeitado_por_id INTEGER,
+    rejeitado_por_nome TEXT,
+    motivo_rejeicao TEXT,
+    rejeitado_em DATETIME,
+    movimentacao_sucata_id INTEGER,
+    valor_venda REAL,
+    comprovante_arquivo TEXT,
+    destino_registrado_por_id INTEGER,
+    destino_registrado_por_nome TEXT,
+    destino_registrado_em DATETIME,
+    observacoes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // A fila de pendencias e a tela: "o que esta esperando a minha assinatura" filtra por status.
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_sucateamento_status ON sucateamentos_almoxarifado(status)');
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_sucateamento_material ON sucateamentos_almoxarifado(material_id)');
+
   // ── Ferramentas ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS ferramentas_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

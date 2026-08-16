@@ -35,6 +35,24 @@ const ACAO_PERFIS = {
   // de cliente para fora). Exposta em GET /almoxarifado/minhas-permissoes automaticamente — a
   // rota itera Object.keys(ACAO_PERFIS).
   remessar_terceiro: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
+  // Etapa 9, decisao 9: sucatear APAGA material do patrimonio, e apagar nao tem estorno operacional
+  // — a chapa ja foi para a cacamba. Mesmo criterio da Etapa 8 (ajustar_material_cliente) e da 8b
+  // (remessar_terceiro), escrito la e reusado aqui: quando a operacao muda a NATUREZA DO RISCO, ela
+  // ganha acao propria em vez de pegar carona no `movimentar`, que e o gate mais amplo do modulo.
+  //
+  // Sao DUAS acoes, e a separacao E a feature — nao e uma acao escrita duas vezes. A dupla
+  // aprovacao do design so vale alguma coisa se as duas pernas nao puderem ser assinadas pelo mesmo
+  // BALCAO: `aprovar_sucateamento` e o almoxarifado (quem tem o material na mao) e
+  // `aprovar_sucateamento_gestao` e a gestao responsavel (secao 6 do requisito). As listas se
+  // cruzam SO em ADMINISTRADOR, e mesmo ele nao assina as duas pernas da MESMA solicitacao — essa
+  // segunda barreira e por IDENTIDADE (user.id) e mora em scrapDisposalService.aprovar, porque
+  // permissao por perfil nao tem como saber quem ja assinou.
+  //
+  // As duas entram de graca em GET /almoxarifado/minhas-permissoes — a rota itera
+  // Object.keys(ACAO_PERFIS) —, que e o que permite a tela esconder o botao da perna que o usuario
+  // nao assina. Quem DECIDE continua sendo o backend: a rota falha aberto de proposito.
+  aprovar_sucateamento: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
+  aprovar_sucateamento_gestao: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
   aprovar_requisicao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   separar_emitir: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   requisitar: [PERFIS.ADMINISTRADOR, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.ALMOXARIFE],

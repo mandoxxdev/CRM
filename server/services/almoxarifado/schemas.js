@@ -1,6 +1,10 @@
 /** Schemas Zod compartilhados do almoxarifado (padrão da fundação — ver validation.js). */
 const { z } = require('zod');
 const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPOS_RESULTADO, STATUS_SOBRA } = require('./schema');
+// Etapa 9, Task 6: o enum dos destinos finais do sucateamento tem FONTE UNICA na maquina de
+// estados (ver o comentario de SucateamentoDestinoSchema no fim do arquivo). O modulo e puro —
+// nao requer nada — entao nao ha ciclo aqui.
+const { DESTINOS_FINAIS } = require('./scrapDisposalStateMachine');
 
 const CentroCustoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
@@ -523,6 +527,75 @@ const GerarRetalhoSchema = z.object({
   }
 });
 
+/**
+ * POST /sucateamentos (Etapa 9, Task 6) — a SOLICITACAO do processo de sucateamento.
+ *
+ * `justificativa` e OBRIGATORIA aqui, e nao "opcional no schema, exigida no servico" como
+ * `quantidade_baixa` acima. A razao e a ordem dos acontecimentos: o motor exige justificativa em
+ * `SUCATA` (movementRules.REGRAS_VINCULO), mas a baixa so e emitida na SEGUNDA assinatura — deixar
+ * a exigencia para la significaria descobrir o campo vazio depois de duas pessoas ja terem
+ * assinado, e a perna assinada nao se desfaz sem compensacao. O campo que o motor vai cobrar nasce
+ * cobrado no formulario.
+ *
+ * `lote_id` fica opcional mesmo sendo OBRIGATORIO quando o material tem `controle_lote`: a
+ * exigencia depende de uma coluna do MATERIAL, que o schema nao tem como ler. Mesma divisao de
+ * trabalho de `EncerramentoRemessaSchema` (8b) e `GerarRetalhoSchema` (Task 3) — quem recusa e o
+ * servico.
+ *
+ * `projeto_origem_id`/`os_origem_id` sao opcionais pelo mesmo motivo, um degrau acima: para
+ * material NOSSO eles sao mesmo opcionais, e para material de CLIENTE a guarda do dono
+ * (ownerRules) exige um dos dois E que ele seja do dono — coisa que so se sabe lendo o material e
+ * o projeto/OS no banco.
+ *
+ * NAO EXISTE `status` NEM CAMPO DE APROVACAO AQUI, e a ausencia e a regra: `z.object` DESCARTA
+ * chave nao declarada em silencio, entao um `{status:'APROVADO'}` ou um `aprovador_gestao_id` no
+ * body nem chega ao servico. Sem isso, o processo inteiro de dupla aprovacao seria contornavel
+ * pelo formulario de abertura — a mesma armadilha boa do custo em `GerarRetalhoSchema`.
+ */
+const SucateamentoCreateSchema = z.object({
+  material_id: z.number().int().positive(),
+  quantidade: z.number().gt(0, 'quantidade a sucatear deve ser maior que zero'),
+  justificativa: z.string().trim().min(1, 'justificativa é obrigatória para sucatear'),
+  lote_id: z.number().int().positive().nullable().optional(),
+  sobra_id: z.number().int().positive().nullable().optional(),
+  // Texto livre com sugestoes no front (aco carbono, inox, aluminio, cobre, cavaco, misto): a
+  // taxonomia real e pergunta pendente ao cliente (decisao 9), e enum agora travaria a operacao
+  // enquanto a resposta nao vem.
+  classificacao: z.string().nullable().optional(),
+  peso_estimado: z.number().nonnegative().nullable().optional(),
+  projeto_origem_id: z.number().int().positive().nullable().optional(),
+  os_origem_id: z.number().int().positive().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+});
+
+/**
+ * PUT /sucateamentos/:id/destino (Etapa 9, Task 6) — o destino final, DEPOIS da baixa.
+ *
+ * O enum vem de `scrapDisposalStateMachine.DESTINOS_FINAIS`, importado, e nao reescrito aqui.
+ * E uma correcao consciente do precedente de `EncerramentoRemessaSchema` logo acima, que repetiu o
+ * enum a mao e documentou a duplicacao como armadilha conhecida: listas replicadas divergindo foi
+ * o que este modulo passou a Etapa 8c inteira consertando.
+ *
+ * `valor_venda` obrigatorio SO em VENDIDA — e essa e a unica regra deste schema que depende de
+ * outro campo, entao ela mora num `superRefine` (mesmo molde do `quantidade_baixa` de
+ * `GerarRetalhoSchema`). Ela e repetida no servico porque o servico tambem e chamado direto (por
+ * teste e, adiante, por outras telas), onde o Zod nao passa. Descarte nao exige valor: sucata
+ * descartada normalmente nao rende nada, e exigir "0" seria pedir mentira formatada.
+ */
+const SucateamentoDestinoSchema = z.object({
+  destino: z.enum(DESTINOS_FINAIS),
+  valor_venda: z.number().positive('valor de venda deve ser maior que zero').nullable().optional(),
+  comprovante_arquivo: z.string().nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.destino === 'VENDIDA' && !(data.valor_venda > 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['valor_venda'],
+      message: 'informe o valor da venda da sucata (destino VENDIDA)',
+    });
+  }
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -531,4 +604,5 @@ module.exports = {
   ResultadoTransformacaoSchema, TransformacaoRemessaSchema,
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
   SobraUpdateSchema, GerarRetalhoSchema,
+  SucateamentoCreateSchema, SucateamentoDestinoSchema,
 };
