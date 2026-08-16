@@ -222,6 +222,43 @@ async function gerarRetalho(db, user, payload = {}) {
   // converteria chapa de cliente em patrimonio da GMP (ou o inverso) em silencio.
   await ownerRules.assertMesmoDonoNoRetalho(db, origem, retalho);
 
+  // ── controle_serie: recusa ANTES de mover, porque aqui a compensacao NAO SALVA (fix round 1) ──
+  //
+  // Achado do review, e a cadeia foi verificada nas duas pontas. Nenhuma das duas pernas informa
+  // serie (nao ha campo no payload para isso), entao:
+  //  - ORIGEM serializada + modo com baixa: a SAIDA debita sem reivindicar serie, e o estorno dela
+  //    e RECUSADO pela guarda de stockService.js:1434 (`COUNT(series ENTREGUE/SUCATEADA) = 0 <
+  //    quantidade`). Se a perna 2 falhasse, `compensarRetalho` estouraria NO ESTORNO DA BAIXA — que
+  //    de proposito nao tem `.catch` — e o material de origem ficaria BAIXADO sem retalho nenhum em
+  //    troca. E exatamente o estado que a compensacao existe para impedir, alcancavel justamente
+  //    onde ela nao consegue rodar.
+  //  - RETALHO serializado: a ENTRADA_RETALHO credita sem serie e fica impossivel de estornar para
+  //    sempre (mesma guarda, stockService.js:1414). No ramo da perna 3 o `.catch` engoliria a
+  //    recusa e sobraria retalho fantasma — saldo creditado sem linha de sobra.
+  // Alem do estorno, os dois casos ja quebram na hora o invariante da Etapa 6b
+  // (COUNT(series presentes) == quantidade_atual), que nenhuma compensacao reconstroi.
+  //
+  // Precedente duplo para RECUSAR em vez de inventar serie: a rota v1 (routes/almoxarifado.js:640-
+  // 653) declara `exigeSerie: true` justamente porque o corpo dela nao carrega series, e
+  // returnService.js:104 recusa devolucao de material serializado sem as series. A saida do
+  // operador e a mesma nos dois: a tela que TEM o seletor de serie.
+  //
+  // A checagem da ORIGEM e gateada por `baixarOriginal` porque so ela emite movimentacao na origem:
+  // no modo sem baixa nada e movido la, o invariante nao e tocado e nao ha estorno para recusar —
+  // recusar tambem ali seria falsa recusa, e e justamente o caminho que a mensagem abaixo ensina.
+  if (baixarOriginal && origem.controle_serie) {
+    throw erro(`O material ${origem.codigo} tem controle de serie e a geracao de retalho nao tem `
+      + 'campo para dizer QUAL numero de serie esta sendo cortado. Baixe a peca pela tela de '
+      + 'Movimentacoes (que tem seletor de serie) e depois registre o retalho aqui no modo "peca '
+      + 'ja baixada do estoque".');
+  }
+  if (retalho.controle_serie) {
+    throw erro(`O material ${retalho.codigo} do retalho tem controle de serie, e nao ha como `
+      + 'informar a serie de um retalho — creditar sem serie deixaria o saldo maior que a contagem '
+      + 'de series e a entrada nao poderia mais ser estornada. Cadastre (ou escolha) um material de '
+      + 'retalho SEM controle de serie: retalho e pedaco, nao unidade rastreada uma a uma.');
+  }
+
   if (baixarOriginal && !(Number(quantidadeBaixa) > 0)) {
     throw erro('Informe a quantidade baixada do material de origem (quantidade_baixa)');
   }
@@ -242,9 +279,18 @@ async function gerarRetalho(db, user, payload = {}) {
     }
   }
 
-  const justificativaSaida = (justificativa && String(justificativa).trim())
-    || `Retalho gerado de ${origem.codigo}: ${quantidadeBaixa} ${origem.unidade || ''} baixados `
-      + `para gerar ${quantidadeRetalho} ${retalho.unidade || ''} de ${retalho.codigo}`;
+  // A frase montada so fala em BAIXA quando ha baixa (fix round 1, achado do review). Ela era
+  // montada incondicionalmente com `quantidade_baixa`, que no modo sem baixa e `undefined` de
+  // proposito — entao, sem justificativa do operador, a AUDITORIA do evento gravava "...:
+  // undefined UN baixados...". Registro que mente e pior do que registro ausente: quem for
+  // auditar "quem gerou este retalho" leria uma baixa que nunca existiu. Mesmo condicional que a
+  // justificativa da entrada ja tinha.
+  const justificativaMontada = baixarOriginal
+    ? `Retalho gerado de ${origem.codigo}: ${quantidadeBaixa} ${origem.unidade || ''} baixados `
+      + `para gerar ${quantidadeRetalho} ${retalho.unidade || ''} de ${retalho.codigo}`
+    : `Retalho gerado de ${origem.codigo}: entrada de ${quantidadeRetalho} `
+      + `${retalho.unidade || ''} de ${retalho.codigo} (peca ja tinha saido do estoque)`;
+  const justificativaEvento = (justificativa && String(justificativa).trim()) || justificativaMontada;
 
   // ── 2. Perna 1: a baixa do original ─────────────────────────────────────────────────────────
   let movBaixa = null;
@@ -257,7 +303,7 @@ async function gerarRetalho(db, user, payload = {}) {
       projeto_id: projetoId || undefined,
       os_id: osId || undefined,
       centro_custo_id: centroCustoId || undefined,
-      justificativa: justificativaSaida,
+      justificativa: justificativaEvento,
     }, { exigeLote: true });
   }
 
@@ -328,7 +374,7 @@ async function gerarRetalho(db, user, payload = {}) {
       movimentacao_baixa_id: movBaixa ? movBaixa.id : null,
       movimentacao_entrada_id: movEntrada.id,
     },
-    justificativa: justificativaSaida,
+    justificativa: justificativaEvento,
   });
 
   return {

@@ -55,14 +55,16 @@ function test(name, fn) {
 const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin', is_superadmin: 1, email: 'admin@test.com' };
 
 let seq = 0;
-async function novoMaterial(db, { atual = 0, custo = 0, controle_lote = 0, dono = null, ativo = 1 } = {}) {
+async function novoMaterial(db, {
+  atual = 0, custo = 0, controle_lote = 0, controle_serie = 0, dono = null, ativo = 1,
+} = {}) {
   seq += 1;
   const codigo = `RTG-${seq}`;
   const r = await dbRun(db, `INSERT INTO materiais_almoxarifado
       (codigo, nome, unidade, quantidade_atual, custo_medio, custo_unitario, controle_lote,
-       proprietario_cliente_id, tipo_material, ativo)
-    VALUES (?,?,'UN',?,?,?,?,?,'ACO',?)`,
-  [codigo, `Material retalho ${seq}`, atual, custo, custo, controle_lote, dono, ativo]);
+       controle_serie, proprietario_cliente_id, tipo_material, ativo)
+    VALUES (?,?,'UN',?,?,?,?,?,?,'ACO',?)`,
+  [codigo, `Material retalho ${seq}`, atual, custo, custo, controle_lote, controle_serie, dono, ativo]);
   return { id: r.lastID, codigo };
 }
 
@@ -228,6 +230,87 @@ const movsDe = async (db, materialId) => dbAll(db,
     const s = (await sobrasDe(db, origem.id))[0];
     assert.strictEqual(s.movimentacao_baixa_id, null, 'a sobra gravou uma baixa que nao existe');
     assert.strictEqual(s.movimentacao_entrada_id, r.movimentacao_entrada_id);
+
+    // Fix round 1 (achado do review): a frase montada pelo servico era construida sempre com
+    // `quantidade_baixa`, que neste modo e `undefined` de proposito — e ia parar na AUDITORIA como
+    // "...: undefined UN baixados...". Registro que mente e pior do que registro ausente: quem
+    // auditasse este retalho leria uma baixa que nunca existiu.
+    const log = await dbGet(db,
+      "SELECT justificativa, dados_novos FROM auditoria_log_almoxarifado WHERE entidade='sobra' AND entidade_id=?", [s.id]);
+    assert.ok(log, 'o evento sem baixa nao gravou auditoria');
+    assert.ok(!/undefined/.test(log.justificativa),
+      `a justificativa auditada fala de uma baixa inexistente: ${log.justificativa}`);
+    assert.ok(!/undefined/.test(log.dados_novos),
+      `dados_novos da auditoria carrega "undefined": ${log.dados_novos}`);
+  });
+
+  // ── controle_serie: recusa ANTES de mover, porque aqui a compensacao nao salva ───────────────
+  await test('origem com controle_serie e recusada no modo com baixa (a compensacao nao teria como rodar)', async () => {
+    // Achado do review. A SAIDA sairia SEM reivindicar serie (nao ha campo no payload), e o
+    // estorno dela e recusado pela guarda de stockService.js:1434 — entao, se a perna 2 falhasse,
+    // `compensarRetalho` estouraria no estorno da baixa (que de proposito nao tem `.catch`) e o
+    // material de origem ficaria BAIXADO sem retalho nenhum em troca. Recusar antes e o unico
+    // jeito de esse estado nao existir.
+    const origem = await novoMaterial(db, { atual: 40, controle_serie: 1 });
+    const retalho = await novoMaterial(db, { atual: 0 });
+    await assert.rejects(
+      () => scrapService.gerarRetalho(db, ADMIN, {
+        material_origem_id: origem.id, material_retalho_id: retalho.id,
+        baixar_original: true, quantidade_baixa: 10, justificativa: 'corte de material serializado',
+      }),
+      /serie/i);
+    assert.strictEqual((await est(db, origem.id)).quantidade_atual, 40, 'baixou material serializado mesmo recusando');
+    assert.strictEqual((await est(db, retalho.id)).quantidade_atual, 0);
+    assert.strictEqual((await sobrasDe(db, origem.id)).length, 0);
+  });
+
+  await test('[CONTROLE POSITIVO] o MESMO cenario sem controle_serie passa', async () => {
+    // Sem este controle, uma guarda escrita larga demais (recusar toda geracao com baixa) passaria
+    // no teste acima e mataria o caso principal da etapa.
+    const origem = await novoMaterial(db, { atual: 40 });
+    const retalho = await novoMaterial(db, { atual: 0 });
+    const r = await scrapService.gerarRetalho(db, ADMIN, {
+      material_origem_id: origem.id, material_retalho_id: retalho.id,
+      baixar_original: true, quantidade_baixa: 10, justificativa: 'corte de material sem serie',
+    });
+    assert.ok(r.sobra.id);
+    assert.strictEqual((await est(db, origem.id)).quantidade_atual, 30);
+  });
+
+  await test('[CONTROLE POSITIVO] origem serializada PASSA no modo sem baixa — nada e movido nela', async () => {
+    // A checagem da origem e gateada pelo modo de proposito: sem baixa, nenhuma movimentacao toca
+    // o material serializado, o invariante da Etapa 6b nao e tocado e nao ha estorno a recusar.
+    // Recusar aqui tambem seria falsa recusa — e este e justamente o caminho que a mensagem de
+    // erro do teste anterior ensina ao operador.
+    const origem = await novoMaterial(db, { atual: 40, controle_serie: 1 });
+    const retalho = await novoMaterial(db, { atual: 0 });
+    const r = await scrapService.gerarRetalho(db, ADMIN, {
+      material_origem_id: origem.id, material_retalho_id: retalho.id, baixar_original: false,
+    });
+    assert.ok(r.sobra.id);
+    assert.strictEqual((await est(db, origem.id)).quantidade_atual, 40);
+    assert.strictEqual((await movsDe(db, origem.id)).length, 0);
+  });
+
+  await test('material_retalho com controle_serie e recusado nos DOIS modos', async () => {
+    // Espelho do caso acima, e pior: a ENTRADA_RETALHO creditaria sem serie (saldo maior que a
+    // contagem de series, invariante quebrado na hora) e ficaria impossivel de estornar para
+    // sempre — e no ramo da perna 3 o `.catch` engoliria a recusa, deixando retalho fantasma.
+    const origem = await novoMaterial(db, { atual: 40 });
+    const retalhoSerializado = await novoMaterial(db, { atual: 0, controle_serie: 1 });
+    for (const modo of [false, true]) {
+      await assert.rejects(
+        () => scrapService.gerarRetalho(db, ADMIN, {
+          material_origem_id: origem.id, material_retalho_id: retalhoSerializado.id,
+          baixar_original: modo, quantidade_baixa: modo ? 10 : undefined,
+          justificativa: 'retalho em material serializado',
+        }),
+        /serie/i,
+        `modo baixar_original:${modo} aceitou material-retalho serializado`);
+    }
+    assert.strictEqual((await est(db, origem.id)).quantidade_atual, 40, 'baixou a origem mesmo recusando');
+    assert.strictEqual((await est(db, retalhoSerializado.id)).quantidade_atual, 0);
+    assert.strictEqual((await sobrasDe(db, origem.id)).length, 0);
   });
 
   await test('retalho de material de cliente com dono DIFERENTE e recusado, nomeando os dois donos', async () => {
