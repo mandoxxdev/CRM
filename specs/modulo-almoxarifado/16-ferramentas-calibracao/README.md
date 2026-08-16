@@ -1,7 +1,10 @@
 # 16 — Ferramentas e Equipamentos de Medição
 
 > **Status:** 🟡 — cadastro e empréstimo prontos no backend, sem UI; calibração inexistente · **Spec original:** seção 20
-> **Última atualização:** 2026-08-02
+> **Última atualização:** 2026-08-15 — correção declarada: a afirmação "Teste de serviço existe"
+> sobre o `toolService` estava errada (grep vazio em `server/tests/`); referências de linha mortas
+> corrigidas (`schema.js`, `extended.js`)
+> Antes: 2026-08-02
 
 ## Objetivo
 
@@ -9,9 +12,15 @@ Patrimônio de ferramentas com empréstimo a colaborador, lembrete de devoluçã
 
 ## O que já existe
 
-- `ferramentas_almoxarifado` (`schema.js:555`): codigo_patrimonio UNIQUE, nome, tipo, setor responsável, status, material_id.
-- `emprestimos_ferramenta_almoxarifado` (`schema.js:569`): colaborador, setor, data retirada/prevista/real, status.
-- Rotas: `/ferramentas`, `/ferramentas/:id/emprestar`, `/emprestimos`, `/emprestimos/:id/devolver` (`extended.js:247-269`) via `toolService.js` (57 L). Teste de serviço existe.
+- `ferramentas_almoxarifado` (`schema.js:1303`): codigo_patrimonio UNIQUE, nome, tipo, setor responsável, status, material_id.
+- `emprestimos_ferramenta_almoxarifado` (`schema.js:1317`): colaborador, setor, data retirada/prevista/real, status.
+- Rotas: `/ferramentas`, `/ferramentas/:id/emprestar`, `/emprestimos`, `/emprestimos/:id/devolver` (`extended.js:672-698`) via `toolService.js` (57 L).
+  **Correção (2026-08-15):** duas coisas erradas nesta seção, corrigidas por declaração, não em
+  silêncio. (1) "Teste de serviço existe" era falso: não existe teste nenhum de `toolService`
+  (`grep -rn "toolService\|criarFerramenta" server/tests/` sem nenhuma ocorrência, verificado em
+  2026-08-15) — a Etapa 9 cria os primeiros. (2) as referências de linha citadas nesta seção
+  estavam mortas: eram `schema.js:555/569` e `extended.js:247-269`; os números corretos hoje são
+  os que aparecem acima (`schema.js:1303/1317`, `extended.js:672-698`).
 - `colaboradores` cadastrados no core (`index.js:19130`).
 - Tipo de requisição de ferramenta previsto na spec (feature 04).
 
