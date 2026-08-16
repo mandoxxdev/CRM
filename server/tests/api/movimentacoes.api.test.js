@@ -153,9 +153,11 @@ async function criarMaterial(db, codigo, qtd = 100) {
 
   // A whitelist não pode fechar demais: os tipos que o formulário oferece e as variantes que
   // outras telas/relatórios usam continuam passando pela v2.
+  // SUCATA saiu desta lista na Etapa 9 Task 5 (virou TIPOS_DEDICADOS — ver
+  // sucataDedicada.api.test.js, que cobre a recusa e o caminho interno que continua aceitando).
   await test('v2 continua aceitando os tipos operacionais do formulario', async () => {
     const mat = await criarMaterial(db, 'MOV-WL', 100);
-    for (const tipo of ['ENTRADA', 'SAIDA', 'DEVOLUCAO', 'SAIDA_PRODUCAO', 'ENTRADA_COMPRA', 'SUCATA']) {
+    for (const tipo of ['ENTRADA', 'SAIDA', 'DEVOLUCAO', 'SAIDA_PRODUCAO', 'ENTRADA_COMPRA']) {
       const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
         .send({ material_id: mat, tipo, quantidade: 1, justificativa: 'operacao normal', os_id: 1 });
       assert.strictEqual(res.status, 201, `${tipo} deveria passar: ${JSON.stringify(res.body)}`);

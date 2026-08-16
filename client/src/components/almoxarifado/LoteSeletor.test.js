@@ -68,7 +68,9 @@ const LOTES_VENCIMENTO = [
 // (status === 'ATIVO' && (!vencido || vencimento_liberado)) — certo para SAIDA, errado para
 // SUCATA/PERDA, que o motor isenta da guarda de vencimento de proposito (stockService
 // tiposDescarte). Lote ATIVO, vencido, sem liberacao: elegivel:false, mas tem de ser
-// selecionavel em descarte.
+// selecionavel em descarte. Isto continua verdade dos DOIS tipos no motor — só que a partir da
+// Etapa 9 Task 5 SUCATA não entra mais por este formulário (virou TIPOS_DEDICADOS), então os
+// testes abaixo só têm como exercitar esta regra via PERDA.
 const LOTE_VENCIDO_DESCARTAVEL = {
   id: 30, codigo: 'VENC-DESCARTE', data_validade: '2018-01-01', status: 'ATIVO', saldo: 12,
   vencido: true, vencimento_liberado: false, elegivel: false,
@@ -196,22 +198,21 @@ describe('elegibilidade do lote vencido (carry-forward da Task 7)', () => {
 });
 
 describe('elegibilidade sensivel ao tipo do movimento (fix round 1 da Task 9: descarte nao e barrado por vencimento)', () => {
-  test('em Sucata, lote vencido sem liberacao (mas ATIVO) fica selecionavel e vira pre-selecao', async () => {
+  // SUCATA saiu do formulario na Etapa 9 Task 5 (virou TIPOS_DEDICADOS em schema.js — a rota
+  // generica passou a recusa-lo, entao oferece-lo aqui seria oferecer um botao que so devolve
+  // 400). PERDA continua no formulario e tem o MESMO tratamento de descarte
+  // (TIPOS_DESCARTE_LOTE em MovimentacoesAlmoxarifado.js), entao os dois testes que usavam SUCATA
+  // migraram para PERDA — a regra que eles provam ("elegivel" cru trava vencido; status ainda
+  // bloqueia) nao mudou, so o tipo alcancavel pela tela.
+  test('em Perda, lote vencido sem liberacao (mas ATIVO) fica selecionavel e vira pre-selecao', async () => {
     lotesDoBanco = [LOTE_VENCIDO_DESCARTAVEL];
-    await abrirComMaterialETipo('SUCATA');
+    await abrirComMaterialETipo('PERDA');
     const opcao = opcaoPorTexto(/VENC-DESCARTE/);
     expect(opcao.disabled).toBe(false);
     // O rotulo continua avisando que o lote esta vencido — o operador precisa saber o que
     // esta descartando, mesmo que a guarda de vencimento nao se aplique ao tipo.
     expect(opcao.textContent).toMatch(/vencido/i);
     expect(seletorLote().value).toBe('30');
-  });
-
-  test('em Perda, o mesmo lote vencido sem liberacao tambem fica selecionavel', async () => {
-    lotesDoBanco = [LOTE_VENCIDO_DESCARTAVEL];
-    await abrirComMaterialETipo('PERDA');
-    const opcao = opcaoPorTexto(/VENC-DESCARTE/);
-    expect(opcao.disabled).toBe(false);
   });
 
   test('em Saida, o mesmo lote continua desabilitado e a pre-selecao fica vazia (guarda de vencimento normal se aplica)', async () => {
@@ -222,9 +223,9 @@ describe('elegibilidade sensivel ao tipo do movimento (fix round 1 da Task 9: de
     expect(seletorLote().value).toBe('');
   });
 
-  test('lote BLOQUEADO continua indisponivel mesmo em Sucata (descarte isenta vencimento, nao status)', async () => {
+  test('lote BLOQUEADO continua indisponivel mesmo em Perda (descarte isenta vencimento, nao status)', async () => {
     lotesDoBanco = [{ ...LOTE_VENCIDO_DESCARTAVEL, id: 31, codigo: 'VENC-BLOQ-DESCARTE', status: 'BLOQUEADO' }];
-    await abrirComMaterialETipo('SUCATA');
+    await abrirComMaterialETipo('PERDA');
     const opcao = opcaoPorTexto(/VENC-BLOQ-DESCARTE/);
     expect(opcao.disabled).toBe(true);
   });

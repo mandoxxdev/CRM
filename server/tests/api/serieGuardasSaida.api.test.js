@@ -17,6 +17,7 @@ const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const lotService = require('../../services/almoxarifado/lotService');
+const stockService = require('../../services/almoxarifado/stockService');
 const { assertInvarianteSerie } = require('../helpers/serieInvariante');
 
 let passed = 0; let failed = 0;
@@ -76,17 +77,21 @@ async function entrarComSeries(app, db, materialId, numeros, extra = {}) {
     await assertInvarianteSerie(db, mat);
   });
 
-  await test('SUCATA marca SUCATEADA', async () => {
+  await test('SUCATA marca SUCATEADA (via motor — SUCATA saiu da v2 na Etapa 9 Task 5)', async () => {
+    // SUCATA nao entra mais pela v2 (TIPOS_DEDICADOS — ver sucataDedicada.api.test.js), entao o
+    // claim de series so pode ser exercitado chamando o motor direto, como os caminhos legitimos
+    // fazem. `exigeSerie: true` no 4o argumento reproduz o que a v2 sempre declarou (routes/
+    // almoxarifado/extended.js:311) — sem ele `serieObrigatoria` fica falso e o claim nem roda.
     const mat = await novoMaterial(db, { controle_serie: 1 });
     const series = await entrarComSeries(app, db, mat, ['SN-D']);
 
-    const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
-      .send({ material_id: mat, tipo: 'SUCATA', quantidade: 1, serie_ids: [series[0].id], ...JUST });
-    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+    const mov = await stockService.registrarMovimentacao(db, ADMIN,
+      { material_id: mat, tipo: 'SUCATA', quantidade: 1, serie_ids: [series[0].id], ...JUST },
+      { exigeSerie: true });
 
     const s = await dbGet(db, 'SELECT status, movimentacao_saida_id FROM series_almoxarifado WHERE id = ?', [series[0].id]);
     assert.strictEqual(s.status, 'SUCATEADA');
-    assert.strictEqual(s.movimentacao_saida_id, res.body.id);
+    assert.strictEqual(s.movimentacao_saida_id, mov.id);
     await assertInvarianteSerie(db, mat);
   });
 

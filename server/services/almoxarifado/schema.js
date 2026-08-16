@@ -172,7 +172,20 @@ const TIPOS_RETENCAO = [
 //     sem o vinculo com a sobra e sem a guarda de dono que o evento composto carrega (retalho tem
 //     de ter o MESMO dono da origem). Entrar aqui ja o tira da rota generica, pelo mesmo mecanismo
 //     de derivacao — nao ha segunda lista a editar em schemas.js.
-const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO', 'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO'];
+//   SUCATA (Etapa 9, Task 5) -> ate aqui era o unico tipo de descarte aceito na v2 (PERDA
+//     continua, olhar abaixo). A spec 15 (retalhos e sucatas) exige um teste que hoje e
+//     IMPOSSIVEL de escrever: "sucatear sem dupla aprovacao falha". Com SUCATA aberto na v2 —
+//     gate `movimentar`, o mais amplo do modulo — bastava mandar {tipo:'SUCATA'} para sucatear
+//     sem passar pela rota de sucateamento (Task 6/7), que e onde a dupla aprovacao vai morar:
+//     a exigencia ficaria decorativa antes mesmo de existir. Mesmo precedente de DEVOLUCAO na
+//     Etapa 7 (saiu do FORMULARIO, nao deste array — DEVOLUCAO comum nunca esteve aqui) e de
+//     DEVOLUCAO_CLIENTE nesta mesma lista: o tipo ganhou exigencia propria (aprovacao dupla) que
+//     so a rota dedicada pode cobrar. Os emissores legitimos (returnService, destino SUCATA da
+//     devolucao; e o servico de sucateamento da Task 6/7) chamam stockService.registrarMovimentacao
+//     DIRETO, por fora da v2 — TIPOS_DEDICADOS so gira a porta HTTP generica, nao o motor. PERDA
+//     fica de fora desta lista de proposito: nao tem processo de aprovacao dupla na spec 15, e
+//     tirar os dois juntos sem necessidade reduziria o formulario sem ganho nenhum.
+const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO', 'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'SUCATA'];
 
 /**
  * Classificacao da linha de resultado de uma TRANSFORMACAO (Etapa 8c, decisao 8 do design).

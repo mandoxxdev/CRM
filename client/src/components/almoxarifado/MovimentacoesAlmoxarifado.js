@@ -14,24 +14,36 @@ import './Almoxarifado.css';
 // material vencido pudesse ser descartado — mas até a Task 9 nenhum dos dois era selecionável
 // aqui, então a regra "vencido não fica preso" era verdadeira da API e falsa da tela. Não inclui
 // AJUSTE_NEGATIVO: é tipo interno de ajuste, e o AJUSTE puro já cobre correção de contagem.
+//
+// Etapa 9, Task 5: SUCATA SAIU de novo daqui — mesmo precedente de DEVOLUCAO na Etapa 7 (ver
+// comentário de TIPOS logo abaixo). A spec 15 exige um teste que era impossível de cumprir com
+// SUCATA aceito na rota genérica (POST /movimentacoes/v2, gate `movimentar`, o mais amplo do
+// módulo): "sucatear sem dupla aprovação falha". Bastava mandar {tipo:'SUCATA'} por este
+// formulário para sucatear sem passar pela rota de sucateamento (Task 6/7), que é onde a dupla
+// aprovação vai morar — a exigência ficaria decorativa antes mesmo de existir (server/services/
+// almoxarifado/schema.js, TIPOS_DEDICADOS). PERDA fica: não tem processo de aprovação na spec 15.
 const TIPOS_FORM = [
   { value: 'ENTRADA', label: 'Entrada', cls: 'entrada' },
   { value: 'SAIDA', label: 'Saída', cls: 'saida' },
   { value: 'TRANSFERENCIA', label: 'Transferência', cls: 'transferencia' },
   { value: 'AJUSTE', label: 'Ajuste', cls: 'ajuste' },
-  { value: 'SUCATA', label: 'Sucata', cls: 'saida' },
   { value: 'PERDA', label: 'Perda', cls: 'saida' },
 ];
 
 // Lista completa para filtro e exibição no livro. Inclui ESTORNO (gerado pelo servidor ao
-// cancelar) e DEVOLUCAO, que SAIU do formulário na Etapa 7 mas continua aqui: registrar
+// cancelar), DEVOLUCAO, que SAIU do formulário na Etapa 7 mas continua aqui: registrar
 // "Devolução" no formulário genérico criava uma movimentação solta — sem motivo, sem condição,
 // sem destino — e não criava registro nenhum em devolucoes_material_almoxarifado. O caminho certo
-// é a tela /almoxarifado/devolucoes. Tirar DEVOLUCAO desta lista faria o livro parar de exibir os
-// lançamentos antigos e o filtro perder a opção.
+// é a tela /almoxarifado/devolucoes. E SUCATA, que saiu do formulário na Etapa 9 Task 5 pelo
+// mesmo motivo (ver comentário acima) mas continua tendo linhas de verdade no livro — o material
+// ainda é sucateado, só não mais por este formulário: pela devolução com destino sucata
+// (returnService) e, a partir da Task 6/7, pela rota de sucateamento com dupla aprovação. Tirar
+// DEVOLUCAO ou SUCATA desta lista faria o livro parar de exibir os lançamentos e o filtro perder
+// a opção.
 const TIPOS = [
   ...TIPOS_FORM,
   { value: 'DEVOLUCAO', label: 'Devolução', cls: 'devolucao' },
+  { value: 'SUCATA', label: 'Sucata', cls: 'saida' },
   { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
 
@@ -48,9 +60,13 @@ const TIPOS = [
 // não tem caminho para mover o vínculo da série, e `serieObrigatoria` no stockService nem dispara
 // para ela). Enfiar TRANSFERENCIA aqui faria a tela exigir séries que o servidor não lê nesse
 // tipo. Por isso os três conjuntos separados abaixo.
-const TIPOS_SAIDA_LOTE = ['SAIDA', 'SUCATA', 'PERDA'];
-const TIPOS_COM_LOTE_EXISTENTE = ['SAIDA', 'SUCATA', 'PERDA', 'TRANSFERENCIA'];
-const TIPOS_COM_ORIGEM = ['SAIDA', 'SUCATA', 'PERDA', 'TRANSFERENCIA'];
+// Etapa 9, Task 5: SUCATA saiu dos quatro conjuntos abaixo — eles só governam o FORMULÁRIO
+// (form.tipo nunca mais vale 'SUCATA', já que TIPOS_FORM não oferece mais a opção), e deixar o
+// valor morto aqui sugeriria um caminho de tela que não existe mais. O livro (badges, tipoInfo)
+// não usa nenhum destes conjuntos — continua lendo de TIPOS, que mantém SUCATA.
+const TIPOS_SAIDA_LOTE = ['SAIDA', 'PERDA'];
+const TIPOS_COM_LOTE_EXISTENTE = ['SAIDA', 'PERDA', 'TRANSFERENCIA'];
+const TIPOS_COM_ORIGEM = ['SAIDA', 'PERDA', 'TRANSFERENCIA'];
 const TIPOS_COM_DESTINO = ['ENTRADA', 'TRANSFERENCIA'];
 
 // Fix round 1 (review da Task 9): `elegivel`, que a API devolve por lote, e calculado SO a partir
@@ -68,7 +84,9 @@ const TIPOS_COM_DESTINO = ['ENTRADA', 'TRANSFERENCIA'];
 // Mover um lote reprovado de prateleira é legítimo: é assim que ele vai parar na área de
 // bloqueados. Oferecer só o lote elegível aqui contradiria o backend (que não checa nada no ramo
 // TRANSFERENCIA) e esconderia do operador exatamente o lote que ele precisa mover.
-const TIPOS_DESCARTE_LOTE = ['SUCATA', 'PERDA'];
+// SUCATA saiu (Etapa 9, Task 5 — mesmo raciocínio do bloco de constantes acima): esta função só
+// é chamada a partir do form.tipo do modal, que nunca mais vale 'SUCATA'.
+const TIPOS_DESCARTE_LOTE = ['PERDA'];
 const loteDisponivelParaTipo = (lote, tipo) => {
   if (tipo === 'TRANSFERENCIA') return true;
   return TIPOS_DESCARTE_LOTE.includes(tipo) ? lote.status === 'ATIVO' : lote.elegivel;
@@ -181,9 +199,9 @@ const MovimentacoesAlmoxarifado = () => {
     return () => clearTimeout(t);
   }, [tipoFilter, dataInicio, dataFim]);
 
-  // Lote só é escolhido (não digitado) numa saída (SAIDA/SUCATA/PERDA) ou numa TRANSFERENCIA — é
-  // onde o motor decide de qual lote consumir/mover, e a lista já vem em ordem FEFO com
-  // `elegivel` calculado no servidor.
+  // Lote só é escolhido (não digitado) numa saída do formulário (SAIDA/PERDA — SUCATA saiu na
+  // Etapa 9 Task 5) ou numa TRANSFERENCIA — é onde o motor decide de qual lote consumir/mover, e
+  // a lista já vem em ordem FEFO com `elegivel` calculado no servidor.
   useEffect(() => {
     if (!form.material_id || !TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo)) { setLotes([]); return; }
     let cancelado = false;
@@ -332,9 +350,9 @@ const MovimentacoesAlmoxarifado = () => {
       // trocado para AJUSTE) vaze para um tipo onde o campo nem aparece na tela.
       if (TIPOS_COM_ORIGEM.includes(form.tipo) && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
       if (TIPOS_COM_DESTINO.includes(form.tipo) && form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
-      // Entrada: lote nasce aqui, texto livre. Saída (inclusive SUCATA/PERDA): lote é escolhido
-      // de um já existente (lote_id), nunca digitado — evita saída registrada contra um lote que
-      // não existe.
+      // Entrada: lote nasce aqui, texto livre. Saída do formulário (SAIDA/PERDA): lote é
+      // escolhido de um já existente (lote_id), nunca digitado — evita saída registrada contra um
+      // lote que não existe.
       if (form.tipo === 'ENTRADA' && form.lote) payload.lote = form.lote;
       if (TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo) && form.lote_id) payload.lote_id = Number(form.lote_id);
       // Série: mesma regra "só envia campo que o tipo exibe" — entrada manda a lista de texto
@@ -637,12 +655,12 @@ const MovimentacoesAlmoxarifado = () => {
                   <div className="almox-field">
                     <label className="almox-label">
                       Motivo
-                      {(form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'SUCATA' || form.tipo === 'PERDA') && <span className="required">*</span>}
+                      {(form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'PERDA') && <span className="required">*</span>}
                     </label>
                     <input className="almox-input" value={form.motivo}
                       onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
                       placeholder="Compra, Uso produção, Retorno, etc."
-                      required={form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'SUCATA' || form.tipo === 'PERDA'} />
+                      required={form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'PERDA'} />
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">Referência (OS / NF)</label>

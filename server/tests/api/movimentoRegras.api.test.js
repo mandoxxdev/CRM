@@ -46,13 +46,17 @@ async function criarMaterial(db, codigo, qtd = 100) {
     assert.strictEqual(res.status, 400);
   });
 
-  await test('SUCATA sem justificativa falha; com justificativa passa', async () => {
-    const sem = await request(app).post('/api/almoxarifado/movimentacoes/v2')
-      .send({ material_id: mat, tipo: 'SUCATA', quantidade: 1 });
-    assert.strictEqual(sem.status, 400);
+  // SUCATA saiu da v2 na Etapa 9 Task 5 (virou TIPOS_DEDICADOS): a partir daqui a rota recusa o
+  // tipo SEMPRE, com ou sem justificativa, entao o teste "com justificativa passa" nao faz mais
+  // sentido aqui. A recusa da v2 esta coberta em sucataDedicada.api.test.js; a regra de negocio
+  // "SUCATA exige justificativa" (movementRules.REGRAS_VINCULO) nao mudou de lugar — continua
+  // valendo para quem chama o motor por dentro, e a prova disso tambem migrou para la (o teste
+  // "SUCATA via motor direto ainda exige justificativa").
+
+  await test('[controle da migracao acima] v2 recusa SUCATA mesmo com justificativa (nao e mais so falta dela)', async () => {
     const com = await request(app).post('/api/almoxarifado/movimentacoes/v2')
       .send({ material_id: mat, tipo: 'SUCATA', quantidade: 1, justificativa: 'Material danificado' });
-    assert.strictEqual(com.status, 201, JSON.stringify(com.body));
+    assert.strictEqual(com.status, 400, `SUCATA nao devia mais passar pela v2 nem com justificativa: ${JSON.stringify(com.body)}`);
   });
 
   let emergId;

@@ -13,6 +13,7 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const stockService = require('../../services/almoxarifado/stockService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -147,16 +148,23 @@ const totalDoMaterial = async (db, id) =>
     assert.strictEqual(await totalDoMaterial(db, mat), 93);
   });
 
-  await test('SUCATA de material de cliente tambem exige o vinculo do dono', async () => {
+  await test('SUCATA de material de cliente tambem exige o vinculo do dono (via motor — SUCATA saiu da v2 na Etapa 9 Task 5)', async () => {
+    // A guarda do dono mora em ownerRules.assertSaidaPermitida, chamada por
+    // stockService.registrarMovimentacao independente da rota que a acionou. SUCATA nao entra
+    // mais pela v2 (TIPOS_DEDICADOS — ver sucataDedicada.api.test.js), entao este teste passa a
+    // exercitar o motor direto, do mesmo jeito que os caminhos legitimos (devolucao destino
+    // sucata, o futuro servico de sucateamento) o chamam.
     const mat = await novoMaterial(db, { proprietario_cliente_id: cliA });
-    const res = await request(app).post('/api/almoxarifado/movimentacoes/v2')
-      .send({ material_id: mat, tipo: 'SUCATA', quantidade: 2, motivo: 'teste', justificativa: 'peca danificada' });
-    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
-    assert.ok(/Cliente Alfa LTDA/.test(res.body.error), res.body.error);
-    const ok = await request(app).post('/api/almoxarifado/movimentacoes/v2')
-      .send({ material_id: mat, tipo: 'SUCATA', quantidade: 2, motivo: 'teste',
+    await assert.rejects(
+      () => stockService.registrarMovimentacao(db, ADMIN,
+        { material_id: mat, tipo: 'SUCATA', quantidade: 2, motivo: 'teste', justificativa: 'peca danificada' }),
+      /Cliente Alfa LTDA/);
+    assert.strictEqual(await totalDoMaterial(db, mat), 100, 'a saida recusada nao podia debitar');
+    const mov = await stockService.registrarMovimentacao(db, ADMIN,
+      { material_id: mat, tipo: 'SUCATA', quantidade: 2, motivo: 'teste',
         justificativa: 'peca danificada', projeto_id: projA });
-    assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
+    assert.ok(mov.id, 'a movimentacao nao foi gravada no livro');
+    assert.strictEqual(await totalDoMaterial(db, mat), 98);
   });
 
   await test('PERDA de material de cliente tambem exige o vinculo do dono', async () => {

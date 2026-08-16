@@ -120,6 +120,16 @@ describe('MovimentacoesAlmoxarifado — botão de estorno por tipo', () => {
  * Task 9 (Etapa 6): SUCATA e PERDA foram isentas da guarda de vencimento na Task 3 para que
  * material vencido pudesse ser descartado, mas até aqui nenhuma das duas era selecionável no
  * formulário — a regra "vencido não fica preso" era verdadeira da API e falsa da tela.
+ *
+ * Etapa 9, Task 5: SUCATA SAIU de novo do seletor — mesmo precedente de DEVOLUCAO na Etapa 7. A
+ * rota genérica (POST /movimentacoes/v2, gate `movimentar`, o mais amplo do módulo) virou tipo
+ * dedicado (server/services/almoxarifado/schema.js, TIPOS_DEDICADOS) porque a spec 15 exige um
+ * teste impossível de cumprir com SUCATA aceito ali: "sucatear sem dupla aprovação falha". Este
+ * formulário posta na v2, então oferecer SUCATA aqui seria oferecer um botão que a rota recusa
+ * com 400 — e SUCATA continua aparecendo no livro (TIPOS mantém o tipo), porque as movimentações
+ * antigas e as emitidas pelos caminhos legítimos (devolução destino sucata; e, a partir da
+ * Task 6/7, a rota de sucateamento) continuam de verdade. PERDA fica: não tem processo de
+ * aprovação na spec 15.
  */
 async function abrirModalNovaMovimentacao() {
   await renderizar();
@@ -148,11 +158,12 @@ function seletorTipo() {
   return [...container.querySelectorAll('.almox-modal select.almox-form-select')][1];
 }
 
-describe('MovimentacoesAlmoxarifado — SUCATA e PERDA no seletor de tipo', () => {
-  test('SUCATA e PERDA aparecem como opção no seletor de tipo', async () => {
+describe('MovimentacoesAlmoxarifado — SUCATA fora do seletor, PERDA dentro (Etapa 9, Task 5)', () => {
+  test('SUCATA NÃO aparece como opção no seletor de tipo, mas PERDA continua', async () => {
     await abrirModalNovaMovimentacao();
     const valores = [...seletorTipo().querySelectorAll('option')].map((o) => o.value);
-    expect(valores).toEqual(expect.arrayContaining(['SUCATA', 'PERDA']));
+    expect(valores).not.toContain('SUCATA');
+    expect(valores).toContain('PERDA');
   });
 
   test('AJUSTE_NEGATIVO não é oferecido (é tipo interno; AJUSTE puro cobre a correção de contagem)', async () => {
@@ -161,11 +172,14 @@ describe('MovimentacoesAlmoxarifado — SUCATA e PERDA no seletor de tipo', () =
     expect(valores).not.toContain('AJUSTE_NEGATIVO');
   });
 
-  test('Sucata mostra os campos que uma saída precisa: localização de origem e lote por seleção (não texto livre)', async () => {
+  test('Perda mostra os campos que uma saída precisa: localização de origem e lote por seleção (não texto livre)', async () => {
+    // Era o mesmo teste para SUCATA antes da Task 5 — SUCATA saiu do seletor, mas PERDA tem
+    // exatamente os mesmos requisitos de campo (TIPOS_COM_ORIGEM/TIPOS_COM_LOTE_EXISTENTE), então
+    // a cobertura do comportamento "saída com lote por seleção" continua por aqui.
     await abrirModalNovaMovimentacao();
     const selectMaterial = container.querySelector('.almox-modal select.almox-form-select');
     preencher(selectMaterial, '10');
-    preencher(seletorTipo(), 'SUCATA');
+    preencher(seletorTipo(), 'PERDA');
     await esperarEfeitos();
 
     const rotulos = [...container.querySelectorAll('.almox-modal .almox-field label')].map((l) => l.textContent);
@@ -181,6 +195,13 @@ describe('MovimentacoesAlmoxarifado — SUCATA e PERDA no seletor de tipo', () =
     const rotuloMotivo = [...container.querySelectorAll('.almox-modal .almox-field label')]
       .find((l) => l.textContent.startsWith('Motivo'));
     expect(rotuloMotivo.textContent).toContain('*');
+  });
+
+  test('o filtro do livro continua oferecendo Sucata (TIPOS mantém o tipo, só o formulário fecha a porta)', async () => {
+    await renderizar();
+    const filtro = container.querySelector('.almox-filters select.almox-select');
+    const valores = [...filtro.querySelectorAll('option')].map((o) => o.value);
+    expect(valores).toContain('SUCATA');
   });
 });
 
