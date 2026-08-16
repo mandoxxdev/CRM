@@ -47,6 +47,39 @@ export function montarEtiquetaSerie(material, serie, origin) {
   };
 }
 
+/**
+ * Etiqueta de retalho (Etapa 9, Task 9). ÚNICO montador que lê `window.location.origin` por
+ * dentro em vez de receber `origin` por parâmetro: o QR aponta para a PRÓPRIA tela de sobras
+ * (`?sobra_id=`), e essa tela é alcançada tanto de dentro do app quanto por quem escaneia a
+ * etiqueta física com o celular — não há uma tela "de origem" que decida o domínio, como nos
+ * outros montadores (chamados de dentro de MateriaisAlmoxarifado/LotesAlmoxarifado, que já sabem
+ * o `origin` certo).
+ *
+ * `codigo`/`nome` vêm do material-RETALHO (o pedaço, o que o operador vai pegar na prateleira),
+ * nunca do material de origem — é o mesmo material que a etiqueta de material comum imprimiria,
+ * só que com a linha de controle extra.
+ *
+ * `linhaControle` junta dimensões restantes + espessura (ex.: "1200x800x3mm") e peso aproximado
+ * (ex.: "~18kg"), separados por " · " — mesmo separador de `montarEtiquetaLote`. Cada parte é
+ * OMITIDA quando ausente (nunca "undefined" nem um "x"/"· ~kg" solto): a sobra pode ter só
+ * dimensões, só peso, ou nada — os campos do formulário de "Gerar retalho" são opcionais.
+ */
+export function montarEtiquetaRetalho(sobra, materialRetalho) {
+  const dim = sobra.dimensoes_restantes && (sobra.espessura || sobra.espessura === 0)
+    ? `${sobra.dimensoes_restantes}x${sobra.espessura}mm`
+    : sobra.dimensoes_restantes
+      ? String(sobra.dimensoes_restantes)
+      : (sobra.espessura || sobra.espessura === 0) ? `${sobra.espessura}mm` : '';
+  const peso = (sobra.peso_aproximado !== null && sobra.peso_aproximado !== undefined && sobra.peso_aproximado !== '')
+    ? `~${sobra.peso_aproximado}kg`
+    : '';
+  return {
+    codigo: materialRetalho.codigo, nome: materialRetalho.nome,
+    linhaControle: [dim, peso].filter(Boolean).join(' · '),
+    qrUrl: `${window.location.origin}/almoxarifado/sobras?sobra_id=${sobra.id}`,
+  };
+}
+
 const linhasDeSeries = (txt) => String(txt || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
 
 export function montarEtiquetasDoRecebimento(itens, materiais, origin) {

@@ -25,13 +25,14 @@ jest.mock('qrcode', () => ({
 
 import {
   FORMATOS_ETIQUETA, montarEtiquetaMaterial, montarEtiquetaLote,
-  montarEtiquetaSerie, montarEtiquetasDoRecebimento, gerarEtiquetasPDF,
+  montarEtiquetaSerie, montarEtiquetasDoRecebimento, montarEtiquetaRetalho, gerarEtiquetasPDF,
 } from './etiquetasPdf';
 
 const ORIGIN = 'https://crm.gmp.ind.br';
 const MAT_SIMPLES = { id: 7, codigo: 'MAT-7', nome: 'Parafuso M8', controle_lote: 0, controle_serie: 0 };
 const MAT_LOTE = { id: 8, codigo: 'MAT-8', nome: 'Chapa Inox 304 3mm 1200x3000 certificada', controle_lote: 1, controle_serie: 0 };
 const MAT_SERIE = { id: 9, codigo: 'MAT-9', nome: 'Motor 5cv', controle_lote: 0, controle_serie: 1 };
+const MAT_RETALHO = { id: 210, codigo: 'RET-210', nome: 'Retalho chapa inox 3mm' };
 
 describe('montadores de etiqueta', () => {
   test('material simples: codigo/nome e QR para a lista de materiais', () => {
@@ -57,6 +58,49 @@ describe('montadores de etiqueta', () => {
     const e = montarEtiquetaSerie(MAT_SERIE, { numero: 'GMP-0042' }, ORIGIN);
     expect(e.linhaControle).toBe('SN: GMP-0042');
     expect(e.qrUrl).toBe(`${ORIGIN}/almoxarifado/lotes?material_id=9&aba=SERIES&serie=GMP-0042`);
+  });
+});
+
+// Etapa 9, Task 9: retalho e o UNICO montador que le `window.location.origin` por dentro em vez
+// de receber `origin` como parametro — o brief pede o QR apontando para a PROPRIA tela de sobras
+// (`/almoxarifado/sobras?sobra_id=`), e essa tela e alcancada tanto de dentro do app (onde
+// `window.location.origin` ja e o dominio certo) quanto por quem escaneia o QR com o celular.
+describe('montarEtiquetaRetalho', () => {
+  test('codigo/nome vem do material-RETALHO, nao do material de origem', () => {
+    const sobra = { id: 55, material_id: 8, material_retalho_id: 210, dimensoes_restantes: '1200x800', espessura: 3, peso_aproximado: 18 };
+    const e = montarEtiquetaRetalho(sobra, MAT_RETALHO);
+    expect(e.codigo).toBe('RET-210');
+    expect(e.nome).toBe('Retalho chapa inox 3mm');
+  });
+
+  test('linhaControle junta dimensoes+espessura e peso aproximado, no formato do brief', () => {
+    const sobra = { id: 55, dimensoes_restantes: '1200x800', espessura: 3, peso_aproximado: 18 };
+    const e = montarEtiquetaRetalho(sobra, MAT_RETALHO);
+    expect(e.linhaControle).toBe('1200x800x3mm · ~18kg');
+  });
+
+  test('sem espessura, so as dimensoes entram (sem "x" solto no fim)', () => {
+    const sobra = { id: 55, dimensoes_restantes: '1200x800', peso_aproximado: 18 };
+    const e = montarEtiquetaRetalho(sobra, MAT_RETALHO);
+    expect(e.linhaControle).toBe('1200x800 · ~18kg');
+  });
+
+  test('sem peso, a linha fica so com as dimensoes (sem "· ~kg" solto)', () => {
+    const sobra = { id: 55, dimensoes_restantes: '1200x800', espessura: 3 };
+    const e = montarEtiquetaRetalho(sobra, MAT_RETALHO);
+    expect(e.linhaControle).toBe('1200x800x3mm');
+  });
+
+  test('sem nenhuma das duas partes, a linha fica vazia (nao "undefined" nem "· ~kg")', () => {
+    const sobra = { id: 55 };
+    const e = montarEtiquetaRetalho(sobra, MAT_RETALHO);
+    expect(e.linhaControle).toBe('');
+  });
+
+  test('qrUrl aponta para a tela de sobras com o id da sobra, usando window.location.origin', () => {
+    const sobra = { id: 55 };
+    const e = montarEtiquetaRetalho(sobra, MAT_RETALHO);
+    expect(e.qrUrl).toBe(`${window.location.origin}/almoxarifado/sobras?sobra_id=55`);
   });
 });
 
@@ -112,6 +156,23 @@ describe('gerarEtiquetasPDF', () => {
     const doc = require('jspdf').default.__instancias.at(-1);
     expect(doc.addPage).toHaveBeenCalledTimes(2); // 3 etiquetas, 1 por pagina, a 1a pagina ja existe
     expect(require('qrcode').default.toDataURL).toHaveBeenCalledWith('u', expect.any(Object));
+  });
+
+  test('linhaControle longa de um retalho na TERMICA_100x50 nao estoura — vai com maxWidth, igual aos vizinhos', async () => {
+    // Espessura/dimensoes/peso mais realistas que os montadores vizinhos (que testam com nomes
+    // longos, nao linhaControle) — aqui e a linha de controle que pode crescer com dimensoes de
+    // chapa grande. A termica e o formato de MENOR largura (100mm vs 99mm da grade A4, mas com
+    // etiqueta unica ocupando a pagina toda) — se o `maxWidth` sumisse do `doc.text`, o texto
+    // vazaria da etiqueta fisica sem nenhum aviso em teste algum.
+    const sobra = { id: 999, dimensoes_restantes: '3000x1500x1200x800x400', espessura: 12.7, peso_aproximado: 245.8 };
+    const etiqueta = montarEtiquetaRetalho(sobra, { codigo: 'RET-999', nome: 'Retalho de chapa grande sobrando do corte' });
+    await gerarEtiquetasPDF({ formato: 'TERMICA_100x50', etiquetas: [etiqueta] });
+    const doc = require('jspdf').default.__instancias.at(-1);
+    const chamadaLinhaControle = doc.text.mock.calls.find((c) => c[0] === etiqueta.linhaControle);
+    expect(chamadaLinhaControle).toBeTruthy();
+    const opcoes = chamadaLinhaControle[3];
+    expect(opcoes).toEqual(expect.objectContaining({ maxWidth: expect.any(Number) }));
+    expect(opcoes.maxWidth).toBeGreaterThan(0);
   });
 
   test('formato desconhecido e lista vazia sao recusados', async () => {

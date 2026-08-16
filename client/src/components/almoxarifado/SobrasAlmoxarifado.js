@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiRefreshCw, FiScissors, FiEdit2, FiPlus } from 'react-icons/fi';
+import {
+  FiRefreshCw, FiScissors, FiEdit2, FiPlus, FiTag, FiTrash2,
+  FiCheck, FiXCircle, FiDollarSign, FiSlash,
+} from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { useAuth } from '../../context/AuthContext';
 import SeloProprietario, { rotuloMaterialComDono } from './SeloProprietario';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
+import EtiquetasPdfModal from './EtiquetasPdfModal';
+import { montarEtiquetaRetalho } from '../../utils/etiquetasPdf';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import './Almoxarifado.css';
 
@@ -31,6 +38,36 @@ import './Almoxarifado.css';
  * servidor nao restringe o PUT pelo status atual — editar uma sobra CONSUMIDA/SUCATEADA para
  * corrigir um dado de cadastro e legitimo. Por isso nao ha STATUS_COM_* aqui: o botao "Editar"
  * fica disponivel em toda linha, gateado so por permissao.
+ *
+ * ── Task 9: aba Sucateamentos + etiqueta de retalho (paga a pendencia da 6c) ─────────────────
+ *
+ * A mesma tela ganhou uma segunda aba (`aba`, molde de LotesAlmoxarifado.js: botoes
+ * primary/secondary alternando, sem CSS novo) para o processo de sucateamento entregue pelas
+ * Tasks 6/7 (`scrapDisposalService` + rotas em `extended.js`) — ate aqui, sem tela nenhuma,
+ * so alcancavel por chamada direta a API. AO CONTRARIO da aba Retalhos, sucateamento TEM maquina
+ * de estados (SOLICITADO -> APROVADO -> VENDIDA/DESCARTADA, ou REJEITADO/CANCELADO a partir de
+ * SOLICITADO) — por isso aqui HA `STATUS_SUC_COM_*`, no molde de RemessasTerceirosAlmoxarifado.js.
+ *
+ * As DUAS PERNAS da dupla aprovacao (`aprovar_sucateamento` = almoxarifado, `aprovar_sucateamento_
+ * gestao` = gestao) sao mostradas/escondidas por TRES condicoes ao mesmo tempo: status SOLICITADO, a
+ * perna especifica ainda sem assinatura (`aprovador_almox_id`/`aprovador_gestao_id` nulos) e
+ * `pode(acao)` da perna. Uma QUARTA condicao (nao ligada a `pode`) esconde os DOIS botoes do
+ * proprio solicitante (`solicitante_id === user?.id`, useAuth — mesmo padrao de RequisicoesList.js)
+ * — o backend barra de qualquer jeito (barreira 2 de scrapDisposalService), mas a tela ja nao
+ * oferece o botao para nao ensinar um clique que so vai voltar 403.
+ *
+ * `Rejeitar` e `Registrar destino` NAO tem uma unica `acao` de `requirePermission` no servidor
+ * (o gate real e "aprova ALGUMA das duas pernas", um OU que a rota tambem resolve manualmente,
+ * nao por `requirePermission` — ver o comentario de `requerAprovarAlgumaPerna` em
+ * routes/almoxarifado/extended.js) — por isso a visibilidade aqui e
+ * `pode('aprovar_sucateamento') || pode('aprovar_sucateamento_gestao')`, e os cliques para essas
+ * duas acoes NAO passam por `bloquearSeNaoPode` (nao ha uma acao unica para checar): a visibilidade
+ * do botao E o gate do lado do cliente, e o servico decide de verdade.
+ *
+ * Etiqueta de retalho (`montarEtiquetaRetalho`, utils/etiquetasPdf.js): reusa o MESMO
+ * `EtiquetasPdfModal` da Etapa 6c — a tela so monta o descritor, quem desenha o PDF e o modal.
+ * O QR aponta para esta PROPRIA tela (`?sobra_id=`), e o deep-link e lido no mount (molde do
+ * `destaque` one-shot de LotesAlmoxarifado.js) para destacar a linha que o QR apontou.
  */
 
 const STATUS_SOBRA = [
@@ -53,8 +90,40 @@ const FORM_GERAR_VAZIO = {
 
 const FORM_EDITAR_VAZIO = { status: 'DISPONIVEL', localizacao_id: '', observacoes: '', reutilizavel: true };
 
+// Status do sucateamento (scrapDisposalStateMachine.STATUS_SUCATEAMENTO), com cores REUSADAS das
+// classes `almox-badge-*` ja existentes (nenhuma classe nova) — mesmo espirito de `statusInfo`
+// acima: SOLICITADO e "em andamento" (ajuste, azul), APROVADO e "baixou, falta o destino" (baixo,
+// laranja — chama atencao para a acao pendente), VENDIDA e sucesso terminal (ok, verde),
+// DESCARTADA/CANCELADO sao neutros terminais (zerado, cinza), REJEITADO e recusa (critico, vermelho).
+const STATUS_SUCATEAMENTO = [
+  { value: 'SOLICITADO', label: 'Solicitado', cls: 'ajuste' },
+  { value: 'APROVADO', label: 'Aprovado', cls: 'baixo' },
+  { value: 'VENDIDA', label: 'Vendida', cls: 'ok' },
+  { value: 'DESCARTADA', label: 'Descartada', cls: 'zerado' },
+  { value: 'REJEITADO', label: 'Rejeitado', cls: 'critico' },
+  { value: 'CANCELADO', label: 'Cancelado', cls: 'zerado' },
+];
+const statusSucInfo = (s) => STATUS_SUCATEAMENTO.find((x) => x.value === s) || { label: s || '—', cls: 'ajuste' };
+
+// Molde de RemessasTerceirosAlmoxarifado.js (STATUS_COM_*): os botoes seguem o STATUS, e quem
+// decide de verdade e o backend — aqui so escondemos o que o servidor recusaria.
+const STATUS_SUC_COM_REJEITAR = ['SOLICITADO'];
+const STATUS_SUC_COM_CANCELAR = ['SOLICITADO'];
+const STATUS_SUC_COM_DESTINO = ['APROVADO'];
+
+// Sugestoes do brief — texto livre, o <datalist> so ajuda a digitar consistente.
+const CLASSIFICACOES_SUGERIDAS = ['aço carbono', 'inox', 'alumínio', 'cobre', 'cavaco', 'misto'];
+
+const FORM_SUC_VAZIO = {
+  material_id: '', lote_id: '', sobra_id: '', quantidade: '', classificacao: '',
+  peso_estimado: '', projeto_origem_id: '', os_origem_id: '', justificativa: '', observacoes: '',
+};
+const FORM_SUC_ACAO_VAZIO = { motivo: '', destino: '', valor_venda: '', comprovante: null };
+
 const SobrasAlmoxarifado = () => {
-  const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
 
   const [sobras, setSobras] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -70,15 +139,38 @@ const SobrasAlmoxarifado = () => {
   const [projetos, setProjetos] = useState([]);
   const [lotesOrigem, setLotesOrigem] = useState([]);
 
-  const [modal, setModal] = useState(null); // { tipo: 'gerar'|'editar', sobra? }
+  // { tipo: 'gerar'|'editar'|'solicitar'|'rejeitar'|'destino', sobra?|sucateamento? }
+  const [modal, setModal] = useState(null);
   const [form, setForm] = useState(FORM_GERAR_VAZIO);
   const [formEditar, setFormEditar] = useState(FORM_EDITAR_VAZIO);
   const [novoMaterial, setNovoMaterial] = useState(null); // null fechado, {} aberto
   const [salvando, setSalvando] = useState(false);
   const [extratoMaterialId, setExtratoMaterialId] = useState(null);
+  const [etiquetas, setEtiquetas] = useState(null); // null fechado, [] ou [x] aberto (EtiquetasPdfModal)
+
+  // Deep-link do QR da etiqueta (`?sobra_id=`) — one-shot, lido so no mount: molde do `destaque`
+  // de LotesAlmoxarifado.js. Trocar de filtro depois de entrar pelo QR nao deve "perseguir" um
+  // destaque velho de outra visita.
+  const [destaqueSobraId] = useState(() => searchParams.get('sobra_id') || '');
+
+  // Aba: Retalhos (Task 8) ou Sucateamentos (Task 9) — molde de LotesAlmoxarifado.js (botoes
+  // primary/secondary alternando, sem CSS novo). O `modal` e COMPARTILHADO entre as duas abas de
+  // proposito: o botao "Sucatear" na linha do retalho abre o modal de solicitar sucateamento SEM
+  // trocar de aba — o operador nao precisa sair de Retalhos para sucatear o que acabou de ver.
+  const [aba, setAba] = useState('RETALHOS');
+
+  const [sucateamentos, setSucateamentos] = useState([]);
+  const [loadingSuc, setLoadingSuc] = useState(true);
+  const [reloadTokenSuc, setReloadTokenSuc] = useState(0);
+  const [filtroStatusSuc, setFiltroStatusSuc] = useState('');
+  const [filtroMaterialSuc, setFiltroMaterialSuc] = useState('');
+  const [lotesSuc, setLotesSuc] = useState([]);
+  const [formSuc, setFormSuc] = useState(FORM_SUC_VAZIO);
+  const [formSucAcao, setFormSucAcao] = useState(FORM_SUC_ACAO_VAZIO);
 
   const materiaisPorId = useMemo(() => new Map((materiais || []).map((m) => [m.id, m])), [materiais]);
   const origemSelecionada = materiaisPorId.get(Number(form.material_origem_id));
+  const materialSucSelecionado = materiaisPorId.get(Number(formSuc.material_id));
 
   useEffect(() => {
     let cancelado = false;
@@ -128,7 +220,35 @@ const SobrasAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [modal?.tipo, form.material_origem_id]);
 
+  // Fila de sucateamentos — so busca quando a aba esta aberta, mesmo espirito de "so quando o
+  // modal que precisa" dos efeitos acima: e uma lista separada que a aba Retalhos nao usa.
+  useEffect(() => {
+    if (aba !== 'SUCATEAMENTOS') return undefined;
+    let cancelado = false;
+    setLoadingSuc(true);
+    const params = {};
+    if (filtroStatusSuc) params.status = filtroStatusSuc;
+    if (filtroMaterialSuc) params.material_id = filtroMaterialSuc;
+    api.get('/almoxarifado/sucateamentos', { params })
+      .then((r) => { if (!cancelado) setSucateamentos(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => { if (!cancelado) { setSucateamentos([]); toast.error('Não foi possível carregar os sucateamentos'); } })
+      .finally(() => { if (!cancelado) setLoadingSuc(false); });
+    return () => { cancelado = true; };
+  }, [aba, filtroStatusSuc, filtroMaterialSuc, reloadTokenSuc]);
+
+  // Lotes do material a sucatear, so quando o modal de solicitar esta aberto — mesmo molde do
+  // efeito de `lotesOrigem` acima.
+  useEffect(() => {
+    if (modal?.tipo !== 'solicitar' || !formSuc.material_id) { setLotesSuc([]); return undefined; }
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${formSuc.material_id}/lotes?com_saldo=1`)
+      .then((res) => { if (!cancelado) setLotesSuc(res.data || []); })
+      .catch(() => { if (!cancelado) setLotesSuc([]); });
+    return () => { cancelado = true; };
+  }, [modal?.tipo, formSuc.material_id]);
+
   const recarregar = useCallback(() => setReloadToken((t) => t + 1), []);
+  const recarregarSuc = useCallback(() => setReloadTokenSuc((t) => t + 1), []);
 
   const abrirGerar = (evento) => {
     if (!bloquearSeNaoPode('movimentar', evento)) return;
@@ -239,10 +359,18 @@ const SobrasAlmoxarifado = () => {
 
     setSalvando(true);
     try {
-      await api.post('/almoxarifado/sobras/gerar-retalho', payload);
+      const res = await api.post('/almoxarifado/sobras/gerar-retalho', payload);
       toast.success(form.baixar_original
         ? 'Retalho gerado — o material de origem foi baixado'
         : 'Retalho gerado — nada foi baixado (a peça já tinha saído do estoque)');
+      // Task 9: oferece a etiqueta do retalho recem-criado (nao forca — o EtiquetasPdfModal so
+      // ABRE, quem decide imprimir e o operador). `res.data.sobra` e a linha completa da tabela
+      // `sobras_material_almoxarifado` (scrapService.gerarRetalho); o material-retalho ja esta em
+      // `materiaisPorId` porque veio do MESMO select que acabou de ser usado no payload.
+      const materialRetalho = materiaisPorId.get(Number(form.material_retalho_id));
+      if (res.data?.sobra && materialRetalho) {
+        setEtiquetas([montarEtiquetaRetalho(res.data.sobra, materialRetalho)]);
+      }
       setModal(null);
       recarregar();
     } catch (err) {
@@ -270,7 +398,155 @@ const SobrasAlmoxarifado = () => {
     } finally { setSalvando(false); }
   };
 
-  const confirmar = () => (modal?.tipo === 'gerar' ? confirmarGerar() : confirmarEditar());
+  /**
+   * Abre "Solicitar sucateamento". `prefill` e usado pelo botao "Sucatear" da linha do retalho
+   * (brief): pre-preenche `material_id` (o material-RETALHO, o que esta na prateleira) e
+   * `sobra_id` — o operador nao digita de novo o que a tela ja sabe.
+   */
+  const abrirSolicitarSucateamento = (evento, prefill = {}) => {
+    if (!bloquearSeNaoPode('movimentar', evento)) return;
+    setFormSuc({ ...FORM_SUC_VAZIO, ...prefill });
+    setModal({ tipo: 'solicitar' });
+  };
+
+  const confirmarSolicitarSucateamento = async () => {
+    if (!formSuc.material_id) { toast.error('Selecione o material a sucatear'); return; }
+    if (!(Number(formSuc.quantidade) > 0)) { toast.error('Informe a quantidade a sucatear'); return; }
+    if (materialSucSelecionado?.controle_lote === 1 && !formSuc.lote_id) {
+      toast.error('Este material controla lote: selecione o lote'); return;
+    }
+    if (!String(formSuc.justificativa || '').trim()) {
+      toast.error('Justificativa é obrigatória para sucatear: a baixa SUCATA exige o motivo escrito.');
+      return;
+    }
+
+    const payload = {
+      material_id: Number(formSuc.material_id),
+      quantidade: Number(formSuc.quantidade),
+      justificativa: String(formSuc.justificativa).trim(),
+    };
+    if (formSuc.lote_id) payload.lote_id = Number(formSuc.lote_id);
+    if (formSuc.sobra_id) payload.sobra_id = Number(formSuc.sobra_id);
+    if (formSuc.classificacao) payload.classificacao = String(formSuc.classificacao).trim();
+    if (formSuc.peso_estimado !== '') payload.peso_estimado = Number(formSuc.peso_estimado);
+    if (formSuc.projeto_origem_id) payload.projeto_origem_id = Number(formSuc.projeto_origem_id);
+    if (formSuc.os_origem_id) payload.os_origem_id = Number(formSuc.os_origem_id);
+    if (formSuc.observacoes) payload.observacoes = String(formSuc.observacoes).trim();
+
+    setSalvando(true);
+    try {
+      await api.post('/almoxarifado/sucateamentos', payload);
+      toast.success('Sucateamento solicitado — aguardando as duas assinaturas (almoxarifado e gestão)');
+      setModal(null);
+      recarregarSuc();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao solicitar o sucateamento');
+    } finally { setSalvando(false); }
+  };
+
+  /**
+   * Assina UMA perna. `perna` e `'almoxarifado'` ou `'gestao'` — o nome vira o segmento da rota
+   * (`/aprovar-almoxarifado` / `/aprovar-gestao`) e a `acao` do gate, no mesmo molde declarativo
+   * de `PERNAS` em scrapDisposalService.js.
+   *
+   * O toast distingue os dois desfechos possiveis (contrato de `aprovar`, task-7-report.md): esta
+   * assinatura pode ser a PRIMEIRA perna (falta a outra, nada mudou no estoque ainda) ou a
+   * SEGUNDA (as duas fecharam, a baixa SAIU do estoque agora) — sao noticias bem diferentes para
+   * quem clicou.
+   */
+  const aprovarSucateamento = async (sucateamento, perna, evento) => {
+    const acao = perna === 'almoxarifado' ? 'aprovar_sucateamento' : 'aprovar_sucateamento_gestao';
+    if (!bloquearSeNaoPode(acao, evento)) return;
+    try {
+      const res = await api.post(`/almoxarifado/sucateamentos/${sucateamento.id}/aprovar-${perna}`, {});
+      toast.success(res.data?.baixa_emitida
+        ? 'Sucateamento aprovado nas duas pernas — a baixa foi emitida no estoque'
+        : 'Perna assinada — falta a assinatura da outra perna para a baixa sair');
+      recarregarSuc();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao aprovar o sucateamento');
+    }
+  };
+
+  // Rejeitar e Registrar destino NAO tem uma unica `acao` de requirePermission (o gate real e "quem
+  // aprova ALGUMA das duas pernas") — por isso abrir o modal aqui nao passa por `bloquearSeNaoPode`
+  // (nao ha uma acao unica para checar): a visibilidade do BOTAO ja e o gate do lado do cliente
+  // (`pode('aprovar_sucateamento') || pode('aprovar_sucateamento_gestao')`), e o servico decide de
+  // verdade.
+  const abrirRejeitarSucateamento = (sucateamento) => {
+    setFormSucAcao(FORM_SUC_ACAO_VAZIO);
+    setModal({ tipo: 'rejeitar', sucateamento });
+  };
+
+  const confirmarRejeitarSucateamento = async () => {
+    const texto = String(formSucAcao.motivo || '').trim();
+    if (!texto) { toast.error('Informe o motivo da rejeição'); return; }
+    setSalvando(true);
+    try {
+      await api.post(`/almoxarifado/sucateamentos/${modal.sucateamento.id}/rejeitar`, { motivo: texto });
+      toast.success('Sucateamento rejeitado');
+      setModal(null);
+      recarregarSuc();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao rejeitar o sucateamento');
+    } finally { setSalvando(false); }
+  };
+
+  const abrirDestinoSucateamento = (sucateamento) => {
+    setFormSucAcao(FORM_SUC_ACAO_VAZIO);
+    setModal({ tipo: 'destino', sucateamento });
+  };
+
+  const confirmarDestinoSucateamento = async () => {
+    if (!formSucAcao.destino) { toast.error('Selecione o destino'); return; }
+    if (formSucAcao.destino === 'VENDIDA' && !(Number(formSucAcao.valor_venda) > 0)) {
+      toast.error('Informe o valor da venda da sucata (maior que zero)'); return;
+    }
+    setSalvando(true);
+    try {
+      // Multipart (contrato da Task 7): `destino` + `valor_venda` (string, o servidor coage) +
+      // `comprovante` opcional. Mesmo molde de LotesAlmoxarifado.js (anexar certificado).
+      const fd = new FormData();
+      fd.append('destino', formSucAcao.destino);
+      if (formSucAcao.valor_venda !== '') fd.append('valor_venda', formSucAcao.valor_venda);
+      if (formSucAcao.comprovante) fd.append('comprovante', formSucAcao.comprovante);
+      await api.post(`/almoxarifado/sucateamentos/${modal.sucateamento.id}/destino`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Destino registrado');
+      setModal(null);
+      recarregarSuc();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao registrar o destino');
+    } finally { setSalvando(false); }
+  };
+
+  /**
+   * Cancelar nao tem modal (ao contrario de Remessas): o servico NAO recebe motivo nenhum
+   * (`scrapDisposalService.cancelar(db, user, id)`) — desistir do proprio pedido nao exige
+   * justificativa, so confirmacao. Mesmo molde de `handleDelete` em MateriaisAlmoxarifado.js
+   * (`window.confirm`).
+   */
+  const cancelarSucateamento = async (sucateamento, evento) => {
+    if (!bloquearSeNaoPode('movimentar', evento)) return;
+    if (!window.confirm(`Cancelar a solicitação de sucateamento de ${sucateamento.material_codigo}?`)) return;
+    try {
+      await api.post(`/almoxarifado/sucateamentos/${sucateamento.id}/cancelar`, {});
+      toast.success('Sucateamento cancelado');
+      recarregarSuc();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao cancelar o sucateamento');
+    }
+  };
+
+  const confirmar = () => {
+    if (modal?.tipo === 'gerar') return confirmarGerar();
+    if (modal?.tipo === 'editar') return confirmarEditar();
+    if (modal?.tipo === 'solicitar') return confirmarSolicitarSucateamento();
+    if (modal?.tipo === 'rejeitar') return confirmarRejeitarSucateamento();
+    if (modal?.tipo === 'destino') return confirmarDestinoSucateamento();
+    return undefined;
+  };
 
   const rotuloLocalizacao = (l) => `${l.endereco_completo || formatLocalizacaoLabel(l, localizacoes)}${l.descricao ? ` — ${l.descricao}` : ''}`;
 
@@ -280,20 +556,39 @@ const SobrasAlmoxarifado = () => {
         <div>
           <h1><FiScissors size={20} /> Sobras e Retalhos</h1>
           <p>
-            {loading ? 'Carregando...'
-              : `${sobras.length} sobra(s) · retalho rastreável, disponível antes de cortar chapa nova`}
+            {aba === 'RETALHOS'
+              ? (loading ? 'Carregando...'
+                : `${sobras.length} sobra(s) · retalho rastreável, disponível antes de cortar chapa nova`)
+              : (loadingSuc ? 'Carregando...'
+                : `${sucateamentos.length} sucateamento(s) · dupla assinatura antes de sair do patrimônio`)}
           </p>
         </div>
         <div className="almox-header-actions">
-          <button className="btn-almox-secondary" onClick={recarregar}>
+          <button className="btn-almox-secondary" onClick={aba === 'RETALHOS' ? recarregar : recarregarSuc}>
             <FiRefreshCw size={13} /> Atualizar
           </button>
-          <button className="btn-almox-primary" onClick={abrirGerar}>
-            <FiScissors size={13} /> Gerar retalho
-          </button>
+          {aba === 'RETALHOS' ? (
+            <button className="btn-almox-primary" onClick={abrirGerar}>
+              <FiScissors size={13} /> Gerar retalho
+            </button>
+          ) : (
+            <button className="btn-almox-primary" onClick={(e) => abrirSolicitarSucateamento(e)}>
+              <FiTrash2 size={13} /> Solicitar sucateamento
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Abas — Task 9: molde de LotesAlmoxarifado.js (botoes primary/secondary alternando, sem
+          CSS novo). Os MODAIS ficam fora do bloco de cada aba (mais abaixo): o botao "Sucatear" da
+          linha do retalho abre o modal de solicitar sem trocar de aba. */}
+      <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
+        <button className={aba === 'RETALHOS' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('RETALHOS')}>Retalhos</button>
+        <button className={aba === 'SUCATEAMENTOS' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('SUCATEAMENTOS')}>Sucateamentos</button>
+      </div>
+
+      {aba === 'RETALHOS' && (
+      <>
       <div className="almox-filters">
         <select className="almox-select" value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)}>
           <option value="">Todos os status</option>
@@ -325,7 +620,8 @@ const SobrasAlmoxarifado = () => {
                   const retalho = materiaisPorId.get(s.material_retalho_id);
                   const info = statusInfo(s.status);
                   return (
-                    <tr key={s.id}>
+                    <tr key={s.id}
+                      style={{ background: String(s.id) === destaqueSobraId ? 'rgba(79,172,254,0.10)' : undefined }}>
                       <td>
                         {origem ? `${origem.codigo} — ${origem.nome}` : `#${s.material_id}`}
                         {' → '}
@@ -347,6 +643,18 @@ const SobrasAlmoxarifado = () => {
                             onClick={(e) => abrirEditar(s, e)}>
                             <FiEdit2 size={13} /> Editar
                           </button>
+                          <button className="btn-almox-secondary" disabled={!retalho}
+                            title="Imprimir etiqueta deste retalho"
+                            onClick={() => setEtiquetas([montarEtiquetaRetalho(s, retalho)])}>
+                            <FiTag size={13} /> Etiqueta
+                          </button>
+                          <button className="btn-almox-secondary"
+                            title="Solicitar sucateamento deste retalho"
+                            onClick={(e) => abrirSolicitarSucateamento(e, {
+                              material_id: String(s.material_retalho_id), sobra_id: String(s.id),
+                            })}>
+                            <FiTrash2 size={13} /> Sucatear
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -356,6 +664,99 @@ const SobrasAlmoxarifado = () => {
             </table>
           )}
       </div>
+      </>
+      )}
+
+      {aba === 'SUCATEAMENTOS' && (
+      <>
+      <div className="almox-filters">
+        <select className="almox-select" value={filtroStatusSuc} onChange={(e) => setFiltroStatusSuc(e.target.value)}>
+          <option value="">Todos os status</option>
+          {STATUS_SUCATEAMENTO.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        <select className="almox-select" value={filtroMaterialSuc} onChange={(e) => setFiltroMaterialSuc(e.target.value)}>
+          <option value="">Todos os materiais</option>
+          {materiais.map((m) => <option key={m.id} value={m.id}>{m.codigo} — {m.nome}</option>)}
+        </select>
+      </div>
+
+      <div className="almox-table-container">
+        {loadingSuc ? <SkeletonTable rows={6} columns={6} />
+          : sucateamentos.length === 0 ? (
+            <div className="almox-empty"><p>Nenhum sucateamento registrado</p></div>
+          ) : (
+            <table className="almox-table almox-sucateamento-lista">
+              <thead>
+                <tr>
+                  <th>Material</th><th>Quantidade</th><th>Classificação</th>
+                  <th>Status</th><th>Solicitante</th><th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sucateamentos.map((s) => {
+                  const info = statusSucInfo(s.status);
+                  // As TRES condicoes do docstring: status SOLICITADO, a perna ainda sem
+                  // assinatura, e `pode(acao)` — mais a QUARTA (fora de `pode`): esconder do
+                  // proprio solicitante, que o backend barra de qualquer jeito (barreira 2).
+                  const naoEhSolicitante = Number(s.solicitante_id) !== Number(user?.id);
+                  const mostraAprovarAlmox = s.status === 'SOLICITADO' && !s.aprovador_almox_id
+                    && naoEhSolicitante && pode('aprovar_sucateamento');
+                  const mostraAprovarGestao = s.status === 'SOLICITADO' && !s.aprovador_gestao_id
+                    && naoEhSolicitante && pode('aprovar_sucateamento_gestao');
+                  const aprovaAlgumaPerna = pode('aprovar_sucateamento') || pode('aprovar_sucateamento_gestao');
+                  return (
+                    <tr key={s.id}>
+                      <td>
+                        {s.material_codigo} — {s.material_nome}
+                        <SeloProprietario material={s} />
+                      </td>
+                      <td>{s.quantidade} {s.material_unidade || ''}</td>
+                      <td>{s.classificacao || '—'}</td>
+                      <td><span className={`almox-badge almox-badge-${info.cls}`}>{info.label}</span></td>
+                      <td>{s.solicitante_nome || '—'}</td>
+                      <td>
+                        <div className="almox-actions">
+                          {mostraAprovarAlmox && (
+                            <button className="btn-almox-primary" title="Assinar a perna do almoxarifado"
+                              onClick={(e) => aprovarSucateamento(s, 'almoxarifado', e)}>
+                              <FiCheck size={13} /> Aprovar almoxarifado
+                            </button>
+                          )}
+                          {mostraAprovarGestao && (
+                            <button className="btn-almox-primary" title="Assinar a perna da gestão"
+                              onClick={(e) => aprovarSucateamento(s, 'gestao', e)}>
+                              <FiCheck size={13} /> Aprovar gestão
+                            </button>
+                          )}
+                          {STATUS_SUC_COM_REJEITAR.includes(s.status) && aprovaAlgumaPerna && (
+                            <button className="btn-almox-secondary" title="Rejeitar a solicitação"
+                              onClick={() => abrirRejeitarSucateamento(s)}>
+                              <FiXCircle size={13} /> Rejeitar
+                            </button>
+                          )}
+                          {STATUS_SUC_COM_DESTINO.includes(s.status) && aprovaAlgumaPerna && (
+                            <button className="btn-almox-secondary" title="Registrar venda ou descarte"
+                              onClick={() => abrirDestinoSucateamento(s)}>
+                              <FiDollarSign size={13} /> Registrar destino
+                            </button>
+                          )}
+                          {STATUS_SUC_COM_CANCELAR.includes(s.status) && Number(s.solicitante_id) === Number(user?.id) && (
+                            <button className="btn-almox-secondary" title="Cancelar a própria solicitação"
+                              onClick={(e) => cancelarSucateamento(s, e)}>
+                              <FiSlash size={13} /> Cancelar
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+      </div>
+      </>
+      )}
 
       {modal?.tipo === 'gerar' && (
         <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>
@@ -650,9 +1051,177 @@ const SobrasAlmoxarifado = () => {
         </div>
       )}
 
+      {modal?.tipo === 'solicitar' && (
+        <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>
+          <div className="almox-modal almox-modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Solicitar sucateamento</h2>
+              <button className="almox-modal-close" onClick={() => setModal(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0, fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
+                A solicitação não move saldo nenhum — a baixa só sai do estoque quando as DUAS
+                assinaturas (almoxarifado e gestão) fecharem o processo.
+              </p>
+              <div className="almox-form-grid">
+                <div className="almox-field">
+                  <label className="almox-label">Material a sucatear<span className="required">*</span></label>
+                  <select className="almox-form-select" value={formSuc.material_id}
+                    onChange={(e) => setFormSuc((f) => ({ ...f, material_id: e.target.value, lote_id: '' }))}>
+                    <option value="">Selecionar material...</option>
+                    {materiais.map((m) => (
+                      <option key={m.id} value={m.id}>{rotuloMaterialComDono(m, `${m.codigo} — ${m.nome}`)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Quantidade a sucatear<span className="required">*</span></label>
+                  <input className="almox-input" type="number" min="0" value={formSuc.quantidade}
+                    onChange={(e) => setFormSuc((f) => ({ ...f, quantidade: e.target.value }))} />
+                </div>
+                {materialSucSelecionado?.controle_lote === 1 && (
+                  <div className="almox-field">
+                    <label className="almox-label">Lote<span className="required">*</span></label>
+                    <select className="almox-form-select" value={formSuc.lote_id}
+                      onChange={(e) => setFormSuc((f) => ({ ...f, lote_id: e.target.value }))}>
+                      <option value="">Selecionar lote...</option>
+                      {lotesSuc.map((l) => <option key={l.id} value={l.id}>{l.codigo} — saldo {l.saldo}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="almox-field">
+                  <label className="almox-label">Classificação</label>
+                  <input className="almox-input" list="almox-suc-classificacoes" value={formSuc.classificacao}
+                    onChange={(e) => setFormSuc((f) => ({ ...f, classificacao: e.target.value }))} />
+                  <datalist id="almox-suc-classificacoes">
+                    {CLASSIFICACOES_SUGERIDAS.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Peso estimado (kg)</label>
+                  <input className="almox-input" type="number" min="0" value={formSuc.peso_estimado}
+                    onChange={(e) => setFormSuc((f) => ({ ...f, peso_estimado: e.target.value }))} />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">Projeto de origem</label>
+                  <select className="almox-form-select" value={formSuc.projeto_origem_id}
+                    onChange={(e) => setFormSuc((f) => ({ ...f, projeto_origem_id: e.target.value }))}>
+                    <option value="">—</option>
+                    {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                  </select>
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label">OS de origem</label>
+                  <select className="almox-form-select" value={formSuc.os_origem_id}
+                    onChange={(e) => setFormSuc((f) => ({ ...f, os_origem_id: e.target.value }))}>
+                    <option value="">—</option>
+                    {ordensServico.map((os) => (
+                      <option key={os.id} value={os.id}>
+                        {os.numero_os}{os.cliente_nome ? ` — ${os.cliente_nome}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="almox-field almox-form-full">
+                <label className="almox-label">Justificativa<span className="required">*</span></label>
+                <textarea className="almox-textarea" rows={2} value={formSuc.justificativa}
+                  onChange={(e) => setFormSuc((f) => ({ ...f, justificativa: e.target.value }))} />
+                <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                  Obrigatória — fica no livro de movimentações como a única explicação de por que o
+                  material sumiu do patrimônio.
+                </small>
+              </div>
+              <div className="almox-field almox-form-full">
+                <label className="almox-label">Observações</label>
+                <textarea className="almox-textarea" rows={2} value={formSuc.observacoes}
+                  onChange={(e) => setFormSuc((f) => ({ ...f, observacoes: e.target.value }))} />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setModal(null)} disabled={salvando}>Fechar</button>
+              <button className="btn-almox-primary" onClick={confirmar} disabled={salvando}>
+                {salvando ? 'Solicitando...' : 'Solicitar sucateamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal?.tipo === 'rejeitar' && (
+        <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>
+          <div className="almox-modal almox-modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Rejeitar sucateamento</h2>
+              <button className="almox-modal-close" onClick={() => setModal(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}><strong>{modal.sucateamento.material_codigo}</strong> — {modal.sucateamento.material_nome}</p>
+              <div className="almox-field">
+                <label className="almox-label">Motivo da rejeição<span className="required">*</span></label>
+                <textarea className="almox-textarea" rows={3} value={formSucAcao.motivo}
+                  onChange={(e) => setFormSucAcao((f) => ({ ...f, motivo: e.target.value }))} />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setModal(null)} disabled={salvando}>Fechar</button>
+              <button className="btn-almox-primary" onClick={confirmar} disabled={salvando}>
+                {salvando ? 'Rejeitando...' : 'Rejeitar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modal?.tipo === 'destino' && (
+        <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>
+          <div className="almox-modal almox-modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Registrar destino da sucata</h2>
+              <button className="almox-modal-close" onClick={() => setModal(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}><strong>{modal.sucateamento.material_codigo}</strong> — {modal.sucateamento.material_nome}</p>
+              <div className="almox-field">
+                <label className="almox-label">Destino<span className="required">*</span></label>
+                <select className="almox-form-select" value={formSucAcao.destino}
+                  onChange={(e) => setFormSucAcao((f) => ({ ...f, destino: e.target.value }))}>
+                  <option value="">Selecionar destino...</option>
+                  <option value="VENDIDA">Vendida</option>
+                  <option value="DESCARTADA">Descartada</option>
+                </select>
+              </div>
+              {formSucAcao.destino === 'VENDIDA' && (
+                <div className="almox-field">
+                  <label className="almox-label">Valor da venda (R$)<span className="required">*</span></label>
+                  <input className="almox-input" type="number" min="0" step="0.01" value={formSucAcao.valor_venda}
+                    onChange={(e) => setFormSucAcao((f) => ({ ...f, valor_venda: e.target.value }))} />
+                </div>
+              )}
+              <div className="almox-field">
+                <label className="almox-label">Comprovante (PDF ou imagem)</label>
+                <input className="almox-input" type="file" accept=".pdf,image/*"
+                  onChange={(e) => setFormSucAcao((f) => ({ ...f, comprovante: e.target.files?.[0] || null }))} />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setModal(null)} disabled={salvando}>Fechar</button>
+              <button className="btn-almox-primary" onClick={confirmar} disabled={salvando}>
+                {salvando ? 'Salvando...' : 'Confirmar destino'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {extratoMaterialId && (
         <ExtratoMaterialModal materialId={extratoMaterialId} onClose={() => setExtratoMaterialId(null)} />
       )}
+
+      {/* Etiqueta de retalho (Task 9) — mesmo EtiquetasPdfModal da Etapa 6c: `etiquetas: null`
+          fechado. Aberta pelo botao "Etiqueta" por linha e, automaticamente, apos "Gerar retalho"
+          ter sucesso (a tela OFERECE a impressao, nao forca). */}
+      <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
     </div>
   );
 };
