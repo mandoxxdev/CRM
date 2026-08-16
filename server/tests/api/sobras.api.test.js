@@ -106,6 +106,42 @@ async function novaSobra(db, overrides = {}) {
     assert.strictEqual(novos.status, 'CONSUMIDA', 'dados_novos nao capturou o status de depois do PUT');
   });
 
+  // Fix round 1 (review): COALESCE nao distinguia "chave omitida" de "null explicito" — os dois
+  // paravam como `null` no parametro e o SQL preservava os dois casos igual. SobraUpdateSchema
+  // promete `.nullable()` em localizacao_id/observacoes (limpar o campo de verdade); o teste
+  // abaixo e o controle positivo dos DOIS lados do contrato, no molde HARD REQUIREMENT ja usado
+  // em routes/almoxarifado.js (`val(k)`: omitido preserva, null explicito substitui).
+  await test('PUT /sobras/:id preserva localizacao_id/observacoes quando omitidos, e limpa quando null explicito', async () => {
+    const loc = await dbGet(db, 'SELECT id FROM localizacoes_almoxarifado LIMIT 1');
+    assert.ok(loc, 'setup errado: nao ha localizacao semeada para o teste');
+    const id = await novaSobra(db);
+
+    const comValor = await request(app).put(`/api/almoxarifado/sobras/${id}`)
+      .send({ localizacao_id: loc.id, observacoes: 'nota inicial' });
+    assert.strictEqual(comValor.status, 200, JSON.stringify(comValor.body));
+    assert.strictEqual(comValor.body.localizacao_id, loc.id, 'PUT nao gravou localizacao_id');
+    assert.strictEqual(comValor.body.observacoes, 'nota inicial', 'PUT nao gravou observacoes');
+
+    // PRESERVA: um PUT que so manda `status` (nao manda localizacao_id/observacoes) nao pode
+    // apagar o que ja estava setado.
+    const omitido = await request(app).put(`/api/almoxarifado/sobras/${id}`).send({ status: 'DISPONIVEL' });
+    assert.strictEqual(omitido.status, 200, JSON.stringify(omitido.body));
+    assert.strictEqual(omitido.body.localizacao_id, loc.id,
+      'PUT omitindo localizacao_id limpou o campo — preserve-when-omitted quebrado');
+    assert.strictEqual(omitido.body.observacoes, 'nota inicial',
+      'PUT omitindo observacoes limpou o campo — preserve-when-omitted quebrado');
+
+    // LIMPA: `null` explicito tem que limpar de verdade — e o lado que o COALESCE antigo nunca
+    // entregava (era exatamente o achado do review).
+    const limpo = await request(app).put(`/api/almoxarifado/sobras/${id}`)
+      .send({ localizacao_id: null, observacoes: null });
+    assert.strictEqual(limpo.status, 200, JSON.stringify(limpo.body));
+    assert.strictEqual(limpo.body.localizacao_id, null,
+      'PUT com localizacao_id:null nao limpou o campo — o contrato do Zod (.nullable()) nao foi entregue');
+    assert.strictEqual(limpo.body.observacoes, null,
+      'PUT com observacoes:null nao limpou o campo — o contrato do Zod (.nullable()) nao foi entregue');
+  });
+
   await test('PUT /sobras/:id sem perfil de movimentar (PRODUCAO) -> 403', async () => {
     const id = await novaSobra(db);
     setUser(PRODUCAO);

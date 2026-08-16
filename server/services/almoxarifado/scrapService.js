@@ -43,17 +43,21 @@ async function atualizarSobra(db, user, id, data) {
     throw err;
   }
 
+  // Preserve-when-omitted (HARD REQUIREMENT — mesma classe de bug corrigida 3x em
+  // routes/almoxarifado.js, padrao `val(k)` na linha ~379: `undefined` no body preserva o valor
+  // atual, qualquer valor explicito, INCLUINDO `null`, substitui). O COALESCE anterior nao
+  // distinguia "chave omitida" de "null explicito" — os dois viravam `null` no parametro e o
+  // SQL preservava os dois casos igual, quebrando o contrato que SobraUpdateSchema promete com
+  // `.nullable()` em localizacao_id/observacoes: o Zod aceitava `null` para limpar o campo e a
+  // implementacao nunca limpava nada.
+  const val = (k) => (data[k] === undefined ? anterior[k] : data[k]);
+  const status = data.status === undefined ? anterior.status : data.status;
+  const reutilizavel = data.reutilizavel === undefined ? anterior.reutilizavel : (data.reutilizavel ? 1 : 0);
+
   await dbRun(db, `UPDATE sobras_material_almoxarifado SET
-    status = COALESCE(?, status), localizacao_id = COALESCE(?, localizacao_id),
-    observacoes = COALESCE(?, observacoes), reutilizavel = COALESCE(?, reutilizavel),
+    status = ?, localizacao_id = ?, observacoes = ?, reutilizavel = ?,
     updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [
-      data.status || null,
-      data.localizacao_id === undefined ? null : data.localizacao_id,
-      data.observacoes === undefined ? null : data.observacoes,
-      data.reutilizavel === undefined ? null : (data.reutilizavel ? 1 : 0),
-      id,
-    ]);
+    [status, val('localizacao_id'), val('observacoes'), reutilizavel, id]);
 
   const atual = await dbGet(db, 'SELECT * FROM sobras_material_almoxarifado WHERE id = ?', [id]);
 
