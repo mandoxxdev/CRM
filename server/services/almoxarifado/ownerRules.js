@@ -201,6 +201,30 @@ async function assertAjustePermitido(db, material, tipo, params, user) {
 }
 
 /**
+ * NUCLEO COMPARTILHADO das duas guardas material <-> material (transformacao, Etapa 8c; retalho,
+ * Etapa 9). O PORQUE da regra esta no docstring longo logo abaixo — aqui mora so a comparacao,
+ * que e o pedaco que as duas nao podem deixar divergir.
+ *
+ * `montarMensagem` recebe os dois nomes ja resolvidos e devolve o texto: a mensagem e a UNICA
+ * coisa que difere entre as duas guardas, e ela difere de proposito (vocabulario do fluxo que o
+ * operador esta executando).
+ *
+ * `|| null` nos dois lados normaliza antes de comparar: '' e 0 NAO significam nada aqui (todas as
+ * leituras de estoque proprio testam IS NULL), e sem a normalizacao um 0 mal gravado recusaria a
+ * operacao mais comum do dia a dia — a de material nosso.
+ */
+async function assertMesmoDono(db, materialOrigem, materialDestino, montarMensagem) {
+  const donoOrigem = materialOrigem.proprietario_cliente_id || null;
+  const donoDestino = materialDestino.proprietario_cliente_id || null;
+  if (donoOrigem === donoDestino) return;
+
+  const rotulo = async (id) => (id ? await nomeDoCliente(db, id) : 'estoque proprio (material nosso)');
+  const nomeOrigem = await rotulo(donoOrigem);
+  const nomeDestino = await rotulo(donoDestino);
+  throw erro(montarMensagem({ nomeOrigem, nomeDestino }));
+}
+
+/**
  * A peca cortada tem de ter o MESMO dono da chapa (Etapa 8c, decisao 3 do design). Sem excecao.
  *
  * O caso perigoso NAO e o de dois clientes diferentes — e chapa DE CLIENTE virando peca NOSSA: a
@@ -222,30 +246,46 @@ async function assertAjustePermitido(db, material, tipo, params, user) {
  * nao ids, porque quem chama (thirdPartyService.registrarTransformacao) ja leu as duas linhas na
  * pre-checagem — reler aqui seria uma consulta por resultado, N+1 numa transformacao de 40 pecas.
  *
- * `|| null` nos dois lados normaliza antes de comparar: '' e 0 NAO significam nada aqui (todas as
- * leituras de estoque proprio testam IS NULL), e sem a normalizacao um 0 mal gravado recusaria a
- * transformacao mais comum do dia a dia — a de material nosso.
+ * A comparacao (com a normalizacao `|| null`, que e load-bearing) mora em `assertMesmoDono` acima
+ * desde a Etapa 9, quando a guarda do retalho passou a precisar exatamente dela com outra mensagem.
  */
 async function assertMesmoDonoNaTransformacao(db, materialOrigem, materialResultado) {
-  const donoOrigem = materialOrigem.proprietario_cliente_id || null;
-  const donoResultado = materialResultado.proprietario_cliente_id || null;
-  if (donoOrigem === donoResultado) return;
-
-  const rotulo = async (id) => (id ? await nomeDoCliente(db, id) : 'estoque proprio (material nosso)');
-  const nomeOrigem = await rotulo(donoOrigem);
-  const nomeResultado = await rotulo(donoResultado);
-
   // A mensagem NOMEIA OS DOIS LADOS e os DOIS CODIGOS: sem isso o operador ve "dono diferente" e
   // nao sabe qual dos dois cadastros esta errado, nem por qual dos dois caminhos consertar
   // (corrigir o dono do material de destino, ou usar outro material de destino). Mesmo criterio da
   // mensagem de remessa mista na 8b.
-  throw erro(`A peca resultante tem dono diferente da chapa: ${materialOrigem.codigo} e de `
-    + `${nomeOrigem} e ${materialResultado.codigo} e de ${nomeResultado}. A transformacao nao pode `
-    + 'mudar o proprietario do material — cadastre o material resultante com o mesmo proprietario '
-    + 'da chapa, ou escolha outro material de destino.');
+  await assertMesmoDono(db, materialOrigem, materialResultado,
+    ({ nomeOrigem, nomeDestino }) => `A peca resultante tem dono diferente da chapa: `
+      + `${materialOrigem.codigo} e de ${nomeOrigem} e ${materialResultado.codigo} e de `
+      + `${nomeDestino}. A transformacao nao pode mudar o proprietario do material — cadastre o `
+      + 'material resultante com o mesmo proprietario da chapa, ou escolha outro material de destino.');
+}
+
+/**
+ * O material do RETALHO tem de ter o mesmo dono do material de origem (Etapa 9, decisao 5).
+ *
+ * Mesma regra e mesmo caso perigoso de assertMesmoDonoNaTransformacao — chapa DE CLIENTE virando
+ * retalho NOSSO converte material de cliente em patrimonio da GMP em silencio —, e por isso as
+ * duas compartilham `assertMesmoDono` acima: a comparacao e a normalizacao `|| null` sao o pedaco
+ * que NAO pode divergir entre as duas (divergir e o que este modulo passou a Etapa 8c inteira
+ * consertando em listas replicadas).
+ *
+ * O que muda e SO a mensagem, e e por isso que existe funcao separada em vez de reuso direto: a
+ * mensagem da transformacao fala de "peca resultante" e "chapa enviada" ao terceiro, vocabulario
+ * de um fluxo que o operador do retalho nao esta executando — ele cortou material AQUI dentro. Ver
+ * o mesmo criterio no comentario de assertMesmoDonoNaTransformacao sobre por que ela nao reusou
+ * assertSaidaPermitida.
+ */
+async function assertMesmoDonoNoRetalho(db, materialOrigem, materialRetalho) {
+  await assertMesmoDono(db, materialOrigem, materialRetalho,
+    ({ nomeOrigem, nomeDestino }) => `O material do retalho tem dono diferente do material de `
+      + `origem: ${materialOrigem.codigo} e de ${nomeOrigem} e ${materialRetalho.codigo} e de `
+      + `${nomeDestino}. Gerar retalho nao pode mudar o proprietario do material — cadastre o `
+      + 'material do retalho com o mesmo proprietario da origem, ou escolha outro material de retalho.');
 }
 
 module.exports = {
   TIPOS_ISENTOS_DONO, TIPOS_SAIDA_COM_DONO, TIPOS_AJUSTE_DONO,
-  assertSaidaPermitida, assertAjustePermitido, assertMesmoDonoNaTransformacao,
+  assertSaidaPermitida, assertAjustePermitido,
+  assertMesmoDonoNaTransformacao, assertMesmoDonoNoRetalho,
 };

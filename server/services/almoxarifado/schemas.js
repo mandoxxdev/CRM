@@ -462,6 +462,67 @@ const SobraUpdateSchema = z.object({
   reutilizavel: z.boolean().optional(),
 });
 
+/**
+ * POST /sobras/gerar-retalho (Etapa 9, Task 3) — o evento composto: baixa do material de origem +
+ * `ENTRADA_RETALHO` do material-retalho + a linha dimensional da sobra.
+ *
+ * `baixar_original` e OBRIGATORIO e NAO tem default — mesma disciplina do `tipo_resultado` da 8c,
+ * e pelo mesmo motivo: um default aqui escolheria sozinho um dos dois modos do design (decisao 2).
+ * Com default `false`, um formulario que perdesse o campo creditaria retalho SEM baixar nada —
+ * saldo do nada, em silencio, que e a doenca que esta etapa inteira existe para nao criar. Com
+ * default `true`, o retorno de sobra do chao de fabrica (o modo em que a peca JA saiu do estoque)
+ * baixaria de novo material que nao esta mais la. Quem chama declara o modo.
+ *
+ * `quantidade_baixa` e opcional AQUI e obrigatoria quando `baixar_original` — regra no
+ * `superRefine` porque ela depende do outro campo, e repetida no servico porque o servico tambem e
+ * chamado direto (por teste e, adiante, pela tela de requisicoes), onde o Zod nao passa.
+ *
+ * `lote_origem_id` fica opcional no schema mesmo sendo OBRIGATORIO quando a origem tem
+ * `controle_lote`: a exigencia depende de uma coluna do MATERIAL, que o schema nao tem como ler —
+ * mesma divisao de trabalho do EncerramentoRemessaSchema da 8b. Quem recusa e o servico.
+ *
+ * NAO EXISTE CAMPO DE CUSTO, e a ausencia e a regra (decisao 4): retalho entra a custo zero,
+ * sempre. `z.object` DESCARTA chave nao declarada em silencio, entao um `custo_unitario` no body
+ * nem chega ao servico — mesma armadilha boa de `custo_unitario_aplicado` no
+ * TransformacaoRemessaSchema. A outra ponta da armadilha e ruim e vale o aviso de sempre: TODO
+ * campo que o servico usa precisa estar declarado aqui, senao chega `undefined` e some sem erro.
+ */
+const GerarRetalhoSchema = z.object({
+  material_origem_id: z.number().int().positive(),
+  material_retalho_id: z.number().int().positive(),
+  quantidade_retalho: z.number().gt(0, 'quantidade do retalho deve ser maior que zero').optional(),
+  baixar_original: z.boolean(),
+  quantidade_baixa: z.number().gt(0, 'quantidade baixada deve ser maior que zero').optional(),
+  lote_origem_id: z.number().int().positive().nullable().optional(),
+  localizacao_id: z.number().int().positive().nullable().optional(),
+  // Vinculo da SAIDA (so tem efeito no modo baixar_original — REGRAS_VINCULO de SAIDA e 'qualquer').
+  projeto_id: z.number().int().positive().nullable().optional(),
+  os_id: z.number().int().positive().nullable().optional(),
+  centro_custo_id: z.number().int().positive().nullable().optional(),
+  justificativa: z.string().nullable().optional(),
+  // Anexo dimensional (decisao 1): o que o catalogo nao tem onde guardar.
+  dimensoes_originais: z.string().nullable().optional(),
+  dimensoes_restantes: z.string().nullable().optional(),
+  norma: z.string().nullable().optional(),
+  espessura: z.number().nonnegative().nullable().optional(),
+  diametro: z.number().nonnegative().nullable().optional(),
+  largura: z.number().nonnegative().nullable().optional(),
+  comprimento: z.number().nonnegative().nullable().optional(),
+  peso_aproximado: z.number().nonnegative().nullable().optional(),
+  material_descricao: z.string().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+  projeto_origem_id: z.number().int().positive().nullable().optional(),
+  os_origem_id: z.number().int().positive().nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.baixar_original && !(data.quantidade_baixa > 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['quantidade_baixa'],
+      message: 'informe a quantidade baixada do material de origem (baixar_original esta ligado)',
+    });
+  }
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -469,5 +530,5 @@ module.exports = {
   ItemRemessaTerceiroSchema, RemessaTerceiroSchema, RetornoRemessaSchema,
   ResultadoTransformacaoSchema, TransformacaoRemessaSchema,
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
-  SobraUpdateSchema,
+  SobraUpdateSchema, GerarRetalhoSchema,
 };
