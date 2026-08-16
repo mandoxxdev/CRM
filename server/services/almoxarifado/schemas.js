@@ -1,6 +1,6 @@
 /** Schemas Zod compartilhados do almoxarifado (padrão da fundação — ver validation.js). */
 const { z } = require('zod');
-const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPOS_RESULTADO } = require('./schema');
+const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPOS_RESULTADO, STATUS_SOBRA } = require('./schema');
 
 const CentroCustoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
@@ -448,6 +448,20 @@ const CancelamentoRemessaSchema = z.object({
   motivo: z.string().min(1, 'motivo é obrigatório'),
 });
 
+/**
+ * PUT /sobras/:id (Etapa 9, Task 1). `status` só aceita o enum de STATUS_SOBRA (schema.js) — a
+ * ilha antiga aceitava qualquer string, incluindo lixo, direto na coluna. `localizacao_id` é
+ * nullable (mover a sobra "para nenhum lugar" precisa poder limpar o endereço); `reutilizavel`
+ * não é nullable porque é uma flag booleana, não tem estado "ausente" que faça sentido além de
+ * omitir a chave.
+ */
+const SobraUpdateSchema = z.object({
+  status: z.enum(STATUS_SOBRA).optional(),
+  localizacao_id: z.number().int().positive().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+  reutilizavel: z.boolean().optional(),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -455,4 +469,5 @@ module.exports = {
   ItemRemessaTerceiroSchema, RemessaTerceiroSchema, RetornoRemessaSchema,
   ResultadoTransformacaoSchema, TransformacaoRemessaSchema,
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
+  SobraUpdateSchema,
 };

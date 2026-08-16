@@ -7,7 +7,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -652,20 +652,18 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
     } catch (e) { handleError(res, e); }
   });
 
-  // ── Sobras ──
+  // ── Sobras (Etapa 9, Task 1) ──────────────────────────────────────────────────────────────
+  // POST /sobras avulso foi APOSENTADO aqui: zero consumidores no front (grep em client/src) e
+  // zero testes cobrindo criacao avulsa. O unico caminho de criacao passa a ser gerarRetalho
+  // (Task 3) — deixar o POST avulso vivo recriaria a mesma ilha sem auditoria que esta task
+  // fechou em atualizarSobra, so que na ponta de criacao.
   app.get('/api/almoxarifado/sobras', auth, async (req, res) => {
     try { res.json(await scrapService.listarSobras(db, req.query)); }
     catch (e) { handleError(res, e); }
   });
 
-  app.post('/api/almoxarifado/sobras', auth, requirePermission('movimentar'), async (req, res) => {
-    try {
-      res.status(201).json(await scrapService.criarSobra(db, req.user, req.body));
-    } catch (e) { handleError(res, e); }
-  });
-
-  app.put('/api/almoxarifado/sobras/:id', auth, requirePermission('movimentar'), async (req, res) => {
-    try { res.json(await scrapService.atualizarSobra(db, req.params.id, req.body)); }
+  app.put('/api/almoxarifado/sobras/:id', auth, requirePermission('movimentar'), validate(SobraUpdateSchema), async (req, res) => {
+    try { res.json(await scrapService.atualizarSobra(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }
   });
 

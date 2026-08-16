@@ -163,6 +163,17 @@ const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIR
  */
 const TIPOS_RESULTADO = ['PECA', 'SOBRA'];
 
+/**
+ * Estados possiveis de uma sobra (Etapa 9, Task 1). Lista literal repetida em dois lugares
+ * diverge na primeira mudanca — SobraUpdateSchema (Zod) le daqui, nao de um enum proprio, mesmo
+ * criterio usado acima para TIPOS_RESULTADO.
+ *
+ * DISPONIVEL — pode ser consumida por outra requisicao/OS.
+ * CONSUMIDA  — ja foi usada inteira (saiu do catalogo de sobras disponiveis).
+ * SUCATEADA  — descartada como sucata, nao volta a ficar disponivel.
+ */
+const STATUS_SOBRA = ['DISPONIVEL', 'CONSUMIDA', 'SUCATEADA'];
+
 const FAMILIAS_SEED = [
   ['PAR', 'Parafusos e Porcas', 'Elementos de fixação — parafusos, porcas e arruelas'],
   ['ROL', 'Rolamentos', 'Rolamentos e mancais'],
@@ -1299,6 +1310,42 @@ async function initSchema(db) {
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // ── Etapa 9, Task 1: sobra ganha rastro de retalhamento ─────────────────────────────────────
+  //
+  // `material_id` (coluna original, acima) passa a ser lida como material de ORIGEM a partir
+  // daqui: o material do qual a sobra foi retalhada. NULL continua significando sobra legada,
+  // criada antes desta etapa, sem material de origem rastreado — nao e buraco de migracao, e o
+  // valor correto para o que existia antes.
+  //
+  // norma/diametro/largura/comprimento: dimensoes ESTRUTURADAS da sobra (perfil, chapa, barra).
+  //   `dimensoes_originais`/`dimensoes_restantes` (texto livre, colunas ja existentes) continuam
+  //   existindo — estas colunas SOMAM para permitir filtro e ordenacao, nao substituem o texto.
+  // foto: caminho do upload, no mesmo molde das outras evidencias fotograficas do modulo.
+  // criado_por_id/criado_por_nome: quem gerou a sobra. Ausentes ate aqui porque o `user` de
+  //   atualizarSobra (e o `criarSobra` da rota aposentada) era parametro morto — nunca gravado.
+  //   E o retrato exato da pendencia nomeada na spec 23: unico servico de cauda do modulo sem
+  //   rastreabilidade de autor.
+  // lote_origem_id: o lote do material de origem, quando ele controla lote — sem isso a sobra de
+  //   um lote com certificado perderia o vinculo ao ser gerada.
+  // material_retalho_id: o material CADASTRADO que representa esta sobra no catalogo — a sobra
+  //   tambem e um material normal, como a linha SOBRA da transformacao da Etapa 8c (ver
+  //   TIPOS_RESULTADO acima).
+  // movimentacao_baixa_id / movimentacao_entrada_id: os dois lados do evento de retalhamento no
+  //   livro — a baixa do material de origem e a entrada do material_retalho_id gerado. Mesmo
+  //   raciocinio do par de movimentacoes que retornos_remessa_item_almoxarifado.movimentacao_id /
+  //   movimentacao_consumo_id usa acima: um evento, duas pontas, dois fios para auditar.
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN norma TEXT');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN diametro REAL');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN largura REAL');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN comprimento REAL');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN foto TEXT');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN criado_por_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN criado_por_nome TEXT');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN lote_origem_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN material_retalho_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN movimentacao_baixa_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE sobras_material_almoxarifado ADD COLUMN movimentacao_entrada_id INTEGER');
+
   // ── Ferramentas ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS ferramentas_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1573,4 +1620,5 @@ module.exports = {
   TIPOS_DEDICADOS,
   TIPOS_RESULTADO,
   TIPOS_REQUISICAO,
+  STATUS_SOBRA,
 };
