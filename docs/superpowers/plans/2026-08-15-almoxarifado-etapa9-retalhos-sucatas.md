@@ -20,6 +20,83 @@ jspdf/qrcode já instalados.
 **Design aprovado:** [`docs/superpowers/specs/2026-08-15-almoxarifado-etapa9-retalhos-sucatas-design.md`](../specs/2026-08-15-almoxarifado-etapa9-retalhos-sucatas-design.md)
 — as decisões numeradas de lá mandam; este plano só as executa.
 
+## Execução — registro de fechamento (2026-08-16)
+
+**ETAPA ENTREGUE.** Todas as tasks executadas, cada uma com review (subagent-driven); os fix
+rounds estão nos hashes. Números medidos no fechamento: `test:api` **90/90 arquivos OK**,
+`test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite`
+**3/0**; client **344 testes em 27 suítes**, build `CI=true` sem warning (exit 0).
+
+| Task | Hash | Fix round |
+|---|---|---|
+| 0 — correções das specs 15/16 | `b727c0a` | — |
+| 1 — sobra reformada | `bedce46` | `2623b0b` (preserve-when-omitted no PUT) |
+| 2 — `ENTRADA_RETALHO` nas fontes únicas | `03b8113` | `81c1622` (docstring de clientePosicaoTipos) |
+| 3 — `gerarRetalho` | `15dd000` | `c3424e4` (controle_serie recusado nas duas pontas; auditoria não cita baixa inexistente) |
+| 4 — rotas do retalho | `8727ff3` | — |
+| 5 — SUCATA dedicada | `d5821ac` | — |
+| 6 — sucateamento (serviço) | `a30ce6f` | `ba545e7` (barreira 3 no WHERE do claim — corrida 500/500→0/500; `exigeSerie` na baixa) |
+| 7 — rotas + comprovante + relatório | `bc34819` | — |
+| 8 — tela Sobras e Retalhos | `e27abe8` | — |
+| 9 — sucateamento na tela + etiqueta | `b8e8f1a` | `4ba94e2` (barreira 3 na visibilidade do botão; teste de toast que era tautológico) |
+| 10 — documentação e verificação | commits de fechamento (specs/guia/novidades/plano + manual) | — |
+
+### Divergências entre o plano e a execução (o plano errado é dado, não vergonha)
+
+1. **A sabotagem prevista na Task 2 era impossível como escrita.** O plano dizia que remover
+   `ENTRADA_RETALHO` de `movementTypes.TIPOS_ENTRADA` derrubaria `clientePosicaoTipos.api.test.js`
+   — **não derruba**: desde a 8c aquele teste itera a própria lista da fonte única, então um tipo
+   ausente dali fica invisível para ele. Só o teste de DECLARAÇÃO da task pega. Isso virou a
+   pendência da guarda geral (abaixo, e na spec 15).
+2. **A injeção de falha da compensação (Task 3) teve de ser trocada.** O plano mandava forçar a
+   falha da perna 2 com `material_retalho.controle_lote = 1` — não funciona: por decisão do
+   cliente (2026-08-10), a exigência de lote é declarada pelo chamador, a perna 2 não declara
+   `exigeLote`, e o material entraria sem lote em vez de falhar. A injeção usada é **localização
+   destino bloqueada** (igualmente natural, sem mock), com asserção-sentinela que morre se a
+   injeção deixar de falhar.
+3. **O gate de `/destino` (Task 7) foi emendado ainda na Task 6**, com registro no próprio plano:
+   `requirePermission('movimentar')` excluiria silenciosamente o GESTOR, que o serviço autoriza; a
+   rota ficou só com auth e o gate real ("aprova alguma perna") mora no serviço. O concern gêmeo
+   sobre `/cancelar` foi **resolvido por design**: a rota de solicitar exige `movimentar`, logo
+   todo solicitante tem `movimentar` e o gate de cancelar não bloqueia ninguém legítimo.
+4. **Desvio ENDOSSADO pela review (Task 6): sem pré-checagem de disponível na aprovação.** O
+   design pedia pré-checagem "na solicitação E na aprovação final"; na aprovação quem checa é o
+   MOTOR, e a compensação da assinatura cobre a corrida — repetir a conta seria segunda fonte da
+   regra de `availabilitySql.js`. Documentado como decisão na spec 15.
+5. **Task 9 atravessou um crash de sessão** — o agente foi retomado do transcript e o commit
+   `b8e8f1a` saiu íntegro; a review em cima dele achou 2 Importants, pagos no fix `4ba94e2`.
+6. **Minors deferidos com registro:** listados no ledger da etapa e consolidados na seção
+   "Pendências" da spec 15 (auditoria de sobra com linha inteira, `origem.ativo` no modo sem
+   baixa, `.catch` vazio no estorno da perna 2, claim de `registrarDestino`, `PODE_*` sem
+   consumidor, `valor_venda` em DESCARTADA, superRefine duplicado, multer sem teste de mimetype,
+   filtros/ramo de lote sem teste RTL, guarda de duplo clique).
+
+### Próxima tarefa detalhada — Etapa 9b: ferramentas e calibração (feature 16)
+
+**Não tem design nem plano.** Primeira ação: `superpowers:brainstorming` sobre
+`specs/modulo-almoxarifado/16-ferramentas-calibracao/README.md` — a spec foi **corrigida em
+`b727c0a`** e hoje diz a verdade: não existe teste nenhum de `toolService`, e as referências
+vivas são `schema.js:1303/1317` (tabelas `ferramentas_almoxarifado` e
+`emprestimos_ferramenta_almoxarifado`) e `extended.js:672-698` (rotas de ferramentas/empréstimos).
+
+O que a Etapa 9 deixa pronto e a 9b **não precisa reabrir**:
+- O padrão de processo com máquina de estados + claim no WHERE + compensação está exemplificado
+  três vezes (thirdPartyService, returnService, scrapDisposalService) — empréstimo/devolução de
+  ferramenta é a mesma forma.
+- `requirePermission` real no harness de teste, `validate(schema)` Zod, `registrarAuditoria`,
+  `useAlmoxPermissoes().bloquearSeNaoPode` no front — tudo é o idioma corrente.
+- O relatório de EPI emprestado já existe em `reportService.js` (consulta as tabelas de
+  ferramentas) — ponto de partida para a leitura.
+
+Pontos de atenção que a 9b herda:
+- **Ferramenta é patrimônio emprestável, não estoque** — a razão da divisão 9/9b. Não modelar
+  empréstimo como movimentação de saldo.
+- A pendência da **guarda geral de tipo novo de movimento** (divergência 1 acima): se a 9b criar
+  tipo de movimento, as fontes únicas (`movementTypes`, `TIPOS_DEDICADOS`, `REGRAS_VINCULO`,
+  `ownerRules`) têm de ser lembradas **na mão** — só o teste de declaração protege.
+- Calibração com vencimento provavelmente reusa o padrão de validade/status do lote (Etapa 6) —
+  ler `lotService` antes de inventar outro.
+
 ## Global Constraints
 
 - Branch: `desenvolvimento-almoxarifado`. Um commit por task, mensagem em português sem acento,
@@ -59,14 +136,14 @@ jspdf/qrcode já instalados.
 Duas afirmações falsas verificadas por grep (zero ocorrências de
 scrapService/criarSobra/toolService/criarFerramenta em `server/tests/`):
 
-- [ ] **Step 1:** Na spec 15 (linha ~13), a frase "Teste de serviço existe" sobre o
+- [x] **Step 1:** Na spec 15 (linha ~13), a frase "Teste de serviço existe" sobre o
   `scrapService` — substituir por correção declarada no molde do projeto: a afirmação estava
   **errada**, não existe teste nenhum de `scrapService`/rotas `/sobras` (verificado em
   2026-08-15), e a Etapa 9 os cria. Não apagar em silêncio: dizer que estava errada.
-- [ ] **Step 2:** Na spec 16: mesma correção para o `toolService` ("Teste de serviço existe" é
+- [x] **Step 2:** Na spec 16: mesma correção para o `toolService` ("Teste de serviço existe" é
   falso) e atualizar as referências mortas: `schema.js:555/569` → `schema.js:1303/1317`,
   `extended.js:247-269` → `extended.js:672-698`, com nota de que estavam desatualizadas.
-- [ ] **Step 3:** Commit: `Almoxarifado: specs 15 e 16 afirmavam teste de servico que nunca
+- [x] **Step 3:** Commit: `Almoxarifado: specs 15 e 16 afirmavam teste de servico que nunca
   existiu — corrigidas dizendo que estavam erradas` (corpo: grep vazio como evidência, regra 5
   do CLAUDE.md).
 
@@ -100,22 +177,22 @@ scrapService/criarSobra/toolService/criarFerramenta em `server/tests/`):
   `gerarRetalho` (Task 3). A rota `POST /sobras` é removida de `extended.js` (zero consumidores
   no front, zero testes — verificado).
 
-- [ ] **Step 1:** Escrever `sobras.api.test.js` (falhando): GET /sobras lista com filtros novos;
+- [x] **Step 1:** Escrever `sobras.api.test.js` (falhando): GET /sobras lista com filtros novos;
   PUT /sobras/:id com payload inválido (status fora do enum) → 400; PUT válido grava auditoria
   (SELECT em `auditoria_log_almoxarifado` WHERE entidade='sobra') e persiste; PUT sem perfil
   (PRODUCAO) → 403 (`requirePermission('movimentar')` real); POST /sobras → 404 (rota
   aposentada). Controle positivo: asserção de auditoria falha se ninguém gravar (rodar antes de
   implementar e ver falhar).
-- [ ] **Step 2:** Rodar e ver falhar (`node tests/api/sobras.api.test.js` direto ou
+- [x] **Step 2:** Rodar e ver falhar (`node tests/api/sobras.api.test.js` direto ou
   `npm run test:api`).
-- [ ] **Step 3:** Implementar: safeAlters + scrapService reescrito + schemas + rotas (GET
+- [x] **Step 3:** Implementar: safeAlters + scrapService reescrito + schemas + rotas (GET
   mantém só-auth como as leituras do módulo; PUT `requirePermission('movimentar')` +
   `validate(SobraUpdateSchema)`; POST removido). Manter o relatório `sobras-disponiveis`
   (`extended.js:807`) funcionando.
-- [ ] **Step 4:** Rodar `npm run test:api` inteiro (o arquivo novo E os antigos) — verde.
-- [ ] **Step 5:** SABOTAGEM: comentar a chamada de `registrarAuditoria` em `atualizarSobra` →
+- [x] **Step 4:** Rodar `npm run test:api` inteiro (o arquivo novo E os antigos) — verde.
+- [x] **Step 5:** SABOTAGEM: comentar a chamada de `registrarAuditoria` em `atualizarSobra` →
   o teste de auditoria TEM de cair. Reverter.
-- [ ] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 1: sobra reformada — auditoria, Zod,
+- [x] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 1: sobra reformada — auditoria, Zod,
   usuario gravado e POST avulso aposentado` (corpo: paga a pendência nomeada da spec 23 — único
   serviço de cauda sem auditoria; POST avulso recriaria a ilha).
 
@@ -142,21 +219,21 @@ scrapService/criarSobra/toolService/criarFerramenta em `server/tests/`):
 rota genérica v2 (deriva de `TIPOS_DEDICADOS` — `schemas.js:54-56`, nada a editar lá), coberto
 pela equação da posição por cliente (deriva de `movementTypes.js`).
 
-- [ ] **Step 1:** Escrever `retalhoTipo.api.test.js` (falhando): (a) declaração — tipo em
+- [x] **Step 1:** Escrever `retalhoTipo.api.test.js` (falhando): (a) declaração — tipo em
   `TIPOS_MOVIMENTO`, `TIPOS_DEDICADOS` e `movementTypes.TIPOS_ENTRADA`; (b) rota genérica v2
   recusa `{tipo:'ENTRADA_RETALHO'}` (Zod 400); (c) motor credita: `registrarMovimentacao` com o
   tipo + justificativa soma `quantidade_atual`; (d) sem justificativa → recusa
   (`avaliarRegrasVinculo`); (e) custo: movimentar com o tipo **não altera** `custo_medio` do
   material (o serviço nunca passa custo; asserção com material de `custo_medio` preexistente).
-- [ ] **Step 2:** Rodar e ver falhar.
-- [ ] **Step 3:** Implementar as quatro edições de lista + comentários.
-- [ ] **Step 4:** `npm run test:api` inteiro — atenção especial a
+- [x] **Step 2:** Rodar e ver falhar.
+- [x] **Step 3:** Implementar as quatro edições de lista + comentários.
+- [x] **Step 4:** `npm run test:api` inteiro — atenção especial a
   `clientePosicaoTipos.api.test.js` (a equação passa a exercitar o tipo novo sozinha) e
   `transformacaoMotor.api.test.js`.
-- [ ] **Step 5:** SABOTAGEM: remover `'ENTRADA_RETALHO'` só de `movementTypes.TIPOS_ENTRADA`
+- [x] **Step 5:** SABOTAGEM: remover `'ENTRADA_RETALHO'` só de `movementTypes.TIPOS_ENTRADA`
   (deixando em TIPOS_MOVIMENTO) → `clientePosicaoTipos` E o teste novo TÊM de cair — é
   exatamente o esquecimento que aconteceu duas vezes (8b, 8c). Reverter.
-- [ ] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 2: ENTRADA_RETALHO nasce nas fontes unicas`.
+- [x] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 2: ENTRADA_RETALHO nasce nas fontes unicas`.
 
 ---
 
@@ -202,7 +279,7 @@ modo `baixar_original`: pré-checagens → SAIDA (perna 1) → ENTRADA_RETALHO (
 sobra (perna 3); falha na 2 compensa a 1; falha na 3 compensa 2 e 1. Auditoria
 (`entidade:'sobra'`, `acao:'gerar_retalho'`) com os ids das movimentações em `dados_novos`.
 
-- [ ] **Step 1:** Escrever `retalhoGeracao.api.test.js` (falhando), casos com os NOMES da spec:
+- [x] **Step 1:** Escrever `retalhoGeracao.api.test.js` (falhando), casos com os NOMES da spec:
   - `consumo parcial gera retalho na mesma transacao`: modo `baixar_original` — saldo origem cai,
     saldo retalho sobe, sobra criada com os 2 ids de movimentação preenchidos, tudo no mesmo
     chamado.
@@ -218,12 +295,12 @@ sobra (perna 3); falha na 2 compensa a 1; falha na 3 compensa 2 e 1. Auditoria
     perna 2 → asserção: saldo do original RESTAURADO e nenhuma sobra criada. (Mesma técnica de
     injeção natural dos testes da 8b.)
   - Saldo insuficiente na origem → recusa antes de qualquer perna.
-- [ ] **Step 2:** Rodar e ver falhar.
-- [ ] **Step 3:** Implementar `gerarRetalho` + `GerarRetalhoSchema`.
-- [ ] **Step 4:** `npm run test:api` inteiro — verde.
-- [ ] **Step 5:** SABOTAGEM: comentar a compensação da perna 1 → o teste de compensação TEM de
+- [x] **Step 2:** Rodar e ver falhar.
+- [x] **Step 3:** Implementar `gerarRetalho` + `GerarRetalhoSchema`.
+- [x] **Step 4:** `npm run test:api` inteiro — verde.
+- [x] **Step 5:** SABOTAGEM: comentar a compensação da perna 1 → o teste de compensação TEM de
   cair (saldo do original ficaria baixado à toa). Reverter.
-- [ ] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 3: gerarRetalho — evento composto com
+- [x] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 3: gerarRetalho — evento composto com
   guarda de dono e compensacao`.
 
 ---
@@ -246,12 +323,12 @@ sobra (perna 3); falha na 2 compensa a 1; falha na 3 compensa 2 e 1. Auditoria
     disponível do `material_retalho_id` > 0 (JOIN com `materiais_almoxarifado` usando
     `availabilitySql`); resposta com dimensões, localização e o disponível.
 
-- [ ] **Step 1:** Escrever `retalhoRotas.api.test.js` (falhando): 403 para PRODUCAO no POST;
+- [x] **Step 1:** Escrever `retalhoRotas.api.test.js` (falhando): 403 para PRODUCAO no POST;
   400 Zod (sem material_origem_id); happy 201; `retalhos-disponiveis` devolve a sobra recém
   criada e **para de devolvê-la** quando o saldo do material-retalho zera (fazer a SAIDA e
   reconsultar — controle positivo do filtro de disponibilidade).
-- [ ] **Step 2:** Rodar e ver falhar. **Step 3:** Implementar. **Step 4:** Suíte verde.
-- [ ] **Step 5:** Commit: `Almoxarifado Etapa 9 Task 4: rota do evento e retalhos disponiveis
+- [x] **Step 2:** Rodar e ver falhar. **Step 3:** Implementar. **Step 4:** Suíte verde.
+- [x] **Step 5:** Commit: `Almoxarifado Etapa 9 Task 4: rota do evento e retalhos disponiveis
   por material`.
 
 ---
@@ -270,17 +347,17 @@ sobra (perna 3); falha na 2 compensa a 1; falha na 3 compensa 2 e 1. Auditoria
 - Test: `server/tests/api/sucataDedicada.api.test.js` (novo)
 - Test client: ajustar o teste existente da tela de Movimentações se ele listar SUCATA no form.
 
-- [ ] **Step 1:** Escrever `sucataDedicada.api.test.js` (falhando): (a) v2 genérica recusa
+- [x] **Step 1:** Escrever `sucataDedicada.api.test.js` (falhando): (a) v2 genérica recusa
   `{tipo:'SUCATA'}` com 400; (b) declaração: `'SUCATA'` em `TIPOS_DEDICADOS`; (c) regressão
   guiada: devolução com destino SUCATA continua funcionando (o par
   ENTRADA_DEVOLUCAO+SUCATA — já coberto por `devolucaoDestinos.api.test.js`, que TEM de
   continuar verde; citar no cabeçalho do teste novo). Verificar também que a rota v1 (modal
   rápido de Materiais) não aceita SUCATA — se aceitar, incluí-la na recusa.
-- [ ] **Step 2:** Rodar e ver falhar. **Step 3:** Implementar servidor + front.
-- [ ] **Step 4:** `npm run test:api` + suíte client + build CI — verdes.
-- [ ] **Step 5:** SABOTAGEM: tirar `'SUCATA'` de `TIPOS_DEDICADOS` → (a) do teste novo cai.
+- [x] **Step 2:** Rodar e ver falhar. **Step 3:** Implementar servidor + front.
+- [x] **Step 4:** `npm run test:api` + suíte client + build CI — verdes.
+- [x] **Step 5:** SABOTAGEM: tirar `'SUCATA'` de `TIPOS_DEDICADOS` → (a) do teste novo cai.
   Reverter.
-- [ ] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 5: SUCATA sai do formulario generico — sem
+- [x] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 5: SUCATA sai do formulario generico — sem
   isso a dupla aprovacao seria decorativa` (corpo: precedente DEVOLUCAO da Etapa 7; PERDA fica).
 
 ---
@@ -382,7 +459,7 @@ UPDATE sucateamentos_almoxarifado
 - `listar(db, filters)` — status, material_id; JOIN nome do material + `SeloProprietario` data
   (`proprietario_cliente_id` no SELECT).
 
-- [ ] **Step 1:** Escrever os dois arquivos de teste (falhando):
+- [x] **Step 1:** Escrever os dois arquivos de teste (falhando):
   - `sucateamento.api.test.js`: solicitar happy; sem justificativa → Zod 400; lote obrigatório
     com `controle_lote`; disponível insuficiente → recusa; material de cliente sem projeto/os →
     recusa nomeando a guarda do dono (controle positivo: com projeto passa); cancelar pelo
@@ -395,12 +472,12 @@ UPDATE sucateamentos_almoxarifado
     `/aprovar-*` → 403 (gate real); aprovar perna já assinada → 409; rejeitar com motivo;
     compensação: entre solicitação e 2ª aprovação, consumir o saldo por SAIDA → 2ª aprovação
     falha E o claim volta (status SOLICITADO, perna limpa) — controle positivo da compensação.
-- [ ] **Step 2:** Rodar e ver falhar. **Step 3:** Implementar tudo acima.
-- [ ] **Step 4:** Suíte inteira verde.
-- [ ] **Step 5:** SABOTAGEM (duas): (a) remover a checagem "mesmo usuário nas duas pernas" → o
+- [x] **Step 2:** Rodar e ver falhar. **Step 3:** Implementar tudo acima.
+- [x] **Step 4:** Suíte inteira verde.
+- [x] **Step 5:** SABOTAGEM (duas): (a) remover a checagem "mesmo usuário nas duas pernas" → o
   teste de segregação TEM de cair; (b) remover a compensação do claim → o teste de compensação
   TEM de cair. Reverter.
-- [ ] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 6: sucateamento com dupla aprovacao
+- [x] **Step 6:** Commit: `Almoxarifado Etapa 9 Task 6: sucateamento com dupla aprovacao
   segregada e baixa pelo motor na segunda assinatura`.
 
 ---
@@ -456,15 +533,15 @@ UPDATE sucateamentos_almoxarifado
   pelo custo ATUAL, movimentação não guarda custo histórico — decisão 10 da 8c) + sucateamentos
   `VENDIDA` (valor_venda somado) + total por classificação.
 
-- [ ] **Step 1:** Escrever `sucateamentoRotas.api.test.js` (falhando): 403s por rota (PRODUCAO
+- [x] **Step 1:** Escrever `sucateamentoRotas.api.test.js` (falhando): 403s por rota (PRODUCAO
   em aprovar-almoxarifado; ALMOXARIFE em aprovar-gestao — perfil errado na perna errada);
   destino VENDIDA sem valor → 400; destino com valor → estado final; relatório: criar uma
   SUCATA via processo E uma via devolução-destino-sucata → as DUAS aparecem no total (prova que
   o relatório lê o LIVRO — o consumidor declarado da spec 12); valor estimado bate com
   `custoUnitarioSql` (material com `custo_medio > 0` para o CASE morder — a lição das fixtures
   da 8c: incluir também material só com `custo_unitario`, que o COALESCE antigo zerava).
-- [ ] **Step 2:** Rodar e ver falhar. **Step 3:** Implementar. **Step 4:** Suíte verde.
-- [ ] **Step 5:** Commit: `Almoxarifado Etapa 9 Task 7: rotas do sucateamento, comprovante e
+- [x] **Step 2:** Rodar e ver falhar. **Step 3:** Implementar. **Step 4:** Suíte verde.
+- [x] **Step 5:** Commit: `Almoxarifado Etapa 9 Task 7: rotas do sucateamento, comprovante e
   relatorio financeiro lendo o livro`.
 
 ---
@@ -494,13 +571,13 @@ retalho" (molde `RemessasTerceirosAlmoxarifado.js:289-294` — POST de material 
 `bloquearSeNaoPode`); edição de status/localização/observações (PUT); ações gateadas por
 `useAlmoxPermissoes`.
 
-- [ ] **Step 1:** Escrever o teste RTL (falhando): renderiza lista com dados mockados
+- [x] **Step 1:** Escrever o teste RTL (falhando): renderiza lista com dados mockados
   (fetch mock), abre o modal de gerar retalho, alterna `baixar_original` e vê os campos de
   vínculo aparecerem/sumirem, submissão chama `POST /sobras/gerar-retalho` com o payload
   esperado.
-- [ ] **Step 2:** Rodar suíte client e ver falhar. **Step 3:** Implementar tela + rota + menu +
+- [x] **Step 2:** Rodar suíte client e ver falhar. **Step 3:** Implementar tela + rota + menu +
   hint + badge. **Step 4:** Suíte client + `CI=true` build — verdes.
-- [ ] **Step 5:** Commit: `Almoxarifado Etapa 9 Task 8: tela Sobras e Retalhos, gerar retalho e
+- [x] **Step 5:** Commit: `Almoxarifado Etapa 9 Task 8: tela Sobras e Retalhos, gerar retalho e
   a sugestao de retalho na saida`.
 
 ---
@@ -529,13 +606,13 @@ retalho" (molde `RemessasTerceirosAlmoxarifado.js:289-294` — POST de material 
   Cancelar (só solicitante em SOLICITADO). Botão "Sucatear" também na linha do retalho
   (pré-preenche `sobra_id`/material).
 
-- [ ] **Step 1:** Testes (falhando): montador — conteúdo do descritor e truncagem na
+- [x] **Step 1:** Testes (falhando): montador — conteúdo do descritor e truncagem na
   `TERMICA_100x50` (linhaControle longa não estoura — mesma asserção dos montadores vizinhos);
   tela — fluxo de solicitar e visibilidade dos botões de aprovar conforme permissões mockadas.
-- [ ] **Step 2:** Ver falhar. **Step 3:** Implementar. **Step 4:** Suíte client + build CI
+- [x] **Step 2:** Ver falhar. **Step 3:** Implementar. **Step 4:** Suíte client + build CI
   verdes; `EtiquetasPdfModal` recebendo `null`/`[]` conforme o contrato (null fecha, [] abre
   desabilitado).
-- [ ] **Step 5:** Commit: `Almoxarifado Etapa 9 Task 9: fluxo de sucateamento na tela e
+- [x] **Step 5:** Commit: `Almoxarifado Etapa 9 Task 9: fluxo de sucateamento na tela e
   etiqueta de retalho com QR`.
 
 ---
@@ -556,11 +633,11 @@ retalho" (molde `RemessasTerceirosAlmoxarifado.js:289-294` — POST de material 
   verificar; seção de sobras/sucateamento em linguagem de operador)
 - este plano (tasks marcadas, achados registrados)
 
-- [ ] **Step 1:** Invocar a skill `fechar-etapa` e seguir o checklist dela por inteiro.
-- [ ] **Step 2:** Rodar TODAS as suítes e citar números reais no commit e nos docs
+- [x] **Step 1:** Invocar a skill `fechar-etapa` e seguir o checklist dela por inteiro.
+- [x] **Step 2:** Rodar TODAS as suítes e citar números reais no commit e nos docs
   (`test:api`, `test:almoxarifado`, `test:validation`, `test:safealter`, `test:sqlite`, client,
   build CI).
-- [ ] **Step 3:** Commit final de documentação.
+- [x] **Step 3:** Commit final de documentação.
 
 **Pendencia registrada na execucao (Task 2):** nao existe guarda automatica que garanta "todo tipo
 novo em `schema.js` `TIPOS_MOVIMENTO` tem de estar em `movementTypes.TIPOS_ENTRADA` ou

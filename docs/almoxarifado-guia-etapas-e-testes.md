@@ -1,10 +1,35 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-13 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-16 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 8c) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 9) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-13 (Etapa 8c ENTREGUE)
+> ## Onde o desenvolvimento parou — 2026-08-16 (Etapa 9 ENTREGUE)
+>
+> **Etapas 1 a 9 completas.** A **Etapa 9 (Retalhos, Sobras e Sucatas) fechou em 2026-08-16**
+> (`b727c0a..4ba94e2`, mais os commits de documentação), e com ela a **feature 15 fica
+> completa**. A **próxima etapa é a 9b — ferramentas e calibração** (feature 16), que ainda não
+> tem design nem plano.
+>
+> **A Etapa 9 fez duas coisas.** Primeiro: **o retalho passou a existir no estoque.** Quando uma
+> chapa/tubo/barra é parcialmente usada, o pedaço aproveitável agora tem saldo, etiqueta com QR e
+> aparece como sugestão quando alguém vai dar saída no material inteiro — antes ele não existia
+> para o sistema e a empresa comprava chapa nova com meia chapa na prateleira. Segundo:
+> **sucatear deixou de ser um clique.** `Sucata` **sumiu do formulário de Movimentações** — quem
+> procurar o tipo lá não vai mais achar, e isso é de propósito: sucatear agora é um **processo com
+> duas assinaturas obrigatórias** (uma do almoxarifado, uma da gestão, de **pessoas diferentes**),
+> na tela nova **Almoxarifado → Sobras e Retalhos**, e a baixa só sai do estoque quando a segunda
+> pessoa assina. Depois da baixa, registra-se o destino: **vendida** (com valor e comprovante) ou
+> **descartada**. Ver a seção "Etapa 9", mais abaixo, com o roteiro completo — o teste da dupla
+> aprovação precisa de **dois usuários** logados.
+>
+> **⚠️ A mudança que precisa ser avisada a quem opera:** o caminho antigo de sucatear
+> (Movimentações → tipo Sucata) **não existe mais**. Os caminhos válidos são o processo de
+> sucateamento (tela Sobras e Retalhos) e a devolução com destino Sucata (que continua igual).
+> `Perda` **continua** no formulário de Movimentações — a exigência de dupla aprovação é só para
+> sucateamento.
+>
+> **Antes: 2026-08-13 (Etapa 8c ENTREGUE).**
 >
 > **Etapas 1 a 8c completas.** A **Etapa 8c (Transformação no Terceiro) fechou em 2026-08-13**
 > (`753d23b..61c6f52`, mais o commit de documentação da Task 10), e com ela a **feature 14 (materiais em terceiros) fica completa**:
@@ -1990,6 +2015,172 @@ passado.
 - **Não conserta a divergência entre as telas de patrimônio.** É anterior à etapa e está registrada.
 - **Não manda e-mail nem alerta** (features 19 e 20).
 - **Não anexa desenho** ao item da remessa.
+
+---
+
+## Etapa 9 — Retalhos, Sobras e Sucatas (ENTREGUE — 2026-08-16)
+
+**Em uma frase:** a meia chapa que sobra do corte vira estoque de verdade — com saldo, etiqueta e
+sugestão de uso antes de cortar chapa nova — e sucatear deixa de ser um clique de uma pessoa só:
+vira processo com duas assinaturas de pessoas diferentes, destino registrado e número financeiro.
+
+**O problema que existia.** Quando uma chapa era parcialmente usada, o sistema só sabia "1 chapa
+saiu" — o pedaço aproveitável não tinha saldo, não tinha etiqueta e não aparecia quando alguém
+procurava material. E `Sucata` era um tipo selecionável no formulário de Movimentações: qualquer
+pessoa com permissão de movimentar baixava qualquer material do patrimônio com uma justificativa,
+sem segunda opinião, sem classificação, sem registro de venda ou descarte.
+
+### Antes → Agora
+
+| Situação | Antes (até a 8c) | Agora (Etapa 9) |
+|---|---|---|
+| Sobra aproveitável de corte | Não existia para o sistema — comprava-se chapa nova com meia chapa na prateleira | Tela **Sobras e Retalhos**: o retalho tem **saldo real** (é um material do catálogo) mais a ficha dimensional (dimensões restantes, norma, peso, localização, responsável) |
+| Registrar o retalho | — | Botão **Gerar retalho**, com **dois modos**: a peça está saindo do estoque **agora** (baixa o original e credita o retalho no mesmo evento) ou a peça **já tinha saído** antes (só credita o retalho) |
+| **Sucatear** | **Tipo "Sucata" no formulário de Movimentações — um clique de uma pessoa** | **O tipo SUMIU do formulário.** Sucatear é solicitação + **duas assinaturas de pessoas diferentes** (almoxarifado e gestão) na tela Sobras e Retalhos; a baixa só sai na segunda assinatura |
+| Quem aprova a própria solicitação | — | **Ninguém.** Quem pediu não assina nenhuma das duas pernas, e a mesma pessoa não assina as duas — nem o Administrador |
+| Destino da sucata | Não existia registro | **Vendida** (valor obrigatório + comprovante PDF/imagem) ou **Descartada** — com relatório financeiro somando o estimado e o realmente vendido |
+| Etiqueta do retalho | Pendência declarada desde a Etapa 6c | Etiqueta em PDF (A4 ou térmica) com dimensões/peso e **QR que abre a tela com a linha destacada** — oferecida automaticamente ao gerar o retalho |
+| Saída de material que tem retalho parado | Nada avisava | Aviso **não bloqueante** no formulário de Saída: *"Existem N retalho(s) deste material — considere usá-los antes de baixar do estoque principal."* com link **Ver retalhos** |
+| Custo do retalho | — | **Zero, sempre** — o projeto já pagou a chapa inteira na saída; o retalho entra sem custo e não infla o patrimônio |
+| Retalho de chapa de cliente | — | **Continua do cliente**: o sistema recusa gerar retalho para um material de dono diferente do original, nomeando os dois donos |
+
+### As regras, com o cenário exato
+
+As mensagens abaixo são as **mensagens reais do sistema**, copiadas do código.
+
+**1. Gerar retalho com baixa move as duas pontas no mesmo evento.**
+*Cenário:* chapa com 30 UN, gerar retalho marcando **"Baixar o material de origem agora"**,
+quantidade baixada 1, retalho 1. Ao confirmar:
+> `Retalho gerado — o material de origem foi baixado`
+
+Em **Materiais**: a chapa cai 1, o material-retalho sobe 1; no **Extrato** dos dois aparecem a
+SAÍDA e a **Entrada (retalho)**. Se qualquer perna falhar no meio, o que já andou é desfeito —
+nunca fica saída sem retalho nem retalho sem registro.
+
+**2. O modo sem baixa é para a sobra que volta do chão de fábrica.**
+*Cenário:* deixar o checkbox **desmarcado** (a peça já saiu por requisição há dias). Ao confirmar:
+> `Retalho gerado — nada foi baixado (a peça já tinha saído do estoque)`
+
+Só o retalho é creditado — inventar uma baixa aqui tiraria do saldo material que já não está lá.
+
+**3. O material do retalho tem de existir — e a tela ajuda a criar.**
+*Cenário:* informar um material de retalho inexistente pela API:
+> `O material do retalho 999 nao existe. Cadastre o material do retalho primeiro (Almoxarifado > Materiais > Novo, ou o atalho "Criar material do retalho" na tela de Sobras e Retalhos) e refaca a geracao — o sistema nao cria material sozinho a partir de um formulario de retalho.`
+
+O atalho **Criar material do retalho** cadastra na hora, com código gerado pela família da origem
+e **dono e categoria herdados** — o aviso do formulário diz isso com todas as letras.
+
+**4. Retalho de material de cliente permanece do cliente.**
+O material-retalho tem de ter o **mesmo dono** do material de origem — a recusa nomeia os dois
+donos (mesma família da guarda da transformação da 8c). Sem isso, um corte converteria chapa do
+cliente em patrimônio da GMP em silêncio.
+
+**5. Material com número de série não gera retalho com baixa — e a recusa ensina o caminho.**
+> `O material CHP-01 tem controle de serie e a geracao de retalho nao tem campo para dizer QUAL numero de serie esta sendo cortado. Baixe a peca pela tela de Movimentacoes (que tem seletor de serie) e depois registre o retalho aqui no modo "peca ja baixada do estoque".`
+
+**6. A origem com controle de lote exige o lote.**
+> `O material CHP-01 controla lote: informe o lote de origem (lote_origem_id) para gerar retalho com baixa — o retalho herda a rastreabilidade do lote da chapa, e a propria saida exige o lote de qualquer forma.`
+
+**7. Solicitar sucateamento não move saldo nenhum.** O próprio modal diz: *"A solicitação não move
+saldo nenhum — a baixa só sai do estoque quando as DUAS assinaturas (almoxarifado e gestão)
+fecharem o processo."* Ao solicitar:
+> `Sucateamento solicitado — aguardando as duas assinaturas (almoxarifado e gestão)`
+
+A justificativa é obrigatória já na solicitação. Na tela, o aviso é
+`Justificativa é obrigatória para sucatear: a baixa SUCATA exige o motivo escrito.`; quem tentar
+por fora da tela recebe a versão completa do servidor:
+> `Justificativa e obrigatoria para sucatear: a baixa SUCATA exige o motivo escrito, e ele fica no livro de movimentacoes como a unica explicacao de por que o material sumiu do patrimonio.`
+
+**8. Quem solicitou não aprova — em nenhuma das duas pernas.**
+> `Quem solicitou o sucateamento nao aprova a propria solicitacao — em nenhuma das duas pernas. Peca a assinatura de outra pessoa do almoxarifado e da gestao.`
+
+(A tela nem mostra os botões de aprovar para o solicitante — mas o servidor barra de qualquer
+jeito, mesmo por chamada direta.)
+
+**9. A mesma pessoa não assina as duas pernas — nem o Administrador.**
+*Cenário:* o mesmo usuário assina a perna do almoxarifado e tenta assinar a da gestão:
+> `Voce ja assinou a perna almoxarifado deste sucateamento e nao pode assinar tambem a perna gestao: dupla aprovacao com a mesma pessoa nas duas pernas e uma assinatura com dois carimbos. A segunda assinatura tem de ser de outra pessoa.`
+
+Esta regra vale **até sob cliques simultâneos** — foi provada por teste de corrida (500 tentativas
+concorrentes, zero furos).
+
+**10. A baixa acontece na segunda assinatura — e o toast diz qual das duas foi a sua.**
+Primeira perna: `Perna assinada — falta a assinatura da outra perna para a baixa sair`.
+Segunda perna: `Sucateamento aprovado nas duas pernas — a baixa foi emitida no estoque` — e neste
+momento o total e o disponível do material **caem**, com a movimentação `SUCATA` no livro.
+
+**11. Se o saldo mudou entre a solicitação e a segunda assinatura, a aprovação volta atrás.**
+O motor recusa a baixa (com a mensagem de saldo insuficiente, com os números) e o sistema
+**desfaz a assinatura recém-dada**: o processo volta a SOLICITADO, com a compensação registrada na
+auditoria. Nunca fica "aprovado no papel" sem baixa no livro.
+
+**12. Rejeitar exige motivo; cancelar é só do solicitante.**
+> `So o solicitante (Fulano) cancela o proprio sucateamento. Para recusar a solicitacao de outra pessoa use Rejeitar, que exige motivo e fica no historico.`
+
+**13. Vender exige valor.**
+> `Informe o valor da venda da sucata (valor_venda maior que zero) — o destino VENDIDA alimenta o relatorio financeiro de sucata, e venda sem valor nao e venda.`
+
+**14. Quem pode o quê.** Solicitar exige **movimentar** (ADMINISTRADOR, ALMOXARIFE). Aprovar a
+perna do almoxarifado: ADMINISTRADOR e ALMOXARIFE. Aprovar a perna da gestão: ADMINISTRADOR e
+GESTOR. Rejeitar e registrar destino: quem aprova **qualquer** uma das duas pernas.
+
+### Roteiro de teste manual (Etapa 9)
+
+Prepare: um material "chapa" com saldo (ex.: 30 UN) e **dois usuários com perfis diferentes** —
+um ALMOXARIFE e um GESTOR (ou um ADMINISTRADOR e um ALMOXARIFE). O teste da dupla aprovação
+não funciona com um usuário só — **essa é a regra sendo testada**.
+
+**Parte 1 — Retalho nos dois modos:**
+1. **Almoxarifado → Sobras e Retalhos** (item novo do menu) → **Gerar retalho**.
+2. Material de origem = a chapa. Clicar **Criar material do retalho**, nome "Retalho chapa 1200x800",
+   **Cadastrar e usar** — conferir o toast `Material <código> criado — já selecionado como retalho`.
+3. Marcar **"Baixar o material de origem agora"**, quantidade baixada **1**, preencher dimensões
+   restantes (ex.: `1200x800`), espessura, peso. **Gerar retalho.**
+4. Conferir o toast do modo com baixa e o **modal de etiqueta abrindo sozinho** — gerar o PDF e
+   conferir: código do retalho, dimensões `1200x800x<esp>mm · ~<peso>kg` e o QR. Escanear (ou abrir
+   a URL do QR): a tela abre com **a linha do retalho destacada**.
+5. Em **Materiais**: chapa caiu 1, retalho subiu 1. No **Extrato** do retalho: **Entrada (retalho)**.
+6. Gerar um segundo retalho **sem marcar** o checkbox (modo "a peça já tinha saído") — conferir o
+   toast do modo sem baixa e que a chapa **não** caiu de novo.
+7. **Movimentações → Nova movimentação → Saída** da chapa: conferir o aviso **"Existem N retalho(s)
+   deste material — considere usá-los..."** com o link **Ver retalhos**.
+8. Conferir no formulário de Movimentações que **o tipo Sucata não existe mais** na lista.
+
+**Parte 2 — Sucateamento com dois usuários:**
+9. Na aba **Sucateamentos** → **Solicitar sucateamento** (ou o botão **Sucatear** na linha do
+   retalho, que já preenche o material): quantidade, classificação (as sugestões aparecem ao
+   digitar: aço carbono, inox, alumínio, cobre, cavaco, misto), justificativa. Confirmar e conferir
+   o toast de "aguardando as duas assinaturas".
+10. Conferir que **para o solicitante os botões Aprovar não aparecem** na linha.
+11. Com o **usuário 2** (perfil ALMOXARIFE): **Aprovar almoxarifado** → toast "Perna assinada —
+    falta a assinatura da outra perna". Conferir em **Materiais** que o saldo **não mudou**.
+12. Ainda com o usuário 2, conferir que **Aprovar gestão não aparece** para ele (já assinou a outra
+    perna). Se forçar pela API, a recusa é a mensagem da regra 9.
+13. Com o **usuário 3** (perfil GESTOR ou ADMINISTRADOR distinto): **Aprovar gestão** → toast
+    "aprovado nas duas pernas — a baixa foi emitida". Conferir em **Materiais** que o saldo
+    **caiu**, e no livro de **Movimentações** a linha `SUCATA` com referência `SUC-<id>`.
+14. **Registrar destino** → **Vendida** sem valor → recusa. Com valor (ex.: 150) e um PDF de
+    comprovante anexado → status vira **Vendida**.
+15. Criar uma segunda solicitação e **Rejeitar** com o outro usuário (motivo obrigatório); criar
+    uma terceira e **Cancelar** com o próprio solicitante (confirmação, sem motivo).
+
+### O que a Etapa 9 **não** cobre (é decisão declarada, não esquecimento)
+
+- **O sistema não calcula quanto sobrou.** As dimensões do retalho são **digitadas** — não há
+  aritmética dimensional (3000−1200=1800 não é feito). Automatizar exigiria modelagem dimensional
+  por material que o catálogo não tem; se a GMP quiser, é etapa própria.
+- **Ninguém recebe e-mail de sucateamento** — o acompanhamento é pela tela (e-mails são a
+  feature 19, como nas etapas anteriores).
+- **Vender sucata registra valor e comprovante — não vira fatura nem título financeiro.**
+- **O relatório financeiro de sucata é só API** (`sucata-financeiro`) — não há tela de relatórios,
+  que continua sendo pendência antiga do módulo. A valoração usa o **custo atual** do material
+  (o livro não guarda custo histórico — mesma limitação declarada da 8c).
+- **Não há foto do retalho.** O campo existe no banco, mas a tela não oferece upload — pendência
+  registrada na spec.
+- **Não há reserva de retalho** (mesma pendência da reserva por lote/série).
+- **Ferramentas e calibração ficam para a Etapa 9b.**
+- **Peça com número de série não passa pelo sucateamento** — a recusa ensina: baixe pela tela de
+  Movimentações, que tem seletor de série.
 
 ---
 

@@ -1,7 +1,44 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-13 (**Etapa 8c fechada — transformação no terceiro,
+> **Última atualização:** 2026-08-16 (**Etapa 9 fechada — retalhos, sobras e sucatas,
+> `b727c0a..4ba94e2` + commits de documentação. A feature 15 vira 🟢.**
+> **Onde o desenvolvimento parou: a Etapa 9 está fechada; a próxima da ordem é a Etapa 9b —
+> ferramentas e calibração (feature 16)** — a divisão 9/9b foi decidida no design da Etapa 9
+> (mesmo precedente de 6/6b/6c e 8/8b/8c: retalho é estoque, ferramenta é patrimônio emprestável,
+> e cada subsistema fecha com testes por conta própria).
+> **O que a etapa entregou:** o retalho virou **estoque de verdade** — material normal no motor,
+> creditado pelo tipo novo `ENTRADA_RETALHO` (dedicado, sem custo, nascido nas fontes únicas
+> `movementTypes`/`TIPOS_DEDICADOS`), com a tabela `sobras_material_almoxarifado` **reformada**
+> como anexo dimensional (colunas novas por `safeAlter`; `POST /sobras` avulso **aposentado**; o
+> único caminho de criação é o evento composto `gerarRetalho`, com guarda de dono própria e
+> compensação no padrão 8b/8c). E o sucateamento virou **processo com dupla aprovação**: `SUCATA`
+> saiu do formulário genérico de Movimentações (entrou em `TIPOS_DEDICADOS` — sem isso o teste
+> exigido pela spec, "sucatear sem aprovação falha", seria impossível por construção), e a baixa
+> só sai pelo motor na **segunda assinatura** de duas pernas segregadas
+> (`aprovar_sucateamento` = ADMINISTRADOR/ALMOXARIFE; `aprovar_sucateamento_gestao` =
+> ADMINISTRADOR/GESTOR; solicitante não assina; a mesma pessoa não assina as duas — a barreira
+> repetida no WHERE do claim depois que o review provou o TOCTOU por corrida, 500/500→0/500).
+> Destino final VENDIDA (valor + comprovante multipart) ou DESCARTADA; relatório
+> `sucata-financeiro` lendo o **livro** (inclui a devolução-destino-sucata da Etapa 7 — o
+> consumidor declarado da spec 12), com valoração pelo custo atual e nota de limitação. Tela nova
+> `/almoxarifado/sobras` com as visões Retalhos e Sucateamentos, etiqueta de retalho com QR
+> (paga a pendência da 6c) e hint não bloqueante de retalho disponível na SAÍDA.
+> **Decisão endossada em review (documentada na spec 15):** sem pré-checagem de disponível na
+> aprovação final — o motor é o checador e a compensação da assinatura cobre a corrida; repetir a
+> conta seria segunda fonte da regra que `availabilitySql.js` unificou.
+> **Pendência nova nomeada (spec 15):** não existe guarda automática "todo tipo novo de
+> `TIPOS_MOVIMENTO` precisa estar em `movementTypes.TIPOS_ENTRADA`/`TIPOS_SAIDA`" — a sabotagem
+> da Task 2 provou que o teste da equação por cliente **não pega** esse esquecimento (ele itera a
+> própria lista da fonte única); construir a guarda exige lista de exceções nomeadas, design em
+> aberto. Outras pendências registradas na spec 15: coluna `foto` da sobra sem escritor,
+> `ENTRADA_RETALHO` sem lote quando o material-retalho controla lote (mesma isenção declarada da
+> spec 10), `valor_venda` aceito em DESCARTADA, e-mail → feature 19.
+> **Números (medidos no fechamento, 2026-08-16):** `test:api` **90/90 arquivos OK**,
+> `test:almoxarifado` **42 passou / 0 falhou**, `test:validation` **4/0**, `test:safealter`
+> **3/0**, `test:sqlite` **3/0**; client **344 testes em 27 suítes**, build `CI=true` concluído
+> sem warning (exit 0).)
+> Antes: 2026-08-13 (**Etapa 8c fechada — transformação no terceiro,
 > `753d23b..61c6f52`.** Com ela a **feature 14 fica completa (🟢)**: a 8b entregou a metade em que
 > **o mesmo material volta** (galvanização, pintura, tratamento) e a 8c entrega a metade em que
 > **volta outra coisa** — corte, dobra, usinagem: sai 1 chapa e voltam N peças mais uma sobra.
@@ -157,7 +194,7 @@
 - Quando uma feature entrar em desenvolvimento, escrever o plano detalhado de implementação (tarefas TDD passo a passo) em `docs/superpowers/plans/` e linkar no README da feature.
 - Status: ✅ completo (com testes) · 🟡 parcial · ❌ ausente
 
-## Mapa de features e status atual (2026-08-13)
+## Mapa de features e status atual (2026-08-16)
 
 | # | Feature | Backend | Frontend | Testes | Status |
 |---|---------|---------|----------|--------|--------|
@@ -176,15 +213,15 @@
 | 12 | [Devoluções](12-devolucoes/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd` + `eabd848`)** — devolução cita a saída original (vínculo **opcional mas validado**: mesmo material, não cancelada, tipo devolvível, e `quantidade + já devolvido ≤ entregue` com a mensagem **dizendo quanto resta**), herda o `lote_id` da entrega, reativa a série `ENTREGUE → EM_ESTOQUE`, e tem tela dedicada em `/almoxarifado/devolucoes` (começa pelo **material**, porque pela requisição não se alcança saída manual). Duas colunas por `safeAlter` e a rota de leitura `GET /devolucoes/saidas-elegiveis`. **Bug de saldo corrigido em commit próprio (`29524fc`): devolver para sucata baixava o estoque DUAS vezes** — 100 → saída 10 → 90 → devolução 3 para sucata dava **87**; a spec 12 descrevia esse comportamento como se estivesse certo e foi corrigida dizendo que estava errada. Conserto fora do plano (`eabd848`): devolução recusada não deixa mais linha gravada (compensação), porque a linha fantasma encolhia **permanentemente** o devolvível da entrega citada. Fora de escopo declarado: série no **descarte** de devolução (caminho de dois passos, com 400 que ensina o caminho), fotos/anexos, devolução ao fornecedor, estorno de custo de projeto (22), tipos de devolução por origem (13/16) |
 | 13 | [Materiais de clientes](13-materiais-clientes/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 8 entregue (2026-08-12, `f26b635..5b5eb55`)** — material de cliente virou **material normal com dono** (`proprietario_cliente_id`, `NULL` = nosso) e ganhou tudo que as Etapas 1 a 7 construíram: lote, série, endereço, extrato, etiqueta e livro. **A segregação não foi "lembrar de filtrar"**: 40 leituras da tabela auditadas uma a uma e classificadas em A (estoque próprio → filtra), B (leitura por id → não filtra, senão o motor pararia de funcionar para material de cliente) e C (misturar é o correto → não filtra, e o **selo** é a contrapartida). **Guarda do dono** na saída, com a **emergencial NÃO furando** — única exceção deliberada ao padrão do módulo, porque "regularizo depois" não é resposta para o dono da chapa. **Ajuste** sob a ação nova `ajustar_material_cliente` (só ADMINISTRADOR), verificada **dentro do motor** porque o AJUSTE chega por duas rotas ambas gateadas por `movimentar`. Tipo `DEVOLUCAO_CLIENTE` (saída, rota dedicada, documento obrigatório) — **não confundir com a devolução da Etapa 7**, onde o material volta. Ilha aposentada (rotas e serviço removidos; **tabela preservada**). Tela `/almoxarifado/materiais-cliente` com posição por cliente + PDF no navegador. **Duas correções declaradas de spec:** a spec de design mandava auditar o lugar errado (`9d70d8c`), e o item "entrada exige cliente + **projeto** + documento" estava **ERRADO** quanto ao projeto — a linha diz isso em vez de sumir. **Fora do escopo, declarado:** e-mails (19), sobras (15), perdas/não conformes/valorização por cliente (21), aprovação assíncrona de ajuste (06). **Pendência aberta e grave o bastante para o guia do usuário:** a conferência de inventário (`routes/almoxarifado.js:941`) ajusta `quantidade_atual` fora do motor, logo fora da permissão nova |
 | 14 | [Materiais em terceiros](14-materiais-terceiros/README.md) | ✅ | ✅ | ✅ | 🟢 **COMPLETA — as duas metades entregues: Etapa 8b (2026-08-12, `0a01124..b176212`), o MESMO material volta; Etapa 8c (2026-08-13, `753d23b..61c6f52`), volta OUTRA coisa.** **8b** — remessa e retorno do **MESMO** material, ciclo completo. Quarta coluna de retenção `quantidade_em_terceiros` (sai do disponível, **não** do patrimônio) com a conta do disponível **centralizada** em `availabilitySql.js`; conferência de inventário descontando **só ela**; três tabelas + `thirdPartyStateMachine` (`ABERTA → ENVIADA → RETORNO_PARCIAL → ENCERRADA/CANCELADA`); quatro tipos de movimento no motor; envio **tudo-ou-nada** agregando por material; retorno parcial com teto acumulado **por item**; encerramento com **destino obrigatório** (`PERDA_NO_TERCEIRO`/`CONSUMIDO_NO_PROCESSO`) + justificativa; cancelamento com estorno **do que ainda está lá fora**; ação de perfil `remessar_terceiro`; sete rotas + `GET /vencidas`; tela `/almoxarifado/remessas-terceiros` + PDF no navegador. **Correção declarada de spec:** o checklist dizia "envio = saída para localização virtual", e isso **estava errado** — o disponível é calculado sobre o escalar `quantidade_atual`, então localização virtual não tira nada do disponível. **Correção declarada de status:** esta linha dizia *"**Falta a Etapa 8c — transformação**"* — **deixou de ser verdade em 2026-08-13**. **8c** (`753d23b..61c6f52`) — corte, dobra e usinagem: sai 1 chapa e voltam N peças mais uma sobra, no **mesmo evento** (a chapa baixa por `CONSUMO_TERCEIRO`, cada resultado entra pelo tipo novo `RETORNO_TRANSFORMACAO`, `9c7ec75`); três colunas em `retornos_remessa_item_almoxarifado` (`tipo_resultado` `PECA`/`SOBRA`, `custo_unitario_aplicado`, `movimentacao_consumo_id` como agrupador do evento), com `NULL` significando "retorno simples"; rateio de custo em função **pura** (`transformCost.js`) — **peça recebe rateio, sobra entra a custo ZERO**; rota dedicada `POST /remessas-terceiros/:id/transformacoes` (`remessar_terceiro`), tipo em `TIPOS_DEDICADOS` (fora da rota genérica); guarda própria `assertMesmoDonoNaTransformacao` (a peça tem de ter o **mesmo** dono da chapa); modal com N resultados, classificação e rendimento. E-mail (19) e alerta de atraso (20) seguem **fora do escopo**. **Pendência que continua aberta e precisa de resposta do cliente:** "uma remessa não mistura donos" foi **deduzida**, não pedida. Pendência menor da 8c: o **rendimento** é calculado, exibido e **jogado fora** — não há coluna que o guarde |
-| 15 | [Retalhos, sobras e sucatas](15-retalhos-sucatas/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem UI |
-| 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem calibração |
+| 15 | [Retalhos, sobras e sucatas](15-retalhos-sucatas/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 9 entregue (2026-08-16, `b727c0a..4ba94e2`)** — retalho é material normal no motor (`ENTRADA_RETALHO` dedicado, sem custo) + anexo dimensional na tabela de sobras reformada (auditada, Zod, `POST /sobras` avulso aposentado); `gerarRetalho` é evento composto com guarda de dono e compensação; `SUCATA` saiu do formulário genérico e virou processo com **dupla aprovação segregada** (duas ações novas de perfil, baixa pelo motor na segunda assinatura, claim anti-corrida), destino VENDIDA/DESCARTADA com comprovante e relatório `sucata-financeiro` lendo o livro; tela `/almoxarifado/sobras` (Retalhos + Sucateamentos), etiqueta de retalho com QR e hint de retalho na SAÍDA. Os 4 testes nomeados da spec existem e passam. **Fora do escopo declarado:** e-mail (→ 19). Pendências nomeadas na spec: guarda geral de tipo novo nas fontes únicas, coluna `foto` sem escritor, lote do material-retalho, `valor_venda` em DESCARTADA |
+| 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem calibração — **é a Etapa 9b, a próxima da ordem** (decisão registrada no design da Etapa 9: subsistema independente, ferramenta é patrimônio emprestável, não estoque). A spec 16 foi corrigida em `b727c0a` (Task 0 da Etapa 9): afirmava "teste de serviço existe" — falso — e citava linhas mortas de `schema.js`/`extended.js`, atualizadas |
 | 17 | [Inventário e contagem cíclica](17-inventario-contagem/README.md) | 🟡 | 🟡 | ❌ | 🟡 só inventário simples |
 | 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟡 | 🟡 | 🟡 | 🟡 alertas ok |
 | 19 | [E-mails e notificações](19-emails-notificacoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 sem fila/cobertura total |
 | 20 | [Alertas operacionais](20-alertas/README.md) | 🟡 | ❌ | 🟡 | 🟡 2 de ~20 |
-| 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟡 | 🟡 | ❌ | 🟡 16 no back (entrou `materiais-sem-endereco` na Etapa 2), 2 no front |
+| 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟡 | 🟡 | ❌ | 🟡 16 no back (entrou `materiais-sem-endereco` na Etapa 2) + `sucata-financeiro` (Etapa 9, **só API** — sem tela de relatórios), 2 no front |
 | 22 | [Integrações](22-integracoes/README.md) | ❌ | ❌ | ❌ | ❌ módulos vizinhos vazios |
-| 23 | [Perfis, segurança e auditoria](23-perfis-seguranca-auditoria/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Correção 2026-08-11: a spec dizia "auditoria com 0 linhas em produção" — **superado desde as Etapas 3-6** (materiais, requisições, motor, reservas, lotes, recebimento e inspeção auditam, todos com tela). Buracos reais restantes: conferência de inventário e sobras (`scrapService`) não auditam |
+| 23 | [Perfis, segurança e auditoria](23-perfis-seguranca-auditoria/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Correção 2026-08-11: a spec dizia "auditoria com 0 linhas em produção" — **superado desde as Etapas 3-6** (materiais, requisições, motor, reservas, lotes, recebimento e inspeção auditam, todos com tela). Buraco real restante: conferência de inventário não audita. **A pendência das sobras foi paga na Etapa 9, Task 1 (`bedce46`)** — `scrapService` audita atualizar e gerar retalho, e o sucateamento audita solicitar/aprovar/rejeitar/cancelar/destino/compensação |
 
 ## Ordem de desenvolvimento sugerida (etapas pequenas)
 
@@ -356,8 +393,38 @@ o tipo novo em `TIPOS_DEDICADOS` para não cair na rota genérica de movimentaç
   (deduzida, sem resposta do cliente); `AJUSTE` × retenção, agora com **quatro** colunas; categorias
   hardcoded do front; e o **rendimento** que é calculado, mostrado e jogado fora.
 
-### Etapa 9 — Retalhos e ferramentas → `15-retalhos-sucatas` + `16-ferramentas-calibracao`
-UI de sobras; baixa dimensional; calibração com vencimento.
+### Etapa 9 — ✅ ENTREGUE em 2026-08-16 → `15-retalhos-sucatas` · Etapa 9b — Ferramentas e calibração (**próxima da ordem**) → `16-ferramentas-calibracao`
+
+**A Etapa 9 foi DIVIDIDA no design (2026-08-15)**, mesmo precedente de 6/6b/6c e 8/8b/8c: retalho
+é **estoque** (precisa do motor), ferramenta é **patrimônio emprestável** (precisa de cadastro,
+empréstimo e calibração com vencimento) — cada subsistema fecha com testes por conta própria.
+
+**Etapa 9 = feature 15 (`b727c0a..4ba94e2`)** — retalho no motor via `ENTRADA_RETALHO` + anexo
+dimensional; `gerarRetalho` composto com compensação; sucateamento com dupla aprovação segregada e
+baixa na segunda assinatura; destino final com comprovante; relatório `sucata-financeiro` pelo
+livro; tela `/almoxarifado/sobras`; etiqueta de retalho com QR. Detalhes, decisões endossadas e
+pendências: [spec 15](15-retalhos-sucatas/README.md) e o
+[plano da etapa](../../docs/superpowers/plans/2026-08-15-almoxarifado-etapa9-retalhos-sucatas.md).
+
+| Task | O quê | Hash |
+|---|---|---|
+| 0 | correções declaradas das specs 15 e 16 (afirmavam teste que nunca existiu) | `b727c0a` |
+| 1 | sobra reformada — auditoria, Zod, usuário gravado, `POST /sobras` aposentado | `bedce46` · fix `2623b0b` |
+| 2 | `ENTRADA_RETALHO` nas fontes únicas | `03b8113` · fix `81c1622` |
+| 3 | `gerarRetalho` — evento composto, guarda de dono, compensação | `15dd000` · fix `c3424e4` |
+| 4 | rota do evento + retalhos disponíveis por material | `8727ff3` |
+| 5 | `SUCATA` sai do formulário genérico (tipo dedicado) | `d5821ac` |
+| 6 | sucateamento: tabela, máquina de estados, dupla aprovação, baixa pelo motor | `a30ce6f` · fix `ba545e7` |
+| 7 | rotas, comprovante multipart, relatório financeiro pelo livro | `bc34819` |
+| 8 | tela Sobras e Retalhos + hint na saída | `e27abe8` |
+| 9 | sucateamento na tela + etiqueta de retalho com QR | `b8e8f1a` · fix `4ba94e2` |
+| 10 | documentação e verificação final | commits de fechamento |
+
+**Etapa 9b = feature 16 — ainda sem design nem plano.** O que a spec 16 pede: cadastro de
+ferramentas com empréstimo/devolução (parcialmente existente), calibração com vencimento e
+bloqueio de ferramenta vencida, histórico por ferramenta. Primeira ação de quem pegar:
+`superpowers:brainstorming` sobre a spec 16 — que foi corrigida em `b727c0a` e hoje diz a verdade
+sobre o que existe (nenhum teste de `toolService`; referências de linha atualizadas).
 
 ### Etapa 10 — Inventário avançado → `17-inventario-contagem`
 Contagem cega, recontagem, tolerância, aprovação de ajuste, acuracidade.

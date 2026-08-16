@@ -1,13 +1,13 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 8c (02/08/2026 a 13/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 9 (02/08/2026 a 16/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em 2026-08-13 (Etapa 8c).
+> `docs/superpowers/plans/`. Atualizado em 2026-08-16 (Etapa 9).
 
 ## Visão geral
 
@@ -26,6 +26,7 @@
 | 8 | Materiais de Clientes | 2026-08-12 | A chapa do cliente saiu da lista à parte e virou material de verdade, com dono: fora de todo número do nosso estoque, e só sai no trabalho de quem é dela |
 | 8b | Remessas a Terceiros | 2026-08-12 | O material que vai beneficiar fora (galvanizar, pintar, usinar) para de sumir do controle: sai do disponível sem sair do patrimônio, com prazo, retorno parcial e baixa justificada do que não voltou |
 | 8c | Transformação no Terceiro | 2026-08-13 | A chapa que sai para corte e volta como 40 peças e uma sobra para de mentir no estoque: a chapa é baixada de verdade e as peças entram com o custo dela rateado |
+| 9 | Retalhos, Sobras e Sucatas | 2026-08-16 | A meia chapa vira estoque de verdade (com saldo, etiqueta com QR e sugestão de uso antes de cortar chapa nova) — e sucatear deixa de ser um clique: exige duas assinaturas de pessoas diferentes, com destino e valor registrados |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -33,6 +34,9 @@ clientes).
 **Com a 8c, a feature 14 (materiais enviados a terceiros) fica completa**: a 8b entregou a metade
 em que **o mesmo material volta** (galvanizar, pintar, tratar) e a 8c entrega a metade em que
 **volta outra coisa** (cortar, dobrar, usinar).
+**Com a 9, a feature 15 (retalhos, sobras e sucatas) fica completa** — só o e-mail de
+sucateamento ficou de fora, declarado, junto com todos os e-mails do módulo (feature 19). A
+próxima etapa é a **9b — ferramentas e calibração**.
 
 ---
 
@@ -49,12 +53,12 @@ está detalhado na seção da etapa correspondente e no
 | **A1** | **O bug da Sucata pode ter deixado saldo a menos.** Devolver material para o destino Sucata baixava o estoque **duas vezes**. A correção **não conserta o passado**. No banco de desenvolvimento a checagem já foi feita: **0 devoluções, nenhum efeito lá**. | Ver a consulta exata no guia, seção "Etapa 7 → O bug da Sucata". Ela lista **só as devoluções anteriores à correção** (as que não têm a entrada correspondente no livro) — cada linha é um material cujo saldo está **a menos** pela quantidade devolvida. Uma consulta que filtrasse só `destino = 'SUCATA'` traria também as devoluções corretas feitas depois do deploy, e faria você caçar problema que não existe. |
 | **A2** | **A lista antiga de materiais de cliente foi aposentada** com base no banco de desenvolvimento (0 linhas). **Nada foi apagado** — a tabela foi preservada exatamente para este caso. | `SELECT COUNT(*) AS total, SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos FROM materiais_cliente_almoxarifado;` — se vier `0`, só anotar e fechar. Se vier `> 0`, **não reverte nada**: entra uma migração assistida antes de qualquer exclusão. |
 
-**Continuam sendo duas — a 8b e a 8c não acrescentam nenhuma.** As duas etapas de terceiros só
-**criam** colunas e tabelas novas, que nascem vazias; **nenhum dado existente é tocado ou
-reinterpretado** por elas. Está dito explicitamente porque as Etapas 7 e 8 deixaram consultas
-pendentes e você vai procurar a das etapas novas.
+**Continuam sendo duas — a 8b, a 8c e a 9 não acrescentam nenhuma.** As duas etapas de terceiros
+e a de retalhos/sucatas só **criam** colunas e tabelas novas, que nascem vazias; **nenhum dado
+existente é tocado ou reinterpretado** por elas. Está dito explicitamente porque as Etapas 7 e 8
+deixaram consultas pendentes e você vai procurar a das etapas novas.
 
-### B. Decisões de negócio — duas esperando por você, uma já tomada
+### B. Decisões de negócio — três esperando por você (o Ajuste B1–B3, a sucata B5, as categorias B6), uma já tomada (B4)
 
 **B1 a B3 — o que muda o saldo total não olha para o material que está retido.** É sempre o mesmo
 defeito, e a Etapa 8b foi a **terceira** vez que ele apareceu — por isso está aqui, e não escondido
@@ -111,6 +115,24 @@ conta" é exatamente o que a regra da sobra a zero recusa em voz alta.
 **Se a operação real for outra, isto é mudança de regra, não bug** — e é barato mudar, porque a
 conta vive numa função isolada (`transformCost.ratearCusto`).
 
+> **A Etapa 9 não tocou em B1–B3.** O sucateamento baixa pelo caminho controlado (o motor, na
+> segunda assinatura) e pré-checa o disponível na solicitação; o Ajuste manual continua sem
+> reconciliar retenção nenhuma. A decisão continua aberta e continua sendo a mesma.
+
+**B5 (NOVO, da Etapa 9) — as classificações de sucata são sugestões minhas, não a taxonomia de
+vocês.** Ao solicitar um sucateamento, o campo **Classificação** é texto livre com seis sugestões
+que aparecem ao digitar: *aço carbono, inox, alumínio, cobre, cavaco, misto*. **Essa lista foi
+inventada para a operação não travar** — a pergunta é: **quais tipos de sucata a GMP separa de
+verdade** (para venda, para o relatório financeiro)? A resposta vira a lista oficial; enquanto não
+vem, texto livre não trava nada, mas duas pessoas podem escrever "aço" e "aço carbono" e o
+relatório contar como duas classificações.
+
+**B6 (registrada desde a 8c, a Etapa 9 desviou dela de propósito) — a taxonomia de categorias de
+material.** As categorias das telas continuam fixas no código do front, divergindo da tabela
+configurável do servidor (dívida da spec 01). A Etapa 9 **herdou a categoria do original** ao
+criar material de retalho justamente **para não depender dessa resposta** — a pergunta continua
+em pé: qual lista vale?
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **A conferência de inventário muda saldo de material de cliente sem a permissão especial.**
@@ -154,8 +176,17 @@ conta vive numa função isolada (`transformCost.ratearCusto`).
    - **O saldo não muda** — ele nunca veio dessas somas. O que muda são as **colunas explicativas**.
    - **Se você já apresentou essa tela a um cliente, os números da coluna "consumido" vão estar
      maiores da próxima vez.** Vale avisar.
-
-### D. Limitações declaradas — são decisão, não esquecimento
+5. **🚨 (Etapa 9) O TIPO "SUCATA" SUMIU DO FORMULÁRIO DE MOVIMENTAÇÕES — e é de propósito.** Quem
+   sucateava por ali vai procurar o tipo e não vai achar. Os caminhos válidos agora são **dois**:
+   o **processo de sucateamento** (Almoxarifado → Sobras e Retalhos → aba Sucateamentos —
+   solicitação + duas assinaturas de pessoas diferentes) e a **devolução com destino Sucata**
+   (continua igual). `Perda` **continua** no formulário. O motivo: enquanto qualquer pessoa com
+   permissão de movimentar pudesse baixar patrimônio escolhendo "Sucata" numa lista, a regra de
+   dupla aprovação que o requisito exige seria decorativa. **Isto precisa ser contado a quem opera
+   ANTES do deploy** — senão o primeiro sucateamento do dia vira chamado de "sumiu função do
+   sistema". Detalhe operacional que decorre disso: sucatear passou a exigir **duas pessoas**;
+   material com **número de série** não passa pelo processo (a recusa manda baixar pela tela de
+   Movimentações, que tem seletor de série).
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
   transferência é imediata. Volta a fazer sentido se houver obra externa ou segundo prédio.
@@ -179,6 +210,18 @@ conta vive numa função isolada (`transformCost.ratearCusto`).
   300% não é recusado, só mostrado.
 - **(8c) Corte feito DENTRO da GMP continua sem caminho próprio.** A transformação vive dentro de
   uma remessa a terceiro.
+- **(9) O sistema não calcula quanto sobrou.** As dimensões do retalho são **digitadas** pelo
+  operador — não há aritmética dimensional (3000−1200=1800 não é feito). Automatizar exigiria
+  modelagem dimensional por material que o catálogo não tem; se quiserem, é etapa própria.
+- **(9) Ninguém recebe e-mail de sucateamento** — o acompanhamento é pela tela. E-mails são a
+  feature 19, mesmo corte declarado das etapas 8/8b/8c.
+- **(9) Vender sucata registra valor e comprovante — não vira fatura nem título financeiro.**
+- **(9) O relatório financeiro de sucata é só API** — não existe tela de relatórios no módulo
+  (pendência antiga). A valoração usa o **custo atual** do material, porque o livro não guarda
+  custo histórico (mesma limitação declarada da 8c) — o próprio relatório carrega essa nota.
+- **(9) Não há foto do retalho** — o campo existe no banco, a tela não oferece upload
+  (pendência registrada na spec 15), e **não há reserva de retalho** (mesma pendência da reserva
+  por lote/série).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -221,6 +264,14 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
      selecionado** no campo de material do resultado;
    - os **avisos** (sucesso e rendimento) aparecem depois de confirmar;
    - ao reabrir a remessa, a coluna **Transformado** mostra o número **vindo do servidor**.
+
+4. **(9) A tela Sobras e Retalhos inteira.** **Nenhum navegador foi aberto na entrega da
+   Etapa 9** — os testes de tela são de comportamento (React Testing Library), não visuais. Falta
+   conferir: os **badges de status** das duas abas com cor (Disponível/Consumida/Sucateada;
+   Solicitado/Aprovado/Vendida/Descartada/Rejeitado/Cancelado); o **modal de gerar retalho**
+   (largo, os campos de baixa aparecendo/sumindo com o checkbox); a **etiqueta em PDF** abrindo
+   legível com o QR funcionando (escanear e ver a linha destacada); e o **aviso de retalho
+   disponível** no formulário de Saída. O roteiro completo está no guia, seção da Etapa 9.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -1254,18 +1305,173 @@ backend**, que responde 403 se alguém forçar a chamada por fora.
 
 ---
 
+## Etapa 9 — Retalhos, Sobras e Sucatas (2026-08-16)
+
+**Em uma frase:** a meia chapa que sobra do corte vira estoque de verdade — com saldo, etiqueta com
+QR e sugestão de uso antes de cortar chapa nova — e sucatear deixa de ser um clique de uma pessoa
+só: vira processo com duas assinaturas de pessoas diferentes, destino registrado e número
+financeiro.
+
+**O problema que existia.** Três, encadeados. O **retalho não existia**: quando uma chapa era
+parcialmente usada, o sistema só sabia "1 chapa saiu" — o pedaço aproveitável não tinha saldo, não
+tinha etiqueta e não aparecia quando alguém procurava material, então se comprava chapa nova com
+meia chapa na prateleira. **Sucatear era uma baixa solta**: `Sucata` era um tipo do formulário de
+Movimentações — qualquer pessoa com permissão de movimentar apagava material do patrimônio com uma
+justificativa, sem segunda opinião, sem classificação, sem registro de venda ou descarte e sem
+número financeiro. E havia **uma lista morta de sobras** no banco: registrar ali não criava saldo,
+não movimentava nada e não aparecia em lugar nenhum — a mesma doença da lista de materiais de
+clientes que a Etapa 8 aposentou.
+
+**O que há de novo (visível para o usuário):**
+- Tela nova **Almoxarifado → Sobras e Retalhos**, com duas abas: **Retalhos** e **Sucateamentos**.
+- **Gerar retalho**, com **dois modos**: a peça está saindo do estoque **agora** (o original é
+  baixado e o retalho entra, no mesmo evento) ou a peça **já tinha saído** antes (só o retalho
+  entra — é a sobra que volta do chão de fábrica). A ficha dimensional (dimensões restantes,
+  norma, espessura, peso, localização) fica junto.
+- Atalho **Criar material do retalho** dentro do modal: cadastra o material na hora, com código
+  gerado pela família da origem e **dono e categoria herdados** — retalho de chapa de cliente
+  continua do cliente.
+- **Etiqueta do retalho** em PDF (A4 ou térmica), com as dimensões e o peso no papel e um **QR que
+  abre a tela com a linha destacada** — oferecida automaticamente logo depois de gerar. Era a
+  pendência declarada da Etapa 6c.
+- Aviso na **Saída** de Movimentações quando o material tem retalho parado: *"Existem N retalho(s)
+  deste material — considere usá-los antes de baixar do estoque principal."* — **aviso, não
+  trava**: quem decide é o almoxarife.
+- **Solicitar sucateamento** (a partir de qualquer material, ou pelo botão **Sucatear** na linha do
+  retalho): quantidade, lote quando o material exige, classificação (texto livre com sugestões),
+  peso, justificativa obrigatória. **Solicitar não move saldo nenhum.**
+- **Duas aprovações, de pessoas diferentes**: uma perna do **almoxarifado**, uma da **gestão**. A
+  baixa sai do estoque **na segunda assinatura** — e o aviso na tela diz qual das duas foi a sua.
+- **Rejeitar** (com motivo obrigatório), **Cancelar** (só o próprio solicitante), e **Registrar
+  destino** depois de aprovado: **Vendida** (valor obrigatório + comprovante PDF/imagem) ou
+  **Descartada**.
+
+**Por baixo do capô:**
+- O retalho é **material normal no motor de estoque** — não uma lista à parte. Ele entra por um
+  tipo de movimento próprio (`ENTRADA_RETALHO`), que **não aceita custo**: o projeto já pagou a
+  chapa inteira na saída, e o retalho a custo zero **não infla o patrimônio** (mesma regra da sobra
+  da 8c). A ficha dimensional vive na tabela de sobras **reformada** — que deixou de ser ilha: só
+  nasce junto com a movimentação, auditada, com autor.
+- A criação avulsa de sobra (sem passar pelo estoque) foi **aposentada** — era o caminho que
+  recriaria a lista morta.
+- O sucateamento tem **máquina de estados** e **três barreiras de segregação**: o perfil da perna,
+  o solicitante não assina, e **a mesma pessoa não assina as duas** — esta última garantida também
+  contra cliques simultâneos (provado por teste de corrida: 500 tentativas concorrentes do mesmo
+  usuário nas duas pernas, zero furos).
+- Se o saldo mudar entre a solicitação e a segunda assinatura, o motor recusa a baixa e o sistema
+  **desfaz a assinatura recém-dada** — nunca fica "aprovado no papel" sem baixa no livro. A
+  compensação fica registrada na auditoria, com o motivo.
+- O **relatório financeiro de sucata** lê o **livro de movimentações**, não só a fila de
+  sucateamentos — assim ele soma também a sucata que nasce de **devolução com destino Sucata**
+  (Etapa 7), que não passa pelas duas assinaturas porque o material já tinha saído fisicamente.
+  Duas somas separadas de propósito: o **estimado** (quantidade × custo atual) e o **realmente
+  vendido** (declarado, com comprovante).
+
+### As regras, com o cenário exato
+
+Todas as mensagens abaixo são as **mensagens reais do sistema**, copiadas do código.
+
+**1. Gerar retalho com baixa move as duas pontas no mesmo evento.**
+*Cenário:* chapa com 30, gerar retalho marcando **"Baixar o material de origem agora"**, baixa 1,
+retalho 1 →
+> `Retalho gerado — o material de origem foi baixado`
+
+A chapa cai, o retalho sobe, e o extrato dos dois mostra a saída e a **Entrada (retalho)**. Se
+qualquer perna falhar no meio, o que já andou é **desfeito** — nunca fica saída sem retalho.
+
+**2. O modo sem baixa é para a sobra que volta do chão de fábrica.**
+*Cenário:* checkbox desmarcado (a peça já saiu por requisição há dias) →
+> `Retalho gerado — nada foi baixado (a peça já tinha saído do estoque)`
+
+**3. O sistema NÃO cria o material do retalho sozinho — e a recusa ensina o caminho.**
+> `O material do retalho 999 nao existe. Cadastre o material do retalho primeiro (Almoxarifado > Materiais > Novo, ou o atalho "Criar material do retalho" na tela de Sobras e Retalhos) e refaca a geracao — o sistema nao cria material sozinho a partir de um formulario de retalho.`
+
+Mesma razão da 8c: cadastro-lixo em almoxarifado não se apaga — ele ganha saldo. Em troca, o
+atalho cadastra na hora, herdando família, dono e categoria da origem.
+
+**4. Meia chapa não é chapa.**
+*Cenário:* escolher como "material do retalho" o próprio material de origem:
+> `O retalho CHP-3MM e o mesmo material da origem. Meia chapa nao e chapa: cadastre (ou escolha) um material proprio para o retalho.`
+
+**5. Retalho de material de cliente permanece do cliente.** O material-retalho tem de ter o
+**mesmo dono** do original — a recusa nomeia os dois donos, como na transformação da 8c. Sem essa
+guarda, um corte converteria chapa do cliente em patrimônio da GMP em silêncio.
+
+**6. Material com número de série não passa — e a recusa ensina o caminho.**
+> `O material CHP-01 tem controle de serie e a geracao de retalho nao tem campo para dizer QUAL numero de serie esta sendo cortado. Baixe a peca pela tela de Movimentacoes (que tem seletor de serie) e depois registre o retalho aqui no modo "peca ja baixada do estoque".`
+
+(O sucateamento recusa material serializado pelo mesmo motivo, apontando a mesma saída.)
+
+**7. Sucatear pelo formulário de Movimentações NÃO EXISTE MAIS.**
+*Cenário:* abrir Movimentações → Nova movimentação → o tipo **Sucata não está na lista**. Quem
+forçar `{tipo: 'SUCATA'}` por fora recebe a recusa da rota. *Por quê:* enquanto essa porta
+estivesse aberta, a dupla aprovação seria decorativa — o requisito "sucatear sem aprovação falha"
+era **impossível de cumprir** por construção. Mesmo precedente da Devolução na Etapa 7.
+**`Perda` continua no formulário** — a exigência de dupla aprovação é só para sucateamento.
+
+**8. Solicitar não move saldo — e a justificativa é obrigatória desde já.**
+O modal avisa: *"A solicitação não move saldo nenhum — a baixa só sai do estoque quando as DUAS
+assinaturas (almoxarifado e gestão) fecharem o processo."* Ao confirmar:
+> `Sucateamento solicitado — aguardando as duas assinaturas (almoxarifado e gestão)`
+
+**9. Quem solicitou não aprova.**
+> `Quem solicitou o sucateamento nao aprova a propria solicitacao — em nenhuma das duas pernas. Peca a assinatura de outra pessoa do almoxarifado e da gestao.`
+
+(A tela nem mostra os botões para o solicitante — e o servidor barra de qualquer jeito.)
+
+**10. A mesma pessoa não assina as duas pernas — nem o Administrador.**
+> `Voce ja assinou a perna almoxarifado deste sucateamento e nao pode assinar tambem a perna gestao: dupla aprovacao com a mesma pessoa nas duas pernas e uma assinatura com dois carimbos. A segunda assinatura tem de ser de outra pessoa.`
+
+**11. A baixa sai na segunda assinatura — e o aviso diz qual foi a sua.**
+Primeira: `Perna assinada — falta a assinatura da outra perna para a baixa sair`. Segunda:
+`Sucateamento aprovado nas duas pernas — a baixa foi emitida no estoque` — e é agora que o total e
+o disponível caem, com a linha `SUCATA` no livro (referência `SUC-<número>`).
+
+**12. Se o saldo mudou no meio, a aprovação volta atrás sozinha.**
+*Cenário:* solicitar 10, alguém consome o saldo por saída antes da segunda assinatura. A segunda
+assinatura falha com o erro do motor (com os números) e o processo **volta a SOLICITADO**, com a
+assinatura recém-dada desfeita e a compensação auditada.
+
+**13. Vender exige valor.**
+> `Informe o valor da venda da sucata (valor_venda maior que zero) — o destino VENDIDA alimenta o relatorio financeiro de sucata, e venda sem valor nao e venda.`
+
+**14. Cancelar é só do solicitante — recusar solicitação alheia é Rejeitar, com motivo.**
+> `So o solicitante (Fulano) cancela o proprio sucateamento. Para recusar a solicitacao de outra pessoa use Rejeitar, que exige motivo e fica no historico.`
+
+**Antes → Agora:**
+
+| Antes | Agora |
+|---|---|
+| A meia chapa não existia para o sistema — comprava-se chapa nova com meia chapa na prateleira | Retalho com **saldo real**, ficha dimensional, etiqueta com QR e localização |
+| Registro de sobra era uma lista morta: sem saldo, sem movimentação, sem tela | A sobra só nasce **junto com a movimentação**, auditada — a criação avulsa foi aposentada |
+| **Sucatear era um clique de uma pessoa** no formulário de Movimentações | **O tipo sumiu do formulário.** Sucatear é solicitação + **duas assinaturas de pessoas diferentes** + baixa na segunda |
+| Nada registrava o destino da sucata | **Vendida** (valor + comprovante) ou **Descartada**, com relatório financeiro |
+| Nada sugeria usar o retalho antes de cortar chapa nova | Aviso não bloqueante na Saída, com link para a tela de retalhos |
+| Etiqueta de retalho era pendência declarada da 6c | Entregue — dimensões/peso no papel, QR abrindo a linha certa |
+
+**O que esta etapa NÃO cobre (é decisão declarada, não esquecimento):**
+- **Não calcula dimensões** — o operador digita quanto sobrou (item **D**).
+- **Não manda e-mail** de sucateamento (feature 19, item **D**).
+- **Não emite fatura/título** na venda de sucata — registro com valor e comprovante (item **D**).
+- **Não tem tela de relatório** — o financeiro de sucata é API (item **D**).
+- **Não tem foto do retalho nem reserva de retalho** (item **D**).
+- **Ferramentas e calibração são a Etapa 9b.**
+
+---
+
 ## Onde estamos e o que vem a seguir
 
-- **Concluído até aqui:** Etapas 0 a 8c — fundação, motor de estoque, cadastros, requisições,
+- **Concluído até aqui:** Etapas 0 a 9 — fundação, motor de estoque, cadastros, requisições,
   reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções, materiais de clientes,
-  remessas a terceiros e transformação no terceiro. As features 10 (lotes/séries/etiquetas),
-  11 (transferências), 12 (devoluções), 13 (materiais de clientes) e **14 (materiais em terceiros)**
-  estão completas no que cada etapa se propôs. A 14 fechou com a 8c: a 8b entregou "o mesmo material
-  volta", a 8c entregou "volta outra coisa".
-- **Próxima etapa:** **não está decidida.** A ordem do planejamento traz a feature 15 (retalhos e
-  sucatas) como candidata natural — a sobra que a 8c passou a creditar é literalmente um retalho, e
-  hoje ela entra como material comum, sem tela própria. Mas isso é **sugestão, não decisão**: a
-  escolha é sua.
+  remessas a terceiros, transformação no terceiro e **retalhos/sucatas**. As features 10
+  (lotes/séries/etiquetas), 11 (transferências), 12 (devoluções), 13 (materiais de clientes),
+  **14 (materiais em terceiros)** e **15 (retalhos, sobras e sucatas)** estão completas no que cada
+  etapa se propôs. A 15 fechou com a Etapa 9: retalho virou estoque com etiqueta, e sucateamento
+  virou processo com dupla aprovação — só o e-mail ficou para a feature 19, declarado.
+- **Próxima etapa:** **Etapa 9b — ferramentas e calibração** (feature 16). A divisão 9/9b foi
+  decidida no design da Etapa 9 (retalho é estoque, ferramenta é patrimônio emprestável); a 9b
+  ainda **não tem design nem plano** — a primeira ação de quem pegar é o brainstorming sobre a
+  spec 16, que foi corrigida na Etapa 9 e hoje diz a verdade sobre o que existe.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
@@ -1273,14 +1479,18 @@ backend**, que responde 403 se alguém forçar a chamada por fora.
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
   3. saber que a **conferência de inventário ajusta saldo fora da permissão de material de
      cliente** (seção da Etapa 8) — é o ponto que mais importa contar a quem opera;
-  4. **nem a 8b nem a 8c acrescentam consulta a esta lista** — as duas só criam colunas e tabelas
-     novas, sem tocar em dado existente;
+  4. **nem a 8b, nem a 8c, nem a 9 acrescentam consulta a esta lista** — as três só criam colunas
+     e tabelas novas, sem tocar em dado existente;
   5. **avisar quem compara relatórios com o mês passado** de que dois números mudam de leitura
-     (itens **C3** e **C4**) — nenhum dado foi alterado, mas o número na tela vai ser outro.
+     (itens **C3** e **C4**) — nenhum dado foi alterado, mas o número na tela vai ser outro;
+  6. **avisar quem opera que o tipo Sucata sumiu do formulário de Movimentações** (item **C5**) —
+     sucatear agora é pela tela Sobras e Retalhos, com duas assinaturas de pessoas diferentes.
 - **O que depende de você, não do código:** confirmar se **remessa mista de donos** deve mesmo ser
   recusada (item **E**); reconhecer a **regra de rateio de custo** implementada no seu nome (item
-  **B4**); decidir o **Ajuste contra a retenção** (item **B**); e fazer as **verificações no
-  navegador** dos selos, do PDF e do modal de transformação (item **F**).
+  **B4**); decidir o **Ajuste contra a retenção** (item **B**); dizer **quais classificações de
+  sucata a GMP usa de verdade** (item **B5**) e **qual taxonomia de categorias vale** (item
+  **B6**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação e a tela
+  nova de Sobras e Retalhos (item **F**).
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas
   pelo usuário (roteiros no guia); tela de subfamílias; telas para localizações
   vazias/materiais sem endereço; pendências declaradas (a)–(j) da 6b e (a)–(g) da 6c na
@@ -1288,9 +1498,14 @@ backend**, que responde 403 se alguém forçar a chamada por fora.
   pendente) e o estado parcial da Sucata sem notificação; as da Etapa 8 — conferência de
   inventário fora do motor, e os relatórios que misturam material de cliente sem o selo; as da
   Etapa 8b — a mesma decisão do Ajuste agora alcançando a coluna "em terceiros" (item **B**), e a
-  lista de exclusão que protege as colunas novas por omissão (item **G1**); e as da Etapa 8c —
+  lista de exclusão que protege as colunas novas por omissão (item **G1**); as da Etapa 8c —
   a **fragilidade das fixtures de teste** (item **G2**), a coluna com **três significados** (item
-  **G3**), as categorias de material ainda fixas no código do front, e o anexo de desenho na remessa.
+  **G3**), as categorias de material ainda fixas no código do front, e o anexo de desenho na
+  remessa; e as da Etapa 9, registradas na spec 15 — a falta de uma **guarda automática para tipo
+  novo de movimento** nas fontes únicas (a sabotagem da etapa provou que o teste da equação por
+  cliente não pega o esquecimento sozinho), a coluna **foto** da sobra sem escritor, o retalho de
+  material com controle de lote entrando **sem lote** (mesma isenção declarada da spec 10), e o
+  **valor de venda aceito em descarte** (gravado, mas fora do total do relatório).
 - **Transversal (2026-08-11):** auditoria completa das 24 specs contra o código — specs
   que afirmavam coisas não entregues foram corrigidas com nota datada, e o bug de front dos
   status de reserva (`92fe236`) saiu dessa auditoria.
