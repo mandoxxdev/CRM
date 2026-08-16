@@ -56,6 +56,13 @@ import './Almoxarifado.css';
  * — o backend barra de qualquer jeito (barreira 2 de scrapDisposalService), mas a tela ja nao
  * oferece o botao para nao ensinar um clique que so vai voltar 403.
  *
+ * Fix round 1 (review Finding 2): faltava uma QUINTA condicao, simetrica a quarta mas para o
+ * AVALIADOR em vez do solicitante. A barreira 3 do servico (`scrapDisposalService.js:347`) proibe
+ * o MESMO usuario assinar as duas pernas — sem checar isso na tela, quem ja tinha assinado
+ * `aprovador_almox_id` continuava vendo "Aprovar gestao" na mesma linha, e o clique so voltava
+ * 403. `naoAssinouAOutraPerna(pernaAlvo)` compara `user?.id` com o aprovador da perna OPOSTA a
+ * que o botao oferece.
+ *
  * `Rejeitar` e `Registrar destino` NAO tem uma unica `acao` de `requirePermission` no servidor
  * (o gate real e "aprova ALGUMA das duas pernas", um OU que a rota tambem resolve manualmente,
  * nao por `requirePermission` — ver o comentario de `requerAprovarAlgumaPerna` em
@@ -695,14 +702,17 @@ const SobrasAlmoxarifado = () => {
               <tbody>
                 {sucateamentos.map((s) => {
                   const info = statusSucInfo(s.status);
-                  // As TRES condicoes do docstring: status SOLICITADO, a perna ainda sem
-                  // assinatura, e `pode(acao)` — mais a QUARTA (fora de `pode`): esconder do
-                  // proprio solicitante, que o backend barra de qualquer jeito (barreira 2).
+                  // As CINCO condicoes do docstring (fix round 1 acrescentou a quinta): status
+                  // SOLICITADO, a perna ainda sem assinatura, `pode(acao)`, nao-e-o-solicitante, e
+                  // nao-assinou-a-outra-perna (barreira 3 do servico).
                   const naoEhSolicitante = Number(s.solicitante_id) !== Number(user?.id);
+                  const naoAssinouAOutraPerna = (pernaAlvo) => (pernaAlvo === 'almoxarifado'
+                    ? Number(s.aprovador_gestao_id) !== Number(user?.id)
+                    : Number(s.aprovador_almox_id) !== Number(user?.id));
                   const mostraAprovarAlmox = s.status === 'SOLICITADO' && !s.aprovador_almox_id
-                    && naoEhSolicitante && pode('aprovar_sucateamento');
+                    && naoEhSolicitante && pode('aprovar_sucateamento') && naoAssinouAOutraPerna('almoxarifado');
                   const mostraAprovarGestao = s.status === 'SOLICITADO' && !s.aprovador_gestao_id
-                    && naoEhSolicitante && pode('aprovar_sucateamento_gestao');
+                    && naoEhSolicitante && pode('aprovar_sucateamento_gestao') && naoAssinouAOutraPerna('gestao');
                   const aprovaAlgumaPerna = pode('aprovar_sucateamento') || pode('aprovar_sucateamento_gestao');
                   return (
                     <tr key={s.id}>

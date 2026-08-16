@@ -91,12 +91,24 @@ const SUCATEAMENTOS = [
     material_codigo: 'CHP-3MM', material_nome: 'Chapa 3mm', material_unidade: 'PC',
     proprietario_cliente_id: null },
   // Uma perna JA assinada (almoxarifado), a outra (gestao) ainda aberta — o caso em que
-  // "Aprovar gestão" e o clique que FECHA as duas assinaturas e emite a baixa.
+  // "Aprovar gestão" e o clique que FECHA as duas assinaturas e emite a baixa. `aprovador_almox_id:
+  // 1` NAO e mais o usuario logado (Fix round 1, Finding 2) — o proprio ADMIN (id 1) que assinou
+  // essa perna nao pode ver "Aprovar gestão" nesta linha (barreira 3 do servico), entao os testes
+  // que precisam ver o botao usam um TERCEIRO usuario (gestora, id 60).
   { id: 503, material_id: 101, lote_id: null, sobra_id: null, quantidade: 1,
     classificacao: 'misto', justificativa: 'Sobra pequena demais',
     status: 'SOLICITADO', solicitante_id: 50, solicitante_nome: 'Pedro Produção',
     aprovador_almox_id: 1, aprovador_almox_nome: 'Admin',
     aprovador_gestao_id: null, aprovador_gestao_nome: null,
+    material_codigo: 'CHP-3MM', material_nome: 'Chapa 3mm', material_unidade: 'PC',
+    proprietario_cliente_id: null },
+  // Simetrico ao 503: a perna da GESTAO ja assinada (pela gestora, id 60), a do almoxarifado
+  // ainda aberta — prova a barreira 3 nos DOIS sentidos (Fix round 1, Finding 2).
+  { id: 504, material_id: 101, lote_id: null, sobra_id: null, quantidade: 3,
+    classificacao: 'cavaco', justificativa: 'Aparas do corte a laser',
+    status: 'SOLICITADO', solicitante_id: 50, solicitante_nome: 'Pedro Produção',
+    aprovador_almox_id: null, aprovador_almox_nome: null,
+    aprovador_gestao_id: 60, aprovador_gestao_nome: 'Gestora Teste',
     material_codigo: 'CHP-3MM', material_nome: 'Chapa 3mm', material_unidade: 'PC',
     proprietario_cliente_id: null },
 ];
@@ -407,6 +419,26 @@ describe('SobrasAlmoxarifado — sucateamento: lista e visibilidade dos botoes',
     expect(botao('Aprovar gestão', linhaAprovado)).toBeFalsy();
   });
 
+  // Fix round 1 (review Finding 2): barreira 3 do servico (scrapDisposalService.js:347) proibe o
+  // MESMO usuario assinar as duas pernas. Dois testes, um por direcao — controle positivo real
+  // (sabotagem + revert do codigo, nao um teste embutido) confirmou que cada um pega a regressao:
+  // ver task-9-report.md, secao "Fix round 1".
+  test('quem ja assinou a perna do almoxarifado nao ve mais "Aprovar gestão" na mesma linha', async () => {
+    mockUser = { id: 1, nome: 'Admin' }; // e o aprovador_almox_id de SUCATEAMENTOS[2] (id 503)
+    await renderizar();
+    await abrirAbaSucateamentos();
+    const linha = linhasSuc()[2]; // id 503: aprovador_almox_id = 1 = mockUser.id, gestao em aberto
+    expect(botao('Aprovar gestão', linha)).toBeFalsy();
+  });
+
+  test('quem ja assinou a perna da gestao nao ve mais "Aprovar almoxarifado" na mesma linha (simetrico)', async () => {
+    mockUser = { id: 60, nome: 'Gestora Teste' }; // e o aprovador_gestao_id de SUCATEAMENTOS[3] (id 504)
+    await renderizar();
+    await abrirAbaSucateamentos();
+    const linha = linhasSuc()[3]; // id 504: aprovador_gestao_id = 60 = mockUser.id, almox em aberto
+    expect(botao('Aprovar almoxarifado', linha)).toBeFalsy();
+  });
+
   test('Rejeitar aparece so em SOLICITADO para quem aprova alguma perna', async () => {
     await renderizar();
     await abrirAbaSucateamentos();
@@ -444,21 +476,28 @@ describe('SobrasAlmoxarifado — sucateamento: lista e visibilidade dos botoes',
 });
 
 describe('SobrasAlmoxarifado — sucateamento: aprovar, rejeitar, destino, cancelar (acoes)', () => {
-  test('aprovar a perna do almoxarifado chama a rota certa (sem baixa emitida ainda)', async () => {
+  // Fix round 1 (review Finding 1): `/baixa/i` casava com as DUAS mensagens do ternario
+  // (`baixa_emitida`) — comprovado por sabotagem do revisor: removendo o ternario a suite inteira
+  // seguia verde. Agora cada ramo assere uma substring que SO existe naquele ramo.
+  test('aprovar a perna do almoxarifado chama a rota certa e avisa que falta a outra assinatura', async () => {
     await renderizar();
     await abrirAbaSucateamentos();
     await clicar(botao('Aprovar almoxarifado', linhasSuc()[0]));
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/sucateamentos/501/aprovar-almoxarifado', {});
-    expect(toast.success).toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/falta a assinatura/i));
   });
 
   test('aprovar a perna que fecha as duas assinaturas avisa que a baixa foi emitida', async () => {
+    // Fix round 1 (review Finding 2): id 503 tem `aprovador_almox_id: 1`, o MESMO id do mockUser
+    // padrao — com a barreira 3 agora respeitada na tela, o proprio Admin nao veria mais o botao
+    // "Aprovar gestão" nessa linha (cenario que o backend recusaria). Quem assina aqui tem que ser
+    // um TERCEIRO usuario, que nao assinou nenhuma das duas pernas — a gestora, id 60.
+    mockUser = { id: 60, nome: 'Gestora Teste' };
     await renderizar();
     await abrirAbaSucateamentos();
-    // id 503: SOLICITADO com a perna do almoxarifado JA assinada — "Aprovar gestão" e a que fecha.
     await clicar(botao('Aprovar gestão', linhasSuc()[2]));
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/sucateamentos/503/aprovar-gestao', {});
-    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/baixa/i));
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/foi emitida no estoque/i));
   });
 
   test('erro do servidor ao aprovar chega ao operador com a mensagem literal', async () => {
