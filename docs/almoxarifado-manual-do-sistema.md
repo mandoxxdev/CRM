@@ -29,9 +29,11 @@ explicada logo abaixo dela.
 16. [Materiais de clientes](#16-materiais-de-clientes)
 17. [Material enviado a terceiros](#17-material-enviado-a-terceiros)
 18. [Transformação no terceiro](#18-transformação-no-terceiro)
-19. [Como o sistema calcula](#19-como-o-sistema-calcula)
-20. [Cuidados na operação](#20-cuidados-na-operação)
-21. [Onde pedir ajuda e o que este documento não cobre](#21-onde-pedir-ajuda-e-o-que-este-documento-não-cobre)
+19. [Sobras e retalhos](#19-sobras-e-retalhos)
+20. [Sucateamento](#20-sucateamento)
+21. [Como o sistema calcula](#21-como-o-sistema-calcula)
+22. [Cuidados na operação](#22-cuidados-na-operação)
+23. [Onde pedir ajuda e o que este documento não cobre](#23-onde-pedir-ajuda-e-o-que-este-documento-não-cobre)
 
 ---
 
@@ -50,11 +52,12 @@ As telas do módulo ficam em **Almoxarifado**, no menu lateral:
 | Requisições | pedido, aprovação, separação e entrega |
 | Recebimentos | chegada de material e entrada por nota fiscal |
 | Inspeções | quarentena, decisão da qualidade, bloqueio e desbloqueio |
-| Movimentações | o livro de lançamentos e o formulário de entrada, saída, transferência, ajuste, sucata e perda |
+| Movimentações | o livro de lançamentos e o formulário de entrada, saída, transferência, ajuste e perda |
 | Lotes e Séries | situação do lote, certificado, validade e números de série |
 | Devoluções | material entregue que volta ao almoxarifado |
 | Materiais de Clientes | posição por cliente e devolução ao dono |
 | Remessas a Terceiros | material enviado para beneficiamento externo |
+| Sobras e Retalhos | retalhos com ficha dimensional e etiqueta, e o processo de sucateamento com dupla aprovação |
 | Reservas | saldo separado para uma OS ou projeto |
 | Conferências de Estoque | inventário e homologação de divergência |
 | Mapa de Áreas | o desenho do galpão, posição por posição |
@@ -141,7 +144,7 @@ O bloco **Dados Técnicos** é o que transforma o cadastro em ficha de material,
 | Marca / Modelo | identificação comercial |
 | Norma Técnica | a norma que o item atende (ex.: a especificação do aço) |
 | Material Construtivo | de que o item é feito |
-| Peso Unitário (kg) | peso de uma unidade — também é o que permite calcular rendimento quando um material sai para corte e volta transformado (ver 19.4) |
+| Peso Unitário (kg) | peso de uma unidade — também é o que permite calcular rendimento quando um material sai para corte e volta transformado (ver 21.4) |
 | Dimensões | medidas do item, em texto livre |
 | NCM | classificação fiscal |
 | Aplicação | onde esse item é usado |
@@ -363,7 +366,7 @@ Recusas da liberação: *"justificativa obrigatoria para liberar o vencimento do
 
 FEFO significa *first expired, first out* — **o que vence primeiro sai primeiro**. É o critério correto para material com validade, e é diferente de FIFO (o que entrou primeiro sai primeiro).
 
-Onde aparece: na tela de **Movimentações**, ao escolher uma Saída, Sucata, Perda ou Transferência, a lista de lotes vem ordenada assim — **primeiro os elegíveis, depois por validade crescente** (lote sem validade vai para o fim), e o **primeiro lote elegível já vem pré-selecionado**. A mesma ordem é usada no seletor de lote da tela de Devoluções.
+Onde aparece: na tela de **Movimentações**, ao escolher uma Saída, Perda ou Transferência, a lista de lotes vem ordenada assim — **primeiro os elegíveis, depois por validade crescente** (lote sem validade vai para o fim), e o **primeiro lote elegível já vem pré-selecionado**. A mesma ordem é usada no seletor de lote da tela de Devoluções e nos seletores da tela de Sobras e Retalhos (gerar retalho e solicitar sucateamento).
 
 **É sugestão, não imposição.** O operador pode trocar por qualquer outro lote elegível — há motivos legítimos para pegar outro, e travar isso no sistema atrapalharia mais do que ajudaria. O motor não verifica FEFO: ele valida situação, validade e saldo do lote **que foi escolhido**.
 
@@ -397,7 +400,7 @@ Com **Controle por número de série** ligado, cada unidade tem identidade próp
 
 **Na entrada** (tela Movimentações), aparece a caixa **"Números de série (um por linha)"**, com um contador ao vivo do tipo `3/5`. Há um **gerador de sequência**: informe um Prefixo (`GMP-`) e um Nº inicial, clique em **Gerar sequência**, e a caixa é preenchida sozinha. A quantidade de linhas tem de bater exatamente com a quantidade movimentada.
 
-**Na saída** (Saída, Sucata ou Perda), em vez de digitar, aparece uma **lista das séries em estoque**, para marcar quais saem. Se um lote já estiver escolhido, a lista mostra **apenas as séries daquele lote** — e trocar o lote limpa a seleção de séries, para não sair uma série que pertence a outro conjunto.
+**Na saída** (Saída ou Perda), em vez de digitar, aparece uma **lista das séries em estoque**, para marcar quais saem. Se um lote já estiver escolhido, a lista mostra **apenas as séries daquele lote** — e trocar o lote limpa a seleção de séries, para não sair uma série que pertence a outro conjunto.
 
 **No Recebimento**, cada item tem a caixa **"Séries (uma por linha)"** ao lado dos campos de lote, com contador contra a quantidade recebida.
 
@@ -449,6 +452,7 @@ O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arq
   - etiqueta de **material**: sem linha de controle;
   - etiqueta de **lote**: `Lote L-001 · Val 31/01/2026` — a parte da validade só aparece se o lote tiver validade;
   - etiqueta de **série**: `SN: GMP-042`;
+  - etiqueta de **retalho**: as dimensões restantes com a espessura e o peso aproximado, no formato `1200x800x3mm · ~18kg` — cada parte é omitida quando o retalho não a tem registrada;
 - **QR Code**, à direita.
 
 **Não** vão para o papel: fornecedor, corrida, número da nota fiscal, projeto, localização, saldo e situação de inspeção. Isso é escolha de projeto, não omissão — etiqueta cheia de letra miúda é ilegível numa prateleira de galpão, e o QR existe justamente para carregar o resto.
@@ -460,6 +464,7 @@ O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arq
 | Material | a tela **Materiais**, naquele material |
 | Lote | a tela **Lotes e Séries**, no material certo, na aba **Lotes**, com a linha daquele lote **destacada** |
 | Série | a tela **Lotes e Séries**, no material certo, na aba **Séries**, com a linha daquela série **destacada** |
+| Retalho | a tela **Sobras e Retalhos**, com a linha daquele retalho **destacada** |
 
 Ler o QR com a câmera do celular abre o navegador nesse endereço. Como dado de estoque exige sessão, quem não estiver logado cai na tela de login — faça o login e escaneie de novo. Não é preciso aplicativo nem coletor: o leitor é a câmera do próprio celular.
 
@@ -471,6 +476,7 @@ Ler o QR com a câmera do celular abre o navegador nesse endereço. Como dado de
 | **Lotes e Séries** | em cada linha de lote e em cada linha de série — inclusive séries já entregues ou sucateadas, para reimprimir uma via danificada |
 | **Lotes e Séries → aba Séries** | botão no topo, **"Etiquetas das séries em estoque"**, que gera uma etiqueta para cada série em estoque daquele material de uma vez |
 | **Recebimentos** | botão **"Imprimir etiquetas dos itens"**, na nota já processada — gera uma etiqueta por série (material serializado), ou uma por lote (material com controle de lote), ou uma do material |
+| **Sobras e Retalhos** | botão **Etiqueta** em cada linha de retalho; além disso, ao **gerar um retalho** o modal de impressão abre sozinho com a etiqueta daquele retalho — imprimir é opcional |
 
 O modal de impressão se chama **Imprimir etiquetas** e mostra, antes de gerar, quantas etiquetas e quantas páginas o PDF terá. O campo **Cópias** só aparece quando há uma única etiqueta selecionada. Quando não há nada a etiquetar, o botão fica desabilitado com a explicação na tela.
 
@@ -537,6 +543,8 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Criar material | ● | ● | – | – | ● | – | – |
 | Editar material | ● | ● | – | – | ● | – | – |
 | Movimentar estoque | ● | ● | – | – | – | – | – |
+| Aprovar sucateamento (perna do almoxarifado) | ● | ● | – | – | – | – | – |
+| Aprovar sucateamento (perna da gestão) | ● | – | – | – | – | ● | – |
 | Ajustar estoque | ● | – | – | – | – | ● | – |
 | Ajustar material de cliente | ● | – | – | – | – | – | – |
 | Remeter a terceiro | ● | ● | – | – | – | – | – |
@@ -550,11 +558,12 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Inventariar | ● | ● | – | – | – | ● | – |
 | Configurar o módulo | ● | – | – | – | – | – | – |
 
-Três leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
+Quatro leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 
 - **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor ajusta o saldo da GMP; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente. O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Hoje pertence ao Administrador e ao Almoxarife.
+- **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
 E uma que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos.
 
@@ -571,7 +580,7 @@ A mudança vale para as próximas ações da pessoa — pode levar alguns instan
 
 Toda operação relevante do módulo grava uma trilha com **quem** (nome do usuário), **quando**, **o que** (a entidade e a ação), os **valores anteriores e novos** quando houve alteração, e a **justificativa** quando a operação exige uma.
 
-São auditados: criação e edição de material; aprovação, rejeição, confirmação, encerramento e exclusão de requisição; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; e a própria troca de perfil de um usuário.
+São auditados: criação e edição de material; aprovação, rejeição, confirmação, encerramento e exclusão de requisição; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e a própria troca de perfil de um usuário.
 
 Duas notas de comportamento que evitam mal-entendido:
 
@@ -609,7 +618,7 @@ Disponível = Físico − Reservado − Bloqueado − Em inspeção − Em poder
 
 As três primeiras deduções são **estados administrativos de material que está na prateleira**. A quarta é a única que significa **"não está no prédio"**. Guardar essa distinção é o que faz a contagem de inventário funcionar (seção 13).
 
-O **cartão "Disponível"** que aparece no extrato do material já é essa conta pronta. As consequências dessa fórmula em todo o resto do sistema — quem compara contra o disponível, o que continua valendo dinheiro — estão reunidas em 19.1.
+O **cartão "Disponível"** que aparece no extrato do material já é essa conta pronta. As consequências dessa fórmula em todo o resto do sistema — quem compara contra o disponível, o que continua valendo dinheiro — estão reunidas em 21.1.
 
 Lembre-se, ao ler qualquer saldo, da regra permanente enunciada em 3.1: **o saldo de um material é um só**, somado em todas as áreas do almoxarifado, porque as áreas são do mesmo site.
 
@@ -629,7 +638,7 @@ Uma configuração dessa tela só existe se houver alguém no sistema que a cons
 
 ### 6.2 Os tipos que o operador lança na tela
 
-O formulário de **Nova Movimentação** oferece seis tipos:
+O formulário de **Nova Movimentação** oferece cinco tipos:
 
 | Tipo na tela | O que faz com o saldo | Campos que aparecem |
 |---|---|---|
@@ -637,18 +646,22 @@ O formulário de **Nova Movimentação** oferece seis tipos:
 | **Saída** | Subtrai do físico | Localização de origem, Lote (seletor), Séries, Saída emergencial |
 | **Transferência** | **Não altera o físico** — move de uma localização para outra | Origem **e** destino, Lote (seletor) |
 | **Ajuste** | Define o físico por um **valor absoluto** (o campo passa a se chamar "Novo Saldo") | Localização de destino (opcional) |
-| **Sucata** | Subtrai do físico | Localização de origem, Lote (seletor) |
 | **Perda** | Subtrai do físico | Localização de origem, Lote (seletor) |
+
+**Sucata não está na lista, e não é falta.** Baixar material como sucata exige **duas aprovações
+de pessoas diferentes**, e por isso tem processo próprio, na tela **Sobras e Retalhos** — a
+seção 20 descreve o caminho completo. O livro de Movimentações continua **exibindo** os
+lançamentos de sucata; só o formulário não os cria.
 
 Pontos técnicos importantes:
 
 - **Ajuste é absoluto, não incremental.** Digitar 40 num material que tem 100 leva o saldo a 40. Por isso o rótulo do campo muda para "Novo Saldo" quando o tipo é Ajuste.
 - **Ajuste com localização escolhida** zera/redefine **aquela** localização e recalcula o total do material pela soma das prateleiras. É o único tipo que aceita quantidade **zero** — justamente para permitir "esta prateleira está vazia". Em qualquer outro caso, quantidade 0 é recusada com *"quantidade deve ser maior que zero"*.
-- **Sucata e Perda são saídas de verdade** para o motor: baixam o físico, respeitam controle de lote e a situação do lote. O que as diferencia da Saída comum é que elas **são isentas da trava de vencimento** — é assim que um lote vencido consegue sair do sistema (4.3).
+- **Perda é saída de verdade** para o motor: baixa o físico, respeita controle de lote e a situação do lote. O que a diferencia da Saída comum é que ela **é isenta da trava de vencimento** — assim como a sucata, que passa pela mesma isenção quando a baixa dela sai pelo processo de sucateamento: é assim que um lote vencido consegue sair do sistema (4.3).
 
 ### 6.3 Outros movimentos que o sistema gera sozinho
 
-Além dos seis do formulário, o livro registra movimentos criados pelas telas especializadas. Eles **não podem** ser lançados pelo formulário genérico — a tela de Movimentações recusa com a mensagem *"tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)"*.
+Além dos cinco do formulário, o livro registra movimentos criados pelas telas especializadas. Eles **não podem** ser lançados pelo formulário genérico — a tela de Movimentações recusa com a mensagem *"tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)"*.
 
 | Movimento | Nasce em | Efeito |
 |---|---|---|
@@ -657,6 +670,8 @@ Além dos seis do formulário, o livro registra movimentos criados pelas telas e
 | Quarentena / Decisão de inspeção | Recebimento e Inspeções | Mexe no **Em inspeção** (e no Bloqueado, quando reprova) |
 | Entrada de devolução | Devoluções | Soma ao físico |
 | Remessa / Retorno de terceiro | Remessas a Terceiros | Mexe só no **Em poder de terceiros** |
+| Entrada (retalho) | Sobras e Retalhos → Gerar retalho | Soma ao físico do material-retalho, **sempre sem custo** (seção 19) |
+| Sucata | Segunda aprovação de um sucateamento (seção 20) e devolução com destino Sucata (12.6) | Subtrai do físico |
 | Estorno | Botão "Estornar" do livro | Lançamento reverso |
 
 Essa separação é deliberada: cada um desses movimentos tem uma tela dona, com a permissão certa e um registro paralelo (a reserva, o item do recebimento, a inspeção, a remessa) que dá lastro ao número. Se a tela genérica os aceitasse, o número da coluna existiria sem nada por trás.
@@ -665,14 +680,14 @@ Essa separação é deliberada: cada um desses movimentos tem uma tela dona, com
 
 São dois campos com papéis diferentes.
 
-**Motivo** é o campo do formulário. Ele é **obrigatório na tela** para Saída, Ajuste, Sucata e Perda (o campo fica marcado com asterisco e o navegador não deixa enviar em branco).
+**Motivo** é o campo do formulário. Ele é **obrigatório na tela** para Saída, Ajuste e Perda (o campo fica marcado com asterisco e o navegador não deixa enviar em branco).
 
 **Justificativa** é a exigência do servidor, por tipo de movimento. Sem ela a operação é recusada com a mensagem *"&lt;TIPO&gt; exige justificativa"* — por exemplo, *"AJUSTE exige justificativa"*.
 
 | Movimento | Exige justificativa? |
 |---|---|
 | Ajuste (e Ajuste positivo / negativo) | **Sim** |
-| Sucata | **Sim** |
+| Sucata | **Sim** — o texto nasce na **solicitação do sucateamento** (seção 20) e é o que vai para o livro na baixa |
 | Perda | **Sim** |
 | Bloqueio / Desbloqueio | **Sim** |
 | Reprovação / Decisão de inspeção | **Sim** |
@@ -723,7 +738,7 @@ O motor testa nesta ordem, e **nada de saldo é tocado até todas passarem**:
 5. **Propriedade** — material de cliente só sai com OS ou projeto daquele cliente (16.4).
 6. **Localização** — origem/destino bloqueada é recusada sempre: *"Localização A-01 está bloqueada"*. E uma localização pode restringir o tipo de material que aceita: *"Localização EPI não aceita o tipo de material 'Consumível'"* (essa restrição vale só para o **destino**, nunca para a origem — a política pode ter mudado depois que o material já estava lá).
 7. **Situação do lote** — lote que não está Ativo não sai por caminho nenhum, nem para descarte: *"Lote L-001 esta bloqueado e nao pode ser utilizado"*. O caminho é resolver a situação na tela de Lotes e Séries primeiro.
-8. **Vencimento do lote** — lote vencido **não sai para consumo**, mas **sai** por Sucata, Perda ou Ajuste (senão ficaria preso para sempre). A recusa ensina as três saídas possíveis: *"Lote L-001 vencido em 2026-01-31 nao pode sair para consumo. Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."*
+8. **Vencimento do lote** — lote vencido **não sai para consumo**, mas **sai** pelas baixas de descarte: Perda ou Ajuste na tela de Movimentações, e a baixa de sucata pelo processo de sucateamento (seção 20) — senão ficaria preso para sempre. A recusa ensina as saídas possíveis: *"Lote L-001 vencido em 2026-01-31 nao pode sair para consumo. Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."*
 9. **Saldo disponível** → *"Saldo insuficiente. Disponível: 12 UN"*. O número na mensagem é o disponível real, não o físico.
 10. **Bloqueio de qualidade** — se há quantidade bloqueada e a saída invadiria essa parte: *"Material bloqueado não pode ser utilizado"*.
 
@@ -731,7 +746,7 @@ A validação final de saldo acontece **no próprio comando que desconta**, e n�
 
 ### 6.8 Custo na entrada
 
-Quando a Entrada informa **Custo unitário**, o sistema recalcula a **média ponderada** do material e passa a tratar o valor informado como último custo de compra. O recebimento por nota fiscal alimenta a média pelo mesmo caminho. A fórmula, o arredondamento, o exemplo numérico e a lista completa do que alimenta e do que não alimenta o custo estão em 19.2.
+Quando a Entrada informa **Custo unitário**, o sistema recalcula a **média ponderada** do material e passa a tratar o valor informado como último custo de compra. O recebimento por nota fiscal alimenta a média pelo mesmo caminho. A fórmula, o arredondamento, o exemplo numérico e a lista completa do que alimenta e do que não alimenta o custo estão em 21.2.
 
 Duas consequências que interessam a quem lança:
 
@@ -894,7 +909,7 @@ O **motivo é obrigatório**: *"Dados inválidos — motivo: Motivo da rejeiçã
 valor_total = Σ (quantidade solicitada do item × custo unitário do material)
 ```
 
-arredondado em 2 casas. E o **custo unitário do material** obedece à regra única de leitura de custo do módulo (19.2):
+arredondado em 2 casas. E o **custo unitário do material** obedece à regra única de leitura de custo do módulo (21.2):
 
 ```
 custo = custo_médio, quando o custo médio for MAIOR QUE ZERO
@@ -1367,7 +1382,7 @@ Ao processar a nota, além de somar a quantidade ao saldo do material, o sistema
 
 - **cria o lote** quando o campo Lote foi preenchido, herdando da nota o fornecedor, a corrida, a data de fabricação, a validade e o número da nota fiscal;
 - **cria os números de série** informados, cada um vinculado ao lote e à localização de entrada;
-- **alimenta o custo médio** do material com o valor unitário do item da nota (fórmula em 19.2) — quando a nota traz valor. Nota sem valor (conserto, amostra, brinde, material de cliente) entra normalmente e **não mexe no custo**;
+- **alimenta o custo médio** do material com o valor unitário do item da nota (fórmula em 21.2) — quando a nota traz valor. Nota sem valor (conserto, amostra, brinde, material de cliente) entra normalmente e **não mexe no custo**;
 - **gera a conta a pagar** com a descrição "NF ⟨número⟩/⟨série⟩ — ⟨número do recebimento⟩";
 - **grava tudo no livro de movimentações**, com o número do recebimento como documento vinculado.
 
@@ -1790,7 +1805,7 @@ Cada resultado tem de ser classificado, e **não há padrão** — o campo é ob
 | **PECA** | "Peça (recebe o custo rateado da chapa)" | recebe rateio |
 | **SOBRA** | "Sobra / retalho (entra a custo zero)" | entra a **custo zero** |
 
-Não há padrão de propósito: um padrão "Peça" faria a sobra virar peça por omissão e entrar carregando rateio — que é exatamente o que a regra de custo existe para impedir (19.3).
+Não há padrão de propósito: um padrão "Peça" faria a sobra virar peça por omissão e entrar carregando rateio — que é exatamente o que a regra de custo existe para impedir (21.3).
 
 O que "virou cavaco" **não é resultado e não tem linha**: é a diferença entre o consumido e o que voltou, e já foi baixada junto com a chapa.
 
@@ -1830,15 +1845,206 @@ Depois de confirmada a transformação, a tela mostra um aviso informativo:
 
 E lista **todos** de uma vez, não só o primeiro — para não obrigar o operador a acertar um cadastro, tentar de novo, descobrir o segundo, e assim por diante.
 
-A fórmula e as condições de cálculo estão em 19.4. A razão de o rendimento nunca bloquear é a mesma que vale em todo o módulo: **peso unitário é campo opcional no cadastro**, e travar o operador por causa de um campo em branco pararia o galpão.
+A fórmula e as condições de cálculo estão em 21.4. A razão de o rendimento nunca bloquear é a mesma que vale em todo o módulo: **peso unitário é campo opcional no cadastro**, e travar o operador por causa de um campo em branco pararia o galpão.
 
 ---
 
-## 19. Como o sistema calcula
+## 19. Sobras e retalhos
+
+A tela é **Almoxarifado → Sobras e Retalhos**, aba **Retalhos**. Retalho é o pedaço aproveitável
+que sobra quando uma chapa, tubo ou barra é parcialmente usada. No sistema, ele é **duas coisas ao
+mesmo tempo**: um **material do catálogo com saldo real** (o "material do retalho" — meia chapa não
+é chapa, então ela tem cadastro próprio) e uma **ficha dimensional** (dimensões restantes, norma,
+espessura, diâmetro, largura, comprimento, peso aproximado, localização, responsável e os vínculos
+com o material de origem e o lote de onde a peça veio).
+
+### 19.1 Gerar retalho — os dois modos
+
+O botão **Gerar retalho** (exige a permissão de movimentar estoque) pede o material de **origem**
+(o que foi cortado) e o material do **retalho** (o que representa o pedaço no catálogo). O
+checkbox **"Baixar o material de origem agora"** escolhe entre dois modos, e a diferença é o que
+acontece com o saldo:
+
+| Modo | Quando usar | O que acontece |
+|---|---|---|
+| **Com baixa** (checkbox marcado) | O corte está acontecendo agora — a peça ainda está no estoque | O sistema lança a **saída** do material de origem (com lote, OS/projeto e as regras normais de saída) **e** a **entrada do retalho**, no mesmo ato. Se qualquer uma das pontas falhar, a outra é desfeita — nunca fica saída sem retalho |
+| **Sem baixa** (desmarcado) | A peça já saiu do estoque antes (foi entregue por requisição) e a sobra está voltando do chão de fábrica | Só a **entrada do retalho** é lançada — o texto da tela avisa: *"nada é baixado agora, só o retalho é creditado"* |
+
+Regras que o sistema aplica ao gerar:
+
+- **O material do retalho tem de existir — o sistema não cria sozinho.** A recusa ensina o
+  caminho: *"O material do retalho 999 nao existe. Cadastre o material do retalho primeiro
+  (Almoxarifado > Materiais > Novo, ou o atalho 'Criar material do retalho' na tela de Sobras e
+  Retalhos) e refaca a geracao — o sistema nao cria material sozinho a partir de um formulario de
+  retalho."* O atalho **Criar material do retalho**, dentro do próprio modal, cadastra na hora com
+  o código gerado pela família da origem.
+- **Dono e categoria são herdados do material de origem** no atalho de criação — e a geração
+  **recusa** um material de retalho com dono diferente do original, nomeando os dois donos.
+  Retalho de chapa de cliente continua sendo do cliente; sem essa regra, um corte transformaria
+  material de terceiro em material próprio sem ninguém perceber.
+- **Retalhar um material "para ele mesmo" é recusado**: *"O retalho CHP-3MM e o mesmo material da
+  origem. Meia chapa nao e chapa: cadastre (ou escolha) um material proprio para o retalho."*
+- **Origem com controle de lote exige o lote** no modo com baixa: *"O material CHP-01 controla
+  lote: informe o lote de origem (lote_origem_id) para gerar retalho com baixa — o retalho herda a
+  rastreabilidade do lote da chapa, e a propria saida exige o lote de qualquer forma."* No modo
+  sem baixa o lote é opcional, mas, se informado, é validado (tem de ser um lote daquele
+  material).
+- **Material com número de série não gera retalho com baixa** — não há campo para dizer qual série
+  está sendo cortada. A recusa aponta a saída: baixar a peça pela tela de Movimentações (que tem
+  seletor de série) e registrar o retalho no modo sem baixa. Pelo mesmo motivo, o material **do
+  retalho** não pode ter controle de série.
+- **O retalho entra sempre sem custo.** O projeto já pagou a peça inteira na saída; creditar o
+  retalho com valor contaria o mesmo aço duas vezes no patrimônio. A entrada a custo zero **não
+  apaga** o custo médio que o material do retalho já tenha.
+- **Quantidade do retalho em branco entra 1** — o corte devolve uma peça, e é o caso comum.
+
+Ao confirmar, a tela avisa qual dos dois modos aconteceu — *"Retalho gerado — o material de origem
+foi baixado"* ou *"Retalho gerado — nada foi baixado (a peça já tinha saído do estoque)"* — e o
+modal de **etiqueta** abre sozinho com a etiqueta daquele retalho (4.8). Imprimir é opcional.
+
+### 19.2 A lista, a edição e o status
+
+A lista mostra origem → retalho, dimensões restantes, peso, localização, status e responsável,
+com filtros por status, material de origem e busca por norma/dimensão/descrição. O selo de
+proprietário aparece quando o retalho é de cliente. O nome do retalho é um link para o **extrato**
+do material.
+
+Cada linha tem **Editar** (status, localização, observações e a marca **Reutilizável**) — toda
+edição fica auditada com o antes e o depois. Os status são **Disponível**, **Consumida** e
+**Sucateada**; mudar o status é registro de cadastro, **não move saldo** — o saldo vive no
+material do retalho e só muda por movimentação.
+
+### 19.3 A sugestão de retalho antes de cortar material novo
+
+Quando alguém lança uma **Saída** de um material que tem retalho aproveitável parado, o formulário
+de Movimentações mostra um aviso — *"Existem N retalho(s) deste material — considere usá-los antes
+de baixar do estoque principal."* — com o link **Ver retalhos**. É **aviso, não trava**: o
+almoxarife pode ter motivo legítimo para usar o material inteiro (o retalho pode não servir para a
+peça). Só contam na sugestão os retalhos **Disponíveis**, marcados como **Reutilizáveis** e cujo
+material do retalho ainda tem saldo disponível maior que zero.
+
+---
+
+## 20. Sucateamento
+
+A tela é **Almoxarifado → Sobras e Retalhos**, aba **Sucateamentos**. Sucatear é tirar material do
+patrimônio de forma definitiva — e, por isso, **não é um lançamento de uma pessoa só**: é um
+processo com solicitação, **duas aprovações de pessoas diferentes**, baixa automática na segunda
+aprovação e registro do destino final (venda ou descarte).
+
+**Sucata não aparece no formulário de Movimentações.** Os únicos caminhos que geram uma baixa de
+sucata são este processo e a devolução com destino Sucata (12.6). **Perda** continua no formulário
+de Movimentações — a exigência de dupla aprovação vale só para sucateamento.
+
+### 20.1 Solicitar
+
+O botão **Solicitar sucateamento** (exige a permissão de movimentar estoque) pede material,
+quantidade, lote (quando o material controla lote), classificação, peso estimado, projeto/OS de
+origem e **justificativa obrigatória**. O botão **Sucatear**, na linha de um retalho, abre o mesmo
+formulário já preenchido com o material daquele retalho.
+
+O próprio modal explica a natureza do passo: *"A solicitação não move saldo nenhum — a baixa só
+sai do estoque quando as DUAS assinaturas (almoxarifado e gestão) fecharem o processo."*
+
+O que o sistema valida já na solicitação (para a recusa não esperar duas assinaturas):
+
+- **Justificativa em branco é recusada**: *"Justificativa e obrigatoria para sucatear: a baixa
+  SUCATA exige o motivo escrito, e ele fica no livro de movimentacoes como a unica explicacao de
+  por que o material sumiu do patrimonio."*
+- **Saldo disponível insuficiente é recusado com os números**: *"Saldo disponivel insuficiente
+  para sucatear CHP-01: disponivel 20 UN, solicitado 30. O disponivel ja desconta reservado,
+  bloqueado, em inspecao e em poder de terceiros — sucatear alem dele apagaria material que esta
+  comprometido com outra OS."*
+- **Material com controle de lote sem lote informado é recusado**, e o lote informado tem de ser
+  daquele material.
+- **Material com número de série não passa pelo processo** — não há campo para dizer qual série
+  está sendo sucateada; a recusa manda baixar a peça pela tela de Movimentações, que tem o
+  seletor de série.
+- **Material de cliente exige o vínculo do dono** (OS/projeto do próprio cliente), com a mesma
+  regra e a mesma mensagem da saída comum (16.4).
+
+A **classificação** é texto livre com seis sugestões que aparecem ao digitar: aço carbono, inox,
+alumínio, cobre, cavaco, misto. Ela agrupa o relatório financeiro — vale combinar a grafia com a
+equipe.
+
+### 20.2 As duas aprovações — e por que precisam ser de pessoas diferentes
+
+O processo exige **duas assinaturas**, em qualquer ordem:
+
+| Perna | Quem pode assinar |
+|---|---|
+| **Almoxarifado** | Administrador, Almoxarife |
+| **Gestão** | Administrador, Gestor |
+
+Três regras de segregação, todas verificadas pelo servidor (a tela apenas esconde os botões de
+quem não pode):
+
+1. **Quem solicitou não aprova** — nenhuma das duas pernas: *"Quem solicitou o sucateamento nao
+   aprova a propria solicitacao — em nenhuma das duas pernas. Peca a assinatura de outra pessoa do
+   almoxarifado e da gestao."*
+2. **Cada perna exige a permissão daquela perna** — a recusa diz qual permissão faltou e qual é o
+   seu perfil.
+3. **A mesma pessoa não assina as duas pernas — nem o Administrador**, que tem as duas
+   permissões: *"Voce ja assinou a perna almoxarifado deste sucateamento e nao pode assinar tambem
+   a perna gestao: dupla aprovacao com a mesma pessoa nas duas pernas e uma assinatura com dois
+   carimbos. A segunda assinatura tem de ser de outra pessoa."* Essa regra vale até para cliques
+   simultâneos em duas abas.
+
+**A baixa acontece na segunda assinatura.** A primeira só assina: *"Perna assinada — falta a
+assinatura da outra perna para a baixa sair"* — e o saldo **não muda**. A segunda fecha o
+processo: *"Sucateamento aprovado nas duas pernas — a baixa foi emitida no estoque"* — é neste
+momento que o total e o disponível caem e a linha de sucata entra no livro, com a justificativa da
+solicitação e a referência `SUC-<número>` amarrando o lançamento ao processo.
+
+**Se o saldo mudou entre a solicitação e a segunda assinatura**, a baixa é recusada com a mensagem
+de saldo (com os números) e o sistema **desfaz a assinatura recém-dada sozinho**: o processo volta
+a "Solicitado", a assinatura anterior é preservada, e a reversão fica registrada no histórico.
+Nunca existe processo "aprovado" sem a baixa correspondente no livro.
+
+### 20.3 Rejeitar e cancelar
+
+- **Rejeitar** (permitido a quem pode aprovar qualquer uma das duas pernas) exige **motivo
+  obrigatório**, que fica no histórico. Não há efeito de saldo — nada tinha saído.
+- **Cancelar** é **só do próprio solicitante**, enquanto o processo está em "Solicitado", com
+  confirmação e sem exigir motivo — desistir do próprio pedido não precisa de justificativa. Quem
+  tentar cancelar pedido alheio é recusado: *"So o solicitante (Fulano) cancela o proprio
+  sucateamento. Para recusar a solicitacao de outra pessoa use Rejeitar, que exige motivo e fica
+  no historico."*
+
+### 20.4 O destino final: vendida ou descartada
+
+Depois de aprovado (e baixado), o botão **Registrar destino** (mesmo grupo de quem aprova)
+declara o que foi feito com a sucata:
+
+- **Vendida** — exige o **valor da venda** maior que zero: *"Informe o valor da venda da sucata
+  (valor_venda maior que zero) — o destino VENDIDA alimenta o relatorio financeiro de sucata, e
+  venda sem valor nao e venda."* O **comprovante** (PDF ou imagem) pode ser anexado.
+- **Descartada** — sem exigência de valor; o comprovante também é aceito.
+
+Registrar destino **não move saldo** — o material saiu do estoque na segunda assinatura; aqui se
+declara o que foi feito com ele. Vendida e Descartada são estados finais.
+
+### 20.5 Os status do sucateamento
+
+| Status | Significado |
+|---|---|
+| **Solicitado** | Aguardando as assinaturas — o saldo ainda não mudou |
+| **Aprovado** | As duas pernas assinaram e **a baixa já saiu do estoque** — falta registrar o destino |
+| **Vendida** | Destino registrado com valor (e comprovante, quando anexado) — final |
+| **Descartada** | Destino registrado sem venda — final |
+| **Rejeitado** | Recusado por um aprovador, com motivo no histórico — final |
+| **Cancelado** | Desistência do próprio solicitante antes de qualquer assinatura fechar — final |
+
+Toda ação do processo fica auditada: solicitação, cada assinatura, rejeição, cancelamento,
+destino e a reversão automática de assinatura quando a baixa é recusada.
+
+---
+
+## 21. Como o sistema calcula
 
 Esta seção é a que permite explicar os números do sistema a terceiros.
 
-### 19.1 Saldo disponível
+### 21.1 Saldo disponível
 
 O material tem **uma** quantidade física e **quatro** retenções. O saldo disponível é a subtração das quatro (a tabela das parcelas está em 6.1):
 
@@ -1852,7 +2058,7 @@ Consequências:
 - **O consumo contra uma reserva não é bloqueado pela própria reserva.** Quem reservou pode consumir: na hora do consumo, a parte reservada que está sendo usada é somada de volta antes da comparação (9.4).
 - **Valor do estoque usa a quantidade física, não o disponível** — material reservado, bloqueado ou em inspeção continua sendo patrimônio e continua valendo dinheiro.
 
-### 19.2 Custo médio ponderado
+### 21.2 Custo médio ponderado
 
 **A fórmula, aplicada a cada entrada com custo informado:**
 
@@ -1888,6 +2094,7 @@ Essa é a leitura usada em **todo** o sistema — dashboard, relatório de posi�
 | Entrada manual pela tela de Movimentações com custo digitado | **Sim** |
 | Entrada de resultado de transformação classificado como **peça** | **Sim** (com o custo rateado) |
 | Entrada de resultado classificado como **sobra** | **Não** (entra sem custo; não apaga o custo que o material já tinha) |
+| **Entrada de retalho** (Sobras e Retalhos → Gerar retalho) | **Não** — sempre sem custo, pela mesma razão da sobra: o projeto já pagou a peça inteira na saída (seção 19) |
 | Nota **sem** valor (conserto, amostra, brinde, material de cliente) | **Não** |
 | Entrada sem custo informado | **Não** |
 
@@ -1905,7 +2112,7 @@ Saída não muda custo médio porque a média ponderada é uma média **de aquis
 
 > **Nota importante para quem apresenta o sistema:** o custo médio é alimentado **daqui para frente**. Materiais que nunca receberam uma entrada com valor mostram o custo unitário do cadastro, que é a informação disponível — não há custo médio inventado.
 
-### 19.3 Rateio de custo na transformação
+### 21.3 Rateio de custo na transformação
 
 **A regra:** o valor da chapa consumida é distribuído **por quantidade, entre as peças**; a **sobra entra a custo zero**; o custo do serviço do terceiro **soma** quando informado.
 
@@ -1958,7 +2165,7 @@ O sistema calcula essa soma e a compara com o valor total a cada transformação
 
 E o rateio roda **antes** de qualquer efeito: classificação inválida ou quantidade zerada recusam a transformação inteira antes de a chapa ser baixada — *"Quantidade do resultado deve ser maior que zero (material 88: 0)"*, *"Classificacao invalida no resultado do material 88: X. Validas: PECA, SOBRA"*.
 
-### 19.4 Rendimento
+### 21.4 Rendimento
 
 **A fórmula:**
 
@@ -1982,7 +2189,7 @@ Note que **peças e sobras entram os dois** no peso que voltou: o rendimento med
 
 ---
 
-## 20. Cuidados na operação
+## 22. Cuidados na operação
 
 Quatro pontos que valem para o dia a dia e que não se deduzem das telas. Nenhum deles impede o trabalho — todos dizem **por qual caminho** fazer.
 
@@ -2005,7 +2212,7 @@ Com as retenções resolvidas, o ajuste do total é seguro e o disponível volta
 
 ---
 
-## 21. Onde pedir ajuda e o que este documento não cobre
+## 23. Onde pedir ajuda e o que este documento não cobre
 
 **Quando o sistema recusa alguma coisa, leia a mensagem inteira antes de procurar ajuda.** Este módulo foi construído para que a recusa diga três coisas: o que faltou, com que números, e **por qual caminho** resolver — qual tela abrir, qual perfil pedir, qual documento informar. Boa parte das dúvidas se resolve na própria frase.
 
