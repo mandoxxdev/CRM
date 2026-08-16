@@ -420,7 +420,9 @@ UPDATE sucateamentos_almoxarifado
 
 **Interfaces (Produces):**
 - `POST /api/almoxarifado/sucateamentos` — `requirePermission('movimentar')` +
-  `validate(SucateamentoCreateSchema)`.
+  `validate(SucateamentoCreateSchema)`. **Mantido** como estava: é o gate previsto pela decisão 9
+  do design, e o serviço não checa permissão em `solicitar` de propósito (solicitar não é poder
+  nenhum — nada sai do estoque sem as duas assinaturas), então o gate da rota é o único.
 - `GET /api/almoxarifado/sucateamentos?status=&material_id=` — só auth.
 - `POST /api/almoxarifado/sucateamentos/:id/aprovar-almoxarifado` —
   `requirePermission('aprovar_sucateamento')`.
@@ -430,9 +432,24 @@ UPDATE sucateamentos_almoxarifado
   `can(user,'aprovar_sucateamento') || can(user,'aprovar_sucateamento_gestao')` (403 senão).
 - `POST /api/almoxarifado/sucateamentos/:id/cancelar` — `requirePermission('movimentar')`
   (o serviço restringe ao solicitante).
-- `POST /api/almoxarifado/sucateamentos/:id/destino` — `requirePermission('movimentar')`,
-  multipart opcional `comprovante` + campos `destino`/`valor_venda`
+- `POST /api/almoxarifado/sucateamentos/:id/destino` — **só auth, SEM `requirePermission`**
+  (o gate real é o do serviço), multipart opcional `comprovante` + campos `destino`/`valor_venda`
   (`validate(SucateamentoDestinoSchema)` nos campos).
+  **AJUSTE REGISTRADO NA EXECUÇÃO (review da Task 6).** O plano dizia
+  `requirePermission('movimentar')` = {ADMINISTRADOR, ALMOXARIFE}. O serviço entregue na Task 6
+  gateia esta operação com a **união das duas ações de aprovação** (`assertAprovaAlgumaPerna`) =
+  {ADMINISTRADOR, ALMOXARIFE, GESTOR} — quem autorizou a sucata é quem responde por quanto ela
+  rendeu, e `valor_venda` alimenta o relatório financeiro. A interseção dos dois gates excluiria
+  **silenciosamente o GESTOR**, que é exatamente um dos perfis que o serviço diz poder registrar
+  destino: o 403 viria da rota e ninguém saberia por quê. Como "uma das duas ações" não é
+  exprimível em `requirePermission` (mesmo caso de `/rejeitar` acima), a rota fica só com auth e
+  deixa o serviço decidir — que é onde a regra já mora e é testada.
+- ⚠️ **OBSERVAÇÃO PARA A TASK 7, do mesmo tipo, NÃO alterada aqui** (fora do escopo do fix round 1,
+  decidir na Task 7): `/cancelar` está com `requirePermission('movimentar')` = {ADMINISTRADOR,
+  ALMOXARIFE}, mas o serviço restringe a operação ao **solicitante** — e o solicitante típico é
+  PRODUCAO, que não tem `movimentar`. Do jeito que está no plano, quem solicita nunca consegue
+  cancelar o próprio pedido. Mesma solução provável do `/destino`: só auth, com o serviço
+  decidindo por identidade.
 - Relatório `sucata-financeiro` no dispatcher (`reportService.relatorioSucataFinanceiro(db,
   { de, ate })`): movimentações `SUCATA` no período (quantidade, material, valor estimado =
   quantidade × `custoUnitarioSql('m')` — **fonte única**, com a nota de limitação: valoração

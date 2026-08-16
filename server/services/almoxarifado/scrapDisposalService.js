@@ -344,24 +344,46 @@ async function aprovar(db, user, id, pernaNome) {
       + 'pernas. Peca a assinatura de outra pessoa do almoxarifado e da gestao.', 403);
   }
 
-  // Barreira 3 — o mesmo usuario nao assina as duas pernas.
+  // Barreira 3 — o mesmo usuario nao assina as duas pernas. Esta checagem existe pela MENSAGEM: ela
+  // explica ao operador o que aconteceu. Quem GARANTE a regra e a condicao gemea dentro do WHERE do
+  // claim, logo abaixo — ver o comentario "a barreira 3 se repete no WHERE" ali.
   if (atual[outra.colId] !== null && Number(atual[outra.colId]) === Number(user.id)) {
     throw erro(`Voce ja assinou a perna ${outra.rotulo} deste sucateamento e nao pode assinar tambem `
       + `a perna ${perna.rotulo}: dupla aprovacao com a mesma pessoa nas duas pernas e uma `
       + 'assinatura com dois carimbos. A segunda assinatura tem de ser de outra pessoa.', 403);
   }
 
+  // ── A BARREIRA 3 SE REPETE NO WHERE, e a repeticao e o que a torna real (fix round 1) ────────
+  //
+  // Achado do review, e e um TOCTOU classico: a checagem acima le a linha e decide; o claim escreve
+  // depois. Entre as duas coisas nao ha lock nenhum. Duas requisicoes SIMULTANEAS do MESMO
+  // ADMINISTRADOR — uma em cada perna — leem as duas pernas vazias, as duas passam na checagem, e
+  // ai a primeira assina uma perna e a segunda assina a outra: o `CASE` vira APROVADO e a baixa sai
+  // com UMA pessoa tendo carimbado os dois lados. Exatamente o que a dupla aprovacao existe para
+  // impedir, e alcancavel justamente pelo unico perfil que tem as duas acoes (ADMINISTRADOR) —
+  // quem tem as duas acoes e quem tem motivo para clicar nos dois botoes.
+  //
+  // `IS NULL OR <> ?` e nao so `<> ?` porque em SQL `NULL <> 5` e NULL, nao verdadeiro: sem o
+  // `IS NULL` explicito a primeira assinatura (com a outra perna ainda vazia) seria recusada
+  // sempre, e o processo nunca sairia do lugar.
+  //
+  // Simetrico ao claim de `cancelar` abaixo, que tambem repete no WHERE (`solicitante_id = ?`) a
+  // identidade que ja checou antes, e pelo mesmo motivo. O padrao do modulo e este: pre-checagem
+  // para a MENSAGEM, claim no WHERE para a GARANTIA (stockService.cancelarMovimentacao,
+  // thirdPartyService).
   const claim = await dbGet(db, `UPDATE sucateamentos_almoxarifado
        SET ${perna.colId} = ?, ${perna.colNome} = ?, ${perna.colEm} = CURRENT_TIMESTAMP,
            status = CASE WHEN ${outra.colId} IS NOT NULL THEN 'APROVADO' ELSE status END,
            updated_at = CURRENT_TIMESTAMP
      WHERE id = ? AND status = 'SOLICITADO' AND ${perna.colId} IS NULL
-     RETURNING id, status`, [user.id, nomeDoUsuario(user), id]);
+       AND (${outra.colId} IS NULL OR ${outra.colId} <> ?)
+     RETURNING id, status`, [user.id, nomeDoUsuario(user), id, user.id]);
 
   if (!claim) {
-    throw erro(`A perna ${perna.rotulo} deste sucateamento ja foi aprovada, ou o processo nao esta `
-      + 'mais em SOLICITADO — outra pessoa agiu enquanto esta tela estava aberta. Recarregue a fila '
-      + 'de sucateamentos e confira o estado atual.', 409);
+    throw erro(`A perna ${perna.rotulo} deste sucateamento nao pode ser assinada agora: ela ja foi `
+      + 'aprovada, ou o processo nao esta mais em SOLICITADO, ou a outra perna foi assinada por '
+      + 'voce mesmo — outra pessoa (ou outra aba sua) agiu enquanto esta tela estava aberta. '
+      + 'Recarregue a fila de sucateamentos e confira o estado atual.', 409);
   }
 
   const fechou = claim.status === 'APROVADO';
@@ -386,7 +408,16 @@ async function aprovar(db, user, id, pernaNome) {
         // Fio entre o livro e o processo, no molde do `DEV-<id>` de returnService: o relatorio
         // financeiro de sucata (decisao 10) cruza os dois lados por aqui.
         referencia: `SUC-${atual.id}`,
-      }, { exigeLote: true });
+        // `exigeSerie: true` junto com `exigeLote` (fix round 1, achado do review). Parece morto —
+        // `solicitar` RECUSA material com controle_serie —, e nao e: `controle_serie` pode ser
+        // LIGADO no cadastro do material entre a solicitacao e a segunda assinatura
+        // (MaterialUpdateSchema permite). Sem declarar aqui, a baixa sairia sem reivindicar serie e
+        // quebraria na hora o invariante da Etapa 6b (COUNT(series presentes) == quantidade_atual)
+        // — e ESSE e o unico estrago que a compensacao NAO reconstroi: ela desfaz o claim, nao a
+        // contagem de series. Declarando, o mesmo caso vira uma recusa limpa do motor seguida de
+        // compensacao. Custo no caminho legitimo: zero, porque material serializado nao chega aqui.
+        // Como sempre neste modulo, no 4o argumento e nunca no body (stockService.js:569-607).
+      }, { exigeLote: true, exigeSerie: true });
     } catch (e) {
       await compensarAssinatura(db, user, id, perna, e.message);
       // Re-lanca o erro ORIGINAL do motor, sem mascarar: "Saldo insuficiente. Disponivel: 20 UN" e

@@ -211,6 +211,51 @@ const JUST = 'chapa oxidada no patio, sem recuperacao';
     assert.strictEqual((await sucatasDe(db, m.id)).length, 0);
   });
 
+  await test('CORRIDA: o mesmo ADMINISTRADOR disparando as duas pernas ao mesmo tempo nao fecha', async () => {
+    // O TOCTOU que o review achou, exercitado pelo caminho REAL (nenhum mock, nenhuma sabotagem):
+    // a barreira 3 le a linha e decide, e o claim escreve depois — entre as duas coisas nao ha lock.
+    // Duas chamadas simultaneas do MESMO usuario, uma em cada perna, leem as DUAS pernas vazias e
+    // as DUAS passam na pre-checagem. Quem tem de recusar dali em diante e a condicao gemea dentro
+    // do WHERE do claim.
+    //
+    // A corrida e deterministica com a fila do sqlite3: as duas chamadas entram, cada uma emite o
+    // seu `obter` (as duas leem pernas vazias), e so entao os dois claims sao executados em
+    // sequencia. E por isso que este teste exercita a janela de verdade em vez de simula-la.
+    const m = await novoMaterial(db, { atual: 100 });
+    const s = await solicitar(m);
+
+    const [a, b] = await Promise.allSettled([
+      scrapDisposalService.aprovar(db, ADMIN, s.id, 'almoxarifado'),
+      scrapDisposalService.aprovar(db, ADMIN, s.id, 'gestao'),
+    ]);
+
+    const cumpridas = [a, b].filter((r) => r.status === 'fulfilled');
+    assert.strictEqual(cumpridas.length, 1,
+      `a corrida deixou ${cumpridas.length} assinaturas passarem — uma pessoa carimbou os dois lados`);
+    const recusada = [a, b].find((r) => r.status === 'rejected');
+    assert.strictEqual(recusada.reason.status, 409,
+      `a perna perdedora nao levou 409: ${recusada.reason.message}`);
+
+    // As assercoes de consequencia: nenhuma das duas assinaturas pode ter FECHADO o processo.
+    const row = await linha(db, s.id);
+    assert.strictEqual(row.status, 'SOLICITADO',
+      'a corrida fechou o sucateamento com uma pessoa so nas duas pernas');
+    assert.strictEqual(row.movimentacao_sucata_id, null, 'a corrida emitiu a baixa');
+    assert.strictEqual(await atualDe(db, m.id), 100, 'a corrida baixou o estoque');
+    assert.strictEqual((await sucatasDe(db, m.id)).length, 0);
+    // Exatamente UMA perna assinada, e a outra intacta.
+    const assinadas = [row.aprovador_almox_id, row.aprovador_gestao_id].filter((v) => v !== null);
+    assert.strictEqual(assinadas.length, 1, 'as duas pernas ficaram assinadas pelo mesmo usuario');
+    assert.strictEqual(assinadas[0], ADMIN.id);
+
+    // CONTROLE POSITIVO da corrida: a solicitacao continua viva, e OUTRA pessoa fecha normalmente.
+    const pernaLivre = row.aprovador_almox_id === null ? 'almoxarifado' : 'gestao';
+    const quem = pernaLivre === 'almoxarifado' ? ALMOXARIFE : GESTOR;
+    await scrapDisposalService.aprovar(db, quem, s.id, pernaLivre);
+    assert.strictEqual((await linha(db, s.id)).status, 'APROVADO');
+    assert.strictEqual(await atualDe(db, m.id), 60);
+  });
+
   await test('[CONTROLE POSITIVO] OUTRO administrador fecha a segunda perna', async () => {
     // Sem este controle, uma barreira escrita larga demais ("ADMINISTRADOR nunca assina a segunda
     // perna") passaria no teste acima e travaria o caso legitimo — dois administradores distintos.
@@ -353,6 +398,45 @@ const JUST = 'chapa oxidada no patio, sem recuperacao';
     assert.strictEqual(depois.status, 'APROVADO', 'a solicitacao compensada nao pode mais ser aprovada');
     assert.ok(depois.movimentacao_sucata_id);
     assert.strictEqual(await atualDe(db, m.id), 80, '120 - 40 = 80: a baixa do segundo ciclo nao saiu');
+  });
+
+  await test('controle_serie LIGADO no meio do processo: o motor recusa e o claim e compensado', async () => {
+    // Achado do review (fix round 1). `solicitar` recusa material com controle_serie, mas a flag
+    // pode ser LIGADA no cadastro entre a solicitacao e a segunda assinatura (MaterialUpdateSchema
+    // permite). Sem `exigeSerie: true` na chamada do motor, a baixa sairia SEM reivindicar serie e
+    // quebraria na hora o invariante da Etapa 6b (COUNT(series presentes) == quantidade_atual) —
+    // o unico estrago que a compensacao NAO reconstroi, porque ela desfaz o claim e nao a contagem
+    // de series. Com a declaracao, o mesmo caso vira recusa limpa + compensacao.
+    const m = await novoMaterial(db, { atual: 100 });
+    const s = await solicitar(m);
+    await scrapDisposalService.aprovar(db, ALMOXARIFE, s.id, 'almoxarifado');
+
+    // A mudanca de cadastro que o processo nao controla.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 1 WHERE id = ?', [m.id]);
+
+    await assert.rejects(
+      () => scrapDisposalService.aprovar(db, GESTOR, s.id, 'gestao'),
+      (e) => {
+        assert.ok(/serie/i.test(e.message),
+          `a recusa nao veio da guarda de serie do motor: ${e.message}`);
+        return true;
+      },
+      'a baixa saiu sem reivindicar serie — o invariante da Etapa 6b foi quebrado sem conserto');
+
+    const row = await linha(db, s.id);
+    assert.strictEqual(row.status, 'SOLICITADO', 'o claim nao foi compensado');
+    assert.strictEqual(row.aprovador_gestao_id, null, 'a perna recem-assinada nao foi limpa');
+    assert.strictEqual(row.aprovador_almox_id, ALMOXARIFE.id, 'apagou a perna assinada antes');
+    assert.strictEqual(row.movimentacao_sucata_id, null);
+    assert.strictEqual((await sucatasDe(db, m.id)).length, 0, 'lancou SUCATA sem serie no livro');
+    assert.strictEqual(await atualDe(db, m.id), 100, 'baixou o estoque apesar da recusa');
+
+    // CONTROLE POSITIVO: desligada a flag, a MESMA solicitacao fecha normalmente — a compensacao
+    // deixou a linha viva, e a recusa era da serie e nao de outra coisa.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 0 WHERE id = ?', [m.id]);
+    await scrapDisposalService.aprovar(db, GESTOR, s.id, 'gestao');
+    assert.strictEqual((await linha(db, s.id)).status, 'APROVADO');
+    assert.strictEqual(await atualDe(db, m.id), 60);
   });
 
   // ── Rejeitar ────────────────────────────────────────────────────────────────────────────────
