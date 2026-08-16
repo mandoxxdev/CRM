@@ -7,7 +7,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -664,6 +664,29 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken) {
 
   app.put('/api/almoxarifado/sobras/:id', auth, requirePermission('movimentar'), validate(SobraUpdateSchema), async (req, res) => {
     try { res.json(await scrapService.atualizarSobra(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  // POST /sobras/gerar-retalho (Etapa 9, Task 4): o evento composto da Task 3 (SAIDA opcional +
+  // ENTRADA_RETALHO + linha de sobra). Registrada com um segmento fixo (`gerar-retalho`), nao
+  // `:id` — nao colide com PUT /sobras/:id acima porque e outro METODO (Express casa metodo E
+  // path juntos), mas o segmento fixo tambem evita que um `id` literal chamado "gerar-retalho"
+  // algum dia faca sentido colidir. `handleError` mapeia o `err.status` que o servico ja seta
+  // (400 nas recusas de negocio — material inexistente/inativo, dono diferente, controle_serie,
+  // lote faltando, saldo insuficiente) direto para o cliente, com a mensagem intacta.
+  app.post('/api/almoxarifado/sobras/gerar-retalho', auth, requirePermission('movimentar'), validate(GerarRetalhoSchema), async (req, res) => {
+    try {
+      res.status(201).json(await scrapService.gerarRetalho(db, req.user, req.body));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // GET /materiais/:id/retalhos-disponiveis (Etapa 9, Task 4): so `auth`, sem requirePermission —
+  // mesmo padrao de leitura do resto do modulo (GET /sobras, /devolucoes/saidas-elegiveis etc.):
+  // o gate de MODULO ja aconteceu na camada de cima, e o perfil CONSULTA existe justamente para
+  // poder ver sem poder agir. `:id` aqui e o material de ORIGEM (o que foi retalhado), nao o
+  // material-retalho — mesma convencao de `sobras?material_id=`.
+  app.get('/api/almoxarifado/materiais/:id/retalhos-disponiveis', auth, async (req, res) => {
+    try { res.json(await scrapService.listarRetalhosDisponiveis(db, req.params.id)); }
     catch (e) { handleError(res, e); }
   });
 

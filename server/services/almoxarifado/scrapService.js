@@ -16,6 +16,7 @@ const { registrarAuditoria } = require('./audit');
 const stockService = require('./stockService');
 const ownerRules = require('./ownerRules');
 const lotService = require('./lotService');
+const { disponivelSql } = require('./availabilitySql');
 
 function erro(msg, status = 400) {
   const e = new Error(msg);
@@ -42,6 +43,33 @@ async function listarSobras(db, filters = {}) {
   }
   sql += ' ORDER BY s.created_at DESC';
   return dbAll(db, sql, params);
+}
+
+/**
+ * Sobras de retalho REUTILIZAVEIS de um material de ORIGEM (Etapa 9, Task 4) — a lista que
+ * responde "o que ja sobrou de cortar este material e ainda da pra usar".
+ *
+ * Tres filtros, e os tres tem de valer juntos: `status='DISPONIVEL'` (nao consumida nem
+ * sucateada), `reutilizavel=1` (a Task 1 deixou essa flag existir de verdade — ver
+ * atualizarSobra) e o disponivel do MATERIAL-RETALHO (nao da sobra, que nao tem saldo proprio)
+ * maior que zero: a sobra pode estar "DISPONIVEL" no cadastro e o material-retalho que ela
+ * referencia ja ter sido todo consumido por outra requisicao — listar mesmo assim ofereceria algo
+ * que nao tem mais estoque.
+ *
+ * A formula do disponivel vem de `disponivelSql` (availabilitySql.js) — REGRA do modulo desde a
+ * 8b, ver o cabecalho daquele arquivo: nenhuma query nova escreve a subtracao a mao.
+ */
+async function listarRetalhosDisponiveis(db, materialOrigemId) {
+  const sql = `SELECT s.*, l.codigo as localizacao_codigo,
+      ma.codigo as material_retalho_codigo, ma.nome as material_retalho_nome,
+      ${disponivelSql('ma')} as material_retalho_disponivel
+    FROM sobras_material_almoxarifado s
+    JOIN materiais_almoxarifado ma ON s.material_retalho_id = ma.id
+    LEFT JOIN localizacoes_almoxarifado l ON s.localizacao_id = l.id
+    WHERE s.material_id = ? AND s.status = 'DISPONIVEL' AND s.reutilizavel = 1
+      AND ${disponivelSql('ma')} > 0
+    ORDER BY s.created_at DESC`;
+  return dbAll(db, sql, [materialOrigemId]);
 }
 
 async function atualizarSobra(db, user, id, data) {
@@ -384,4 +412,4 @@ async function gerarRetalho(db, user, payload = {}) {
   };
 }
 
-module.exports = { listarSobras, atualizarSobra, gerarRetalho };
+module.exports = { listarSobras, listarRetalhosDisponiveis, atualizarSobra, gerarRetalho };
