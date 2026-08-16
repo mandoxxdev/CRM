@@ -10,6 +10,8 @@
  * Executar: cd client && CI=true npx react-scripts test src/components/almoxarifado --watchAll=false
  */
 import React, { act } from 'react';
+import fs from 'fs';
+import path from 'path';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import MovimentacoesAlmoxarifado from './MovimentacoesAlmoxarifado';
@@ -382,5 +384,110 @@ describe('MovimentacoesAlmoxarifado — selo de propriedade', () => {
     const nossa = opcoes.find((o) => o.value === '10');
     expect(doCliente.textContent).toContain('Cliente Alfa LTDA');
     expect(nossa.textContent).not.toMatch(/cliente/i);
+  });
+});
+
+/**
+ * Etapa 9, Task 8: ENTRADA_RETALHO no livro (badge/cor).
+ *
+ * ENTRADA_RETALHO nasce SÓ pelo evento composto de POST /sobras/gerar-retalho (Task 3/4) — nunca
+ * por este formulário, TIPOS_FORM não a oferece — mas precisa aparecer no livro (TIPOS mantém o
+ * tipo, mesmo precedente de DEVOLUCAO/SUCATA) e com COR. cls 'entrada' reaproveitado, não uma
+ * classe nova: ExtratoMaterialModal.js já pinta qualquer tipo que começa com 'ENTRADA' de verde
+ * por prefixo, e uma classe nova esquecida no CSS sairia sem fundo nem cor sem nenhum teste de
+ * comportamento pegar — a lição do d117dc2 (TRANSFERENCIA sem `.almox-badge-transferencia`).
+ */
+const MOV_RETALHO = [
+  { ...movimento(201, 'ENTRADA_RETALHO'), material_id: 10, material_codigo: 'MAT-1', material_nome: 'Chapa 3mm' },
+];
+
+describe('MovimentacoesAlmoxarifado — ENTRADA_RETALHO no livro (Etapa 9, Task 8)', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOV_RETALHO });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('ENTRADA_RETALHO aparece no livro com um badge que TEM classe (nao sai sem cor)', async () => {
+    await renderizar();
+    const badge = linhas()[0].querySelector('.almox-badge-entrada');
+    expect(badge).toBeTruthy();
+    expect(badge.textContent).toMatch(/retalho/i);
+  });
+
+  test('a classe .almox-badge-entrada EXISTE no Almoxarifado.css, com cor (controle do d117dc2)', () => {
+    const css = fs.readFileSync(path.join(__dirname, 'Almoxarifado.css'), 'utf8');
+    const regra = css.match(/\.almox-badge-entrada\s*\{[^}]*\}/);
+    if (!regra) throw new Error('falta a regra .almox-badge-entrada em Almoxarifado.css');
+    expect(regra[0]).toMatch(/color\s*:/);
+    expect(regra[0]).toMatch(/background\s*:/);
+  });
+
+  test('o filtro do livro oferece ENTRADA_RETALHO (TIPOS mantém o tipo)', async () => {
+    await renderizar();
+    const filtro = container.querySelector('.almox-filters select.almox-select');
+    const valores = [...filtro.querySelectorAll('option')].map((o) => o.value);
+    expect(valores).toContain('ENTRADA_RETALHO');
+  });
+});
+
+/**
+ * Etapa 9, Task 8: hint de retalho disponível na SAÍDA.
+ *
+ * NÃO BLOQUEIA: é sugestão ("considere usá-los"), não regra — o operador pode ter motivo legítimo
+ * para consumir do estoque principal mesmo com retalho parado. Só aparece em SAIDA: é a saída de
+ * consumo que compete por uso com o retalho, as outras (ENTRADA, AJUSTE, TRANSFERENCIA, PERDA)
+ * não.
+ */
+describe('MovimentacoesAlmoxarifado — hint de retalho disponível na SAÍDA (Etapa 9, Task 8)', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOVIMENTOS });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' }] });
+      }
+      if (url === '/almoxarifado/materiais/10/retalhos-disponiveis') {
+        return Promise.resolve({ data: [{ id: 1 }, { id: 2 }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('SAIDA com retalho disponível mostra o aviso com a contagem e um link para /almoxarifado/sobras', async () => {
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    preencher(seletorTipo(), 'SAIDA');
+    await esperarEfeitos();
+    expect(container.querySelector('.almox-modal').textContent).toMatch(/2 retalho/i);
+    expect(container.querySelector('.almox-modal a[href="/almoxarifado/sobras"]')).toBeTruthy();
+  });
+
+  test('[controle positivo] ENTRADA (tipo padrão do formulário) NÃO mostra o aviso mesmo com retalho disponível', async () => {
+    // Sem este controle, um aviso que aparecesse em qualquer tipo passaria no teste acima e
+    // confundiria o operador numa entrada, onde "retalho disponível" não faz sentido nenhum.
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    await esperarEfeitos();
+    expect(container.querySelector('.almox-modal').textContent).not.toMatch(/retalho\(s\)/i);
+  });
+
+  test('o aviso NÃO bloqueia a submissão da saída', async () => {
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    preencher(seletorTipo(), 'SAIDA');
+    await esperarEfeitos();
+    const inputs = [...container.querySelectorAll('.almox-modal input.almox-input')];
+    preencher(inputs.find((i) => i.type === 'number'), '5');
+
+    const form = container.querySelector('.almox-modal form');
+    await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/v2', expect.objectContaining({
+      tipo: 'SAIDA', material_id: 10, quantidade: 5,
+    }));
   });
 });

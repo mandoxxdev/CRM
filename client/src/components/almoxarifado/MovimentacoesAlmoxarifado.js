@@ -40,10 +40,18 @@ const TIPOS_FORM = [
 // (returnService) e, a partir da Task 6/7, pela rota de sucateamento com dupla aprovação. Tirar
 // DEVOLUCAO ou SUCATA desta lista faria o livro parar de exibir os lançamentos e o filtro perder
 // a opção.
+//
+// Etapa 9, Task 8: ENTRADA_RETALHO entrou pelo mesmo motivo — nasce SÓ pelo evento composto de
+// POST /sobras/gerar-retalho (Task 3), nunca por este formulário, mas precisa aparecer no livro
+// com cor. cls 'entrada' (reaproveitado, não uma classe nova): ExtratoMaterialModal.js já pinta
+// qualquer tipo que COMEÇA com 'ENTRADA' de verde por prefixo (tipoBadgeCls), então usar a mesma
+// classe aqui mantém as duas telas consistentes. Uma classe nova e esquecida no CSS sairia sem cor
+// nenhuma sem teste nenhum pegar — lição do d117dc2 (TRANSFERENCIA sem `.almox-badge-transferencia`).
 const TIPOS = [
   ...TIPOS_FORM,
   { value: 'DEVOLUCAO', label: 'Devolução', cls: 'devolucao' },
   { value: 'SUCATA', label: 'Sucata', cls: 'saida' },
+  { value: 'ENTRADA_RETALHO', label: 'Entrada (retalho)', cls: 'entrada' },
   { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
 
@@ -125,6 +133,7 @@ const MovimentacoesAlmoxarifado = () => {
   const [estornoSaving, setEstornoSaving] = useState(false);
   const [extratoMaterialId, setExtratoMaterialId] = useState(null);
   const [lotes, setLotes] = useState([]);
+  const [retalhosDisponiveis, setRetalhosDisponiveis] = useState([]);
 
   const [form, setForm] = useState({
     material_id: '',
@@ -262,6 +271,21 @@ const MovimentacoesAlmoxarifado = () => {
     ));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.lote_id, seriesDisponiveis]);
+
+  // Etapa 9, Task 8: hint de retalho na SAÍDA. `GET /materiais/:id/retalhos-disponiveis` (Task 4)
+  // já filtra DISPONIVEL + reutilizavel + saldo do material-retalho > 0 — a tela só conta o que
+  // veio. NÃO BLOQUEIA a submissão: é sugestão ("considere usá-los"), não regra — o operador pode
+  // ter motivo legítimo para consumir do estoque principal mesmo com retalho parado (ex.: o
+  // retalho não serve para a peça). Só em SAIDA (não em PERDA/TRANSFERENCIA/AJUSTE): é a saída de
+  // consumo real que compete com o retalho por uso, as outras não.
+  useEffect(() => {
+    if (!form.material_id || form.tipo !== 'SAIDA') { setRetalhosDisponiveis([]); return undefined; }
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${form.material_id}/retalhos-disponiveis`)
+      .then((res) => { if (!cancelado) setRetalhosDisponiveis(res.data || []); })
+      .catch(() => { if (!cancelado) setRetalhosDisponiveis([]); });
+    return () => { cancelado = true; };
+  }, [form.material_id, form.tipo]);
 
   const loadMateriais = async () => {
     try {
@@ -832,6 +856,18 @@ const MovimentacoesAlmoxarifado = () => {
                     </div>
                   )}
 
+                  {/* Hint de retalho (Etapa 9, Task 8): NÃO bloqueia — só avisa. Fica antes do
+                      checkbox de emergencial de propósito, para o operador ver antes de confirmar
+                      a saída, não depois. */}
+                  {form.tipo === 'SAIDA' && retalhosDisponiveis.length > 0 && (
+                    <div className="almox-field almox-form-full">
+                      <small style={{ color: 'var(--gmp-warning)', fontSize: '0.78rem' }}>
+                        Existem {retalhosDisponiveis.length} retalho(s) deste material — considere
+                        usá-los antes de baixar do estoque principal.{' '}
+                        <a href="/almoxarifado/sobras">Ver retalhos</a>
+                      </small>
+                    </div>
+                  )}
                   {form.tipo === 'SAIDA' && (
                     <div className="almox-field almox-form-full">
                       <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>

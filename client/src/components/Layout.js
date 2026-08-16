@@ -11,7 +11,8 @@ import {
   FiHome, FiUsers, FiBriefcase, FiFileText,
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
-  FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft
+  FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
+  FiScissors
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -343,6 +344,12 @@ const Layout = () => {
     // Não confundir com "Devoluções" (Etapa 7, o material volta PARA o estoque) nem com "Materiais
     // de Clientes" (Etapa 8, material que é de outro dono e está AQUI).
     { path: '/almoxarifado/remessas-terceiros', icon: FiTruck, label: 'Remessas a Terceiros' },
+    // Etapa 9: "Sobras e Retalhos" e o pedaco que SOBROU de cortar uma chapa/tubo/barra — nao
+    // confundir com "Devoluções" (Etapa 7, a peça inteira que volta ao estoque) nem com "Materiais
+    // de Clientes" (Etapa 8, o dono e outro). O retalho pode ate ser de material de cliente (o
+    // dono e herdado), mas o que o separa das Devoluções e a ORIGEM: aqui nasceu de um corte, com
+    // dimensao remanescente registrada — la, voltou inteiro do chao de fabrica.
+    { path: '/almoxarifado/sobras', icon: FiScissors, label: 'Sobras e Retalhos' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
