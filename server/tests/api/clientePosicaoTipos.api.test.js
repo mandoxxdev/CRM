@@ -21,11 +21,27 @@
  * de "quanto voltou pra mim". PERDA_TERCEIRO e CONSUMO_TERCEIRO nao tem coluna propria, entao
  * deixa-los de fora nao os separa: os torna INVISIVEIS.
  *
- * ── A guarda de verdade ──────────────────────────────────────────────────────────────────────
+ * ── A guarda de verdade — e o que ela NAO cobre (revisado na Etapa 9 Task 2) ────────────────────
  *
  * O teste que importa nao e "RETORNO_TRANSFORMACAO conta" (isso so cobre o tipo de hoje). E a
- * EQUACAO, exercitada com uma linha de CADA tipo do motor: um tipo novo esquecido em qualquer
- * consumidor quebra a equacao, sem ninguem precisar lembrar de escrever um teste para ele.
+ * EQUACAO, exercitada com uma linha de CADA tipo de `movementTypes.TIPOS_ENTRADA`/`TIPOS_SAIDA`:
+ * um tipo que ESTA numa dessas duas listas mas nao chega direito na leitura do cliente quebra a
+ * equacao aqui, sem ninguem precisar escrever teste proprio para ele. O que isto garante de
+ * verdade: os CONSUMIDORES (`clienteEstoqueService`) derivam da fonte unica e nao tem como
+ * divergir dela em silencio — o defeito original descrito acima (o terceiro espelho).
+ *
+ * O que isto NAO garante, desde a 8c: `clienteEstoqueService.TIPOS_ENTRADA` deixou de ser lista
+ * propria e virou `= movementTypes.TIPOS_ENTRADA` — a MESMA referencia (clienteEstoqueService.js,
+ * linha ~42), nao mais um espelho que possa divergir. O `for` do teste [EQUACAO] abaixo itera essa
+ * MESMA lista, importada direto de `movementTypes.js`: um tipo esquecido DENTRO de
+ * `TIPOS_ENTRADA`/`TIPOS_SAIDA` — ou seja, declarado em `schema.js` `TIPOS_MOVIMENTO` mas nunca
+ * acrescentado la — nao aparece em lugar nenhum deste arquivo, porque o teste nao tem fonte
+ * independente para saber que o tipo deveria estar na lista e nao esta: ele so pode iterar o que
+ * ja esta la. Esse esquecimento e pego pelo teste de DECLARACAO do proprio tipo novo (ex.:
+ * retalhoTipo.api.test.js, transformacaoMotor.api.test.js:50-53) — quem cria um tipo tem de
+ * escrever aquele teste; este arquivo nao escreve por ele. Confirmado por execucao na Etapa 9 Task
+ * 2: sabotar SO `movementTypes.TIPOS_ENTRADA` (deixando o tipo em TIPOS_MOVIMENTO) nao derruba
+ * nenhum teste deste arquivo.
  *
  * Executar: cd server && node tests/api/clientePosicaoTipos.api.test.js
  */

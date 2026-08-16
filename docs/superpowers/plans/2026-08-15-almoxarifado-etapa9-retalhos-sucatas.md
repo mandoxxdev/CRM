@@ -545,6 +545,15 @@ retalho" (molde `RemessasTerceirosAlmoxarifado.js:289-294` — POST de material 
   build CI).
 - [ ] **Step 3:** Commit final de documentação.
 
+**Pendencia registrada na execucao (Task 2):** nao existe guarda automatica que garanta "todo tipo
+novo em `schema.js` `TIPOS_MOVIMENTO` tem de estar em `movementTypes.TIPOS_ENTRADA` ou
+`TIPOS_SAIDA`, salvo excecao nomeada (AJUSTE/ESTORNO/TRANSFERENCIA/retencoes...)". A sabotagem da
+Task 2 provou que `clientePosicaoTipos.api.test.js` NAO pega esse esquecimento — desde a 8c ele
+itera a propria lista `movementTypes.TIPOS_ENTRADA`/`TIPOS_SAIDA`, entao um tipo ausente dali fica
+invisivel para aquele teste; so o teste de DECLARACAO do tipo novo pega. Nao foi construida agora
+porque exige uma lista de excecoes mantida (design em aberto, nao achado a corrigir em Task 2) —
+Task 10/9b precisa levar isto para as pendencias da spec da feature 15.
+
 ---
 
 ## Self-review do plano (feito na escrita)
