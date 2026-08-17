@@ -82,7 +82,7 @@ assinatura). A pré-checagem de disponível existe, e fica, na **solicitação**
 
 ### Backend — sucatas
 - [x] Classificação de tipo de sucata + peso + material + projeto de origem (texto livre com sugestões no front; taxonomia real é pergunta ao cliente) — `a30ce6f` / `b8e8f1a`
-- [x] Aprovação de sucateamento (Almoxarifado + gestão): duas ações novas de perfil, segregação em três barreiras (perfil, solicitante, mesma pessoa nas duas pernas — a terceira repetida no WHERE do claim contra corrida, provada 500/500→0/500) — `a30ce6f` + fix `ba545e7`
+- [x] Aprovação de sucateamento (Almoxarifado + gestão): duas ações novas de perfil, segregação em três barreiras (perfil, solicitante, mesma pessoa nas duas pernas — a terceira repetida no WHERE do claim contra corrida, provada por teste determinístico na suíte; a sonda de 500 execuções do fix round, não versionada, mediu 0 furos) — `a30ce6f` + fix `ba545e7`
 - [x] `SUCATA` fora do formulário genérico (em `TIPOS_DEDICADOS`; sem isso o teste "sucatear sem aprovação falha" seria impossível por construção) — `d5821ac`
 - [x] Transferência para área de sucata: **já existia** (Etapa 7, `TRANSFERENCIA` + tipo de localização) — documentada no guia, nada a construir
 - [x] Registro de venda ou descarte com comprovante anexo (multipart no molde do certificado de lote, VENDIDA exige valor) — `bc34819`
@@ -126,21 +126,27 @@ client: `SobrasAlmoxarifado.test.js` + casos novos em `etiquetasPdf.test.js`.
   não declara `exigeLote` porque o payload não tem campo "lote do retalho" (decisão do cliente de
   2026-08-10: a exigência vale só onde existe COMO informar). Mesma família dos quatro fluxos
   internos isentos da spec 10.
-- **`valor_venda` é aceito em DESCARTADA** e fica gravado na linha (nem o Zod nem o serviço
-  forçam NULL fora de VENDIDA). O relatório financeiro soma apenas `status='VENDIDA'`, então o
-  valor de um descarte não contamina o total hoje — mas o campo deveria ser forçado a NULL fora
-  de VENDIDA para o dado não mentir (minor deferido da Task 6).
+- **Estorno da baixa SUCATA não reconcilia o processo** (decisão de deferir, review final): estornar
+  a movimentação pelo livro deixa o sucateamento em APROVADO/VENDIDA apontando para uma movimentação
+  cancelada, e o relatório continua somando o `valor_venda` de uma sucata cuja baixa foi desfeita —
+  divergência silenciosa entre processo e livro; reconciliar é design da 9b.
+- **`confirmarEditar` da tela Sobras deixa `localizacao_codigo` obsoleto na linha** (decisão de
+  deferir, review final): o merge `{ ...s, ...res.data }` atualiza `localizacao_id` mas a resposta
+  não traz o código novo — a coluna Localização mostra o endereço antigo até o próximo reload.
 - **Reserva de retalho** não existe — mesma pendência da reserva por lote/série (spec 10).
 - **Sem aritmética dimensional**: o sistema não calcula 3000−1200=1800; dimensões remanescentes
   são registro descritivo digitado (decisão 16 do design — exigiria modelagem dimensional por
   material que o catálogo não tem).
 - Minors deferidos com registro no ledger da etapa (baixo risco, nomeados para não sumirem):
   auditoria de sobra grava linha inteira em vez de diff de campos; `origem.ativo` não checado no
-  modo `baixar_original: false`; `.catch` vazio no estorno da perna 2 de `compensarRetalho`;
+  modo `baixar_original: false`;
   claim de `registrarDestino` sem `AND movimentacao_sucata_id IS NOT NULL`; `PODE_*` exportados
   da máquina de estados sem consumidor; filtros da lista de sobras e ramo `lote_origem_id`
   obrigatório sem teste RTL dedicado; sem guarda de duplo clique em aprovar/cancelar na tela (o
   backend rejeita a repetição com 409).
+- *(Fix wave final da review de conjunto, 2026-08-17)* dois minors saíram desta lista porque foram
+  **pagos**: `valor_venda` fora de VENDIDA agora é forçado a NULL no serviço, e o `.catch` vazio do
+  estorno da perna 2 de `compensarRetalho` ganhou `console.warn` com rastro.
 
 ## Dependências
 

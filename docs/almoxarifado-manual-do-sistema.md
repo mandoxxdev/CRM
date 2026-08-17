@@ -661,7 +661,7 @@ Pontos técnicos importantes:
 
 ### 6.3 Outros movimentos que o sistema gera sozinho
 
-Além dos cinco do formulário, o livro registra movimentos criados pelas telas especializadas. Eles **não podem** ser lançados pelo formulário genérico — a tela de Movimentações recusa com a mensagem *"tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)"*.
+Além dos cinco do formulário, o livro registra movimentos criados pelas telas especializadas. Eles **não podem** ser lançados pelo formulário genérico — a tela de Movimentações recusa, e a mensagem depende do tipo. Para os tipos de retenção, a recusa é *"tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)"*. Para os tipos que têm processo próprio, a recusa **ensina o caminho certo** — para Sucata: *"tipo de movimentação não permitido nesta rota — sucatear é um processo com dupla aprovação — use Almoxarifado → Sobras e Retalhos → aba Sucateamentos"*; para Entrada (retalho): *"tipo de movimentação não permitido nesta rota — retalho nasce pelo botão Gerar retalho, em Almoxarifado → Sobras e Retalhos"* (devolução ao cliente, perda/consumo no terceiro e retorno de transformação têm recusas equivalentes apontando para Materiais de Clientes e Remessas a Terceiros).
 
 | Movimento | Nasce em | Efeito |
 |---|---|---|

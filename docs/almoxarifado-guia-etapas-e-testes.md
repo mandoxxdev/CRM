@@ -2101,8 +2101,10 @@ jeito, mesmo por chamada direta.)
 *Cenário:* o mesmo usuário assina a perna do almoxarifado e tenta assinar a da gestão:
 > `Voce ja assinou a perna almoxarifado deste sucateamento e nao pode assinar tambem a perna gestao: dupla aprovacao com a mesma pessoa nas duas pernas e uma assinatura com dois carimbos. A segunda assinatura tem de ser de outra pessoa.`
 
-Esta regra vale **até sob cliques simultâneos** — foi provada por teste de corrida (500 tentativas
-concorrentes, zero furos).
+Esta regra vale **até sob cliques simultâneos** — foi provada por um teste de corrida
+determinístico que vive na suíte (as duas pernas disparadas ao mesmo tempo pelo mesmo usuário;
+nenhuma fecha). Durante a correção, uma sonda de 500 execuções concorrentes confirmou zero furos —
+mas a sonda foi ferramenta de diagnóstico; o que fica no repositório é o teste determinístico.
 
 **10. A baixa acontece na segunda assinatura — e o toast diz qual das duas foi a sua.**
 Primeira perna: `Perna assinada — falta a assinatura da outra perna para a baixa sair`.

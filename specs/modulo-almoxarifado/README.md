@@ -18,7 +18,8 @@
 > só sai pelo motor na **segunda assinatura** de duas pernas segregadas
 > (`aprovar_sucateamento` = ADMINISTRADOR/ALMOXARIFE; `aprovar_sucateamento_gestao` =
 > ADMINISTRADOR/GESTOR; solicitante não assina; a mesma pessoa não assina as duas — a barreira
-> repetida no WHERE do claim depois que o review provou o TOCTOU por corrida, 500/500→0/500).
+> repetida no WHERE do claim depois que o review provou o TOCTOU; a suíte tem teste de corrida
+> determinístico, e a sonda de 500 execuções do fix round — não versionada — mediu 0 furos).
 > Destino final VENDIDA (valor + comprovante multipart) ou DESCARTADA; relatório
 > `sucata-financeiro` lendo o **livro** (inclui a devolução-destino-sucata da Etapa 7 — o
 > consumidor declarado da spec 12), com valoração pelo custo atual e nota de limitação. Tela nova

@@ -35,7 +35,7 @@ rounds estão nos hashes. Números medidos no fechamento: `test:api` **90/90 arq
 | 3 — `gerarRetalho` | `15dd000` | `c3424e4` (controle_serie recusado nas duas pontas; auditoria não cita baixa inexistente) |
 | 4 — rotas do retalho | `8727ff3` | — |
 | 5 — SUCATA dedicada | `d5821ac` | — |
-| 6 — sucateamento (serviço) | `a30ce6f` | `ba545e7` (barreira 3 no WHERE do claim — corrida 500/500→0/500; `exigeSerie` na baixa) |
+| 6 — sucateamento (serviço) | `a30ce6f` | `ba545e7` (barreira 3 no WHERE do claim — teste de corrida determinístico na suíte; a sonda de 500 execuções do fix round, não versionada, mediu 0 furos; `exigeSerie` na baixa) |
 | 7 — rotas + comprovante + relatório | `bc34819` | — |
 | 8 — tela Sobras e Retalhos | `e27abe8` | — |
 | 9 — sucateamento na tela + etiqueta | `b8e8f1a` | `4ba94e2` (barreira 3 na visibilidade do botão; teste de toast que era tautológico) |

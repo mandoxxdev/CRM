@@ -188,6 +188,8 @@ em pé: qual lista vale?
    material com **número de série** não passa pelo processo (a recusa manda baixar pela tela de
    Movimentações, que tem seletor de série).
 
+### D. Limitações declaradas — são decisão, não esquecimento
+
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
   transferência é imediata. Volta a fazer sentido se houver obra externa ou segundo prédio.
 - **Devolver peça com número de série para sucata leva dois passos**: devolver ao estoque e depois
@@ -1356,8 +1358,9 @@ clientes que a Etapa 8 aposentou.
   recriaria a lista morta.
 - O sucateamento tem **máquina de estados** e **três barreiras de segregação**: o perfil da perna,
   o solicitante não assina, e **a mesma pessoa não assina as duas** — esta última garantida também
-  contra cliques simultâneos (provado por teste de corrida: 500 tentativas concorrentes do mesmo
-  usuário nas duas pernas, zero furos).
+  contra cliques simultâneos (provado por teste de corrida determinístico na suíte: o mesmo usuário
+  dispara as duas pernas ao mesmo tempo e nenhuma fecha; a sonda de 500 execuções usada durante a
+  correção confirmou zero furos, mas não foi versionada — o que vive no repo é o determinístico).
 - Se o saldo mudar entre a solicitação e a segunda assinatura, o motor recusa a baixa e o sistema
   **desfaz a assinatura recém-dada** — nunca fica "aprovado no papel" sem baixa no livro. A
   compensação fica registrada na auditoria, com o motivo.
