@@ -580,7 +580,11 @@ async function registrarDestino(db, user, id, data = {}) {
            destino_registrado_em = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
      WHERE id = ? AND status = 'APROVADO'
      RETURNING id`, [
-    destino, destino === 'VENDIDA' ? Number(valorVenda) : ouNulo(valorVenda),
+    // Fix wave final da Etapa 9: fora de VENDIDA o valor e FORCADO a NULL — gravar valor_venda
+    // em DESCARTADA poe na tabela um dado que mente ("descarte que rendeu dinheiro"); o relatorio
+    // financeiro so nao o somava por coincidencia de filtro (status = 'VENDIDA'). A auditoria
+    // logo abaixo ja gravava null nesse caso — o banco agora conta a mesma historia.
+    destino, destino === 'VENDIDA' ? Number(valorVenda) : null,
     ouNulo(comprovante), user.id, nomeDoUsuario(user), id,
   ]);
   if (!claim) {

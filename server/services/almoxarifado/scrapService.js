@@ -136,7 +136,14 @@ async function atualizarSobra(db, user, id, data) {
 async function compensarRetalho(db, user, { movEntrada, movBaixa }) {
   const motivo = 'Compensacao automatica: a geracao de retalho falhou no meio e foi desfeita';
   if (movEntrada && movEntrada.id) {
-    await stockService.cancelarMovimentacao(db, user, movEntrada.id, motivo).catch(() => {});
+    // Fix wave final da Etapa 9: o engolir continua deliberado (nao mascarar o erro original),
+    // mas SEM rastro nao — o unico cenario em que este ramo falha e exatamente o que deixa
+    // retalho-fantasma (credito sem linha de sobra), e alguem precisa achar isso no log.
+    // Padrao da casa: stockService.js:1319.
+    await stockService.cancelarMovimentacao(db, user, movEntrada.id, motivo).catch((err) => {
+      console.warn('[almoxarifado-retalho] Falha ao estornar a ENTRADA_RETALHO na compensacao '
+        + `(mov ${movEntrada.id}) — retalho-fantasma possivel, conferir o livro:`, err.message);
+    });
   }
   if (movBaixa && movBaixa.id) {
     await stockService.cancelarMovimentacao(db, user, movBaixa.id, motivo);

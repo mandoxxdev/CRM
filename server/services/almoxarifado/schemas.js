@@ -59,11 +59,38 @@ const TIPOS_MOVIMENTO_ROTA = TIPOS_MOVIMENTO.filter(
   (t) => t !== 'ESTORNO' && !TIPOS_RETENCAO.includes(t) && !TIPOS_DEDICADOS.includes(t),
 );
 
+/**
+ * Etapa 9, fix wave final (decisão 8 do design): a recusa da v2 para tipo DEDICADO tem de
+ * ENSINAR o caminho do processo dono do tipo. A mensagem genérica antiga mandava quem enviasse
+ * `{tipo:'SUCATA'}` para "as telas de Reservas e Inspeções" — telas que não têm nada a ver com
+ * sucatear. Este mapa aponta a tela dona de cada tipo dedicado; retenções, ESTORNO e tipos
+ * desconhecidos continuam com a mensagem genérica, que para eles está certa.
+ *
+ * O manual do sistema (seção 6.3) cita estas mensagens LITERALMENTE — mudou aqui, mude lá.
+ */
+const CAMINHO_TIPO_DEDICADO = {
+  SUCATA: 'sucatear é um processo com dupla aprovação — use Almoxarifado → Sobras e Retalhos → aba Sucateamentos',
+  ENTRADA_RETALHO: 'retalho nasce pelo botão Gerar retalho, em Almoxarifado → Sobras e Retalhos',
+  DEVOLUCAO_CLIENTE: 'a devolução ao dono sai pela tela Materiais de Clientes, que exige o documento de devolução',
+  PERDA_TERCEIRO: 'perda em poder de terceiro é registrada no encerramento da remessa, em Remessas a Terceiros',
+  CONSUMO_TERCEIRO: 'consumo em poder de terceiro é registrado na transformação ou no encerramento da remessa, em Remessas a Terceiros',
+  RETORNO_TRANSFORMACAO: 'o retorno transformado é registrado pela transformação da remessa, em Remessas a Terceiros',
+};
+
+const MSG_TIPO_NAO_PERMITIDO_GENERICA = 'tipo de movimentação não permitido nesta rota '
+  + '(tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)';
+
 const MovimentacaoSchema = z.object({
   material_id: z.number().int().positive(),
-  tipo: z.string().min(1).refine((t) => TIPOS_MOVIMENTO_ROTA.includes(t), {
-    message: 'tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção '
-      + 'só podem ser criados pelas telas de Reservas e Inspeções)',
+  tipo: z.string().min(1).superRefine((t, ctx) => {
+    if (TIPOS_MOVIMENTO_ROTA.includes(t)) return;
+    const caminho = CAMINHO_TIPO_DEDICADO[t];
+    ctx.addIssue({
+      code: 'custom',
+      message: caminho
+        ? `tipo de movimentação não permitido nesta rota — ${caminho}`
+        : MSG_TIPO_NAO_PERMITIDO_GENERICA,
+    });
   }),
   quantidade: z.number().min(0, 'quantidade deve ser maior que zero'),
   motivo: z.string().optional(),

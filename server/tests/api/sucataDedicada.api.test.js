@@ -10,8 +10,9 @@
  * Etapa 7 (ver comentario em MovimentacoesAlmoxarifado.js:26-31) e DEVOLUCAO_CLIENTE da v2 na
  * Etapa 8 (schemas.js:35-39).
  *
- * O que continua igual: SUCATA continua em TIPOS_MOVIMENTO, TIPOS_ISENTOS_DONO,
- * TIPOS_SAIDA_COM_DONO e movementRules (exige justificativa) — so a PORTA HTTP generica fecha.
+ * O que continua igual: SUCATA continua em TIPOS_MOVIMENTO, TIPOS_SAIDA_COM_DONO (as listas
+ * TIPOS_ISENTOS_DONO e TIPOS_SAIDA_COM_DONO sao mutuamente exclusivas — SUCATA esta SO na
+ * segunda, ownerRules.js:77) e movementRules (exige justificativa) — so a PORTA HTTP generica fecha.
  * Os caminhos legitimos chamam stockService.registrarMovimentacao DIRETO, por fora da v2:
  *  - returnService (devolucao com destino SUCATA: ENTRADA_DEVOLUCAO seguido de SUCATA) — a
  *    cobertura funda desse par mora em devolucaoDestinos.api.test.js, que TEM de continuar verde
@@ -78,6 +79,14 @@ async function entregar(db, materialId, qtd) {
       .send({ material_id: mat, tipo: T, quantidade: 5, justificativa: 'pela porta errada' });
     assert.strictEqual(r.status, 400, `a rota generica aceitou o tipo (status ${r.status}): ${JSON.stringify(r.body)}`);
     assert.strictEqual(await totalDoMaterial(db, mat), 100, 'a recusa nao podia mexer no saldo');
+    // Fix wave final da Etapa 9 (decisao 8 do design): a recusa tem de ENSINAR o caminho do
+    // processo — a mensagem antiga mandava para "as telas de Reservas e Inspecoes", que nao tem
+    // nada a ver com sucatear.
+    assert.match(r.body.error, /dupla aprova/i, `a recusa nao ensina o processo: ${r.body.error}`);
+    assert.match(r.body.error, /Sobras e Retalhos/, `a recusa nao aponta a tela certa: ${r.body.error}`);
+    assert.match(r.body.error, /Sucateamentos/, `a recusa nao aponta a aba certa: ${r.body.error}`);
+    assert.ok(!/Reservas e Inspe/.test(r.body.error),
+      `a recusa ainda aponta para as telas erradas (Reservas e Inspecoes): ${r.body.error}`);
   });
 
   await test('[CONTROLE POSITIVO] a rota generica continua aceitando PERDA (so SUCATA saiu)', async () => {

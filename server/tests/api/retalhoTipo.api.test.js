@@ -86,6 +86,12 @@ const est = async (db, id) => dbGet(db,
       .send({ material_id: mat, tipo: T, quantidade: 5, justificativa: 'pela porta errada' });
     assert.strictEqual(r.status, 400, `a rota generica aceitou o tipo (status ${r.status})`);
     assert.strictEqual((await est(db, mat)).quantidade_atual, 0);
+    // Fix wave final da Etapa 9 (decisao 8 do design): a recusa tem de ENSINAR o caminho —
+    // a mensagem antiga mandava para "as telas de Reservas e Inspecoes", que nao criam retalho.
+    assert.match(r.body.error, /Gerar retalho/, `a recusa nao ensina o caminho: ${r.body.error}`);
+    assert.match(r.body.error, /Sobras e Retalhos/, `a recusa nao aponta a tela certa: ${r.body.error}`);
+    assert.ok(!/Reservas e Inspe/.test(r.body.error),
+      `a recusa ainda aponta para as telas erradas (Reservas e Inspecoes): ${r.body.error}`);
   });
 
   await test('[CONTROLE POSITIVO] a rota generica continua aceitando ENTRADA_MANUAL', async () => {

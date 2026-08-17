@@ -511,8 +511,15 @@ const JUST = 'chapa oxidada no patio, sem recuperacao';
 
   await test('registrarDestino DESCARTADA nao exige valor; e o segundo registro cai no claim', async () => {
     const { s } = await aprovada();
-    await scrapDisposalService.registrarDestino(db, GESTOR, s.id, { destino: 'DESCARTADA' });
-    assert.strictEqual((await linha(db, s.id)).status, 'DESCARTADA');
+    // Fix wave final da Etapa 9: valor_venda no payload de DESCARTADA e FORCADO a NULL na coluna
+    // — descarte nao rende dinheiro, e o relatorio so nao somava o valor por coincidencia de
+    // filtro (status='VENDIDA'). O controle positivo de que a coluna GRAVA quando deve e o teste
+    // VENDIDA acima (row.valor_venda === 850.75).
+    await scrapDisposalService.registrarDestino(db, GESTOR, s.id, { destino: 'DESCARTADA', valor_venda: 999 });
+    const descartada = await linha(db, s.id);
+    assert.strictEqual(descartada.status, 'DESCARTADA');
+    assert.strictEqual(descartada.valor_venda, null,
+      `DESCARTADA gravou valor_venda=${descartada.valor_venda} — dado que mente no banco`);
     // Claim `WHERE status='APROVADO'`: o segundo registro nao reescreve um destino ja declarado.
     await assert.rejects(
       () => scrapDisposalService.registrarDestino(db, GESTOR, s.id, { destino: 'VENDIDA', valor_venda: 10 }),
