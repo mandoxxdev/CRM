@@ -67,6 +67,28 @@ async function novaFerramenta(db, extra = {}) {
     await close();
   });
 
+  // Achado Important da revisao: o teste acima nunca anexa certificado, entao o caminho de
+  // limparUploadOrfao (extended.js) num 400 de REGRA DE NEGOCIO — o mais provavel em producao,
+  // onde quem manda datas erradas normalmente ja escolheu o arquivo tambem — nunca era
+  // exercitado. Mesma tecnica do teste do 403 (fs.readdirSync antes/depois): prova que o multer
+  // gravou o arquivo (o 400 so acontece DEPOIS do multer, dentro do servico) e que o catch da
+  // rota o apaga antes de responder.
+  await test('validade <= calibracao COM certificado anexado: 400 e o arquivo gravado pelo multer e limpo (sem orfao)', async () => {
+    const { app, db, close, uploadsAlmoxDir } = await createTestApp();
+    const fid = await novaFerramenta(db);
+    const arquivosAntes = fs.readdirSync(uploadsAlmoxDir).length;
+
+    const r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/calibracoes`)
+      .field('data_calibracao', '2026-05-01')
+      .field('data_validade', '2026-05-01')
+      .attach('certificado', Buffer.from('%PDF-1.4'), 'cert.pdf')
+      .expect(400);
+    assert.strictEqual(r.body.error, 'Data de validade deve ser posterior à data de calibração');
+    assert.strictEqual(fs.readdirSync(uploadsAlmoxDir).length, arquivosAntes,
+      'certificado ficou orfao em disco depois do 400 de regra de negocio — limparUploadOrfao nao rodou');
+    await close();
+  });
+
   await test('POST com certificado grava certificado_path e o arquivo existe em uploadsAlmoxDir', async () => {
     const { app, db, close, uploadsAlmoxDir } = await createTestApp();
     const fid = await novaFerramenta(db);
@@ -127,6 +149,23 @@ async function novaFerramenta(db, extra = {}) {
     const aVencerIds5 = r5.body.a_vencer.map(i => i.id);
     assert.ok(!aVencerIds5.includes(aVencer), 'ferramenta a vencer em 10 dias apareceu com ?dias=5');
     assert.ok(r5.body.vencidas.map(i => i.id).includes(vencida), 'vencida some do painel com dias=5 — vencida independe de dias');
+    await close();
+  });
+
+  // Achado Important da revisao: o codigo classifica "vence hoje" (dias_restantes === 0) como
+  // a_vencer — so dias_restantes < 0 vira vencidas (toolService.js: `if (r.dias_restantes ===
+  // null || r.dias_restantes < 0)`). Sem este teste, trocar `< 0` por `<= 0` nao quebraria nada.
+  await test('painel: calibracao que vence HOJE (dias_restantes=0) entra em a_vencer, nao em vencidas', async () => {
+    const { app, db, close } = await createTestApp();
+    const venceHoje = await novaFerramenta(db, { exige_calibracao: 1 });
+    await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
+      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date('now','-1 year'), date('now'))`, [venceHoje]);
+
+    const r = await request(app).get('/api/almoxarifado/calibracoes/painel?dias=30').expect(200);
+    const item = r.body.a_vencer.find(i => i.id === venceHoje);
+    assert.ok(item, `ferramenta que vence hoje ausente de a_vencer: ${JSON.stringify(r.body.a_vencer)}`);
+    assert.strictEqual(item.dias_restantes, 0, `dias_restantes esperado 0, veio ${item.dias_restantes}`);
+    assert.ok(!r.body.vencidas.map(i => i.id).includes(venceHoje), 'vence-hoje apareceu em vencidas — deveria ser a_vencer');
     await close();
   });
 
