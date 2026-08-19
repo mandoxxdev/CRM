@@ -143,7 +143,11 @@ async function listarEmprestimos(db, filters = {}) {
   const params = [];
   if (filters.status) { sql += ' AND e.status = ?'; params.push(filters.status); }
   if (filters.ferramenta_id) { sql += ' AND e.ferramenta_id = ?'; params.push(filters.ferramenta_id); }
-  if (filters.colaborador_nome) { sql += ' AND e.colaborador_nome LIKE ?'; params.push(`%${filters.colaborador_nome}%`); }
+  // Nome do query param e o contrato congelado no design (tabela de contratos, GET
+  // /emprestimos): `colaborador`, nao `colaborador_nome`. A Task 6 e o front (Task 7)
+  // constroem contra esse nome — usar outro aqui vira colisao que as proximas tasks teriam
+  // de contornar. O match continua sendo contra o colaborador_nome gravado no emprestimo.
+  if (filters.colaborador) { sql += ' AND e.colaborador_nome LIKE ?'; params.push(`%${filters.colaborador}%`); }
   sql += ' ORDER BY e.data_retirada DESC';
   return dbAll(db, sql, params);
 }

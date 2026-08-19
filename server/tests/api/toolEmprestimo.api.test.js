@@ -146,6 +146,20 @@ async function novaFerramenta(db, extra = {}) {
     await close();
   });
 
+  await test('listarEmprestimos filtra por ?colaborador= (contrato congelado do design)', async () => {
+    const { app, db, close } = await createTestApp();
+    const f1 = await novaFerramenta(db);
+    const f2 = await novaFerramenta(db);
+    await request(app).post(`/api/almoxarifado/ferramentas/${f1}/emprestar`)
+      .send({ colaborador_nome: 'Joao Silva' }).expect(201);
+    await request(app).post(`/api/almoxarifado/ferramentas/${f2}/emprestar`)
+      .send({ colaborador_nome: 'Maria Souza' }).expect(201);
+    const r = await request(app).get('/api/almoxarifado/emprestimos?colaborador=Joao').expect(200);
+    assert.strictEqual(r.body.length, 1, `esperava so o emprestimo do Joao, veio ${r.body.length}`);
+    assert.strictEqual(r.body[0].colaborador_nome, 'Joao Silva');
+    await close();
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();
