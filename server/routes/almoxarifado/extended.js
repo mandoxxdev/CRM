@@ -10,7 +10,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -989,6 +989,52 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   app.post('/api/almoxarifado/ferramentas/:id/reencontrar', auth, requirePermission('gerenciar_ferramentas'), validate(JustificativaSchema), async (req, res) => {
     try { res.json(await toolService.reencontrarFerramenta(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  // Upload da foto de ocorrencia (Etapa 9b, Task 5) — CLONE de uploadCertificadoCalibracao
+  // (linha ~910): gravacao FLAT em uploadsAlmoxDir com prefixo `ocorrencia-` no filename, SEM
+  // subpasta (mesma razao D3: o multer nao cria diretorio e ninguem mkdir'a subpastas aqui).
+  const uploadFotoOcorrencia = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `ocorrencia-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
+      cb(new Error('Foto deve ser PDF ou imagem'));
+    },
+  });
+
+  // POST /ferramentas/:id/ocorrencias — multipart, campo de arquivo `foto` opcional. Ordem de
+  // middlewares OBRIGATORIA: auth -> requirePermission -> multer -> safeParse manual (D3, mesmo
+  // desenho de /calibracoes acima) — o gate e uma acao so, entao vai na PORTA, antes do multer
+  // gravar qualquer coisa em disco (precedente permissoesRotas.api.test.js:515-534). A checagem
+  // `AVARIA|PERDA` NAO esta no Zod (`OcorrenciaSchema` so valida forma) — o throw 400 com a
+  // mensagem literal do contrato vem do SERVICO (`toolService.registrarOcorrencia`) e cai no
+  // catch abaixo, que tambem limpa o upload orfao.
+  app.post('/api/almoxarifado/ferramentas/:id/ocorrencias', auth, requirePermission('gerenciar_ferramentas'),
+    uploadFotoOcorrencia.single('foto'), async (req, res) => {
+      const parsed = OcorrenciaSchema.safeParse(req.body);
+      if (!parsed.success) {
+        limparUploadOrfao(req);
+        return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
+      }
+      try {
+        const fotoPath = req.file ? req.file.filename : null;
+        res.status(201).json(await toolService.registrarOcorrencia(db, req.user, req.params.id, parsed.data, fotoPath));
+      } catch (e) {
+        limparUploadOrfao(req);
+        handleError(res, e);
+      }
+    });
+
+  app.get('/api/almoxarifado/ferramentas/:id/ocorrencias', auth, async (req, res) => {
+    try { res.json(await toolService.listarOcorrencias(db, req.params.id)); }
     catch (e) { handleError(res, e); }
   });
 

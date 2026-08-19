@@ -706,6 +706,21 @@ const ManutencaoConcluirSchema = z.object({
   observacoes: z.string().nullable().optional(),
 });
 
+/**
+ * Ocorrencia (Etapa 9b, Task 5) — POST /ferramentas/:id/ocorrencias e multipart (foto opcional
+ * via multer), entao `tipo` fica `z.string().min(1)` aqui: a checagem `AVARIA|PERDA` e regra de
+ * negocio (mensagem literal `"Tipo de ocorrência inválido"`) e mora no SERVICO, pelo mesmo motivo
+ * de `data_validade > data_calibracao` em CalibracaoSchema — o Zod embrulharia em
+ * "Dados invalidos - ...". `responsavel_colaborador_id` usa `numFromForm` (precedente
+ * `schemas.js:~641`) porque campo de form chega STRING.
+ */
+const OcorrenciaSchema = z.object({
+  tipo: z.string().min(1),
+  descricao: z.string().min(1),
+  responsavel_nome: z.string().nullable().optional(),
+  responsavel_colaborador_id: numFromForm(z.number().int().positive().nullable().optional()),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -717,4 +732,5 @@ module.exports = {
   SucateamentoCreateSchema, SucateamentoDestinoSchema, SucateamentoDestinoFormSchema,
   FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema,
   CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema,
+  OcorrenciaSchema,
 };

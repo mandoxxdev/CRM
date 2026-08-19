@@ -263,6 +263,97 @@ async function reencontrarFerramenta(db, user, ferramentaId, data) {
   return { success: true };
 }
 
+/** Mapa tipo -> status de destino (Task 5, RN-05). Fonte unica: nao repetir o enum em mais lugar. */
+const TIPOS_OCORRENCIA = { AVARIA: STATUS.AVARIADA, PERDA: STATUS.PERDIDA };
+
+/**
+ * Registra avaria/perda (RN-05, Task 5). Ordem de efeitos e o PORQUE de cada um:
+ *
+ *   1) validar `tipo` ANTES de tocar a ferramenta — o Zod so garante string nao vazia
+ *      (`OcorrenciaSchema`); `AVARIA|PERDA` e regra de negocio, com a mensagem literal do
+ *      contrato, entao mora aqui (mesmo motivo de `registrarCalibracao` com a data de validade).
+ *   2) claim por UPDATE, DUAS tentativas de origem (DISPONIVEL, depois EMPRESTADA) — mesmo padrao
+ *      de `iniciarManutencao`: cada tentativa captura a origem REAL que o proprio UPDATE viu, nao
+ *      uma leitura solta que uma corrida poderia ja ter tornado obsoleta. So essas duas origens
+ *      valem (instrucao da task); BLOQUEADA/EM_MANUTENCAO/AVARIADA/PERDIDA recusam com 400.
+ *   3) INSERT da ocorrencia com compensacao: se falhar (ex.: `descricao` NULL chamando o servico
+ *      direto, fora do Zod), o claim ja tirou a ferramenta de circulacao — devolve para a origem
+ *      real capturada no passo 2, mesmo desenho de `iniciarManutencao`.
+ *   4) SO SE a origem era EMPRESTADA: fecha o emprestimo aberto NO MESMO ATO (RN-05) — DEPOIS do
+ *      INSERT, nao antes, porque a mensagem de fechamento cita "#<id da ocorrencia>" e esse id so
+ *      existe apos o INSERT. Claim pelo `id` do proprio emprestimo (mesmo molde de
+ *      `devolverFerramenta`): se `changes===0` (emprestimo ja foi fechado por fora entre o claim
+ *      do passo 2 e agora — janela pequena, mas real), a ocorrencia NAO pode ficar meio-registrada
+ *      (ferramenta avariada/perdida com o emprestimo "aberto para sempre" seria o BUG que esta
+ *      task existe para evitar) — desfaz o INSERT e devolve a ferramenta a origem, depois relanca.
+ */
+async function registrarOcorrencia(db, user, ferramentaId, data, fotoPath) {
+  const destino = TIPOS_OCORRENCIA[data.tipo];
+  if (!destino) throw Object.assign(new Error('Tipo de ocorrência inválido'), { status: 400 });
+
+  let origem = null;
+  let claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?`,
+    [destino, ferramentaId, STATUS.DISPONIVEL]);
+  if (claim.changes > 0) {
+    origem = STATUS.DISPONIVEL;
+  } else {
+    claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+      SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?`,
+      [destino, ferramentaId, STATUS.EMPRESTADA]);
+    if (claim.changes > 0) origem = STATUS.EMPRESTADA;
+  }
+  if (!origem) {
+    const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [ferramentaId]);
+    if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+    throw Object.assign(new Error(`Ferramenta não pode registrar ocorrência (status atual: ${atual.status})`), { status: 400 });
+  }
+
+  const r = await dbRun(db, `INSERT INTO ocorrencias_ferramenta_almoxarifado
+    (ferramenta_id, tipo, descricao, responsavel_colaborador_id, responsavel_nome, foto_path, usuario_id)
+    VALUES (?,?,?,?,?,?,?)`, [
+    ferramentaId, data.tipo, data.descricao, data.responsavel_colaborador_id || null,
+    data.responsavel_nome || null, fotoPath || null, user.id,
+  ]).catch(async (e) => {
+    await dbRun(db, 'UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [origem, ferramentaId]);
+    throw e;
+  });
+  const ocorrenciaId = r.lastID;
+
+  let emprestimoEncerradoId = null;
+  if (origem === STATUS.EMPRESTADA) {
+    const empAberto = await dbGet(db, `SELECT id FROM emprestimos_ferramenta_almoxarifado
+      WHERE ferramenta_id = ? AND status = 'EMPRESTADA' ORDER BY id DESC LIMIT 1`, [ferramentaId]);
+    const msg = `Encerrado por ocorrência #${ocorrenciaId} (${data.tipo})`;
+    const empClaim = empAberto
+      ? await dbRun(db, `UPDATE emprestimos_ferramenta_almoxarifado
+          SET status = 'DEVOLVIDA', data_devolucao_real = CURRENT_TIMESTAMP,
+              observacoes = CASE WHEN observacoes IS NULL OR observacoes = '' THEN ?
+                                  ELSE observacoes || ' | ' || ? END
+          WHERE id = ? AND status = 'EMPRESTADA'`, [msg, msg, empAberto.id])
+      : { changes: 0 };
+    if (empClaim.changes === 0) {
+      // compensacao total (passo 4 do comentario acima): desfaz o INSERT e devolve a ferramenta.
+      await dbRun(db, 'DELETE FROM ocorrencias_ferramenta_almoxarifado WHERE id = ?', [ocorrenciaId]);
+      await dbRun(db, 'UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [origem, ferramentaId]);
+      throw Object.assign(new Error('Empréstimo não encontrado'), { status: 404 });
+    }
+    emprestimoEncerradoId = empAberto.id;
+  }
+
+  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'OCORRENCIA',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { ocorrencia_id: ocorrenciaId, tipo: data.tipo, emprestimo_encerrado_id: emprestimoEncerradoId } });
+  return { id: ocorrenciaId };
+}
+
+async function listarOcorrencias(db, ferramentaId) {
+  return dbAll(db, `SELECT id, tipo, descricao, responsavel_nome, foto_path, created_at
+    FROM ocorrencias_ferramenta_almoxarifado WHERE ferramenta_id = ? ORDER BY created_at DESC, id DESC`, [ferramentaId]);
+}
+
 async function listarFerramentas(db, filters = {}) {
   let sql = 'SELECT * FROM ferramentas_almoxarifado WHERE ativo = 1';
   const params = [];
@@ -382,4 +473,5 @@ module.exports = {
   registrarCalibracao, listarCalibracoes, painelCalibracoes,
   bloquearFerramenta, desbloquearFerramenta, iniciarManutencao, concluirManutencao,
   listarManutencoes, reencontrarFerramenta,
+  registrarOcorrencia, listarOcorrencias,
 };
