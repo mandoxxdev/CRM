@@ -70,9 +70,18 @@ const EMPRESTIMOS = [
 
 // GET /calibracoes/painel: {vencidas:[], a_vencer:[]} — FER-003 vencida, FER-002 a vencer. Os
 // dois nomes NAO podem aparecer trocados de secao (o teste de painel prova isso).
+//
+// FER-004 e uma ferramenta que NUNCA foi calibrada — decisao do design (D3):
+// `calibracaoVigente` nao acha nenhum registro, entao o backend classifica em `vencidas` mesmo
+// sem `data_validade`/`dias_restantes` (os dois vem null, nao ha calibracao nenhuma para tirar
+// esses numeros). O fallback generico ("Vencida", "—") tem de aguentar isso sem quebrar.
 const PAINEL = {
-  vencidas: [{ id: 100, ferramenta_id: 3, codigo_patrimonio: 'FER-003', nome: 'Multímetro',
-    data_validade: '2026-08-01', dias_restantes: -18 }],
+  vencidas: [
+    { id: 100, ferramenta_id: 3, codigo_patrimonio: 'FER-003', nome: 'Multímetro',
+      data_validade: '2026-08-01', dias_restantes: -18 },
+    { id: null, ferramenta_id: 4, codigo_patrimonio: 'FER-004', nome: 'Trena a laser',
+      data_validade: null, dias_restantes: null },
+  ],
   a_vencer: [{ id: 101, ferramenta_id: 2, codigo_patrimonio: 'FER-002', nome: 'Paquímetro digital',
     data_validade: '2026-09-01', dias_restantes: 13 }],
 };
@@ -237,7 +246,7 @@ describe('FerramentasAlmoxarifado — painel de calibrações', () => {
     await renderizar();
     await clicar(botao('Calibrações'));
 
-    expect(linhasVencidas()).toHaveLength(1);
+    expect(linhasVencidas()).toHaveLength(2); // FER-003 (numerica) + FER-004 (nunca calibrada)
     expect(linhasAVencer()).toHaveLength(1);
 
     const vencidasTexto = container.querySelector('.almox-calibracao-vencidas').textContent;
@@ -247,5 +256,21 @@ describe('FerramentasAlmoxarifado — painel de calibrações', () => {
     expect(vencidasTexto).not.toContain('FER-002');
     expect(aVencerTexto).toContain('FER-002');
     expect(aVencerTexto).not.toContain('FER-003');
+  });
+
+  // Achado da revisao (Important): ferramenta NUNCA calibrada entra em `vencidas` com
+  // `data_validade`/`dias_restantes` null (design D3 — sem calibracao nenhuma para tirar esses
+  // numeros). O guard `c.dias_restantes != null` (e o `c.data_validade ? ... : '—'`) tem de
+  // aguentar isso sem quebrar a tela nem virar `NaN`/`null` cru na celula.
+  test('calibração vencida sem data_validade/dias_restantes (nunca calibrada) renderiza com o fallback genérico', async () => {
+    await renderizar();
+    await clicar(botao('Calibrações'));
+
+    expect(linhasVencidas()).toHaveLength(2);
+    const linhaNuncaCalibrada = linhasVencidas().find((tr) => tr.textContent.includes('FER-004'));
+    expect(linhaNuncaCalibrada).toBeTruthy();
+    expect(linhaNuncaCalibrada.textContent).toContain('Trena a laser');
+    expect(linhaNuncaCalibrada.textContent).toContain('—'); // coluna Validade, sem data
+    expect(linhaNuncaCalibrada.querySelector('.almox-badge-vencida').textContent.trim()).toBe('Vencida');
   });
 });
