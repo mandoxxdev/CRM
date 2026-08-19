@@ -10,7 +10,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -901,6 +901,63 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   app.post('/api/almoxarifado/emprestimos/:id/devolver', auth, requirePermission('gerenciar_ferramentas'), validate(DevolucaoEmprestimoSchema), async (req, res) => {
     try { res.json(await toolService.devolverFerramenta(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }
+  });
+
+  // Upload do certificado de calibracao (Task 3) — CLONE de uploadComprovanteSucata (linha ~74),
+  // gravacao FLAT em uploadsAlmoxDir com prefixo `calibracao-` no filename, SEM subpasta: o multer
+  // nao cria diretorio e ninguem mkdir'a subpastas aqui — o primeiro upload numa subpasta daria
+  // ENOENT -> 500 (design D3, brief da Task 3).
+  const uploadCertificadoCalibracao = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `calibracao-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
+      cb(new Error('Certificado deve ser PDF ou imagem'));
+    },
+  });
+
+  // POST /ferramentas/:id/calibracoes — multipart, campo de arquivo `certificado` opcional.
+  // Ordem de middlewares OBRIGATORIA: auth -> requirePermission -> multer -> safeParse manual do
+  // schema (design D3). NAO copiar a ordem da rota de destino do sucateamento (linha ~845): aquela
+  // rota nao tem requirePermission DE PROPOSITO (o gate dela mora no servico, "uma das duas
+  // pernas", nao exprimivel em requirePermission). Aqui o gate E uma acao so, entao vai na PORTA —
+  // precedente provado por permissoesRotas.api.test.js:515-534 (POST /materiais/:id/foto): o 403
+  // sai ANTES do multer gravar nada em disco. Do sucateamento aproveita-se so o
+  // `limparUploadOrfao` (linha ~823) para o 400 pos-upload (validacao ou regra de negocio).
+  app.post('/api/almoxarifado/ferramentas/:id/calibracoes', auth, requirePermission('gerenciar_ferramentas'),
+    uploadCertificadoCalibracao.single('certificado'), async (req, res) => {
+      const parsed = CalibracaoSchema.safeParse(req.body);
+      if (!parsed.success) {
+        limparUploadOrfao(req);
+        return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
+      }
+      try {
+        const certificadoPath = req.file ? req.file.filename : null;
+        res.status(201).json(await toolService.registrarCalibracao(db, req.user, req.params.id, parsed.data, certificadoPath));
+      } catch (e) {
+        limparUploadOrfao(req);
+        handleError(res, e);
+      }
+    });
+
+  app.get('/api/almoxarifado/ferramentas/:id/calibracoes', auth, async (req, res) => {
+    try { res.json(await toolService.listarCalibracoes(db, req.params.id)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  // GET /calibracoes/painel — ANTES de /ferramentas/:id se algum dia esta rota ganhar irma sob
+  // /ferramentas; hoje o caminho e distinto (/calibracoes/painel) e nao colide com nenhum :id.
+  app.get('/api/almoxarifado/calibracoes/painel', auth, async (req, res) => {
+    try {
+      const dias = req.query.dias !== undefined ? Number(req.query.dias) : 30;
+      res.json(await toolService.painelCalibracoes(db, Number.isFinite(dias) ? dias : 30));
+    } catch (e) { handleError(res, e); }
   });
 
   // ── Materiais de cliente: a ILHA foi aposentada na Etapa 8 (decisao 4) ───────────────────────

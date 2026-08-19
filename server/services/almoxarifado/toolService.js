@@ -152,7 +152,74 @@ async function listarEmprestimos(db, filters = {}) {
   return dbAll(db, sql, params);
 }
 
+/**
+ * Registra uma calibracao (Task 3). `certificadoPath` ja vem resolvido pela ROTA (req.file.filename
+ * depois do multer) — mesmo desenho de `comprovante_arquivo` em SucateamentoDestinoFormSchema:
+ * quem grava o path e a rota, nunca um valor vindo do corpo do formulario.
+ *
+ * A regra "validade > calibracao" fica aqui, nao no Zod (CalibracaoSchema so valida forma) —
+ * porque o erro do Zod sai embrulhado em "Dados invalidos - ..." (validation.js) e o contrato
+ * exige a mensagem literal abaixo.
+ */
+async function registrarCalibracao(db, user, ferramentaId, data, certificadoPath) {
+  const ferr = await dbGet(db, 'SELECT * FROM ferramentas_almoxarifado WHERE id = ? AND ativo = 1', [ferramentaId]);
+  if (!ferr) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+
+  if (!(new Date(data.data_validade) > new Date(data.data_calibracao))) {
+    throw Object.assign(new Error('Data de validade deve ser posterior à data de calibração'), { status: 400 });
+  }
+
+  const r = await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
+    (ferramenta_id, data_calibracao, data_validade, certificado_path, observacoes, usuario_id)
+    VALUES (?,?,?,?,?,?)`, [
+    ferramentaId, data.data_calibracao, data.data_validade,
+    certificadoPath || null, data.observacoes || null, user.id,
+  ]);
+
+  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'CALIBRACAO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { calibracao_id: r.lastID, data_calibracao: data.data_calibracao, data_validade: data.data_validade } });
+  return { id: r.lastID };
+}
+
+async function listarCalibracoes(db, ferramentaId) {
+  return dbAll(db, `SELECT * FROM calibracoes_ferramenta_almoxarifado
+    WHERE ferramenta_id = ? ORDER BY date(data_validade) DESC, id DESC`, [ferramentaId]);
+}
+
+/**
+ * Painel de vencimento (Task 3, contrato congelado): so ferramentas `exige_calibracao = 1` e
+ * `ativo = 1`, cada uma olhando so a sua calibracao vigente/mais recente (mesma consulta de
+ * `calibracaoVigente`, mas aqui precisamos tambem da vencida — por isso MAX direto por
+ * ferramenta, nao o filtro `data_validade >= hoje` daquela funcao).
+ */
+async function painelCalibracoes(db, dias = 30) {
+  const rows = await dbAll(db, `
+    SELECT f.id, f.codigo_patrimonio, f.nome, c.data_validade,
+      CAST(julianday(date(c.data_validade)) - julianday(date('now')) AS INTEGER) AS dias_restantes
+    FROM ferramentas_almoxarifado f
+    JOIN calibracoes_ferramenta_almoxarifado c ON c.ferramenta_id = f.id
+    WHERE f.exige_calibracao = 1 AND f.ativo = 1
+      AND c.data_validade = (
+        SELECT MAX(c2.data_validade) FROM calibracoes_ferramenta_almoxarifado c2
+        WHERE c2.ferramenta_id = f.id
+      )
+    ORDER BY c.data_validade ASC`);
+
+  const vencidas = [];
+  const a_vencer = [];
+  for (const r of rows) {
+    if (r.dias_restantes < 0) {
+      vencidas.push(r);
+    } else if (r.dias_restantes <= dias) {
+      a_vencer.push(r);
+    }
+  }
+  return { vencidas, a_vencer };
+}
+
 module.exports = {
   criarFerramenta, atualizarFerramenta, emprestarFerramenta, devolverFerramenta,
   listarFerramentas, listarEmprestimos, calibracaoVigente,
+  registrarCalibracao, listarCalibracoes, painelCalibracoes,
 };

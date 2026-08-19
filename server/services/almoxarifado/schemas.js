@@ -676,6 +676,19 @@ const EmprestimoSchema = z.object({
 
 const DevolucaoEmprestimoSchema = z.object({ observacoes: z.string().nullable().optional() });
 
+/**
+ * Calibracao (Etapa 9b, Task 3) — POST /ferramentas/:id/calibracoes e multipart (certificado
+ * opcional via multer), entao so forma aqui: `data_calibracao`/`data_validade` chegam STRING e
+ * ficam string (nao precisam virar Date — a comparacao validade>calibracao e feita no SERVICO,
+ * nao aqui, porque o erro de regra de negocio tem mensagem literal do contrato e o erro do Zod
+ * sai embrulhado em "Dados invalidos - ..." (validation.js:16-27) — ver o cabecalho do brief).
+ */
+const CalibracaoSchema = z.object({
+  data_calibracao: z.string().min(1, 'data_calibracao é obrigatória'),
+  data_validade: z.string().min(1, 'data_validade é obrigatória'),
+  observacoes: z.string().nullable().optional(),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -686,4 +699,5 @@ module.exports = {
   SobraUpdateSchema, GerarRetalhoSchema,
   SucateamentoCreateSchema, SucateamentoDestinoSchema, SucateamentoDestinoFormSchema,
   FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema,
+  CalibracaoSchema,
 };
