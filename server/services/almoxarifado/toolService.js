@@ -116,6 +116,112 @@ async function devolverFerramenta(db, user, emprestimoId, data = {}) {
   return { success: true };
 }
 
+/**
+ * Bloqueio/desbloqueio/manutencao/reencontro (Task 4, RN-06/RN-07/RN-10) — mesmo padrao de claim
+ * de emprestarFerramenta/devolverFerramenta: UPDATE com o(s) status de origem no WHERE, e so se
+ * `changes === 0` le o status atual para montar a mensagem literal do contrato. Nunca
+ * ler-depois-decidir: essa ordem foi a TOCTOU que a Etapa 9 provou explorável.
+ */
+async function bloquearFerramenta(db, user, ferramentaId, data) {
+  const claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?`,
+    [STATUS.BLOQUEADA, ferramentaId, STATUS.DISPONIVEL]);
+  if (claim.changes === 0) {
+    const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [ferramentaId]);
+    if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+    throw Object.assign(new Error(`Ferramenta não pode ser bloqueada (status atual: ${atual.status})`), { status: 400 });
+  }
+  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'BLOQUEIO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { justificativa: data.justificativa } });
+  return { success: true };
+}
+
+async function desbloquearFerramenta(db, user, ferramentaId, data) {
+  const claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?`,
+    [STATUS.DISPONIVEL, ferramentaId, STATUS.BLOQUEADA]);
+  if (claim.changes === 0) {
+    const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [ferramentaId]);
+    if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+    throw Object.assign(new Error(`Ferramenta não está bloqueada (status atual: ${atual.status})`), { status: 400 });
+  }
+  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'DESBLOQUEIO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { justificativa: data.justificativa } });
+  return { success: true };
+}
+
+/**
+ * Iniciar manutencao (RN-07): claim de origem DISPONIVEL|AVARIADA -> EM_MANUTENCAO. EMPRESTADA
+ * fica de fora DE PROPOSITO — devolva primeiro, a manutencao e feita com a ferramenta na mao.
+ * Uma manutencao aberta por ferramenta e garantida pelo proprio claim de status (nao ha UNIQUE
+ * na tabela de manutencoes): so quem esta DISPONIVEL ou AVARIADA consegue abrir outra.
+ */
+async function iniciarManutencao(db, user, ferramentaId, data) {
+  const claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN (?, ?)`,
+    [STATUS.EM_MANUTENCAO, ferramentaId, STATUS.DISPONIVEL, STATUS.AVARIADA]);
+  if (claim.changes === 0) {
+    const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [ferramentaId]);
+    if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+    throw Object.assign(new Error(`Ferramenta não pode entrar em manutenção (status atual: ${atual.status})`), { status: 400 });
+  }
+
+  const r = await dbRun(db, `INSERT INTO manutencoes_ferramenta_almoxarifado
+    (ferramenta_id, descricao, usuario_id) VALUES (?,?,?)`,
+    [ferramentaId, data.descricao, user.id]);
+
+  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'MANUTENCAO_INICIO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { manutencao_id: r.lastID, descricao: data.descricao } });
+  return { id: r.lastID };
+}
+
+/**
+ * Concluir manutencao: claim no PROPRIO registro de manutencao (`data_fim IS NULL`) — cobre tanto
+ * "id inexistente" quanto "manutencao ja concluida" com a mesma mensagem 404, como o contrato
+ * pede. So depois de fechar a linha e que a ferramenta volta EM_MANUTENCAO -> DISPONIVEL; essa
+ * segunda transicao e garantida pelo mesmo invariante de iniciarManutencao (uma manutencao aberta
+ * por ferramenta), entao nao precisa de outra recusa aqui.
+ */
+async function concluirManutencao(db, user, manutencaoId, data = {}) {
+  const claim = await dbRun(db, `UPDATE manutencoes_ferramenta_almoxarifado
+    SET data_fim = CURRENT_TIMESTAMP, observacoes = COALESCE(?, observacoes)
+    WHERE id = ? AND data_fim IS NULL`, [data.observacoes || null, manutencaoId]);
+  if (claim.changes === 0) throw Object.assign(new Error('Manutenção não encontrada'), { status: 404 });
+
+  const manutencao = await dbGet(db, 'SELECT * FROM manutencoes_ferramenta_almoxarifado WHERE id = ?', [manutencaoId]);
+  await dbRun(db, `UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = ?`, [STATUS.DISPONIVEL, manutencao.ferramenta_id, STATUS.EM_MANUTENCAO]);
+
+  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { manutencao_id: Number(manutencaoId) } });
+  return { success: true };
+}
+
+async function listarManutencoes(db, ferramentaId) {
+  return dbAll(db, `SELECT * FROM manutencoes_ferramenta_almoxarifado
+    WHERE ferramenta_id = ? ORDER BY data_inicio DESC, id DESC`, [ferramentaId]);
+}
+
+/** Reencontrar (RN-10): claim PERDIDA -> DISPONIVEL, justificativa obrigatoria e auditada. */
+async function reencontrarFerramenta(db, user, ferramentaId, data) {
+  const claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?`,
+    [STATUS.DISPONIVEL, ferramentaId, STATUS.PERDIDA]);
+  if (claim.changes === 0) {
+    const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [ferramentaId]);
+    if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+    throw Object.assign(new Error(`Ferramenta não está perdida (status atual: ${atual.status})`), { status: 400 });
+  }
+  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'REENCONTRO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { justificativa: data.justificativa } });
+  return { success: true };
+}
+
 async function listarFerramentas(db, filters = {}) {
   let sql = 'SELECT * FROM ferramentas_almoxarifado WHERE ativo = 1';
   const params = [];
@@ -233,4 +339,6 @@ module.exports = {
   criarFerramenta, atualizarFerramenta, emprestarFerramenta, devolverFerramenta,
   listarFerramentas, listarEmprestimos, calibracaoVigente,
   registrarCalibracao, listarCalibracoes, painelCalibracoes,
+  bloquearFerramenta, desbloquearFerramenta, iniciarManutencao, concluirManutencao,
+  listarManutencoes, reencontrarFerramenta,
 };

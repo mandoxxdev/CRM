@@ -10,7 +10,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -958,6 +958,38 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       const dias = req.query.dias !== undefined ? Number(req.query.dias) : 30;
       res.json(await toolService.painelCalibracoes(db, Number.isFinite(dias) ? dias : 30));
     } catch (e) { handleError(res, e); }
+  });
+
+  // ── Bloqueio, manutencao e reencontro (Etapa 9b, Task 4) — RN-06/RN-07/RN-10 ──
+  // Mesmo gate `gerenciar_ferramentas`, mesmo padrao de claim por UPDATE-com-WHERE do servico.
+  app.post('/api/almoxarifado/ferramentas/:id/bloquear', auth, requirePermission('gerenciar_ferramentas'), validate(JustificativaSchema), async (req, res) => {
+    try { res.json(await toolService.bloquearFerramenta(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/ferramentas/:id/desbloquear', auth, requirePermission('gerenciar_ferramentas'), validate(JustificativaSchema), async (req, res) => {
+    try { res.json(await toolService.desbloquearFerramenta(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/ferramentas/:id/manutencoes', auth, requirePermission('gerenciar_ferramentas'), validate(ManutencaoSchema), async (req, res) => {
+    try { res.status(201).json(await toolService.iniciarManutencao(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/manutencoes/:id/concluir', auth, requirePermission('gerenciar_ferramentas'), validate(ManutencaoConcluirSchema), async (req, res) => {
+    try { res.json(await toolService.concluirManutencao(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/ferramentas/:id/manutencoes', auth, async (req, res) => {
+    try { res.json(await toolService.listarManutencoes(db, req.params.id)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/ferramentas/:id/reencontrar', auth, requirePermission('gerenciar_ferramentas'), validate(JustificativaSchema), async (req, res) => {
+    try { res.json(await toolService.reencontrarFerramenta(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
   });
 
   // ── Materiais de cliente: a ILHA foi aposentada na Etapa 8 (decisao 4) ───────────────────────

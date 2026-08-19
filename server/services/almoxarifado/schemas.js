@@ -689,6 +689,23 @@ const CalibracaoSchema = z.object({
   observacoes: z.string().nullable().optional(),
 });
 
+/**
+ * Bloqueio/desbloqueio/reencontro (Etapa 9b, Task 4) — RN-06/RN-10, mesmo schema para os tres:
+ * justificativa obrigatoria com minimo 5 caracteres, exatamente como o design pede.
+ */
+const JustificativaSchema = z.object({
+  justificativa: z.string().min(5),
+});
+
+// Manutencao (Etapa 9b, Task 4) — RN-07.
+const ManutencaoSchema = z.object({
+  descricao: z.string().min(1),
+});
+
+const ManutencaoConcluirSchema = z.object({
+  observacoes: z.string().nullable().optional(),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -699,5 +716,5 @@ module.exports = {
   SobraUpdateSchema, GerarRetalhoSchema,
   SucateamentoCreateSchema, SucateamentoDestinoSchema, SucateamentoDestinoFormSchema,
   FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema,
-  CalibracaoSchema,
+  CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema,
 };
