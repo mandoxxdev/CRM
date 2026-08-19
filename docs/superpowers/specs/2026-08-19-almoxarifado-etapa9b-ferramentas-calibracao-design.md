@@ -90,11 +90,17 @@ como melhoria. Efeito no status: `AVARIA → AVARIADA`; `PERDA → PERDIDA`. Sob
 emprestada, RN-05. Descartado: bloquear ocorrência em ferramenta emprestada — perda não tem como
 ser devolvida antes.
 
-**D6 — Lembrete de devolução vencida:** seguir o padrão do `requisitionReminderService` (job
-existente) + **filtro `GET /emprestimos?vencidos=1`** (não rota própria — a tabela de contratos é
-a fonte; a versão anterior deste parágrafo dizia `GET /emprestimos/vencidos` e contradizia a
-tabela, achado 5 da revisão do plano). O painel/alerta formal fica na feature 20 — declarado, não
-esquecido.
+**D6 — Devolução vencida:** **filtro `GET /emprestimos?vencidos=1`** (não rota própria — a tabela
+de contratos é a fonte; a versão anterior deste parágrafo dizia `GET /emprestimos/vencidos` e
+contradizia a tabela, achado 5 da revisão do plano) + destaque de vencidos na tela + a função pura
+`toolReminderService.listarEmprestimosVencidos(db)`, testada e pronta para ser plugada.
+**Correção declarada (revisão da Task 6):** este parágrafo prometia "seguir o padrão do
+`requisitionReminderService` (job existente)" — **o job NÃO foi ligado nesta etapa**, por decisão
+registrada na execução: um agendador sem canal de notificação (e-mail é feature 19; alerta formal
+é feature 20) rodaria sem efeito útil e daria falsa sensação de cobertura. O que existe hoje é o
+filtro, o destaque na tela e a função pronta; **ligar o job + notificação fica com a feature 20**,
+e a decisão vai à letra B do bloco "Leia antes de apresentar" para o usuário arbitrar (revertê-la
+é barato: um `setInterval` no padrão de `routes/almoxarifado.js:2401`).
 
 **D7 — Colunas novas em `ferramentas_almoxarifado`** (todas por `safeAlter`): `numero_serie TEXT`,
 `localizacao_id INTEGER` (FK lógica para localizações), `exige_calibracao INTEGER DEFAULT 0`.
