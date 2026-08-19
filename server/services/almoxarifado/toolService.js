@@ -386,6 +386,13 @@ async function listarEmprestimos(db, filters = {}) {
   // constroem contra esse nome — usar outro aqui vira colisao que as proximas tasks teriam
   // de contornar. O match continua sendo contra o colaborador_nome gravado no emprestimo.
   if (filters.colaborador) { sql += ' AND e.colaborador_nome LIKE ?'; params.push(`%${filters.colaborador}%`); }
+  // vencidos=1 (Task 6, design D6): so EMPRESTADA com data_prevista_devolucao no passado.
+  // Empresta sem data prevista (coluna nullable) nunca e vencido — por isso o IS NOT NULL aqui,
+  // nao so o date(...) < date('now') sozinho (NULL comparado a qualquer coisa e sempre falso em
+  // SQL, mas deixar explicito documenta a regra em vez de depender do comportamento implicito).
+  if (filters.vencidos) {
+    sql += " AND e.status = 'EMPRESTADA' AND e.data_prevista_devolucao IS NOT NULL AND date(e.data_prevista_devolucao) < date('now')";
+  }
   sql += ' ORDER BY e.data_retirada DESC';
   return dbAll(db, sql, params);
 }
