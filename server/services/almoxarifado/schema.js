@@ -1490,6 +1490,43 @@ async function initSchema(db) {
     FOREIGN KEY (ferramenta_id) REFERENCES ferramentas_almoxarifado(id)
   )`);
 
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS calibracoes_ferramenta_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ferramenta_id INTEGER NOT NULL,
+    data_calibracao DATE NOT NULL,
+    data_validade DATE NOT NULL,
+    certificado_path TEXT,
+    observacoes TEXT,
+    usuario_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ferramenta_id) REFERENCES ferramentas_almoxarifado(id)
+  )`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS manutencoes_ferramenta_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ferramenta_id INTEGER NOT NULL,
+    descricao TEXT NOT NULL,
+    data_inicio DATETIME DEFAULT CURRENT_TIMESTAMP,
+    data_fim DATETIME,
+    observacoes TEXT,
+    usuario_id INTEGER,
+    FOREIGN KEY (ferramenta_id) REFERENCES ferramentas_almoxarifado(id)
+  )`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS ocorrencias_ferramenta_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ferramenta_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    responsavel_colaborador_id INTEGER,
+    responsavel_nome TEXT,
+    foto_path TEXT,
+    usuario_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ferramenta_id) REFERENCES ferramentas_almoxarifado(id)
+  )`);
+  await safeAlter(db, 'ALTER TABLE ferramentas_almoxarifado ADD COLUMN numero_serie TEXT');
+  await safeAlter(db, 'ALTER TABLE ferramentas_almoxarifado ADD COLUMN localizacao_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE ferramentas_almoxarifado ADD COLUMN exige_calibracao INTEGER DEFAULT 0');
+
   // ── Materiais do cliente ──
   // ── APOSENTADA na Etapa 8 (decisao 4 do design, 2026-08-12) ──────────────────────────────────
   // NAO tem escritor nem leitor no codigo: o clientMaterialService.js foi removido e as tres rotas

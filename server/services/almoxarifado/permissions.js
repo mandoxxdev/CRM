@@ -53,6 +53,11 @@ const ACAO_PERFIS = {
   // nao assina. Quem DECIDE continua sendo o backend: a rota falha aberto de proposito.
   aprovar_sucateamento: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   aprovar_sucateamento_gestao: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
+  // Etapa 9b, decisao D1: ferramenta e PATRIMONIO emprestavel, nao estoque — gatear com
+  // `movimentar` (permissao de mover saldo) acoplava os dois e impedia restringir um sem o outro.
+  // Mesmo criterio de remessar_terceiro: acao propria para PODER restringir sem reescrever.
+  // Uma acao so (nao emprestar_/calibrar_/etc): YAGNI ate o cliente pedir granularidade.
+  gerenciar_ferramentas: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   aprovar_requisicao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   separar_emitir: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   requisitar: [PERFIS.ADMINISTRADOR, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.ALMOXARIFE],
