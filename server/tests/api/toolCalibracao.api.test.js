@@ -130,6 +130,25 @@ async function novaFerramenta(db, extra = {}) {
     await close();
   });
 
+  await test('painel: exige_calibracao=1 sem NENHUMA calibracao aparece em vencidas com data_validade null', async () => {
+    const { app, db, close } = await createTestApp();
+    const nuncaCalibrada = await novaFerramenta(db, { exige_calibracao: 1 });
+    // controle positivo: sem exige_calibracao e sem registro nao aparece em lugar nenhum
+    const semExigenciaSemRegistro = await novaFerramenta(db, { exige_calibracao: 0 });
+
+    const r = await request(app).get('/api/almoxarifado/calibracoes/painel?dias=30').expect(200);
+    const item = r.body.vencidas.find(i => i.id === nuncaCalibrada);
+    assert.ok(item, `ferramenta exige_calibracao=1 sem historico ausente de vencidas: ${JSON.stringify(r.body.vencidas)}`);
+    assert.strictEqual(item.data_validade, null, `data_validade esperado null, veio ${item.data_validade}`);
+    assert.strictEqual(item.dias_restantes, null, `dias_restantes esperado null, veio ${item.dias_restantes}`);
+    assert.ok(!r.body.a_vencer.map(i => i.id).includes(nuncaCalibrada), 'nunca-calibrada vazou em a_vencer');
+
+    const idsTodos = [...r.body.vencidas, ...r.body.a_vencer].map(i => i.id);
+    assert.ok(!idsTodos.includes(semExigenciaSemRegistro),
+      'ferramenta sem exige_calibracao e sem registro apareceu no painel');
+    await close();
+  });
+
   await test('PRODUCAO -> 403 no POST sem gravar arquivo orfao; 200 no GET', async () => {
     const { app, db, close, setUser, uploadsAlmoxDir } = await createTestApp();
     const fid = await novaFerramenta(db);

@@ -152,7 +152,7 @@ tratar 0/1. Em rotas **multipart**, todo campo chega **string**: numéricos são
 | `POST /api/almoxarifado/ferramentas/:id/reencontrar` | gerenciar_ferramentas | `justificativa!` (min 5) | 200 | 400 `"Ferramenta não está perdida (status atual: <STATUS>)"` |
 | `POST /api/almoxarifado/ferramentas/:id/calibracoes` | gerenciar_ferramentas | multipart: `data_calibracao!`, `data_validade!`, `observacoes?`, campo de arquivo `certificado?` | 201 `{id}` | 400 `"Data de validade deve ser posterior à data de calibração"` |
 | `GET /api/almoxarifado/ferramentas/:id/calibracoes` | auth | — | 200 lista | — |
-| `GET /api/almoxarifado/calibracoes/painel` | auth | query: `dias?` (default 30) | 200 `{vencidas:[], a_vencer:[]}` | — |
+| `GET /api/almoxarifado/calibracoes/painel` | auth | query: `dias?` (default 30) | 200 `{vencidas:[], a_vencer:[]}` — ferramenta `exige_calibracao=1` **sem nenhuma calibração** entra em `vencidas` com `data_validade: null`/`dias_restantes: null` (coerência com RN-03, que já a recusa no empréstimo; decisão registrada na execução da Task 3) | — |
 
 ## Testes exigidos (os 4 da spec + os das RN novas)
 

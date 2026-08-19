@@ -192,24 +192,35 @@ async function listarCalibracoes(db, ferramentaId) {
  * `ativo = 1`, cada uma olhando so a sua calibracao vigente/mais recente (mesma consulta de
  * `calibracaoVigente`, mas aqui precisamos tambem da vencida — por isso MAX direto por
  * ferramenta, nao o filtro `data_validade >= hoje` daquela funcao).
+ *
+ * LEFT JOIN, nao INNER (ajuste pos-revisao do controller): ferramenta que exige calibracao e
+ * NUNCA foi calibrada tem de aparecer em `vencidas` com `data_validade: null` e
+ * `dias_restantes: null` — RN-03 ja trata "sem calibracao" como vencida na hora de emprestar; o
+ * painel omitir o que o emprestimo recusa seria contradicao interna (o pior caso, a
+ * nunca-calibrada, e o que o painel existe pra mostrar). O `AND c.data_validade = (MAX...)` no ON
+ * (nao no WHERE) preserva essa semantica: quando nao ha nenhuma linha de calibracao a
+ * comparacao nunca casa (NULL = NULL e falso em SQL), entao o LEFT JOIN devolve a ferramenta com
+ * as colunas de `c` todas NULL, em vez de sumir da consulta.
  */
 async function painelCalibracoes(db, dias = 30) {
   const rows = await dbAll(db, `
     SELECT f.id, f.codigo_patrimonio, f.nome, c.data_validade,
-      CAST(julianday(date(c.data_validade)) - julianday(date('now')) AS INTEGER) AS dias_restantes
+      CASE WHEN c.data_validade IS NULL THEN NULL
+        ELSE CAST(julianday(date(c.data_validade)) - julianday(date('now')) AS INTEGER)
+      END AS dias_restantes
     FROM ferramentas_almoxarifado f
-    JOIN calibracoes_ferramenta_almoxarifado c ON c.ferramenta_id = f.id
-    WHERE f.exige_calibracao = 1 AND f.ativo = 1
+    LEFT JOIN calibracoes_ferramenta_almoxarifado c ON c.ferramenta_id = f.id
       AND c.data_validade = (
         SELECT MAX(c2.data_validade) FROM calibracoes_ferramenta_almoxarifado c2
         WHERE c2.ferramenta_id = f.id
       )
+    WHERE f.exige_calibracao = 1 AND f.ativo = 1
     ORDER BY c.data_validade ASC`);
 
   const vencidas = [];
   const a_vencer = [];
   for (const r of rows) {
-    if (r.dias_restantes < 0) {
+    if (r.dias_restantes === null || r.dias_restantes < 0) {
       vencidas.push(r);
     } else if (r.dias_restantes <= dias) {
       a_vencer.push(r);
