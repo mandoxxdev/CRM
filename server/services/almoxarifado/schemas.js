@@ -649,6 +649,33 @@ const SucateamentoDestinoFormSchema = z.object({
   }
 });
 
+// ── Ferramentas (Etapa 9b, Task 2) ─────────────────────────────────────────────
+const FerramentaCreateSchema = z.object({
+  codigo_patrimonio: z.string().min(1),
+  nome: z.string().min(1),
+  tipo: z.string().nullable().optional(),
+  setor_responsavel: z.string().nullable().optional(),
+  material_id: z.number().int().positive().nullable().optional(),
+  numero_serie: z.string().nullable().optional(),
+  localizacao_id: z.number().int().positive().nullable().optional(),
+  // aceita true/false E 0/1: o GET devolve a linha do SQLite (0/1) e o front repopula o form
+  // com ela — um PUT de volta com 1 nao pode dar 400 (achado 9 da revisao do plano).
+  exige_calibracao: z.union([z.boolean(), z.literal(0), z.literal(1)])
+    .transform((v) => (v ? 1 : 0)).optional(),
+  observacoes: z.string().nullable().optional(),
+});
+const FerramentaUpdateSchema = FerramentaCreateSchema.partial();
+
+const EmprestimoSchema = z.object({
+  colaborador_nome: z.string().min(1),
+  colaborador_id: z.number().int().positive().nullable().optional(),
+  setor: z.string().nullable().optional(),
+  data_prevista_devolucao: z.string().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+});
+
+const DevolucaoEmprestimoSchema = z.object({ observacoes: z.string().nullable().optional() });
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -658,4 +685,5 @@ module.exports = {
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
   SobraUpdateSchema, GerarRetalhoSchema,
   SucateamentoCreateSchema, SucateamentoDestinoSchema, SucateamentoDestinoFormSchema,
+  FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema,
 };

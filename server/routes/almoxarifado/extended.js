@@ -10,7 +10,7 @@ const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = requi
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema } = require('../../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
@@ -859,19 +859,35 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       }
     });
 
-  // ── Ferramentas ──
+  // ── Ferramentas (Etapa 9b) ──
+  // Gate `gerenciar_ferramentas`, nao `movimentar`: ferramenta e PATRIMONIO emprestavel, nao
+  // estoque (permissions.js, decisao D1) — acoplar ao gate de mover saldo impediria restringir
+  // um sem o outro.
   app.get('/api/almoxarifado/ferramentas', auth, async (req, res) => {
     try { res.json(await toolService.listarFerramentas(db, req.query)); }
     catch (e) { handleError(res, e); }
   });
 
-  app.post('/api/almoxarifado/ferramentas', auth, requirePermission('movimentar'), async (req, res) => {
+  app.post('/api/almoxarifado/ferramentas', auth, requirePermission('gerenciar_ferramentas'), validate(FerramentaCreateSchema), async (req, res) => {
     try {
       res.status(201).json(await toolService.criarFerramenta(db, req.user, req.body));
-    } catch (e) { handleError(res, e); }
+    } catch (e) {
+      // 409 e nao 400: precedente do modulo para UNIQUE e centro de custo (linha ~121 acima).
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(409).json({ error: 'Código de patrimônio já cadastrado' });
+      handleError(res, e);
+    }
   });
 
-  app.post('/api/almoxarifado/ferramentas/:id/emprestar', auth, requirePermission('movimentar'), async (req, res) => {
+  app.put('/api/almoxarifado/ferramentas/:id', auth, requirePermission('gerenciar_ferramentas'), validate(FerramentaUpdateSchema), async (req, res) => {
+    try {
+      res.json(await toolService.atualizarFerramenta(db, req.user, req.params.id, req.body));
+    } catch (e) {
+      if (/UNIQUE constraint/i.test(e.message)) return res.status(409).json({ error: 'Código de patrimônio já cadastrado' });
+      handleError(res, e);
+    }
+  });
+
+  app.post('/api/almoxarifado/ferramentas/:id/emprestar', auth, requirePermission('gerenciar_ferramentas'), validate(EmprestimoSchema), async (req, res) => {
     try {
       res.status(201).json(await toolService.emprestarFerramenta(db, req.user, req.params.id, req.body));
     } catch (e) { handleError(res, e); }
@@ -882,8 +898,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     catch (e) { handleError(res, e); }
   });
 
-  app.post('/api/almoxarifado/emprestimos/:id/devolver', auth, requirePermission('movimentar'), async (req, res) => {
-    try { res.json(await toolService.devolverFerramenta(db, req.user, req.params.id)); }
+  app.post('/api/almoxarifado/emprestimos/:id/devolver', auth, requirePermission('gerenciar_ferramentas'), validate(DevolucaoEmprestimoSchema), async (req, res) => {
+    try { res.json(await toolService.devolverFerramenta(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }
   });
 
