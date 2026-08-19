@@ -140,6 +140,25 @@ async function novaFerramenta(db, extra = {}) {
     await close();
   });
 
+  await test('origem invalida: BLOQUEADA recusa com a mensagem literal, sem linha criada e sem mudar status', async () => {
+    const { app, db, close } = await createTestApp();
+    const fid = await novaFerramenta(db);
+    await dbRun(db, "UPDATE ferramentas_almoxarifado SET status = 'BLOQUEADA' WHERE id = ?", [fid]);
+
+    const r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/ocorrencias`)
+      .field('tipo', 'AVARIA')
+      .field('descricao', 'tentando registrar sobre ferramenta bloqueada')
+      .expect(400);
+    assert.strictEqual(r.body.error, 'Ferramenta não pode registrar ocorrência (status atual: BLOQUEADA)');
+
+    const linhas = await dbAll(db, 'SELECT * FROM ocorrencias_ferramenta_almoxarifado WHERE ferramenta_id = ?', [fid]);
+    assert.strictEqual(linhas.length, 0, 'nenhuma ocorrencia deveria ter sido criada');
+
+    const f = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [fid]);
+    assert.strictEqual(f.status, 'BLOQUEADA', 'status nao deveria ter mudado');
+    await close();
+  });
+
   await test('RN-09: PRODUCAO recebe 403 no POST sem gravar arquivo; GET passa', async () => {
     const { app, db, close, setUser, uploadsAlmoxDir } = await createTestApp();
     const fid = await novaFerramenta(db);
