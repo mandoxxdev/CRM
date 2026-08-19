@@ -159,18 +159,40 @@ async function desbloquearFerramenta(db, user, ferramentaId, data) {
  * na tabela de manutencoes): so quem esta DISPONIVEL ou AVARIADA consegue abrir outra.
  */
 async function iniciarManutencao(db, user, ferramentaId, data) {
-  const claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
-    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status IN (?, ?)`,
-    [STATUS.EM_MANUTENCAO, ferramentaId, STATUS.DISPONIVEL, STATUS.AVARIADA]);
-  if (claim.changes === 0) {
+  // Duas tentativas de claim, uma por origem, em vez de um IN (DISPONIVEL, AVARIADA) so: assim
+  // sabemos com certeza qual das duas foi a origem REAL que o UPDATE viu (nao a que uma leitura
+  // separada teria visto um instante antes, que poderia ja estar desatualizada por uma corrida
+  // entre DISPONIVEL e AVARIADA). E a origem exata que a compensacao abaixo precisa para devolver
+  // o status certo se o INSERT falhar.
+  let origem = null;
+  let claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?`,
+    [STATUS.EM_MANUTENCAO, ferramentaId, STATUS.DISPONIVEL]);
+  if (claim.changes > 0) {
+    origem = STATUS.DISPONIVEL;
+  } else {
+    claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+      SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?`,
+      [STATUS.EM_MANUTENCAO, ferramentaId, STATUS.AVARIADA]);
+    if (claim.changes > 0) origem = STATUS.AVARIADA;
+  }
+  if (!origem) {
     const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [ferramentaId]);
     if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
     throw Object.assign(new Error(`Ferramenta não pode entrar em manutenção (status atual: ${atual.status})`), { status: 400 });
   }
 
+  // Compensacao (espelha emprestarFerramenta): o claim ja tirou a ferramenta de circulacao: se o
+  // INSERT falhar (ex.: descricao NOT NULL violada por quem chama o servico direto, fora do Zod),
+  // a ferramenta NAO pode ficar presa em EM_MANUTENCAO sem nenhuma linha de manutencao aberta —
+  // devolve para a origem real que o claim capturou acima.
   const r = await dbRun(db, `INSERT INTO manutencoes_ferramenta_almoxarifado
     (ferramenta_id, descricao, usuario_id) VALUES (?,?,?)`,
-    [ferramentaId, data.descricao, user.id]);
+    [ferramentaId, data.descricao, user.id]).catch(async (e) => {
+      await dbRun(db, 'UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [origem, ferramentaId]);
+      throw e;
+    });
 
   await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'MANUTENCAO_INICIO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
@@ -181,9 +203,20 @@ async function iniciarManutencao(db, user, ferramentaId, data) {
 /**
  * Concluir manutencao: claim no PROPRIO registro de manutencao (`data_fim IS NULL`) — cobre tanto
  * "id inexistente" quanto "manutencao ja concluida" com a mesma mensagem 404, como o contrato
- * pede. So depois de fechar a linha e que a ferramenta volta EM_MANUTENCAO -> DISPONIVEL; essa
- * segunda transicao e garantida pelo mesmo invariante de iniciarManutencao (uma manutencao aberta
- * por ferramenta), entao nao precisa de outra recusa aqui.
+ * pede. So depois de fechar a linha e que a ferramenta tenta voltar EM_MANUTENCAO -> DISPONIVEL.
+ *
+ * O invariante "uma manutencao aberta por ferramenta" (que iniciarManutencao garante hoje) e o
+ * que deveria tornar esse segundo claim sempre bem-sucedido — mas ele NAO e checado aqui, e uma
+ * task futura (Task 5, ocorrencias) vai abrir caminhos novos de mudanca de status. Por isso o
+ * `changes` do segundo UPDATE e verificado: se vier 0, a linha de manutencao JA foi fechada (o
+ * primeiro claim e irreversivel por design — nao ha por que desfaze-lo, o historico de "a
+ * manutencao acabou nesta hora" continua verdadeiro), mas a ferramenta nao seguiu para DISPONIVEL
+ * porque alguma outra escrita mudou o status dela nesse meio-tempo. Devolver {success:true} nesse
+ * caso mentiria (a auditoria diria MANUTENCAO_FIM como se a ferramenta tivesse voltado a circular,
+ * quando na verdade ela esta em outro estado) — em vez disso, a funcao AUDITA a anomalia (mesma
+ * acao MANUTENCAO_FIM, com uma flag e o status real em dados_novos, para nao perder o rastro de
+ * que a manutencao foi concluida) e lanca 400 com o status atual, para quem chamou saber que a
+ * ferramenta nao esta disponivel e agir (ex.: reabrir uma manutencao, investigar).
  */
 async function concluirManutencao(db, user, manutencaoId, data = {}) {
   const claim = await dbRun(db, `UPDATE manutencoes_ferramenta_almoxarifado
@@ -192,8 +225,16 @@ async function concluirManutencao(db, user, manutencaoId, data = {}) {
   if (claim.changes === 0) throw Object.assign(new Error('Manutenção não encontrada'), { status: 404 });
 
   const manutencao = await dbGet(db, 'SELECT * FROM manutencoes_ferramenta_almoxarifado WHERE id = ?', [manutencaoId]);
-  await dbRun(db, `UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP
+  const claimFerramenta = await dbRun(db, `UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND status = ?`, [STATUS.DISPONIVEL, manutencao.ferramenta_id, STATUS.EM_MANUTENCAO]);
+
+  if (claimFerramenta.changes === 0) {
+    const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [manutencao.ferramenta_id]);
+    await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
+      usuario_id: user.id, usuario_nome: user.nome || user.email,
+      dados_novos: { manutencao_id: Number(manutencaoId), anomalia: 'ferramenta_nao_estava_em_manutencao', status_atual: atual ? atual.status : null } });
+    throw Object.assign(new Error(`Estado da ferramenta mudou durante a conclusão da manutenção (status atual: ${atual ? atual.status : 'desconhecido'})`), { status: 400 });
+  }
 
   await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
     usuario_id: user.id, usuario_nome: user.nome || user.email,

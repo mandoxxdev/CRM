@@ -8,6 +8,7 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
+const toolService = require('../../services/almoxarifado/toolService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -195,6 +196,74 @@ async function novaFerramenta(db, extra = {}) {
     await request(app).post(`/api/almoxarifado/ferramentas/${fid}/manutencoes`)
       .send({ descricao: 'tentando manutencao' }).expect(403);
     await request(app).get(`/api/almoxarifado/ferramentas/${fid}/manutencoes`).expect(200);
+    await close();
+  });
+
+  await test('iniciarManutencao compensa: INSERT falhando (descricao NULL) devolve a ferramenta a origem', async () => {
+    const { db, close } = await createTestApp();
+    const fid = await novaFerramenta(db);
+    const ADMIN = { id: 1, nome: 'Admin Teste', email: 'admin@test.com' };
+
+    // Injecao NATURAL, sem mock: chamar o servico direto (fora da rota/Zod) com descricao NULL —
+    // a coluna e NOT NULL (schema.js:1507), entao o INSERT falha de verdade no SQLite. E o mesmo
+    // caminho que qualquer INSERT quebrado tomaria (ex.: FK invalida), so mais facil de forcar.
+    await assert.rejects(
+      () => toolService.iniciarManutencao(db, ADMIN, fid, { descricao: null }),
+      /NOT NULL/,
+    );
+    const f = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [fid]);
+    assert.strictEqual(f.status, 'DISPONIVEL', 'ferramenta ficou presa em EM_MANUTENCAO sem linha de manutencao');
+    const abertas = await dbAll(db,
+      'SELECT * FROM manutencoes_ferramenta_almoxarifado WHERE ferramenta_id = ?', [fid]);
+    assert.strictEqual(abertas.length, 0, 'INSERT falhou mas deixou linha gravada');
+
+    // controle positivo: a mesma ferramenta, com descricao valida, funciona normalmente depois.
+    await toolService.iniciarManutencao(db, ADMIN, fid, { descricao: 'Revisao' });
+    const f2 = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [fid]);
+    assert.strictEqual(f2.status, 'EM_MANUTENCAO');
+    await close();
+  });
+
+  await test('iniciarManutencao compensa devolvendo para AVARIADA quando essa foi a origem real', async () => {
+    const { db, close } = await createTestApp();
+    const fid = await novaFerramenta(db);
+    await dbRun(db, "UPDATE ferramentas_almoxarifado SET status = 'AVARIADA' WHERE id = ?", [fid]);
+    const ADMIN = { id: 1, nome: 'Admin Teste', email: 'admin@test.com' };
+
+    await assert.rejects(() => toolService.iniciarManutencao(db, ADMIN, fid, { descricao: null }), /NOT NULL/);
+    const f = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [fid]);
+    assert.strictEqual(f.status, 'AVARIADA', 'compensacao devolveu para a origem errada');
+    await close();
+  });
+
+  await test('concluirManutencao: status da ferramenta mudou por fora — 400 e auditoria de anomalia, sem sucesso silencioso', async () => {
+    const { app, db, close } = await createTestApp();
+    const fid = await novaFerramenta(db);
+    const m = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/manutencoes`)
+      .send({ descricao: 'Ajuste' }).expect(201);
+
+    // Injecao natural: entre iniciar e concluir, outra escrita muda o status da ferramenta por
+    // fora do fluxo de manutencao — quebra o invariante "uma manutencao aberta por ferramenta"
+    // que concluirManutencao normalmente confia. Simulado por UPDATE direto, como o brief pede.
+    await dbRun(db, "UPDATE ferramentas_almoxarifado SET status = 'BLOQUEADA' WHERE id = ?", [fid]);
+
+    const r = await request(app).put(`/api/almoxarifado/manutencoes/${m.body.id}/concluir`)
+      .send({}).expect(400);
+    assert.strictEqual(r.body.error, 'Estado da ferramenta mudou durante a conclusão da manutenção (status atual: BLOQUEADA)');
+
+    // a linha de manutencao FOI fechada (claim 1 e irreversivel por design) mesmo com a recusa.
+    const linha = await dbGet(db, 'SELECT * FROM manutencoes_ferramenta_almoxarifado WHERE id = ?', [m.body.id]);
+    assert.ok(linha.data_fim, 'manutencao deveria ter sido fechada mesmo com a anomalia');
+
+    // a ferramenta continua no estado real (nao virou DISPONIVEL por engano).
+    const f = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [fid]);
+    assert.strictEqual(f.status, 'BLOQUEADA');
+
+    // a anomalia foi auditada, nao sumiu do rastro.
+    const audit = await dbAll(db,
+      "SELECT * FROM auditoria_log_almoxarifado WHERE entidade = 'ferramenta' AND entidade_id = ? AND acao = 'MANUTENCAO_FIM'", [fid]);
+    assert.strictEqual(audit.length, 1, 'sem auditoria de MANUTENCAO_FIM na anomalia');
+    assert.ok(/anomalia/.test(audit[0].dados_novos), `flag de anomalia ausente: ${audit[0].dados_novos}`);
     await close();
   });
 
