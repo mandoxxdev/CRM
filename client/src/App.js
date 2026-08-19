@@ -109,6 +109,7 @@ import {
   MateriaisClienteAlmoxarifado,
   RemessasTerceirosAlmoxarifado,
   SobrasAlmoxarifado,
+  FerramentasAlmoxarifado,
   ChatPage,
   MinhaConta,
   TodolistBoard,
@@ -492,6 +493,7 @@ function AppRoutes() {
         <Route path="materiais-cliente" element={<MateriaisClienteAlmoxarifado />} />
         <Route path="remessas-terceiros" element={<RemessasTerceirosAlmoxarifado />} />
         <Route path="sobras" element={<SobrasAlmoxarifado />} />
+        <Route path="ferramentas" element={<FerramentasAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
         <Route path="configuracoes" element={<ProtectedAlmoxConfigRoute><ConfiguracoesAlmoxarifado /></ProtectedAlmoxConfigRoute>} />
       </Route>
