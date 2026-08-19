@@ -8626,17 +8626,31 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
           }
         }
         
-        // Regenerar o número da proposta apenas se a revisão mudou
+        // Revisão mexe SÓ no sufixo REV. O sequencial (098 em 098-02-AJ-2026-REV02)
+        // é identidade da proposta: sai uma vez, na criação, e não anda mais.
+        //
+        // Antes daqui saía um gerarNumeroPropostaComVerificacao, que monta o número
+        // INTEIRO do zero — e o sequencial dele é MAX(sequencial)+1 sobre a tabela.
+        // Resultado: cada revisão empurrava a proposta para o topo da fila e o
+        // documento trocava de identidade no meio da negociação (097 virava 098),
+        // além de queimar um número que nenhuma proposta usaria.
+        //
+        // É a mesma substituição que POST /propostas/:id/revisao já fazia certo.
         let numeroFinal = numero_proposta;
         if (cliente_id && deveIncrementarRevisao) {
-          // Gerar novo número com revisão incrementada
-          gerarNumeroPropostaComVerificacao(cliente_id, finalResponsavelId, novaRevisao, id, (err, numeroGerado) => {
-            if (err) {
-              return res.status(500).json({ error: 'Erro ao gerar número da proposta: ' + err.message });
-            }
-            numeroFinal = numeroGerado;
-            salvarHistoricoEAtualizar();
-          });
+          const numeroAtualProposta = String(propostaAtual.numero_proposta || '').trim();
+          const sufixoRev = `REV${String(novaRevisao).padStart(2, '0')}`;
+          if (/REV\s*\d+\s*$/i.test(numeroAtualProposta)) {
+            numeroFinal = numeroAtualProposta.replace(/REV\s*\d+\s*$/i, sufixoRev);
+          } else if (numeroAtualProposta) {
+            // Número legado sem sufixo: acrescenta em vez de reescrever tudo.
+            numeroFinal = `${numeroAtualProposta}-${sufixoRev}`;
+          } else {
+            // Proposta sem número gravado (não deveria acontecer num update):
+            // mantém o que veio no corpo em vez de inventar um sequencial.
+            numeroFinal = numero_proposta;
+          }
+          salvarHistoricoEAtualizar();
         } else {
           // Se não incrementou revisão, manter número atual da proposta
           // Se o número enviado for diferente do atual, verificar se não existe em outra proposta
@@ -9102,9 +9116,10 @@ const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Tr
 function carregarVariaveisDasFamilias(templateConfig, callback) {
   if (!templateConfig) return callback();
   db.all(
-    `SELECT f.nome AS familia, fv.variavel_chave AS chave
+    `SELECT f.nome AS familia, g.nome AS grupo, fv.variavel_chave AS chave
      FROM familias_produto f
      LEFT JOIN familia_variaveis fv ON fv.familia_id = f.id AND fv.ativo = 1
+     LEFT JOIN grupos_produto g ON g.id = f.grupo_id
      WHERE f.ativo = 1`,
     [],
     (err, rows) => {
@@ -9115,13 +9130,18 @@ function carregarVariaveisDasFamilias(templateConfig, callback) {
         return callback();
       }
       const mapa = {};
+      const grupos = {};
       (rows || []).forEach((r) => {
         const fam = String(r.familia || '').trim();
         if (!fam) return;
         if (!mapa[fam]) mapa[fam] = [];
         if (r.chave) mapa[fam].push(r.chave);
+        // Grupo da família: a capa usa para escolher o título ("equipamentos
+        // industriais" x "peças e acessórios").
+        if (r.grupo && !grupos[fam]) grupos[fam] = String(r.grupo).trim();
       });
       templateConfig.variaveis_da_familia = mapa;
+      templateConfig.grupo_por_familia = grupos;
       callback();
     }
   );
