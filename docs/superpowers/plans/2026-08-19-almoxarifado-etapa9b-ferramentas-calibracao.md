@@ -45,6 +45,19 @@ estão lá e valem como requisito de cada task. O nome de cada teste de RN cita 
   de CADA task, marcar este plano com o estado real; mesmo teste falhando 3 rodadas → parar e
   reportar aqui.
 
+## Fase 2 — revisão adversarial do plano (2026-08-19, ANTES do dispatch)
+
+Agente fresco revisou plano + design contra spec e código real: **10 achados, todos acatados**,
+nenhum ruído. Os que quebrariam a execução: tabela de auditoria com nome errado nos testes
+(`auditoria_almoxarifado` → `auditoria_log_almoxarifado`); precedente de multer errado (a rota de
+destino da sucata NÃO tem gate de propósito — copiá-la deixava PRODUCAO com upload 201); duas
+mensagens literais impossíveis via Zod (embrulho "Dados inválidos — ..." → regras movidas para o
+serviço); subpastas de upload que ninguém cria (→ prefixo flat); tipo `exige_calibracao`
+boolean×0/1 ambíguo no contrato (→ union+transform); UNIQUE 400→409 (precedente do módulo);
+subsequência (não igualdade) na asserção de auditoria da Task 8; D6 e rota de ocorrências
+desalinhados da tabela de contratos; foto singular vs "fotos" da spec declarada como corte.
+Correções aplicadas neste arquivo e no design em 2026-08-19 — contar na retro como 10 reais / 0 ruído.
+
 ## Sort topológico (tronco/galho)
 
 | Task | Tema | Classe |
@@ -355,8 +368,10 @@ test('RN-11: emprestar e devolver auditam', async () => {
   const e = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
     .send({ colaborador_nome: 'Joao' }).expect(201);
   await request(app).post(`/api/almoxarifado/emprestimos/${e.body.id}/devolver`).send({}).expect(200);
+  // A tabela e auditoria_LOG_almoxarifado (audit.js:6, schema.js:1541) — "auditoria_almoxarifado"
+  // NAO existe e ja derrubou teste nesta base (ver materialServiceCriacao.api.test.js:126).
   const audit = await dbAll(db,
-    "SELECT acao FROM auditoria_almoxarifado WHERE entidade = 'ferramenta' AND entidade_id = ?", [fid]);
+    "SELECT acao FROM auditoria_log_almoxarifado WHERE entidade = 'ferramenta' AND entidade_id = ?", [fid]);
   const acoes = audit.map(a => a.acao);
   assert.ok(acoes.includes('EMPRESTIMO'), `sem auditoria de emprestimo: ${acoes}`);
   assert.ok(acoes.includes('DEVOLUCAO'), `sem auditoria de devolucao: ${acoes}`);
@@ -452,7 +467,10 @@ const FerramentaCreateSchema = z.object({
   material_id: z.number().int().positive().nullable().optional(),
   numero_serie: z.string().nullable().optional(),
   localizacao_id: z.number().int().positive().nullable().optional(),
-  exige_calibracao: z.boolean().optional(),
+  // aceita true/false E 0/1: o GET devolve a linha do SQLite (0/1) e o front repopula o form
+  // com ela — um PUT de volta com 1 nao pode dar 400 (achado 9 da revisao do plano).
+  exige_calibracao: z.union([z.boolean(), z.literal(0), z.literal(1)])
+    .transform((v) => (v ? 1 : 0)).optional(),
   observacoes: z.string().nullable().optional(),
 });
 const FerramentaUpdateSchema = FerramentaCreateSchema.partial();
@@ -468,8 +486,9 @@ const DevolucaoEmprestimoSchema = z.object({ observacoes: z.string().nullable().
 
 Rotas (`extended.js:863-887`): trocar `requirePermission('movimentar')` →
 `requirePermission('gerenciar_ferramentas')`, acrescentar `validate(...)` e `PUT /ferramentas/:id`.
-`criarFerramenta` ganha os campos novos e a recusa do UNIQUE vira 400
-`"Código de patrimônio já cadastrado"` (catch de `SQLITE_CONSTRAINT`). `listarFerramentas` passa a
+`criarFerramenta` ganha os campos novos e a recusa do UNIQUE vira **409**
+`"Código de patrimônio já cadastrado"` (catch de `SQLITE_CONSTRAINT`; 409 e não 400 porque o
+precedente do módulo para UNIQUE é 409 — centro de custo, `extended.js:121`). `listarFerramentas` passa a
 montar `calibracao_vigente`/`emprestimo_aberto` (LEFT JOIN ou subquery; `calibracao_vigente = null`
 quando `exige_calibracao = 0`).
 - [ ] **Step 4: Verde + suíte inteira** (`npm run test:api` — atenção a `permissoesRotas.api.test.js`,
@@ -488,11 +507,14 @@ quando `exige_calibracao = 0`).
 - Modify: `server/services/almoxarifado/toolService.js` (`registrarCalibracao`,
   `listarCalibracoes`, `painelCalibracoes`)
 - Modify: `server/routes/almoxarifado/extended.js` (3 rotas novas; multer `uploadCertificadoCalibracao`
-  clonando a configuração de `uploadComprovanteSucata` de `extended.js:74`, subpasta
-  `uploads/almoxarifado/calibracoes`)
+  clonando a configuração de `uploadComprovanteSucata` de `extended.js:74` — **gravação FLAT em
+  `uploadsAlmoxDir` com prefixo `calibracao-` no filename, SEM subpasta**: `multer.diskStorage`
+  não cria diretório e ninguém mkdir'a subpastas — o primeiro upload daria ENOENT → 500)
 - Modify: `server/services/almoxarifado/schemas.js` (`CalibracaoSchema`: `data_calibracao` string
-  date obrigatória, `data_validade` obrigatória, `observacoes?`; refine: validade > calibração,
-  mensagem literal `"Data de validade deve ser posterior à data de calibração"`)
+  date obrigatória, `data_validade` obrigatória, `observacoes?` — **só forma**; a regra
+  validade > calibração é checada NO SERVIÇO com throw 400 e a mensagem literal
+  `"Data de validade deve ser posterior à data de calibração"`, porque erro de Zod sai embrulhado
+  em `"Dados inválidos — <path>: ..."` pela `validation.js:16-27` e nunca bateria o contrato)
 - Test: `server/tests/api/toolCalibracao.api.test.js`
 
 **Interfaces:**
@@ -511,9 +533,13 @@ quando `exige_calibracao = 0`).
   listas certas, `dias=5` deixa a de 10 dias de fora); PRODUCAO → 403 no POST, 200 no GET; POST
   audita (`acao:'CALIBRACAO'`).
 - [ ] **Step 2: Rodar e ver falhar.**
-- [ ] **Step 3: Implementar.** Multer ANTES do gate grava arquivo mesmo em 403 — usar a MESMA
-  solução da rota de destino da sucata (ler o comentário em `extended.js:815-845` e copiar a
-  ordem dos middlewares de lá; não inventar).
+- [ ] **Step 3: Implementar.** Ordem de middlewares: `auth → requirePermission('gerenciar_ferramentas')
+  → multer → safeParse manual do schema`. **NÃO copiar a ordem da rota de destino da sucata** —
+  aquela rota não tem `requirePermission` DE PROPÓSITO (o gate dela, "uma das duas pernas", vive
+  no serviço, `extended.js:831-845`); copiá-la deixaria PRODUCAO fazendo upload com 201. O
+  precedente certo para multipart COM gate exprimível é a rota de foto — o teste
+  `permissoesRotas.api.test.js:515-534` prova que o gate roda ANTES do multer (403 sem arquivo
+  órfão). Da sucata, aproveitar só o `limparUploadOrfao` para o 400 de validação pós-upload.
 - [ ] **Step 4: Verde + suíte.**
 - [ ] **Step 5: SABOTAGEM:** no `painelCalibracoes`, trocar o filtro `exige_calibracao = 1` por
   `1=1` → o teste do painel TEM de cair (ferramenta sem exigência apareceria). Restaurar.
@@ -564,12 +590,15 @@ quando `exige_calibracao = 0`).
 **Files:**
 - Modify: `server/services/almoxarifado/toolService.js` (`registrarOcorrencia`, `listarOcorrencias`)
 - Modify: `server/routes/almoxarifado/extended.js` (`POST /ferramentas/:id/ocorrencias` multipart
-  campo `foto` + `GET /ferramentas/:id/ocorrencias`; multer reusa o storage da Task 3, subpasta
-  `uploads/almoxarifado/ocorrencias`)
-- Modify: `server/services/almoxarifado/schemas.js` (`OcorrenciaSchema`:
-  `tipo: z.enum(['AVARIA','PERDA'])` — a mensagem de enum inválido do contrato é
-  `"Tipo de ocorrência inválido"`, usar `errorMap`/refine para bater literal —, `descricao!`,
-  `responsavel_nome?`, `responsavel_colaborador_id?`)
+  campo `foto` + `GET /ferramentas/:id/ocorrencias`; multer reusa o storage da Task 3 — gravação
+  FLAT em `uploadsAlmoxDir` com prefixo `ocorrencia-`, sem subpasta; ordem de middlewares
+  idêntica à Task 3: gate ANTES do multer)
+- Modify: `server/services/almoxarifado/schemas.js` (`OcorrenciaSchema`: `tipo: z.string().min(1)`
+  — **a checagem `AVARIA|PERDA` é do SERVIÇO**, com throw 400 e a mensagem literal
+  `"Tipo de ocorrência inválido"`; pelo Zod ela sairia embrulhada em "Dados inválidos — ..." e o
+  contrato quebraria —, `descricao!`, `responsavel_nome?`, `responsavel_colaborador_id?` com
+  coerção de multipart: campo de form chega STRING — usar o precedente `numFromForm` de
+  `schemas.js:641`)
 - Test: `server/tests/api/toolOcorrencia.api.test.js`
 
 **Interfaces:**
@@ -684,7 +713,9 @@ criar ferramenta exige_calibracao=1
 → iniciar manutencao sobre AVARIADA (Task 4, RN-07)
 → concluir manutencao → DISPONIVEL
 → emprestar: 201 → devolver: 200 (RN-04)
-→ auditoria da ferramenta contem, em ordem: CALIBRACAO, EMPRESTIMO, OCORRENCIA, EMPRESTIMO, DEVOLUCAO
+→ auditoria da ferramenta contem, como SUBSEQUENCIA em ordem (nao igualdade — RN-11 obriga
+  manutencao a auditar tambem, entao ha entradas intercaladas): CALIBRACAO, EMPRESTIMO,
+  OCORRENCIA, EMPRESTIMO, DEVOLUCAO — na tabela auditoria_log_almoxarifado
 → GET /calibracoes/painel NAO lista a ferramenta (calibracao vigente)
 ```
 

@@ -65,9 +65,14 @@ de emprestar — sem coluna-cache na ferramenta. Descartado: cache `data_proxima
 ferramenta — segunda fonte da mesma verdade, exatamente a doença que `availabilitySql`/`custoSql`/
 `movementTypes` curaram nas etapas 8b/8c. Corrida aceita de propósito: vencimento é função do
 tempo, não de escritor concorrente — pré-checagem basta, não precisa estar no claim.
-Certificado: multipart via multer em disco, mesmo padrão do comprovante de sucata (Etapa 9),
-inclusive a ordem "multer grava antes do gate" já resolvida lá — copiar o padrão da rota de
-destino da sucata, não inventar.
+Certificado: multipart via multer em disco, configuração clonada do comprovante de sucata
+(`extended.js:74`), gravação **flat** em `uploadsAlmoxDir` com prefixo no filename (subpasta não —
+ninguém a cria e o multer não cria destino). **Ordem de middlewares: gate ANTES do multer**
+(`auth → requirePermission → multer → safeParse`) — a rota de destino da sucata NÃO serve de
+precedente aqui: ela não tem `requirePermission` de propósito (o gate dela vive no serviço); o
+precedente certo é a rota de foto, provada por `permissoesRotas.api.test.js:515-534`. Da sucata
+aproveita-se só o `limparUploadOrfao` para o 400 pós-upload. (Correção da revisão do plano,
+achado 3 — a versão anterior deste parágrafo mandava copiar o precedente errado.)
 
 **D4 — Manutenção como histórico:** tabela `manutencoes_ferramenta_almoxarifado`
 (`ferramenta_id`, `descricao`, `data_inicio`, `data_fim NULL`, `usuario_id`, `observacoes`).
@@ -78,12 +83,18 @@ de status, não por UNIQUE).
 **D5 — Avaria e perda como ocorrências:** tabela `ocorrencias_ferramenta_almoxarifado`
 (`ferramenta_id`, `tipo` `AVARIA|PERDA`, `descricao`, `responsavel_colaborador_id NULL`,
 `responsavel_nome`, `foto_path NULL`, `usuario_id`, `created_at`). Foto multipart opcional (multer,
-D3). Efeito no status: `AVARIA → AVARIADA`; `PERDA → PERDIDA`. Sobre ferramenta emprestada, RN-05.
-Descartado: bloquear ocorrência em ferramenta emprestada — perda não tem como ser devolvida antes.
+D3). **A spec diz "fotos" (plural); esta etapa entrega UMA foto por ocorrência** — corte declarado
+(achado 8 da revisão do plano), não esquecimento: galeria de N fotos exige tabela filha e UI de
+galeria; se o galpão precisar de mais de uma, registram-se ocorrências adicionais ou o item volta
+como melhoria. Efeito no status: `AVARIA → AVARIADA`; `PERDA → PERDIDA`. Sobre ferramenta
+emprestada, RN-05. Descartado: bloquear ocorrência em ferramenta emprestada — perda não tem como
+ser devolvida antes.
 
 **D6 — Lembrete de devolução vencida:** seguir o padrão do `requisitionReminderService` (job
-existente) + rota `GET /emprestimos/vencidos`. O painel/alerta formal fica na feature 20 —
-declarado, não esquecido.
+existente) + **filtro `GET /emprestimos?vencidos=1`** (não rota própria — a tabela de contratos é
+a fonte; a versão anterior deste parágrafo dizia `GET /emprestimos/vencidos` e contradizia a
+tabela, achado 5 da revisão do plano). O painel/alerta formal fica na feature 20 — declarado, não
+esquecido.
 
 **D7 — Colunas novas em `ferramentas_almoxarifado`** (todas por `safeAlter`): `numero_serie TEXT`,
 `localizacao_id INTEGER` (FK lógica para localizações), `exige_calibracao INTEGER DEFAULT 0`.
@@ -114,12 +125,19 @@ herdado".)
 ## Contratos de API (congelados — o front trabalha contra isto)
 
 Erros seguem o padrão do módulo: `{ error: "<mensagem>" }`, status 400 para regra recusada,
-403 para perfil sem a ação, 404 para id inexistente.
+403 para perfil sem a ação, 404 para id inexistente, 409 para conflito de UNIQUE.
+
+**Tipos (revisão do plano, achado 9):** `exige_calibracao` é aceito como `true/false` **ou** `0/1`
+no POST/PUT (o Zod normaliza para 0/1) e o GET devolve **0/1** (linha do SQLite) — o front deve
+tratar 0/1. Em rotas **multipart**, todo campo chega **string**: numéricos são coagidos no schema
+(precedente `numFromForm`, `schemas.js:641`). **Mensagens de regra de negócio saem do SERVIÇO**
+(throw 400 com a mensagem literal da tabela) — não do Zod, cujo erro sai embrulhado em
+`"Dados inválidos — <path>: ..."` (`validation.js`); o Zod valida só a forma.
 
 | Método e caminho | Gate | Payload (Zod) | Sucesso | Recusas (mensagem literal) |
 |---|---|---|---|---|
 | `GET /api/almoxarifado/ferramentas` | auth | query: `status?`, `busca?`, `exige_calibracao?` | 200 lista (cada item com `calibracao_vigente: bool\|null`, `emprestimo_aberto` resumido) | — |
-| `POST /api/almoxarifado/ferramentas` | gerenciar_ferramentas | `codigo_patrimonio!`, `nome!`, `tipo?`, `setor_responsavel?`, `material_id?`, `numero_serie?`, `localizacao_id?`, `exige_calibracao?`, `observacoes?` | 201 `{id}` | 400 `"Código de patrimônio já cadastrado"` (UNIQUE) |
+| `POST /api/almoxarifado/ferramentas` | gerenciar_ferramentas | `codigo_patrimonio!`, `nome!`, `tipo?`, `setor_responsavel?`, `material_id?`, `numero_serie?`, `localizacao_id?`, `exige_calibracao?`, `observacoes?` | 201 `{id}` | **409** `"Código de patrimônio já cadastrado"` (UNIQUE — 409 e não 400 pelo precedente do módulo, centro de custo em `extended.js:121`) |
 | `PUT /api/almoxarifado/ferramentas/:id` | gerenciar_ferramentas | mesmos campos, todos opcionais | 200 `{success:true}` | 404 `"Ferramenta não encontrada"` |
 | `POST /api/almoxarifado/ferramentas/:id/emprestar` | gerenciar_ferramentas | `colaborador_nome!`, `colaborador_id?`, `setor?`, `data_prevista_devolucao?`, `observacoes?` | 201 `{id}` | 400 RN-01/02: `"Ferramenta não está disponível (status atual: <STATUS>)"` · 400 RN-03: `"Ferramenta com calibração vencida ou sem calibração registrada"` |
 | `POST /api/almoxarifado/emprestimos/:id/devolver` | gerenciar_ferramentas | `observacoes?` | 200 `{success:true}` | 404 `"Empréstimo não encontrado"` (inclui já devolvido) |
@@ -130,6 +148,7 @@ Erros seguem o padrão do módulo: `{ error: "<mensagem>" }`, status 400 para re
 | `PUT /api/almoxarifado/manutencoes/:id/concluir` | gerenciar_ferramentas | `observacoes?` | 200 | 404 `"Manutenção não encontrada"` (inclui já concluída) |
 | `GET /api/almoxarifado/ferramentas/:id/manutencoes` | auth | — | 200 lista | — |
 | `POST /api/almoxarifado/ferramentas/:id/ocorrencias` | gerenciar_ferramentas | multipart: `tipo!` (`AVARIA\|PERDA`), `descricao!`, `responsavel_nome?`, `responsavel_colaborador_id?`, campo de arquivo `foto?` | 201 `{id}` | 400 `"Tipo de ocorrência inválido"` · RN-05 aplica sem recusa extra |
+| `GET /api/almoxarifado/ferramentas/:id/ocorrencias` | auth | — | 200 lista (`{id, tipo, descricao, responsavel_nome, foto_path, created_at}`) | — |
 | `POST /api/almoxarifado/ferramentas/:id/reencontrar` | gerenciar_ferramentas | `justificativa!` (min 5) | 200 | 400 `"Ferramenta não está perdida (status atual: <STATUS>)"` |
 | `POST /api/almoxarifado/ferramentas/:id/calibracoes` | gerenciar_ferramentas | multipart: `data_calibracao!`, `data_validade!`, `observacoes?`, campo de arquivo `certificado?` | 201 `{id}` | 400 `"Data de validade deve ser posterior à data de calibração"` |
 | `GET /api/almoxarifado/ferramentas/:id/calibracoes` | auth | — | 200 lista | — |
