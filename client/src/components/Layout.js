@@ -350,6 +350,9 @@ const Layout = () => {
     // dono e herdado), mas o que o separa das Devoluções e a ORIGEM: aqui nasceu de um corte, com
     // dimensao remanescente registrada — la, voltou inteiro do chao de fabrica.
     { path: '/almoxarifado/sobras', icon: FiScissors, label: 'Sobras e Retalhos' },
+    // Etapa 9b: ferramenta e PATRIMONIO emprestavel (furadeira, paquimetro...), nao estoque —
+    // tela nova para emprestimo/devolucao, manutencao, avaria/perda e calibracao (design D9).
+    { path: '/almoxarifado/ferramentas', icon: FiTool, label: 'Ferramentas' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
