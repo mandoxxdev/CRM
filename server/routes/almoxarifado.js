@@ -860,7 +860,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // CONCLUIDO/CANCELADO aceitava edicao, contradizendo o proprio teste que a spec 17 sempre
       // pediu ("conferencia concluida nao pode ser editada"). Nao e mudanca de comportamento
       // pedida por ninguem: e o comportamento que a spec sempre presumiu e o codigo nunca teve.
-      const conf = await dbGet(db, `SELECT status FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
+      const conf = await dbGet(db, `SELECT status, dupla_contagem FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
       if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
       if (conf.status !== 'ABERTO') {
         return res.status(400).json({ error: `Conferência não está aberta (status atual: ${conf.status})` });
@@ -879,10 +879,26 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // deduzir a partir do valor antigo, que ele nem tem em maos.
       const ehRecontagem = item.quantidade_contada !== null;
 
+      // RN-03 (10b): dupla contagem — o autor da PRIMEIRA contagem nunca reconta. A comparação
+      // é sempre contra contado_por_id (não o contador anterior): senão o primeiro contador
+      // poderia sobrescrever a recontagem do colega e anular os quatro olhos.
+      if (ehRecontagem && conf.dupla_contagem && item.contado_por_id === req.user.id) {
+        return res.status(400).json({
+          error: `Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: ${item.contado_por_nome})`,
+        });
+      }
+
+      // RN-04 (10b): autoria sempre gravada, flag ou não — primeira contagem em contado_por_*,
+      // cada contagem seguinte sobrescreve recontado_por_* (fica o último recontador).
+      const autorNome = req.user.nome || req.user.email;
+      const camposAutoria = ehRecontagem
+        ? ', recontado_por_id = ?, recontado_por_nome = ?'
+        : ', contado_por_id = ?, contado_por_nome = ?';
+
       await dbRun(db, `UPDATE itens_conferencia_almoxarifado
-              SET quantidade_contada = ?, divergencia = ?, observacoes = ?${ehRecontagem ? ', recontado = 1' : ''}
+              SET quantidade_contada = ?, divergencia = ?, observacoes = ?${ehRecontagem ? ', recontado = 1' : ''}${camposAutoria}
               WHERE id = ?`,
-        [quantidade_contada, divergencia, observacoes || null, req.params.itemId]);
+        [quantidade_contada, divergencia, observacoes || null, req.user.id, autorNome, req.params.itemId]);
 
       res.json({ success: true, divergencia, recontagem: ehRecontagem });
     } catch (e) {
