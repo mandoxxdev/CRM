@@ -161,11 +161,28 @@ describe('ConferenciaEstoque — criação com modo_cego e tolerancia_percentual
     expect(payload.tolerancia_percentual).toBeUndefined();
   });
 
-  test('campo Tolerância mostra o default no placeholder', async () => {
+  test('campo Tolerância mostra o default fixo no placeholder quando a config nao responde nada util', async () => {
     await renderizar();
     await clicar(botao('Nova Conferência'));
     const campoTolerancia = campo('Tolerância');
     expect(campoTolerancia.placeholder).toMatch(/2/);
+  });
+
+  // Achado da revisão da Task 3: o placeholder original SEMPRE mostrava "2" fixo, alegando que
+  // não existia endpoint de leitura de configuração — falso, GET /almoxarifado/configuracoes já
+  // existe (e ConfiguracoesAlmoxarifado.js já o consome). Corrigido para ler a config real.
+  test('campo Tolerância mostra o valor REAL configurado no placeholder, nao so o default fixo', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      if (url === '/almoxarifado/configuracoes') {
+        return Promise.resolve({ data: { tolerancia_inventario_percentual: { valor: '7.5', id: 1 } } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Nova Conferência'));
+    const campoTolerancia = campo('Tolerância');
+    expect(campoTolerancia.placeholder).toMatch(/7\.5/);
   });
 });
 

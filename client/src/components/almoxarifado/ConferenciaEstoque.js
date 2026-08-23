@@ -12,9 +12,11 @@ const CATEGORIAS = [
   'MECÂNICO', 'INSUMO', 'EMBALAGEM', 'ESCRITÓRIO', 'LIMPEZA', 'OUTROS'
 ];
 
-// Default espelhado do servidor (routes/almoxarifado.js, toleranciaEfetiva) só para o placeholder
-// do campo — o valor real que vale é sempre o que o backend calcula (configuracoes_almoxarifado
-// ou 2 se ausente); a tela nunca decide o default, só sugere um no placeholder.
+// Fallback final do servidor (routes/almoxarifado.js, toleranciaEfetiva) quando a config nem
+// existe — usado só se a leitura de /almoxarifado/configuracoes falhar ou a chave não estiver
+// setada. Achado da revisão da Task 3: o placeholder ORIGINAL usava sempre este valor fixo,
+// alegando que não existia endpoint de leitura — falso, GET /almoxarifado/configuracoes já
+// existe e já é consumido por ConfiguracoesAlmoxarifado.js. Corrigido para ler a config real.
 const TOLERANCIA_DEFAULT_PLACEHOLDER = '2';
 
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -29,6 +31,7 @@ const ConferenciaEstoque = () => {
   const [criarModoCego, setCriarModoCego] = useState(false);
   const [criarTolerancia, setCriarTolerancia] = useState('');
   const [creating, setCreating] = useState(false);
+  const [toleranciaPlaceholder, setToleranciaPlaceholder] = useState(TOLERANCIA_DEFAULT_PLACEHOLDER);
 
   const [confAberta, setConfAberta] = useState(null);
   const [loadingConf, setLoadingConf] = useState(false);
@@ -40,7 +43,24 @@ const ConferenciaEstoque = () => {
 
   useEffect(() => {
     loadConferencias();
+    loadToleranciaConfigurada();
   }, []);
+
+  // GET /almoxarifado/configuracoes devolve um MAPA { chave: { valor, descricao, id } } (mesmo
+  // contrato que ConfiguracoesAlmoxarifado.js já consome) — a chave que importa aqui é
+  // tolerancia_inventario_percentual (routes/almoxarifado.js, toleranciaEfetiva). Falha silenciosa
+  // de propósito: se a leitura falhar, o placeholder cai para o fallback fixo — o valor REAL que
+  // vale sempre é o que o backend calcula na criação, o placeholder é só uma dica visual.
+  const loadToleranciaConfigurada = async () => {
+    try {
+      const res = await api.get('/almoxarifado/configuracoes');
+      const info = res.data?.tolerancia_inventario_percentual;
+      const valor = info && typeof info === 'object' ? info.valor : info;
+      if (valor !== undefined && valor !== null && valor !== '' && Number.isFinite(parseFloat(valor))) {
+        setToleranciaPlaceholder(String(parseFloat(valor)));
+      }
+    } catch { /* mantém o fallback TOLERANCIA_DEFAULT_PLACEHOLDER */ }
+  };
 
   const loadConferencias = async () => {
     setLoading(true);
@@ -452,7 +472,7 @@ const ConferenciaEstoque = () => {
                     step="0.01"
                     value={criarTolerancia}
                     onChange={e => setCriarTolerancia(e.target.value)}
-                    placeholder={`${TOLERANCIA_DEFAULT_PLACEHOLDER} (padrão, se deixar em branco)`}
+                    placeholder={`${toleranciaPlaceholder} (padrão, se deixar em branco)`}
                   />
                 </div>
                 <div style={{ background: 'rgba(79,172,254,0.06)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '12px 16px', marginTop: 16, fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
