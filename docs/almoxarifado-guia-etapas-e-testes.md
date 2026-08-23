@@ -2,15 +2,29 @@
 
 > Atualizado em 2026-08-22 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 9b) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 10) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-22 (Etapa 9b ENTREGUE)
+> ## Onde o desenvolvimento parou — 2026-08-22 (Etapa 10 ENTREGUE)
+>
+> **Etapas 1 a 10 completas.** A **Etapa 10 (Inventário Avançado) fechou em 2026-08-22**
+> (`d644827..8db2671`), e com ela a **feature 17 fica parcialmente completa** — o risco crítico
+> de três etapas (ajuste gravando saldo por fora do sistema) está resolvido; tipos de contagem
+> avançados, dupla contagem por duas pessoas, congelamento de movimentação e relatório de
+> acuracidade ficam declarados fora do escopo, para uma **Etapa 10b** (ver seção "Etapa 10", mais
+> abaixo). Não há próxima etapa numerada definida ainda.
+>
+> **A Etapa 10 fez o ajuste de inventário parar de mentir.** Concluir uma conferência com
+> "aplicar ajustes" agora registra uma movimentação de verdade, auditada, e recusa deixar
+> material bloqueado/reservado/em inspeção/em terceiro com número que não fecha. De brinde:
+> contagem cega (quem conta não vê o saldo do sistema) e recontagem obrigatória para divergência
+> grande. Ver a seção "Etapa 10", mais abaixo, com o roteiro completo.
+>
+> **Antes: 2026-08-22 (Etapa 9b ENTREGUE).**
 >
 > **Etapas 1 a 9b completas.** A **Etapa 9b (Ferramentas e Calibração) fechou em 2026-08-22**
 > (`d644827..b8e6f60`), e com ela a **feature 16 fica completa** (com duas melhorias pendentes
 > declaradas — lembrete automático sem canal, e edição de ferramenta pela tela — ver seção
-> "Etapa 9b", mais abaixo). A **próxima etapa é a 10 — inventário avançado** (feature 17):
-> contagem cega, recontagem, tolerância, aprovação de ajuste, acuracidade.
+> "Etapa 9b", mais abaixo).
 >
 > **A Etapa 9b fez ferramenta virar patrimônio controlado de verdade.** Empréstimo agora recusa
 > ferramenta ocupada, bloqueada, em manutenção, avariada, perdida ou com calibração vencida — com
@@ -2332,6 +2346,82 @@ Prepare: uma ferramenta que **não** exige calibração e outra que **exige** �
   — isso depende da inspeção com plano de medidas, que ainda não existe.
 - **Uma foto por ocorrência**, não uma galeria — se precisar de mais de uma foto por avaria,
   registre ocorrências adicionais.
+
+---
+
+## Etapa 10 — Inventário Avançado (ENTREGUE — 2026-08-22)
+
+**Em uma frase:** a conferência de inventário deixou de gravar o saldo por fora do sistema —
+agora o ajuste é uma movimentação de verdade, auditada, e recusada quando deixaria material
+bloqueado/reservado/em inspeção/em terceiro com número que não fecha. De brinde: contagem cega
+e recontagem obrigatória para divergência grande.
+
+**O problema que existia.** Concluir uma conferência com "aplicar ajustes" escrevia o saldo do
+material direto no banco, sem nenhuma das verificações que qualquer outra movimentação do módulo
+tem — nenhuma checagem de que o material bloqueado, reservado, em inspeção ou em terceiro não
+ficaria com número negativo, e nenhum registro de auditoria de verdade.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Ajuste que reduz o total abaixo do que está retido (bloqueado/reservado/em inspeção/em terceiro) era aceito em silêncio | **Recusado**, dizendo qual retenção pesa e o mínimo aceitável |
+| Ajuste não deixava registro auditável | Movimentação de verdade no livro, com quem homologou |
+| Ver quanto o sistema diz que tem, contando | Opcional por conferência ("Contagem cega") |
+| Divergência muito grande era aceita sem segunda chance | Exige **recontar** antes de concluir |
+| Justificativa do ajuste | Obrigatória ao aplicar ajustes |
+| Impacto financeiro do ajuste | Calculado e mostrado no aviso de sucesso |
+| Concluir a mesma conferência duas vezes | Recusado — só conclui uma vez |
+
+### As regras, com o cenário exato
+
+**1. Ajuste que deixaria retenção maior que o total é recusado.**
+*Cenário:* material com 8 unidades bloqueadas, contagem aponta só 5:
+> `Ajuste bloqueado: <código>: Ajuste para 5 UN deixaria o disponível negativo (bloqueada: 8, mínimo aceitável: 8 UN). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.`
+
+**2. Divergência acima da tolerância exige recontar antes de concluir.**
+*Cenário:* divergência de 10%, tolerância configurada em 2%:
+> `Recontagem necessária antes de concluir: <código> - 10.00% (limite 2%)`
+
+Contar o mesmo item de novo já libera a conclusão.
+
+**3. Aplicar ajustes exige justificativa.**
+> `Justificativa deve ter pelo menos 5 caracteres`
+
+**4. Uma conferência só conclui uma vez.**
+> `Conferência não está aberta (status atual: CONCLUIDO)`
+
+### Roteiro de teste manual (Etapa 10)
+
+Prepare: um material com custo cadastrado (para ver o impacto financeiro) e, opcionalmente, um
+segundo usuário com perfil Almoxarife (para testar a contagem cega de verdade).
+
+1. **Almoxarifado → Conferências de Estoque** → **Nova Conferência**.
+2. Marcar **"Contagem cega"** e preencher **"Tolerância (%)"** com `5` → **Criar Conferência**.
+3. Abrir a conferência criada. Se estiver logado como Almoxarife (sem a permissão de ajustar
+   estoque), a coluna "Qtd. Sistema" mostra `—`; como Gestor/Administrador, mostra o número.
+4. Contar um item com uma divergência **grande** (ex.: sistema mostra 100, contar 50 — 50% de
+   divergência, acima do limite de 5%). Tentar **Concluir Conferência** → conferir a recusa
+   citando "Recontagem necessária".
+5. Contar o **mesmo item de novo** (pode ser o mesmo valor) → a coluna "Recontagem" para de
+   mostrar o aviso. **Concluir Conferência** de novo → agora passa da checagem de tolerância.
+6. No modal de concluir, marcar **"Aplicar ajustes automáticos"** sem preencher a justificativa
+   → botão "Confirmar" fica desabilitado. Preencher com pelo menos 5 caracteres → habilita.
+7. **Confirmar** → conferir o aviso de sucesso mostrando "impacto financeiro" em reais.
+8. **Almoxarifado → Movimentações** → conferir a linha nova do tipo **"Ajuste (inventário)"**,
+   sem botão de estornar.
+9. Tentar **Concluir Conferência** de novo na mesma conferência (já concluída) → conferir a
+   recusa "Conferência não está aberta".
+
+### O que a Etapa 10 **não** cobre (é decisão declarada, não esquecimento)
+
+- **Só contagem "por categoria"** — por endereço, família, criticidade/ABC automática, item
+  crítico e surpresa não foram construídas.
+- **A recontagem aceita a mesma pessoa** — não exige um segundo contador.
+- **Nenhuma movimentação é congelada durante a contagem.**
+- **Não há fluxo formal de duas assinaturas** (como o sucateamento) — existe dupla permissão
+  (quem conta ≠ quem homologa), não duas pessoas assinando o mesmo processo.
+- **Relatório formal de acuracidade e e-mail do resultado não existem.**
 
 ---
 

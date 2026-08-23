@@ -1270,9 +1270,25 @@ A razão é uma só, e vale a pena saber explicar:
 
 > É a mesma distinção do disponível (6.1), mas com corte diferente — e por isso as duas contas não podem ser confundidas: **o disponível subtrai as quatro retenções; a contagem só pode subtrair uma.**
 
-### 13.3 Contar
+### 13.3 Contagem cega
 
-A tela lista, por linha: **Código**, **Material**, **Localização**, **Qtd. Sistema**, **Qtd. Contada** (campo digitável) e **Divergência**. O cabeçalho acompanha o progresso: *"X / Y itens contados · N divergências"*.
+Ao criar a conferência, o marcador **"Contagem cega"** decide se quem só tem permissão para
+contar (perfil Almoxarife) vê a coluna "Qtd. Sistema" e a "Divergência" enquanto a contagem está
+**Aberta**. Marcado, essas duas colunas ficam ocultas para quem não pode aplicar ajustes de
+estoque; quem pode (Administrador, Gestor) sempre vê tudo, porque é quem vai decidir o ajuste.
+Concluída ou cancelada, a conferência sempre mostra as colunas completas — é o registro
+histórico, não faz sentido escondê-lo depois.
+
+A blindagem é da **tela**, não do sistema inteiro: um usuário que também acessa a tela de
+Materiais continua vendo o saldo lá. E a própria mensagem de recontagem (13.4) cita o percentual
+de divergência — quem sabe quanto contou consegue calcular o número escondido fazendo a conta ao
+contrário.
+
+### 13.4 Contar
+
+A tela lista, por linha: **Código**, **Material**, **Localização**, **Qtd. Sistema** (ou `—` em
+modo cego, para quem não pode ajustar), **Qtd. Contada** (campo digitável), **Divergência** e
+**Recontagem** (um aviso, quando se aplica — ver abaixo).
 
 A divergência é calculada e gravada a cada item, assim que o campo perde o foco:
 
@@ -1280,30 +1296,76 @@ A divergência é calculada e gravada a cada item, assim que o campo perde o foc
 Divergência = quantidade contada − quantidade sistema
 ```
 
-Positiva significa sobra física; negativa, falta. **Não há tolerância configurável**: qualquer diferença de zero é uma divergência.
+Positiva significa sobra física; negativa, falta. Contar o **mesmo item uma segunda vez** conta
+como **recontagem** — não precisa dar o mesmo valor; a segunda contagem é a segunda chance, não
+uma confirmação da primeira.
+
+**Tolerância e recontagem obrigatória.** Cada conferência tem uma tolerância (%) — definida na
+criação, ou o padrão configurado do módulo quando não informada. Um item cuja divergência
+percentual (sobre a quantidade do sistema) passa da tolerância e **ainda não foi recontado**
+bloqueia a conclusão da conferência **inteira** — com ou sem aplicar ajustes:
+
+> `Recontagem necessária antes de concluir: <código> - <percentual>% (limite <tolerância>%)`
+
+Recontar aquele item (mesmo dando o mesmo número) libera a conclusão.
 
 Item sem contagem informada fica em branco e **não vira ajuste** — só entram na apuração os itens efetivamente contados.
 
-### 13.4 Concluir — com ou sem aplicar ajustes
+### 13.5 Concluir — com ou sem aplicar ajustes
 
 Ao concluir, existe o marcador **"Aplicar ajustes automáticos ao concluir (saldos com divergência serão corrigidos)"**. Ele muda tudo:
 
 | Marcador | O que acontece |
 |---|---|
 | **Desmarcado** | A conferência fecha e as divergências ficam **apenas registradas**. Nenhum saldo muda |
-| **Marcado** | Cada item divergente tem o saldo do material **substituído pela quantidade contada**, e uma linha de **Ajuste** entra no livro com o motivo `Ajuste de conferência INV-…` |
+| **Marcado** | Cada item divergente vira uma **movimentação de ajuste** de verdade no livro, com o motivo `Ajuste de conferência INV-…`, o número da conferência e a justificativa digitada |
 
-**A permissão é dupla, e essa é a segregação da etapa:** fechar a contagem exige o perfil de **inventário**; **aplicar os ajustes** exige, **além disso**, o perfil que pode **ajustar estoque** (Administrador e Gestor). Sem ele, a recusa é *"Sem permissão para aplicar ajustes de estoque na conclusão do inventário"*.
+**Marcar "aplicar ajustes" exige uma justificativa** (pelo menos 5 caracteres) — sem ela, a
+recusa é imediata, antes de tocar em qualquer material:
+
+> `Justificativa deve ter pelo menos 5 caracteres`
+
+**A permissão é dupla:** fechar a contagem exige o perfil de **inventário**; **aplicar os ajustes** exige, **além disso**, o perfil que pode **ajustar estoque** (Administrador e Gestor). Sem ele, a recusa é *"Sem permissão para aplicar ajustes de estoque na conclusão do inventário"*.
 
 Na prática: **o almoxarife conta o inventário, mas quem homologa a divergência no saldo é Administrador ou Gestor.**
 
-Depois de aplicar, os alertas de estoque mínimo dos materiais afetados são reavaliados automaticamente.
+**O ajuste é recusado se deixaria alguma retenção maior que o novo total** — reservado, bloqueado, em inspeção ou em poder de terceiros. A mensagem diz qual retenção pesa e o mínimo aceitável:
 
-> Antes de homologar uma conferência com ajustes, leia a seção 20 — a homologação escreve o total do material e há dois cuidados de operação que valem para ela.
+> `Ajuste bloqueado: <código>: Ajuste para <valor> <unidade> deixaria o disponível negativo (<retenção>: <valor>, mínimo aceitável: <valor> <unidade>). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.`
 
-### 13.5 Cancelar
+Se a divergência for de um material que pertence a um **cliente** e quem está concluindo não tem
+a autorização especial para ajustar saldo de terceiro (16.8), a recusa é sobre isso — e tem
+prioridade sobre a de retenção quando a mesma conferência tem os dois problemas:
+
+> `Ajuste bloqueado — os seguintes materiais são de cliente e exigem a permissão "ajustar_material_cliente": <código> (<cliente>)`
+
+**A aplicação é tudo ou nada.** Se qualquer item da conferência for recusado (por retenção ou por
+permissão), **nenhum** ajuste é aplicado — nem os que passariam sozinhos — e a conferência
+continua Aberta. Resolva o motivo da recusa (libere a retenção, peça a autorização) e conclua de
+novo.
+
+**Uma conferência só conclui uma vez.** Tentar concluir de novo uma que já está Concluída ou
+Cancelada é recusado:
+
+> `Conferência não está aberta (status atual: <status>)`
+
+O aviso de sucesso mostra o **impacto financeiro** dos ajustes aplicados — a soma, em reais, de
+cada item ajustado (valor absoluto: uma sobra de R$ 50 e uma falta de R$ 50 na mesma conferência
+somam R$ 100 de impacto, não R$ 0 — é "quanto dinheiro este inventário movimentou", não um
+líquido). Depois de aplicar, os alertas de estoque mínimo dos materiais afetados são reavaliados
+automaticamente.
+
+> Antes de homologar uma conferência com ajustes, leia a seção 23 — há cuidados de operação que
+> continuam valendo mesmo com a guarda de retenção.
+
+### 13.6 Cancelar
 
 Uma conferência **Aberta** pode ser cancelada, e cancelar **não altera saldo nenhum**. Conferência já concluída não volta atrás: *"Só é possível cancelar conferências abertas"*.
+
+Uma movimentação de ajuste de inventário, uma vez aplicada, **não pode ser estornada** pelo botão
+de estorno do livro de Movimentações — ela representa uma contagem física já homologada, e
+desfazê-la sem uma nova contagem apagaria o rastro de que a contagem aconteceu. O caminho de
+correção é abrir uma **nova conferência**.
 
 ---
 
@@ -1586,7 +1648,7 @@ Quem não tem a permissão recebe:
 
 A verificação acontece **dentro do motor de estoque**, e não só na tela — de forma que qualquer ajuste lançado pela tela de Movimentações passa por ela. Todo ajuste de material de cliente deixa registro de auditoria **nomeando o cliente proprietário**, com o saldo anterior, o tipo de ajuste, a quantidade e a justificativa (que é obrigatória em qualquer ajuste).
 
-> Para acertar o saldo de um material de cliente, use sempre o **Ajuste** da tela de Movimentações — ver o cuidado registrado em 20.
+> Para acertar o saldo de um material de cliente, use sempre o **Ajuste** da tela de Movimentações — ver o cuidado registrado em 23.
 
 ### 16.9 A tela e o relatório de posição por cliente
 
@@ -1680,7 +1742,7 @@ ABERTA ──► ENVIADA ──► RETORNO_PARCIAL ──► ENCERRADA
 
 > *"Transicao invalida: remessa em ENCERRADA nao pode ir para ENVIADA. Permitidos a partir de ENCERRADA: nenhum (estado final)."*
 
-Os movimentos de envio e de retorno de remessa também **não podem ser estornados pelo livro de movimentações**: *"Movimento de remessa a terceiro não pode ser estornado pelo livro — use a tela de Remessas para cancelar ou encerrar a remessa"*. Com a remessa já encerrada, portanto, não há estorno a fazer: se o encerramento foi lançado errado, o saldo se acerta por um lançamento novo de **Ajuste** na tela de Movimentações, com justificativa e pelo perfil que pode ajustar estoque — e o cuidado descrito em 20 se aplica.
+Os movimentos de envio e de retorno de remessa também **não podem ser estornados pelo livro de movimentações**: *"Movimento de remessa a terceiro não pode ser estornado pelo livro — use a tela de Remessas para cancelar ou encerrar a remessa"*. Com a remessa já encerrada, portanto, não há estorno a fazer: se o encerramento foi lançado errado, o saldo se acerta por um lançamento novo de **Ajuste** na tela de Movimentações, com justificativa e pelo perfil que pode ajustar estoque — e o cuidado descrito em 23 se aplica.
 
 ### 17.4 O envio é tudo ou nada
 
@@ -2314,13 +2376,18 @@ Note que **peças e sobras entram os dois** no peso que voltou: o rendimento med
 
 Quatro pontos que valem para o dia a dia e que não se deduzem das telas. Nenhum deles impede o trabalho — todos dizem **por qual caminho** fazer.
 
-**1. A conferência de estoque é a ferramenta da contagem física — use-a para isso.** A homologação de uma conferência com ajustes grava a **quantidade contada direto no material**, como total. É exatamente o que uma contagem de galpão precisa: você conta a prateleira, o número contado passa a ser o saldo, e a divergência fica registrada com autor e data.
+**1. A conferência de estoque é a ferramenta da contagem física — use-a para isso.** A
+homologação de uma conferência com ajustes vira uma movimentação de verdade no livro: o saldo do
+material recebe a quantidade contada (mais o que estiver em poder de terceiros, que nunca é
+contável fisicamente — 13.2), com autor, justificativa e data registrados, e a divergência fica
+no histórico. É exatamente o que uma contagem de galpão precisa: você conta a prateleira, o
+sistema aplica e audita.
 
-**2. Para acertar o saldo de um material de cliente, use o Ajuste da tela de Movimentações.** É ali que a autorização específica de material de cliente é verificada — a permissão restrita a Administrador descrita em 16.8, com o registro de auditoria nomeando o cliente proprietário. Correção de saldo de material que pertence a um cliente é o número que ele vai conferir e cobrar: faça-a pelo caminho que pede essa autorização e deixa esse rastro.
+**2. Para acertar o saldo de um material de cliente, use o Ajuste da tela de Movimentações — ou a conferência de inventário, que agora exige a mesma autorização.** A permissão especial (restrita a Administrador, descrita em 16.8) é verificada nos dois caminhos, com o registro de auditoria nomeando o cliente proprietário. Correção de saldo de material que pertence a um cliente é o número que ele vai conferir e cobrar: faça-a por um caminho que peça essa autorização e deixe esse rastro.
 
 **3. Não intercale, no mesmo material, homologação de inventário e contagem por localização.** A homologação escreve o total do material; a contagem por prateleira recalcula o total a partir da soma das posições. Se você homologar uma conferência e, em seguida, fizer uma contagem por localização naquele mesmo material, o total passa a vir das posições — e o número homologado é substituído. Escolha um dos dois caminhos por material: ou o total vem da conferência, ou vem da soma das prateleiras.
 
-**4. Antes de um ajuste que reduz o total, libere as retenções pelo caminho próprio de cada uma.** O ajuste define o total do material, mas **não redistribui nem acerta as retenções** — reservado, bloqueado, em inspeção e em poder de terceiros continuam com o valor que tinham. Um material com 8 unidades bloqueadas cujo total é ajustado para 1 fica com a retenção maior que o total, e o disponível calculado (6.1) vira um número negativo, sem aviso na tela. A ordem correta é sempre soltar a retenção primeiro:
+**4. Um ajuste que deixaria alguma retenção maior que o total é recusado — exceto quando o ajuste é escopado a uma localização específica.** Para o ajuste do material inteiro (o caminho que a tela de Movimentações usa sem escolher uma prateleira, e o caminho que toda conferência de inventário usa), o sistema **recusa** e diz qual retenção pesa e o mínimo aceitável (13.5) — reservado, bloqueado, em inspeção e em poder de terceiros continuam protegidos automaticamente. **A única exceção é o ajuste escopado a uma localização/prateleira específica**: ali o total só é conhecido depois de somar todas as posições, e essa combinação ainda não tem a mesma guarda — um material com 8 unidades bloqueadas cujo total, ajustado por localização, cai para 1, ainda fica com a retenção maior que o total, e o disponível calculado (6.1) vira negativo sem aviso. Para esse caso específico, a ordem correta continua sendo soltar a retenção primeiro:
 
 | Retenção a soltar | Caminho próprio |
 |---|---|
@@ -2329,7 +2396,7 @@ Quatro pontos que valem para o dia a dia e que não se deduzem das telas. Nenhum
 | **Em inspeção** | decidir a inspeção — aprovar ou reprovar (15.2) |
 | **Em poder de terceiros** | receber o retorno, encerrar com destino ou cancelar a remessa (17.5 a 17.7) |
 
-Com as retenções resolvidas, o ajuste do total é seguro e o disponível volta a fechar.
+Com as retenções resolvidas, o ajuste por localização também fica seguro e o disponível volta a fechar.
 
 ---
 

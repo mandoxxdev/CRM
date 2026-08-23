@@ -1,13 +1,13 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 9b (02/08/2026 a 22/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 10 (02/08/2026 a 22/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em 2026-08-22 (Etapa 9b).
+> `docs/superpowers/plans/`. Atualizado em 2026-08-22 (Etapa 10).
 
 ## Visão geral
 
@@ -28,6 +28,7 @@
 | 8c | Transformação no Terceiro | 2026-08-13 | A chapa que sai para corte e volta como 40 peças e uma sobra para de mentir no estoque: a chapa é baixada de verdade e as peças entram com o custo dela rateado |
 | 9 | Retalhos, Sobras e Sucatas | 2026-08-16 | A meia chapa vira estoque de verdade (com saldo, etiqueta com QR e sugestão de uso antes de cortar chapa nova) — e sucatear deixa de ser um clique: exige duas assinaturas de pessoas diferentes, com destino e valor registrados |
 | 9b | Ferramentas e Calibração | 2026-08-22 | Ferramenta virou patrimônio controlado: empréstimo à prova de corrida, calibração vencida bloqueia o uso, avaria/perda com foto fecha o empréstimo sozinha, bloqueio e manutenção com histórico — tudo numa tela própria |
+| 10 | Inventário Avançado | 2026-08-22 | O ajuste da conferência de inventário deixou de gravar saldo por fora do sistema — agora é auditado e recusa deixar material bloqueado/reservado/em terceiro com número que não fecha; contagem cega e recontagem obrigatória para divergência grande |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -39,7 +40,11 @@ em que **o mesmo material volta** (galvanizar, pintar, tratar) e a 8c entrega a 
 sucateamento ficou de fora, declarado, junto com todos os e-mails do módulo (feature 19).
 **Com a 9b, a feature 16 (ferramentas e calibração) fica completa**, com duas melhorias
 pendentes declaradas (lembrete de devolução sem canal de notificação, edição de ferramenta pela
-tela — ver letra B). A próxima etapa é a **10 — inventário avançado** (feature 17).
+tela — ver letra B).
+**Com a 10, a feature 17 (inventário avançado) fica parcialmente completa** — o risco crítico
+nomeado desde a Etapa 7 (ajuste fora do motor) está resolvido; tipos de contagem avançados,
+dupla contagem por duas pessoas e relatório de acuracidade formal ficam declarados fora do
+escopo (letra D). Não há próxima etapa numerada ainda — ver "Onde estamos e o que vem a seguir".
 
 ---
 
@@ -162,15 +167,44 @@ trás), mas a tela não oferece um campo para o usuário mudar esse número. Bai
 categoria da B8 — fica registrado para não ser confundido com "o painel não filtra": ele filtra,
 só não deixa escolher o prazo pela tela ainda.
 
+**B10 (NOVO, da Etapa 10) — o "ajuste sem retenção suficiente" agora é RECUSADO, não mais aceito
+em silêncio. Esta você já decidiu por mim; está escrita aqui para você reconhecer o que foi
+implementado no seu nome.** Era a mesma pergunta registrada desde a Etapa 7 (o Ajuste contra
+material bloqueado/reservado/em terceiro): o que o sistema faz quando um ajuste de saldo deixaria
+menos material do que está retido para outra coisa? Três respostas eram possíveis: **(a)** baixar
+a retenção proporcionalmente; **(b)** recusar o ajuste; **(c)** aceitar e só avisar. **Implementei
+a opção (b): o sistema agora recusa**, com a mensagem dizendo qual retenção pesa e o mínimo
+aceitável para o ajuste passar. Motivo: as outras duas opções mexeriam em número que não é do
+ajuste (a retenção pertence a outro processo — a reserva, o bloqueio de qualidade, a remessa a
+terceiro), e diminuí-la ou fingir que não existe corrigiria um saldo inventando outro erro em
+cima. **Se a operação real precisar de outro comportamento** (por exemplo, um ajuste que force a
+baixa da retenção também, com aviso), é decisão de negócio nova — reversível, a recusa vira só
+uma checagem a mais antes de aceitar.
+
+**B11 (NOVO, da Etapa 10) — o checklist original pedia "dupla aprovação" para o ajuste de
+inventário; o que foi entregue é "dupla permissão" (mais barato, já existia antes desta etapa).**
+"Dupla permissão" quer dizer: quem **conta** o inventário (perfil Almoxarife) não precisa ser
+quem **homologa** o ajuste final (precisa da permissão de ajustar estoque, hoje Gestor/
+Administrador) — isso é checado numa única chamada, sem processo. "Dupla aprovação" (o que o
+sucateamento da Etapa 9 tem) é diferente: duas pessoas **assinam** o mesmo processo, uma depois da
+outra, com tela de pendências e a garantia de que a mesma pessoa não assina as duas pernas.
+**Não construí o fluxo de duas assinaturas para o inventário** — é o tamanho de uma etapa própria
+(tela de pendências, notificação de quem falta assinar), e o texto original não deixava claro que
+pedia duas coisas diferentes sob a mesma palavra. **A pergunta para você: o inventário precisa do
+fluxo formal de duas assinaturas, ou a dupla permissão que já existe é suficiente?** Reversível
+sem migração de dado — a permissão dupla que existe hoje não precisa ser desfeita se decidirem
+construir o fluxo formal depois.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
-1. **A conferência de inventário muda saldo de material de cliente sem a permissão especial.**
-   A Etapa 8 criou uma autorização dedicada para ajustar material de terceiro — mas a
-   **conferência de inventário grava o saldo por um caminho próprio, fora do motor**, e por isso
-   não passa por essa autorização. Na prática: *o mesmo usuário que é barrado no ajuste pela tela
-   de Movimentações consegue mudar o saldo pela conferência.* Fechar isso exige reescrever a
-   conferência inteira — é etapa própria, não foi feito. **É o ponto que mais importa contar a
-   quem opera.**
+1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
+   sem a permissão especial.** Este item dizia que a conferência gravava o saldo por um caminho
+   próprio, fora do motor, e por isso um usuário barrado no ajuste pela tela de Movimentações
+   conseguia mudar o mesmo saldo pela conferência. **A Etapa 10 reescreveu exatamente esse
+   caminho**: a conclusão da conferência agora passa pelo mesmo motor de qualquer outra
+   movimentação, e a mesma autorização (`ajustar_material_cliente`) é exigida nos dois lugares.
+   Deixado aqui, riscado, em vez de apagado — para quem lembrar do furo antigo confirmar que
+   fechou, com o número da etapa que fechou.
 2. **Devolução para Sucata pode parar no meio, sem avisar ninguém.** A devolução para sucata
    lança duas movimentações (entrou / foi descartada). Se a segunda falhar depois de a primeira
    ter entrado, a devolução fica marcada como **estado parcial** na auditoria e a correção é
@@ -216,6 +250,13 @@ só não deixa escolher o prazo pela tela ainda.
    sistema". Detalhe operacional que decorre disso: sucatear passou a exigir **duas pessoas**;
    material com **número de série** não passa pelo processo (a recusa manda baixar pela tela de
    Movimentações, que tem seletor de série).
+6. **(10) A contagem cega não é blindagem perfeita — o número escondido pode voltar pela conta.**
+   Se a divergência de um item passa da tolerância, a mensagem de "recontagem necessária" mostra
+   o **percentual** de divergência. Quem sabe quanto contou consegue calcular quanto o sistema
+   dizia que tinha, fazendo a conta ao contrário (percentual × contado). A tela já era honesta
+   sobre isso desde o desenho (a "cegueira" protege a coluna de saldo, não o sistema inteiro — um
+   usuário que tem acesso à tela de Materiais já vê o número lá de qualquer forma), mas vale saber
+   que a mensagem de recusa é outro caminho pelo qual o número escondido pode aparecer.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -260,6 +301,21 @@ só não deixa escolher o prazo pela tela ainda.
   foto, registre ocorrências adicionais — galeria de N fotos exigiria tabela e tela própria.
 - **(9b) Requisição de ferramenta pelo fluxo de requisições não existe** — fica para a feature 04
   encostar nisso, se um dia fizer sentido pedir ferramenta pelo mesmo caminho que material.
+- **(10) Só existe contagem "por categoria".** Contagem por endereço, por família, cíclica
+  automática por criticidade/curva ABC, item crítico e surpresa não foram construídas — o
+  checklist original pedia todas; ficam para uma etapa futura.
+- **(10) A recontagem aceita a mesma pessoa contando de novo** — não exige que seja um segundo
+  contador. "Dupla contagem por duas pessoas diferentes" (o checklist original) não foi
+  implementada; a recontagem desta etapa só garante uma segunda olhada, não uma segunda pessoa.
+- **(10) Nenhuma movimentação é congelada durante a contagem.** É possível lançar uma saída ou
+  entrada de um material no meio de uma conferência em aberto — o mesmo raciocínio da
+  Transferência sem "em trânsito" (Etapa 7): site único, baixo valor prático, alto custo de
+  implementação, ninguém pediu.
+- **(10) Relatório formal de acuracidade e e-mail do resultado do inventário não existem** — ficam
+  para as features de relatórios (21) e notificações (19).
+- **(10) A guarda de retenção não cobre ajuste por localização/endereço específico** — só o
+  ajuste do material inteiro (o caminho que a conferência usa) tem a checagem nova; um ajuste
+  manual escopado a uma prateleira específica não passa por ela ainda.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -319,6 +375,14 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    foto/certificado funcionando de verdade (anexar um arquivo e ver o preview ou o nome
    aparecer); e o **filtro "Exige calibração"** da lista de ferramentas. O roteiro completo está
    no guia, seção da Etapa 9b.
+6. **(10) A tela Conferência de Estoque com os campos novos.** **Nenhum navegador foi aberto na
+   entrega da Etapa 10** — mesma ressalva. Falta conferir: o checkbox "Contagem cega" e o campo
+   "Tolerância (%)" no modal de criar conferência (o placeholder mostra o valor configurado de
+   verdade, não um número fixo); a coluna "Recontagem" com o badge aparecendo/sumindo ao contar
+   um item; o modal de concluir com o campo "Justificativa do ajuste" só aparecendo quando
+   "Aplicar ajustes automáticos" está marcado; o aviso de sucesso mostrando o impacto financeiro
+   formatado em reais; e as mensagens de recusa (recontagem, retenção, permissão de cliente)
+   aparecendo por inteiro no aviso, não cortadas.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -388,6 +452,25 @@ os dois lados juntos, viu o padrão.** Fica registrado como algo a vigiar nas pr
 usarem contrato congelado + galho paralelo: se o padrão se repetir, vale desenhar uma checagem
 automatizável que compare contrato declarado × uso real dos dois lados, em vez de depender só da
 revisão final para pegá-lo.
+
+**G5 (NOVO, da 10). Validar em duas passadas ("confere tudo, aplica depois") só é seguro se a
+primeira passada souber de TODAS as regras que a segunda vai checar — e essa lista tende a ficar
+desatualizada.** A Etapa 10 escreveu esse padrão pela primeira vez neste módulo (para o ajuste de
+inventário poder ser tudo-ou-nada sem transação de banco): uma passada só de leitura confere cada
+item, e só se todos passarem é que aplica de verdade. O achado da revisão final: a primeira
+passada só sabia checar **duas** das regras que a segunda (o motor de estoque de verdade) aplica —
+esqueceu que quantidade zero e material desativado também são motivo de recusa lá. Resultado
+concreto: um item que a primeira passada aprovava por engano só quebrava na hora de aplicar, com
+**outros itens já gravados** — o "tudo-ou-nada" virava "tudo-ou-um-pouco". **Corrigido nesta
+etapa** (as duas regras que faltavam entraram na primeira passada), mas o padrão em si — duas
+listas de regras que precisam ficar iguais, em dois lugares diferentes do código — é frágil por
+natureza: a próxima regra nova que entrar só no motor (segunda passada) volta a abrir a mesma
+fresta, silenciosamente. **Nota também sobre como o achado quase escapou da própria revisão:** a
+primeira tentativa de prova (sabotar a checagem e ver o teste cair) passou verde por coincidência —
+a ordem em que os materiais eram processados escondeu o bug. Só forçando a ordem dos itens no
+teste (o "OK" processado antes do "quebrado") é que a sabotagem provou alguma coisa de verdade.
+Fica como lição para qualquer teste de "tudo-ou-nada" daqui pra frente: sem forçar a ordem dos
+itens, o teste pode estar provando sorte, não comportamento.
 
 ---
 
@@ -1606,48 +1689,133 @@ Almoxarife). Ver e consultar histórico é livre para qualquer usuário logado.
 
 ---
 
+## Etapa 10 — Inventário Avançado (2026-08-22)
+
+**Em uma frase:** a conferência de inventário deixou de gravar o saldo por fora do sistema —
+agora o ajuste é uma movimentação de verdade, auditada, e recusada quando deixaria material
+bloqueado/reservado/em inspeção/em terceiro com número que não fecha. De brinde: contagem cega
+(quem conta não vê quanto o sistema diz que tem) e recontagem obrigatória para divergência grande.
+
+**O problema que existia.** Desde a Etapa 0 a conclusão de uma conferência com "aplicar ajustes"
+escrevia o saldo do material **direto no banco**, por um caminho que não passava pelas mesmas
+verificações de qualquer outra movimentação do módulo: nenhuma checagem de que o material
+bloqueado/reservado/em inspeção/em terceiro não ficaria com número negativo, e nenhum registro de
+auditoria de verdade. Era o único lugar do sistema inteiro com esse problema — e já tinha
+aparecido, sob outra roupagem, em três etapas anteriores, sempre sem resposta.
+
+### Antes → Agora
+
+| Situação | Antes | Agora (Etapa 10) |
+|---|---|---|
+| Ajuste que reduz o total abaixo do que está bloqueado/reservado/em inspeção/em terceiro | Aceito em silêncio — o disponível ficava negativo sem ninguém saber | **Recusado**, com a mensagem dizendo exatamente qual retenção pesa e o mínimo aceitável |
+| Registro do ajuste no livro | Não existia (gravação direta na tabela do material) | Movimentação de verdade, auditada, com o número da conferência e quem homologou |
+| Ver quanto o sistema diz que tem, contando | Sempre visível | Opcional por conferência ("Contagem cega") — some para quem só conta, aparece para quem homologa |
+| Divergência muito grande | Aceita sem segunda chance | Exige **recontar** antes de poder concluir (limite configurável, 2% por padrão) |
+| Justificativa do ajuste final | Não existia campo | Obrigatória (mínimo 5 caracteres) sempre que "aplicar ajustes" está marcado |
+| Impacto financeiro do ajuste | Não calculado | Aparece no aviso de sucesso, somando o valor de cada item ajustado |
+| Concluir a mesma conferência duas vezes | Reaplicava o ajuste (duplicava o lançamento) | Recusado — uma conferência só conclui uma vez |
+
+### As regras, com o cenário exato
+
+As mensagens abaixo são as **mensagens reais do sistema**, conferidas no código.
+
+**1. Ajuste que deixaria retenção maior que o total é recusado.**
+*Cenário:* material com 8 unidades bloqueadas, contagem aponta só 5. Ao concluir com "aplicar
+ajustes":
+> `Ajuste bloqueado: <código>: Ajuste para 5 UN deixaria o disponível negativo (bloqueada: 8, mínimo aceitável: 8 UN). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.`
+
+Resolver a retenção (desbloquear, liberar a reserva, encerrar a remessa a terceiro) antes de
+concluir é o caminho — a mensagem já diz qual.
+
+**2. Se a conferência tem mais de um material com problema, a resposta prioriza permissão sobre
+retenção.** Se algum material for de um cliente e quem está concluindo não tem autorização para
+ajustar saldo de cliente, a recusa é sobre isso primeiro:
+> `Ajuste bloqueado — os seguintes materiais são de cliente e exigem a permissão "ajustar_material_cliente": <código> (<cliente>)`
+
+**3. Divergência acima da tolerância exige recontar antes de concluir — com ou sem aplicar
+ajustes.**
+*Cenário:* contagem 10% divergente, tolerância configurada em 2%. Ao tentar concluir:
+> `Recontagem necessária antes de concluir: <código> - 10.00% (limite 2%)`
+
+Contar o mesmo item **de novo** (mesmo que dê o mesmo valor) já libera a conclusão — a segunda
+contagem é a segunda chance, não precisa bater com a primeira.
+
+**4. Aplicar ajustes exige justificativa.**
+*Cenário:* marcar "Aplicar ajustes automáticos" sem preencher o motivo:
+> `Justificativa deve ter pelo menos 5 caracteres`
+
+**5. Uma conferência só conclui uma vez.**
+*Cenário:* tentar concluir de novo uma conferência já concluída (ou já cancelada):
+> `Conferência não está aberta (status atual: CONCLUIDO)`
+
+**6. Contagem cega esconde o saldo do sistema, mas não do homologador.** Quem só tem permissão
+para contar (perfil Almoxarife sem a permissão de ajustar estoque) não vê a coluna "Qtd. Sistema"
+nem a divergência enquanto a conferência está aberta — só o aviso "Recontagem necessária" quando
+se aplica. Quem homologa (Gestor/Administrador) vê tudo. Depois de concluída, todo mundo vê o
+histórico completo.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Contagem por endereço, família, criticidade/ABC automática, item crítico, surpresa** — só
+  "por categoria" continua existindo. Fica para uma etapa própria.
+- **Dupla contagem por duas pessoas diferentes** — a recontagem desta etapa aceita a mesma pessoa
+  contar de novo; não rastreia se foi outra pessoa.
+- **Congelar movimentações do material durante a contagem** — não implementado (mesmo raciocínio
+  da Etapa 7: um único site, baixo valor prático, alto custo de implementação).
+- **Relatório formal de acuracidade e e-mail do resultado** — ficam para as features de
+  relatórios e notificações.
+- **Guarda de retenção para contagem por localização/endereço** — a guarda desta etapa vale para
+  o ajuste do material inteiro; contagem por endereço específico não tem essa checagem ainda.
+
 ## Onde estamos e o que vem a seguir
 
-- **Concluído até aqui:** Etapas 0 a 9b — fundação, motor de estoque, cadastros, requisições,
+- **Concluído até aqui:** Etapas 0 a 10 — fundação, motor de estoque, cadastros, requisições,
   reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções, materiais de clientes,
-  remessas a terceiros, transformação no terceiro, **retalhos/sucatas** e **ferramentas e
-  calibração**. As features 10 (lotes/séries/etiquetas), 11 (transferências), 12 (devoluções), 13
-  (materiais de clientes), **14 (materiais em terceiros)**, **15 (retalhos, sobras e sucatas)** e
-  **16 (ferramentas e calibração)** estão completas no que cada etapa se propôs. A 16 fechou com
-  a Etapa 9b: ferramenta virou patrimônio controlado com claim atômico, calibração barrando o uso
-  e histórico auditado — com duas melhorias pendentes declaradas (itens **B7**/**B8**).
-- **Próxima etapa:** **Etapa 10 — inventário avançado** (feature 17): contagem cega, recontagem,
-  tolerância, aprovação de ajuste, acuracidade.
+  remessas a terceiros, transformação no terceiro, **retalhos/sucatas**, **ferramentas e
+  calibração** e o **núcleo correto do inventário avançado**. As features 10 (lotes/séries/
+  etiquetas), 11 (transferências), 12 (devoluções), 13 (materiais de clientes), **14 (materiais em
+  terceiros)**, **15 (retalhos, sobras e sucatas)** e **16 (ferramentas e calibração)** estão
+  completas no que cada etapa se propôs. A **17 (inventário avançado) fica parcial** — o ajuste
+  de inventário agora passa pelo motor de verdade, com a decisão de retenção tomada (item **B10**)
+  e contagem cega + recontagem entregues; tipos de contagem avançados, dupla contagem por duas
+  pessoas e relatório de acuracidade ficam para uma **Etapa 10b** (item **D**).
+- **Próxima etapa:** **Etapa 10b — inventário avançado, parte 2** (feature 17, o que ficou de
+  fora — ver letra D) ou **Etapa 11 — reposição e compras** (feature 18), conforme prioridade a
+  decidir na sessão que pegar o trabalho.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
   2. rodar em produção a consulta que confirma a **lista antiga de materiais de cliente vazia**
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
-  3. saber que a **conferência de inventário ajusta saldo fora da permissão de material de
-     cliente** (seção da Etapa 8) — é o ponto que mais importa contar a quem opera;
-  4. **nem a 8b, nem a 8c, nem a 9, nem a 9b acrescentam consulta a esta lista** — todas só criam
-     colunas e tabelas novas, sem tocar em dado existente;
+  3. ~~saber que a conferência de inventário ajusta saldo fora da permissão de material de
+     cliente~~ — **resolvido na Etapa 10**, item **C1**;
+  4. **nem a 8b, nem a 8c, nem a 9, nem a 9b, nem a 10 acrescentam consulta a esta lista** — todas
+     só criam colunas e tabelas novas, sem tocar em dado existente;
   5. **avisar quem compara relatórios com o mês passado** de que dois números mudam de leitura
      (itens **C3** e **C4**) — nenhum dado foi alterado, mas o número na tela vai ser outro;
   6. **avisar quem opera que o tipo Sucata sumiu do formulário de Movimentações** (item **C5**) —
      sucatear agora é pela tela Sobras e Retalhos, com duas assinaturas de pessoas diferentes;
   7. **avisar quem opera que existe uma tela nova de Ferramentas** (Almoxarifado → Ferramentas) —
      ninguém precisa ser treinado às pressas (o fluxo antigo de empréstimo continua existindo por
-     baixo), mas vale que o almoxarifado saiba onde ficou.
+     baixo), mas vale que o almoxarifado saiba onde ficou;
+  8. **avisar quem opera que a conferência de inventário ganhou campos novos** (contagem cega,
+     tolerância, justificativa do ajuste) — quem já usa a tela vai ver os campos na próxima
+     conferência que criar; nada quebra no fluxo antigo, só fica mais completo.
 - **O que depende de você, não do código:** confirmar se **remessa mista de donos** deve mesmo ser
   recusada (item **E**); reconhecer a **regra de rateio de custo** implementada no seu nome (item
-  **B4**); decidir o **Ajuste contra a retenção** (item **B**); dizer **quais classificações de
-  sucata a GMP usa de verdade** (item **B5**) e **qual taxonomia de categorias vale** (item
-  **B6**); decidir o **canal do lembrete de devolução de ferramenta** (item **B7**) e priorizar (ou
-  não) a **tela de editar ferramenta** (item **B8**); e fazer as **verificações no navegador** —
-  selos, PDF, modal de transformação, a tela de Sobras e Retalhos e a tela nova de Ferramentas
-  (item **F**).
+  **B4**); dizer **quais classificações de sucata a GMP usa de verdade** (item **B5**) e **qual
+  taxonomia de categorias vale** (item **B6**); decidir o **canal do lembrete de devolução de
+  ferramenta** (item **B7**) e priorizar (ou não) a **tela de editar ferramenta** (item **B8**);
+  reconhecer a **regra de retenção do ajuste de inventário** implementada no seu nome (item
+  **B10**) e decidir se o inventário precisa do **fluxo formal de duas assinaturas** (item
+  **B11**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação, a tela
+  de Sobras e Retalhos, a tela de Ferramentas e a tela de Conferência de Estoque (item **F**).
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas
   pelo usuário (roteiros no guia); tela de subfamílias; telas para localizações
   vazias/materiais sem endereço; pendências declaradas (a)–(j) da 6b e (a)–(g) da 6c na
   spec 10; as duas da Etapa 7 — Ajuste não reconcilia o bloqueado (decisão de negócio
-  pendente) e o estado parcial da Sucata sem notificação; as da Etapa 8 — conferência de
-  inventário fora do motor, e os relatórios que misturam material de cliente sem o selo; as da
+  pendente) e o estado parcial da Sucata sem notificação; as da Etapa 8 — os relatórios que
+  misturam material de cliente sem o selo; as da
   Etapa 8b — a mesma decisão do Ajuste agora alcançando a coluna "em terceiros" (item **B**), e a
   lista de exclusão que protege as colunas novas por omissão (item **G1**); as da Etapa 8c —
   a **fragilidade das fixtures de teste** (item **G2**), a coluna com **três significados** (item
@@ -1656,10 +1824,15 @@ Almoxarife). Ver e consultar histórico é livre para qualquer usuário logado.
   novo de movimento** nas fontes únicas (a sabotagem da etapa provou que o teste da equação por
   cliente não pega o esquecimento sozinho), a coluna **foto** da sobra sem escritor, o retalho de
   material com controle de lote entrando **sem lote** (mesma isenção declarada da spec 10), e o
-  **valor de venda aceito em descarte** (gravado, mas fora do total do relatório); e as da Etapa
+  **valor de venda aceito em descarte** (gravado, mas fora do total do relatório); as da Etapa
   9b, registradas na spec 16 — o **lembrete sem canal** (item **B7**), a **edição de ferramenta
   sem tela** (item **B8**), o **filtro de dias do painel sem campo** (item **B9**), e o padrão de
-  **contrato congelado honrado só por um lado** que a revisão final identificou (item **G4**).
+  **contrato congelado honrado só por um lado** que a revisão final identificou (item **G4**); e
+  as da Etapa 10, registradas na spec 17 — os tipos de contagem avançados e a dupla contagem por
+  duas pessoas (item **D**, ficam para a 10b), a blindagem imperfeita da contagem cega (item
+  **C6**), e a fragilidade estrutural de "validar em duas passadas" que a revisão final
+  achou e corrigiu, mas que continua exigindo atenção manual em qualquer código futuro parecido
+  (item **G5**).
 - **Transversal (2026-08-11):** auditoria completa das 24 specs contra o código — specs
   que afirmavam coisas não entregues foram corrigidas com nota datada, e o bug de front dos
   status de reserva (`92fe236`) saiu dessa auditoria.

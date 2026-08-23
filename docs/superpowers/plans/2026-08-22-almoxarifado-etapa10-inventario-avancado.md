@@ -761,13 +761,12 @@ re-verificada depois de todos os fixes: `test:api` 103/103, `test:almoxarifado` 
 
 ### Task 5: Fechamento (fase 6)
 
-- [ ] Usar a skill **`fechar-etapa`** inteira: novidades-por-etapa (bloco ⚠️ com as decisões
-  D1-D9 que esperam arbitragem, e a resolução FINAL de B1/B2/B3 — não é mais pendência, é
-  decisão tomada e implementada, registrar como tal), spec 17 (status, checklist com hash por
-  item, os cortes D7 nomeados), mapa de status, guia do usuário, manual do sistema (RN em
-  linguagem de operador, mensagens literais conferidas no código), este plano (tasks marcadas +
-  divergências).
-- [ ] **Retro de 4 números** no fim deste arquivo.
+- [x] Usar a skill **`fechar-etapa`** inteira: novidades-por-etapa (bloco ⚠️ com as decisões
+  D10/D11 que esperam arbitragem, e a resolução FINAL de B1/B2/B3 registrada como tal), spec 17
+  (status, checklist com hash por item, os cortes D7 nomeados), mapa de status, guia do usuário,
+  manual do sistema (RN em linguagem de operador, mensagens literais conferidas no código), este
+  plano (tasks marcadas + divergências).
+- [x] **Retro de 4 números** no fim deste arquivo.
 
 ---
 
@@ -781,3 +780,45 @@ re-verificada depois de todos os fixes: `test:api` 103/103, `test:almoxarifado` 
   já usa em 14 lugares — nenhuma lista nova. `AJUSTE_INVENTARIO` reusa o branch de `AJUSTE` do
   motor (Task 1), não cria caminho paralelo.
 - **Sem placeholder:** cada task tem código ou instrução executável com precedente file:line.
+
+---
+
+## Retro (fechamento)
+
+Segunda etapa completa sob a skill `desenvolver-etapa-almoxarifado` (a primeira foi a 9b). Linha
+de base: 9b teve 10/0 na Fase 2, ~8 Important em revisão de task + 4 Important na revisão final,
+1 galho paralelo com zero retrabalho.
+
+**1. Rodadas de correção até verde.** 3 rodadas no total: Task 2 (1, gate de status ausente em
+`PUT /concluir`), Task 3 (1, placeholder com justificativa falsa), revisão final (1 onda, o
+Critical + 2 dos 4 Important de backend + 2 Important de front). Tasks 1 e 4 saíram sem nenhuma
+rodada (Task 1 aprovada com só minors deferidos; Task 4 é teste de integração sem código de
+produção). Nenhuma bateu 3 rodadas na mesma falha — o detector de esteira nunca precisou disparar.
+
+**2. Achados reais vs. ruído.** Fase 2 (revisão adversarial do plano, antes de qualquer código):
+**10 reais / 0 ruído** — os 10 listados no topo deste arquivo. Revisões de task: Task 1 zero
+Important (5 Minor deferidos), Task 2 um Important, Task 3 um Important — 2 achados reais nas
+revisões de task, 0 ruído. Revisão final de branch (o escopo que nenhuma revisão de task cobre):
+1 Critical + 4 Important, todos reais, todos corrigidos — 0 ruído também aqui. **Somando tudo:
+17 achados reais em toda a etapa, 0 descartados como ruído.**
+
+**3. Paralelismo de fato.** Um uso real: Task 3 (front) em worktree própria, contra o contrato
+HTTP congelado desde o design, depois de Task 1 e Task 2 comitarem. **Retrabalho causado por
+paralelismo: zero** — o merge (`314666b`) fechou sem nenhum conflito. A Task 3 precisou de 1
+rodada de fix, mas pelo mesmo motivo que qualquer task teria: um achado de revisão normal, não
+uma consequência de ter rodado em paralelo.
+
+**4. Defeito que escapou (e um padrão novo para a próxima etapa vigiar).** Nenhum defeito escapou
+desta etapa — a revisão final achou o Critical e os Important **antes** do fechamento, exatamente
+o motivo dela existir. O que fica registrado para a próxima etapa observar é um **padrão de
+fragilidade novo**, nomeado no doc de novidades como **G5**: quando uma rota precisa aplicar
+várias mudanças "tudo ou nada" sem transação composta, o padrão "confere tudo numa passada
+só-leitura, aplica na segunda" só é seguro se a primeira passada souber de **todas** as regras
+que a segunda (o motor de verdade) vai checar — e essa lista tende a ficar desatualizada
+silenciosamente. Nesta etapa a primeira passada esqueceu duas regras do motor (quantidade zero,
+material inativo) e isso só foi achado porque a revisão final forçou a ordem dos itens no teste
+de prova — a primeira tentativa de sabotagem tinha passado por sorte de ordenação. Se a próxima
+etapa escrever um padrão parecido (validação em duas passadas), vale desenhar desde o início uma
+forma de manter as duas listas de regras sincronizadas (ex.: a segunda passada expor uma lista
+das próprias checagens, e a primeira iterar sobre ela), em vez de reescrever a lista à mão de
+novo.
