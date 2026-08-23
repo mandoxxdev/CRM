@@ -93,6 +93,7 @@ const FerramentasAlmoxarifado = () => {
   const [reloadToken, setReloadToken] = useState(0);
   const [filtroStatus, setFiltroStatus] = useState('');
   const [filtroBusca, setFiltroBusca] = useState('');
+  const [filtroExigeCalibracao, setFiltroExigeCalibracao] = useState('');
 
   // Empréstimos
   const [emprestimos, setEmprestimos] = useState([]);
@@ -128,12 +129,13 @@ const FerramentasAlmoxarifado = () => {
     const params = {};
     if (filtroStatus) params.status = filtroStatus;
     if (filtroBusca) params.busca = filtroBusca;
+    if (filtroExigeCalibracao !== '') params.exige_calibracao = filtroExigeCalibracao;
     api.get('/almoxarifado/ferramentas', { params })
       .then((r) => { if (!cancelado) setFerramentas(Array.isArray(r.data) ? r.data : []); })
       .catch(() => { if (!cancelado) { setFerramentas([]); toast.error('Não foi possível carregar as ferramentas'); } })
       .finally(() => { if (!cancelado) setLoading(false); });
     return () => { cancelado = true; };
-  }, [aba, filtroStatus, filtroBusca, reloadToken]);
+  }, [aba, filtroStatus, filtroBusca, filtroExigeCalibracao, reloadToken]);
 
   useEffect(() => {
     if (aba !== 'EMPRESTIMOS') return undefined;
@@ -411,8 +413,16 @@ const FerramentasAlmoxarifado = () => {
 
   const rotuloLocalizacao = (l) => `${l.endereco_completo || formatLocalizacaoLabel(l, localizacoes)}${l.descricao ? ` — ${l.descricao}` : ''}`;
 
+  // Comparacao date-only espelhando o servidor (achado F4 da revisao final de branch):
+  // `date(e.data_prevista_devolucao) < date('now')` no SQL (listarEmprestimos, filters.vencidos)
+  // nunca olha hora. `new Date(str) < new Date()` comparava data_prevista_devolucao (meia-noite
+  // UTC) contra o instante atual — em qualquer fuso atras de UTC isso faz "vence hoje" aparecer
+  // vencido horas antes da meia-noite local. Usa data LOCAL (nao toISOString, que e UTC) para o
+  // "hoje" e compara string 'YYYY-MM-DD' com string 'YYYY-MM-DD', igual o servidor faz com date().
+  const hoje = new Date();
+  const hojeISO = [hoje.getFullYear(), String(hoje.getMonth() + 1).padStart(2, '0'), String(hoje.getDate()).padStart(2, '0')].join('-');
   const vencido = (e) => e.status === 'EMPRESTADA' && e.data_prevista_devolucao
-    && new Date(e.data_prevista_devolucao) < new Date();
+    && String(e.data_prevista_devolucao).slice(0, 10) < hojeISO;
 
   return (
     <div className="almox-page">
@@ -454,6 +464,11 @@ const FerramentasAlmoxarifado = () => {
             </select>
             <input className="almox-input" style={{ maxWidth: 260 }} placeholder="Buscar por código ou nome"
               value={filtroBusca} onChange={(e) => setFiltroBusca(e.target.value)} />
+            <select className="almox-select" value={filtroExigeCalibracao} onChange={(e) => setFiltroExigeCalibracao(e.target.value)}>
+              <option value="">Exige calibração: todos</option>
+              <option value="1">Exige calibração: sim</option>
+              <option value="0">Exige calibração: não</option>
+            </select>
           </div>
 
           <div className="almox-table-container">
@@ -484,7 +499,12 @@ const FerramentasAlmoxarifado = () => {
                           </td>
                           <td><span className={`almox-badge almox-badge-${info.cls}`}>{info.label}</span></td>
                           <td>{f.numero_serie || '—'}</td>
-                          <td>{f.localizacao_id || '—'}</td>
+                          <td>{f.localizacao_id
+                            ? (() => {
+                              const loc = localizacoes.find((l) => String(l.id) === String(f.localizacao_id));
+                              return loc ? rotuloLocalizacao(loc) : f.localizacao_id;
+                            })()
+                            : '—'}</td>
                           <td>
                             {!f.exige_calibracao ? '—' : (
                               <span className={`almox-badge almox-badge-${f.calibracao_vigente ? 'ok' : 'critico'}`}>

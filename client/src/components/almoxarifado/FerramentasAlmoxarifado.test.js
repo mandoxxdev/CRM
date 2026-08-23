@@ -274,3 +274,71 @@ describe('FerramentasAlmoxarifado — painel de calibrações', () => {
     expect(linhaNuncaCalibrada.querySelector('.almox-badge-vencida').textContent.trim()).toBe('Vencida');
   });
 });
+
+// Achado F4 da revisao final de branch: `new Date(str) < new Date()` compara a data prevista
+// (meia-noite UTC) contra o INSTANTE atual — um emprestimo que vence HOJE aparecia "Vencido"
+// horas antes da meia-noite local. O servidor (listarEmprestimos, filters.vencidos) usa
+// `date(...) < date('now')`, comparacao so de data. O fix na tela precisa concordar com isso:
+// data local de hoje, formatada 'YYYY-MM-DD', comparada como STRING.
+describe('FerramentasAlmoxarifado — badge "Vencido" (data-only, espelha o servidor)', () => {
+  test('emprestimo que vence HOJE nao aparece como Vencido', async () => {
+    const hoje = new Date();
+    const hojeISO = [hoje.getFullYear(), String(hoje.getMonth() + 1).padStart(2, '0'), String(hoje.getDate()).padStart(2, '0')].join('-');
+    const emprestimosComVenceHoje = [
+      { id: 30, ferramenta_id: 1, codigo_patrimonio: 'FER-001', ferramenta_nome: 'Furadeira de bancada',
+        colaborador_nome: 'Carlos Lima', setor: 'Produção', data_retirada: hojeISO,
+        data_prevista_devolucao: hojeISO, data_devolucao_real: null, status: 'EMPRESTADA', observacoes: null },
+    ];
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/ferramentas') return Promise.resolve({ data: FERRAMENTAS });
+      if (url === '/almoxarifado/emprestimos') return Promise.resolve({ data: emprestimosComVenceHoje });
+      if (url === '/almoxarifado/calibracoes/painel') return Promise.resolve({ data: PAINEL });
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [] });
+      if (url === '/almoxarifado/localizacoes') return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+
+    await renderizar();
+    await clicar(botao('Empréstimos'));
+
+    expect(linhasEmprestimos()).toHaveLength(1);
+    expect(texto()).not.toContain('Vencido');
+  });
+});
+
+// Extra barato da revisao final (F1/D9): filtro "Exige calibração" na visão Ferramentas, e a
+// coluna Localização mostrando o rotulo (nao o id cru) quando a tela ja tem a localizacao
+// carregada.
+describe('FerramentasAlmoxarifado — extras da revisão final', () => {
+  test('filtro "Exige calibração" manda ?exige_calibracao= no GET /ferramentas', async () => {
+    await renderizar();
+    const select = [...container.querySelectorAll('.almox-select')]
+      .find((s) => s.textContent.includes('Exige calibração'));
+    expect(select).toBeTruthy();
+
+    api.get.mockClear();
+    preencher(select, '1');
+    await esperarEfeitos();
+
+    const chamada = api.get.mock.calls.find((c) => c[0] === '/almoxarifado/ferramentas');
+    expect(chamada[1].params.exige_calibracao).toBe('1');
+  });
+
+  test('coluna Localização mostra o rótulo, não o id cru, quando a localização está carregada', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/ferramentas') return Promise.resolve({ data: FERRAMENTAS });
+      if (url === '/almoxarifado/emprestimos') return Promise.resolve({ data: EMPRESTIMOS });
+      if (url === '/almoxarifado/calibracoes/painel') return Promise.resolve({ data: PAINEL });
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [] });
+      if (url === '/almoxarifado/localizacoes') return Promise.resolve({ data: [{ id: 5, setor: 'Almoxarifado Central', descricao: 'Prateleira A' }] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    // FERRAMENTAS[0] (FER-001) tem localizacao_id: 5. Colunas: Código, Nome, Status, Série,
+    // Localização, Calibração, Ações — a celula de Localização e a 5a (indice 4).
+    const linha = linhasFerramentas().find((tr) => tr.textContent.includes('FER-001'));
+    const celulaLocalizacao = linha.querySelectorAll('td')[4];
+    expect(celulaLocalizacao.textContent.trim()).not.toBe('5');
+    expect(celulaLocalizacao.textContent).toContain('Almoxarifado Central');
+  });
+});
