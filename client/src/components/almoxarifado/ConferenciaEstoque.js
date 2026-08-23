@@ -331,7 +331,7 @@ const ConferenciaEstoque = () => {
         )}
 
         <div className="almox-table-container">
-          {loadingConf ? <SkeletonTable rows={8} columns={5} /> : (
+          {loadingConf ? <SkeletonTable rows={8} columns={7} /> : (
             <table className="almox-table">
               <thead>
                 <tr>
@@ -363,8 +363,9 @@ const ConferenciaEstoque = () => {
                             também não tem autoria pra mostrar — sem dado, sem linha. */}
                         {(item.contado_por_nome || item.recontado_por_nome) && (
                           <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', marginTop: 2 }}>
-                            {item.contado_por_nome && `Contado por: ${item.contado_por_nome}`}
-                            {item.recontado_por_nome && ` · Recontado por: ${item.recontado_por_nome}`}
+                            {[item.contado_por_nome && `Contado por: ${item.contado_por_nome}`,
+                              item.recontado_por_nome && `Recontado por: ${item.recontado_por_nome}`]
+                              .filter(Boolean).join(' · ')}
                           </div>
                         )}
                       </td>
@@ -385,7 +386,7 @@ const ConferenciaEstoque = () => {
                             placeholder="—"
                           />
                         ) : (
-                          <span>{item.quantidade_contada !== null ? `${item.quantidade_contada} ${item.unidade}` : '—'}</span>
+                          <span>{item.quantidade_contada != null ? `${item.quantidade_contada} ${item.unidade}` : '—'}</span>
                         )}
                       </td>
                       <td>
@@ -645,7 +646,7 @@ const ConferenciaEstoque = () => {
             </div>
             <div className="almox-modal-body">
               {loadingAcuracidade ? <SkeletonTable rows={5} columns={8} /> : !relatorioAcuracidade ? null : (
-                relatorioAcuracidade.conferencias.length === 0 ? (
+                (relatorioAcuracidade.conferencias || []).length === 0 ? (
                   <div className="almox-empty">
                     <p>Nenhuma conferência concluída ainda</p>
                   </div>
@@ -665,7 +666,7 @@ const ConferenciaEstoque = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {relatorioAcuracidade.conferencias.map(c => (
+                        {(relatorioAcuracidade.conferencias || []).map(c => (
                           <tr key={c.id}>
                             <td style={{ fontWeight: 700, fontFamily: 'monospace' }}>{c.numero}</td>
                             <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(c.data_fim)}</td>

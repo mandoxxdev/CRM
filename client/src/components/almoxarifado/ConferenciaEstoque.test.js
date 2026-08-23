@@ -409,19 +409,51 @@ const CONFERENCIA_ABERTA_ESCOPO = {
 
 describe('ConferenciaEstoque — RN-01/02/03: escopo combinável e dupla contagem na criação', () => {
   test('RN-01: criar envia os filtros de escopo e dupla_contagem no POST', async () => {
+    // TODOS os seis campos de uma vez (achado da revisao da task: so tres eram aferidos, e
+    // transpor apenas_de_clientes com apenas_em_terceiros passava com a suite verde).
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [{ id: 3, nome: 'Chapas', parent_id: null }] });
+      // handleCriar abre a conferencia recem-criada — o detalhe precisa ter shape de conferencia.
+      if (url.startsWith('/almoxarifado/conferencias/')) return Promise.resolve({ data: CONFERENCIA_ABERTA_ESCOPO });
+      return Promise.resolve({ data: [] });
+    });
     await renderizar();
     await clicar(botao('Nova Conferência'));
 
+    preencher(campo('Família'), '3');
     preencher(campo('Classe'), 'A');
     marcar(campo('Somente críticos'), true);
+    // ASSIMETRICO de proposito: so clientes, terceiros fica desmarcado — com os dois marcados,
+    // transpor os estados no handleCriar produzia payload identico e a sabotagem passava.
+    marcar(campo('Materiais de clientes'), true);
     marcar(campo('Dupla contagem'), true);
     await clicar(botao('Criar Conferência'));
 
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/conferencias', expect.objectContaining({
+      familia_id: 3,
       classe_abc: 'A',
       apenas_criticos: true,
+      apenas_de_clientes: true,
       dupla_contagem: true,
     }));
+    const payloadCheio = api.post.mock.calls[0][1];
+    expect(payloadCheio.apenas_em_terceiros).toBeUndefined();
+    // familia_id como NUMERO — string '3' passaria pela afinidade do SQLite em silencio.
+    expect(typeof payloadCheio.familia_id).toBe('number');
+  });
+
+  test('RN-01: filtros vazios NAO entram no payload', async () => {
+    // "So manda quando preenchido" — o servidor ate coage falsy para ausente, mas o contrato
+    // congelado nao promete isso; o front nao pode depender da coacao alheia.
+    await renderizar();
+    await clicar(botao('Nova Conferência'));
+    await clicar(botao('Criar Conferência'));
+
+    const payload = api.post.mock.calls[0][1];
+    for (const chave of ['familia_id', 'classe_abc', 'apenas_criticos', 'apenas_de_clientes', 'apenas_em_terceiros', 'dupla_contagem']) {
+      expect(payload[chave]).toBeUndefined();
+    }
   });
 });
 
@@ -455,8 +487,18 @@ describe('ConferenciaEstoque — RN-04: autoria de contagem', () => {
         return Promise.resolve({
           data: {
             ...CONFERENCIA_ABERTA_ESCOPO,
-            itens: [{ ...CONFERENCIA_ABERTA_ESCOPO.itens[0], quantidade_contada: 90, divergencia: -10,
-              contado_por_nome: 'Almoxarife', recontado_por_nome: 'Gestor' }],
+            itens: [
+              { ...CONFERENCIA_ABERTA_ESCOPO.itens[0], quantidade_contada: 90, divergencia: -10,
+                contado_por_nome: 'Almoxarife', recontado_por_nome: 'Gestor' },
+              // Item LEGADO misto: contado antes da etapa (autoria nula), recontado depois —
+              // achado da revisao: o separador ficava pendurado (" · Recontado por: ...").
+              { ...CONFERENCIA_ABERTA_ESCOPO.itens[0], id: 11, material_id: 101, material_codigo: 'MAT-LEG',
+                material_nome: 'Chapa Legada', quantidade_contada: 40, divergencia: 0,
+                contado_por_nome: null, recontado_por_nome: 'Gestor' },
+              // Item nunca contado, par todo nulo — nao pode virar "Contado por: null".
+              { ...CONFERENCIA_ABERTA_ESCOPO.itens[0], id: 12, material_id: 102, material_codigo: 'MAT-NULO',
+                material_nome: 'Porca Nunca Contada' },
+            ],
           },
         });
       }
@@ -467,6 +509,14 @@ describe('ConferenciaEstoque — RN-04: autoria de contagem', () => {
 
     expect(texto()).toContain('Contado por: Almoxarife');
     expect(texto()).toContain('Recontado por: Gestor');
+    // Guardas de nulo (achado da revisao: remover as guardas deixava 19/19 verde e a tela
+    // imprimia "Contado por: null" em toda linha pre-etapa).
+    expect(texto()).not.toContain('null');
+    const linhaLegada = linhaMaterial('MAT-LEG');
+    expect(linhaLegada.textContent).toContain('Recontado por: Gestor');
+    expect(linhaLegada.textContent).not.toContain('Contado por:');
+    expect(linhaLegada.textContent).not.toContain('· Recontado');
+    expect(linhaMaterial('MAT-NULO').textContent).not.toContain('Contado por');
   });
 });
 
@@ -489,6 +539,44 @@ describe('ConferenciaEstoque — RN-03/RN-08: erro do PUT item exibido verbatim'
 
     expect(toast.error).toHaveBeenCalledWith(mensagem);
   });
+
+  test('RN-08: item cego+dupla vem SEM quantidade_contada — input vazio e salvar funciona', async () => {
+    // Achado da revisao da task: o headline-fix do commit (!= null no initContagens) nao
+    // tinha teste — reverter para !== null deixava 19/19 verde, com o estado envenenado pela
+    // string "undefined" (que furava o guard do handleSalvarContagem e mandava NaN->null ao
+    // servidor: exatamente o buraco que a RN-08 fechou). Fixture com a chave AUSENTE, como o
+    // servidor de fato manda (destructuring remove o campo, nao poe null).
+    const { quantidade_contada, divergencia, quantidade_sistema, ...itemSemContagem } = CONFERENCIA_ABERTA_ESCOPO.itens[0];
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      if (url === '/almoxarifado/conferencias/1') {
+        return Promise.resolve({
+          data: { ...CONFERENCIA_ABERTA_ESCOPO, modo_cego: 1, dupla_contagem: 1,
+            itens: [{ ...itemSemContagem, contado_por_nome: 'Almoxarife' }] },
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    api.put.mockResolvedValueOnce({ data: { success: true, divergencia: -10, recontagem: true } });
+    await renderizar();
+    await clicar(botao('Abrir'));
+
+    const linha = linhaMaterial('MAT-1');
+    const inputContagem = linha.querySelector('input[type="number"]');
+    expect(inputContagem.value).toBe('');
+    expect(texto()).not.toMatch(/undefined|NaN/);
+
+    // O veneno do estado age no blur SEM digitar: com o bug (!== null), o estado interno vira
+    // a string 'undefined', fura o guard do handleSalvarContagem e manda parseFloat=NaN ao
+    // servidor. Sair do campo sem digitar NAO pode disparar PUT nenhum.
+    await sairDoCampo(inputContagem);
+    expect(api.put).not.toHaveBeenCalled();
+
+    preencher(inputContagem, '90');
+    await sairDoCampo(inputContagem);
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/conferencias/1/item/10',
+      { quantidade_contada: 90 });
+  });
 });
 
 describe('ConferenciaEstoque — RN-06: visão Acuracidade', () => {
@@ -498,7 +586,10 @@ describe('ConferenciaEstoque — RN-06: visão Acuracidade', () => {
         { id: 1, numero: 'CONF-0010', data_fim: '2026-08-20T10:00:00Z', escopo_descricao: 'Geral',
           modo_cego: false, dupla_contagem: false, total_itens: 10, contados: 10, exatos: 9, divergentes: 1,
           acuracidade: 98.5, impacto_financeiro: 120 },
-        { id: 2, numero: 'CONF-0011', data_fim: '2026-08-21T10:00:00Z', escopo_descricao: null,
+        // escopo_descricao NAO nulo de proposito (achado da revisao: com escopo nulo, o "—"
+        // do assert vinha da celula de escopo e as duas celulas de metrica nunca eram lidas —
+        // formatador sem guarda renderizava "0.00%" para acuracidade nula com o teste verde).
+        { id: 2, numero: 'CONF-0011', data_fim: '2026-08-21T10:00:00Z', escopo_descricao: 'Geral',
           modo_cego: false, dupla_contagem: false, total_itens: 0, contados: 0, exatos: 0, divergentes: 0,
           acuracidade: null, impacto_financeiro: null },
       ],
@@ -514,14 +605,25 @@ describe('ConferenciaEstoque — RN-06: visão Acuracidade', () => {
 
     const impactoFormatado = Number(120).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     expect(texto()).toContain('CONF-0010');
-    expect(texto()).toContain('98.50%');
-    expect(texto()).toContain(impactoFormatado);
     expect(texto()).toContain('CONF-0011');
     expect(texto()).toContain('92.31%');
 
+    // POR CELULA, nao por textContent do container (achado da revisao: transpor as colunas
+    // acuracidade/impacto deixava 19/19 verde — o gestor leria R$ 120 como acuracidade).
+    // Colunas: 0 numero, 1 data, 2 escopo, 3 contados, 4 exatos, 5 divergentes, 6 acuracidade, 7 impacto.
+    const tds10 = linhaMaterial('CONF-0010').querySelectorAll('td');
+    expect(tds10[3].textContent.trim()).toBe('10');
+    expect(tds10[4].textContent.trim()).toBe('9');
+    expect(tds10[5].textContent.trim()).toBe('1');
+    expect(tds10[6].textContent.trim()).toBe('98.50%');
+    expect(tds10[7].textContent.trim()).toBe(impactoFormatado);
+
     const linhaSemMetrica = linhaMaterial('CONF-0011');
     expect(linhaSemMetrica).toBeTruthy();
-    expect(linhaSemMetrica.textContent).toContain('—');
+    const tds11 = linhaSemMetrica.querySelectorAll('td');
+    expect(tds11[6].textContent.trim()).toBe('—');
+    expect(tds11[7].textContent.trim()).toBe('—');
+    expect(linhaSemMetrica.textContent).not.toMatch(/NaN|0\.00%/);
   });
 });
 
