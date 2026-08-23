@@ -193,6 +193,116 @@ async function contarItem(app, confId, itemId, quantidade) {
     assert.strictEqual(itemBanco.recontado_por_nome, 'Almoxarife', JSON.stringify(itemBanco));
   });
 
+  await test('RN-08: contagem invalida (null/texto/negativa) recusa 400 sem gravar nada', async () => {
+    // Achado da revisao da Task 2: mandar "abc" (o front converte em null via parseFloat)
+    // gravava NULL, devolvia o item a "nunca contado" e DESTRAVAVA o primeiro contador — o
+    // numero final chegava ao estoque digitado por uma pessoa so, com a trilha dizendo dois.
+    setUser(ALMOXARIFE);
+    const mat = await novoMaterial(db);
+    const conf = await abrirConferencia(app, { dupla_contagem: true });
+    const itemRow = await itemDoMaterial(db, conf.id, mat.id);
+    await contarItem(app, conf.id, itemRow.id, 90);
+
+    setUser(GESTOR);
+    for (const invalida of [null, 'abc', -5, undefined]) {
+      const res = await contarItem(app, conf.id, itemRow.id, invalida);
+      assert.strictEqual(res.status, 400, `esperava 400 para ${JSON.stringify(invalida)}: ${JSON.stringify(res.body)}`);
+      assert.strictEqual(res.body.error, 'Quantidade contada deve ser um número maior ou igual a zero');
+    }
+    // Nada mudou no banco — a primeira contagem continua la, e o primeiro contador continua
+    // barrado (a sentinela do gate nao foi resetada).
+    const itemBanco = await itemDoMaterial(db, conf.id, mat.id);
+    assert.strictEqual(Number(itemBanco.quantidade_contada), 90, JSON.stringify(itemBanco));
+    setUser(ALMOXARIFE);
+    const resPrimeiro = await contarItem(app, conf.id, itemRow.id, 999);
+    assert.strictEqual(resPrimeiro.status, 400, JSON.stringify(resPrimeiro.body));
+
+    // CONTROLE do zero: contagem 0 e fisica e legitima (Critical da Etapa 10) — continua 200.
+    setUser(GESTOR);
+    const resZero = await contarItem(app, conf.id, itemRow.id, 0);
+    assert.strictEqual(resZero.status, 200, JSON.stringify(resZero.body));
+  });
+
+  await test('RN-03: modo cego + dupla contagem esconde a contagem do colega no GET', async () => {
+    // Achado da revisao da Task 2: a blindagem do modo cego so removia quantidade_sistema/
+    // divergencia — o recontador lia a contagem do primeiro contador antes de recontar, e os
+    // quatro olhos viravam dois olhos e uma copia.
+    setUser(ALMOXARIFE);
+    const mat = await novoMaterial(db);
+    const conf = await abrirConferencia(app, { modo_cego: true, dupla_contagem: true });
+    const itemRow = await itemDoMaterial(db, conf.id, mat.id);
+    await contarItem(app, conf.id, itemRow.id, 90);
+
+    // O proprio autor continua vendo o que digitou.
+    const detalheAutor = await getConferencia(app, conf.id);
+    const itemAutor = detalheAutor.itens.find((i) => i.material_id === mat.id);
+    assert.strictEqual(Number(itemAutor.quantidade_contada), 90, JSON.stringify(itemAutor));
+
+    // O colega (GESTOR tem ajustar_estoque — usar um segundo ALMOXARIFE, que nao tem) NAO ve.
+    const ALMOXARIFE2 = { id: 7, nome: 'Almoxarife Dois', role: 'usuario', perfil_almoxarifado: 'ALMOXARIFE', email: 'almox2@test.com' };
+    setUser(ALMOXARIFE2);
+    const detalheColega = await getConferencia(app, conf.id);
+    const itemColega = detalheColega.itens.find((i) => i.material_id === mat.id);
+    assert.strictEqual(itemColega.quantidade_contada, undefined, JSON.stringify(itemColega));
+    assert.strictEqual(itemColega.quantidade_sistema, undefined, JSON.stringify(itemColega));
+    // A autoria continua visivel — nao e numero de saldo.
+    assert.strictEqual(itemColega.contado_por_nome, 'Almoxarife', JSON.stringify(itemColega));
+
+    // Quem homologa (ajustar_estoque) ve tudo, como na Etapa 10.
+    setUser(GESTOR);
+    const detalheGestor = await getConferencia(app, conf.id);
+    const itemGestor = detalheGestor.itens.find((i) => i.material_id === mat.id);
+    assert.strictEqual(Number(itemGestor.quantidade_contada), 90, JSON.stringify(itemGestor));
+
+    // Sem modo cego, dupla contagem sozinha NAO esconde nada (controle).
+    setUser(ALMOXARIFE);
+    const matAberto = await novoMaterial(db);
+    const confAberta = await abrirConferencia(app, { dupla_contagem: true });
+    const itemAberto = await itemDoMaterial(db, confAberta.id, matAberto.id);
+    await contarItem(app, confAberta.id, itemAberto.id, 50);
+    setUser(ALMOXARIFE2);
+    const detalheSemCego = await getConferencia(app, confAberta.id);
+    const itemSemCego = detalheSemCego.itens.find((i) => i.material_id === matAberto.id);
+    assert.strictEqual(Number(itemSemCego.quantidade_contada), 50, JSON.stringify(itemSemCego));
+  });
+
+  await test('RN-03: superadmin nao tem bypass da dupla contagem', async () => {
+    // Buraco de regressao apontado pela revisao: um `!req.user.is_superadmin &&` no gate
+    // passava com a suite toda verde. O ADMIN como primeiro contador tem de tomar 400 igual.
+    setUser(ADMIN);
+    const mat = await novoMaterial(db);
+    const conf = await abrirConferencia(app, { dupla_contagem: true });
+    const itemRow = await itemDoMaterial(db, conf.id, mat.id);
+    await contarItem(app, conf.id, itemRow.id, 90);
+
+    const res = await contarItem(app, conf.id, itemRow.id, 91);
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error,
+      'Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: Admin Teste)',
+      JSON.stringify(res.body));
+  });
+
+  await test('RN-04: com tres contadores fica o ULTIMO recontador', async () => {
+    // Buraco de regressao apontado pela revisao: um COALESCE guardando o PRIMEIRO recontador
+    // passava com a suite toda verde. O design diz "sobrescrevendo — fica o ultimo".
+    setUser(ALMOXARIFE);
+    const mat = await novoMaterial(db);
+    const conf = await abrirConferencia(app, {});
+    const itemRow = await itemDoMaterial(db, conf.id, mat.id);
+    await contarItem(app, conf.id, itemRow.id, 90);
+
+    setUser(GESTOR);
+    await contarItem(app, conf.id, itemRow.id, 88);
+    setUser(ADMIN);
+    const res = await contarItem(app, conf.id, itemRow.id, 87);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+
+    const itemBanco = await itemDoMaterial(db, conf.id, mat.id);
+    assert.strictEqual(itemBanco.contado_por_id, 3, JSON.stringify(itemBanco));
+    assert.strictEqual(itemBanco.recontado_por_id, 1, JSON.stringify(itemBanco));
+    assert.strictEqual(itemBanco.recontado_por_nome, 'Admin Teste', JSON.stringify(itemBanco));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

@@ -731,6 +731,23 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // cancelada os dois voltam para todo mundo: e o registro historico.
       if (conf.modo_cego && conf.status === 'ABERTO' && !can(req.user, 'ajustar_estoque')) {
         itens = itens.map(({ quantidade_sistema, divergencia, ...resto }) => resto);
+
+        // RN-03 (10b, achado da revisao da Task 2): com dupla contagem, a contagem do COLEGA
+        // tambem e numero escondido — o recontador precisa contar sem ver o valor do primeiro
+        // contador, senao os quatro olhos viram dois olhos e uma copia. Some so o valor de
+        // quem NAO foi o ultimo autor; o proprio autor continua vendo o que digitou (a tela
+        // mostra a contagem salva). O design da 10b afirmava "a blindagem do modo cego nao
+        // muda" — estava ERRADO para esta combinacao, corrigido no proprio design.
+        if (conf.dupla_contagem) {
+          itens = itens.map((item) => {
+            const ultimoAutorId = item.recontado_por_id != null ? item.recontado_por_id : item.contado_por_id;
+            if (ultimoAutorId != null && Number(ultimoAutorId) !== Number(req.user.id)) {
+              const { quantidade_contada, ...resto } = item;
+              return resto;
+            }
+            return item;
+          });
+        }
       }
 
       res.json({ ...conf, itens });
@@ -856,6 +873,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     try {
       const { quantidade_contada, observacoes } = req.body;
 
+      // RN-08 (10b, achado da revisao da Task 2): a rota nunca validou quantidade_contada, e
+      // isso era CONTORNO da dupla contagem — mandar "abc" (que o front converte em null via
+      // parseFloat) gravava NULL, devolvia o item a "nunca contado" e destravava o primeiro
+      // contador para digitar sozinho o numero final, com a trilha de autoria dizendo que
+      // foram dois. Tambem fecha o minor deferido da Etapa 10 (negativo aceito sem validacao,
+      // que produzia mensagem de retencao malformada no concluir). Zero CONTINUA valido —
+      // contagem fisica legitima (Critical da revisao final da Etapa 10).
+      const quantidadeNum = parseFloat(quantidade_contada);
+      if (!Number.isFinite(quantidadeNum) || quantidadeNum < 0) {
+        return res.status(400).json({ error: 'Quantidade contada deve ser um número maior ou igual a zero' });
+      }
+
       // RN-03/D9: fora de ABERTO a rota nunca checou status nenhum — item de conferencia
       // CONCLUIDO/CANCELADO aceitava edicao, contradizendo o proprio teste que a spec 17 sempre
       // pediu ("conferencia concluida nao pode ser editada"). Nao e mudanca de comportamento
@@ -872,7 +901,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               WHERE ic.id = ? AND ic.conferencia_id = ?`, [req.params.itemId, req.params.id]);
       if (!item) return res.status(404).json({ error: 'Item não encontrado' });
 
-      const divergencia = parseFloat(quantidade_contada) - item.quantidade_sistema;
+      const divergencia = quantidadeNum - item.quantidade_sistema;
       // RN-04: a SEGUNDA vez que este item recebe contagem (isto e: `item.quantidade_contada`,
       // lido ANTES deste UPDATE, ja nao era nulo) conta como recontagem — marca `recontado`
       // sozinha, sem rota nova. A resposta ecoa o mesmo booleano para o front nao ter de
@@ -882,7 +911,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // RN-03 (10b): dupla contagem — o autor da PRIMEIRA contagem nunca reconta. A comparação
       // é sempre contra contado_por_id (não o contador anterior): senão o primeiro contador
       // poderia sobrescrever a recontagem do colega e anular os quatro olhos.
-      if (ehRecontagem && conf.dupla_contagem && item.contado_por_id === req.user.id) {
+      // Sentinela = contado_por_id (nao ehRecontagem): a autoria nunca volta a null, entao o
+      // gate nao depende de um campo que outra requisicao poderia limpar (defesa em
+      // profundidade do achado RN-08 acima). Number() dos dois lados: se o id vier string de
+      // um token futuro, === estrito falharia ABERTO em silencio.
+      if (conf.dupla_contagem && item.contado_por_id != null
+          && Number(item.contado_por_id) === Number(req.user.id)) {
         return res.status(400).json({
           error: `Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: ${item.contado_por_nome})`,
         });
@@ -898,7 +932,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       await dbRun(db, `UPDATE itens_conferencia_almoxarifado
               SET quantidade_contada = ?, divergencia = ?, observacoes = ?${ehRecontagem ? ', recontado = 1' : ''}${camposAutoria}
               WHERE id = ?`,
-        [quantidade_contada, divergencia, observacoes || null, req.user.id, autorNome, req.params.itemId]);
+        [quantidadeNum, divergencia, observacoes || null, req.user.id, autorNome, req.params.itemId]);
 
       res.json({ success: true, divergencia, recontagem: ehRecontagem });
     } catch (e) {

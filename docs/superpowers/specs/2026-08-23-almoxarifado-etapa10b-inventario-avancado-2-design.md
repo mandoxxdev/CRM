@@ -85,6 +85,29 @@ Independente de `dupla_contagem`, `PUT /item` grava a autoria: a primeira contag
 `recontado_por_id`/`recontado_por_nome`. `GET /conferencias/:id` retorna os quatro campos por
 item. Nome segue o padrão do módulo: `req.user.nome || req.user.email`.
 
+### RN-08 — Contagem validada no PUT /item (acrescentada pela revisão da Task 2)
+
+`PUT /item` recusa **400** qualquer `quantidade_contada` que não seja número finito ≥ 0, com
+a mensagem literal `"Quantidade contada deve ser um número maior ou igual a zero"` — **antes**
+de qualquer escrita. Zero continua válido (contagem física legítima — Critical da Etapa 10).
+
+**Por que isso é regra de negócio e não faxina:** sem a validação, mandar `"abc"` (que o
+front converte em `null` via `parseFloat`) gravava `NULL`, devolvia o item a "nunca contado"
+e **destravava o primeiro contador** — o número final chegava ao estoque digitado por uma
+pessoa só, numa conferência de dupla contagem, com a trilha de autoria dizendo que foram
+duas. Também fecha o minor deferido da Etapa 10 (negativo aceito sem validação). Defesa em
+profundidade: a sentinela do gate RN-03 passou a ser `contado_por_id` (que nunca volta a
+nulo), não `quantidade_contada`.
+
+**Complemento de RN-03 (mesma revisão):** em conferência com `modo_cego` **e**
+`dupla_contagem`, o `GET /:id` esconde também `quantidade_contada` dos itens cujo **último
+autor** não é quem está lendo (o próprio autor continua vendo o que digitou; quem tem
+`ajustar_estoque` vê tudo; concluída/cancelada, tudo volta). Sem isso o recontador lia a
+contagem do colega antes de recontar — quatro olhos virando dois olhos e uma cópia. A versão
+original deste design afirmava "a blindagem do modo cego não muda — autoria não é número de
+saldo"; **estava errado** para esta combinação: autoria não é número, mas a contagem do
+colega é.
+
 ### RN-05 — Impacto financeiro persistido na conclusão
 
 `PUT /concluir` calcula o impacto financeiro **sempre** (com ou sem `aplicar_ajustes`) sobre
@@ -142,14 +165,18 @@ primeiro contador recontando (RN-03).
 
 - **400** (dupla contagem): `{ error: "Dupla contagem: a recontagem deve ser feita por outra
   pessoa (primeira contagem: <nome>)" }`.
+- **400** (RN-08, contagem inválida): `{ error: "Quantidade contada deve ser um número maior
+  ou igual a zero" }` — para `null`, texto não numérico ou negativo; zero é válido.
 - Resposta de sucesso inalterada: `{ success, divergencia, recontagem }`.
 - Erros existentes (RN-03 da Etapa 10, 404) inalterados.
 
 ### `GET /api/almoxarifado/conferencias/:id` (alterado)
 
 Cada item passa a incluir `contado_por_id`, `contado_por_nome`, `recontado_por_id`,
-`recontado_por_nome`. A blindagem do modo cego (RN-02 da Etapa 10) não muda — autoria não é
-número de saldo.
+`recontado_por_nome` (nulos em itens contados antes da etapa — o front renderiza "—").
+Autoria não entra na blindagem do modo cego (não é número de saldo), **mas** com `modo_cego`
++ `dupla_contagem` o item **pode vir sem `quantidade_contada`** para quem não é o último
+autor nem homologa (RN-08/complemento de RN-03) — o front trata ausência como "—".
 
 ### `PUT /api/almoxarifado/conferencias/:id/concluir` (alterado)
 
@@ -240,7 +267,10 @@ que o `MaterialAlmoxarifadoForm.js` já usa — a fonte é o form de material, n
 - **RN-04 da Etapa 10 (recontagem automática na segunda contagem)**: inalterada; a dupla
   contagem só restringe **quem** pode fazer a segunda.
 - **Modo cego**: autoria não é blindada (não é número de saldo). O contador da recontagem em
-  modo cego continua sem ver `quantidade_sistema` se não puder ajustar.
+  modo cego continua sem ver `quantidade_sistema` se não puder ajustar. **Correção (revisão
+  da Task 2):** este item dizia que a blindagem não mudava em nada — **estava errado** quando
+  `modo_cego` e `dupla_contagem` se combinam: a contagem do colega também precisa sumir para
+  o recontador (ver o complemento em RN-08 acima).
 - **Esperado × em terceiros (8b)**: inalterado (RN-02 explicita).
 - **G5 (validar em duas passadas)**: esta etapa **não cria** nenhum caminho novo de duas
   passadas — escopo é WHERE na criação, dupla contagem é checagem única no PUT, relatório é

@@ -575,9 +575,17 @@ valor achado — e o porquê.)
   - `GET /almoxarifado/conferencias` — cada linha agora tem `escopo_descricao` (nulo nas
     antigas → renderizar `—`).
   - `GET /almoxarifado/conferencias/:id` — itens com `contado_por_nome`/`recontado_por_nome`
-    (nulos → não renderizar).
+    (nulos → renderizar "—"; itens contados antes da etapa têm o par todo nulo). **Em
+    conferência `modo_cego` + `dupla_contagem`, o item pode vir SEM `quantidade_contada`**
+    para quem não é o último autor (fix da revisão da Task 2) — input vazio e "—", nunca
+    `undefined` na tela.
   - `PUT .../item/:itemId` — 400 novo com `error` começando com `Dupla contagem:` (exibir o
-    texto do servidor, sem parafrasear — padrão já usado no handleConcluir).
+    texto do servidor, sem parafrasear — padrão já usado no handleConcluir). E 400 de RN-08
+    para contagem inválida (`Quantidade contada deve ser um número maior ou igual a zero`) —
+    o servidor agora RECUSA o `null` que `parseFloat('abc')` produz, em vez de zerar a
+    contagem em silêncio; exibir o texto do servidor. Checkboxes de escopo/dupla contagem
+    sempre por `checked` booleano, nunca `value` string (string truthy ativaria filtro no
+    backend — minor deferido da Task 1).
   - `GET /almoxarifado/conferencias/relatorio-acuracidade` → `{ conferencias, agregado }`
     (campos no design; `acuracidade`/`impacto_financeiro` nulos → `—`).
   - `GET /almoxarifado/familias` → lista `{ id, nome, parent_id }` (mesma fonte do
