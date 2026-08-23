@@ -72,9 +72,18 @@ entrega.
   inspeção e em terceiros. A spec 22 pede "considerar reservas": está considerado **ali**, e
   reescrever a subtração aqui contaria a reserva duas vezes (a fórmula tem UMA casa desde a 8b).
 - `a_caminho` = Σ `quantidade` das `solicitacoes_compra_almoxarifado` do material com status
-  `PENDENTE` ou `VINCULADO` — o que já foi pedido não é sugerido de novo (e por isso não existe
-  flag "já solicitado": a solicitação aberta **entra na conta** e o material só reaparece se
+  `PENDENTE` ou `VINCULADO` **criadas dentro do horizonte** (config
+  `reposicao_horizonte_solicitacao_dias`, semeada com `60`) — o que já foi pedido não é
+  sugerido de novo, e a solicitação aberta **entra na conta** (o material só reaparece se
   ainda assim estiver abaixo do ponto).
+
+**Por que o horizonte existe (achado da Fase 2, Critical):** nada no sistema fecha uma
+solicitação — os únicos escritores de status são a criação (`PENDENTE`) e o vínculo
+(`VINCULADO`); não há status terminal, e o recebimento por NF não a toca (isso é a feature 22).
+Sem o horizonte, a solicitação de janeiro seguraria a posição **para sempre** e o material
+nunca mais apareceria na sugestão — sub-compra silenciosa. Com ele, uma solicitação velha
+simplesmente deixa de contar. **Vai para a letra E**: a régua certa é "fechar no recebimento",
+que depende do módulo Compras ganhar o elo; o horizonte é a aproximação honesta até lá.
 
 Sugere-se quando `ponto_efetivo > 0` **e** `posicao < ponto_efetivo`.
 
@@ -83,7 +92,9 @@ Sugere-se quando `ponto_efetivo > 0` **e** `posicao < ponto_efetivo`.
 `alvo = max(quantidade_maxima, ponto_efetivo)` (o `max` protege contra máxima cadastrada menor
 que o ponto — dado ruim não pode gerar sugestão que já nasce abaixo do ponto).
 `quantidade_sugerida = max(alvo − posicao, lote_economico)` quando `lote_economico > 0`, senão
-`alvo − posicao`. Sugestões com quantidade ≤ 0 não saem.
+`alvo − posicao` — que é sempre positiva quando o material é sugerido (`posicao < ponto ≤
+alvo`; a Fase 2 apontou que "sugestão ≤ 0 não sai" era regra intestável e ela foi removida —
+a condição de entrada já a garante).
 
 `valor_estimado = quantidade_sugerida × custo unitário` pela fonte única (`custoUnitarioSql()`).
 
@@ -127,13 +138,31 @@ funciona muda de gate nesta etapa. A ação entra automaticamente em `GET /minha
 
 ### RN-09 — Gerar solicitações: o servidor calcula, o cliente só escolhe
 
-`POST /reposicao/gerar-solicitacoes` aceita `material_ids` (opcional; ausente = todas as
-sugestões do momento). **As quantidades vêm do cálculo do servidor, nunca do body** — o cliente
-escolhe *quais* materiais, não *quanto*. Dedupe pela regra que já existe (material com
-solicitação `PENDENTE` não ganha outra — vira `pulada` com motivo `JA_PENDENTE`); id que não
-está entre as sugestões do momento vira `pulada` com motivo `SEM_SUGESTAO`. Cada criação é
-**auditada** (`registrarAuditoria`), coisa que a geração legada por mínimo nunca fez (e
-continua não fazendo — não mexer no legado; registrado em "Interações").
+**(Reescrita pela Fase 2 — a versão original tinha um dedupe `JA_PENDENTE` que a própria
+arquitetura tornava inalcançável no caminho normal e nocivo no caso raro em que alcançava:
+recusava repor material que continuava faltando.)**
+
+`POST /reposicao/gerar-solicitacoes` aceita `material_ids`: **ausente** = todas as sugestões do
+momento; **`[]` = nenhuma** (desmarcar tudo e clicar não dispara o catálogo inteiro — achado da
+Fase 2). **As quantidades vêm do cálculo do servidor, nunca do body** — o cliente escolhe
+*quais* materiais, não *quanto*.
+
+**Não há dedupe no caminho novo — a matemática da posição É o dedupe:** a solicitação aberta
+entra em `a_caminho` (RN-03), então (a) material cuja pendência já cobre o ponto **não é
+sugerido** e um `POST` ausente simplesmente não o inclui; (b) material com pendência
+**insuficiente** continua sugerido com `quantidade_sugerida` já descontando o que está a
+caminho — gerar cria a solicitação do **complemento**, que é o comportamento certo (o dedupe
+antigo recusaria repor o que falta). O dedupe por `PENDENTE` continua existindo **só no caminho
+legado** (`verificar-minimos`), intocado — é dele que o teste da spec 18 fala.
+
+`pulada` tem um único motivo: `SEM_SUGESTAO` — id pedido explicitamente que não está entre as
+sugestões do momento (sem régua, ou posição já coberta). `POST` sem ids quando não há nada a
+sugerir responde `{ criadas: [], puladas: [] }` e o front mostra "Nenhuma sugestão para gerar"
+(não é sucesso mudo).
+
+Cada criação é **auditada** (`registrarAuditoria`, `dados_novos` como **objeto** — a função
+serializa; passar string duplicaria o escape), coisa que a geração legada nunca fez (e continua
+não fazendo — legado intocado, D10).
 
 ## Contratos de API (congelados)
 
@@ -170,20 +199,26 @@ continua não fazendo — não mexer no legado; registrado em "Interações").
 
 ### `POST /api/almoxarifado/reposicao/gerar-solicitacoes` (novo, mesmo gate)
 
-- Body: `{ "material_ids": [10, 11] }` (opcional — ausente/vazio = todas as sugestões).
+- Body: `{ "material_ids": [10, 11] }` — **ausente** = todas as sugestões do momento;
+  **`[]` = nenhuma** (corrigido pela Fase 2: "vazio = todas" era destrutivo com a tela que
+  marca tudo por default).
 - **200**: `{ "criadas": [{ "material_id", "solicitacao_id", "quantidade" }], "puladas":
-  [{ "material_id", "motivo": "JA_PENDENTE" | "SEM_SUGESTAO" }] }`
+  [{ "material_id", "motivo": "SEM_SUGESTAO" }] }` — `puladas` só existe para ids explícitos.
 - **400** (`material_ids` presente mas não-array ou com não-número):
   `{ "error": "Lista de materiais inválida" }`
 
 ### `GET /api/almoxarifado/reposicao/estoque-parado` (novo, mesmo gate)
 
-- Query: `?tipo=EXCESSO|SEM_CONSUMO|OBSOLETO` (opcional; ausente = tudo que tem alguma flag).
+- Query: `?tipo=EXCESSO|SEM_CONSUMO|OBSOLETO` (opcional; ausente **ou vazio** = tudo que tem
+  alguma flag — string vazia é "Todos" do select da tela, não erro; achado da Fase 2).
 - **200**: `{ "dias_sem_consumo": 180, "itens": [{ "material_id", "codigo", "nome", "unidade",
   "quantidade_atual", "quantidade_maxima", "ultima_entrada", "ultima_saida", "valor_parado",
   "excesso", "sem_consumo", "obsoleto" }], "resumo": { "excesso", "sem_consumo", "obsoleto",
-  "valor_parado_total" } }` — flags booleanas; datas `null` quando nunca houve.
-- **400** (`tipo` fora do domínio): `{ "error": "Tipo inválido (use EXCESSO, SEM_CONSUMO ou OBSOLETO)" }`
+  "valor_parado_total" } }` — flags booleanas; datas `null` quando nunca houve. **O `resumo` é
+  calculado sobre a lista COMPLETA (antes do filtro por tipo e do teto de 500)** — é o retrato
+  do estoque parado inteiro; `itens` é a janela filtrada/truncada (semântica congelada pela
+  Fase 2, que apontou a ambiguidade).
+- **400** (`tipo` não-vazio fora do domínio): `{ "error": "Tipo inválido (use EXCESSO, SEM_CONSUMO ou OBSOLETO)" }`
 
 ### Configs novas (semeadas no `schema.js` — lição da Etapa 10: config não semeada nunca é configurável)
 
@@ -191,6 +226,11 @@ continua não fazendo — não mexer no legado; registrado em "Interações").
 |---|---|---|
 | `reposicao_janela_consumo_dias` | `90` | Janela (dias) do consumo médio para reposição |
 | `reposicao_dias_sem_consumo` | `180` | Dias sem saída para material contar como parado/obsoleto |
+| `reposicao_horizonte_solicitacao_dias` | `60` | Dias em que uma solicitação aberta ainda conta como "a caminho" |
+
+**E as três entram no array `CAMPOS` da tela de Configurações** (achado da Fase 2: semear no
+banco não basta — a tela renderiza uma lista fixa de campos, e chave fora dela é ineditável
+pela UI; a mesma lição da Etapa 10 um nível acima).
 
 ### Front — tela nova `/almoxarifado/reposicao` (`ReposicaoAlmoxarifado.js`)
 
@@ -202,8 +242,11 @@ continua não fazendo — não mexer no legado; registrado em "Interações").
   POST com os marcados; resposta mostra criadas/puladas.
 - **Aba Estoque Parado**: filtro por tipo, tabela com flags como badges, valor parado,
   última entrada/saída (`—` quando nunca).
-- **Aba Solicitações**: leitura do relatório existente `GET /almoxarifado/relatorios/solicitacoes-compra`
-  (pendentes/vinculadas) — sem ação nova aqui além de visualizar.
+- **Aba Solicitações**: leitura do relatório `GET /almoxarifado/relatorios/solicitacoes-compra`.
+  **Correção da Fase 2:** o relatório real era `WHERE status = 'PENDENTE'` — a VINCULADA (que
+  é justamente a que esconde o material da sugestão) ficava invisível na tela inteira; o
+  relatório passa a trazer `PENDENTE` e `VINCULADO` (mudança no tronco, Task 2). Sem ação nova
+  além de visualizar.
 - Todos os valores em R$ com `toLocaleString('pt-BR', { style: 'currency' })`; nulos → `—`.
 
 ## Decisões
@@ -211,13 +254,16 @@ continua não fazendo — não mexer no legado; registrado em "Interações").
 - **D1 — O motor de sugestão vive no `purchaseService`** (expande o serviço existente de 31
   linhas), não num serviço novo. Descartado: `replenishmentService` separado — duas fontes de
   "o que comprar" divergiriam; o serviço é um só e pequeno.
-- **D2 — "Pedidos de compra abertos" = solicitações do próprio almoxarifado.** A spec 22 pede
-  para descontar pedidos abertos, mas a tabela `pedidos_compra` do módulo Compras é **só
-  cabeçalho** (fornecedor + valor total, sem itens por material) — o dado "quantidade pedida
-  por material" **não existe** no sistema. O proxy honesto é `solicitacoes_compra_almoxarifado`
-  com status `PENDENTE`/`VINCULADO` (a VINCULADO aponta para um pedido real). Quando o módulo
-  Compras ganhar itens por material, trocar a fonte é uma query. **Vai para a letra E** (regra
-  aproximada por limitação de dado, não por escolha).
+- **D2 — "Pedidos de compra abertos" = solicitações do próprio almoxarifado (com horizonte).**
+  A spec 22 pede para descontar pedidos abertos. **Correção da Fase 2 — a versão original
+  deste D dizia que "quantidade pedida por material não existe no sistema"; estava errado:**
+  existe `solicitacoes_compra_itens` (do core do CRM) com `material_id`/`quantidade`, **mas
+  hoje ela só é gravada com `material_tipo = 'escritorio'`** (o fluxo de solicitações do
+  escritório) — para material de almoxarifado o dado continua não sendo gravado por ninguém, e
+  `pedidos_compra` é só cabeçalho. O proxy honesto segue sendo
+  `solicitacoes_compra_almoxarifado` `PENDENTE`/`VINCULADO`, agora **dentro do horizonte**
+  (RN-03) porque nada as fecha. Quando o Compras ganhar o elo por material, trocar a fonte é
+  uma query. **Vai para a letra E.**
 - **D3 — Reservas não são descontadas de novo** — `disponivelSql` já as desconta (fonte única
   da 8b). A spec lista "considerar reservas" como se fosse conta nova; está considerada.
 - **D4 — "Projetos futuros" fora** — exigiria BOM/OP (features 22/23 de integração), que não
@@ -259,6 +305,19 @@ continua não fazendo — não mexer no legado; registrado em "Interações").
   duplicada é anulável por humano, não corrompe saldo).
 - **Front espelha formatação, não fórmula** — nenhum cálculo de sugestão no client (aprendizado
   G6: o que o servidor decide, o servidor manda pronto).
+- **`requisitionStateMachine.calcularStatusPosAprovacao` conta solicitações `PENDENTE`** para
+  decidir `AGUARDANDO_COMPRA` vs `AGUARDANDO_ESTOQUE` numa requisição aprovada sem saldo — o
+  POST novo passa a influenciar esse status (uma requisição aprovada depois de gerar a
+  sugestão verá "aguardando compra"). É o comportamento **desejável** (a compra está mesmo em
+  andamento) e fica declarado aqui em vez de descoberto por surpresa.
+- **Já existe um terceiro caminho de compra com canal:** `requisitionPurchaseNotifyService`
+  e-maila o setor de Compras quando itens de requisição não têm estoque (config
+  `compras_notificar_emails`). Não conflita em código com esta etapa (fluxos distintos), mas a
+  frase "uma fonte de compra" do D1 vale para o SERVIÇO de sugestão, não para o módulo inteiro
+  — corrigido aqui para a narrativa não mentir.
+- **Índice novo** `idx_mov_almox_material_tipo` em `movimentacoes_almoxarifado (material_id,
+  cancelado, tipo)` — as queries novas fazem subselects correlacionados por material sobre o
+  livro; sem índice é N × full scan (Fase 2). Primeira consulta do módulo com esse shape.
 
 ## Testes exigidos (arquivos novos)
 

@@ -37,6 +37,42 @@ reescritos.
 - Commits em português, corpo sem acento, um assunto por commit, `git add` explícito.
 - `cd server && npm run test:api` antes de cada commit de backend (baseline atual: 107/107).
 
+## Fase 2 — achados da revisão adversarial do plano (acatados antes da execução)
+
+Revisor fresco: **3 Critical + 6 Important + 6 Minor; 1 ruído** (a "árvore suja" era o
+snapshot do início da sessão — `git status` real está limpo). Correções aplicadas no texto:
+
+1. **[Critical]** `saidaNoLivro` sem `saldo_anterior`/`saldo_posterior` (NOT NULL sem default)
+   morria em SQLITE_CONSTRAINT — corrigido com o padrão dos helpers reais da base.
+2. **[Critical]** o dedupe `JA_PENDENTE` era inalcançável no caminho normal (a pendência entra
+   em `a_caminho` e tira o material da sugestão antes do dedupe rodar) e nocivo no caso raro
+   (recusava repor material que continuava faltando). **RN-09 reescrita**: sem dedupe no
+   caminho novo — a matemática da posição É o dedupe, e pendência insuficiente gera o
+   COMPLEMENTO; `pulada` só existe como `SEM_SUGESTAO` para id explícito.
+3. **[Critical]** `a_caminho` sem horizonte: nada no sistema fecha solicitação (verificado —
+   só existem PENDENTE e VINCULADO), então uma solicitação de janeiro seguraria a posição para
+   SEMPRE e o material sumia da sugestão eternamente (sub-compra silenciosa). RN-03 ganhou o
+   horizonte `reposicao_horizonte_solicitacao_dias` (60) — letra E no fechamento.
+4. **[Important ×6]** `?tipo=` vazio (o "Todos" do select) tomava 400 → tratado como ausente;
+   `material_ids: []` significava "todas" (desmarcar tudo e clicar dispararia o catálogo
+   inteiro) → `[]` = nenhuma; `dados_novos` como string seria re-serializado (escape em dobro)
+   → objeto, e o teste passa a `JSON.parse` o gravado; configs semeadas eram ineditáveis pela
+   tela (o array `CAMPOS` é fixo) → 3 entradas novas na Task 3; a aba Solicitações não
+   mostraria as VINCULADAS (o relatório era só PENDENTE) → relatório passa a IN
+   ('PENDENTE','VINCULADO'), mudança movida para o tronco (Task 2); índice novo no livro
+   (subselects correlacionados por material).
+5. **[Minor acatados]** resumo do estoque-parado calculado sobre a lista COMPLETA (semântica
+   congelada); asserts globais dos testes 6/8 por delta/`itemDe` (banco compartilhado);
+   `if (sugerida <= 0)` era código morto e a regra correspondente saiu do design; D2 corrigido
+   DIZENDO que estava errado (`solicitacoes_compra_itens` existe, mas só grava 'escritorio');
+   duas interações existentes declaradas (requisitionStateMachine conta PENDENTE;
+   requisitionPurchaseNotifyService já e-maila Compras).
+6. **Respostas que o plano deixou em aberto, resolvidas pelo revisor:** `custoUnitarioSql`
+   ACEITA alias (usar `custoUnitarioSql('m')`); ordem dos placeholders confere nas duas
+   queries; `registrarAuditoria` recebe OBJETO; ALMOXARIFE não tem bypass no gate; aritmética
+   do RN-04 conferida; `permissoesRotas` não varre rotas; `minhas-permissoes` expõe a ação
+   sozinha; nenhum front colide.
+
 ## Sort topológico
 
 | Task | O quê | Classe |
@@ -89,10 +125,23 @@ a ordem do arquivo), com comentário no padrão da casa:
 Em `schema.js`, no array `configs` existente (junto de `tolerancia_inventario_percentual`):
 
 ```js
-    // Etapa 11: janela do consumo medio e regua de material parado (RN-01/RN-07). Semeadas
-    // porque PUT /configuracoes so escreve chave que ja existe (licao da Etapa 10).
+    // Etapa 11: janela do consumo medio, regua de material parado e horizonte da solicitacao
+    // (RN-01/RN-03/RN-07). Semeadas porque PUT /configuracoes so escreve chave que ja existe
+    // (licao da Etapa 10) — e as tres tambem entram no array CAMPOS da tela (Task 3), senao
+    // continuam ineditaveis pela UI (Fase 2).
     ['reposicao_janela_consumo_dias', '90', 'Janela (dias) do consumo médio para reposição'],
     ['reposicao_dias_sem_consumo', '180', 'Dias sem saída para material contar como parado/obsoleto'],
+    ['reposicao_horizonte_solicitacao_dias', '60', 'Dias em que uma solicitação aberta ainda conta como "a caminho"'],
+```
+
+E o **índice** (Fase 2 — as queries novas fazem subselects correlacionados por material sobre
+o livro), junto dos outros `CREATE INDEX`/`safeAlter` do schema:
+
+```js
+  // Etapa 11: primeiro shape de consulta do modulo com subselect correlacionado por material
+  // sobre o livro inteiro (consumo medio, ultima entrada/saida) — sem indice e N x full scan.
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_mov_almox_material_tipo
+    ON movimentacoes_almoxarifado (material_id, cancelado, tipo)`);
 ```
 
 - [ ] **Step 3: teste vermelho — `reposicaoSugestao.api.test.js`**
@@ -119,9 +168,11 @@ async function novoMaterial(db, over = {}) {
   return { id: r.lastID, codigo: m.codigo };
 }
 async function saidaNoLivro(db, materialId, quantidade, { diasAtras = 1, tipo = 'SAIDA', cancelado = 0 } = {}) {
+  // saldo_anterior/saldo_posterior sao NOT NULL sem default (Fase 2, Critical 1); nada da
+  // reposicao le essas colunas — 0 como fixture, mesmo padrao de materialClienteSeloProprietario.
   await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-      (material_id, tipo, quantidade, cancelado, created_at)
-     VALUES (?,?,?,?, datetime('now', ?))`,
+      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, usuario_id, cancelado, created_at)
+     VALUES (?,?,?,0,0,1,?, datetime('now', ?))`,
     [materialId, tipo, quantidade, cancelado, `-${diasAtras} days`]);
 }
 async function sugestoes(app) { return request(app).get('/api/almoxarifado/reposicao/sugestoes'); }
@@ -152,9 +203,13 @@ Testes:
    `minima: 5, qtd: 0`; primeiro aparece (`posicao 0`); inserir
    `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, status) VALUES (?, 10, 'PENDENTE')`
    → some da resposta (posição 10 ≥ 5). Trocar status para `'VINCULADO'` → continua fora.
-   Trocar para `'CANCELADO'`... (não há status cancelado no legado — usar `'ATENDIDO'`? LEIA
-   os status usados; se só PENDENTE/VINCULADO existem, use um literal qualquer diferente,
-   ex.: `'FECHADO'`) → volta a aparecer.
+   Trocar para `'FECHADO'` (status **inexistente de propósito** — só PENDENTE/VINCULADO são
+   escritos no sistema, verificado pela Fase 2; o teste prova o IN-list, e a falta de status
+   terminal é exatamente o motivo do horizonte abaixo) → volta a aparecer.
+   **E o horizonte (Critical 3 da Fase 2):** voltar o status para `'PENDENTE'` e backdatear
+   `UPDATE solicitacoes_compra_almoxarifado SET created_at = datetime('now', '-90 days')
+   WHERE id = ?` → o material **volta a aparecer** (solicitação com 90 dias não segura mais a
+   posição; horizonte default 60).
 4. `RN-03: reserva NAO e descontada duas vezes` — material `qtd: 10, minima: 8` com
    `quantidade_reservada = 4` (UPDATE direto): disponível = 6 < 8 → sugere com
    `disponivel === 6` e `posicao === 6` (se alguém reescrever a conta descontando reserva de
@@ -208,17 +263,27 @@ async function calcularSugestoes(db) {
            m.prazo_reposicao_dias, m.material_critico, m.fornecedor_id,
            f.razao_social AS fornecedor_nome,
            ${disponivelSql('m')} AS disponivel,
-           ${custoUnitarioSql()} AS custo_unitario,
+           ${custoUnitarioSql('m')} AS custo_unitario,
            COALESCE((SELECT SUM(mv.quantidade) FROM movimentacoes_almoxarifado mv
                      WHERE mv.material_id = m.id AND mv.cancelado = 0
                        AND mv.tipo IN (${placeholders})
                        AND mv.created_at >= datetime('now', '-' || ? || ' days')), 0) AS consumo_janela,
            COALESCE((SELECT SUM(sc.quantidade) FROM solicitacoes_compra_almoxarifado sc
-                     WHERE sc.material_id = m.id AND sc.status IN ('PENDENTE','VINCULADO')), 0) AS a_caminho
+                     WHERE sc.material_id = m.id AND sc.status IN ('PENDENTE','VINCULADO')
+                       AND sc.created_at >= datetime('now', '-' || ? || ' days')), 0) AS a_caminho
     FROM materiais_almoxarifado m
     LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL`,
-    [...TIPOS_SAIDA, janela]);
+    [...TIPOS_SAIDA, janela, horizonte]);
+```
+
+(com `const horizonte = await lerConfigNumero(db, 'reposicao_horizonte_solicitacao_dias', 60);`
+junto da janela. **Ordem dos placeholders re-contada:** 10 de `TIPOS_SAIDA` + 1 da janela no
+subselect de consumo, depois 1 do horizonte no de a_caminho — `[...TIPOS_SAIDA, janela,
+horizonte]` = 12. `custoUnitarioSql` ACEITA alias — `custoUnitarioSql('m')`, resposta da
+Fase 2.)
+
+```js
 
   const itens = [];
   for (const r of rows) {
@@ -234,9 +299,9 @@ async function calcularSugestoes(db) {
     if (posicao >= pontoEfetivo) continue;
 
     const alvo = Math.max(r.quantidade_maxima || 0, pontoEfetivo);   // RN-04
-    let sugerida = alvo - posicao;
+    let sugerida = alvo - posicao;                                   // sempre > 0 aqui:
     if (r.lote_economico > 0) sugerida = Math.max(sugerida, r.lote_economico);
-    if (sugerida <= 0) continue;
+    // (posicao < ponto <= alvo garante sugerida > 0 — o guard "<= 0" era codigo morto, Fase 2)
 
     itens.push({
       material_id: r.material_id, codigo: r.codigo, nome: r.nome, unidade: r.unidade,
@@ -328,6 +393,8 @@ git commit -m "Almoxarifado Etapa 11 Task 1: motor de sugestao de reposicao e GE
 
 **Files:**
 - Modify: `server/services/almoxarifado/purchaseService.js`
+- Modify: `server/services/almoxarifado/reportService.js` (relatório de solicitações ganha
+  VINCULADO — Fase 2, movido do galho para o tronco)
 - Modify: `server/routes/almoxarifado/extended.js`
 - Test: `server/tests/api/reposicaoGerarSolicitacoes.api.test.js` e
   `server/tests/api/reposicaoEstoqueParado.api.test.js` (novos)
@@ -343,24 +410,38 @@ git commit -m "Almoxarifado Etapa 11 Task 1: motor de sugestao de reposicao e GE
 
 `reposicaoGerarSolicitacoes.api.test.js` (helpers da Task 1 copiados):
 
-1. `RN-09: gera com a quantidade DO SERVIDOR e audita` — material `minima: 5, maxima: 20,
-   qtd: 0, custo: 10`; POST `{}` → `criadas` tem `{ material_id, quantidade: 20 }`; a linha
-   existe em `solicitacoes_compra_almoxarifado` com `motivo = 'PONTO_REPOSICAO'` e
-   `status = 'PENDENTE'`; `SELECT * FROM auditoria_log_almoxarifado WHERE entidade =
-   'solicitacao_compra' AND entidade_id = ?` tem 1 linha com a ação de criação.
-2. `RN-09: dedupe — material com PENDENTE vira pulada JA_PENDENTE` — POST duas vezes: a
-   segunda responde `puladas: [{ material_id, motivo: 'JA_PENDENTE' }]` e NÃO cria segunda
-   linha (COUNT = 1).
-3. `RN-09: id fora das sugestoes vira SEM_SUGESTAO` — POST `{ material_ids: [999999] }` →
-   `puladas` com motivo `SEM_SUGESTAO`, `criadas` vazio.
-4. `RN-09: selecao parcial cria SO os pedidos` — dois materiais sugeridos, POST com um id →
-   1 criada, e o outro material continua aparecendo em GET /sugestoes.
-5. `RN-09: body invalido recusa 400 literal` — `{ material_ids: 'abc' }` e
+1. `RN-09: gera com a quantidade DO SERVIDOR e audita como OBJETO` — material `minima: 5,
+   maxima: 20, qtd: 0, custo: 10`; POST `{}` → `criadas` tem `{ material_id, quantidade: 20 }`;
+   linha em `solicitacoes_compra_almoxarifado` com `motivo = 'PONTO_REPOSICAO'` e `status =
+   'PENDENTE'`; e a auditoria: `SELECT dados_novos FROM auditoria_log_almoxarifado WHERE
+   entidade = 'solicitacao_compra' AND entidade_id = ?` → **`JSON.parse(dados_novos).quantidade
+   === 20`** (Fase 2: passar string re-serializava e gravava escape em dobro; contar linha não
+   pegava — o parse pega).
+2. `RN-09: segundo POST sem ids responde vazio-legivel, sem duplicar` — POST `{}` duas vezes:
+   a pendência do 1º entra em `a_caminho`, a posição cobre o ponto, o material some da
+   sugestão → a 2ª responde `{ criadas: [], puladas: [] }` e COUNT continua 1. (Fase 2,
+   Critical 2: era este cenário que o "JA_PENDENTE" do plano original afirmava e nunca poderia
+   acontecer.)
+3. `RN-09: pendencia INSUFICIENTE gera o COMPLEMENTO` — material `minima: 100, qtd: 0` com
+   solicitação PENDENTE de 10 (inserida direto): posição 10 < 100 → ainda sugerido com
+   `quantidade_sugerida 90`; POST `{}` cria a segunda solicitação **de 90** (o complemento —
+   o dedupe antigo recusaria repor o que falta). COUNT = 2, soma das quantidades = 100.
+4. `RN-09: id fora das sugestoes vira SEM_SUGESTAO` — POST `{ material_ids: [999999] }` →
+   `puladas` com motivo `SEM_SUGESTAO`, `criadas` vazio. E id de material cuja posição já
+   cobre o ponto → mesmo motivo.
+5. `RN-09: selecao parcial cria SO os pedidos; lista VAZIA nao cria NADA` — dois materiais
+   sugeridos: POST `{ material_ids: [um] }` → 1 criada, o outro segue em GET /sugestoes;
+   POST `{ material_ids: [] }` → `{ criadas: [], puladas: [] }` e NENHUMA linha nova (Fase 2:
+   "[] = todas" dispararia o catálogo inteiro ao desmarcar tudo).
+6. `RN-09: body invalido recusa 400 literal` — `{ material_ids: 'abc' }` e
    `{ material_ids: [1, 'x'] }` → 400 `Lista de materiais inválida`; nada criado.
-6. `RN-08: gate — PRODUCAO e ALMOXARIFE 403, COMPRAS 200` (par positivo+negativo).
-7. `[CONTROLE] a quantidade do body e IGNORADA` — POST `{ material_ids: [id],
-   quantidades: { [id]: 99999 } }` (campo inventado) → a criada tem a quantidade calculada,
-   não 99999.
+7. `RN-08: gate — PRODUCAO e ALMOXARIFE 403, COMPRAS 200` (par positivo+negativo).
+8. `[CONTROLE] a quantidade do body e IGNORADA` — POST `{ material_ids: [id],
+   quantidades: { [id]: 99999 } }` (campo inventado) → a criada tem a quantidade calculada.
+9. `relatorio solicitacoes-compra traz PENDENTE e VINCULADO` — criar uma de cada (a VINCULADO
+   via rota legada de vincular) → `GET /almoxarifado/relatorios/solicitacoes-compra` traz as
+   duas (Fase 2: era só PENDENTE, e a VINCULADO — que esconde o material da sugestão — ficava
+   invisível na tela inteira).
 
 `reposicaoEstoqueParado.api.test.js`:
 
@@ -371,8 +452,11 @@ git commit -m "Almoxarifado Etapa 11 Task 1: motor de sugestao de reposicao e GE
    material que NUNCA saiu → `true`.
 3. `RN-07: obsoleto exige tambem nenhuma entrada no periodo` — sem saída há 200 dias e COM
    entrada há 30 → `obsoleto false, sem_consumo true`; sem nada há 200 → `obsoleto true`.
-4. `RN-07: filtro por tipo e 400 literal` — `?tipo=EXCESSO` só traz excessos;
+4. `RN-07: filtro por tipo, tipo VAZIO e 400 literal` — `?tipo=EXCESSO` só traz excessos;
+   `?tipo=` (string vazia — o "Todos" do select) → **200 com tudo** (Fase 2);
    `?tipo=QUALQUER` → 400 `Tipo inválido (use EXCESSO, SEM_CONSUMO ou OBSOLETO)`.
+   E o resumo é da lista COMPLETA: com `?tipo=EXCESSO`, `resumo.sem_consumo` continua contando
+   os sem-consumo do estoque inteiro (semântica congelada).
 5. `RN-07: valor parado e resumo` — `qtd: 100, custo: 2` → `valor_parado 200`;
    `resumo.valor_parado_total` soma; contadores por flag batem.
 6. `RN-07: material de cliente e material zerado ficam fora` — cliente com excesso → ausente;
@@ -386,42 +470,38 @@ git commit -m "Almoxarifado Etapa 11 Task 1: motor de sugestao de reposicao e GE
 **(a) `gerarSolicitacoesDaSugestao`** em `purchaseService.js`:
 
 ```js
-// RN-09: o servidor calcula, o cliente so escolhe QUAIS materiais. Recalcula as sugestoes na
-// hora (nao confia em quantidade vinda de fora) e reusa o dedupe do legado: material com
-// PENDENTE nao ganha outra solicitacao. Auditada — a geracao legada por minimo nunca foi
-// (D10: legado intocado).
+// RN-09 (reescrita pela Fase 2): o servidor calcula, o cliente so escolhe QUAIS materiais —
+// ausente = todas as sugestoes do momento; [] = NENHUMA (desmarcar tudo nao dispara o
+// catalogo). NAO ha dedupe aqui: a pendencia entra em a_caminho (RN-03), entao material
+// coberto nem e sugerido, e pendencia INSUFICIENTE gera o COMPLEMENTO (a quantidade sugerida
+// ja desconta o que esta a caminho) — recusar seria negar reposicao a material que continua
+// faltando. O dedupe por PENDENTE segue existindo SO no legado verificar-minimos (D10).
 async function gerarSolicitacoesDaSugestao(db, usuario, materialIds) {
   const sugestao = await calcularSugestoes(db);
   const porMaterial = new Map();
   for (const g of sugestao.fornecedores) for (const i of g.itens) porMaterial.set(i.material_id, i);
 
-  const alvos = (materialIds && materialIds.length > 0)
-    ? materialIds : [...porMaterial.keys()];
+  const alvos = Array.isArray(materialIds) ? materialIds : [...porMaterial.keys()];
 
   const criadas = []; const puladas = [];
   for (const materialId of alvos) {
     const item = porMaterial.get(materialId);
     if (!item) { puladas.push({ material_id: materialId, motivo: 'SEM_SUGESTAO' }); continue; }
-    const pendente = await dbGet(db,
-      "SELECT id FROM solicitacoes_compra_almoxarifado WHERE material_id = ? AND status = 'PENDENTE'",
-      [materialId]);
-    if (pendente) { puladas.push({ material_id: materialId, motivo: 'JA_PENDENTE' }); continue; }
     const r = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado
         (material_id, quantidade, motivo) VALUES (?,?,'PONTO_REPOSICAO')`,
       [materialId, item.quantidade_sugerida]);
+    // dados_novos como OBJETO — audit.js serializa; string aqui viraria escape em dobro
+    // (Fase 2, verificado nos 11 chamadores reais).
     await registrarAuditoria(db, {
       entidade: 'solicitacao_compra', entidade_id: r.lastID, acao: 'CRIAR',
       usuario_id: usuario.id, usuario_nome: usuario.nome || usuario.email,
-      dados_novos: JSON.stringify({ material_id: materialId, quantidade: item.quantidade_sugerida, motivo: 'PONTO_REPOSICAO' }),
+      dados_novos: { material_id: materialId, quantidade: item.quantidade_sugerida, motivo: 'PONTO_REPOSICAO' },
     });
     criadas.push({ material_id: materialId, solicitacao_id: r.lastID, quantidade: item.quantidade_sugerida });
   }
   return { criadas, puladas };
 }
 ```
-
-(Confira a assinatura real de `registrarAuditoria` em `audit.js` — os campos acima vêm dela;
-se `dados_novos` esperar objeto em vez de string, siga o padrão dos chamadores existentes.)
 
 **(b) `estoqueParado`**:
 
@@ -449,7 +529,7 @@ async function estoqueParado(db, tipo) {
   const limite = Date.now() - dias * 24 * 60 * 60 * 1000;
   const antigaOuNunca = (d) => d == null || new Date(`${String(d).replace(' ', 'T')}Z`).getTime() < limite;
 
-  let itens = rows.map((r) => {
+  const todos = rows.map((r) => {
     const sem_consumo = antigaOuNunca(r.ultima_saida);
     return {
       material_id: r.material_id, codigo: r.codigo, nome: r.nome, unidade: r.unidade,
@@ -462,6 +542,16 @@ async function estoqueParado(db, tipo) {
     };
   }).filter((i) => i.excesso || i.sem_consumo || i.obsoleto);
 
+  // Resumo sobre a lista COMPLETA, antes do filtro por tipo e do teto (semantica congelada
+  // pela Fase 2): o resumo e o retrato do estoque parado inteiro; `itens` e a janela.
+  const resumo = {
+    excesso: todos.filter((i) => i.excesso).length,
+    sem_consumo: todos.filter((i) => i.sem_consumo).length,
+    obsoleto: todos.filter((i) => i.obsoleto).length,
+    valor_parado_total: Number(todos.reduce((s, i) => s + i.valor_parado, 0).toFixed(2)),
+  };
+
+  let itens = todos;
   if (tipo) {
     const chave = { EXCESSO: 'excesso', SEM_CONSUMO: 'sem_consumo', OBSOLETO: 'obsoleto' }[tipo];
     itens = itens.filter((i) => i[chave]);
@@ -469,16 +559,7 @@ async function estoqueParado(db, tipo) {
   itens.sort((a, b) => b.valor_parado - a.valor_parado);
   itens = itens.slice(0, 500);
 
-  return {
-    dias_sem_consumo: dias,
-    itens,
-    resumo: {
-      excesso: itens.filter((i) => i.excesso).length,
-      sem_consumo: itens.filter((i) => i.sem_consumo).length,
-      obsoleto: itens.filter((i) => i.obsoleto).length,
-      valor_parado_total: Number(itens.reduce((s, i) => s + i.valor_parado, 0).toFixed(2)),
-    },
-  };
+  return { dias_sem_consumo: dias, itens, resumo };
 }
 ```
 
@@ -499,13 +580,21 @@ async function estoqueParado(db, tipo) {
   app.get('/api/almoxarifado/reposicao/estoque-parado', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
     try {
       const { tipo } = req.query;
-      if (tipo !== undefined && !['EXCESSO', 'SEM_CONSUMO', 'OBSOLETO'].includes(tipo)) {
+      // `tipo` VAZIO e o "Todos" do select da tela — trata como ausente, nao como erro
+      // (Fase 2: `?tipo=` tomava 400 e a propria tela nova quebrava).
+      if (tipo && !['EXCESSO', 'SEM_CONSUMO', 'OBSOLETO'].includes(tipo)) {
         return res.status(400).json({ error: 'Tipo inválido (use EXCESSO, SEM_CONSUMO ou OBSOLETO)' });
       }
-      res.json(await purchaseService.estoqueParado(db, tipo));
+      res.json(await purchaseService.estoqueParado(db, tipo || undefined));
     } catch (e) { handleError(res, e); }
   });
 ```
+
+**(d) `reportService.relatorioSolicitacoesCompraPendentes`** — trocar `WHERE s.status =
+'PENDENTE'` por `WHERE s.status IN ('PENDENTE','VINCULADO')`, com comentário: a VINCULADA é
+exatamente a que esconde o material da sugestão (a_caminho conta as duas) e ficava invisível
+na tela inteira (Fase 2). Manter o nome da função (renomear tocaria o dispatcher à toa) e
+anotar no comentário que o nome ficou histórico.
 
 Exportar as duas funções novas.
 
@@ -573,7 +662,16 @@ git commit -m "Almoxarifado Etapa 11 Task 2: gerar solicitacoes da sugestao e es
   `almox-table`, abas como em `SobrasAlmoxarifado`/`FerramentasAlmoxarifado`; ler um deles
   antes). Checkboxes por `checked` (nunca value-string). Valores `toLocaleString('pt-BR',
   { style: 'currency', currency: 'BRL' })`; nulos → `—`. Rota/menu no padrão exato de
-  `/almoxarifado/sobras` (lazyModules linha ~156/207, App.js ~111/495, Layout).
+  `/almoxarifado/sobras` (lazyModules linha ~156/207, App.js ~111/495, Layout). **E as três
+  configs novas entram no array `CAMPOS` de `ConfiguracoesAlmoxarifado.js`** (Fase 2: a tela
+  renderiza lista fixa — chave fora dela é ineditável pela UI):
+  `reposicao_janela_consumo_dias` (label `Janela do Consumo Médio (dias)`),
+  `reposicao_dias_sem_consumo` (label `Dias Sem Consumo (estoque parado)`),
+  `reposicao_horizonte_solicitacao_dias` (label `Horizonte da Solicitação (dias)`), tipo
+  number, descrições do design — com um teste RTL de que os três campos aparecem e entram no
+  payload do salvar (modificar também `ConfiguracoesAlmoxarifado.test.js` se existir; senão,
+  cobrir no teste da tela nova? NÃO — campo de outra tela se testa na tela dela; se não houver
+  arquivo de teste, criar um mínimo só para os campos novos).
 
 - [ ] **Step 4: suíte + build** — `CI=true npx react-scripts test --watchAll=false
   ReposicaoAlmoxarifado` e depois a suíte client INTEIRA (o Layout/App mudaram) +
@@ -603,10 +701,10 @@ Jornada (um `test` longo, motor real, padrão `inventarioEscopoJornada.api.test.
 5. `POST /gerar-solicitacoes {}` → 1 criada com quantidade 20 (alvo 20 − posição 0);
    auditoria existe.
 6. `GET /sugestoes` de novo → M1 **sumiu** (a_caminho 20 ≥ ponto 5).
-7. POST de novo → `puladas: [{ motivo: 'JA_PENDENTE' }]`... **atenção**: M1 não está mais nas
-   sugestões (posição coberta), então o motivo REAL é `SEM_SUGESTAO` — afirmar o
-   comportamento VERDADEIRO (o design diz: dedupe JA_PENDENTE só se ainda sugerido; leia o
-   código da Task 2 e afirme o que ele faz; se divergir do esperado de negócio, é achado).
+7. POST `{}` de novo → `{ criadas: [], puladas: [] }` (M1 coberto pela pendência não é
+   sugerido — resposta vazia-legível, comportamento congelado pela Fase 2); e POST
+   `{ material_ids: [M1] }` → `puladas: [{ motivo: 'SEM_SUGESTAO' }]`. COUNT de solicitações
+   continua 1.
 8. Vincular pedido pela rota legada (ADMIN, gate `configurar`):
    `POST /compras/solicitacoes/:id/vincular-pedido { pedido_compra_id: 1 }` → status
    VINCULADO; sugestão continua sem M1 (VINCULADO também conta em a_caminho).
