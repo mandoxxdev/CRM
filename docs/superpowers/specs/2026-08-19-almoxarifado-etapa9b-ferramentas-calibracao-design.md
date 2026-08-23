@@ -109,12 +109,19 @@ e a decisão vai à letra B do bloco "Leia antes de apresentar" para o usuário 
 As 5 rotas existentes **ganham** validação (hoje não têm nenhuma).
 
 **D9 — Front:** tela nova `/almoxarifado/ferramentas` (code-split em `lazyModules.js`) com três
-visões: **Ferramentas** (lista com status/filtros, cadastro/edição, ações por status: emprestar,
+visões: **Ferramentas** (lista com status/filtros, cadastro, ações por status: emprestar,
 devolver, bloquear/desbloquear, iniciar/concluir manutenção, registrar ocorrência, registrar
 calibração, reencontrar), **Empréstimos** (ativos com vencidos destacados + histórico) e
 **Calibrações** (painel a vencer: vencidas primeiro, depois por proximidade — o "painel de
 calibrações a vencer" da spec). Gate de UI com `useAlmoxPermissoes().bloquearSeNaoPode('gerenciar_ferramentas')`;
 quem decide é o backend, como sempre.
+
+> **Correção declarada (revisão final de branch, achado F3):** este D9 dizia "cadastro/edição" —
+> a tela de **edição não foi entregue** nesta etapa. O plano da Task 7 nunca detalhou essa UI (só
+> o cadastro), e ninguém percebeu o corte até a revisão final. `PUT /ferramentas/:id` **existe no
+> backend e está testado** (`toolFerramentaEdicao.api.test.js`: atualiza campos, 404 de id
+> inexistente, 409 de patrimônio duplicado) — só falta o formulário de edição na tela, que fica
+> registrado aqui como melhoria pendente, não como bug.
 
 **D10 — Compatibilidade das rotas existentes:** as 5 rotas atuais **mantêm caminho e método**
 (o front não as usa — não há tela —, mas o contrato não quebra); mudam o gate (`movimentar` →
