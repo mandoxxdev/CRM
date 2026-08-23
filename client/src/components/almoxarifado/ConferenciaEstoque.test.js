@@ -392,3 +392,158 @@ describe('ConferenciaEstoque — concluir com sucesso mostra o impacto financeir
 // SABOTAGEM (Step 5 do brief): se o catch do concluir virar um catch genérico que ignora
 // err.response?.data?.error (ex.: sempre "Erro ao concluir conferência"), este teste tem de
 // cair — é ele que prova que a mensagem completa do servidor chega ao toast.
+
+/**
+ * Etapa 10b, Task 4 — escopo combinável (RN-01/02), dupla contagem (RN-03), autoria (RN-04) e
+ * visão Acuracidade (RN-06). Contrato congelado: docs/superpowers/plans/
+ * 2026-08-23-almoxarifado-etapa10b-inventario-avancado-2.md (seção Task 4).
+ */
+const CONFERENCIA_ABERTA_ESCOPO = {
+  id: 1, numero: 'CONF-0001', status: 'ABERTO', modo_cego: false, tolerancia_percentual: 2,
+  itens: [
+    { id: 10, material_id: 100, material_codigo: 'MAT-1', material_nome: 'Parafuso M8', unidade: 'UN',
+      localizacao: null, almoxarifado_codigo: null, quantidade_sistema: 100, quantidade_contada: null,
+      divergencia: null, recontagem_necessaria: false, recontado: 0, contado_por_nome: null, recontado_por_nome: null },
+  ],
+};
+
+describe('ConferenciaEstoque — RN-01/02/03: escopo combinável e dupla contagem na criação', () => {
+  test('RN-01: criar envia os filtros de escopo e dupla_contagem no POST', async () => {
+    await renderizar();
+    await clicar(botao('Nova Conferência'));
+
+    preencher(campo('Classe'), 'A');
+    marcar(campo('Somente críticos'), true);
+    marcar(campo('Dupla contagem'), true);
+    await clicar(botao('Criar Conferência'));
+
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/conferencias', expect.objectContaining({
+      classe_abc: 'A',
+      apenas_criticos: true,
+      dupla_contagem: true,
+    }));
+  });
+});
+
+describe('ConferenciaEstoque — lista mostra escopo_descricao', () => {
+  test('lista mostra escopo_descricao e traço quando nulo', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') {
+        return Promise.resolve({
+          data: [
+            { id: 1, numero: 'CONF-0001', status: 'ABERTO', responsavel_nome: 'Ana Souza', data_inicio: '2026-08-20T10:00:00Z', data_fim: null, escopo_descricao: 'Classe A + Somente críticos' },
+            { id: 2, numero: 'CONF-0002', status: 'CONCLUIDO', responsavel_nome: 'Ana Souza', data_inicio: '2026-08-19T10:00:00Z', data_fim: '2026-08-19T12:00:00Z', escopo_descricao: null },
+          ],
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+
+    expect(texto()).toContain('Classe A + Somente críticos');
+    const linhaSemEscopo = linhaMaterial('CONF-0002');
+    expect(linhaSemEscopo).toBeTruthy();
+    expect(linhaSemEscopo.textContent).toContain('—');
+  });
+});
+
+describe('ConferenciaEstoque — RN-04: autoria de contagem', () => {
+  test('RN-04: item mostra contado por e recontado por', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      if (url === '/almoxarifado/conferencias/1') {
+        return Promise.resolve({
+          data: {
+            ...CONFERENCIA_ABERTA_ESCOPO,
+            itens: [{ ...CONFERENCIA_ABERTA_ESCOPO.itens[0], quantidade_contada: 90, divergencia: -10,
+              contado_por_nome: 'Almoxarife', recontado_por_nome: 'Gestor' }],
+          },
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Abrir'));
+
+    expect(texto()).toContain('Contado por: Almoxarife');
+    expect(texto()).toContain('Recontado por: Gestor');
+  });
+});
+
+describe('ConferenciaEstoque — RN-03/RN-08: erro do PUT item exibido verbatim', () => {
+  test('RN-03: 400 de dupla contagem exibe a mensagem do servidor', async () => {
+    const mensagem = 'Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: Almoxarife)';
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      if (url === '/almoxarifado/conferencias/1') return Promise.resolve({ data: CONFERENCIA_ABERTA_ESCOPO });
+      return Promise.resolve({ data: [] });
+    });
+    api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: mensagem } } });
+    await renderizar();
+    await clicar(botao('Abrir'));
+
+    const linha = linhaMaterial('MAT-1');
+    const inputContagem = linha.querySelector('input[type="number"]');
+    preencher(inputContagem, '90');
+    await sairDoCampo(inputContagem);
+
+    expect(toast.error).toHaveBeenCalledWith(mensagem);
+  });
+});
+
+describe('ConferenciaEstoque — RN-06: visão Acuracidade', () => {
+  test('visao Acuracidade renderiza linhas e agregado com traço para nulos', async () => {
+    const RELATORIO = {
+      conferencias: [
+        { id: 1, numero: 'CONF-0010', data_fim: '2026-08-20T10:00:00Z', escopo_descricao: 'Geral',
+          modo_cego: false, dupla_contagem: false, total_itens: 10, contados: 10, exatos: 9, divergentes: 1,
+          acuracidade: 98.5, impacto_financeiro: 120 },
+        { id: 2, numero: 'CONF-0011', data_fim: '2026-08-21T10:00:00Z', escopo_descricao: null,
+          modo_cego: false, dupla_contagem: false, total_itens: 0, contados: 0, exatos: 0, divergentes: 0,
+          acuracidade: null, impacto_financeiro: null },
+      ],
+      agregado: { conferencias: 2, total_itens: 10, contados: 10, exatos: 9, acuracidade: 92.31 },
+    };
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      if (url === '/almoxarifado/conferencias/relatorio-acuracidade') return Promise.resolve({ data: RELATORIO });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Acuracidade'));
+
+    const impactoFormatado = Number(120).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    expect(texto()).toContain('CONF-0010');
+    expect(texto()).toContain('98.50%');
+    expect(texto()).toContain(impactoFormatado);
+    expect(texto()).toContain('CONF-0011');
+    expect(texto()).toContain('92.31%');
+
+    const linhaSemMetrica = linhaMaterial('CONF-0011');
+    expect(linhaSemMetrica).toBeTruthy();
+    expect(linhaSemMetrica.textContent).toContain('—');
+  });
+});
+
+describe('ConferenciaEstoque — RN-05: impacto financeiro sem ajuste aplicado', () => {
+  test('RN-05: concluir sem aplicar mostra o impacto encontrado', async () => {
+    api.put.mockResolvedValueOnce({ data: { success: true, ajustesAplicados: 0, impactoFinanceiro: 4320 } });
+    await renderizar();
+    await clicar(botao('Abrir'));
+
+    const checkboxAplicarAjustes = [...container.querySelectorAll('input[type="checkbox"]')]
+      .find((c) => c.closest('label')?.textContent.includes('Aplicar ajustes'));
+    marcar(checkboxAplicarAjustes, false);
+
+    await clicar(botao('Concluir Conferência'));
+    const modal = container.querySelector('.almox-modal');
+    await clicar(botao('Confirmar', modal.querySelector('.almox-modal-footer')));
+
+    const impactoFormatado = Number(4320).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    expect(toast.success).toHaveBeenCalled();
+    const mensagem = toast.success.mock.calls[0][0];
+    expect(mensagem).toContain('divergências encontradas');
+    expect(mensagem).toContain(impactoFormatado);
+    expect(mensagem).toContain('nenhum ajuste aplicado');
+  });
+});
