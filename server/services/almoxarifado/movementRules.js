@@ -16,6 +16,10 @@ const REGRAS_VINCULO = {
   AJUSTE: { vinculo: 'nenhum', justificativa: true },
   AJUSTE_POSITIVO: { vinculo: 'nenhum', justificativa: true },
   AJUSTE_NEGATIVO: { vinculo: 'nenhum', justificativa: true },
+  // Etapa 10 (RN-06b): mesma exigencia que AJUSTE ja tem — sem esta entrada, ownerRules.js:166-168
+  // mentiria ao afirmar que todo AJUSTE* exige justificativa, e a auditoria de material de
+  // cliente (ownerRules.assertAjustePermitido) gravaria justificativa: null para o tipo novo.
+  AJUSTE_INVENTARIO: { vinculo: 'nenhum', justificativa: true },
   SUCATA: { vinculo: 'nenhum', justificativa: true },
   PERDA: { vinculo: 'nenhum', justificativa: true },
 

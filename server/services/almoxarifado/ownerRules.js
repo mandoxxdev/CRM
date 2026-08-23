@@ -59,10 +59,15 @@ const { registrarAuditoria } = require('./audit');
  *    PROPRIA — o retalho tem de ter o MESMO dono da chapa de origem, mesmo raciocinio de
  *    assertMesmoDonoNaTransformacao, senao um corte converteria material de cliente em patrimonio
  *    da GMP (ou o inverso) sem ninguem perceber.
+ *  - AJUSTE_INVENTARIO (Etapa 10): mesmo caso de RETORNO_TRANSFORMACAO/ENTRADA_RETALHO —
+ *    DECLARATIVO. Nao e saida (nao entra em TIPOS_SAIDA_COM_DONO abaixo), entao
+ *    assertSaidaPermitida ja sai cedo pelo segundo `if` de qualquer forma; entra aqui so para a
+ *    ausencia ser LIDA, nao presumida. A guarda de verdade para material de cliente e a outra,
+ *    TIPOS_AJUSTE_DONO abaixo — AJUSTE_INVENTARIO esta la tambem.
  */
 const TIPOS_ISENTOS_DONO = ['DEVOLUCAO_CLIENTE', 'TRANSFERENCIA', 'AJUSTE', 'AJUSTE_POSITIVO',
   'AJUSTE_NEGATIVO', 'REMESSA_TERCEIRO', 'RETORNO_TERCEIRO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
-  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO'];
+  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'AJUSTE_INVENTARIO'];
 
 /**
  * Tipos de saida que a guarda cobre. Espelha o `tiposSaida` do stockService menos os isentos.
@@ -154,8 +159,13 @@ async function assertSaidaPermitida(db, material, tipo, params) {
  * TIPOS_ISENTOS_DONO: isentos da regra de OS/projeto (ajustar saldo nao e APLICAR material em
  * trabalho de ninguem), e por isso mesmo precisam da outra guarda — senao ajuste seria a porta
  * aberta que a guarda da saida fechou.
+ *
+ * AJUSTE_INVENTARIO (Etapa 10) entra aqui pelo MESMO motivo que AJUSTE: e o ajuste que a
+ * conclusao da conferencia de inventario emite, e material de cliente com divergencia continua
+ * exigindo `ajustar_material_cliente` para ser homologado — a conferencia nao pode virar um
+ * segundo caminho para ajustar saldo de terceiro sem a permissao dedicada.
  */
-const TIPOS_AJUSTE_DONO = ['AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO'];
+const TIPOS_AJUSTE_DONO = ['AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_INVENTARIO'];
 
 /**
  * Ajuste de material de cliente (Etapa 8, decisao 7). Exige a acao dedicada

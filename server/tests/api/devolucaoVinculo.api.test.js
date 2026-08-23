@@ -625,17 +625,23 @@ async function entregar(db, materialId, qtd, extra = {}) {
   // movimento que de fato aconteceu no estoque.
   //
   // Cenario alcancavel so pela API: o destino SUCATA emite ENTRADA_DEVOLUCAO e depois SUCATA. Um
-  // BLOQUEIO seguido de AJUSTE para menos deixa `quantidade_bloqueada` MAIOR que
-  // `quantidade_atual` (inventario achou menos do que o sistema dizia, com parte em quarentena) —
+  // AJUSTE seguido de BLOQUEIO deixa `quantidade_bloqueada` MAIOR que `quantidade_atual`
+  // (inventario achou menos do que o sistema dizia, e so DEPOIS uma parte foi pra quarentena) —
   // disponivel fica negativo, a entrada passa (entrada nao olha disponivel) e a saida da sucata
   // falha. E exatamente o par meio-feito que a pre-validacao da Task 3 evita quando consegue.
+  // Ordem invertida na Etapa 10 (RN-06, guarda de retencao do motor): BLOQUEIO(8) ANTES de
+  // AJUSTE(1) seria recusado pela guarda nova (o ajuste deixaria o disponivel negativo contra uma
+  // retencao que JA existe) — o par so continua alcancavel fazendo o AJUSTE primeiro (quando ainda
+  // nao ha nada bloqueado, a guarda nao acha nada pra recusar) e SO DEPOIS bloqueando mais do que
+  // sobrou; o ramo BLOQUEIO (stockService.js) nao checa disponivel, entao o cenario "bloqueado >
+  // total" continua alcancavel, so por outro caminho.
   await test('[compensacao] devolucao com movimentacao JA gravada mantem a linha (rastro do estoque)', async () => {
     const mat = await novoMaterial(db, { qtd: 20 });
     const saidaId = await entregar(db, mat, 10);
     await stockService.registrarMovimentacao(db, ADMIN, {
-      material_id: mat, tipo: 'BLOQUEIO', quantidade: 8, justificativa: 'lote em analise' });
-    await stockService.registrarMovimentacao(db, ADMIN, {
       material_id: mat, tipo: 'AJUSTE', quantidade: 1, justificativa: 'inventario achou menos' });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'BLOQUEIO', quantidade: 8, justificativa: 'lote em analise' });
 
     const res = await request(app).post('/api/almoxarifado/devolucoes')
       .send({ material_id: mat, quantidade: 3, motivo: 'DANIFICADO', destino: 'SUCATA', movimentacao_saida_id: saidaId });

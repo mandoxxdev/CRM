@@ -35,6 +35,39 @@ async function getSaldoDisponivel(material) {
 }
 
 /**
+ * RN-06 (Etapa 10): decide, para as tres instancias registradas desde a Etapa 7
+ * (docs/almoxarifado-novidades-por-etapa.md, itens B1-B3), o que o Ajuste faz quando o novo
+ * total ficaria menor que alguma retencao. Escolhida a opcao (b) das tres possiveis: nunca
+ * aceitar — um ajuste que deixaria o disponivel negativo e inconsistencia interna dos dados
+ * (bloqueei/reservei/mandei pra terceiro mais do que digo que existe), categoria diferente de
+ * "aceito vender mais do que tenho fisicamente" (permite_saldo_negativo, que NAO bypassa esta
+ * guarda de proposito).
+ *
+ * FUNCAO PURA — sem I/O, sem throw. So se aplica ao ajuste SEM localizacao: com localizacao o
+ * novo total so e conhecido depois do syncMaterialTotals somar todas as linhas — verificar a
+ * retencao contra um total ainda-nao-existente fica fora do escopo desta etapa (D1/D7 do
+ * design). Exportada para a rota da conferencia (Task 2) poder pre-validar VARIOS itens antes
+ * de aplicar qualquer um (RN-07, tudo-ou-nada) SEM reescrever esta formula — D1 do design proibe
+ * duplicar a formula, nao proibe chamar esta funcao duas vezes.
+ *
+ * @returns {string|null} mensagem de recusa, ou null se o ajuste pode prosseguir.
+ */
+function motivoRecusaAjustePorRetencao(material, novoTotal) {
+  const retido = COLUNAS_RETENCAO.reduce((soma, col) => soma + (material[col] || 0), 0);
+  if (novoTotal >= retido) return null;
+  const LABELS = {
+    quantidade_reservada: 'reservada', quantidade_bloqueada: 'bloqueada',
+    quantidade_em_inspecao: 'em inspeção', quantidade_em_terceiros: 'em terceiros',
+  };
+  const partes = COLUNAS_RETENCAO
+    .filter((col) => (material[col] || 0) > 0)
+    .map((col) => `${LABELS[col]}: ${material[col]}`);
+  return `Ajuste para ${novoTotal} ${material.unidade} deixaria o disponível negativo `
+    + `(${partes.join(', ')}, mínimo aceitável: ${retido} ${material.unidade}). Resolva a `
+    + 'retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.';
+}
+
+/**
  * Recalcula o TOTAL FÍSICO do material a partir da soma das linhas de saldo por localização/lote.
  *
  * Restaurada no review round 3 desta task (removida no round 2, achando que o delta local era
@@ -530,7 +563,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // quantidade que eles baixam esta RETIDA em quantidade_em_terceiros, nao disponivel — por isso a
   // flag `baixandoTerceiro` abaixo.
   const tiposSaida = movementTypes.TIPOS_SAIDA;
-  const tiposAjuste = ['AJUSTE'];
+  // Etapa 10: AJUSTE_INVENTARIO tem semantica IDENTICA a AJUSTE (valor absoluto) — entra na MESMA
+  // lista, nao numa segunda, para os dois ramos abaixo (validacao e escrita) tratarem os dois
+  // tipos igual sem duplicar codigo.
+  const tiposAjuste = ['AJUSTE', 'AJUSTE_INVENTARIO'];
   // Consumo de reserva: só quando a saída cita `reserva_id`. RESERVA/LIBERACAO_RESERVA também
   // carregam reserva_id, mas não consomem nada — são o lançamento da própria reserva.
   const consumindoReserva = !!reserva_id && tiposSaida.includes(tipo);
@@ -723,7 +759,19 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       }
     }
     saldoPosterior = saldoAnterior - parseFloat(quantidade);
+  } else if (tiposAjuste.includes(tipo) && !localizacao_destino_id) {
+    // RN-06 (Etapa 10): guarda de retencao, ANTES de qualquer efeito, como todas as guardas
+    // deste motor. So se aplica ao ajuste SEM localizacao — com localizacao o novo total do
+    // MATERIAL so e conhecido depois do syncMaterialTotals somar todas as linhas (ver o ramo
+    // AJUSTE-com-localizacao mais abaixo); verificar a retencao contra um total ainda-nao-
+    // existente fica fora do escopo desta etapa (D1/D7 do design).
+    const motivoRecusa = motivoRecusaAjustePorRetencao(material, parseFloat(quantidade));
+    if (motivoRecusa) throw Object.assign(new Error(motivoRecusa), { status: 400 });
+    saldoPosterior = parseFloat(quantidade);
   } else if (tiposAjuste.includes(tipo)) {
+    // AJUSTE/AJUSTE_INVENTARIO COM localizacao: comportamento de sempre, guarda de retencao
+    // fora do escopo desta etapa (D1/D7 do design) — o branch original mudou de lugar para aqui
+    // embaixo, sem nenhuma alteracao de comportamento.
     saldoPosterior = parseFloat(quantidade);
   } else if (tipo === 'TRANSFERENCIA') {
     if (!localizacao_origem_id || !localizacao_destino_id) {
@@ -1625,6 +1673,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         saldoDepois = mov.saldo_anterior;
         await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id);
       }
+    } else if (mov.tipo === 'AJUSTE_INVENTARIO') {
+      // RN-10/D11 (Etapa 10): AJUSTE_INVENTARIO representa uma contagem fisica HOMOLOGADA — nao
+      // e um delta que faz sentido reverter para saldo_anterior (AJUSTE comum ja faz isso no ramo
+      // acima; este e NOVO de proposito, nao reusa aquele ramo). Recusa explicita, mesmo
+      // precedente de REMESSA_TERCEIRO (linha ~1360): o caminho de correcao e uma contagem nova.
+      throw Object.assign(new Error(
+        'Ajuste de inventário não pode ser estornado por aqui — o caminho de correção é uma '
+        + 'nova conferência de inventário.'), { status: 400 });
     } else if (mov.tipo === 'TRANSFERENCIA') {
       // mov.lote_id (Etapa 6, Task 3): estorna a MESMA linha de lote que a transferência moveu.
       const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote_id);
@@ -1930,6 +1986,7 @@ module.exports = {
   getConfig,
   getMaterial,
   getSaldoDisponivel,
+  motivoRecusaAjustePorRetencao,
   syncMaterialTotals,
   syncSaldoLocalizacaoPadrao,
   getOrCreateSaldo,

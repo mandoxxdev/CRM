@@ -117,6 +117,14 @@ const TIPOS_MOVIMENTO = [
   //     retalho tem de nascer sempre vinculado a origem que o evento composto registra.
   'ENTRADA_RETALHO',
   'ENTRADA', 'SAIDA', 'AJUSTE', 'DEVOLUCAO', 'ESTORNO',
+  // Etapa 10: o ajuste que a conclusao da conferencia de inventario emite. Semantica IDENTICA a
+  // AJUSTE (valor absoluto, ver stockService) — tipo SEPARADO so para poder ser DEDICADO
+  // (TIPOS_DEDICADOS abaixo): a rota generica de Movimentacoes nunca aceita, so a conclusao da
+  // conferencia (routes/almoxarifado.js) chama o motor direto com este tipo. Resolve a lacuna
+  // nomeada desde a Etapa 7/8/8b (docs/almoxarifado-novidades-por-etapa.md, itens B1-B3): o
+  // ajuste da conferencia passa a ter a MESMA guarda de retencao do AJUSTE avulso, em vez de
+  // gravar por fora do motor sem validacao nenhuma.
+  'AJUSTE_INVENTARIO',
 ];
 
 // Tipos de RETENCAO: nao mexem no fisico (quantidade_atual), so nas colunas de retencao de
@@ -185,7 +193,14 @@ const TIPOS_RETENCAO = [
 //     DIRETO, por fora da v2 — TIPOS_DEDICADOS so gira a porta HTTP generica, nao o motor. PERDA
 //     fica de fora desta lista de proposito: nao tem processo de aprovacao dupla na spec 15, e
 //     tirar os dois juntos sem necessidade reduziria o formulario sem ganho nenhum.
-const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO', 'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'SUCATA'];
+//   AJUSTE_INVENTARIO (Etapa 10) -> so a conclusao da conferencia de inventario (Task 2) emite
+//     este tipo, chamando stockService.registrarMovimentacao DIRETO, por fora da v2. Mesmo
+//     criterio de SUCATA logo acima: aceita-lo na v2 (gate `movimentar`, o mais amplo do modulo)
+//     bastaria mandar {tipo:'AJUSTE_INVENTARIO'} para gravar um ajuste "homologado por
+//     conferencia" sem conferencia nenhuma por tras — a exigencia de que o valor venha de uma
+//     contagem revisada ficaria decorativa.
+const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'SUCATA', 'AJUSTE_INVENTARIO'];
 
 /**
  * Classificacao da linha de resultado de uma TRANSFORMACAO (Etapa 8c, decisao 8 do design).
@@ -1691,6 +1706,18 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN aprovador_id INTEGER');
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN aprovador_nome TEXT');
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN justificativa_ajuste TEXT');
+  // Etapa 10 (Task 1 — so as colunas; Task 2 as usa): modo_cego (RN-01/RN-02) esconde
+  // quantidade_sistema/divergencia de quem conta e nao tem `ajustar_estoque`, enquanto a
+  // conferencia esta ABERTO. tolerancia_percentual (RN-01) e lida de
+  // configuracoes_almoxarifado.tolerancia_inventario_percentual NA CRIACAO da conferencia e
+  // gravada aqui — uma mudanca na config global depois nao muda o criterio de uma conferencia ja
+  // em andamento. recontado (itens_conferencia_almoxarifado) marca a SEGUNDA vez que o item
+  // recebe quantidade_contada (RN-04): libera a conclusao mesmo com divergencia acima da
+  // tolerancia (RN-05), qualquer que seja o novo valor — a segunda contagem e a segunda chance,
+  // nao mais uma rodada sujeita ao mesmo limiar.
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN modo_cego INTEGER DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN tolerancia_percentual REAL');
+  await safeAlter(db, 'ALTER TABLE itens_conferencia_almoxarifado ADD COLUMN recontado INTEGER DEFAULT 0');
 
   // ── Config defaults ──
   const configs = [
