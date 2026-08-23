@@ -134,6 +134,14 @@ persistir acuracidade):
   (contados com `divergencia = 0`), `divergentes` (contados − exatos), `acuracidade`
   (`exatos / contados × 100`, 2 casas; **`null` quando `contados = 0`** — sem contagem não há
   acuracidade, e 0% mentiria), `impacto_financeiro` (nulo nas anteriores à etapa).
+- **"Exato" tolera deriva de float (revisão da Task 3):** `quantidade_sistema` nasce de uma
+  subtração REAL (`atual − em_terceiros`); a comparação de "item exato" usa
+  `|divergência| < 1e-9` (uma definição só, usada pelo relatório e pelo filtro de ajustes do
+  concluir), senão contar 0.2 contra um esperado 0.1999999999999993 dava 0% de acuracidade
+  para um operador que acertou — e um `AJUSTE_INVENTARIO` inútil de 7e-16.
+- **`impacto_financeiro` não sai pela listagem nem pelo detalhe** (revisão da Task 3): os dois
+  GET não têm gate de perfil de propósito (Fase 2 vetou gatear leitura), então o campo de
+  dinheiro sai **só** pelo relatório gateado — a listagem/detalhe removem a coluna da resposta.
 - `agregado`: `conferencias`, `total_itens`, `contados`, `exatos` e `acuracidade` **ponderada**
   (`Σ exatos / Σ contados × 100`, 2 casas; `null` se `Σ contados = 0`) — média ponderada por
   item contado, não média simples das porcentagens (uma conferência de 2 itens não pode pesar

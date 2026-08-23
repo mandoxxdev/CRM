@@ -111,6 +111,69 @@ async function materialAtual(db, materialId) {
     // Nao aplicou: o saldo do material nao mudou.
     const matAtual = await materialAtual(db, mat.id);
     assert.strictEqual(Number(matAtual.quantidade_atual), 100, JSON.stringify(matAtual));
+
+    // A CADEIA RN-05 -> RN-06 (achado da revisao da task: o relatorio podia devolver
+    // impacto_financeiro null fixo com a suite toda verde — nenhum teste ligava a coluna
+    // persistida a linha do relatorio; este assert e o que da sentido ao teste do null).
+    const rel = await relatorio(app);
+    assert.strictEqual(rel.status, 200, JSON.stringify(rel.body));
+    const linha = rel.body.conferencias.find((c) => c.id === conf.id);
+    assert.ok(linha, 'conferencia nao apareceu no relatorio');
+    assert.strictEqual(linha.impacto_financeiro, 100, JSON.stringify(linha));
+  });
+
+  await test('RN-07: impacto_financeiro NAO sai pela listagem nem pelo detalhe sem gate', async () => {
+    // Achado da revisao da task: GET /conferencias (sem gate de perfil, de proposito — Fase 2
+    // vetou gatear leitura) fazia SELECT * e a coluna nova de dinheiro pegava carona para
+    // exatamente quem o relatorio recusa com 403. O campo so sai pelo relatorio gateado.
+    const categoria = 'CAT-ACUR-LEAK';
+    const mat = await novoMaterial(db, { qtd: 100, categoria, custo_unitario: 10 });
+    const conf = await abrirConferencia(app, { categoria, tolerancia_percentual: 100000 });
+    const itens = await itensDaConferencia(db, conf.id);
+    await contarItem(app, conf.id, itens.find((i) => i.material_id === mat.id).id, 90);
+    await concluir(app, conf.id, {});
+
+    setUser(PRODUCAO);
+    const lista = await request(app).get('/api/almoxarifado/conferencias');
+    assert.strictEqual(lista.status, 200, JSON.stringify(lista.body).slice(0, 200));
+    const daLista = lista.body.find((c) => c.id === conf.id);
+    assert.ok(daLista, 'conferencia nao apareceu na listagem');
+    assert.strictEqual(daLista.impacto_financeiro, undefined, JSON.stringify(daLista));
+
+    const detalhe = await request(app).get(`/api/almoxarifado/conferencias/${conf.id}`);
+    assert.strictEqual(detalhe.status, 200);
+    assert.strictEqual(detalhe.body.impacto_financeiro, undefined, JSON.stringify({ impacto: detalhe.body.impacto_financeiro }));
+
+    const relNegado = await relatorio(app);
+    assert.strictEqual(relNegado.status, 403, JSON.stringify(relNegado.body));
+    setUser(ALMOXARIFE);
+  });
+
+  await test('RN-06: deriva de float nao vira divergencia — contagem certa e 100% exata', async () => {
+    // Achado da revisao da task (medido): quantidade_sistema nasce de subtracao REAL
+    // (atual - em_terceiros); contar 0.2 contra esperado 0.1999999999999993 dava divergencia
+    // 7e-16 e o relatorio dizia 0% de acuracidade para um operador que acertou. E o concluir
+    // dispararia um AJUSTE_INVENTARIO inutil de 7e-16.
+    const categoria = 'CAT-ACUR-FLOAT';
+    const mat = await novoMaterial(db, { qtd: 30.3, categoria, custo_unitario: 10 });
+    await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_em_terceiros = 30.1 WHERE id = ?`, [mat.id]);
+
+    const conf = await abrirConferencia(app, { categoria, tolerancia_percentual: 100000 });
+    const itens = await itensDaConferencia(db, conf.id);
+    const item = itens.find((i) => i.material_id === mat.id);
+    await contarItem(app, conf.id, item.id, 0.2);
+
+    const res = await concluir(app, conf.id, {});
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    // Deriva nao e divergencia: impacto zero, nao 7e-15.
+    assert.strictEqual(res.body.impactoFinanceiro, 0, JSON.stringify(res.body));
+
+    const rel = await relatorio(app);
+    const linha = rel.body.conferencias.find((c) => c.id === conf.id);
+    assert.strictEqual(linha.contados, 1, JSON.stringify(linha));
+    assert.strictEqual(linha.exatos, 1, JSON.stringify(linha));
+    assert.strictEqual(linha.divergentes, 0, JSON.stringify(linha));
+    assert.strictEqual(linha.acuracidade, 100, JSON.stringify(linha));
   });
 
   await test('RN-06: metricas por conferencia com numeros conhecidos', async () => {
@@ -237,6 +300,12 @@ async function materialAtual(db, materialId) {
     const agregado = rel.body.agregado;
     const esperada = Number(((agregado.exatos / agregado.contados) * 100).toFixed(2));
     assert.strictEqual(agregado.acuracidade, esperada, JSON.stringify(agregado));
+
+    // "Mais recente primeiro" (RN-06): B foi concluida DEPOIS de A — tem de vir antes.
+    // data_fim tem resolucao de segundo, entao o desempate real e o id DESC.
+    const idxA = rel.body.conferencias.findIndex((c) => c.id === confA.id);
+    const idxB = rel.body.conferencias.findIndex((c) => c.id === confB.id);
+    assert.ok(idxB < idxA, `esperava B (idx ${idxB}) antes de A (idx ${idxA})`);
   });
 
   await test('RN-07: sem perfil e 403', async () => {

@@ -51,6 +51,14 @@ function toleranciaEfetiva(valor) {
   return Number.isFinite(n) ? n : 2;
 }
 
+// RN-06 (achado da revisao da Task 3 da 10b): "exato" tolera deriva de float. quantidade_sistema
+// nasce de uma subtracao REAL (atual - em_terceiros) — contar 0.2 contra um esperado
+// 0.1999999999999993 dava divergencia 7e-16, o operador acertava e o relatorio dizia 0% de
+// acuracidade (e o concluir dispararia um AJUSTE_INVENTARIO inutil de 7e-16). UMA definicao de
+// "e divergencia de verdade", usada pelo relatorio (SQL) e pelo filtro de ajustes do concluir —
+// duas copias da mesma conta e o que a G5 manda evitar.
+const EPSILON_DIVERGENCIA = 1e-9;
+
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
   // ── Diretório de fotos ──────────────────────────────────────────────────────
@@ -691,10 +699,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // ════════════════════════════════════════════════════════════════════════════
 
   // GET /api/almoxarifado/conferencias — listar
+  //
+  // Sem gate de perfil DE PROPOSITO (so o gate de modulo): CONSULTA/COMPRAS/PRODUCAO leem
+  // conferencias desde sempre, e a Fase 2 da 10b vetou gatear leitura. Por isso mesmo,
+  // `impacto_financeiro` (dinheiro) NAO sai por aqui nem pelo :id — o unico leitor e o
+  // relatorio de acuracidade, que tem requirePermission('inventario') (RN-07; achado da
+  // revisao da Task 3: a coluna nova vazava pelo SELECT * para quem o relatorio recusa).
   app.get('/api/almoxarifado/conferencias',(req, res) => {
     db.all(`SELECT * FROM conferencias_almoxarifado ORDER BY created_at DESC`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
+      res.json(rows.map(({ impacto_financeiro, ...c }) => c));
     });
   });
 
@@ -709,7 +723,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                c.impacto_financeiro,
                COUNT(ic.id) AS total_itens,
                COALESCE(SUM(CASE WHEN ic.quantidade_contada IS NOT NULL THEN 1 ELSE 0 END), 0) AS contados,
-               COALESCE(SUM(CASE WHEN ic.quantidade_contada IS NOT NULL AND ic.divergencia = 0 THEN 1 ELSE 0 END), 0) AS exatos
+               COALESCE(SUM(CASE WHEN ic.quantidade_contada IS NOT NULL AND ABS(ic.divergencia) < ${EPSILON_DIVERGENCIA} THEN 1 ELSE 0 END), 0) AS exatos
         FROM conferencias_almoxarifado c
         LEFT JOIN itens_conferencia_almoxarifado ic ON ic.conferencia_id = c.id
         WHERE c.status = 'CONCLUIDO'
@@ -796,7 +810,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         }
       }
 
-      res.json({ ...conf, itens });
+      // impacto_financeiro so sai pelo relatorio gateado (ver comentario da rota de listagem).
+      const { impacto_financeiro, ...confPublica } = conf;
+      res.json({ ...confPublica, itens });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
@@ -1062,7 +1078,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: `Recontagem necessária antes de concluir: ${lista}` });
       }
 
-      const ajustes = todosItens.filter((i) => i.divergencia !== 0);
+      const ajustes = todosItens.filter((i) => Math.abs(i.divergencia) > EPSILON_DIVERGENCIA);
 
       // RN-05 (10b): impacto financeiro SEMPRE calculado — com ou sem aplicar_ajustes — sobre
       // os itens contados divergentes. "O inventário achou R$ X de erro" interessa mesmo
