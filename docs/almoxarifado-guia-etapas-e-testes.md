@@ -1,15 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-16 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-22 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 9) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 9b) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-16 (Etapa 9 ENTREGUE)
+> ## Onde o desenvolvimento parou — 2026-08-22 (Etapa 9b ENTREGUE)
+>
+> **Etapas 1 a 9b completas.** A **Etapa 9b (Ferramentas e Calibração) fechou em 2026-08-22**
+> (`d644827..b8e6f60`), e com ela a **feature 16 fica completa** (com duas melhorias pendentes
+> declaradas — lembrete automático sem canal, e edição de ferramenta pela tela — ver seção
+> "Etapa 9b", mais abaixo). A **próxima etapa é a 10 — inventário avançado** (feature 17):
+> contagem cega, recontagem, tolerância, aprovação de ajuste, acuracidade.
+>
+> **A Etapa 9b fez ferramenta virar patrimônio controlado de verdade.** Empréstimo agora recusa
+> ferramenta ocupada, bloqueada, em manutenção, avariada, perdida ou com calibração vencida — com
+> mensagem dizendo o motivo, e à prova de dois cliques simultâneos na mesma ferramenta. Avaria e
+> perda viram registro com foto e responsável, e fecham o empréstimo em aberto sozinhas. Ver a
+> seção "Etapa 9b", mais abaixo, com o roteiro completo.
+>
+> **Antes: 2026-08-16 (Etapa 9 ENTREGUE).**
 >
 > **Etapas 1 a 9 completas.** A **Etapa 9 (Retalhos, Sobras e Sucatas) fechou em 2026-08-16**
 > (`b727c0a..4ba94e2`, mais os commits de documentação), e com ela a **feature 15 fica
-> completa**. A **próxima etapa é a 9b — ferramentas e calibração** (feature 16), que ainda não
-> tem design nem plano.
+> completa**.
 >
 > **A Etapa 9 fez duas coisas.** Primeiro: **o retalho passou a existir no estoque.** Quando uma
 > chapa/tubo/barra é parcialmente usada, o pedaço aproveitável agora tem saldo, etiqueta com QR e
@@ -2183,6 +2196,142 @@ não funciona com um usuário só — **essa é a regra sendo testada**.
 - **Ferramentas e calibração ficam para a Etapa 9b.**
 - **Peça com número de série não passa pelo sucateamento** — a recusa ensina: baixe pela tela de
   Movimentações, que tem seletor de série.
+
+---
+
+## Etapa 9b — Ferramentas e Calibração (ENTREGUE — 2026-08-22)
+
+**Em uma frase:** ferramentas (furadeira, paquímetro, torquímetro...) ganharam controle de
+verdade — empréstimo com recusa automática por status ou calibração vencida, avaria/perda com
+foto, bloqueio, manutenção e histórico de calibração com painel de vencimento — numa tela própria.
+
+**O problema que existia.** O empréstimo de ferramenta funcionava, mas sem nenhuma trava real:
+duas pessoas podiam emprestar a mesma ferramenta ao mesmo tempo (o sistema só checava o status
+*antes* de gravar, não durante), emprestar e devolver não deixavam rastro na auditoria, e a
+permissão usada era a de mexer em estoque — a mesma que qualquer almoxarife usa para lançar
+movimentação de material. Calibração, manutenção, avaria, perda e bloqueio **não existiam** —
+nem como campo no banco.
+
+### Antes → Agora
+
+| Situação | Antes | Agora (Etapa 9b) |
+|---|---|---|
+| Emprestar ferramenta já emprestada | Podia acontecer em cliques simultâneos (checagem antes de gravar, não durante) | **Impossível mesmo em corrida** — a gravação só aceita se o status ainda for o esperado no instante exato |
+| Ferramenta que exige calibração | Emprestava do mesmo jeito, vencida ou não | **Bloqueada até ter calibração vigente registrada** — mensagem explica o motivo |
+| Avaria ou perda durante o empréstimo | Não existia registro | Tela **Ocorrência**: avaria ou perda, com foto e responsável — **fecha o empréstimo em aberto sozinha**, sem passo manual de devolução |
+| Ferramenta com defeito | Não existia bloqueio nem manutenção | **Bloquear** (com justificativa) tira de circulação; **Manutenção** registra início/fim; ferramenta avariada entra em manutenção e sai disponível ao concluir |
+| Ferramenta perdida encontrada de volta | Não existia | **Reencontrar**, com justificativa — volta a disponível |
+| Calibração | Não existia campo nenhum | Histórico de calibrações com certificado anexo + **painel de vencimento** (vencidas e a vencer) |
+| Quem pode mexer em ferramentas | Mesma permissão de mexer em estoque (movimentar) | Permissão **própria** — dá para autorizar ferramenta sem autorizar estoque, e vice-versa |
+| Tela | Não existia | **Almoxarifado → Ferramentas**, com três abas: Ferramentas, Empréstimos, Calibrações |
+
+### As regras, com o cenário exato
+
+As mensagens abaixo são as **mensagens reais do sistema**, conferidas no código.
+
+**1. Ferramenta ocupada, bloqueada, em manutenção, avariada ou perdida não empresta.**
+*Cenário:* clicar **Emprestar** numa ferramenta que já está com outra pessoa (ou bloqueada, em
+manutenção, avariada ou perdida). O sistema recusa:
+> `Ferramenta não está disponível (status atual: EMPRESTADA)`
+
+(o status entre parênteses muda conforme o caso real). Isso vale **mesmo em cliques
+simultâneos** — se duas pessoas tentarem emprestar a mesma ferramenta ao mesmo tempo, exatamente
+uma consegue.
+
+**2. Ferramenta que exige calibração não empresta sem calibração vigente.**
+*Cenário:* uma ferramenta marcada "exige calibração" nunca teve calibração registrada, ou a
+última calibração já venceu. Ao clicar **Emprestar**:
+> `Ferramenta com calibração vencida ou sem calibração registrada`
+
+Registrar uma calibração com validade futura (aba **Calibrações** → **Calibração** na linha da
+ferramenta) resolve na hora — a próxima tentativa de empréstimo passa.
+
+**3. Devolver libera a ferramenta para um novo empréstimo.**
+*Cenário:* **Devolver** um empréstimo ativo. O toast confirma `Ferramenta devolvida`, e a
+ferramenta volta a aparecer disponível para emprestar de novo.
+
+**4. Avaria ou perda durante o empréstimo fecha o empréstimo sozinha.**
+*Cenário:* com a ferramenta emprestada, clicar **Ocorrência** → tipo **Perda** (ou **Avaria**),
+descrição, e opcionalmente foto e responsável. Ao confirmar (`Perda registrada`/`Avaria
+registrada`): o empréstimo em aberto fecha automaticamente e a ferramenta muda para o status da
+ocorrência — **não é preciso devolver antes**, porque perda não tem como ser devolvida.
+
+**5. Bloquear e desbloquear exigem justificativa.**
+*Cenário:* **Bloquear** sem preencher o motivo (menos de 5 caracteres):
+> `Justificativa deve ter pelo menos 5 caracteres`
+
+Só ferramenta **disponível** bloqueia:
+> `Ferramenta não pode ser bloqueada (status atual: <STATUS>)`
+
+**6. Ferramenta emprestada não entra em manutenção — devolva primeiro.**
+*Cenário:* **Iniciar manutenção** numa ferramenta emprestada:
+> `Ferramenta não pode entrar em manutenção (status atual: EMPRESTADA)`
+
+Ferramenta **disponível** ou **avariada** (o caminho de conserto) entram normalmente; ao
+**Concluir manutenção**, a ferramenta volta a disponível.
+
+**7. Ferramenta perdida só reencontra com justificativa — e só se estiver perdida.**
+*Cenário:* **Reencontrar** numa ferramenta que não está com status Perdida:
+> `Ferramenta não está perdida (status atual: <STATUS>)`
+
+**8. Calibração exige validade posterior à data de calibração.**
+*Cenário:* registrar calibração com a data de validade igual ou anterior à data da calibração:
+> `Data de validade deve ser posterior à data de calibração`
+
+**9. Código de patrimônio duplicado não cadastra.**
+*Cenário:* cadastrar uma ferramenta nova com um código de patrimônio que já existe:
+> `Código de patrimônio já cadastrado`
+
+**10. Quem pode o quê.** Toda ação de escrita (cadastrar, emprestar, devolver, bloquear,
+manutenção, ocorrência, calibração, reencontrar) exige a permissão **Ferramentas** —
+Administrador ou Almoxarife. Ver a ferramenta e o histórico (leitura) é livre para qualquer
+usuário autenticado.
+
+### Roteiro de teste manual (Etapa 9b)
+
+Prepare: uma ferramenta que **não** exige calibração e outra que **exige** — ou marque a opção
+"Exige calibração" no cadastro para criar a segunda.
+
+1. **Almoxarifado → Ferramentas** (item novo do menu, ícone de chave de fenda).
+2. **Nova ferramenta** → preencher código de patrimônio e nome → **Cadastrar**. Conferir o toast
+   `Ferramenta cadastrada` e a linha nova na tabela, status **Disponível**.
+3. Repetir o código de patrimônio numa segunda ferramenta → conferir a recusa
+   `Código de patrimônio já cadastrado`.
+4. Na ferramenta cadastrada, clicar **Emprestar**, preencher o nome do colaborador →
+   confirmar. Conferir `Ferramenta emprestada` e o status virando **Emprestada**.
+5. Tentar **Emprestar** de novo a mesma ferramenta → conferir a recusa `Ferramenta não está
+   disponível (status atual: EMPRESTADA)`.
+6. Aba **Empréstimos** → conferir o empréstimo ativo com o nome do colaborador. **Devolver** →
+   conferir `Ferramenta devolvida` e o empréstimo saindo da lista de ativos.
+7. Cadastrar uma ferramenta marcando **"Exige calibração"**. Tentar **Emprestar** → conferir a
+   recusa `Ferramenta com calibração vencida ou sem calibração registrada`.
+8. Na mesma ferramenta, **Calibração** → preencher data de calibração (hoje) e validade (uma data
+   futura) → confirmar `Calibração registrada`. **Emprestar** de novo → agora deve funcionar.
+9. Aba **Calibrações** → conferir o painel; registrar uma calibração com validade **já vencida**
+   numa terceira ferramenta e conferir que ela aparece na lista de **vencidas**.
+10. Com uma ferramenta emprestada, **Ocorrência** → tipo **Avaria**, descrição, e opcionalmente
+    anexar uma foto → confirmar `Avaria registrada`. Conferir: o empréstimo correspondente sumiu
+    da lista de ativos (fechou sozinho) e o status da ferramenta virou **Avariada**.
+11. Na ferramenta avariada, **Iniciar manutenção** → status vira **Em manutenção**. **Concluir
+    manutenção** → status volta a **Disponível**, e a ferramenta volta a emprestar normalmente.
+12. **Bloquear** uma ferramenta disponível sem preencher a justificativa → conferir a recusa de
+    tamanho mínimo. Preencher a justificativa → confirmar, status vira **Bloqueada**.
+    **Desbloquear** → volta a **Disponível**.
+13. Logar com um usuário **sem** a permissão Ferramentas (perfil Produção) → conferir que os
+    botões de ação não aparecem na tela, e que uma tentativa direta pela API recebe 403.
+
+### O que a Etapa 9b **não** cobre (é decisão declarada, não esquecimento)
+
+- **Lembrete automático de devolução vencida** — a tela já destaca empréstimos vencidos na aba
+  Empréstimos, mas **não há e-mail nem alerta automático** ainda; isso depende do motor de
+  notificações (etapas futuras).
+- **Editar uma ferramenta já cadastrada pela tela** — o cadastro existe; a edição (mudar nome,
+  localização, se exige calibração) ainda não tem tela própria. Fica registrado como melhoria
+  pendente.
+- **Ferramenta usada como instrumento de medição na inspeção de qualidade** não está integrada
+  — isso depende da inspeção com plano de medidas, que ainda não existe.
+- **Uma foto por ocorrência**, não uma galeria — se precisar de mais de uma foto por avaria,
+  registre ocorrências adicionais.
 
 ---
 

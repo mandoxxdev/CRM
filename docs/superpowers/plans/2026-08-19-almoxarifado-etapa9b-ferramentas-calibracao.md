@@ -235,15 +235,12 @@ Em `permissions.js`, depois da linha 55 (`aprovar_sucateamento_gestao`):
   gerenciar_ferramentas: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
 ```
 
-- [ ] **Step 4: Rodar o teste (verde) e a suíte** — `node tests/api/toolFundacao.api.test.js` e
+- [x] **Step 4: Rodar o teste (verde) e a suíte** — `node tests/api/toolFundacao.api.test.js` e
   `npm run test:api`.
-- [ ] **Step 5: SABOTAGEM (controle positivo):** remover `STATUS.EMPRESTADA` da lista de
+- [x] **Step 5: SABOTAGEM (controle positivo):** remover `STATUS.EMPRESTADA` da lista de
   `TRANSICOES[STATUS.DISPONIVEL]` → o teste da máquina TEM de cair. `md5sum` antes/depois/
   restaurado; `git diff --stat` vazio ao final.
-- [ ] **Step 6: Commit** — `git add server/services/almoxarifado/schema.js
-  server/services/almoxarifado/toolStateMachine.js server/services/almoxarifado/permissions.js
-  server/tests/api/toolFundacao.api.test.js` + mensagem
-  `Almoxarifado Etapa 9b Task 1: fundacao de ferramentas — tabelas, maquina de estados e acao propria`.
+- [x] **Step 6: Commit** — `a62f71a` — `Almoxarifado Etapa 9b Task 1: fundacao de ferramentas — tabelas, maquina de estados e acao propria`. Review: clean, sem findings.
 
 ---
 
@@ -491,13 +488,12 @@ Rotas (`extended.js:863-887`): trocar `requirePermission('movimentar')` →
 precedente do módulo para UNIQUE é 409 — centro de custo, `extended.js:121`). `listarFerramentas` passa a
 montar `calibracao_vigente`/`emprestimo_aberto` (LEFT JOIN ou subquery; `calibracao_vigente = null`
 quando `exige_calibracao = 0`).
-- [ ] **Step 4: Verde + suíte inteira** (`npm run test:api` — atenção a `permissoesRotas.api.test.js`,
+- [x] **Step 4: Verde + suíte inteira** (`npm run test:api` — atenção a `permissoesRotas.api.test.js`,
   que pode listar as rotas de ferramentas com o gate antigo; se listar, atualizar o teste É parte
   da task e o commit explica).
-- [ ] **Step 5: SABOTAGEM:** trocar o claim de volta para if-depois-UPDATE (remover
+- [x] **Step 5: SABOTAGEM:** trocar o claim de volta para if-depois-UPDATE (remover
   `AND status = ?` do WHERE) → o teste de corrida TEM de cair. Restaurar (md5sum + diff vazio).
-- [ ] **Step 6: Commit** — pathspec explícito, mensagem
-  `Almoxarifado Etapa 9b Task 2: emprestimo com claim atomico, calibracao barrando, auditoria e gate proprio`.
+- [x] **Step 6: Commit** — `a3d37dd` — `Almoxarifado Etapa 9b Task 2: emprestimo com claim atomico, calibracao barrando, auditoria e gate proprio`. **Divergiu do plano:** filtro `colaborador` da GET /emprestimos saiu implementado como `colaborador_nome`, violando o contrato congelado — achado da revisao de task, corrigido no fix round 1 (`718adc3`, `Task 2 fix: filtro de GET /emprestimos usa colaborador, nao colaborador_nome`).
 
 ---
 
@@ -540,10 +536,10 @@ quando `exige_calibracao = 0`).
   precedente certo para multipart COM gate exprimível é a rota de foto — o teste
   `permissoesRotas.api.test.js:515-534` prova que o gate roda ANTES do multer (403 sem arquivo
   órfão). Da sucata, aproveitar só o `limparUploadOrfao` para o 400 de validação pós-upload.
-- [ ] **Step 4: Verde + suíte.**
-- [ ] **Step 5: SABOTAGEM:** no `painelCalibracoes`, trocar o filtro `exige_calibracao = 1` por
+- [x] **Step 4: Verde + suíte.**
+- [x] **Step 5: SABOTAGEM:** no `painelCalibracoes`, trocar o filtro `exige_calibracao = 1` por
   `1=1` → o teste do painel TEM de cair (ferramenta sem exigência apareceria). Restaurar.
-- [ ] **Step 6: Commit** `Almoxarifado Etapa 9b Task 3: calibracao com certificado e painel de vencimento`.
+- [x] **Step 6: Commit** — `5e01413` — `Almoxarifado Etapa 9b Task 3: calibracao com certificado e painel de vencimento`. **Divergiu do plano:** o painel entregue com `INNER JOIN` omitia silenciosamente ferramentas `exige_calibracao=1` nunca calibradas (concern do proprio implementador) — ruling: `LEFT JOIN`, nunca-calibrada entra em `vencidas` com `data_validade`/`dias_restantes` null; contrato do design atualizado (`bdd9848`, `Task 3 fix: painel nao omite a ferramenta nunca calibrada`). Review de task achou 2 Important adicionais (gaps de cobertura, nao bugs): borda `dias_restantes=0` sem teste fixando `a_vencer`, e `limparUploadOrfao` sem prova com arquivo real no 400 de validade≤calibracao — ambos fechados no fix round seguinte (`40490bc`, `Task 3 fix: fecha duas lacunas de teste achadas na revisao`).
 
 ---
 
@@ -579,9 +575,9 @@ quando `exige_calibracao = 0`).
   `PERDIDA`, reencontrar → `DISPONIVEL`, auditoria `acao:'REENCONTRO'`).
 - [ ] **Step 2: Ver falhar. Step 3: Implementar** (cada transição = claim com a lista de origens
   válidas no WHERE; `changes===0` → ler status atual e montar a mensagem do contrato).
-- [ ] **Step 4: Verde + suíte. Step 5: SABOTAGEM:** no `iniciarManutencao`, incluir `EMPRESTADA`
+- [x] **Step 4: Verde + suíte. Step 5: SABOTAGEM:** no `iniciarManutencao`, incluir `EMPRESTADA`
   nas origens do claim → o teste RN-07 TEM de cair. Restaurar.
-- [ ] **Step 6: Commit** `Almoxarifado Etapa 9b Task 4: bloqueio, manutencao e reencontro com claim por transicao`.
+- [x] **Step 6: Commit** — `b383b37` — `Almoxarifado Etapa 9b Task 4: bloqueio, manutencao e reencontro com claim por transicao`. **Divergiu do plano:** review de task achou 2 Important — `iniciarManutencao` sem compensacao no INSERT pos-claim (mesmo padrao de `emprestarFerramenta`, esquecido aqui), e `concluirManutencao` descartando o `changes` do segundo UPDATE (sucesso/auditoria mentirosos se o invariante quebrasse — load-bearing para a Task 5). Ambos corrigidos com compensacao de origem real e claim checado com rastro de anomalia (`99e5dc7`, `Task 4 fix: compensacao em iniciarManutencao e claim real em concluirManutencao`).
 
 ---
 
@@ -615,10 +611,10 @@ quando `exige_calibracao = 0`).
   `"Tipo de ocorrência inválido"`; PRODUCAO → 403.
 - [ ] **Step 2: Ver falhar. Step 3: Implementar** (claim: origem `DISPONIVEL|EMPRESTADA` →
   destino pelo tipo; fechar empréstimo DEPOIS do claim vencido, na mesma função).
-- [ ] **Step 4: Verde + suíte. Step 5: SABOTAGEM:** comentar o fechamento do empréstimo dentro de
+- [x] **Step 4: Verde + suíte. Step 5: SABOTAGEM:** comentar o fechamento do empréstimo dentro de
   `registrarOcorrencia` → o teste RN-05 TEM de cair (empréstimo ficaria aberto para sempre com a
   ferramenta perdida). Restaurar.
-- [ ] **Step 6: Commit** `Almoxarifado Etapa 9b Task 5: avaria e perda com foto — ocorrencia fecha emprestimo aberto`.
+- [x] **Step 6: Commit** — `0f89434` — `Almoxarifado Etapa 9b Task 5: avaria e perda com foto — ocorrencia fecha emprestimo aberto`. **Divergiu do plano:** review de task achou que o codigo recusa registrar ocorrencia sobre ferramenta `BLOQUEADA`/`EM_MANUTENCAO` com mensagem propria, mas o contrato do design nao previa essa recusa extra — era o **contrato que estava incompleto**, nao o codigo. Ruling: implementacao fica, contrato corrigido, teste da mensagem literal acrescentado (`d2adfe6`, `Task 5 fix: recusa por status sem teste que soubesse falhar`). Corrida devolver↔ocorrencia (mesma familia de bug do F2 da revisao final) nao tinha teste dedicado nesta task — aceito como minor na epoca, virou achado F2 na revisao final de branch e foi corrigido la (ver fix wave abaixo).
 
 ---
 
@@ -641,9 +637,9 @@ quando `exige_calibracao = 0`).
 
 - [ ] **Step 1: Teste falhando** (um vencido ontem, um para amanhã, um devolvido: `vencidos=1`
   traz só o primeiro; a função pura idem). **Step 2: falhar. Step 3: implementar.**
-- [ ] **Step 4: Verde + suíte. Step 5: SABOTAGEM:** inverter o sinal da comparação de data →
+- [x] **Step 4: Verde + suíte. Step 5: SABOTAGEM:** inverter o sinal da comparação de data →
   o teste TEM de cair. Restaurar.
-- [ ] **Step 6: Commit** `Almoxarifado Etapa 9b Task 6: emprestimos vencidos — filtro e lembrete no padrao das requisicoes`.
+- [x] **Step 6: Commit** — `f5004df` — `Almoxarifado Etapa 9b Task 6: emprestimos vencidos — filtro e lembrete no padrao das requisicoes`. **Divergiu do plano:** `toolReminderService.listarEmprestimosVencidos(db)` foi entregue como funcao pura testada, mas **sem nenhum agendamento/wiring** — o plano pedia "funcao pura + agendamento fino" espelhando `requisitionReminderService`. Ruling: codigo fica assim — um job sem canal de notificacao (email e feature 19, alerta e feature 20) seria cerimonia sem valor; a funcao pura e a costura que a feature 20 vai consumir. Corte nao declarado ate a revisao de task; D6 do design corrigido; item vai para a letra B do fechamento (decisao do usuario). Agente caiu por erro de API apos o RED desta task e foi retomado com sucesso via SendMessage — nao perdeu trabalho.
 
 ---
 
@@ -683,12 +679,12 @@ vermelho, a vencer com `dias_restantes`). Botões de escrita sob
   `"Ferramenta com calibração vencida ou sem calibração registrada"`); usuário sem
   `gerenciar_ferramentas` (mock de `minhas-permissoes`) não vê os botões de escrita; painel separa
   vencidas de a-vencer.
-- [ ] **Step 2: Ver falhar. Step 3: Implementar. Step 4:**
+- [x] **Step 2: Ver falhar. Step 3: Implementar. Step 4:**
   `CI=true npx react-scripts test --watchAll=false` verde + `CI=true npx react-scripts build`
   sem warning.
-- [ ] **Step 5: SABOTAGEM:** remover o `bloquearSeNaoPode` de um botão → o teste de permissão TEM
+- [x] **Step 5: SABOTAGEM:** remover o `bloquearSeNaoPode` de um botão → o teste de permissão TEM
   de cair. Restaurar.
-- [ ] **Step 6: Commit** `Almoxarifado Etapa 9b Task 7: tela de ferramentas — emprestimo, manutencao, ocorrencia e painel de calibracao`.
+- [x] **Step 6: Commit** — `96d0879` (branch `etapa9b-task7-front`, worktree `../CRM-etapa9b-front`) — `Almoxarifado Etapa 9b Task 7: tela de ferramentas — emprestimo, manutencao, ocorrencia e painel de calibracao`. **Divergiu do plano:** rodada em PARALELO com a Task 3 (unico paralelismo real da etapa — ruling registrado no SDD, custo se errado seria conflito de merge no client, que so esta task toca; zero retrabalho de fato). Review achou 1 Important: o painel nunca testava o caso `dias_restantes: null` (guard desprotegido) — corrigido (`0d26c9a`, `Task 7 fix: painel de calibracao cobre ferramenta nunca calibrada`). Ambiente: `qrcode` faltava em `client/node_modules` desta maquina (pre-existente, bloqueava build e 5 suites de etiquetas) — `npm install` resolveu antes de validar a suite completa. Merge do galho para `desenvolvimento-almoxarifado` em `daffb81` (Fase 4, zero conflito — a topologia tronco/galho validou-se aqui).
 
 ---
 
@@ -719,25 +715,68 @@ criar ferramenta exige_calibracao=1
 → GET /calibracoes/painel NAO lista a ferramenta (calibracao vigente)
 ```
 
-- [ ] **Step 2: Rodar** — se falhar, o defeito é de COSTURA entre tasks: registrar aqui no plano
+- [x] **Step 2: Rodar** — se falhar, o defeito é de COSTURA entre tasks: registrar aqui no plano
   qual costura a revisão da Fase 2 deixou passar (regra da skill), consertar e só então seguir.
-- [ ] **Step 3: Suíte completa serial** (os cinco comandos da `fechar-etapa`).
-- [ ] **Step 4: SABOTAGEM:** reverter mentalmente não vale — escolher UMA costura real (ex.:
+  A jornada passou DE PRIMEIRA — zero costura solta entre as tasks 1–7.
+- [x] **Step 3: Suíte completa serial** (os cinco comandos da `fechar-etapa`) — verde no branch
+  integrado (api 96/96 arquivos, almox 42/0, validation 4/0, safealter 3/0, sqlite 3/0, client
+  354/354, build exit 0).
+- [x] **Step 4: SABOTAGEM:** reverter mentalmente não vale — escolher UMA costura real (ex.:
   fazer `registrarOcorrencia` não fechar o empréstimo) e confirmar que ESTE teste cai além do
-  unitário da Task 5. Restaurar.
-- [ ] **Step 5: Commit** `Almoxarifado Etapa 9b Task 8: teste-jornada da ferramenta — calibra, empresta, avaria, conserta, devolve`.
+  unitário da Task 5. Sabotagem derrubou a jornada + os unitarios de RN-05. Restaurado.
+- [x] **Step 5: Commit** — `d5d949d` — `Almoxarifado Etapa 9b Task 8: teste-jornada da ferramenta — calibra, empresta, avaria, conserta, devolve` (97/97). **Divergiu do plano:** a revisao de task desta task foi DOBRADA na revisao final de branch (ruling do SDD) — diff test-only, controle positivo ja provado pela propria sabotagem do step 4; um revisor dedicado seria assento duplicado. Custo se errado: defeito no proprio teste-jornada passaria por 1 gate a menos — mitigado por ser item nomeado no dispatch da revisao final.
+
+---
+
+### Task 8.5: Revisão final de branch + onda de fix (não estava no plano original — exigida pela skill `desenvolver-etapa-almoxarifado`, Fase 5)
+
+Depois do merge do galho front (`daffb81`) e da Task 8 (`d5d949d`), revisor externo (fable,
+range `d644827..d5d949d`, o branch inteiro da etapa) rodou o review whole-branch que os gates
+por-task não conseguem ver (interação entre tasks, contrato-vs-implementação de ponta a ponta).
+Veredito: **"With fixes"**, 4 Important:
+
+- **F1** — `busca`/`exige_calibracao` do contrato congelado ignorados por `listarFerramentas` (a
+  caixa de busca da Task 7 era enfeite morto: o front mandava, o backend nunca lia).
+- **F2** — corrida `devolverFerramenta` ↔ `registrarOcorrencia` podia corromper a maquina de
+  estados (UPDATE incondicional de um lado, restauracao para `origem` errada do outro) —
+  upgrade do minor deferido na Task 5.
+- **F3** — `PUT /ferramentas/:id` e o 409 de patrimonio duplicado sem nenhum teste; UI de edicao
+  que D9 prometia nunca foi construida (corte nao declarado).
+- **F4** — badge "Vencido" do front comparava `new Date(str) < new Date()` (instante UTC) contra
+  o `date(...) < date('now')` do servidor (so data) — emprestimo vencendo HOJE aparecia vencido
+  horas antes da meia-noite local.
+
+Onda de fix unica dispatachada com os 4 achados + 2 extras baratos recomendados pelo revisor
+(filtro `exige_calibracao` na UI, rotulo de localizacao na tabela). **Interrupção real:** o
+implementador foi encerrado pelo usuário logo após concluir e verificar o build ("Build succeeds
+... Now let's write the final report and commit"), sem commitar e sem relatório. Retomado pelo
+controlador na sessão seguinte (sem agente alcançável): os 4 diffs foram conferidos linha a linha
+contra os achados (bateram exatamente, zero extrapolação), as 7 suítes completas rodaram verdes
+de novo, e o commit foi dividido em 4 por assunto (F1 isolado via `git add -p` por hunk; F2 junto
+por ser a mesma corrida nos dois sentidos; F3 teste+design; F4+extras do front):
+
+- [x] Fix F1 — `60a452e`
+- [x] Fix F2 — `4278d27`
+- [x] Fix F3 — `86090f0`
+- [x] Fix F4 + extras — `b8e6f60`
+- [x] **Re-review escopado** (sonnet, range `d5d949d..b8e6f60`, os 4 achados) — veredito: **todos
+  ADDRESSED, zero quebra nova, zero achado fora de escopo**. Sem residuais — não houve segunda
+  onda.
+
+Detalhe de cada fix (mudança, teste, comando, saída real) em
+`.superpowers/sdd/2026-08-19-almoxarifado-etapa9b-ferramentas-calibracao/final-fix-report.md`.
 
 ---
 
 ### Task 9: Fechamento (fase 6)
 
-- [ ] Usar a skill **`fechar-etapa`** inteira: novidades-por-etapa (com o bloco ⚠️ atualizado —
+- [x] Usar a skill **`fechar-etapa`** inteira: novidades-por-etapa (com o bloco ⚠️ atualizado —
   as decisões D1–D12 delegadas entram na letra B se alguma esperar arbitragem), spec 16 (status,
   checklist com hash por item, **e a correção declarada das linhas envelhecidas** anotada no
   design), mapa de status (feature 16), guia do usuário, manual do sistema (regras RN citadas em
   linguagem de operador, mensagens literais conferidas no código), este plano (tasks marcadas +
   divergências).
-- [ ] **Retro de 4 números** no fim deste arquivo (regra da skill `desenvolver-etapa-almoxarifado`):
+- [x] **Retro de 4 números** no fim deste arquivo (regra da skill `desenvolver-etapa-almoxarifado`):
   rodadas até verde; achados reais vs. ruído na revisão adversarial; galhos paralelos de fato e
   retrabalho causado; defeito que escapou (preencher na etapa seguinte).
 
@@ -752,3 +791,42 @@ criar ferramenta exige_calibracao=1
 - **Consistência de tipos:** `calibracaoVigente` definida em T2 e citada em T3/T8;
   mensagens literais idênticas ao contrato do design; `STATUS` de T1 usado em T2/T4/T5.
 - **Sem placeholder:** cada task tem código ou instrução executável com precedente file:line.
+
+---
+
+## Retro (fechamento, primeira etapa sob a skill `desenvolver-etapa-almoxarifado`)
+
+Primeira etapa completa sob o workflow tronco/galho + revisão adversarial de plano + SDD. Sem
+retro anterior para comparar — os 4 números abaixo viram a linha de base para a próxima etapa.
+
+**1. Rodadas de fix até verde.** 7 rodadas de fix no total, nenhuma passou de 1 rodada por
+achado (o "detector de esteira" — 3 rodadas na mesma falha — nunca disparou): Task 2 (1, filtro
+`colaborador`), Task 3 (2, uma pré-review + um round pós-review com 2 Important de cobertura),
+Task 4 (1, compensação + claim descartado), Task 5 (1, inconsistência de contrato), Task 7 (1,
+guard de `dias_restantes: null`), revisão final de branch (1 onda, 4 achados). Tasks 1, 6 e 8
+saíram limpas de primeira.
+
+**2. Achados reais vs. ruído.** Revisão adversarial do plano (Fase 2, antes de qualquer código):
+**10 reais / 0 ruído** — os 10 listados no topo deste arquivo, todos teriam quebrado a execução
+se não corrigidos antes do dispatch. Revisões de task (Fase 3, uma por task): somando as 5 tasks
+com fix round, ~8 achados Important — mistura de defeitos reais (2), gaps de cobertura (4) e
+inconsistências de contrato-vs-implementação (2). Revisão final de branch (Fase 5, escopo que
+nenhuma revisão de task cobre): 4 Important, todos reais e todos ADDRESSED no re-review escopado.
+Zero achado descartado como ruído em qualquer fase — toda revisão adversarial pagou o próprio
+custo nesta etapa.
+
+**3. Paralelismo de fato.** Um uso real: Task 7 (front) em worktree própria, em paralelo com a
+Task 3 (backend), contra o contrato HTTP congelado desde a Task 2. **Retrabalho causado: zero** —
+o merge (`daffb81`) fechou sem nenhum conflito, e o teste-jornada da Task 8 passou de primeira
+sem nenhuma costura solta entre os galhos. A aposta central do workflow (congelar o contrato antes
+de paralelizar o consumidor) se confirmou no primeiro uso real.
+
+**4. Defeito que escapou (para a próxima etapa nomear se se repetir).** O revisor da revisão
+final identificou um padrão que atravessou 3 dos 4 achados (F1, F3, F4): **contrato congelado
+honrado por um lado só** — o front mandava `busca`, o backend não lia (F1); o design prometia
+edição, só o cadastro foi construído (F3); o front e o backend calculavam "vencido" com regras de
+data diferentes sem nenhum teste comparando os dois (F4). Nenhuma das revisões de task por si
+pegou isso, porque cada uma olha um lado do contrato de cada vez — só a revisão whole-branch, que
+lê os dois lados juntos, viu. Registrar para a próxima etapa: se esse padrão se repetir, vale
+considerar uma checagem automatizável contrato-vs-implementação (o revisor final sugeriu isso,
+sem desenhar como) em vez de depender só da revisão final para pegá-lo.

@@ -1,13 +1,13 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 9 (02/08/2026 a 16/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 9b (02/08/2026 a 22/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em 2026-08-16 (Etapa 9).
+> `docs/superpowers/plans/`. Atualizado em 2026-08-22 (Etapa 9b).
 
 ## Visão geral
 
@@ -27,6 +27,7 @@
 | 8b | Remessas a Terceiros | 2026-08-12 | O material que vai beneficiar fora (galvanizar, pintar, usinar) para de sumir do controle: sai do disponível sem sair do patrimônio, com prazo, retorno parcial e baixa justificada do que não voltou |
 | 8c | Transformação no Terceiro | 2026-08-13 | A chapa que sai para corte e volta como 40 peças e uma sobra para de mentir no estoque: a chapa é baixada de verdade e as peças entram com o custo dela rateado |
 | 9 | Retalhos, Sobras e Sucatas | 2026-08-16 | A meia chapa vira estoque de verdade (com saldo, etiqueta com QR e sugestão de uso antes de cortar chapa nova) — e sucatear deixa de ser um clique: exige duas assinaturas de pessoas diferentes, com destino e valor registrados |
+| 9b | Ferramentas e Calibração | 2026-08-22 | Ferramenta virou patrimônio controlado: empréstimo à prova de corrida, calibração vencida bloqueia o uso, avaria/perda com foto fecha o empréstimo sozinha, bloqueio e manutenção com histórico — tudo numa tela própria |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -35,8 +36,10 @@ clientes).
 em que **o mesmo material volta** (galvanizar, pintar, tratar) e a 8c entrega a metade em que
 **volta outra coisa** (cortar, dobrar, usinar).
 **Com a 9, a feature 15 (retalhos, sobras e sucatas) fica completa** — só o e-mail de
-sucateamento ficou de fora, declarado, junto com todos os e-mails do módulo (feature 19). A
-próxima etapa é a **9b — ferramentas e calibração**.
+sucateamento ficou de fora, declarado, junto com todos os e-mails do módulo (feature 19).
+**Com a 9b, a feature 16 (ferramentas e calibração) fica completa**, com duas melhorias
+pendentes declaradas (lembrete de devolução sem canal de notificação, edição de ferramenta pela
+tela — ver letra B). A próxima etapa é a **10 — inventário avançado** (feature 17).
 
 ---
 
@@ -53,10 +56,12 @@ está detalhado na seção da etapa correspondente e no
 | **A1** | **O bug da Sucata pode ter deixado saldo a menos.** Devolver material para o destino Sucata baixava o estoque **duas vezes**. A correção **não conserta o passado**. No banco de desenvolvimento a checagem já foi feita: **0 devoluções, nenhum efeito lá**. | Ver a consulta exata no guia, seção "Etapa 7 → O bug da Sucata". Ela lista **só as devoluções anteriores à correção** (as que não têm a entrada correspondente no livro) — cada linha é um material cujo saldo está **a menos** pela quantidade devolvida. Uma consulta que filtrasse só `destino = 'SUCATA'` traria também as devoluções corretas feitas depois do deploy, e faria você caçar problema que não existe. |
 | **A2** | **A lista antiga de materiais de cliente foi aposentada** com base no banco de desenvolvimento (0 linhas). **Nada foi apagado** — a tabela foi preservada exatamente para este caso. | `SELECT COUNT(*) AS total, SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos FROM materiais_cliente_almoxarifado;` — se vier `0`, só anotar e fechar. Se vier `> 0`, **não reverte nada**: entra uma migração assistida antes de qualquer exclusão. |
 
-**Continuam sendo duas — a 8b, a 8c e a 9 não acrescentam nenhuma.** As duas etapas de terceiros
-e a de retalhos/sucatas só **criam** colunas e tabelas novas, que nascem vazias; **nenhum dado
-existente é tocado ou reinterpretado** por elas. Está dito explicitamente porque as Etapas 7 e 8
-deixaram consultas pendentes e você vai procurar a das etapas novas.
+**Continuam sendo duas — a 8b, a 8c, a 9 e a 9b não acrescentam nenhuma.** As etapas de
+terceiros, a de retalhos/sucatas e a de ferramentas só **criam** colunas e tabelas novas, que
+nascem vazias; **nenhum dado existente é tocado ou reinterpretado** por elas — a Etapa 9b em
+particular nem toca o motor de estoque, ferramenta é patrimônio separado. Está dito
+explicitamente porque as Etapas 7 e 8 deixaram consultas pendentes e você vai procurar a das
+etapas novas.
 
 ### B. Decisões de negócio — três esperando por você (o Ajuste B1–B3, a sucata B5, as categorias B6), uma já tomada (B4)
 
@@ -132,6 +137,30 @@ material.** As categorias das telas continuam fixas no código do front, divergi
 configurável do servidor (dívida da spec 01). A Etapa 9 **herdou a categoria do original** ao
 criar material de retalho justamente **para não depender dessa resposta** — a pergunta continua
 em pé: qual lista vale?
+
+**B7 (NOVO, da Etapa 9b) — o lembrete de devolução vencida não tem canal, e não é esquecimento.**
+A tela já **destaca visualmente** os empréstimos vencidos (aba Empréstimos). Por baixo, existe
+também uma função pronta e testada que lista os empréstimos vencidos, pensada para virar um job
+agendado — mas **o job não foi ligado a nada**: decisão tomada durante a execução, porque um
+agendador sem e-mail (feature 19) ou alerta formal (feature 20) rodaria em segundo plano sem
+avisar ninguém, dando a falsa sensação de que existe cobertura. **Três respostas possíveis:**
+**(a)** esperar a feature 20 (alertas) e ligar o job junto; **(b)** ligar agora um job simples que
+só grava um log/alerta interno, sem e-mail, como primeiro passo; **(c)** decidir que o destaque na
+tela já basta por enquanto. Reverter para **(b)** é barato — o padrão já existe em
+`routes/almoxarifado.js:2401` (o mesmo job da requisição).
+
+**B8 (NOVO, da Etapa 9b) — falta a tela de editar ferramenta, o cadastro já existe.** Cadastrar
+uma ferramenta nova funciona; **mudar depois** o nome, a localização ou se ela exige calibração
+**não tem formulário na tela**. O backend que faz isso **já existe e está testado** — só falta o
+botão e o modal na tela de Ferramentas. Ficou de fora porque ninguém detalhou essa parte da tela
+no plano da etapa, e só apareceu na revisão final. Baixo custo para entrar numa próxima rodada
+pequena, se quiserem antes da Etapa 10.
+
+**B9 (NOVO, da Etapa 9b) — o filtro "quantos dias faltam" do painel de calibração não tem campo
+na tela.** O painel de calibrações a vencer aceita um parâmetro `dias` (hoje fixo em 30, por
+trás), mas a tela não oferece um campo para o usuário mudar esse número. Baixo custo, mesma
+categoria da B8 — fica registrado para não ser confundido com "o painel não filtra": ele filtra,
+só não deixa escolher o prazo pela tela ainda.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -224,6 +253,13 @@ em pé: qual lista vale?
 - **(9) Não há foto do retalho** — o campo existe no banco, a tela não oferece upload
   (pendência registrada na spec 15), e **não há reserva de retalho** (mesma pendência da reserva
   por lote/série).
+- **(9b) Ferramenta usada em inspeção (instrumento calibrado referenciando a medição) não está
+  integrada** — depende de a feature 09 ganhar plano de inspeção com medidas, que não existe
+  ainda.
+- **(9b) Uma foto por ocorrência de avaria/perda, não uma galeria.** Se precisar de mais de uma
+  foto, registre ocorrências adicionais — galeria de N fotos exigiria tabela e tela própria.
+- **(9b) Requisição de ferramenta pelo fluxo de requisições não existe** — fica para a feature 04
+  encostar nisso, se um dia fizer sentido pedir ferramenta pelo mesmo caminho que material.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -274,6 +310,15 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    (largo, os campos de baixa aparecendo/sumindo com o checkbox); a **etiqueta em PDF** abrindo
    legível com o QR funcionando (escanear e ver a linha destacada); e o **aviso de retalho
    disponível** no formulário de Saída. O roteiro completo está no guia, seção da Etapa 9.
+5. **(9b) A tela Ferramentas inteira.** **Nenhum navegador foi aberto na entrega da Etapa 9b** —
+   mesma ressalva: os testes de tela são de comportamento, não visuais. Falta conferir: os
+   **badges de status** da aba Ferramentas com cor própria para cada um dos seis status
+   (Disponível/Emprestada/Bloqueada/Em manutenção/Avariada/Perdida); o **painel de calibrações**
+   distinguindo vencidas (vermelho) de a-vencer visualmente; os **modais** de emprestar,
+   bloquear/desbloquear, manutenção, ocorrência e calibração cabendo na largura, com o campo de
+   foto/certificado funcionando de verdade (anexar um arquivo e ver o preview ou o nome
+   aparecer); e o **filtro "Exige calibração"** da lista de ferramentas. O roteiro completo está
+   no guia, seção da Etapa 9b.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -329,6 +374,20 @@ casos. O que a 8c fez em vez disso foi tornar o terceiro significado **legível 
 de resultado agora diz se é peça ou sobra) e **desdobrar na tela** em *Retornado / Transformado /
 Baixado*. **A pendência continua aberta e está registrada na spec** — não foi apagada porque a 8c
 encostou nela.
+
+**G4 (NOVO, da 9b). Contrato congelado entre back e front, honrado só de um lado — e passou por
+quatro revisões de task antes de ser pego.** A Etapa 9b congelou o contrato de API antes de
+paralelizar a tela contra o backend (a mesma técnica que já tinha funcionado bem nas etapas
+anteriores). O problema achado na revisão final: **três vezes** o contrato dizia uma coisa e só
+um dos dois lados a cumpria — a tela mandava um filtro de busca que o servidor nunca lia; o
+design prometia edição de ferramenta e só o cadastro foi construído; a tela e o servidor calculavam
+"empréstimo vencido" com fórmulas de data diferentes, sem nenhum teste comparando os dois. Nenhuma
+revisão de task pegou isso, porque cada revisão de task olha o código de **uma** task por vez — o
+front e o backend de cada contrato são tasks diferentes. **Só a revisão do branch inteiro, que lê
+os dois lados juntos, viu o padrão.** Fica registrado como algo a vigiar nas próximas etapas que
+usarem contrato congelado + galho paralelo: se o padrão se repetir, vale desenhar uma checagem
+automatizável que compare contrato declarado × uso real dos dois lados, em vez de depender só da
+revisão final para pegá-lo.
 
 ---
 
@@ -1458,23 +1517,107 @@ assinatura recém-dada desfeita e a compensação auditada.
 - **Não emite fatura/título** na venda de sucata — registro com valor e comprovante (item **D**).
 - **Não tem tela de relatório** — o financeiro de sucata é API (item **D**).
 - **Não tem foto do retalho nem reserva de retalho** (item **D**).
-- **Ferramentas e calibração são a Etapa 9b.**
+
+---
+
+## Etapa 9b — Ferramentas e Calibração (2026-08-22)
+
+**Em uma frase:** ferramenta (furadeira, paquímetro, torquímetro...) virou patrimônio controlado
+de verdade — empréstimo à prova de dois cliques simultâneos, calibração vencida bloqueando o uso,
+avaria/perda com foto fechando o empréstimo sozinha, bloqueio e manutenção com histórico — numa
+tela própria.
+
+**O problema que existia.** O empréstimo de ferramenta funcionava, mas sem trava real: duas
+pessoas podiam emprestar a mesma ferramenta ao mesmo tempo (a checagem era feita **antes** de
+gravar, não **durante**), emprestar e devolver não deixavam rastro de auditoria, e a permissão
+usada para mexer em ferramenta era a **mesma** de mexer em estoque de material. Calibração,
+manutenção, avaria, perda e bloqueio não existiam — nem como campo no banco.
+
+**Antes → Agora:**
+
+| Antes | Agora |
+|---|---|
+| Emprestar ferramenta já emprestada podia acontecer em cliques simultâneos | **Impossível mesmo em corrida** — a gravação só aceita se o status ainda for o esperado no instante exato |
+| Ferramenta que exige calibração emprestava vencida ou sem calibração nenhuma | **Bloqueada** até ter calibração vigente registrada, com mensagem explicando o motivo |
+| Avaria/perda durante o empréstimo não tinha registro | Ocorrência com **foto e responsável**, que **fecha o empréstimo em aberto sozinha** |
+| Ferramenta com defeito não tinha bloqueio nem manutenção | **Bloquear** (com justificativa) e **Manutenção** (início/fim) com histórico completo |
+| Ferramenta perdida encontrada de volta não tinha caminho | **Reencontrar**, com justificativa — volta a disponível |
+| Emprestar e devolver não deixavam rastro | Toda ação de escrita **audita**, com o usuário responsável |
+| Mesma permissão do estoque de material | Permissão **própria** (Ferramentas) — dá para autorizar uma sem a outra |
+| Sem tela | **Almoxarifado → Ferramentas**, três abas: Ferramentas, Empréstimos, Calibrações |
+
+### As regras, com o cenário exato
+
+As mensagens abaixo são as **mensagens reais do sistema**, conferidas no código.
+
+**1. Ferramenta ocupada, bloqueada, em manutenção, avariada ou perdida não empresta — mesmo em
+corrida.** *Cenário:* clicar **Emprestar** numa ferramenta que já não está disponível:
+> `Ferramenta não está disponível (status atual: EMPRESTADA)`
+
+Vale até em dois cliques simultâneos na mesma ferramenta — exatamente um vence, o outro recebe
+essa recusa.
+
+**2. Calibração vencida (ou nunca registrada) bloqueia o empréstimo.**
+> `Ferramenta com calibração vencida ou sem calibração registrada`
+
+Registrar uma calibração nova com validade futura destrava na hora.
+
+**3. Devolver libera para um novo empréstimo.** Ao confirmar: `Ferramenta devolvida` — a
+ferramenta volta a Disponível. Tentar devolver um empréstimo que já foi fechado (ou que não
+existe):
+> `Empréstimo não encontrado`
+
+**4. Avaria ou perda durante o empréstimo fecha o empréstimo automaticamente.** *Cenário:* com a
+ferramenta emprestada, registrar Ocorrência tipo Perda (ou Avaria). O empréstimo em aberto fecha
+sozinho e a ferramenta muda para o status da ocorrência — não é preciso devolver antes.
+
+**5. Bloquear e desbloquear exigem justificativa de pelo menos 5 caracteres.**
+> `Justificativa deve ter pelo menos 5 caracteres`
+
+Só ferramenta disponível bloqueia:
+> `Ferramenta não pode ser bloqueada (status atual: <status>)`
+
+**6. Ferramenta emprestada não entra em manutenção — devolva primeiro.**
+> `Ferramenta não pode entrar em manutenção (status atual: EMPRESTADA)`
+
+Ferramenta avariada entra em manutenção normalmente (é o caminho de conserto); ao concluir, volta
+a disponível.
+
+**7. Reencontrar só vale para ferramenta perdida.**
+> `Ferramenta não está perdida (status atual: <status>)`
+
+**8. Código de patrimônio duplicado não cadastra.**
+> `Código de patrimônio já cadastrado`
+
+**9. Quem pode o quê.** Toda escrita (cadastrar, emprestar, devolver, bloquear, manutenção,
+ocorrência, calibração, reencontrar) exige a permissão **Ferramentas** (Administrador ou
+Almoxarife). Ver e consultar histórico é livre para qualquer usuário logado.
+
+**O que esta etapa NÃO cobre (é decisão declarada, não esquecimento):**
+- **Lembrete de devolução vencida sem canal de notificação** — a tela já destaca vencidos; e-mail
+  e alerta automático dependem das features 19/20 (item **B7**).
+- **Editar ferramenta pela tela** — o cadastro existe; a edição ainda não tem formulário próprio
+  (backend já testado) (item **B8**).
+- **Ferramenta como instrumento de medição na inspeção** não está integrada — depende do plano de
+  inspeção com medidas, que a feature 09 ainda não tem (item **D**).
+- **Uma foto por ocorrência**, não galeria — mais de uma foto vira ocorrências adicionais
+  (item **D**).
+- **Requisição de ferramenta pelo fluxo de requisições** não existe (item **D**).
 
 ---
 
 ## Onde estamos e o que vem a seguir
 
-- **Concluído até aqui:** Etapas 0 a 9 — fundação, motor de estoque, cadastros, requisições,
+- **Concluído até aqui:** Etapas 0 a 9b — fundação, motor de estoque, cadastros, requisições,
   reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções, materiais de clientes,
-  remessas a terceiros, transformação no terceiro e **retalhos/sucatas**. As features 10
-  (lotes/séries/etiquetas), 11 (transferências), 12 (devoluções), 13 (materiais de clientes),
-  **14 (materiais em terceiros)** e **15 (retalhos, sobras e sucatas)** estão completas no que cada
-  etapa se propôs. A 15 fechou com a Etapa 9: retalho virou estoque com etiqueta, e sucateamento
-  virou processo com dupla aprovação — só o e-mail ficou para a feature 19, declarado.
-- **Próxima etapa:** **Etapa 9b — ferramentas e calibração** (feature 16). A divisão 9/9b foi
-  decidida no design da Etapa 9 (retalho é estoque, ferramenta é patrimônio emprestável); a 9b
-  ainda **não tem design nem plano** — a primeira ação de quem pegar é o brainstorming sobre a
-  spec 16, que foi corrigida na Etapa 9 e hoje diz a verdade sobre o que existe.
+  remessas a terceiros, transformação no terceiro, **retalhos/sucatas** e **ferramentas e
+  calibração**. As features 10 (lotes/séries/etiquetas), 11 (transferências), 12 (devoluções), 13
+  (materiais de clientes), **14 (materiais em terceiros)**, **15 (retalhos, sobras e sucatas)** e
+  **16 (ferramentas e calibração)** estão completas no que cada etapa se propôs. A 16 fechou com
+  a Etapa 9b: ferramenta virou patrimônio controlado com claim atômico, calibração barrando o uso
+  e histórico auditado — com duas melhorias pendentes declaradas (itens **B7**/**B8**).
+- **Próxima etapa:** **Etapa 10 — inventário avançado** (feature 17): contagem cega, recontagem,
+  tolerância, aprovação de ajuste, acuracidade.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
@@ -1482,18 +1625,23 @@ assinatura recém-dada desfeita e a compensação auditada.
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
   3. saber que a **conferência de inventário ajusta saldo fora da permissão de material de
      cliente** (seção da Etapa 8) — é o ponto que mais importa contar a quem opera;
-  4. **nem a 8b, nem a 8c, nem a 9 acrescentam consulta a esta lista** — as três só criam colunas
-     e tabelas novas, sem tocar em dado existente;
+  4. **nem a 8b, nem a 8c, nem a 9, nem a 9b acrescentam consulta a esta lista** — todas só criam
+     colunas e tabelas novas, sem tocar em dado existente;
   5. **avisar quem compara relatórios com o mês passado** de que dois números mudam de leitura
      (itens **C3** e **C4**) — nenhum dado foi alterado, mas o número na tela vai ser outro;
   6. **avisar quem opera que o tipo Sucata sumiu do formulário de Movimentações** (item **C5**) —
-     sucatear agora é pela tela Sobras e Retalhos, com duas assinaturas de pessoas diferentes.
+     sucatear agora é pela tela Sobras e Retalhos, com duas assinaturas de pessoas diferentes;
+  7. **avisar quem opera que existe uma tela nova de Ferramentas** (Almoxarifado → Ferramentas) —
+     ninguém precisa ser treinado às pressas (o fluxo antigo de empréstimo continua existindo por
+     baixo), mas vale que o almoxarifado saiba onde ficou.
 - **O que depende de você, não do código:** confirmar se **remessa mista de donos** deve mesmo ser
   recusada (item **E**); reconhecer a **regra de rateio de custo** implementada no seu nome (item
   **B4**); decidir o **Ajuste contra a retenção** (item **B**); dizer **quais classificações de
   sucata a GMP usa de verdade** (item **B5**) e **qual taxonomia de categorias vale** (item
-  **B6**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação e a tela
-  nova de Sobras e Retalhos (item **F**).
+  **B6**); decidir o **canal do lembrete de devolução de ferramenta** (item **B7**) e priorizar (ou
+  não) a **tela de editar ferramenta** (item **B8**); e fazer as **verificações no navegador** —
+  selos, PDF, modal de transformação, a tela de Sobras e Retalhos e a tela nova de Ferramentas
+  (item **F**).
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas
   pelo usuário (roteiros no guia); tela de subfamílias; telas para localizações
   vazias/materiais sem endereço; pendências declaradas (a)–(j) da 6b e (a)–(g) da 6c na
@@ -1504,11 +1652,14 @@ assinatura recém-dada desfeita e a compensação auditada.
   lista de exclusão que protege as colunas novas por omissão (item **G1**); as da Etapa 8c —
   a **fragilidade das fixtures de teste** (item **G2**), a coluna com **três significados** (item
   **G3**), as categorias de material ainda fixas no código do front, e o anexo de desenho na
-  remessa; e as da Etapa 9, registradas na spec 15 — a falta de uma **guarda automática para tipo
+  remessa; as da Etapa 9, registradas na spec 15 — a falta de uma **guarda automática para tipo
   novo de movimento** nas fontes únicas (a sabotagem da etapa provou que o teste da equação por
   cliente não pega o esquecimento sozinho), a coluna **foto** da sobra sem escritor, o retalho de
   material com controle de lote entrando **sem lote** (mesma isenção declarada da spec 10), e o
-  **valor de venda aceito em descarte** (gravado, mas fora do total do relatório).
+  **valor de venda aceito em descarte** (gravado, mas fora do total do relatório); e as da Etapa
+  9b, registradas na spec 16 — o **lembrete sem canal** (item **B7**), a **edição de ferramenta
+  sem tela** (item **B8**), o **filtro de dias do painel sem campo** (item **B9**), e o padrão de
+  **contrato congelado honrado só por um lado** que a revisão final identificou (item **G4**).
 - **Transversal (2026-08-11):** auditoria completa das 24 specs contra o código — specs
   que afirmavam coisas não entregues foram corrigidas com nota datada, e o bug de front dos
   status de reserva (`92fe236`) saiu dessa auditoria.

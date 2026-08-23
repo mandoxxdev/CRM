@@ -1,12 +1,32 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-16 (**Etapa 9 fechada — retalhos, sobras e sucatas,
-> `b727c0a..4ba94e2` + commits de documentação. A feature 15 vira 🟢.**
-> **Onde o desenvolvimento parou: a Etapa 9 está fechada; a próxima da ordem é a Etapa 9b —
-> ferramentas e calibração (feature 16)** — a divisão 9/9b foi decidida no design da Etapa 9
-> (mesmo precedente de 6/6b/6c e 8/8b/8c: retalho é estoque, ferramenta é patrimônio emprestável,
-> e cada subsistema fecha com testes por conta própria).
+> **Última atualização:** 2026-08-22 (**Etapa 9b fechada — ferramentas e calibração,
+> `d644827..b8e6f60` + commits de documentação. A feature 16 vira 🟢.**
+> **Onde o desenvolvimento parou: a Etapa 9b está fechada; a próxima da ordem é a Etapa 10 —
+> inventário avançado (feature 17)** — contagem cega, recontagem, tolerância, aprovação de
+> ajuste, acuracidade (ver seção "Etapa 10" abaixo).
+> **O que a Etapa 9b entregou:** o subsistema de ferramentas (antes: 57 linhas sem teste, sem
+> Zod, com corrida SELECT-depois-UPDATE, sem auditoria, gate emprestado do estoque) virou
+> patrimônio emprestável completo. Máquina de estados explícita (`toolStateMachine.js`) com toda
+> transição por **claim** no WHERE; calibração com vencimento **lida da última calibração** (sem
+> coluna-cache) barrando o empréstimo; avaria/perda com foto encerrando o empréstimo aberto no
+> mesmo ato; bloqueio/manutenção/reencontro com justificativa auditada; ação de perfil própria
+> `gerenciar_ferramentas`; Zod e auditoria em toda escrita; tela `/almoxarifado/ferramentas` com
+> três visões. **Revisão final de branch** (depois do merge de todas as tasks) achou 4 Important
+> que nenhum gate por-task pegou — todos do mesmo padrão, "contrato congelado honrado por um lado
+> só": filtro `busca`/`exige_calibracao` que o front mandava e o backend nunca lia; corrida
+> `devolverFerramenta`↔`registrarOcorrencia` que podia corromper o status (UPDATE incondicional de
+> um lado, restauração para o estado errado do outro); `PUT`/409 de ferramenta sem nenhum teste; e
+> o badge "Vencido" do front comparando instante UTC contra a comparação por-data do servidor —
+> todos corrigidos e um re-review escopado confirmou zero residual. **Pendências declaradas, para
+> a letra B do fechamento:** job de lembrete de devolução sem canal de notificação (função pura
+> pronta, aguarda feature 20/e-mail feature 19); UI de edição de ferramenta (backend testado, só
+> falta o formulário — achado da revisão final, D9 do design corrigido).
+> **Números (medidos no fechamento, 2026-08-22):** `test:api` **98/98 arquivos OK** (inclui o
+> novo `toolFerramentaEdicao.api.test.js`), `test:almoxarifado` **42/0**,
+> `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **3/0**; client **357 testes
+> em 28 suítes**, build `CI=true` concluído sem warning (exit 0).)
 > **O que a etapa entregou:** o retalho virou **estoque de verdade** — material normal no motor,
 > creditado pelo tipo novo `ENTRADA_RETALHO` (dedicado, sem custo, nascido nas fontes únicas
 > `movementTypes`/`TIPOS_DEDICADOS`), com a tabela `sobras_material_almoxarifado` **reformada**
@@ -215,7 +235,7 @@
 | 13 | [Materiais de clientes](13-materiais-clientes/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 8 entregue (2026-08-12, `f26b635..5b5eb55`)** — material de cliente virou **material normal com dono** (`proprietario_cliente_id`, `NULL` = nosso) e ganhou tudo que as Etapas 1 a 7 construíram: lote, série, endereço, extrato, etiqueta e livro. **A segregação não foi "lembrar de filtrar"**: 40 leituras da tabela auditadas uma a uma e classificadas em A (estoque próprio → filtra), B (leitura por id → não filtra, senão o motor pararia de funcionar para material de cliente) e C (misturar é o correto → não filtra, e o **selo** é a contrapartida). **Guarda do dono** na saída, com a **emergencial NÃO furando** — única exceção deliberada ao padrão do módulo, porque "regularizo depois" não é resposta para o dono da chapa. **Ajuste** sob a ação nova `ajustar_material_cliente` (só ADMINISTRADOR), verificada **dentro do motor** porque o AJUSTE chega por duas rotas ambas gateadas por `movimentar`. Tipo `DEVOLUCAO_CLIENTE` (saída, rota dedicada, documento obrigatório) — **não confundir com a devolução da Etapa 7**, onde o material volta. Ilha aposentada (rotas e serviço removidos; **tabela preservada**). Tela `/almoxarifado/materiais-cliente` com posição por cliente + PDF no navegador. **Duas correções declaradas de spec:** a spec de design mandava auditar o lugar errado (`9d70d8c`), e o item "entrada exige cliente + **projeto** + documento" estava **ERRADO** quanto ao projeto — a linha diz isso em vez de sumir. **Fora do escopo, declarado:** e-mails (19), sobras (15), perdas/não conformes/valorização por cliente (21), aprovação assíncrona de ajuste (06). **Pendência aberta e grave o bastante para o guia do usuário:** a conferência de inventário (`routes/almoxarifado.js:941`) ajusta `quantidade_atual` fora do motor, logo fora da permissão nova |
 | 14 | [Materiais em terceiros](14-materiais-terceiros/README.md) | ✅ | ✅ | ✅ | 🟢 **COMPLETA — as duas metades entregues: Etapa 8b (2026-08-12, `0a01124..b176212`), o MESMO material volta; Etapa 8c (2026-08-13, `753d23b..61c6f52`), volta OUTRA coisa.** **8b** — remessa e retorno do **MESMO** material, ciclo completo. Quarta coluna de retenção `quantidade_em_terceiros` (sai do disponível, **não** do patrimônio) com a conta do disponível **centralizada** em `availabilitySql.js`; conferência de inventário descontando **só ela**; três tabelas + `thirdPartyStateMachine` (`ABERTA → ENVIADA → RETORNO_PARCIAL → ENCERRADA/CANCELADA`); quatro tipos de movimento no motor; envio **tudo-ou-nada** agregando por material; retorno parcial com teto acumulado **por item**; encerramento com **destino obrigatório** (`PERDA_NO_TERCEIRO`/`CONSUMIDO_NO_PROCESSO`) + justificativa; cancelamento com estorno **do que ainda está lá fora**; ação de perfil `remessar_terceiro`; sete rotas + `GET /vencidas`; tela `/almoxarifado/remessas-terceiros` + PDF no navegador. **Correção declarada de spec:** o checklist dizia "envio = saída para localização virtual", e isso **estava errado** — o disponível é calculado sobre o escalar `quantidade_atual`, então localização virtual não tira nada do disponível. **Correção declarada de status:** esta linha dizia *"**Falta a Etapa 8c — transformação**"* — **deixou de ser verdade em 2026-08-13**. **8c** (`753d23b..61c6f52`) — corte, dobra e usinagem: sai 1 chapa e voltam N peças mais uma sobra, no **mesmo evento** (a chapa baixa por `CONSUMO_TERCEIRO`, cada resultado entra pelo tipo novo `RETORNO_TRANSFORMACAO`, `9c7ec75`); três colunas em `retornos_remessa_item_almoxarifado` (`tipo_resultado` `PECA`/`SOBRA`, `custo_unitario_aplicado`, `movimentacao_consumo_id` como agrupador do evento), com `NULL` significando "retorno simples"; rateio de custo em função **pura** (`transformCost.js`) — **peça recebe rateio, sobra entra a custo ZERO**; rota dedicada `POST /remessas-terceiros/:id/transformacoes` (`remessar_terceiro`), tipo em `TIPOS_DEDICADOS` (fora da rota genérica); guarda própria `assertMesmoDonoNaTransformacao` (a peça tem de ter o **mesmo** dono da chapa); modal com N resultados, classificação e rendimento. E-mail (19) e alerta de atraso (20) seguem **fora do escopo**. **Pendência que continua aberta e precisa de resposta do cliente:** "uma remessa não mistura donos" foi **deduzida**, não pedida. Pendência menor da 8c: o **rendimento** é calculado, exibido e **jogado fora** — não há coluna que o guarde |
 | 15 | [Retalhos, sobras e sucatas](15-retalhos-sucatas/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 9 entregue (2026-08-16, `b727c0a..4ba94e2`)** — retalho é material normal no motor (`ENTRADA_RETALHO` dedicado, sem custo) + anexo dimensional na tabela de sobras reformada (auditada, Zod, `POST /sobras` avulso aposentado); `gerarRetalho` é evento composto com guarda de dono e compensação; `SUCATA` saiu do formulário genérico e virou processo com **dupla aprovação segregada** (duas ações novas de perfil, baixa pelo motor na segunda assinatura, claim anti-corrida), destino VENDIDA/DESCARTADA com comprovante e relatório `sucata-financeiro` lendo o livro; tela `/almoxarifado/sobras` (Retalhos + Sucateamentos), etiqueta de retalho com QR e hint de retalho na SAÍDA. Os 4 testes nomeados da spec existem e passam. **Fora do escopo declarado:** e-mail (→ 19). Pendências nomeadas na spec: guarda geral de tipo novo nas fontes únicas, coluna `foto` sem escritor, lote do material-retalho, `valor_venda` em DESCARTADA |
-| 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | ❌ | 🟡 | 🟡 sem calibração — **é a Etapa 9b, a próxima da ordem** (decisão registrada no design da Etapa 9: subsistema independente, ferramenta é patrimônio emprestável, não estoque). A spec 16 foi corrigida em `b727c0a` (Task 0 da Etapa 9): afirmava "teste de serviço existe" — falso — e citava linhas mortas de `schema.js`/`extended.js`, atualizadas |
+| 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | 🟡 | ✅ | 🟢 **Etapa 9b entregue (2026-08-22, `d644827..b8e6f60`)** — ferramenta virou patrimônio emprestável completo: máquina de estados explícita (`toolStateMachine.js`) com toda transição por **claim** (`UPDATE ... WHERE status IN (...)`, sem a janela de corrida SELECT-depois-UPDATE que existia antes), calibração com vencimento **lida da última calibração** (sem coluna-cache) barrando o empréstimo, avaria/perda com foto encerrando o empréstimo aberto no mesmo ato (RN-05), bloqueio/manutenção/reencontro com justificativa auditada, ação de perfil própria `gerenciar_ferramentas` (parou de usar o gate genérico `movimentar`), Zod em todas as rotas (nenhuma tinha antes), auditoria em toda escrita (emprestar/devolver não auditavam antes), e tela `/almoxarifado/ferramentas` com três visões (Ferramentas, Empréstimos, Calibrações). Revisão final de branch achou 4 Important cross-task que os gates por-task não pegam (busca/filtro do contrato ignorados pelo backend; corrida devolver↔ocorrência podendo corromper o status; PUT/409 sem teste; badge de vencimento do front discordando do servidor) — todos corrigidos e re-revisados limpos. **Fora do escopo declarado, com pendência aberta:** job de lembrete de devolução sem canal de notificação (função pura pronta, aguarda feature 20), UI de edição de ferramenta (backend testado, só falta o formulário — achado da revisão final), integração com inspeção (feature 09) |
 | 17 | [Inventário e contagem cíclica](17-inventario-contagem/README.md) | 🟡 | 🟡 | ❌ | 🟡 só inventário simples |
 | 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟡 | 🟡 | 🟡 | 🟡 alertas ok |
 | 19 | [E-mails e notificações](19-emails-notificacoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 sem fila/cobertura total |
@@ -394,7 +414,7 @@ o tipo novo em `TIPOS_DEDICADOS` para não cair na rota genérica de movimentaç
   (deduzida, sem resposta do cliente); `AJUSTE` × retenção, agora com **quatro** colunas; categorias
   hardcoded do front; e o **rendimento** que é calculado, mostrado e jogado fora.
 
-### Etapa 9 — ✅ ENTREGUE em 2026-08-16 → `15-retalhos-sucatas` · Etapa 9b — Ferramentas e calibração (**próxima da ordem**) → `16-ferramentas-calibracao`
+### Etapa 9 — ✅ ENTREGUE em 2026-08-16 → `15-retalhos-sucatas` · Etapa 9b — ✅ ENTREGUE em 2026-08-22 → `16-ferramentas-calibracao`
 
 **A Etapa 9 foi DIVIDIDA no design (2026-08-15)**, mesmo precedente de 6/6b/6c e 8/8b/8c: retalho
 é **estoque** (precisa do motor), ferramenta é **patrimônio emprestável** (precisa de cadastro,
@@ -421,13 +441,34 @@ pendências: [spec 15](15-retalhos-sucatas/README.md) e o
 | 9 | sucateamento na tela + etiqueta de retalho com QR | `b8e8f1a` · fix `4ba94e2` |
 | 10 | documentação e verificação final | commits de fechamento |
 
-**Etapa 9b = feature 16 — ainda sem design nem plano.** O que a spec 16 pede: cadastro de
-ferramentas com empréstimo/devolução (parcialmente existente), calibração com vencimento e
-bloqueio de ferramenta vencida, histórico por ferramenta. Primeira ação de quem pegar:
-`superpowers:brainstorming` sobre a spec 16 — que foi corrigida em `b727c0a` e hoje diz a verdade
-sobre o que existe (nenhum teste de `toolService`; referências de linha atualizadas).
+**Etapa 9b = feature 16 (`d644827..b8e6f60`)** — ferramenta virou patrimônio emprestável completo:
+máquina de estados explícita com claim atômico em toda transição, calibração com vencimento lida
+da última calibração (sem coluna-cache), avaria/perda com foto fechando o empréstimo aberto no
+mesmo ato (RN-05), bloqueio/manutenção/reencontro auditados, ação de perfil própria
+`gerenciar_ferramentas`, Zod e auditoria em toda escrita, tela `/almoxarifado/ferramentas` com
+três visões. Detalhes, decisões (D1–D12) e correções declaradas:
+[spec 16](16-ferramentas-calibracao/README.md), o
+[design da etapa](../../docs/superpowers/specs/2026-08-19-almoxarifado-etapa9b-ferramentas-calibracao-design.md)
+e o [plano](../../docs/superpowers/plans/2026-08-19-almoxarifado-etapa9b-ferramentas-calibracao.md)
+(com a retro de fechamento no final).
 
-### Etapa 10 — Inventário avançado → `17-inventario-contagem`
+| Task | O quê | Hash |
+|---|---|---|
+| Fase 2 | revisão adversarial do plano — 10 achados acatados, 0 ruído | `d644827` |
+| 1 | fundação — tabelas, máquina de estados, ação de perfil | `a62f71a` |
+| 2 | empréstimo com claim atômico, calibração barrando, auditoria, gate próprio | `a3d37dd` · fix `718adc3` |
+| 3 | calibração com certificado e painel de vencimento | `5e01413` · fix `bdd9848` · fix `40490bc` |
+| 7 | tela de ferramentas (galho paralelo, worktree própria) | `96d0879` · fix `0d26c9a` |
+| 4 | bloqueio, manutenção e reencontro com claim por transição | `b383b37` · fix `99e5dc7` |
+| 5 | avaria e perda com foto — ocorrência fecha empréstimo aberto | `0f89434` · fix `d2adfe6` |
+| 6 | empréstimos vencidos — filtro e função pura de lembrete | `f5004df` |
+| — | correções declaradas no design durante a execução | `555779d` |
+| — | merge do galho paralelo do front | `daffb81` |
+| 8 | teste-jornada — calibra, empresta, avaria, conserta, devolve | `d5d949d` |
+| — | revisão final de branch: 4 Important (F1–F4, ver spec 16) | fix `60a452e`/`4278d27`/`86090f0`/`b8e6f60` |
+| 9 | documentação e verificação final | commits de fechamento |
+
+### Etapa 10 — Inventário avançado → `17-inventario-contagem` (**próxima da ordem**)
 Contagem cega, recontagem, tolerância, aprovação de ajuste, acuracidade.
 
 ### Etapa 11 — Reposição e compras → `18-reposicao-estoque-minimo`

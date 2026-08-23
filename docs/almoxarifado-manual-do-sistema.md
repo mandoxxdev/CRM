@@ -31,9 +31,10 @@ explicada logo abaixo dela.
 18. [Transformação no terceiro](#18-transformação-no-terceiro)
 19. [Sobras e retalhos](#19-sobras-e-retalhos)
 20. [Sucateamento](#20-sucateamento)
-21. [Como o sistema calcula](#21-como-o-sistema-calcula)
-22. [Cuidados na operação](#22-cuidados-na-operação)
-23. [Onde pedir ajuda e o que este documento não cobre](#23-onde-pedir-ajuda-e-o-que-este-documento-não-cobre)
+21. [Ferramentas e calibração](#21-ferramentas-e-calibração)
+22. [Como o sistema calcula](#22-como-o-sistema-calcula)
+23. [Cuidados na operação](#23-cuidados-na-operação)
+24. [Onde pedir ajuda e o que este documento não cobre](#24-onde-pedir-ajuda-e-o-que-este-documento-não-cobre)
 
 ---
 
@@ -543,6 +544,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Criar material | ● | ● | – | – | ● | – | – |
 | Editar material | ● | ● | – | – | ● | – | – |
 | Movimentar estoque | ● | ● | – | – | – | – | – |
+| Gerenciar ferramentas (emprestar, calibrar, bloquear...) | ● | ● | – | – | – | – | – |
 | Aprovar sucateamento (perna do almoxarifado) | ● | ● | – | – | – | – | – |
 | Aprovar sucateamento (perna da gestão) | ● | – | – | – | – | ● | – |
 | Ajustar estoque | ● | – | – | – | – | ● | – |
@@ -558,8 +560,12 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Inventariar | ● | ● | – | – | – | ● | – |
 | Configurar o módulo | ● | – | – | – | – | – | – |
 
-Quatro leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
+Cinco leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 
+- **Gerenciar ferramentas é independente de movimentar estoque**, mesmo com os mesmos dois perfis
+  hoje: ferramenta é patrimônio emprestável, não estoque (seção 21), e a permissão existe separada
+  de propósito — dá para autorizar um perfil só para ferramentas, sem abrir movimentação de
+  material, se um dia isso for pedido.
 - **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor ajusta o saldo da GMP; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente. O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Hoje pertence ao Administrador e ao Almoxarife.
@@ -2040,11 +2046,126 @@ destino e a reversão automática de assinatura quando a baixa é recusada.
 
 ---
 
-## 21. Como o sistema calcula
+## 21. Ferramentas e calibração
+
+### 21.1 O que é uma ferramenta, e por que ela não é estoque
+
+Ferramenta é **patrimônio emprestável** — uma furadeira, um paquímetro, um torquímetro —, não um
+item que se consome. Ela tem uma tela própria (**Almoxarifado → Ferramentas**), separada da tela
+de materiais, e não passa pelo motor de movimentações: emprestar e devolver uma ferramenta não
+altera saldo de nenhum material, não gera entrada nem saída no livro de movimentações. A conexão
+com um material do catálogo (campo opcional) é só referência — não é controle de estoque.
+
+Cada ferramenta tem um destes status: **Disponível**, **Emprestada**, **Bloqueada**, **Em
+manutenção**, **Avariada** ou **Perdida**. Só existe um caminho entre dois status por vez — por
+exemplo, uma ferramenta emprestada não pode ser bloqueada diretamente; ela precisa voltar a
+disponível primeiro (com a devolução).
+
+### 21.2 O ciclo de empréstimo
+
+Emprestar registra o colaborador (nome obrigatório; setor e data prevista de devolução são
+opcionais) e muda a ferramenta para **Emprestada**. Essa mudança é **atômica**: se duas pessoas
+tentarem emprestar a mesma ferramenta ao mesmo instante, exatamente uma consegue — a outra recebe
+a recusa abaixo, nunca as duas ficam "donas" da mesma ferramenta.
+
+Uma ferramenta que não está **Disponível** recusa o empréstimo:
+> `Ferramenta não está disponível (status atual: <status>)`
+
+Devolver fecha o empréstimo (fica registrada a data real de devolução) e a ferramenta volta a
+**Disponível**, liberada para um novo empréstimo. Tentar devolver um empréstimo que já foi
+fechado (ou que não existe) recusa com:
+> `Empréstimo não encontrado`
+
+A tela de Empréstimos destaca os que já passaram da data prevista de devolução — isso é um
+**aviso visual**, não um bloqueio: a ferramenta continua emprestada normalmente até alguém
+devolvê-la ou registrar uma ocorrência sobre ela.
+
+### 21.3 Calibração — o que trava o empréstimo
+
+Nem toda ferramenta precisa de calibração (só instrumentos de medição — o cadastro tem o campo
+**"Exige calibração"**). Para as que exigem, o sistema guarda um **histórico** de calibrações
+(data da calibração, data de validade, certificado anexo opcional, observações) — não existe um
+campo único "última calibração" na ferramenta: a validade é sempre lida do **registro mais
+recente**.
+
+Uma ferramenta que exige calibração só empresta se a calibração mais recente ainda estiver
+**dentro da validade**. Sem nenhum registro, ou com a validade já passada, o empréstimo é
+recusado:
+> `Ferramenta com calibração vencida ou sem calibração registrada`
+
+Registrar uma nova calibração com validade futura destrava o empréstimo imediatamente — não
+precisa de nenhuma outra ação. A data de validade tem de ser **posterior** à data da calibração;
+se não for, o registro é recusado:
+> `Data de validade deve ser posterior à data de calibração`
+
+O **painel de calibrações** (aba Calibrações) lista as ferramentas que exigem calibração,
+separadas em **vencidas** e **a vencer** (dentro do prazo configurável, 30 dias por padrão). Uma
+ferramenta que nunca foi calibrada aparece na lista de vencidas.
+
+### 21.4 Avaria e perda
+
+Registrar uma ocorrência de **Avaria** ou **Perda** muda a ferramenta para o status
+correspondente. Se a ferramenta estava **emprestada** no momento, o empréstimo em aberto é
+**fechado automaticamente pela própria ocorrência** — não é preciso (nem é possível) devolver
+antes: uma ferramenta perdida não tem como ser devolvida fisicamente. Cada ocorrência aceita uma
+foto opcional e o nome do responsável.
+
+Um tipo de ocorrência fora de Avaria/Perda é recusado:
+> `Tipo de ocorrência inválido`
+
+Registrar ocorrência só é permitido com a ferramenta **Disponível** ou **Emprestada** — sobre uma
+ferramenta já Bloqueada ou Em manutenção, a recusa é:
+> `Ferramenta não pode registrar ocorrência (status atual: <status>)`
+
+### 21.5 Bloqueio, manutenção e reencontro
+
+**Bloquear** tira a ferramenta de circulação por decisão administrativa (não é defeito — é, por
+exemplo, "aguardando inventário" ou "reservada para um evento"). Exige uma justificativa de pelo
+menos 5 caracteres; sem isso:
+> `Justificativa deve ter pelo menos 5 caracteres`
+
+Só ferramenta **Disponível** bloqueia:
+> `Ferramenta não pode ser bloqueada (status atual: <status>)`
+
+**Desbloquear** (também com justificativa) devolve a ferramenta a Disponível; tentar desbloquear
+uma que não está bloqueada recusa com a mensagem simétrica
+(`Ferramenta não está bloqueada (status atual: <status>)`).
+
+**Manutenção**: iniciar tira a ferramenta de circulação (status **Em manutenção**) — aceita
+ferramenta **Disponível** ou **Avariada** (é o caminho de conserto de uma avaria); ferramenta
+**emprestada** não entra em manutenção direto — devolva primeiro:
+> `Ferramenta não pode entrar em manutenção (status atual: EMPRESTADA)`
+
+Concluir a manutenção registra a data de fim e devolve a ferramenta a Disponível. Concluir uma
+manutenção que já foi concluída (ou que não existe) recusa com `Manutenção não encontrada`.
+
+**Reencontrar** só vale para ferramenta **Perdida** — devolve a Disponível, com justificativa
+obrigatória. Tentar reencontrar uma ferramenta que não está perdida:
+> `Ferramenta não está perdida (status atual: <status>)`
+
+### 21.6 Cadastro e perfis
+
+Cadastrar uma ferramenta exige código de patrimônio e nome; os demais campos (tipo, setor
+responsável, material de referência, número de série, localização, se exige calibração,
+observações) são opcionais. O código de patrimônio é único — cadastrar um repetido recusa:
+> `Código de patrimônio já cadastrado`
+
+**Toda ação de escrita** (cadastrar, emprestar, devolver, bloquear, desbloquear, manutenção,
+ocorrência, calibração, reencontrar) exige a permissão **Ferramentas** —
+Administrador ou Almoxarife (ver 5.5). Essa permissão é **independente** da permissão de
+movimentar estoque: é possível autorizar alguém a mexer em ferramentas sem autorizar a mexer no
+estoque de materiais, e vice-versa. Ler a lista de ferramentas e o histórico é livre para
+qualquer usuário autenticado, como todo GET do módulo.
+
+Toda ação de escrita fica registrada na auditoria do módulo, com o usuário responsável.
+
+---
+
+## 22. Como o sistema calcula
 
 Esta seção é a que permite explicar os números do sistema a terceiros.
 
-### 21.1 Saldo disponível
+### 22.1 Saldo disponível
 
 O material tem **uma** quantidade física e **quatro** retenções. O saldo disponível é a subtração das quatro (a tabela das parcelas está em 6.1):
 
@@ -2058,7 +2179,7 @@ Consequências:
 - **O consumo contra uma reserva não é bloqueado pela própria reserva.** Quem reservou pode consumir: na hora do consumo, a parte reservada que está sendo usada é somada de volta antes da comparação (9.4).
 - **Valor do estoque usa a quantidade física, não o disponível** — material reservado, bloqueado ou em inspeção continua sendo patrimônio e continua valendo dinheiro.
 
-### 21.2 Custo médio ponderado
+### 22.2 Custo médio ponderado
 
 **A fórmula, aplicada a cada entrada com custo informado:**
 
@@ -2112,7 +2233,7 @@ Saída não muda custo médio porque a média ponderada é uma média **de aquis
 
 > **Nota importante para quem apresenta o sistema:** o custo médio é alimentado **daqui para frente**. Materiais que nunca receberam uma entrada com valor mostram o custo unitário do cadastro, que é a informação disponível — não há custo médio inventado.
 
-### 21.3 Rateio de custo na transformação
+### 22.3 Rateio de custo na transformação
 
 **A regra:** o valor da chapa consumida é distribuído **por quantidade, entre as peças**; a **sobra entra a custo zero**; o custo do serviço do terceiro **soma** quando informado.
 
@@ -2165,7 +2286,7 @@ O sistema calcula essa soma e a compara com o valor total a cada transformação
 
 E o rateio roda **antes** de qualquer efeito: classificação inválida ou quantidade zerada recusam a transformação inteira antes de a chapa ser baixada — *"Quantidade do resultado deve ser maior que zero (material 88: 0)"*, *"Classificacao invalida no resultado do material 88: X. Validas: PECA, SOBRA"*.
 
-### 21.4 Rendimento
+### 22.4 Rendimento
 
 **A fórmula:**
 
@@ -2189,7 +2310,7 @@ Note que **peças e sobras entram os dois** no peso que voltou: o rendimento med
 
 ---
 
-## 22. Cuidados na operação
+## 23. Cuidados na operação
 
 Quatro pontos que valem para o dia a dia e que não se deduzem das telas. Nenhum deles impede o trabalho — todos dizem **por qual caminho** fazer.
 
@@ -2212,7 +2333,7 @@ Com as retenções resolvidas, o ajuste do total é seguro e o disponível volta
 
 ---
 
-## 23. Onde pedir ajuda e o que este documento não cobre
+## 24. Onde pedir ajuda e o que este documento não cobre
 
 **Quando o sistema recusa alguma coisa, leia a mensagem inteira antes de procurar ajuda.** Este módulo foi construído para que a recusa diga três coisas: o que faltou, com que números, e **por qual caminho** resolver — qual tela abrir, qual perfil pedir, qual documento informar. Boa parte das dúvidas se resolve na própria frase.
 
