@@ -594,6 +594,20 @@ test('tolerancia_percentual=0 na criacao NAO cai no default 2 (achado da Fase 2,
   REAL de itens aplicados (0 quando `aplicar_ajustes` é falso). Sem regressão (nenhum teste
   dependia do valor antigo), registrado por não estar listado como mudança no design.
 
+**Review (opus, diff 4e0fabb..a30c87e): Needs fixes — 1 Important.** Todas as mensagens literais
+(RN-03/05/06b/07×2) bateram caractere a caractere contra o contrato congelado — checado
+explicitamente porque o front (Task 3) casa contra elas em paralelo. O achado real: `PUT
+/concluir` não tinha gate de status — concluir de novo uma conferência já `CONCLUIDO`/`CANCELADO`
+fabricava uma **segunda** movimentação `AJUSTE_INVENTARIO` auditada por item (e uma segunda
+auditoria de material de cliente, quando aplicável), ou ressuscitava uma cancelada. **Fix
+aplicado direto pelo controlador** (2 linhas, reusa a mensagem já congelada de RN-03 — `PUT /item`
+já usa a mesma frase), com sabotagem provada: 2 testes novos ficam vermelhos sem o gate
+(`false && conf.status !== 'ABERTO'`), verdes com ele restaurado — commit `d6ea764`. 6 minors
+deferidos (fórmula de tolerância duplicada entre GET e concluir, `nomeDoCliente` duplicado
+inline, N+1 na leitura de custo, `totalItens` ausente na resposta vazia, sem guard null em
+`proprietario_cliente_id`, contradição interna do design sobre o formato de RN-05 — corrigida no
+design junto com a semântica de `impactoFinanceiro` como soma **absoluta**, não líquida).
+
 ---
 
 ### Task 3: Front — `ConferenciaEstoque.js` contra o contrato congelado (GALHO PARALELO — worktree própria)
@@ -626,14 +640,22 @@ test('tolerancia_percentual=0 na criacao NAO cai no default 2 (achado da Fase 2,
 - Resposta de sucesso do concluir: mostrar `impactoFinanceiro` (ex.: "Ajustes aplicados: 3 —
   impacto financeiro: R$ 1.234,56").
 
-- [ ] **Step 1: Testes RTL falhando** (precedente: os testes já existentes do arquivo, mesmo
-  padrão de mock de `api.get`/`api.post`).
-- [ ] **Step 2: Ver falhar. Step 3: Implementar. Step 4:**
-  `CI=true npx react-scripts test --watchAll=false` verde + `CI=true npx react-scripts build`
-  sem warning.
-- [ ] **Step 5: SABOTAGEM:** remover o tratamento da mensagem de recusa de tolerância (deixar
-  cair no catch genérico) → o teste que verifica a lista completa no toast TEM de cair. Restaurar.
-- [ ] **Step 6: Commit** `Almoxarifado Etapa 10 Task 3: tela de conferencia — contagem cega, tolerancia e impacto financeiro do ajuste`.
+- [x] **Step 1: Testes RTL falhando** — 11/11 (arquivo de teste novo, componente não tinha
+  nenhum teste antes desta task).
+- [x] **Step 2: Ver falhar. Step 3: Implementar. Step 4:**
+  `CI=true npx react-scripts test --watchAll=false` verde (368/368 na suíte completa) +
+  `CI=true npx react-scripts build` sem warning.
+- [x] **Step 5: SABOTAGEM:** catch genérico no lugar do tratamento por status (400/403) → 3 dos
+  11 testes caíram (exatamente os de mensagem de recusa: RN-05, RN-07/400, RN-07/403). Restaurado.
+- [x] **Step 6: Commit** — `4f7ed6f` (branch `etapa10-task3-front`) —
+  `Almoxarifado Etapa 10 Task 3: tela de conferencia — contagem cega, tolerancia e impacto financeiro do ajuste`.
+  **Divergiu do plano (decisão da implementação, documentada):** o botão "Concluir" usava
+  `window.confirm` puro; como o brief pede um campo de justificativa "no modal de concluir" e não
+  havia modal nenhum, virou um modal de verdade (mesmo padrão visual do modal de criar) — mudança
+  de UX sem teste anterior cobrindo o `window.confirm`, sem regressão. O placeholder de
+  "Tolerância (%)" mostra o default hard-coded do servidor (`2`), não uma leitura ao vivo da
+  config (não existe endpoint de leitura exposto ao client, fora do escopo desta task) —
+  registrado como aproximação honesta, não descoberta silenciosa.
 
 ---
 
