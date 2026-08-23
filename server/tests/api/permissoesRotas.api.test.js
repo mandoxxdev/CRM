@@ -82,11 +82,18 @@ async function criarConferencia(db, { materialId, quantidadeSistema = 100, quant
     [`INV-PERM-${seqConf}`, status, ADMIN.id]);
   const confId = r.lastID;
   const divergencia = quantidadeContada === null ? null : quantidadeContada - quantidadeSistema;
+  // Etapa 10 (RN-04/RN-05): os testes deste arquivo medem PERFIL (quem pode concluir/aplicar
+  // ajuste), não a regra de tolerância — mas a rota agora valida RN-05 de verdade, e a
+  // divergência de teste que este helper grava (100 -> 5, 95%) sem tolerância configurada
+  // estourava qualquer limite. `recontado = 1` reaproveita a mesma saída que RN-04 dá ao
+  // operador de verdade (a segunda contagem libera qualquer que seja o valor) sem mudar a
+  // divergência que os testes de PERMISSÃO realmente verificam (ex.: saldo virando 5 depois do
+  // ajuste do GESTOR).
   const ri = await dbRun(db,
     `INSERT INTO itens_conferencia_almoxarifado
-     (conferencia_id, material_id, quantidade_sistema, quantidade_contada, divergencia)
-     VALUES (?,?,?,?,?)`,
-    [confId, materialId, quantidadeSistema, quantidadeContada, divergencia]);
+     (conferencia_id, material_id, quantidade_sistema, quantidade_contada, divergencia, recontado)
+     VALUES (?,?,?,?,?,?)`,
+    [confId, materialId, quantidadeSistema, quantidadeContada, divergencia, quantidadeContada === null ? 0 : 1]);
   return { id: confId, itemId: ri.lastID };
 }
 
@@ -237,8 +244,11 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
     const { id: confId } = await criarConferencia(db, { materialId: matId, quantidadeSistema: 100, quantidadeContada: 5 });
 
     setUser(GESTOR);
+    // Etapa 10 (RN-06b): aplicar_ajustes agora exige justificativa_ajuste (min 5 caracteres) —
+    // sem isto o motor recusaria com 400 antes de tocar no saldo, e este teste NÃO é sobre essa
+    // regra (tem arquivo próprio: conferenciaTolerancia.api.test.js).
     const res = await request(app).put(`/api/almoxarifado/conferencias/${confId}/concluir`)
-      .send({ aplicar_ajustes: true });
+      .send({ aplicar_ajustes: true, justificativa_ajuste: 'Ajuste homologado pelo gestor' });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.ajustesAplicados, 1, JSON.stringify(res.body));
     assert.strictEqual(Number(await saldoDe(db, matId)), 5, 'GESTOR deveria conseguir aplicar o ajuste');

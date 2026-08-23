@@ -11,7 +11,7 @@ const alertService = require('../services/almoxarifado/alertService');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
-const { valorEstoqueSql } = require('../services/almoxarifado/custoSql');
+const { valorEstoqueSql, custoUnitarioSql } = require('../services/almoxarifado/custoSql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
@@ -38,6 +38,17 @@ function denyUnlessAlmoxAdmin(req, res) {
     return true;
   }
   return false;
+}
+
+// Etapa 10 (RN-01): tolerancia de inventario, EFETIVA. `configuracoes_almoxarifado.valor` e
+// TEXT — getConfig devolve string ou undefined, nunca numero — e `0` e um valor VALIDO de
+// tolerancia, diferente de "ausente". `parseFloat(x) || 2` devolveria 2 para '0' (achado da
+// Fase 2: `parseFloat('0') || 2` === 2, silenciosamente) — por isso Number.isFinite, nao ||.
+// Uma unica funcao para os tres pontos que precisam da mesma conta (criar, listar e concluir)
+// nao divergirem entre si.
+function toleranciaEfetiva(valor) {
+  const n = parseFloat(valor);
+  return Number.isFinite(n) ? n : 2;
 }
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
@@ -688,12 +699,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // GET /api/almoxarifado/conferencias/:id — detalhe com itens
-  app.get('/api/almoxarifado/conferencias/:id',(req, res) => {
-    db.get(`SELECT * FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id], (err, conf) => {
-      if (err) return res.status(500).json({ error: err.message });
+  app.get('/api/almoxarifado/conferencias/:id', async (req, res) => {
+    try {
+      const conf = await dbGet(db, `SELECT * FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
       if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
 
-      db.all(`SELECT ic.*, ma.nome as material_nome, ma.codigo as material_codigo,
+      const itensRaw = await dbAll(db, `SELECT ic.*, ma.nome as material_nome, ma.codigo as material_codigo,
                      ma.unidade, ma.localizacao, ma.foto,
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
               FROM itens_conferencia_almoxarifado ic
@@ -701,99 +712,137 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               LEFT JOIN localizacoes_almoxarifado l ON ma.localizacao_padrao_id = l.id
               LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
               WHERE ic.conferencia_id = ?
-              ORDER BY ma.nome`,
-        [req.params.id], (err2, itens) => {
-          if (err2) return res.status(500).json({ error: err2.message });
-          res.json({ ...conf, itens: enrichMaterialRows(itens) });
-        });
-    });
+              ORDER BY ma.nome`, [req.params.id]);
+
+      const tolerancia = toleranciaEfetiva(conf.tolerancia_percentual);
+
+      // RN-02/RN-05: `recontagem_necessaria` e SEMPRE calculada aqui (nunca no front, que nao
+      // tem acesso a `quantidade_sistema` em modo cego) e SEMPRE entra no item — inclusive
+      // quando o campo vai ser removido logo abaixo, porque quem so conta precisa saber que
+      // precisa recontar mesmo sem ver o numero da divergencia.
+      let itens = enrichMaterialRows(itensRaw).map((item) => {
+        const recontagem_necessaria = item.quantidade_contada != null && !item.recontado
+          && (Math.abs(item.divergencia) / Math.max(item.quantidade_sistema, 1)) * 100 > tolerancia;
+        return { ...item, recontagem_necessaria };
+      });
+
+      // RN-02: contagem cega — enquanto ABERTO e para quem NAO homologa ajuste
+      // (`ajustar_estoque`), o esperado e a divergencia ficam escondidos. Concluida ou
+      // cancelada os dois voltam para todo mundo: e o registro historico.
+      if (conf.modo_cego && conf.status === 'ABERTO' && !can(req.user, 'ajustar_estoque')) {
+        itens = itens.map(({ quantidade_sistema, divergencia, ...resto }) => resto);
+      }
+
+      res.json({ ...conf, itens });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // POST /api/almoxarifado/conferencias — criar nova conferência
   // Todo o fluxo de inventário exige `inventario` ([ADMINISTRADOR, ALMOXARIFE, GESTOR]) —
   // o gate global do módulo só checa ACESSO, não perfil.
-  app.post('/api/almoxarifado/conferencias', requirePermission('inventario'), (req, res) => {
-    const { observacoes, categoria } = req.body;
+  app.post('/api/almoxarifado/conferencias', requirePermission('inventario'), async (req, res) => {
+    try {
+      const { observacoes, categoria, modo_cego, tolerancia_percentual } = req.body;
 
-    // Gerar número único
-    const numero = `INV-${Date.now().toString().slice(-8)}`;
+      // Gerar número único
+      const numero = `INV-${Date.now().toString().slice(-8)}`;
+      const modoCegoValor = modo_cego ? 1 : 0;
+      // RN-01: `tolerancia_percentual` no body manda quando informado (0 incluso — ver
+      // toleranciaEfetiva); ausente, cai para a config global, e sem config nenhuma, para 2.
+      const toleranciaOrigem = tolerancia_percentual !== undefined && tolerancia_percentual !== null && tolerancia_percentual !== ''
+        ? tolerancia_percentual
+        : await stockService.getConfig(db, 'tolerancia_inventario_percentual');
+      const toleranciaValor = toleranciaEfetiva(toleranciaOrigem);
 
-    db.run(`INSERT INTO conferencias_almoxarifado (numero, status, responsavel_id, responsavel_nome, observacoes)
-            VALUES (?, 'ABERTO', ?, ?, ?)`,
-      [numero, req.user.id, req.user.nome || req.user.email, observacoes || null],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        const confId = this.lastID;
+      const ins = await dbRun(db, `INSERT INTO conferencias_almoxarifado
+              (numero, status, responsavel_id, responsavel_nome, observacoes, modo_cego, tolerancia_percentual)
+              VALUES (?, 'ABERTO', ?, ?, ?, ?, ?)`,
+        [numero, req.user.id, req.user.nome || req.user.email, observacoes || null, modoCegoValor, toleranciaValor]);
+      const confId = ins.lastID;
 
-        // Inserir todos os materiais ativos.
-        //
-        // Etapa 8b (decisao 2 do design): o esperado desconta `quantidade_em_terceiros`, e SO ela.
-        // A conferencia e por MATERIAL, nao por localizacao — entao material que esta no
-        // galvanizador entraria no esperado e toda contagem acusaria uma diferenca fantasma, com o
-        // operador "corrigindo" o saldo para menos de material que existe e vai voltar.
-        //
-        // E SO ELA de proposito. quantidade_reservada, quantidade_bloqueada e quantidade_em_inspecao
-        // continuam somando porque aquele material ESTA na prateleira e TEM de ser contado:
-        // "bloqueado" e um estado administrativo, nao uma ausencia fisica. `quantidade_em_terceiros`
-        // e a unica das quatro que significa "nao esta no predio". Quem "uniformizar as quatro"
-        // aqui passa a esconder do inventario material que esta no galpao.
-        //
-        // NAO usar `disponivelSql` aqui: parece a mesma conta e nao e — o disponivel subtrai as
-        // quatro retencoes, a contagem so pode subtrair uma.
-        // Coberto nos dois sentidos por tests/api/conferenciaEmTerceiros.api.test.js.
-        let sql = `SELECT id, (quantidade_atual - COALESCE(quantidade_em_terceiros, 0)) AS quantidade_sistema
-                   FROM materiais_almoxarifado WHERE ativo = 1`;
-        const params = [];
-        if (categoria) { sql += ` AND categoria = ?`; params.push(categoria); }
-        sql += ` ORDER BY nome`;
+      // Inserir todos os materiais ativos.
+      //
+      // Etapa 8b (decisao 2 do design): o esperado desconta `quantidade_em_terceiros`, e SO ela.
+      // A conferencia e por MATERIAL, nao por localizacao — entao material que esta no
+      // galvanizador entraria no esperado e toda contagem acusaria uma diferenca fantasma, com o
+      // operador "corrigindo" o saldo para menos de material que existe e vai voltar.
+      //
+      // E SO ELA de proposito. quantidade_reservada, quantidade_bloqueada e quantidade_em_inspecao
+      // continuam somando porque aquele material ESTA na prateleira e TEM de ser contado:
+      // "bloqueado" e um estado administrativo, nao uma ausencia fisica. `quantidade_em_terceiros`
+      // e a unica das quatro que significa "nao esta no predio". Quem "uniformizar as quatro"
+      // aqui passa a esconder do inventario material que esta no galpao.
+      //
+      // NAO usar `disponivelSql` aqui: parece a mesma conta e nao e — o disponivel subtrai as
+      // quatro retencoes, a contagem so pode subtrair uma.
+      // Coberto nos dois sentidos por tests/api/conferenciaEmTerceiros.api.test.js.
+      let sql = `SELECT id, (quantidade_atual - COALESCE(quantidade_em_terceiros, 0)) AS quantidade_sistema
+                 FROM materiais_almoxarifado WHERE ativo = 1`;
+      const params = [];
+      if (categoria) { sql += ` AND categoria = ?`; params.push(categoria); }
+      sql += ` ORDER BY nome`;
 
-        db.all(sql, params, (err2, materiais) => {
-          if (err2) return res.status(500).json({ error: err2.message });
+      const materiais = await dbAll(db, sql, params);
 
-          if (materiais.length === 0) {
-            return res.status(201).json({ id: confId, numero, status: 'ABERTO', itens: [] });
-          }
-
-          const inserts = materiais.map(m =>
-            new Promise((resolve, reject) => {
-              db.run(`INSERT INTO itens_conferencia_almoxarifado (conferencia_id, material_id, quantidade_sistema)
-                      VALUES (?, ?, ?)`,
-                [confId, m.id, m.quantidade_sistema],
-                (e) => e ? reject(e) : resolve());
-            })
-          );
-
-          Promise.all(inserts).then(() => {
-            res.status(201).json({ id: confId, numero, status: 'ABERTO', totalItens: materiais.length });
-          }).catch(e => res.status(500).json({ error: e.message }));
+      if (materiais.length === 0) {
+        return res.status(201).json({
+          id: confId, numero, status: 'ABERTO',
+          modo_cego: modoCegoValor, tolerancia_percentual: toleranciaValor, itens: [],
         });
       }
-    );
+
+      await Promise.all(materiais.map((m) => dbRun(db,
+        `INSERT INTO itens_conferencia_almoxarifado (conferencia_id, material_id, quantidade_sistema)
+         VALUES (?, ?, ?)`, [confId, m.id, m.quantidade_sistema])));
+
+      res.status(201).json({
+        id: confId, numero, status: 'ABERTO',
+        modo_cego: modoCegoValor, tolerancia_percentual: toleranciaValor, totalItens: materiais.length,
+      });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // PUT /api/almoxarifado/conferencias/:id/item — registrar contagem de um item
-  app.put('/api/almoxarifado/conferencias/:id/item/:itemId', requirePermission('inventario'), (req, res) => {
-    const { quantidade_contada, observacoes } = req.body;
+  app.put('/api/almoxarifado/conferencias/:id/item/:itemId', requirePermission('inventario'), async (req, res) => {
+    try {
+      const { quantidade_contada, observacoes } = req.body;
 
-    db.get(`SELECT ic.*, ma.quantidade_atual
-            FROM itens_conferencia_almoxarifado ic
-            JOIN materiais_almoxarifado ma ON ic.material_id = ma.id
-            WHERE ic.id = ? AND ic.conferencia_id = ?`,
-      [req.params.itemId, req.params.id], (err, item) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!item) return res.status(404).json({ error: 'Item não encontrado' });
+      // RN-03/D9: fora de ABERTO a rota nunca checou status nenhum — item de conferencia
+      // CONCLUIDO/CANCELADO aceitava edicao, contradizendo o proprio teste que a spec 17 sempre
+      // pediu ("conferencia concluida nao pode ser editada"). Nao e mudanca de comportamento
+      // pedida por ninguem: e o comportamento que a spec sempre presumiu e o codigo nunca teve.
+      const conf = await dbGet(db, `SELECT status FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
+      if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
+      if (conf.status !== 'ABERTO') {
+        return res.status(400).json({ error: `Conferência não está aberta (status atual: ${conf.status})` });
+      }
 
-        const divergencia = parseFloat(quantidade_contada) - item.quantidade_sistema;
+      const item = await dbGet(db, `SELECT ic.*, ma.quantidade_atual
+              FROM itens_conferencia_almoxarifado ic
+              JOIN materiais_almoxarifado ma ON ic.material_id = ma.id
+              WHERE ic.id = ? AND ic.conferencia_id = ?`, [req.params.itemId, req.params.id]);
+      if (!item) return res.status(404).json({ error: 'Item não encontrado' });
 
-        db.run(`UPDATE itens_conferencia_almoxarifado
-                SET quantidade_contada = ?, divergencia = ?, observacoes = ?
-                WHERE id = ?`,
-          [quantidade_contada, divergencia, observacoes || null, req.params.itemId],
-          (err2) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            res.json({ success: true, divergencia });
-          });
-      });
+      const divergencia = parseFloat(quantidade_contada) - item.quantidade_sistema;
+      // RN-04: a SEGUNDA vez que este item recebe contagem (isto e: `item.quantidade_contada`,
+      // lido ANTES deste UPDATE, ja nao era nulo) conta como recontagem — marca `recontado`
+      // sozinha, sem rota nova. A resposta ecoa o mesmo booleano para o front nao ter de
+      // deduzir a partir do valor antigo, que ele nem tem em maos.
+      const ehRecontagem = item.quantidade_contada !== null;
+
+      await dbRun(db, `UPDATE itens_conferencia_almoxarifado
+              SET quantidade_contada = ?, divergencia = ?, observacoes = ?${ehRecontagem ? ', recontado = 1' : ''}
+              WHERE id = ?`,
+        [quantidade_contada, divergencia, observacoes || null, req.params.itemId]);
+
+      res.json({ success: true, divergencia, recontagem: ehRecontagem });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // PUT /api/almoxarifado/conferencias/:id/concluir — concluir e aplicar ajustes
@@ -802,15 +851,23 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   //  - concluir a conferência (fechar a contagem) => `inventario`, no middleware;
   //  - `aplicar_ajustes: true` => além disso `ajustar_estoque`, checado no handler porque
   //    requirePermission é middleware e não vê a semântica do body.
-  // Com aplicar_ajustes o handler faz `UPDATE materiais_almoxarifado SET
-  // quantidade_atual = ?` DIRETO, por fora do stockService (sem validação de saldo,
-  // localização bloqueada ou custo médio) — é o caminho mais destrutivo do arquivo, e
-  // deve exigir o mesmo perfil de qualquer outro ajuste de saldo
-  // (ajustar_estoque: [ADMINISTRADOR, GESTOR]). Efeito prático da segregação: o
-  // ALMOXARIFE conta o inventário, mas quem homologa a divergência no saldo é
-  // ADMINISTRADOR/GESTOR.
-  app.put('/api/almoxarifado/conferencias/:id/concluir', requirePermission('inventario'), (req, res) => {
-    const { aplicar_ajustes } = req.body;
+  //
+  // Etapa 10: até aqui `aplicar_ajustes` fazia `UPDATE materiais_almoxarifado SET
+  // quantidade_atual = ?` DIRETO, seguido de um INSERT manual em movimentacoes_almoxarifado que
+  // nem usava auditoria — o ÚNICO caminho de escrita de saldo do módulo inteiro fora do motor
+  // (design da Etapa 10, itens B1-B3 de novidades-por-etapa.md). Agora cada item divergente vira
+  // uma `stockService.registrarMovimentacao(tipo: 'AJUSTE_INVENTARIO')`, com TODAS as guardas do
+  // motor: retenção (RN-06), dono do material (RN-07/403) e a auditoria de verdade.
+  //
+  // RN-07 é tudo-ou-nada em DUAS passadas: pré-validação (sem efeito colateral nenhum — nem
+  // `registrarMovimentacao` nem `ownerRules.assertAjustePermitido`, que audita como efeito
+  // colateral e duplicaria auditoria se chamada aqui e de novo na aplicação real) e só depois a
+  // aplicação, SEQUENCIAL (não Promise.all — precisa poder abortar sem deixar metade aplicada).
+  // O motor não tem transação composta: se a aplicação real recusar algo que a pré-validação
+  // aprovou, é corrida entre as duas passadas — limitação conhecida, documentada no plano da
+  // Etapa 10, não resolvida aqui.
+  app.put('/api/almoxarifado/conferencias/:id/concluir', requirePermission('inventario'), async (req, res) => {
+    const { aplicar_ajustes, justificativa_ajuste } = req.body;
 
     if (aplicar_ajustes && !can(req.user, 'ajustar_estoque')) {
       return res.status(403).json({
@@ -819,51 +876,127 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       });
     }
 
-    db.get(`SELECT * FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id], (err, conf) => {
-      if (err) return res.status(500).json({ error: err.message });
+    // RN-06b: com aplicar_ajustes, justificativa_ajuste e obrigatoria (min 5 caracteres) — 400
+    // IMEDIATO, antes de buscar a conferencia ou tocar em qualquer item. Mesmo texto do
+    // JustificativaSchema (schemas.js) por consistencia de UX, escrito a mao aqui: o `validate()`
+    // generico embrulharia em "Dados inválidos — justificativa: ...", e a mensagem esta
+    // congelada no design (Task 3 depende do texto exato).
+    if (aplicar_ajustes) {
+      const justificativaValida = typeof justificativa_ajuste === 'string' && justificativa_ajuste.trim().length >= 5;
+      if (!justificativaValida) {
+        return res.status(400).json({ error: 'Justificativa deve ter pelo menos 5 caracteres' });
+      }
+    }
+
+    try {
+      const conf = await dbGet(db, `SELECT * FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
       if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
 
-      db.all(`SELECT * FROM itens_conferencia_almoxarifado WHERE conferencia_id = ? AND quantidade_contada IS NOT NULL`,
-        [req.params.id], (err2, itens) => {
-          if (err2) return res.status(500).json({ error: err2.message });
+      const todosItens = await dbAll(db,
+        `SELECT * FROM itens_conferencia_almoxarifado WHERE conferencia_id = ? AND quantidade_contada IS NOT NULL`,
+        [req.params.id]);
 
-          const ajustes = itens.filter(i => i.divergencia !== 0 && i.quantidade_contada !== null);
+      // RN-05: divergencia acima da tolerancia sem recontagem bloqueia a conclusao INTEIRA — COM
+      // ou SEM aplicar_ajustes (a tolerancia protege o REGISTRO, nao so o ajuste). Recontar
+      // (RN-04) libera a conclusao qualquer que seja o novo valor.
+      const tolerancia = toleranciaEfetiva(conf.tolerancia_percentual);
+      const divergenciaPercentualDe = (item) => Math.abs(item.divergencia) / Math.max(item.quantidade_sistema, 1) * 100;
+      const pendentesRecontagem = todosItens.filter((item) => divergenciaPercentualDe(item) > tolerancia && !item.recontado);
+      if (pendentesRecontagem.length > 0) {
+        const materialIds = pendentesRecontagem.map((i) => i.material_id);
+        const materiaisPend = await dbAll(db,
+          `SELECT id, codigo FROM materiais_almoxarifado WHERE id IN (${materialIds.map(() => '?').join(',')})`,
+          materialIds);
+        const codigoPorId = new Map(materiaisPend.map((m) => [m.id, m.codigo]));
+        const lista = pendentesRecontagem
+          .map((item) => `${codigoPorId.get(item.material_id)} - ${divergenciaPercentualDe(item).toFixed(2)}% (limite ${tolerancia}%)`)
+          .join('; ');
+        return res.status(400).json({ error: `Recontagem necessária antes de concluir: ${lista}` });
+      }
 
-          const aplicarPromises = aplicar_ajustes && ajustes.length > 0
-            ? ajustes.map(item =>
-                new Promise((resolve, reject) => {
-                  db.run(`UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-                    [item.quantidade_contada, item.material_id], (e) => {
-                      if (e) return reject(e);
-                      db.run(`INSERT INTO movimentacoes_almoxarifado
-                        (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, usuario_id, usuario_nome)
-                        VALUES (?, 'AJUSTE', ?, ?, ?, ?, ?, ?)`,
-                        [item.material_id, Math.abs(item.divergencia), item.quantidade_sistema,
-                         item.quantidade_contada, `Ajuste de conferência ${conf.numero}`,
-                         req.user.id, req.user.nome || req.user.email],
-                        (e2) => {
-                          if (e2) return reject(e2);
-                          db.run(`UPDATE itens_conferencia_almoxarifado SET ajustado = 1 WHERE id = ?`,
-                            [item.id], resolve);
-                        });
-                    });
-                })
-              )
-            : [];
+      const ajustes = todosItens.filter((i) => i.divergencia !== 0);
+      let impactoFinanceiro = 0;
+      let ajustesAplicados = 0;
+      const materiaisAjustados = new Set();
 
-          Promise.all(aplicarPromises).then(() => {
-            db.run(`UPDATE conferencias_almoxarifado SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP WHERE id = ?`,
-              [req.params.id], (e) => {
-                if (e) return res.status(500).json({ error: e.message });
-                const materialIds = [...new Set(ajustes.map(a => a.material_id))];
-                Promise.all(materialIds.map(mid => alertService.verificarAlertaPorMaterialId(db, mid).catch(() => null)))
-                  .finally(() => {
-                    res.json({ success: true, ajustesAplicados: ajustes.length });
-                  });
-              });
-          }).catch(e => res.status(500).json({ error: e.message }));
-        });
-    });
+      if (aplicar_ajustes && ajustes.length > 0) {
+        // ── Pré-validação: SÓ LEITURA. Nenhum registrarMovimentacao, nenhum
+        // assertAjustePermitido — tem de poder abortar tudo sem ter aplicado nada (RN-07/D3).
+        const materiaisPorItem = new Map();
+        const falhasPermissao = [];
+        const falhasRetencao = [];
+        for (const item of ajustes) {
+          const material = await dbGet(db, `SELECT * FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
+          materiaisPorItem.set(item.id, material);
+
+          if (material.proprietario_cliente_id && !can(req.user, 'ajustar_material_cliente')) {
+            // Checagem LEVE — de propósito NÃO chama ownerRules.assertAjustePermitido aqui: essa
+            // função audita como efeito colateral, e chamá-la na pré-validação gravaria
+            // auditoria duplicada quando a aplicação real rodar (achado da Fase 2).
+            const dono = await dbGet(db, `SELECT razao_social FROM clientes WHERE id = ?`, [material.proprietario_cliente_id]);
+            const donoNome = dono?.razao_social || `cliente #${material.proprietario_cliente_id}`;
+            falhasPermissao.push(`${material.codigo} (${donoNome})`);
+            continue;
+          }
+
+          // RN-06c: o total mandado ao motor é o contado MAIS o que está retido em terceiros —
+          // `quantidade_sistema` já descontou essa retenção (Etapa 8b), reconstituir sem somar
+          // de volta apagaria o material que está no galvanizador. Fecha B3.
+          const novoTotal = item.quantidade_contada + (material.quantidade_em_terceiros || 0);
+          const motivoRetencao = stockService.motivoRecusaAjustePorRetencao(material, novoTotal);
+          if (motivoRetencao) falhasRetencao.push(`${material.codigo}: ${motivoRetencao}`);
+        }
+
+        // RN-07: prioridade — se ALGUM item bloqueia por falta de `ajustar_material_cliente`, a
+        // resposta INTEIRA é 403, ignorando as falhas de retenção nesta mesma resposta.
+        if (falhasPermissao.length > 0) {
+          return res.status(403).json({
+            error: 'Ajuste bloqueado — os seguintes materiais são de cliente e exigem a permissão '
+              + `"ajustar_material_cliente": ${falhasPermissao.join(', ')}`,
+          });
+        }
+        if (falhasRetencao.length > 0) {
+          return res.status(400).json({ error: `Ajuste bloqueado: ${falhasRetencao.join('; ')}` });
+        }
+
+        // ── Aplicação real, SEQUENCIAL — a pré-validação já rodou a mesma
+        // motivoRecusaAjustePorRetencao; se o motor recusar mesmo assim é corrida entre as duas
+        // passadas (limitação conhecida, ver comentário da rota acima).
+        for (const item of ajustes) {
+          const material = materiaisPorItem.get(item.id);
+          const quantidadeAbsoluta = item.quantidade_contada + (material.quantidade_em_terceiros || 0);
+          await stockService.registrarMovimentacao(db, req.user, {
+            material_id: item.material_id,
+            tipo: 'AJUSTE_INVENTARIO',
+            quantidade: quantidadeAbsoluta,
+            motivo: `Ajuste de conferência ${conf.numero}`,
+            referencia: conf.numero,
+            justificativa: justificativa_ajuste,
+          });
+          await dbRun(db, `UPDATE itens_conferencia_almoxarifado SET ajustado = 1 WHERE id = ?`, [item.id]);
+
+          // D8: impacto financeiro de graça, reusando a fonte única de custo (custoSql.js) — a
+          // mesma regra que proíbe reescrever a fórmula de retenção vale para custo (achado da
+          // Etapa 8c: 3 respostas diferentes para "quanto vale uma unidade" já causou dashboard e
+          // relatório divergirem).
+          const custoRow = await dbGet(db,
+            `SELECT ${custoUnitarioSql()} AS custo FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
+          impactoFinanceiro += Math.abs(item.divergencia) * (custoRow?.custo || 0);
+          ajustesAplicados += 1;
+          materiaisAjustados.add(item.material_id);
+        }
+      }
+
+      await dbRun(db, `UPDATE conferencias_almoxarifado
+              SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP, justificativa_ajuste = ?
+              WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, req.params.id]);
+
+      await Promise.all([...materiaisAjustados].map((mid) => alertService.verificarAlertaPorMaterialId(db, mid).catch(() => null)));
+
+      res.json({ success: true, ajustesAplicados, impactoFinanceiro });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // DELETE /api/almoxarifado/conferencias/:id — cancelar conferência
