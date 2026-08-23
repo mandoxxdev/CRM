@@ -692,14 +692,70 @@ PUT /item numa conferencia ja CONCLUIDA -> 400 RN-03
 POST /movimentacoes/:id/cancelar na movimentacao AJUSTE_INVENTARIO recem-criada -> 400 RN-10
 ```
 
-- [ ] **Step 1: Escrever o fluxo completo como UM teste-jornada + asserções intermediárias.**
-- [ ] **Step 2: Rodar** — se falhar, o defeito é de COSTURA entre Task 1 e Task 2: registrar aqui
-  qual costura a Fase 2 deixou passar, consertar, só então seguir.
-- [ ] **Step 3: Suíte completa serial** (os cinco comandos da `fechar-etapa`).
-- [ ] **Step 4: SABOTAGEM:** escolher UMA costura real (ex.: fazer o `concluir` aplicar em
-  paralelo nesse cenário específico com bloqueio no meio) e confirmar que ESTE teste cai além do
-  unitário da Task 2. Restaurar.
-- [ ] **Step 5: Commit** `Almoxarifado Etapa 10 Task 4: teste-jornada — contagem cega, tolerancia, recontagem e ajuste tudo-ou-nada`.
+- [x] **Step 1: Escrever o fluxo completo como UM teste-jornada + asserções intermediárias.**
+  14 passos, batendo em `supertest(app)` do início ao fim (bloqueio/desbloqueio pela rota REAL
+  dedicada, não a genérica — a genérica recusa `BLOQUEIO`/`DESBLOQUEIO` por design, achado ao
+  rodar a primeira tentativa).
+- [x] **Step 2: Rodar** — passou de primeira (Tasks 1-3 já revisadas e corrigidas
+  individualmente antes desta task; sem defeito de costura vivo — ver Step 4).
+- [x] **Step 3: Suíte completa serial** — `test:api` 103/103 arquivos, `test:almoxarifado` 42/0,
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0, client 369/369, build limpo.
+- [x] **Step 4: SABOTAGEM:** escolhida uma costura REAL entre Task 1 e Task 2 (não hipotética):
+  filtrar `!i.recontado` junto de `divergencia !== 0` na lista de ajustes — conflando a isenção
+  de RN-04 (recontagem isenta da checagem de *tolerância*) com a guarda de RN-06/07 (retenção),
+  que são regras independentes nascidas em tasks diferentes. Resultado: o teste-jornada CAIU
+  (esperava 400, recebeu 200 aplicando o ajuste indevidamente), e os DOIS arquivos unitários da
+  Task 2 (`conferenciaMotorAjuste`, `conferenciaTolerancia`) continuaram 100% verdes — nenhum dos
+  dois combina recontagem com retenção no mesmo item. Prova real de que só o teste de integração
+  cobre essa composição. Restaurado (`git diff --stat` vazio antes do commit).
+- [x] **Step 5: Commit** — `2a8b529` —
+  `Almoxarifado Etapa 10 Task 4: teste-jornada — contagem cega, tolerancia, recontagem e ajuste tudo-ou-nada`.
+  Nenhum código de produção alterado — só o arquivo de teste novo.
+
+---
+
+### Task 4.5: Revisão final de branch + fixes (não estava no plano original — exigida pela skill `desenvolver-etapa-almoxarifado`, Fase 5)
+
+Depois do merge do galho front e da Task 4, revisor externo (opus, range `9062a18..2a8b529`, o
+branch inteiro da etapa) rodou o review whole-branch que os gates por-task não conseguem ver.
+Veredito: **"No — 1 fix crítico antes de fechar"**, 1 Critical + 4 Important + 6 Minor:
+
+- **Critical** — `AJUSTE_INVENTARIO` com `quantidade=0` (uma contagem física legítima — "achei
+  zero na prateleira") era recusado pela validação de entrada do motor, mas a pré-validação da
+  rota não sabia disso e aprovava o item na primeira passada. O motor só recusava na hora de
+  aplicar de verdade — com outros itens da mesma conferência **já gravados**, quebrando o
+  tudo-ou-nada de RN-07 de verdade (não hipoteticamente: reproduzido com ordem de itens forçada).
+  Pior, como a conferência ficava `ABERTO`, cada retry duplicava a movimentação do item que já
+  tinha aplicado certo. Regressão real contra o caminho antigo (`UPDATE` cru nunca teve esse
+  problema).
+- **Important (4)** — `material.ativo=0` entre a contagem e a conclusão tinha o mesmo furo de
+  pré-validação incompleta do achado Critical (mesma família de bug, corrigido junto);
+  `POST /conferencias` não ecoava `totalItens` na resposta vazia (front lia `undefined`); a
+  chave de config `tolerancia_inventario_percentual` nunca tinha sido semeada em `schema.js`,
+  então `PUT /configuracoes` (que só grava chave já semeada) nunca conseguia configurar um valor
+  diferente do fallback fixo; o badge "Recontagem necessária" só chegava na tela ao ABRIR a
+  conferência — salvar uma contagem não atualizava, e quem contava só descobria a recontagem
+  exigida no 400 da conclusão; `AJUSTE_INVENTARIO` nunca foi acrescentado às listas do livro de
+  movimentações (`TIPOS`/`TIPOS_SEM_ESTORNO`) — mesmo padrão "N lugares pra atualizar, um
+  esquecido" que `ENTRADA_RETALHO` já tinha documentado na Etapa 9.
+- **Minor (6, todos deferidos)** — modo cego vaza o número escondido através da mensagem de
+  RN-05 (a fórmula é reversível a partir da % e da tolerância — D4 já declara que a blindagem
+  não é perfeita, registrar no manual); mensagem de retenção malformada quando não há retenção
+  nenhuma e a quantidade é negativa (upstream: `PUT /item` não valida negativos — pré-existente,
+  fora do escopo desta etapa); RN-10 lança depois do claim em `cancelarMovimentacao`, não antes
+  (mesma decisão do Task 1 reviewer, confirmada ainda segura — a compensação reverte tudo); config
+  de tolerância pré-etapa aplica 2% retroativamente a conferências já abertas (intencional por
+  RN-05, mas efeito de migração de dado não nomeado antes); comentário desatualizado citando
+  "listar" como consumidor de `toleranciaEfetiva` quando não é; branches 400/else redundantes no
+  front (estrutural, sem diferença de comportamento).
+
+**Todos os achados Critical/Important corrigidos direto pelo controlador**, cada um com teste
+novo + sabotagem provada (a primeira tentativa de sabotagem do achado Critical passou por sorte
+de ordenação alfabética dos materiais — corrigido forçando a ordem nos testes antes de aceitar
+qualquer verificação como válida). Commits: `38a7afb` (Critical + os dois Important de backend),
+`d3fc0ab` (badge de recontagem), `8db2671` (wiring do livro de movimentações). Suite completa
+re-verificada depois de todos os fixes: `test:api` 103/103, `test:almoxarifado` 42/0,
+`test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0, client 373/373, build limpo.
 
 ---
 
