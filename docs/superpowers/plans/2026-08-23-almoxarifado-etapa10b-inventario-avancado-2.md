@@ -779,6 +779,69 @@ Dois revisores frescos em paralelo (lente backend/cross-task e lente costura fro
 
 ---
 
+## Execução — estado final (2026-08-23, etapa FECHADA)
+
+| Task | Estado | Hash | Divergências do plano |
+|---|---|---|---|
+| 1 | ✅ | `c1ee37b` + fix `7e66d02` | 0 desvios do implementer; o fix-round veio da revisão (4 furos de sabotagem em testes — inclusive a 1ª versão do conserto do filtro de família, que ainda deixava `>=` passar) |
+| 2 | ✅ | `80a7fea` + fix `b16561a` | 0 desvios; a revisão achou 2 Important DE PRODUÇÃO (contorno da RN-03 por valor inválido → RN-08 nova; vazamento da contagem do colega no modo cego) |
+| 3 | ✅ | `78cdbcd` + fix `957d148` | 1 desvio legítimo (teste 1 com ADMIN — `ajustar_estoque` não inclui ALMOXARIFE); revisão: cadeia RN-05→RN-06 sem teste, vazamento do impacto pela listagem (fix SEM gatear — ruling da Fase 2 mantido), deriva de float |
+| 4 | ✅ | `b8490cc` + fix `cfe44bf`, merge `a95db02` | 2 desvios declarados e aceitos (autoria só renderiza quando existe — contrato corrigido em `58e9440`; node_modules por symlink na worktree); revisão: 5/7 sabotagens passavam — testes por célula |
+| 5 | ✅ | `f4f2301` | 0 desvios; sem revisor dedicado (ruling: diff test-only + controle positivo real, precedente 9b-T8/10-T4); reestruturada em `7290481` para a regra de correção |
+| 5.5 | ✅ | fix `7290481` | ver seção "Task 5.5" acima — 1 Critical + 8 Important + 11 Minor, 0 ruído |
+| 6 | ✅ | commits de fechamento | — |
+
+**Mudança de regra DURANTE a etapa (importante para quem ler os testes):** a RN-03 do design
+foi emendada duas vezes pela cadeia de revisões — (1) o strip da contagem do colega saiu de
+"sub-caso do modo cego" para "sempre que houver dupla contagem" (Critical); (2) o primeiro
+contador ganhou o caminho de correção pré-recontagem (ruling, letra B12 do novidades). Testes
+que afirmavam o comportamento intermediário foram reescritos em `7290481` — não é flakiness,
+é regra que mudou com registro.
+
+## Próxima tarefa detalhada — Etapa 11 (reposição e compras, feature 18)
+
+- **Spec:** `specs/modulo-almoxarifado/18-reposicao-estoque-minimo/README.md` (status 🟡
+  "alertas ok" — ler antes de desenhar; o mapa diz que ponto de reposição calculado e sugestão
+  de compra consolidada são o corpo da etapa).
+- **O que já existe e NÃO precisa reabrir:** alertas de estoque mínimo (feature 20 parcial,
+  `alertService.verificarAlertaPorMaterialId` — o concluir da conferência já o chama);
+  `quantidade_minima`/`material_critico`/`classe_abc` no cadastro; `custoUnitarioSql()` para
+  valorar sugestões; `disponivelSql()` para "disponível abaixo do mínimo" (NUNCA reescrever a
+  fórmula — availabilitySql é fonte única).
+- **Pontos de atenção herdados:** decisão B11 (dupla aprovação formal) continua aberta — não
+  construir aprovação de compra sobre ela sem arbitragem; e-mails são feature 19 (corte
+  padrão); os relatórios novos seguem o padrão "gate `inventario`/ação própria + LIMIT 500".
+- **Processo:** mesmo fluxo desta etapa (skill `desenvolver-etapa-almoxarifado`, Fase 0 lendo
+  spec 18 + este plano + letras B do novidades).
+
+## Retro (fechamento)
+
+Terceira etapa completa sob a skill `desenvolver-etapa-almoxarifado` (9b, 10, 10b). Linha de
+base da 10: 3 rodadas de fix, 17 achados reais/0 ruído, 1 galho paralelo sem retrabalho, 0
+defeitos escapados.
+
+**1. Rodadas de correção até verde.** 5 no total: Task 1 (1, só testes), Task 2 (1, com 2
+Important de produção), Task 3 (1), Task 4 (1), revisão final (1 onda, com o Critical).
+Nenhuma bateu o limite de 3 rodadas na mesma falha — o detector de esteira não disparou.
+
+**2. Achados reais vs. ruído.** Fase 2 (plano): 12 reais / 0 ruído. Revisões de task: 1+2+3+4
+(Tasks 1–4) = 10 reais / 0 ruído. Revisão final: 1 Critical + 8 Important + 11 Minor = 20
+reais / 0 ruído. **Total: 42 achados reais, 0 descartados** — mais que o dobro da Etapa 10
+(17), com uma diferença qualitativa: nesta etapa TRÊS achados de produção graves (o contorno
+da RN-03, o vazamento do modo cego e o Tab-reconta) vieram de revisores instruídos a MEDIR o
+cenário em vez de raciocinar sobre ele. Rodar o probe vale mais que argumentar.
+
+**3. Paralelismo de fato.** Um par real: Task 4 (front, worktree) e Task 5 (jornada, árvore
+principal) rodaram simultaneamente, zero conflito, merge limpo (`a95db02`). Custo do
+paralelismo: zero retrabalho — o contrato congelado segurou (as emendas de contrato chegaram
+ANTES do despacho da Task 4, pelo fix-round da Task 2).
+
+**4. Defeito que escapou.** Nenhum descoberto após o fechamento (preencher na próxima etapa se
+aparecer). O que fica para vigiar: **G6** (a régua de divergência espelhada no front pela
+fronteira HTTP — mesmo eixo do G4) e as três lições de disciplina de sabotagem registradas no
+G6 do novidades (âncora única NOS DOIS SENTIDOS; nunca `git checkout` para restaurar em árvore
+suja; sabotagem verde pode ser teste fraco, não teste faltando — aconteceu DUAS vezes aqui).
+
 ## Self-review do plano (feito na escrita)
 
 - **Cobertura do design:** RN-01/02 → Task 1; RN-03/04 → Task 2; RN-05/06/07 → Task 3; front

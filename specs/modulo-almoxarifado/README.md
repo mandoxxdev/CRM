@@ -1,13 +1,34 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-22 (**Etapa 10 fechada — inventário avançado,
+> **Última atualização:** 2026-08-23 (**Etapa 10b fechada — inventário avançado parte 2,
+> `14f4458..7290481`. A feature 17 vira 🟢 no que as duas rodadas se propuseram.**
+> **Onde o desenvolvimento parou: a Etapa 10b está fechada. A próxima da ordem é a Etapa 11 —
+> reposição e compras** (feature 18). A escolha "10b antes da 11" foi ruling da sessão de
+> 2026-08-23, pelo precedente das sub-etapas (6b/6c, 8b/8c, 9b) — registrado na letra B do doc
+> de novidades.
+> **O que a Etapa 10b entregou:** escopos de contagem **combináveis** (família raiz, classe ABC,
+> somente críticos, materiais de clientes, com saldo em terceiros — filtros sobre colunas que o
+> material já tinha, gravados como `escopo_descricao`-snapshot); **dupla contagem por duas
+> pessoas** (flag por conferência: recontagem exige outra pessoa, o GET esconde a contagem do
+> colega de quem não é o último autor — com ou sem modo cego —, o primeiro contador pode corrigir
+> o próprio número enquanto ninguém recontou, autoria por item sempre gravada); **RN-08**
+> (contagem validada: número finito ≥ 0, zero vale); **relatório de acuracidade** (derivado dos
+> itens imutáveis, ponderado, contados/total + recontados, impacto financeiro persistido na
+> conclusão sem backfill, gate `inventario`); **epsilon de divergência como fonte única**
+> (`divergencia.js` — alcança também o relatório antigo `inventario-divergencias`, que ganhou
+> gate e filtro CONCLUIDO: antes vazava contagem em andamento para qualquer usuário do módulo).
+> O **motor de estoque não foi tocado**. **Revisão final de branch** (2 revisores em paralelo,
+> lentes backend e costura front↔back): **1 Critical + 8 Important + 11 Minor, 0 ruído** — o
+> Critical era o strip da contagem do colega existindo só sob modo cego: em dupla contagem sem
+> cego, o input do recontador vinha preenchido e um **Tab** certificava a recontagem sem digitar
+> nada (medido: saldo reescrito pelo motor com trilha de duas pessoas). Corrigido nas duas pontas
+> (strip por dupla_contagem no servidor; front só salva campo digitado na sessão).
+> **Números (medidos no fechamento, 2026-08-23):** `test:api` **107/107 arquivos OK**,
+> `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
+> `test:sqlite` **3/0**; client **382 testes em 29 suítes**, build `CI=true` exit 0.)
+> Antes: 2026-08-22 (**Etapa 10 fechada — inventário avançado,
 > `d644827..8db2671`. A feature 17 vira 🟡 (parcial, com corte declarado — ver abaixo).**
-> **Onde o desenvolvimento parou: a Etapa 10 está fechada. A próxima da ordem é a Etapa 10b —
-> inventário avançado, parte 2** (o que ficou de fora desta etapa: tipos de contagem avançados,
-> dupla contagem por duas pessoas, congelamento de movimentação, fluxo formal de dupla aprovação,
-> relatório de acuracidade) **ou a Etapa 11 — reposição e compras** (feature 18), conforme
-> prioridade a decidir na sessão que pegar o trabalho.
 > **O que a Etapa 10 entregou:** fecha uma pendência registrada desde a Etapa 7 (itens B1/B2/B3
 > do `docs/almoxarifado-novidades-por-etapa.md`) — a conclusão da conferência de inventário
 > gravava saldo **por fora do motor de estoque**, sem validação nenhuma. Agora existe um tipo
@@ -267,7 +288,7 @@
 | 14 | [Materiais em terceiros](14-materiais-terceiros/README.md) | ✅ | ✅ | ✅ | 🟢 **COMPLETA — as duas metades entregues: Etapa 8b (2026-08-12, `0a01124..b176212`), o MESMO material volta; Etapa 8c (2026-08-13, `753d23b..61c6f52`), volta OUTRA coisa.** **8b** — remessa e retorno do **MESMO** material, ciclo completo. Quarta coluna de retenção `quantidade_em_terceiros` (sai do disponível, **não** do patrimônio) com a conta do disponível **centralizada** em `availabilitySql.js`; conferência de inventário descontando **só ela**; três tabelas + `thirdPartyStateMachine` (`ABERTA → ENVIADA → RETORNO_PARCIAL → ENCERRADA/CANCELADA`); quatro tipos de movimento no motor; envio **tudo-ou-nada** agregando por material; retorno parcial com teto acumulado **por item**; encerramento com **destino obrigatório** (`PERDA_NO_TERCEIRO`/`CONSUMIDO_NO_PROCESSO`) + justificativa; cancelamento com estorno **do que ainda está lá fora**; ação de perfil `remessar_terceiro`; sete rotas + `GET /vencidas`; tela `/almoxarifado/remessas-terceiros` + PDF no navegador. **Correção declarada de spec:** o checklist dizia "envio = saída para localização virtual", e isso **estava errado** — o disponível é calculado sobre o escalar `quantidade_atual`, então localização virtual não tira nada do disponível. **Correção declarada de status:** esta linha dizia *"**Falta a Etapa 8c — transformação**"* — **deixou de ser verdade em 2026-08-13**. **8c** (`753d23b..61c6f52`) — corte, dobra e usinagem: sai 1 chapa e voltam N peças mais uma sobra, no **mesmo evento** (a chapa baixa por `CONSUMO_TERCEIRO`, cada resultado entra pelo tipo novo `RETORNO_TRANSFORMACAO`, `9c7ec75`); três colunas em `retornos_remessa_item_almoxarifado` (`tipo_resultado` `PECA`/`SOBRA`, `custo_unitario_aplicado`, `movimentacao_consumo_id` como agrupador do evento), com `NULL` significando "retorno simples"; rateio de custo em função **pura** (`transformCost.js`) — **peça recebe rateio, sobra entra a custo ZERO**; rota dedicada `POST /remessas-terceiros/:id/transformacoes` (`remessar_terceiro`), tipo em `TIPOS_DEDICADOS` (fora da rota genérica); guarda própria `assertMesmoDonoNaTransformacao` (a peça tem de ter o **mesmo** dono da chapa); modal com N resultados, classificação e rendimento. E-mail (19) e alerta de atraso (20) seguem **fora do escopo**. **Pendência que continua aberta e precisa de resposta do cliente:** "uma remessa não mistura donos" foi **deduzida**, não pedida. Pendência menor da 8c: o **rendimento** é calculado, exibido e **jogado fora** — não há coluna que o guarde |
 | 15 | [Retalhos, sobras e sucatas](15-retalhos-sucatas/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 9 entregue (2026-08-16, `b727c0a..4ba94e2`)** — retalho é material normal no motor (`ENTRADA_RETALHO` dedicado, sem custo) + anexo dimensional na tabela de sobras reformada (auditada, Zod, `POST /sobras` avulso aposentado); `gerarRetalho` é evento composto com guarda de dono e compensação; `SUCATA` saiu do formulário genérico e virou processo com **dupla aprovação segregada** (duas ações novas de perfil, baixa pelo motor na segunda assinatura, claim anti-corrida), destino VENDIDA/DESCARTADA com comprovante e relatório `sucata-financeiro` lendo o livro; tela `/almoxarifado/sobras` (Retalhos + Sucateamentos), etiqueta de retalho com QR e hint de retalho na SAÍDA. Os 4 testes nomeados da spec existem e passam. **Fora do escopo declarado:** e-mail (→ 19). Pendências nomeadas na spec: guarda geral de tipo novo nas fontes únicas, coluna `foto` sem escritor, lote do material-retalho, `valor_venda` em DESCARTADA |
 | 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | 🟡 | ✅ | 🟢 **Etapa 9b entregue (2026-08-22, `d644827..b8e6f60`)** — ferramenta virou patrimônio emprestável completo: máquina de estados explícita (`toolStateMachine.js`) com toda transição por **claim** (`UPDATE ... WHERE status IN (...)`, sem a janela de corrida SELECT-depois-UPDATE que existia antes), calibração com vencimento **lida da última calibração** (sem coluna-cache) barrando o empréstimo, avaria/perda com foto encerrando o empréstimo aberto no mesmo ato (RN-05), bloqueio/manutenção/reencontro com justificativa auditada, ação de perfil própria `gerenciar_ferramentas` (parou de usar o gate genérico `movimentar`), Zod em todas as rotas (nenhuma tinha antes), auditoria em toda escrita (emprestar/devolver não auditavam antes), e tela `/almoxarifado/ferramentas` com três visões (Ferramentas, Empréstimos, Calibrações). Revisão final de branch achou 4 Important cross-task que os gates por-task não pegam (busca/filtro do contrato ignorados pelo backend; corrida devolver↔ocorrência podendo corromper o status; PUT/409 sem teste; badge de vencimento do front discordando do servidor) — todos corrigidos e re-revisados limpos. **Fora do escopo declarado, com pendência aberta:** job de lembrete de devolução sem canal de notificação (função pura pronta, aguarda feature 20), UI de edição de ferramenta (backend testado, só falta o formulário — achado da revisão final), integração com inspeção (feature 09) |
-| 17 | [Inventário e contagem cíclica](17-inventario-contagem/README.md) | 🟡 | 🟡 | ✅ | 🟡 **Etapa 10 entregue (2026-08-22, `d644827..8db2671`)** — o risco crítico registrado desde 2026-08-11 (ajuste gravando saldo por fora do motor) está **resolvido**: tipo dedicado `AJUSTE_INVENTARIO` passa por `stockService.registrarMovimentacao`, com guarda de retenção nova que **decide**, para a pendência aberta desde a Etapa 7 (itens B1/B2/B3 do doc de novidades), recusar um ajuste que deixaria material bloqueado/reservado/em inspeção/em terceiro com número negativo. Contagem cega (por conferência) e tolerância+recontagem entregues; aplicação **tudo ou nada** (pré-valida todos os itens antes de aplicar qualquer um). **Fora do escopo, declarado:** tipos de contagem avançados, dupla contagem por duas pessoas, congelamento de movimentação, fluxo formal de dupla aprovação (existe dupla permissão, não duas assinaturas), relatório de acuracidade — ficam para uma **Etapa 10b** |
+| 17 | [Inventário e contagem cíclica](17-inventario-contagem/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapas 10 + 10b entregues (2026-08-22/23, `d644827..8db2671` e `14f4458..7290481`)** — a 10 resolveu o risco crítico (tipo dedicado `AJUSTE_INVENTARIO` pelo motor, guarda de retenção decidindo a pendência B1/B2/B3, contagem cega, tolerância+recontagem, tudo-ou-nada); a 10b entregou **escopos de contagem combináveis** (família raiz, ABC, críticos, de clientes, em terceiros), **dupla contagem por duas pessoas** (recontagem de outra pessoa, número do colega escondido com ou sem modo cego, correção própria pré-recontagem, autoria por item), **relatório de acuracidade** (ponderado, contados/total + recontados, impacto persistido sem backfill) e o **epsilon de divergência como fonte única** (alcançando o relatório antigo, que ganhou gate + só CONCLUIDO). **Fora, declarado com porquê na spec:** contagem por endereço (+ guarda de retenção com localização), cíclica automática, congelamento (ruling mantido), dupla aprovação formal (aguarda B11), e-mail, tela de conciliação lado a lado |
 | 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟡 | 🟡 | 🟡 | 🟡 alertas ok |
 | 19 | [E-mails e notificações](19-emails-notificacoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 sem fila/cobertura total |
 | 20 | [Alertas operacionais](20-alertas/README.md) | 🟡 | ❌ | 🟡 | 🟡 2 de ~20 |
@@ -530,10 +551,30 @@ pessoas diferentes, congelamento de movimentação durante a contagem, fluxo for
 aprovação (existe dupla permissão, não duas assinaturas), relatório de acuracidade formal,
 e-mail do resultado.
 
-### Etapa 10b — Inventário avançado, parte 2 → `17-inventario-contagem`
-O que a Etapa 10 cortou, declarado: tipos de contagem avançados, dupla contagem por duas pessoas,
-congelamento de movimentação, fluxo formal de dupla aprovação, relatório de acuracidade. Sem
-plano ainda — decidir prioridade contra a Etapa 11 na sessão que pegar o trabalho.
+### Etapa 10b — ✅ ENTREGUE em 2026-08-23 → `17-inventario-contagem`
+
+**Etapa 10b = feature 17, segunda rodada (`14f4458..7290481`)** — escopos de contagem
+combináveis, dupla contagem por duas pessoas, relatório de acuracidade, RN-08 e o epsilon de
+divergência como fonte única. Motor de estoque não tocado. Detalhes, decisões (D1–D12 +
+emendas das revisões) e correções declaradas:
+[spec 17](17-inventario-contagem/README.md), o
+[design da etapa](../../docs/superpowers/specs/2026-08-23-almoxarifado-etapa10b-inventario-avancado-2-design.md)
+e o [plano](../../docs/superpowers/plans/2026-08-23-almoxarifado-etapa10b-inventario-avancado-2.md)
+(com o registro da revisão final na seção Task 5.5 e a retro no final).
+
+| Task | O quê | Hash |
+|---|---|---|
+| — | design e plano (Fase 2: 12 achados acatados, 0 ruído) | `14f4458` · `7f78876` · `9f13ad8` |
+| 1 | escopo combinável no POST /conferencias (RN-01/02) | `c1ee37b` · fix `7e66d02` |
+| 2 | dupla contagem + autoria por item (RN-03/04, RN-08) | `80a7fea` · fix `b16561a` |
+| 3 | impacto persistido + relatório de acuracidade (RN-05/06/07) | `78cdbcd` · fix `957d148` |
+| 4 | tela (galho paralelo, worktree própria) | `b8490cc` · fix `cfe44bf` · merge `a95db02` |
+| 5 | teste-jornada de composição | `f4f2301` |
+| — | revisão final de branch: 1 Critical + 8 Important + 11 Minor, 0 ruído | fix `7290481` |
+| 6 | documentação e verificação final | commits de fechamento |
+
+**Fora, declarado (sem etapa marcada):** contagem por endereço, cíclica automática,
+congelamento, dupla aprovação formal (aguarda B11), e-mail, conciliação lado a lado.
 
 ### Etapa 11 — Reposição e compras → `18-reposicao-estoque-minimo`
 Ponto de reposição calculado; sugestão de compra consolidada.

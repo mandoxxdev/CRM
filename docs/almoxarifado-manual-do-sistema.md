@@ -1239,13 +1239,28 @@ Toda devolução recebe uma referência própria no livro (no formato `DEV-<núm
 
 ## 13. Inventário e conferência de estoque
 
-A tela é **Almoxarifado → Conferências de Estoque**. Todo o fluxo exige a permissão de **inventário** (Administrador, Almoxarife e Gestor).
+A tela é **Almoxarifado → Conferências de Estoque**. Toda **ação** do fluxo — criar, contar, concluir, cancelar e os relatórios — exige a permissão de **inventário** (Administrador, Almoxarife e Gestor); a **consulta** de conferências fica aberta a quem acessa o módulo, e o valor financeiro do impacto só aparece pelo relatório de acuracidade (13.7), que exige a permissão.
 
-### 13.1 Como a contagem é montada
+### 13.1 Como a contagem é montada — e o escopo
 
-Ao criar uma conferência, o sistema gera um número (no formato `INV-…`) e **congela**, naquele instante, a quantidade esperada de **todos os materiais ativos** — opcionalmente filtrados por uma categoria. É uma contagem **por material**, não por prateleira.
+Ao criar uma conferência, o sistema gera um número (no formato `INV-…`) e **congela**, naquele instante, a quantidade esperada dos materiais ativos que casarem com o **escopo** escolhido. É uma contagem **por material**, não por prateleira.
 
-Congelar é o ponto: a contagem compara o físico com o que o sistema achava **no momento em que a contagem começou**, não com um número que continua se movendo enquanto o operador anda pelo galpão.
+O escopo é montado por filtros **combináveis** (todos opcionais; sem nenhum, entram todos os materiais ativos):
+
+| Filtro | O que seleciona |
+|---|---|
+| **Categoria** | materiais daquela categoria |
+| **Família** | materiais daquela família — o seletor só oferece **famílias raiz**, porque é a raiz que o cadastro de material vincula |
+| **Classe ABC** | materiais da classe A, B ou C |
+| **Somente críticos** | materiais marcados como críticos no cadastro |
+| **Materiais de clientes** | materiais que pertencem a algum cliente |
+| **Com saldo em terceiros** | materiais com alguma quantidade em poder de terceiros — para conferir **o que está no prédio** desses materiais (o esperado continua descontando a parte que está fora, 13.2) |
+
+Os filtros se combinam por **E** (Classe A **e** críticos = só quem é as duas coisas). O escopo fica **gravado por escrito** na conferência (ex.: `Categoria: Elétrica + Classe A + Somente críticos`; sem filtro, `Geral`) e aparece na lista — é uma **fotografia do momento da criação**: renomear a família ou mudar a classe de um material depois não altera o texto nem os itens que entraram. Um escopo que não casa nenhum material cria a conferência **vazia** (o aviso diz "criada com 0 itens") — não é erro. Pela API, uma classe fora de A/B/C é recusada com:
+
+> `Classe ABC inválida (use A, B ou C)`
+
+Congelar é o ponto: a contagem compara o físico com o que o sistema achava **no momento em que a contagem começou**, não com um número que continua se movendo enquanto o operador anda pelo galpão. Por isso mesmo, **evite contar o escopo "com saldo em terceiros" enquanto uma remessa está saindo ou voltando**: o saldo não corre risco (o ajuste recompõe a parte em terceiros corretamente), mas a divergência falsa entra nas métricas de acuracidade (13.7).
 
 ### 13.2 O que o sistema considera "esperado" — e por quê
 
@@ -1284,6 +1299,36 @@ Materiais continua vendo o saldo lá. E a própria mensagem de recontagem (13.4)
 de divergência — quem sabe quanto contou consegue calcular o número escondido fazendo a conta ao
 contrário.
 
+### 13.3b Dupla contagem — duas pessoas, dois pares de olhos
+
+Ao criar a conferência, o marcador **"Dupla contagem"** exige que a **recontagem** de cada item
+seja feita por uma pessoa **diferente** de quem fez a primeira contagem. Três mecanismos
+sustentam isso:
+
+1. **O número do colega fica escondido.** Enquanto a conferência está Aberta, quem abre um item
+   contado por **outra** pessoa vê o campo de contagem **vazio** — ele conta o que está na
+   prateleira, não confirma o que o colega digitou. Isso vale **com ou sem** contagem cega (a
+   cega esconde o saldo do sistema; a dupla contagem esconde a contagem do colega — são duas
+   proteções diferentes). O próprio autor continua vendo o que digitou, e quem pode aplicar
+   ajustes (Administrador, Gestor) vê tudo.
+2. **Sair do campo sem digitar não conta.** Só um valor **digitado na sessão** vira contagem —
+   passar pelo campo com a tecla Tab não grava nada. Recontar confirmando o mesmo número é
+   digitar o número.
+3. **O primeiro contador pode corrigir o próprio número — até alguém recontar.** Errou a
+   digitação? Corrija: a correção **não** conta como recontagem (o aviso de recontagem
+   necessária continua lá, e quem reconta continua tendo de ser outra pessoa). Depois que o
+   colega recontou, o primeiro contador não toca mais no item:
+
+> `Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: <nome>)`
+
+Cada item mostra **quem contou** e **quem recontou** (`Contado por: … · Recontado por: …`).
+Itens de conferências antigas, contados antes de a autoria existir, não mostram a linha.
+
+**O que a flag não faz:** ela não obriga ninguém a recontar — item dentro da tolerância nunca é
+recontado, e a conferência conclui normalmente. Por isso o relatório de acuracidade (13.7) traz
+a coluna **Recontados**: um inventário "com dupla contagem" onde ninguém recontou nada tem
+recontados = 0, e o selo vale o que esse número disser.
+
 ### 13.4 Contar
 
 A tela lista, por linha: **Código**, **Material**, **Localização**, **Qtd. Sistema** (ou `—` em
@@ -1298,7 +1343,24 @@ Divergência = quantidade contada − quantidade sistema
 
 Positiva significa sobra física; negativa, falta. Contar o **mesmo item uma segunda vez** conta
 como **recontagem** — não precisa dar o mesmo valor; a segunda contagem é a segunda chance, não
-uma confirmação da primeira.
+uma confirmação da primeira. (Com **dupla contagem** ligada, a segunda contagem tem de ser de
+outra pessoa, e a segunda escrita do próprio autor é correção, não recontagem — 13.3b.)
+
+**A contagem tem de ser um número maior ou igual a zero.** Zero **vale** — contar uma prateleira
+vazia é contagem legítima. Texto, campo vazio enviado por engano ou número negativo são
+recusados na hora, sem gravar nada:
+
+> `Quantidade contada deve ser um número maior ou igual a zero`
+
+Um valor recusado também **sai da tela**, voltando ao que estava salvo — ele não fica na coluna
+de divergência confundindo a leitura.
+
+**Empate de arredondamento não é divergência.** Quando o esperado nasce de uma subtração com
+casas decimais (ex.: 30.3 no total, 30.1 em terceiros), o computador pode guardar
+0.1999999999999993 em vez de 0.2 — e contar 0.2 é **acertar**. Diferenças menores que um
+bilionésimo são tratadas como **exatas** em todos os lugares que leem divergência: a exigência
+de recontagem, o ajuste na conclusão (nenhuma movimentação microscópica é disparada), o
+relatório de acuracidade e o relatório de divergências.
 
 **Tolerância e recontagem obrigatória.** Cada conferência tem uma tolerância (%) — definida na
 criação, ou o padrão configurado do módulo quando não informada. Um item cuja divergência
@@ -1349,10 +1411,20 @@ Cancelada é recusado:
 
 > `Conferência não está aberta (status atual: <status>)`
 
-O aviso de sucesso mostra o **impacto financeiro** dos ajustes aplicados — a soma, em reais, de
-cada item ajustado (valor absoluto: uma sobra de R$ 50 e uma falta de R$ 50 na mesma conferência
-somam R$ 100 de impacto, não R$ 0 — é "quanto dinheiro este inventário movimentou", não um
-líquido). Depois de aplicar, os alertas de estoque mínimo dos materiais afetados são reavaliados
+O **impacto financeiro** é calculado **sempre** na conclusão — com ou sem aplicar ajustes — como
+a soma, em reais, das divergências encontradas (valor absoluto: uma sobra de R$ 50 e uma falta
+de R$ 50 na mesma conferência somam R$ 100 de impacto, não R$ 0 — é "quanto de erro este
+inventário encontrou", não um líquido). Ele fica **gravado na conferência** com o custo do dia
+da conclusão, e é o que o relatório de acuracidade (13.7) mostra depois. O aviso de sucesso o
+exibe nos dois caminhos — aplicando:
+
+> `Conferência concluída! Ajustes aplicados: <n> — impacto financeiro: R$ <valor>`
+
+e concluindo **sem** aplicar (a divergência fica registrada, o saldo não muda):
+
+> `Conferência concluída! 0 ajustes aplicados — divergências encontradas: R$ <valor> (nenhum ajuste aplicado)`
+
+Depois de aplicar, os alertas de estoque mínimo dos materiais afetados são reavaliados
 automaticamente.
 
 > Antes de homologar uma conferência com ajustes, leia a seção 23 — há cuidados de operação que
@@ -1366,6 +1438,29 @@ Uma movimentação de ajuste de inventário, uma vez aplicada, **não pode ser e
 de estorno do livro de Movimentações — ela representa uma contagem física já homologada, e
 desfazê-la sem uma nova contagem apagaria o rastro de que a contagem aconteceu. O caminho de
 correção é abrir uma **nova conferência**.
+
+### 13.7 Acuracidade — o inventário como número de gestão
+
+O botão **Acuracidade**, na lista de conferências, mostra as métricas de todas as conferências
+**concluídas** (as 500 mais recentes), uma linha por conferência:
+
+| Coluna | O que significa |
+|---|---|
+| **Contados** | itens efetivamente contados **sobre o total** da conferência (`1 / 10` deixa claro que 9 itens nunca foram contados — uma acuracidade alta sobre poucos itens contados não se esconde atrás do percentual) |
+| **Exatos / Divergentes** | contados que bateram com o esperado / que não bateram |
+| **Recontados** | itens que receberam recontagem — é o número que sustenta o selo de dupla contagem (13.3b) |
+| **Acuracidade** | `exatos ÷ contados × 100`. Sem nenhum item contado, mostra `—` (não 0% nem 100% — sem contagem não há acuracidade) |
+| **Impacto Financeiro** | o valor gravado na conclusão (13.5), com o custo daquele dia. Conferências concluídas antes de o valor ser gravado mostram `—` (não medido na época — recalcular com o custo de hoje inventaria um número que nunca foi mostrado a ninguém) |
+
+A linha de **agregado** soma tudo e calcula a acuracidade **ponderada por item contado**
+(`total de exatos ÷ total de contados`) — uma conferência de 2 itens não pesa o mesmo que uma
+de 200, como pesaria numa média simples de percentuais.
+
+O relatório exige a permissão de **inventário**, como o resto do fluxo. O relatório de
+**divergências de inventário** (da API de relatórios) segue a mesma régua: só conferências
+concluídas, mesma permissão, e a mesma definição de divergência — uma contagem **em andamento**
+não aparece em relatório nenhum, para as blindagens da contagem cega e da dupla contagem não
+serem contornáveis por fora.
 
 ---
 

@@ -1,17 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-22 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-23 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 10) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 10b) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-22 (Etapa 10 ENTREGUE)
+> ## Onde o desenvolvimento parou — 2026-08-23 (Etapa 10b ENTREGUE)
+>
+> **Etapas 1 a 10b completas.** A **Etapa 10b (Inventário Avançado, parte 2) fechou em
+> 2026-08-23** (`14f4458..7290481`), e com ela a **feature 17 fica completa no que as duas
+> rodadas se propuseram**: contagem por escopo (classe A, críticos, de clientes, em terceiros,
+> família), dupla contagem por duas pessoas com o número do colega escondido, autoria por item
+> e o relatório de Acuracidade com impacto em reais. Ver a seção "Etapa 10b", mais abaixo, com
+> o roteiro completo. **Próxima etapa: Etapa 11 — Reposição e Compras** (feature 18).
+>
+> **Antes: 2026-08-22 (Etapa 10 ENTREGUE).**
 >
 > **Etapas 1 a 10 completas.** A **Etapa 10 (Inventário Avançado) fechou em 2026-08-22**
 > (`d644827..8db2671`), e com ela a **feature 17 fica parcialmente completa** — o risco crítico
 > de três etapas (ajuste gravando saldo por fora do sistema) está resolvido; tipos de contagem
 > avançados, dupla contagem por duas pessoas, congelamento de movimentação e relatório de
 > acuracidade ficam declarados fora do escopo, para uma **Etapa 10b** (ver seção "Etapa 10", mais
-> abaixo). Não há próxima etapa numerada definida ainda.
+> abaixo). *(Frase da época; a 10b foi entregue em 2026-08-23 — ver acima.)*
 >
 > **A Etapa 10 fez o ajuste de inventário parar de mentir.** Concluir uma conferência com
 > "aplicar ajustes" agora registra uma movimentação de verdade, auditada, e recusa deixar
@@ -2415,13 +2424,74 @@ segundo usuário com perfil Almoxarife (para testar a contagem cega de verdade).
 
 ### O que a Etapa 10 **não** cobre (é decisão declarada, não esquecimento)
 
-- **Só contagem "por categoria"** — por endereço, família, criticidade/ABC automática, item
-  crítico e surpresa não foram construídas.
-- **A recontagem aceita a mesma pessoa** — não exige um segundo contador.
-- **Nenhuma movimentação é congelada durante a contagem.**
-- **Não há fluxo formal de duas assinaturas** (como o sucateamento) — existe dupla permissão
-  (quem conta ≠ quem homologa), não duas pessoas assinando o mesmo processo.
-- **Relatório formal de acuracidade e e-mail do resultado não existem.**
+- ~~**Só contagem "por categoria"**~~ · ~~**a recontagem aceita a mesma pessoa**~~ ·
+  ~~**relatório de acuracidade não existe**~~ — **os três foram entregues na Etapa 10b**
+  (seção seguinte). Continuam de fora: endereço, cíclica automática, congelamento de
+  movimentação, fluxo formal de duas assinaturas e e-mail — ver a lista da 10b.
+
+---
+
+## Etapa 10b — Inventário Avançado, parte 2 (ENTREGUE — 2026-08-23)
+
+A Etapa 10 consertou o motor do inventário; a 10b o transforma em rotina de gestão: contagem
+por **escopo** (só a classe A, só os críticos, só material de cliente, só o que tem parte em
+terceiro, uma família), **dupla contagem por duas pessoas** (a recontagem tem de ser de outra
+pessoa — e ela conta **sem ver** o número do colega), **autoria por item** (quem contou e quem
+recontou, na tela) e o botão **Acuracidade** (por conferência: contados/total, exatos,
+divergentes, recontados, % e impacto em reais — gravado no dia da conclusão).
+
+### Antes → Agora
+
+| Antes (Etapa 10) | Agora (Etapa 10b) |
+|---|---|
+| Conferência de tudo, ou por categoria | Escopo combinável, gravado na conferência (ex.: `Classe A + Somente críticos`) |
+| Recontagem podia ser a mesma pessoa | Flag "Dupla contagem": recontagem de **outra pessoa**, sem ver o número do colega |
+| Ninguém sabia quem contou | `Contado por: … · Recontado por: …` em cada item |
+| Qualquer valor entrava como contagem | Número ≥ 0 obrigatório (zero vale); texto/negativo é recusado na hora |
+| Impacto financeiro aparecia e sumia | Impacto gravado na conclusão; concluir sem aplicar também mede o erro |
+| Nenhuma visão consolidada | Botão **Acuracidade** com tabela por conferência + agregado ponderado |
+
+### Roteiro de teste manual (10 passos, precisa de DOIS usuários com perfil de inventário)
+
+1. **Login** (Gestor ou Administrador) → **Almoxarifado → Conferência de Estoque → Nova
+   Conferência**. Marcar **Classe ABC = A** e **Somente críticos**, marcar **Dupla contagem**
+   e **Contagem cega**, tolerância 5. Criar → conferir que só os materiais classe A + críticos
+   entraram e que a lista mostra o escopo `Classe A + Somente críticos`.
+2. Com o **usuário 1** (almoxarife): abrir a conferência e contar um item com divergência
+   grande (ex.: sistema 100, contar 90). Conferir que ele **não vê** o saldo do sistema
+   (contagem cega) e que o item mostra `Contado por: <nome dele>`.
+3. Ainda com o usuário 1: **corrigir** a própria contagem (digitar 91 no mesmo campo) →
+   aceita, e **não** vira recontagem (o badge "Recontagem necessária" continua lá). Corrigir
+   de volta para 90.
+4. **Tabular** por um campo sem digitar nada → nada acontece (nenhum aviso, nenhuma gravação).
+   Tabular não é contar.
+5. Digitar **"abc"** ou **-5** numa contagem → recusa na hora:
+   `Quantidade contada deve ser um número maior ou igual a zero`.
+6. Com o **usuário 2** (outro almoxarife): abrir a mesma conferência → o campo do item contado
+   vem **vazio** (ele não vê os 90 do colega). Recontar 90 → aceita, badge de recontagem some,
+   item mostra `Recontado por: <nome dele>`.
+7. Com o **usuário 1** de novo: tentar mudar o item recontado → recusa:
+   `Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: <nome>)`.
+8. Com quem homologa (Gestor/Admin): **Concluir Conferência** SEM marcar "Aplicar ajustes" →
+   o aviso diz `... 0 ajustes aplicados — divergências encontradas: R$ ... (nenhum ajuste
+   aplicado)`.
+9. Na lista, clicar **Acuracidade** → conferir a linha da conferência: contados **/ total**,
+   exatos, divergentes, **recontados = 1**, acuracidade % e o impacto em R$; conferências
+   antigas mostram `—` no impacto; a linha de agregado embaixo.
+10. Criar uma conferência **sem** dupla contagem e repetir a recontagem pela mesma pessoa →
+    continua permitido (o comportamento antigo não mudou sem a flag).
+
+### O que a Etapa 10b **não** cobre (é decisão declarada, não esquecimento)
+
+- **Contagem por endereço/prateleira** (e a guarda de retenção para ajuste por localização —
+  mesmo corte).
+- **Contagem cíclica automática** — contar a classe A todo mês é criar a conferência "Classe A"
+  todo mês; agendamento automático não existe.
+- **Congelar movimentações durante a contagem** — e por isso: **não conte o escopo "com saldo
+  em terceiros" com remessa em andamento** (a divergência falsa aparece na métrica; o saldo em
+  si não corre risco).
+- **Fluxo formal de duas assinaturas** — aguarda a decisão B11 do doc de novidades.
+- **E-mail do resultado** e **tela de conciliação lado a lado das duas contagens**.
 
 ---
 

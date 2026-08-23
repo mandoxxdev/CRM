@@ -1,13 +1,13 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 10 (02/08/2026 a 22/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 10b (02/08/2026 a 23/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em 2026-08-22 (Etapa 10).
+> `docs/superpowers/plans/`. Atualizado em 2026-08-23 (Etapa 10b).
 
 ## Visão geral
 
@@ -29,6 +29,7 @@
 | 9 | Retalhos, Sobras e Sucatas | 2026-08-16 | A meia chapa vira estoque de verdade (com saldo, etiqueta com QR e sugestão de uso antes de cortar chapa nova) — e sucatear deixa de ser um clique: exige duas assinaturas de pessoas diferentes, com destino e valor registrados |
 | 9b | Ferramentas e Calibração | 2026-08-22 | Ferramenta virou patrimônio controlado: empréstimo à prova de corrida, calibração vencida bloqueia o uso, avaria/perda com foto fecha o empréstimo sozinha, bloqueio e manutenção com histórico — tudo numa tela própria |
 | 10 | Inventário Avançado | 2026-08-22 | O ajuste da conferência de inventário deixou de gravar saldo por fora do sistema — agora é auditado e recusa deixar material bloqueado/reservado/em terceiro com número que não fecha; contagem cega e recontagem obrigatória para divergência grande |
+| 10b | Inventário Avançado, parte 2 | 2026-08-23 | Contagem por escopo (classe A, críticos, de clientes, em terceiros), dupla contagem por duas pessoas com o número do colega escondido, autoria por item e relatório de acuracidade com impacto em reais |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -195,6 +196,18 @@ fluxo formal de duas assinaturas, ou a dupla permissão que já existe é sufici
 sem migração de dado — a permissão dupla que existe hoje não precisa ser desfeita se decidirem
 construir o fluxo formal depois.
 
+**B12 (NOVO, da Etapa 10b) — o primeiro contador pode corrigir a própria contagem enquanto
+ninguém recontou. Esta você já decidiu por mim; está escrita aqui para você reconhecer o que foi
+implementado no seu nome.** Com a dupla contagem ligada, a primeira versão da regra barrava
+**qualquer** segunda escrita do primeiro contador — e como a etapa também passou a recusar valor
+inválido, um erro de digitação dele **congelava o item** (e, acima da tolerância, a conferência
+inteira) até outra pessoa logar. **Implementei: corrigir o próprio número é permitido enquanto
+`recontado` está zerado, e a correção NÃO conta como recontagem** — só a contagem de OUTRA pessoa
+conta. Descartei a alternativa (documentar "chame um colega" como procedimento) porque ela
+transformava um typo em parada operacional sem ganhar nada em controle: os quatro olhos continuam
+exigidos, porque a recontagem continua tendo de vir de outra pessoa. Reversível — se preferirem o
+comportamento rígido, é remover uma condição.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -257,6 +270,28 @@ construir o fluxo formal depois.
    sobre isso desde o desenho (a "cegueira" protege a coluna de saldo, não o sistema inteiro — um
    usuário que tem acesso à tela de Materiais já vê o número lá de qualquer forma), mas vale saber
    que a mensagem de recusa é outro caminho pelo qual o número escondido pode aparecer.
+7. **(10b) Contar "só o que tem parte em terceiro" durante uma remessa ativa gera divergência
+   falsa — e ela é CONCENTRADA exatamente nesse escopo.** O esperado do item desconta o que está
+   no galvanizador **no momento da criação da conferência**; se uma remessa sai (ou volta) no
+   meio da contagem, o operador que contou certo aparece como divergente, e o número entra na
+   acuracidade e no impacto financeiro. **O saldo não corre risco** (medido: o ajuste soma a
+   retenção de volta e o estoque termina certo) — o que mente é a **métrica**. Como o escopo
+   "com saldo em terceiros" seleciona exatamente os materiais cuja retenção se move, a regra
+   prática é: **não contar esse escopo com remessa em andamento** (congelar movimentação foi
+   corte declarado — letra D).
+8. **(10b) A flag "dupla contagem" não força ninguém a recontar** — item dentro da tolerância
+   nunca é recontado, e a conferência conclui normalmente. A flag garante só que, **quando**
+   houver recontagem, ela seja de outra pessoa. Por isso o relatório de Acuracidade tem a coluna
+   **Recontados**: um inventário "com dupla contagem" e recontados = 0 significa que ninguém
+   conferiu nada em dupla — o selo vale o que o número disser. (E um detalhe de API: em
+   conferência SEM a flag, re-salvar o mesmo valor pela mesma pessoa ainda marca recontagem —
+   mecânica da Etapa 10; a tela não faz mais isso por acidente, porque tabular sem digitar não
+   salva.)
+9. **(10b) O escopo gravado é fotografia do momento da criação.** Renomear uma família ou mudar
+   a classe ABC de um material **depois** não altera o texto `Classe A + ...` gravado na
+   conferência — nem os itens que entraram. É a semântica certa (o registro histórico diz o que
+   foi contado), mas quem estranhar "o escopo diz X e o material hoje é Y" precisa saber que o
+   texto é da época.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -301,18 +336,21 @@ construir o fluxo formal depois.
   foto, registre ocorrências adicionais — galeria de N fotos exigiria tabela e tela própria.
 - **(9b) Requisição de ferramenta pelo fluxo de requisições não existe** — fica para a feature 04
   encostar nisso, se um dia fizer sentido pedir ferramenta pelo mesmo caminho que material.
-- **(10) Só existe contagem "por categoria".** Contagem por endereço, por família, cíclica
-  automática por criticidade/curva ABC, item crítico e surpresa não foram construídas — o
-  checklist original pedia todas; ficam para uma etapa futura.
-- **(10) A recontagem aceita a mesma pessoa contando de novo** — não exige que seja um segundo
-  contador. "Dupla contagem por duas pessoas diferentes" (o checklist original) não foi
-  implementada; a recontagem desta etapa só garante uma segunda olhada, não uma segunda pessoa.
+- ~~**(10) Só existe contagem "por categoria".**~~ **Entregue na Etapa 10b** (família raiz,
+  classe ABC, críticos, de clientes, em terceiros — combináveis). Continuam fora, declarados na
+  seção da 10b: endereço, cíclica automática, surpresa (não é software), por divergência
+  (a recontagem obrigatória já é isso) e subfamília.
+- ~~**(10) A recontagem aceita a mesma pessoa contando de novo.**~~ **Entregue na Etapa 10b**: a
+  flag "Dupla contagem" exige recontagem de outra pessoa, esconde o número do primeiro contador
+  e registra a autoria por item. Sem a flag, o comportamento antigo continua valendo — e a flag
+  não força recontagem de item dentro da tolerância (item C8).
 - **(10) Nenhuma movimentação é congelada durante a contagem.** É possível lançar uma saída ou
   entrada de um material no meio de uma conferência em aberto — o mesmo raciocínio da
   Transferência sem "em trânsito" (Etapa 7): site único, baixo valor prático, alto custo de
   implementação, ninguém pediu.
-- **(10) Relatório formal de acuracidade e e-mail do resultado do inventário não existem** — ficam
-  para as features de relatórios (21) e notificações (19).
+- ~~**(10) Relatório formal de acuracidade não existe.**~~ **Entregue na Etapa 10b** (botão
+  Acuracidade na tela de Conferência: por conferência e agregado ponderado). O **e-mail do
+  resultado** continua fora (feature 19).
 - **(10) A guarda de retenção não cobre ajuste por localização/endereço específico** — só o
   ajuste do material inteiro (o caminho que a conferência usa) tem a checagem nova; um ajuste
   manual escopado a uma prateleira específica não passa por ela ainda.
@@ -383,6 +421,14 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    "Aplicar ajustes automáticos" está marcado; o aviso de sucesso mostrando o impacto financeiro
    formatado em reais; e as mensagens de recusa (recontagem, retenção, permissão de cliente)
    aparecendo por inteiro no aviso, não cortadas.
+7. **(10b) Os acréscimos da Etapa 10b na mesma tela.** **Nenhum navegador foi aberto na entrega
+   da 10b** — mesma ressalva. Falta conferir: os controles de escopo no modal de criar (select
+   de família só com raízes, select de classe, os três checkboxes e o de dupla contagem)
+   cabendo no layout; a coluna "Escopo" na lista; a linha "Contado por · Recontado por" nos
+   itens; o modal de **Acuracidade** com a tabela inteira na largura (9 colunas) e os traços
+   nos nulos; e o fluxo de dupla contagem com **dois logins de verdade** (o segundo usuário
+   vendo o campo vazio, o Tab não salvando nada, a correção do primeiro contador funcionando).
+   O roteiro completo está no guia, seção da Etapa 10b.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -471,6 +517,25 @@ a ordem em que os materiais eram processados escondeu o bug. Só forçando a ord
 teste (o "OK" processado antes do "quebrado") é que a sabotagem provou alguma coisa de verdade.
 Fica como lição para qualquer teste de "tudo-ou-nada" daqui pra frente: sem forçar a ordem dos
 itens, o teste pode estar provando sorte, não comportamento.
+
+**G6 (NOVO, da 10b). A régua de "isto é divergência de verdade" tem uma cópia declarada no
+front — e cópia declarada também deriva.** A Etapa 10b unificou no servidor a definição de
+divergência (uma tolerância mínima que ignora a deriva de decimal — sem ela, contar 0.2 contra
+um esperado de 0.1999999... dava 0% de acuracidade para um operador que acertou). A revisão
+final achou a mesma comparação exata em **três** lugares do servidor (relatório novo, relatório
+antigo e o gate de recontagem) e as levou para a fonte única; mas o **contador de divergências
+da tela** faz a conta localmente e **espelha o mesmo valor por cópia** — legítimo, porque a
+fronteira HTTP existe de verdade, e frágil pelo mesmo motivo de sempre: se a régua do servidor
+mudar, a do front não muda junto sozinha. Mesma família do G4 (contrato honrado por um lado
+só) — quem mexer na régua procura os dois lados. **E três adendos de disciplina de sabotagem,
+aprendidos por falha real nesta etapa:** (1) a âncora do `sed` precisa ser única **nos dois
+sentidos** — a restauração de uma sabotagem casou 11 ocorrências e espalhou a mudança por rotas
+alheias (o md5 pegou); (2) restaurar sabotagem com `git checkout` numa árvore com trabalho não
+commitado **apaga o trabalho** (o md5 pegou de novo) — restauração é sempre por edição reversa;
+(3) sabotagem que passa verde pode ser o **teste fraco**, não a prova de que ele falta — duas
+vezes nesta etapa o mutante precisou ser trocado por um mais forte antes de provar algo
+(o fallback do restore produzia o mesmo resultado; o par de checkboxes marcado simetricamente
+tornava a transposição invisível).
 
 ---
 
@@ -1767,21 +1832,112 @@ histórico completo.
 - **Guarda de retenção para contagem por localização/endereço** — a guarda desta etapa vale para
   o ajuste do material inteiro; contagem por endereço específico não tem essa checagem ainda.
 
+## Etapa 10b — Inventário Avançado, parte 2 (2026-08-23)
+
+A Etapa 10 consertou o motor do inventário; esta etapa entrega o que faz o inventário virar
+**rotina de gestão**. Antes, contar era tudo-ou-nada: uma conferência pegava o estoque inteiro
+(ou uma categoria), e "recontar" podia ser a mesma pessoa olhando de novo para o mesmo papel.
+Agora dá para contar **só a classe A**, **só os críticos**, **só o material de cliente** ou **só
+o que tem parte em terceiro**; dá para exigir que a recontagem seja de **outra pessoa** (e o
+sistema esconde o número do primeiro contador para a segunda contagem ser de verdade); e o
+resultado de cada inventário vira **número de gestão** — acuracidade por conferência, com o
+impacto em reais gravado no dia em que foi medido.
+
+### Antes → Agora
+
+| Antes (Etapa 10) | Agora (Etapa 10b) |
+|---|---|
+| Conferência de tudo, ou por categoria | Escopo combinável: categoria, família, classe ABC, somente críticos, materiais de clientes, com saldo em terceiros — e o escopo fica **gravado** na conferência |
+| Recontagem podia ser a mesma pessoa | Com "Dupla contagem" marcado, a recontagem tem de ser de **outra pessoa** — e ela conta **sem ver** o número do colega |
+| Ninguém sabia quem contou | Cada item guarda **quem contou** e **quem recontou**, visível na tela |
+| Qualquer valor entrava como contagem | Contagem tem de ser número ≥ 0 (zero vale — prateleira vazia é contagem legítima) |
+| Impacto financeiro aparecia uma vez e sumia | Impacto gravado na conclusão; concluir **sem** aplicar ajustes também mostra quanto de erro foi encontrado |
+| Nenhuma visão consolidada | Botão **Acuracidade**: por conferência, contados/total, exatos, divergentes, recontados, % de acuracidade e impacto em R$ + agregado ponderado |
+| Deriva de decimal virava "divergência" | Contar 0.2 contra um esperado de 0.1999999... é **exato** (100%), não 0% |
+
+### As regras, com o cenário exato
+
+1. **Escopo combinável.** Em Conferência de Estoque → Nova Conferência, marque **Classe ABC =
+   A** e **Somente críticos**: só os materiais que são as duas coisas entram, e a conferência
+   grava o escopo — a lista mostra `Classe A + Somente críticos`. Sem nenhum filtro, o escopo é
+   `Geral`. O seletor de família só oferece **famílias raiz** (o cadastro de material vincula a
+   raiz). Filtro que não casa nada cria a conferência **vazia**, avisando "criada com 0 itens".
+   Pela API, classe fora de A/B/C recusa com: `Classe ABC inválida (use A, B ou C)`.
+2. **Dupla contagem esconde o número do colega — com ou sem contagem cega.** Crie com **Dupla
+   contagem** marcado. Ana conta 90. Quando Bruno abre a mesma conferência, o campo do item vem
+   **vazio** — ele não vê os 90 de Ana (nem precisa do modo cego para isso; o modo cego continua
+   escondendo o **saldo do sistema**, que é outra coisa). Quem tem permissão de homologar
+   (Gestor/Administrador) vê tudo.
+3. **Tabular não é contar.** Sair de um campo sem digitar **não salva nada** — só valor digitado
+   na sessão vira contagem. (É o que impede alguém de "recontar" três itens com a tecla Tab.)
+4. **O primeiro contador corrige o próprio número — até alguém recontar.** Ana contou 90 mas era
+   91? Ela corrige, e a correção **não** conta como recontagem. Depois que Bruno recontou, Ana
+   não toca mais no item: `Dupla contagem: a recontagem deve ser feita por outra pessoa
+   (primeira contagem: Ana)`.
+5. **Contagem tem de ser um número.** Digitar texto ou negativo recusa na hora:
+   `Quantidade contada deve ser um número maior ou igual a zero`. Zero é aceito — contar uma
+   prateleira vazia é contagem de verdade (e um valor recusado **sai da tela**, voltando ao que
+   estava salvo).
+6. **Concluir sem aplicar também mede o erro.** Conclua sem marcar "Aplicar ajustes": o aviso
+   diz `Conferência concluída! 0 ajustes aplicados — divergências encontradas: R$ 100,00
+   (nenhum ajuste aplicado)` — o tamanho do erro encontrado fica gravado mesmo quando ninguém
+   mexe no saldo.
+7. **Acuracidade.** O botão **Acuracidade** (na lista de conferências) mostra, por conferência
+   concluída: contados **sobre o total** (100% de acuracidade contando 1 de 10 itens aparece
+   como `1 / 10` — o denominador não se esconde), exatos, divergentes, **recontados** (o selo de
+   dupla contagem só vale o que esse número disser), acuracidade % e impacto em R$. Conferências
+   de antes desta etapa mostram `—` no impacto (não medido na época — recalcular hoje com o
+   custo de hoje inventaria um número que nunca existiu). Sem nenhum item contado, a acuracidade
+   é `—`, não 0% nem 100%. O agregado é **ponderado por item contado**, não média simples.
+8. **Deriva de decimal não é divergência.** Material com 30.3 no total e 30.1 em terceiro tem
+   esperado 0.2 — mas o computador guarda 0.1999999999999993. Contar 0.2 dá **exato** (100% de
+   acuracidade, impacto R$ 0,00), em todos os lugares que leem divergência: acuracidade,
+   relatório de divergências e o próprio ajuste (que não dispara movimentação de 0,0000000000000007).
+9. **Quem contou fica registrado.** Cada item mostra `Contado por: Ana · Recontado por: Bruno`.
+   Itens contados antes desta etapa não têm autoria — a linha simplesmente não aparece (sem
+   "Contado por: —" à toa).
+10. **O relatório antigo de divergências entrou na linha.** Ele só mostra conferências
+    **concluídas** (contagem em andamento não vaza mais por ele), exige a mesma permissão de
+    inventário e usa a mesma régua de divergência do resto.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Contagem por endereço/prateleira** — a conferência é por material (decisão da Etapa 8b
+  sobre o esperado depende disso), e ajuste por localização é exatamente o corte declarado da
+  guarda de retenção. Fica para quando contagem por endereço for pedida de verdade.
+- **Contagem cíclica automática** (gerar conferência sozinho por frequência ABC) — não há
+  infraestrutura de agendamento no módulo; o filtro por classe entrega a prática manual (contar
+  a classe A todo mês é criar a conferência "Classe A" todo mês).
+- **Contagem "surpresa" não é software** — surpresa é não avisar o galpão; qualquer conferência
+  criada na hora já é isso.
+- **Contagem "por divergência"** — a recontagem obrigatória da Etapa 10 já é a recontagem
+  seletiva dos itens divergentes; um escopo "só os que divergiram da última vez" seria uma
+  segunda resposta para a mesma pergunta.
+- **Escopo por subfamília** — o cadastro de material vincula a **família raiz**; o seletor só
+  oferece raízes de propósito (oferecer subfamília criava conferência vazia em silêncio).
+- **Filtro por cliente específico** — "materiais de clientes" cobre o tipo pedido; auditoria de
+  um cliente específico já tem a tela de posição por cliente.
+- **Congelar movimentações durante a contagem** — ruling anterior mantido (site único, baixo
+  valor, alto custo). Consequência prática registrada na letra C.
+- **Fluxo formal de dupla aprovação (duas assinaturas)** — a pergunta B11 continua aberta;
+  construir antes da resposta seria construir sobre decisão pendente.
+- **E-mail do resultado** — feature 19, mesmo corte de todas as etapas.
+
 ## Onde estamos e o que vem a seguir
 
-- **Concluído até aqui:** Etapas 0 a 10 — fundação, motor de estoque, cadastros, requisições,
+- **Concluído até aqui:** Etapas 0 a 10b — fundação, motor de estoque, cadastros, requisições,
   reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções, materiais de clientes,
   remessas a terceiros, transformação no terceiro, **retalhos/sucatas**, **ferramentas e
-  calibração** e o **núcleo correto do inventário avançado**. As features 10 (lotes/séries/
-  etiquetas), 11 (transferências), 12 (devoluções), 13 (materiais de clientes), **14 (materiais em
-  terceiros)**, **15 (retalhos, sobras e sucatas)** e **16 (ferramentas e calibração)** estão
-  completas no que cada etapa se propôs. A **17 (inventário avançado) fica parcial** — o ajuste
-  de inventário agora passa pelo motor de verdade, com a decisão de retenção tomada (item **B10**)
-  e contagem cega + recontagem entregues; tipos de contagem avançados, dupla contagem por duas
-  pessoas e relatório de acuracidade ficam para uma **Etapa 10b** (item **D**).
-- **Próxima etapa:** **Etapa 10b — inventário avançado, parte 2** (feature 17, o que ficou de
-  fora — ver letra D) ou **Etapa 11 — reposição e compras** (feature 18), conforme prioridade a
-  decidir na sessão que pegar o trabalho.
+  calibração** e o **inventário avançado em duas rodadas** (a 10 consertou o motor; a 10b entregou
+  escopos de contagem, dupla contagem por duas pessoas e o relatório de acuracidade). As features
+  10 (lotes/séries/etiquetas), 11 (transferências), 12 (devoluções), 13 (materiais de clientes),
+  **14 (materiais em terceiros)**, **15 (retalhos, sobras e sucatas)** e **16 (ferramentas e
+  calibração)** estão completas no que cada etapa se propôs. A **17 (inventário avançado) fica
+  quase completa** — o que resta fora está declarado na seção da 10b (endereço, cíclica
+  automática, dupla aprovação formal aguardando **B11**, e-mail) e não tem etapa própria marcada.
+- **Próxima etapa:** **Etapa 11 — reposição e compras** (feature 18). A escolha "10b antes da 11"
+  foi ruling desta sessão, pelo precedente das sub-etapas (6b/6c, 8b/8c, 9b) — reversível e já
+  consumado.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
@@ -1789,8 +1945,8 @@ histórico completo.
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
   3. ~~saber que a conferência de inventário ajusta saldo fora da permissão de material de
      cliente~~ — **resolvido na Etapa 10**, item **C1**;
-  4. **nem a 8b, nem a 8c, nem a 9, nem a 9b, nem a 10 acrescentam consulta a esta lista** — todas
-     só criam colunas e tabelas novas, sem tocar em dado existente;
+  4. **nem a 8b, nem a 8c, nem a 9, nem a 9b, nem a 10, nem a 10b acrescentam consulta a esta
+     lista** — todas só criam colunas e tabelas novas, sem tocar em dado existente;
   5. **avisar quem compara relatórios com o mês passado** de que dois números mudam de leitura
      (itens **C3** e **C4**) — nenhum dado foi alterado, mas o número na tela vai ser outro;
   6. **avisar quem opera que o tipo Sucata sumiu do formulário de Movimentações** (item **C5**) —
@@ -1808,8 +1964,10 @@ histórico completo.
   ferramenta** (item **B7**) e priorizar (ou não) a **tela de editar ferramenta** (item **B8**);
   reconhecer a **regra de retenção do ajuste de inventário** implementada no seu nome (item
   **B10**) e decidir se o inventário precisa do **fluxo formal de duas assinaturas** (item
-  **B11**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação, a tela
-  de Sobras e Retalhos, a tela de Ferramentas e a tela de Conferência de Estoque (item **F**).
+  **B11**); reconhecer a **correção do primeiro contador** implementada no seu nome (item
+  **B12**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação, a tela
+  de Sobras e Retalhos, a tela de Ferramentas e a tela de Conferência de Estoque com os campos
+  da 10b (escopo, dupla contagem, Acuracidade — item **F**).
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas
   pelo usuário (roteiros no guia); tela de subfamílias; telas para localizações
   vazias/materiais sem endereço; pendências declaradas (a)–(j) da 6b e (a)–(g) da 6c na
