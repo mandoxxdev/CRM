@@ -744,7 +744,20 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // o gate global do módulo só checa ACESSO, não perfil.
   app.post('/api/almoxarifado/conferencias', requirePermission('inventario'), async (req, res) => {
     try {
-      const { observacoes, categoria, modo_cego, tolerancia_percentual } = req.body;
+      const { observacoes, categoria, modo_cego, tolerancia_percentual,
+              familia_id, classe_abc, apenas_criticos, apenas_de_clientes,
+              apenas_em_terceiros, dupla_contagem } = req.body;
+
+      // RN-01 (10b): classe ABC é o único filtro de domínio fechado — valor fora de A/B/C é
+      // 400. Os demais filtros que não casam nada só geram conferência vazia, mesmo
+      // comportamento que `categoria` inexistente sempre teve.
+      let classeAbc = null;
+      if (classe_abc !== undefined && classe_abc !== null && classe_abc !== '') {
+        classeAbc = String(classe_abc).toUpperCase();
+        if (!['A', 'B', 'C'].includes(classeAbc)) {
+          return res.status(400).json({ error: 'Classe ABC inválida (use A, B ou C)' });
+        }
+      }
 
       // Gerar número único
       const numero = `INV-${Date.now().toString().slice(-8)}`;
@@ -756,10 +769,30 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         : await stockService.getConfig(db, 'tolerancia_inventario_percentual');
       const toleranciaValor = toleranciaEfetiva(toleranciaOrigem);
 
+      // RN-01 (10b): descrição legível do escopo, ordem fixa, juntada por " + ". Sem filtro
+      // nenhum → "Geral". Persistida na conferência para aparecer na lista/detalhe sem
+      // reconstruir os filtros originais depois.
+      const partesEscopo = [];
+      if (categoria) partesEscopo.push(`Categoria: ${categoria}`);
+      if (familia_id) {
+        const fam = await dbGet(db, `SELECT nome FROM familias_material_almoxarifado WHERE id = ?`, [familia_id]);
+        // Literal congelado (RN-01): com cadastro "Família: <nome>"; sem, "Família #<id>"
+        // (SEM dois-pontos — o teste afere os dois ramos).
+        partesEscopo.push(fam?.nome ? `Família: ${fam.nome}` : `Família #${familia_id}`);
+      }
+      if (classeAbc) partesEscopo.push(`Classe ${classeAbc}`);
+      if (apenas_criticos) partesEscopo.push('Somente críticos');
+      if (apenas_de_clientes) partesEscopo.push('Materiais de clientes');
+      if (apenas_em_terceiros) partesEscopo.push('Com saldo em terceiros');
+      const escopoDescricao = partesEscopo.length > 0 ? partesEscopo.join(' + ') : 'Geral';
+      const duplaContagemValor = dupla_contagem ? 1 : 0;
+
       const ins = await dbRun(db, `INSERT INTO conferencias_almoxarifado
-              (numero, status, responsavel_id, responsavel_nome, observacoes, modo_cego, tolerancia_percentual)
-              VALUES (?, 'ABERTO', ?, ?, ?, ?, ?)`,
-        [numero, req.user.id, req.user.nome || req.user.email, observacoes || null, modoCegoValor, toleranciaValor]);
+              (numero, status, responsavel_id, responsavel_nome, observacoes, modo_cego,
+               tolerancia_percentual, dupla_contagem, escopo_descricao)
+              VALUES (?, 'ABERTO', ?, ?, ?, ?, ?, ?, ?)`,
+        [numero, req.user.id, req.user.nome || req.user.email, observacoes || null,
+         modoCegoValor, toleranciaValor, duplaContagemValor, escopoDescricao]);
       const confId = ins.lastID;
 
       // Inserir todos os materiais ativos.
@@ -782,6 +815,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                  FROM materiais_almoxarifado WHERE ativo = 1`;
       const params = [];
       if (categoria) { sql += ` AND categoria = ?`; params.push(categoria); }
+      if (familia_id) { sql += ` AND familia_id = ?`; params.push(familia_id); }
+      if (classeAbc) { sql += ` AND classe_abc = ?`; params.push(classeAbc); }
+      if (apenas_criticos) { sql += ` AND material_critico = 1`; }
+      if (apenas_de_clientes) { sql += ` AND proprietario_cliente_id IS NOT NULL`; }
+      // RN-02 (10b): escopo "em terceiros" = tem retenção fora do prédio. O esperado continua
+      // sendo o que está NO prédio (o SELECT acima já desconta — regra da 8b, inalterada).
+      if (apenas_em_terceiros) { sql += ` AND COALESCE(quantidade_em_terceiros, 0) > 0`; }
       sql += ` ORDER BY nome`;
 
       const materiais = await dbAll(db, sql, params);
@@ -793,6 +833,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(201).json({
           id: confId, numero, status: 'ABERTO',
           modo_cego: modoCegoValor, tolerancia_percentual: toleranciaValor, itens: [], totalItens: 0,
+          dupla_contagem: duplaContagemValor, escopo_descricao: escopoDescricao,
         });
       }
 
@@ -803,6 +844,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       res.status(201).json({
         id: confId, numero, status: 'ABERTO',
         modo_cego: modoCegoValor, tolerancia_percentual: toleranciaValor, totalItens: materiais.length,
+        dupla_contagem: duplaContagemValor, escopo_descricao: escopoDescricao,
       });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });

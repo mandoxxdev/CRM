@@ -1719,6 +1719,19 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN tolerancia_percentual REAL');
   await safeAlter(db, 'ALTER TABLE itens_conferencia_almoxarifado ADD COLUMN recontado INTEGER DEFAULT 0');
 
+  // Etapa 10b (Task 1 — só as colunas; quem as usa são as Tasks 1-3): escopo_descricao (RN-01)
+  // guarda a descrição legível do escopo com que a conferência foi criada; dupla_contagem
+  // (RN-03) exige recontagem por OUTRA pessoa; impacto_financeiro (RN-05) persiste na
+  // conclusão o que a Etapa 10 calculava e jogava fora. Autoria por item (RN-04): primeira
+  // contagem preenche contado_por_*, cada contagem seguinte sobrescreve recontado_por_*.
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN escopo_descricao TEXT');
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN dupla_contagem INTEGER DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN impacto_financeiro REAL');
+  await safeAlter(db, 'ALTER TABLE itens_conferencia_almoxarifado ADD COLUMN contado_por_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE itens_conferencia_almoxarifado ADD COLUMN contado_por_nome TEXT');
+  await safeAlter(db, 'ALTER TABLE itens_conferencia_almoxarifado ADD COLUMN recontado_por_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE itens_conferencia_almoxarifado ADD COLUMN recontado_por_nome TEXT');
+
   // ── Config defaults ──
   const configs = [
     // Migrado de routes/almoxarifado.js (diff de segurança — Task 3): chaves base que só
