@@ -192,6 +192,36 @@ async function contar(app, confId, itemId, quantidade) {
     assert.strictEqual(mov.length, 0);
   });
 
+  await test('concluir uma conferencia JA CONCLUIDA recusa 400 (achado da revisao — sem isto, replay duplicava o ajuste)', async () => {
+    setUser(ADMIN);
+    const mat = await novoMaterial(db, { qtd: 100, custoUnitario: 10 });
+    const conf = await abrirConferencia(app);
+    const item = await itemDoMaterial(db, conf.id, mat.id);
+    await contar(app, conf.id, item.id, 99);
+    const primeira = await request(app).put(`/api/almoxarifado/conferencias/${conf.id}/concluir`)
+      .send({ aplicar_ajustes: true, justificativa_ajuste: 'Primeira conclusao' });
+    assert.strictEqual(primeira.status, 200, JSON.stringify(primeira.body));
+
+    const segunda = await request(app).put(`/api/almoxarifado/conferencias/${conf.id}/concluir`)
+      .send({ aplicar_ajustes: true, justificativa_ajuste: 'Tentativa de concluir de novo' });
+    assert.strictEqual(segunda.status, 400, JSON.stringify(segunda.body));
+    assert.strictEqual(segunda.body.error, 'Conferência não está aberta (status atual: CONCLUIDO)');
+
+    const mov = await dbAll(db, `SELECT * FROM movimentacoes_almoxarifado WHERE tipo = 'AJUSTE_INVENTARIO' AND material_id = ?`, [mat.id]);
+    assert.strictEqual(mov.length, 1, 'o replay nao pode ter gravado uma segunda movimentacao');
+  });
+
+  await test('concluir uma conferencia CANCELADA recusa 400 (nao ressuscita)', async () => {
+    setUser(ADMIN);
+    const mat = await novoMaterial(db, { qtd: 100 });
+    const conf = await abrirConferencia(app);
+    await dbRun(db, `UPDATE conferencias_almoxarifado SET status = 'CANCELADO' WHERE id = ?`, [conf.id]);
+
+    const res = await request(app).put(`/api/almoxarifado/conferencias/${conf.id}/concluir`).send({});
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Conferência não está aberta (status atual: CANCELADO)');
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

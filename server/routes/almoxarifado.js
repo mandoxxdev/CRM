@@ -891,6 +891,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     try {
       const conf = await dbGet(db, `SELECT * FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
       if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
+      // Achado da revisao da Task 2: sem este gate, concluir de novo uma conferencia ja
+      // CONCLUIDA fabricava um SEGUNDO AJUSTE_INVENTARIO (e uma segunda auditoria de material de
+      // cliente) por item, e concluir uma CANCELADA a ressuscitava. Mesma mensagem de RN-03
+      // (PUT /item ja usa), agora tambem aqui — a conferencia so aceita ser concluida uma vez.
+      if (conf.status !== 'ABERTO') {
+        return res.status(400).json({ error: `Conferência não está aberta (status atual: ${conf.status})` });
+      }
 
       const todosItens = await dbAll(db,
         `SELECT * FROM itens_conferencia_almoxarifado WHERE conferencia_id = ? AND quantidade_contada IS NOT NULL`,
