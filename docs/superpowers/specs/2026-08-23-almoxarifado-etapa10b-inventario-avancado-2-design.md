@@ -181,7 +181,9 @@ primeiro contador recontando (RN-03).
 ### `GET /api/almoxarifado/conferencias/:id` (alterado)
 
 Cada item passa a incluir `contado_por_id`, `contado_por_nome`, `recontado_por_id`,
-`recontado_por_nome` (nulos em itens contados antes da etapa — o front renderiza "—").
+`recontado_por_nome` (nulos em itens contados antes da etapa — o front **omite a linha de
+autoria** quando não há nome nenhum, e une as partes presentes com " · "; a versão original
+dizia "renderiza '—'", corrigido na execução da Task 4).
 Autoria não entra na blindagem do modo cego (não é número de saldo), **mas** com `modo_cego`
 + `dupla_contagem` o item **pode vir sem `quantidade_contada`** para quem não é o último
 autor nem homologa (RN-08/complemento de RN-03) — o front trata ausência como "—".

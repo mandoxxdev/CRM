@@ -574,8 +574,11 @@ valor achado — e o porquê.)
     `escopo_descricao`, `dupla_contagem`.
   - `GET /almoxarifado/conferencias` — cada linha agora tem `escopo_descricao` (nulo nas
     antigas → renderizar `—`).
-  - `GET /almoxarifado/conferencias/:id` — itens com `contado_por_nome`/`recontado_por_nome`
-    (nulos → renderizar "—"; itens contados antes da etapa têm o par todo nulo). **Em
+  - `GET /almoxarifado/conferencias/:id` — itens com `contado_por_nome`/`recontado_por_nome`.
+    **Correção (execução da Task 4):** este contrato dizia "nulos → renderizar '—'" — o
+    entregue é melhor e fica: a linha de autoria só renderiza quando existe pelo menos um
+    nome (item nunca contado ou legado sem autoria não ganha "Contado por: —" à toa), e as
+    partes presentes são unidas por " · " (sem separador pendurado no caso legado misto). **Em
     conferência `modo_cego` + `dupla_contagem`, o item pode vir SEM `quantidade_contada`**
     para quem não é o último autor (fix da revisão da Task 2) — input vazio e "—", nunca
     `undefined` na tela.
