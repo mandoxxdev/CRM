@@ -358,6 +358,20 @@ async function listarFerramentas(db, filters = {}) {
   let sql = 'SELECT * FROM ferramentas_almoxarifado WHERE ativo = 1';
   const params = [];
   if (filters.status) { sql += ' AND status = ?'; params.push(filters.status); }
+  // busca/exige_calibracao: contrato congelado do design (tabela de contratos, GET
+  // /ferramentas: `status?, busca?, exige_calibracao?`) — o front (Task 7) ja manda `busca` na
+  // caixa de texto desde que a tela existe; a query so nao lia. `busca` casa codigo_patrimonio
+  // OU nome (mesmo padrao de outras listagens do modulo); `exige_calibracao` e 0/1 explicito
+  // (nao truthy), pra nao confundir "nao filtrar" com "filtrar por 0".
+  if (filters.busca) {
+    sql += ' AND (codigo_patrimonio LIKE ? OR nome LIKE ?)';
+    params.push(`%${filters.busca}%`, `%${filters.busca}%`);
+  }
+  if (filters.exige_calibracao === '0' || filters.exige_calibracao === '1'
+    || filters.exige_calibracao === 0 || filters.exige_calibracao === 1) {
+    sql += ' AND exige_calibracao = ?';
+    params.push(Number(filters.exige_calibracao));
+  }
   sql += ' ORDER BY nome';
   const ferramentas = await dbAll(db, sql, params);
 

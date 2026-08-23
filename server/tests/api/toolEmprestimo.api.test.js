@@ -160,6 +160,38 @@ async function novaFerramenta(db, extra = {}) {
     await close();
   });
 
+  await test('listarFerramentas: ?busca= casa codigo_patrimonio ou nome, ?exige_calibracao= filtra 0/1 (F1 da revisao final)', async () => {
+    const { app, db, close } = await createTestApp();
+    await dbRun(db, `INSERT INTO ferramentas_almoxarifado (codigo_patrimonio, nome, status, exige_calibracao)
+      VALUES ('PAT-XYZ-01', 'Furadeira de impacto', 'DISPONIVEL', 1)`);
+    await dbRun(db, `INSERT INTO ferramentas_almoxarifado (codigo_patrimonio, nome, status, exige_calibracao)
+      VALUES ('PAT-9999', 'Serra circular', 'DISPONIVEL', 0)`);
+
+    // busca por codigo acha
+    let r = await request(app).get('/api/almoxarifado/ferramentas?busca=XYZ').expect(200);
+    assert.strictEqual(r.body.length, 1, `busca por codigo deveria achar 1, veio ${r.body.length}`);
+    assert.strictEqual(r.body[0].codigo_patrimonio, 'PAT-XYZ-01');
+
+    // busca por nome acha
+    r = await request(app).get('/api/almoxarifado/ferramentas?busca=Serra').expect(200);
+    assert.strictEqual(r.body.length, 1, `busca por nome deveria achar 1, veio ${r.body.length}`);
+    assert.strictEqual(r.body[0].nome, 'Serra circular');
+
+    // nao-match nao acha
+    r = await request(app).get('/api/almoxarifado/ferramentas?busca=NaoExiste').expect(200);
+    assert.strictEqual(r.body.length, 0, `busca sem match deveria vir vazia, veio ${r.body.length}`);
+
+    // exige_calibracao=1 filtra
+    r = await request(app).get('/api/almoxarifado/ferramentas?exige_calibracao=1').expect(200);
+    assert.ok(r.body.every(f => f.exige_calibracao === 1), 'exige_calibracao=1 deveria devolver so as que exigem');
+    assert.ok(r.body.some(f => f.codigo_patrimonio === 'PAT-XYZ-01'));
+
+    r = await request(app).get('/api/almoxarifado/ferramentas?exige_calibracao=0').expect(200);
+    assert.ok(r.body.every(f => f.exige_calibracao === 0), 'exige_calibracao=0 deveria devolver so as que nao exigem');
+    assert.ok(r.body.some(f => f.codigo_patrimonio === 'PAT-9999'));
+    await close();
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();
