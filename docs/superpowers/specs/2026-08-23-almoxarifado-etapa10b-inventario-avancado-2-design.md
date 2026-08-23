@@ -66,17 +66,37 @@ galvanizador.
 
 ### RN-03 — Dupla contagem por duas pessoas
 
-Conferência criada com `dupla_contagem: true` (default `false`) exige que **toda contagem
-depois da primeira** de um item seja feita por usuário **diferente de quem fez a primeira**
-(`contado_por_id`). O autor da primeira contagem tentando recontar → **400** com a mensagem
-literal:
+Conferência criada com `dupla_contagem: true` (default `false`) exige que a **recontagem** de
+um item seja feita por usuário **diferente de quem fez a primeira contagem**
+(`contado_por_id`).
 
-`"Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: <nome>)"`
+**Emendada pela revisão final de branch (dois pontos — a versão original desta RN estava
+errada nos dois):**
 
-- A regra compara com o autor da **primeira** contagem, não da anterior — senão o primeiro
-  contador poderia sobrescrever a recontagem do colega e anular os quatro olhos.
+1. **Enquanto ninguém recontou (`recontado = 0`), o primeiro contador pode CORRIGIR a própria
+   contagem** — correção **não** é recontagem: não marca `recontado`, não preenche
+   `recontado_por`, resposta `recontagem: false`. A versão original barrava toda segunda
+   escrita dele, e junto com RN-08 isso congelava um erro de digitação até outra pessoa
+   logar (acima da tolerância, travava a conferência inteira). Só a contagem de **outra**
+   pessoa marca recontagem. **Depois** da recontagem do colega, ele toma **400** com a
+   mensagem literal (que não mudou):
+   `"Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: <nome>)"`
+2. **O GET esconde a contagem do colega MESMO SEM modo cego.** A versão original tratava a
+   ocultação como sub-caso do modo cego — **estava errado, e era Critical**: em dupla
+   contagem sem modo cego (a combinação mais provável), o input do recontador chegava
+   preenchido com o número do colega e um **Tab** certificava a "recontagem" sem digitar nada
+   (medido: saldo reescrito 100→70 pelo motor com trilha de duas pessoas). O strip de
+   `quantidade_contada` depende **só** de `dupla_contagem` (+ ABERTO + não-homologador +
+   não-último-autor); o strip de `quantidade_sistema`/`divergencia` continua sendo do modo
+   cego. No front, o par da defesa: **só campo digitado na sessão dispara PUT** — tabular por
+   um input preenchido não salva nada, e valor recusado pelo servidor volta ao que estava.
+
+- A comparação é sempre com o autor da **primeira** contagem, não da anterior — senão o
+  primeiro contador poderia sobrescrever a recontagem do colega e anular os quatro olhos.
 - Sem a flag, o comportamento da Etapa 10 fica **intacto** (mesma pessoa pode recontar).
 - A flag é por conferência, como `modo_cego`; conferências antigas (coluna nula) valem 0.
+- A flag **não força** recontagem de item dentro da tolerância — o relatório (RN-06) traz
+  `recontados` por conferência exatamente para o selo não valer mais do que o número.
 
 ### RN-04 — Autoria de contagem sempre gravada
 
@@ -99,14 +119,14 @@ duas. Também fecha o minor deferido da Etapa 10 (negativo aceito sem validaçã
 profundidade: a sentinela do gate RN-03 passou a ser `contado_por_id` (que nunca volta a
 nulo), não `quantidade_contada`.
 
-**Complemento de RN-03 (mesma revisão):** em conferência com `modo_cego` **e**
-`dupla_contagem`, o `GET /:id` esconde também `quantidade_contada` dos itens cujo **último
-autor** não é quem está lendo (o próprio autor continua vendo o que digitou; quem tem
-`ajustar_estoque` vê tudo; concluída/cancelada, tudo volta). Sem isso o recontador lia a
-contagem do colega antes de recontar — quatro olhos virando dois olhos e uma cópia. A versão
-original deste design afirmava "a blindagem do modo cego não muda — autoria não é número de
-saldo"; **estava errado** para esta combinação: autoria não é número, mas a contagem do
-colega é.
+**Complemento de RN-03 (revisão da Task 2, ENDURECIDO pela revisão final):** o `GET /:id`
+esconde `quantidade_contada` dos itens cujo **último autor** não é quem está lendo, em
+qualquer conferência com `dupla_contagem` — **com ou sem modo cego** (o próprio autor continua
+vendo o que digitou; quem tem `ajustar_estoque` vê tudo; concluída/cancelada, tudo volta). A
+primeira versão desta correção condicionava o strip ao modo cego; a revisão final provou que
+isso deixava o Critical aberto na combinação mais provável (dupla sem cego — Tab certificava
+recontagem). Duas afirmações anteriores deste design sobre o assunto estavam **erradas** e
+foram corrigidas em sequência.
 
 ### RN-05 — Impacto financeiro persistido na conclusão
 
@@ -131,14 +151,30 @@ persistir acuracidade):
 
 - por conferência: `id`, `numero`, `data_fim`, `escopo_descricao`, `modo_cego`,
   `dupla_contagem`, `total_itens`, `contados` (com `quantidade_contada` não nula), `exatos`
-  (contados com `divergencia = 0`), `divergentes` (contados − exatos), `acuracidade`
+  (contados com `|divergência| < 1e-9` — ver o epsilon abaixo), `recontados` (itens com
+  `recontado = 1` — acrescentado na revisão final: a flag `dupla_contagem` sozinha não prova
+  que alguém recontou), `divergentes` (contados − exatos), `acuracidade`
   (`exatos / contados × 100`, 2 casas; **`null` quando `contados = 0`** — sem contagem não há
-  acuracidade, e 0% mentiria), `impacto_financeiro` (nulo nas anteriores à etapa).
-- **"Exato" tolera deriva de float (revisão da Task 3):** `quantidade_sistema` nasce de uma
-  subtração REAL (`atual − em_terceiros`); a comparação de "item exato" usa
-  `|divergência| < 1e-9` (uma definição só, usada pelo relatório e pelo filtro de ajustes do
-  concluir), senão contar 0.2 contra um esperado 0.1999999999999993 dava 0% de acuracidade
-  para um operador que acertou — e um `AJUSTE_INVENTARIO` inútil de 7e-16.
+  acuracidade, e 0% mentiria), `impacto_financeiro` (nulo nas anteriores à etapa). Máximo de
+  **500 conferências** (mesmo teto dos relatórios irmãos). A tabela do front mostra
+  **`contados / total_itens`** — 100% de acuracidade sobre 1 de 10 itens contados sem mostrar
+  o 10 mentiria tanto quanto o 0% proibido acima.
+- **"Exato" tolera deriva de float (revisão da Task 3; fonte única movida na revisão final):**
+  `quantidade_sistema` nasce de uma subtração REAL (`atual − em_terceiros`); a comparação de
+  "item exato" usa `|divergência| < 1e-9`, senão contar 0.2 contra um esperado
+  0.1999999999999993 dava 0% de acuracidade para um operador que acertou — e um
+  `AJUSTE_INVENTARIO` inútil de 7e-16. **A definição mora em
+  `services/almoxarifado/divergencia.js`** (a revisão final achou uma SEGUNDA cópia da
+  comparação exata no relatório antigo de divergências e uma TERCEIRA fresta no gate de
+  recontagem — tolerância 0 travava a conclusão com a mensagem sem sentido
+  "0.00% (limite 0%)"). Consumidores: relatório de acuracidade, filtro de ajustes do
+  concluir, gate de recontagem, `recontagem_necessaria` do GET /:id e o relatório
+  `inventario-divergencias`; o front espelha o valor na fronteira HTTP (cópia declarada).
+- **Relatório antigo `inventario-divergencias` corrigido junto (revisão final):** ele não
+  filtrava status nem tinha gate — entregava `quantidade_sistema`/`divergência`/`contado_por`
+  de conferência **ABERTA** para qualquer usuário do módulo, desfazendo o modo cego e a dupla
+  contagem por fora. Agora: só `CONCLUIDO`, gate `inventario` (mesmo do relatório novo),
+  epsilon da fonte única, `LIMIT 500`.
 - **`impacto_financeiro` não sai pela listagem nem pelo detalhe** (revisão da Task 3): os dois
   GET não têm gate de perfil de propósito (Fase 2 vetou gatear leitura), então o campo de
   dinheiro sai **só** pelo relatório gateado — a listagem/detalhe removem a coluna da resposta.

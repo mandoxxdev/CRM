@@ -49,6 +49,10 @@ const ConferenciaEstoque = () => {
   const [loadingConf, setLoadingConf] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [contagens, setContagens] = useState({});
+  // Só campo DIGITADO nesta sessão pode disparar PUT (Critical da revisão final: com o input
+  // pré-preenchido, tabular pelo grid re-salvava o valor e certificava "recontagem" sem
+  // contagem nenhuma — e dava um toast de erro por linha para o primeiro contador).
+  const [contagensSujas, setContagensSujas] = useState({});
   const [aplicarAjustes, setAplicarAjustes] = useState(true);
   const [showConcluirModal, setShowConcluirModal] = useState(false);
   const [justificativaAjuste, setJustificativaAjuste] = useState('');
@@ -153,6 +157,7 @@ const ConferenciaEstoque = () => {
         initContagens[item.id] = item.quantidade_contada != null ? String(item.quantidade_contada) : '';
       });
       setContagens(initContagens);
+      setContagensSujas({});
     } catch {
       toast.error('Erro ao abrir conferência');
     } finally {
@@ -162,11 +167,15 @@ const ConferenciaEstoque = () => {
 
   const handleSalvarContagem = async (itemId) => {
     const val = contagens[itemId];
+    // Sem digitação nesta sessão, o blur não salva nada — quem quer recontar confirmando o
+    // mesmo número digita o número (é a contagem dele); tabular não é contar.
+    if (!contagensSujas[itemId]) return;
     if (val === '' || val === undefined) return;
     try {
       await api.put(`/almoxarifado/conferencias/${confAberta.id}/item/${itemId}`, {
         quantidade_contada: parseFloat(val)
       });
+      setContagensSujas(s => ({ ...s, [itemId]: false }));
       // Achado da revisão final de branch: recontagem_necessaria é calculada no servidor
       // (RN-02/RN-05) e só chegava na tela na hora de ABRIR a conferência — quem contava um
       // item nunca via o badge atualizar na mesma sessão, e só descobria a recontagem exigida
@@ -176,8 +185,15 @@ const ConferenciaEstoque = () => {
       setConfAberta(res.data);
     } catch (err) {
       // RN-03 (dupla contagem) e RN-08 (contagem inválida) chegam prontas do servidor — exibir
-      // o texto literal, sem parafrasear (mesmo padrão do handleConcluir).
+      // o texto literal, sem parafrasear (mesmo padrão do handleConcluir). E o valor recusado
+      // não fica na tela alimentando a coluna Divergência: volta ao que está salvo.
       toast.error(err.response?.data?.error || 'Erro ao salvar contagem');
+      const original = confAberta?.itens?.find(i => i.id === itemId);
+      setContagens(c => ({
+        ...c,
+        [itemId]: original && original.quantidade_contada != null ? String(original.quantidade_contada) : '',
+      }));
+      setContagensSujas(s => ({ ...s, [itemId]: false }));
     }
   };
 
@@ -238,9 +254,9 @@ const ConferenciaEstoque = () => {
     }
   };
 
-  // RN-06/RN-07: relatório derivado, só CONCLUIDO, gate real fica no requirePermission do
-  // servidor — a tela só busca e mostra, sem esconder o botão (falha aberta, como o resto do
-  // módulo).
+  // RN-06/RN-07: relatório derivado, só CONCLUIDO; quem decide é o requirePermission do
+  // servidor — o botão pré-barra com bloquearSeNaoPode('inventario') como os irmãos do
+  // arquivo (a UI barra antes do formulário, o backend continua sendo a autoridade).
   const handleAbrirAcuracidade = async () => {
     setMostrarAcuracidade(true);
     setLoadingAcuracidade(true);
@@ -271,16 +287,30 @@ const ConferenciaEstoque = () => {
     if (!confAberta) return 0;
     return confAberta.itens.filter(item => {
       const d = divergenciaItem(item);
-      return d !== null && d !== 0;
+      // Espelho do EPSILON_DIVERGENCIA do servidor (divergencia.js) — cópia declarada na
+      // fronteira HTTP: deriva de float não é divergência aqui também.
+      return d !== null && Math.abs(d) > 1e-9;
     }).length;
   };
 
   const itensContados = () => {
     if (!confAberta) return 0;
-    return confAberta.itens.filter(item => contagens[item.id] !== '' && contagens[item.id] !== undefined).length;
+    // Conta por AUTORIA, não pelo valor local: em dupla contagem o servidor esconde a
+    // contagem do colega — o item está contado mesmo sem valor visível para este leitor
+    // (achado da revisão final: o contador mostrava 0/3 para o recontador e REGREDIA de 3/3
+    // para 2/3 para a primeira contadora conforme o trabalho avançava).
+    return confAberta.itens.filter(item => item.contado_por_id != null
+      || item.quantidade_contada != null
+      || (contagens[item.id] !== '' && contagens[item.id] !== undefined)).length;
   };
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+  // Timestamps do SQLite vêm em UTC sem sufixo ("YYYY-MM-DD HH:MM:SS") — sem o ajuste, o V8
+  // lê como hora local e a tela mostra 05:25 onde o correto em BRT é 02:25.
+  const formatDate = (d) => {
+    if (!d) return '—';
+    const iso = typeof d === 'string' && d.includes(' ') && !d.includes('T') ? `${d.replace(' ', 'T')}Z` : d;
+    return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
 
   // ── Tela de contagem aberta ──
   if (confAberta) {
@@ -381,7 +411,11 @@ const ConferenciaEstoque = () => {
                             min="0"
                             step="1"
                             value={contagens[item.id] || ''}
-                            onChange={e => setContagens(c => ({ ...c, [item.id]: e.target.value }))}
+                            onChange={e => {
+                              const valorDigitado = e.target.value;
+                              setContagens(c => ({ ...c, [item.id]: valorDigitado }));
+                              setContagensSujas(s => ({ ...s, [item.id]: true }));
+                            }}
                             onBlur={() => handleSalvarContagem(item.id)}
                             placeholder="—"
                           />
@@ -470,7 +504,7 @@ const ConferenciaEstoque = () => {
           </button>
           <button
             className="btn-almox-secondary"
-            onClick={handleAbrirAcuracidade}
+            onClick={(e) => { if (!bloquearSeNaoPode('inventario', e)) return; handleAbrirAcuracidade(); }}
             title="Métricas de acurácia derivadas das conferências concluídas (RN-06)"
           >
             Acuracidade
@@ -582,7 +616,12 @@ const ConferenciaEstoque = () => {
                   <label className="almox-label">Família (opcional)</label>
                   <select className="almox-form-select" value={criarFamilia} onChange={e => setCriarFamilia(e.target.value)}>
                     <option value="">Todas as famílias</option>
-                    {familias.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                    {/* Só famílias RAIZ (achado da revisão final): o material guarda a raiz em
+                        familia_id e a filha em subfamilia_id — oferecer subfamília aqui criava
+                        conferência vazia em silêncio, com o escopo gravado mentindo. Mesmo
+                        filtro do MaterialAlmoxarifadoForm. */}
+                    {familias.filter(f => f.parent_id === null || f.parent_id === undefined)
+                      .map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
                   </select>
                 </div>
                 <div className="almox-field" style={{ marginTop: 16 }}>
@@ -621,7 +660,7 @@ const ConferenciaEstoque = () => {
                   </label>
                 </div>
                 <div style={{ background: 'rgba(79,172,254,0.06)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '12px 16px', marginTop: 16, fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
-                  Todos os materiais{criarCategoria ? ` da categoria "${criarCategoria}"` : ''} serão incluídos na conferência com seus saldos atuais.
+                  Os materiais ativos que casarem com o escopo escolhido acima serão incluídos na conferência com seus saldos atuais. Sem nenhum filtro, entram todos.
                 </div>
               </div>
               <div className="almox-modal-footer">
@@ -661,6 +700,7 @@ const ConferenciaEstoque = () => {
                           <th>Contados</th>
                           <th>Exatos</th>
                           <th>Divergentes</th>
+                          <th>Recontados</th>
                           <th>Acuracidade</th>
                           <th>Impacto Financeiro</th>
                         </tr>
@@ -671,9 +711,14 @@ const ConferenciaEstoque = () => {
                             <td style={{ fontWeight: 700, fontFamily: 'monospace' }}>{c.numero}</td>
                             <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(c.data_fim)}</td>
                             <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{c.escopo_descricao || '—'}</td>
-                            <td>{c.contados}</td>
+                            {/* Contados / total (achado da revisão final): 100% de acuracidade
+                                sobre 1 de 10 itens contados sem mostrar o 10 mentiria tanto
+                                quanto o 0% que a RN-06 proíbe. Recontados sustenta o selo de
+                                dupla contagem — a flag sozinha não prova recontagem. */}
+                            <td>{c.contados} / {c.total_itens}</td>
                             <td>{c.exatos}</td>
                             <td>{c.divergentes}</td>
+                            <td>{c.recontados}</td>
                             <td>{formatAcuracidade(c.acuracidade)}</td>
                             <td>{formatImpacto(c.impacto_financeiro)}</td>
                           </tr>
@@ -682,7 +727,7 @@ const ConferenciaEstoque = () => {
                     </table>
                     {relatorioAcuracidade.agregado && (
                       <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 8, fontSize: '0.875rem' }}>
-                        Agregado: {relatorioAcuracidade.agregado.conferencias} conferências · {relatorioAcuracidade.agregado.contados} contados · {relatorioAcuracidade.agregado.exatos} exatos · acuracidade {formatAcuracidade(relatorioAcuracidade.agregado.acuracidade)}
+                        Agregado: {relatorioAcuracidade.agregado.conferencias} conferências · {relatorioAcuracidade.agregado.total_itens} itens · {relatorioAcuracidade.agregado.contados} contados · {relatorioAcuracidade.agregado.exatos} exatos · acuracidade {formatAcuracidade(relatorioAcuracidade.agregado.acuracidade)}
                       </div>
                     )}
                   </>

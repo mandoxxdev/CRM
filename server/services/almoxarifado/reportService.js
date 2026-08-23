@@ -1,6 +1,7 @@
 const { dbAll, dbGet } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
+const { divergenciaRealSql } = require('./divergencia');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -74,13 +75,19 @@ async function relatorioHistoricoMovimentacoes(db, filters = {}) {
   return dbAll(db, sql, params);
 }
 
+// Revisao final da Etapa 10b: (1) so conferencia CONCLUIDO — sem o filtro, este relatorio
+// vazava quantidade_sistema/divergencia/contado_por de contagem EM ANDAMENTO e desfazia o modo
+// cego e a dupla contagem por fora (relatorio de divergencia sobre contagem inacabada nem faz
+// sentido); (2) a comparacao exata `!= 0` era uma SEGUNDA definicao de "e divergencia" —
+// deriva de float (7e-16) aparecia aqui como divergente enquanto a acuracidade dizia 100%.
+// A definicao unica mora em divergencia.js.
 async function relatorioInventarioDivergencias(db) {
   return dbAll(db, `SELECT ic.*, c.numero as conferencia_numero, ma.nome as material_nome, ma.codigo
     FROM itens_conferencia_almoxarifado ic
     JOIN conferencias_almoxarifado c ON ic.conferencia_id = c.id
     JOIN materiais_almoxarifado ma ON ic.material_id = ma.id
-    WHERE ic.divergencia IS NOT NULL AND ic.divergencia != 0
-    ORDER BY c.created_at DESC`);
+    WHERE c.status = 'CONCLUIDO' AND ic.divergencia IS NOT NULL AND ${divergenciaRealSql('ic.divergencia')}
+    ORDER BY c.created_at DESC LIMIT 500`);
 }
 
 async function relatorioMateriaisMaisConsumidos(db, dataInicio, dataFim) {

@@ -1173,6 +1173,14 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     try {
       const fn = reports[req.params.tipo];
       if (!fn) return res.status(404).json({ error: 'Relatório não encontrado' });
+      // Revisao final da Etapa 10b (Important): este relatorio expunha quantidade_sistema/
+      // divergencia/contado_por de conferencia ABERTA para qualquer usuario do modulo —
+      // desfazia o modo cego e a dupla contagem por fora (o GET /conferencias/:id esconde, o
+      // relatorio entregava). Mesmo gate do relatorio de acuracidade; o filtro de status
+      // CONCLUIDO esta na query do reportService.
+      if (req.params.tipo === 'inventario-divergencias' && !can(req.user, 'inventario')) {
+        return res.status(403).json({ error: 'Sem permissão para este relatório', acao: 'inventario' });
+      }
       res.json(await fn(db, req.query));
     } catch (e) { handleError(res, e); }
   });

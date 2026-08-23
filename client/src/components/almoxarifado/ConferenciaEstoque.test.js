@@ -413,7 +413,14 @@ describe('ConferenciaEstoque — RN-01/02/03: escopo combinável e dupla contage
     // transpor apenas_de_clientes com apenas_em_terceiros passava com a suite verde).
     api.get.mockImplementation((url) => {
       if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
-      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [{ id: 3, nome: 'Chapas', parent_id: null }] });
+      if (url === '/almoxarifado/familias') {
+        // Uma raiz e uma SUBFAMILIA — o select so pode oferecer a raiz (achado da revisao
+        // final: subfamilia nunca casa material nenhum, criava conferencia vazia em silencio).
+        return Promise.resolve({ data: [
+          { id: 3, nome: 'Chapas', parent_id: null },
+          { id: 9, nome: 'Chapas Finas', parent_id: 3 },
+        ] });
+      }
       // handleCriar abre a conferencia recem-criada — o detalhe precisa ter shape de conferencia.
       if (url.startsWith('/almoxarifado/conferencias/')) return Promise.resolve({ data: CONFERENCIA_ABERTA_ESCOPO });
       return Promise.resolve({ data: [] });
@@ -421,7 +428,11 @@ describe('ConferenciaEstoque — RN-01/02/03: escopo combinável e dupla contage
     await renderizar();
     await clicar(botao('Nova Conferência'));
 
-    preencher(campo('Família'), '3');
+    const selectFamilia = campo('Família');
+    const opcoes = [...selectFamilia.querySelectorAll('option')].map(o => o.textContent);
+    expect(opcoes).toContain('Chapas');
+    expect(opcoes).not.toContain('Chapas Finas');
+    preencher(selectFamilia, '3');
     preencher(campo('Classe'), 'A');
     marcar(campo('Somente críticos'), true);
     // ASSIMETRICO de proposito: so clientes, terceiros fica desmarcado — com os dois marcados,
@@ -538,6 +549,43 @@ describe('ConferenciaEstoque — RN-03/RN-08: erro do PUT item exibido verbatim'
     await sairDoCampo(inputContagem);
 
     expect(toast.error).toHaveBeenCalledWith(mensagem);
+    // Valor recusado nao fica na tela alimentando a coluna Divergencia (achado da revisao
+    // final) — volta ao que esta salvo (aqui: nada).
+    expect(inputContagem.value).toBe('');
+  });
+
+  test('tabular por um input pre-preenchido NAO dispara PUT nenhum', async () => {
+    // Critical da revisao final: com o input pre-preenchido com a contagem salva, o blur
+    // re-salvava o valor — em dupla contagem isso certificava "recontagem" com a tecla Tab,
+    // sem digitacao e sem ida ao galpao (saldo reescrito com trilha de duas pessoas). So
+    // campo DIGITADO nesta sessao pode salvar.
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      if (url === '/almoxarifado/conferencias/1') {
+        return Promise.resolve({
+          data: {
+            ...CONFERENCIA_ABERTA_ESCOPO,
+            itens: [{ ...CONFERENCIA_ABERTA_ESCOPO.itens[0], quantidade_contada: 90, divergencia: -10,
+              contado_por_id: 3, contado_por_nome: 'Almoxarife' }],
+          },
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Abrir'));
+
+    const inputContagem = linhaMaterial('MAT-1').querySelector('input[type="number"]');
+    expect(inputContagem.value).toBe('90');
+    await sairDoCampo(inputContagem);
+    expect(api.put).not.toHaveBeenCalled();
+
+    // Digitou de verdade -> salva normalmente.
+    api.put.mockResolvedValueOnce({ data: { success: true, divergencia: -9, recontagem: true } });
+    preencher(inputContagem, '91');
+    await sairDoCampo(inputContagem);
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/conferencias/1/item/10',
+      { quantidade_contada: 91 });
   });
 
   test('RN-08: item cego+dupla vem SEM quantidade_contada — input vazio e salvar funciona', async () => {
@@ -552,7 +600,7 @@ describe('ConferenciaEstoque — RN-03/RN-08: erro do PUT item exibido verbatim'
       if (url === '/almoxarifado/conferencias/1') {
         return Promise.resolve({
           data: { ...CONFERENCIA_ABERTA_ESCOPO, modo_cego: 1, dupla_contagem: 1,
-            itens: [{ ...itemSemContagem, contado_por_nome: 'Almoxarife' }] },
+            itens: [{ ...itemSemContagem, contado_por_id: 3, contado_por_nome: 'Almoxarife' }] },
         });
       }
       return Promise.resolve({ data: [] });
@@ -565,6 +613,9 @@ describe('ConferenciaEstoque — RN-03/RN-08: erro do PUT item exibido verbatim'
     const inputContagem = linha.querySelector('input[type="number"]');
     expect(inputContagem.value).toBe('');
     expect(texto()).not.toMatch(/undefined|NaN/);
+    // O contador do cabecalho conta por AUTORIA (achado da revisao final: mostrava 0/1 para o
+    // recontador e regredia conforme o trabalho avancava) — o item do colega ESTA contado.
+    expect(texto()).toContain('1 / 1 itens contados');
 
     // O veneno do estado age no blur SEM digitar: com o bug (!== null), o estado interno vira
     // a string 'undefined', fura o guard do handleSalvarContagem e manda parseFloat=NaN ao
@@ -585,13 +636,13 @@ describe('ConferenciaEstoque — RN-06: visão Acuracidade', () => {
       conferencias: [
         { id: 1, numero: 'CONF-0010', data_fim: '2026-08-20T10:00:00Z', escopo_descricao: 'Geral',
           modo_cego: false, dupla_contagem: false, total_itens: 10, contados: 10, exatos: 9, divergentes: 1,
-          acuracidade: 98.5, impacto_financeiro: 120 },
+          recontados: 2, acuracidade: 98.5, impacto_financeiro: 120 },
         // escopo_descricao NAO nulo de proposito (achado da revisao: com escopo nulo, o "—"
         // do assert vinha da celula de escopo e as duas celulas de metrica nunca eram lidas —
         // formatador sem guarda renderizava "0.00%" para acuracidade nula com o teste verde).
         { id: 2, numero: 'CONF-0011', data_fim: '2026-08-21T10:00:00Z', escopo_descricao: 'Geral',
           modo_cego: false, dupla_contagem: false, total_itens: 0, contados: 0, exatos: 0, divergentes: 0,
-          acuracidade: null, impacto_financeiro: null },
+          recontados: 0, acuracidade: null, impacto_financeiro: null },
       ],
       agregado: { conferencias: 2, total_itens: 10, contados: 10, exatos: 9, acuracidade: 92.31 },
     };
@@ -611,18 +662,23 @@ describe('ConferenciaEstoque — RN-06: visão Acuracidade', () => {
     // POR CELULA, nao por textContent do container (achado da revisao: transpor as colunas
     // acuracidade/impacto deixava 19/19 verde — o gestor leria R$ 120 como acuracidade).
     // Colunas: 0 numero, 1 data, 2 escopo, 3 contados, 4 exatos, 5 divergentes, 6 acuracidade, 7 impacto.
+    // Colunas (revisao final): 0 numero, 1 data, 2 escopo, 3 contados/total, 4 exatos,
+    // 5 divergentes, 6 recontados, 7 acuracidade, 8 impacto. "Contados" mostra o DENOMINADOR
+    // (100% sobre 1/10 sem mostrar o 10 mentiria) e "Recontados" sustenta o selo da dupla.
     const tds10 = linhaMaterial('CONF-0010').querySelectorAll('td');
-    expect(tds10[3].textContent.trim()).toBe('10');
+    expect(tds10[3].textContent.trim()).toBe('10 / 10');
     expect(tds10[4].textContent.trim()).toBe('9');
     expect(tds10[5].textContent.trim()).toBe('1');
-    expect(tds10[6].textContent.trim()).toBe('98.50%');
-    expect(tds10[7].textContent.trim()).toBe(impactoFormatado);
+    expect(tds10[6].textContent.trim()).toBe('2');
+    expect(tds10[7].textContent.trim()).toBe('98.50%');
+    expect(tds10[8].textContent.trim()).toBe(impactoFormatado);
 
     const linhaSemMetrica = linhaMaterial('CONF-0011');
     expect(linhaSemMetrica).toBeTruthy();
     const tds11 = linhaSemMetrica.querySelectorAll('td');
-    expect(tds11[6].textContent.trim()).toBe('—');
+    expect(tds11[3].textContent.trim()).toBe('0 / 0');
     expect(tds11[7].textContent.trim()).toBe('—');
+    expect(tds11[8].textContent.trim()).toBe('—');
     expect(linhaSemMetrica.textContent).not.toMatch(/NaN|0\.00%/);
   });
 });

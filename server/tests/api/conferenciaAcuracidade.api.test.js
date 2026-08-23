@@ -321,6 +321,67 @@ async function materialAtual(db, materialId) {
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
   });
 
+  await test('relatorio de DIVERGENCIAS antigo: so CONCLUIDO, com gate e com epsilon', async () => {
+    // Revisao final de branch (Important): o relatorio pre-existente inventario-divergencias
+    // nao filtrava status nem tinha gate de perfil — entregava quantidade_sistema/divergencia/
+    // contado_por de conferencia ABERTA para qualquer usuario do modulo, desfazendo o modo
+    // cego e a dupla contagem por fora. E usava `!= 0` (segunda definicao de "e divergencia"):
+    // deriva de float aparecia aqui enquanto a acuracidade dizia 100%.
+    const divergencias = () => request(app).get('/api/almoxarifado/relatorios/inventario-divergencias');
+
+    // Conferencia ABERTA com divergencia real contada — NAO pode aparecer.
+    const categoriaAberta = 'CAT-DIVREL-ABERTA';
+    const matAberta = await novoMaterial(db, { qtd: 100, categoria: categoriaAberta });
+    const confAbertaRel = await abrirConferencia(app, { categoria: categoriaAberta, tolerancia_percentual: 100000 });
+    const itensAberta = await itensDaConferencia(db, confAbertaRel.id);
+    await contarItem(app, confAbertaRel.id, itensAberta.find((i) => i.material_id === matAberta.id).id, 60);
+
+    // Conferencia CONCLUIDA com divergencia real — aparece; e com deriva de float — nao.
+    const categoriaConc = 'CAT-DIVREL-CONC';
+    const matReal = await novoMaterial(db, { qtd: 100, categoria: categoriaConc });
+    const matDeriva = await novoMaterial(db, { qtd: 30.3, categoria: categoriaConc });
+    await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_em_terceiros = 30.1 WHERE id = ?`, [matDeriva.id]);
+    const confConc = await abrirConferencia(app, { categoria: categoriaConc, tolerancia_percentual: 100000 });
+    const itensConc = await itensDaConferencia(db, confConc.id);
+    await contarItem(app, confConc.id, itensConc.find((i) => i.material_id === matReal.id).id, 80);
+    await contarItem(app, confConc.id, itensConc.find((i) => i.material_id === matDeriva.id).id, 0.2);
+    await concluir(app, confConc.id, {});
+
+    const res = await divergencias();
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body).slice(0, 200));
+    const numeros = res.body.map((r) => r.conferencia_numero);
+    assert.ok(numeros.includes(confConc.numero), 'divergencia real da CONCLUIDA deveria aparecer');
+    assert.ok(!numeros.includes(confAbertaRel.numero), 'conferencia ABERTA nao pode vazar no relatorio');
+    const codigosListados = res.body.map((r) => r.codigo);
+    assert.ok(codigosListados.includes(matReal.codigo), JSON.stringify(codigosListados));
+    assert.ok(!codigosListados.includes(matDeriva.codigo), 'deriva de float nao e divergencia (epsilon)');
+
+    // Gate: PRODUCAO 403, ALMOXARIFE 200 (o mesmo par positivo+negativo do relatorio novo).
+    setUser(PRODUCAO);
+    const resNegado = await divergencias();
+    assert.strictEqual(resNegado.status, 403, JSON.stringify(resNegado.body));
+    setUser(ALMOXARIFE);
+    const resPermitido = await divergencias();
+    assert.strictEqual(resPermitido.status, 200);
+  });
+
+  await test('RN-06: relatorio traz recontados por conferencia', async () => {
+    // Revisao final (Minor acatado): a flag dupla_contagem sozinha nao prova que alguem
+    // recontou — dentro da tolerancia ninguem reconta. O numero sustenta o selo.
+    const categoria = 'CAT-ACUR-RECONT';
+    const mat = await novoMaterial(db, { qtd: 100, categoria });
+    const conf = await abrirConferencia(app, { categoria, tolerancia_percentual: 100000 });
+    const itens = await itensDaConferencia(db, conf.id);
+    const item = itens.find((i) => i.material_id === mat.id);
+    await contarItem(app, conf.id, item.id, 90);
+    await contarItem(app, conf.id, item.id, 90); // mesma pessoa, sem flag: reconta (Etapa 10)
+    await concluir(app, conf.id, {});
+
+    const rel = await relatorio(app);
+    const linha = rel.body.conferencias.find((c) => c.id === conf.id);
+    assert.strictEqual(linha.recontados, 1, JSON.stringify(linha));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

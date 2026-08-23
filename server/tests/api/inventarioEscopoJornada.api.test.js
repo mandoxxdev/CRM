@@ -129,15 +129,31 @@ const PRODUCAO = { id: 9, nome: 'Chao de Fabrica', role: 'usuario', email: 'prod
       JSON.stringify(concluirSemRecontar.body));
     assert.ok(concluirSemRecontar.body.error.includes('JOR10B-M1'), JSON.stringify(concluirSemRecontar.body));
 
-    // ── Passo 6: ALMOXARIFE (autor da primeira contagem) tenta recontar M1 -> 400 dupla ──
-    // contagem, mensagem literal (RN-03).
+    // ── Passo 6: ALMOXARIFE (autor da primeira contagem) CORRIGE a propria contagem antes ──
+    // de qualquer recontagem -> 200, recontagem: false, recontado continua 0 (ruling da
+    // revisao final: correcao nao e recontagem — so a contagem de OUTRA pessoa e).
     setUser(ALMOXARIFE);
-    const recontagemPeloAutor = await request(app).put(`/api/almoxarifado/conferencias/${confId}/item/${itemM1Row.id}`)
+    const correcaoPeloAutor = await request(app).put(`/api/almoxarifado/conferencias/${confId}/item/${itemM1Row.id}`)
       .send({ quantidade_contada: 92 });
-    assert.strictEqual(recontagemPeloAutor.status, 400, JSON.stringify(recontagemPeloAutor.body));
-    assert.strictEqual(recontagemPeloAutor.body.error,
-      'Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: Almoxarife)',
-      JSON.stringify(recontagemPeloAutor.body));
+    assert.strictEqual(correcaoPeloAutor.status, 200, JSON.stringify(correcaoPeloAutor.body));
+    assert.strictEqual(correcaoPeloAutor.body.recontagem, false, JSON.stringify(correcaoPeloAutor.body));
+    const m1AposCorrecao = await dbGet(db,
+      `SELECT quantidade_contada, recontado, recontado_por_id FROM itens_conferencia_almoxarifado WHERE id = ?`, [itemM1Row.id]);
+    assert.strictEqual(m1AposCorrecao.recontado, 0, JSON.stringify(m1AposCorrecao));
+    assert.strictEqual(m1AposCorrecao.recontado_por_id, null, JSON.stringify(m1AposCorrecao));
+
+    // ── Passo 6b: a correcao NAO libera a conclusao — recontagem continua exigida (RN-05). ──
+    setUser(ADMIN);
+    const concluirAposCorrecao = await request(app).put(`/api/almoxarifado/conferencias/${confId}/concluir`).send({});
+    assert.strictEqual(concluirAposCorrecao.status, 400, JSON.stringify(concluirAposCorrecao.body));
+    assert.ok(concluirAposCorrecao.body.error.startsWith('Recontagem necessária antes de concluir:'),
+      JSON.stringify(concluirAposCorrecao.body));
+
+    // ── Passo 6c: o autor corrige de volta para 90 (mantem a aritmetica dos passos 9-11). ──
+    setUser(ALMOXARIFE);
+    const correcaoDeVolta = await request(app).put(`/api/almoxarifado/conferencias/${confId}/item/${itemM1Row.id}`)
+      .send({ quantidade_contada: 90 });
+    assert.strictEqual(correcaoDeVolta.status, 200, JSON.stringify(correcaoDeVolta.body));
 
     // ── Extra (RN-08, achado da revisao da Task 2): GESTOR manda quantidade_contada 'abc' -> ──
     // 400 literal, ANTES de qualquer gate de dupla contagem — e a contagem armazenada continua
@@ -154,10 +170,24 @@ const PRODUCAO = { id: 9, nome: 'Chao de Fabrica', role: 'usuario', email: 'prod
       'contagem invalida nao podia ter mexido no valor gravado');
 
     // ── Passo 7: GESTOR (outra pessoa) reconta M1 = 90 -> 200, recontagem: true (RN-03/RN-04). ──
+    setUser(GESTOR);
     const recontagemGestor = await request(app).put(`/api/almoxarifado/conferencias/${confId}/item/${itemM1Row.id}`)
       .send({ quantidade_contada: 90 });
     assert.strictEqual(recontagemGestor.status, 200, JSON.stringify(recontagemGestor.body));
     assert.strictEqual(recontagemGestor.body.recontagem, true, JSON.stringify(recontagemGestor.body));
+
+    // ── Passo 7b: DEPOIS da recontagem do colega, o autor da primeira contagem toma o 400 ──
+    // literal (RN-03) — e o valor recontado fica intacto.
+    setUser(ALMOXARIFE);
+    const autorPosRecontagem = await request(app).put(`/api/almoxarifado/conferencias/${confId}/item/${itemM1Row.id}`)
+      .send({ quantidade_contada: 92 });
+    assert.strictEqual(autorPosRecontagem.status, 400, JSON.stringify(autorPosRecontagem.body));
+    assert.strictEqual(autorPosRecontagem.body.error,
+      'Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: Almoxarife)',
+      JSON.stringify(autorPosRecontagem.body));
+    const m1PosRecontagem = await dbGet(db,
+      `SELECT quantidade_contada FROM itens_conferencia_almoxarifado WHERE id = ?`, [itemM1Row.id]);
+    assert.strictEqual(Number(m1PosRecontagem.quantidade_contada), 90, JSON.stringify(m1PosRecontagem));
 
     // ── Passo 8: GET /:id (ADMIN, tem ajustar_estoque — ve tudo mesmo em modo cego) -> M1 com ──
     // contado_por_nome 'Almoxarife' e recontado_por_nome 'Gestor' (RN-04).

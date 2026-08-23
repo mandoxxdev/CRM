@@ -6,12 +6,15 @@
  * sobrescreve `recontado_por_*` (fica o ultimo recontador). `GET /conferencias/:id` ecoa os
  * quatro campos por item (SELECT ic.* ja carrega por arrastao, sem mudanca no GET).
  *
- * RN-03: com `dupla_contagem: true` na conferencia, o autor da PRIMEIRA contagem nunca pode
- * recontar o mesmo item — 400 literal. A comparacao e sempre contra `contado_por_id` (o
- * PRIMEIRO contador), nunca contra o contador anterior: senao o primeiro contador poderia
- * sobrescrever a recontagem do colega e anular os quatro olhos (testado explicitamente na
- * terceira contagem). Sem a flag, o comportamento da Etapa 10 fica intacto (mesma pessoa pode
- * recontar).
+ * RN-03: com `dupla_contagem: true` na conferencia, a RECONTAGEM tem de ser de outra pessoa.
+ * Enquanto ninguem recontou (recontado = 0), o primeiro contador pode CORRIGIR a propria
+ * contagem — correcao nao e recontagem (nao marca recontado, nao preenche recontado_por;
+ * ruling da revisao final: sem esse caminho um typo dele congelava a conferencia inteira).
+ * Depois da recontagem do colega, ele toma 400 literal — a comparacao e sempre contra
+ * `contado_por_id` (o PRIMEIRO contador), nunca contra o anterior. E o GET esconde a contagem
+ * do colega de quem nao e o ultimo autor MESMO SEM modo cego (Critical da revisao final: com
+ * o input preenchido, um Tab "recontava" sem digitar nada). Sem a flag, o comportamento da
+ * Etapa 10 fica intacto (mesma pessoa pode recontar).
  *
  * Executar: cd server && node tests/api/conferenciaDuplaContagem.api.test.js
  */
@@ -109,7 +112,11 @@ async function contarItem(app, confId, itemId, quantidade) {
     assert.strictEqual(itemBanco.recontado_por_nome, 'Gestor', JSON.stringify(itemBanco));
   });
 
-  await test('RN-03: com dupla_contagem o primeiro contador nao reconta — 400 literal', async () => {
+  await test('RN-03: o primeiro contador CORRIGE a propria contagem antes da recontagem — nao vira recontagem', async () => {
+    // Revisao final de branch: sem este caminho, um typo do primeiro contador congelava o
+    // item (a RN-08 fechou o contorno por valor invalido) e, acima da tolerancia, travava a
+    // conferencia inteira ate outra pessoa logar. Correcao NAO marca recontado nem preenche
+    // recontado_por — so a contagem de OUTRA pessoa e recontagem.
     setUser(ALMOXARIFE);
     const mat = await novoMaterial(db);
     const conf = await abrirConferencia(app, { dupla_contagem: true });
@@ -118,15 +125,37 @@ async function contarItem(app, confId, itemId, quantidade) {
     await contarItem(app, conf.id, itemRow.id, 90);
 
     const res = await contarItem(app, conf.id, itemRow.id, 91);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.recontagem, false, JSON.stringify(res.body));
+
+    const itemBanco = await itemDoMaterial(db, conf.id, mat.id);
+    assert.strictEqual(Number(itemBanco.quantidade_contada), 91, JSON.stringify(itemBanco));
+    assert.strictEqual(itemBanco.recontado, 0, JSON.stringify(itemBanco));
+    assert.strictEqual(itemBanco.recontado_por_id, null, JSON.stringify(itemBanco));
+    assert.strictEqual(itemBanco.contado_por_id, 3, JSON.stringify(itemBanco));
+  });
+
+  await test('RN-03: depois da recontagem do colega, o primeiro contador toma 400 literal', async () => {
+    setUser(ALMOXARIFE);
+    const mat = await novoMaterial(db);
+    const conf = await abrirConferencia(app, { dupla_contagem: true });
+    const itemRow = await itemDoMaterial(db, conf.id, mat.id);
+    await contarItem(app, conf.id, itemRow.id, 90);
+
+    setUser(GESTOR);
+    await contarItem(app, conf.id, itemRow.id, 88);
+
+    setUser(ALMOXARIFE);
+    const res = await contarItem(app, conf.id, itemRow.id, 91);
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     assert.strictEqual(res.body.error,
       'Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: Almoxarife)',
       JSON.stringify(res.body));
 
-    // Nao pode ter mexido no banco: continua so com a primeira contagem.
+    // Nao mexeu no banco: a recontagem do Gestor continua intacta.
     const itemBanco = await itemDoMaterial(db, conf.id, mat.id);
-    assert.strictEqual(Number(itemBanco.quantidade_contada), 90, JSON.stringify(itemBanco));
-    assert.strictEqual(itemBanco.recontado_por_id, null, JSON.stringify(itemBanco));
+    assert.strictEqual(Number(itemBanco.quantidade_contada), 88, JSON.stringify(itemBanco));
+    assert.strictEqual(itemBanco.recontado_por_id, 2, JSON.stringify(itemBanco));
   });
 
   await test('RN-03: outra pessoa reconta normalmente', async () => {
@@ -209,18 +238,23 @@ async function contarItem(app, confId, itemId, quantidade) {
       assert.strictEqual(res.status, 400, `esperava 400 para ${JSON.stringify(invalida)}: ${JSON.stringify(res.body)}`);
       assert.strictEqual(res.body.error, 'Quantidade contada deve ser um número maior ou igual a zero');
     }
-    // Nada mudou no banco — a primeira contagem continua la, e o primeiro contador continua
-    // barrado (a sentinela do gate nao foi resetada).
+    // Nada mudou no banco — a primeira contagem continua la, e o item continua sem recontagem
+    // (valor invalido nao reseta a sentinela: era o contorno que a RN-08 fechou).
     const itemBanco = await itemDoMaterial(db, conf.id, mat.id);
     assert.strictEqual(Number(itemBanco.quantidade_contada), 90, JSON.stringify(itemBanco));
-    setUser(ALMOXARIFE);
-    const resPrimeiro = await contarItem(app, conf.id, itemRow.id, 999);
-    assert.strictEqual(resPrimeiro.status, 400, JSON.stringify(resPrimeiro.body));
+    assert.strictEqual(itemBanco.recontado, 0, JSON.stringify(itemBanco));
 
-    // CONTROLE do zero: contagem 0 e fisica e legitima (Critical da Etapa 10) — continua 200.
+    // CONTROLE do zero: contagem 0 e fisica e legitima (Critical da Etapa 10) — continua 200,
+    // e vinda de OUTRA pessoa e recontagem de verdade.
     setUser(GESTOR);
     const resZero = await contarItem(app, conf.id, itemRow.id, 0);
     assert.strictEqual(resZero.status, 200, JSON.stringify(resZero.body));
+    assert.strictEqual(resZero.body.recontagem, true, JSON.stringify(resZero.body));
+
+    // Depois da recontagem do colega, o primeiro contador esta barrado de verdade.
+    setUser(ALMOXARIFE);
+    const resPrimeiro = await contarItem(app, conf.id, itemRow.id, 999);
+    assert.strictEqual(resPrimeiro.status, 400, JSON.stringify(resPrimeiro.body));
   });
 
   await test('RN-03: modo cego + dupla contagem esconde a contagem do colega no GET', async () => {
@@ -254,7 +288,11 @@ async function contarItem(app, confId, itemId, quantidade) {
     const itemGestor = detalheGestor.itens.find((i) => i.material_id === mat.id);
     assert.strictEqual(Number(itemGestor.quantidade_contada), 90, JSON.stringify(itemGestor));
 
-    // Sem modo cego, dupla contagem sozinha NAO esconde nada (controle).
+    // Revisao FINAL de branch (Critical): dupla contagem esconde a contagem do colega MESMO
+    // SEM modo cego — este teste afirmava o contrario e estava certificando o buraco: o input
+    // do recontador chegava preenchido e um Tab "recontava" sem digitar nada (saldo reescrito
+    // 100->70 com trilha de duas pessoas). quantidade_sistema continua visivel (nao ha modo
+    // cego), quantidade_contada do colega NAO.
     setUser(ALMOXARIFE);
     const matAberto = await novoMaterial(db);
     const confAberta = await abrirConferencia(app, { dupla_contagem: true });
@@ -263,18 +301,30 @@ async function contarItem(app, confId, itemId, quantidade) {
     setUser(ALMOXARIFE2);
     const detalheSemCego = await getConferencia(app, confAberta.id);
     const itemSemCego = detalheSemCego.itens.find((i) => i.material_id === matAberto.id);
-    assert.strictEqual(Number(itemSemCego.quantidade_contada), 50, JSON.stringify(itemSemCego));
+    assert.strictEqual(itemSemCego.quantidade_contada, undefined, JSON.stringify(itemSemCego));
+    assert.strictEqual(Number(itemSemCego.quantidade_sistema), 100, JSON.stringify(itemSemCego));
+    // O proprio autor continua vendo o que digitou.
+    setUser(ALMOXARIFE);
+    const detalheAutorAberto = await getConferencia(app, confAberta.id);
+    const itemAutorAberto = detalheAutorAberto.itens.find((i) => i.material_id === matAberto.id);
+    assert.strictEqual(Number(itemAutorAberto.quantidade_contada), 50, JSON.stringify(itemAutorAberto));
   });
 
   await test('RN-03: superadmin nao tem bypass da dupla contagem', async () => {
     // Buraco de regressao apontado pela revisao: um `!req.user.is_superadmin &&` no gate
-    // passava com a suite toda verde. O ADMIN como primeiro contador tem de tomar 400 igual.
+    // passava com a suite toda verde. O ADMIN como primeiro contador tem de tomar 400 igual —
+    // DEPOIS da recontagem do colega (antes dela, corrigir a propria contagem e permitido
+    // para todo mundo, ruling da revisao final).
     setUser(ADMIN);
     const mat = await novoMaterial(db);
     const conf = await abrirConferencia(app, { dupla_contagem: true });
     const itemRow = await itemDoMaterial(db, conf.id, mat.id);
     await contarItem(app, conf.id, itemRow.id, 90);
 
+    setUser(GESTOR);
+    await contarItem(app, conf.id, itemRow.id, 90);
+
+    setUser(ADMIN);
     const res = await contarItem(app, conf.id, itemRow.id, 91);
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     assert.strictEqual(res.body.error,

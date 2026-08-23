@@ -51,13 +51,10 @@ function toleranciaEfetiva(valor) {
   return Number.isFinite(n) ? n : 2;
 }
 
-// RN-06 (achado da revisao da Task 3 da 10b): "exato" tolera deriva de float. quantidade_sistema
-// nasce de uma subtracao REAL (atual - em_terceiros) — contar 0.2 contra um esperado
-// 0.1999999999999993 dava divergencia 7e-16, o operador acertava e o relatorio dizia 0% de
-// acuracidade (e o concluir dispararia um AJUSTE_INVENTARIO inutil de 7e-16). UMA definicao de
-// "e divergencia de verdade", usada pelo relatorio (SQL) e pelo filtro de ajustes do concluir —
-// duas copias da mesma conta e o que a G5 manda evitar.
-const EPSILON_DIVERGENCIA = 1e-9;
+// RN-06: "exato" tolera deriva de float — a definicao mora em services/almoxarifado/
+// divergencia.js (fonte unica; a revisao final achou uma SEGUNDA copia da comparacao exata no
+// reportService e a moveu para la tambem).
+const { EPSILON_DIVERGENCIA } = require('../services/almoxarifado/divergencia');
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
@@ -723,17 +720,22 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                c.impacto_financeiro,
                COUNT(ic.id) AS total_itens,
                COALESCE(SUM(CASE WHEN ic.quantidade_contada IS NOT NULL THEN 1 ELSE 0 END), 0) AS contados,
-               COALESCE(SUM(CASE WHEN ic.quantidade_contada IS NOT NULL AND ABS(ic.divergencia) < ${EPSILON_DIVERGENCIA} THEN 1 ELSE 0 END), 0) AS exatos
+               COALESCE(SUM(CASE WHEN ic.quantidade_contada IS NOT NULL AND ABS(ic.divergencia) < ${EPSILON_DIVERGENCIA} THEN 1 ELSE 0 END), 0) AS exatos,
+               COALESCE(SUM(CASE WHEN ic.recontado = 1 THEN 1 ELSE 0 END), 0) AS recontados
         FROM conferencias_almoxarifado c
         LEFT JOIN itens_conferencia_almoxarifado ic ON ic.conferencia_id = c.id
         WHERE c.status = 'CONCLUIDO'
         GROUP BY c.id
-        ORDER BY c.data_fim DESC, c.id DESC`, []);
+        ORDER BY c.data_fim DESC, c.id DESC
+        LIMIT 500`, []);
 
       const conferencias = rows.map((r) => ({
         id: r.id, numero: r.numero, data_fim: r.data_fim, escopo_descricao: r.escopo_descricao,
         modo_cego: r.modo_cego, dupla_contagem: r.dupla_contagem,
         total_itens: r.total_itens, contados: r.contados, exatos: r.exatos,
+        // recontados (revisao final): a flag dupla_contagem sozinha nao prova que alguem
+        // recontou (dentro da tolerancia ninguem reconta) — o numero e o que sustenta o selo.
+        recontados: r.recontados,
         divergentes: r.contados - r.exatos,
         // RN-06: sem contagem não há acuracidade — 0% mentiria.
         acuracidade: r.contados > 0 ? Number(((r.exatos / r.contados) * 100).toFixed(2)) : null,
@@ -781,23 +783,33 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // quando o campo vai ser removido logo abaixo, porque quem so conta precisa saber que
       // precisa recontar mesmo sem ver o numero da divergencia.
       let itens = enrichMaterialRows(itensRaw).map((item) => {
+        // Epsilon (revisao final): deriva de float nao e divergencia — sem isso, tolerancia 0
+        // + esperado nascido de subtracao REAL travava a conclusao com "0.00% (limite 0%)".
         const recontagem_necessaria = item.quantidade_contada != null && !item.recontado
+          && Math.abs(item.divergencia) > EPSILON_DIVERGENCIA
           && (Math.abs(item.divergencia) / Math.max(item.quantidade_sistema, 1)) * 100 > tolerancia;
         return { ...item, recontagem_necessaria };
       });
 
-      // RN-02: contagem cega — enquanto ABERTO e para quem NAO homologa ajuste
-      // (`ajustar_estoque`), o esperado e a divergencia ficam escondidos. Concluida ou
-      // cancelada os dois voltam para todo mundo: e o registro historico.
-      if (conf.modo_cego && conf.status === 'ABERTO' && !can(req.user, 'ajustar_estoque')) {
-        itens = itens.map(({ quantidade_sistema, divergencia, ...resto }) => resto);
+      if (conf.status === 'ABERTO' && !can(req.user, 'ajustar_estoque')) {
+        // RN-02: contagem cega — o esperado e a divergencia ficam escondidos de quem nao
+        // homologa. Concluida ou cancelada os dois voltam para todo mundo: e o registro
+        // historico.
+        if (conf.modo_cego) {
+          itens = itens.map(({ quantidade_sistema, divergencia, ...resto }) => resto);
+        }
 
-        // RN-03 (10b, achado da revisao da Task 2): com dupla contagem, a contagem do COLEGA
-        // tambem e numero escondido — o recontador precisa contar sem ver o valor do primeiro
-        // contador, senao os quatro olhos viram dois olhos e uma copia. Some so o valor de
-        // quem NAO foi o ultimo autor; o proprio autor continua vendo o que digitou (a tela
-        // mostra a contagem salva). O design da 10b afirmava "a blindagem do modo cego nao
-        // muda" — estava ERRADO para esta combinacao, corrigido no proprio design.
+        // RN-03 (10b): com dupla contagem, a contagem do COLEGA tambem e numero escondido —
+        // o recontador precisa contar sem ver o valor do primeiro contador, senao os quatro
+        // olhos viram dois olhos e uma copia. Some so o valor de quem NAO foi o ultimo autor;
+        // o proprio autor continua vendo o que digitou.
+        //
+        // ACHADO DA REVISAO FINAL DE BRANCH (Critical): este strip vivia DENTRO do bloco do
+        // modo cego — em dupla contagem SEM modo cego (a combinacao mais provavel), o input
+        // do recontador chegava preenchido com o numero do colega e um Tab certificava a
+        // "recontagem" sem digitar nada: saldo reescrito pelo motor com trilha dizendo que
+        // duas pessoas contaram. O strip depende SO de dupla_contagem. O design dizia que a
+        // ocultacao era um sub-caso do modo cego — estava ERRADO, corrigido la.
         if (conf.dupla_contagem) {
           itens = itens.map((item) => {
             const ultimoAutorId = item.recontado_por_id != null ? item.recontado_por_id : item.contado_por_id;
@@ -970,33 +982,44 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // deduzir a partir do valor antigo, que ele nem tem em maos.
       const ehRecontagem = item.quantidade_contada !== null;
 
-      // RN-03 (10b): dupla contagem — o autor da PRIMEIRA contagem nunca reconta. A comparação
-      // é sempre contra contado_por_id (não o contador anterior): senão o primeiro contador
+      // RN-03 (10b): dupla contagem — a RECONTAGEM tem de ser de outra pessoa, sempre
+      // comparando com contado_por_id (o PRIMEIRO contador, nao o anterior): senao o primeiro
       // poderia sobrescrever a recontagem do colega e anular os quatro olhos.
       // Sentinela = contado_por_id (nao ehRecontagem): a autoria nunca volta a null, entao o
       // gate nao depende de um campo que outra requisicao poderia limpar (defesa em
       // profundidade do achado RN-08 acima). Number() dos dois lados: se o id vier string de
       // um token futuro, === estrito falharia ABERTO em silencio.
-      if (conf.dupla_contagem && item.contado_por_id != null
-          && Number(item.contado_por_id) === Number(req.user.id)) {
+      //
+      // ACHADO DA REVISAO FINAL: enquanto NINGUEM recontou (recontado = 0), o primeiro
+      // contador pode CORRIGIR a propria contagem — correcao NAO e recontagem (nao marca
+      // recontado, nao preenche recontado_por; so a contagem de OUTRA pessoa faz isso).
+      // Sem esse caminho, um erro de digitacao dele congelava o item (RN-08 fechou o contorno
+      // por valor invalido) e, acima da tolerancia, travava a conferencia inteira ate outra
+      // pessoa logar. Depois da recontagem do colega, ele continua barrado como antes.
+      const ehPrimeiroContador = item.contado_por_id != null
+        && Number(item.contado_por_id) === Number(req.user.id);
+      if (conf.dupla_contagem && ehPrimeiroContador && item.recontado) {
         return res.status(400).json({
           error: `Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: ${item.contado_por_nome})`,
         });
       }
+      const ehCorrecaoDoPrimeiro = conf.dupla_contagem && ehPrimeiroContador && !item.recontado;
+      const marcaRecontagem = ehRecontagem && !ehCorrecaoDoPrimeiro;
 
-      // RN-04 (10b): autoria sempre gravada, flag ou não — primeira contagem em contado_por_*,
-      // cada contagem seguinte sobrescreve recontado_por_* (fica o último recontador).
+      // RN-04 (10b): autoria sempre gravada, flag ou não — primeira contagem (e correção do
+      // primeiro contador) em contado_por_*, recontagem de verdade sobrescreve recontado_por_*
+      // (fica o último recontador).
       const autorNome = req.user.nome || req.user.email;
-      const camposAutoria = ehRecontagem
+      const camposAutoria = marcaRecontagem
         ? ', recontado_por_id = ?, recontado_por_nome = ?'
         : ', contado_por_id = ?, contado_por_nome = ?';
 
       await dbRun(db, `UPDATE itens_conferencia_almoxarifado
-              SET quantidade_contada = ?, divergencia = ?, observacoes = ?${ehRecontagem ? ', recontado = 1' : ''}${camposAutoria}
+              SET quantidade_contada = ?, divergencia = ?, observacoes = COALESCE(?, observacoes)${marcaRecontagem ? ', recontado = 1' : ''}${camposAutoria}
               WHERE id = ?`,
         [quantidadeNum, divergencia, observacoes || null, req.user.id, autorNome, req.params.itemId]);
 
-      res.json({ success: true, divergencia, recontagem: ehRecontagem });
+      res.json({ success: true, divergencia, recontagem: marcaRecontagem });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
@@ -1065,7 +1088,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // (RN-04) libera a conclusao qualquer que seja o novo valor.
       const tolerancia = toleranciaEfetiva(conf.tolerancia_percentual);
       const divergenciaPercentualDe = (item) => Math.abs(item.divergencia) / Math.max(item.quantidade_sistema, 1) * 100;
-      const pendentesRecontagem = todosItens.filter((item) => divergenciaPercentualDe(item) > tolerancia && !item.recontado);
+      // Epsilon (revisao final): deriva de float nao exige recontagem — sem isso, tolerancia 0
+      // travava a conclusao com "PB-3 - 0.00% (limite 0%)" para um operador que acertou.
+      const pendentesRecontagem = todosItens.filter((item) => Math.abs(item.divergencia) > EPSILON_DIVERGENCIA
+        && divergenciaPercentualDe(item) > tolerancia && !item.recontado);
       if (pendentesRecontagem.length > 0) {
         const materialIds = pendentesRecontagem.map((i) => i.material_id);
         const materiaisPend = await dbAll(db,
@@ -1084,11 +1110,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // os itens contados divergentes. "O inventário achou R$ X de erro" interessa mesmo
       // quando ninguém aplica, e é o que o relatório de acuracidade consome. Fórmula D8 da
       // Etapa 10 (valores ABSOLUTOS), custo pela fonte única (custoSql.js).
+      // Um SELECT so (revisao final): antes era um dbGet por item divergente — inventario
+      // anual com 300 divergencias pagava 300 round-trips sequenciais antes de qualquer
+      // escrita, e agora o calculo roda SEMPRE (nao so com aplicar_ajustes).
       let impactoFinanceiro = 0;
-      for (const item of ajustes) {
-        const custoRow = await dbGet(db,
-          `SELECT ${custoUnitarioSql()} AS custo FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
-        impactoFinanceiro += Math.abs(item.divergencia) * (custoRow?.custo || 0);
+      if (ajustes.length > 0) {
+        const idsAjuste = ajustes.map((i) => i.material_id);
+        const custos = await dbAll(db,
+          `SELECT id, ${custoUnitarioSql()} AS custo FROM materiais_almoxarifado WHERE id IN (${idsAjuste.map(() => '?').join(',')})`,
+          idsAjuste);
+        const custoPorId = new Map(custos.map((c) => [c.id, c.custo]));
+        for (const item of ajustes) {
+          impactoFinanceiro += Math.abs(item.divergencia) * (custoPorId.get(item.material_id) || 0);
+        }
       }
 
       let ajustesAplicados = 0;

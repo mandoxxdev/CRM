@@ -725,6 +725,46 @@ git commit -m "Almoxarifado Etapa 10b Task 5: jornada de escopo, dupla contagem 
 
 ---
 
+### Task 5.5 — Revisão final de branch (registro)
+
+Dois revisores frescos em paralelo (lente backend/cross-task e lente costura front↔back):
+**1 Critical + 8 Important + 11 Minor**, todos com cenário medido (probes contra o app real),
+0 ruído. Corrigidos numa onda única pelo controlador; deferidos só os documentais.
+
+- **[Critical] Tab certificava a dupla contagem.** O strip da contagem do colega só existia
+  sob `modo_cego`; em dupla contagem sem cego (a combinação mais provável) o input do
+  recontador vinha preenchido e o blur re-salvava — medido: saldo 100→70 pelo motor, item
+  `recontado=1`, trilha "Contado por: Ana · Recontado por: Bruno" com Bruno tendo apenas
+  tabulado. Fix nas duas pontas: strip depende só de `dupla_contagem` (servidor decide) e o
+  front só salva campo **digitado na sessão** (`contagensSujas`), restaurando valor recusado.
+- **[Important ×8]** relatório antigo `inventario-divergencias` sem gate/status desfazia o
+  cego e a dupla por fora (→ CONCLUIDO + gate `inventario` + epsilon + LIMIT); epsilon tinha
+  segunda cópia (`!= 0`) no mesmo relatório e terceira fresta no gate de recontagem
+  (tolerância 0 + deriva = "0.00% (limite 0%)") — fonte única virou
+  `services/almoxarifado/divergencia.js`; RN-03+RN-08 congelavam typo do primeiro contador
+  (→ **ruling**: correção própria permitida enquanto `recontado=0`, não marca recontagem —
+  letra B); select de família oferecia subfamílias que nunca casam material (conferência
+  vazia em silêncio → só raízes, como o form de material); `total_itens` descartado pela
+  tabela (100% sobre 1/10 sem mostrar o 10 → coluna `contados / total`); contador do
+  cabeçalho mentia em cego+dupla (0/3 para o recontador, regredia para a autora → conta por
+  autoria).
+- **[Minor acatados]** `recontados` no payload+tabela do relatório; toast por linha ao
+  tabular (mesma guarda); valor recusado não fica na tela; `data_fim` UTC lida como local
+  (+3h) no `formatDate`; botão Acuracidade sem `bloquearSeNaoPode` (padronizado);
+  N+1 de custo no concluir (um `SELECT ... IN`); `observacoes` write-then-erase
+  (`COALESCE`); caixa informativa do modal contradizia o escopo montado.
+- **[Confirmado correto pelos revisores]** a cadeia de saldo inteira (escopo → desconto do
+  esperado → tolerância → tudo-ou-nada → soma-de-volta RN-06c) coerente e auto-corretiva
+  (medida ponta a ponta com remessa saindo no meio da contagem); tudo-ou-nada intacto nos 3
+  caminhos de aborto; 0×NULL do impacto sem confusão; contrato de campos honrado byte a byte
+  nos dois lados; `escopo_descricao` é snapshot de criação por semântica correta.
+- **[Deferido, documentar na Task 6]** escopo em-terceiros concentra falsas divergências se
+  houver remessa durante a contagem (inerente a D7 — vai para "o que não cobre");
+  `dupla_contagem` não força recontagem dentro da tolerância (o campo `recontados` existe
+  para isso); re-save deliberado do mesmo valor pela mesma pessoa em conferência SEM dupla
+  contagem continua marcando recontagem (mecânica da Etapa 10, agora inalcançável por
+  acidente na UI); PUT de `observacoes` sem quantidade toma 400 de RN-08 (nada usa).
+
 ### Task 6: Fechar a etapa
 
 - [ ] Merge da worktree do front (`git merge --no-ff`), suíte completa serial (os cinco
