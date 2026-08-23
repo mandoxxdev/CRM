@@ -192,6 +192,33 @@ async function novaFerramenta(db, extra = {}) {
     await close();
   });
 
+  await test('F2(a): devolver com ferramenta ja tirada de EMPRESTADA por ocorrencia concorrente nao volta a DISPONIVEL', async () => {
+    const { app, db, close } = await createTestApp();
+    const fid = await novaFerramenta(db);
+    const e = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
+      .send({ colaborador_nome: 'Joao' }).expect(201);
+
+    // Simula a ocorrencia concorrente: ela ja fechou o mesmo emprestimo E mudou a ferramenta para
+    // AVARIADA por dentro (RN-05), antes do devolver rodar. UPDATE direto na FERRAMENTA (nao no
+    // emprestimo) para isolar exatamente o claim que F2(a) protege.
+    await dbRun(db, "UPDATE ferramentas_almoxarifado SET status = 'AVARIADA' WHERE id = ?", [fid]);
+
+    const r = await request(app).post(`/api/almoxarifado/emprestimos/${e.body.id}/devolver`).send({}).expect(200);
+    assert.strictEqual(r.body.success, true);
+
+    const emp = await dbGet(db, 'SELECT status FROM emprestimos_ferramenta_almoxarifado WHERE id = ?', [e.body.id]);
+    assert.strictEqual(emp.status, 'DEVOLVIDA', 'emprestimo deveria ter sido fechado pelo devolver');
+
+    const f = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [fid]);
+    assert.strictEqual(f.status, 'AVARIADA', 'ferramenta nao deveria voltar a DISPONIVEL por cima da ocorrencia concorrente');
+
+    const audit = await dbAll(db,
+      "SELECT dados_novos FROM auditoria_log_almoxarifado WHERE entidade = 'ferramenta' AND entidade_id = ? AND acao = 'DEVOLUCAO' ORDER BY id DESC LIMIT 1", [fid]);
+    assert.ok(audit.length === 1, 'sem auditoria de devolucao');
+    assert.ok(/anomalia/.test(audit[0].dados_novos), `auditoria da devolucao deveria citar a anomalia: ${audit[0].dados_novos}`);
+    await close();
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();

@@ -195,6 +195,32 @@ async function novaFerramenta(db, extra = {}) {
     await close();
   });
 
+  await test('F2(b): emprestimo fechado por fora entre o claim da ferramenta e o empClaim nao trava a ferramenta em EMPRESTADA', async () => {
+    const { app, db, close } = await createTestApp();
+    const fid = await novaFerramenta(db);
+    const emp = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
+      .send({ colaborador_nome: 'Joao' }).expect(201);
+
+    // Fecha SO o emprestimo por UPDATE direto (simula devolverFerramenta tendo vencido o proprio
+    // claim do emprestimo um instante antes) sem tocar a ferramenta — ela continua EMPRESTADA no
+    // banco, entao o claim de origem da ocorrencia (passo 2) vence normalmente e so o empClaim
+    // (passo 4, que exige status='EMPRESTADA' no emprestimo) encontra 0 linhas.
+    await dbRun(db, "UPDATE emprestimos_ferramenta_almoxarifado SET status = 'DEVOLVIDA', data_devolucao_real = CURRENT_TIMESTAMP WHERE id = ?", [emp.body.id]);
+
+    const r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/ocorrencias`)
+      .field('tipo', 'AVARIA')
+      .field('descricao', 'ocorrencia contra emprestimo ja fechado por fora')
+      .expect(404);
+    assert.strictEqual(r.body.error, 'Empréstimo não encontrado');
+
+    const f = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [fid]);
+    assert.strictEqual(f.status, 'DISPONIVEL', 'ferramenta deveria voltar a DISPONIVEL (estado que o devolver concorrente deixou), nao ficar travada em EMPRESTADA');
+
+    const ocorrencias = await dbAll(db, 'SELECT * FROM ocorrencias_ferramenta_almoxarifado WHERE ferramenta_id = ?', [fid]);
+    assert.strictEqual(ocorrencias.length, 0, 'ocorrencia deveria ter sido desfeita (compensacao)');
+    await close();
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();

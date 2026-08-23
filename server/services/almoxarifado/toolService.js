@@ -107,12 +107,29 @@ async function devolverFerramenta(db, user, emprestimoId, data = {}) {
   if (claim.changes === 0) throw Object.assign(new Error('Empréstimo não encontrado'), { status: 404 });
 
   const emp = await dbGet(db, 'SELECT * FROM emprestimos_ferramenta_almoxarifado WHERE id = ?', [emprestimoId]);
-  await dbRun(db, 'UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+  // Claim tambem na ferramenta, nao UPDATE incondicional: entre o claim do emprestimo acima e
+  // esta linha, uma ocorrencia concorrente (registrarOcorrencia) pode ter tirado a ferramenta de
+  // EMPRESTADA (ex.: AVARIADA/PERDIDA) fechando o MESMO emprestimo por dentro (RN-05, passo 4).
+  // Sem o `AND status = 'EMPRESTADA'` este UPDATE reescreveria a ferramenta para DISPONIVEL por
+  // cima do estado que a ocorrencia acabou de gravar — corrompendo a maquina de estados (achado
+  // F2 da revisao final de branch). Quando `changes === 0` a ferramenta ja saiu de EMPRESTADA por
+  // essa ocorrencia: NAO e erro para quem chamou devolver (o claim do emprestimo, acima, ja
+  // venceu e fechou o emprestimo com sucesso) — so registra a anomalia na auditoria da propria
+  // DEVOLUCAO e segue devolvendo 200, sem tocar no status da ferramenta.
+  const claimFerramenta = await dbRun(db, `UPDATE ferramentas_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'EMPRESTADA'`,
     [STATUS.DISPONIVEL, emp.ferramenta_id]);
+
+  const dadosNovos = { emprestimo_id: Number(emprestimoId) };
+  if (claimFerramenta.changes === 0) {
+    const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [emp.ferramenta_id]);
+    dadosNovos.anomalia = 'ferramenta_ja_fora_de_emprestada_ao_devolver';
+    dadosNovos.status_atual = atual ? atual.status : null;
+  }
 
   await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: emp.ferramenta_id, acao: 'DEVOLUCAO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
-    dados_novos: { emprestimo_id: Number(emprestimoId) } });
+    dados_novos: dadosNovos });
   return { success: true };
 }
 
@@ -335,9 +352,17 @@ async function registrarOcorrencia(db, user, ferramentaId, data, fotoPath) {
       : { changes: 0 };
     if (empClaim.changes === 0) {
       // compensacao total (passo 4 do comentario acima): desfaz o INSERT e devolve a ferramenta.
+      // Devolve para DISPONIVEL, NAO para `origem` (que aqui e sempre EMPRESTADA, dado o `if`
+      // acima): o empClaim so falha quando o emprestimo ja foi fechado por fora nesta janela —
+      // e quem fecha um emprestimo (devolverFerramenta) e o proprio dono da transicao
+      // EMPRESTADA -> DISPONIVEL (achado F2 da revisao final de branch). Restaurar `origem`
+      // reescreveria a ferramenta de volta para EMPRESTADA por cima de um emprestimo que JA
+      // esta fechado — ferramenta emprestada sem nenhum emprestimo aberto, estado indestravavel
+      // (nada no contrato transiciona EMPRESTADA sem antes achar a linha `status='EMPRESTADA'`
+      // do emprestimo). DISPONIVEL e o estado que o devolver concorrente correto ja deixou.
       await dbRun(db, 'DELETE FROM ocorrencias_ferramenta_almoxarifado WHERE id = ?', [ocorrenciaId]);
       await dbRun(db, 'UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [origem, ferramentaId]);
+        [STATUS.DISPONIVEL, ferramentaId]);
       throw Object.assign(new Error('Empréstimo não encontrado'), { status: 404 });
     }
     emprestimoEncerradoId = empAberto.id;
