@@ -27,7 +27,10 @@ não depende de decisão de negócio pendente:
 
 Congelamento de movimentação (ruling anterior mantido), fluxo formal de dupla aprovação (B11
 sem arbitragem), contagem por endereço, contagem cíclica automática, contagem surpresa como
-artefato de software, filtro por cliente específico, e-mail do resultado.
+artefato de software, **contagem "por divergência"** (ver D12 — a recontagem obrigatória da
+Etapa 10 já é a recontagem seletiva dos itens divergentes; um escopo de criação "só os que
+divergiram da última vez" seria uma segunda resposta para a mesma pergunta), filtro por
+cliente específico, e-mail do resultado.
 
 ---
 
@@ -224,6 +227,13 @@ que o `MaterialAlmoxarifadoForm.js` já usa — a fonte é o form de material, n
   divergir da conta. Impacto financeiro é a exceção (D9) porque **depende do custo do
   momento**, que muda.
 - **D11 — E-mail do resultado: fora (feature 19)**, mesmo corte de todas as etapas.
+- **D12 — Contagem "por divergência" (spec 21) não vira escopo de criação.** (Acrescentado
+  pela revisão adversarial do plano — o design original nem a listava, o que na Task 6
+  deixaria o item do checklist da spec 17 desmarcado e mudo.) A recontagem obrigatória acima
+  da tolerância (RN-04/05 da Etapa 10) já É a recontagem seletiva dos itens divergentes,
+  dentro da mesma conferência; um escopo "só materiais divergentes da última conferência"
+  responderia a mesma pergunta por um segundo caminho. Se a operação pedir esse escopo de
+  verdade, é filtro barato sobre o histórico — decisão adiada, não perdida.
 
 ## Interações verificadas com regras existentes
 

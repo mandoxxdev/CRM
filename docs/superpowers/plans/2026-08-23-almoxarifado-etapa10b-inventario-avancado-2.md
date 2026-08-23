@@ -24,7 +24,11 @@ tocado** nesta etapa.
 - Mensagens literais congeladas (não parafrasear):
   - 400 escopo: `Classe ABC inválida (use A, B ou C)`
   - 400 dupla contagem: `Dupla contagem: a recontagem deve ser feita por outra pessoa (primeira contagem: <nome>)`
-- Todo o fluxo fica sob `requirePermission('inventario')`; o relatório novo idem (RN-07).
+- Todo o fluxo **mutante** de conferência (POST, PUT /item, PUT /concluir, PUT /cancelar) já
+  está sob `requirePermission('inventario')`; **as duas rotas GET existentes (lista e `:id`)
+  NÃO estão, e esta etapa NÃO as gateia** — a leitura fica com o gate de módulo, como hoje
+  (CONSULTA/COMPRAS/PRODUCAO continuam lendo). O relatório novo é a exceção deliberada:
+  agregação gerencial, entra com `inventario` (RN-07). Não "corrija" os GET.
 - Colunas novas **só** por `safeAlter`; zero migração destrutiva; conferências antigas (colunas
   nulas) mantêm o comportamento de hoje.
 - Teste novo que passa de primeira exige **controle positivo** (sabotagem que o derruba,
@@ -33,6 +37,40 @@ tocado** nesta etapa.
 - Commits em português, corpo sem acento, um assunto por commit, nunca `git add -A` na raiz.
 - Rodar `cd server && npm run test:api` antes de cada commit de backend; suíte client no galho
   do front.
+
+## Fase 2 — achados da revisão adversarial do plano (todos acatados antes da execução)
+
+Revisor fresco, 1 Critical + 5 Important + 6 Minor, **0 ruído**. Correções já aplicadas no
+texto das tasks abaixo; registrados aqui para a trilha:
+
+1. **[Critical]** teste de família usava `INSERT (nome)` — `codigo` é `UNIQUE NOT NULL`; o
+   teste morreria em SQLITE_CONSTRAINT antes de qualquer assert (vermelho pela razão errada).
+2. **[Important]** código do plano produzia `Família: #<id>` para família sem cadastro; o
+   literal congelado do design é `Família #<id>` — corrigido + teste do ramo.
+3. **[Important]** teste 5 da Task 3 fazia `UPDATE ... SET impacto_financeiro = NULL` **sem
+   WHERE** — zerava o banco compartilhado inteiro e só passava por ordem acidental.
+4. **[Important]** o 403 do PRODUCAO era o único teste do gate do relatório — qualquer
+   permissão errada (`ajustar_estoque`, `configurar`) passava na suíte inteira; acrescentado
+   o caso positivo do ALMOXARIFE (teste 9).
+5. **[Important]** teste 7 (agregado) era auto-referencial (comparava o agregado consigo
+   mesmo) — a sabotagem `SUM→COUNT` passava verde; acrescentados os absolutos das linhas +
+   sabotagem (iii).
+6. **[Important]** a Global Constraint dizia "todo o fluxo sob `requirePermission('inventario')`"
+   — **falso**: os dois GET existentes não têm gate de perfil, e a frase induzia o executor a
+   "corrigi-los", tirando a leitura de CONSULTA/COMPRAS/PRODUCAO sem teste que pegasse.
+7. **[Minor ×6]** estrutura `almox-field`/`label` que o helper `campo()` exige; `catch` sem
+   binding no `handleSalvarContagem`; impacto invisível no toast quando `ajustesAplicados
+   === 0` (novo teste 6 do front); teste 2 da Task 3 reusando material já ajustado; risco de
+   `AND` depois do `ORDER BY` no POST; contagem "por divergência" sem declaração no design
+   (virou D12).
+
+O revisor também **confirmou** as premissas de risco do plano: `SELECT ic.*` ecoa a autoria
+por arrastão; o strip do modo cego remove só 2 campos; nenhum teste existente afere
+`impactoFinanceiro === 0` sem aplicar; `AJUSTE_INVENTARIO` não toca custo (o impacto pode ser
+calculado antes da aplicação sem mudar o número); a rota nova entre lista e `:id` funciona;
+`permissoesRotas` NÃO varre rotas (não precisa registrar a nova); perfis conferidos
+(`inventario` = ADMIN/ALMOXARIFE/GESTOR; `ajustar_estoque` sem ALMOXARIFE); nenhum teste
+existente quebra com as colunas novas.
 
 ## Sort topológico
 
@@ -124,8 +162,13 @@ Testes (todos com `assert` na mensagem/status exatos):
    (`classe_abc: 'A'` e `'B'`), POST `{ classe_abc: 'a', categoria: '<única>' }` →
    `totalItens: 1`, item aponta o material A.
 3. `RN-01: familia_id filtra` — cria família (`INSERT INTO familias_material_almoxarifado
-   (nome) VALUES ('Fam RN01')`), material dentro e fora, POST `{ familia_id }` → só o de
-   dentro. Confirma `escopo_descricao === 'Família: Fam RN01'`.
+   (codigo, nome) VALUES ('FAM-RN01', 'Fam RN01')` — **`codigo` é `UNIQUE NOT NULL`**,
+   schema.js ~700; sem ele o INSERT morre em SQLITE_CONSTRAINT antes de qualquer assert),
+   material dentro e fora — o de fora com `familia_id: null` ou outra família (o
+   `initSchema` semeia famílias; nunca conte com a tabela vazia). POST `{ familia_id }` → só
+   o de dentro. Confirma `escopo_descricao === 'Família: Fam RN01'`. E um caso com
+   `familia_id: 999999` (sem cadastro) → `escopo_descricao === 'Família #999999'` (sem
+   dois-pontos — literal congelado no design).
 4. `RN-01: apenas_criticos e apenas_de_clientes filtram` — precisa de um cliente:
    `INSERT INTO clientes (razao_social) VALUES ('Cliente Escopo')` (adapte às colunas NOT
    NULL da tabela se houver — leia o schema de `clientes` antes). Material crítico + de
@@ -175,7 +218,9 @@ Depois do cálculo de `toleranciaValor`, a descrição do escopo (RN-01 — orde
       if (categoria) partesEscopo.push(`Categoria: ${categoria}`);
       if (familia_id) {
         const fam = await dbGet(db, `SELECT nome FROM familias_material_almoxarifado WHERE id = ?`, [familia_id]);
-        partesEscopo.push(`Família: ${fam?.nome || `#${familia_id}`}`);
+        // Literal congelado (RN-01): com cadastro "Família: <nome>"; sem, "Família #<id>"
+        // (SEM dois-pontos — o teste afere os dois ramos).
+        partesEscopo.push(fam?.nome ? `Família: ${fam.nome}` : `Família #${familia_id}`);
       }
       if (classeAbc) partesEscopo.push(`Classe ${classeAbc}`);
       if (apenas_criticos) partesEscopo.push('Somente críticos');
@@ -196,8 +241,10 @@ INSERT da conferência ganha as duas colunas:
          modoCegoValor, toleranciaValor, duplaContagemValor, escopoDescricao]);
 ```
 
-WHERE (depois do `if (categoria)` existente — manter o comentário da 8b sobre o esperado
-intacto):
+WHERE — **substituir** a linha `if (categoria) ...` existente pelo bloco abaixo (não
+acrescentar depois dela): no código real o `sql += ' ORDER BY nome'` vem logo em seguida, e
+um `AND` acrescentado depois do ORDER BY é `SQLITE_ERROR: near "AND"`. Manter o comentário da
+8b sobre o esperado intacto e o ORDER BY **depois** do bloco:
 
 ```js
       if (categoria) { sql += ` AND categoria = ?`; params.push(categoria); }
@@ -373,9 +420,11 @@ Testes:
    contar 90 → concluir `{ aplicar_ajustes: true, justificativa_ajuste: 'ajuste 10b' }` →
    resposta `impactoFinanceiro === 100` (|−10| × 10) e
    `SELECT impacto_financeiro FROM conferencias_almoxarifado` === 100.
-2. `RN-05: concluir SEM aplicar tambem calcula e persiste` — mesmo cenário, concluir `{}` →
-   resposta `impactoFinanceiro === 100` (mudança declarada: a Etapa 10 respondia 0 aqui) e
-   coluna === 100; **e o saldo do material NÃO mudou** (continua 100 — não aplicou).
+2. `RN-05: concluir SEM aplicar tambem calcula e persiste` — material **NOVO** (não reusar o
+   do teste 1, que ficou com saldo 90 depois do ajuste), `custo_unitario = 10`, qtd 100,
+   categoria única própria; contar 90; concluir `{}` → resposta `impactoFinanceiro === 100`
+   (mudança declarada: a Etapa 10 respondia 0 aqui) e coluna === 100; **e o saldo do material
+   NÃO mudou** (continua 100 — não aplicou).
 3. `RN-06: metricas por conferencia com numeros conhecidos` — 3 materiais na categoria única;
    contar 2 (um exato, um divergente), 1 sem contar; concluir `{}`; relatório: a linha da
    conferência tem `total_itens 3, contados 2, exatos 1, divergentes 1, acuracidade 50` e
@@ -383,17 +432,27 @@ Testes:
 4. `RN-06: conferencia concluida sem contagem tem acuracidade null e contados 0` — concluir
    direto; linha: `contados === 0` (o COALESCE — não null), `acuracidade === null`.
 5. `RN-06: impacto nulo de conferencia antiga aparece como null` — concluir, depois
-   `UPDATE conferencias_almoxarifado SET impacto_financeiro = NULL` (simula pré-10b);
-   relatório: `impacto_financeiro === null`.
+   `UPDATE conferencias_almoxarifado SET impacto_financeiro = NULL WHERE id = ?`,
+   `[conf.id]` (simula pré-10b — **com WHERE**: sem ele o teste zera o impacto de todas as
+   conferências do banco compartilhado e derruba qualquer assert de impacto que rode depois);
+   relatório: `impacto_financeiro === null` **nessa linha**.
 6. `RN-06: so CONCLUIDO entra` — uma ABERTO e uma CANCELADO (PUT /cancelar) não aparecem
    no relatório (procure pelos `numero`).
-7. `RN-06: agregado e ponderado por item contado` — duas conferências: A com 4 contados/4
-   exatos, B com 1 contado/0 exatos → média simples seria 50; o agregado tem de dar
-   `acuracidade === 80` (5 contados, 4 exatos). O teste **força o conjunto**: afere sobre os
-   totais do agregado (`contados`, `exatos`) e não assume que só existem essas duas
-   conferências no banco — calcule o esperado a partir do próprio payload
-   (`Number((Σexatos/Σcontados*100).toFixed(2))`) e afira que A e B estão nas linhas.
+7. `RN-06: agregado e ponderado por item contado` — duas conferências: A com 4 itens, todos
+   contados e exatos; B com **2 itens e só 1 contado** (0 exatos — o item não contado é o que
+   separa `contados` de `total_itens`). **Primeiro os ABSOLUTOS das linhas** (é o que impede
+   o teste de ser auto-referencial — comparar o agregado só consigo mesmo passaria com os
+   insumos errados): `linhaA.total_itens === 4 && linhaA.contados === 4 && linhaA.exatos
+   === 4`; `linhaB.total_itens === 2 && linhaB.contados === 1 && linhaB.exatos === 0`. Só
+   então o agregado: como o banco é compartilhado, derive a ponderada esperada de
+   `agregado.contados`/`agregado.exatos` (`Number((Σexatos/Σcontados*100).toFixed(2))`) e
+   afira que `agregado.acuracidade` bate — a força do teste está nos absolutos das linhas,
+   a derivação só confere a fórmula final.
 8. `RN-07: sem perfil e 403` — `setUser(PRODUCAO)` → status 403.
+9. `RN-07: ALMOXARIFE (tem inventario, nao tem ajustar_estoque) le o relatorio` —
+   `setUser(ALMOXARIFE)` → status 200. **Sem este caso positivo, trocar o gate por
+   `ajustar_estoque`/`configurar` passaria em todos os outros testes** (ADMIN passa em
+   qualquer gate; PRODUCAO toma 403 em qualquer um).
 
 - [ ] **Step 2: rodar e ver falhar** — 404 na rota nova; coluna nula no teste 1.
 
@@ -481,10 +540,13 @@ O UPDATE final ganha a coluna:
   `conferenciaMotorAjuste` (o concluir mudou), `conferenciaTolerancia`,
   `inventarioIntegracao`, `permissoesRotas`.
 
-- [ ] **Step 5: controle positivo** — duas sabotagens independentes: (i) trocar o WHERE do
+- [ ] **Step 5: controle positivo** — três sabotagens independentes: (i) trocar o WHERE do
   relatório para `c.status != ''` → teste 6 cai; (ii) na conta do agregado, trocar a ponderada
   por média simples das porcentagens (`conferencias.reduce((s,c) => s + (c.acuracidade||0), 0)
-  / conferencias.length`) → teste 7 cai. Restaurar, md5 idêntico.
+  / conferencias.length`) → teste 7 cai (na derivação final); (iii) trocar o SUM de `contados`
+  por `COUNT(ic.id)` → o assert `linhaB.contados === 1` do teste 7 cai (é a sabotagem que a
+  versão auto-referencial do teste NÃO pegava — se ela não derrubar nada, o teste 7 está
+  fraco, conserte o teste antes de seguir). Restaurar, md5 idêntico.
 
 - [ ] **Step 6: suíte + commit**
 
@@ -542,6 +604,10 @@ mocks de `api.get`/`api.post`):
    com uma linha `acuracidade: 98.5, impacto_financeiro: 120` e outra
    `acuracidade: null, impacto_financeiro: null`, agregado `acuracidade: 92.31`; tudo
    renderiza; nulos viram `—`.
+6. `RN-05: concluir sem aplicar mostra o impacto encontrado` — mock do PUT /concluir
+   respondendo `{ ajustesAplicados: 0, impactoFinanceiro: 4320 }`; a mensagem de sucesso cita
+   as divergências encontradas em R$ (sem isso o número que a RN-05 foi criada para produzir
+   fica invisível até alguém abrir a visão Acuracidade).
 
 - [ ] **Step 2: rodar e ver falhar** —
   `cd client && CI=true npx react-scripts test --watchAll=false ConferenciaEstoque`
@@ -556,13 +622,22 @@ Seguir os padrões do componente (styles inline dos modais, `api` compartilhado,
   `mostrarAcuracidade`, `relatorioAcuracidade`.
 - Modal de criação: select de família (`<option>` por família, value id), select de classe
   (vazio/A/B/C), checkboxes "Somente críticos", "Materiais de clientes", "Com saldo em
-  terceiros", "Dupla contagem (recontagem por outra pessoa)". `handleCriar` inclui os campos
-  no body **só quando preenchidos** (booleans `true`, ids não vazios).
+  terceiros", "Dupla contagem (recontagem por outra pessoa)". **Cada controle novo em seu
+  próprio `<div className="almox-field">` com `<label>` contendo o rótulo exato** — é o que o
+  helper `campo()` do arquivo de teste (~linha 141) encontra; agrupar checkboxes num div
+  solto faz `campo()` devolver `undefined` e o teste morrer por marcação, não por lógica.
+  `handleCriar` inclui os campos no body **só quando preenchidos** (booleans `true`, ids não
+  vazios).
 - Lista: célula/badge `conf.escopo_descricao || '—'`.
 - Detalhe do item: linha pequena `Contado por: <nome>` e `· Recontado por: <nome>` quando
   presentes.
 - Erro do `handleSalvarContagem`: exibir `err.response?.data?.error` quando houver (o texto
-  da dupla contagem vem pronto do servidor).
+  da dupla contagem vem pronto do servidor). **Atenção: o `catch` atual é `catch { ... }` sem
+  binding** (~linha 137) — trocar por `catch (err)` primeiro, senão `err` é `ReferenceError`.
+- `handleConcluir`: quando `ajustesAplicados === 0` e `impactoFinanceiro > 0`, a mensagem de
+  sucesso cita `divergências encontradas: R$ <valor> (nenhum ajuste aplicado)` — hoje o
+  impacto só aparece quando `ajustesAplicados > 0` (~linhas 154-157) e o número novo da
+  RN-05 ficaria invisível.
 - Botão "Acuracidade" no cabeçalho da lista → carrega
   `api.get('/almoxarifado/conferencias/relatorio-acuracidade')` e mostra a tabela
   (`numero`, `data_fim`, `escopo_descricao`, contados/exatos/divergentes, `acuracidade`
