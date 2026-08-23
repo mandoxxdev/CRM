@@ -32,6 +32,18 @@ const ConferenciaEstoque = () => {
   const [criarTolerancia, setCriarTolerancia] = useState('');
   const [creating, setCreating] = useState(false);
   const [toleranciaPlaceholder, setToleranciaPlaceholder] = useState(TOLERANCIA_DEFAULT_PLACEHOLDER);
+  // Etapa 10b (Task 4): escopo combinável (RN-01/02) e dupla contagem (RN-03) na criação.
+  const [criarFamilia, setCriarFamilia] = useState('');
+  const [criarClasseAbc, setCriarClasseAbc] = useState('');
+  const [criarCriticos, setCriarCriticos] = useState(false);
+  const [criarDeClientes, setCriarDeClientes] = useState(false);
+  const [criarEmTerceiros, setCriarEmTerceiros] = useState(false);
+  const [criarDuplaContagem, setCriarDuplaContagem] = useState(false);
+  const [familias, setFamilias] = useState([]);
+  // Etapa 10b (Task 4): visão Acuracidade (RN-06), modal separado por cima da lista.
+  const [mostrarAcuracidade, setMostrarAcuracidade] = useState(false);
+  const [loadingAcuracidade, setLoadingAcuracidade] = useState(false);
+  const [relatorioAcuracidade, setRelatorioAcuracidade] = useState(null);
 
   const [confAberta, setConfAberta] = useState(null);
   const [loadingConf, setLoadingConf] = useState(false);
@@ -44,7 +56,20 @@ const ConferenciaEstoque = () => {
   useEffect(() => {
     loadConferencias();
     loadToleranciaConfigurada();
+    loadFamilias();
   }, []);
+
+  // Mesma fonte que MaterialAlmoxarifadoForm.js:153 usa para o select de família — falha
+  // silenciosa de propósito: sem famílias o select de escopo fica só com "Todas", a criação
+  // continua funcionando sem esse filtro.
+  const loadFamilias = async () => {
+    try {
+      const res = await api.get('/almoxarifado/familias');
+      setFamilias(res.data || []);
+    } catch {
+      setFamilias([]);
+    }
+  };
 
   // GET /almoxarifado/configuracoes devolve um MAPA { chave: { valor, descricao, id } } (mesmo
   // contrato que ConfiguracoesAlmoxarifado.js já consome) — a chave que importa aqui é
@@ -84,7 +109,15 @@ const ConferenciaEstoque = () => {
         observacoes: criarObs,
         categoria: criarCategoria || undefined,
         modo_cego: criarModoCego,
-        tolerancia_percentual: criarTolerancia !== '' ? parseFloat(criarTolerancia) : undefined
+        tolerancia_percentual: criarTolerancia !== '' ? parseFloat(criarTolerancia) : undefined,
+        // RN-01/02/03: escopo combinável e dupla contagem — só entram no body quando
+        // preenchidos (booleans true, ids não vazios); undefined some no JSON enviado.
+        familia_id: criarFamilia !== '' ? parseInt(criarFamilia, 10) : undefined,
+        classe_abc: criarClasseAbc || undefined,
+        apenas_criticos: criarCriticos || undefined,
+        apenas_de_clientes: criarDeClientes || undefined,
+        apenas_em_terceiros: criarEmTerceiros || undefined,
+        dupla_contagem: criarDuplaContagem || undefined
       });
       toast.success(`Conferência ${res.data.numero} criada com ${res.data.totalItens} itens`);
       setShowCreateModal(false);
@@ -92,6 +125,12 @@ const ConferenciaEstoque = () => {
       setCriarCategoria('');
       setCriarModoCego(false);
       setCriarTolerancia('');
+      setCriarFamilia('');
+      setCriarClasseAbc('');
+      setCriarCriticos(false);
+      setCriarDeClientes(false);
+      setCriarEmTerceiros(false);
+      setCriarDuplaContagem(false);
       loadConferencias();
       abrirConferencia(res.data.id);
     } catch (err) {
@@ -108,7 +147,10 @@ const ConferenciaEstoque = () => {
       setConfAberta(res.data);
       const initContagens = {};
       res.data.itens.forEach(item => {
-        initContagens[item.id] = item.quantidade_contada !== null ? String(item.quantidade_contada) : '';
+        // Etapa 10b (amendo Task 2): em modo_cego + dupla_contagem o servidor pode OMITIR
+        // quantidade_contada (undefined, campo nem veio) para quem não é o último autor — usar
+        // `!= null` (cobre null E undefined) evita a string literal "undefined" no input.
+        initContagens[item.id] = item.quantidade_contada != null ? String(item.quantidade_contada) : '';
       });
       setContagens(initContagens);
     } catch {
@@ -132,8 +174,10 @@ const ConferenciaEstoque = () => {
       // só o objeto, sem `setLoadingConf`) para o badge da linha recém-contada atualizar aqui.
       const res = await api.get(`/almoxarifado/conferencias/${confAberta.id}`);
       setConfAberta(res.data);
-    } catch {
-      toast.error('Erro ao salvar contagem');
+    } catch (err) {
+      // RN-03 (dupla contagem) e RN-08 (contagem inválida) chegam prontas do servidor — exibir
+      // o texto literal, sem parafrasear (mesmo padrão do handleConcluir).
+      toast.error(err.response?.data?.error || 'Erro ao salvar contagem');
     }
   };
 
@@ -147,9 +191,17 @@ const ConferenciaEstoque = () => {
       const res = await api.put(`/almoxarifado/conferencias/${confAberta.id}/concluir`, payload);
       // D8: impactoFinanceiro e a soma dos valores ABSOLUTOS por item ajustado (nao um
       // liquido/saldo) — so mostra quando teve ajuste de verdade aplicado.
-      const mensagem = res.data.ajustesAplicados > 0
-        ? `Conferência concluída! Ajustes aplicados: ${res.data.ajustesAplicados} — impacto financeiro: ${formatMoeda(res.data.impactoFinanceiro)}`
-        : `Conferência concluída! ${res.data.ajustesAplicados} ajustes aplicados.`;
+      // RN-05 (Etapa 10b): concluir SEM aplicar ajustes agora também calcula o impacto (o que
+      // o inventário encontrou de divergência) — sem citar o valor aqui, o número só aparece
+      // pra quem abrir a visão Acuracidade depois. Ajustes aplicados continua tendo prioridade.
+      let mensagem;
+      if (res.data.ajustesAplicados > 0) {
+        mensagem = `Conferência concluída! Ajustes aplicados: ${res.data.ajustesAplicados} — impacto financeiro: ${formatMoeda(res.data.impactoFinanceiro)}`;
+      } else if (res.data.impactoFinanceiro > 0) {
+        mensagem = `Conferência concluída! ${res.data.ajustesAplicados} ajustes aplicados — divergências encontradas: ${formatMoeda(res.data.impactoFinanceiro)} (nenhum ajuste aplicado)`;
+      } else {
+        mensagem = `Conferência concluída! ${res.data.ajustesAplicados} ajustes aplicados.`;
+      }
       toast.success(mensagem);
       setShowConcluirModal(false);
       setJustificativaAjuste('');
@@ -185,6 +237,26 @@ const ConferenciaEstoque = () => {
       toast.error(err.response?.data?.error || 'Erro ao cancelar conferência');
     }
   };
+
+  // RN-06/RN-07: relatório derivado, só CONCLUIDO, gate real fica no requirePermission do
+  // servidor — a tela só busca e mostra, sem esconder o botão (falha aberta, como o resto do
+  // módulo).
+  const handleAbrirAcuracidade = async () => {
+    setMostrarAcuracidade(true);
+    setLoadingAcuracidade(true);
+    try {
+      const res = await api.get('/almoxarifado/conferencias/relatorio-acuracidade');
+      setRelatorioAcuracidade(res.data);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao carregar relatório de acuracidade');
+      setMostrarAcuracidade(false);
+    } finally {
+      setLoadingAcuracidade(false);
+    }
+  };
+
+  const formatAcuracidade = (v) => (v !== null && v !== undefined ? `${Number(v).toFixed(2)}%` : '—');
+  const formatImpacto = (v) => (v !== null && v !== undefined ? formatMoeda(v) : '—');
 
   const divergenciaItem = (item) => {
     if (contagens[item.id] === '' || contagens[item.id] === undefined) return null;
@@ -259,7 +331,7 @@ const ConferenciaEstoque = () => {
         )}
 
         <div className="almox-table-container">
-          {loadingConf ? <SkeletonTable rows={8} columns={5} /> : (
+          {loadingConf ? <SkeletonTable rows={8} columns={7} /> : (
             <table className="almox-table">
               <thead>
                 <tr>
@@ -283,6 +355,19 @@ const ConferenciaEstoque = () => {
                       <td>
                         <div style={{ fontWeight: 600 }}>{item.material_nome}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{item.unidade}</div>
+                        {/* RN-04: autoria sempre gravada, com ou sem dupla_contagem — inclusive
+                            quando o servidor omite quantidade_contada (modo_cego + dupla_contagem
+                            para quem não é o último autor: autoria não é blindada, só o número).
+                            Item nunca contado (par todo nulo) não ganha linha "Contado por: —"
+                            à toa; item contado antes da etapa (par nulo mas já com contagem)
+                            também não tem autoria pra mostrar — sem dado, sem linha. */}
+                        {(item.contado_por_nome || item.recontado_por_nome) && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', marginTop: 2 }}>
+                            {[item.contado_por_nome && `Contado por: ${item.contado_por_nome}`,
+                              item.recontado_por_nome && `Recontado por: ${item.recontado_por_nome}`]
+                              .filter(Boolean).join(' · ')}
+                          </div>
+                        )}
                       </td>
                       <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
                         {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo) || '—'}
@@ -301,7 +386,7 @@ const ConferenciaEstoque = () => {
                             placeholder="—"
                           />
                         ) : (
-                          <span>{item.quantidade_contada !== null ? `${item.quantidade_contada} ${item.unidade}` : '—'}</span>
+                          <span>{item.quantidade_contada != null ? `${item.quantidade_contada} ${item.unidade}` : '—'}</span>
                         )}
                       </td>
                       <td>
@@ -384,6 +469,13 @@ const ConferenciaEstoque = () => {
             <FiRefreshCw size={13} /> Atualizar
           </button>
           <button
+            className="btn-almox-secondary"
+            onClick={handleAbrirAcuracidade}
+            title="Métricas de acurácia derivadas das conferências concluídas (RN-06)"
+          >
+            Acuracidade
+          </button>
+          <button
             className="btn-almox-primary"
             onClick={(e) => { if (!bloquearSeNaoPode('inventario', e)) return; setShowCreateModal(true); }}
             title="Abre uma contagem de inventário: congela o saldo atual de cada material para você conferir com o físico"
@@ -394,7 +486,7 @@ const ConferenciaEstoque = () => {
       </div>
 
       <div className="almox-table-container">
-        {loading ? <SkeletonTable rows={6} columns={6} /> : conferencias.length === 0 ? (
+        {loading ? <SkeletonTable rows={6} columns={7} /> : conferencias.length === 0 ? (
           <div className="almox-empty">
             <FiClipboard size={48} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
             <p>Nenhuma conferência de estoque encontrada</p>
@@ -405,6 +497,7 @@ const ConferenciaEstoque = () => {
               <tr>
                 <th>Número</th>
                 <th>Status</th>
+                <th>Escopo</th>
                 <th>Responsável</th>
                 <th>Data Início</th>
                 <th>Data Fim</th>
@@ -418,6 +511,8 @@ const ConferenciaEstoque = () => {
                   <td>
                     <span className={`almox-badge almox-badge-${c.status.toLowerCase()}`}>{c.status}</span>
                   </td>
+                  {/* RN-01: escopo_descricao é nulo em conferências criadas antes da etapa. */}
+                  <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{c.escopo_descricao || '—'}</td>
                   <td style={{ fontSize: '0.875rem' }}>{c.responsavel_nome}</td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(c.data_inicio)}</td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(c.data_fim)}</td>
@@ -482,6 +577,49 @@ const ConferenciaEstoque = () => {
                     placeholder={`${toleranciaPlaceholder} (padrão, se deixar em branco)`}
                   />
                 </div>
+                {/* Etapa 10b (RN-01/02): escopo combinável por E, além da categoria acima. */}
+                <div className="almox-field" style={{ marginTop: 16 }}>
+                  <label className="almox-label">Família (opcional)</label>
+                  <select className="almox-form-select" value={criarFamilia} onChange={e => setCriarFamilia(e.target.value)}>
+                    <option value="">Todas as famílias</option>
+                    {familias.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                  </select>
+                </div>
+                <div className="almox-field" style={{ marginTop: 16 }}>
+                  <label className="almox-label">Classe ABC (opcional)</label>
+                  <select className="almox-form-select" value={criarClasseAbc} onChange={e => setCriarClasseAbc(e.target.value)}>
+                    <option value="">Todas as classes</option>
+                    <option value="A">Classe A</option>
+                    <option value="B">Classe B</option>
+                    <option value="C">Classe C</option>
+                  </select>
+                </div>
+                <div className="almox-field" style={{ marginTop: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>
+                    <input type="checkbox" checked={criarCriticos} onChange={e => setCriarCriticos(e.target.checked)} />
+                    Somente críticos
+                  </label>
+                </div>
+                <div className="almox-field" style={{ marginTop: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>
+                    <input type="checkbox" checked={criarDeClientes} onChange={e => setCriarDeClientes(e.target.checked)} />
+                    Materiais de clientes
+                  </label>
+                </div>
+                <div className="almox-field" style={{ marginTop: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>
+                    <input type="checkbox" checked={criarEmTerceiros} onChange={e => setCriarEmTerceiros(e.target.checked)} />
+                    Com saldo em terceiros
+                  </label>
+                </div>
+                {/* RN-03: dupla contagem — recontagem exigida por OUTRA pessoa; checked booleano,
+                    nunca value string (string truthy ativaria o filtro no backend). */}
+                <div className="almox-field" style={{ marginTop: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>
+                    <input type="checkbox" checked={criarDuplaContagem} onChange={e => setCriarDuplaContagem(e.target.checked)} />
+                    Dupla contagem (recontagem por outra pessoa)
+                  </label>
+                </div>
                 <div style={{ background: 'rgba(79,172,254,0.06)', border: '1px solid rgba(79,172,254,0.2)', borderRadius: 8, padding: '12px 16px', marginTop: 16, fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
                   Todos os materiais{criarCategoria ? ` da categoria "${criarCategoria}"` : ''} serão incluídos na conferência com seus saldos atuais.
                 </div>
@@ -493,6 +631,64 @@ const ConferenciaEstoque = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Visão Acuracidade (RN-06/RN-07): relatório derivado, só CONCLUIDO, mais recente
+          primeiro — quem consome é o gestor, não muda saldo nenhum. */}
+      {mostrarAcuracidade && (
+        <div className="almox-modal-overlay" onClick={() => setMostrarAcuracidade(false)}>
+          <div className="almox-modal almox-modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Acuracidade do Inventário</h2>
+              <button className="almox-modal-close" onClick={() => setMostrarAcuracidade(false)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              {loadingAcuracidade ? <SkeletonTable rows={5} columns={8} /> : !relatorioAcuracidade ? null : (
+                (relatorioAcuracidade.conferencias || []).length === 0 ? (
+                  <div className="almox-empty">
+                    <p>Nenhuma conferência concluída ainda</p>
+                  </div>
+                ) : (
+                  <>
+                    <table className="almox-table">
+                      <thead>
+                        <tr>
+                          <th>Número</th>
+                          <th>Data Fim</th>
+                          <th>Escopo</th>
+                          <th>Contados</th>
+                          <th>Exatos</th>
+                          <th>Divergentes</th>
+                          <th>Acuracidade</th>
+                          <th>Impacto Financeiro</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(relatorioAcuracidade.conferencias || []).map(c => (
+                          <tr key={c.id}>
+                            <td style={{ fontWeight: 700, fontFamily: 'monospace' }}>{c.numero}</td>
+                            <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(c.data_fim)}</td>
+                            <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{c.escopo_descricao || '—'}</td>
+                            <td>{c.contados}</td>
+                            <td>{c.exatos}</td>
+                            <td>{c.divergentes}</td>
+                            <td>{formatAcuracidade(c.acuracidade)}</td>
+                            <td>{formatImpacto(c.impacto_financeiro)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {relatorioAcuracidade.agregado && (
+                      <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 8, fontSize: '0.875rem' }}>
+                        Agregado: {relatorioAcuracidade.agregado.conferencias} conferências · {relatorioAcuracidade.agregado.contados} contados · {relatorioAcuracidade.agregado.exatos} exatos · acuracidade {formatAcuracidade(relatorioAcuracidade.agregado.acuracidade)}
+                      </div>
+                    )}
+                  </>
+                )
+              )}
+            </div>
           </div>
         </div>
       )}
