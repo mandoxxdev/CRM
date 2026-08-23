@@ -118,6 +118,13 @@ async function getConferencia(app, confId) {
     assert.strictEqual(semValores.tolerancia_percentual, 2, 'sem config nem body, o default declarado e 2');
   });
 
+  await test('achado da revisao final: categoria sem material ativo devolve totalItens:0 (nao undefined)', async () => {
+    setUser(ALMOXARIFE);
+    const vazia = await abrirConferencia(app, { categoria: 'CATEGORIA-QUE-NAO-EXISTE-NUNCA' });
+    assert.strictEqual(vazia.itens.length, 0);
+    assert.strictEqual(vazia.totalItens, 0, JSON.stringify(vazia));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

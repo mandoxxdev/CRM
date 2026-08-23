@@ -33,14 +33,14 @@ async function novoMaterial(db, opts = {}) {
   seq += 1;
   const {
     qtd = 100, custoUnitario = 0, custoMedio = 0, emTerceiros = 0, bloqueada = 0,
-    proprietarioClienteId = null,
+    proprietarioClienteId = null, nome = `Material Motor ${seq}`,
   } = opts;
   const codigo = `MOT-${seq}`;
   const r = await dbRun(db, `INSERT INTO materiais_almoxarifado
       (codigo, nome, unidade, quantidade_atual, custo_unitario, custo_medio,
        quantidade_em_terceiros, quantidade_bloqueada, proprietario_cliente_id, ativo)
      VALUES (?,?,'UN',?,?,?,?,?,?,1)`,
-    [codigo, `Material Motor ${seq}`, qtd, custoUnitario, custoMedio, emTerceiros, bloqueada, proprietarioClienteId]);
+    [codigo, nome, qtd, custoUnitario, custoMedio, emTerceiros, bloqueada, proprietarioClienteId]);
   return { id: r.lastID, codigo };
 }
 
@@ -209,6 +209,62 @@ async function contar(app, confId, itemId, quantidade) {
 
     const mov = await dbAll(db, `SELECT * FROM movimentacoes_almoxarifado WHERE tipo = 'AJUSTE_INVENTARIO' AND material_id = ?`, [mat.id]);
     assert.strictEqual(mov.length, 1, 'o replay nao pode ter gravado uma segunda movimentacao');
+  });
+
+  await test('achado da revisao final (Critico): contar ZERO em um item nao quebra o tudo-ou-nada de outros itens', async () => {
+    setUser(ADMIN);
+    // Nome forcado pra ORDER BY nome da criacao da conferencia processar o item OK ANTES do
+    // item zerado — e exatamente essa ordem (o item que passaria sendo aplicado primeiro) que
+    // expoe o bug se o zero nao for tratado ja na guarda de entrada do motor.
+    const matOk = await novoMaterial(db, { qtd: 100, custoUnitario: 10, nome: 'AAA-Ordem-Ok' });
+    const matZero = await novoMaterial(db, { qtd: 5, nome: 'ZZZ-Ordem-Zero' });
+    const conf = await abrirConferencia(app);
+    const itemOk = await itemDoMaterial(db, conf.id, matOk.id);
+    const itemZero = await itemDoMaterial(db, conf.id, matZero.id);
+    await contar(app, conf.id, itemOk.id, 90); // divergencia normal
+    await contar(app, conf.id, itemZero.id, 0); // achou ZERO na prateleira — contagem legitima
+
+    const res = await request(app).put(`/api/almoxarifado/conferencias/${conf.id}/concluir`)
+      .send({ aplicar_ajustes: true, justificativa_ajuste: 'Contagem com item zerado' });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.ajustesAplicados, 2, JSON.stringify(res.body));
+
+    const materialOk = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matOk.id]);
+    const materialZero = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matZero.id]);
+    assert.strictEqual(Number(materialOk.quantidade_atual), 90);
+    assert.strictEqual(Number(materialZero.quantidade_atual), 0);
+
+    // Replay nao pode duplicar: a conferencia ja concluiu, uma segunda tentativa recusa (RN-03).
+    const replay = await request(app).put(`/api/almoxarifado/conferencias/${conf.id}/concluir`)
+      .send({ aplicar_ajustes: true, justificativa_ajuste: 'Replay' });
+    assert.strictEqual(replay.status, 400, JSON.stringify(replay.body));
+    const movsOk = await dbAll(db, `SELECT * FROM movimentacoes_almoxarifado WHERE tipo = 'AJUSTE_INVENTARIO' AND material_id = ?`, [matOk.id]);
+    assert.strictEqual(movsOk.length, 1, 'replay nao pode ter duplicado a movimentacao do item que ja tinha aplicado certo');
+  });
+
+  await test('achado da revisao final: material INATIVO entre a contagem e a conclusao bloqueia tudo-ou-nada (nao aplica parcial)', async () => {
+    setUser(ADMIN);
+    // Mesma logica de ordem forcada do teste do item zerado acima: o item OK precisa ser
+    // processado ANTES do item que vai virar invalido, senao um bug de pre-validacao incompleta
+    // passaria despercebido so porque o item ruim calhou de vir primeiro na iteracao.
+    const matOk = await novoMaterial(db, { qtd: 100, nome: 'AAA-Ordem-Ok2' });
+    const matInativo = await novoMaterial(db, { qtd: 50, nome: 'ZZZ-Ordem-Inativo' });
+    const conf = await abrirConferencia(app);
+    const itemOk = await itemDoMaterial(db, conf.id, matOk.id);
+    const itemInativo = await itemDoMaterial(db, conf.id, matInativo.id);
+    await contar(app, conf.id, itemOk.id, 90);
+    await contar(app, conf.id, itemInativo.id, 40);
+    await dbRun(db, `UPDATE materiais_almoxarifado SET ativo = 0 WHERE id = ?`, [matInativo.id]);
+
+    const res = await request(app).put(`/api/almoxarifado/conferencias/${conf.id}/concluir`)
+      .send({ aplicar_ajustes: true, justificativa_ajuste: 'Material desativado no meio do inventario' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.ok(res.body.error.includes('inativo'), JSON.stringify(res.body));
+
+    const materialOk = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [matOk.id]);
+    assert.strictEqual(Number(materialOk.quantidade_atual), 100, 'tudo-ou-nada: o item OK nao pode ter sido aplicado');
+    const movs = await dbAll(db, `SELECT * FROM movimentacoes_almoxarifado WHERE tipo = 'AJUSTE_INVENTARIO' AND material_id IN (?, ?)`, [matOk.id, matInativo.id]);
+    assert.strictEqual(movs.length, 0);
   });
 
   await test('concluir uma conferencia CANCELADA recusa 400 (nao ressuscita)', async () => {

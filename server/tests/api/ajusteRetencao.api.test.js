@@ -131,6 +131,39 @@ function test(name, fn) {
     await close();
   });
 
+  await test('achado da revisao final: AJUSTE_INVENTARIO com quantidade 0 e aceito (contagem fisica legitima)', async () => {
+    const { db, close } = await createTestApp();
+    const r = await dbRun(db, `INSERT INTO materiais_almoxarifado
+      (codigo, nome, unidade, quantidade_atual, ativo) VALUES ('MAT-ZERO', 'Material zerado', 'UN', 5, 1)`);
+    const materialId = r.lastID;
+    const res = await stockService.registrarMovimentacao(db, { id: 1, nome: 'Teste' },
+      { material_id: materialId, tipo: 'AJUSTE_INVENTARIO', quantidade: 0, motivo: 'conferencia', justificativa: 'conferencia INV-1' });
+    assert.ok(res.id, 'ajuste para zero tem de passar e devolver a movimentacao');
+    const m = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+    assert.strictEqual(Number(m.quantidade_atual), 0);
+    await close();
+  });
+
+  await test('[CONTROLE NEGATIVO] AJUSTE comum (nao AJUSTE_INVENTARIO) sem localizacao continua recusando quantidade 0', async () => {
+    // Prova que o fix e' escopado ao tipo novo, nao afrouxou o AJUSTE generico existente
+    // (comportamento pre-existente, fora do escopo desta etapa).
+    const { db, close } = await createTestApp();
+    const r = await dbRun(db, `INSERT INTO materiais_almoxarifado
+      (codigo, nome, unidade, quantidade_atual, ativo) VALUES ('MAT-ZERO2', 'Material', 'UN', 5, 1)`);
+    await assert.rejects(
+      stockService.registrarMovimentacao(db, { id: 1, nome: 'Teste' },
+        { material_id: r.lastID, tipo: 'AJUSTE', quantidade: 0, motivo: 'x', justificativa: 'x' }),
+      (err) => { assert.strictEqual(err.status, 400); return true; });
+    await close();
+  });
+
+  await test('achado da revisao final: config tolerancia_inventario_percentual vem semeada com o default', async () => {
+    const { db, close } = await createTestApp();
+    const valor = await stockService.getConfig(db, 'tolerancia_inventario_percentual');
+    assert.strictEqual(valor, '2', `esperava a chave semeada com '2', veio ${JSON.stringify(valor)}`);
+    await close();
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();

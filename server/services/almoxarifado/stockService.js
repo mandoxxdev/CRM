@@ -521,12 +521,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
 
   if (!user?.id) throw Object.assign(new Error('Usuário responsável obrigatório'), { status: 400 });
   // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização e recalcula
-  // o total do material — espelha o superRefine de MovimentacaoSchema). Fora desse caso,
-  // 0 e negativos continuam rejeitados; a checagem não pode usar `!quantidade` porque isso
-  // também rejeitaria o 0 legítimo.
-  const ajusteZeraLocalizacao = tipo === 'AJUSTE' && !!localizacao_destino_id;
+  // o total do material — espelha o superRefine de MovimentacaoSchema) OU para AJUSTE_INVENTARIO
+  // (Etapa 10, achado da revisão final de branch): a conclusão da conferência manda o valor
+  // ABSOLUTO contado, e "contei zero" é uma contagem física legítima — sem esta exceção, um
+  // material zerado quebrava a conclusão da conferência inteira com "material_id, tipo e
+  // quantidade são obrigatórios", e pior: como a pré-validação da rota (routes/almoxarifado.js)
+  // não sabia disso, ela aprovava o item e só o motor recusava na hora de aplicar de verdade —
+  // exatamente a janela que quebra o tudo-ou-nada de RN-07 (outros itens já aplicados ficavam
+  // aplicados, o zerado nunca). Fora desses dois casos, 0 e negativos continuam rejeitados; a
+  // checagem não pode usar `!quantidade` porque isso também rejeitaria o 0 legítimo.
+  const zeroPermitidoParaAjuste = (tipo === 'AJUSTE' && !!localizacao_destino_id) || tipo === 'AJUSTE_INVENTARIO';
   const quantidadeInvalida = quantidade === undefined || quantidade === null || Number.isNaN(quantidade)
-    || quantidade < 0 || (quantidade === 0 && !ajusteZeraLocalizacao);
+    || quantidade < 0 || (quantidade === 0 && !zeroPermitidoParaAjuste);
   if (!material_id || !tipo || quantidadeInvalida) {
     throw Object.assign(new Error('material_id, tipo e quantidade são obrigatórios'), { status: 400 });
   }

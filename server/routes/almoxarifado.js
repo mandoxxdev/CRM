@@ -787,9 +787,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const materiais = await dbAll(db, sql, params);
 
       if (materiais.length === 0) {
+        // Achado da revisao final de branch: faltava totalItens aqui — o contrato promete o
+        // campo em toda resposta 201, e o front (ConferenciaEstoque.js) le
+        // `res.data.totalItens` sem checar undefined ("criada com undefined itens").
         return res.status(201).json({
           id: confId, numero, status: 'ABERTO',
-          modo_cego: modoCegoValor, tolerancia_percentual: toleranciaValor, itens: [],
+          modo_cego: modoCegoValor, tolerancia_percentual: toleranciaValor, itens: [], totalItens: 0,
         });
       }
 
@@ -935,6 +938,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         for (const item of ajustes) {
           const material = await dbGet(db, `SELECT * FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
           materiaisPorItem.set(item.id, material);
+
+          // Achado da revisao final de branch: o motor recusa material.ativo=0
+          // ("Material inativo não pode ser movimentado", stockService.js) de forma
+          // DETERMINISTICA na aplicacao real — sem espelhar isso aqui, um material
+          // desativado entre a contagem e a conclusao (ex.: descontinuado no meio do
+          // inventario) passava a pre-validacao e so quebrava o tudo-ou-nada na hora de
+          // aplicar de verdade, com outros itens ja gravados. Mesma mensagem literal do motor.
+          if (!material.ativo) {
+            falhasRetencao.push(`${material.codigo}: Material inativo não pode ser movimentado`);
+            continue;
+          }
 
           if (material.proprietario_cliente_id && !can(req.user, 'ajustar_material_cliente')) {
             // Checagem LEVE — de propósito NÃO chama ownerRules.assertAjustePermitido aqui: essa

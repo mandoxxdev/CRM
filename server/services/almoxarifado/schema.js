@@ -1756,6 +1756,12 @@ async function initSchema(db) {
     ['liberacao_valor_ativo', '0', 'Habilita aprovação de alto valor em requisições de material'],
     ['liberacao_valor_limite', '500', 'Valor máximo (R$) para liberação automática sem aprovação extra'],
     ['liberacao_valor_aprovadores', '[]', 'IDs dos usuários aprovadores de alto valor (JSON)'],
+    // Etapa 10 (achado da revisão final de branch): sem a linha semeada, a chave nunca existe —
+    // PUT /configuracoes só grava chave já semeada ("grava apenas chave que já existe"), então
+    // GET /conferencias/tolerancia_inventario_percentual sempre voltava undefined e
+    // toleranciaEfetiva() caía no fallback fixo 2, silenciosamente, mesmo que um admin tentasse
+    // configurar outro valor pela tela.
+    ['tolerancia_inventario_percentual', '2', 'Tolerância padrão (%) de divergência no inventário antes de exigir recontagem'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
