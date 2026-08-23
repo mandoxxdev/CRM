@@ -52,6 +52,11 @@ const TIPOS = [
   { value: 'DEVOLUCAO', label: 'Devolução', cls: 'devolucao' },
   { value: 'SUCATA', label: 'Sucata', cls: 'saida' },
   { value: 'ENTRADA_RETALHO', label: 'Entrada (retalho)', cls: 'entrada' },
+  // Etapa 10 (achado da revisão final de branch): mesmo motivo de ENTRADA_RETALHO acima — nasce
+  // SÓ da conclusão de uma conferência de inventário (nunca deste formulário), mas precisa
+  // aparecer no livro com rótulo e opção de filtro, senão cai no fallback genérico (rótulo cru
+  // "AJUSTE_INVENTARIO", sem opção no dropdown de filtro).
+  { value: 'AJUSTE_INVENTARIO', label: 'Ajuste (inventário)', cls: 'ajuste' },
   { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
 
@@ -107,9 +112,13 @@ const loteDisponivelParaTipo = (lote, tipo) => {
 //  - RESERVA/LIBERACAO_RESERVA: desfeitas pela tela de Reservas;
 //  - QUARENTENA/LIBERACAO_INSPECAO/REPROVACAO_INSPECAO/DECISAO_INSPECAO: o retido pertence ao
 //    item do recebimento, então rever uma decisão é pela tela de Inspeções, não pelo livro.
+//  - AJUSTE_INVENTARIO (Etapa 10, RN-10): representa uma contagem física homologada; desfazer
+//    por engano sem reabrir a conferência original apagaria o rastro de que a contagem
+//    aconteceu — o caminho de correção é uma conferência nova, não o botão de estorno do livro.
 const TIPOS_SEM_ESTORNO = [
   'RESERVA', 'LIBERACAO_RESERVA',
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO',
+  'AJUSTE_INVENTARIO',
 ];
 const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !TIPOS_SEM_ESTORNO.includes(m.tipo);
 

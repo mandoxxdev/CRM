@@ -436,6 +436,47 @@ describe('MovimentacoesAlmoxarifado — ENTRADA_RETALHO no livro (Etapa 9, Task 
 });
 
 /**
+ * Etapa 10 (achado da revisão final de branch): AJUSTE_INVENTARIO no livro. Mesmo motivo de
+ * ENTRADA_RETALHO acima — nasce SÓ da conclusão de uma conferência de inventário (nunca deste
+ * formulário), precisa aparecer no livro com rótulo próprio (sem isso cai no rótulo cru
+ * "AJUSTE_INVENTARIO" e some do dropdown de filtro), e RN-10 recusa o estorno dele no servidor —
+ * o botão de estorno não pode aparecer, senão entrega um 400 garantido.
+ */
+const MOV_AJUSTE_INVENTARIO = [
+  { ...movimento(300, 'AJUSTE_INVENTARIO'), material_id: 10, material_codigo: 'MAT-1', material_nome: 'Chapa 3mm' },
+];
+
+describe('MovimentacoesAlmoxarifado — AJUSTE_INVENTARIO no livro (Etapa 10)', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOV_AJUSTE_INVENTARIO });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('AJUSTE_INVENTARIO aparece no livro com rótulo próprio, não o valor cru do tipo', async () => {
+    await renderizar();
+    expect(linhas()[0].textContent).toMatch(/Ajuste \(invent[aá]rio\)/i);
+    expect(linhas()[0].textContent).not.toContain('AJUSTE_INVENTARIO');
+  });
+
+  test('o filtro do livro oferece AJUSTE_INVENTARIO (TIPOS mantém o tipo)', async () => {
+    await renderizar();
+    const filtro = container.querySelector('.almox-filters select.almox-select');
+    const valores = [...filtro.querySelectorAll('option')].map((o) => o.value);
+    expect(valores).toContain('AJUSTE_INVENTARIO');
+  });
+
+  test('não oferece estorno (RN-10 recusa no servidor — o botão sempre voltaria 400)', async () => {
+    await renderizar();
+    expect(temBotaoEstorno(0)).toBe(false);
+  });
+});
+
+/**
  * Etapa 9, Task 8: hint de retalho disponível na SAÍDA.
  *
  * NÃO BLOQUEIA: é sugestão ("considere usá-los"), não regra — o operador pode ter motivo legítimo
