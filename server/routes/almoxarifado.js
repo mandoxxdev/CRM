@@ -698,6 +698,52 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
+  // GET /api/almoxarifado/conferencias/relatorio-acuracidade — RN-06/RN-07 (Etapa 10b).
+  // Registrada ANTES de GET /conferencias/:id — senão o Express casa "relatorio-acuracidade"
+  // como :id. Métricas DERIVADAS dos itens (imutáveis pós-conclusão — D10: acuracidade nunca
+  // é persistida; impacto_financeiro é, porque depende do custo do momento).
+  app.get('/api/almoxarifado/conferencias/relatorio-acuracidade', requirePermission('inventario'), async (req, res) => {
+    try {
+      const rows = await dbAll(db, `
+        SELECT c.id, c.numero, c.data_fim, c.escopo_descricao, c.modo_cego, c.dupla_contagem,
+               c.impacto_financeiro,
+               COUNT(ic.id) AS total_itens,
+               COALESCE(SUM(CASE WHEN ic.quantidade_contada IS NOT NULL THEN 1 ELSE 0 END), 0) AS contados,
+               COALESCE(SUM(CASE WHEN ic.quantidade_contada IS NOT NULL AND ic.divergencia = 0 THEN 1 ELSE 0 END), 0) AS exatos
+        FROM conferencias_almoxarifado c
+        LEFT JOIN itens_conferencia_almoxarifado ic ON ic.conferencia_id = c.id
+        WHERE c.status = 'CONCLUIDO'
+        GROUP BY c.id
+        ORDER BY c.data_fim DESC, c.id DESC`, []);
+
+      const conferencias = rows.map((r) => ({
+        id: r.id, numero: r.numero, data_fim: r.data_fim, escopo_descricao: r.escopo_descricao,
+        modo_cego: r.modo_cego, dupla_contagem: r.dupla_contagem,
+        total_itens: r.total_itens, contados: r.contados, exatos: r.exatos,
+        divergentes: r.contados - r.exatos,
+        // RN-06: sem contagem não há acuracidade — 0% mentiria.
+        acuracidade: r.contados > 0 ? Number(((r.exatos / r.contados) * 100).toFixed(2)) : null,
+        impacto_financeiro: r.impacto_financeiro,
+      }));
+
+      const totalContados = conferencias.reduce((s, c) => s + c.contados, 0);
+      const totalExatos = conferencias.reduce((s, c) => s + c.exatos, 0);
+      const agregado = {
+        conferencias: conferencias.length,
+        total_itens: conferencias.reduce((s, c) => s + c.total_itens, 0),
+        contados: totalContados,
+        exatos: totalExatos,
+        // RN-06: ponderada por item contado (Σ exatos / Σ contados) — uma conferência de 2
+        // itens não pode pesar o mesmo que uma de 200.
+        acuracidade: totalContados > 0 ? Number(((totalExatos / totalContados) * 100).toFixed(2)) : null,
+      };
+
+      res.json({ conferencias, agregado });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
   // GET /api/almoxarifado/conferencias/:id — detalhe com itens
   app.get('/api/almoxarifado/conferencias/:id', async (req, res) => {
     try {
@@ -1017,7 +1063,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
 
       const ajustes = todosItens.filter((i) => i.divergencia !== 0);
+
+      // RN-05 (10b): impacto financeiro SEMPRE calculado — com ou sem aplicar_ajustes — sobre
+      // os itens contados divergentes. "O inventário achou R$ X de erro" interessa mesmo
+      // quando ninguém aplica, e é o que o relatório de acuracidade consome. Fórmula D8 da
+      // Etapa 10 (valores ABSOLUTOS), custo pela fonte única (custoSql.js).
       let impactoFinanceiro = 0;
+      for (const item of ajustes) {
+        const custoRow = await dbGet(db,
+          `SELECT ${custoUnitarioSql()} AS custo FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
+        impactoFinanceiro += Math.abs(item.divergencia) * (custoRow?.custo || 0);
+      }
+
       let ajustesAplicados = 0;
       const materiaisAjustados = new Set();
 
@@ -1087,22 +1144,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             justificativa: justificativa_ajuste,
           });
           await dbRun(db, `UPDATE itens_conferencia_almoxarifado SET ajustado = 1 WHERE id = ?`, [item.id]);
-
-          // D8: impacto financeiro de graça, reusando a fonte única de custo (custoSql.js) — a
-          // mesma regra que proíbe reescrever a fórmula de retenção vale para custo (achado da
-          // Etapa 8c: 3 respostas diferentes para "quanto vale uma unidade" já causou dashboard e
-          // relatório divergirem).
-          const custoRow = await dbGet(db,
-            `SELECT ${custoUnitarioSql()} AS custo FROM materiais_almoxarifado WHERE id = ?`, [item.material_id]);
-          impactoFinanceiro += Math.abs(item.divergencia) * (custoRow?.custo || 0);
           ajustesAplicados += 1;
           materiaisAjustados.add(item.material_id);
         }
       }
 
       await dbRun(db, `UPDATE conferencias_almoxarifado
-              SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP, justificativa_ajuste = ?
-              WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, req.params.id]);
+              SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP, justificativa_ajuste = ?, impacto_financeiro = ?
+              WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, impactoFinanceiro, req.params.id]);
 
       await Promise.all([...materiaisAjustados].map((mid) => alertService.verificarAlertaPorMaterialId(db, mid).catch(() => null)));
 
