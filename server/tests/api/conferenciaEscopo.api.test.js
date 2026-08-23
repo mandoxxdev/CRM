@@ -16,7 +16,7 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun, dbAll } = require('../../services/almoxarifado/db');
+const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -66,6 +66,8 @@ async function abrirConferencia(app, body = {}) {
     const res = await abrirConferencia(app, { classe_abc: 'a', categoria });
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));
     assert.strictEqual(res.body.totalItens, 1, JSON.stringify(res.body));
+    // A normalizacao vale tambem para a DESCRICAO, nao so para o WHERE — 'a' vira 'Classe A'.
+    assert.strictEqual(res.body.escopo_descricao, 'Categoria: CAT-RN01-CLASSE + Classe A', JSON.stringify(res.body));
 
     const itens = await itensDaConferencia(db, res.body.id);
     assert.strictEqual(itens.length, 1);
@@ -76,18 +78,29 @@ async function abrirConferencia(app, body = {}) {
     const famR = await dbRun(db,
       `INSERT INTO familias_material_almoxarifado (codigo, nome) VALUES ('FAM-RN01', 'Fam RN01')`);
     const familiaId = famR.lastID;
+    // Uma SEGUNDA familia com id MAIOR, na mesma categoria: e o que separa `= ?` de um
+    // operador errado tipo `>= ?` (sabotagem rodada de verdade — sem este material, `>=`
+    // passava 8/8 porque NULL >= x tambem exclui o matFora).
+    const famR2 = await dbRun(db,
+      `INSERT INTO familias_material_almoxarifado (codigo, nome) VALUES ('FAM-RN01-B', 'Fam RN01 B')`);
     const categoria = 'CAT-RN01-FAM';
     const matDentro = await novoMaterial(db, { categoria, familia_id: familiaId });
-    await novoMaterial(db, { categoria, familia_id: null });
+    const matFora = await novoMaterial(db, { categoria, familia_id: null });
+    const matOutraFamilia = await novoMaterial(db, { categoria, familia_id: famR2.lastID });
 
-    const res = await abrirConferencia(app, { familia_id: familiaId });
+    // Categoria unica fixa o universo do teste: o filtro de familia tem de provar INCLUSAO E
+    // EXCLUSAO (achado da revisao da task: sem o assert de ausencia, trocar o operador do
+    // filtro por `familia_id >= ?` passava verde).
+    const res = await abrirConferencia(app, { categoria, familia_id: familiaId });
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));
-    assert.strictEqual(res.body.escopo_descricao, 'Família: Fam RN01', JSON.stringify(res.body));
+    assert.strictEqual(res.body.totalItens, 1, JSON.stringify(res.body));
+    assert.strictEqual(res.body.escopo_descricao, 'Categoria: CAT-RN01-FAM + Família: Fam RN01', JSON.stringify(res.body));
 
     const itens = await itensDaConferencia(db, res.body.id);
-    assert.ok(itens.every((i) => i.material_id === matDentro.id || i.material_id !== undefined));
     const idsRetornados = itens.map((i) => i.material_id);
     assert.ok(idsRetornados.includes(matDentro.id), 'material dentro da familia deveria estar na conferencia');
+    assert.ok(!idsRetornados.includes(matFora.id), 'material FORA da familia nao deveria estar na conferencia');
+    assert.ok(!idsRetornados.includes(matOutraFamilia.id), 'material de OUTRA familia nao deveria estar na conferencia');
 
     // Família sem cadastro: literal congelado é "Família #<id>" (SEM dois-pontos).
     const resSemCadastro = await abrirConferencia(app, { familia_id: 999999 });
@@ -137,6 +150,20 @@ async function abrirConferencia(app, body = {}) {
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));
     assert.strictEqual(res.body.escopo_descricao, 'Categoria: CAT-DESC + Classe A + Somente críticos', JSON.stringify(res.body));
 
+    // TODAS as seis partes de uma vez, contra a string inteira — e o que prende os literais
+    // 'Materiais de clientes'/'Com saldo em terceiros' e a POSICAO de 'Família' (achado da
+    // revisao da task: cada um deles podia mudar sozinho com a suite verde).
+    const famR = await dbRun(db,
+      `INSERT INTO familias_material_almoxarifado (codigo, nome) VALUES ('FAM-DESC6', 'Fam Descricao')`);
+    const resSeis = await abrirConferencia(app, {
+      categoria: 'CAT-DESC-SEIS', familia_id: famR.lastID, classe_abc: 'C',
+      apenas_criticos: true, apenas_de_clientes: true, apenas_em_terceiros: true,
+    });
+    assert.strictEqual(resSeis.status, 201, JSON.stringify(resSeis.body));
+    assert.strictEqual(resSeis.body.escopo_descricao,
+      'Categoria: CAT-DESC-SEIS + Família: Fam Descricao + Classe C + Somente críticos + Materiais de clientes + Com saldo em terceiros',
+      JSON.stringify(resSeis.body));
+
     const resGeral = await abrirConferencia(app, {});
     assert.strictEqual(resGeral.status, 201, JSON.stringify(resGeral.body));
     assert.strictEqual(resGeral.body.escopo_descricao, 'Geral', JSON.stringify(resGeral.body));
@@ -149,7 +176,8 @@ async function abrirConferencia(app, body = {}) {
     assert.ok(res.body.escopo_descricao, 'escopo_descricao deveria estar presente mesmo na conferencia vazia');
   });
 
-  await test('RN-01: dupla_contagem ecoada no 201', async () => {
+  await test('RN-01: dupla_contagem ecoada no 201 e PERSISTIDA na linha', async () => {
+    // Ramo vazio (o eco do primeiro return).
     const resTrue = await abrirConferencia(app, { categoria: 'CAT-INEXISTENTE-DUPLA', dupla_contagem: true });
     assert.strictEqual(resTrue.status, 201, JSON.stringify(resTrue.body));
     assert.strictEqual(resTrue.body.dupla_contagem, 1, JSON.stringify(resTrue.body));
@@ -157,6 +185,22 @@ async function abrirConferencia(app, body = {}) {
     const resFalse = await abrirConferencia(app, { categoria: 'CAT-INEXISTENTE-DUPLA' });
     assert.strictEqual(resFalse.status, 201, JSON.stringify(resFalse.body));
     assert.strictEqual(resFalse.body.dupla_contagem, 0, JSON.stringify(resFalse.body));
+
+    // Ramo NAO-vazio (achado da revisao da task: so o ramo vazio era aferido — apagar o eco
+    // do segundo return passava verde) + persistencia na tabela (idem: trocar os params do
+    // INSERT por null,null passava verde, e as Tasks 2 e 3 leem exatamente essas colunas).
+    const categoria = 'CAT-DUPLA-CHEIA';
+    await novoMaterial(db, { categoria });
+    const resCheia = await abrirConferencia(app, { categoria, dupla_contagem: true });
+    assert.strictEqual(resCheia.status, 201, JSON.stringify(resCheia.body));
+    assert.strictEqual(resCheia.body.totalItens, 1, JSON.stringify(resCheia.body));
+    assert.strictEqual(resCheia.body.dupla_contagem, 1, JSON.stringify(resCheia.body));
+    assert.strictEqual(resCheia.body.escopo_descricao, 'Categoria: CAT-DUPLA-CHEIA', JSON.stringify(resCheia.body));
+
+    const linha = await dbGet(db,
+      `SELECT dupla_contagem, escopo_descricao FROM conferencias_almoxarifado WHERE id = ?`, [resCheia.body.id]);
+    assert.strictEqual(linha.dupla_contagem, 1, JSON.stringify(linha));
+    assert.strictEqual(linha.escopo_descricao, 'Categoria: CAT-DUPLA-CHEIA', JSON.stringify(linha));
   });
 
   await close();
