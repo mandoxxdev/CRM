@@ -125,6 +125,13 @@ const ConferenciaEstoque = () => {
       await api.put(`/almoxarifado/conferencias/${confAberta.id}/item/${itemId}`, {
         quantidade_contada: parseFloat(val)
       });
+      // Achado da revisão final de branch: recontagem_necessaria é calculada no servidor
+      // (RN-02/RN-05) e só chegava na tela na hora de ABRIR a conferência — quem contava um
+      // item nunca via o badge atualizar na mesma sessão, e só descobria a recontagem exigida
+      // no 400 da conclusão. Re-busca a conferência SEM acionar o loading de tela cheia (troca
+      // só o objeto, sem `setLoadingConf`) para o badge da linha recém-contada atualizar aqui.
+      const res = await api.get(`/almoxarifado/conferencias/${confAberta.id}`);
+      setConfAberta(res.data);
     } catch {
       toast.error('Erro ao salvar contagem');
     }

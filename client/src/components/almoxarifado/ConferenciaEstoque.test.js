@@ -121,6 +121,15 @@ function preencher(el, valor) {
     el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
   });
 }
+async function sairDoCampo(el) {
+  // React 17+ implementa onBlur delegado por 'focusout' (que borbulha), não 'blur' nativo
+  // (que não borbulha) — disparar 'blur' sozinho nunca chega no handler delegado no root.
+  await act(async () => { el.dispatchEvent(new Event('focusout', { bubbles: true })); });
+  // handleSalvarContagem encadeia DOIS awaits (PUT depois GET) — um único
+  // setTimeout(0) só garante drenar o primeiro; espera duas voltas.
+  await esperarEfeitos();
+  await esperarEfeitos();
+}
 // Checkbox: React detecta o toggle pelo evento 'click' (mesmo padrão de SobrasAlmoxarifado.test.js).
 function marcar(el, valor) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
@@ -226,6 +235,43 @@ describe('ConferenciaEstoque — badge "Recontagem necessária" vem do servidor'
     expect(linhaMat1.textContent).not.toContain('Recontagem necessária');
     expect(linhaMat2.textContent).toContain('Recontagem necessária');
     expect(linhaMat3.textContent).not.toContain('Recontagem necessária');
+  });
+
+  // Achado da revisão final de branch: recontagem_necessaria só chegava na tela na hora de
+  // ABRIR a conferência — salvar uma contagem não atualizava o badge, e quem contasse ficava
+  // sem saber que precisava recontar até o 400 da conclusão. Depois do fix, salvar a contagem
+  // rebusca a conferência e o badge da linha aparece SEM precisar reabrir a tela.
+  test('badge atualiza sozinho depois de salvar uma contagem, sem precisar reabrir a conferência', async () => {
+    let chamadasDetalhe = 0;
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: CONFERENCIAS });
+      if (url === '/almoxarifado/conferencias/1') {
+        chamadasDetalhe += 1;
+        if (chamadasDetalhe === 1) return Promise.resolve({ data: CONFERENCIA_ABERTA_NORMAL });
+        // Segunda chamada (pós-contagem): MAT-1 passa a precisar de recontagem.
+        return Promise.resolve({
+          data: {
+            ...CONFERENCIA_ABERTA_NORMAL,
+            itens: CONFERENCIA_ABERTA_NORMAL.itens.map((it) =>
+              it.material_codigo === 'MAT-1' ? { ...it, quantidade_contada: 50, divergencia: -50, recontagem_necessaria: true } : it),
+          },
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Abrir'));
+
+    const linhaMat1 = linhaMaterial('MAT-1');
+    expect(linhaMat1.textContent).not.toContain('Recontagem necessária');
+
+    const inputContagem = linhaMat1.querySelector('input[type="number"]');
+    preencher(inputContagem, '50');
+    await sairDoCampo(inputContagem);
+
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/conferencias/1');
+    expect(chamadasDetalhe).toBeGreaterThanOrEqual(2);
+    expect(linhaMaterial('MAT-1').textContent).toContain('Recontagem necessária');
   });
 });
 
