@@ -114,34 +114,38 @@ lista + export); Test `server/tests/api/relatoriosRegistro.api.test.js` (novo).
   corrompido e a rota da lista passa a servir as colunas vazadas até reiniciar; sempre
   `.map()` novo. Attachment `<tipo>-<AAAA-MM-DD>.xlsx`; resultado vazio → planilha só com a
   linha de cabeçalho dos rótulos (200).
-- [ ] Step 1: teste vermelho — (1) registro completo: as 17 chaves atuais presentes, TODA
-  entrada com `acao` declarada (`'acao' in entrada`), categorias válidas; (2) lista como
-  ADMIN traz 17+ tipos; como PRODUCAO (sem perfil) NÃO traz os 2 gated e TRAZ os sem gate;
-  sem campo `acao` no JSON; (3) paridade dispatcher×lista: para todo tipo da lista, `res.status` ∈ {200, 400} (400 só
-  para param obrigatório ausente) — NUNCA 404 e NUNCA ≥ 500; o teste cria stubs
-  `ordens_servico` e `projetos` (molde: clientePosicaoTipos.api.test.js:101), senão
-  `materiais-cliente` responde 500 no harness e "≠404" o aprova (Fase 2, I3 — medido);
-  e o PAR INVERSO: toda chave do mapa `reports` do extended.js existe no registro; (4) gates preservados: PRODUCAO em `inventario-divergencias` → 403
-  literal com `acao: 'inventario'`; ADMIN → 200 (par positivo+negativo, idem
-  solicitacoes-compra com COMPRAS positivo); (5) export: `estoque-atual` como ADMIN → 200,
-  content-type de xlsx, attachment correto, e o BUFFER reaberto com a própria lib `xlsx` tem
-  as mesmas LINHAS do JSON do dispatcher E o CABEÇALHO por deepStrictEqual contra os RÓTULOS
-  declarados (Fase 2, C2 — paridade de linhas sozinha passa com 64 colunas vazando); exportar
-  o MESMO tipo DUAS vezes no mesmo processo → cabeçalhos idênticos e `GET /relatorios` com
-  params/colunas inalterados depois (C3 — sem isso a mutação do registro nunca fica
-  vermelha); export de `sucata-financeiro` e de `materiais-cliente?cliente_id=N` → 400
-  `Relatório sem exportação tabular` (C1); export de tipo gated sem perfil → 403; tipo
-  inexistente → 404; `materiais-cliente` sem `cliente_id` → 400 `informe o cliente_id`
-  igual ao dispatcher; (6) filtro com os NOMES declarados: `sucata-financeiro` com `de`
-  cortando uma de duas sucatas em datas diferentes (I6 — filtro ignorado é indistinguível de
-  sem-filtro sem esse par).
-- [ ] Step 2: implementação.
-- [ ] Step 3: verde + regressão dos testes de relatório existentes + suíte completa (116→117).
-- [ ] Step 4: controles positivos — (i) apagar `acao` de uma entrada do registro → teste 1
-  cai; (ii) lista deixando de filtrar (`can` → true) → teste 2 cai; (iii) export com query
-  própria (trocar `fn` por SELECT direto de outra tabela) → paridade (5) cai; (iv) gate do
-  export removido → 403 do export cai.
-- [ ] Step 5: suíte + commit.
+- [x] Step 1: teste vermelho — `server/tests/api/relatoriosRegistro.api.test.js` (15 casos)
+  cobre os 6 itens: (1) registro completo (17 chaves, `acao` em toda entrada, categorias
+  válidas, `colunas` obrigatória quando `exportavel:true`); (2) lista ADMIN (17) e PRODUCAO
+  (15, sem os 2 gated), sem campo `acao`; (3) paridade dispatcher×lista com stubs
+  `ordens_servico`/`projetos` (molde clientePosicaoTipos.api.test.js:101) e o PAR INVERSO
+  (`registerExtendedRoutes.__reportKeys`, propriedade exposta só para este teste); (4) gates
+  preservados (inventario-divergencias, solicitacoes-compra) com par positivo+negativo;
+  (5) export com paridade de linhas e cabeçalho por `deepStrictEqual`, export 2x provando
+  registro inalterado (C3), 400 de payload não-tabular (C1), 403 do export gated, 404 de
+  tipo inexistente; (6) filtro `de`/`ate` da sucata cortando uma de duas, e nome errado
+  (`data_inicio`) provado como ignorado.
+- [x] Step 2: implementação — `server/services/almoxarifado/reportRegistry.js` (novo, 17
+  chaves, metadados puros sem `fn`) + `server/routes/almoxarifado/extended.js` (dispatcher
+  refatorado para resolver `fn`/gate pelo registro com validação de paridade nos dois
+  sentidos na subida; `GET /relatorios` lista fail-closed; `GET /relatorios/:tipo/export`
+  novo, projeção de colunas via `.map()` novo — nunca o array do registro).
+- [x] Step 3: verde (15/15) + regressão dos 9 arquivos que consomem `relatorios/`
+  (conferenciaAcuracidade, enderecamento, materialClienteIlhaAposentada,
+  materialClientePosicao, materialClienteSegregacao, reposicaoGerarSolicitacoes,
+  reposicaoJornada, sobras, sucateamentoRotas — todos verdes) + suíte completa 116→117
+  (117/117 OK).
+- [x] Step 4: controles positivos aplicados por edição reversa (nunca `git checkout`), md5
+  conferido antes/depois de cada um — todos vermelhos como esperado, depois restaurados: (i)
+  apagar `acao: null` de `estoque-atual` → derrubou os testes 1, 2 (ADMIN e PRODUCAO) e 5, e
+  também 3 (a entrada some da lista e da paridade); (ii) `filter(...|| true)` na lista → só o
+  teste de PRODUCAO caiu (17 em vez de 15), como esperado — a lista do ADMIN não muda; (iii)
+  export com query própria (`reportService.relatorioAbaixoMinimo(db)` fixo em vez de
+  `entrada.fn`) → derrubou a paridade de linhas (5) e o literal 400 do `materiais-cliente`
+  (a função errada nunca lança o erro de `cliente_id`); (iv) gate do export removido →
+  derrubou exatamente "export de tipo gated sem perfil: 403" (200 em vez de 403).
+- [x] Step 5: suíte (117/117) + commit `781c784` ("Almoxarifado Etapa 13 Task 1: registro de
+  relatorios + lista fail-closed + export XLSX (RN-01/02/03)").
 
 ### Task 2: Indicadores gerenciais (RN-04)
 
