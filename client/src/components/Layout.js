@@ -364,6 +364,13 @@ const Layout = () => {
     // Icone de e-mail, nao FiBell — o sino ja e o do painel global de notificacoes no header
     // (nit da revisao da Task 4: dois sinos para coisas diferentes confundem).
     { path: '/almoxarifado/notificacoes', icon: FiMail, label: 'Notificações' },
+    // Etapa 13: registro único de relatórios (17 tipos + indicadores, Task 2) por trás de uma
+    // tela genérica dirigida pela lista — gate por relatório resolvido pelo backend (RN-01/02),
+    // sem adminOnly aqui (mesmo critério de reposicao/notificacoes acima: quem não pode ver um
+    // relatório gated simplesmente não o vê na lista). Ícone igual ao de "Relatórios" nos
+    // outros módulos (comercial/financeiro/frota) — ainda não usado dentro do menu do
+    // almoxarifado.
+    { path: '/almoxarifado/relatorios', icon: FiBarChart2, label: 'Relatórios' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
