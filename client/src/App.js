@@ -112,6 +112,7 @@ import {
   FerramentasAlmoxarifado,
   ReposicaoAlmoxarifado,
   NotificacoesAlmoxarifado,
+  RelatoriosAlmoxarifado,
   ChatPage,
   MinhaConta,
   TodolistBoard,
@@ -498,6 +499,7 @@ function AppRoutes() {
         <Route path="ferramentas" element={<FerramentasAlmoxarifado />} />
         <Route path="reposicao" element={<ReposicaoAlmoxarifado />} />
         <Route path="notificacoes" element={<NotificacoesAlmoxarifado />} />
+        <Route path="relatorios" element={<RelatoriosAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
         <Route path="configuracoes" element={<ProtectedAlmoxConfigRoute><ConfiguracoesAlmoxarifado /></ProtectedAlmoxConfigRoute>} />
       </Route>
