@@ -2728,6 +2728,21 @@ const TabConfiguracoes = () => {
   };
 
   const handleSalvar = async () => {
+    // Revisao final da Etapa 11 (achado 4, medido): o servidor recusa (400) as chaves
+    // `reposicao_*` que nao forem inteiro >= 1 (purchaseService.lerConfigNumero cai no default
+    // em silencio para qualquer outro valor). Sem o mesmo guard aqui, o clique em "Salvar"
+    // sempre disparava o PUT e so descobria o erro depois de ida e volta ao servidor — o
+    // literal do 400 e reaproveitado aqui de proposito (mesma frase, mesma chave) para o
+    // administrador nao ver duas mensagens diferentes para o mesmo problema.
+    const chaveInvalida = CAMPOS.find((c) => {
+      if (!c.chave.startsWith('reposicao_')) return false;
+      const n = Number(configs[c.chave]);
+      return !Number.isInteger(n) || n < 1;
+    });
+    if (chaveInvalida) {
+      toast.error(`Configuração "${chaveInvalida.chave}" deve ser um número de dias maior que zero`);
+      return;
+    }
     setSaving(true);
     try {
       // PUT espera o corpo achatado { chave: valor }. O envelope `{ configuracoes: [...] }` que
@@ -2763,6 +2778,7 @@ const TabConfiguracoes = () => {
             ) : (
               <input className="almox-input" style={{ width: 180, flexShrink: 0 }}
                 type={campo.tipo === 'number' ? 'number' : 'text'}
+                min={campo.chave.startsWith('reposicao_') ? 1 : undefined}
                 value={configs[campo.chave] || ''}
                 onChange={e => setConfigs(c => ({ ...c, [campo.chave]: e.target.value }))} />
             )}

@@ -50,7 +50,7 @@ const SUGESTOES_DUAS_FORNECEDORES = {
       fornecedor_id: 3, fornecedor_nome: 'Alfa Parafusos', total_itens: 1, valor_total: 940,
       itens: [
         { material_id: 10, codigo: 'ALM-0010', nome: 'Chapa 3mm', unidade: 'PC',
-          disponivel: 4, a_caminho: 0, posicao: 4, consumo_medio_diario: 0.5,
+          disponivel: 4, a_caminho: 0, a_caminho_vencido: 0, posicao: 4, consumo_medio_diario: 0.5,
           prazo_reposicao_dias: 10, ponto_efetivo: 5, origem_ponto: 'CALCULADO',
           quantidade_sugerida: 17, valor_estimado: 940, risco_parada: false },
       ],
@@ -58,8 +58,11 @@ const SUGESTOES_DUAS_FORNECEDORES = {
     {
       fornecedor_id: 7, fornecedor_nome: 'Zeta Aços', total_itens: 1, valor_total: 400,
       itens: [
+        // a_caminho_vencido: 3 — RN-03 esta descontando a_caminho normal (0) do calculo, mas
+        // existe uma pendencia ANTIGA (fora do horizonte) que continua aberta de verdade
+        // (achado do backend recem-landado, avisado na celula "A caminho").
         { material_id: 20, codigo: 'ALM-0020', nome: 'Perfil L', unidade: 'PC',
-          disponivel: 0, a_caminho: 0, posicao: 0, consumo_medio_diario: 1,
+          disponivel: 0, a_caminho: 0, a_caminho_vencido: 3, posicao: 0, consumo_medio_diario: 1,
           prazo_reposicao_dias: 5, ponto_efetivo: 5, origem_ponto: 'CADASTRADO',
           quantidade_sugerida: 5, valor_estimado: 400, risco_parada: true },
       ],
@@ -68,7 +71,7 @@ const SUGESTOES_DUAS_FORNECEDORES = {
       fornecedor_id: null, fornecedor_nome: 'Sem fornecedor definido', total_itens: 1, valor_total: 50,
       itens: [
         { material_id: 30, codigo: 'ALM-0030', nome: 'Parafuso M8', unidade: 'UN',
-          disponivel: 2, a_caminho: 0, posicao: 2, consumo_medio_diario: 0.2,
+          disponivel: 2, a_caminho: 0, a_caminho_vencido: 0, posicao: 2, consumo_medio_diario: 0.2,
           prazo_reposicao_dias: 0, ponto_efetivo: 5, origem_ponto: 'MINIMO',
           quantidade_sugerida: 25, valor_estimado: 50, risco_parada: false },
       ],
@@ -105,6 +108,30 @@ const SOLICITACOES_FIXTURE = [
   { id: 2, material_id: 20, material_codigo: 'ALM-0020', material_nome: 'Perfil L',
     quantidade: 5, motivo: 'ESTOQUE_MINIMO', status: 'VINCULADO', created_at: '2026-08-18 09:00:00' },
 ];
+
+// Um UNICO fornecedor com DOIS itens — o cenario que o header checkbox "Selecionar todos"
+// (achado 5) precisa provar: marcar/desmarcar um so grupo nao pode ser distinguido de marcar
+// item por item quando o grupo so tem um item (fixture principal acima so tem 1 item por
+// fornecedor).
+const SUGESTOES_FORNECEDOR_DOIS_ITENS = {
+  janela_dias: 90,
+  fornecedores: [
+    {
+      fornecedor_id: 5, fornecedor_nome: 'Beta Insumos', total_itens: 2, valor_total: 300,
+      itens: [
+        { material_id: 50, codigo: 'ALM-0050', nome: 'Item A', unidade: 'UN',
+          disponivel: 1, a_caminho: 0, a_caminho_vencido: 0, posicao: 1, consumo_medio_diario: 0.1,
+          prazo_reposicao_dias: 5, ponto_efetivo: 5, origem_ponto: 'MINIMO',
+          quantidade_sugerida: 10, valor_estimado: 150, risco_parada: false },
+        { material_id: 51, codigo: 'ALM-0051', nome: 'Item B', unidade: 'UN',
+          disponivel: 2, a_caminho: 0, a_caminho_vencido: 0, posicao: 2, consumo_medio_diario: 0.2,
+          prazo_reposicao_dias: 5, ponto_efetivo: 5, origem_ponto: 'MINIMO',
+          quantidade_sugerida: 5, valor_estimado: 150, risco_parada: false },
+      ],
+    },
+  ],
+  resumo: { materiais_sugeridos: 2, valor_total: 300, riscos_parada: 0 },
+};
 
 let container; let root;
 
@@ -204,6 +231,101 @@ describe('ReposicaoAlmoxarifado — aba Sugestões de Compra', () => {
     const linhaRisco = linhaMaterial('ALM-0020');
     expect(linhaRisco.textContent).toContain('Risco de parada');
     expect(linha.textContent).not.toContain('Risco de parada');
+  });
+
+  // Achado 2 (medido): janela_dias vinha no payload e era descartado.
+  test('subtitulo mostra a janela de dias do consumo medio, vinda do payload', async () => {
+    await renderizar();
+    expect(texto()).toContain('Consumo médio calculado sobre os últimos 90 dias');
+  });
+
+  // Achado 2 (medido): a celula "Ponto (origem)" mostrava so o rotulo da origem — quando
+  // CALCULADO, a conta que produziu o ponto (consumo medio x prazo) ficava escondida.
+  test('celula Ponto (origem) mostra consumo medio x prazo SO quando origem e CALCULADO', async () => {
+    await renderizar();
+
+    const linhaCalculado = linhaMaterial('ALM-0010'); // origem_ponto: CALCULADO
+    const tdsCalculado = linhaCalculado.querySelectorAll('td');
+    expect(tdsCalculado[5].textContent).toContain('0,5/dia × 10d');
+
+    const linhaCadastrado = linhaMaterial('ALM-0020'); // origem_ponto: CADASTRADO
+    const tdsCadastrado = linhaCadastrado.querySelectorAll('td');
+    expect(tdsCadastrado[5].textContent).not.toContain('/dia');
+  });
+
+  // Backend recem-landado (a_caminho_vencido): ha solicitacao aberta fora do horizonte que
+  // continua de pe mas nao segura mais posicao (RN-03) — a tela precisa avisar ANTES do
+  // comprador clicar "Gerar" e duplicar o pedido (achado da duplicacao de dois caminhos).
+  test('a_caminho_vencido > 0 mostra aviso de solicitacao antiga aberta, so na linha afetada', async () => {
+    await renderizar();
+
+    const linhaVencida = linhaMaterial('ALM-0020'); // a_caminho_vencido: 3
+    expect(linhaVencida.textContent).toContain('Vencido');
+    const badge = linhaVencida.querySelector('.almox-badge-baixo');
+    expect(badge).toBeTruthy();
+    expect(badge.title).toBe('Há solicitação antiga aberta (3) fora do horizonte');
+
+    const linhaSemVencido = linhaMaterial('ALM-0010'); // a_caminho_vencido: 0
+    expect(linhaSemVencido.textContent).not.toContain('Vencido');
+  });
+
+  // Achado 5 (medido): so dava para marcar/desmarcar material por material — em fornecedor com
+  // dezenas de itens, isso e um clique por linha so para desmarcar um punhado.
+  test('checkbox "Selecionar todos" do cabecalho marca/desmarca todos os itens do fornecedor', async () => {
+    mockarApi({ sugestoes: SUGESTOES_FORNECEDOR_DOIS_ITENS });
+    await renderizar();
+
+    const linhaA = () => linhaMaterial('ALM-0050');
+    const linhaB = () => linhaMaterial('ALM-0051');
+    expect(linhaA().querySelector('input[type="checkbox"]').checked).toBe(true);
+    expect(linhaB().querySelector('input[type="checkbox"]').checked).toBe(true);
+
+    const headerCheckbox = container.querySelector('thead input[aria-label="Selecionar todos"]');
+    expect(headerCheckbox).toBeTruthy();
+    expect(headerCheckbox.checked).toBe(true); // todos marcados por default (design)
+
+    marcar(headerCheckbox, false);
+    expect(linhaA().querySelector('input[type="checkbox"]').checked).toBe(false);
+    expect(linhaB().querySelector('input[type="checkbox"]').checked).toBe(false);
+    expect(botao('Gerar solicitações').disabled).toBe(true);
+
+    marcar(headerCheckbox, true);
+    expect(linhaA().querySelector('input[type="checkbox"]').checked).toBe(true);
+    expect(linhaB().querySelector('input[type="checkbox"]').checked).toBe(true);
+  });
+
+  // Achado 3 (medido): o servidor RECALCULA a quantidade no POST — o usuario confirmou uma
+  // ESTIMATIVA (texto do window.confirm) e nunca via o que foi de fato pedido. O painel de
+  // resultado tinha so a contagem ("2 solicitacao(oes) criada(s)."), nunca a quantidade real.
+  test('painel de resultado lista cada solicitacao criada com codigo, nome e quantidade real', async () => {
+    await renderizar();
+    api.post.mockResolvedValueOnce({
+      data: {
+        criadas: [
+          { material_id: 10, solicitacao_id: 201, quantidade: 17 },
+          { material_id: 20, solicitacao_id: 202, quantidade: 5 },
+        ],
+        puladas: [],
+      },
+    });
+
+    await clicar(botao('Gerar solicitações'));
+
+    expect(texto()).toContain('2 solicitação(ões) criada(s):');
+    expect(texto()).toContain('ALM-0010 — Chapa 3mm: 17');
+    expect(texto()).toContain('ALM-0020 — Perfil L: 5');
+  });
+
+  // Achado 4 (medido): o painel de resultado da geracao anterior continuava na tela depois do
+  // usuario trocar de aba e voltar — parecia que a ultima geracao ainda valia.
+  test('painel de resultado da geracao some ao trocar de aba', async () => {
+    await renderizar();
+    await clicar(botao('Gerar solicitações'));
+    expect(texto()).toContain('solicitação(ões) criada(s)');
+
+    await clicar(botao('Estoque Parado'));
+    await clicar(botao('Sugestões de Compra'));
+    expect(texto()).not.toContain('solicitação(ões) criada(s)');
   });
 
   test('gerar solicitacoes envia SO os ids marcados', async () => {
@@ -318,6 +440,13 @@ describe('ReposicaoAlmoxarifado — aba Estoque Parado', () => {
     expect(texto()).toContain('Retrato do estoque parado inteiro — o filtro abaixo não muda estes números.');
   });
 
+  // Achado 2 (medido): dias_sem_consumo vinha no payload e era descartado.
+  test('subtitulo mostra os dias sem consumo (corte de "parado"), vindo do payload', async () => {
+    await renderizar();
+    await clicar(botao('Estoque Parado'));
+    expect(texto()).toContain('Parado = sem saída há 180 dias ou mais');
+  });
+
   test('filtro por tipo refaz a chamada', async () => {
     await renderizar();
     await clicar(botao('Estoque Parado'));
@@ -362,7 +491,12 @@ describe('ReposicaoAlmoxarifado — aba Solicitações', () => {
 });
 
 describe('ReposicaoAlmoxarifado — 403 legivel do backend', () => {
-  test('sugestoes: mensagem do requirePermission aparece verbatim no toast', async () => {
+  // Achado 1 (Critical, medido pelos dois revisores): os tres `.catch` gravavam estado de
+  // painel VAZIO em cima de um 403 — ALMOXARIFE/PRODUCAO liam "nada para comprar/parado/
+  // pendente" como fato operacional, nunca como "sem permissao". Cada teste abaixo prova as
+  // DUAS pontas: o painel de erro aparece (mensagem do servidor verbatim) E o estado vazio /
+  // KPIs NAO aparecem no lugar dele.
+  test('sugestoes: painel de erro substitui KPIs e tabela — nunca o estado vazio', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/almoxarifado/reposicao/sugestoes') {
         return Promise.reject({ response: { status: 403, data: { error: 'Sem permissão para reposicao.sugestoes' } } });
@@ -370,10 +504,23 @@ describe('ReposicaoAlmoxarifado — 403 legivel do backend', () => {
       return Promise.resolve({ data: [] });
     });
     await renderizar();
+
     expect(toast.error).toHaveBeenCalledWith('Sem permissão para reposicao.sugestoes');
+    expect(texto()).toContain('Dados indisponíveis no momento');
+    expect(texto()).toContain('Sem permissão para reposicao.sugestoes');
+    // O sintoma do achado 1: NAO pode aparecer o estado vazio nem os cards de KPI zerados.
+    expect(texto()).not.toContain('Nenhuma sugestão para gerar');
+    expect(container.querySelector('[data-testid="kpi-materiais-sugeridos"]')).toBeNull();
+
+    // "Tentar novamente" refaz a chamada (mesmo padrao do loadError de AlmoxarifadoDashboard).
+    api.get.mockClear();
+    api.get.mockImplementation(() => Promise.resolve({ data: SUGESTOES_DUAS_FORNECEDORES }));
+    await clicar(botao('Tentar novamente'));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/reposicao/sugestoes');
+    expect(container.querySelector('[data-testid="kpi-materiais-sugeridos"]')).toBeTruthy();
   });
 
-  test('estoque-parado: mensagem do requirePermission aparece verbatim no toast', async () => {
+  test('estoque-parado: painel de erro substitui KPIs e tabela — nunca o estado vazio', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/almoxarifado/reposicao/sugestoes') {
         return Promise.resolve({ data: SUGESTOES_DUAS_FORNECEDORES });
@@ -385,22 +532,33 @@ describe('ReposicaoAlmoxarifado — 403 legivel do backend', () => {
     });
     await renderizar();
     await clicar(botao('Estoque Parado'));
+
     expect(toast.error).toHaveBeenCalledWith('Sem permissão para reposicao.estoque-parado');
+    expect(texto()).toContain('Dados indisponíveis no momento');
+    expect(texto()).toContain('Sem permissão para reposicao.estoque-parado');
+    expect(texto()).not.toContain('Nenhum material parado encontrado');
+    expect(container.querySelector('[data-testid="kpi-excesso"]')).toBeNull();
   });
 
-  test('solicitacoes: mensagem do requirePermission aparece verbatim no toast', async () => {
+  test('solicitacoes: painel de erro substitui a tabela — nunca o estado vazio', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/almoxarifado/reposicao/sugestoes') {
         return Promise.resolve({ data: SUGESTOES_DUAS_FORNECEDORES });
       }
       if (url === '/almoxarifado/relatorios/solicitacoes-compra') {
-        return Promise.reject({ response: { status: 403, data: { error: 'Sem permissão para relatorios.solicitacoes-compra' } } });
+        // Etapa 11 revisao final: esta rota agora tambem 403 (gate `gerenciar_reposicao`
+        // adicionado no backend DEPOIS desta tela ter sido escrita) — corpo sem `perfil`
+        // (rota generica de relatorios, nao usa requirePermission do modulo).
+        return Promise.reject({ response: { status: 403, data: { error: 'Sem permissão para este relatório', acao: 'gerenciar_reposicao' } } });
       }
       return Promise.resolve({ data: [] });
     });
     await renderizar();
     await clicar(botao('Solicitações'));
-    expect(toast.error).toHaveBeenCalledWith('Sem permissão para relatorios.solicitacoes-compra');
+
+    expect(toast.error).toHaveBeenCalledWith('Sem permissão para este relatório');
+    expect(texto()).toContain('Dados indisponíveis no momento');
+    expect(texto()).not.toContain('Nenhuma solicitação de compra pendente');
   });
 });
 

@@ -28,6 +28,15 @@ const ACOES = {
   reservar_outra_os: 'reservar material de outra OS',
   inventario: 'fazer inventário',
   configurar: 'configurar o módulo',
+  // Revisao final da Etapa 11 (achado 7, medido): faltavam no mapa — o botao "Gerar
+  // solicitacoes" da tela de reposicao (bloquearSeNaoPode('gerenciar_reposicao', ...)) caia no
+  // fallback de labelAcao e mostrava "gerenciar reposicao" cru. gerenciar_ferramentas e as duas
+  // pernas de sucateamento (aprovar_sucateamento/aprovar_sucateamento_gestao) tinham o mesmo
+  // buraco (existem em ACAO_PERFIS desde as Etapas 9/9b) — corrigidos junto.
+  gerenciar_reposicao: 'gerenciar reposição e compras',
+  gerenciar_ferramentas: 'gerenciar ferramentas',
+  aprovar_sucateamento: 'aprovar sucateamento (almoxarifado)',
+  aprovar_sucateamento_gestao: 'aprovar sucateamento (gestão)',
   // frota
   gerenciar_veiculos: 'gerenciar veículos',
   gerenciar_motoristas: 'gerenciar motoristas',

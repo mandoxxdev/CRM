@@ -26,6 +26,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import ConfiguracoesAlmoxarifado from './ConfiguracoesAlmoxarifado';
 import api from '../../services/api';
+import { toast } from 'react-toastify';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -46,10 +47,17 @@ jest.mock('../../services/permissionsCache', () => ({
 
 // FORMA REAL de GET /api/almoxarifado/configuracoes (routes/almoxarifado.js): mapa por chave,
 // com valor/descricao/id — e não um array de linhas.
+// As tres chaves `reposicao_*` estao SEMPRE semeadas no servidor real (schema.js) com valor
+// padrao valido — sem elas aqui, o guard novo do achado 6 (handleSalvar recusa reposicao_*
+// invalida) via `configs[chave]` undefined como NaN e barraria os testes de salvar que nao tem
+// nada a ver com reposicao. Valores de fixture arbitrarios, mas validos (inteiro >= 1).
 const RESPOSTA_DO_SERVIDOR = {
   aprovacao_automatica: { valor: '1', descricao: 'Aprovar requisições automaticamente', id: 1 },
   permite_saldo_negativo_global: { valor: '1', descricao: 'Permitir saldo negativo (global)', id: 2 },
   alertas_smtp_pass: { valor: 'segredo', descricao: 'Senha SMTP', id: 3 },
+  reposicao_janela_consumo_dias: { valor: '90', descricao: 'Janela do consumo médio', id: 4 },
+  reposicao_dias_sem_consumo: { valor: '180', descricao: 'Dias sem saída (estoque parado)', id: 5 },
+  reposicao_horizonte_solicitacao_dias: { valor: '60', descricao: 'Horizonte da solicitação', id: 6 },
 };
 
 let container;
@@ -181,4 +189,32 @@ test('as tres chaves de reposicao (Etapa 11) aparecem e entram no payload do sal
   expect(corpo.reposicao_janela_consumo_dias).toBe('120');
   expect(corpo.reposicao_dias_sem_consumo).toBe('200');
   expect(corpo.reposicao_horizonte_solicitacao_dias).toBe('45');
+});
+
+/**
+ * Revisao final da Etapa 11 (achado 6, medido): o servidor recusa (400) as chaves
+ * `reposicao_*` menores que 1 (rota PUT /almoxarifado/configuracoes, purchaseService le com
+ * fallback silencioso). Sem guard no cliente, o "0" digitado disparava o PUT do mesmo jeito e
+ * so voltava o 400 depois da ida ao servidor. Aqui prova a metade que so o cliente pode provar:
+ * o clique NEM CHEGA a chamar `api.put` quando um campo de reposicao esta fora do intervalo, e
+ * o toast reaproveita o MESMO literal que a rota devolveria.
+ */
+test('digitar 0 num campo de reposicao recusa salvar com toast, sem chamar o PUT', async () => {
+  await renderAbaGeral();
+
+  const inputJanela = inputDoCampo('Janela do Consumo Médio (dias)');
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  await act(async () => { preencher(inputJanela, '0'); });
+
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+  await act(async () => { botao.click(); });
+
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "reposicao_janela_consumo_dias" deve ser um número de dias maior que zero'
+  );
 });
