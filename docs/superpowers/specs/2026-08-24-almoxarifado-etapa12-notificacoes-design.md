@@ -105,6 +105,18 @@ usuário, material (código+nome), quantidade e unidade, **saldo anterior e sald
 lote/série quando houver, projeto/OS/cliente quando houver, motivo/justificativa, e link
 direto (`/almoxarifado/movimentacoes?destaque=<id>`). Sem PDF (corte D3).
 
+**Emendas da revisão da Task 2:** (a) as séries entram no corpo a partir das linhas que o
+motor **realmente** criou/reivindicou (`seriesAfetadas`/`seriesClaim`, nunca o input cru) —
+a primeira entrega tinha só o lote; (b) `motivo` e `justificativa` são campos distintos do
+livro e saem com rótulos próprios (a primeira entrega rotulava motivo como "Justificativa");
+`referencia` também é renderizada; (c) em `AJUSTE`/`AJUSTE_INVENTARIO` a quantidade é o
+**valor absoluto** aplicado, então o rótulo vira `Quantidade (novo total)`; (d)
+**cancelamento suprime a notificação pendente**: `cancelarMovimentacao` marca a linha
+PENDENTE da movimentação original como FALHA com `ultimo_erro = 'Movimentação cancelada
+antes do envio'` (mantém histórico — D4 — e o worker não manda e-mail de uma movimentação
+que não existe mais no saldo). Linha já ENVIADA fica como está: e-mail de correção retroativa
+é corte declarado (letra B). O HTML do corpo é escapado (`escapeHtml`) linha a linha.
+
 ### RN-05 — Destinatários por classe de evento, via configs (com fallback)
 
 Quatro classes com config própria (lista aceita JSON ou vírgula — `parseList`):
@@ -112,7 +124,13 @@ Quatro classes com config própria (lista aceita JSON ou vírgula — `parseList
 `notificacoes_dest_terceiros` — classe resolvida pela fonte única `movementTypes`, com
 **precedência fixa** (Fase 2): sufixo `_TERCEIRO` **>** prefixo `AJUSTE` **>**
 `TIPOS_ENTRADA`/`TIPOS_SAIDA` (sem ela, `AJUSTE_POSITIVO` — que está em TIPOS_ENTRADA —
-cairia numa classe por acidente da ordem dos ifs). As chaves vivem num **mapa literal** no
+cairia numa classe por acidente da ordem dos ifs). **Emenda da revisão da Task 2 — a regra
+do sufixo, sozinha, estava ERRADA para dois tipos:** `REMESSA_TERCEIRO` e `RETORNO_TERCEIRO`
+são **retenção** (mexem só em `quantidade_em_terceiros`; o saldo global não muda — o e-mail
+diria "30 KG" com saldo idêntico) e a remessa chama o motor **item a item** (uma remessa de
+10 itens viraria 10 e-mails — a mesma família de spam que a emenda de RESERVA cortou). Os
+dois ficam **fora** da classe `terceiros`; o canal da remessa é o alerta de remessa vencida
+(RN-07). `CONSUMO_TERCEIRO`/`PERDA_TERCEIRO` continuam notificando — são saída de verdade. As chaves vivem num **mapa literal** no
 serviço (chave montada por template string some da varredura do teste de amarração
 cliente↔servidor). Classe sem config → fallback `alertas_estoque_emails`; tipo **sem classe**
 → não enfileira (`SEM_CLASSE`); sem destinatário nenhum → não enfileira

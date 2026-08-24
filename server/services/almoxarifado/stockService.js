@@ -1389,6 +1389,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // Fase 2: loteIdFinal/loteCodigoFinal, NAO o lote_id cru — ele vem null sempre que a
         // chamada usou o CODIGO do lote (inclusive quando a entrada CRIOU o lote).
         lote_id: loteIdFinal, lote_codigo: loteCodigoFinal,
+        // Revisao da Task 2 (I1): RN-04 pede "lote/serie quando houver" — os numeros vem das
+        // linhas que o motor REALMENTE criou/reivindicou (RETURNING *), nao do input cru.
+        serie_numeros: [...seriesAfetadas, ...seriesClaim]
+          .map((s) => s.linha && s.linha.numero).filter(Boolean),
         projeto_id, os_id, cliente_id, requisicao_id, documento_vinculado,
       }, material, user);
     }
@@ -1814,6 +1818,17 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     await alertService.verificarAlertaPorMaterialId(db, mov.material_id);
   } catch (alertErr) {
     console.warn('[almoxarifado-alertas] Falha ao verificar alerta pós-estorno:', alertErr.message);
+  }
+
+  // Etapa 12 (revisao da Task 2, I2): a notificacao PENDENTE da movimentacao original nao pode
+  // mais sair — o saldo que ela anuncia acabou de ser revertido. Vira FALHA com erro literal
+  // (nunca DELETE: a fila e o historico, D4). Sem gate de config: se a linha existe, foi
+  // enfileirada com a config ligada; suprimir e higiene incondicional. Try/catch pelo mesmo
+  // motivo do gancho — aviso nunca derruba estorno.
+  try {
+    await notificationQueueService.suprimirNotificacaoMovimentacao(db, movimentoId);
+  } catch (notifErr) {
+    console.warn('[almoxarifado-notificacoes] Falha ao suprimir notificacao pós-estorno:', notifErr.message);
   }
 
   return { success: true, estorno_id: estornoId };

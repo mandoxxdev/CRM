@@ -223,10 +223,12 @@ async function reenviar(db, usuario, id) {
   return { success: true, status: atualizado.status };
 }
 
-// Etapa 12, Task 2 (RN-05): mapa LITERAL chave->config (Fase 2, achado 4 — chave montada por
-// template string some da varredura do configuracoesGerais.api.test.js, que procura o literal
-// `'chave'` em routes/services). Classes sem entrada aqui (compras, etc.) nao passam por
-// enfileirarMovimentacao.
+// Etapa 12, Task 2 (RN-05): mapa LITERAL chave->config. Revisao da Task 2 (M1): a varredura do
+// configuracoesGerais.api.test.js hoje so percorre as chaves do array CAMPOS do CLIENTE — estas
+// 4 chaves ainda nao estao la (entram na Task 4), entao o literal e ANTECIPATORIO: garante que,
+// quando a Task 4 as puser em CAMPOS, a amarracao cliente<->servidor ja enxergue o leitor daqui
+// (template string sumiria da varredura). Classes sem entrada aqui (compras, etc.) nao passam
+// por enfileirarMovimentacao.
 const DEST_POR_CLASSE = {
   entradas: 'notificacoes_dest_entradas',
   saidas: 'notificacoes_dest_saidas',
@@ -246,6 +248,13 @@ const DEST_POR_CLASSE = {
  */
 function resolverClasseMovimentacao(tipo) {
   if (typeof tipo !== 'string') return null;
+  // Revisao da Task 2 (I3): REMESSA/RETORNO a terceiro sao RETENCAO — mexem so em
+  // quantidade_em_terceiros, o saldo global NAO muda, entao o e-mail diria "30 KG" com saldo
+  // identico (ilegivel); e enviarRemessa chama o motor ITEM A ITEM (thirdPartyService:241) —
+  // uma remessa de 10 itens viraria 10 e-mails, a mesma familia de spam que a emenda da Fase 2
+  // cortou para RESERVA. Ficam fora de proposito; o canal da remessa e o alerta de remessa
+  // VENCIDA (Task 3). CONSUMO_TERCEIRO/PERDA_TERCEIRO continuam: sao saida de verdade.
+  if (tipo === 'REMESSA_TERCEIRO' || tipo === 'RETORNO_TERCEIRO') return null;
   if (tipo.endsWith('_TERCEIRO')) return 'terceiros';
   if (tipo.startsWith('AJUSTE')) return 'ajustes';
   if (movementTypes.TIPOS_ENTRADA.includes(tipo)) return 'entradas';
@@ -302,20 +311,32 @@ async function enfileirarMovimentacao(db, movimentacao, materialRow, user) {
     `Data/hora: ${dataHora}`,
     `Usuário: ${usuarioLabel}`,
     `Material: ${materialLabel}`,
-    `Quantidade: ${movimentacao.quantidade} ${materialRow.unidade || ''}`.trim(),
+    // Revisao da Task 2 (M4): em AJUSTE/AJUSTE_INVENTARIO a quantidade e o VALOR ABSOLUTO
+    // aplicado (novo total), nao o delta — o mesmo rotulo "Quantidade" para as duas contas
+    // faria o leitor somar um novo-total como se fosse delta.
+    `${['AJUSTE', 'AJUSTE_INVENTARIO'].includes(movimentacao.tipo) ? 'Quantidade (novo total)' : 'Quantidade'}: ${movimentacao.quantidade} ${materialRow.unidade || ''}`.trim(),
     `Saldo anterior: ${movimentacao.saldo_anterior}`,
     `Saldo posterior: ${movimentacao.saldo_posterior}`,
   ];
   // lote_codigo (Fase 2): sempre o loteCodigoFinal que o gancho resolveu, NUNCA o lote cru — ver
   // a nota do brief da Task 2 sobre o lote_id vir null quando a chamada usou o CODIGO do lote.
   if (movimentacao.lote_codigo) linhas.push(`Lote: ${movimentacao.lote_codigo}`);
+  // Revisao da Task 2 (I1): a RN-04 pede "lote/serie quando houver" — serie faltava. O gancho
+  // passa os numeros ja resolvidos pelo motor (seriesAfetadas/seriesClaim), nao o input cru.
+  if (Array.isArray(movimentacao.serie_numeros) && movimentacao.serie_numeros.length) {
+    linhas.push(`Séries: ${movimentacao.serie_numeros.join(', ')}`);
+  }
   if (movimentacao.projeto_id) linhas.push(`Projeto: #${movimentacao.projeto_id}`);
   if (movimentacao.os_id) linhas.push(`OS: #${movimentacao.os_id}`);
   if (movimentacao.cliente_id) linhas.push(`Cliente: #${movimentacao.cliente_id}`);
   if (movimentacao.requisicao_id) linhas.push(`Requisição: #${movimentacao.requisicao_id}`);
   if (movimentacao.documento_vinculado) linhas.push(`Documento: ${movimentacao.documento_vinculado}`);
-  const justificativaOuMotivo = movimentacao.justificativa || movimentacao.motivo;
-  if (justificativaOuMotivo) linhas.push(`Justificativa: ${justificativaOuMotivo}`);
+  // Revisao da Task 2 (M2/M3): motivo e justificativa sao campos DISTINTOS no livro — rotular
+  // um pelo nome do outro e mentira pequena; e `referencia` era passada pelo gancho e nunca
+  // renderizada (campo morto).
+  if (movimentacao.motivo) linhas.push(`Motivo: ${movimentacao.motivo}`);
+  if (movimentacao.justificativa) linhas.push(`Justificativa: ${movimentacao.justificativa}`);
+  if (movimentacao.referencia) linhas.push(`Referência: ${movimentacao.referencia}`);
   linhas.push(`Link: ${link}`);
 
   const corpo_texto = linhas.join('\n');
@@ -334,6 +355,24 @@ async function enfileirarMovimentacao(db, movimentacao, materialRow, user) {
   });
 }
 
+/**
+ * Revisao da Task 2 (I2): cancelar movimentacao (estorno) precisa impedir o e-mail da
+ * movimentacao original que ainda NAO saiu — sem isto, o destinatario recebia aviso de uma
+ * saida que nao existe mais no saldo (o ESTORNO nasce de INSERT direto e nunca passa pelo
+ * gancho, entao nao ha "e-mail de correcao"). Linha PENDENTE vira FALHA com erro literal —
+ * mantem historico (D4: a fila E o historico), nao envia, e o painel conta a verdade. Linha
+ * ja ENVIADA fica como esta: o e-mail saiu de fato; correcao retroativa e corte declarado
+ * (letra B). Corrida residual: se o worker ja passou da re-checagem pos-claim desta linha, o
+ * envio desta rodada nao e mais alcancavel — janela de milissegundos, aceita e documentada.
+ */
+async function suprimirNotificacaoMovimentacao(db, movimentacaoId) {
+  const hash = hashDedupe('MOVIMENTACAO', `mov-${movimentacaoId}`);
+  const r = await dbRun(db, `UPDATE fila_notificacoes_almoxarifado
+    SET status = 'FALHA', ultimo_erro = 'Movimentação cancelada antes do envio'
+    WHERE hash_dedupe = ? AND status = 'PENDENTE'`, [hash]);
+  return { suprimida: r.changes > 0 };
+}
+
 module.exports = {
   STATUS_VALIDOS,
   enfileirar,
@@ -341,5 +380,6 @@ module.exports = {
   reenviar,
   enfileirarMovimentacao,
   resolverClasseMovimentacao,
+  suprimirNotificacaoMovimentacao,
   DEST_POR_CLASSE,
 };

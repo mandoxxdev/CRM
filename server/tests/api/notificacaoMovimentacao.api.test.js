@@ -29,13 +29,14 @@ let seq = 0;
 async function novoMaterial(db, over = {}) {
   seq += 1;
   const r = await dbRun(db, `INSERT INTO materiais_almoxarifado
-    (codigo, nome, unidade, quantidade_atual, quantidade_em_terceiros, ativo)
-    VALUES (?,?,?,?,?,1)`, [
+    (codigo, nome, unidade, quantidade_atual, quantidade_em_terceiros, controle_serie, ativo)
+    VALUES (?,?,?,?,?,?,1)`, [
     over.codigo || `NOTIF-${seq}`,
     over.nome || `Material notificacao ${seq}`,
     over.unidade || 'UN',
     over.quantidade_atual !== undefined ? over.quantidade_atual : 100,
     over.quantidade_em_terceiros || 0,
+    over.controle_serie || 0,
   ]);
   return r.lastID;
 }
@@ -64,6 +65,7 @@ async function filaPorMovimentacao(db, movimentacaoId) {
     const mat = await novoMaterial(db, { codigo: 'NOTIF-RN04-1', quantidade_atual: 0 });
     const mov = await stockService.registrarMovimentacao(db, ADMIN, {
       material_id: mat, tipo: 'ENTRADA_MANUAL', quantidade: 10, motivo: 'compra',
+      justificativa: 'urgente <b>hoje</b> & "fim"', referencia: 'REF-999',
     });
 
     const linha = await filaPorMovimentacao(db, mov.id);
@@ -80,6 +82,19 @@ async function filaPorMovimentacao(db, movimentacaoId) {
     assert.ok(linha.corpo_texto.includes(`Saldo posterior: ${mov.saldo_posterior}`), linha.corpo_texto);
     assert.strictEqual(mov.saldo_anterior, 0, JSON.stringify(mov));
     assert.strictEqual(mov.saldo_posterior, 10, JSON.stringify(mov));
+
+    // Revisao da Task 2 (M2/M3, sabotagem S3): motivo e justificativa com rotulos PROPRIOS
+    // (sao campos distintos no livro), referencia renderizada, e o link direto — dois itens
+    // NOMEADOS na RN-04 que nenhum teste olhava.
+    assert.ok(linha.corpo_texto.includes('Motivo: compra'), linha.corpo_texto);
+    assert.ok(linha.corpo_texto.includes('Justificativa: urgente <b>hoje</b> & "fim"'), linha.corpo_texto);
+    assert.ok(linha.corpo_texto.includes('Referência: REF-999'), linha.corpo_texto);
+    assert.ok(linha.corpo_texto.includes(`/almoxarifado/movimentacoes?destaque=${mov.id}`), linha.corpo_texto);
+
+    // Revisao da Task 2 (sabotagem S1): o escape de HTML e a UNICA defesa contra injecao no
+    // corpo — a justificativa com <b>/& tem de sair ESCAPADA no corpo_html, nunca crua.
+    assert.ok(linha.corpo_html.includes('urgente &lt;b&gt;hoje&lt;/b&gt; &amp;'), linha.corpo_html);
+    assert.ok(!linha.corpo_html.includes('<b>hoje</b>'), 'HTML da justificativa nao pode sair cru');
 
     const destinatarios = JSON.parse(linha.destinatarios);
     assert.deepStrictEqual(destinatarios, ['dest-entradas@teste.com'], JSON.stringify(destinatarios));
@@ -148,13 +163,17 @@ async function filaPorMovimentacao(db, movimentacaoId) {
     await setConfig(db, 'notificacoes_dest_ajustes', 'classe-ajustes@teste.com');
     await setConfig(db, 'notificacoes_dest_terceiros', 'classe-terceiros@teste.com');
 
-    // ENTRADA -> dest_entradas
+    // ENTRADA -> dest_entradas. Revisao da Task 2 (sabotagem S2): a config de classe em JSON
+    // com DOIS e-mails — o formato que a aba de Alertas grava — tem de passar pelo parseList
+    // (sem ele, a lista inteira virava UM destinatario '["a@...","b@..."]').
+    await setConfig(db, 'notificacoes_dest_entradas', '["classe-entradas@teste.com","classe-entradas-2@teste.com"]');
     const matEnt = await novoMaterial(db, { codigo: 'NOTIF-RN05-ENT', quantidade_atual: 0 });
     const movEnt = await stockService.registrarMovimentacao(db, ADMIN, {
       material_id: matEnt, tipo: 'ENTRADA_MANUAL', quantidade: 5, motivo: 'compra',
     });
     const linhaEnt = await filaPorMovimentacao(db, movEnt.id);
-    assert.deepStrictEqual(JSON.parse(linhaEnt.destinatarios), ['classe-entradas@teste.com']);
+    assert.deepStrictEqual(JSON.parse(linhaEnt.destinatarios),
+      ['classe-entradas@teste.com', 'classe-entradas-2@teste.com']);
 
     // SAIDA -> dest_saidas
     const matSai = await novoMaterial(db, { codigo: 'NOTIF-RN05-SAI', quantidade_atual: 50 });
@@ -233,6 +252,100 @@ async function filaPorMovimentacao(db, movimentacaoId) {
     const linhaSemDest = await filaPorMovimentacao(db, movSemDest.id);
     assert.ok(!linhaSemDest, 'sem destinatario nenhum nao pode ter linha na fila');
     assert.ok(movSemDest.id, 'a movimentacao em si tem de ter sido registrada normalmente');
+
+    await setConfig(db, 'notificar_movimentacoes', '0');
+  });
+
+  await test('RN-04: lote e series aparecem no corpo (revisao I1)', async () => {
+    await setConfig(db, 'notificar_movimentacoes', '1');
+    await setConfig(db, 'notificacoes_dest_entradas', 'dest-entradas@teste.com');
+
+    const mat = await novoMaterial(db, { codigo: 'NOTIF-SERIE-1', quantidade_atual: 0, controle_serie: 1 });
+    // Entrada que CRIA o lote pelo codigo (lote_id cru = null — o cenario da Fase 2) e as
+    // series pelo motor de verdade (seriesService via registrarMovimentacao, exigeSerie).
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA_MANUAL', quantidade: 2, motivo: 'compra',
+      lote: 'LOTE-NOTIF-1', series: ['SN-A1', 'SN-A2'],
+    }, { exigeSerie: true });
+
+    const linha = await filaPorMovimentacao(db, mov.id);
+    assert.ok(linha, 'deveria ter enfileirado');
+    assert.ok(linha.corpo_texto.includes('Lote: LOTE-NOTIF-1'), linha.corpo_texto);
+    assert.ok(linha.corpo_texto.includes('Séries: SN-A1, SN-A2'), linha.corpo_texto);
+  });
+
+  await test('RN-05: remessa/retorno a terceiro NAO enfileiram (revisao I3)', async () => {
+    await setConfig(db, 'notificar_movimentacoes', '1');
+    await setConfig(db, 'notificacoes_dest_terceiros', 'classe-terceiros@teste.com');
+
+    // REMESSA/RETORNO sao RETENCAO (saldo global nao muda) e a remessa chama o motor item a
+    // item — 10 itens virariam 10 e-mails de "saldo identico". Ficam fora da classe terceiros;
+    // CONSUMO_TERCEIRO (saida de verdade) continua notificando — provado no teste de classes.
+    const mat = await novoMaterial(db, {
+      codigo: 'NOTIF-REM-1', quantidade_atual: 50, quantidade_em_terceiros: 10,
+    });
+    const antes = await contarFila(db);
+
+    const movRem = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'REMESSA_TERCEIRO', quantidade: 5, justificativa: 'remessa para tratamento',
+    });
+    const movRet = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'RETORNO_TERCEIRO', quantidade: 3, justificativa: 'retorno do tratamento',
+    });
+
+    const depois = await contarFila(db);
+    assert.strictEqual(depois, antes, 'remessa/retorno nao podem ter enfileirado nada');
+    assert.ok(!(await filaPorMovimentacao(db, movRem.id)), 'REMESSA_TERCEIRO sem linha na fila');
+    assert.ok(!(await filaPorMovimentacao(db, movRet.id)), 'RETORNO_TERCEIRO sem linha na fila');
+  });
+
+  await test('RN-04: cancelamento suprime a notificacao PENDENTE, preserva a ENVIADA (revisao I2)', async () => {
+    await setConfig(db, 'notificar_movimentacoes', '1');
+    await setConfig(db, 'notificacoes_dest_saidas', 'dest-saidas@teste.com');
+
+    // Sem a supressao, o worker mandava e-mail de uma saida que o estorno acabou de desfazer —
+    // e nao existe e-mail de correcao (ESTORNO nasce de INSERT direto, nunca passa pelo gancho).
+    const mat = await novoMaterial(db, { codigo: 'NOTIF-CANC-1', quantidade_atual: 100 });
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA_PRODUCAO', quantidade: 40, os_id: 1,
+    });
+    const pendente = await filaPorMovimentacao(db, mov.id);
+    assert.strictEqual(pendente.status, 'PENDENTE', JSON.stringify(pendente));
+
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'saida lancada por engano');
+    const suprimida = await filaPorMovimentacao(db, mov.id);
+    assert.strictEqual(suprimida.status, 'FALHA', JSON.stringify(suprimida));
+    assert.strictEqual(suprimida.ultimo_erro, 'Movimentação cancelada antes do envio', JSON.stringify(suprimida));
+
+    // Linha ja ENVIADA fica como esta (o e-mail saiu de fato; correcao retroativa e corte
+    // declarado) — a supressao so alcanca PENDENTE.
+    const mov2 = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA_PRODUCAO', quantidade: 10, os_id: 1,
+    });
+    const linha2 = await filaPorMovimentacao(db, mov2.id);
+    await dbRun(db, `UPDATE fila_notificacoes_almoxarifado SET status = 'ENVIADO', enviado_em = CURRENT_TIMESTAMP WHERE id = ?`, [linha2.id]);
+    await stockService.cancelarMovimentacao(db, ADMIN, mov2.id, 'tambem engano');
+    const linha2Depois = await dbGet(db, 'SELECT status FROM fila_notificacoes_almoxarifado WHERE id = ?', [linha2.id]);
+    assert.strictEqual(linha2Depois.status, 'ENVIADO', JSON.stringify(linha2Depois));
+
+    await setConfig(db, 'notificar_movimentacoes', '0');
+  });
+
+  await test('RN-04: AJUSTE_INVENTARIO rotula quantidade como novo total (revisao M4)', async () => {
+    await setConfig(db, 'notificar_movimentacoes', '1');
+    await setConfig(db, 'notificacoes_dest_ajustes', 'classe-ajustes@teste.com');
+
+    // Em AJUSTE/AJUSTE_INVENTARIO a quantidade e o VALOR ABSOLUTO contado (100 -> 30), nao o
+    // delta — o rotulo tem de dizer isso, senao o leitor soma 30 como se fosse delta.
+    const mat = await novoMaterial(db, { codigo: 'NOTIF-AJI-1', quantidade_atual: 100 });
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'AJUSTE_INVENTARIO', quantidade: 30, justificativa: 'contagem fisica',
+    });
+    const linha = await filaPorMovimentacao(db, mov.id);
+    assert.ok(linha, 'deveria ter enfileirado');
+    assert.ok(linha.corpo_texto.includes('Quantidade (novo total): 30'), linha.corpo_texto);
+    assert.ok(linha.corpo_texto.includes('Saldo anterior: 100'), linha.corpo_texto);
+    assert.ok(linha.corpo_texto.includes('Saldo posterior: 30'), linha.corpo_texto);
 
     await setConfig(db, 'notificar_movimentacoes', '0');
   });
