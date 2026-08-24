@@ -60,14 +60,32 @@ async function calcularSugestoes(db) {
                        AND mv.created_at >= datetime('now', '-' || ? || ' days')), 0) AS consumo_janela,
            COALESCE((SELECT SUM(sc.quantidade) FROM solicitacoes_compra_almoxarifado sc
                      WHERE sc.material_id = m.id AND sc.status IN ('PENDENTE','VINCULADO')
-                       AND sc.created_at >= datetime('now', '-' || ? || ' days')), 0) AS a_caminho
+                       AND sc.created_at >= datetime('now', '-' || ? || ' days')), 0) AS a_caminho,
+           -- Revisao final E11 (achado 5): o espelho do a_caminho, para FORA do horizonte —
+           -- expoe a solicitacao velha que deixou de segurar a posicao (RN-03) mas continua
+           -- aberta de verdade, para a tela avisar "ha solicitacao antiga aberta" em vez de
+           -- fingir que ela nunca existiu. O fix definitivo (status terminal no recebimento)
+           -- e a letra E; isto e a mitigacao honesta ate la.
+           COALESCE((SELECT SUM(sc.quantidade) FROM solicitacoes_compra_almoxarifado sc
+                     WHERE sc.material_id = m.id AND sc.status IN ('PENDENTE','VINCULADO')
+                       AND sc.created_at < datetime('now', '-' || ? || ' days')), 0) AS a_caminho_vencido
     FROM materiais_almoxarifado m
     LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL`,
-    [...TIPOS_SAIDA, janela, horizonte]);
+    [...TIPOS_SAIDA, janela, horizonte, horizonte]);
 
+  // RN-06 (revisao final E11, medido): o resumo tem de contar TODOS os criticos zerados,
+  // sugeridos ou nao — clicar em "Gerar" faz a solicitacao entrar em a_caminho e o item some
+  // da LISTA (posicao passa a cobrir o ponto), mas o material continua FISICAMENTE parado
+  // (disponivel ainda <= 0: uma solicitacao a caminho nao segura producao, a mesma razao de
+  // RN-06 para o flag por item). Contar so `itens` zerava o numero enquanto a fabrica
+  // continuava parada. O flag por ITEM (abaixo) continua so nos sugeridos — so eles tem
+  // objeto no payload.
+  let riscosParadaTotal = 0;
   const itens = [];
   for (const r of rows) {
+    if (r.material_critico && r.disponivel <= 0) riscosParadaTotal += 1;
+
     const consumoDiario = r.consumo_janela / janela;
     // RN-02 (emendada pela revisao da Task 1, Critical): a MINIMA e o CHAO de todas as
     // reguas — se o alerta de minimo grita, a sugestao TEM de existir. Sem o chao, preencher
@@ -91,19 +109,23 @@ async function calcularSugestoes(db) {
     const alvo = Math.max(r.quantidade_maxima || 0, pontoEfetivo);   // RN-04
     let sugerida = alvo - posicao;
     if (r.lote_economico > 0) sugerida = Math.max(sugerida, r.lote_economico);
-    // CORRECAO (revisao da Task 2): o comentario anterior dizia que o guard "<= 0" era codigo
-    // morto — era verdade ANTES do toFixed e FALSO depois: residuo de float abaixo de 5e-5
-    // (minima 2.14 contra pendencias 1.0 + 1.14 = 2.1399999999999997) arredondava a sugestao
-    // para 0, o material continuava "sugerido" para sempre e cada POST gravava mais uma
-    // solicitacao de quantidade ZERO que nunca somava em a_caminho — lixo infinito no
-    // relatorio. Arredonda UMA vez e descarta o fantasma.
+    // CORRECAO (revisao da Task 2, emendada na revisao final E11): o comentario original dizia
+    // que o guard "<= 0" era codigo morto — era verdade ANTES do toFixed e FALSO depois:
+    // residuo de float (minima 2.14 contra pendencias 1.0 + 1.14 = 2.1399999999999997)
+    // arredondava a sugestao para 0, o material continuava "sugerido" para sempre e cada POST
+    // gravava mais uma solicitacao de quantidade ZERO — lixo infinito no relatorio.
+    // O guard "<=0" sozinho nao bastava: um residuo um fio MAIOR (minima 2.14 contra pendencia
+    // 2.1399, sem o 999...) arredonda para 0.0001 — positivo, passa pelo "<=0" e ainda grava a
+    // solicitacao fantasma (achado 6, medido). Piso ABSOLUTO 0.001, nao relativo: um piso
+    // relativo (ex.: % do ponto) esconderia falta real de material com ponto gigante.
     const quantidadeSugerida = Number(sugerida.toFixed(4));
-    if (quantidadeSugerida <= 0) continue;
+    if (quantidadeSugerida < 0.001) continue;
 
     itens.push({
       material_id: r.material_id, codigo: r.codigo, nome: r.nome, unidade: r.unidade,
       fornecedor_id: r.fornecedor_id, fornecedor_nome: r.fornecedor_nome,
       disponivel: Number(r.disponivel.toFixed(4)), a_caminho: Number(r.a_caminho.toFixed(4)),
+      a_caminho_vencido: Number(r.a_caminho_vencido.toFixed(4)),
       posicao: Number(posicao.toFixed(4)),
       consumo_medio_diario: Number(consumoDiario.toFixed(4)),
       prazo_reposicao_dias: r.prazo_reposicao_dias || 0,
@@ -150,7 +172,7 @@ async function calcularSugestoes(db) {
     resumo: {
       materiais_sugeridos: itens.length,
       valor_total: Number(itens.reduce((s, i) => s + i.valor_estimado, 0).toFixed(2)),
-      riscos_parada: itens.filter((i) => i.risco_parada).length,
+      riscos_parada: riscosParadaTotal,
     },
   };
 }
@@ -210,7 +232,17 @@ async function estoqueParado(db, tipo) {
     [...TIPOS_SAIDA, ...TIPOS_ENTRADA]);
 
   const limite = Date.now() - dias * 24 * 60 * 60 * 1000;
-  const antigaOuNunca = (d) => d == null || new Date(`${String(d).replace(' ', 'T')}Z`).getTime() < limite;
+  // Revisao final E11 (achado 7): armadilha latente — created_at do SQLite vem sem "T"
+  // ("YYYY-MM-DD HH:MM:SS") e precisava do "Z" concatenado para virar ISO valido; mas se
+  // algum dia uma linha chegar aqui ja em ISO (com "T"), concatenar "Z" de novo vira "...ZZ",
+  // Date invalido, e o material cai em silencio no ramo "recente" (nunca aparece como
+  // parado/obsoleto quando deveria). So concatena "Z" quando a string NAO tem "T".
+  const antigaOuNunca = (d) => {
+    if (d == null) return true;
+    const s = String(d);
+    const iso = s.includes('T') ? s : `${s.replace(' ', 'T')}Z`;
+    return new Date(iso).getTime() < limite;
+  };
 
   const todos = rows.map((r) => {
     const sem_consumo = antigaOuNunca(r.ultima_saida);

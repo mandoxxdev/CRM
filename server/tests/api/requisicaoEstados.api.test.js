@@ -228,6 +228,25 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
     assert.strictEqual(row.status, 'AGUARDANDO_COMPRA');
   });
 
+  // ── revisao final E11 (achado 3): solicitacao PENDENTE fora do horizonte nao pode segurar
+  // a requisicao em AGUARDANDO_COMPRA para sempre — mesma regua que RN-03 usa para tirar a
+  // solicitacao velha de a_caminho na tela de reposicao (nada no sistema fecha uma
+  // solicitacao). ──
+  await test('[aprovar] item sem disponível, com solicitação de compra PENDENTE mas VELHA (fora do horizonte) -> AGUARDANDO_ESTOQUE', async () => {
+    const matId = await criarMaterial('MATEST-05B', 0);
+    await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, status, created_at)
+      VALUES (?, 10, 'PENDENTE', datetime('now', '-400 days'))`, [matId]); // horizonte default 60
+    const { id: reqId } = await criarRequisicao(db, { status: 'PENDENTE', itens: [{ material_id: matId, quantidade: 5 }], solicitanteId: 77 });
+
+    const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/aprovar`).send({});
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.status, 'AGUARDANDO_ESTOQUE',
+      'solicitacao de compra de 400 dias atras nao pode travar a requisicao em AGUARDANDO_COMPRA para sempre');
+
+    const row = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
+    assert.strictEqual(row.status, 'AGUARDANDO_ESTOQUE');
+  });
+
   // ── aprovar com estoque disponível -> NÃO cai em AGUARDANDO_* (regressão da Task 2) ──
   // Etapa 4 mudou o status de destino: havendo saldo, a aprovação reserva e a requisição vai
   // para TOTALMENTE_RESERVADA (design da Etapa 4, decisão 2 — os status de reserva substituem

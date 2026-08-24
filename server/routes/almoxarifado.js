@@ -1876,6 +1876,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (desconhecidas.length) {
         return res.status(400).json({ error: `Configuração desconhecida: ${desconhecidas.join(', ')}` });
       }
+      // Revisao final da Etapa 11 (achado 4, medido): as chaves `reposicao_*` sao dias — o
+      // motor (purchaseService.lerConfigNumero) so aceita numero finito > 0 e cai no default
+      // em silencio para qualquer outra coisa. Sem validacao aqui, '0'/''/'-7' gravavam com
+      // HTTP 200 e "Configuracoes salvas!" enquanto o motor ignorava o valor e usava o
+      // default — o administrador achava que tinha mudado a janela e nada mudou. Only as
+      // chaves `reposicao_*`: as demais configs do modulo tem semanticas proprias (booleana
+      // '0'/'1', texto livre, etc.) que esta regra nao serve.
+      for (const [chave, valor] of entradas) {
+        if (chave.startsWith('reposicao_')) {
+          const n = Number(valor);
+          if (!Number.isInteger(n) || n < 1) {
+            return res.status(400).json({ error: `Configuração "${chave}" deve ser um número de dias maior que zero` });
+          }
+        }
+      }
       for (const [chave, valor] of entradas) {
         await dbRun(db, `UPDATE configuracoes_almoxarifado
                          SET valor = ?, updated_at = CURRENT_TIMESTAMP, updated_by = ?

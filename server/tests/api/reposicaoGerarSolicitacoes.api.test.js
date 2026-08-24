@@ -244,6 +244,67 @@ async function somarSolicitacoes(db, materialId) {
     assert.ok(!linhas.some((l) => Number(l.quantidade) === 0), JSON.stringify(linhas));
   });
 
+  await test('[relatorio solicitacoes-compra] gate: sem a acao 403, COMPRAS/ALMOXARIFE conforme D9 (revisao final E11, achado 1)', async () => {
+    // A Task 2 alargou este relatorio para PENDENTE+VINCULADO — o pipeline de compra inteiro
+    // ficava visivel numa rota sem gate. Mesmo remedio da 10b (inventario-divergencias).
+    setUser(PRODUCAO);
+    let res = await request(app).get('/api/almoxarifado/relatorios/solicitacoes-compra');
+    assert.strictEqual(res.status, 403, JSON.stringify(res.body));
+    assert.strictEqual(res.body.acao, 'gerenciar_reposicao', JSON.stringify(res.body));
+
+    setUser(ALMOXARIFE);
+    res = await request(app).get('/api/almoxarifado/relatorios/solicitacoes-compra');
+    assert.strictEqual(res.status, 403, JSON.stringify(res.body)); // fora de proposito, D9
+
+    setUser(COMPRAS);
+    res = await request(app).get('/api/almoxarifado/relatorios/solicitacoes-compra');
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+
+    setUser(ADMIN);
+  });
+
+  await test('RN-06 (revisao final E11, achado 2): riscos_parada conta TODOS os criticos zerados, sugeridos ou nao', async () => {
+    const mat = await novoMaterial(db, { minima: 5, qtd: 0 });
+    await dbRun(db, `UPDATE materiais_almoxarifado SET material_critico = 1 WHERE id = ?`, [mat.id]);
+
+    const antes = await sugestoes(app);
+    const resumoAntes = antes.body.resumo.riscos_parada;
+    const itemAntes = itemDe(antes, mat.id);
+    assert.ok(itemAntes, 'deveria estar sugerido antes de gerar');
+    assert.strictEqual(itemAntes.risco_parada, true, JSON.stringify(itemAntes));
+
+    // Gerar a solicitacao: a_caminho passa a cobrir o ponto e o item SOME da lista de
+    // sugestoes — mas o material continua FISICAMENTE parado (disponivel ainda 0, solicitacao
+    // a caminho nao segura producao, mesma razao do RN-06 do flag por item). Clicar em "Gerar"
+    // nao pode zerar o risco.
+    const resGerar = await gerar(app, { material_ids: [mat.id] });
+    assert.strictEqual(resGerar.status, 200, JSON.stringify(resGerar.body));
+
+    const depois = await sugestoes(app);
+    assert.strictEqual(itemDe(depois, mat.id), undefined, 'material deveria ter sumido da LISTA de sugestoes');
+    assert.strictEqual(depois.body.resumo.riscos_parada, resumoAntes,
+      'clicar em Gerar zerou o risco de parada enquanto a fabrica continua parada: ' + JSON.stringify(depois.body.resumo));
+  });
+
+  await test('piso absoluto (revisao final E11, achado 6): residuo simbolico 0.0001 tambem e fantasma', async () => {
+    // O guard antigo "<=0" so pegava residuo que arredondava para 0 EXATO. Uma pendencia um
+    // fio abaixo da minima (2.14 vs 2.1399, sem o 999... do teste anterior) arredonda para
+    // 0.0001 — POSITIVO, passava pelo "<=0" e ainda gravava a solicitacao fantasma. Piso
+    // ABSOLUTO (0.001), nao relativo: um piso relativo (% do ponto) esconderia falta real em
+    // material de ponto gigante.
+    const mat = await novoMaterial(db, { minima: 2.14, qtd: 0 });
+    await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, status) VALUES (?, 2.1399, 'PENDENTE')`, [mat.id]);
+
+    const resSug = await request(app).get('/api/almoxarifado/reposicao/sugestoes');
+    const temFantasma = resSug.body.fornecedores.some((g) => g.itens.some((i) => i.material_id === mat.id));
+    assert.strictEqual(temFantasma, false, 'sugestao de quantidade 0.0001 nao pode existir');
+
+    const resGerar = await gerar(app, {});
+    assert.ok(!resGerar.body.criadas.some((c) => c.material_id === mat.id), JSON.stringify(resGerar.body));
+    const linhas = await dbAll(db, `SELECT quantidade FROM solicitacoes_compra_almoxarifado WHERE material_id = ?`, [mat.id]);
+    assert.strictEqual(linhas.length, 1, 'nenhuma linha nova pode ter sido criada');
+  });
+
   await test('ids repetidos no body NAO multiplicam a quantidade', async () => {
     // Important 2 da revisao (medido): POST [id,id,id] criava 3 solicitacoes de 20 = 60
     // unidades pedidas onde o material precisava de 20.

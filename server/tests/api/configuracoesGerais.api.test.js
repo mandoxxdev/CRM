@@ -160,6 +160,46 @@ function fontesDoServidor() {
     assert.strictEqual(row.valor, '0', 'aplicou parte do corpo antes de rejeitar o resto');
   });
 
+  // ── Revisao final da Etapa 11 (achado 4, medido): as chaves reposicao_* sao dias — o motor
+  // (purchaseService.lerConfigNumero) cai no default em silencio para qualquer valor que nao
+  // seja numero finito > 0. Sem validacao na rota, '0'/''/'-7' salvavam com 200 e o
+  // administrador achava que tinha mudado a janela sem nada mudar. ──
+
+  await test('PUT reposicao_janela_consumo_dias "0" e recusado (400 literal), nao grava', async () => {
+    const antes = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'reposicao_janela_consumo_dias'");
+    const res = await request(app).put('/api/almoxarifado/configuracoes')
+      .send({ reposicao_janela_consumo_dias: '0' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Configuração "reposicao_janela_consumo_dias" deve ser um número de dias maior que zero');
+    const depois = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'reposicao_janela_consumo_dias'");
+    assert.strictEqual(depois.valor, antes.valor, 'valor rejeitado nao pode ter sido gravado');
+  });
+
+  await test('PUT reposicao_dias_sem_consumo "" e "-7" tambem sao recusados (400 literal)', async () => {
+    let res = await request(app).put('/api/almoxarifado/configuracoes').send({ reposicao_dias_sem_consumo: '' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Configuração "reposicao_dias_sem_consumo" deve ser um número de dias maior que zero');
+
+    res = await request(app).put('/api/almoxarifado/configuracoes').send({ reposicao_dias_sem_consumo: '-7' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Configuração "reposicao_dias_sem_consumo" deve ser um número de dias maior que zero');
+  });
+
+  await test('PUT reposicao_janela_consumo_dias "30" persiste E o motor de sugestao reflete de verdade (round-trip)', async () => {
+    const put = await request(app).put('/api/almoxarifado/configuracoes')
+      .send({ reposicao_janela_consumo_dias: '30' });
+    assert.strictEqual(put.status, 200, JSON.stringify(put.body));
+
+    const sug = await request(app).get('/api/almoxarifado/reposicao/sugestoes');
+    assert.strictEqual(sug.status, 200, JSON.stringify(sug.body));
+    assert.strictEqual(sug.body.janela_dias, 30, JSON.stringify(sug.body.janela_dias));
+
+    // devolve o default para nao vazar estado para as outras suites de reposicao
+    const volta = await request(app).put('/api/almoxarifado/configuracoes')
+      .send({ reposicao_janela_consumo_dias: '90' });
+    assert.strictEqual(volta.status, 200, JSON.stringify(volta.body));
+  });
+
   // ── A opção, ligada, tem de FAZER o que promete ──
 
   const material = async (qtd) => {

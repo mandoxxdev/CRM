@@ -10,6 +10,22 @@ const { dbGet, dbAll } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
 
 /**
+ * Le a config `reposicao_horizonte_solicitacao_dias` (default 60) — mesmo padrao inline usado
+ * por cada servico do modulo (alertService.getConfigValue, stockService, purchaseService
+ * .lerConfigNumero): sem helper compartilhado, cada um le a propria chave.
+ * Etapa 11, revisao final (achado 3): calcularStatusPosAprovacao contava solicitacao PENDENTE
+ * sem corte de data — uma solicitacao de 400 dias atras, que a propria tela de reposicao ja
+ * nao considera "a caminho" (RN-03 usa o mesmo horizonte), continuava travando requisicoes
+ * novas em AGUARDANDO_COMPRA para sempre (o status nunca se autocorrige). Duas leituras da
+ * mesma tabela nao podem usar reguas diferentes de "aberta".
+ */
+async function lerHorizonteSolicitacaoDias(db) {
+  const row = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'reposicao_horizonte_solicitacao_dias'");
+  const n = parseFloat(row?.valor);
+  return Number.isFinite(n) && n > 0 ? n : 60;
+}
+
+/**
  * Etapa 4: os dois status de reserva. Nomeados aqui porque a máquina de estados é a dona da
  * lista de status — quem os grava (requisitionService.reservarItensAprovacao) importa daqui em
  * vez de repetir a string.
@@ -90,6 +106,13 @@ function validarTransicao(statusAtual, novoStatus) {
  * único UPDATE (status + aprovador_id + data_aprovacao), evitando uma janela transitória
  * com status=APROVADO visível a leitores concorrentes entre dois writes.
  *
+ * Etapa 11 (revisão final, achado 3): a contagem de `PENDENTE` respeita o MESMO horizonte
+ * (`reposicao_horizonte_solicitacao_dias`) que `purchaseService.calcularSugestoes` usa para
+ * decidir se uma solicitação ainda está "a caminho" (RN-03) — nada no sistema fecha uma
+ * solicitação (só criação e vínculo escrevem status), então sem o corte de data uma
+ * solicitação antiga que a própria tela de reposição já ignora continuaria empurrando
+ * requisições novas para AGUARDANDO_COMPRA indefinidamente.
+ *
  * @returns {Promise<'APROVADO'|'AGUARDANDO_ESTOQUE'|'AGUARDANDO_COMPRA'>}
  */
 async function calcularStatusPosAprovacao(db, requisicaoId) {
@@ -106,10 +129,12 @@ async function calcularStatusPosAprovacao(db, requisicaoId) {
 
   const materialIds = [...new Set(itens.map((i) => i.material_id))];
   const placeholders = materialIds.map(() => '?').join(',');
+  const horizonte = await lerHorizonteSolicitacaoDias(db);
   const compraPendente = await dbGet(db,
     `SELECT COUNT(*) as n FROM solicitacoes_compra_almoxarifado
-     WHERE status = 'PENDENTE' AND material_id IN (${placeholders})`,
-    materialIds);
+     WHERE status = 'PENDENTE' AND material_id IN (${placeholders})
+       AND created_at >= datetime('now', '-' || ? || ' days')`,
+    [...materialIds, horizonte]);
 
   return (compraPendente && compraPendente.n > 0) ? 'AGUARDANDO_COMPRA' : 'AGUARDANDO_ESTOQUE';
 }

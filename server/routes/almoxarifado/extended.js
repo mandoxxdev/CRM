@@ -1214,6 +1214,14 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (req.params.tipo === 'inventario-divergencias' && !can(req.user, 'inventario')) {
         return res.status(403).json({ error: 'Sem permissão para este relatório', acao: 'inventario' });
       }
+      // Revisao final da Etapa 11 (achado 1, medido pelos dois revisores): a Task 2 alargou
+      // este relatorio para trazer PENDENTE + VINCULADO — ele passou a expor o pipeline
+      // inteiro de compra (a caminho incluido) numa rota sem gate nenhum, visivel a qualquer
+      // usuario do modulo (chao de fabrica incluido). Mesmo remedio da 10b tres linhas acima:
+      // a acao que decide compra (`gerenciar_reposicao`) e quem pode ver o relatorio dela.
+      if (req.params.tipo === 'solicitacoes-compra' && !can(req.user, 'gerenciar_reposicao')) {
+        return res.status(403).json({ error: 'Sem permissão para este relatório', acao: 'gerenciar_reposicao' });
+      }
       res.json(await fn(db, req.query));
     } catch (e) { handleError(res, e); }
   });

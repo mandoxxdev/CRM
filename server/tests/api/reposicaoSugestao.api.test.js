@@ -196,6 +196,19 @@ function itemDe(res, materialId) {
     assert.ok(item, 'solicitacao com 90 dias nao deveria mais segurar a posicao (horizonte 60)');
   });
 
+  await test('a_caminho_vencido: soma PENDENTE/VINCULADO FORA do horizonte (revisao final E11, achado 5)', async () => {
+    const mat = await novoMaterial(db, { minima: 5, qtd: 0 });
+    await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, status, created_at)
+        VALUES (?, 8, 'PENDENTE', datetime('now', '-90 days'))`, [mat.id]); // horizonte default 60
+
+    const res = await sugestoes(app);
+    const item = itemDe(res, mat.id);
+    assert.ok(item, 'solicitacao fora do horizonte nao deveria segurar a posicao');
+    assert.strictEqual(item.a_caminho, 0, JSON.stringify(item));
+    assert.strictEqual(item.a_caminho_vencido, 8,
+      'a tela precisa saber que ha solicitacao antiga aberta mesmo sem ela segurar a posicao: ' + JSON.stringify(item));
+  });
+
   await test('RN-03: reserva NAO e descontada duas vezes', async () => {
     const mat = await novoMaterial(db, { qtd: 10, minima: 8 });
     await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = 4 WHERE id = ?`, [mat.id]);

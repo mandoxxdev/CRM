@@ -94,6 +94,22 @@ nunca mais apareceria na sugestão — sub-compra silenciosa. Com ele, uma solic
 simplesmente deixa de contar. **Vai para a letra E**: a régua certa é "fechar no recebimento",
 que depende do módulo Compras ganhar o elo; o horizonte é a aproximação honesta até lá.
 
+Cada item traz também `a_caminho_vencido` — o espelho do `a_caminho`, para as solicitações
+`PENDENTE`/`VINCULADO` **fora** do horizonte (achado 5 da revisão final): não seguram mais a
+posição, mas continuam abertas de verdade, e a tela usa o campo para avisar "há solicitação
+antiga aberta" em vez de fingir que ela nunca existiu.
+
+**Nota da revisão final (achado 3): o MESMO horizonte vale para a máquina de estados de
+requisição.** `requisitionStateMachine.calcularStatusPosAprovacao` também lê
+`solicitacoes_compra_almoxarifado` para decidir `AGUARDANDO_COMPRA` vs `AGUARDANDO_ESTOQUE`
+numa requisição aprovada sem saldo (ver "Interações verificadas" abaixo) — e usava `PENDENTE`
+**sem corte de data**. Duas leituras da mesma tabela com réguas diferentes de "aberta" é o
+tipo de inconsistência que este design existe para evitar: uma solicitação de 400 dias atrás,
+que a própria tela de reposição já não considera "a caminho", continuava travando requisições
+novas em `AGUARDANDO_COMPRA` — status que nunca se autocorrige. A contagem em
+`calcularStatusPosAprovacao` agora aplica `AND created_at >= datetime('now', '-' || ? ||
+' days')` com o mesmo `reposicao_horizonte_solicitacao_dias`.
+
 Sugere-se quando `ponto_efetivo > 0` **e** `posicao < ponto_efetivo`.
 
 ### RN-04 — Quantidade sugerida: completar até o alvo, nunca menos que o lote econômico
@@ -101,9 +117,21 @@ Sugere-se quando `ponto_efetivo > 0` **e** `posicao < ponto_efetivo`.
 `alvo = max(quantidade_maxima, ponto_efetivo)` (o `max` protege contra máxima cadastrada menor
 que o ponto — dado ruim não pode gerar sugestão que já nasce abaixo do ponto).
 `quantidade_sugerida = max(alvo − posicao, lote_economico)` quando `lote_economico > 0`, senão
-`alvo − posicao` — que é sempre positiva quando o material é sugerido (`posicao < ponto ≤
-alvo`; a Fase 2 apontou que "sugestão ≤ 0 não sai" era regra intestável e ela foi removida —
-a condição de entrada já a garante).
+`alvo − posicao`.
+
+**Correção da revisão final (Etapa 11, achado 6 — a frase abaixo estava ERRADA): a Fase 2
+dizia que "sugestão ≤ 0 não sai" era regra intestável e que a condição de entrada
+(`posicao < ponto_efetivo`) já garantia `alvo − posicao` positiva, dispensando o guard.**
+Matematicamente é verdade — mas só em aritmética exata. Em ponto flutuante não é: residual de
+soma (`2.14` contra pendências `1.0 + 1.14 = 2.1399999999999997`) faz `alvo − posicao` sair
+negativo por um fio, e o `toFixed(4)` de exibição pode devolver tanto `0.0000` quanto um
+resíduo simbólico positivo como `0.0001` (medido: minima `2.14` contra pendência `2.1399`) —
+os dois são fantasmas, não quantidade real a comprar. O guard **foi restaurado** pela revisão
+da Task 2 (contra o resíduo que já arredondava pra zero) e **endurecido** na revisão final
+E11 para um **piso absoluto** `quantidade_sugerida < 0.001` (não relativo — um piso em % do
+ponto esconderia falta real num material de ponto grande). Sem ele, cada `POST` gravava mais
+uma solicitação de quantidade ~0 que nunca somava em `a_caminho`: lixo infinito no relatório
+de solicitações.
 
 `valor_estimado = quantidade_sugerida × custo unitário` pela fonte única (`custoUnitarioSql()`).
 
@@ -120,6 +148,17 @@ do CRM); materiais sem fornecedor entram no grupo `"Sem fornecedor definido"`. C
 **disponível** (sem contar o a-caminho — solicitação não segura produção) é **≤ 0**. É flag no
 payload e contagem no resumo — **notificação por e-mail/WhatsApp é feature 19/20** (corte
 declarado; o `alertService` continua dono do canal do mínimo).
+
+**Nota da revisão final (achado 2, medido):** `resumo.riscos_parada` conta **TODOS** os
+materiais críticos zerados existentes no catálogo (`material_critico = 1` e `disponivel <= 0`),
+**sugeridos ou não** — não é `itens.filter(risco_parada).length`. A diferença importa: gerar a
+solicitação de um material crítico zerado faz a pendência entrar em `a_caminho` (RN-03), a
+`posicao` passar a cobrir o `ponto_efetivo`, e o item **sumir da lista** de sugestões — mas o
+material continua fisicamente parado (`disponivel` não mudou; solicitação a caminho não move
+uma unidade da prateleira). Contar só sobre `itens` fazia o clique em "Gerar solicitações"
+**zerar o contador de risco enquanto a fábrica seguia parada** — o resumo mentia exatamente no
+momento em que o usuário mais confiava nele. O flag `risco_parada` **por item** continua igual
+(só existe nos itens sugeridos, porque só eles têm objeto no payload).
 
 ### RN-07 — Estoque parado: excesso, sem consumo, obsoleto
 
@@ -190,7 +229,7 @@ não fazendo — legado intocado, D10).
       "itens": [
         {
           "material_id": 10, "codigo": "ALM-0010", "nome": "Chapa 3mm", "unidade": "PC",
-          "disponivel": 4, "a_caminho": 0, "posicao": 4,
+          "disponivel": 4, "a_caminho": 0, "a_caminho_vencido": 0, "posicao": 4,
           "consumo_medio_diario": 0.5, "prazo_reposicao_dias": 10,
           "ponto_efetivo": 5, "origem_ponto": "CALCULADO",
           "quantidade_sugerida": 16, "valor_estimado": 800,
@@ -202,8 +241,16 @@ não fazendo — legado intocado, D10).
   "resumo": { "materiais_sugeridos": 2, "valor_total": 1234.5, "riscos_parada": 1 }
 }
 ```
+- `a_caminho_vencido` (adicionado na revisão final, achado 5): soma de `PENDENTE`/`VINCULADO`
+  do material **fora** do horizonte — solicitações que deixaram de segurar a `posicao` mas
+  continuam abertas de verdade. Ver a nota em RN-03.
 - Materiais sem fornecedor: grupo com `fornecedor_id: null`, `fornecedor_nome: "Sem fornecedor
   definido"`, **sempre por último** na lista; grupos com fornecedor em ordem alfabética.
+- Fornecedor **órfão** (`fornecedor_id` gravado mas sem linha correspondente em `fornecedores`
+  — a coluna é `INTEGER` solto, sem FK): grupo com `fornecedor_nome: "Fornecedor #<id> (não
+  cadastrado)"` em vez de cabeçalho vazio (o `LEFT JOIN` devolve nome `null`, e `String(null)`
+  ordenaria como a palavra "null"); o rótulo aponta o dado a consertar em vez de escondê-lo
+  (revisão da Task 1, coberto por teste em `reposicaoSugestao.api.test.js`).
 - **403**: mensagem padrão do `requirePermission` (`acao: "gerenciar_reposicao"`).
 
 ### `POST /api/almoxarifado/reposicao/gerar-solicitacoes` (novo, mesmo gate)
@@ -241,6 +288,15 @@ não fazendo — legado intocado, D10).
 banco não basta — a tela renderiza uma lista fixa de campos, e chave fora dela é ineditável
 pela UI; a mesma lição da Etapa 10 um nível acima).
 
+**Validação no `PUT /api/almoxarifado/configuracoes` (revisão final, achado 4, medido):**
+qualquer chave que comece com `reposicao_` precisa valer um inteiro `>= 1`, senão 400 literal
+`Configuração "<chave>" deve ser um número de dias maior que zero`. Sem essa validação,
+`'0'`/`''`/`'-7'` eram aceitos com `200`/"sucesso", gravados como string, e o motor
+(`purchaseService.lerConfigNumero`) caía silenciosamente no default para qualquer valor não
+finito/`<= 0` — o administrador achava que tinha mudado a janela e nada mudava. A regra vale
+só para as chaves `reposicao_*`; as demais configs do módulo têm semânticas próprias (booleana
+`'0'`/`'1'`, texto livre) que essa validação não serve.
+
 ### Front — tela nova `/almoxarifado/reposicao` (`ReposicaoAlmoxarifado.js`)
 
 - Rota lazy + item de menu (padrão `lazyModules.js`/`Layout.js`).
@@ -255,7 +311,12 @@ pela UI; a mesma lição da Etapa 10 um nível acima).
   **Correção da Fase 2:** o relatório real era `WHERE status = 'PENDENTE'` — a VINCULADA (que
   é justamente a que esconde o material da sugestão) ficava invisível na tela inteira; o
   relatório passa a trazer `PENDENTE` e `VINCULADO` (mudança no tronco, Task 2). Sem ação nova
-  além de visualizar.
+  além de visualizar. **Correção da revisão final (achado 1, medido pelos dois revisores):**
+  esse alargamento (PENDENTE+VINCULADO = o pipeline de compra inteiro) foi feito numa rota de
+  relatório **sem gate nenhum** — qualquer usuário do módulo, chão de fábrica incluído, passou
+  a enxergar solicitações de compra em aberto. O dispatcher de relatórios ganhou o mesmo gate
+  das rotas novas: `!can(req.user, 'gerenciar_reposicao')` → 403 (mesmo remédio já usado para
+  `inventario-divergencias` na revisão final da 10b).
 - Todos os valores em R$ com `toLocaleString('pt-BR', { style: 'currency' })`; nulos → `—`.
 
 ## Decisões
@@ -303,9 +364,27 @@ pela UI; a mesma lição da Etapa 10 um nível acima).
 
 - **`disponivelSql`/`custoUnitarioSql`/`TIPOS_SAIDA`**: consumidos, nunca reescritos — zero
   fórmula nova de disponível/custo/tipos.
-- **`verificarEstoqueMinimo` legado**: continua existindo e NÃO deduplica contra as sugestões
-  novas além da regra comum (material com PENDENTE não duplica em nenhum dos dois caminhos —
-  a mesma checagem protege ambos).
+- **`verificarEstoqueMinimo` legado**: continua existindo, intocado.
+  **Correção da revisão final (achado 8a — a frase anterior aqui estava ERRADA nos DOIS
+  sentidos):** a versão original afirmava que "material com PENDENTE não duplica em nenhum dos
+  dois caminhos — a mesma checagem protege ambos". Não protege. As réguas são diferentes e
+  cada uma tem um buraco medido (390 pedidos onde 195 bastavam num cenário controlado):
+  - **novo → vinculado → legado duplica:** o caminho novo (`gerarSolicitacoesDaSugestao`) não
+    tem dedupe — a matemática da posição faz esse papel (RN-09). Quando essa solicitação é
+    **vinculada** a um pedido real (`VINCULADO`), o dedupe do legado (`verificarEstoqueMinimo`)
+    só enxerga `PENDENTE` — ele não vê a `VINCULADA` e abre uma solicitação **nova** para o
+    mesmo material, que o motor de sugestão volta a contar em `a_caminho` normalmente (RN-03
+    soma `PENDENTE` **e** `VINCULADO`), mas o legado nunca soube que já havia uma pendência.
+  - **legado → envelhece → novo duplica:** uma solicitação aberta pelo legado (`PENDENTE`,
+    dedupe por `PENDENTE`) segura a posição enquanto está dentro do horizonte (RN-03). Depois
+    do horizonte, ela some de `a_caminho` — o material reaparece na sugestão nova, que gera
+    outra solicitação para o mesmo material sem saber que a antiga (ainda `PENDENTE` no banco,
+    só velha) continua em aberto.
+  - **Mitigação real:** `a_caminho_vencido` (achado 5, RN-03) expõe a solicitação velha na
+    tela em vez de escondê-la — reduz a chance de duplicar por desconhecimento, mas não
+    elimina a corrida (ver G5, abaixo). A régua definitiva é status terminal no recebimento
+    (letra E) — enquanto ele não existe, os dois caminhos podem sempre divergir sobre "o que já
+    está pedido".
 - **Material de cliente**: fora de sugestões, estoque parado e geração (mesma classe A da
   auditoria da Etapa 8).
 - **G5 (duas passadas)**: o POST recalcula as sugestões na hora de gerar (uma passada só que
@@ -318,7 +397,12 @@ pela UI; a mesma lição da Etapa 10 um nível acima).
   decidir `AGUARDANDO_COMPRA` vs `AGUARDANDO_ESTOQUE` numa requisição aprovada sem saldo — o
   POST novo passa a influenciar esse status (uma requisição aprovada depois de gerar a
   sugestão verá "aguardando compra"). É o comportamento **desejável** (a compra está mesmo em
-  andamento) e fica declarado aqui em vez de descoberto por surpresa.
+  andamento) e fica declarado aqui em vez de descoberto por surpresa. **Correção da revisão
+  final (achado 3):** essa contagem não tinha corte de data — uma solicitação `PENDENTE` de
+  400 dias atrás, que a própria RN-03 já não considera "a caminho", continuava empurrando
+  requisições novas para `AGUARDANDO_COMPRA` (status sem escritor de saída, não se
+  autocorrige). Passou a aplicar o mesmo `reposicao_horizonte_solicitacao_dias` — ver a nota
+  em RN-03.
 - **Já existe um terceiro caminho de compra com canal:** `requisitionPurchaseNotifyService`
   e-maila o setor de Compras quando itens de requisição não têm estoque (config
   `compras_notificar_emails`). Não conflita em código com esta etapa (fluxos distintos), mas a
@@ -333,11 +417,22 @@ pela UI; a mesma lição da Etapa 10 um nível acima).
 - `reposicaoSugestao.api.test.js` — RN-01 (consumo pela janela, cancelada fora, cliente fora),
   RN-02 (as três origens do ponto + material sem régua nunca sugerido), RN-03 (posição soma
   a_caminho; solicitação aberta faz o material sumir da sugestão; disponível vem líquido de
-  reserva SEM descontar de novo — cenário com reserva ativa), RN-04 (alvo máx(máxima, ponto),
-  lote econômico como piso), RN-05 (agrupamento e ordem), RN-06 (flag risco), RN-08 (403 sem a
+  reserva SEM descontar de novo — cenário com reserva ativa; `a_caminho_vencido` soma o que
+  está fora do horizonte, achado 5 da revisão final), RN-04 (alvo máx(máxima, ponto), lote
+  econômico como piso), RN-05 (agrupamento e ordem), RN-06 (flag risco), RN-08 (403 sem a
   ação + 200 COMPRAS — o par positivo+negativo, lição da 10b).
-- `reposicaoGerarSolicitacoes.api.test.js` — RN-09 (cria com quantidade DO SERVIDOR, dedupe
-  JA_PENDENTE, SEM_SUGESTAO, body inválido 400 literal, auditoria gravada, seleção parcial).
+- `requisicaoEstados.api.test.js` — cobre também `calcularStatusPosAprovacao` com o horizonte
+  (achado 3 da revisão final): solicitação `PENDENTE` recente → `AGUARDANDO_COMPRA`, a mesma
+  mas backdated 400 dias → `AGUARDANDO_ESTOQUE`.
+- `configuracoesGerais.api.test.js` — cobre a validação das chaves `reposicao_*` no `PUT
+  /configuracoes` (achado 4 da revisão final): `'0'`/`''`/`'-7'` → 400 literal; `'30'` → 200 e
+  round-trip conferido em `GET /reposicao/sugestoes` (`janela_dias` reflete o valor salvo).
+- `reposicaoGerarSolicitacoes.api.test.js` — RN-09 (cria com quantidade DO SERVIDOR,
+  **`pulada: SEM_SUGESTAO`** — não há dedupe `JA_PENDENTE` no caminho novo, a lista da Fase 2
+  acima estava desatualizada com a própria reescrita de RN-09 dela mesma — body inválido 400
+  literal, auditoria gravada, seleção parcial); mais os achados da revisão final: gate do
+  relatório `solicitacoes-compra` (achado 1), `riscos_parada` sobre todos os críticos zerados
+  mesmo após gerar (achado 2), piso absoluto do resíduo simbólico (achado 6).
 - `reposicaoEstoqueParado.api.test.js` — RN-07 (cada flag isolada + combinação obsoleto,
   filtro por tipo, tipo inválido 400 literal, cliente fora, valor parado).
 - Task de integração cruzando os galhos (jornada: consumir no livro → sugestão aparece →
