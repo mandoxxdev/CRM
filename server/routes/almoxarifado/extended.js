@@ -4,6 +4,7 @@
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const XLSX = require('xlsx');
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
@@ -30,6 +31,9 @@ const purchaseService = require('../../services/almoxarifado/purchaseService');
 const clienteEstoqueService = require('../../services/almoxarifado/clienteEstoqueService');
 const thirdPartyService = require('../../services/almoxarifado/thirdPartyService');
 const notificationQueueService = require('../../services/almoxarifado/notificationQueueService');
+// Etapa 13, Task 1 (RN-01): registro puro de metadados dos relatorios — sem `fn` (ver cabecalho
+// do arquivo). `fn` e ligada logo antes do dispatcher, apos o mapa `reports` estar montado.
+const { RELATORIOS } = require('../../services/almoxarifado/reportRegistry');
 
 function handleError(res, err) {
   const status = err.status || 500;
@@ -1258,27 +1262,92 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     },
   };
 
+  // Exposto SO para o teste de paridade (relatoriosRegistro.api.test.js) inspecionar o PAR
+  // INVERSO diretamente — "toda chave do mapa `reports` existe no registro" — sem precisar
+  // reimplementar o mapa. Nao e consumido por nenhuma rota; producao ignora esta propriedade.
+  registerExtendedRoutes.__reportKeys = Object.keys(reports);
+
+  // Liga `fn` no registro puro (reportRegistry.js nao importa services do modulo de proposito —
+  // ver cabecalho do arquivo) e valida o PAR NOS DOIS SENTIDOS na subida: toda chave de `reports`
+  // (as funcoes reais, acima) tem de existir no registro, e toda chave do registro tem de ter
+  // ganho uma funcao aqui. Sem este par inverso um relatorio poderia ficar SERVIVEL e FORA da
+  // lista/gate — exatamente a classe de defeito ("relatorio novo esquece o gate", ja entrou 2x
+  // por achado de revisao: 10b e 11) que este registro existe para matar. Falha alto e cedo
+  // (throw na subida do processo), nunca em silencio.
+  for (const tipo of Object.keys(reports)) {
+    if (!RELATORIOS[tipo]) {
+      throw new Error(`reportRegistry.js: chave '${tipo}' existe no dispatcher (extended.js) mas nao foi declarada no registro`);
+    }
+    RELATORIOS[tipo].fn = reports[tipo];
+  }
+  for (const tipo of Object.keys(RELATORIOS)) {
+    if (!reports[tipo]) {
+      throw new Error(`extended.js: chave '${tipo}' esta declarada em reportRegistry.js mas nao tem funcao ligada no dispatcher`);
+    }
+  }
+
+  // RN-02: lista fail-closed. Nasce do registro filtrado por `can()` — a tela monta o menu a
+  // partir dela e nunca oferece link que daria 403. NUNCA inclui `acao` (detalhe de autorizacao
+  // nao vaza para a UI decidir).
+  app.get('/api/almoxarifado/relatorios', auth, (req, res) => {
+    const relatorios = Object.entries(RELATORIOS)
+      .filter(([, entrada]) => entrada.acao === null || can(req.user, entrada.acao))
+      .map(([tipo, entrada]) => ({
+        tipo, titulo: entrada.titulo, categoria: entrada.categoria, params: entrada.params,
+      }));
+    res.json({ relatorios });
+  });
+
+  // RN-01/RN-03: gate e funcao resolvidos PELO REGISTRO — os literais 403/404 sao os mesmos de
+  // antes do refactor (comportamento preservado; nenhum shape de rota existente muda).
   app.get('/api/almoxarifado/relatorios/:tipo', auth, async (req, res) => {
     try {
-      const fn = reports[req.params.tipo];
-      if (!fn) return res.status(404).json({ error: 'Relatório não encontrado' });
-      // Revisao final da Etapa 10b (Important): este relatorio expunha quantidade_sistema/
-      // divergencia/contado_por de conferencia ABERTA para qualquer usuario do modulo —
-      // desfazia o modo cego e a dupla contagem por fora (o GET /conferencias/:id esconde, o
-      // relatorio entregava). Mesmo gate do relatorio de acuracidade; o filtro de status
-      // CONCLUIDO esta na query do reportService.
-      if (req.params.tipo === 'inventario-divergencias' && !can(req.user, 'inventario')) {
-        return res.status(403).json({ error: 'Sem permissão para este relatório', acao: 'inventario' });
+      const entrada = RELATORIOS[req.params.tipo];
+      if (!entrada) return res.status(404).json({ error: 'Relatório não encontrado' });
+      if (entrada.acao !== null && !can(req.user, entrada.acao)) {
+        return res.status(403).json({ error: 'Sem permissão para este relatório', acao: entrada.acao });
       }
-      // Revisao final da Etapa 11 (achado 1, medido pelos dois revisores): a Task 2 alargou
-      // este relatorio para trazer PENDENTE + VINCULADO — ele passou a expor o pipeline
-      // inteiro de compra (a caminho incluido) numa rota sem gate nenhum, visivel a qualquer
-      // usuario do modulo (chao de fabrica incluido). Mesmo remedio da 10b tres linhas acima:
-      // a acao que decide compra (`gerenciar_reposicao`) e quem pode ver o relatorio dela.
-      if (req.params.tipo === 'solicitacoes-compra' && !can(req.user, 'gerenciar_reposicao')) {
-        return res.status(403).json({ error: 'Sem permissão para este relatório', acao: 'gerenciar_reposicao' });
+      res.json(await entrada.fn(db, req.query));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // RN-03: export XLSX generico, MESMA funcao e MESMO gate do dispatcher acima — nenhum
+  // relatorio ganha query propria de export (nao ha como divergirem).
+  app.get('/api/almoxarifado/relatorios/:tipo/export', auth, async (req, res) => {
+    try {
+      const entrada = RELATORIOS[req.params.tipo];
+      if (!entrada) return res.status(404).json({ error: 'Relatório não encontrado' });
+      if (entrada.acao !== null && !can(req.user, entrada.acao)) {
+        return res.status(403).json({ error: 'Sem permissão para este relatório', acao: entrada.acao });
       }
-      res.json(await fn(db, req.query));
+      const dados = await entrada.fn(db, req.query);
+      // Fase 2 (C1/I9/I10 — todos medidos): a checagem de exportabilidade so acontece DEPOIS do
+      // await, e QUALQUER setHeader so acontece depois desta checagem — um setHeader antes do
+      // await, ou antes deste 400, estoura ERR_HTTP_HEADERS_SENT quando o payload nao e tabular
+      // (materiais-cliente, sucata-financeiro devolvem OBJETO — o xlsx explode com TypeError em
+      // payload nao-array) ou quando o gate/tipo falha.
+      if (!entrada.exportavel || !Array.isArray(dados)) {
+        return res.status(400).json({ error: 'Relatório sem exportação tabular' });
+      }
+      // Projeta SEMPRE pelas `colunas` declaradas (obrigatorias quando exportavel:true) ANTES do
+      // json_to_sheet — nunca passa as linhas cruas: `header` no json_to_sheet NAO descarta chave
+      // nao declarada (6 colunas declaradas viravam 64 no estoque-atual, com custo_medio e
+      // proprietario_cliente_id vazando; inventario-divergencias re-exporia ic.* e desfaria o
+      // gate da 10b em planilha — Fase 2, C2). E NUNCA passa `entrada.colunas` direto como
+      // `header`: a lib faz PUSH nesse array quando uma linha tem chave fora dele — o registro
+      // singleton ficaria corrompido (e a rota de lista passaria a servir as colunas vazadas) ate
+      // o processo reiniciar (Fase 2, C3, medido). Por isso sempre um `.map()` NOVO aqui.
+      const colunas = entrada.colunas;
+      const linhas = dados.map((r) => Object.fromEntries(colunas.map((c) => [c.rotulo, r[c.chave]])));
+      const planilha = XLSX.utils.json_to_sheet(linhas, { header: colunas.map((c) => c.rotulo) });
+      const livro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(livro, planilha, 'Relatório');
+      const buffer = XLSX.write(livro, { type: 'buffer', bookType: 'xlsx' });
+
+      const data = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${req.params.tipo}-${data}.xlsx"`);
+      res.send(buffer);
     } catch (e) { handleError(res, e); }
   });
 
