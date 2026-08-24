@@ -1246,6 +1246,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     // — a devolucao-destino-sucata (Etapa 7) tambem emite SUCATA e nao passa pelo processo de
     // dupla aprovacao. Ver o cabecalho de relatorioSucataFinanceiro em reportService.js.
     'sucata-financeiro': (db, q) => reportService.relatorioSucataFinanceiro(db, { de: q.de, ate: q.ate }),
+    // Etapa 13, Task 2 (RN-04): indicadores gerenciais — giro, cobertura, rupturas, valor por
+    // grupo, atendimento de requisicoes. Devolve OBJETO (exportavel:false no registro).
+    'indicadores': (db, q) => reportService.relatorioIndicadores(db, q),
     'materiais-sem-endereco': async (db) => {
       // Etapa 8, Task 1, classe C da auditoria: NAO filtra o dono de proposito. Enderecar
       // material do cliente e tao necessario quanto enderecar o nosso — a chapa dele precisa

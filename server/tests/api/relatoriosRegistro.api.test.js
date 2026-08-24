@@ -59,9 +59,9 @@ function getBinary(req) {
   const cliente = await dbRun(db, 'INSERT INTO clientes (razao_social) VALUES (?)', ['Cliente Teste LTDA']);
   const clienteId = cliente.lastID;
 
-  await test('[1] registro: 17 chaves, TODA entrada declara acao (nem que seja null), categorias validas', async () => {
+  await test('[1] registro: 18 chaves, TODA entrada declara acao (nem que seja null), categorias validas', async () => {
     const chaves = Object.keys(RELATORIOS);
-    assert.strictEqual(chaves.length, 17, JSON.stringify(chaves));
+    assert.strictEqual(chaves.length, 18, JSON.stringify(chaves));
     for (const tipo of chaves) {
       const entrada = RELATORIOS[tipo];
       assert.ok('acao' in entrada, `${tipo}: entrada sem campo 'acao' declarado`);
@@ -80,7 +80,7 @@ function getBinary(req) {
     assert.strictEqual(RELATORIOS['solicitacoes-compra'].acao, 'gerenciar_reposicao');
 
     // fn ligada: prova que o wiring em extended.js (RELATORIOS[tipo].fn = reports[tipo]) rodou
-    // para as 17 chaves — sem isto o dispatcher chamaria undefined().
+    // para as 18 chaves — sem isto o dispatcher chamaria undefined().
     for (const tipo of chaves) {
       assert.strictEqual(typeof RELATORIOS[tipo].fn, 'function', `${tipo}: fn nao foi ligada`);
     }
@@ -88,7 +88,7 @@ function getBinary(req) {
 
   await test('[3] PAR INVERSO: toda chave do mapa `reports` (extended.js) existe no registro', async () => {
     const reportKeys = registerExtendedRoutes.__reportKeys;
-    assert.ok(Array.isArray(reportKeys) && reportKeys.length === 17, JSON.stringify(reportKeys));
+    assert.ok(Array.isArray(reportKeys) && reportKeys.length === 18, JSON.stringify(reportKeys));
     for (const tipo of reportKeys) {
       assert.ok(RELATORIOS[tipo], `chave '${tipo}' do dispatcher nao existe no registro`);
     }
@@ -98,12 +98,12 @@ function getBinary(req) {
     }
   });
 
-  await test('[2] lista: ADMIN traz as 17 chaves, sem o campo acao', async () => {
+  await test('[2] lista: ADMIN traz as 18 chaves, sem o campo acao', async () => {
     setUser(ADMIN);
     const res = await request(app).get('/api/almoxarifado/relatorios');
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.ok(Array.isArray(res.body.relatorios), JSON.stringify(res.body));
-    assert.strictEqual(res.body.relatorios.length, 17, JSON.stringify(res.body.relatorios.map((r) => r.tipo)));
+    assert.strictEqual(res.body.relatorios.length, 18, JSON.stringify(res.body.relatorios.map((r) => r.tipo)));
     for (const item of res.body.relatorios) {
       assert.ok(!('acao' in item), `item '${item.tipo}' vazou o campo acao: ${JSON.stringify(item)}`);
       assert.ok(item.tipo && item.titulo && item.categoria, JSON.stringify(item));
@@ -111,12 +111,12 @@ function getBinary(req) {
     }
   });
 
-  await test('[2] lista: PRODUCAO (sem perfil) nao traz os 2 gated e traz os 15 sem gate', async () => {
+  await test('[2] lista: PRODUCAO (sem perfil) nao traz os 2 gated e traz os 16 sem gate', async () => {
     setUser(PRODUCAO);
     const res = await request(app).get('/api/almoxarifado/relatorios');
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     const tipos = res.body.relatorios.map((r) => r.tipo);
-    assert.strictEqual(tipos.length, 15, JSON.stringify(tipos));
+    assert.strictEqual(tipos.length, 16, JSON.stringify(tipos));
     assert.ok(!tipos.includes('inventario-divergencias'), JSON.stringify(tipos));
     assert.ok(!tipos.includes('solicitacoes-compra'), JSON.stringify(tipos));
     const semGate = Object.keys(RELATORIOS).filter((t) => RELATORIOS[t].acao === null);
@@ -129,7 +129,7 @@ function getBinary(req) {
   await test('[3] paridade dispatcher x lista: todo tipo listado responde 200 ou 400 (nunca 404, nunca >=500)', async () => {
     setUser(ADMIN);
     const lista = (await request(app).get('/api/almoxarifado/relatorios')).body.relatorios;
-    assert.strictEqual(lista.length, 17, JSON.stringify(lista.map((r) => r.tipo)));
+    assert.strictEqual(lista.length, 18, JSON.stringify(lista.map((r) => r.tipo)));
     for (const { tipo } of lista) {
       const qs = tipo === 'materiais-cliente' ? `?cliente_id=${clienteId}` : '';
       const res = await request(app).get(`/api/almoxarifado/relatorios/${tipo}${qs}`);
@@ -318,7 +318,7 @@ function getBinary(req) {
   await test('[revisao I1] VARREDURA: toda `chave` de colunas existe no SQL real; todo `nome` de param e CONSUMIDO; `limite` bate com o LIMIT', async () => {
     // A revisao da Task 1 provou com duas sabotagens verdes que chave/nome errados numa
     // entrada NAO-testada passam em silencio (coluna vazia no XLSX; filtro ignorado que
-    // devolve o periodo inteiro parecendo filtrado). Esta varredura fecha as 17 de uma vez:
+    // devolve o periodo inteiro parecendo filtrado). Esta varredura fecha as 18 de uma vez:
     // espiona a CONEXAO (dbAll/dbGet recebem o db como 1o argumento — as funcoes de servico
     // desestruturam os helpers no require, entao o unico ponto interceptavel e o proprio
     // objeto de conexao) e mede o SQL que cada fn realmente executa.
@@ -331,7 +331,7 @@ function getBinary(req) {
 
     for (const [tipo, entrada] of Object.entries(RELATORIOS)) {
       // (a) chaves das colunas existem nas colunas do SQL real (TEMP VIEW + PRAGMA — funciona
-      // com resultado vazio, sem precisar semear 17 relatorios).
+      // com resultado vazio, sem precisar semear 18 relatorios).
       if (entrada.exportavel) {
         const capturado = [];
         const qFull = {};

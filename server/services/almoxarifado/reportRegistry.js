@@ -378,6 +378,32 @@ const RELATORIOS = {
     colunas: null,
     fn: null,
   },
+  'indicadores': {
+    titulo: 'Indicadores gerenciais',
+    categoria: 'Gestão',
+    // D5 (Etapa 13): gate null, IGUAL ao dashboard hoje — o valorTotalEstoque ja e visivel a
+    // todo usuario do modulo; gate novo seria regra nova sem pedido. Reversivel (uma linha).
+    acao: null,
+    // Devolve OBJETO (giro/cobertura/rupturas/valor_por_grupo/atendimento_requisicoes), nao
+    // array — mesma razao de materiais-cliente/sucata-financeiro (Fase 2 da Task 1, C1).
+    exportavel: false,
+    // A regua de cada bloco, para a tela nao deixar implicito (RN-05): giro e APROXIMACAO
+    // declarada (consumo na janela / valor do estoque ATUAL — nao ha snapshot historico);
+    // cobertura e a MEDIANA (materiais sem consumo na janela ficam de fora, contados a parte);
+    // rupturas olham o saldo FISICO (nao o disponivel — 100% reservado nao aparece) e so contam
+    // TIPOS_SAIDA ou AJUSTE_INVENTARIO (tipos neutros como LIBERACAO_RESERVA nao mexem no saldo
+    // fisico); atendimento so considera requisicao com ENTREGA COMPLETA, sem filtro de janela.
+    nota: 'Giro: valor consumido (TIPOS_SAIDA) na janela dividido pelo valor do estoque ATUAL '
+      + '(aproximacao declarada — sem snapshot historico). Cobertura por MEDIANA (materiais sem '
+      + 'consumo na janela ficam fora, contados a parte). Janela default: '
+      + 'configuracoes_almoxarifado.reposicao_janela_consumo_dias (fallback 90 dias).',
+    limite: null,
+    params: [
+      { nome: 'janela_dias', rotulo: 'Janela (dias)', tipo: 'number', obrigatorio: false },
+    ],
+    colunas: null,
+    fn: null,
+  },
 };
 
 module.exports = { RELATORIOS };

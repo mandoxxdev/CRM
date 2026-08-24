@@ -2,6 +2,8 @@ const { dbAll, dbGet } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
 const { divergenciaRealSql } = require('./divergencia');
+const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
+const { TIPOS_SAIDA } = require('./movementTypes');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -239,10 +241,155 @@ async function relatorioSucataFinanceiro(db, { de, ate } = {}) {
   };
 }
 
+// Local, no mesmo padrao de purchaseService.lerConfigNumero (Etapa 11) — mesma chave
+// ('reposicao_janela_consumo_dias'), nao uma config nova (Global Constraints da Etapa 13: a
+// janela vem por querystring, sem amarracao nova em configuracoesGerais.api.test.js).
+async function lerJanelaPadrao(db) {
+  const row = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'reposicao_janela_consumo_dias'");
+  const n = parseFloat(row?.valor);
+  return Number.isFinite(n) && n > 0 ? n : 90;
+}
+
+/** Mediana de uma lista de numeros. Lista vazia -> 0 (nao ha material com consumo na janela). */
+function mediana(valores) {
+  if (!valores.length) return 0;
+  const ordenado = [...valores].sort((a, b) => a - b);
+  const meio = Math.floor(ordenado.length / 2);
+  return ordenado.length % 2 !== 0 ? ordenado[meio] : (ordenado[meio - 1] + ordenado[meio]) / 2;
+}
+
+/**
+ * RN-04 (Etapa 13, Task 2): indicadores gerenciais medidos pelas fontes UNICAS do modulo —
+ * `custoUnitarioSql`/`valorEstoqueSql` (custo, custoSql.js), `TIPOS_SAIDA` (consumo,
+ * movementTypes.js) e `consumoJanelaSql` (consumo POR MATERIAL numa janela — o mesmo fragmento
+ * que `purchaseService.calcularSugestoes` usa desde a Etapa 11, extraido para `consumoSql.js`
+ * nesta task, Global Constraints/C4). Material de cliente (`proprietario_cliente_id IS NOT
+ * NULL`) fica FORA de giro/cobertura/rupturas/valor_por_grupo — nao e patrimonio nosso (D4/RN-04
+ * do design). `m.ativo = 1` em todas as consultas por materiail: giro/cobertura/rupturas/valor
+ * comparam contra o estoque ATUAL, que so faz sentido para material ativo (mesmo criterio de
+ * `relatorioEstoqueAtual`).
+ */
+async function relatorioIndicadores(db, query = {}) {
+  const bruto = query.janela_dias;
+  let janela;
+  if (bruto === undefined || bruto === null || bruto === '') {
+    janela = await lerJanelaPadrao(db);
+  } else {
+    const n = Number(bruto);
+    if (!Number.isInteger(n) || n <= 0) {
+      throw Object.assign(new Error('Parâmetro "janela_dias" deve ser um número inteiro maior que zero'), { status: 400 });
+    }
+    janela = n;
+  }
+
+  const phSaida = TIPOS_SAIDA.map(() => '?').join(',');
+
+  // ── Giro (aproximado, D4): valor consumido (TIPOS_SAIDA, na janela) / valor do estoque ──
+  // ATUAL (nao ha snapshot historico — usar o valor atual como denominador e aproximacao
+  // honesta, escrita na `nota` do registro). Custo SEMPRE via custoUnitarioSql (fonte unica) —
+  // `SUM(qtd * m.custo_unitario)` a mao NAO seria pego pela varredura (Global Constraints, I2).
+  const giroConsumido = await dbGet(db, `
+    SELECT COALESCE(SUM(mv.quantidade * ${custoUnitarioSql('m')}), 0) AS valor
+    FROM movimentacoes_almoxarifado mv
+    JOIN materiais_almoxarifado m ON m.id = mv.material_id
+    WHERE mv.cancelado = 0 AND mv.tipo IN (${phSaida})
+      AND mv.created_at >= datetime('now', '-' || ? || ' days')
+      AND m.ativo = 1 AND m.proprietario_cliente_id IS NULL`,
+    [...TIPOS_SAIDA, janela]);
+  const giroEstoque = await dbGet(db, `
+    SELECT COALESCE(SUM(${valorEstoqueSql('m')}), 0) AS valor
+    FROM materiais_almoxarifado m
+    WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL`);
+  const valorConsumido = Number(giroConsumido.valor) || 0;
+  const valorEstoqueAtual = Number(giroEstoque.valor) || 0;
+  // Arredondado (I8, medido): asserts exatos contra o arredondado; os dois operandos ficam no
+  // payload SEM arredondar (comparados por Math.abs(a-b) < 1e-9 pelos consumidores).
+  const indice = valorEstoqueAtual > 0 ? Number((valorConsumido / valorEstoqueAtual).toFixed(2)) : 0;
+
+  // ── Cobertura (dias): disponivel / consumo medio diario da janela, POR MATERIAL — a MESMA ──
+  // regua de consumo da Etapa 11 (consumoJanelaSql/TIPOS_SAIDA). Agregado por MEDIANA: media
+  // seria distorcida por material sem consumo (cobertura "infinita"); material sem consumo na
+  // janela fica FORA da mediana, contado a parte em `materiais_sem_consumo`.
+  const coberturaRows = await dbAll(db, `
+    SELECT ${disponivelSql('m')} AS disponivel, ${consumoJanelaSql('m')} AS consumo_janela
+    FROM materiais_almoxarifado m
+    WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL`,
+    consumoJanelaParams(janela));
+  const coberturas = [];
+  let materiaisSemConsumo = 0;
+  for (const r of coberturaRows) {
+    const consumoJanela = Number(r.consumo_janela) || 0;
+    if (consumoJanela > 0) {
+      const diario = consumoJanela / janela;
+      coberturas.push(Number(r.disponivel) / diario);
+    } else {
+      materiaisSemConsumo += 1;
+    }
+  }
+  const medianaDias = Number(mediana(coberturas).toFixed(2));
+
+  // ── Rupturas (regua CORRIGIDA, Fase 2/C5): saldo FISICO <= 0 causado por um EVENTO de tipo ──
+  // em TIPOS_SAIDA ou AJUSTE_INVENTARIO. Tipos NEUTROS (LIBERACAO_RESERVA, BLOQUEIO, RESERVA...)
+  // gravam `saldo_posterior = saldo_anterior` (stockService.js) — sem este filtro de tipo, um
+  // material ja zerado atribuiria a 1a ruptura a um lancamento burocratico (medido). DECLARADO:
+  // a regua olha o FISICO, nao o disponivel — material 100% reservado (disponivel 0) sem evento
+  // de saida/ajuste na janela NAO aparece (contagem de EVENTO, nao de ESTADO); AJUSTE_INVENTARIO
+  // que zera por contagem fisica CONTA, por decisao.
+  const rupturasRows = await dbAll(db, `
+    SELECT m.codigo, m.nome, MIN(mv.created_at) AS data
+    FROM movimentacoes_almoxarifado mv
+    JOIN materiais_almoxarifado m ON m.id = mv.material_id
+    WHERE mv.cancelado = 0 AND mv.saldo_posterior <= 0
+      AND mv.tipo IN (${phSaida}, ?)
+      AND mv.created_at >= datetime('now', '-' || ? || ' days')
+      AND m.ativo = 1 AND m.proprietario_cliente_id IS NULL
+    GROUP BY m.id
+    ORDER BY data ASC`,
+    [...TIPOS_SAIDA, 'AJUSTE_INVENTARIO', janela]);
+
+  // ── Valor do estoque por grupo: valorEstoqueSql agrupado por categoria, so materiais ──
+  // PROPRIOS (nao e patrimonio nosso valorar o do cliente).
+  const valorPorGrupoRows = await dbAll(db, `
+    SELECT COALESCE(m.categoria, 'Sem categoria') AS categoria,
+           COALESCE(SUM(${valorEstoqueSql('m')}), 0) AS valor
+    FROM materiais_almoxarifado m
+    WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL
+    GROUP BY COALESCE(m.categoria, 'Sem categoria')
+    ORDER BY categoria`);
+
+  // ── Atendimento de requisicoes (I7, medido): so ENTREGA COMPLETA — `data_entrega` tem UM ──
+  // escritor (requisitionService.js:376) e so grava na entrega COMPLETA (parcial/encerrada sem
+  // completar ficam fora). `total_consideradas` tem de vir do MESMO WHERE que filtra
+  // data_entrega: um COUNT(*) fora desse WHERE contaria requisicao nao entregue (medido 3 vs 2)
+  // enquanto o AVG (que ja ignora NULL sozinho) continuaria certo — os dois numeros
+  // divergiriam. SEM filtro de janela, de proposito: ao contrario de giro/cobertura/rupturas
+  // (que a RN-04 declara "na janela" explicitamente), a regua do atendimento no design nao
+  // menciona janela — decisao registrada no relatorio de fechamento desta task (reversivel).
+  const atendimento = await dbGet(db, `
+    SELECT AVG((julianday(data_entrega) - julianday(created_at)) * 24) AS media_horas,
+           COUNT(*) AS total_consideradas
+    FROM requisicoes_almoxarifado
+    WHERE data_entrega IS NOT NULL`);
+  const totalConsideradas = Number(atendimento.total_consideradas) || 0;
+  const mediaHoras = totalConsideradas > 0 ? Number((atendimento.media_horas || 0).toFixed(2)) : 0;
+
+  return {
+    janela_dias: janela,
+    giro: { valor_consumido: valorConsumido, valor_estoque_atual: valorEstoqueAtual, indice },
+    cobertura: { mediana_dias: medianaDias, materiais_sem_consumo: materiaisSemConsumo },
+    rupturas: {
+      total: rupturasRows.length,
+      materiais: rupturasRows.map((r) => ({ codigo: r.codigo, nome: r.nome, data: r.data })),
+    },
+    valor_por_grupo: valorPorGrupoRows.map((r) => ({ categoria: r.categoria, valor: Number(r.valor) || 0 })),
+    atendimento_requisicoes: { media_horas: mediaHoras, total_consideradas: totalConsideradas },
+  };
+}
+
 module.exports = {
   relatorioEstoqueAtual, relatorioAbaixoMinimo, relatorioReservadoPorOS,
   relatorioConsumoPorOS, relatorioMateriaisMaisConsumidos, relatorioRecebimentosPendentes,
   relatorioMateriaisBloqueados, relatorioHistoricoMovimentacoes, relatorioInventarioDivergencias,
   relatorioConsumoPeriodo, relatorioFerramentasEmprestadas, relatorioEPIPorColaborador,
-  relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro,
+  relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro, relatorioIndicadores,
 };

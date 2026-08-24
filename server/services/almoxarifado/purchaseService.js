@@ -1,6 +1,7 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
 const { custoUnitarioSql } = require('./custoSql');
+const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
 const { TIPOS_SAIDA, TIPOS_ENTRADA } = require('./movementTypes');
 const { registrarAuditoria } = require('./audit');
 // Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
@@ -49,7 +50,6 @@ async function lerConfigNumero(db, chave, fallback) {
 async function calcularSugestoes(db) {
   const janela = await lerConfigNumero(db, 'reposicao_janela_consumo_dias', 90);
   const horizonte = await lerConfigNumero(db, 'reposicao_horizonte_solicitacao_dias', 60);
-  const placeholders = TIPOS_SAIDA.map(() => '?').join(',');
 
   const rows = await dbAll(db, `
     SELECT m.id AS material_id, m.codigo, m.nome, m.unidade,
@@ -58,10 +58,7 @@ async function calcularSugestoes(db) {
            f.razao_social AS fornecedor_nome,
            ${disponivelSql('m')} AS disponivel,
            ${custoUnitarioSql('m')} AS custo_unitario,
-           COALESCE((SELECT SUM(mv.quantidade) FROM movimentacoes_almoxarifado mv
-                     WHERE mv.material_id = m.id AND mv.cancelado = 0
-                       AND mv.tipo IN (${placeholders})
-                       AND mv.created_at >= datetime('now', '-' || ? || ' days')), 0) AS consumo_janela,
+           ${consumoJanelaSql('m')} AS consumo_janela,
            COALESCE((SELECT SUM(sc.quantidade) FROM solicitacoes_compra_almoxarifado sc
                      WHERE sc.material_id = m.id AND sc.status IN ('PENDENTE','VINCULADO')
                        AND sc.created_at >= datetime('now', '-' || ? || ' days')), 0) AS a_caminho,
@@ -76,7 +73,10 @@ async function calcularSugestoes(db) {
     FROM materiais_almoxarifado m
     LEFT JOIN fornecedores f ON m.fornecedor_id = f.id
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL`,
-    [...TIPOS_SAIDA, janela, horizonte, horizonte]);
+    // Etapa 13, Task 2 (C4): consumo_janela agora vem de consumoJanelaSql('m') — os bind params
+    // dela (TIPOS_SAIDA + janela) tem de vir NA MESMA ORDEM que os `?` da subquery aparecem no
+    // texto acima, antes dos dois `horizonte` de a_caminho/a_caminho_vencido.
+    [...consumoJanelaParams(janela), horizonte, horizonte]);
 
   // RN-06 (revisao final E11, medido): o resumo tem de contar TODOS os criticos zerados,
   // sugeridos ou nao — clicar em "Gerar" faz a solicitacao entrar em a_caminho e o item some
