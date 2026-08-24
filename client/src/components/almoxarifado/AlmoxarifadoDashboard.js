@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { canConfigureAlmox } from '../../utils/systemPermissions';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import api from '../../services/api';
-import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers, FiClipboard, FiMap, FiSettings, FiTruck } from 'react-icons/fi';
+import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers, FiClipboard, FiMap, FiSettings, FiTruck, FiTrendingUp } from 'react-icons/fi';
 import './Almoxarifado.css';
 
 const STATUS_REQ = {
@@ -58,6 +58,37 @@ const AlmoxarifadoDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const relatoriosCarregados = useRef(false);
+  // Etapa 13, Task 4 (RN-06): indicadores gerenciais buscados UMA vez, à parte do restante do
+  // dashboard — a falha deste endpoint NUNCA pode derrubar os KPIs já existentes (por isso o
+  // try/catch e o estado de erro vivem isolados, fora do loadDashboard/loadError de cima).
+  const [indicadores, setIndicadores] = useState(null);
+  const [erroIndicadores, setErroIndicadores] = useState(null);
+  const [carregandoIndicadores, setCarregandoIndicadores] = useState(true);
+
+  const loadIndicadores = useCallback(async () => {
+    setCarregandoIndicadores(true);
+    setErroIndicadores(null);
+    try {
+      const res = await api.get('/almoxarifado/relatorios/indicadores');
+      setIndicadores(res.data);
+    } catch (err) {
+      setIndicadores(null);
+      const status = err.response?.status;
+      if (status === 403) {
+        setErroIndicadores('Sem permissão para ver os indicadores.');
+      } else if (!err.response) {
+        setErroIndicadores('Não foi possível conectar ao servidor.');
+      } else {
+        setErroIndicadores(err.response?.data?.error || 'Não foi possível carregar os indicadores.');
+      }
+    } finally {
+      setCarregandoIndicadores(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadIndicadores();
+  }, [loadIndicadores]);
 
   const loadRelatorios = useCallback(async (dias) => {
     const { data_inicio, data_fim } = getPeriodDates(dias);
@@ -297,6 +328,76 @@ const AlmoxarifadoDashboard = () => {
             </div>
           </>
         )}
+      </div>
+
+      {/* Indicadores gerenciais (RN-06, Etapa 13 Task 4) — lidos de relatorios/indicadores */}
+      <div className="almox-dash-card" style={{ marginBottom: 20 }} data-testid="indicadores-secao">
+        <div className="almox-dash-card-header">
+          <h3><FiTrendingUp size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />Indicadores gerenciais</h3>
+        </div>
+        <div className="almox-dash-card-body">
+          {erroIndicadores ? (
+            <div
+              data-testid="indicadores-erro"
+              style={{
+                padding: '14px 18px',
+                borderRadius: 10,
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                background: 'rgba(239, 68, 68, 0.08)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 16,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <FiAlertTriangle size={18} style={{ color: '#ef4444', flexShrink: 0, marginTop: 2 }} />
+                <span style={{ fontSize: '0.9rem', color: 'var(--gmp-text-light)' }}>{erroIndicadores}</span>
+              </div>
+              <button type="button" className="btn-almox-secondary" onClick={loadIndicadores}>
+                <FiRefreshCw size={14} /> Tentar novamente
+              </button>
+            </div>
+          ) : carregandoIndicadores ? (
+            <div className="almox-empty"><p>Carregando indicadores...</p></div>
+          ) : (
+            <div className="almox-kpis" style={{ marginBottom: 0 }}>
+              <div className="almox-kpi-card">
+                <div className="almox-kpi-icon primary"><FiTrendingUp /></div>
+                <div className="almox-kpi-info">
+                  <div className="almox-kpi-value" data-testid="kpi-giro">{indicadores.giro.indice.toFixed(2)}</div>
+                  <div className="almox-kpi-label">Giro de estoque</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                    Janela de {indicadores.janela_dias} dias
+                  </div>
+                </div>
+              </div>
+              <div className="almox-kpi-card">
+                <div className="almox-kpi-icon danger"><FiAlertOctagon /></div>
+                <div className="almox-kpi-info">
+                  <div className="almox-kpi-value" data-testid="kpi-rupturas">{indicadores.rupturas.total}</div>
+                  <div className="almox-kpi-label">Rupturas na janela</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                    Janela de {indicadores.janela_dias} dias
+                  </div>
+                </div>
+              </div>
+              <div className="almox-kpi-card">
+                <div className="almox-kpi-icon purple"><FiClock /></div>
+                <div className="almox-kpi-info">
+                  <div className="almox-kpi-value" data-testid="kpi-atendimento">
+                    {indicadores.atendimento_requisicoes.media_horas.toFixed(2)}h
+                  </div>
+                  <div className="almox-kpi-label">Tempo médio de atendimento</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                    Considera todo o histórico de requisições entregues
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Grid principal */}

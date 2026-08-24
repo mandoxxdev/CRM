@@ -232,10 +232,11 @@ Modify `lazyModules.js`, `App.js`, `Layout.js` (menu, ícone ≠ dos usados).
   worktree. Reconferir a suíte de client DEPOIS do merge (a Task 4 muda o client na árvore
   principal em paralelo — o número da worktree fica defasado; Fase 2, M7).
 
-### Task 4: Dashboard + teste-jornada (galho, árvore principal — SÓ após Tasks 1-2)
+### Task 4: Dashboard + teste-jornada — ✅ FEITA
 
-**Files:** Modify `client/src/components/almoxarifado/AlmoxarifadoDashboard.js` (+ teste);
-Create `server/tests/api/relatoriosJornada.api.test.js`.
+**Files:** Modify `client/src/components/almoxarifado/AlmoxarifadoDashboard.js`;
+Create `client/src/components/almoxarifado/AlmoxarifadoDashboard.test.js` (7 casos),
+`server/tests/api/relatoriosJornada.api.test.js` (6 casos).
 
 - Dashboard: 3 cartões (giro, rupturas, tempo médio de atendimento) do endpoint
   `relatorios/indicadores`, com legenda da janela; falha do endpoint → erro localizado nos 3
@@ -245,7 +246,35 @@ Create `server/tests/api/relatoriosJornada.api.test.js`.
   `indicadores` (números batem com o semeado) → exportar `estoque-atual` e conferir paridade
   de linhas com o dispatcher → 403 do export gated como PRODUCAO → 404 de tipo inventado.
   Sabotagem da jornada: gate do export removido → elo do 403 cai.
-- [ ] Commit (arquivos explícitos).
+- [x] Step 1: dashboard — busca `relatorios/indicadores` UMA vez, em `useEffect`/estado ISOLADOS
+  do `loadDashboard` (nunca dentro do mesmo try/catch), com painel de erro próprio (com retry)
+  nos 3 cartões novos. Cartão de atendimento não janelado — legenda "todo o histórico" (desvio
+  já declarado na `nota` do registro, Task 2). 7 testes (client): valor exato dos 3 cartões,
+  janela efetiva na legenda dos 2 janelados, ausência da legenda de janela no de atendimento,
+  UMA chamada só, 403/rede isolados sem derrubar KPIs existentes, retry funcional. Controle
+  positivo aplicado por edição reversa (md5 antes/depois, nunca `git checkout`): trocar a
+  legenda do atendimento por "Janela de X dias" derrubou 2/7 — restaurado, hash confere.
+- [x] Step 2: jornada (servidor) — semeia 3 materiais + 1 requisição ENTREGUE via
+  `PUT /requisicoes/:id/entregar` (motor real, mesma rota de `requisicaoEntregaMotor.api.
+  test.js`). Achado durante a escrita: a entrega da requisição TAMBÉM é uma SAIDA pelo motor —
+  os números esperados de giro (`valor_consumido`/`valor_estoque_atual`) tiveram de somar essa
+  saída junto com a do material dedicado, não só este último (o indicador agrega o módulo
+  inteiro, não um recorte). 6 casos: lista GESTOR (18/18, com `indicadores` e
+  `solicitacoes-compra`) e PRODUCAO (16/18, paridade 200/400 nos dois papéis); indicadores com
+  asserts exatos (`giro.indice=0.25`, `atendimento_requisicoes.media_horas` computado dos
+  timestamps reais gravados pelo motor, não hardcoded); export `estoque-atual` com paridade de
+  linhas E cabeçalho (rótulos declarados) por `deepStrictEqual`; `solicitacoes-compra/export`
+  403 PRODUCAO / 200 ADMIN; tipo inventado 404 no dispatcher e no export.
+- [x] Step 3: sabotagem — gate do export removido (o `if (entrada.acao !== null && !can(...))`
+  de DENTRO da rota `/export`, não o do dispatcher) → só o elo `[4]` (403 PRODUCAO) caiu, os
+  outros 5 continuaram verdes; restaurado por edição reversa, md5 de
+  `routes/almoxarifado/extended.js` idêntico antes/depois.
+- [x] Step 4: regressão — client 436/436 → **443/443** (32 suítes); build CI=true OK;
+  `npm run test:api` 118/118 → **119/119**.
+- [x] Step 5: commit "Almoxarifado Etapa 13 Task 4: dashboard + teste-jornada (RN-06)" (arquivos
+  explícitos: `AlmoxarifadoDashboard.js`, `AlmoxarifadoDashboard.test.js`,
+  `relatoriosJornada.api.test.js`, este plano). Hash a registrar no fechamento da etapa
+  (Task 5) junto com o README da feature e o mapa de status.
 
 ### Task 5: Fechar a etapa
 - [ ] `fechar-etapa` completa (7 artefatos + verificação medida + retro de 4 números).
