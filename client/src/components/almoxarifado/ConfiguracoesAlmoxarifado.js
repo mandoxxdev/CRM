@@ -2701,6 +2701,20 @@ const TabConfiguracoes = () => {
     { chave: 'reposicao_janela_consumo_dias', label: 'Janela do Consumo Médio (dias)', tipo: 'number', descricao: 'Período (dias) considerado para calcular o consumo médio diário na sugestão de reposição' },
     { chave: 'reposicao_dias_sem_consumo', label: 'Dias Sem Consumo (estoque parado)', tipo: 'number', descricao: 'Dias sem saída para o material contar como parado/obsoleto' },
     { chave: 'reposicao_horizonte_solicitacao_dias', label: 'Horizonte da Solicitação (dias)', tipo: 'number', descricao: 'Dias em que uma solicitação de compra aberta ainda conta como "a caminho" na sugestão' },
+    // Etapa 12 (RN-09): fila de notificacoes — as 10 chaves semeadas no schema.js (Task 1) com
+    // leitor real no worker/gancho/varreduras (Tasks 1-3). notificar_movimentacoes usa o mesmo
+    // padrao 'boolean' das duas primeiras linhas deste array (nasce '0' de proposito — D1 do
+    // design: ligar e-mail em toda movimentacao por default despejaria dezenas de e-mails sem
+    // ninguem ter escolhido; ligar e um clique aqui, reversivel).
+    { chave: 'notificar_movimentacoes', label: 'Notificar Movimentações por E-mail', tipo: 'boolean', descricao: 'Envia e-mail para toda movimentação confirmada (entrada, saída, ajuste, terceiro) — desligado por padrão' },
+    { chave: 'notificacoes_worker_intervalo_min', label: 'Intervalo do Worker (min)', tipo: 'number', descricao: 'Intervalo, em minutos, entre execuções do worker que envia a fila de notificações' },
+    { chave: 'notificacoes_max_tentativas', label: 'Máx. Tentativas de Envio', tipo: 'number', descricao: 'Número de tentativas de envio antes de marcar a notificação como FALHA' },
+    { chave: 'alerta_lote_vencendo_dias', label: 'Alerta de Lote Vencendo (dias)', tipo: 'number', descricao: 'Dias de antecedência para alertar lote próximo do vencimento' },
+    { chave: 'notificacoes_dest_entradas', label: 'Destinatários — Entradas', tipo: 'text', descricao: 'E-mails (lista) para notificação de entrada de material; vazio usa o e-mail de alertas' },
+    { chave: 'notificacoes_dest_saidas', label: 'Destinatários — Saídas', tipo: 'text', descricao: 'E-mails (lista) para notificação de saída de material; vazio usa o e-mail de alertas' },
+    { chave: 'notificacoes_dest_ajustes', label: 'Destinatários — Ajustes', tipo: 'text', descricao: 'E-mails (lista) para notificação de ajuste de estoque; vazio usa o e-mail de alertas' },
+    { chave: 'notificacoes_dest_terceiros', label: 'Destinatários — Terceiros', tipo: 'text', descricao: 'E-mails (lista) para notificação de movimentação de terceiro; vazio usa o e-mail de alertas' },
+    { chave: 'notificacoes_dest_compras', label: 'Destinatários — Compras', tipo: 'text', descricao: 'E-mails (lista) para notificação de solicitação de compra gerada; vazio usa compras_notificar_emails' },
   ];
   // Saíram daqui por não ter leitor nenhum no servidor — nenhuma delas fazia coisa alguma:
   // `prazo_atendimento_horas` (semeada, mas nada calcula prazo de atendimento),
@@ -2734,13 +2748,25 @@ const TabConfiguracoes = () => {
     // sempre disparava o PUT e so descobria o erro depois de ida e volta ao servidor — o
     // literal do 400 e reaproveitado aqui de proposito (mesma frase, mesma chave) para o
     // administrador nao ver duas mensagens diferentes para o mesmo problema.
+    //
+    // Etapa 12 (RN-09, Fase 2 do design): a fila de notificacoes trouxe chaves de TENTATIVAS e
+    // MINUTOS (`notificacoes_worker_*`, `notificacoes_max_*`) — reusar a mensagem "dias" para
+    // elas MENTIRIA. Mesmo par de prefixos/mensagens que a rota valida no servidor
+    // (routes/almoxarifado.js) — espelho de proposito, nao fonte unica.
+    const PREFIXOS_DIAS = ['reposicao_', 'alerta_lote_'];
+    const PREFIXOS_INTEIRO = ['notificacoes_worker_', 'notificacoes_max_'];
     const chaveInvalida = CAMPOS.find((c) => {
-      if (!c.chave.startsWith('reposicao_')) return false;
+      const ehDias = PREFIXOS_DIAS.some((p) => c.chave.startsWith(p));
+      const ehInteiro = PREFIXOS_INTEIRO.some((p) => c.chave.startsWith(p));
+      if (!ehDias && !ehInteiro) return false;
       const n = Number(configs[c.chave]);
       return !Number.isInteger(n) || n < 1;
     });
     if (chaveInvalida) {
-      toast.error(`Configuração "${chaveInvalida.chave}" deve ser um número de dias maior que zero`);
+      const ehDias = PREFIXOS_DIAS.some((p) => chaveInvalida.chave.startsWith(p));
+      toast.error(ehDias
+        ? `Configuração "${chaveInvalida.chave}" deve ser um número de dias maior que zero`
+        : `Configuração "${chaveInvalida.chave}" deve ser um número inteiro maior que zero`);
       return;
     }
     setSaving(true);
@@ -2778,7 +2804,8 @@ const TabConfiguracoes = () => {
             ) : (
               <input className="almox-input" style={{ width: 180, flexShrink: 0 }}
                 type={campo.tipo === 'number' ? 'number' : 'text'}
-                min={campo.chave.startsWith('reposicao_') ? 1 : undefined}
+                min={(campo.chave.startsWith('reposicao_') || campo.chave.startsWith('alerta_lote_')
+                  || campo.chave.startsWith('notificacoes_worker_') || campo.chave.startsWith('notificacoes_max_')) ? 1 : undefined}
                 value={configs[campo.chave] || ''}
                 onChange={e => setConfigs(c => ({ ...c, [campo.chave]: e.target.value }))} />
             )}

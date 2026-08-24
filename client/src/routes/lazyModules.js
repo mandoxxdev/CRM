@@ -156,6 +156,7 @@ export const RemessasTerceirosAlmoxarifado = page(() => import('../components/al
 export const SobrasAlmoxarifado = page(() => import('../components/almoxarifado/SobrasAlmoxarifado'));
 export const FerramentasAlmoxarifado = page(() => import('../components/almoxarifado/FerramentasAlmoxarifado'));
 export const ReposicaoAlmoxarifado = page(() => import('../components/almoxarifado/ReposicaoAlmoxarifado'));
+export const NotificacoesAlmoxarifado = page(() => import('../components/almoxarifado/NotificacoesAlmoxarifado'));
 export const ChatPage = page(() => import('../components/chat/ChatPage'));
 export const TodolistBoard = page(() => import('../components/todolist/TodolistBoard'));
 
@@ -208,6 +209,7 @@ export const ROUTE_PREFETCH = {
   '/almoxarifado/sobras': () => import('../components/almoxarifado/SobrasAlmoxarifado'),
   '/almoxarifado/ferramentas': () => import('../components/almoxarifado/FerramentasAlmoxarifado'),
   '/almoxarifado/reposicao': () => import('../components/almoxarifado/ReposicaoAlmoxarifado'),
+  '/almoxarifado/notificacoes': () => import('../components/almoxarifado/NotificacoesAlmoxarifado'),
   '/configuracoes': () => import('../components/Configuracoes'),
   '/admin/usuarios': () => import('../components/Admin'),
 };

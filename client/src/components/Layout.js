@@ -12,7 +12,7 @@ import {
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
   FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
-  FiScissors
+  FiScissors, FiBell
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -357,6 +357,11 @@ const Layout = () => {
     // solicitacoes — gate proprio (gerenciar_reposicao) resolvido pelo backend, sem adminOnly
     // aqui (o perfil COMPRAS/GESTOR tambem acessa, nao so admin do modulo).
     { path: '/almoxarifado/reposicao', icon: FiShoppingCart, label: 'Reposição e Compras' },
+    // Etapa 12: fila de notificacoes (e-mails de movimentacao, dividas das etapas 7-11 e
+    // alertas novos) — gate proprio (gerenciar_notificacoes) resolvido pelo backend, sem
+    // adminOnly aqui (o painel de erro por 403 e quem barra o restante do perfil, mesmo
+    // criterio de reposicao acima).
+    { path: '/almoxarifado/notificacoes', icon: FiBell, label: 'Notificações' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },

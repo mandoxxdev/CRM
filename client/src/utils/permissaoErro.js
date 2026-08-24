@@ -35,6 +35,10 @@ const ACOES = {
   // buraco (existem em ACAO_PERFIS desde as Etapas 9/9b) — corrigidos junto.
   gerenciar_reposicao: 'gerenciar reposição e compras',
   gerenciar_ferramentas: 'gerenciar ferramentas',
+  // Etapa 12, Task 4: falta no mapa reproduziria o mesmo buraco do achado 7 da Etapa 11 —
+  // o botao "Reenviar"/"Processar fila agora" da tela de notificacoes cairia no fallback de
+  // labelAcao e mostraria "gerenciar notificacoes" cru em vez da frase natural.
+  gerenciar_notificacoes: 'gerenciar notificações',
   aprovar_sucateamento: 'aprovar sucateamento (almoxarifado)',
   aprovar_sucateamento_gestao: 'aprovar sucateamento (gestão)',
   // frota
