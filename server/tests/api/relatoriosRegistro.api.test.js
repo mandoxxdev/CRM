@@ -181,15 +181,18 @@ function getBinary(req) {
     assert.deepStrictEqual(res.body, { error: 'Relatório não encontrado' });
   });
 
-  await test('[400] materiais-cliente sem cliente_id: dispatcher e export com o MESMO literal', async () => {
+  await test('[400] materiais-cliente sem cliente_id: dispatcher com o literal; export nem roda a query', async () => {
     setUser(ADMIN);
     let res = await request(app).get('/api/almoxarifado/relatorios/materiais-cliente');
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     assert.strictEqual(res.body.error, 'informe o cliente_id');
 
+    // Revisao da Task 1 (M5): exportavel:false e checado ANTES do await — relatorio que nunca
+    // exporta responde o 400 de exportacao SEM rodar a query (o "informe o cliente_id" do
+    // export sumiu de proposito: era efeito de rodar uma query que nao devia rodar).
     res = await request(app).get('/api/almoxarifado/relatorios/materiais-cliente/export');
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
-    assert.strictEqual(res.body.error, 'informe o cliente_id');
+    assert.strictEqual(res.body.error, 'Relatório sem exportação tabular');
   });
 
   await test('[404] materiais-cliente com cliente_id inexistente: "Cliente nao encontrado" (segundo 404 da familia)', async () => {
@@ -310,6 +313,116 @@ function getBinary(req) {
     const doMaterialErrado = nomeErrado.body.movimentacoes.filter((m) => m.material_id === materialId);
     assert.strictEqual(doMaterialErrado.length, 2,
       'nome errado do parametro deveria ser ignorado (periodo inteiro), nao filtrar');
+  });
+
+  await test('[revisao I1] VARREDURA: toda `chave` de colunas existe no SQL real; todo `nome` de param e CONSUMIDO; `limite` bate com o LIMIT', async () => {
+    // A revisao da Task 1 provou com duas sabotagens verdes que chave/nome errados numa
+    // entrada NAO-testada passam em silencio (coluna vazia no XLSX; filtro ignorado que
+    // devolve o periodo inteiro parecendo filtrado). Esta varredura fecha as 17 de uma vez:
+    // espiona a CONEXAO (dbAll/dbGet recebem o db como 1o argumento — as funcoes de servico
+    // desestruturam os helpers no require, entao o unico ponto interceptavel e o proprio
+    // objeto de conexao) e mede o SQL que cada fn realmente executa.
+    const espiar = (registro) => ({
+      all: (sql, params, cb) => { registro.push({ sql, params }); return db.all(sql, params, cb); },
+      get: (sql, params, cb) => { registro.push({ sql, params }); return db.get(sql, params, cb); },
+      run: (...a) => db.run(...a),
+    });
+    const valorPara = (param) => (param.tipo === 'date' ? '2026-01-15' : param.tipo === 'number' ? 1 : 'x');
+
+    for (const [tipo, entrada] of Object.entries(RELATORIOS)) {
+      // (a) chaves das colunas existem nas colunas do SQL real (TEMP VIEW + PRAGMA — funciona
+      // com resultado vazio, sem precisar semear 17 relatorios).
+      if (entrada.exportavel) {
+        const capturado = [];
+        const qFull = {};
+        for (const p of entrada.params) qFull[p.nome] = valorPara(p);
+        if (tipo === 'materiais-cliente') qFull.cliente_id = clienteId;
+        await entrada.fn(espiar(capturado), qFull).catch(() => {});
+        const selects = capturado.filter((c) => /^\s*select/i.test(c.sql));
+        assert.ok(selects.length >= 1, `${tipo}: nenhum SELECT capturado`);
+        const colunasReais = new Set();
+        for (let i = 0; i < selects.length; i++) {
+          const viewSql = selects[i].sql.replace(/\?/g, 'NULL').replace(/;\s*$/, '');
+          await dbRun(db, `CREATE TEMP VIEW _varredura_${i} AS ${viewSql}`).catch(() => {});
+          const cols = await new Promise((resolve) => {
+            db.all(`PRAGMA table_info(_varredura_${i})`, [], (e, rows) => resolve(rows || []));
+          });
+          cols.forEach((c) => colunasReais.add(c.name));
+          await dbRun(db, `DROP VIEW IF EXISTS _varredura_${i}`).catch(() => {});
+        }
+        for (const c of entrada.colunas) {
+          assert.ok(colunasReais.has(c.chave),
+            `${tipo}: coluna declarada "${c.chave}" NAO existe no SQL real (colunas: ${[...colunasReais].join(',')})`);
+        }
+        // (c) limite declarado bate com o LIMIT do SQL (ou nenhum LIMIT quando null).
+        const limites = selects.map((s) => (s.sql.match(/LIMIT\s+(\d+)/i) || [])[1]).filter(Boolean);
+        if (entrada.limite !== null) {
+          assert.ok(limites.includes(String(entrada.limite)),
+            `${tipo}: limite declarado ${entrada.limite} nao aparece no SQL (${limites.join(',') || 'sem LIMIT'})`);
+        } else {
+          assert.strictEqual(limites.length, 0, `${tipo}: SQL tem LIMIT ${limites} mas o registro declara null`);
+        }
+      }
+      // (b) todo param declarado e CONSUMIDO: com o param, o par (sql, params) capturado MUDA.
+      for (const p of entrada.params) {
+        if (tipo === 'materiais-cliente') continue; // obrigatorio, provado pelo trio 400/404/200
+        const sem = []; const com = [];
+        await entrada.fn(espiar(sem), {}).catch(() => {});
+        await entrada.fn(espiar(com), { [p.nome]: valorPara(p) }).catch(() => {});
+        const assinatura = (r) => JSON.stringify(r.map((x) => [x.sql, x.params]));
+        assert.notStrictEqual(assinatura(com), assinatura(sem),
+          `${tipo}: param declarado "${p.nome}" NAO muda o SQL/params — nome errado ou param morto`);
+      }
+    }
+  });
+
+  await test('[revisao I2] lista serve exportavel/limite/nota (a tela nao pode hardcoda-los)', async () => {
+    setUser(ADMIN);
+    const res = await request(app).get('/api/almoxarifado/relatorios');
+    for (const r of res.body.relatorios) {
+      assert.ok('exportavel' in r && 'limite' in r && 'nota' in r, JSON.stringify(r));
+      assert.ok(!('acao' in r) && !('fn' in r), 'acao/fn nunca saem na lista');
+    }
+    const hist = res.body.relatorios.find((r) => r.tipo === 'historico-movimentacoes');
+    assert.strictEqual(hist.limite, 500, JSON.stringify(hist));
+    const cons = res.body.relatorios.find((r) => r.tipo === 'consumo-os');
+    assert.ok(cons.nota && cons.nota.includes('saídas diretas'), JSON.stringify(cons.nota));
+    const suc = res.body.relatorios.find((r) => r.tipo === 'sucata-financeiro');
+    assert.strictEqual(suc.exportavel, false, JSON.stringify(suc));
+  });
+
+  await test('[revisao M4] gate do export tem PAR POSITIVO: ADMIN exporta o gated', async () => {
+    setUser(ADMIN);
+    const res = await getBinary(request(app).get('/api/almoxarifado/relatorios/inventario-divergencias/export'));
+    assert.strictEqual(res.status, 200, `esperava 200, veio ${res.status}`);
+    assert.ok(String(res.headers['content-type']).includes('spreadsheetml'), res.headers['content-type']);
+  });
+
+  await test('[revisao M6] chave de prototipo NAO e relatorio: 404 literal', async () => {
+    setUser(ADMIN);
+    for (const chave of ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      const res = await request(app).get(`/api/almoxarifado/relatorios/${chave}`);
+      assert.strictEqual(res.status, 404, `${chave}: esperava 404, veio ${res.status}`);
+      assert.strictEqual(res.body.error, 'Relatório não encontrado', JSON.stringify(res.body));
+      const resExp = await request(app).get(`/api/almoxarifado/relatorios/${chave}/export`);
+      assert.strictEqual(resExp.status, 404, `${chave}/export: esperava 404, veio ${resExp.status}`);
+    }
+  });
+
+  await test('[revisao M7] resultado vazio exporta planilha SO com a linha de cabecalho', async () => {
+    // App/banco NOVOS (o principal ja tem materiais semeados pelos testes acima).
+    const isolado = await createTestApp({ user: ADMIN });
+    try {
+      const res = await getBinary(request(isolado.app).get('/api/almoxarifado/relatorios/estoque-atual/export'));
+      assert.strictEqual(res.status, 200, `esperava 200, veio ${res.status}`);
+      const XLSX = require('xlsx');
+      const wb = XLSX.read(res.body, { type: 'buffer' });
+      const linhas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+      assert.strictEqual(linhas.length, 1, JSON.stringify(linhas));
+      assert.ok(linhas[0].includes('Código'), JSON.stringify(linhas[0]));
+    } finally {
+      await isolado.close();
+    }
   });
 
   await close();

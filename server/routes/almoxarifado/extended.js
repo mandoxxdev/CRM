@@ -1289,20 +1289,33 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // RN-02: lista fail-closed. Nasce do registro filtrado por `can()` — a tela monta o menu a
   // partir dela e nunca oferece link que daria 403. NUNCA inclui `acao` (detalhe de autorizacao
   // nao vaza para a UI decidir).
+  // Revisao da Task 1 (I2): a lista serve tambem exportavel/limite/nota — a RN-05 exige que a
+  // tela esconda o Exportar do nao-tabular, avise "mostrando os primeiros N" e mostre a regua
+  // no rodape; sem esses campos a tela teria de HARDCODAR os tres (a duplicacao que o registro
+  // existe para matar). Alargamento ADITIVO do contrato da RN-02 (design corrigido dizendo que
+  // o shape original estava estreito). `acao` continua NUNCA saindo (autorizacao nao vaza).
   app.get('/api/almoxarifado/relatorios', auth, (req, res) => {
     const relatorios = Object.entries(RELATORIOS)
       .filter(([, entrada]) => entrada.acao === null || can(req.user, entrada.acao))
       .map(([tipo, entrada]) => ({
         tipo, titulo: entrada.titulo, categoria: entrada.categoria, params: entrada.params,
+        exportavel: entrada.exportavel, limite: entrada.limite, nota: entrada.nota,
       }));
     res.json({ relatorios });
   });
+
+  // Revisao da Task 1 (M6): chave de prototipo ('constructor', '__proto__', 'toString') NAO e
+  // relatorio — sem o hasOwnProperty, RELATORIOS['constructor'] devolve a funcao herdada e a
+  // resposta sai fora dos literais congelados (o dispatcher antigo devolvia ate 200/500).
+  const entradaDoRegistro = (tipo) => (
+    Object.prototype.hasOwnProperty.call(RELATORIOS, tipo) ? RELATORIOS[tipo] : undefined
+  );
 
   // RN-01/RN-03: gate e funcao resolvidos PELO REGISTRO — os literais 403/404 sao os mesmos de
   // antes do refactor (comportamento preservado; nenhum shape de rota existente muda).
   app.get('/api/almoxarifado/relatorios/:tipo', auth, async (req, res) => {
     try {
-      const entrada = RELATORIOS[req.params.tipo];
+      const entrada = entradaDoRegistro(req.params.tipo);
       if (!entrada) return res.status(404).json({ error: 'Relatório não encontrado' });
       if (entrada.acao !== null && !can(req.user, entrada.acao)) {
         return res.status(403).json({ error: 'Sem permissão para este relatório', acao: entrada.acao });
@@ -1315,18 +1328,24 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // relatorio ganha query propria de export (nao ha como divergirem).
   app.get('/api/almoxarifado/relatorios/:tipo/export', auth, async (req, res) => {
     try {
-      const entrada = RELATORIOS[req.params.tipo];
+      const entrada = entradaDoRegistro(req.params.tipo);
       if (!entrada) return res.status(404).json({ error: 'Relatório não encontrado' });
       if (entrada.acao !== null && !can(req.user, entrada.acao)) {
         return res.status(403).json({ error: 'Sem permissão para este relatório', acao: entrada.acao });
       }
+      // Revisao da Task 1 (M5): a checagem de `exportavel` vem ANTES do await — nao roda a
+      // query de um relatorio que nunca vai exportar, e uma entrada futura exportavel:false
+      // que devolva ARRAY continua barrada (sem esta ordem, so o Array.isArray decidia e o
+      // flag era peso morto — sabotagem sobreviveu verde na revisao).
+      if (!entrada.exportavel) {
+        return res.status(400).json({ error: 'Relatório sem exportação tabular' });
+      }
       const dados = await entrada.fn(db, req.query);
-      // Fase 2 (C1/I9/I10 — todos medidos): a checagem de exportabilidade so acontece DEPOIS do
-      // await, e QUALQUER setHeader so acontece depois desta checagem — um setHeader antes do
-      // await, ou antes deste 400, estoura ERR_HTTP_HEADERS_SENT quando o payload nao e tabular
-      // (materiais-cliente, sucata-financeiro devolvem OBJETO — o xlsx explode com TypeError em
-      // payload nao-array) ou quando o gate/tipo falha.
-      if (!entrada.exportavel || !Array.isArray(dados)) {
+      // Fase 2 (C1/I9/I10 — todos medidos): QUALQUER setHeader so acontece depois desta
+      // checagem — um setHeader antes do await, ou antes deste 400, estoura
+      // ERR_HTTP_HEADERS_SENT quando o payload nao e tabular ou quando o gate/tipo falha.
+      // O Array.isArray fica como BACKSTOP para funcao que mude de shape sem o registro saber.
+      if (!Array.isArray(dados)) {
         return res.status(400).json({ error: 'Relatório sem exportação tabular' });
       }
       // Projeta SEMPRE pelas `colunas` declaradas (obrigatorias quando exportavel:true) ANTES do

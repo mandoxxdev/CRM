@@ -96,7 +96,15 @@ gates existentes ficam idênticos: `inventario-divergencias` → `inventario`,
 preservado — mudar é letra B).
 
 ### RN-02 — Lista fail-closed
-`GET /api/almoxarifado/relatorios` → 200 `{ relatorios: [{ tipo, titulo, categoria, params }] }`
+
+**Emenda da revisão da Task 1 (I2) — o shape original estava ESTREITO demais e contradizia a
+RN-05:** a lista serve também `exportavel`, `limite` e `nota` (campo novo do registro, com a
+régua/nota de cada relatório como DADO) — sem eles a tela teria de hardcodar os três, a
+duplicação que o registro existe para matar. Alargamento aditivo; `acao` continua nunca
+saindo.
+
+`GET /api/almoxarifado/relatorios` → 200 `{ relatorios: [{ tipo, titulo, categoria, params,
+exportavel, limite, nota }] }`
 contendo SÓ as chaves cujo `acao` é null ou passa em `can(req.user, acao)`. Usuário sem perfil
 (PRODUCAO) vê os 15 sem gate e NÃO vê os 2 gated. A resposta NUNCA inclui `acao` (detalhe de
 autorização não vaza para a UI decidir).
@@ -120,8 +128,11 @@ registro: sem permissão → 403 `{ "error": "Sem permissão para este relatóri
 `{ "error": "Relatório não encontrado" }` (idem). O export chama a MESMA função do registro —
 mesmos filtros de query — e devolve XLSX (`Content-Type` de planilha,
 `Content-Disposition: attachment; filename="<tipo>-<AAAA-MM-DD>.xlsx"`) com cabeçalhos das
-`colunas` declaradas; relatório sem `colunas` declaradas exporta as chaves do primeiro item
-(fallback documentado).
+`colunas` declaradas. **Esta RN dizia "relatório sem colunas declaradas exporta as chaves do primeiro
+item (fallback documentado)"; ESTAVA ERRADA e foi removida (revisão da Task 1, I3):** o
+fallback recriaria exatamente o vazamento C2 medido (64 colunas com custo/proprietário; o
+`inventario-divergencias` re-exporia `ic.*` desfazendo o gate da 10b). Não existe fallback:
+`colunas` é obrigatória quando `exportavel: true` e a varredura do registro exige.
 
 ### RN-04 — Indicadores medidos pelas fontes únicas
 `GET /relatorios/indicadores?janela_dias=90` (default 90; validação: inteiro ≥ 1, senão 400

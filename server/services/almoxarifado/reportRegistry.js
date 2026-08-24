@@ -55,6 +55,7 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -73,6 +74,7 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -90,6 +92,7 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -105,6 +108,7 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -120,6 +124,7 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -137,6 +142,7 @@ const RELATORIOS = {
     categoria: 'Movimentações',
     acao: null,
     exportavel: true,
+    nota: "Mostra as 500 movimentações mais recentes do filtro.",
     // Fase 2, I5: a query do proprio relatorio ja tem LIMIT 500 (reportService.js) — o export
     // herda esse teto, nunca refaz a query sem limite.
     limite: 500,
@@ -162,6 +168,7 @@ const RELATORIOS = {
     categoria: 'Movimentações',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     // Fase 2, M8: os_id NAO e obrigatorio — sem ele o relatorio devolve todas as reservas ATIVAS
     // hoje (comportamento atual); obrigar seria mudanca de comportamento disfarcada.
@@ -186,6 +193,7 @@ const RELATORIOS = {
     // régua de `indicadores`, que usa TIPOS_SAIDA inteiro; a tela mostra a nota no rodapé).
     acao: null,
     exportavel: true,
+    nota: "Conta apenas saídas diretas (SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA) — régua histórica deste relatório; o indicador de giro conta todo débito de patrimônio.",
     limite: null,
     params: [
       { nome: 'os_id', rotulo: 'OS', tipo: 'number', obrigatorio: false },
@@ -205,6 +213,7 @@ const RELATORIOS = {
     categoria: 'Movimentações',
     acao: null,
     exportavel: true,
+    nota: "Conta os tipos de saída SAIDA* — régua histórica deste relatório; o indicador de giro conta todo débito de patrimônio.",
     limite: null,
     params: [
       { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
@@ -226,6 +235,7 @@ const RELATORIOS = {
     categoria: 'Movimentações',
     acao: null,
     exportavel: true,
+    nota: "Top 10 por quantidade, contando apenas saídas diretas (SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA).",
     // Fase 2, I5: LIMIT 10 na query (reportService.js) — declarado para a tela avisar.
     limite: 10,
     params: [
@@ -245,6 +255,7 @@ const RELATORIOS = {
     categoria: 'Gestão',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -263,6 +274,7 @@ const RELATORIOS = {
     // CONCLUIDA para qualquer usuario do modulo — mesmo gate do relatorio de acuracidade.
     acao: 'inventario',
     exportavel: true,
+    nota: "Mostra as 500 divergências mais recentes de conferências CONCLUÍDAS.",
     // Fase 2, I5: LIMIT 500 na query (reportService.js).
     limite: 500,
     params: [],
@@ -284,6 +296,7 @@ const RELATORIOS = {
     // sem gate — a acao que decide compra e quem pode ver o relatorio dela.
     acao: 'gerenciar_reposicao',
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -303,6 +316,7 @@ const RELATORIOS = {
     // Devolve OBJETO ({ periodo, movimentacoes, vendas, totais, por_classificacao, nota }), nao
     // array — export tabular nao existe para este relatorio (Fase 2, C1).
     exportavel: false,
+    nota: null,
     limite: null,
     // Nomes REAIS (Fase 2, I6): `de`/`ate`, NAO data_inicio/data_fim — nome errado e ignorado e
     // devolve o periodo inteiro parecendo filtrado.
@@ -318,6 +332,7 @@ const RELATORIOS = {
     categoria: 'Gestão',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -335,6 +350,7 @@ const RELATORIOS = {
     categoria: 'Gestão',
     acao: null,
     exportavel: true,
+    nota: null,
     limite: null,
     params: [],
     colunas: [
@@ -352,6 +368,7 @@ const RELATORIOS = {
     // Devolve OBJETO ({ cliente, itens, aplicacoes }), nao array — export tabular nao existe
     // para este relatorio (Fase 2, C1).
     exportavel: false,
+    nota: null,
     limite: null,
     // Unico param obrigatorio de verdade da etapa (clienteEstoqueService.posicaoPorCliente
     // devolve 400 'informe o cliente_id' sem ele).
