@@ -1,13 +1,19 @@
 /**
  * Etapa 13, Task 3 — tela "/almoxarifado/relatorios" contra o contrato HTTP CONGELADO (RN-01/
- * 02/03) medido em server/routes/almoxarifado/extended.js, não contra o design aspiracional
- * (a lista real só devolve `{ tipo, titulo, categoria, params }` — sem `exportavel`/`limite`/
- * `colunas`; ver o cabeçalho de RelatoriosAlmoxarifado.js para as duas decisões que isso força).
+ * 02/03/05) medido em server/routes/almoxarifado/extended.js: a lista devolve, por relatório,
+ * `{ tipo, titulo, categoria, params, exportavel, limite, nota }` (realinhado pelo fix-round
+ * `cfdbbe5` — a primeira versão desta suíte testava contra um shape mais estreito e tinha 3
+ * contornos: proxy Array.isArray para o botão Exportar, tabela local de limites, e nota
+ * cortada; todos removidos do componente e desta suíte).
  *
  * Fixtures usam formas realistas espelhando server/services/almoxarifado/reportRegistry.js
  * (títulos, categorias, nomes de params reais como `de`/`ate` da sucata-financeiro), mas o
  * componente nunca é testado por conhecer um tipo específico — os asserts de "menu só com o
- * listado" e "tabela genérica" são o que garantem isso.
+ * listado" e "tabela genérica" são o que garantem isso. Uma entrada de fixture (
+ * `diagnostico-consistencia`) é deliberadamente FICTÍCIA, com `limite:3` (valor que nunca
+ * existiu em nenhuma tabela hardcoded desta tela) e `exportavel:false` mesmo respondendo um
+ * payload ARRAY — é o par de testes que prova que o campo da lista é a fonte, não mais um
+ * proxy sobre o formato do payload.
  *
  * Executar: cd client && CI=true npx react-scripts test --watchAll=false --testPathPattern=RelatoriosAlmoxarifado
  */
@@ -28,15 +34,23 @@ jest.mock('react-toastify', () => ({
 
 // Espelha um recorte realista do registro real (2 categorias, um relatório sem params, um com
 // params opcionais de nomes REAIS diferentes de data_inicio/data_fim, e o único obrigatório de
-// verdade da etapa: cliente_id do materiais-cliente).
+// verdade da etapa: cliente_id do materiais-cliente). Cada entrada já traz exportavel/limite/
+// nota (contrato alargado pelo fix-round cfdbbe5).
+const NOTA_MATERIAIS_MAIS_CONSUMIDOS = 'Top 10 por quantidade, contando apenas saídas diretas '
+  + '(SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA).';
+
 const LISTA_FIXTURE = [
-  { tipo: 'estoque-atual', titulo: 'Estoque atual', categoria: 'Estoque', params: [] },
+  {
+    tipo: 'estoque-atual', titulo: 'Estoque atual', categoria: 'Estoque', params: [],
+    exportavel: true, limite: null, nota: null,
+  },
   {
     tipo: 'materiais-mais-consumidos', titulo: 'Materiais mais consumidos', categoria: 'Movimentações',
     params: [
       { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
       { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
     ],
+    exportavel: true, limite: 10, nota: NOTA_MATERIAIS_MAIS_CONSUMIDOS,
   },
   {
     tipo: 'sucata-financeiro', titulo: 'Sucata — financeiro', categoria: 'Gestão',
@@ -44,14 +58,25 @@ const LISTA_FIXTURE = [
       { nome: 'de', rotulo: 'De', tipo: 'date', obrigatorio: false },
       { nome: 'ate', rotulo: 'Até', tipo: 'date', obrigatorio: false },
     ],
+    exportavel: false, limite: null, nota: null,
   },
   {
     tipo: 'materiais-cliente', titulo: 'Posição por cliente', categoria: 'Terceiros e clientes',
     params: [{ nome: 'cliente_id', rotulo: 'Cliente', tipo: 'number', obrigatorio: true }],
+    exportavel: false, limite: null, nota: null,
   },
   {
     tipo: 'indicadores', titulo: 'Indicadores gerenciais', categoria: 'Gestão',
     params: [{ nome: 'janela_dias', rotulo: 'Janela (dias)', tipo: 'number', obrigatorio: false }],
+    exportavel: false, limite: null, nota: null,
+  },
+  // Entrada FICTÍCIA de propósito (não existe em reportRegistry.js): limite:3 é um valor que
+  // NUNCA esteve em nenhuma tabela hardcoded desta tela, e exportavel:false combinado com um
+  // payload ARRAY é o caso que o antigo proxy Array.isArray acertava por acidente. As duas
+  // coisas juntas provam que hoje é o CAMPO da lista que decide, não uma inferência do payload.
+  {
+    tipo: 'diagnostico-consistencia', titulo: 'Diagnóstico de consistência', categoria: 'Estoque',
+    params: [], exportavel: false, limite: 3, nota: null,
   },
 ];
 
@@ -267,8 +292,8 @@ describe('RelatoriosAlmoxarifado — payload objeto (indicadores)', () => {
   });
 });
 
-describe('RelatoriosAlmoxarifado — aviso de limite', () => {
-  test('linhas === limite conhecido (10, materiais-mais-consumidos) mostra o aviso', async () => {
+describe('RelatoriosAlmoxarifado — aviso de limite (campo `limite` da lista)', () => {
+  test('linhas === limite da lista (10, materiais-mais-consumidos) mostra o aviso', async () => {
     await renderizar();
     await selecionarRelatorio('materiais-mais-consumidos');
     const dezLinhas = Array.from({ length: 10 }, (_, i) => ({ codigo: `MAT-${i}`, total_consumido: i }));
@@ -282,7 +307,7 @@ describe('RelatoriosAlmoxarifado — aviso de limite', () => {
     expect(aviso.textContent).toContain('10');
   });
 
-  test('linhas < limite conhecido NÃO mostra o aviso (sabotagem-alvo: remover o aviso passa despercebido sem este par negativo)', async () => {
+  test('linhas < limite da lista NÃO mostra o aviso (sabotagem-alvo: remover o aviso passa despercebido sem este par negativo)', async () => {
     await renderizar();
     await selecionarRelatorio('materiais-mais-consumidos');
     const noveLinhas = Array.from({ length: 9 }, (_, i) => ({ codigo: `MAT-${i}`, total_consumido: i }));
@@ -293,10 +318,44 @@ describe('RelatoriosAlmoxarifado — aviso de limite', () => {
 
     expect(container.querySelector('[data-testid="aviso-limite"]')).toBeNull();
   });
+
+  test('limite ATÍPICO (3, diagnostico-consistencia) prova que o aviso é dirigido pelo campo, não por uma tabela local', async () => {
+    // 3 nunca esteve em nenhuma tabela hardcoded desta tela (os únicos valores reais do
+    // registro são 500 e 10) — só passa se o componente ler `entradaSelecionada.limite`.
+    await renderizar();
+    await selecionarRelatorio('diagnostico-consistencia');
+    const tresLinhas = [{ codigo: 'X1' }, { codigo: 'X2' }, { codigo: 'X3' }];
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/diagnostico-consistencia'
+      ? Promise.resolve({ data: tresLinhas })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Consultar'));
+
+    const aviso = container.querySelector('[data-testid="aviso-limite"]');
+    expect(aviso).toBeTruthy();
+    expect(aviso.textContent).toContain('3');
+  });
+});
+
+describe('RelatoriosAlmoxarifado — nota/régua declarada no rodapé (campo `nota` da lista)', () => {
+  test('nota aparece, com o texto exato do registro, já ao selecionar o relatório (antes de consultar)', async () => {
+    await renderizar();
+    await selecionarRelatorio('materiais-mais-consumidos');
+
+    const nota = container.querySelector('[data-testid="nota-relatorio"]');
+    expect(nota).toBeTruthy();
+    expect(nota.textContent).toBe(NOTA_MATERIAIS_MAIS_CONSUMIDOS);
+  });
+
+  test('relatório sem nota declarada (null) não renderiza o bloco de nota', async () => {
+    await renderizar();
+    await selecionarRelatorio('estoque-atual');
+
+    expect(container.querySelector('[data-testid="nota-relatorio"]')).toBeNull();
+  });
 });
 
 describe('RelatoriosAlmoxarifado — exportar XLSX', () => {
-  test('export usa a MESMA querystring da última consulta e só existe quando o payload é array (proxy de exportavel)', async () => {
+  test('export usa a MESMA querystring da última consulta (relatório com exportavel:true)', async () => {
     await renderizar();
     await selecionarRelatorio('materiais-mais-consumidos');
 
@@ -338,6 +397,19 @@ describe('RelatoriosAlmoxarifado — exportar XLSX', () => {
   test('botão Exportar XLSX não aparece antes de qualquer consulta', async () => {
     await renderizar();
     await selecionarRelatorio('materiais-mais-consumidos');
+    expect(botao('Exportar XLSX')).toBeUndefined();
+  });
+
+  test('exportavel:false esconde o botão MESMO com payload array (o caso que o proxy Array.isArray errava)', async () => {
+    await renderizar();
+    await selecionarRelatorio('diagnostico-consistencia');
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/diagnostico-consistencia'
+      ? Promise.resolve({ data: [{ codigo: 'X1' }, { codigo: 'X2' }] }) // payload TABULAR de propósito
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Consultar'));
+
+    // A tabela genérica renderiza normalmente (payload é array) — só o botão de export some.
+    expect(container.querySelector('.almox-table')).toBeTruthy();
     expect(botao('Exportar XLSX')).toBeUndefined();
   });
 });

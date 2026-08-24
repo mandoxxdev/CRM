@@ -11,26 +11,16 @@ import './Almoxarifado.css';
  * Contrato: docs/superpowers/specs/2026-08-24-almoxarifado-etapa13-relatorios-design.md
  * (RN-02/RN-03/RN-05, D6).
  *
- * ── Duas decisões por contrato HTTP REAL divergir do design (medido em extended.js) ──────────
+ * ── Contrato da lista (realinhado pelo fix-round `cfdbbe5`) ───────────────────────────────────
  *
- * RN-02 diz literalmente que a lista devolve `{ tipo, titulo, categoria, params }` — o handler
- * real (`app.get('/api/almoxarifado/relatorios', ...)`) confirma: SEM `exportavel`, `limite` ou
- * `colunas` (só esses 4 campos são mapeados; "a resposta nunca inclui `acao`" no design não
- * cobre os outros três, mas o código também os omite). O design/RN-05 assume que a tela lê
- * esses campos direto da lista — não dá, e a decisão foi:
- *
- *  1. Botão "Exportar XLSX": sem `exportavel` na lista, uso o payload da ÚLTIMA CONSULTA como
- *     proxy — `Array.isArray(payload) <=> exportavel:true`. Essa equivalência é GARANTIDA pelo
- *     próprio registro do servidor (Task 1: `colunas` é obrigatória quando `exportavel:true`, e
- *     o dispatcher de export devolve 400 quando o payload não é array — os dois únicos casos
- *     `exportavel:false` hoje, `materiais-cliente` e `sucata-financeiro`, devolvem objeto). O
- *     botão só aparece DEPOIS de uma consulta bem-sucedida cujo payload seja array.
- *  2. Aviso "mostrando os primeiros N": sem `limite` na lista, uso uma tabela local que
- *     ESPELHA os 3 valores hoje declarados em reportRegistry.js (historico-movimentacoes: 500,
- *     inventario-divergencias: 500, materiais-mais-consumidos: 10). Risco de desalinhamento
- *     REGISTRADO: se o registro mudar o limite de um desses três (letra B), este mapa precisa
- *     acompanhar — não há como descobrir isso pela lista sem mudar o contrato congelado, fora
- *     do escopo desta task (galho de tela, não pode tocar o backend).
+ * `GET /api/almoxarifado/relatorios` devolve, por relatório:
+ * `{ tipo, titulo, categoria, params, exportavel, limite, nota }`. A primeira versão desta
+ * tela foi construída contra um shape mais estreito (só `tipo/titulo/categoria/params`, medido
+ * na Task 1 original) e teve de driblar a ausência de `exportavel`/`limite`/`nota` com três
+ * contornos declarados (proxy `Array.isArray` do payload, tabela local de limites espelhando
+ * `reportRegistry.js`, e corte da régua/nota por falta de campo). O fix-round alargou a lista
+ * ADITIVAMENTE (RN-05) — os três contornos foram REMOVIDOS e a tela agora lê os campos direto
+ * da lista, fonte única, sem duplicar dado do registro no cliente.
  *
  * ── Download do export ──────────────────────────────────────────────────────────────────────
  * Usa o MESMO padrão já estabelecido no resto do cliente (PropostaForm.js, PropostasList.js,
@@ -42,13 +32,6 @@ import './Almoxarifado.css';
  * nenhum outro download do app faz isso). Usar a mesma instância do axios garante o header
  * certo, mantém o download testável por mock e não abre uma exceção de segurança nova.
  */
-
-// Decisão 2 acima — ver cabeçalho do arquivo.
-const LIMITE_CONHECIDO = {
-  'historico-movimentacoes': 500,
-  'inventario-divergencias': 500,
-  'materiais-mais-consumidos': 10,
-};
 
 // Mesmo painel de erro por estado da Etapa 11/12 (achado 1, Critical) — copiado de
 // ReposicaoAlmoxarifado.js/NotificacoesAlmoxarifado.js para o módulo não ganhar um terceiro
@@ -106,9 +89,10 @@ const formatCelula = (v) => {
   return String(v);
 };
 
-// Tabela genérica: cabeçalhos vêm das CHAVES do primeiro item (o front não conhece `colunas` do
-// registro — nem chegam na lista, ver decisão 2 do cabeçalho). Usada tanto para o payload ARRAY
-// direto quanto para um array interno de um payload OBJETO (ex.: `rupturas.materiais`).
+// Tabela genérica: cabeçalhos vêm das CHAVES do primeiro item — a lista não traz `colunas`
+// (só `params`, ver contrato no cabeçalho do arquivo), então o front nunca assume nomes fixos.
+// Usada tanto para o payload ARRAY direto quanto para um array interno de um payload OBJETO
+// (ex.: `rupturas.materiais`).
 const TabelaGenerica = ({ linhas }) => {
   if (!linhas || linhas.length === 0) {
     return <div className="almox-empty"><p>Nenhum registro encontrado</p></div>;
@@ -321,9 +305,14 @@ const RelatoriosAlmoxarifado = () => {
     }
   };
 
-  // Decisão 1 do cabeçalho: Array.isArray do payload é o proxy de `exportavel`.
-  const podeExportar = Array.isArray(dadosRelatorio) && ultimaConsultaParams !== null;
-  const limiteDoTipo = entradaSelecionada ? LIMITE_CONHECIDO[entradaSelecionada.tipo] : undefined;
+  // Fonte é o campo `exportavel` da lista (não mais um proxy Array.isArray do payload — o
+  // proxy errava exatamente o caso "payload array mas exportavel:false" que não existe hoje
+  // mas o registro não impede de existir amanhã). Array.isArray fica só como guarda extra
+  // (defesa em profundidade: nunca oferece download de algo que a última consulta não trouxe
+  // como tabela, mesmo que `exportavel` diga true).
+  const podeExportar = !!entradaSelecionada?.exportavel && Array.isArray(dadosRelatorio) && ultimaConsultaParams !== null;
+  // Fonte é o campo `limite` da lista — sem tabela local duplicando reportRegistry.js.
+  const limiteDoTipo = entradaSelecionada?.limite;
   const atingiuLimite = Array.isArray(dadosRelatorio) && !!limiteDoTipo && dadosRelatorio.length === limiteDoTipo;
 
   return (
@@ -377,6 +366,12 @@ const RelatoriosAlmoxarifado = () => {
             ) : (
               <>
                 <h2 style={{ marginTop: 0 }}>{entradaSelecionada.titulo}</h2>
+
+                {entradaSelecionada.nota && (
+                  <p data-testid="nota-relatorio" style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', margin: '0 0 12px' }}>
+                    {entradaSelecionada.nota}
+                  </p>
+                )}
 
                 {(entradaSelecionada.params || []).length > 0 && (
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', margin: '12px 0' }}>
