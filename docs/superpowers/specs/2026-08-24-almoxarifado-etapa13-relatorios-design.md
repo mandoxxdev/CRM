@@ -6,7 +6,11 @@
 > as DUAS entraram por achado de revisão final, não por design: a classe de defeito
 > "relatório novo esquece o gate" é estrutural. Front consome só 2 dos 17; não há tela de
 > relatórios do módulo. Libs de exportação já no server (`xlsx@0.18.5`, `pdfkit`, `puppeteer`).
-> Acuracidade (10b) vive em rota própria com `requirePermission('inventario')`. Fontes únicas
+> Acuracidade (10b) vive em rota própria com `requirePermission('inventario')`.
+> **Correção da Fase 2 (M2): "front consome só 2 dos 17" estava ERRADO — são 3**
+> (AlmoxarifadoDashboard consome consumo-os e materiais-mais-consumidos; ReposicaoAlmoxarifado
+> consome o GATED solicitacoes-compra — a regressão do refactor cobre esse consumidor).
+> Fontes únicas
 > vivas: `custoUnitarioSql`/`valorEstoqueSql` (com teste-varredura que PROÍBE ler custo à mão),
 > `disponivelSql`, `divergenciaRealSql`.
 
@@ -46,16 +50,21 @@ sem os cartões que a spec 27 pede.
     consumo da Etapa 11 — `TIPOS_SAIDA` na janela), por material; o indicador agregado é a
     mediana (média seria distorcida por material sem consumo → cobertura infinita; materiais
     sem consumo na janela ficam FORA da mediana e contados à parte).
-  - **Rupturas na janela:** COUNT de materiais ativos, próprios (`proprietario_cliente_id IS
-    NULL`), que tocaram saldo ≤ 0 no período (livro: alguma movimentação com
-    `saldo_posterior <= 0` e `cancelado = 0`), com lista dos materiais.
+  - **Rupturas na janela (régua emendada pela Fase 2, C5 — a original contava lançamento
+    burocrático como ruptura, medido):** COUNT de materiais ativos, próprios, com movimentação
+    `cancelado = 0` na janela, `saldo_posterior <= 0` **e `tipo` em `TIPOS_SAIDA` ou
+    `AJUSTE_INVENTARIO`** (tipos neutros gravam `saldo_posterior = saldo_anterior` e, num
+    material já zerado, atribuiriam a 1ª ruptura a uma LIBERACAO_RESERVA). Declarado (letra
+    E): a régua olha o saldo FÍSICO — 100% reservado tem disponível 0 e NÃO aparece; é
+    contagem de evento, não de estado; AJUSTE_INVENTARIO que zera por contagem conta.
   - **Valor do estoque por grupo:** `valorEstoqueSql` agrupado por `categoria` (COALESCE
     'Sem categoria').
-  - **Tempo médio de atendimento de requisição (h):** média de
-    `entregue_em - created_at` das requisições que chegaram a ENTREGUE no período (régua
-    exata conferida na Fase 0 da task contra o schema real de requisições — se o timestamp de
-    entrega não existir como coluna, usar a ÚLTIMA movimentação com `requisicao_id` como
-    proxy e DECLARAR).
+  - **Tempo médio de atendimento de requisição (h) — régua confirmada pela Fase 2 (I7):**
+    `AVG((julianday(data_entrega) - julianday(created_at)) * 24)` com
+    `WHERE data_entrega IS NOT NULL` e `total_consideradas` DENTRO do mesmo WHERE. Declarado:
+    `data_entrega` tem UM escritor (requisitionService.js:376) e só na entrega COMPLETA —
+    parcial e ENCERRADA sem completar ficam fora. `media_horas` arredondada
+    (`Number(x.toFixed(2))` — julianday devolve 6.499999992549419 para 6h30, medido).
   - **Cortados (letra D):** previsto×realizado por projeto (exige BOM/OP — feature 22),
     divergência/rejeição por fornecedor (dados da 08/09 sem agregação pedida por ninguém
     ainda), % requisições no prazo (campo de prazo prometido não é confiável — conferir na
@@ -64,6 +73,9 @@ sem os cartões que a spec 27 pede.
 - **D5 — Gate dos indicadores: `null` (módulo inteiro), IGUAL ao dashboard.** O
   `valorTotalEstoque` já é visível a todo usuário do módulo no dashboard hoje; gate novo aqui
   seria regra nova sem pedido. Registrado na letra B como reversível (uma linha no registro).
+  **Declarado (Fase 2, M6): `acao: null` expõe a QUEBRA por categoria e a lista nominal de
+  rupturas — mais do que o agregado de hoje.** Decisão consciente; se o cliente objetar, o
+  gate natural é `gerenciar_reposicao`.
 - **D6 — Tela `/almoxarifado/relatorios` genérica, dirigida pelo registro.** Menu por
   categoria (vem da lista D2), formulário de parâmetros declarados (`params`), tabela
   genérica com as `colunas`, botão Exportar XLSX, painel de erro por estado (lição da 11),
@@ -90,6 +102,18 @@ contendo SÓ as chaves cujo `acao` é null ou passa em `can(req.user, acao)`. Us
 autorização não vaza para a UI decidir).
 
 ### RN-03 — Dispatcher e export com o MESMO gate e a MESMA função
+
+**Emendas da Fase 2 (todas medidas):** o export só existe para relatório `exportavel: true`
+com `colunas` declaradas — payload OBJETO (`materiais-cliente`, `sucata-financeiro`, e
+`indicadores`) responde 400 `Relatório sem exportação tabular` (o xlsx explode com TypeError
+em payload não-array); as linhas são PROJETADAS pelas colunas ANTES do `json_to_sheet`
+(`header` não descarta chave não declarada — 6 declaradas viravam 64 colunas com
+custo/proprietário vazando, e `inventario-divergencias` re-exporia `ic.*` desfazendo o gate
+da 10b); NUNCA passar o array do registro como `header` (a lib faz push nele — o singleton
+corromperia a lista até reiniciar); headers HTTP só DEPOIS do await (senão 400/403/404
+estoura com headers enviados); LIMITs herdados declarados no registro
+(`historico-movimentacoes` 500, `inventario-divergencias` 500, `materiais-mais-consumidos`
+10) e avisados na tela; volume medido: 20.000 linhas × 4 colunas = 187 ms / 3,13 MB.
 `GET /relatorios/:tipo` (existente) e `GET /relatorios/:tipo/export` resolvem gate pelo
 registro: sem permissão → 403 `{ "error": "Sem permissão para este relatório", "acao": "<acao>" }`
 (literal ATUAL do dispatcher, preservado). Tipo inexistente → 404
@@ -110,6 +134,12 @@ leitura à mão); consumo SEMPRE via `TIPOS_SAIDA` (fonte única de tipos); mate
 fora de giro/cobertura/rupturas/valor (não é patrimônio nosso).
 
 ### RN-05 — Tela dirigida pelo registro
+
+**Emenda da Fase 2 (I6/C4/I5):** os nomes de parâmetro vêm do REGISTRO, nunca assumidos
+(`sucata-financeiro` usa `de`/`ate` — nome errado não erra, é ignorado e o período inteiro
+volta parecendo filtrado); cada relatório exibe no rodapé a régua/nota declarada (consumo-os
+conta só SAIDA*, indicadores conta TIPOS_SAIDA inteiro — 10 vs 18 medidos no mesmo material)
+e o aviso "mostrando os primeiros N" quando as linhas baterem no limite declarado.
 Menu por categoria com SÓ o que a lista devolve; parâmetros renderizados por declaração
 (`data_inicio`/`data_fim` como date, ids como number/text); erro de rede/403 → painel de erro
 com retry (nunca lista vazia); export baixa o arquivo da rota de export com os mesmos
