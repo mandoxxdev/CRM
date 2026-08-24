@@ -247,6 +247,10 @@ async function relatorioSucataFinanceiro(db, { de, ate } = {}) {
 async function lerJanelaPadrao(db) {
   const row = await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'reposicao_janela_consumo_dias'");
   const n = parseFloat(row?.valor);
+  // Assimetria DECLARADA (revisao da Task 2, minor): a querystring exige inteiro >= 1 (400
+  // literal), este parseFloat aceita '1.5' — mas o PUT /configuracoes valida a chave como
+  // inteiro (PREFIXOS_DIAS da Etapa 11), entao um decimal aqui so entra por UPDATE manual no
+  // banco. Mesmo parseFloat do lerConfigNumero da E11, de proposito (uma regua de leitura so).
   return Number.isFinite(n) && n > 0 ? n : 90;
 }
 

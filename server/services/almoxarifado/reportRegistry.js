@@ -393,10 +393,17 @@ const RELATORIOS = {
     // rupturas olham o saldo FISICO (nao o disponivel — 100% reservado nao aparece) e so contam
     // TIPOS_SAIDA ou AJUSTE_INVENTARIO (tipos neutros como LIBERACAO_RESERVA nao mexem no saldo
     // fisico); atendimento so considera requisicao com ENTREGA COMPLETA, sem filtro de janela.
-    nota: 'Giro: valor consumido (TIPOS_SAIDA) na janela dividido pelo valor do estoque ATUAL '
-      + '(aproximacao declarada — sem snapshot historico). Cobertura por MEDIANA (materiais sem '
-      + 'consumo na janela ficam fora, contados a parte). Janela default: '
-      + 'configuracoes_almoxarifado.reposicao_janela_consumo_dias (fallback 90 dias).',
+    // Revisao da Task 2 (I-2): a nota e o UNICO canal desta informacao ate a tela — os desvios
+    // DECLARADOS (atendimento sem janela; rupturas por evento fisico; cliente/inativo fora)
+    // estavam so em comentario JS, que nao chega ao usuario.
+    nota: 'Giro: valor consumido na janela dividido pelo valor do estoque ATUAL '
+      + '(aproximação declarada — não há histórico de estoque). Cobertura pela MEDIANA dos '
+      + 'materiais com consumo na janela (os sem consumo são contados à parte). Rupturas: '
+      + 'materiais próprios e ativos cujo saldo FÍSICO tocou zero por saída ou ajuste de '
+      + 'inventário na janela — material 100% reservado não conta, e material inativado sai do '
+      + 'histórico. Tempo de atendimento: só requisições com entrega COMPLETA, de TODO o '
+      + 'histórico (sem janela). Materiais de clientes ficam fora de todos os blocos. Janela '
+      + 'padrão: a mesma da Reposição (config; 90 dias de fábrica).',
     limite: null,
     params: [
       { nome: 'janela_dias', rotulo: 'Janela (dias)', tipo: 'number', obrigatorio: false },

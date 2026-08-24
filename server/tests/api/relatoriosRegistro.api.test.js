@@ -385,6 +385,10 @@ function getBinary(req) {
     }
     const hist = res.body.relatorios.find((r) => r.tipo === 'historico-movimentacoes');
     assert.strictEqual(hist.limite, 500, JSON.stringify(hist));
+    // Revisao da Task 3 (C1): a lista serve tambem as colunas declaradas — a tela projeta a
+    // tabela por elas (sem isso, Object.keys da linha renderizava 64 colunas cruas com custo).
+    assert.ok(Array.isArray(hist.colunas) && hist.colunas.length > 0
+      && hist.colunas.every((c) => c.chave && c.rotulo), JSON.stringify(hist.colunas));
     const cons = res.body.relatorios.find((r) => r.tipo === 'consumo-os');
     assert.ok(cons.nota && cons.nota.includes('saídas diretas'), JSON.stringify(cons.nota));
     const suc = res.body.relatorios.find((r) => r.tipo === 'sucata-financeiro');

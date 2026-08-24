@@ -1303,6 +1303,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       .map(([tipo, entrada]) => ({
         tipo, titulo: entrada.titulo, categoria: entrada.categoria, params: entrada.params,
         exportavel: entrada.exportavel, limite: entrada.limite, nota: entrada.nota,
+        // Revisao da Task 3 (C1): a TELA tambem projeta a tabela pelas colunas declaradas —
+        // sem servi-las, ela caia em Object.keys(linha) e renderizava as 64 colunas cruas do
+        // SELECT * (custo_medio/proprietario_cliente_id como cabecalho, para qualquer usuario
+        // do modulo), desfazendo na UI a decisao C2 do export. Mesmo alargamento aditivo.
+        colunas: entrada.colunas,
       }));
     res.json({ relatorios });
   });

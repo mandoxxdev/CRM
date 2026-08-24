@@ -133,11 +133,28 @@ async function getIndicadores(app, query) {
       const matB = await criarMaterial(db, { custo_unitario: 10, custo_medio: 12, quantidade_atual: 30 });
       await movimentar(db, { material_id: matB, tipo: 'SAIDA', quantidade: 4 }); // 4 * 12 = 48
 
+      // Revisao T2 (M9): SUCATA e consumo (TIPOS_SAIDA inteiro, C4) — estreitar a regua para
+      // so 'SAIDA' derrubaria os 20 abaixo.
+      await movimentar(db, { material_id: matA, tipo: 'SUCATA', quantidade: 2, justificativa: 'sucata teste' }); // 2 * 10 = 20
+
+      // Revisao T2 (M11): movimentacao CANCELADA nao conta no consumido (INSERT direto no
+      // livro com cancelado=1 — estornar de verdade tambem creditaria o saldo e mudaria o
+      // denominador; aqui isola SO o filtro cancelado).
+      await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, cancelado, usuario_nome)
+        VALUES (?, 'SAIDA', 50, 62, 12, 1, 'teste')`, [matA]);
+
+      // Revisao T2 (M2/M3): material de CLIENTE com estoque E consumo no livro — nem o
+      // consumido nem o estoque do giro podem ve-lo.
+      const clienteGiro = await dbRun(db, `INSERT INTO clientes (razao_social) VALUES ('Cliente Giro LTDA')`);
+      const matCli = await criarMaterial(db, { custo_unitario: 1000, quantidade_atual: 5, proprietario_cliente_id: clienteGiro.lastID });
+      await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, cancelado, usuario_nome)
+        VALUES (?, 'SAIDA', 2, 7, 5, 0, 'teste')`, [matCli]);
+
       const res = await getIndicadores(app, { janela_dias: 30 });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-      assert.strictEqual(res.body.giro.valor_consumido, 108, JSON.stringify(res.body.giro)); // 60 + 48
-      assert.strictEqual(res.body.giro.valor_estoque_atual, 452, JSON.stringify(res.body.giro)); // 14*10 + 26*12
-      assert.strictEqual(res.body.giro.indice, 0.24, JSON.stringify(res.body.giro)); // 108/452
+      assert.strictEqual(res.body.giro.valor_consumido, 128, JSON.stringify(res.body.giro)); // 60 + 48 + 20
+      assert.strictEqual(res.body.giro.valor_estoque_atual, 432, JSON.stringify(res.body.giro)); // 12*10 + 26*12
+      assert.strictEqual(res.body.giro.indice, 0.3, JSON.stringify(res.body.giro)); // 128/432
     } finally { await close(); }
   });
 
@@ -147,22 +164,32 @@ async function getIndicadores(app, query) {
     const { app, db, close } = await createTestApp({ user: ADMIN });
     try {
       const mat1 = await criarMaterial(db, { custo_unitario: 1, quantidade_atual: 20 });
-      await movimentar(db, { material_id: mat1, tipo: 'SAIDA', quantidade: 6 }); // disp 14, consumo 6 -> 14/(6/30)=70
+      await movimentar(db, { material_id: mat1, tipo: 'SAIDA', quantidade: 6 }); // disp 14, consumo 6 -> 14/(6/60)=140
 
       const mat2 = await criarMaterial(db, { custo_unitario: 1, quantidade_atual: 30 });
-      await movimentar(db, { material_id: mat2, tipo: 'SAIDA', quantidade: 4 }); // disp 26, consumo 4 -> 26/(4/30)=195
+      await movimentar(db, { material_id: mat2, tipo: 'SAIDA', quantidade: 4 }); // disp 26, consumo 4 -> 26/(4/60)=390
 
       const mat3 = await criarMaterial(db, { custo_unitario: 1, quantidade_atual: 100 });
-      await movimentar(db, { material_id: mat3, tipo: 'SAIDA', quantidade: 10 }); // disp 90, consumo 10 -> 90/(10/30)=270
+      await movimentar(db, { material_id: mat3, tipo: 'SAIDA', quantidade: 10 }); // disp 90, consumo 10 -> 90/(10/60)=540
 
       // Sem consumo na janela: fica FORA da mediana, contado a parte.
       await criarMaterial(db, { custo_unitario: 1, quantidade_atual: 10 });
 
-      const res = await getIndicadores(app, { janela_dias: 30 });
+      // Revisao T2 (M5): material de CLIENTE com consumo no livro — se a cobertura o incluisse,
+      // a mediana de 4 valores mudaria (o INSERT e direto no livro porque saida de material de
+      // cliente pelo motor exige a guarda de dono — o indicador le o LIVRO, e isso basta).
+      const clienteCob = await dbRun(db, `INSERT INTO clientes (razao_social) VALUES ('Cliente Cobertura LTDA')`);
+      const matCliCob = await criarMaterial(db, { custo_unitario: 1, quantidade_atual: 1000, proprietario_cliente_id: clienteCob.lastID });
+      await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, cancelado, usuario_nome)
+        VALUES (?, 'SAIDA', 1, 1001, 1000, 0, 'teste')`, [matCliCob]);
+
+      // Revisao T2 (M4): janela 60, NAO 30 — um /30 cravado no denominador da cobertura
+      // produziria [70,195,270] e o assert de 390 cai.
+      const res = await getIndicadores(app, { janela_dias: 60 });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-      // Mediana de [70,195,270] = 195 — a MEDIA seria 178.33: se alguem trocar mediana por
-      // media (controle positivo iii), este numero cai.
-      assert.strictEqual(res.body.cobertura.mediana_dias, 195, JSON.stringify(res.body.cobertura));
+      // Mediana de [140,390,540] = 390 — a MEDIA seria 356.67 (controle iii) e com o cliente
+      // vazando seriam 4 valores (mediana 465).
+      assert.strictEqual(res.body.cobertura.mediana_dias, 390, JSON.stringify(res.body.cobertura));
       assert.strictEqual(res.body.cobertura.materiais_sem_consumo, 1, JSON.stringify(res.body.cobertura));
     } finally { await close(); }
   });
@@ -175,9 +202,30 @@ async function getIndicadores(app, query) {
       const cliente = await dbRun(db, 'INSERT INTO clientes (razao_social) VALUES (?)', ['Cliente Ruptura LTDA']);
       const clienteId = cliente.lastID;
 
-      // Positivo 1: SAIDA zera -> ruptura.
+      // Positivo 1: SAIDA zera -> ruptura. Revisao T2 (M1): DOIS episodios de zeragem no mesmo
+      // material — o 1o backdatado 3 dias — e a `data` reportada tem de ser a do PRIMEIRO
+      // (MIN); um MAX devolveria a de hoje.
       const matSaida = await criarMaterial(db, { codigo: 'RUP-SAIDA', quantidade_atual: 8 });
-      await movimentar(db, { material_id: matSaida, tipo: 'SAIDA', quantidade: 8 });
+      const rupt1 = await movimentar(db, { material_id: matSaida, tipo: 'SAIDA', quantidade: 8 });
+      await backdatar(db, rupt1.id, 3);
+      await movimentar(db, { material_id: matSaida, tipo: 'ENTRADA', quantidade: 5, motivo: 'repos' });
+      await movimentar(db, { material_id: matSaida, tipo: 'SAIDA', quantidade: 5 }); // 2a zeragem, hoje
+
+      // Revisao T2 (M6): movimentacao CANCELADA que zerou nao conta (INSERT direto, cancelado=1).
+      const matCancelada = await criarMaterial(db, { codigo: 'RUP-CANCELADA', quantidade_atual: 4 });
+      await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, cancelado, usuario_nome)
+        VALUES (?, 'SAIDA', 4, 4, 0, 1, 'teste')`, [matCancelada]);
+
+      // Revisao T2 (M7): material INATIVO com zeragem no livro nao conta.
+      const matInativo = await criarMaterial(db, { codigo: 'RUP-INATIVA', quantidade_atual: 0, ativo: 0 });
+      await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, cancelado, usuario_nome)
+        VALUES (?, 'SAIDA', 3, 3, 0, 0, 'teste')`, [matInativo]);
+
+      // Revisao T2 (M8): zeragem FORA da janela (40 dias atras, janela 30) nao conta.
+      const matAntiga = await criarMaterial(db, { codigo: 'RUP-ANTIGA', quantidade_atual: 0 });
+      const ruptAntiga = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, cancelado, usuario_nome)
+        VALUES (?, 'SAIDA', 6, 6, 0, 0, 'teste')`, [matAntiga]);
+      await backdatar(db, ruptAntiga.lastID, 40);
 
       // Positivo 2: AJUSTE_INVENTARIO zera por CONTAGEM -> ruptura (tipo tambem conta, decisao).
       const matAjuste = await criarMaterial(db, { codigo: 'RUP-AJUSTE', quantidade_atual: 5 });
@@ -209,12 +257,19 @@ async function getIndicadores(app, query) {
       const res = await getIndicadores(app, { janela_dias: 30 });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const codigos = res.body.rupturas.materiais.map((m) => m.codigo).sort();
+      // O deepStrictEqual do CONJUNTO e o que mata M6/M7/M8: cancelada, inativa e antiga
+      // entrariam aqui se qualquer filtro caisse.
       assert.deepStrictEqual(codigos, ['RUP-AJUSTE', 'RUP-PROPRIO', 'RUP-SAIDA'], JSON.stringify(res.body.rupturas));
       assert.strictEqual(res.body.rupturas.total, 3, JSON.stringify(res.body.rupturas));
       for (const m of res.body.rupturas.materiais) {
         assert.ok(m.data, `${m.codigo}: data da 1a ruptura ausente`);
         assert.ok(m.nome, `${m.codigo}: nome ausente`);
       }
+      // M1: a data do RUP-SAIDA e a do episodio BACKDATADO (3 dias atras), nao a de hoje.
+      const dataEsperada = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const rupSaida = res.body.rupturas.materiais.find((m) => m.codigo === 'RUP-SAIDA');
+      assert.ok(String(rupSaida.data).startsWith(dataEsperada),
+        `RUP-SAIDA: data da 1a ruptura deveria ser ${dataEsperada} (MIN), veio ${rupSaida.data}`);
     } finally { await close(); }
   });
 
@@ -230,6 +285,8 @@ async function getIndicadores(app, query) {
       await criarMaterial(db, { categoria: null, custo_unitario: 7, quantidade_atual: 2 }); // 14 -> Sem categoria
       // Cliente na MESMA categoria — se vazar, ACO viraria 190 em vez de 90.
       await criarMaterial(db, { categoria: 'ACO', custo_unitario: 100, quantidade_atual: 1, proprietario_cliente_id: clienteId });
+      // Revisao T2 (M10): material INATIVO na mesma categoria — se vazar, ACO viraria 1089.
+      await criarMaterial(db, { categoria: 'ACO', custo_unitario: 999, quantidade_atual: 1, ativo: 0 });
 
       const res = await getIndicadores(app, {});
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));

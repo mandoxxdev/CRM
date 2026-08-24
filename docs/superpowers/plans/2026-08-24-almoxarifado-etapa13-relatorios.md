@@ -147,7 +147,16 @@ lista + export); Test `server/tests/api/relatoriosRegistro.api.test.js` (novo).
 - [x] Step 5: suíte (117/117) + commit `781c784` ("Almoxarifado Etapa 13 Task 1: registro de
   relatorios + lista fail-closed + export XLSX (RN-01/02/03)").
 
-### Task 2: Indicadores gerenciais (RN-04)
+### Task 2: Indicadores gerenciais — ✅ FEITA (`4f8e3fc` + fix-round no fechamento da revisão)
+
+> Revisão: código certo em todos os casos adversariais (paridade do consumoSql provada por
+> IGUALDADE de SQL+payload contra a versão pré-refactor), mas 11 mutações de uma linha
+> passavam verdes — cross-asserts baratos adicionados (cliente/cancelado/ativo/janela/MIN
+> provados em todos os blocos); a `nota` passou a declarar os desvios (atendimento sem
+> janela; rupturas por evento físico; cliente fora); assimetria querystring×config declarada
+> em comentário. Desvios do implementador aceitos pelo revisor: atendimento sem janela
+> (leitura literal do design — REJEITADA só a omissão na nota, corrigida), mediana
+> arredondada, ativo=1 nas 4 queries.
 
 **Files:** Modify `server/services/almoxarifado/reportService.js` (função
 `relatorioIndicadores`), `server/services/almoxarifado/reportRegistry.js` +
@@ -178,7 +187,7 @@ Test `server/tests/api/relatoriosIndicadores.api.test.js` (novo).
   6.499999992549419 para 6h30): `media_horas` e `indice` do giro saem `Number(x.toFixed(2))`;
   asserts exatos contra o arredondado; monetários com `Math.abs(a-b) < 1e-9`.
 - `janela_dias`: default 90; inválido → 400 literal da Global Constraint.
-- [ ] Step 1: teste vermelho — cenário construído pelo MOTOR REAL (entradas com custo, saídas,
+- [x] Step 1: teste vermelho — cenário construído pelo MOTOR REAL (entradas com custo, saídas,
   material 100% de cliente que NÃO pode contaminar nada, material zerado na janela, requisição
   entregue com timestamps controlados): asserts NUMÉRICOS exatos (contra os arredondados —
   I8); janela=1 exclui movimento antigo; `janela_dias=0` → 400 literal; janela OMITIDA usa
@@ -188,15 +197,15 @@ Test `server/tests/api/relatoriosIndicadores.api.test.js` (novo).
   custo_unitario=10 e outro custo_medio=12/custo_unitario=10 — valor_consumido e
   valor_estoque_atual por número exato, para que ler custo_unitario puro (que a varredura NÃO
   pega, medido) fique vermelho.
-- [ ] Step 2: implementação (custo/valor SÓ pelas fontes únicas — o teste-varredura pega).
-- [ ] Step 3: verde + suíte (117→118).
-- [ ] Step 4: controles positivos — (i) trocar mediana por média na cobertura → cai (fixture
+- [x] Step 2: implementação (custo/valor SÓ pelas fontes únicas — o teste-varredura pega).
+- [x] Step 3: verde + suíte (117→118).
+- [x] Step 4: controles positivos — (i) trocar mediana por média na cobertura → cai (fixture
   com outlier); (ii) incluir cliente no valor_por_grupo → cai; (iii-a) tipo neutro
   (LIBERACAO_RESERVA) em material zerado NÃO entra na lista nem vira data da 1ª ruptura → sem
   o filtro de tipo, cai; (iii-b) material quantidade_atual=10/reservada=10 NÃO entra (par
   negativo da aproximação declarada — se alguém "consertar" para disponível, cai e a decisão
   volta à mesa); (iii-c) régua para `< 0` → cai.
-- [ ] Step 5: suíte + commit.
+- [x] Step 5: suíte + commit.
 
 ### Task 3: Tela `/almoxarifado/relatorios` (galho, worktree)
 
