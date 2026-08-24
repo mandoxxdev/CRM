@@ -12,7 +12,7 @@ import {
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
   FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
-  FiScissors, FiBell
+  FiScissors, FiBell, FiMail
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -361,7 +361,9 @@ const Layout = () => {
     // alertas novos) — gate proprio (gerenciar_notificacoes) resolvido pelo backend, sem
     // adminOnly aqui (o painel de erro por 403 e quem barra o restante do perfil, mesmo
     // criterio de reposicao acima).
-    { path: '/almoxarifado/notificacoes', icon: FiBell, label: 'Notificações' },
+    // Icone de e-mail, nao FiBell — o sino ja e o do painel global de notificacoes no header
+    // (nit da revisao da Task 4: dois sinos para coisas diferentes confundem).
+    { path: '/almoxarifado/notificacoes', icon: FiMail, label: 'Notificações' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },

@@ -39,6 +39,7 @@ const ACOES = {
   // o botao "Reenviar"/"Processar fila agora" da tela de notificacoes cairia no fallback de
   // labelAcao e mostraria "gerenciar notificacoes" cru em vez da frase natural.
   gerenciar_notificacoes: 'gerenciar notificações',
+
   aprovar_sucateamento: 'aprovar sucateamento (almoxarifado)',
   aprovar_sucateamento_gestao: 'aprovar sucateamento (gestão)',
   // frota

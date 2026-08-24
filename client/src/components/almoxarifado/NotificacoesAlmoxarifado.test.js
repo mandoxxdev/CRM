@@ -42,10 +42,11 @@ jest.mock('../../hooks/useAlmoxPermissoes', () => ({
   }),
 }));
 
-// 3 linhas com evento/status/tentativas DISTINTOS (pega troca de coluna) — id 5 elegível a
-// reenvio (PENDENTE), id 6 elegível (FALHA, com ultimo_erro longo para o truncamento), id 7
-// ENVIADO (sem botão de reenvio no contrato desta tela). destinatarios/payload chegam como
-// STRING JSON, exatamente como o contrato congelado descreve.
+// 3 linhas com evento/status/tentativas DISTINTOS (pega troca de coluna) — id 5 PENDENTE,
+// id 6 FALHA (ultimo_erro longo para o truncamento), id 7 ENVIADO (reenvio com confirm —
+// decisão M5 da revisão: RN-08 prevalece). destinatarios/payload chegam como STRING JSON.
+// As datas do id 7 cruzam a MEIA-NOITE UTC de propósito (revisão I1): em qualquer fuso a
+// oeste de UTC, ler '2026-08-18 01:00:00' como hora local em vez de UTC muda o DIA exibido.
 const ITENS_FIXTURE = [
   {
     id: 5, evento: 'MOVIMENTACAO', destinatarios: '["compras@gmp.com","almox@gmp.com"]',
@@ -62,7 +63,7 @@ const ITENS_FIXTURE = [
   {
     id: 7, evento: 'SOLICITACAO_COMPRA', destinatarios: '["compras@gmp.com"]',
     assunto: '[Almoxarifado] Solicitação de compra gerada', status: 'ENVIADO', tentativas: 1,
-    ultimo_erro: null, enviado_em: '2026-08-18 09:30:00', created_at: '2026-08-18 09:00:00',
+    ultimo_erro: null, enviado_em: '2026-08-18 01:30:00', created_at: '2026-08-18 01:00:00',
     payload: '{}',
   },
 ];
@@ -167,15 +168,75 @@ describe('NotificacoesAlmoxarifado — lista e badges', () => {
     );
   });
 
-  test('linha ENVIADO nao mostra botao de reenviar; PENDENTE e FALHA mostram', async () => {
+  test('Reenviar aparece em TODAS as linhas; ENVIADO exige confirm (decisao M5 — RN-08 prevalece)', async () => {
+    // RN-08 (emenda da Task 1): reenviar ENVIADO e o UNICO caminho de reemissao de e-mail
+    // perdido apos o aceite do SMTP. A secao "Front — tela" do design dizia "so em
+    // FALHA/PENDENTE" e ESTAVA ERRADA (conflito interno). Protecao: confirm no ENVIADO.
+    api.post.mockResolvedValue({ data: { success: true, status: 'PENDENTE' } });
     await renderizar();
 
-    const linhaPendente = linhaNotificacao('ENTRADA — MAT-01');
-    const linhaFalha = linhaNotificacao('Lote vencendo');
-    const linhaEnviada = linhaNotificacao('Solicitação de compra');
-    expect(botao('Reenviar', linhaPendente)).toBeTruthy();
-    expect(botao('Reenviar', linhaFalha)).toBeTruthy();
-    expect(botao('Reenviar', linhaEnviada)).toBeFalsy();
+    expect(botao('Reenviar', linhaNotificacao('ENTRADA — MAT-01'))).toBeTruthy();
+    expect(botao('Reenviar', linhaNotificacao('Lote vencendo'))).toBeTruthy();
+    const btnEnviada = botao('Reenviar', linhaNotificacao('Solicitação de compra'));
+    expect(btnEnviada).toBeTruthy();
+
+    // Confirm recusado -> NENHUM POST (o clique acidental nao reemite e-mail).
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    await clicar(btnEnviada);
+    expect(api.post).not.toHaveBeenCalled();
+
+    // Confirm aceito -> POST do id certo.
+    confirmSpy.mockReturnValue(true);
+    await clicar(botao('Reenviar', linhaNotificacao('Solicitação de compra')));
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/notificacoes/7/reenviar');
+
+    // PENDENTE reenvia SEM confirm.
+    confirmSpy.mockClear();
+    await clicar(botao('Reenviar', linhaNotificacao('ENTRADA — MAT-01')));
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/notificacoes/5/reenviar');
+    confirmSpy.mockRestore();
+  });
+
+  test('datas Criada em/Enviada em por celula, UTC-safe e sem troca de coluna (revisao I1)', async () => {
+    await renderizar();
+    const linha = linhaNotificacao('Solicitação de compra');
+    const tds = linha.querySelectorAll('td');
+
+    // Esperado ancorado em UTC (o 'Z' que formatDataHora acrescenta). Se a mutacao tirar o
+    // 'Z', o V8 le como hora local: em qualquer fuso != UTC o texto diverge (aqui as horas
+    // cruzam a meia-noite UTC, entao ate o DIA muda a oeste de UTC).
+    const fmt = { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' };
+    const esperadoCriada = new Date('2026-08-18T01:00:00Z').toLocaleString('pt-BR', fmt);
+    const esperadoEnviada = new Date('2026-08-18T01:30:00Z').toLocaleString('pt-BR', fmt);
+    expect(tds[6].textContent).toBe(esperadoCriada);
+    expect(tds[7].textContent).toBe(esperadoEnviada);
+    // Pega troca de coluna (created_at <-> enviado_em): os dois valores sao distintos.
+    expect(tds[6].textContent).not.toBe(tds[7].textContent);
+    // Guarda anti-hora-local: so e vacua se o runner estiver em UTC (na maquina do projeto,
+    // America/Sao_Paulo, ela morde).
+    const errado = new Date('2026-08-18T01:00:00').toLocaleString('pt-BR', fmt);
+    if (errado !== esperadoCriada) expect(tds[6].textContent).not.toBe(errado);
+  });
+
+  test('celulas nulas mostram travessao: ultimo_erro e enviado_em da linha PENDENTE (revisao M2)', async () => {
+    await renderizar();
+    const tds = linhaNotificacao('ENTRADA — MAT-01').querySelectorAll('td');
+    expect(tds[5].textContent).toBe('—');
+    expect(tds[7].textContent).toBe('—');
+  });
+
+  test('destinatarios legado em virgula (nao-JSON) renderiza, nunca tela branca (revisao M1)', async () => {
+    // O try/catch do parseListaExibicao e a unica defesa: o design chegou a dizer "lista por
+    // virgula" (corrigido na revisao da Task 1) — linha de build antigo ou UPDATE manual de
+    // suporte cai aqui. Sem o catch, JSON.parse derruba o render inteiro (sem error boundary).
+    mockarApi({
+      itens: [{ ...ITENS_FIXTURE[0], id: 9, assunto: '[Almoxarifado] LEGADO — MAT-09', destinatarios: 'a@b.com, c@d.com' }],
+    });
+    await renderizar();
+    const linha = linhaNotificacao('LEGADO — MAT-09');
+    expect(linha).toBeTruthy();
+    expect(linha.querySelectorAll('td')[2].textContent).toBe('a@b.com, c@d.com');
   });
 });
 
@@ -280,6 +341,34 @@ describe('NotificacoesAlmoxarifado — processar fila', () => {
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/notificacoes/processar');
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/notificacoes', { params: {} });
     expect(toast.success).toHaveBeenCalledWith('3 processada(s): 1 enviada(s), 2 falha(s)');
+  });
+
+  test('processar desabilita o botao enquanto a chamada esta em voo (revisao M4 — duplo clique)', async () => {
+    // O servidor tem claim (Task 1), mas a UI nao deve nem emitir o segundo POST.
+    let resolver;
+    api.post.mockImplementationOnce(() => new Promise((res) => { resolver = res; }));
+    await renderizar();
+
+    const btn = botao('Processar fila agora');
+    await act(async () => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    const btnEmVoo = botao('Processando...');
+    expect(btnEmVoo).toBeTruthy();
+    expect(btnEmVoo.disabled).toBe(true);
+    expect(api.post).toHaveBeenCalledTimes(1);
+
+    await act(async () => { resolver({ data: { processadas: 0, enviadas: 0, falharam: 0 } }); });
+    expect(botao('Processar fila agora').disabled).toBe(false);
+  });
+
+  test('erro no processar mostra toast de erro, nao silencio (revisao M4)', async () => {
+    api.post.mockRejectedValueOnce({ response: { data: { error: 'Erro interno' } } });
+    await renderizar();
+
+    await clicar(botao('Processar fila agora'));
+
+    expect(toast.error).toHaveBeenCalled();
+    expect(botao('Processar fila agora').disabled).toBe(false);
   });
 
   test('processar e gateado por gerenciar_notificacoes', async () => {

@@ -23,15 +23,29 @@ describe('formatarErroPermissao', () => {
   });
 
   test('cobre as ações do hardening, sem sobrar snake_case na tela', () => {
+    // Revisao da Task 4 da Etapa 12 (M3): esta lista parou nas 7 acoes do hardening e as acoes
+    // novas (gerenciar_reposicao na 11, gerenciar_notificacoes na 12) regrediram em silencio —
+    // apagar o rotulo delas deixava a suite inteira verde. Toda acao nova de ACAO_PERFIS
+    // (servidor) ENTRA AQUI junto com o rotulo em permissaoErro.js.
     const acoes = [
       'inventario', 'ajustar_estoque', 'separar_emitir',
       'aprovar_requisicao', 'editar_material', 'requisitar', 'movimentar',
+      'gerenciar_reposicao', 'gerenciar_notificacoes',
     ];
     acoes.forEach((acao) => {
       const msg = formatarErroPermissao({ acao, perfil: 'PRODUCAO' });
       expect(msg).toContain('seu perfil é Produção');
       expect(msg).not.toContain('_');
     });
+  });
+
+  test('acoes novas usam o ROTULO do mapa, nao o fallback sem acento (controle da sabotagem W7)', () => {
+    // O fallback replace('_', ' ') tambem passa no "not.toContain('_')" — apagar o rotulo do
+    // mapa ficava verde. So o texto ACENTUADO exato prova que o mapa tem a entrada.
+    expect(formatarErroPermissao({ acao: 'gerenciar_notificacoes', perfil: 'PRODUCAO' }))
+      .toContain('gerenciar notificações');
+    expect(formatarErroPermissao({ acao: 'gerenciar_reposicao', perfil: 'PRODUCAO' }))
+      .toContain('gerenciar reposição e compras');
   });
 
   test('perfis de frota e produção também são traduzidos (mesmo contrato de 403)', () => {

@@ -41,10 +41,14 @@ const EVENTO_OPCOES = [
 
 const STATUS_BADGE_CLASS = { PENDENTE: 'almox-badge-baixo', ENVIADO: 'almox-badge-ok', FALHA: 'almox-badge-critico' };
 
-// Só pode reenviar item PENDENTE ou FALHA — a rota aceita reenviar um ENVIADO também (RN-08:
-// é o único caminho de reemissão de um e-mail perdido depois do aceite do SMTP), mas o botão
-// por linha do design fica restrito a FALHA/PENDENTE (contrato desta task).
-const PODE_REENVIAR = new Set(['PENDENTE', 'FALHA']);
+// Revisao da Task 4 (M5): o design tinha um CONFLITO interno — a RN-08 (emenda medida da
+// revisao da Task 1) diz que reenviar um ENVIADO "e permitido de proposito: e o unico caminho
+// de reemissao de um e-mail perdido depois do aceite do SMTP", mas a secao "Front — tela"
+// dizia "so em FALHA/PENDENTE". DECISAO: a RN-08 prevalece (decisao com racional escrito) — o
+// botao aparece em TODAS as linhas; para ENVIADO ha um confirm de protecao contra clique
+// acidental (reenviar la manda e-mail duplicado de verdade). O design foi corrigido dizendo
+// que a secao do front estava errada.
+const CONFIRMA_REENVIO_ENVIADO = 'Esta notificação já foi enviada. Reenviar mesmo assim envia o e-mail de novo aos mesmos destinatários.';
 
 // Mesmo painel de erro por estado da Etapa 11 (achado 1, Critical, medido pelos dois
 // revisores) — copiado de ReposicaoAlmoxarifado.js para o módulo não ganhar dois jeitos
@@ -140,6 +144,7 @@ const NotificacoesAlmoxarifado = () => {
 
   const handleReenviar = async (item, evento) => {
     if (!bloquearSeNaoPode('gerenciar_notificacoes', evento)) return;
+    if (item.status === 'ENVIADO' && !window.confirm(CONFIRMA_REENVIO_ENVIADO)) return;
     setReenviando(item.id);
     try {
       await api.post(`/almoxarifado/notificacoes/${item.id}/reenviar`);
@@ -245,7 +250,7 @@ const NotificacoesAlmoxarifado = () => {
           </div>
 
           <div className="almox-table-container">
-            {loading ? <SkeletonTable rows={6} columns={8} />
+            {loading ? <SkeletonTable rows={6} columns={9} />
               : itens.length === 0 ? (
                 <div className="almox-empty"><p>Nenhuma notificação encontrada</p></div>
               ) : (
@@ -266,7 +271,6 @@ const NotificacoesAlmoxarifado = () => {
                   <tbody>
                     {itens.map((item) => {
                       const destinatarios = parseListaExibicao(item.destinatarios).join(', ') || '—';
-                      const podeReenviar = PODE_REENVIAR.has(item.status);
                       return (
                         <tr key={item.id}>
                           <td>{item.evento}</td>
@@ -284,7 +288,7 @@ const NotificacoesAlmoxarifado = () => {
                           <td>{formatDataHora(item.created_at)}</td>
                           <td>{formatDataHora(item.enviado_em)}</td>
                           <td>
-                            {podeReenviar && (
+                            {(
                               <button
                                 type="button"
                                 className="btn-almox-secondary"
