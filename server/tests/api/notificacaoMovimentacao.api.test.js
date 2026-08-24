@@ -9,6 +9,7 @@
  * Executar: cd server && node tests/api/notificacaoMovimentacao.api.test.js
  */
 const assert = require('assert');
+const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
@@ -56,7 +57,7 @@ async function filaPorMovimentacao(db, movimentacaoId) {
 }
 
 (async () => {
-  const { db, close } = await createTestApp({ user: ADMIN });
+  const { app, db, setUser, close } = await createTestApp({ user: ADMIN });
 
   await test('RN-04: movimentacao confirmada enfileira com conteudo minimo', async () => {
     await setConfig(db, 'notificar_movimentacoes', '1');
@@ -331,21 +332,91 @@ async function filaPorMovimentacao(db, movimentacaoId) {
     await setConfig(db, 'notificar_movimentacoes', '0');
   });
 
-  await test('RN-04: AJUSTE_INVENTARIO rotula quantidade como novo total (revisao M4)', async () => {
+  await test('RN-04: AJUSTE rotula quantidade como novo total; AJUSTE_INVENTARIO NAO enfileira (revisao final C2)', async () => {
     await setConfig(db, 'notificar_movimentacoes', '1');
     await setConfig(db, 'notificacoes_dest_ajustes', 'classe-ajustes@teste.com');
 
-    // Em AJUSTE/AJUSTE_INVENTARIO a quantidade e o VALOR ABSOLUTO contado (100 -> 30), nao o
-    // delta — o rotulo tem de dizer isso, senao o leitor soma 30 como se fosse delta.
+    // Em AJUSTE/AJUSTE_INVENTARIO a quantidade e o VALOR ABSOLUTO (100 -> 30), nao o delta —
+    // o rotulo tem de dizer isso. O AJUSTE manual (um a um) continua notificando.
     const mat = await novoMaterial(db, { codigo: 'NOTIF-AJI-1', quantidade_atual: 100 });
     const mov = await stockService.registrarMovimentacao(db, ADMIN, {
-      material_id: mat, tipo: 'AJUSTE_INVENTARIO', quantidade: 30, justificativa: 'contagem fisica',
+      material_id: mat, tipo: 'AJUSTE', quantidade: 30, justificativa: 'acerto manual',
     });
     const linha = await filaPorMovimentacao(db, mov.id);
     assert.ok(linha, 'deveria ter enfileirado');
     assert.ok(linha.corpo_texto.includes('Quantidade (novo total): 30'), linha.corpo_texto);
     assert.ok(linha.corpo_texto.includes('Saldo anterior: 100'), linha.corpo_texto);
     assert.ok(linha.corpo_texto.includes('Saldo posterior: 30'), linha.corpo_texto);
+
+    // Revisao final (lente A, Critical 2): AJUSTE_INVENTARIO so existe em LOTE — a conclusao
+    // da conferencia emite um por item divergente (50 divergencias = 50 e-mails num clique,
+    // medido; o comentario da rota fala em 300). Mesma familia de rajada que o resolver ja
+    // corta para RESERVA e remessa. Fica fora; a conferencia tem tela/relatorio proprios.
+    const mat2 = await novoMaterial(db, { codigo: 'NOTIF-AJI-2', quantidade_atual: 100 });
+    const antes = await contarFila(db);
+    const movInv = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat2, tipo: 'AJUSTE_INVENTARIO', quantidade: 30, justificativa: 'contagem fisica',
+    });
+    assert.strictEqual(await contarFila(db), antes, 'AJUSTE_INVENTARIO nao pode enfileirar');
+    assert.ok(!(await filaPorMovimentacao(db, movInv.id)), 'AJUSTE_INVENTARIO sem linha na fila');
+
+    await setConfig(db, 'notificar_movimentacoes', '0');
+  });
+
+  await test('RN-05: fallback respeita o toggle "Notificar por e-mail" (revisao final I2)', async () => {
+    // O fallback e o estado DEFAULT (dest_* nascem vazias): sem esta guarda, quem silenciou
+    // alertas_estoque_emails voltava a receber e-mail nela ao ligar notificar_movimentacoes.
+    await setConfig(db, 'notificar_movimentacoes', '1');
+    await setConfig(db, 'notificacoes_dest_entradas', '');
+    await setConfig(db, 'alertas_estoque_emails', '["silenciado@teste.com"]');
+    await setConfig(db, 'alertas_estoque_notificar_email', '0');
+    try {
+      const mat = await novoMaterial(db, { codigo: 'NOTIF-TGL-1', quantidade_atual: 0 });
+      const antes = await contarFila(db);
+      const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+        material_id: mat, tipo: 'ENTRADA_MANUAL', quantidade: 2, motivo: 'compra',
+      });
+      assert.strictEqual(await contarFila(db), antes, 'toggle OFF + fallback nao pode enfileirar');
+      assert.ok(!(await filaPorMovimentacao(db, mov.id)));
+
+      // Classe COM config propria fica FORA do toggle (o admin escolheu aquele destino).
+      await setConfig(db, 'notificacoes_dest_entradas', 'explicito@teste.com');
+      const mat2 = await novoMaterial(db, { codigo: 'NOTIF-TGL-2', quantidade_atual: 0 });
+      const mov2 = await stockService.registrarMovimentacao(db, ADMIN, {
+        material_id: mat2, tipo: 'ENTRADA_MANUAL', quantidade: 2, motivo: 'compra',
+      });
+      const linha2 = await filaPorMovimentacao(db, mov2.id);
+      assert.ok(linha2, 'classe com config propria enfileira mesmo com toggle OFF');
+      assert.deepStrictEqual(JSON.parse(linha2.destinatarios), ['explicito@teste.com']);
+    } finally {
+      await setConfig(db, 'alertas_estoque_notificar_email', '1');
+      await setConfig(db, 'alertas_estoque_emails', '[]');
+      await setConfig(db, 'notificar_movimentacoes', '0');
+    }
+  });
+
+  await test('RN-08: reenviar de notificacao de movimentacao CANCELADA recusa 400 (revisao final I1)', async () => {
+    // O reenvio manual atravessava a supressao: "olhar as falhas e reenviar" reemitia o aviso
+    // de uma saida que nao existe mais no saldo. A guarda e por FATO (coluna cancelado).
+    await setConfig(db, 'notificar_movimentacoes', '1');
+    await setConfig(db, 'notificacoes_dest_saidas', 'dest-saidas@teste.com');
+    const mat = await novoMaterial(db, { codigo: 'NOTIF-CANC-REENV', quantidade_atual: 100 });
+    const mov = await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'SAIDA_PRODUCAO', quantidade: 10, os_id: 1,
+    });
+    await stockService.cancelarMovimentacao(db, ADMIN, mov.id, 'engano');
+    const linha = await filaPorMovimentacao(db, mov.id);
+    assert.strictEqual(linha.status, 'FALHA', JSON.stringify(linha));
+
+    setUser(ADMIN);
+    const res = await request(app).post(`/api/almoxarifado/notificacoes/${linha.id}/reenviar`).send({});
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Movimentação cancelada — notificação não pode ser reenviada');
+
+    // O motivo da supressao continua legivel no painel (o reenviar recusado nao reseta nada).
+    const depois = await dbGet(db, 'SELECT status, ultimo_erro FROM fila_notificacoes_almoxarifado WHERE id = ?', [linha.id]);
+    assert.strictEqual(depois.status, 'FALHA', JSON.stringify(depois));
+    assert.strictEqual(depois.ultimo_erro, 'Movimentação cancelada antes do envio', JSON.stringify(depois));
 
     await setConfig(db, 'notificar_movimentacoes', '0');
   });

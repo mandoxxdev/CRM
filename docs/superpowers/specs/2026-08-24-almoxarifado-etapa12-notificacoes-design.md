@@ -130,7 +130,22 @@ são **retenção** (mexem só em `quantidade_em_terceiros`; o saldo global não
 diria "30 KG" com saldo idêntico) e a remessa chama o motor **item a item** (uma remessa de
 10 itens viraria 10 e-mails — a mesma família de spam que a emenda de RESERVA cortou). Os
 dois ficam **fora** da classe `terceiros`; o canal da remessa é o alerta de remessa vencida
-(RN-07). `CONSUMO_TERCEIRO`/`PERDA_TERCEIRO` continuam notificando — são saída de verdade. As chaves vivem num **mapa literal** no
+(RN-07). `CONSUMO_TERCEIRO`/`PERDA_TERCEIRO` continuam notificando — são saída de verdade.
+
+**Emendas da revisão final da branch:** (a) **`AJUSTE_INVENTARIO` também fica fora** — é um
+tipo que só existe em lote (a única porta é o laço da conclusão de conferência): 50
+divergências = 50 e-mails num clique, medido; o comentário da própria rota fala em 300. É a
+mesma família de rajada já cortada para RESERVA e remessa; a conferência tem tela/relatório
+próprios como canal, e digest por e-mail é corte declarado (D3). `AJUSTE`/`AJUSTE_POSITIVO`/
+`AJUSTE_NEGATIVO` (manuais, um a um) continuam. (b) **O fallback para `alertas_estoque_emails`
+respeita o toggle "Notificar por e-mail"** — o fallback é o estado default (as `dest_*` nascem
+vazias) e ignorá-lo reintroduzia o que a emenda de RN-07 impediu; classe **com** config própria
+fica fora do toggle (o admin escolheu aquele destino). (c) Operações compostas que continuam
+emitindo um e-mail por item do laço (requisição entregue com N itens → N; encerrar remessa →
+N; transformação → N linhas): comportamento **declarado**, respaldado pela spec 14 ("toda
+entrada e saída") — dimensionado na letra C do documento de novidades.
+
+As chaves vivem num **mapa literal** no
 serviço (chave montada por template string some da varredura do teste de amarração
 cliente↔servidor). Classe sem config → fallback `alertas_estoque_emails`; tipo **sem classe**
 → não enfileira (`SEM_CLASSE`); sem destinatário nenhum → não enfileira
@@ -181,7 +196,14 @@ Decisão reversível, letra B.
   zerado dispara **só para material sem mínimo**, que é o racional escrito deste design.
   (d) material visto pela primeira vez **já zerado** é semeado como ZERADO **sem alertar** — a
   máquina alerta transições observadas; sem isso a primeira gravação em lote da tela de
-  estoques-mínimos despejava um aviso por material zerado do catálogo.
+  estoques-mínimos despejava um aviso por material zerado do catálogo. **Emenda da revisão
+  final (Critical 1) — a heurística "a linha de estado existe?" sozinha estava ERRADA como
+  régua de transição:** material sem mínimo (a população-alvo) nunca ganha linha por outro
+  caminho, então a **primeira zeragem observada** (10→0 numa movimentação) caía no ramo
+  "primeiro contato" e era engolida — toda a coorte do deploy e todo material criado com saldo
+  inicial. O fato que decide é o **`saldo_anterior` do motor**, que o gancho repassa: se era
+  > 0, a transição foi observada agora e alerta; sem essa evidência (edição de cadastro,
+  varredura), semeia em silêncio.
 - **Lote próximo do vencimento**: job diário — lotes ativos com `data_validade` **até**
   `+N dias` (config `alerta_lote_vencendo_dias`, default `30`), com saldo > 0;
   `dedupe: lote-vencendo-<lote_id>-<data_validade>` (um aviso por lote/validade, não por dia).
@@ -275,7 +297,15 @@ CREATE INDEX IF NOT EXISTS idx_fila_notif_status ON fila_notificacoes_almoxarifa
   `{ success: true, status: '<status pós-processamento>' }`; **404**
   `{ "error": "Notificação não encontrada" }`. Auditado (`registrarAuditoria`, objeto).
 - `POST /api/almoxarifado/notificacoes/processar` (mesmo gate) → **200**
-  `{ processadas, enviadas, falharam }`.
+  `{ processadas, enviadas, falharam, reagendadas }`. **Emenda da revisão final (M1) — a versão
+  sem `reagendadas` fazia `falharam` contar retentativa agendada como falha:** o toast dizia
+  "7 falha(s)" ao lado do card "0 falhas" (que conta status FALHA). Agora `falharam` é só a
+  transição definitiva para FALHA; backoff conta em `reagendadas`.
+- `POST /:id/reenviar` de notificação de **movimentação cancelada** → **400**
+  `{ "error": "Movimentação cancelada — notificação não pode ser reenviada" }` (emenda da
+  revisão final, I1: o reenvio manual atravessava a supressão de cancelamento e reemitia aviso
+  de uma saída que não existe mais no saldo — a guarda é pelo fato, a coluna `cancelado` do
+  livro, nunca por comparação do texto de `ultimo_erro`).
 - **Corpo/assunto**: `assunto` sempre prefixado `[Almoxarifado] ` + descrição curta do evento.
 
 ## Front — tela `/almoxarifado/notificacoes` (`NotificacoesAlmoxarifado.js`)

@@ -106,7 +106,9 @@ async function filaPorPayload(db, evento, chave, valor) {
     const res = await request(app).post('/api/almoxarifado/notificacoes/processar').send({});
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.ok(res.body.processadas >= 1, JSON.stringify(res.body));
-    assert.ok(res.body.falharam >= 1, JSON.stringify(res.body));
+    // Revisao final (M1): tentativa 1 de 5 e RETENTATIVA agendada, nao falha definitiva.
+    assert.ok(res.body.reagendadas >= 1, JSON.stringify(res.body));
+    assert.strictEqual(res.body.falharam, 0, JSON.stringify(res.body));
 
     const linha = await dbGet(db, 'SELECT * FROM fila_notificacoes_almoxarifado WHERE id = ?', [linhaOriginalId]);
     // Max ainda no default (5): fica PENDENTE com retry agendado, nao FALHA.

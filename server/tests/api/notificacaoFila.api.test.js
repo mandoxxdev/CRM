@@ -102,7 +102,11 @@ async function setMaxTentativas(db, valor) {
     const resultado = await queueService.processarFila(db, { id: r.id });
     assert.strictEqual(resultado.processadas, 1, JSON.stringify(resultado));
     assert.strictEqual(resultado.enviadas, 0, JSON.stringify(resultado));
-    assert.strictEqual(resultado.falharam, 1, JSON.stringify(resultado));
+    // Revisao final (M1): retentativa agendada NAO e falha definitiva — `falharam` conta so
+    // transicao para FALHA; backoff conta em `reagendadas` (o toast dizia "7 falha(s)" com o
+    // card "0 falhas" do lado).
+    assert.strictEqual(resultado.falharam, 0, JSON.stringify(resultado));
+    assert.strictEqual(resultado.reagendadas, 1, JSON.stringify(resultado));
 
     const row = await dbGet(db, 'SELECT * FROM fila_notificacoes_almoxarifado WHERE id = ?', [r.id]);
     assert.strictEqual(row.status, 'PENDENTE', JSON.stringify(row));
@@ -207,7 +211,7 @@ async function setMaxTentativas(db, valor) {
     assert.strictEqual(r.enfileirada, true, JSON.stringify(r));
 
     const resultado = await queueService.processarFila(db, { id: r.id });
-    assert.strictEqual(resultado.falharam, 1, JSON.stringify(resultado));
+    assert.strictEqual(resultado.reagendadas, 1, JSON.stringify(resultado)); // tentativa 1 de 5 = backoff
 
     const row = await dbGet(db, 'SELECT ultimo_erro FROM fila_notificacoes_almoxarifado WHERE id = ?', [r.id]);
     assert.strictEqual(row.ultimo_erro, 'SMTP não configurado', JSON.stringify(row));
@@ -485,6 +489,67 @@ async function setMaxTentativas(db, valor) {
     const depois = await dbGet(db, 'SELECT status, enviado_em FROM fila_notificacoes_almoxarifado WHERE id = ?', [r.id]);
     assert.notStrictEqual(depois.status, 'ENVIADO', JSON.stringify(depois));
     assert.strictEqual(depois.enviado_em, null, JSON.stringify(depois));
+  });
+
+  await test('RN-02: re-checagem pos-claim pula linha terminada por outro dreno (revisao final, lente B)', async () => {
+    // O claim tem DUAS metades: o Set em voo (drenos simultaneos) e a re-checagem no banco
+    // (dreno B alcanca uma linha que o dreno A TERMINOU depois do SELECT de B — ela ja saiu
+    // do Set, so o banco sabe). O teste concorrente cobre a primeira; este forca a segunda:
+    // durante o envio da linha 1, a linha 2 e finalizada "por fora" — o dreno tem de pular.
+    // Estaciona as PENDENTES elegiveis deixadas pelos testes anteriores (o dreno aqui e SEM
+    // {id} de proposito — o cenario exige varrer mais de uma linha), senao o mock as marca.
+    await dbRun(db, `UPDATE fila_notificacoes_almoxarifado
+      SET proxima_tentativa_em = datetime('now', '+1 hour')
+      WHERE status = 'PENDENTE' AND (proxima_tentativa_em IS NULL OR proxima_tentativa_em <= datetime('now'))`);
+
+    const r1 = await enfileirarDireto(db, { evento: 'TESTE_RECHECK', dedupe_chave: 'recheck-1' });
+    const r2 = await enfileirarDireto(db, { evento: 'TESTE_RECHECK', dedupe_chave: 'recheck-2' });
+
+    const original = alertService.enviarEmail;
+    let chamadas = 0;
+    alertService.enviarEmail = async () => {
+      chamadas++;
+      if (chamadas === 1) {
+        await dbRun(db, `UPDATE fila_notificacoes_almoxarifado SET status = 'ENVIADO', enviado_em = CURRENT_TIMESTAMP WHERE id = ?`, [r2.id]);
+      }
+      return { enviados: 1, erros: [] };
+    };
+    let resultado;
+    try {
+      resultado = await queueService.processarFila(db);
+    } finally {
+      alertService.enviarEmail = original;
+    }
+
+    assert.strictEqual(chamadas, 1, `linha ja ENVIADA por outro dreno nao pode ser reenviada (chamadas=${chamadas})`);
+    assert.ok(resultado.processadas >= 1, JSON.stringify(resultado));
+    const row1 = await dbGet(db, 'SELECT status FROM fila_notificacoes_almoxarifado WHERE id = ?', [r1.id]);
+    assert.strictEqual(row1.status, 'ENVIADO', JSON.stringify(row1));
+  });
+
+  await test('RN-04: corpo_html do aviso FALHA_NOTIFICACAO escapa o erro do transporte (revisao final, lente B)', async () => {
+    // Unico builder que interpolava cru — `erro` vem do err.message do nodemailer (texto do
+    // servidor SMTP, fonte EXTERNA). Simula transporte hostil e confere o escape.
+    await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = '["admin@gmp.com"]' WHERE chave = 'alertas_estoque_emails'`);
+    await setMaxTentativas(db, 1);
+    const r = await enfileirarDireto(db, { evento: 'TESTE_ESCAPE_FALHA', dedupe_chave: 'escape-falha-1' });
+
+    const original = alertService.enviarEmail;
+    alertService.enviarEmail = async () => ({ enviados: 0, erros: ['SMTP disse: <script>alert(1)</script>'] });
+    try {
+      await queueService.processarFila(db, { id: r.id });
+    } finally {
+      alertService.enviarEmail = original;
+    }
+
+    const aviso = await dbGet(db, `SELECT corpo_html FROM fila_notificacoes_almoxarifado
+      WHERE evento = 'FALHA_NOTIFICACAO' AND payload LIKE ?`, [`%"notificacao_id":${r.id}%`]);
+    assert.ok(aviso, 'aviso deveria ter sido enfileirado');
+    assert.ok(aviso.corpo_html.includes('&lt;script&gt;'), aviso.corpo_html);
+    assert.ok(!aviso.corpo_html.includes('<script>'), 'HTML do erro nao pode sair cru');
+
+    await setMaxTentativas(db, 5);
+    await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = '[]' WHERE chave = 'alertas_estoque_emails'`);
   });
 
   await test('RN-09: notificar_movimentacoes so aceita 0 ou 1', async () => {

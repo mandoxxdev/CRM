@@ -204,6 +204,31 @@ async function criarRemessa(db, over = {}) {
     assert.strictEqual((await filaZeradoDoMaterial(db, mat.id)).length, 1, 'transicao observada deveria alertar');
   });
 
+  await test('RN-07: PRIMEIRA zeragem observada pelo MOTOR alerta, mesmo sem linha de estado previa (revisao final C1)', async () => {
+    // A heuristica "a linha de estado existe?" estava errada: material sem minimo (a
+    // populacao-alvo) nunca ganha linha por outro caminho, entao a primeira zeragem real
+    // (10 -> 0 numa unica movimentacao) caia no ramo "primeiro contato" e era engolida —
+    // toda a coorte do deploy e todo material criado com saldo inicial. O fato que decide e
+    // o saldo_anterior do motor, que o gancho agora repassa.
+    const stockService = require('../../services/almoxarifado/stockService');
+    const mat = await novoMaterial(db, { qtd: 10 });
+    // NENHUMA chamada previa ao hook: a linha de estado nao existe ainda.
+    const semLinha = await dbGet(db, `SELECT 1 FROM alertas_estoque_material_almoxarifado WHERE material_id = ?`, [mat.id]);
+    assert.ok(!semLinha, 'pre-condicao: sem linha de estado');
+
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat.id, tipo: 'SAIDA_PRODUCAO', quantidade: 10, os_id: 1,
+    });
+    const linhas = await filaZeradoDoMaterial(db, mat.id);
+    assert.strictEqual(linhas.length, 1, 'a transicao 10->0 FOI observada — tem de alertar');
+
+    // E o cenario simetrico continua silencioso: material ja zerado visto pela primeira vez
+    // SEM evidencia de transicao (hook sem saldo_anterior, ex.: edicao de cadastro).
+    const mat2 = await novoMaterial(db, { qtd: 0 });
+    await alertService.verificarAlertaPorMaterialId(db, mat2.id);
+    assert.strictEqual((await filaZeradoDoMaterial(db, mat2.id)).length, 0, 'sem evidencia de transicao nao alerta');
+  });
+
   await test('RN-07: material COM minimo configurado fica no canal do minimo — zerado nao dispara (revisao I3)', async () => {
     // Zerado <= abaixo-do-minimo: os dois canais mandavam dois e-mails do mesmo fato para a
     // mesma lista. O zerado existe para o material SEM minimo, que nada cobria.
@@ -363,6 +388,51 @@ async function criarRemessa(db, over = {}) {
     await queueService.varrerRemessasVencidas(db);
     const linhas = await dbAll(db, `SELECT * FROM fila_notificacoes_almoxarifado WHERE evento = 'REMESSA_VENCIDA' AND payload LIKE ?`, [`%"remessa_id":${remessaId}%`]);
     assert.strictEqual(linhas.length, 0, 'remessa encerrada nao pode entrar mesmo com prazo no passado');
+  });
+
+  await test('RN-04: builders de zerado/lote/remessa escapam HTML e prefixam o assunto (revisao final, lente B)', async () => {
+    // Sabotagem S1 da lente B provou: dava para apagar o escapeHtml das varreduras e a suite
+    // inteira ficava verde. Nome/codigo com HTML real em cada fonte + varredura de prefixo.
+    const stockService = require('../../services/almoxarifado/stockService');
+    await setConfig(db, 'alertas_estoque_emails', '["admin@teste.com"]');
+
+    // Zerado: nome do material com HTML (via motor, transicao observada).
+    const matZ = await novoMaterial(db, { qtd: 5, nome: 'Chapa <b>fina</b> & Cia' });
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: matZ.id, tipo: 'SAIDA_PRODUCAO', quantidade: 5, os_id: 1 });
+    const linhaZ = (await filaZeradoDoMaterial(db, matZ.id))[0];
+    assert.ok(linhaZ, 'zerado deveria ter enfileirado');
+    assert.ok(linhaZ.corpo_html.includes('&lt;b&gt;fina&lt;/b&gt; &amp;'), linhaZ.corpo_html);
+    assert.ok(!linhaZ.corpo_html.includes('<b>fina</b>'), 'HTML do nome nao pode sair cru (zerado)');
+
+    // Lote: codigo do lote com HTML.
+    const matL = await novoMaterial(db, { qtd: 50 });
+    const validade = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const loteId = await criarLote(db, matL.id, { codigo: 'L<script>x</script>', data_validade: validade });
+    await darSaldoAoLote(db, matL.id, loteId, 10);
+    await queueService.varrerLotesVencendo(db);
+    const linhaL = await dbGet(db, `SELECT * FROM fila_notificacoes_almoxarifado WHERE evento = 'LOTE_VENCENDO' AND payload LIKE ?`, [`%"lote_id":${loteId}%`]);
+    assert.ok(linhaL, 'lote deveria ter enfileirado');
+    assert.ok(linhaL.corpo_html.includes('&lt;script&gt;'), linhaL.corpo_html);
+    assert.ok(!linhaL.corpo_html.includes('<script>'), 'HTML do codigo do lote nao pode sair cru');
+
+    // Remessa: numero com HTML.
+    const prazoPassado = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const remessaId = await criarRemessa(db, { numero: 'REM<script>y</script>', status: 'ENVIADA', prazo_previsto: prazoPassado });
+    await queueService.varrerRemessasVencidas(db);
+    const linhaR = await dbGet(db, `SELECT * FROM fila_notificacoes_almoxarifado WHERE evento = 'REMESSA_VENCIDA' AND payload LIKE ?`, [`%"remessa_id":${remessaId}%`]);
+    assert.ok(linhaR, 'remessa deveria ter enfileirado');
+    assert.ok(linhaR.corpo_html.includes('&lt;script&gt;'), linhaR.corpo_html);
+    assert.ok(!linhaR.corpo_html.includes('<script>'), 'HTML do numero da remessa nao pode sair cru');
+
+    // Contrato do design: TODO assunto da fila prefixado "[Almoxarifado] " — varre o conjunto
+    // inteiro deste banco (todos os eventos gerados neste arquivo), nao 1 ou 2 eventos.
+    const assuntos = await dbAll(db, `SELECT DISTINCT evento, assunto FROM fila_notificacoes_almoxarifado`);
+    assert.ok(assuntos.length >= 3, 'varredura precisa de linhas para valer');
+    for (const a of assuntos) {
+      assert.ok(a.assunto.startsWith('[Almoxarifado] '), `assunto sem prefixo (${a.evento}): ${a.assunto}`);
+    }
+
+    await setConfig(db, 'alertas_estoque_emails', '[]');
   });
 
   await close();

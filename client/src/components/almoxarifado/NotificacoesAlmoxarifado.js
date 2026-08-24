@@ -160,8 +160,11 @@ const NotificacoesAlmoxarifado = () => {
     setProcessando(true);
     try {
       const res = await api.post('/almoxarifado/notificacoes/processar');
-      const { processadas = 0, enviadas = 0, falharam = 0 } = res.data || {};
-      toast.success(`${processadas} processada(s): ${enviadas} enviada(s), ${falharam} falha(s)`);
+      // Revisao final (M1): `falharam` e so a transicao definitiva para FALHA; retentativa
+      // agendada vem em `reagendadas` — sem a distincao, o toast dizia "7 falha(s)" com o
+      // card "0 falhas" do lado.
+      const { processadas = 0, enviadas = 0, falharam = 0, reagendadas = 0 } = res.data || {};
+      toast.success(`${processadas} processada(s): ${enviadas} enviada(s), ${reagendadas} reagendada(s), ${falharam} falha(s)`);
       setReload((t) => t + 1);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao processar a fila');

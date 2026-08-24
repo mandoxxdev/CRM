@@ -1372,7 +1372,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   });
 
   try {
-    await alertService.verificarAlertaPorMaterialId(db, material_id);
+    // saldo_anterior (Etapa 12, revisao final C1): e a evidencia de "transicao observada" do
+    // alerta de zerado — sem ela, a primeira zeragem de material recem-conhecido pela maquina
+    // era engolida como se fosse estado pre-existente.
+    await alertService.verificarAlertaPorMaterialId(db, material_id, { saldo_anterior: saldoAnteriorReal });
   } catch (alertErr) {
     console.warn('[almoxarifado-alertas] Falha ao verificar alerta pós-movimentação:', alertErr.message);
   }

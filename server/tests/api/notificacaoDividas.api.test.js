@@ -264,6 +264,17 @@ async function criarLoteAtivo(db, materialId, over = {}) {
     }
   });
 
+  await test('RN-04: todo assunto gerado pelas dividas e prefixado [Almoxarifado] (revisao final, lente B)', async () => {
+    // Sabotagem S5 da lente B: tirar o prefixo de um builder passava verde — o contrato do
+    // design ("assunto sempre prefixado") so estava amarrado em 2 dos 8 eventos. Varre o
+    // conjunto inteiro deste banco (ferramenta, solicitacao de compra, devolucao parcial...).
+    const assuntos = await dbAll(db, `SELECT DISTINCT evento, assunto FROM fila_notificacoes_almoxarifado`);
+    assert.ok(assuntos.length >= 2, 'varredura precisa de linhas para valer');
+    for (const a of assuntos) {
+      assert.ok(a.assunto.startsWith('[Almoxarifado] '), `assunto sem prefixo (${a.evento}): ${a.assunto}`);
+    }
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

@@ -560,7 +560,7 @@ async function marcarAlertaEnviado(db, materialId) {
  * OBSERVOU, não estados pré-existentes. Sem isso, a primeira gravação em lote da tela de
  * estoques-mínimos em produção despejava um aviso por material zerado do catálogo.
  */
-async function avaliarZerado(db, material) {
+async function avaliarZerado(db, material, opcoes = {}) {
   const qtd = Number(material.quantidade_atual);
 
   if (qtd > 0) {
@@ -575,10 +575,21 @@ async function avaliarZerado(db, material) {
     return { deveAlertar: false, motivo: rearme.changes > 0 ? 'com saldo (rearmado)' : 'com saldo' };
   }
 
-  // Linha de estado ainda não existe: primeiro contato já zerado -> semeia ZERADO sem alertar.
+  // Linha de estado ainda não existe. Revisão final (lente A, Critical 1): a heurística "a
+  // linha existe?" ESTAVA ERRADA como régua de transição — material sem mínimo (a população-
+  // alvo do zerado) nunca ganha linha por outro caminho, então a PRIMEIRA zeragem observada
+  // caía no ramo "primeiro contato" e era engolida (medido: transição 10->0 real, zero
+  // alertas; atinge toda a coorte do deploy e todo material criado com saldo inicial, cujo
+  // POST não passa pelo hook). O fato que decide é `saldo_anterior` do próprio motor: se ele
+  // era > 0, a zeragem FOI observada agora e alerta; sem essa evidência, semeia em silêncio.
   const semente = await dbRun(db, `INSERT OR IGNORE INTO alertas_estoque_material_almoxarifado
     (material_id, estado_zerado) VALUES (?, ?)`, [material.id, ESTADO_ZERADO]);
   if (semente.changes === 1) {
+    if (Number(opcoes.saldo_anterior) > 0) {
+      await dbRun(db, `UPDATE alertas_estoque_material_almoxarifado
+        SET ultimo_alerta_zerado = CURRENT_TIMESTAMP WHERE material_id = ?`, [material.id]);
+      return { deveAlertar: true, motivo: null };
+    }
     return { deveAlertar: false, motivo: 'primeiro contato já zerado — estado semeado sem alerta' };
   }
 
@@ -617,7 +628,7 @@ async function alertasEmailLigado(db) {
  * ordem errada dependendo de quem carrega primeiro (ver a nota no topo de
  * `notificationQueueService.js`).
  */
-async function processarAlertaZerado(db, material) {
+async function processarAlertaZerado(db, material, opcoes = {}) {
   // Revisão da Task 3 (I2): material INATIVO fica fora — catálogo desativado é justamente o
   // que está zerado; alertar reposição de material morto é ruído puro.
   if (material.ativo !== undefined && !material.ativo) {
@@ -636,7 +647,7 @@ async function processarAlertaZerado(db, material) {
     return { material_id: material.id, enviado: false, motivo: 'notificação por e-mail desligada' };
   }
 
-  const cruzamento = await avaliarZerado(db, material);
+  const cruzamento = await avaliarZerado(db, material, { saldo_anterior: opcoes.saldo_anterior });
   if (!cruzamento.deveAlertar) {
     return { material_id: material.id, enviado: false, motivo: cruzamento.motivo };
   }
@@ -779,7 +790,10 @@ async function verificarAlertaPorMaterialId(db, materialId, opts = {}) {
   // Fora do modo `teste` (mesmo motivo do alerta de minimo: teste nao deve gerar fila real).
   if (!opts.teste) {
     try {
-      await processarAlertaZerado(db, material);
+      // `saldo_anterior` (quando o chamador e o motor de estoque) e o fato que decide a
+      // primeira zeragem observada — ver o comentario em avaliarZerado (Critical 1 da
+      // revisao final).
+      await processarAlertaZerado(db, material, { saldo_anterior: opts.saldo_anterior });
     } catch (e) {
       console.warn('[almoxarifado-alertas] Falha ao avaliar alerta de zerado:', e.message);
     }

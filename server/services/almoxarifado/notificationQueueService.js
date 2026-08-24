@@ -111,6 +111,10 @@ async function processarFila(db, opcoes = {}) {
   let processadas = 0;
   let enviadas = 0;
   let falharam = 0;
+  // Revisao final (lente A, M1): `falharam` contava RETENTATIVA como falha — o toast dizia
+  // "7 falha(s)" com o card "0 falhas" do lado (o card conta status FALHA). Agora `falharam`
+  // e so a transicao definitiva para FALHA; tentativa reagendada (backoff) conta aqui.
+  let reagendadas = 0;
 
   for (const row of itens) {
     // Claim: has+add sao sincronos (sem await no meio — atomico no event loop). Um dreno
@@ -167,7 +171,10 @@ async function processarFila(db, opcoes = {}) {
             dedupe_chave: `falha-${row.id}`,
             destinatarios: adminDest,
             assunto: `[Almoxarifado] Falha ao enviar notificação #${row.id}`,
-            corpo_html: `<p>A notificação #${row.id} (evento ${row.evento}) falhou após ${proxTentativas} tentativa(s).</p><p>Último erro: ${erro}</p>`,
+            // Revisao final (lente B, Important): unico builder de 8 que interpolava cru no
+            // HTML — `erro` vem de err.message do nodemailer (texto do servidor SMTP, fonte
+            // externa) e `evento` por simetria. A RN-04 promete escape linha a linha.
+            corpo_html: `<p>A notificação #${row.id} (evento ${alertService.escapeHtml(row.evento)}) falhou após ${proxTentativas} tentativa(s).</p><p>Último erro: ${alertService.escapeHtml(erro)}</p>`,
             corpo_texto: `A notificação #${row.id} (evento ${row.evento}) falhou após ${proxTentativas} tentativa(s). Último erro: ${erro}`,
             payload: { notificacao_id: row.id, evento_original: row.evento },
           });
@@ -182,7 +189,7 @@ async function processarFila(db, opcoes = {}) {
       await dbRun(db, `UPDATE fila_notificacoes_almoxarifado
         SET tentativas = ?, ultimo_erro = ?, proxima_tentativa_em = datetime('now', '+' || ? || ' minutes')
         WHERE id = ?`, [proxTentativas, erro, minutos, row.id]);
-      falharam++;
+      reagendadas++;
     }
     } finally {
       emVoo.delete(row.id);
@@ -191,7 +198,7 @@ async function processarFila(db, opcoes = {}) {
 
   // `processadas` conta so as linhas efetivamente tentadas (claim + re-checagem passaram) —
   // linha pulada por outro dreno em voo nao conta como processada.
-  return { processadas, enviadas, falharam };
+  return { processadas, enviadas, falharam, reagendadas };
 }
 
 /**
@@ -211,6 +218,21 @@ async function reenviar(db, usuario, id) {
   const row = await dbGet(db, 'SELECT * FROM fila_notificacoes_almoxarifado WHERE id = ?', [id]);
   if (!row) {
     throw Object.assign(new Error('Notificação não encontrada'), { status: 404 });
+  }
+
+  // Revisao final (lente A, Important 1): o reenvio manual atravessava a supressao de
+  // cancelamento — o uso natural da tela ("olhar as falhas e reenviar") reemitia o aviso de
+  // uma movimentacao que nao existe mais no saldo, e o reset apagava o motivo. A guarda e por
+  // FATO (coluna cancelado do livro), nao por comparacao de string do ultimo_erro.
+  if (row.evento === 'MOVIMENTACAO') {
+    let movId = null;
+    try { movId = JSON.parse(row.payload)?.movimentacao_id; } catch (e) { movId = null; }
+    if (movId) {
+      const mov = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [movId]);
+      if (mov && mov.cancelado) {
+        throw Object.assign(new Error('Movimentação cancelada — notificação não pode ser reenviada'), { status: 400 });
+      }
+    }
   }
 
   await dbRun(db, `UPDATE fila_notificacoes_almoxarifado
@@ -264,6 +286,14 @@ function resolverClasseMovimentacao(tipo) {
   // cortou para RESERVA. Ficam fora de proposito; o canal da remessa e o alerta de remessa
   // VENCIDA (Task 3). CONSUMO_TERCEIRO/PERDA_TERCEIRO continuam: sao saida de verdade.
   if (tipo === 'REMESSA_TERCEIRO' || tipo === 'RETORNO_TERCEIRO') return null;
+  // Revisao final (lente A, Critical 2): AJUSTE_INVENTARIO e um tipo que SO existe em lote —
+  // a unica porta que o emite e a conclusao da conferencia (for sobre os itens divergentes).
+  // Uma conferencia de 50 divergencias mandava 50 e-mails num clique (medido); o comentario
+  // da propria rota fala em "inventario anual com 300 divergencias" = 300 e-mails. E a mesma
+  // familia de rajada que este resolver ja corta para RESERVA e remessa. A conferencia tem
+  // tela/relatorio proprios como canal; digest por e-mail e corte declarado (D3). AJUSTE,
+  // AJUSTE_POSITIVO e AJUSTE_NEGATIVO (ajustes manuais, um a um) continuam notificando.
+  if (tipo === 'AJUSTE_INVENTARIO') return null;
   if (tipo.endsWith('_TERCEIRO')) return 'terceiros';
   if (tipo.startsWith('AJUSTE')) return 'ajustes';
   if (movementTypes.TIPOS_ENTRADA.includes(tipo)) return 'entradas';
@@ -298,6 +328,14 @@ async function enfileirarMovimentacao(db, movimentacao, materialRow, user) {
   const configClasse = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chaveClasse]);
   let destinatarios = alertService.parseList(configClasse?.valor);
   if (!destinatarios.length) {
+    // Revisao final (lente A, Important 2): o fallback e o estado DEFAULT (as dest_* nascem
+    // vazias), e cair em alertas_estoque_emails ignorando o toggle "Notificar por e-mail"
+    // reintroduzia exatamente o que a emenda I1 da Task 3 impediu — quem silenciou a lista
+    // voltava a receber e-mail nela ao ligar notificar_movimentacoes sem preencher destino.
+    // Classe COM config propria segue fora do toggle: o admin escolheu aquele destino.
+    if (!(await alertService.alertasEmailLigado(db))) {
+      return { enfileirada: false, motivo: 'EMAIL_DESLIGADO' };
+    }
     const fallback = await alertService.getConfigValue(db, 'alertas_estoque_emails');
     destinatarios = alertService.parseList(fallback);
   }

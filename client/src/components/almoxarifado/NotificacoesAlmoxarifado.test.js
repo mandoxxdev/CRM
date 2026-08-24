@@ -332,7 +332,7 @@ describe('NotificacoesAlmoxarifado — reenviar', () => {
 
 describe('NotificacoesAlmoxarifado — processar fila', () => {
   test('processar chama o POST certo e recarrega a lista', async () => {
-    api.post.mockResolvedValueOnce({ data: { processadas: 3, enviadas: 1, falharam: 2 } });
+    api.post.mockResolvedValueOnce({ data: { processadas: 4, enviadas: 1, falharam: 2, reagendadas: 1 } });
     await renderizar();
     api.get.mockClear();
 
@@ -340,7 +340,7 @@ describe('NotificacoesAlmoxarifado — processar fila', () => {
 
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/notificacoes/processar');
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/notificacoes', { params: {} });
-    expect(toast.success).toHaveBeenCalledWith('3 processada(s): 1 enviada(s), 2 falha(s)');
+    expect(toast.success).toHaveBeenCalledWith('4 processada(s): 1 enviada(s), 1 reagendada(s), 2 falha(s)');
   });
 
   test('processar desabilita o botao enquanto a chamada esta em voo (revisao M4 — duplo clique)', async () => {
