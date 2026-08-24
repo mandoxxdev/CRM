@@ -1,10 +1,11 @@
 /**
  * Etapa 13, Task 3 — tela "/almoxarifado/relatorios" contra o contrato HTTP CONGELADO (RN-01/
  * 02/03/05) medido em server/routes/almoxarifado/extended.js: a lista devolve, por relatório,
- * `{ tipo, titulo, categoria, params, exportavel, limite, nota }` (realinhado pelo fix-round
- * `cfdbbe5` — a primeira versão desta suíte testava contra um shape mais estreito e tinha 3
- * contornos: proxy Array.isArray para o botão Exportar, tabela local de limites, e nota
- * cortada; todos removidos do componente e desta suíte).
+ * `{ tipo, titulo, categoria, params, exportavel, limite, nota, colunas }` (dois fix-rounds:
+ * `cfdbbe5` acrescentou exportavel/limite/nota; `bc1e2de` acrescentou `colunas` depois que a
+ * revisão adversarial mediu C1 — a tabela genérica sem `colunas` renderizava a linha CRUA do
+ * SELECT * na tela, vazando `custo_medio`/`proprietario_cliente_id` como cabeçalho pra qualquer
+ * usuário do módulo, o mesmo vazamento que o export já corrigia via `colunas` no XLSX).
  *
  * Fixtures usam formas realistas espelhando server/services/almoxarifado/reportRegistry.js
  * (títulos, categorias, nomes de params reais como `de`/`ate` da sucata-financeiro), mas o
@@ -14,6 +15,12 @@
  * existiu em nenhuma tabela hardcoded desta tela) e `exportavel:false` mesmo respondendo um
  * payload ARRAY — é o par de testes que prova que o campo da lista é a fonte, não mais um
  * proxy sobre o formato do payload.
+ *
+ * `indicadores` (Task 2, `bc1e2de`) já existe no servidor — a fixture usada aqui é o shape REAL
+ * de `reportService.relatorioIndicadores` (conferido linha a linha: `janela_dias` escalar,
+ * `giro`/`cobertura`/`atendimento_requisicoes` objetos aninhados, `rupturas` com `total` +
+ * `materiais` array aninhado, `valor_por_grupo` array de objetos), não mais uma fixture
+ * "antecipada" adivinhando o shape.
  *
  * Executar: cd client && CI=true npx react-scripts test --watchAll=false --testPathPattern=RelatoriosAlmoxarifado
  */
@@ -39,10 +46,18 @@ jest.mock('react-toastify', () => ({
 const NOTA_MATERIAIS_MAIS_CONSUMIDOS = 'Top 10 por quantidade, contando apenas saídas diretas '
   + '(SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA).';
 
+// `colunas` real do estoque-atual (reportRegistry.js) — usada pelo teste de projeção (C1): a
+// consulta abaixo devolve uma linha CRUA com 10+ chaves, e só estas 3 podem virar cabeçalho.
+const COLUNAS_ESTOQUE_ATUAL = [
+  { chave: 'codigo', rotulo: 'Código' },
+  { chave: 'nome', rotulo: 'Nome' },
+  { chave: 'valor_total', rotulo: 'Valor total' },
+];
+
 const LISTA_FIXTURE = [
   {
     tipo: 'estoque-atual', titulo: 'Estoque atual', categoria: 'Estoque', params: [],
-    exportavel: true, limite: null, nota: null,
+    exportavel: true, limite: null, nota: null, colunas: COLUNAS_ESTOQUE_ATUAL,
   },
   {
     tipo: 'materiais-mais-consumidos', titulo: 'Materiais mais consumidos', categoria: 'Movimentações',
@@ -50,7 +65,9 @@ const LISTA_FIXTURE = [
       { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
       { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
     ],
-    exportavel: true, limite: 10, nota: NOTA_MATERIAIS_MAIS_CONSUMIDOS,
+    // colunas:null de propósito — este relatório prova o FALLBACK (sem colunas declaradas, cai
+    // em Object.keys da primeira linha), o caminho oposto do estoque-atual acima.
+    exportavel: true, limite: 10, nota: NOTA_MATERIAIS_MAIS_CONSUMIDOS, colunas: null,
   },
   {
     tipo: 'sucata-financeiro', titulo: 'Sucata — financeiro', categoria: 'Gestão',
@@ -58,17 +75,17 @@ const LISTA_FIXTURE = [
       { nome: 'de', rotulo: 'De', tipo: 'date', obrigatorio: false },
       { nome: 'ate', rotulo: 'Até', tipo: 'date', obrigatorio: false },
     ],
-    exportavel: false, limite: null, nota: null,
+    exportavel: false, limite: null, nota: null, colunas: null,
   },
   {
     tipo: 'materiais-cliente', titulo: 'Posição por cliente', categoria: 'Terceiros e clientes',
     params: [{ nome: 'cliente_id', rotulo: 'Cliente', tipo: 'number', obrigatorio: true }],
-    exportavel: false, limite: null, nota: null,
+    exportavel: false, limite: null, nota: null, colunas: null,
   },
   {
     tipo: 'indicadores', titulo: 'Indicadores gerenciais', categoria: 'Gestão',
     params: [{ nome: 'janela_dias', rotulo: 'Janela (dias)', tipo: 'number', obrigatorio: false }],
-    exportavel: false, limite: null, nota: null,
+    exportavel: false, limite: null, nota: null, colunas: null,
   },
   // Entrada FICTÍCIA de propósito (não existe em reportRegistry.js): limite:3 é um valor que
   // NUNCA esteve em nenhuma tabela hardcoded desta tela, e exportavel:false combinado com um
@@ -76,7 +93,7 @@ const LISTA_FIXTURE = [
   // coisas juntas provam que hoje é o CAMPO da lista que decide, não uma inferência do payload.
   {
     tipo: 'diagnostico-consistencia', titulo: 'Diagnóstico de consistência', categoria: 'Estoque',
-    params: [], exportavel: false, limite: 3, nota: null,
+    params: [], exportavel: false, limite: 3, nota: null, colunas: null,
   },
 ];
 
@@ -92,6 +109,12 @@ const mockarLista = (itens = LISTA_FIXTURE) => {
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   mockarLista();
+  // jsdom NÃO implementa URL.createObjectURL/revokeObjectURL (medido: undefined) — sem isto,
+  // handleExportar lança no meio do fluxo de download e o catch engole em silêncio ANTES de
+  // chegar no link.setAttribute('download', ...), o que faria o teste do nome do arquivo (C2)
+  // falhar por um motivo que não tem nada a ver com o componente.
+  window.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+  window.URL.revokeObjectURL = jest.fn();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -134,10 +157,12 @@ describe('RelatoriosAlmoxarifado — menu dirigido pela lista', () => {
     // Categorias como títulos de seção — sabotagem-alvo: menu hardcode ignorando a lista faria
     // um tipo NÃO presente na fixture (ex.: "abaixo-minimo") aparecer mesmo assim.
     expect(container.querySelector('[data-testid="menu-relatorio-abaixo-minimo"]')).toBeNull();
-    expect(texto()).toContain('Estoque');
-    expect(texto()).toContain('Movimentações');
-    expect(texto()).toContain('Gestão');
-    expect(texto()).toContain('Terceiros e clientes');
+    // Revisão da Task 3 (C5): preso por NÓ do menu (data-testid do título de grupo), não por
+    // substring solta em todo o texto do container — um `texto().toContain('Estoque')` passaria
+    // mesmo com o agrupamento quebrado, se qualquer outro texto da tela contivesse a palavra.
+    const categoriasMenu = [...container.querySelectorAll('[data-testid="menu-categoria-titulo"]')]
+      .map((el) => el.textContent);
+    expect(categoriasMenu).toEqual(['Estoque', 'Movimentações', 'Gestão', 'Terceiros e clientes']);
   });
 
   test('lista com só 2 relatórios (perfil sem gate) não mostra os outros 3 da fixture completa', async () => {
@@ -197,8 +222,18 @@ describe('RelatoriosAlmoxarifado — formulário de parâmetros por declaração
 
     const inputDe = container.querySelector('#param-de');
     await digitar(inputDe, '2026-01-01');
+    // Shape real de reportService.relatorioSucataFinanceiro inclui `nota` de primeiro nível
+    // (C4) — presente aqui só para fidelidade de fixture; o comportamento de `nota` de payload
+    // é testado à parte, no describe "nota do PAYLOAD" (C3).
     api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/sucata-financeiro'
-      ? Promise.resolve({ data: { periodo: {}, movimentacoes: [], vendas: [], totais: {}, por_classificacao: [] } })
+      ? Promise.resolve({
+        data: {
+          periodo: { de: '2026-01-01', ate: null }, movimentacoes: [], vendas: [],
+          totais: { quantidade_sucateada: 0, valor_estimado_total: 0, valor_vendido_total: 0 },
+          por_classificacao: [],
+          nota: 'Valor estimado calculado pelo custo ATUAL do material (custoUnitarioSql).',
+        },
+      })
       : Promise.reject(new Error(`inesperado: ${url}`))));
     await clicar(botao('Consultar'));
 
@@ -252,21 +287,76 @@ describe('RelatoriosAlmoxarifado — tabela genérica (payload array)', () => {
   });
 });
 
-describe('RelatoriosAlmoxarifado — payload objeto (indicadores)', () => {
-  test('renderiza escalares como cards e arrays internos como tabelas, genericamente', async () => {
+describe('RelatoriosAlmoxarifado — tabela projetada por `colunas` da lista (C1, Major)', () => {
+  test('linha crua com 10+ chaves mostra SÓ os rótulos das colunas declaradas, nada de chave crua', async () => {
+    await renderizar();
+    await selecionarRelatorio('estoque-atual'); // fixture com colunas: COLUNAS_ESTOQUE_ATUAL (3)
+    // Linha CRUA como um SELECT * devolveria — o achado C1 media exatamente isto: sem projeção,
+    // custo_medio/proprietario_cliente_id/ativo etc. vazavam como cabeçalho pra qualquer usuário.
+    const linhaCrua = {
+      codigo: 'MAT-01', nome: 'Parafuso M8', categoria: 'Fixação', unidade: 'UN',
+      quantidade_atual: 100, disponivel: 80, valor_total: 500.5,
+      custo_medio: 4.5, custo_unitario: 5, proprietario_cliente_id: null, ativo: 1,
+    };
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/estoque-atual'
+      ? Promise.resolve({ data: [linhaCrua] })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Consultar'));
+
+    const tabela = container.querySelector('.almox-table');
+    expect(tabela).toBeTruthy();
+    const cabecalhos = [...tabela.querySelectorAll('thead th')].map((th) => th.textContent);
+    expect(cabecalhos).toEqual(['Código', 'Nome', 'Valor total']);
+    expect(cabecalhos).not.toContain('custo_medio');
+    expect(cabecalhos).not.toContain('proprietario_cliente_id');
+    expect(cabecalhos).not.toContain('ativo');
+
+    const tds = tabela.querySelectorAll('tbody td');
+    expect(tds).toHaveLength(3); // só as 3 colunas declaradas, não as 11 chaves da linha crua
+    expect(tds[0].textContent).toBe('MAT-01');
+    expect(tds[1].textContent).toBe('Parafuso M8');
+    expect(tds[2].textContent).toBe('500,5');
+  });
+
+  test('relatório sem `colunas` (materiais-mais-consumidos) mantém o fallback: cabeçalhos das chaves da linha', async () => {
+    // Par negativo do teste acima — prova que o fallback continua existindo para quem não
+    // declara colunas (a lista traz colunas:null de propósito nesta fixture).
+    await renderizar();
+    await selecionarRelatorio('materiais-mais-consumidos');
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/materiais-mais-consumidos'
+      ? Promise.resolve({ data: [{ codigo: 'MAT-09', total_consumido: 3 }] })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Consultar'));
+
+    const cabecalhos = [...container.querySelectorAll('.almox-table thead th')].map((th) => th.textContent);
+    expect(cabecalhos).toEqual(['codigo', 'total_consumido']);
+  });
+});
+
+describe('RelatoriosAlmoxarifado — payload objeto (indicadores, shape REAL de relatorioIndicadores)', () => {
+  test('renderiza escalares como cards, objetos aninhados como cards próprios e arrays internos como tabelas, genericamente', async () => {
     await renderizar();
     await selecionarRelatorio('indicadores');
+    // Shape IDÊNTICO ao `return` de reportService.relatorioIndicadores (Task 2, bc1e2de): os 6
+    // campos de primeiro nível, na mesma forma (giro/cobertura/atendimento_requisicoes objetos,
+    // rupturas com total+materiais, valor_por_grupo array de {categoria,valor}).
     api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/indicadores'
       ? Promise.resolve({
         data: {
           janela_dias: 90,
           giro: { valor_consumido: 1234.5, valor_estoque_atual: 5000, indice: 0.25 },
+          cobertura: { mediana_dias: 12.5, materiais_sem_consumo: 3 },
           rupturas: {
             total: 2,
             materiais: [
               { codigo: 'MAT-07', nome: 'Chapa 3mm', data: '2026-08-10' },
             ],
           },
+          valor_por_grupo: [
+            { categoria: 'Fixação', valor: 1000 },
+            { categoria: 'Sem categoria', valor: 250.75 },
+          ],
+          atendimento_requisicoes: { media_horas: 6.5, total_consideradas: 40 },
         },
       })
       : Promise.reject(new Error(`inesperado: ${url}`))));
@@ -289,6 +379,14 @@ describe('RelatoriosAlmoxarifado — payload objeto (indicadores)', () => {
       .find((t) => t.textContent.includes('MAT-07'));
     expect(tabelaRupturas).toBeTruthy();
     expect(tabelaRupturas.querySelector('tbody td').textContent).toBe('MAT-07');
+
+    // valor_por_grupo (array de objetos NÃO aninhado sob outra chave) também vira tabela.
+    const tabelaValorPorGrupo = [...container.querySelectorAll('.almox-table')]
+      .find((t) => t.textContent.includes('Fixação'));
+    expect(tabelaValorPorGrupo).toBeTruthy();
+    const linhaFixacao = [...tabelaValorPorGrupo.querySelectorAll('tbody tr')]
+      .find((tr) => tr.textContent.includes('Fixação'));
+    expect(linhaFixacao.querySelectorAll('td')[1].textContent).toBe('1.000');
   });
 });
 
@@ -354,6 +452,39 @@ describe('RelatoriosAlmoxarifado — nota/régua declarada no rodapé (campo `no
   });
 });
 
+describe('RelatoriosAlmoxarifado — nota do PAYLOAD vira rodapé, não card KPI (C3)', () => {
+  test('sucata-financeiro: campo `nota` do payload aparece como texto de rodapé, fora da grade de cards', async () => {
+    await renderizar();
+    await selecionarRelatorio('sucata-financeiro');
+    const NOTA_PAYLOAD_SUCATA = 'Valor estimado calculado pelo custo ATUAL do material '
+      + '(custoUnitarioSql) — a movimentacao nao guarda custo historico.';
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/sucata-financeiro'
+      ? Promise.resolve({
+        data: {
+          periodo: { de: null, ate: null },
+          movimentacoes: [],
+          vendas: [],
+          totais: { quantidade_sucateada: 0, valor_estimado_total: 0, valor_vendido_total: 0 },
+          por_classificacao: [],
+          nota: NOTA_PAYLOAD_SUCATA,
+        },
+      })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Consultar'));
+
+    const notaPayload = container.querySelector('[data-testid="nota-payload"]');
+    expect(notaPayload).toBeTruthy();
+    expect(notaPayload.textContent).toBe(NOTA_PAYLOAD_SUCATA);
+
+    // Sabotagem-alvo do achado C3: sem o tratamento especial, `nota` cairia na grade de
+    // escalares como mais um card KPI com rótulo "nota" — este assert prova que NÃO existe tal
+    // card, só o parágrafo de rodapé acima.
+    const cardNota = [...container.querySelectorAll('.almox-kpi-card .almox-kpi-label')]
+      .find((el) => el.textContent === 'nota');
+    expect(cardNota).toBeUndefined();
+  });
+});
+
 describe('RelatoriosAlmoxarifado — exportar XLSX', () => {
   test('export usa a MESMA querystring da última consulta (relatório com exportavel:true)', async () => {
     await renderizar();
@@ -411,6 +542,71 @@ describe('RelatoriosAlmoxarifado — exportar XLSX', () => {
     // A tabela genérica renderiza normalmente (payload é array) — só o botão de export some.
     expect(container.querySelector('.almox-table')).toBeTruthy();
     expect(botao('Exportar XLSX')).toBeUndefined();
+  });
+});
+
+describe('RelatoriosAlmoxarifado — nome do arquivo, troca de relatório, querystring congelada (C2)', () => {
+  test('download usa o nome de arquivo <tipo>-<AAAA-MM-DD>.xlsx', async () => {
+    await renderizar();
+    await selecionarRelatorio('materiais-mais-consumidos');
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/materiais-mais-consumidos'
+      ? Promise.resolve({ data: [{ codigo: 'MAT-01', total_consumido: 5 }] })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Consultar'));
+
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/materiais-mais-consumidos/export'
+      ? Promise.resolve({ data: new Blob(['x']) })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    const setAttributeSpy = jest.spyOn(window.HTMLAnchorElement.prototype, 'setAttribute');
+    await clicar(botao('Exportar XLSX'));
+
+    const chamadaDownload = setAttributeSpy.mock.calls.find(([atributo]) => atributo === 'download');
+    expect(chamadaDownload).toBeTruthy();
+    expect(chamadaDownload[1]).toMatch(/^materiais-mais-consumidos-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    setAttributeSpy.mockRestore();
+  });
+
+  test('trocar de relatório limpa o resultado anterior — a tabela de A NÃO aparece sob o título de B', async () => {
+    await renderizar();
+    await selecionarRelatorio('estoque-atual');
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/estoque-atual'
+      ? Promise.resolve({ data: [{ codigo: 'A1', nome: 'Material A', valor_total: 1 }] })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Consultar'));
+    expect(texto()).toContain('A1');
+    expect(container.querySelector('.almox-table')).toBeTruthy();
+
+    // Troca para B SEM consultar B — o `setDadosRelatorio(null)` do `selecionarRelatorio` é o
+    // que garante que o resultado de A não fica grudado sob o título de B.
+    await selecionarRelatorio('materiais-mais-consumidos');
+
+    expect(texto()).not.toContain('A1');
+    expect(container.querySelector('.almox-table')).toBeNull();
+  });
+
+  test('alterar um input DEPOIS de consultar não muda a querystring do export (usa a da ÚLTIMA consulta)', async () => {
+    await renderizar();
+    await selecionarRelatorio('materiais-mais-consumidos');
+    const inputInicio = container.querySelector('#param-data_inicio');
+    await digitar(inputInicio, '2026-08-01');
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/materiais-mais-consumidos'
+      ? Promise.resolve({ data: [{ codigo: 'MAT-01', total_consumido: 5 }] })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Consultar'));
+
+    // Muda o input DEPOIS de consultar, sem clicar Consultar de novo.
+    await digitar(inputInicio, '2026-12-25');
+
+    api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/materiais-mais-consumidos/export'
+      ? Promise.resolve({ data: new Blob(['x']) })
+      : Promise.reject(new Error(`inesperado: ${url}`))));
+    await clicar(botao('Exportar XLSX'));
+
+    // Continua com o valor da CONSULTA (2026-08-01), não o valor ao vivo do input (2026-12-25).
+    expect(api.get).toHaveBeenCalledWith(
+      '/almoxarifado/relatorios/materiais-mais-consumidos/export',
+      { params: { data_inicio: '2026-08-01' }, responseType: 'blob' },
+    );
   });
 });
 

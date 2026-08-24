@@ -11,16 +11,20 @@ import './Almoxarifado.css';
  * Contrato: docs/superpowers/specs/2026-08-24-almoxarifado-etapa13-relatorios-design.md
  * (RN-02/RN-03/RN-05, D6).
  *
- * ── Contrato da lista (realinhado pelo fix-round `cfdbbe5`) ───────────────────────────────────
+ * ── Contrato da lista (realinhado pelos fix-rounds `cfdbbe5` e `bc1e2de`) ──────────────────────
  *
  * `GET /api/almoxarifado/relatorios` devolve, por relatório:
- * `{ tipo, titulo, categoria, params, exportavel, limite, nota }`. A primeira versão desta
- * tela foi construída contra um shape mais estreito (só `tipo/titulo/categoria/params`, medido
- * na Task 1 original) e teve de driblar a ausência de `exportavel`/`limite`/`nota` com três
- * contornos declarados (proxy `Array.isArray` do payload, tabela local de limites espelhando
- * `reportRegistry.js`, e corte da régua/nota por falta de campo). O fix-round alargou a lista
- * ADITIVAMENTE (RN-05) — os três contornos foram REMOVIDOS e a tela agora lê os campos direto
- * da lista, fonte única, sem duplicar dado do registro no cliente.
+ * `{ tipo, titulo, categoria, params, exportavel, limite, nota, colunas }`
+ * (`colunas: [{ chave, rotulo }] | null`). A primeira versão desta tela foi construída contra
+ * um shape mais estreito (só `tipo/titulo/categoria/params`, medido na Task 1 original) e teve
+ * de driblar a ausência desses campos com contornos declarados (proxy `Array.isArray` do
+ * payload, tabela local de limites espelhando `reportRegistry.js`, corte da régua/nota, e —
+ * achado C1 da revisão adversarial da tela — tabela genérica que renderizava a linha CRUA do
+ * SELECT * quando `colunas` não existia na lista: 6 colunas declaradas viravam 64 no
+ * `estoque-atual`, com `custo_medio`/`proprietario_cliente_id` virando cabeçalho NA TELA para
+ * qualquer usuário do módulo, desfazendo a decisão C2 do export — RN-03 projeta a planilha,
+ * mas a UI não projetava a tabela). Os dois fix-rounds alargaram a lista ADITIVAMENTE — a tela
+ * lê todos os campos direto dela, fonte única, sem duplicar dado do registro no cliente.
  *
  * ── Download do export ──────────────────────────────────────────────────────────────────────
  * Usa o MESMO padrão já estabelecido no resto do cliente (PropostaForm.js, PropostasList.js,
@@ -89,25 +93,31 @@ const formatCelula = (v) => {
   return String(v);
 };
 
-// Tabela genérica: cabeçalhos vêm das CHAVES do primeiro item — a lista não traz `colunas`
-// (só `params`, ver contrato no cabeçalho do arquivo), então o front nunca assume nomes fixos.
-// Usada tanto para o payload ARRAY direto quanto para um array interno de um payload OBJETO
-// (ex.: `rupturas.materiais`).
-const TabelaGenerica = ({ linhas }) => {
+// Tabela genérica. Revisão da Task 3 (C1, Major): quando a lista declara `colunas` para o
+// relatório ([{chave, rotulo}]), a tabela PROJETA por elas — cabeçalho = rotulo, célula =
+// linha[chave] — igual ao que RN-03 já faz no export (server: nunca json_to_sheet com a linha
+// crua). Sem isso, um SELECT * com 20+ colunas (custo_medio, proprietario_cliente_id, ativo...)
+// vazava tudo pro <thead> pra qualquer usuário do módulo — a decisão C2 do export existia só no
+// XLSX, não na tela. Quando `colunas` é null/vazio (relatório sem declaração, ou array interno
+// de um payload objeto como `rupturas.materiais`, que a lista não descreve) cai no fallback de
+// sempre: cabeçalhos a partir das CHAVES do primeiro item.
+const TabelaGenerica = ({ linhas, colunas }) => {
   if (!linhas || linhas.length === 0) {
     return <div className="almox-empty"><p>Nenhum registro encontrado</p></div>;
   }
-  const colunas = Object.keys(linhas[0]);
+  const cols = (colunas && colunas.length > 0)
+    ? colunas
+    : Object.keys(linhas[0]).map((k) => ({ chave: k, rotulo: k }));
   return (
     <div className="almox-table-container">
       <table className="almox-table">
         <thead>
-          <tr>{colunas.map((c) => <th key={c}>{c}</th>)}</tr>
+          <tr>{cols.map((c) => <th key={c.chave}>{c.rotulo}</th>)}</tr>
         </thead>
         <tbody>
           {linhas.map((linha, i) => (
             // eslint-disable-next-line react/no-array-index-key
-            <tr key={i}>{colunas.map((c) => <td key={c}>{formatCelula(linha[c])}</td>)}</tr>
+            <tr key={i}>{cols.map((c) => <td key={c.chave}>{formatCelula(linha[c.chave])}</td>)}</tr>
           ))}
         </tbody>
       </table>
@@ -150,8 +160,17 @@ const ValorObjeto = ({ valor }) => {
 
 // Payload objeto de primeiro nível (D6/RN-05): escalares viram cards numa grade única no topo;
 // arrays e objetos viram seções tituladas com a chave, cada uma com seu próprio ValorObjeto.
+//
+// Revisão da Task 3 (C3): a chave `nota` — quando o PAYLOAD do relatório a traz de primeiro
+// nível (ex.: sucata-financeiro devolve `{ ..., nota: 'Valor estimado calculado...' }`) — é
+// tratada à parte, como texto de rodapé, no MESMO slot visual da nota do registro
+// (`entradaSelecionada.nota`, ver JSX principal). Sem isto ela caía na grade de escalares como
+// mais um card KPI com rótulo "nota", perdida no meio de valor_consumido/indice/etc. Regra por
+// NOME de chave, não por tipo de relatório: qualquer payload objeto que trouxer `nota` string
+// ganha o mesmo tratamento — genérico, sem a tela precisar saber qual relatório é.
 const SecoesObjeto = ({ dados }) => {
-  const entradas = Object.entries(dados);
+  const { nota: notaPayload, ...resto } = dados;
+  const entradas = Object.entries(resto);
   const escalares = entradas.filter(([, v]) => v === null || typeof v !== 'object');
   const complexas = entradas.filter(([, v]) => v !== null && typeof v === 'object');
   return (
@@ -174,6 +193,11 @@ const SecoesObjeto = ({ dados }) => {
           <ValorObjeto valor={v} />
         </div>
       ))}
+      {typeof notaPayload === 'string' && notaPayload && (
+        <p data-testid="nota-payload" style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', margin: '12px 0 0' }}>
+          {notaPayload}
+        </p>
+      )}
     </>
   );
 };
@@ -341,7 +365,12 @@ const RelatoriosAlmoxarifado = () => {
             )}
             {categorias.map(([categoria, itens]) => (
               <div key={categoria} style={{ marginBottom: 18 }}>
-                <div className="almox-section-title">{categoria}</div>
+                {/* Revisão da Task 3 (C5, nit): testid distinto do `almox-section-title` das
+                    seções internas de SecoesObjeto — mesma classe visual, mas sem isto um
+                    seletor por classe não distingue "título de grupo do menu" de "título de
+                    seção do resultado", e testes por substring de texto (ex.: 'Estoque' no
+                    container inteiro) passavam mesmo com o agrupamento quebrado. */}
+                <div className="almox-section-title" data-testid="menu-categoria-titulo">{categoria}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {itens.map((r) => (
                     <button
@@ -423,7 +452,7 @@ const RelatoriosAlmoxarifado = () => {
                 ) : dadosRelatorio !== null ? (
                   <>
                     {Array.isArray(dadosRelatorio) ? (
-                      <TabelaGenerica linhas={dadosRelatorio} />
+                      <TabelaGenerica linhas={dadosRelatorio} colunas={entradaSelecionada.colunas} />
                     ) : (
                       <SecoesObjeto dados={dadosRelatorio} />
                     )}
