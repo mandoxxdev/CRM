@@ -353,6 +353,10 @@ const Layout = () => {
     // Etapa 9b: ferramenta e PATRIMONIO emprestavel (furadeira, paquimetro...), nao estoque —
     // tela nova para emprestimo/devolucao, manutencao, avaria/perda e calibracao (design D9).
     { path: '/almoxarifado/ferramentas', icon: FiTool, label: 'Ferramentas' },
+    // Etapa 11: sugestao de compra por fornecedor, estoque parado e acompanhamento das
+    // solicitacoes — gate proprio (gerenciar_reposicao) resolvido pelo backend, sem adminOnly
+    // aqui (o perfil COMPRAS/GESTOR tambem acessa, nao so admin do modulo).
+    { path: '/almoxarifado/reposicao', icon: FiShoppingCart, label: 'Reposição e Compras' },
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
