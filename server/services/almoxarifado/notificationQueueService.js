@@ -10,6 +10,10 @@
 const crypto = require('crypto');
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
+// movementTypes NAO importa este servico (nem alertService/stockService) — sem ciclo. Ver a nota
+// em `enfileirarMovimentacao` sobre por que `alertService` continua sendo requerido LAZY (dentro
+// da funcao), no mesmo padrao de `processarFila`.
+const movementTypes = require('./movementTypes');
 
 const STATUS_VALIDOS = ['PENDENTE', 'ENVIADO', 'FALHA'];
 
@@ -219,9 +223,123 @@ async function reenviar(db, usuario, id) {
   return { success: true, status: atualizado.status };
 }
 
+// Etapa 12, Task 2 (RN-05): mapa LITERAL chave->config (Fase 2, achado 4 — chave montada por
+// template string some da varredura do configuracoesGerais.api.test.js, que procura o literal
+// `'chave'` em routes/services). Classes sem entrada aqui (compras, etc.) nao passam por
+// enfileirarMovimentacao.
+const DEST_POR_CLASSE = {
+  entradas: 'notificacoes_dest_entradas',
+  saidas: 'notificacoes_dest_saidas',
+  ajustes: 'notificacoes_dest_ajustes',
+  terceiros: 'notificacoes_dest_terceiros',
+};
+
+/**
+ * RN-05: resolve a classe do TIPO com precedencia FIXA (Fase 2) — sufixo `_TERCEIRO` > prefixo
+ * `AJUSTE` > `TIPOS_ENTRADA`/`TIPOS_SAIDA` de `movementTypes` (fonte unica). Sem a precedencia,
+ * `AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO` (que estao em TIPOS_ENTRADA/TIPOS_SAIDA) cairiam em
+ * entradas/saidas por acidente da ordem dos ifs; `CONSUMO_TERCEIRO`/`PERDA_TERCEIRO` (tambem em
+ * TIPOS_SAIDA) cairiam em saidas em vez de terceiros. Tipo que nao bate em nenhuma das tres
+ * regras (RESERVA, LIBERACAO_RESERVA, TRANSFERENCIA, BLOQUEIO, DESBLOQUEIO, QUARENTENA,
+ * RETRABALHO e afins — retencao/remanejo, nao entrada/saida) devolve null: esses tipos passam
+ * pelo motor em toda requisicao aprovada e virariam spam de e-mail (RN-04).
+ */
+function resolverClasseMovimentacao(tipo) {
+  if (typeof tipo !== 'string') return null;
+  if (tipo.endsWith('_TERCEIRO')) return 'terceiros';
+  if (tipo.startsWith('AJUSTE')) return 'ajustes';
+  if (movementTypes.TIPOS_ENTRADA.includes(tipo)) return 'entradas';
+  if (movementTypes.TIPOS_SAIDA.includes(tipo)) return 'saidas';
+  return null;
+}
+
+/**
+ * RN-04/RN-05: chamada pelo gancho pos-commit de `stockService.registrarMovimentacao`, depois
+ * que TODAS as escritas atomicas do motor ja tiveram sucesso — movimentacao que falha em
+ * qualquer guarda nunca chega aqui (o try/catch do gancho e quem impede isto de derrubar o
+ * motor, nao esta funcao). `movimentacao` e o objeto montado pelo gancho: { id, tipo, quantidade,
+ * saldo_anterior, saldo_posterior, justificativa, motivo, referencia, lote_id, lote_codigo,
+ * projeto_id, os_id, cliente_id, requisicao_id, documento_vinculado }. `materialRow` e o material
+ * completo (codigo, nome, unidade) ja carregado pelo motor — nenhuma query nova aqui so pra isso.
+ *
+ * Tipo sem classe: NAO enfileira, sem consultar config nem destinatario (RN-04, `SEM_CLASSE`).
+ * Classe resolvida sem config propria (ou config vazia): cai em `alertas_estoque_emails` — o
+ * fallback so vale para classe resolvida, nunca para SEM_CLASSE (RN-05). Sem destinatario nenhum
+ * (nem classe, nem fallback): `enfileirar` ja devolve SEM_DESTINATARIO sem quebrar nada.
+ */
+async function enfileirarMovimentacao(db, movimentacao, materialRow, user) {
+  // Require LAZY (mesmo padrao/motivo de `processarFila`): alertService nao entra no topo deste
+  // arquivo para nao fixar uma ordem de carregamento que a Task 3 (alerta de ZERADO enfileirando
+  // por aqui) pode inverter, criando o ciclo alertService -> este servico -> alertService.
+  const alertService = require('./alertService');
+
+  const classe = resolverClasseMovimentacao(movimentacao.tipo);
+  if (!classe) return { enfileirada: false, motivo: 'SEM_CLASSE' };
+
+  const chaveClasse = DEST_POR_CLASSE[classe];
+  const configClasse = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chaveClasse]);
+  let destinatarios = alertService.parseList(configClasse?.valor);
+  if (!destinatarios.length) {
+    const fallback = await alertService.getConfigValue(db, 'alertas_estoque_emails');
+    destinatarios = alertService.parseList(fallback);
+  }
+
+  const appUrlDb = await alertService.getConfigValue(db, alertService.APP_URL_CONFIG_KEY);
+  const appBase = alertService.resolveAppBaseUrl(appUrlDb);
+  const link = `${appBase}/almoxarifado/movimentacoes?destaque=${movimentacao.id}`;
+
+  const dataHora = alertService.formatDateTimePtBr();
+  const materialLabel = `${materialRow.codigo} — ${materialRow.nome}`;
+  const usuarioLabel = user?.nome || user?.email || `usuário #${user?.id}`;
+  const assunto = `[Almoxarifado] ${movimentacao.tipo} — ${materialRow.codigo}`;
+
+  // Conteudo minimo da spec 14.1 (RN-04): tipo, id, data/hora, usuario, material, quantidade+
+  // unidade, saldo anterior/posterior, lote quando houver, projeto/OS/cliente/requisicao quando
+  // houver, justificativa/motivo, link direto.
+  const linhas = [
+    `Tipo: ${movimentacao.tipo}`,
+    `Movimentação: #${movimentacao.id}`,
+    `Data/hora: ${dataHora}`,
+    `Usuário: ${usuarioLabel}`,
+    `Material: ${materialLabel}`,
+    `Quantidade: ${movimentacao.quantidade} ${materialRow.unidade || ''}`.trim(),
+    `Saldo anterior: ${movimentacao.saldo_anterior}`,
+    `Saldo posterior: ${movimentacao.saldo_posterior}`,
+  ];
+  // lote_codigo (Fase 2): sempre o loteCodigoFinal que o gancho resolveu, NUNCA o lote cru — ver
+  // a nota do brief da Task 2 sobre o lote_id vir null quando a chamada usou o CODIGO do lote.
+  if (movimentacao.lote_codigo) linhas.push(`Lote: ${movimentacao.lote_codigo}`);
+  if (movimentacao.projeto_id) linhas.push(`Projeto: #${movimentacao.projeto_id}`);
+  if (movimentacao.os_id) linhas.push(`OS: #${movimentacao.os_id}`);
+  if (movimentacao.cliente_id) linhas.push(`Cliente: #${movimentacao.cliente_id}`);
+  if (movimentacao.requisicao_id) linhas.push(`Requisição: #${movimentacao.requisicao_id}`);
+  if (movimentacao.documento_vinculado) linhas.push(`Documento: ${movimentacao.documento_vinculado}`);
+  const justificativaOuMotivo = movimentacao.justificativa || movimentacao.motivo;
+  if (justificativaOuMotivo) linhas.push(`Justificativa: ${justificativaOuMotivo}`);
+  linhas.push(`Link: ${link}`);
+
+  const corpo_texto = linhas.join('\n');
+  const corpo_html = `<div>${linhas.map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`;
+
+  return enfileirar(db, {
+    evento: 'MOVIMENTACAO',
+    // RN-02: dedupe por movimentacao — a mesma movimentacao nunca gera dois e-mails mesmo se o
+    // gancho for chamado duas vezes por engano.
+    dedupe_chave: `mov-${movimentacao.id}`,
+    destinatarios,
+    assunto,
+    corpo_html,
+    corpo_texto,
+    payload: { movimentacao_id: movimentacao.id, tipo: movimentacao.tipo, material_id: materialRow.id },
+  });
+}
+
 module.exports = {
   STATUS_VALIDOS,
   enfileirar,
   processarFila,
   reenviar,
+  enfileirarMovimentacao,
+  resolverClasseMovimentacao,
+  DEST_POR_CLASSE,
 };

@@ -10,6 +10,10 @@ const { custoUnitarioSql, valorEstoqueSql } = require('./custoSql');
 const movementTypes = require('./movementTypes');
 // seriesService nao importa stockService de volta — sem ciclo.
 const seriesService = require('./seriesService');
+// Etapa 12, Task 2 (D8): notificationQueueService NAO importa stockService (nem no topo nem
+// lazy) — sem ciclo. Ele so requer alertService de forma LAZY (dentro de enfileirarMovimentacao/
+// processarFila), entao carregar este require aqui, no topo, nao fecha ciclo nenhum.
+const notificationQueueService = require('./notificationQueueService');
 
 async function getConfig(db, chave) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
@@ -1371,6 +1375,25 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     await alertService.verificarAlertaPorMaterialId(db, material_id);
   } catch (alertErr) {
     console.warn('[almoxarifado-alertas] Falha ao verificar alerta pós-movimentação:', alertErr.message);
+  }
+
+  // Etapa 12 (RN-04, D8): notificacao pos-commit — todas as escritas do motor ja tiveram
+  // sucesso; movimentacao que falha em qualquer guarda nunca chega aqui. O gancho mora no
+  // MOTOR porque movimentacao entra por varias portas (v1, v2, rotas dedicadas, servicos).
+  // Config-gated (default '0') e try/catch: aviso NUNCA derruba movimentacao.
+  try {
+    if (await getConfig(db, 'notificar_movimentacoes') === '1') {
+      await notificationQueueService.enfileirarMovimentacao(db, {
+        id: result.lastID, tipo, quantidade, saldo_anterior: saldoAnteriorReal,
+        saldo_posterior: saldoPosterior, justificativa, motivo, referencia,
+        // Fase 2: loteIdFinal/loteCodigoFinal, NAO o lote_id cru — ele vem null sempre que a
+        // chamada usou o CODIGO do lote (inclusive quando a entrada CRIOU o lote).
+        lote_id: loteIdFinal, lote_codigo: loteCodigoFinal,
+        projeto_id, os_id, cliente_id, requisicao_id, documento_vinculado,
+      }, material, user);
+    }
+  } catch (notifErr) {
+    console.warn('[almoxarifado-notificacoes] Falha ao enfileirar pos-movimentacao:', notifErr.message);
   }
 
   return { id: result.lastID, saldo_anterior: saldoAnteriorReal, saldo_posterior: saldoPosterior };
