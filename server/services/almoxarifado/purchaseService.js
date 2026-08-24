@@ -3,6 +3,10 @@ const { disponivelSql } = require('./availabilitySql');
 const { custoUnitarioSql } = require('./custoSql');
 const { TIPOS_SAIDA, TIPOS_ENTRADA } = require('./movementTypes');
 const { registrarAuditoria } = require('./audit');
+// Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
+// Task 3, RN-06 — resumo de solicitacoes de compra geradas).
+const alertService = require('./alertService');
+const notificationQueueService = require('./notificationQueueService');
 
 async function verificarEstoqueMinimo(db) {
   const criticos = await dbAll(db, `SELECT * FROM materiais_almoxarifado
@@ -193,6 +197,10 @@ async function gerarSolicitacoesDaSugestao(db, usuario, materialIds) {
   const alvos = [...new Set(Array.isArray(materialIds) ? materialIds : [...porMaterial.keys()])];
 
   const criadas = []; const puladas = [];
+  // RN-06: o resumo enfileirado no fim precisa de codigo/nome/unidade do material, que NAO estao
+  // em `criadas` (so material_id/solicitacao_id/quantidade) — capturados aqui, do `item` que so
+  // existe DENTRO do laco (Fase 2).
+  const resumoItens = [];
   for (const materialId of alvos) {
     const item = porMaterial.get(materialId);
     if (!item) { puladas.push({ material_id: materialId, motivo: 'SEM_SUGESTAO' }); continue; }
@@ -207,7 +215,41 @@ async function gerarSolicitacoesDaSugestao(db, usuario, materialIds) {
       dados_novos: { material_id: materialId, quantidade: item.quantidade_sugerida, motivo: 'PONTO_REPOSICAO' },
     });
     criadas.push({ material_id: materialId, solicitacao_id: r.lastID, quantidade: item.quantidade_sugerida });
+    resumoItens.push({
+      codigo: item.codigo, nome: item.nome, unidade: item.unidade, quantidade: item.quantidade_sugerida,
+    });
   }
+
+  // RN-06/RN-01: UM e-mail de resumo por lote gerado (nao um por material) — try/catch proprio,
+  // porque falha de enfileirar NUNCA pode derrubar a criacao das solicitacoes ja gravadas acima.
+  if (criadas.length > 0) {
+    try {
+      // Sort NUMERICO dos ids (achado da Fase 2): o lexicografico ordenaria [2,10] como [10,2] —
+      // duas chamadas com os MESMOS ids em ordem diferente teriam de gerar a MESMA hash de
+      // dedupe, senao o mesmo lote gerado duas vezes (ex.: retry do cliente) dobraria o aviso.
+      const idsOrdenados = criadas.map((c) => c.solicitacao_id).sort((a, b) => a - b);
+      let destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'notificacoes_dest_compras'));
+      if (!destinatarios.length) {
+        destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'compras_notificar_emails'));
+      }
+      const linhas = [
+        `Solicitações de compra geradas: ${criadas.length}`,
+        ...resumoItens.map((i) => `- ${i.codigo} — ${i.nome}: ${i.quantidade} ${i.unidade || ''}`.trim()),
+      ];
+      await notificationQueueService.enfileirar(db, {
+        evento: 'SOLICITACAO_COMPRA',
+        dedupe_chave: `solicitacoes-${idsOrdenados.join('-')}`,
+        destinatarios,
+        assunto: `[Almoxarifado] Solicitações de compra geradas (${criadas.length})`,
+        corpo_texto: linhas.join('\n'),
+        corpo_html: `<div>${linhas.map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`,
+        payload: { solicitacao_ids: idsOrdenados },
+      });
+    } catch (e) {
+      console.warn('[almoxarifado-notificacoes] Falha ao enfileirar resumo de solicitacoes de compra:', e.message);
+    }
+  }
+
   return { criadas, puladas };
 }
 

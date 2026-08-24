@@ -10,6 +10,10 @@ const DEFAULT_DEBOUNCE_SECONDS = 60;
 const DEFAULT_APP_URL = 'https://systemgmp.online';
 const ESTADO_ACIMA = 'ACIMA';
 const ESTADO_ABAIXO = 'ABAIXO';
+// Etapa 12, Task 3 (RN-07): maquina de estado IRMA da ACIMA/ABAIXO, coluna propria
+// (`estado_zerado`) — ver a nota de `avaliarZerado` abaixo.
+const ESTADO_COM_SALDO = 'COM_SALDO';
+const ESTADO_ZERADO = 'ZERADO';
 const PASSWORD_MASK = '********';
 
 const SMTP_CONFIG_KEYS = {
@@ -529,6 +533,100 @@ async function marcarAlertaEnviado(db, materialId) {
   [materialId, ESTADO_ABAIXO, ESTADO_ABAIXO]);
 }
 
+/**
+ * RN-07 (Etapa 12, Task 3) — estoque ZERADO: função SEPARADA de `avaliarCruzamentoMinimo`, de
+ * propósito. Emendas da Fase 2, medidas: (1) a coluna `estado_estoque` é ÚNICA — um terceiro
+ * valor além de ACIMA/ABAIXO quebraria o alerta de mínimo nos dois sentidos; (2) a guarda
+ * `min <= 0` de `avaliarCruzamentoMinimo` retornaria cedo justamente nos materiais SEM mínimo
+ * configurado, onde o zerado mais vale (nada os cobre hoje); (3) a régua é
+ * `quantidade_atual <= 0`, NUNCA "disponível" — 100% reservado ainda está na prateleira, não
+ * zerado. Sem guarda de mínimo, cliente sempre fora (quem chama já filtra
+ * `proprietario_cliente_id IS NULL`, mesmo padrão de `avaliarCruzamentoMinimo`). Mesmo padrão de
+ * transição+debounce: só alerta na transição COM_SALDO -> ZERADO; enquanto ZERADO, no-op; repor
+ * (quantidade volta a ser > 0) rearma o estado para a próxima queda.
+ */
+async function avaliarZerado(db, material) {
+  const qtd = Number(material.quantidade_atual);
+  const row = await dbGet(db,
+    'SELECT estado_zerado FROM alertas_estoque_material_almoxarifado WHERE material_id = ?',
+    [material.id]);
+  const estadoAnterior = row?.estado_zerado || ESTADO_COM_SALDO;
+
+  if (qtd > 0) {
+    if (estadoAnterior !== ESTADO_COM_SALDO) {
+      await dbRun(db, `INSERT INTO alertas_estoque_material_almoxarifado (material_id, estado_zerado)
+        VALUES (?, ?)
+        ON CONFLICT(material_id) DO UPDATE SET estado_zerado = ?`,
+      [material.id, ESTADO_COM_SALDO, ESTADO_COM_SALDO]);
+    }
+    return { deveAlertar: false, motivo: 'com saldo' };
+  }
+
+  if (estadoAnterior === ESTADO_ZERADO) {
+    return { deveAlertar: false, motivo: 'já alertado neste período zerado' };
+  }
+
+  return { deveAlertar: true, motivo: null };
+}
+
+async function marcarAlertaZeradoEnviado(db, materialId) {
+  await dbRun(db, `INSERT INTO alertas_estoque_material_almoxarifado (material_id, estado_zerado, ultimo_alerta_zerado)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(material_id) DO UPDATE SET
+      estado_zerado = ?,
+      ultimo_alerta_zerado = CURRENT_TIMESTAMP`,
+  [materialId, ESTADO_ZERADO, ESTADO_ZERADO]);
+}
+
+/**
+ * RN-07: monta o aviso de zerado e ENFILEIRA (nunca envia direto — RN-01). Destino
+ * `alertas_estoque_emails` (mesma chave da máquina do mínimo). Require LAZY do queue service:
+ * mesmo motivo/padrão documentado em `notificationQueueService.processarFila` — o queue service
+ * já requer este arquivo lazy (para `enviarEmail`); um require de topo aqui fecharia o ciclo na
+ * ordem errada dependendo de quem carrega primeiro (ver a nota no topo de
+ * `notificationQueueService.js`).
+ */
+async function processarAlertaZerado(db, material) {
+  const cruzamento = await avaliarZerado(db, material);
+  if (!cruzamento.deveAlertar) {
+    return { material_id: material.id, enviado: false, motivo: cruzamento.motivo };
+  }
+
+  const queueService = require('./notificationQueueService');
+  const destinatarios = parseList(await getConfigValue(db, 'alertas_estoque_emails'));
+  const appUrlDb = await getConfigValue(db, APP_URL_CONFIG_KEY);
+  const appUrl = getAppAlmoxarifadoUrl(appUrlDb);
+  const geradoEm = formatDateTimePtBr();
+  const unidade = material.unidade ? ` ${material.unidade}` : '';
+  const assunto = `[Almoxarifado] Estoque zerado — ${material.codigo}`;
+  const linhas = [
+    `Material: ${material.nome}`,
+    `Código: ${material.codigo}`,
+    `Localização: ${material.localizacao || 'Não informada'}`,
+    `Saldo atual: 0${unidade}`,
+    `Gerado em: ${geradoEm}`,
+  ];
+  if (appUrl) linhas.push(`Acessar Almoxarifado: ${appUrl}`);
+  const corpo_texto = linhas.join('\n');
+  const corpo_html = `<div>${linhas.map((l) => `<p>${escapeHtml(l)}</p>`).join('\n')}</div>`;
+
+  const resultado = await queueService.enfileirar(db, {
+    evento: 'ESTOQUE_ZERADO',
+    // Dedupe por CROSSING: o guarda real contra duplicidade é o estado (`estado_zerado`) acima —
+    // esta chave (com timestamp) so protege contra dois disparos concorrentes no MESMO instante,
+    // nao carrega semantica de "uma vez por dia" como a do lembrete de ferramenta.
+    dedupe_chave: `zerado-${material.id}-${Date.now()}`,
+    destinatarios,
+    assunto,
+    corpo_html,
+    corpo_texto,
+    payload: { material_id: material.id },
+  });
+
+  if (resultado.enfileirada) await marcarAlertaZeradoEnviado(db, material.id);
+  return { material_id: material.id, enviado: resultado.enfileirada, motivo: resultado.enfileirada ? null : resultado.motivo };
+}
+
 /** Sincroniza estado ACIMA para materiais repostos (verificação periódica). */
 async function sincronizarEstadoAcimaMinimo(db) {
   await dbRun(db, `UPDATE alertas_estoque_material_almoxarifado
@@ -622,6 +720,18 @@ async function verificarAlertaPorMaterialId(db, materialId, opts = {}) {
   const material = await dbGet(db, `SELECT id, codigo, nome, localizacao, unidade, quantidade_atual, quantidade_minima
     FROM materiais_almoxarifado WHERE id = ? AND proprietario_cliente_id IS NULL`, [materialId]);
   if (!material) return null;
+  // RN-07 (Etapa 12, Task 3): mesmo hook em tempo real que o alerta de minimo ja usa — chamado
+  // depois de TODA movimentacao (stockService) e depois de editar material (routes) — e o que
+  // cobre material SEM minimo configurado (a query periodica de `verificarAlertasEstoque` exige
+  // `quantidade_minima > 0` e nunca o pegaria). RN-01: falha aqui nunca derruba quem chamou.
+  // Fora do modo `teste` (mesmo motivo do alerta de minimo: teste nao deve gerar fila real).
+  if (!opts.teste) {
+    try {
+      await processarAlertaZerado(db, material);
+    } catch (e) {
+      console.warn('[almoxarifado-alertas] Falha ao avaliar alerta de zerado:', e.message);
+    }
+  }
   return processarAlertaMaterial(db, material, opts);
 }
 
@@ -647,4 +757,7 @@ module.exports = {
   processarAlertaMaterial,
   avaliarCruzamentoMinimo,
   marcarAlertaEnviado,
+  avaliarZerado,
+  marcarAlertaZeradoEnviado,
+  processarAlertaZerado,
 };

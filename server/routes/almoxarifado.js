@@ -8,6 +8,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { z } = require('zod');
 const alertService = require('../services/almoxarifado/alertService');
+const notificationQueueService = require('../services/almoxarifado/notificationQueueService');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
@@ -2786,4 +2787,47 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   };
   setTimeout(runReminderJob, 30 * 1000).unref();
   setInterval(runReminderJob, REMINDER_INTERVAL_MS).unref();
+
+  // ── Etapa 12, Task 3 — jobs de notificacao (RN-01/03, RN-06, RN-07) ────────────────────────
+  // Nunca testados por setInterval: os testes chamam `processarFila`/as varreduras DIRETO
+  // (mesmo padrao do job de lembretes acima).
+
+  // Job A — worker da fila de notificacoes. O intervalo (`notificacoes_worker_intervalo_min`,
+  // config, default 5) e lido UMA VEZ no boot — mesmo padrao simples do REMINDER_INTERVAL_MS
+  // acima, que tambem e fixo. Alternativa descartada: reler a config a cada disparo, que
+  // reagiria a uma mudanca em Configuracoes sem reiniciar o processo, mas custaria um SELECT
+  // extra por tick so pra decidir o proprio intervalo do proximo tick — complexidade que o
+  // design nao pediu ("escolha o mais simples e documente"). Mudar o intervalo via
+  // Configuracoes exige reiniciar o processo para valer; documentado aqui de proposito.
+  dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'notificacoes_worker_intervalo_min'`, [])
+    .catch(() => null)
+    .then((row) => {
+      const n = parseFloat(row?.valor);
+      const workerIntervalMin = Number.isFinite(n) && n > 0 ? n : 5;
+      const WORKER_INTERVAL_MS = workerIntervalMin * 60 * 1000;
+      const runNotificationWorker = () => {
+        notificationQueueService.processarFila(db).catch((err) => {
+          console.warn('[almoxarifado-notificacoes] Erro no worker da fila:', err.message);
+        });
+      };
+      setTimeout(runNotificationWorker, 30 * 1000).unref();
+      setInterval(runNotificationWorker, WORKER_INTERVAL_MS).unref();
+    });
+
+  // Job B — varreduras diarias (lembrete de ferramenta vencida, lote proximo do vencimento,
+  // remessa a terceiro vencida). Uma vez por dia basta: o dedupe de cada varredura ja e por
+  // dia/validade/prazo (RN-06/RN-07), entao rodar mais vezes so custaria SELECTs extras sem
+  // gerar e-mail a mais.
+  const DAILY_SCAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const runDailyNotificationScans = () => {
+    Promise.all([
+      notificationQueueService.varrerLembretesFerramenta(db),
+      notificationQueueService.varrerLotesVencendo(db),
+      notificationQueueService.varrerRemessasVencidas(db),
+    ]).catch((err) => {
+      console.warn('[almoxarifado-notificacoes] Erro nas varreduras diarias:', err.message);
+    });
+  };
+  setTimeout(runDailyNotificationScans, 30 * 1000).unref();
+  setInterval(runDailyNotificationScans, DAILY_SCAN_INTERVAL_MS).unref();
 };

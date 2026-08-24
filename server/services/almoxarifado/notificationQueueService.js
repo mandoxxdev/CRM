@@ -14,6 +14,15 @@ const { registrarAuditoria } = require('./audit');
 // em `enfileirarMovimentacao` sobre por que `alertService` continua sendo requerido LAZY (dentro
 // da funcao), no mesmo padrao de `processarFila`.
 const movementTypes = require('./movementTypes');
+// toolReminderService so requer `./db` — sem ciclo, top-level seguro (Etapa 12, Task 3).
+const toolReminderService = require('./toolReminderService');
+// thirdPartyService NAO pode vir para o topo: ele requer `./stockService`, que por sua vez requer
+// ESTE arquivo no topo dele (Task 2). Um require de topo aqui fecharia o ciclo
+// notificationQueueService -> thirdPartyService -> stockService -> notificationQueueService, e o
+// require de stockService dentro de thirdPartyService capturaria o module.exports AINDA VAZIO
+// deste arquivo (mid-load) — thirdPartyService.registrarRetorno/enviarRemessa quebrariam em
+// producao (stockService seria `{}` para sempre dentro dele). Fica LAZY, dentro de
+// `varrerRemessasVencidas`, mesmo padrao/motivo do require lazy de `alertService` abaixo.
 
 const STATUS_VALIDOS = ['PENDENTE', 'ENVIADO', 'FALHA'];
 
@@ -373,6 +382,138 @@ async function suprimirNotificacaoMovimentacao(db, movimentacaoId) {
   return { suprimida: r.changes > 0 };
 }
 
+// ── Etapa 12, Task 3 (RN-06/RN-07): varreduras dos jobs diarios ────────────────────────────────
+// As tres funcoes abaixo sao chamadas por `routes/almoxarifado.js` (job diario, setInterval
+// .unref()) e pelos testes DIRETO — nunca esperando o setInterval (mesmo padrao do worker da
+// fila). Cada uma so ENFILEIRA (RN-01): quem envia e sempre o worker de `processarFila`.
+
+/**
+ * RN-06: lembrete de ferramenta vencida. Fonte unica —
+ * `toolReminderService.listarEmprestimosVencidos` (funcao pura da 9b, ja confirmada pela Fase 2:
+ * devolve `e.*` + `ferramenta_nome`/`codigo_patrimonio`/`dias_vencido`). Dedupe
+ * `ferramenta-lembrete-<emprestimo_id>-<hoje>` — UM POR DIA, nao um por execucao do job; `hoje`
+ * em UTC (`toISOString().slice(0,10)`) para casar com o `date('now')` do SQL do proprio
+ * `listarEmprestimosVencidos` (data local duplicaria o lembrete na janela 21h-meia-noite, achado
+ * verificado pela Fase 2).
+ */
+async function varrerLembretesFerramenta(db) {
+  const alertService = require('./alertService');
+  const emprestimos = await toolReminderService.listarEmprestimosVencidos(db);
+  const hoje = new Date().toISOString().slice(0, 10);
+  const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
+
+  let enfileiradas = 0;
+  for (const emp of emprestimos) {
+    const linhas = [
+      `Ferramenta: ${emp.ferramenta_nome}`,
+      `Patrimônio: ${emp.codigo_patrimonio || '-'}`,
+      `Empréstimo: #${emp.id}`,
+      `Responsável: ${emp.colaborador_nome}`,
+      `Devolução prevista: ${emp.data_prevista_devolucao}`,
+      `Dias vencido: ${emp.dias_vencido}`,
+    ];
+    const r = await enfileirar(db, {
+      evento: 'FERRAMENTA_LEMBRETE',
+      dedupe_chave: `ferramenta-lembrete-${emp.id}-${hoje}`,
+      destinatarios,
+      assunto: `[Almoxarifado] Ferramenta vencida — ${emp.codigo_patrimonio || emp.ferramenta_nome}`,
+      corpo_texto: linhas.join('\n'),
+      corpo_html: `<div>${linhas.map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`,
+      payload: { emprestimo_id: emp.id },
+    });
+    if (r.enfileirada) enfileiradas++;
+  }
+  return { total: emprestimos.length, enfileiradas };
+}
+
+/**
+ * RN-07: lote proximo do vencimento. `STATUS_LOTE = ['ATIVO','BLOQUEADO','REPROVADO']`
+ * (lotService:15) — so ATIVO participa. Janela: `data_validade` entre hoje e
+ * `+alerta_lote_vencendo_dias` (config, default 30). Saldo: mesmo precedente de
+ * `lotService.listarLotesDoMaterial` (lotService:206) — `SUM(quantidade)` das linhas de
+ * `estoque_saldo_almoxarifado` do lote, so > 0 participa. Lote com `vencimento_liberado_em`
+ * preenchido SAI da varredura (decisao registrada, letra D do design — a liberacao e decisao
+ * humana de usar mesmo vencendo; alertar de novo seria ruido). Dedupe
+ * `lote-vencendo-<lote_id>-<data_validade>` — um aviso por lote/validade, nao por dia (mudar a
+ * validade do lote pode avisar de novo).
+ */
+async function varrerLotesVencendo(db) {
+  const alertService = require('./alertService');
+  const dias = await lerConfigNumero(db, 'alerta_lote_vencendo_dias', 30);
+
+  const lotes = await dbAll(db, `
+    SELECT l.*, m.codigo AS material_codigo, m.nome AS material_nome, m.unidade AS material_unidade,
+      COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id), 0) AS saldo
+    FROM lotes_almoxarifado l
+    JOIN materiais_almoxarifado m ON m.id = l.material_id
+    WHERE l.status = 'ATIVO'
+      AND l.data_validade IS NOT NULL
+      AND date(l.data_validade) BETWEEN date('now') AND date('now', '+' || ? || ' days')
+      AND l.vencimento_liberado_em IS NULL`, [dias]);
+
+  const lotesComSaldo = lotes.filter((l) => Number(l.saldo) > 0);
+  const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
+
+  let enfileiradas = 0;
+  for (const lote of lotesComSaldo) {
+    const linhas = [
+      `Lote: ${lote.codigo}`,
+      `Material: ${lote.material_codigo} — ${lote.material_nome}`,
+      `Validade: ${lote.data_validade}`,
+      `Saldo: ${lote.saldo} ${lote.material_unidade || ''}`.trim(),
+    ];
+    const r = await enfileirar(db, {
+      evento: 'LOTE_VENCENDO',
+      dedupe_chave: `lote-vencendo-${lote.id}-${lote.data_validade}`,
+      destinatarios,
+      assunto: `[Almoxarifado] Lote vencendo — ${lote.codigo}`,
+      corpo_texto: linhas.join('\n'),
+      corpo_html: `<div>${linhas.map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`,
+      payload: { lote_id: lote.id },
+    });
+    if (r.enfileirada) enfileiradas++;
+  }
+  return { total: lotesComSaldo.length, enfileiradas };
+}
+
+/**
+ * RN-07: remessa a terceiro vencida. A rota `/remessas-terceiros/vencidas` so DELEGA — a fonte
+ * UNICA e `thirdPartyService.listarRemessas(db, { vencidas: '1' })` (thirdPartyService.js:322),
+ * que ja filtra `status IN ('ENVIADA','RETORNO_PARCIAL') AND date(prazo_previsto) < date('now')`.
+ * Nada a extrair, nada a refatorar. A coluna e `prazo_previsto` (nao `data_prevista`). Dedupe
+ * `remessa-vencida-<remessa_id>-<prazo_previsto>`.
+ */
+async function varrerRemessasVencidas(db) {
+  const alertService = require('./alertService');
+  // Lazy — ver a nota no topo do arquivo sobre o ciclo thirdPartyService -> stockService -> este
+  // servico.
+  const thirdPartyService = require('./thirdPartyService');
+  const remessas = await thirdPartyService.listarRemessas(db, { vencidas: '1' });
+  const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
+
+  let enfileiradas = 0;
+  for (const r of remessas) {
+    const linhas = [
+      `Remessa: ${r.numero || `#${r.id}`}`,
+      `Fornecedor: ${r.fornecedor_nome || '-'}`,
+      `Prazo previsto: ${r.prazo_previsto}`,
+      `Status: ${r.status}`,
+      `Itens: ${r.itens_total}`,
+    ];
+    const res = await enfileirar(db, {
+      evento: 'REMESSA_VENCIDA',
+      dedupe_chave: `remessa-vencida-${r.id}-${r.prazo_previsto}`,
+      destinatarios,
+      assunto: `[Almoxarifado] Remessa vencida — ${r.numero || `#${r.id}`}`,
+      corpo_texto: linhas.join('\n'),
+      corpo_html: `<div>${linhas.map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`,
+      payload: { remessa_id: r.id },
+    });
+    if (res.enfileirada) enfileiradas++;
+  }
+  return { total: remessas.length, enfileiradas };
+}
+
 module.exports = {
   STATUS_VALIDOS,
   enfileirar,
@@ -382,4 +523,7 @@ module.exports = {
   resolverClasseMovimentacao,
   suprimirNotificacaoMovimentacao,
   DEST_POR_CLASSE,
+  varrerLembretesFerramenta,
+  varrerLotesVencendo,
+  varrerRemessasVencidas,
 };

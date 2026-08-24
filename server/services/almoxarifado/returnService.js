@@ -2,6 +2,11 @@ const { dbRun, dbAll, dbGet } = require('./db');
 const { registrarMovimentacao } = require('./stockService');
 const lotService = require('./lotService');
 const { registrarAuditoria } = require('./audit');
+// Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
+// Task 3, RN-06 — aviso de devolucao em ESTADO_PARCIAL). stockService (acima) ja carregou os
+// dois por completo antes desta linha rodar, entao aqui e so cache-hit.
+const alertService = require('./alertService');
+const notificationQueueService = require('./notificationQueueService');
 
 const MOTIVOS = ['SOBRA_PROJETO', 'NAO_UTILIZADO', 'ITEM_ERRADO', 'DANIFICADO', 'RECUPERAVEL', 'SUCATA'];
 const DESTINOS = ['ESTOQUE', 'QUARENTENA', 'SUCATA', 'RETRABALHO'];
@@ -249,6 +254,32 @@ async function registrarDevolucao(db, user, data) {
         justificativa: `devolucao ficou parcial: ${emitidas} movimentacao(oes) ja gravada(s) quando o motor `
           + `recusou o restante (${e.message}). A linha foi MANTIDA porque e o rastro do que ja mexeu no estoque.`,
       });
+
+      // RN-06/RN-01: aviso da devolucao parcial na fila, ANTES do `throw e` abaixo, em try/catch
+      // PROPRIO — o aviso nao pode nem engolir nem substituir o erro original que o operador
+      // precisa ler (a mensagem do motor e o que diz o que corrigir).
+      try {
+        const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
+        const linhas = [
+          `Devolução: #${r.lastID}`,
+          `Material: ${material.codigo}`,
+          `Quantidade: ${quantidade}`,
+          `Destino: ${destinoFinal}`,
+          `Movimentações emitidas: ${emitidas}`,
+          `Motivo da falha: ${e.message}`,
+        ];
+        await notificationQueueService.enfileirar(db, {
+          evento: 'DEVOLUCAO_PARCIAL',
+          dedupe_chave: `devolucao-parcial-${r.lastID}`,
+          destinatarios,
+          assunto: `[Almoxarifado] Devolução ficou parcial — #${r.lastID}`,
+          corpo_texto: linhas.join('\n'),
+          corpo_html: `<div>${linhas.map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`,
+          payload: { devolucao_id: r.lastID },
+        });
+      } catch (avisoErr) {
+        console.warn('[almoxarifado-notificacoes] Falha ao enfileirar aviso de devolucao parcial:', avisoErr.message);
+      }
     }
     // Re-lanca o erro ORIGINAL, sem mascarar: a mensagem do motor e o que o operador le e o que
     // diz o que corrigir ("exige lote", "saldo insuficiente"). Trocar por um "falha ao registrar

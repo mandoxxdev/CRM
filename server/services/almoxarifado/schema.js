@@ -1626,6 +1626,11 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
   await safeAlter(db, "ALTER TABLE alertas_estoque_material_almoxarifado ADD COLUMN estado_estoque TEXT DEFAULT 'ACIMA'");
+  // Etapa 12, Task 3 (RN-07): estoque ZERADO e maquina de estado IRMA, nao um terceiro valor de
+  // `estado_estoque` (isso quebraria o alerta de minimo nos dois sentidos — Fase 2, medido).
+  // Colunas proprias, mesmo padrao debounce/transicao de `estado_estoque`/`ultimo_alerta_enviado`.
+  await safeAlter(db, "ALTER TABLE alertas_estoque_material_almoxarifado ADD COLUMN estado_zerado TEXT DEFAULT 'COM_SALDO'");
+  await safeAlter(db, 'ALTER TABLE alertas_estoque_material_almoxarifado ADD COLUMN ultimo_alerta_zerado DATETIME');
 
   await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_historico_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
