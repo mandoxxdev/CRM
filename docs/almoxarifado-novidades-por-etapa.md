@@ -75,7 +75,9 @@ etapas novas.
 Guia rápido do estado: **em aberto** — B5 (taxonomia de sucata), B6 (categorias), B8 (tela de
 editar ferramenta), B9 (campo do filtro de calibração), B11 (dupla aprovação formal do ajuste),
 B12 (recontagem pelo mesmo contador), B13 (quem decide compra), B14 (cancelar solicitação),
-B15-B17 (as três da Etapa 12: ligar o e-mail de movimentação e validar os destinos/toggle).
+B15-B17 (as três da Etapa 12: ligar o e-mail de movimentação e validar os destinos/toggle),
+B18-B20 (as três da Etapa 13: proteção dos Indicadores, unificar as réguas de consumo, tetos/
+auditoria de export/gates antigos).
 **Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
 ferramenta, pago na Etapa 12), B10 (ajuste recusado contra retenção).
 
@@ -269,6 +271,30 @@ estoque **zerado** só dispara para material **sem mínimo** cadastrado — mate
 tem o canal do alerta de mínimo, e dois e-mails do mesmo fato para a mesma lista é ruído
 (**descartado** suprimir o alerta de mínimo quando zerar: inverteria uma máquina estável desde
 a Etapa 4).
+
+**B18 (NOVO, da Etapa 13) — os Indicadores ficaram SEM proteção de perfil, e isso expõe mais
+do que o painel expunha.** Decisão D5: qualquer usuário do módulo (chão de fábrica incluído)
+abre o relatório Indicadores — que traz a **quebra do valor do estoque por categoria** e a
+**lista nominal dos materiais em ruptura** (código, nome, data). É MAIS do que o total
+agregado que o painel já mostrava. A revisão final mediu que a exposição marginal é quase
+zero (o relatório de Estoque Atual, também sem proteção desde antes, já serve categoria e
+valor por material — basta somar), então a decisão é defensável — mas é SUA: se quiser
+restringir, o gate natural é o mesmo de Reposição e Compras (`gerenciar_reposicao`), mudança
+de uma linha. **Descartado** criar ação nova só para isso (regra nova sem pedido).
+
+**B19 (NOVO, da Etapa 13) — as quatro réguas de consumo continuam divergentes de propósito.**
+"Materiais mais consumidos"/"Consumo por OS"/"Consumo por período" contam só saídas diretas;
+o giro e a Reposição contam tudo que debita patrimônio (medido: 10 vs 18 no mesmo material).
+**Escolhido**: manter as antigas e escrever a régua no rodapé de cada um — unificar mudaria
+número de relatório que já se usa, sem você ter pedido. **Descartado**: unificar em silêncio.
+Se quiser unificar, a fonte única já existe (é trocar a régua e avisar quem usa).
+
+**B20 (NOVO, da Etapa 13) — três decisões menores esperando confirmação:** (a) os tetos de
+500 linhas (Histórico, Divergências) e 10 (Mais Consumidos) foram mantidos e agora aparecem
+avisados na tela — aumentar/remover é uma linha por relatório; (b) exportar planilha não gera
+registro de auditoria (nenhuma consulta do módulo gera) — se quiser log de egresso, é uma
+linha; (c) proteger relatórios hoje abertos (Estoque Atual expõe valor do estoque a todo o
+módulo desde sempre) — a etapa PRESERVOU os acessos como estavam de propósito.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -470,6 +496,12 @@ a Etapa 4).
   movimentação.
 - **(12) Lote de material de CLIENTE alerta vencimento normalmente** — validade é qualidade do
   que o galpão guarda, não reposição (contraste deliberado com o zerado, que exclui cliente).
+- **(13) Sem PDF nos relatórios** (impressão do navegador; jsPDF do módulo global descartado —
+  perderia a paridade garantida com a planilha). **Sem snapshot histórico de estoque** — o
+  giro usa o valor atual como denominador, escrito na tela. **Payload não-tabular não
+  exporta** (Sucata financeiro, Posição por cliente, Indicadores — o botão nem aparece).
+- **(13) Rupturas somem retroativamente se o material for INATIVADO** — o indicador filtra
+  ativos; histórico que muda quando alguém edita um flag é fragilidade declarada (letra E).
 - **(12) Alerta de estoque zerado usa o SALDO FÍSICO, não o disponível** — material 100%
   reservado ainda está na prateleira, não está zerado. Escrito aqui porque é fácil "corrigir"
   para o disponível achando que é bug.
@@ -663,6 +695,14 @@ commitado **apaga o trabalho** (o md5 pegou de novo) — restauração é sempre
 vezes nesta etapa o mutante precisou ser trocado por um mais forte antes de provar algo
 (o fallback do restore produzia o mesmo resultado; o par de checkboxes marcado simetricamente
 tornava a transposição invisível).
+
+**Fragilidades estruturais declaradas da Etapa 13 (medidas):** (1) a varredura de fonte única
+de custo NÃO pega leitura de `custo_unitario` puro (só as duas famílias históricas) — quem
+protege os indicadores é a fixture de custo duplo do teste deles; o design chegou a prometer
+"proteção de graça" e foi corrigido dizendo que estava errado; (2) o tempo de atendimento NÃO
+é janelado (todo o histórico) — leitura literal do design, declarada na tela e no rodapé;
+(3) rupturas por evento físico: material 100% reservado não aparece (o chão não consegue
+requisitar e o indicador diz zero — a régua olha o saldo físico, aproximação declarada).
 
 **Fragilidades estruturais declaradas da Etapa 12 (medidas, não corrigidas — saiba que existem):**
 (1) **a fiação dos robôs** (o agendamento do processador da fila e das varreduras diárias) não é
@@ -2219,6 +2259,72 @@ saiu, o que falhou e por quê, e reenviam com um clique.
 - **~15 alertas restantes da spec** (quarentena parada, transferência não recebida, calibração
   vencendo etc.) entram cada um com a sua feature dona, como a spec 20 sempre mandou.
 
+## Etapa 13 — Relatórios e Indicadores (2026-08-24)
+
+O módulo tinha 17 relatórios prontos no servidor e **nenhuma tela** para vê-los — só dois
+apareciam em algum lugar. Agora existe **Almoxarifado → Relatórios**: um menu com todos os
+relatórios que o SEU perfil pode ver, agrupados por assunto, com filtros, exportação para
+Excel e a régua de cada relatório escrita no rodapé (para dois números diferentes na mesma
+página nunca parecerem erro). E nasceram os **indicadores gerenciais** — giro de estoque,
+cobertura em dias, rupturas, valor por grupo e tempo de atendimento — com três cartões novos
+no painel inicial.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| 17 relatórios no servidor, 3 consumidos por telas avulsas | Tela **Relatórios** com menu por categoria, dirigida pelo servidor — cada perfil vê só o que pode |
+| Proteção de relatório era exceção (2 de 17, e as duas entraram por revisão) | **Todo** relatório declara sua proteção num registro único — esquecer deixou de ser possível (o sistema nem sobe com relatório órfão) |
+| Nenhuma exportação | **Exportar XLSX** em todos os relatórios tabulares — a planilha traz exatamente as colunas com rótulos de negócio, nunca a tabela crua do banco |
+| Nenhum indicador gerencial | **Indicadores**: giro (declarado como aproximação), cobertura (mediana em dias), rupturas na janela, valor do estoque por grupo, tempo médio de atendimento |
+| "Consumo" calculado de 4 jeitos divergentes no código | Régua de consumo com **fonte única** (a mesma da Reposição); as réguas antigas continuam nos relatórios antigos **de propósito** — com a diferença escrita no rodapé |
+| Painel inicial sem visão de gestão | 3 cartões novos: giro, rupturas e tempo de atendimento, com a janela na legenda |
+
+### As regras, com o cenário exato
+
+1. **Cada perfil vê só a sua lista — e a lista não mente.** Entre como Almoxarife: o menu de
+   Relatórios mostra 17 itens (com Divergências de Inventário, sem Solicitações de Compra).
+   Como Compras: 17 (o inverso). Como chão de fábrica: 16. Forçar a URL de um relatório
+   proibido responde `Sem permissão para este relatório`; um nome inexistente,
+   `Relatório não encontrado`.
+2. **Exportar entrega a MESMA coisa que a tela, protegida igual.** Em Estoque Atual, clique
+   **Exportar XLSX**: a planilha baixa como `estoque-atual-<data>.xlsx` com as colunas
+   "Código, Nome, Categoria, Unidade, Quantidade atual, Disponível, Valor total" — e nada
+   além (custos internos e dono do material não vazam para a planilha). Exportar relatório
+   não-tabular (Sucata financeiro, Posição por cliente, Indicadores) responde
+   `Relatório sem exportação tabular`.
+3. **O aviso de teto aparece.** Histórico de Movimentações mostra no máximo 500 linhas — e a
+   tela avisa "mostrando os primeiros 500" quando bater o teto; a planilha herda o mesmo teto.
+4. **Indicadores com as réguas escritas.** O relatório Indicadores aceita a janela em dias
+   (vazio = a mesma janela da Reposição; inválido responde
+   `Parâmetro "janela_dias" deve ser um número inteiro maior que zero`). O rodapé declara:
+   giro = consumo na janela ÷ valor do estoque ATUAL (aproximação — não há histórico);
+   cobertura pela MEDIANA; rupturas contam o saldo FÍSICO tocando zero (material 100%
+   reservado não conta; material inativado sai do histórico); atendimento considera TODO o
+   histórico de requisições entregues; materiais de clientes ficam fora de tudo.
+5. **Zerou por contagem, conta como ruptura.** Um ajuste de inventário que zera o material
+   entra na lista de rupturas — o físico está em zero, não importa o motivo. Liberar uma
+   reserva num material já zerado NÃO vira ruptura (lançamento burocrático não é falta).
+6. **Dois números de consumo na mesma página, os dois certos.** "Materiais mais consumidos"
+   conta só as saídas diretas (a régua histórica dele, escrita no rodapé); o giro conta tudo
+   que debita patrimônio (sucata e perda incluídas). No mesmo material com SAIDA 10 + SUCATA 8,
+   um mostra 10 e o outro 18 — é régua, não bug.
+7. **O painel inicial não quebra por causa dos cartões novos.** Se os indicadores falharem
+   (permissão, rede), só os 3 cartões mostram o erro com "Tentar novamente" — o resto do
+   painel continua inteiro.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **PDF** — a tela imprime pelo navegador; PDF estilizado por relatório é etapa própria se a
+  prática pedir.
+- **Unificar as réguas antigas de consumo** — mudaria número de relatório que o pessoal já
+  usa; está na letra B como decisão sua.
+- **Giro com estoque médio histórico** — exigiria snapshot diário de estoque, que não existe;
+  o denominador é o estoque atual, declarado na tela.
+- **Aumentar/remover os tetos de 500/10 linhas** — herdados dos relatórios; letra B.
+- **Auditar exportações** — nenhuma consulta do módulo audita; se o cliente quiser log de
+  egresso de planilha, é uma linha (letra B).
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -2230,14 +2336,22 @@ saiu, o que falhou e por quê, e reenviam com um clique.
   declarados na seção da 10b) e a **18 (reposição) fica entregue no que é do almoxarifado** —
   o que falta dela é integração com o módulo Compras (fechar/cancelar solicitação no
   recebimento, itens por material — letras **B14** e **D**).
+- **Etapa 13 entregue:** **relatórios e indicadores** (feature 21 no grosso) — tela de
+  Relatórios dirigida por um registro único com proteção declarada por relatório, exportação
+  XLSX com colunas curadas, indicadores gerenciais com réguas escritas e 3 cartões novos no
+  painel. O que falta da 21: PDF, tetos configuráveis, indicadores que dependem de outras
+  features (previsto×realizado precisa de BOM/OP da 22) — tudo declarado.
 - **Etapa 12 entregue:** **notificações completas** (feature 19 quase inteira + fatia da 20) —
   fila com retentativa/dedupe/histórico, e-mail de movimentação por classes (desligado por
   default, ligar é decisão sua — B15), três dívidas antigas pagas (lembrete de ferramenta
   da 9b/B7, resumo de solicitações da 11, devolução parcial da 7) e três alertas novos
   (zerado, lote vencendo, remessa vencida), com a tela **Notificações** para Gestor/Admin.
-- **Próxima etapa:** **Etapa 13 — relatórios e indicadores** (feature 21: relatório de
-  acuracidade do inventário, posição de estoque, curva ABC — é o canal "tela/relatório" que a
-  12 citou como destino da conferência).
+- **Próxima etapa:** **Etapa 14 — integrações** (feature 22: Engenharia/BOM, Produção/OP,
+  Compras, custos por projeto). ATENÇÃO: a spec dela sempre disse "depende da maturidade dos
+  outros módulos" — a Fase 0 da 14 começa MEDINDO se BOM/OP/Compras existem de verdade nos
+  módulos vizinhos; se não existirem, a 14 vira a fatia que der para integrar de verdade (ex.:
+  fechar solicitação de compra no recebimento — a ponta que a 11 deixou declarada) e o resto
+  fica escrito como bloqueado por dependência, não como promessa.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;

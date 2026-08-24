@@ -349,7 +349,7 @@ Create `client/src/components/almoxarifado/AlmoxarifadoDashboard.test.js` (7 cas
   `relatoriosJornada.api.test.js`, este plano). Hash a registrar no fechamento da etapa
   (Task 5) junto com o README da feature e o mapa de status.
 
-### Task 5: Fechar a etapa
+### Task 5: Fechar a etapa — ✅ FEITA (commits de fechamento; ver retro abaixo)
 - [ ] `fechar-etapa` completa (7 artefatos + verificação medida + retro de 4 números).
 - [ ] Corrigir a spec 21 DIZENDO que estava errada (Fase 2, M3): ela afirma "15 tipos no mapa"
   e "eram 16" — são 17 (medido); e o design desta etapa dizia "2 consumidos no front" — são 3
@@ -366,3 +366,42 @@ Create `client/src/components/almoxarifado/AlmoxarifadoDashboard.test.js` (7 cas
   etapas: teste que aceita `>= 0` não sabe falhar.
 - Export com paridade MEDIDA (reabrir o XLSX e comparar linhas) — senão a sabotagem (iii) da
   Task 1 não teria como ficar vermelha.
+
+
+---
+
+## Retro de 4 números (Fase 6)
+
+1. **Rodadas de correção até verde:** 4 fix-rounds (T1, T2+carona-C1-da-T3, T3, final) — todas
+   fechadas em UMA rodada; nenhum teste falhou 3 vezes seguidas. A T3 teve ainda 1 rodada de
+   REALINHAMENTO de contrato (não era defeito: o shape alargou sob ela — custo do paralelismo,
+   pago com rebase limpo).
+2. **Achados de revisão:** Fase 2 = 23 (5C+10I+8M, 2 suspeitas refutadas e registradas);
+   revisões de task = ~30; revisão final = 2×Approve com 10 itens leves. **0 ruído** em todas
+   — cada achado veio com medição.
+3. **Paralelismo:** 3 pares reais (revisão-T1 ∥ implementação-T3; fix-T3 ∥ implementação-T2…
+   na prática T2-review ∥ T3-realinhamento; T4 ∥ fix-T3). UM retrabalho estrutural: a T3
+   construiu contra o shape estreito e realinhou — previsto e barato (a tela é dirigida pela
+   lista). Zero conflito de merge.
+4. **Defeito que escapou do fechamento:** preencher na Etapa 14. (Da 12 para cá: nenhum
+   reportado até este fechamento.)
+
+**Incidentes de processo:** 1 âncora de sabotagem com 3 ocorrências corrompeu 7 entradas do
+registro na restauração — a varredura recém-criada apontou as 7 pelo nome e o md5 acusou
+(lição G5, 5ª reincidência da sessão); 1 fixture de sabotagem no material errado (mediana não
+se movia) — trocada pelo material que segura a mediana, com o erro registrado no comentário.
+
+## Próxima tarefa detalhada — Etapa 14 (integrações, feature 22)
+
+- **Fase 0 OBRIGATÓRIA antes de qualquer design:** a spec 22 sempre disse "depende da
+  maturidade dos outros módulos". MEDIR (não presumir): existe BOM em Engenharia? OP em
+  Produção? O módulo Compras tem pedido/recebimento reais? `ls specs/` dos vizinhos + grep de
+  rotas. Sem maturidade → a etapa vira a fatia integrável REAL: **fechar/cancelar solicitação
+  de compra no recebimento** (a ponta que a 11 declarou — B14 aberta) e integração de custo
+  por projeto se os dados existirem; o resto fica ESCRITO como bloqueado por dependência.
+- **O que está pronto e a 14 não reabre:** solicitações de compra (purchaseService, estados
+  PENDENTE/VINCULADO da 11), consumoSql/custoSql/disponivelSql (fontes únicas), a fila de
+  notificações da 12 (se integração quiser avisar, enfileira — canal pronto), o
+  reportRegistry da 13 (relatório novo de integração = 1 entrada declarada).
+- **Regras vivas:** B11/B14 abertas — a 14 é a candidata natural a FECHAR a B14 (cancelar
+  solicitação), decidir na Fase 1; B18-B20 da 13 abertas; almoxarifado é área física.

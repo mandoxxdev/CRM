@@ -1,6 +1,12 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
-> **Status:** 🟡 — 16 relatórios no backend, só 2 consumidos no front; sem tela de relatórios · **Spec original:** seção 27
+> **Status:** 🟡→quase-🟢 — **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)**: tela de relatórios dirigida por registro único com gate declarado por chave, exportação XLSX, indicadores gerenciais e cartões no dashboard. Falta da spec 27: PDF, indicadores dependentes de outras features (previsto×realizado precisa da 22), quebras por lote/série/cliente valoradas · **Spec original:** seção 27
+>
+> **CORREÇÕES DE FATO (regra 5 — o texto abaixo afirmava e ESTAVA ERRADO):** este arquivo
+> dizia "**15** tipos no mapa" e "eram 16" — no início da Etapa 13 eram **17** (medido), e com
+> `indicadores` são **18**. E o cabeçalho dizia "só **2** consumidos no front" — eram **3**
+> (o dashboard consome consumo-os e materiais-mais-consumidos; a tela de Reposição consome o
+> gated solicitacoes-compra).
 > **Última atualização:** 2026-08-13 — **a valoração dos relatórios estava errada e foi corrigida**
 > (tarefa extra da Etapa 8c, ver "Valoração do estoque" abaixo). O resto da linha de 2026-08-11
 > segue valendo: eram 15 tipos, a Etapa 2 acrescentou `materiais-sem-endereco` (16), e "só 2
@@ -46,7 +52,9 @@ replicar, com controle positivo do próprio padrão de busca.
 ## Checklist
 
 ### Levantamento (fazer primeiro)
-- [ ] Listar os 16 tipos do mapa `reports` (`extended.js`) e casar com a spec 27 — o que falta vira item abaixo
+- [x] Listar os tipos do mapa `reports` e casar com a spec 27 — `781c784` (**são 18**, todos no
+  `reportRegistry.js` com titulo/categoria/gate/params/colunas/limite/nota declarados por
+  chave; a validação de subida derruba o processo se dispatcher e registro divergirem)
 
 ### Relatórios de estoque (spec 27)
 - [ ] Saldo por item / localização / almoxarifado — verificar cobertura atual
@@ -60,19 +68,35 @@ replicar, com controle positivo do próprio padrão de busca.
 - [ ] Por usuário / por projeto / por centro de custo
 - [ ] Histórico completo do item (feature 03)
 
-### Gestão e indicadores
-- [ ] Acuracidade (feature 17) · giro · cobertura · rupturas
-- [ ] Materiais parados / obsoletos (feature 18)
-- [~] Valor total do estoque / por grupo — **a leitura do custo ficou consistente em 2026-08-13**
-  (`custoSql.js`, ver acima); **falta** a quebra **por grupo** e a valorização **por cliente**
+### Gestão e indicadores — ver a seção "entregue na Etapa 13" abaixo para o estado atual
+- [x] Acuracidade — já era da 10b (rota própria, gate `inventario`) · giro/cobertura/rupturas — Etapa 13, ver abaixo
+- [x] Materiais parados / obsoletos — já era da Etapa 11 (aba Estoque Parado)
+- [x] Valor total do estoque / por grupo — quebra **por grupo** entregue na Etapa 13 (`4f8e3fc`); a valorização **por cliente** continua fora (letra B — valorar patrimônio alheio é decisão de negócio)
 - [ ] Consumo por projeto, previsto × realizado (feature 22)
-- [ ] Tempo médio de atendimento de requisição / de recebimento
-- [ ] Indicadores da spec 27 restantes: % requisições no prazo/integrais, divergência e rejeição por fornecedor, valor de sucata, nº de ajustes
+- [x] Tempo médio de atendimento de requisição — Etapa 13 (entrega completa, todo o histórico); **de recebimento** ficou de fora (nenhum timestamp de ciclo de recebimento confiável foi levantado — entra com a feature 08 se pedirem)
+- [ ] Indicadores da spec 27 restantes: % requisições no prazo/integrais, divergência e rejeição por fornecedor, nº de ajustes — cada um com a feature dona; **valor de sucata já existe** (relatório sucata-financeiro, Etapa 9)
 
 ### Frontend
-- [ ] Tela `/almoxarifado/relatorios` (padrão das telas de frota/fábrica)
-- [ ] Exportação XLSX/PDF
-- [ ] Dashboard: adicionar cartões dos indicadores principais
+- [x] Tela `/almoxarifado/relatorios` — `59fb871..12dfd4d` via merge `8fd7977` (dirigida pela
+  lista fail-closed do servidor: menu por categoria só com o que o perfil pode ver, params
+  declarados, tabela projetada pelas colunas com rótulos, nota/régua no rodapé, aviso de teto)
+- [x] Exportação **XLSX** — `781c784`+`cfdbbe5` (genérica pela MESMA função e gate do
+  dispatcher; projeção pelas colunas declaradas — SELECT * nunca vaza); **PDF cortado**
+  (impressão do navegador; letra D da Etapa 13)
+- [x] Dashboard: 3 cartões (giro/rupturas/atendimento) — `1aa7c13`+`8bb5e52` (falha isolada
+  com retry; legendas com a janela efetiva e a aproximação do giro)
+
+### Gestão e indicadores — entregue na Etapa 13 (`4f8e3fc`+`bc1e2de`)
+- [x] Giro (aproximado e DECLARADO: consumo na janela ÷ estoque ATUAL — sem snapshot
+  histórico) · cobertura (MEDIANA, sem-consumo à parte) · rupturas (saldo físico ≤ 0 por
+  saída/ajuste-inventário na janela; próprios ativos)
+- [x] Valor total por grupo (categoria; fonte única `custoSql`) — a **valorização por
+  cliente** continua fora (valorar patrimônio alheio é decisão de negócio, letra B)
+- [x] Tempo médio de atendimento de requisição (entrega COMPLETA, todo o histórico — sem
+  janela, declarado)
+- [ ] Consumo por projeto previsto×realizado — depende de BOM/OP (feature 22)
+- [ ] Indicadores restantes da spec 27 (% no prazo, divergência por fornecedor etc.) — cada um
+  com a feature dona dos dados
 
 ## Regras essenciais + testes de API exigidos
 

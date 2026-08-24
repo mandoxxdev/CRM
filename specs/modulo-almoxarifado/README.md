@@ -1,11 +1,13 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-24 (**Etapa 12 fechada — notificações completas,
-> `c1613c2..d7fee6c`. A feature 19 vira 🟢; a 20 soma 4 alertas (6 de 22).**
-> **Onde o desenvolvimento parou: a Etapa 12 está fechada. A próxima da ordem é a Etapa 13 —
-> relatórios e indicadores** (feature 21: acuracidade do inventário, posição de estoque,
-> curva ABC — o canal "tela/relatório" que a 12 declarou como destino da conferência).
+> **Última atualização:** 2026-08-24 (**Etapa 13 fechada — relatórios e indicadores,
+> `4fdda54..8bb5e52`. A feature 21 fica 🟡-forte (grosso entregue; restos declarados).**
+> **Onde o desenvolvimento parou: a Etapa 13 está fechada. A próxima da ordem é a Etapa 14 —
+> integrações** (feature 22) — e a Fase 0 dela COMEÇA medindo a maturidade dos módulos
+> vizinhos (BOM/OP/Compras): a spec sempre disse que a 14 depende deles; sem maturidade, a
+> etapa vira a fatia integrável de verdade (ex.: fechar solicitação no recebimento — ponta
+> declarada da 11) com o resto escrito como bloqueado.
 > **O que a Etapa 12 entregou:** fila de notificações com retry/backoff/dedupe/claim e
 > histórico (a fila é o histórico), gancho pós-commit de movimentação por classes (default
 > desligado — decisão B15), três dívidas antigas pagas (lembrete de ferramenta 9b/B7, resumo
@@ -319,7 +321,7 @@
 | 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapa 11 entregue (2026-08-24, `54e1278..1ea6ab2`)** — motor de sugestão no `purchaseService` (consumo médio por `TIPOS_SAIDA` em janela configurável; ponto efetivo com **a mínima como chão** de todas as réguas; posição = `disponivelSql` + solicitações abertas dentro do **horizonte** configurável, com `a_caminho_vencido` exposto; alvo `max(máxima, ponto)` com lote econômico como piso), `GET /reposicao/sugestoes` consolidado por fornecedor e valorado, `POST /gerar-solicitacoes` (quantidades do servidor, sem dedupe — a posição É o dedupe, complemento em pendência insuficiente, auditado), `GET /estoque-parado` (excesso/sem consumo/obsoleto com valor parado), ação nova `gerenciar_reposicao` [ADMIN, GESTOR, COMPRAS — ALMOXARIFE fora de propósito], relatório de solicitações com VINCULADO e gateado, horizonte compartilhado com a máquina de estados de requisição, 3 configs semeadas+editáveis com validação nos dois lados, índice novo no livro, tela `/almoxarifado/reposicao` (3 abas, painel de erro/permissão por aba). **Fica de fora, declarado:** fechar/cancelar solicitação no recebimento e itens por material (integração Compras, features 22/24 — é o que falta para o ciclo fechar), alerta ativo de máximo, e-mail (19) |
 | 19 | [E-mails e notificações](19-emails-notificacoes/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapa 12 entregue (2026-08-24, `c1613c2..d7fee6c`)** — fila `fila_notificacoes_almoxarifado` (dedupe UNIQUE por hash, retry/backoff em JS, claim de envio contra drenos concorrentes, FALHA + aviso ao admin máx. 1), gancho pós-commit no motor por CLASSES (default `'0'`; RESERVA/remessa/retorno/AJUSTE_INVENTARIO fora de propósito; cancelamento suprime a pendente e recusa reenvio), 3 dívidas pagas (lembrete ferramenta 9b/B7, resumo de solicitações 11, devolução parcial 7), painel `/almoxarifado/notificacoes` gateado (`gerenciar_notificacoes` ADMIN/GESTOR; reenvio de ENVIADO com confirm), jobs (worker + varreduras diárias), 10 configs nos dois lados. **Cortes declarados:** matriz evento×destino, templates, digest, PDF, grupos (letra D/B15) |
 | 20 | [Alertas operacionais](20-alertas/README.md) | 🟡 | ❌ | 🟡 | 🟡 **6 de 22 (Etapa 12 somou 4)** — estoque zerado (máquina própria, claim atômico, só material sem mínimo — B17), lote vencendo (sem piso: vencido com saldo entra), remessa vencida, ferramenta não devolvida; pela fila da 19. Falta: central no front, motor único de regras, e os ~16 restantes com a feature dona de cada um |
-| 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟡 | 🟡 | ❌ | 🟡 16 no back (entrou `materiais-sem-endereco` na Etapa 2) + `sucata-financeiro` (Etapa 9, **só API** — sem tela de relatórios), 2 no front |
+| 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟢 | 🟢 | ✅ | 🟡 **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)** — `reportRegistry` com 18 chaves e gate DECLARADO por chave (mata a classe "relatório novo esquece o gate", 2 precedentes 10b/11; o processo nem sobe com chave órfã), lista fail-closed servindo exportavel/limite/nota/colunas, export XLSX genérico com projeção (paridade linha+cabeçalho medida; payload objeto → 400 literal), `consumoSql.js` fonte única (4 réguas divergentes DOCUMENTADAS — 10 vs 18 medido, unificar é letra B19), indicadores (giro aproximado declarado, cobertura mediana, rupturas físico+tipo, valor por grupo, atendimento sem janela), tela `/almoxarifado/relatorios` dirigida pelo registro, 3 cartões no dashboard. **Falta para 🟢 pleno:** PDF (corte D), previsto×realizado (depende da 22), % no prazo/fornecedor (features donas), valorização por cliente (letra B) |
 | 22 | [Integrações](22-integracoes/README.md) | ❌ | ❌ | ❌ | ❌ módulos vizinhos vazios |
 | 23 | [Perfis, segurança e auditoria](23-perfis-seguranca-auditoria/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Correção 2026-08-11: a spec dizia "auditoria com 0 linhas em produção" — **superado desde as Etapas 3-6** (materiais, requisições, motor, reservas, lotes, recebimento e inspeção auditam, todos com tela). Buraco real restante: conferência de inventário não audita. **A pendência das sobras foi paga na Etapa 9, Task 1 (`bedce46`)** — `scrapService` audita atualizar e gerar retalho, e o sucateamento audita solicitar/aprovar/rejeitar/cancelar/destino/compensação |
 
@@ -624,8 +626,8 @@ e o [plano](../../docs/superpowers/plans/2026-08-23-almoxarifado-etapa11-reposic
 ### Etapa 12 — Notificações completas → `19-emails-notificacoes` + `20-alertas` — ✅ ENTREGUE (2026-08-24, `c1613c2..d7fee6c`)
 Fila com retry/dedupe/histórico; e-mail de movimentação por classes (default OFF); 3 dívidas pagas; 3 alertas novos; painel gateado. Restos da 20 (motor único, central no front, ~16 alertas) ficam com as features donas.
 
-### Etapa 13 — Relatórios e indicadores → `21-relatorios-dashboards`
-Tela de relatórios; indicadores gerenciais.
+### Etapa 13 — Relatórios e indicadores → `21-relatorios-dashboards` — ✅ ENTREGUE (2026-08-24, `4fdda54..8bb5e52`)
+Registro único com gate por chave; tela dirigida pelo registro; export XLSX; indicadores; cartões no dashboard. Restos declarados (PDF, previsto×realizado) com as features donas.
 
 ### Etapa 14 — Integrações → `22-integracoes`
 Engenharia (BOM), Produção (OP), Compras, Projetos/custos — depende da maturidade dos outros módulos.

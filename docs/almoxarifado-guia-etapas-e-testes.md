@@ -2,9 +2,20 @@
 
 > Atualizado em 2026-08-24 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 12) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 13) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-24 (Etapa 12 ENTREGUE)
+> ## Onde o desenvolvimento parou — 2026-08-24 (Etapa 13 ENTREGUE)
+>
+> **Etapas 1 a 13 completas.** A **Etapa 13 (Relatórios e Indicadores) fechou em 2026-08-24**
+> (`4fdda54..8bb5e52`), e com ela a **feature 21 fica entregue no grosso**: a tela nova
+> **Almoxarifado → Relatórios** (menu por assunto com só o que o SEU perfil pode ver, filtros,
+> régua de cada relatório no rodapé), **exportação para Excel** com colunas curadas, os
+> **indicadores gerenciais** (giro, cobertura, rupturas, valor por grupo, tempo de
+> atendimento) e 3 cartões novos no painel inicial. Ver a seção "Etapa 13", mais abaixo, com o
+> roteiro completo. **Próxima etapa: Etapa 14 — Integrações** (feature 22) — a Fase 0 dela
+> começa medindo se BOM/OP/Compras existem de verdade nos módulos vizinhos.
+>
+> **Antes: 2026-08-24 (Etapa 12 ENTREGUE).**
 >
 > **Etapas 1 a 12 completas.** A **Etapa 12 (Notificações Completas) fechou em 2026-08-24**
 > (`c1613c2..d7fee6c`), e com ela a **feature 19 fica completa nos cortes declarados**: fila
@@ -2633,6 +2644,41 @@ tentativas 5, janela do lote 30).
   alerta próprio de vencida).
 - Sem PDF, digest, templates ou WhatsApp na fila; sem e-mail de correção retroativa; sem botão
   de descartar linha pendente.
+
+---
+
+## Etapa 13 — Relatórios e Indicadores (ENTREGUE — 2026-08-24)
+
+O módulo tinha 17 relatórios prontos no servidor e nenhuma tela; agora existe
+**Almoxarifado → Relatórios**, e cada perfil vê só a sua lista.
+
+### Roteiro de teste manual
+
+1. **Menu por perfil.** Entre como Gestor/Admin → menu **Relatórios** (ícone de gráfico): 18
+   itens agrupados (Estoque, Movimentações, Gestão, Terceiros e clientes). Entre como
+   Almoxarife: 17 (tem Divergências de Inventário, não tem Solicitações de Compra). Como um
+   usuário de produção: 16.
+2. **Consultar e exportar.** Abra **Estoque atual** → Consultar → tabela com rótulos de
+   negócio (Código, Nome, Categoria...). Clique **Exportar XLSX**: baixa
+   `estoque-atual-<data>.xlsx` com exatamente essas colunas. Abra **Sucata — financeiro**: o
+   botão Exportar **não aparece** (relatório não-tabular).
+3. **Teto avisado.** Em **Histórico de movimentações**, se houver 500+ movimentos o rodapé
+   avisa "mostrando os primeiros 500".
+4. **Indicadores.** Abra **Indicadores gerenciais**: blocos de giro, cobertura, rupturas,
+   valor por grupo e atendimento, com a régua escrita no rodapé. Digite janela `0`:
+   `Parâmetro "janela_dias" deve ser um número inteiro maior que zero`.
+5. **Rodapé que evita briga de números.** Abra **Materiais mais consumidos** e leia o rodapé:
+   ele conta só saídas diretas; o giro conta tudo que debita patrimônio (sucata/perda). Os
+   dois números podem diferir no mesmo material — é régua declarada, não erro.
+6. **Painel inicial.** No Dashboard do almoxarifado: 3 cartões novos (giro com "consumo ÷
+   estoque atual (aproximação)" na legenda, rupturas com a janela, atendimento com
+   "Considera todo o histórico"). Se os indicadores falharem, só os 3 cartões mostram erro
+   com Tentar novamente — o resto do painel fica de pé.
+
+### O que esta etapa NÃO cobre
+
+PDF (imprima pelo navegador); unificação das réguas antigas de consumo (letra B); giro com
+estoque médio histórico (não há snapshot); tetos configuráveis; auditoria de exportação.
 
 ---
 

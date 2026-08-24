@@ -34,6 +34,7 @@ explicada logo abaixo dela.
 21. [Ferramentas e calibração](#21-ferramentas-e-calibração)
 21b. [Reposição e compras](#21b-reposição-e-compras)
 21c. [Notificações por e-mail](#21c-notificações-por-e-mail)
+21d. [Relatórios e indicadores](#21d-relatórios-e-indicadores)
 22. [Como o sistema calcula](#22-como-o-sistema-calcula)
 23. [Cuidados na operação](#23-cuidados-na-operação)
 24. [Onde pedir ajuda e o que este documento não cobre](#24-onde-pedir-ajuda-e-o-que-este-documento-não-cobre)
@@ -2509,6 +2510,51 @@ processador da fila em minutos e o máximo de tentativas (**número inteiro maio
 em dias (`Configuração "<chave>" deve ser um número de dias maior que zero`) e as cinco listas
 de destinatários (texto livre). Mudar o **intervalo do processador** só passa a valer depois de
 reiniciar o sistema; o espaçamento das retentativas muda imediatamente.
+
+## 21d. Relatórios e indicadores
+
+Em **Almoxarifado → Relatórios** cada perfil vê um menu com os relatórios que pode consultar,
+agrupados por assunto (Estoque, Movimentações, Gestão, Terceiros e clientes). Quem não tem a
+permissão de um relatório simplesmente não o vê no menu; forçar o endereço responde
+"Sem permissão para este relatório", e um nome inexistente, "Relatório não encontrado".
+
+- **Consultar**: escolha o relatório, preencha os filtros declarados (datas, cliente, OS —
+  cada relatório mostra os seus; os obrigatórios bloqueiam a consulta até serem preenchidos) e
+  clique Consultar. O rodapé traz a **régua** do relatório quando há o que declarar, e o aviso
+  "mostrando os primeiros N" quando o resultado bate no teto daquele relatório (Histórico de
+  movimentações e Divergências de inventário mostram no máximo 500 linhas; Materiais mais
+  consumidos, os 10 maiores).
+- **Exportar XLSX**: disponível nos relatórios tabulares; a planilha traz exatamente as
+  colunas da tela, com os mesmos rótulos, e baixa como `<relatório>-<data>.xlsx`. Relatórios
+  de composição (Sucata — financeiro, Posição por cliente, Indicadores) não têm exportação:
+  "Relatório sem exportação tabular".
+- **Números de consumo podem diferir entre relatórios, por régua declarada**: os relatórios
+  de consumo (por OS, por período, mais consumidos) contam apenas as saídas diretas de
+  produção; o indicador de giro conta tudo que debita o patrimônio (incluindo sucata e
+  perda). Cada rodapé diz qual régua usa.
+
+### Indicadores gerenciais
+
+O relatório **Indicadores** aceita uma janela em dias (vazia, usa a mesma janela do consumo
+médio da Reposição; valor inválido responde "Parâmetro \"janela_dias\" deve ser um número
+inteiro maior que zero") e traz cinco blocos — materiais de clientes ficam fora de todos:
+
+- **Giro**: valor consumido na janela dividido pelo valor do estoque ATUAL — é uma
+  aproximação declarada (o sistema não guarda histórico diário de estoque).
+- **Cobertura (dias)**: para cada material com consumo na janela, disponível ÷ consumo médio
+  diário; o número exibido é a **mediana**; materiais sem consumo na janela são contados à
+  parte. Mediana 0 significa que nenhum material teve consumo na janela.
+- **Rupturas**: materiais próprios e ativos cujo saldo **físico** tocou zero na janela por
+  uma saída ou por ajuste de inventário, com a data da primeira ocorrência. Material 100%
+  reservado não conta (fisicamente está na prateleira); material inativado sai do histórico.
+- **Valor do estoque por grupo**: soma do valor por categoria de material.
+- **Tempo médio de atendimento**: horas entre a criação e a **entrega completa** da
+  requisição, considerando todo o histórico (não é limitado pela janela); entregas parciais
+  não contam até completarem.
+
+O painel inicial do almoxarifado mostra três desses números em cartões (giro, rupturas e
+tempo de atendimento), com a janela na legenda; se os indicadores falharem, apenas os três
+cartões mostram o erro — o restante do painel continua.
 
 ## 22. Como o sistema calcula
 
