@@ -632,6 +632,7 @@ module.exports = {
   getWhatsappConfig,
   getConfigValue,
   enviarEmail,
+  parseList,
   escapeHtml,
   shouldUpdateSecret,
   PASSWORD_MASK,

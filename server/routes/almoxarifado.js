@@ -1880,15 +1880,28 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // motor (purchaseService.lerConfigNumero) so aceita numero finito > 0 e cai no default
       // em silencio para qualquer outra coisa. Sem validacao aqui, '0'/''/'-7' gravavam com
       // HTTP 200 e "Configuracoes salvas!" enquanto o motor ignorava o valor e usava o
-      // default — o administrador achava que tinha mudado a janela e nada mudou. Only as
-      // chaves `reposicao_*`: as demais configs do modulo tem semanticas proprias (booleana
-      // '0'/'1', texto livre, etc.) que esta regra nao serve.
+      // default — o administrador achava que tinha mudado a janela e nada mudou.
+      //
+      // Etapa 12 (Fase 2, achado 8): a Etapa 11 so tinha chaves de DIAS, entao uma mensagem so
+      // bastava. A fila de notificacoes trouxe chaves de TENTATIVAS e MINUTOS
+      // (`notificacoes_worker_*`, `notificacoes_max_*`) — reusar a mensagem "dias" para elas
+      // MENTIRIA ("Configuração deve ser um número de dias" para intervalo em minutos). Por
+      // isso DOIS conjuntos de prefixos com DUAS mensagens; `notificar_movimentacoes` e as
+      // `notificacoes_dest_*` (texto livre) NAO caem em nenhum dos dois de proposito — as
+      // demais configs do modulo tem semanticas proprias (booleana '0'/'1', texto livre, etc.)
+      // que esta regra nao serve.
+      const PREFIXOS_DIAS = ['reposicao_', 'alerta_lote_'];
+      const PREFIXOS_INTEIRO = ['notificacoes_worker_', 'notificacoes_max_'];
       for (const [chave, valor] of entradas) {
-        if (chave.startsWith('reposicao_')) {
-          const n = Number(valor);
-          if (!Number.isInteger(n) || n < 1) {
-            return res.status(400).json({ error: `Configuração "${chave}" deve ser um número de dias maior que zero` });
-          }
+        const ehDias = PREFIXOS_DIAS.some((p) => chave.startsWith(p));
+        const ehInteiro = PREFIXOS_INTEIRO.some((p) => chave.startsWith(p));
+        if (!ehDias && !ehInteiro) continue;
+        const n = Number(valor);
+        if (!Number.isInteger(n) || n < 1) {
+          const msg = ehDias
+            ? `Configuração "${chave}" deve ser um número de dias maior que zero`
+            : `Configuração "${chave}" deve ser um número inteiro maior que zero`;
+          return res.status(400).json({ error: msg });
         }
       }
       for (const [chave, valor] of entradas) {

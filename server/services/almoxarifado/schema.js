@@ -1782,6 +1782,20 @@ async function initSchema(db) {
     ['reposicao_janela_consumo_dias', '90', 'Janela (dias) do consumo médio para reposição'],
     ['reposicao_dias_sem_consumo', '180', 'Dias sem saída para material contar como parado/obsoleto'],
     ['reposicao_horizonte_solicitacao_dias', '60', 'Dias em que uma solicitação aberta ainda conta como "a caminho"'],
+    // Etapa 12 (RN-01/02/03/09): fila de notificacoes. Mesma licao da Etapa 10 registrada acima —
+    // config nao semeada aqui e ineditavel pelo PUT /configuracoes (que so grava chave ja
+    // existente) e some da tela na Task 4. notificar_movimentacoes nasce '0' de proposito (D1 do
+    // design): ligar e-mail de TODA movimentacao por default despejaria dezenas de e-mails sem
+    // ninguem ter escolhido.
+    ['notificar_movimentacoes', '0', 'Enviar e-mail para toda movimentacao confirmada (entrada/saida/ajuste/terceiro)'],
+    ['notificacoes_worker_intervalo_min', '5', 'Intervalo (minutos) entre execucoes do worker da fila de notificacoes'],
+    ['notificacoes_max_tentativas', '5', 'Numero maximo de tentativas antes de marcar a notificacao como FALHA'],
+    ['alerta_lote_vencendo_dias', '30', 'Dias de antecedencia para alertar lote proximo do vencimento'],
+    ['notificacoes_dest_entradas', '', 'E-mails para notificacao de entrada de material (lista; vazio = usa alertas_estoque_emails)'],
+    ['notificacoes_dest_saidas', '', 'E-mails para notificacao de saida de material (lista; vazio = usa alertas_estoque_emails)'],
+    ['notificacoes_dest_ajustes', '', 'E-mails para notificacao de ajuste de estoque (lista; vazio = usa alertas_estoque_emails)'],
+    ['notificacoes_dest_terceiros', '', 'E-mails para notificacao de movimentacao de terceiro (lista; vazio = usa alertas_estoque_emails)'],
+    ['notificacoes_dest_compras', '', 'E-mails para notificacao de solicitacao de compra gerada (lista; vazio = usa compras_notificar_emails)'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
@@ -1809,6 +1823,32 @@ async function initSchema(db) {
   // sobre o livro inteiro (consumo medio, ultima entrada/saida) — sem indice e N x full scan.
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_mov_almox_material_tipo
     ON movimentacoes_almoxarifado (material_id, cancelado, tipo)`);
+
+  // ── Etapa 12, Task 1 (RN-01..RN-03): fila de notificacoes — enfileirar so grava, o worker
+  // (notificationQueueService.processarFila) e quem envia. hash_dedupe UNIQUE e o dedupe (RN-02,
+  // sha256(evento + '|' + dedupe_chave)); INSERT OR IGNORE contra ela e no-op silencioso quando
+  // repetido. destinatarios fica em TEXT (JSON, mesmo padrao das configs de lista) — leitor
+  // SEMPRE via parseList do alertService, nunca split cru. DDL copiado do design.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS fila_notificacoes_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    evento TEXT NOT NULL,                 -- MOVIMENTACAO | FERRAMENTA_LEMBRETE | SOLICITACAO_COMPRA |
+                                          -- DEVOLUCAO_PARCIAL | ESTOQUE_ZERADO | LOTE_VENCENDO |
+                                          -- REMESSA_VENCIDA | FALHA_NOTIFICACAO
+    hash_dedupe TEXT NOT NULL UNIQUE,
+    destinatarios TEXT NOT NULL,          -- lista separada por virgula
+    assunto TEXT NOT NULL,
+    corpo_html TEXT,
+    corpo_texto TEXT,
+    payload TEXT,                         -- JSON de contexto (ids), para o painel e o link
+    status TEXT DEFAULT 'PENDENTE',       -- PENDENTE | ENVIADO | FALHA
+    tentativas INTEGER DEFAULT 0,
+    ultimo_erro TEXT,
+    proxima_tentativa_em DATETIME,
+    enviado_em DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_fila_notif_status
+    ON fila_notificacoes_almoxarifado (status, proxima_tentativa_em)`);
 
   console.log('✅ Schema almoxarifado v3 inicializado');
 }

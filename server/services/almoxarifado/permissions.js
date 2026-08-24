@@ -72,6 +72,11 @@ const ACAO_PERFIS = {
   reservar_outra_os: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
   inventario: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   configurar: [PERFIS.ADMINISTRADOR],
+  // Etapa 12 (D7 do design): reenviar e-mail e drenar a fila e operacao administrativa da fila,
+  // nao operacao de balcao — COMPRAS fica fora DE PROPOSITO (recebe e-mail, nao opera a fila).
+  // Mesmo criterio de gerenciar_reposicao (Etapa 11, D9): reversivel, uma linha, registrado na
+  // letra B do doc de novidades.
+  gerenciar_notificacoes: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
 };
 
 function getPerfilFromUser(user) {

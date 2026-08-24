@@ -29,6 +29,7 @@ const purchaseService = require('../../services/almoxarifado/purchaseService');
 // papel: aquele ERA a ilha (tabela propria, fora do motor); este so LE o que o motor ja gravou.
 const clienteEstoqueService = require('../../services/almoxarifado/clienteEstoqueService');
 const thirdPartyService = require('../../services/almoxarifado/thirdPartyService');
+const notificationQueueService = require('../../services/almoxarifado/notificationQueueService');
 
 function handleError(res, err) {
   const status = err.status || 500;
@@ -1110,6 +1111,57 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         return res.status(400).json({ error: 'Tipo inválido (use EXCESSO, SEM_CONSUMO ou OBSOLETO)' });
       }
       res.json(await purchaseService.estoqueParado(db, tipo || undefined));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Notificacoes (Etapa 12, Task 1) — RN-01/02/03/08/09 do design. Gate proprio
+  // (`gerenciar_notificacoes`, D7): reenviar e drenar a fila e operacao administrativa, COMPRAS
+  // fica fora de proposito (mesmo criterio de gerenciar_reposicao/D9 na Etapa 11).
+  app.get('/api/almoxarifado/notificacoes', auth, requirePermission('gerenciar_notificacoes'), async (req, res) => {
+    try {
+      const { status, evento } = req.query;
+      if (status && !notificationQueueService.STATUS_VALIDOS.includes(status)) {
+        return res.status(400).json({ error: 'Status inválido (use PENDENTE, ENVIADO ou FALHA)' });
+      }
+
+      // Resumo do CONJUNTO INTEIRO (semantica da Etapa 11: cards de resumo nao seguem o filtro
+      // de `itens` — a tela mostra o total pendente/enviado/falha independente do que a tabela
+      // esta filtrando no momento).
+      const resumo = await dbGet(db, `SELECT
+          SUM(CASE WHEN status = 'PENDENTE' THEN 1 ELSE 0 END) AS pendentes,
+          SUM(CASE WHEN status = 'ENVIADO' THEN 1 ELSE 0 END) AS enviadas,
+          SUM(CASE WHEN status = 'FALHA' THEN 1 ELSE 0 END) AS falhas
+        FROM fila_notificacoes_almoxarifado`);
+
+      let sql = 'SELECT * FROM fila_notificacoes_almoxarifado WHERE 1=1';
+      const params = [];
+      if (status) { sql += ' AND status = ?'; params.push(status); }
+      if (evento) { sql += ' AND evento = ?'; params.push(evento); }
+      sql += ' ORDER BY id DESC LIMIT 200';
+      const itens = await dbAll(db, sql, params);
+
+      res.json({
+        itens,
+        resumo: {
+          pendentes: resumo?.pendentes || 0,
+          enviadas: resumo?.enviadas || 0,
+          falhas: resumo?.falhas || 0,
+        },
+      });
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/notificacoes/:id/reenviar', auth, requirePermission('gerenciar_notificacoes'), async (req, res) => {
+    try {
+      const resultado = await notificationQueueService.reenviar(db, req.user, Number(req.params.id));
+      res.json(resultado);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/notificacoes/processar', auth, requirePermission('gerenciar_notificacoes'), async (req, res) => {
+    try {
+      const resultado = await notificationQueueService.processarFila(db);
+      res.json(resultado);
     } catch (e) { handleError(res, e); }
   });
 
