@@ -129,11 +129,17 @@ async function relatorioEPIPorColaborador(db) {
     WHERE f.tipo = 'EPI' AND e.status = 'EMPRESTADA'`);
 }
 
+// Nome ficou historico (Etapa 11, Task 2): ate a Etapa 11 so trazia PENDENTE. A aba
+// Solicitacoes da tela nova de reposicao le este mesmo relatorio, e a VINCULADA e EXATAMENTE a
+// que esconde o material da sugestao (a_caminho conta as duas, RN-03) — so trazer PENDENTE
+// deixava a solicitacao vinculada invisivel na tela inteira (Fase 2). Renomear tocaria o
+// dispatcher de relatorios (routes/almoxarifado/extended.js) a toa; o nome ficou desatualizado
+// de proposito.
 async function relatorioSolicitacoesCompraPendentes(db) {
   return dbAll(db, `SELECT s.*, m.nome as material_nome, m.codigo as material_codigo
     FROM solicitacoes_compra_almoxarifado s
     JOIN materiais_almoxarifado m ON s.material_id = m.id
-    WHERE s.status = 'PENDENTE' ORDER BY s.created_at`);
+    WHERE s.status IN ('PENDENTE','VINCULADO') ORDER BY s.created_at`);
 }
 
 /**

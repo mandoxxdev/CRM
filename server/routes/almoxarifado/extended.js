@@ -1087,6 +1087,32 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     catch (e) { handleError(res, e); }
   });
 
+  // POST /gerar-solicitacoes (RN-09) — material_ids AUSENTE = todas as sugestoes do momento;
+  // `[]` = NENHUMA (Fase 2: desmarcar tudo e clicar nao pode disparar o catalogo inteiro).
+  app.post('/api/almoxarifado/reposicao/gerar-solicitacoes', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
+    try {
+      const { material_ids } = req.body || {};
+      if (material_ids !== undefined
+          && (!Array.isArray(material_ids) || material_ids.some((x) => typeof x !== 'number'))) {
+        return res.status(400).json({ error: 'Lista de materiais inválida' });
+      }
+      res.json(await purchaseService.gerarSolicitacoesDaSugestao(db, req.user, material_ids));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // GET /estoque-parado (RN-07) — excesso, sem consumo, obsoleto.
+  app.get('/api/almoxarifado/reposicao/estoque-parado', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
+    try {
+      const { tipo } = req.query;
+      // `tipo` VAZIO e o "Todos" do select da tela — trata como ausente, nao como erro
+      // (Fase 2: `?tipo=` tomava 400 e a propria tela nova quebrava).
+      if (tipo && !['EXCESSO', 'SEM_CONSUMO', 'OBSOLETO'].includes(tipo)) {
+        return res.status(400).json({ error: 'Tipo inválido (use EXCESSO, SEM_CONSUMO ou OBSOLETO)' });
+      }
+      res.json(await purchaseService.estoqueParado(db, tipo || undefined));
+    } catch (e) { handleError(res, e); }
+  });
+
   // ── Auditoria ──
   app.get('/api/almoxarifado/auditoria', auth, async (req, res) => {
     try {

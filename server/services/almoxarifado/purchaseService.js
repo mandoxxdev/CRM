@@ -1,7 +1,8 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
 const { custoUnitarioSql } = require('./custoSql');
-const { TIPOS_SAIDA } = require('./movementTypes');
+const { TIPOS_SAIDA, TIPOS_ENTRADA } = require('./movementTypes');
+const { registrarAuditoria } = require('./audit');
 
 async function verificarEstoqueMinimo(db) {
   const criticos = await dbAll(db, `SELECT * FROM materiais_almoxarifado
@@ -147,4 +148,95 @@ async function calcularSugestoes(db) {
   };
 }
 
-module.exports = { verificarEstoqueMinimo, vincularPedidoCompra, calcularSugestoes };
+// RN-09 (reescrita pela Fase 2): o servidor calcula, o cliente so escolhe QUAIS materiais —
+// ausente = todas as sugestoes do momento; [] = NENHUMA (desmarcar tudo nao dispara o
+// catalogo inteiro). NAO ha dedupe aqui: a pendencia entra em a_caminho (RN-03), entao material
+// coberto nem e sugerido, e pendencia INSUFICIENTE gera o COMPLEMENTO (a quantidade sugerida
+// ja desconta o que esta a caminho) — recusar seria negar reposicao a material que continua
+// faltando. O dedupe por PENDENTE segue existindo SO no legado verificar-minimos (D10).
+async function gerarSolicitacoesDaSugestao(db, usuario, materialIds) {
+  const sugestao = await calcularSugestoes(db);
+  const porMaterial = new Map();
+  for (const g of sugestao.fornecedores) for (const i of g.itens) porMaterial.set(i.material_id, i);
+
+  const alvos = Array.isArray(materialIds) ? materialIds : [...porMaterial.keys()];
+
+  const criadas = []; const puladas = [];
+  for (const materialId of alvos) {
+    const item = porMaterial.get(materialId);
+    if (!item) { puladas.push({ material_id: materialId, motivo: 'SEM_SUGESTAO' }); continue; }
+    const r = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado
+        (material_id, quantidade, motivo) VALUES (?,?,'PONTO_REPOSICAO')`,
+      [materialId, item.quantidade_sugerida]);
+    // dados_novos como OBJETO — audit.js serializa; string aqui viraria escape em dobro
+    // (Fase 2, verificado nos 11 chamadores reais).
+    await registrarAuditoria(db, {
+      entidade: 'solicitacao_compra', entidade_id: r.lastID, acao: 'CRIAR',
+      usuario_id: usuario.id, usuario_nome: usuario.nome || usuario.email,
+      dados_novos: { material_id: materialId, quantidade: item.quantidade_sugerida, motivo: 'PONTO_REPOSICAO' },
+    });
+    criadas.push({ material_id: materialId, solicitacao_id: r.lastID, quantidade: item.quantidade_sugerida });
+  }
+  return { criadas, puladas };
+}
+
+// RN-07: excesso / sem consumo / obsoleto — flags INDEPENDENTES (um material pode ser excesso
+// E obsoleto). So material ativo, nosso, com saldo (a regua e "ocupa prateleira"). LIMIT 500,
+// maior valor parado primeiro.
+async function estoqueParado(db, tipo) {
+  const dias = await lerConfigNumero(db, 'reposicao_dias_sem_consumo', 180);
+  const phSaida = TIPOS_SAIDA.map(() => '?').join(',');
+  const phEntrada = TIPOS_ENTRADA.map(() => '?').join(',');
+
+  const rows = await dbAll(db, `
+    SELECT m.id AS material_id, m.codigo, m.nome, m.unidade,
+           m.quantidade_atual, m.quantidade_maxima,
+           ${custoUnitarioSql('m')} AS custo_unitario,
+           (SELECT MAX(mv.created_at) FROM movimentacoes_almoxarifado mv
+            WHERE mv.material_id = m.id AND mv.cancelado = 0 AND mv.tipo IN (${phSaida})) AS ultima_saida,
+           (SELECT MAX(mv.created_at) FROM movimentacoes_almoxarifado mv
+            WHERE mv.material_id = m.id AND mv.cancelado = 0 AND mv.tipo IN (${phEntrada})) AS ultima_entrada
+    FROM materiais_almoxarifado m
+    WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL AND m.quantidade_atual > 0`,
+    [...TIPOS_SAIDA, ...TIPOS_ENTRADA]);
+
+  const limite = Date.now() - dias * 24 * 60 * 60 * 1000;
+  const antigaOuNunca = (d) => d == null || new Date(`${String(d).replace(' ', 'T')}Z`).getTime() < limite;
+
+  const todos = rows.map((r) => {
+    const sem_consumo = antigaOuNunca(r.ultima_saida);
+    return {
+      material_id: r.material_id, codigo: r.codigo, nome: r.nome, unidade: r.unidade,
+      quantidade_atual: r.quantidade_atual, quantidade_maxima: r.quantidade_maxima,
+      ultima_entrada: r.ultima_entrada || null, ultima_saida: r.ultima_saida || null,
+      valor_parado: Number((r.quantidade_atual * (r.custo_unitario || 0)).toFixed(2)),
+      excesso: r.quantidade_maxima > 0 && r.quantidade_atual > r.quantidade_maxima,
+      sem_consumo,
+      obsoleto: sem_consumo && antigaOuNunca(r.ultima_entrada),
+    };
+  }).filter((i) => i.excesso || i.sem_consumo || i.obsoleto);
+
+  // Resumo sobre a lista COMPLETA, antes do filtro por tipo e do teto (semantica congelada
+  // pela Fase 2): o resumo e o retrato do estoque parado inteiro; `itens` e a janela.
+  const resumo = {
+    excesso: todos.filter((i) => i.excesso).length,
+    sem_consumo: todos.filter((i) => i.sem_consumo).length,
+    obsoleto: todos.filter((i) => i.obsoleto).length,
+    valor_parado_total: Number(todos.reduce((s, i) => s + i.valor_parado, 0).toFixed(2)),
+  };
+
+  let itens = todos;
+  if (tipo) {
+    const chave = { EXCESSO: 'excesso', SEM_CONSUMO: 'sem_consumo', OBSOLETO: 'obsoleto' }[tipo];
+    itens = itens.filter((i) => i[chave]);
+  }
+  itens.sort((a, b) => b.valor_parado - a.valor_parado);
+  itens = itens.slice(0, 500);
+
+  return { dias_sem_consumo: dias, itens, resumo };
+}
+
+module.exports = {
+  verificarEstoqueMinimo, vincularPedidoCompra, calcularSugestoes,
+  gerarSolicitacoesDaSugestao, estoqueParado,
+};
