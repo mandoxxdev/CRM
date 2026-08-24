@@ -284,8 +284,11 @@ Padrão da tela de Reposição (a lição do Critical da 11 já embutida): **pai
 estado com retry** (403 nunca vira lista vazia), cards de resumo (pendentes/enviadas/falhas —
 do conjunto inteiro, com legenda), filtros por status e evento, tabela (evento, assunto,
 destinatários, status com badge, tentativas, último erro truncado com title, datas em
-UTC-safe), botão **Reenviar** por linha (gate `bloquearSeNaoPode('gerenciar_notificacoes')`,
-só em FALHA/PENDENTE) e botão **Processar fila agora**. Rota lazy + menu no padrão de
+UTC-safe), botão **Reenviar** por linha (gate `bloquearSeNaoPode('gerenciar_notificacoes')`)
+e botão **Processar fila agora**. **Esta seção dizia "só em FALHA/PENDENTE" para o Reenviar;
+estava ERRADA — contradizia a RN-08 deste mesmo documento** (reenviar ENVIADO é permitido de
+propósito: é o único caminho de reemissão de e-mail perdido após o aceite do SMTP). Decisão da
+revisão da Task 4: o botão aparece em todas as linhas, com `confirm` de proteção no ENVIADO. Rota lazy + menu no padrão de
 `/almoxarifado/reposicao`. Configs novas no array `CAMPOS` de Configurações.
 
 ## Decisões
