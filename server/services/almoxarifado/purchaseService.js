@@ -89,9 +89,16 @@ async function calcularSugestoes(db) {
     if (posicao >= pontoEfetivo) continue;
 
     const alvo = Math.max(r.quantidade_maxima || 0, pontoEfetivo);   // RN-04
-    let sugerida = alvo - posicao;                                   // sempre > 0 aqui:
+    let sugerida = alvo - posicao;
     if (r.lote_economico > 0) sugerida = Math.max(sugerida, r.lote_economico);
-    // (posicao < ponto <= alvo garante sugerida > 0 — o guard "<= 0" era codigo morto, Fase 2)
+    // CORRECAO (revisao da Task 2): o comentario anterior dizia que o guard "<= 0" era codigo
+    // morto — era verdade ANTES do toFixed e FALSO depois: residuo de float abaixo de 5e-5
+    // (minima 2.14 contra pendencias 1.0 + 1.14 = 2.1399999999999997) arredondava a sugestao
+    // para 0, o material continuava "sugerido" para sempre e cada POST gravava mais uma
+    // solicitacao de quantidade ZERO que nunca somava em a_caminho — lixo infinito no
+    // relatorio. Arredonda UMA vez e descarta o fantasma.
+    const quantidadeSugerida = Number(sugerida.toFixed(4));
+    if (quantidadeSugerida <= 0) continue;
 
     itens.push({
       material_id: r.material_id, codigo: r.codigo, nome: r.nome, unidade: r.unidade,
@@ -101,8 +108,8 @@ async function calcularSugestoes(db) {
       consumo_medio_diario: Number(consumoDiario.toFixed(4)),
       prazo_reposicao_dias: r.prazo_reposicao_dias || 0,
       ponto_efetivo: Number(pontoEfetivo.toFixed(4)), origem_ponto: origemPonto,
-      quantidade_sugerida: Number(sugerida.toFixed(4)),
-      valor_estimado: Number((sugerida * (r.custo_unitario || 0)).toFixed(2)),
+      quantidade_sugerida: quantidadeSugerida,
+      valor_estimado: Number((quantidadeSugerida * (r.custo_unitario || 0)).toFixed(2)),
       // RN-06/D7: critico sem disponivel = risco de parada — solicitacao a caminho nao
       // segura producao, por isso a flag olha o DISPONIVEL, nao a posicao.
       risco_parada: !!r.material_critico && r.disponivel <= 0,
@@ -159,7 +166,9 @@ async function gerarSolicitacoesDaSugestao(db, usuario, materialIds) {
   const porMaterial = new Map();
   for (const g of sugestao.fornecedores) for (const i of g.itens) porMaterial.set(i.material_id, i);
 
-  const alvos = Array.isArray(materialIds) ? materialIds : [...porMaterial.keys()];
+  // Set: id repetido no body multiplicava a quantidade calculada (POST [1,1,1] pedia 60 onde
+  // o material precisava de 20 — revisao da Task 2, medido).
+  const alvos = [...new Set(Array.isArray(materialIds) ? materialIds : [...porMaterial.keys()])];
 
   const criadas = []; const puladas = [];
   for (const materialId of alvos) {

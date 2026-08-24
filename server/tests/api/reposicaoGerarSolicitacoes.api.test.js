@@ -224,6 +224,39 @@ async function somarSolicitacoes(db, materialId) {
     assert.ok(ids.includes(solVinculadaId), 'VINCULADO deveria aparecer no relatorio');
   });
 
+  await test('residuo de float NAO vira solicitacao de quantidade zero infinita', async () => {
+    // Important 1 da revisao (medido): minima 2.14 contra pendencias 1.0 + 1.14 =
+    // 2.1399999999999997 — a posicao ficava um fio abaixo do ponto, a sugestao arredondava
+    // para 0 e CADA POST gravava mais uma linha de quantidade zero que nunca somava em
+    // a_caminho: lixo infinito no relatorio. O fantasma tem de sumir da sugestao.
+    const mat = await novoMaterial(db, { minima: 2.14, qtd: 0 });
+    await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, status) VALUES (?, 1.0, 'PENDENTE')`, [mat.id]);
+    await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, status) VALUES (?, 1.14, 'PENDENTE')`, [mat.id]);
+
+    const resSug = await request(app).get('/api/almoxarifado/reposicao/sugestoes');
+    const temFantasma = resSug.body.fornecedores.some((g) => g.itens.some((i) => i.material_id === mat.id));
+    assert.strictEqual(temFantasma, false, 'sugestao de quantidade 0 nao pode existir');
+
+    const resGerar = await gerar(app, {});
+    assert.ok(!resGerar.body.criadas.some((c) => c.material_id === mat.id), JSON.stringify(resGerar.body));
+    const linhas = await dbAll(db, `SELECT quantidade FROM solicitacoes_compra_almoxarifado WHERE material_id = ?`, [mat.id]);
+    assert.strictEqual(linhas.length, 2, 'nenhuma linha nova pode ter sido criada');
+    assert.ok(!linhas.some((l) => Number(l.quantidade) === 0), JSON.stringify(linhas));
+  });
+
+  await test('ids repetidos no body NAO multiplicam a quantidade', async () => {
+    // Important 2 da revisao (medido): POST [id,id,id] criava 3 solicitacoes de 20 = 60
+    // unidades pedidas onde o material precisava de 20.
+    const mat = await novoMaterial(db, { minima: 5, maxima: 20, qtd: 0 });
+    const res = await gerar(app, { material_ids: [mat.id, mat.id, mat.id] });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const criadasDoMat = res.body.criadas.filter((c) => c.material_id === mat.id);
+    assert.strictEqual(criadasDoMat.length, 1, JSON.stringify(res.body));
+    const linhas = await dbAll(db, `SELECT quantidade FROM solicitacoes_compra_almoxarifado WHERE material_id = ?`, [mat.id]);
+    assert.strictEqual(linhas.length, 1, JSON.stringify(linhas));
+    assert.strictEqual(Number(linhas[0].quantidade), 20, JSON.stringify(linhas));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

@@ -177,6 +177,33 @@ function itemDe(res, materialId) { return res.body.itens.find((i) => i.material_
     setUser(ADMIN);
   });
 
+  await test('resumo e da lista COMPLETA (semantica congelada) e itens saem por valor desc', async () => {
+    // Important 3 da revisao: mover o resumo para depois do filtro passava 7/7 — o unico
+    // assert era um >= que valia por acidente. Par que separa as semanticas: um EXCESSO puro
+    // (com saida recente, nunca sem_consumo) e um OBSOLETO puro (sem excesso).
+    const matExcessoPuro = await novoMaterial(db, { qtd: 100, maxima: 50, custo: 1 });
+    await saidaNoLivro(db, matExcessoPuro.id, 1, { diasAtras: 2 });
+    const matObsoletoPuro = await novoMaterial(db, { qtd: 10, maxima: 0, custo: 50 });
+    await saidaNoLivro(db, matObsoletoPuro.id, 1, { diasAtras: 300 });
+
+    const resTudo = await estoqueParado(app);
+    const resFiltrado = await estoqueParado(app, { tipo: 'EXCESSO' });
+    // O resumo do filtrado e IGUAL ao resumo do tudo — retrato do estoque inteiro.
+    assert.deepStrictEqual(resFiltrado.body.resumo, resTudo.body.resumo,
+      `filtrado: ${JSON.stringify(resFiltrado.body.resumo)} tudo: ${JSON.stringify(resTudo.body.resumo)}`);
+    // E o filtro continua filtrando os itens: o obsoleto puro nao esta na lista de EXCESSO.
+    assert.ok(!resFiltrado.body.itens.some((i) => i.material_id === matObsoletoPuro.id), 'filtro EXCESSO vazou obsoleto');
+    assert.ok(resFiltrado.body.itens.some((i) => i.material_id === matExcessoPuro.id), 'excesso puro sumiu do filtro');
+
+    // Ordenacao por valor parado desc (Minor 5): obsoleto puro vale 500, excesso puro vale
+    // 100 — na lista sem filtro o de maior valor vem primeiro.
+    const idxObsoleto = resTudo.body.itens.findIndex((i) => i.material_id === matObsoletoPuro.id);
+    const idxExcesso = resTudo.body.itens.findIndex((i) => i.material_id === matExcessoPuro.id);
+    assert.ok(idxObsoleto >= 0 && idxExcesso >= 0, JSON.stringify({ idxObsoleto, idxExcesso }));
+    assert.ok(idxObsoleto < idxExcesso,
+      `maior valor parado primeiro: obsoleto(500) idx ${idxObsoleto} deveria vir antes de excesso(100) idx ${idxExcesso}`);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
