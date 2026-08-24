@@ -2695,6 +2695,12 @@ const TabConfiguracoes = () => {
   const CAMPOS = [
     { chave: 'aprovacao_automatica', label: 'Aprovação Automática', tipo: 'boolean', descricao: 'Requisições normais são aprovadas automaticamente (exceto CRÍTICO)' },
     { chave: 'permite_saldo_negativo_global', label: 'Permitir Saída com Saldo Negativo', tipo: 'boolean', descricao: 'Permite registrar saída mesmo sem saldo disponível' },
+    // Etapa 11: as tres chaves do motor de reposicao (purchaseService.calcularSugestoes/
+    // estoqueParado) — semeadas no schema.js, sem isto ficariam ineditaveis pela UI (Fase 2
+    // do design, mesma licao da Etapa 10).
+    { chave: 'reposicao_janela_consumo_dias', label: 'Janela do Consumo Médio (dias)', tipo: 'number', descricao: 'Período (dias) considerado para calcular o consumo médio diário na sugestão de reposição' },
+    { chave: 'reposicao_dias_sem_consumo', label: 'Dias Sem Consumo (estoque parado)', tipo: 'number', descricao: 'Dias sem saída para o material contar como parado/obsoleto' },
+    { chave: 'reposicao_horizonte_solicitacao_dias', label: 'Horizonte da Solicitação (dias)', tipo: 'number', descricao: 'Dias em que uma solicitação de compra aberta ainda conta como "a caminho" na sugestão' },
   ];
   // Saíram daqui por não ter leitor nenhum no servidor — nenhuma delas fazia coisa alguma:
   // `prazo_atendimento_horas` (semeada, mas nada calcula prazo de atendimento),

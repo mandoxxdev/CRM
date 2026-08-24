@@ -134,3 +134,51 @@ test('desligar o switch manda "0" — o valor que o motor de estoque compara', a
 
   expect(api.put.mock.calls[0][1].permite_saldo_negativo_global).toBe('0');
 });
+
+/**
+ * Etapa 11, Task 3 — as tres chaves novas do motor de reposicao (purchaseService,
+ * calcularSugestoes/estoqueParado). Semeadas em schema.js e com leitor real (Task 1/2), mas a
+ * tela renderiza uma LISTA FIXA (`CAMPOS`) — chave fora dela e ineditavel pela UI (achado da
+ * Fase 2 do design, mesma licao do defeito que originou este arquivo). Este teste prova as duas
+ * pontas do lado do cliente: os tres campos aparecem e entram no payload do Salvar.
+ */
+const inputDoCampo = (rotulo) => {
+  const bloco = [...container.querySelectorAll('div')]
+    .find(d => d.textContent.trim().startsWith(rotulo) && d.querySelector('input[type="number"]'));
+  return bloco ? bloco.querySelector('input[type="number"]') : null;
+};
+
+test('as tres chaves de reposicao (Etapa 11) aparecem e entram no payload do salvar', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Janela do Consumo Médio (dias)');
+  expect(container.textContent).toContain('Dias Sem Consumo (estoque parado)');
+  expect(container.textContent).toContain('Horizonte da Solicitação (dias)');
+
+  const inputJanela = inputDoCampo('Janela do Consumo Médio (dias)');
+  const inputParado = inputDoCampo('Dias Sem Consumo (estoque parado)');
+  const inputHorizonte = inputDoCampo('Horizonte da Solicitação (dias)');
+  expect(inputJanela).not.toBeNull();
+  expect(inputParado).not.toBeNull();
+  expect(inputHorizonte).not.toBeNull();
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  await act(async () => {
+    preencher(inputJanela, '120');
+    preencher(inputParado, '200');
+    preencher(inputHorizonte, '45');
+  });
+
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+  await act(async () => { botao.click(); });
+
+  expect(api.put).toHaveBeenCalledTimes(1);
+  const corpo = api.put.mock.calls[0][1];
+  expect(corpo.reposicao_janela_consumo_dias).toBe('120');
+  expect(corpo.reposicao_dias_sem_consumo).toBe('200');
+  expect(corpo.reposicao_horizonte_solicitacao_dias).toBe('45');
+});
