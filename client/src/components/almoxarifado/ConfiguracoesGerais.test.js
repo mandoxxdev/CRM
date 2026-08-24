@@ -51,6 +51,12 @@ jest.mock('../../services/permissionsCache', () => ({
 // padrao valido — sem elas aqui, o guard novo do achado 6 (handleSalvar recusa reposicao_*
 // invalida) via `configs[chave]` undefined como NaN e barraria os testes de salvar que nao tem
 // nada a ver com reposicao. Valores de fixture arbitrarios, mas validos (inteiro >= 1).
+//
+// Etapa 12 (RN-09): as 10 chaves novas da fila de notificacoes tem a MESMA obrigacao — as
+// numericas (`notificacoes_worker_intervalo_min`, `notificacoes_max_tentativas`,
+// `alerta_lote_vencendo_dias`) entram no MESMO guard client-side (agora com dois conjuntos de
+// prefixo/mensagem — achado 8 da Fase 2 do design) e, sem fixture valida aqui, qualquer teste de
+// "Salvar" que nem toque nelas cairia por causa de NaN vindo de `configs[chave]` undefined.
 const RESPOSTA_DO_SERVIDOR = {
   aprovacao_automatica: { valor: '1', descricao: 'Aprovar requisições automaticamente', id: 1 },
   permite_saldo_negativo_global: { valor: '1', descricao: 'Permitir saldo negativo (global)', id: 2 },
@@ -58,6 +64,15 @@ const RESPOSTA_DO_SERVIDOR = {
   reposicao_janela_consumo_dias: { valor: '90', descricao: 'Janela do consumo médio', id: 4 },
   reposicao_dias_sem_consumo: { valor: '180', descricao: 'Dias sem saída (estoque parado)', id: 5 },
   reposicao_horizonte_solicitacao_dias: { valor: '60', descricao: 'Horizonte da solicitação', id: 6 },
+  notificar_movimentacoes: { valor: '0', descricao: 'Notificar movimentações por e-mail', id: 7 },
+  notificacoes_worker_intervalo_min: { valor: '5', descricao: 'Intervalo do worker (min)', id: 8 },
+  notificacoes_max_tentativas: { valor: '5', descricao: 'Máx. tentativas de envio', id: 9 },
+  alerta_lote_vencendo_dias: { valor: '30', descricao: 'Alerta de lote vencendo (dias)', id: 10 },
+  notificacoes_dest_entradas: { valor: '', descricao: 'Destinatários — entradas', id: 11 },
+  notificacoes_dest_saidas: { valor: '', descricao: 'Destinatários — saídas', id: 12 },
+  notificacoes_dest_ajustes: { valor: '', descricao: 'Destinatários — ajustes', id: 13 },
+  notificacoes_dest_terceiros: { valor: '', descricao: 'Destinatários — terceiros', id: 14 },
+  notificacoes_dest_compras: { valor: '', descricao: 'Destinatários — compras', id: 15 },
 };
 
 let container;
@@ -216,5 +231,122 @@ test('digitar 0 num campo de reposicao recusa salvar com toast, sem chamar o PUT
   expect(api.put).not.toHaveBeenCalled();
   expect(toast.error).toHaveBeenCalledWith(
     'Configuração "reposicao_janela_consumo_dias" deve ser um número de dias maior que zero'
+  );
+});
+
+/**
+ * Etapa 12, Task 4 — as 10 chaves novas da fila de notificacoes (RN-09 do design). Mesma
+ * obrigacao que a Etapa 11 estabeleceu para as `reposicao_*`: aparecer na tela E entrar no
+ * payload do Salvar com o valor certo (boolean vira '0'/'1', numericas vao como string,
+ * texto livre passa direto).
+ */
+const inputTextoDoCampo = (rotulo) => {
+  const bloco = [...container.querySelectorAll('div')]
+    .find(d => d.textContent.trim().startsWith(rotulo) && d.querySelector('input[type="text"]'));
+  return bloco ? bloco.querySelector('input[type="text"]') : null;
+};
+
+test('as 10 chaves de notificacoes (Etapa 12) renderizam e entram no payload do salvar', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Notificar Movimentações por E-mail');
+  expect(container.textContent).toContain('Intervalo do Worker (min)');
+  expect(container.textContent).toContain('Máx. Tentativas de Envio');
+  expect(container.textContent).toContain('Alerta de Lote Vencendo (dias)');
+  expect(container.textContent).toContain('Destinatários — Entradas');
+  expect(container.textContent).toContain('Destinatários — Saídas');
+  expect(container.textContent).toContain('Destinatários — Ajustes');
+  expect(container.textContent).toContain('Destinatários — Terceiros');
+  expect(container.textContent).toContain('Destinatários — Compras');
+
+  // Notificar Movimentações nasce '0' na fixture (D1 do design) — liga o switch.
+  const switchNotificar = switchDoCampo('Notificar Movimentações por E-mail');
+  expect(switchNotificar).not.toBeNull();
+  expect(switchNotificar.checked).toBe(false);
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')
+      .set.call(switchNotificar, true);
+    switchNotificar.dispatchEvent(new Event('click', { bubbles: true }));
+  });
+
+  const inputIntervalo = inputDoCampo('Intervalo do Worker (min)');
+  const inputMaxTentativas = inputDoCampo('Máx. Tentativas de Envio');
+  const inputLoteDias = inputDoCampo('Alerta de Lote Vencendo (dias)');
+  const inputDestEntradas = inputTextoDoCampo('Destinatários — Entradas');
+  expect(inputIntervalo).not.toBeNull();
+  expect(inputMaxTentativas).not.toBeNull();
+  expect(inputLoteDias).not.toBeNull();
+  expect(inputDestEntradas).not.toBeNull();
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  await act(async () => {
+    preencher(inputIntervalo, '10');
+    preencher(inputMaxTentativas, '3');
+    preencher(inputLoteDias, '15');
+    preencher(inputDestEntradas, 'compras@gmp.com,almox@gmp.com');
+  });
+
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+  await act(async () => { botao.click(); });
+
+  expect(api.put).toHaveBeenCalledTimes(1);
+  const corpo = api.put.mock.calls[0][1];
+  expect(corpo.notificar_movimentacoes).toBe('1');
+  expect(corpo.notificacoes_worker_intervalo_min).toBe('10');
+  expect(corpo.notificacoes_max_tentativas).toBe('3');
+  expect(corpo.alerta_lote_vencendo_dias).toBe('15');
+  expect(corpo.notificacoes_dest_entradas).toBe('compras@gmp.com,almox@gmp.com');
+});
+
+/**
+ * Etapa 12 (RN-09, Fase 2 do design, achado 8): a mensagem de validação NÃO pode reaproveitar
+ * "número de dias" para tentativas/minutos — mentiria. Prova o par: `alerta_lote_vencendo_dias`
+ * (prefixo de DIAS, mesma mensagem da Etapa 11) e `notificacoes_max_tentativas` (prefixo
+ * INTEIRO, mensagem nova) — cada um recusa o PUT com o literal certo, sem chamar `api.put`.
+ */
+test('config de dias novo (alerta_lote_vencendo_dias) invalido usa a mensagem "dias"', async () => {
+  await renderAbaGeral();
+
+  const inputLoteDias = inputDoCampo('Alerta de Lote Vencendo (dias)');
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  await act(async () => { preencher(inputLoteDias, '0'); });
+
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+  await act(async () => { botao.click(); });
+
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_lote_vencendo_dias" deve ser um número de dias maior que zero'
+  );
+});
+
+test('config inteira nova (notificacoes_max_tentativas) invalida usa a mensagem "numero inteiro", NAO "dias"', async () => {
+  await renderAbaGeral();
+
+  const inputMaxTentativas = inputDoCampo('Máx. Tentativas de Envio');
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  await act(async () => { preencher(inputMaxTentativas, '0'); });
+
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+  await act(async () => { botao.click(); });
+
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "notificacoes_max_tentativas" deve ser um número inteiro maior que zero'
+  );
+  expect(toast.error).not.toHaveBeenCalledWith(
+    expect.stringContaining('notificacoes_max_tentativas" deve ser um número de dias')
   );
 });
