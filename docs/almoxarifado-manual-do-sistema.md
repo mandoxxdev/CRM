@@ -32,6 +32,8 @@ explicada logo abaixo dela.
 19. [Sobras e retalhos](#19-sobras-e-retalhos)
 20. [Sucateamento](#20-sucateamento)
 21. [Ferramentas e calibração](#21-ferramentas-e-calibração)
+21b. [Reposição e compras](#21b-reposição-e-compras)
+21c. [Notificações por e-mail](#21c-notificações-por-e-mail)
 22. [Como o sistema calcula](#22-como-o-sistema-calcula)
 23. [Cuidados na operação](#23-cuidados-na-operação)
 24. [Onde pedir ajuda e o que este documento não cobre](#24-onde-pedir-ajuda-e-o-que-este-documento-não-cobre)
@@ -2415,6 +2417,98 @@ inteiro maior que zero** — valor inválido é recusado na tela antes de salvar
 API:
 
 > `Configuração "<chave>" deve ser um número de dias maior que zero`
+
+## 21c. Notificações por e-mail
+
+O sistema tem uma central de avisos por e-mail. Nenhum aviso é enviado na hora da operação:
+tudo entra numa **fila**, e um processo automático tenta enviar em segundo plano — assim, uma
+falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou uma remessa.
+
+### 21c.1 O que gera aviso
+
+- **Movimentações de estoque** (entrada, saída, ajuste manual e movimentos de terceiros que
+  baixam saldo) — **somente se a chave "Notificar movimentações por e-mail" estiver ligada**
+  em Configurações; ela vem desligada de fábrica. O e-mail traz tipo, número, data/hora,
+  usuário, material, quantidade, **saldo anterior e posterior**, lote e séries quando houver,
+  projeto/OS/cliente, motivo, justificativa e um link direto para o livro de movimentações.
+- **Ferramenta com devolução vencida** — um lembrete por dia, por empréstimo vencido.
+- **Solicitações de compra geradas** pela tela de Reposição — um único e-mail-resumo por
+  geração, listando materiais e quantidades.
+- **Devolução que ficou parcial** — quando parte de uma devolução grava e o restante é
+  recusado pelo motor, o aviso sai com o motivo, sem substituir o erro que o operador vê.
+- **Estoque zerado** — apenas para material **sem estoque mínimo cadastrado** (quem tem mínimo
+  já é coberto pelo alerta de mínimo). Dispara quando uma movimentação zera o saldo físico;
+  enquanto continuar zerado, não repete; repor e zerar de novo gera novo aviso. Material
+  inativo e material de cliente não geram esse aviso. A régua é o **saldo físico**: material
+  totalmente reservado ainda está na prateleira e não conta como zerado.
+- **Lote vencendo** — varredura diária dos lotes ativos com saldo cuja validade está dentro da
+  janela configurada (30 dias de fábrica), **incluindo lotes já vencidos com saldo**. Um aviso
+  por validade: mudou a validade do lote, pode avisar de novo; no mesmo dia seguinte, não.
+  Lote cujo vencimento foi **liberado** por decisão registrada não entra.
+- **Remessa a terceiro vencida** — varredura diária pela mesma régua da tela de remessas.
+
+O que **não** gera aviso de movimentação, de propósito: reservas e liberações, envio e retorno
+de remessa a terceiro (a remessa tem o aviso próprio de vencida) e os ajustes aplicados pela
+**conclusão de conferência de inventário** — uma conferência aplica dezenas de ajustes de uma
+vez e viraria uma rajada de e-mails; o resultado da conferência se consulta na própria tela de
+inventário.
+
+### 21c.2 Destinatários — e o interruptor geral
+
+Cada família de evento tem sua lista de e-mails em Configurações: **entradas, saídas, ajustes,
+terceiros** e **compras** (aceitam vários endereços). Família sem lista preenchida usa a lista
+geral de **Alertas de Estoque** como reserva — e nesse caso vale o checkbox **"Notificar por
+e-mail"** da tela de Alertas: desligado, nada que dependa da lista geral é enviado (inclusive
+o e-mail de movimentação que cairia nela). Família **com** lista própria ignora o checkbox: o
+destino foi escolhido explicitamente. As solicitações de compra usam a lista própria de compras
+e não dependem do checkbox de alertas.
+
+Atenção ao volume com a chave de movimentações ligada: cada item de um fluxo em lote gera um
+e-mail — entregar uma requisição de 10 itens gera 10 avisos.
+
+### 21c.3 Retentativas, falha e o aviso ao administrador
+
+Quando um envio falha (por exemplo, servidor de e-mail não configurado — o motivo aparece
+literal na tela: `SMTP não configurado`), a notificação continua **pendente** e o sistema
+tenta de novo sozinho, esperando mais a cada falha (10 minutos, depois 20, 40...). Ao esgotar
+o número de tentativas (5, configurável), a notificação vira **falha definitiva** e **um**
+aviso é enviado à lista geral de alertas — um só por notificação, mesmo que ela volte a falhar
+depois de um reenvio manual.
+
+### 21c.4 A tela Notificações
+
+Em **Almoxarifado → Notificações** (perfis Gestor e Administrador; os demais recebem a recusa
+de permissão — a tela mostra o motivo, nunca uma lista vazia): três cartões com o total de
+**pendentes, enviadas e falhas** do conjunto inteiro, filtros por status e por evento, e cada
+linha com destinatários, tentativas, o motivo literal da última falha e as datas de criação e
+envio. Filtro de status inválido pela API responde:
+
+> `Status inválido (use PENDENTE, ENVIADO ou FALHA)`
+
+- **Reenviar** (por linha): volta a notificação para a fila e processa na hora. Em linha **já
+  enviada**, o botão pede confirmação — `Esta notificação já foi enviada. Reenviar mesmo assim
+  envia o e-mail de novo aos mesmos destinatários.` — porque reenviar aí duplica o e-mail de
+  verdade. Notificação inexistente responde `Notificação não encontrada`.
+- **Processar fila agora**: dispara o processo em segundo plano imediatamente e informa o
+  resultado no formato `N processada(s): X enviada(s), Y reagendada(s), Z falha(s)` —
+  "reagendada" é retentativa marcada para mais tarde; "falha" é desistência definitiva.
+
+### 21c.5 Movimentação cancelada não vira e-mail
+
+Estornar uma movimentação cujo aviso ainda **não saiu** suprime o aviso: a linha vira falha com
+o motivo `Movimentação cancelada antes do envio`, e tentar reenviá-la é recusado com
+`Movimentação cancelada — notificação não pode ser reenviada`. Se o aviso **já tinha saído**,
+não há e-mail de correção — o livro de movimentações é a fonte da verdade.
+
+### 21c.6 As configurações — e a validação
+
+Em **Configurações → Configurações Gerais**: a chave liga/desliga (**só aceita 0 ou 1** — outro
+valor é recusado com `Configuração "notificar_movimentacoes" deve ser 0 ou 1`), o intervalo do
+processador da fila em minutos e o máximo de tentativas (**número inteiro maior que zero** —
+`Configuração "<chave>" deve ser um número inteiro maior que zero`), a janela do lote vencendo
+em dias (`Configuração "<chave>" deve ser um número de dias maior que zero`) e as cinco listas
+de destinatários (texto livre). Mudar o **intervalo do processador** só passa a valer depois de
+reiniciar o sistema; o espaçamento das retentativas muda imediatamente.
 
 ## 22. Como o sistema calcula
 

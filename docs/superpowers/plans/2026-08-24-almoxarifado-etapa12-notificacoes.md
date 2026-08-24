@@ -123,7 +123,13 @@ worktree) × Task 5 (teste server, árvore principal).
 
 ---
 
-### Task 1: Fila + serviço + painel (RN-01, RN-02, RN-03, RN-08, RN-09)
+### Task 1: Fila + serviço + painel — ✅ FEITA (`18a8d71` + fix-round `a8b9c0e`)
+
+> Revisão adversarial: 1 Critical (dois drenos concorrentes enviavam o mesmo e-mail — claim em
+> memória + re-checagem no banco), 5 Important (enviado_em no reenviar, GET com colunas
+> nomeadas, 3 invariantes sem teste), 5 Minor. Divergências do plano: getConfigValue reusado em
+> vez de leitor novo; teste 5 endurecido; o Step 1 abaixo dizia "mesma mensagem literal" e FOI
+> CORRIGIDO em execução (duas mensagens — ver Global Constraints).
 
 **Files:**
 - Create: `server/services/almoxarifado/notificationQueueService.js`
@@ -177,7 +183,7 @@ worktree) × Task 5 (teste server, árvore principal).
   chama `processarFila(db, { id })` — só o item.
 - Configs semeadas (RN-09) + `gerenciar_notificacoes: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR]`.
 
-- [ ] **Step 1: schema** — tabela+índice do design (copiar o SQL literal) no `initSchema`,
+- [x] **Step 1: schema** — tabela+índice do design (copiar o SQL literal) no `initSchema`,
   configs no array `configs` (com comentário citando a lição da 10: config não semeada é
   ineditável), e em `routes/almoxarifado.js` estender a validação numérica do PUT: trocar o
   teste `chave.startsWith('reposicao_')` (Etapa 11) por um set
@@ -188,7 +194,7 @@ worktree) × Task 5 (teste server, árvore principal).
   `deve ser um número de dias maior que zero`; prefixos `notificacoes_worker_`/`notificacoes_max_`
   ganham `deve ser um número inteiro maior que zero`. `notificar_movimentacoes` valida `0|1`
   (400 `deve ser 0 ou 1` — revisão da Task 1) e as `notificacoes_dest_*` seguem texto livre.
-- [ ] **Step 2: teste vermelho** (harness padrão; usuários ADMIN/GESTOR/COMPRAS/ALMOXARIFE/
+- [x] **Step 2: teste vermelho** (harness padrão; usuários ADMIN/GESTOR/COMPRAS/ALMOXARIFE/
   PRODUCAO; helper `enfileirarDireto` chamando o serviço):
   1. `RN-01: enfileirar so grava PENDENTE, nada e enviado` — enfileira, linha PENDENTE com
      corpo gravado, `enviado_em` nulo.
@@ -225,23 +231,28 @@ worktree) × Task 5 (teste server, árvore principal).
   9. `RN-09: config numerica invalida recusa 400 literal; dest_* aceita texto` — PUT
      `notificacoes_max_tentativas='0'` → 400 com a mensagem da 11; PUT
      `notificacoes_dest_entradas='a@b.com'` → 200.
-- [ ] **Step 3: implementação** — serviço novo (único escritor da fila; `lerConfigNumero`
+- [x] **Step 3: implementação** — serviço novo (único escritor da fila; `lerConfigNumero`
   local no padrão da 11 com comentário de 6º-leitor-declarado), export `enviarEmail` no
   `module.exports` do alertService, rotas em `extended.js` (padrão handleError/auth; a rota
   `/processar` e `/reenviar` chamam o serviço; GET monta `resumo` com COUNTs do conjunto
   inteiro e `itens` LIMIT 200 DESC).
-- [ ] **Step 4: verde + regressão** (`configuracoesGerais`, `permissoesRotas`).
-- [ ] **Step 5: controles positivos** — (i) sabotar o `INSERT OR IGNORE` para `INSERT` cru →
+- [x] **Step 4: verde + regressão** (`configuracoesGerais`, `permissoesRotas`).
+- [x] **Step 5: controles positivos** — (i) sabotar o `INSERT OR IGNORE` para `INSERT` cru →
   teste 2 explode (constraint) em vez de no-op; (ii) backoff: **`proxima_tentativa_em =
   datetime('now')`** (Fase 2: zerar o expoente NÃO sabe falhar — 5 min ainda é futuro) → o
   item fica elegível e a 2ª passada leva tentativas a 2 → teste 4 cai; (iii) aviso de falha
   com dedupe quebrado (`'falha-' + row.id` → `'falha-' + row.id + '-' + row.tentativas`) →
   teste 5 cai (segunda linha nasce). Âncoras nos DOIS sentidos, md5, sed reverso.
-- [ ] **Step 6: suíte + commit** (`git add` os 7 caminhos explícitos).
+- [x] **Step 6: suíte + commit** (`git add` os 7 caminhos explícitos).
 
 ---
 
-### Task 2: Gancho de movimentação + conteúdo + destinatários (RN-04, RN-05)
+### Task 2: Gancho de movimentação + conteúdo + destinatários — ✅ FEITA (`77d1f38` + fix-round `48426f5`)
+
+> Revisão: 3 Important medidos que o plano não previa — REMESSA/RETORNO_TERCEIRO caíam na
+> classe terceiros pelo sufixo (retenção + item-a-item = rajada; excluídos), o e-mail
+> sobrevivia ao cancelamento (supressão criada), série faltava no corpo (RN-04 pedia). 3
+> sabotagens sobreviventes viraram testes (escape, parseList de classe, Lote/Link).
 
 **Files:**
 - Modify: `server/services/almoxarifado/notificationQueueService.js` (builder + resolução de
@@ -290,7 +301,7 @@ worktree) × Task 5 (teste server, árvore principal).
   (Atenção: import circular — stockService ← notificationQueueService ← alertService; o queue
   service NÃO importa stockService, então o ciclo não existe; confirme lendo os requires.)
 
-- [ ] **Step 1: teste vermelho**:
+- [x] **Step 1: teste vermelho**:
   1. `RN-04: movimentacao confirmada enfileira com conteudo minimo` — config '1' + dest
      configurado; ENTRADA via motor → linha na fila com dedupe `mov-<id>`, corpo contendo
      código do material, quantidade, `Saldo anterior` e `Saldo posterior` (valores certos),
@@ -310,20 +321,26 @@ worktree) × Task 5 (teste server, árvore principal).
   5. `RN-05: fallback e sem-destinatario` — classe sem config → cai em
      `alertas_estoque_emails` (configurada com JSON no teste, parseList); nenhum dos dois →
      não enfileira (SEM_DESTINATARIO não quebra o motor).
-- [ ] **Step 2: implementação** (builder no queue service; gancho no motor).
-- [ ] **Step 3: verde + regressão PESADA do motor** — `conferenciaMotorAjuste`,
+- [x] **Step 2: implementação** (builder no queue service; gancho no motor).
+- [x] **Step 3: verde + regressão PESADA do motor** — `conferenciaMotorAjuste`,
   `inventarioIntegracao`, `devolucaoVinculo`, `ajusteRetencao`, qualquer suíte que movimente
   (a config default '0' tem de deixar TUDO intacto) + suíte completa.
-- [ ] **Step 4: controles positivos** — (i) mover o gancho para ANTES da auditoria/claims
+- [x] **Step 4: controles positivos** — (i) mover o gancho para ANTES da auditoria/claims
   (simular pré-commit chamando-o no início) → teste 2 cai (recusada enfileiraria);
   (ii) remover a precedência de `_TERCEIRO` → teste 4 cai; (iii) tirar o try/catch do gancho
   e fazer o enfileirar lançar (config quebrada) → teste 3/regressão do motor cai — prova que
   o try/catch é load-bearing (restaurar!).
-- [ ] **Step 5: suíte + commit.**
+- [x] **Step 5: suíte + commit.**
 
 ---
 
-### Task 3: Dívidas + alertas novos + jobs (RN-06, RN-07)
+### Task 3: Dívidas + alertas novos + jobs — ✅ FEITA (`837faec` + fix-round `078cce2`)
+
+> Revisão: 1 Critical (dedupe do zerado era nonce + estado marcado após enfileirar → claim
+> atômico na transição) e 5 Important (toggle ignorado, inativo elegível, zerado+mínimo em
+> dobro → zerado só sem mínimo, lote JÁ vencido nunca alertava → sem piso, régua
+> quantidade_atual sem teste). Divergências declaradas mantidas: avaliarZerado no hook do
+> verificarAlertaPorMaterialId; thirdPartyService lazy; monkeypatch de getLote no teste.
 
 **Files:**
 - Modify: `server/services/almoxarifado/notificationQueueService.js` (funções de varredura:
@@ -388,7 +405,12 @@ Suíte completa + commit.
 
 ---
 
-### Task 4: Tela `/almoxarifado/notificacoes` (galho, worktree)
+### Task 4: Tela `/almoxarifado/notificacoes` — ✅ FEITA (worktree: `feba6e2` + fix-round `8fdcbe5`, merge `569ecc4`)
+
+> Revisão: nenhuma linha de produção errada; 4 mutações sobreviventes viraram testes (datas
+> UTC, parse legado, travas, rótulo por texto acentuado) e o CONFLITO do design sobre reenviar
+> ENVIADO foi arbitrado (RN-08 prevalece, confirm na tela — `44cc18a` corrige o design
+> dizendo que a seção do front estava errada).
 
 **Files:** Create `client/src/components/almoxarifado/NotificacoesAlmoxarifado.js` +
 `.test.js`; Modify `lazyModules.js`, `App.js`, `Layout.js`,
@@ -415,7 +437,8 @@ CAMPOS sem rodar a suíte de servidor esconderia a quebra até o merge); commit 
 
 ---
 
-### Task 5: Teste-jornada (galho, árvore principal)
+### Task 5: Teste-jornada — ✅ FEITA (`33028b5`, 11 passos, sem revisor dedicado — diff
+test-only com sabotagem provada, precedente 9b/10; coberta pela revisão final)
 
 **File:** `server/tests/api/notificacaoJornada.api.test.js`. Jornada: ligar
 `notificar_movimentacoes` + dest_entradas → ENTRADA pelo motor → item na fila (conteúdo
@@ -428,7 +451,9 @@ completa; commit só do arquivo.
 
 ---
 
-### Task 6: Fechar a etapa
+### Task 6: Fechar a etapa — ✅ FEITA (commits de fechamento após a revisão final de branch
+`d7fee6c`: 2 Critical da lente A — primeira zeragem observada engolida, rajada de 50 e-mails
+da conferência — + 3 Important e os minors, todos corrigidos ou declarados)
 
 Merge da worktree, suíte serial, revisão final de branch (2 revisores MEDINDO — lentes:
 backend/motor intacto com config off + costura front/back), skill `fechar-etapa` (letra B:
@@ -446,3 +471,43 @@ manual: seção temática de notificações), retro de 4 números.
   (grep antes), status reais de lote, régua de /vencidas extraída com regressão, jobs
   testados por chamada direta, backoff testável sem relógio (elegibilidade), config default
   '0' blindando o motor inteiro.
+
+
+---
+
+## Retro de 4 números (Fase 6)
+
+1. **Rodadas de correção até verde:** 5 fix-rounds (um por task revisada + um da revisão
+   final), todas fechadas em UMA rodada cada — nenhum teste falhou 3 vezes seguidas.
+2. **Achados de revisão:** 34 acatados (4 Critical + 12 Important + 18 Minor/testes-fracos),
+   **0 ruído** — nenhum achado deixou de ser reproduzido. As 5 revisões (4 de task + 2 lentes
+   finais contando como 1 rodada) mediram TODAS com probe/sabotagem antes de afirmar.
+3. **Paralelismo:** 2 pares reais (revisão-T3 ∥ implementação-T4; revisão-T4 ∥ implementação-T5)
+   — zero retrabalho por conflito (galho de front em worktree, contratos congelados seguraram).
+4. **Defeito que escapou do fechamento:** preencher na Etapa 13. (Da Etapa 11 para cá: nenhum
+   reportado até este fechamento.)
+
+**Incidentes de processo (para o harness aprender):** duas restaurações de sabotagem por sed
+com âncora não-única espalharam mudança (md5 pegou ambas); um `git checkout` para restaurar com
+árvore suja apagou edições não commitadas (md5 pegou; lição G5 violada e re-provada). Registrados
+na letra E das novidades.
+
+## Próxima tarefa detalhada — Etapa 13 (relatórios e indicadores, feature 21)
+
+- **Spec:** `specs/modulo-almoxarifado/21-relatorios-dashboards/README.md` (ler inteira na
+  Fase 0) + o mapa. A Etapa 12 declarou a 13 como o canal da conferência de inventário
+  (relatório de divergências/acuracidade — a 10b já entregou o relatório de acuracidade com
+  impacto em reais; conferir o que a spec 21 pede ALÉM dele antes de desenhar).
+- **O que já está pronto e a 13 NÃO deve reabrir:** relatórios existentes no dispatcher de
+  `routes/almoxarifado/extended.js` (inventario-divergencias com gate da 10b,
+  solicitacoes-compra com gerenciar_reposicao da 11); fontes únicas `disponivelSql`,
+  `custoUnitarioSql`, `divergenciaRealSql`/`EPSILON_DIVERGENCIA`; a fila da 12 (se algum
+  relatório quiser aba de notificações, o contrato do GET está congelado no design da 12).
+- **Pontos de atenção:** relatórios são leitura — candidatos naturais a GALHO paralelo, mas o
+  gate por relatório é regra compartilhada (tronco curto primeiro definindo o mapa
+  relatório→ação); curva ABC precisa decidir a régua (valor de consumo vs valor de estoque) —
+  decisão de negócio, letra B se não houver resposta; exportação (PDF/Excel) é onde os cortes
+  D3 da 12 podem ser re-perguntados — não assumir.
+- **Regras da casa que continuam valendo:** B11 e B14 seguem abertas (não construir por cima);
+  almoxarifado é área física (não propor filtro por depósito como pendência); worktree para
+  galho de front; suíte serial no merge.

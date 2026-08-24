@@ -70,7 +70,14 @@ particular nem toca o motor de estoque, ferramenta é patrimônio separado. Est�
 explicitamente porque as Etapas 7 e 8 deixaram consultas pendentes e você vai procurar a das
 etapas novas.
 
-### B. Decisões de negócio — três esperando por você (o Ajuste B1–B3, a sucata B5, as categorias B6), uma já tomada (B4)
+### B. Decisões de negócio — B1 a B17; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+Guia rápido do estado: **em aberto** — B5 (taxonomia de sucata), B6 (categorias), B8 (tela de
+editar ferramenta), B9 (campo do filtro de calibração), B11 (dupla aprovação formal do ajuste),
+B12 (recontagem pelo mesmo contador), B13 (quem decide compra), B14 (cancelar solicitação),
+B15-B17 (as três da Etapa 12: ligar o e-mail de movimentação e validar os destinos/toggle).
+**Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
+ferramenta, pago na Etapa 12), B10 (ajuste recusado contra retenção).
 
 **B1 a B3 — o que muda o saldo total não olha para o material que está retido.** É sempre o mesmo
 defeito, e a Etapa 8b foi a **terceira** vez que ele apareceu — por isso está aqui, e não escondido
@@ -145,7 +152,10 @@ configurável do servidor (dívida da spec 01). A Etapa 9 **herdou a categoria d
 criar material de retalho justamente **para não depender dessa resposta** — a pergunta continua
 em pé: qual lista vale?
 
-**B7 (NOVO, da Etapa 9b) — o lembrete de devolução vencida não tem canal, e não é esquecimento.**
+**B7 (da Etapa 9b) — ~~o lembrete de devolução vencida não tem canal~~ — RESOLVIDO na Etapa 12:**
+foi a resposta **(a)** da lista abaixo, com a fila da feature 19 no lugar de "esperar a 20": um
+job diário enfileira **um lembrete por dia** por empréstimo vencido (respeitando o checkbox
+"Notificar por e-mail" — B17). O texto original fica para registro da decisão da época:
 A tela já **destaca visualmente** os empréstimos vencidos (aba Empréstimos). Por baixo, existe
 também uma função pronta e testada que lista os empréstimos vencidos, pensada para virar um job
 agendado — mas **o job não foi ligado a nada**: decisão tomada durante a execução, porque um
@@ -229,6 +239,36 @@ saem por edição direta no banco — a confirmação com quantidade e valor ant
 e o horizonte de 60 dias faz a solicitação velha parar de segurar a sugestão, mas **o caminho
 de cancelamento precisa existir** (provavelmente junto com o fechamento no recebimento —
 letra E). Decida se isso entra na fila.
+
+**B15 (NOVO, da Etapa 12) — o e-mail de movimentação nasce DESLIGADO, e os destinos são por
+família, não por matriz.** A spec pedia "e-mail em toda entrada e saída"; ligar isso por default
+no deploy despejaria dezenas de e-mails por dia sem ninguém ter escolhido — então
+`Notificar movimentações por e-mail` vem **0** e ligar é um clique em Configurações (reversível
+a qualquer momento). Os destinatários são **4 listas por família** (entradas, saídas, ajustes,
+terceiros) + 1 de compras, com a lista geral de alertas como reserva. **Descartada** a
+matriz-tabela evento×destinatário com CRUD próprio — se a prática pedir granularidade maior,
+ela vira etapa própria. Decida quando ligar e com quais listas.
+
+**B16 (NOVO, da Etapa 12) — quem OPERA a fila é Gestor/Administrador; Compras só recebe.** A
+ação nova `gerenciar_notificacoes` (ver a fila, reenviar, processar) ficou com ADMINISTRADOR e
+GESTOR. Compras **recebe** os e-mails de solicitação, mas não mexe na fila — reenviar e-mail e
+drenar fila é operação administrativa. E o **reenvio de e-mail já enviado é permitido de
+propósito** (com confirmação na tela): é o único caminho para reemitir um e-mail que se perdeu
+depois do envio. **Descartado** bloquear com erro — tiraria do admin a única reemissão possível.
+Se discordar de qualquer um dos dois, é config de uma linha.
+
+**B17 (NOVO, da Etapa 12) — o checkbox "Notificar por e-mail" agora governa TUDO que usa a
+lista geral de alertas.** Estoque zerado, lote vencendo, remessa vencida, lembrete de
+ferramenta, devolução parcial **e** o e-mail de movimentação quando cai na lista geral por
+falta de destino próprio: checkbox desligado = nada disso sai. **Escolhido** porque quem
+desligou "notificar por e-mail" não pode voltar a receber e-mail nos mesmos endereços por um
+canal novo; **descartado** dar um botão liga/desliga por alerta (viraria painel de 8 chaves
+sem pedido concreto). Duas consequências deliberadas para você validar: **(a)** lista de
+família preenchida IGNORA o checkbox (você escolheu aquele destino); **(b)** o alerta de
+estoque **zerado** só dispara para material **sem mínimo** cadastrado — material com mínimo já
+tem o canal do alerta de mínimo, e dois e-mails do mesmo fato para a mesma lista é ruído
+(**descartado** suprimir o alerta de mínimo quando zerar: inverteria uma máquina estável desde
+a Etapa 4).
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -328,6 +368,22 @@ letra E). Decida se isso entra na fila.
    foi contado), mas quem estranhar "o escopo diz X e o material hoje é Y" precisa saber que o
    texto é da época.
 
+12. **(12) Fluxos em lote geram um e-mail POR ITEM — com números.** Com o e-mail de
+   movimentação ligado (B15): entregar uma requisição de 10 itens = **10 e-mails**; encerrar
+   uma remessa de N itens = **N** (consumo/perda por item); transformação com N linhas de
+   resultado = **N**. É o que a spec pede ("toda entrada e saída"), mas quem liga a config
+   precisa saber o volume. As duas rajadas piores foram **cortadas**: conclusão de conferência
+   de inventário (seriam 50-300 num clique) e envio de remessa **não geram e-mail nenhum**.
+
+13. **(12) Desligar o e-mail não segura o que JÁ entrou na fila.** O checkbox e as configs
+   valem na hora de **enfileirar**; linha que já estava PENDENTE quando você desligou ainda
+   sai no próximo processamento (com o robô diário, até 24 h depois). Hoje não há botão de
+   descartar linha pendente (só reenviar) — também declarado na letra D.
+
+14. **(12) Mudar o intervalo do robô da fila só vale depois de REINICIAR o servidor.** A
+   config `notificacoes_worker_intervalo_min` é lida uma vez no boot (30 s depois de subir).
+   O espaçamento das retentativas (backoff) muda na hora; o tique do robô, não.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -401,6 +457,22 @@ letra E). Decida se isso entra na fila.
   descontado. Infla o ponto calculado de quem devolve muito; declarado, não consertado.
 - **(11) A nota "Mostrando os 500 itens de maior valor parado" aparece também quando há
   exatamente 500** (o servidor não diz o total). Cosmético, declarado.
+- **(12) Sem PDF anexo, sem resumo diário (digest), sem templates configuráveis** — o corpo do
+  e-mail é fixo por evento e fica gravado na fila (a fila é o histórico; não há segunda tabela
+  de log de envio).
+- **(12) WhatsApp fica fora da fila de notificações** — o alerta de mínimo continua usando o
+  canal WhatsApp próprio dele; a fila é só e-mail.
+- **(12) E-mail de correção retroativa não existe.** Aviso que **já saiu** de movimentação
+  estornada depois não gera "desconsidere" — o livro e a tela são a verdade. (O que ainda NÃO
+  saiu é suprimido automaticamente — regra 3 da seção da etapa.)
+- **(12) Não há botão de descartar/arquivar linha PENDENTE da fila** — só reenviar e processar.
+  Linha indesejada que ainda não saiu só morre pelas retentativas esgotadas ou pelo estorno da
+  movimentação.
+- **(12) Lote de material de CLIENTE alerta vencimento normalmente** — validade é qualidade do
+  que o galpão guarda, não reposição (contraste deliberado com o zerado, que exclui cliente).
+- **(12) Alerta de estoque zerado usa o SALDO FÍSICO, não o disponível** — material 100%
+  reservado ainda está na prateleira, não está zerado. Escrito aqui porque é fácil "corrigir"
+  para o disponível achando que é bug.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -591,6 +663,20 @@ commitado **apaga o trabalho** (o md5 pegou de novo) — restauração é sempre
 vezes nesta etapa o mutante precisou ser trocado por um mais forte antes de provar algo
 (o fallback do restore produzia o mesmo resultado; o par de checkboxes marcado simetricamente
 tornava a transposição invisível).
+
+**Fragilidades estruturais declaradas da Etapa 12 (medidas, não corrigidas — saiba que existem):**
+(1) **a fiação dos robôs** (o agendamento do processador da fila e das varreduras diárias) não é
+coberta por teste nenhum — os testes chamam as funções direto, de propósito; um erro de digitação
+nessa fiação faria a fila nunca drenar em produção sem nenhum teste ficar vermelho; (2) o escape
+de HTML nos corpos de e-mail tem **teste próprio em 5 dos 8 tipos de aviso** (movimentação, falha,
+zerado, lote, remessa) — nos outros 3 (ferramenta, devolução parcial, solicitações) foi **medido
+correto** na revisão final com payload hostil, mas não há teste que impeça regressão; (3) o
+controle positivo do "um lembrete por dia" da ferramenta só distingue data-UTC de data-local
+quando o fuso do runner difere de UTC (em São Paulo, das 21h à meia-noite) — o código está certo
+e testado, o *controle* é que é condicional ao fuso. E a Etapa 12 somou **mais duas** ocorrências
+do adendo (1) acima — âncora de restauração não-única espalhando mudança (o md5 pegou as duas) —
+e **uma** do adendo (2) — `git checkout` para restaurar com árvore suja apagou edições não
+commitadas de novo (md5 pegou, retrabalho de meia hora). O harness segue pagando o próprio custo.
 
 ---
 
@@ -2049,6 +2135,90 @@ o balcão.
 - **E-mail de sugestão/solicitação** — feature 19, mesmo corte de todas as etapas. (O e-mail
   que já existia — requisição sem estoque avisando Compras — continua igual, é outro fluxo.)
 
+## Etapa 12 — Notificações Completas (2026-08-24)
+
+O módulo fazia muita coisa em silêncio: movimentava, emprestava ferramenta, deixava lote
+vencer, via material zerar — e ninguém ficava sabendo a menos que abrisse a tela certa na hora
+certa. Agora existe uma **central de avisos por e-mail**: tudo que merece aviso entra numa
+**fila** (nada trava esperando e-mail sair), um robô tenta enviar, reenvia sozinho quando o
+servidor de e-mail falha, e desiste avisando o administrador depois de esgotar as tentativas.
+E há uma tela nova — **Almoxarifado → Notificações** — onde Gestor e Administrador veem o que
+saiu, o que falhou e por quê, e reenviam com um clique.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| E-mail só de estoque mínimo e requisição | Fila única de avisos: movimentações (opcional), ferramenta vencida, solicitação de compra gerada, devolução que ficou parcial, estoque zerado, lote vencendo, remessa a terceiro vencida |
+| E-mail que falhava sumia sem rastro | Fila com **retentativas automáticas** (espaçamento dobra a cada falha), e **aviso ao administrador** quando esgota |
+| Nenhum histórico do que foi mandado | A fila **é** o histórico: o que saiu, para quem, quando, com o corpo gravado |
+| Falha de e-mail invisível | Tela **Notificações**: cards de pendentes/enviadas/falhas, filtros, motivo literal da falha e botão **Reenviar** |
+| Lembrete de ferramenta vencida sem canal (pendência da Etapa 9b) | Job diário enfileira **um lembrete por dia** por empréstimo vencido |
+| Solicitações de compra geradas em silêncio (pendência da Etapa 11) | **Um** e-mail-resumo por lote gerado, com materiais e quantidades |
+| Devolução que ficava parcial só aparecia na auditoria (pendência da Etapa 7) | Aviso por e-mail na hora, sem esconder o erro original do operador |
+| Zerou o estoque e ninguém viu | Alerta de **estoque zerado** para material **sem** mínimo cadastrado (quem tem mínimo já tem o alerta de mínimo) |
+| Lote vencia na prateleira | Alerta diário de **lote vencendo** (janela configurável, 30 dias) — **incluindo lote já vencido com saldo** |
+| Remessa a terceiro atrasada só na tela | Alerta diário de **remessa vencida** pela mesma régua da tela |
+
+### As regras, com o cenário exato
+
+1. **O e-mail de movimentação nasce DESLIGADO — ligar é decisão sua.** Em Configurações,
+   `Notificar movimentações por e-mail` vem `0`. Com ele ligado e um destino preenchido, toda
+   entrada/saída/ajuste manual confirmado entra na fila com o conteúdo mínimo: tipo, número,
+   data/hora, usuário, material, quantidade, **saldo anterior e posterior**, lote/séries quando
+   houver, projeto/OS/cliente, motivo, justificativa e link direto para o livro. Digitar
+   qualquer coisa fora de 0/1 na config: a API recusa com
+   `Configuração "notificar_movimentacoes" deve ser 0 ou 1`.
+2. **Cada família de evento tem seu destino.** Quatro listas de e-mail por classe (entradas,
+   saídas, ajustes, terceiros) + uma para solicitações de compra. Lista vazia cai na lista
+   geral de alertas de estoque — **e aí o checkbox "Notificar por e-mail" manda**: se você o
+   desligou, o aviso que cairia na lista geral **não sai** (quem silenciou não volta a receber
+   pelo canal novo). Lista da classe preenchida ignora o checkbox — você escolheu o destino.
+3. **Movimentação recusada não gera aviso; movimentação cancelada mata o aviso.** Saída maior
+   que o disponível: erro na tela, **nada** na fila. Estornar uma saída cujo e-mail ainda não
+   saiu: a linha vira FALHA com o motivo literal `Movimentação cancelada antes do envio` — e
+   tentar reenviá-la responde `Movimentação cancelada — notificação não pode ser reenviada`.
+4. **A fila tenta de novo sozinha, e desiste avisando.** Sem servidor de e-mail configurado, a
+   linha fica PENDENTE com o motivo `SMTP não configurado`, tentativa 1, próxima tentativa em
+   10 minutos (depois 20, 40...). Na 5ª falha (configurável) vira **FALHA** e o administrador
+   recebe **um** aviso — um só, mesmo que a linha falhe de novo depois.
+5. **O mesmo evento nunca vira dois e-mails.** Rodar a varredura diária duas vezes, clicar
+   duas vezes em Processar, dois usuários processando juntos: **um** envio. O lembrete de
+   ferramenta é **um por dia** por empréstimo; o de lote, **um por validade** (mudou a
+   validade, avisa de novo — no mesmo dia seguinte, não).
+6. **Estoque zerado avisa uma vez por episódio, e só quem precisa.** Material **sem mínimo**
+   que zera numa movimentação: um e-mail. Continua zerado: silêncio. Repôs e zerou de novo:
+   outro e-mail. Material **com** mínimo cadastrado fica no canal do alerta de mínimo (senão
+   seriam dois e-mails do mesmo fato); material inativo e material de cliente nunca alertam;
+   material que já estava zerado antes desta versão não dispara aviso retroativo no deploy.
+7. **A tela Notificações é de Gestor/Administrador.** Almoxarife, Compras e chão de fábrica
+   tomam `403` (Compras **recebe** e-mail, não opera a fila) — e a tela mostra o painel de
+   sem-permissão com botão de tentar de novo, nunca lista vazia. Filtro de status inválido por
+   API: `Status inválido (use PENDENTE, ENVIADO ou FALHA)`.
+8. **Reenviar é sempre possível — com proteção.** Linha FALHA ou PENDENTE: reenvia e processa
+   na hora. Linha já ENVIADA: o botão pergunta antes —
+   `Esta notificação já foi enviada. Reenviar mesmo assim envia o e-mail de novo aos mesmos
+   destinatários.` — porque é o único jeito de reemitir um e-mail que se perdeu depois do
+   envio. Id inexistente: `Notificação não encontrada`.
+9. **Processar mostra a conta certa.** O botão "Processar fila agora" responde
+   `N processada(s): X enviada(s), Y reagendada(s), Z falha(s)` — reagendada é retentativa
+   marcada para depois, falha é desistência definitiva; os números batem com os cards.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Conclusão de conferência de inventário NÃO manda e-mail por item.** Uma conferência de 50
+  divergências geraria 50 e-mails num clique (o inventário anual, 300) — cortado de propósito;
+  o canal da conferência é a própria tela/relatório de divergências (feature 21).
+- **Reserva, remessa e retorno de terceiro não geram e-mail de movimentação** — são
+  retenção/remanejo, não entrada/saída; a remessa tem o alerta próprio de **remessa vencida**.
+- **Sem PDF anexo, sem resumo diário (digest), sem templates configuráveis** — o corpo é fixo
+  por evento e fica gravado na fila.
+- **WhatsApp fica fora da fila** (o alerta de mínimo continua usando o dele).
+- **E-mail de correção retroativa não existe**: se o aviso de uma movimentação **já saiu** e
+  ela for estornada depois, ninguém recebe "desconsidere" — o livro e a tela são a verdade.
+- **~15 alertas restantes da spec** (quarentena parada, transferência não recebida, calibração
+  vencendo etc.) entram cada um com a sua feature dona, como a spec 20 sempre mandou.
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -2060,9 +2230,14 @@ o balcão.
   declarados na seção da 10b) e a **18 (reposição) fica entregue no que é do almoxarifado** —
   o que falta dela é integração com o módulo Compras (fechar/cancelar solicitação no
   recebimento, itens por material — letras **B14** e **D**).
-- **Próxima etapa:** **Etapa 12 — notificações completas** (features 19 + 20: e-mail em
-  entrada/saída confirmada, fila com retry, alertas restantes — é a fila que várias etapas
-  vêm alimentando com cortes "fica para a 19/20").
+- **Etapa 12 entregue:** **notificações completas** (feature 19 quase inteira + fatia da 20) —
+  fila com retentativa/dedupe/histórico, e-mail de movimentação por classes (desligado por
+  default, ligar é decisão sua — B15), três dívidas antigas pagas (lembrete de ferramenta
+  da 9b/B7, resumo de solicitações da 11, devolução parcial da 7) e três alertas novos
+  (zerado, lote vencendo, remessa vencida), com a tela **Notificações** para Gestor/Admin.
+- **Próxima etapa:** **Etapa 13 — relatórios e indicadores** (feature 21: relatório de
+  acuracidade do inventário, posição de estoque, curva ABC — é o canal "tela/relatório" que a
+  12 citou como destino da conferência).
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;

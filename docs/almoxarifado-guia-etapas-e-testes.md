@@ -2,9 +2,20 @@
 
 > Atualizado em 2026-08-24 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 11) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 12) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-24 (Etapa 11 ENTREGUE)
+> ## Onde o desenvolvimento parou — 2026-08-24 (Etapa 12 ENTREGUE)
+>
+> **Etapas 1 a 12 completas.** A **Etapa 12 (Notificações Completas) fechou em 2026-08-24**
+> (`c1613c2..d7fee6c`), e com ela a **feature 19 fica completa nos cortes declarados**: fila
+> de avisos por e-mail com retentativa automática e histórico, e-mail de movimentação por
+> família de evento (**nasce desligado — ligar é decisão sua**, item B15 das novidades), três
+> avisos que eram dívidas antigas (ferramenta vencida, solicitação de compra gerada, devolução
+> parcial) e três alertas novos (estoque zerado, lote vencendo, remessa vencida), tudo visível
+> na tela nova **Notificações** (Gestor/Admin). Ver a seção "Etapa 12", mais abaixo, com o
+> roteiro completo. **Próxima etapa: Etapa 13 — Relatórios e Indicadores** (feature 21).
+>
+> **Antes: 2026-08-24 (Etapa 11 ENTREGUE).**
 >
 > **Etapas 1 a 11 completas.** A **Etapa 11 (Reposição e Compras) fechou em 2026-08-24**
 > (`54e1278..1ea6ab2`), e com ela a **feature 18 fica completa no que é do almoxarifado**:
@@ -2563,8 +2574,65 @@ Tela nova: **Almoxarifado → Reposição e Compras** — para Gestor, Compras e
   "solicitação antiga aberta". O fechamento de verdade vem com a integração Compras.
 - **Criar pedido de compra real / itens por material no Compras** — features 22/24.
 - **Alerta ativo de máximo na entrada** (o excesso é identificado na aba, sem alerta).
-- **E-mail de sugestão/solicitação** — feature 19 (o e-mail de requisição sem estoque que já
-  existia continua igual; é outro fluxo).
+- **E-mail de sugestão/solicitação** — ~~feature 19~~ **entregue na Etapa 12**: gerar
+  solicitações agora enfileira um e-mail-resumo por lote (ver a seção da Etapa 12).
+
+---
+
+## Etapa 12 — Notificações Completas (ENTREGUE — 2026-08-24)
+
+O módulo ganhou uma central de avisos por e-mail: uma fila que recebe tudo que merece aviso,
+um robô que envia e re-tenta sozinho, e a tela **Almoxarifado → Notificações** para ver o que
+saiu, o que falhou e por quê. O e-mail de movimentação existe mas **nasce desligado** —
+ligá-lo é decisão de negócio (item B15 do documento de novidades).
+
+### Roteiro de teste manual
+
+**Preparo:** entre como administrador do módulo. Em **Almoxarifado → Configurações**, confira
+que existem os campos novos: `Notificar movimentações por e-mail` (0), os destinos por família
+(entradas/saídas/ajustes/terceiros/compras, vazios) e os números do robô (intervalo 5,
+tentativas 5, janela do lote 30).
+
+1. **Painel vazio e permissão.** Menu **Notificações** (ícone de carta). Como Gestor/Admin a
+   tela abre com três cards (Pendentes/Enviadas/Falhas). Entre como um usuário Almoxarife e
+   abra a mesma tela: painel de **sem permissão** com botão "Tentar novamente" — nunca uma
+   lista vazia.
+2. **Ligar o e-mail de movimentação.** Em Configurações, mude `Notificar movimentações por
+   e-mail` para 1 e preencha `Destinos de entradas` com um e-mail seu. Salve. (Digitar
+   qualquer outra coisa no 0/1 é recusado.)
+3. **Movimentar e ver a fila.** Faça uma **entrada manual** de qualquer material
+   (Movimentações → Nova). Volte em Notificações: uma linha PENDENTE, evento MOVIMENTACAO,
+   com o assunto `[Almoxarifado] ENTRADA_MANUAL — <código>`. Clique em **Processar fila
+   agora**: sem servidor de e-mail configurado, a linha continua PENDENTE com tentativa 1 e o
+   motivo literal `SMTP não configurado` — e o aviso do botão diz
+   `1 processada(s): 0 enviada(s), 1 reagendada(s), 0 falha(s)`.
+4. **Movimentação recusada não avisa.** Tente uma saída maior que o disponível: erro na tela,
+   e a fila **não cresce**.
+5. **Estorno mata o aviso.** Faça uma saída (com a config ligada), veja a linha PENDENTE,
+   e **estorne** a movimentação no livro. A linha vira FALHA com
+   `Movimentação cancelada antes do envio`; o botão Reenviar dela responde
+   `Movimentação cancelada — notificação não pode ser reenviada`.
+6. **Reenviar com proteção.** Numa linha FALHA qualquer, Reenviar processa na hora (falha de
+   novo sem SMTP — tentativa nova registrada). Numa linha ENVIADA (se houver), o botão
+   pergunta antes: `Esta notificação já foi enviada. Reenviar mesmo assim envia o e-mail de
+   novo aos mesmos destinatários.`
+7. **Estoque zerado.** Pegue um material **sem mínimo cadastrado** com saldo, e faça uma saída
+   que zere. Na fila aparece `[Almoxarifado] Estoque zerado — <código>`. Zere de novo depois
+   de repor (aguarde ~1 min): segundo aviso. Material **com** mínimo não gera esse aviso — o
+   alerta de mínimo já cobre.
+8. **Desligar tudo.** Volte `Notificar movimentações por e-mail` para 0 e movimente: a fila
+   não cresce. Desmarque o checkbox **Notificar por e-mail** da aba Alertas de Estoque: os
+   avisos que usariam aquela lista (zerado, lote, remessa, ferramenta) param de entrar na
+   fila; os que têm destino de família preenchido continuam.
+
+### O que esta etapa NÃO cobre
+
+- Conclusão de conferência de inventário **não** manda e-mail por item (seriam dezenas num
+  clique — o canal da conferência é a tela/relatório, feature 21).
+- Reserva, remessa e retorno de terceiro não geram e-mail de movimentação (a remessa tem o
+  alerta próprio de vencida).
+- Sem PDF, digest, templates ou WhatsApp na fila; sem e-mail de correção retroativa; sem botão
+  de descartar linha pendente.
 
 ---
 

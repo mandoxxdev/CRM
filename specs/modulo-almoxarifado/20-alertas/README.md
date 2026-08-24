@@ -1,7 +1,7 @@
 # 20 — Alertas Operacionais
 
-> **Status:** 🟡 — 2 de ~21 alertas da spec · **Spec original:** seção 26
-> **Última atualização:** 2026-08-02
+> **Status:** 🟡 — 6 de 22 alertas do checklist (os 4 novos da Etapa 12 disparam pela fila da feature 19; falta a central no front e o motor único — os demais entram cada um com a feature dona, como este arquivo sempre mandou) · **Spec original:** seção 26
+> **Última atualização:** 2026-08-24 (Etapa 12: estoque zerado, lote vencendo, remessa vencida — `837faec` + `078cce2` + `d7fee6c`)
 
 ## Objetivo
 
@@ -17,7 +17,7 @@ Todos os alertas preventivos da spec, com motor único (verificação periódica
 
 - [x] Estoque abaixo do mínimo
 - [x] Requisição aguardando aprovação
-- [ ] Estoque zerado
+- [x] Estoque zerado — `837faec`/`078cce2`/`d7fee6c` (máquina de estado própria com claim atômico na transição, anti-flap 60s, régua = saldo FÍSICO ≤ 0; **só material SEM mínimo** — com mínimo fica no canal do alerta de mínimo, decisão B17; inativo e cliente fora; primeira zeragem observada decide pelo `saldo_anterior` do motor)
 - [ ] Estoque negativo → **bloquear operação** (não é alerta, é regra do motor — feature 03; aqui só o aviso)
 - [ ] Requisição atrasada (passou da data de necessidade)
 - [ ] Material separado aguardando retirada há N dias
@@ -29,9 +29,9 @@ Todos os alertas preventivos da spec, com motor único (verificação periódica
 - [ ] Material sem certificado (feature 10)
 - [ ] Material sem endereço (feature 02)
 - [ ] Transferência não recebida (feature 11)
-- [ ] Ferramenta não devolvida (feature 16)
-- [ ] Material em terceiro com prazo vencido (feature 14)
-- [ ] Lote próximo do vencimento (feature 10)
+- [x] Ferramenta não devolvida (feature 16) — `837faec` (lembrete diário pela fila, dedupe por empréstimo+dia — paga a pendência B7 da Etapa 9b)
+- [x] Material em terceiro com prazo vencido (feature 14) — `837faec` (varredura diária pela régua única de `listarRemessas({vencidas})`, dedupe por remessa+prazo)
+- [x] Lote próximo do vencimento (feature 10) — `837faec`/`d7fee6c` (janela configurável de 30 dias **sem piso — lote JÁ vencido com saldo entra**, a primeira versão o excluía para sempre e **estava errada**; lote com vencimento liberado sai; dedupe por lote+validade)
 - [ ] Calibração próxima do vencimento (feature 16)
 - [ ] Divergência de inventário (feature 17)
 - [ ] Item sem movimentação há N dias (feature 18)

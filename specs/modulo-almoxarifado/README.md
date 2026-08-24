@@ -1,12 +1,16 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-24 (**Etapa 11 fechada — reposição e compras,
-> `54e1278..1ea6ab2`. A feature 18 vira 🟢 no que é do almoxarifado.**
-> **Onde o desenvolvimento parou: a Etapa 11 está fechada. A próxima da ordem é a Etapa 12 —
-> notificações completas** (features 19 + 20: e-mail em entrada/saída confirmada, fila com
-> retry/dedupe/histórico, alertas restantes — é a fila que várias etapas alimentaram com
-> cortes "fica para a 19/20").
+> **Última atualização:** 2026-08-24 (**Etapa 12 fechada — notificações completas,
+> `c1613c2..d7fee6c`. A feature 19 vira 🟢; a 20 soma 4 alertas (6 de 22).**
+> **Onde o desenvolvimento parou: a Etapa 12 está fechada. A próxima da ordem é a Etapa 13 —
+> relatórios e indicadores** (feature 21: acuracidade do inventário, posição de estoque,
+> curva ABC — o canal "tela/relatório" que a 12 declarou como destino da conferência).
+> **O que a Etapa 12 entregou:** fila de notificações com retry/backoff/dedupe/claim e
+> histórico (a fila é o histórico), gancho pós-commit de movimentação por classes (default
+> desligado — decisão B15), três dívidas antigas pagas (lembrete de ferramenta 9b/B7, resumo
+> de solicitações 11, devolução parcial 7), alertas de estoque zerado/lote vencendo/remessa
+> vencida, painel de notificações gateado e 10 configs novas nos dois lados.
 > **O que a Etapa 11 entregou:** motor de **sugestão de reposição** no `purchaseService`
 > (consumo médio pela fonte única `TIPOS_SAIDA` em janela configurável; ponto efetivo com **a
 > mínima como chão de todas as réguas** — emenda Critical da revisão da Task 1; posição =
@@ -313,8 +317,8 @@
 | 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | 🟡 | ✅ | 🟢 **Etapa 9b entregue (2026-08-22, `d644827..b8e6f60`)** — ferramenta virou patrimônio emprestável completo: máquina de estados explícita (`toolStateMachine.js`) com toda transição por **claim** (`UPDATE ... WHERE status IN (...)`, sem a janela de corrida SELECT-depois-UPDATE que existia antes), calibração com vencimento **lida da última calibração** (sem coluna-cache) barrando o empréstimo, avaria/perda com foto encerrando o empréstimo aberto no mesmo ato (RN-05), bloqueio/manutenção/reencontro com justificativa auditada, ação de perfil própria `gerenciar_ferramentas` (parou de usar o gate genérico `movimentar`), Zod em todas as rotas (nenhuma tinha antes), auditoria em toda escrita (emprestar/devolver não auditavam antes), e tela `/almoxarifado/ferramentas` com três visões (Ferramentas, Empréstimos, Calibrações). Revisão final de branch achou 4 Important cross-task que os gates por-task não pegam (busca/filtro do contrato ignorados pelo backend; corrida devolver↔ocorrência podendo corromper o status; PUT/409 sem teste; badge de vencimento do front discordando do servidor) — todos corrigidos e re-revisados limpos. **Fora do escopo declarado, com pendência aberta:** job de lembrete de devolução sem canal de notificação (função pura pronta, aguarda feature 20), UI de edição de ferramenta (backend testado, só falta o formulário — achado da revisão final), integração com inspeção (feature 09) |
 | 17 | [Inventário e contagem cíclica](17-inventario-contagem/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapas 10 + 10b entregues (2026-08-22/23, `d644827..8db2671` e `14f4458..7290481`)** — a 10 resolveu o risco crítico (tipo dedicado `AJUSTE_INVENTARIO` pelo motor, guarda de retenção decidindo a pendência B1/B2/B3, contagem cega, tolerância+recontagem, tudo-ou-nada); a 10b entregou **escopos de contagem combináveis** (família raiz, ABC, críticos, de clientes, em terceiros), **dupla contagem por duas pessoas** (recontagem de outra pessoa, número do colega escondido com ou sem modo cego, correção própria pré-recontagem, autoria por item), **relatório de acuracidade** (ponderado, contados/total + recontados, impacto persistido sem backfill) e o **epsilon de divergência como fonte única** (alcançando o relatório antigo, que ganhou gate + só CONCLUIDO). **Fora, declarado com porquê na spec:** contagem por endereço (+ guarda de retenção com localização), cíclica automática, congelamento (ruling mantido), dupla aprovação formal (aguarda B11), e-mail, tela de conciliação lado a lado |
 | 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapa 11 entregue (2026-08-24, `54e1278..1ea6ab2`)** — motor de sugestão no `purchaseService` (consumo médio por `TIPOS_SAIDA` em janela configurável; ponto efetivo com **a mínima como chão** de todas as réguas; posição = `disponivelSql` + solicitações abertas dentro do **horizonte** configurável, com `a_caminho_vencido` exposto; alvo `max(máxima, ponto)` com lote econômico como piso), `GET /reposicao/sugestoes` consolidado por fornecedor e valorado, `POST /gerar-solicitacoes` (quantidades do servidor, sem dedupe — a posição É o dedupe, complemento em pendência insuficiente, auditado), `GET /estoque-parado` (excesso/sem consumo/obsoleto com valor parado), ação nova `gerenciar_reposicao` [ADMIN, GESTOR, COMPRAS — ALMOXARIFE fora de propósito], relatório de solicitações com VINCULADO e gateado, horizonte compartilhado com a máquina de estados de requisição, 3 configs semeadas+editáveis com validação nos dois lados, índice novo no livro, tela `/almoxarifado/reposicao` (3 abas, painel de erro/permissão por aba). **Fica de fora, declarado:** fechar/cancelar solicitação no recebimento e itens por material (integração Compras, features 22/24 — é o que falta para o ciclo fechar), alerta ativo de máximo, e-mail (19) |
-| 19 | [E-mails e notificações](19-emails-notificacoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 sem fila/cobertura total |
-| 20 | [Alertas operacionais](20-alertas/README.md) | 🟡 | ❌ | 🟡 | 🟡 2 de ~20 |
+| 19 | [E-mails e notificações](19-emails-notificacoes/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapa 12 entregue (2026-08-24, `c1613c2..d7fee6c`)** — fila `fila_notificacoes_almoxarifado` (dedupe UNIQUE por hash, retry/backoff em JS, claim de envio contra drenos concorrentes, FALHA + aviso ao admin máx. 1), gancho pós-commit no motor por CLASSES (default `'0'`; RESERVA/remessa/retorno/AJUSTE_INVENTARIO fora de propósito; cancelamento suprime a pendente e recusa reenvio), 3 dívidas pagas (lembrete ferramenta 9b/B7, resumo de solicitações 11, devolução parcial 7), painel `/almoxarifado/notificacoes` gateado (`gerenciar_notificacoes` ADMIN/GESTOR; reenvio de ENVIADO com confirm), jobs (worker + varreduras diárias), 10 configs nos dois lados. **Cortes declarados:** matriz evento×destino, templates, digest, PDF, grupos (letra D/B15) |
+| 20 | [Alertas operacionais](20-alertas/README.md) | 🟡 | ❌ | 🟡 | 🟡 **6 de 22 (Etapa 12 somou 4)** — estoque zerado (máquina própria, claim atômico, só material sem mínimo — B17), lote vencendo (sem piso: vencido com saldo entra), remessa vencida, ferramenta não devolvida; pela fila da 19. Falta: central no front, motor único de regras, e os ~16 restantes com a feature dona de cada um |
 | 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟡 | 🟡 | ❌ | 🟡 16 no back (entrou `materiais-sem-endereco` na Etapa 2) + `sucata-financeiro` (Etapa 9, **só API** — sem tela de relatórios), 2 no front |
 | 22 | [Integrações](22-integracoes/README.md) | ❌ | ❌ | ❌ | ❌ módulos vizinhos vazios |
 | 23 | [Perfis, segurança e auditoria](23-perfis-seguranca-auditoria/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Correção 2026-08-11: a spec dizia "auditoria com 0 linhas em produção" — **superado desde as Etapas 3-6** (materiais, requisições, motor, reservas, lotes, recebimento e inspeção auditam, todos com tela). Buraco real restante: conferência de inventário não audita. **A pendência das sobras foi paga na Etapa 9, Task 1 (`bedce46`)** — `scrapService` audita atualizar e gerar retalho, e o sucateamento audita solicitar/aprovar/rejeitar/cancelar/destino/compensação |
@@ -617,8 +621,8 @@ e o [plano](../../docs/superpowers/plans/2026-08-23-almoxarifado-etapa11-reposic
 | — | revisão final de branch (2 revisores): 1 Critical + 7 Important, 0 ruído | fixes `95fb25b` (backend) · `1ea6ab2` (front) |
 | 5 | documentação e verificação final | commits de fechamento |
 
-### Etapa 12 — Notificações completas → `19-emails-notificacoes` + `20-alertas`
-E-mail em toda entrada/saída confirmada; fila com retry/dedupe/histórico; alertas restantes.
+### Etapa 12 — Notificações completas → `19-emails-notificacoes` + `20-alertas` — ✅ ENTREGUE (2026-08-24, `c1613c2..d7fee6c`)
+Fila com retry/dedupe/histórico; e-mail de movimentação por classes (default OFF); 3 dívidas pagas; 3 alertas novos; painel gateado. Restos da 20 (motor único, central no front, ~16 alertas) ficam com as features donas.
 
 ### Etapa 13 — Relatórios e indicadores → `21-relatorios-dashboards`
 Tela de relatórios; indicadores gerenciais.
