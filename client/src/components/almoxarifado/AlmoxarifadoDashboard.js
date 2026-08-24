@@ -361,6 +361,12 @@ const AlmoxarifadoDashboard = () => {
             </div>
           ) : carregandoIndicadores ? (
             <div className="almox-empty"><p>Carregando indicadores...</p></div>
+          ) : !(indicadores && indicadores.giro && indicadores.rupturas && indicadores.atendimento_requisicoes) ? (
+            // Revisao final (lente A M3 / lente B M2): a falha ISOLADA cobria promessa
+            // rejeitada; um 200 malformado (data null / bloco faltando) estourava TypeError e
+            // derrubava os KPIs existentes junto — exige quebra de contrato do servidor, mas a
+            // RN-06 promete isolamento e ele tem de valer tambem aqui.
+            <div className="almox-empty"><p>Indicadores indisponíveis (resposta inesperada do servidor).</p></div>
           ) : (
             <div className="almox-kpis" style={{ marginBottom: 0 }}>
               <div className="almox-kpi-card">
@@ -369,7 +375,9 @@ const AlmoxarifadoDashboard = () => {
                   <div className="almox-kpi-value" data-testid="kpi-giro">{indicadores.giro.indice.toFixed(2)}</div>
                   <div className="almox-kpi-label">Giro de estoque</div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
-                    Janela de {indicadores.janela_dias} dias
+                    {/* Revisao final (lente A I2): D4 exige a aproximacao ESCRITA na tela — a
+                        nota do registro nao chega ao dashboard, entao a legenda declara. */}
+                    Janela de {indicadores.janela_dias} dias · consumo ÷ estoque atual (aproximação)
                   </div>
                 </div>
               </div>

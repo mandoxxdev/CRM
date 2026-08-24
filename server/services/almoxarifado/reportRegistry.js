@@ -403,7 +403,9 @@ const RELATORIOS = {
       + 'inventário na janela — material 100% reservado não conta, e material inativado sai do '
       + 'histórico. Tempo de atendimento: só requisições com entrega COMPLETA, de TODO o '
       + 'histórico (sem janela). Materiais de clientes ficam fora de todos os blocos. Janela '
-      + 'padrão: a mesma da Reposição (config; 90 dias de fábrica).',
+      + 'padrão: a mesma da Reposição (config; 90 dias de fábrica). Esta régua de consumo é '
+      + 'MAIS LARGA que a dos relatórios de consumo (que contam só saídas diretas); mediana 0 '
+      + 'significa que nenhum material teve consumo na janela.',
     limite: null,
     params: [
       { nome: 'janela_dias', rotulo: 'Janela (dias)', tipo: 'number', obrigatorio: false },

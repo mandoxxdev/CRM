@@ -274,12 +274,17 @@ describe('RelatoriosAlmoxarifado — tabela genérica (payload array)', () => {
     await renderizar();
     await selecionarRelatorio('materiais-mais-consumidos');
     api.get.mockImplementation((url) => (url === '/almoxarifado/relatorios/materiais-mais-consumidos'
-      ? Promise.resolve({ data: [{ codigo: 'MAT-03', ultimo_erro: null, created_at: '2026-08-18 01:00:00' }] })
+      ? Promise.resolve({ data: [{ codigo: 'MAT-03', ultimo_erro: null, created_at: '2026-08-18 01:00:00', total_consumido: 0, ativo: false }] })
       : Promise.reject(new Error(`inesperado: ${url}`))));
     await clicar(botao('Consultar'));
 
     const tds = container.querySelectorAll('.almox-table tbody tr')[0].querySelectorAll('td');
     expect(tds[1].textContent).toBe('—');
+    // Revisao final (lente B, S4 — a unica sabotagem sobrevivente das 7): o par NEGATIVO do
+    // travessao. Um `if (!v)` renderizaria 0 e false como '—' — numa tela de relatorios,
+    // divergencia 0 (bateu) e ajustado 0 virariam "desconhecido".
+    expect(tds[3].textContent).toBe('0');
+    expect(tds[4].textContent).toBe('false');
     const esperado = new Date('2026-08-18T01:00:00Z').toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
     });

@@ -159,8 +159,22 @@ async function criarMaterial(db, over = {}) {
     assert.strictEqual(res.body.giro.valor_estoque_atual, 840, JSON.stringify(res.body.giro));
     assert.strictEqual(res.body.giro.indice, 0.25, JSON.stringify(res.body.giro)); // 210/840
 
+    // Revisao final (lente A, M4): includes() sozinho aprovaria um relatorio que devolvesse
+    // TODO material — o total exato fecha a tautologia. So JOR-RUPTURA zerou por tipo
+    // qualificado nesta jornada (a SAIDA da entrega nao zera matReq: 50->40).
     const codigosRuptura = res.body.rupturas.materiais.map((m) => m.codigo);
     assert.ok(codigosRuptura.includes('JOR-RUPTURA'), JSON.stringify(res.body.rupturas));
+    assert.strictEqual(res.body.rupturas.total, 1, JSON.stringify(res.body.rupturas));
+
+    // Revisao final (lente A, M4): uma requisicao NAO entregue no mesmo banco — sem ela, o
+    // COUNT fora do WHERE (a mutacao que a lente mediu) tambem daria 1 e o assert nao
+    // distinguia nada.
+    await dbRun(db, `INSERT INTO requisicoes_almoxarifado
+      (numero, solicitante_id, solicitante_nome, status, created_at, data_entrega)
+      VALUES ('JOR-REQ-PEND', 1, 'Solicitante', 'PENDENTE', datetime('now'), NULL)`);
+    const resDepois = await request(app).get('/api/almoxarifado/relatorios/indicadores?janela_dias=30');
+    assert.strictEqual(resDepois.body.atendimento_requisicoes.total_consideradas, 1,
+      JSON.stringify(resDepois.body.atendimento_requisicoes)); // a PENDENTE nao conta
 
     assert.strictEqual(res.body.atendimento_requisicoes.total_consideradas, 1,
       JSON.stringify(res.body.atendimento_requisicoes)); // unica requisicao entregue no banco isolado

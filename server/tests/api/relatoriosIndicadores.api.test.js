@@ -183,6 +183,15 @@ async function getIndicadores(app, query) {
       await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, cancelado, usuario_nome)
         VALUES (?, 'SAIDA', 1, 1001, 1000, 0, 'teste')`, [matCliCob]);
 
+      // Revisao final (lente A, M5): SAIDA CANCELADA no livro do mat2 — a regua de consumo da
+      // cobertura (consumoSql, cancelado=0) nao pode ve-la. O material escolhido e o que
+      // SEGURA a mediana: com a cancelada contando, a cobertura do mat2 cai de 390 para
+      // 26/(104/60)=15 e a mediana vira 140 — o assert de 390 e quem morde. (A 1a versao
+      // punha a cancelada no mat1 e a mediana nao se movia — sabotagem sobreviveu e a fixture
+      // foi corrigida, nao o assert.)
+      await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, cancelado, usuario_nome)
+        VALUES (?, 'SAIDA', 100, 126, 26, 1, 'teste')`, [mat2]);
+
       // Revisao T2 (M4): janela 60, NAO 30 — um /30 cravado no denominador da cobertura
       // produziria [70,195,270] e o assert de 390 cai.
       const res = await getIndicadores(app, { janela_dias: 60 });

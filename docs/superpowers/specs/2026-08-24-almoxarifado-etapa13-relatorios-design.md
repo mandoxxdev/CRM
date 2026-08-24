@@ -167,7 +167,10 @@ parâmetros da consulta na tela.
 - `GET /api/almoxarifado/relatorios/:tipo` → comportamento atual preservado (200 payload do
   relatório; 404/403 com os literais da RN-03). `indicadores` entra como tipo novo.
 - `GET /api/almoxarifado/relatorios/:tipo/export` → **200** XLSX binário; 400 de parâmetro
-  inválido espelha o do relatório; 403/404 idênticos ao dispatcher.
+  inválido espelha o do relatório — **esta metade ficou INALCANÇÁVEL após a emenda M5 da
+  Task 1 (a checagem de `exportavel` roda antes da query e nenhum relatório exportável valida
+  params); corrigido dizendo: o único 400 do export é `Relatório sem exportação tabular`**;
+  403/404 idênticos ao dispatcher.
 - Compat: NENHUMA rota existente muda shape. O refactor do dispatcher é interno (registro),
   provado por regressão dos testes atuais.
 
@@ -188,7 +191,12 @@ parâmetros da consulta na tela.
   classe C da Etapa 8 — preservar).
 - `can()` já é importado no `extended.js` (usado pelos 2 gates inline).
 - `xlsx` está no `package.json` do server (0.18.5) — nenhuma dependência nova.
-- O teste `custoUnitarioFonteUnica.api.test.js` varre o código: os indicadores NOVOS têm de
-  usar `custoSql` senão a suíte já quebra sozinha (proteção de graça).
+- **Esta linha dizia "o teste `custoUnitarioFonteUnica` varre o código: … a suíte já quebra
+  sozinha (proteção de graça)"; ESTAVA ERRADA (medido pela revisão final, lente A):** a
+  varredura só casa as duas famílias históricas (`COALESCE(custo_medio, custo_unitario…)` e o
+  `CASE WHEN` replicado) — ler `custo_unitario` PURO passa em silêncio (12/12 verde com a
+  mutação aplicada). Quem protege os indicadores é a fixture de custo duplo do teste deles
+  (assert numérico), não a varredura. O plano e o comentário do código sempre disseram o
+  certo; o design é que prometeu demais.
 - `configuracoesGerais.api.test.js`: a etapa NÃO cria config nova (janela vem por querystring)
   — nenhuma amarração nova de CAMPOS.

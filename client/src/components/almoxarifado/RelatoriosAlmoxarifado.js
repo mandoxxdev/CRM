@@ -323,7 +323,21 @@ const RelatoriosAlmoxarifado = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao exportar relatório');
+      // Revisao final (lente B, minor 1): com responseType blob o axios entrega o CORPO DO
+      // ERRO como Blob tambem — err.response.data.error e sempre undefined e o usuario via o
+      // generico para 403/400/404 indistintamente (e o interceptor de 403 do api.js escrevia
+      // numa propriedade solta do Blob). Le o texto do Blob e recupera o literal do servidor.
+      let mensagem = 'Erro ao exportar relatório';
+      try {
+        const bruto = err.response?.data;
+        if (bruto && typeof bruto.text === 'function') {
+          const corpo = JSON.parse(await bruto.text());
+          if (corpo && corpo.error) mensagem = corpo.error;
+        } else if (bruto && bruto.error) {
+          mensagem = bruto.error;
+        }
+      } catch (parseErr) { /* corpo nao-JSON: fica o generico */ }
+      toast.error(mensagem);
     } finally {
       setExportando(false);
     }

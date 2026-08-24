@@ -204,4 +204,17 @@ describe('AlmoxarifadoDashboard — falha localizada do endpoint de indicadores'
     expect(secao.querySelector('[data-testid="indicadores-erro"]')).toBeTruthy();
     expect(secao.textContent).toContain('Não foi possível conectar ao servidor.');
   });
+
+  test('200 malformado (data null / bloco faltando) nao derruba os KPIs existentes (revisao final M3)', async () => {
+    mockarApi({ indicadores: () => Promise.resolve({ data: null }) });
+    await renderizar();
+    expect(document.body.textContent).toContain('Indicadores indisponíveis (resposta inesperada do servidor).');
+    // Os KPIs existentes continuam de pe (mesmo assert dos testes de falha isolada).
+    expect(document.body.textContent).toContain('321');
+  });
+
+  test('cartao de giro declara a aproximacao (consumo / estoque atual) — revisao final I2', async () => {
+    await renderizar();
+    expect(document.body.textContent).toContain('consumo ÷ estoque atual (aproximação)');
+  });
 });
