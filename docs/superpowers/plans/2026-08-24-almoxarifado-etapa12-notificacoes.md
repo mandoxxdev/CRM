@@ -25,8 +25,16 @@ o padrão `setTimeout`+`setInterval().unref()` do lembrete de requisição.
 
 - Literais congelados: 400 do painel `Status inválido (use PENDENTE, ENVIADO ou FALHA)`;
   404 `Notificação não encontrada`; assunto sempre prefixado `[Almoxarifado] `; validação de
-  config numérica reusa a mensagem da Etapa 11 `Configuração "<chave>" deve ser um número de
-  dias maior que zero`.
+  config numérica com DUAS mensagens (Fase 2 — a da 11 mentia para chave que não é dias):
+  prefixos de dias (`reposicao_`, `alerta_lote_`) → `Configuração "<chave>" deve ser um
+  número de dias maior que zero` (intacta, contrato da 11); prefixos inteiros
+  (`notificacoes_worker_`, `notificacoes_max_`) → `Configuração "<chave>" deve ser um número
+  inteiro maior que zero`.
+- Worker no job com **delay inicial ≥ 30s** e intervalo longo, `.unref()`, COMO o lembrete —
+  nunca delay curto (mutaria as linhas que os testes conferem).
+- Régua de sucesso do envio: **`resultado.enviados > 0`** — nunca `erros.length === 0` (lista
+  vazia devolve `{enviados: 0, erros: []}`). Destinatários da linha SEMPRE via `parseList`
+  (a coluna é TEXT; as configs semeiam `'[]'`).
 - `notificar_movimentacoes` nasce `'0'` — NENHUM teste existente do motor pode passar a
   depender da fila; o gancho com config desligada é no-op.
 - Falha de enfileirar/notificar **nunca** propaga para a operação de negócio (try/catch +
@@ -41,6 +49,62 @@ o padrão `setTimeout`+`setInterval().unref()` do lembrete de requisição.
 - Sabotagem: âncora única NOS DOIS SENTIDOS, sed reverso, md5; par positivo+negativo em gate;
   teste de conjunto força cenário. Commits pt-BR sem acento, `git add` explícito.
 - Baseline: `npm run test:api` = 111/111.
+
+## Fase 2 — achados da revisão adversarial do plano (TODOS acatados; o texto abaixo já está corrigido)
+
+Revisor fresco com 5 probes contra o app real: **7 Critical + 6 Important + minors, 0 ruído.**
+
+1. **[C] Ciclo de require provado**: RN-07 faz `alertService` → queue service → `alertService`;
+   com `routes/almoxarifado.js` carregando o alertService PRIMEIRO e o `module.exports = {...}`
+   por substituição, `enviarEmail` fica `undefined` **só em produção**. Fix: require **lazy
+   dentro de `processarFila`** (padrão do próprio stockService:589) + teste que requer o
+   alertService antes do queue e processa uma linha.
+2. **[C] `2^tentativas`**: SQLite não tem `^` (SQLITE_ERROR) e em JS é XOR. Fix: calcular em
+   JS com `Math.pow(2, n)` e passar como parâmetro ligado.
+3. **[C] Aviso ao admin sem destinatário**: a chave real é **`alertas_estoque_emails`**,
+   semeada com `'[]'` — split ingênuo por vírgula gera o destinatário fantasma `"[]"`. Fix:
+   exportar/usar o `parseList` do alertService; teste 5 configura a chave com JSON; **FALHA
+   acontece mesmo sem aviso enfileirável** (a transição não depende do aviso).
+4. **[C] Dedupe detectado pelo campo errado**: `INSERT OR IGNORE` ignorado MANTÉM o `lastID`
+   anterior. A régua é **`changes === 0`**.
+5. **[C] ZERADO não cabe na máquina atual**: coluna única `estado_estoque` + guarda
+   `min <= 0` retornando cedo → gravar 'ZERADO' ali quebra o alerta de mínimo E material sem
+   mínimo nunca alertaria. Fix: 2 colunas novas via safeAlter (`estado_zerado`,
+   `ultimo_alerta_zerado`), função **separada** `avaliarZerado` sem a guarda, régua
+   **`quantidade_atual <= 0`** (o design dizia "disponível" — corrigido: 100% reservado não
+   está zerado).
+6. **[C] Chave de config em template string some da varredura** do
+   `configuracoesGerais.api.test.js` (que exige o literal `'chave'` em routes/services) —
+   e a falha só apareceria no merge. Fix: mapa literal `DEST_POR_CLASSE` com comentário.
+7. **[C] "Vale para TODO tipo" mandava e-mail de RESERVA** a cada requisição aprovada. Fix:
+   tipo sem classe → `{enfileirada:false, motivo:'SEM_CLASSE'}`; precedência fixada
+   `_TERCEIRO` > `AJUSTE*` > entrada/saída; testes de RESERVA e AJUSTE_POSITIVO/NEGATIVO.
+8. **[I] Mensagem de validação mentia** ("dias" para tentativas/minutos): dois conjuntos de
+   prefixos, duas mensagens (a da 11 intacta para dias; nova
+   `Configuração "<chave>" deve ser um número inteiro maior que zero` para as demais) — e o
+   guard espelho do client acompanha.
+9. **[I] FALHA_NOTIFICACAO recursava** (não há coluna de max por linha): regra literal no
+   worker `evento === 'FALHA_NOTIFICACAO' → maxTentativas 1, não avisa` + teste 3×.
+10. **[I] Contrato do envio indefinido**: `destinatarios` TEXT → `parseList` sempre; sucesso
+    = **`resultado.enviados > 0`** (lista vazia com `erros: []` NÃO é sucesso); teste afere o
+    literal `ultimo_erro === 'SMTP não configurado'`.
+11. **[I] A régua de /vencidas NÃO está na rota** (ela só delega): fonte única já existe em
+    `thirdPartyService.listarRemessas` (`:322`) — chamar com `{vencidas:'1'}`, NÃO extrair
+    nada; coluna é **`prazo_previsto`** (não `data_prevista`).
+12. **[I] O controle positivo do backoff não sabia falhar** (expoente 0 ainda é futuro):
+    sabotagem correta = `proxima_tentativa_em = datetime('now')` → 2ª passada incrementa;
+    + assert numérico ≥ 10 min na 2ª tentativa (único que distingue expoente).
+13. **[I] Reenviar drenava a fila inteira**: `processarFila(db, { id })` com escopo.
+14. **[I] "hoje" do lembrete em UTC** (`toISOString().slice(0,10)`) para casar com o
+    `date('now')` do toolReminderService.
+15. **[Minors]** `enviarEmail` JÁ é exportado (alertService fora da Task 1); gancho passa
+    `loteIdFinal`/`loteCodigoFinal` (o `lote_id` cru vem null quando a chamada usa código);
+    worker com delay inicial ≥ 30s COMO O LEMBRETE (nunca curto — mutaria linhas sob teste);
+    lote: `STATUS_LOTE`/saldo por precedente `lotService:206`/decidir `vencimento_liberado`
+    (liberado SAI da varredura — decisão registrada); resumo de solicitações captura
+    código/nome no laço e `sort((a,b)=>a-b)`; `returnService` enfileira ANTES do throw;
+    `tipo: 'boolean'` já existe em CAMPOS; Task 4 RODA TAMBÉM `npm run test:api` na worktree
+    (o teste de amarração cliente↔servidor é de servidor e lê arquivo do client).
 
 ## Sort topológico
 
@@ -65,24 +129,52 @@ worktree) × Task 5 (teste server, árvore principal).
 - Create: `server/services/almoxarifado/notificationQueueService.js`
 - Modify: `server/services/almoxarifado/schema.js` (tabela + índice + configs),
   `server/services/almoxarifado/permissions.js` (ação),
-  `server/services/almoxarifado/alertService.js` (exportar `enviarEmail`),
-  `server/routes/almoxarifado.js` (validação de config numérica — estender o prefixo-set),
+  `server/services/almoxarifado/alertService.js` (**só** exportar `parseList` — `enviarEmail`
+  JÁ está exportado, Fase 2),
+  `server/routes/almoxarifado.js` (validação de config: DOIS conjuntos de prefixos, DUAS
+  mensagens — ver Global Constraints; o guard espelho do client fica para a Task 4),
   `server/routes/almoxarifado/extended.js` (3 rotas do painel)
 - Test: `server/tests/api/notificacaoFila.api.test.js` (novo)
 
 **Interfaces (Produces — Tasks 2/3/4/5 consomem):**
 - `enfileirar(db, { evento, dedupe_chave, destinatarios, assunto, corpo_html, corpo_texto, payload })`
   → `{ enfileirada: true, id }` | `{ enfileirada: false, motivo: 'DUPLICADA' }` |
-  `{ enfileirada: false, motivo: 'SEM_DESTINATARIO' }` (destinatários vazios não enfileiram).
-- `processarFila(db)` → `{ processadas, enviadas, falharam }` (pega PENDENTE com
-  `proxima_tentativa_em` nula ou ≤ agora; envia via `alertService.enviarEmail`; sucesso →
-  ENVIADO+`enviado_em`; falha → `tentativas+1`, `ultimo_erro`,
-  `proxima_tentativa_em = datetime('now', '+' || (intervalo_min * 2^tentativas) || ' minutes')`;
-  ao atingir max → FALHA + aviso ao admin UMA vez com `dedupe_chave = 'falha-' + id` e
-  `max_tentativas_proprio = 1`).
-- `reenviar(db, usuario, id)` → `{ success: true, status }` | lança 404-shape; reseta
-  tentativas/status/erro, audita (`registrarAuditoria`, `dados_novos` como OBJETO — lição da
-  11), e chama `processarFila`.
+  `{ enfileirada: false, motivo: 'SEM_DESTINATARIO' }`. **Dedupe pela régua `changes === 0`**
+  do `INSERT OR IGNORE` (Fase 2: o insert ignorado MANTÉM o lastID anterior — testar por
+  lastID devolveria o id de OUTRA notificação).
+- `processarFila(db, opcoes = {})` → `{ processadas, enviadas, falharam }`; `opcoes.id`
+  restringe a UM item (é o que `reenviar` usa — sem isso o botão da tela drenaria a fila
+  inteira e acoplaria os testes). Pega PENDENTE com `proxima_tentativa_em` nula ou ≤ agora.
+  **Require LAZY do alertService DENTRO da função** (Fase 2, Critical: a Task 3 fecha o ciclo
+  alertService⇄queue e o require de topo cachearia `{}` — padrão do stockService:589):
+  `const alertService = require('./alertService');`. Envio: `const destinatarios =
+  parseList(row.destinatarios); const r = await alertService.enviarEmail(db, destinatarios,
+  row.assunto, row.corpo_html, row.corpo_texto); const ok = r.enviados > 0;`. Sucesso →
+  ENVIADO+`enviado_em`. Falha (backoff CALCULADO EM JS — `^` não existe no SQLite e em JS é
+  XOR):
+
+```js
+      const proxTentativas = row.tentativas + 1;
+      const maxTentativas = row.evento === 'FALHA_NOTIFICACAO' ? 1 : maxConfig; // nao recursa
+      if (proxTentativas >= maxTentativas) {
+        // FALHA acontece MESMO que o aviso abaixo nao seja enfileiravel (RN-03 emendada).
+        await dbRun(db, `UPDATE ... SET status = 'FALHA', tentativas = ?, ultimo_erro = ? WHERE id = ?`, [...]);
+        if (row.evento !== 'FALHA_NOTIFICACAO') {
+          const adminDest = parseList(await getConfigLocal(db, 'alertas_estoque_emails'));
+          await enfileirar(db, { evento: 'FALHA_NOTIFICACAO', dedupe_chave: `falha-${row.id}`,
+            destinatarios: adminDest, ... }); // SEM_DESTINATARIO aqui e warn, nunca throw
+        }
+      } else {
+        const minutos = intervaloMin * Math.pow(2, proxTentativas);
+        await dbRun(db, `UPDATE fila_notificacoes_almoxarifado
+          SET tentativas = ?, ultimo_erro = ?, proxima_tentativa_em = datetime('now', '+' || ? || ' minutes')
+          WHERE id = ?`, [proxTentativas, erro, minutos, row.id]);
+      }
+```
+
+- `reenviar(db, usuario, id)` → `{ success: true, status }` | 404-shape; reseta
+  tentativas/status/erro/proxima_tentativa_em, audita (`dados_novos` OBJETO — lição da 11), e
+  chama `processarFila(db, { id })` — só o item.
 - Configs semeadas (RN-09) + `gerenciar_notificacoes: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR]`.
 
 - [ ] **Step 1: schema** — tabela+índice do design (copiar o SQL literal) no `initSchema`,
@@ -101,13 +193,24 @@ worktree) × Task 5 (teste server, árvore principal).
      motivo: 'DUPLICADA' }`, COUNT 1; chave diferente → 2.
   3. `RN-01: sem destinatario nao enfileira` — `{ enfileirada: false, motivo: 'SEM_DESTINATARIO' }`.
   4. `RN-03: falha de envio registra tentativa, backoff e mantem PENDENTE` — processar (SMTP
-     ausente no harness) → `tentativas 1`, `ultimo_erro` preenchido, `proxima_tentativa_em`
-     futura, status PENDENTE; processar DE NOVO em seguida → `tentativas` continua 1 (backoff
-     segura — o item não está elegível).
-  5. `RN-03: FALHA apos max e aviso ao admin UMA vez` — setar `notificacoes_max_tentativas=1`
-     via UPDATE de config + zerar `proxima_tentativa_em` → processar → status FALHA e existe
-     UMA linha `evento FALHA_NOTIFICACAO` (dedupe `falha-<id>`); processar de novo → continua
-     UMA.
+     ausente no harness) → `tentativas 1`, **`ultimo_erro === 'SMTP não configurado'`**
+     (LITERAL — um TypeError de `.join` ou lista vazia dariam outro texto; é o assert que
+     prova o parseList e o caminho real), `proxima_tentativa_em` futura (**assert numérico:
+     ≥ 10 minutos na 2ª tentativa** — o único que distingue o expoente certo), status
+     PENDENTE; processar DE NOVO em seguida → `tentativas` continua 1 (inelegível).
+  5. `RN-03: FALHA apos max e aviso ao admin UMA vez` — **antes de tudo**:
+     `UPDATE configuracoes_almoxarifado SET valor='["admin@gmp.com"]' WHERE
+     chave='alertas_estoque_emails'` (Fase 2: o seed é `'[]'` e sem isso o aviso morre em
+     SEM_DESTINATARIO e o teste não pode passar); setar `notificacoes_max_tentativas=1` +
+     zerar `proxima_tentativa_em` → processar → status FALHA e UMA linha
+     `evento FALHA_NOTIFICACAO` (dedupe `falha-<id>`); processar 2× de novo → continua UMA
+     (a linha de aviso tem max próprio 1 e não gera aviso de si mesma).
+  5b. `RN-03: FALHA acontece mesmo SEM admin configurado` — outro item, `alertas_estoque_emails`
+     de volta a `'[]'` → processar até o max → status FALHA, NENHUMA linha de aviso, nenhum
+     throw.
+  5c. `RN-01: ciclo de require nao quebra o envio` — arquivo requer `alertService` ANTES do
+     queue service (ordem de produção) e processa uma linha → o resultado é a falha REGISTRADA
+     de SMTP, nunca `enviarEmail is not a function`.
   6. `RN-08: reenviar reseta, processa e audita` — reenviar item FALHA → tentativas volta a
      0+1 (processou na hora), auditoria com `JSON.parse(dados_novos).notificacao_id === id`;
      id inexistente → 404 literal.
@@ -125,12 +228,12 @@ worktree) × Task 5 (teste server, árvore principal).
   `/processar` e `/reenviar` chamam o serviço; GET monta `resumo` com COUNTs do conjunto
   inteiro e `itens` LIMIT 200 DESC).
 - [ ] **Step 4: verde + regressão** (`configuracoesGerais`, `permissoesRotas`).
-- [ ] **Step 5: controles positivos** — (i) remover o UNIQUE do hash na criação? NÃO (schema
-  compartilhado) — sabotar o `INSERT OR IGNORE` para `INSERT` cru → teste 2 explode
-  (constraint) em vez de no-op: prova que o dedupe é o OR IGNORE; (ii) backoff: zerar o
-  expoente (`2 ** tentativas` → `0`) → teste 4 cai (segunda passada incrementaria);
-  (iii) aviso de falha sem dedupe (`'falha-' + id` → `'falha-' + id + Math.random()`... usar
-  contador determinístico: `+ tentativas`) → teste 5 cai. Âncoras nos DOIS sentidos, md5.
+- [ ] **Step 5: controles positivos** — (i) sabotar o `INSERT OR IGNORE` para `INSERT` cru →
+  teste 2 explode (constraint) em vez de no-op; (ii) backoff: **`proxima_tentativa_em =
+  datetime('now')`** (Fase 2: zerar o expoente NÃO sabe falhar — 5 min ainda é futuro) → o
+  item fica elegível e a 2ª passada leva tentativas a 2 → teste 4 cai; (iii) aviso de falha
+  com dedupe quebrado (`'falha-' + row.id` → `'falha-' + row.id + '-' + row.tentativas`) →
+  teste 5 cai (segunda linha nasce). Âncoras nos DOIS sentidos, md5, sed reverso.
 - [ ] **Step 6: suíte + commit** (`git add` os 7 caminhos explícitos).
 
 ---
@@ -144,10 +247,15 @@ worktree) × Task 5 (teste server, árvore principal).
 
 **Interfaces:**
 - `enfileirarMovimentacao(db, movimentacao, materialRow, user)` no queue service — chamada
-  pelo gancho; resolve classe (`TIPOS_ENTRADA`→entradas, `TIPOS_SAIDA`→saidas, prefixo
-  `AJUSTE`→ajustes, sufixo `_TERCEIRO`→terceiros **com precedência**), lê
-  `notificacoes_dest_<classe>` com fallback no e-mail de alertas de estoque (ler a chave real
-  que o alertService usa — grep `getConfig` lá; NÃO inventar nome), monta assunto
+  pelo gancho; resolve classe com precedência FIXA (Fase 2): sufixo `_TERCEIRO` **>** prefixo
+  `AJUSTE` **>** `TIPOS_ENTRADA`→entradas / `TIPOS_SAIDA`→saidas; **tipo que não resolve para
+  classe nenhuma NÃO enfileira** (`{enfileirada:false, motivo:'SEM_CLASSE'}` — RESERVA/
+  LIBERACAO_RESERVA/TRANSFERENCIA/BLOQUEIO/etc. passam pelo motor em toda requisição e
+  virariam spam; a spec 14 pede entrada e saída, não retenção). Lê a config pelo mapa
+  **literal** `DEST_POR_CLASSE` (Fase 2: chave em template string some da varredura do
+  `configuracoesGerais.api.test.js`, que exige o literal `'chave'` em routes/services) com
+  fallback `alertas_estoque_emails` via `parseList` — fallback SÓ para classe resolvida.
+  Monta assunto
   `[Almoxarifado] <tipo> — <código do material>` e corpo com o conteúdo mínimo (RN-04: tipo,
   id, data, usuário, material, quantidade+unidade, **saldo anterior/posterior**, lote/série
   quando houver no registro, projeto/OS/cliente quando houver, justificativa, link
@@ -164,8 +272,11 @@ worktree) × Task 5 (teste server, árvore principal).
     if (await getConfig(db, 'notificar_movimentacoes') === '1') {
       await notificationQueueService.enfileirarMovimentacao(db, {
         id: result.lastID, tipo, quantidade, saldo_anterior: saldoAnteriorReal,
-        saldo_posterior: saldoPosterior, justificativa, /* + campos em escopo: lote_id,
-        projeto_id etc. — LER o escopo real da funcao e passar o que existir */
+        saldo_posterior: saldoPosterior, justificativa, motivo, referencia,
+        // Fase 2: loteIdFinal/loteCodigoFinal, NAO o lote_id cru — ele vem null sempre que a
+        // chamada usou o CODIGO do lote (inclusive quando a entrada CRIOU o lote).
+        lote_id: loteIdFinal, lote_codigo: loteCodigoFinal,
+        projeto_id, os_id, cliente_id, requisicao_id, documento_vinculado,
       }, material, user);
     }
   } catch (notifErr) {
@@ -185,11 +296,17 @@ worktree) × Task 5 (teste server, árvore principal).
      motor, COUNT da fila inalterado.
   3. `RN-04: config desligada (default) nao enfileira` — sem tocar config, movimentar →
      fila vazia; e o RETORNO do motor é idêntico (id/saldos) com config ligada/desligada.
-  4. `RN-05: classe certa por tipo` — ENTRADA→dest_entradas; SAIDA→dest_saidas;
-     AJUSTE→dest_ajustes; CONSUMO_TERCEIRO→dest_terceiros (precedência sobre saída) — 4
-     movimentações, cada uma com config de classe distinta, aferindo destinatários da linha.
-  5. `RN-05: fallback e sem-destinatario` — classe sem config → cai no e-mail de alertas;
-     nenhum dos dois → não enfileira (motivo SEM_DESTINATARIO não quebra o motor).
+  4. `RN-05: classe certa por tipo, com precedencia` — ENTRADA→dest_entradas;
+     SAIDA→dest_saidas; **AJUSTE_POSITIVO e AJUSTE_NEGATIVO→dest_ajustes** (mesmo estando em
+     TIPOS_ENTRADA/SAIDA — é a precedência que nenhuma ordem de ifs acidental pode inverter);
+     CONSUMO_TERCEIRO→dest_terceiros (precedência sobre saída) — cada uma com config de
+     classe distinta, aferindo destinatários da linha.
+  4b. `RN-05: tipo SEM classe nao enfileira` — RESERVA com config ligada e destinatários
+     configurados → fila NÃO cresce (Fase 2: sem isso, toda requisição aprovada mandava
+     e-mail de reserva).
+  5. `RN-05: fallback e sem-destinatario` — classe sem config → cai em
+     `alertas_estoque_emails` (configurada com JSON no teste, parseList); nenhum dos dois →
+     não enfileira (SEM_DESTINATARIO não quebra o motor).
 - [ ] **Step 2: implementação** (builder no queue service; gancho no motor).
 - [ ] **Step 3: verde + regressão PESADA do motor** — `conferenciaMotorAjuste`,
   `inventarioIntegracao`, `devolucaoVinculo`, `ajusteRetencao`, qualquer suíte que movimente
@@ -216,25 +333,39 @@ worktree) × Task 5 (teste server, árvore principal).
 - Test: `server/tests/api/notificacaoDividas.api.test.js` e
   `server/tests/api/alertasNovos.api.test.js` (novos)
 
-Pontos de atenção JÁ VERIFICADOS na Fase 0 (o executor confirma lendo):
-- `toolReminderService.listarEmprestimosVencidos(db)` existe e é pura — a varredura chama e
-  enfileira `dedupe: 'ferramenta-lembrete-' + emprestimo.id + '-' + hoje` (um/dia).
-- Remessa vencida: a régua mora na rota `/vencidas` (`extended.js` ~1284) — extrair a
-  CONDIÇÃO para função/const exportável OU replicar com comentário-espelho apontando um para
-  o outro (preferir extrair; se extrair, a rota passa a usar a mesma função — regressão
-  `remessaTerceiro*` obrigatória).
-- Lote: `lotes_almoxarifado.data_validade` (texto ISO); janela = config
-  `alerta_lote_vencendo_dias`; só lote com saldo > 0 e status ativo (ler os status reais do
-  lotService antes de escrever o WHERE).
-- ZERADO no alertService: transição própria com debounce no MESMO padrão ACIMA/ABAIXO (ler
-  `avaliarCruzamentoMinimo` e espelhar; estado novo na tabela de estado existente — conferir
-  colunas; se precisar de coluna, safeAlter). Dispara pela fila (enfileirar), não por
-  enviarEmail direto — o histórico unificado é a fila.
+Pontos de atenção VERIFICADOS pela Fase 2 (probes — seguir à risca):
+- `toolReminderService.listarEmprestimosVencidos(db)` confirmado (retorna `e.*` +
+  `ferramenta_nome`/`codigo_patrimonio`/`dias_vencido`); dedupe
+  `'ferramenta-lembrete-' + emprestimo.id + '-' + hoje` com
+  **`const hoje = new Date().toISOString().slice(0, 10);` (UTC — casa com o `date('now')` do
+  serviço; data local duplicaria o lembrete entre 21h e meia-noite)**.
+- Remessa vencida: **a rota `/vencidas` só DELEGA** — a fonte única JÁ existe em
+  `thirdPartyService.listarRemessas(db, { vencidas: '1' })` (`thirdPartyService.js:322`).
+  Chamar essa função; NÃO extrair nada da rota, NÃO refatorar. Dedupe:
+  `'remessa-vencida-' + r.id + '-' + r.prazo_previsto` (a coluna é **`prazo_previsto`** —
+  `data_prevista` não existe).
+- Lote: `STATUS_LOTE = ['ATIVO','BLOQUEADO','REPROVADO']` (lotService:15); varrer só ATIVO
+  com `data_validade` na janela E saldo > 0 pelo precedente `lotService:206`
+  (`SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id`). **Lote com
+  vencimento liberado (`vencimento_liberado_em` preenchido) SAI da varredura** — a liberação
+  é a decisão humana de usar mesmo vencendo; alertar de novo seria ruído (decisão registrada,
+  letra D).
+- ZERADO: **função separada `avaliarZerado`** (NÃO um ramo em `avaliarCruzamentoMinimo` — a
+  coluna `estado_estoque` é única e um terceiro valor quebraria o alerta de mínimo nos dois
+  sentidos, medido pela Fase 2; e a guarda `min <= 0` retornaria cedo justamente nos materiais
+  sem mínimo, onde o zerado mais vale). Duas colunas novas via safeAlter:
+  `estado_zerado TEXT DEFAULT 'COM_SALDO'` e `ultimo_alerta_zerado DATETIME`. Régua:
+  **`quantidade_atual <= 0`** (o design dizia "disponível" — corrigido: 100% reservado não
+  está zerado), `proprietario_cliente_id IS NULL`. Dispara pela FILA (enfileirar), rearma na
+  transição de volta.
 - `gerarSolicitacoesDaSugestao`: após o loop, se `criadas.length > 0`, enfileirar UM resumo
-  (dedupe `'solicitacoes-' + criadas.map(c=>c.solicitacao_id).sort().join('-')`) para
-  `notificacoes_dest_compras` com fallback `compras_notificar_emails`.
+  (dedupe `'solicitacoes-' + criadas.map(c=>c.solicitacao_id).sort((a,b)=>a-b).join('-')` —
+  **sort NUMÉRICO**, o lexicográfico põe [2,10] como [10,2]) para `notificacoes_dest_compras`
+  com fallback `compras_notificar_emails` (semeada `'[]'` — parseList). O código/nome do
+  material NÃO está em `criadas` — capturar do `item` dentro do laço para o corpo.
 - `returnService` ESTADO_PARCIAL (linha ~244): enfileirar aviso (dedupe
-  `'devolucao-parcial-' + devolucaoId`) — dentro do try/catch RN-01.
+  `'devolucao-parcial-' + r.lastID`) **ANTES do `throw e`** da compensação, em try/catch
+  próprio (RN-01 — aviso nunca engole nem substitui o erro real).
 
 Testes (dois arquivos, red-first; jobs testados chamando as varreduras DIRETO — nunca
 esperar setInterval):
@@ -275,7 +406,9 @@ certo e recarrega; processar idem; 403 → painel (não vazio); resumo por célu
 renderizam e entram no payload; erro de rede ≠ vazio. Sabotagem mínima: trocar o POST de
 reenviar pelo de processar → teste cai; remover painel de erro → teste cai.
 
-Full client suite + build; commit na worktree.
+Full client suite + build **E TAMBÉM `cd server && npm run test:api` NA WORKTREE** (Fase 2:
+`configuracoesGerais.api.test.js` é teste de SERVIDOR que lê o arquivo do CLIENT — mexer em
+CAMPOS sem rodar a suíte de servidor esconderia a quebra até o merge); commit na worktree.
 
 ---
 

@@ -67,16 +67,28 @@ O worker pega itens `PENDENTE` com `proxima_tentativa_em <= agora` (ou nula), te
 pelo canal do `alertService.enviarEmail` (reuso — **nenhum transporte novo**). Falhou:
 `tentativas + 1`, `ultimo_erro` gravado, `proxima_tentativa_em = agora + 2^tentativas ×
 intervalo` (backoff exponencial). Ao atingir `notificacoes_max_tentativas` (config, default
-`5`): status `FALHA` e **uma** notificação de falha é enfileirada para o e-mail de alertas já
-configurado (dedupe `falha-<id>`, máx. 1 tentativa própria — falha de aviso-de-falha não
-recursa). Sucesso: status `ENVIADO`, `enviado_em` preenchido.
+`5`): status `FALHA` e **uma** notificação de falha é enfileirada para
+`alertas_estoque_emails` (a chave real do e-mail de alertas — lida com o `parseList` do
+alertService, porque o seed é `'[]'` e split por vírgula geraria o destinatário fantasma
+`"[]"`), com dedupe `falha-<id>`. **Emendas da Fase 2:** (a) a linha de aviso não tem coluna
+de max próprio — a regra é literal no worker: `evento === 'FALHA_NOTIFICACAO'` → máx. 1
+tentativa e não gera aviso de si mesma; (b) a transição para FALHA acontece **mesmo que o
+aviso não seja enfileirável** (admin sem e-mail configurado → warn, nunca throw); (c) o
+backoff é calculado **em JS** (`Math.pow(2, tentativas)`) e passado como parâmetro — `^` não
+existe no SQLite e em JS é XOR; (d) sucesso de envio = `enviados > 0`, nunca `erros` vazio
+(lista vazia devolve `{enviados: 0, erros: []}`). Sucesso: status `ENVIADO`, `enviado_em`
+preenchido. `processarFila(db, { id })` restringe a um item — é o que o reenvio usa.
 
 ### RN-04 — Movimentação confirmada enfileira DEPOIS do commit; erro não enfileira
 
 Gancho no fim de `stockService.registrarMovimentacao`, **depois** de todas as escritas
 atômicas terem sucesso — movimentação que falha em qualquer guarda não gera notificação.
 Config-gated: `notificar_movimentacoes` (seed `'0'`, **desligado por default** — ligar é
-decisão do usuário, letra B; ligado, vale para TODO tipo do motor). `dedupe_chave =
+decisão do usuário, letra B). **Emenda da Fase 2 — a versão original dizia "ligado, vale
+para TODO tipo do motor"; estava errada e mandaria e-mail de RESERVA a cada requisição
+aprovada:** vale só para tipos que resolvem para uma das quatro classes de RN-05; tipo sem
+classe (RESERVA, LIBERACAO_RESERVA, TRANSFERENCIA, BLOQUEIO, DESBLOQUEIO, QUARENTENA e
+afins — retenção e remanejo, não entrada/saída) **não enfileira**. `dedupe_chave =
 mov-<id da movimentação>`. Conteúdo mínimo (spec 14.1) no corpo: tipo, id, data/hora,
 usuário, material (código+nome), quantidade e unidade, **saldo anterior e saldo posterior**,
 lote/série quando houver, projeto/OS/cliente quando houver, motivo/justificativa, e link
@@ -84,12 +96,16 @@ direto (`/almoxarifado/movimentacoes?destaque=<id>`). Sem PDF (corte D3).
 
 ### RN-05 — Destinatários por classe de evento, via configs (com fallback)
 
-Quatro classes com config própria (lista de e-mails separada por vírgula):
+Quatro classes com config própria (lista aceita JSON ou vírgula — `parseList`):
 `notificacoes_dest_entradas`, `notificacoes_dest_saidas`, `notificacoes_dest_ajustes`,
-`notificacoes_dest_terceiros` — classe resolvida pela fonte única `movementTypes`
-(`TIPOS_ENTRADA`/`TIPOS_SAIDA`; `AJUSTE*` → ajustes; `*_TERCEIRO` → terceiros, com
-precedência sobre entrada/saída). Classe sem config → fallback para o e-mail de alertas de
-estoque já existente; sem nenhum → não enfileira (sem destinatário não há aviso). Material
+`notificacoes_dest_terceiros` — classe resolvida pela fonte única `movementTypes`, com
+**precedência fixa** (Fase 2): sufixo `_TERCEIRO` **>** prefixo `AJUSTE` **>**
+`TIPOS_ENTRADA`/`TIPOS_SAIDA` (sem ela, `AJUSTE_POSITIVO` — que está em TIPOS_ENTRADA —
+cairia numa classe por acidente da ordem dos ifs). As chaves vivem num **mapa literal** no
+serviço (chave montada por template string some da varredura do teste de amarração
+cliente↔servidor). Classe sem config → fallback `alertas_estoque_emails`; tipo **sem classe**
+→ não enfileira (`SEM_CLASSE`); sem destinatário nenhum → não enfileira
+(`SEM_DESTINATARIO`). Material
 **de cliente** acrescenta a classe do dono? Não — corte declarado (D5): destinatário por
 cliente é a matriz-tabela que ficou de fora.
 
@@ -108,15 +124,23 @@ cliente é a matriz-tabela que ficou de fora.
 
 ### RN-07 — Alertas novos (fatia da spec 26, com máquina/duplicidade)
 
-- **Estoque zerado**: dentro da máquina existente do `alertService` — transição para
-  `disponível ≤ 0` com debounce próprio (mesmo padrão ACIMA/ABAIXO; zerar → alerta; repor →
-  rearma). Material de cliente fora, como o mínimo já faz.
+- **Estoque zerado**: **emendado pela Fase 2 — a versão original dizia "dentro da máquina
+  existente" e "disponível ≤ 0"; as duas partes estavam erradas.** A tabela de estado tem UMA
+  coluna (`estado_estoque` ACIMA/ABAIXO) — um terceiro valor quebraria o alerta de mínimo nos
+  dois sentidos; e a guarda `min <= 0` da máquina retorna cedo justamente nos materiais sem
+  mínimo, onde o zerado mais vale; e "disponível ≤ 0" marcaria como zerado material 100%
+  reservado que está na prateleira. O certo: **função separada** (`avaliarZerado`), duas
+  colunas novas de estado (`estado_zerado`/`ultimo_alerta_zerado`, safeAlter), régua
+  **`quantidade_atual ≤ 0`**, sem guarda de mínimo, cliente fora, mesmo padrão de
+  transição+debounce, disparando pela FILA. Zerar → alerta; repor → rearma.
 - **Lote próximo do vencimento**: job diário — lotes ativos com `data_validade` entre hoje e
   `+N dias` (config `alerta_lote_vencendo_dias`, default `30`), com saldo > 0;
   `dedupe: lote-vencendo-<lote_id>-<data_validade>` (um aviso por lote/validade, não por dia).
-- **Remessa a terceiro vencida**: job diário — a MESMA régua SQL do `GET /vencidas`
-  (`extended.js` ~1284; não reescrever a condição);
-  `dedupe: remessa-vencida-<remessa_id>-<data_prevista>`.
+- **Remessa a terceiro vencida**: job diário — **emenda da Fase 2: a rota `/vencidas` só
+  DELEGA; a fonte única já é `thirdPartyService.listarRemessas(db, { vencidas: '1' })`**
+  (nada a extrair, nada a refatorar). A coluna é **`prazo_previsto`** (a versão original
+  escrevia `data_prevista`, que não existe);
+  `dedupe: remessa-vencida-<remessa_id>-<prazo_previsto>`.
 
 ### RN-08 — Painel e reenvio gateados
 
@@ -138,10 +162,15 @@ e para testes; mesma ação). 403 padrão do `requirePermission` para PRODUCAO/A
 | `alerta_lote_vencendo_dias` | `30` | inteiro ≥ 1 |
 | `notificacoes_dest_entradas/saidas/ajustes/terceiros/compras` | `''` | texto livre (lista) |
 
-As numéricas entram na validação do `PUT /configuracoes` (mensagem literal no padrão da 11:
-`Configuração "<chave>" deve ser um número de dias maior que zero` — reusar/estender a
-checagem `reposicao_*` para um prefixo-set `{reposicao_, notificacoes_worker, notificacoes_max,
-alerta_lote}` com a MESMA mensagem) e no array `CAMPOS` da tela.
+As numéricas entram na validação do `PUT /configuracoes` com **duas mensagens** (emenda da
+Fase 2 — a versão original mandava reusar a mensagem da 11 para tudo, e ela **mentiria** para
+tentativas e minutos): prefixos de dias (`reposicao_`, `alerta_lote_`) mantêm o literal da 11
+`Configuração "<chave>" deve ser um número de dias maior que zero`; prefixos inteiros
+(`notificacoes_worker_`, `notificacoes_max_`) ganham
+`Configuração "<chave>" deve ser um número inteiro maior que zero`. Tudo no array `CAMPOS`
+da tela (com o guard espelho do client acompanhando as duas famílias). **Lote com vencimento
+liberado sai da varredura de lote-vencendo** (a liberação é decisão humana registrada —
+alertar de novo é ruído; letra D).
 
 ## Banco (novo, sem migração destrutiva)
 
