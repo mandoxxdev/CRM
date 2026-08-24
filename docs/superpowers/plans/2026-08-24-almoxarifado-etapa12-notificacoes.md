@@ -182,9 +182,12 @@ worktree) × Task 5 (teste server, árvore principal).
   ineditável), e em `routes/almoxarifado.js` estender a validação numérica do PUT: trocar o
   teste `chave.startsWith('reposicao_')` (Etapa 11) por um set
   `['reposicao_', 'notificacoes_worker_', 'notificacoes_max_', 'alerta_lote_'].some((p) => chave.startsWith(p))`
-  — **mesma mensagem literal** (ler o código atual antes: a checagem exata pode ter outra
-  forma; o contrato é: as 4 numéricas novas recusam < 1 com a mensagem da 11, e
-  `notificar_movimentacoes` e as `notificacoes_dest_*` NÃO caem na checagem numérica).
+  — **com DUAS mensagens, não uma** (este parágrafo dizia "mesma mensagem literal";
+  **estava errado** e contradizia a Global Constraint corrigida na Fase 2 — a mensagem "número
+  de dias" mentiria para tentativas/minutos): prefixos `reposicao_`/`alerta_lote_` mantêm
+  `deve ser um número de dias maior que zero`; prefixos `notificacoes_worker_`/`notificacoes_max_`
+  ganham `deve ser um número inteiro maior que zero`. `notificar_movimentacoes` valida `0|1`
+  (400 `deve ser 0 ou 1` — revisão da Task 1) e as `notificacoes_dest_*` seguem texto livre.
 - [ ] **Step 2: teste vermelho** (harness padrão; usuários ADMIN/GESTOR/COMPRAS/ALMOXARIFE/
   PRODUCAO; helper `enfileirarDireto` chamando o serviço):
   1. `RN-01: enfileirar so grava PENDENTE, nada e enviado` — enfileira, linha PENDENTE com

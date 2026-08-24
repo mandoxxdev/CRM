@@ -13,6 +13,18 @@ const { registrarAuditoria } = require('./audit');
 
 const STATUS_VALIDOS = ['PENDENTE', 'ENVIADO', 'FALHA'];
 
+// Revisao da Task 1 (Critical 1): dois drenos concorrentes (duplo clique em /processar,
+// reenviar durante um dreno, ou o setInterval da Task 3 sobrepondo um dreno lento) leem a
+// mesma linha PENDENTE e enviam o MESMO e-mail duas vezes — o UPDATE para ENVIADO so
+// acontece depois do await do SMTP. DECISAO: claim em memoria de processo (Set de ids em
+// voo) + re-checagem de elegibilidade no banco apos o claim, em vez de um status
+// 'ENVIANDO' persistido. Racional: o app e um processo Node unico (rotas, reenviar e o
+// worker da Task 3 vivem todos aqui), entao o Set cobre toda a concorrencia real; o status
+// persistido alargaria o dominio do painel/400 congelado e exigiria recuperacao de linhas
+// orfas apos crash. Descartado 'ENVIANDO' persistido — se um dia houver 2o processo, esta
+// e a linha a revisitar.
+const emVoo = new Set();
+
 function hashDedupe(evento, dedupeChave) {
   return crypto.createHash('sha256').update(`${evento}|${dedupeChave}`).digest('hex');
 }
@@ -83,14 +95,32 @@ async function processarFila(db, opcoes = {}) {
   const maxConfig = await lerConfigNumero(db, 'notificacoes_max_tentativas', 5);
   const intervaloMin = await lerConfigNumero(db, 'notificacoes_worker_intervalo_min', 5);
 
+  let processadas = 0;
   let enviadas = 0;
   let falharam = 0;
 
   for (const row of itens) {
+    // Claim: has+add sao sincronos (sem await no meio — atomico no event loop). Um dreno
+    // concorrente que ja esteja com esta linha em voo faz este pular.
+    if (emVoo.has(row.id)) continue;
+    emVoo.add(row.id);
+    try {
+      // Re-checagem pos-claim: um dreno concorrente pode ter TERMINADO esta linha entre o
+      // SELECT la em cima e este ponto (ai ela ja saiu do Set, mas o status/backoff mudou).
+      const atual = await dbGet(db, `SELECT status, tentativas, proxima_tentativa_em FROM fila_notificacoes_almoxarifado
+        WHERE id = ? AND status = 'PENDENTE' AND (proxima_tentativa_em IS NULL OR proxima_tentativa_em <= datetime('now'))`, [row.id]);
+      if (!atual) continue;
+      processadas++;
+
     // Destinatarios da linha SEMPRE via parseList (Fase 2, achado 3): a coluna e TEXT e as
     // configs semeiam '[]' — split ingenuo por virgula geraria destinatario fantasma "[]".
     const destinatarios = alertService.parseList(row.destinatarios);
-    const r = await alertService.enviarEmail(db, destinatarios, row.assunto, row.corpo_html, row.corpo_texto);
+    // Revisao da Task 1 (Minor iv): linha sem destinatario util (ex.: '[]' gravado por fora
+    // do enfileirar) nem chama o transporte — erro especifico em vez do generico, e a regra
+    // de sucesso (`enviados > 0`) garante que ela jamais vira ENVIADO.
+    const r = destinatarios.length > 0
+      ? await alertService.enviarEmail(db, destinatarios, row.assunto, row.corpo_html, row.corpo_texto)
+      : { enviados: 0, erros: ['Sem destinatário válido'] };
     // Sucesso = enviados > 0, NUNCA erros.length === 0 (lista vazia devolve {enviados:0, erros:[]}).
     const ok = r.enviados > 0;
 
@@ -102,7 +132,7 @@ async function processarFila(db, opcoes = {}) {
     }
 
     const erro = (r.erros && r.erros[0]) || 'Falha no envio';
-    const proxTentativas = row.tentativas + 1;
+    const proxTentativas = atual.tentativas + 1;
     // Fase 2 (achado 9): a linha de aviso (FALHA_NOTIFICACAO) nao tem coluna de max proprio —
     // regra literal aqui: max 1 tentativa, nunca recursa gerando aviso de si mesma.
     const maxTentativas = row.evento === 'FALHA_NOTIFICACAO' ? 1 : maxConfig;
@@ -141,16 +171,28 @@ async function processarFila(db, opcoes = {}) {
         WHERE id = ?`, [proxTentativas, erro, minutos, row.id]);
       falharam++;
     }
+    } finally {
+      emVoo.delete(row.id);
+    }
   }
 
-  return { processadas: itens.length, enviadas, falharam };
+  // `processadas` conta so as linhas efetivamente tentadas (claim + re-checagem passaram) —
+  // linha pulada por outro dreno em voo nao conta como processada.
+  return { processadas, enviadas, falharam };
 }
 
 /**
  * RN-08: reenvio manual gateado (rota chama isto). Reseta para PENDENTE com tentativas/erro/
- * proxima_tentativa_em zerados, audita (dados_novos OBJETO — licao da Etapa 11) e processa NA
- * HORA — so este item (`processarFila(db, { id })`), senao o botao da tela drenaria a fila
- * inteira e acoplaria os testes de itens nao relacionados.
+ * proxima_tentativa_em/enviado_em zerados, audita (dados_novos OBJETO — licao da Etapa 11) e
+ * processa NA HORA — so este item (`processarFila(db, { id })`), senao o botao da tela
+ * drenaria a fila inteira e acoplaria os testes de itens nao relacionados.
+ *
+ * Revisao da Task 1 (Important ii): reenviar linha ja ENVIADA e PERMITIDO de proposito — e o
+ * unico jeito de reemitir um e-mail que se perdeu depois do SMTP aceitar (o dedupe do
+ * enfileirar bloqueia re-enfileirar o mesmo evento). O reset limpa `enviado_em` junto, senao a
+ * linha reprocessada que falhar ficaria PENDENTE/FALHA com carimbo de enviada — o painel
+ * mentiria. Alternativa descartada: 400 para ENVIADO (tiraria do admin o unico caminho de
+ * reemissao). Registrado na RN-08 do design.
  */
 async function reenviar(db, usuario, id) {
   const row = await dbGet(db, 'SELECT * FROM fila_notificacoes_almoxarifado WHERE id = ?', [id]);
@@ -159,7 +201,7 @@ async function reenviar(db, usuario, id) {
   }
 
   await dbRun(db, `UPDATE fila_notificacoes_almoxarifado
-    SET status = 'PENDENTE', tentativas = 0, ultimo_erro = NULL, proxima_tentativa_em = NULL
+    SET status = 'PENDENTE', tentativas = 0, ultimo_erro = NULL, proxima_tentativa_em = NULL, enviado_em = NULL
     WHERE id = ?`, [id]);
 
   await registrarAuditoria(db, {

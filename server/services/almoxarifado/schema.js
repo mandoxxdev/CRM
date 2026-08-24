@@ -1835,7 +1835,7 @@ async function initSchema(db) {
                                           -- DEVOLUCAO_PARCIAL | ESTOQUE_ZERADO | LOTE_VENCENDO |
                                           -- REMESSA_VENCIDA | FALHA_NOTIFICACAO
     hash_dedupe TEXT NOT NULL UNIQUE,
-    destinatarios TEXT NOT NULL,          -- lista separada por virgula
+    destinatarios TEXT NOT NULL,          -- JSON array (gravado por enfileirar; lido com parseList)
     assunto TEXT NOT NULL,
     corpo_html TEXT,
     corpo_texto TEXT,

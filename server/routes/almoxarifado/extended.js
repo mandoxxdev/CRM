@@ -1133,7 +1133,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
           SUM(CASE WHEN status = 'FALHA' THEN 1 ELSE 0 END) AS falhas
         FROM fila_notificacoes_almoxarifado`);
 
-      let sql = 'SELECT * FROM fila_notificacoes_almoxarifado WHERE 1=1';
+      // Colunas NOMEADAS pelo contrato congelado do design (revisao da Task 1, Important v):
+      // SELECT * vazava hash_dedupe/corpo_html/corpo_texto/proxima_tentativa_em para o front —
+      // detalhe de implementacao e corpo inteiro em cada linha da listagem.
+      let sql = `SELECT id, evento, destinatarios, assunto, status, tentativas, ultimo_erro,
+        enviado_em, created_at, payload FROM fila_notificacoes_almoxarifado WHERE 1=1`;
       const params = [];
       if (status) { sql += ' AND status = ?'; params.push(status); }
       if (evento) { sql += ' AND evento = ?'; params.push(evento); }

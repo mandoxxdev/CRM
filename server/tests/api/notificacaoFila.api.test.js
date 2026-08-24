@@ -352,6 +352,153 @@ async function setMaxTentativas(db, valor) {
     await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = '0' WHERE chave = 'notificar_movimentacoes'`);
   });
 
+  await test('RN-02: dois drenos concorrentes enviam UMA vez (claim em voo)', async () => {
+    // Revisao da Task 1 (Critical 1): sem claim, dois processarFila simultaneos (duplo clique
+    // em /processar, ou o worker da Task 3 sobrepondo um dreno lento) leem a mesma linha
+    // PENDENTE e mandam o MESMO e-mail duas vezes. Instrumenta a COSTURA que o proprio
+    // servico define (alertService.enviarEmail — mesmo objeto de modulo que o require lazy
+    // devolve), contando chamadas e simulando SMTP ok com latencia, para abrir a janela de
+    // corrida de verdade. Nao mocka nodemailer.
+    const r = await enfileirarDireto(db, { evento: 'TESTE_CLAIM', dedupe_chave: 'claim-1' });
+    assert.strictEqual(r.enfileirada, true, JSON.stringify(r));
+
+    const original = alertService.enviarEmail;
+    let chamadas = 0;
+    alertService.enviarEmail = async () => {
+      chamadas++;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return { enviados: 1, erros: [] };
+    };
+    let resultados;
+    try {
+      resultados = await Promise.all([
+        queueService.processarFila(db, { id: r.id }),
+        queueService.processarFila(db, { id: r.id }),
+      ]);
+    } finally {
+      alertService.enviarEmail = original;
+    }
+
+    assert.strictEqual(chamadas, 1, `enviarEmail deveria ter sido chamado 1x, foi ${chamadas}x`);
+    assert.strictEqual(resultados[0].enviadas + resultados[1].enviadas, 1, JSON.stringify(resultados));
+
+    // De quebra, o caminho de SUCESSO (inexistente ate esta revisao): ENVIADO + enviado_em.
+    const row = await dbGet(db, 'SELECT status, enviado_em FROM fila_notificacoes_almoxarifado WHERE id = ?', [r.id]);
+    assert.strictEqual(row.status, 'ENVIADO', JSON.stringify(row));
+    assert.ok(row.enviado_em, 'enviado_em deveria estar preenchido');
+  });
+
+  await test('RN-03: linha com destinatarios vazios NUNCA vira ENVIADO', async () => {
+    // Revisao da Task 1 (Important iii-A): a regra de sucesso e `enviados > 0`, nunca `erros`
+    // vazio. Uma linha com '[]' gravado por fora do enfileirar (que barra isso) e o cenario
+    // que separa as duas regras — com `erros.length === 0` ela viraria ENVIADO sem mandar nada.
+    const hash = hashDedupe('TESTE_DEST_VAZIO', 'vazio-1');
+    const ins = await dbRun(db, `INSERT INTO fila_notificacoes_almoxarifado
+      (evento, hash_dedupe, destinatarios, assunto) VALUES ('TESTE_DEST_VAZIO', ?, '[]', '[Almoxarifado] vazio')`, [hash]);
+
+    await queueService.processarFila(db, { id: ins.lastID });
+    const row = await dbGet(db, 'SELECT status, ultimo_erro, enviado_em FROM fila_notificacoes_almoxarifado WHERE id = ?', [ins.lastID]);
+    assert.notStrictEqual(row.status, 'ENVIADO', JSON.stringify(row));
+    assert.strictEqual(row.enviado_em, null, JSON.stringify(row));
+    assert.strictEqual(row.ultimo_erro, 'Sem destinatário válido', JSON.stringify(row));
+
+    // E a regra de sucesso em si (`enviados > 0`, nunca `erros` vazio): transporte devolvendo
+    // {enviados: 0, erros: []} — o caso que separa as duas regras — NAO pode virar ENVIADO.
+    const r2 = await enfileirarDireto(db, { evento: 'TESTE_DEST_VAZIO', dedupe_chave: 'zero-sem-erro' });
+    const original = alertService.enviarEmail;
+    alertService.enviarEmail = async () => ({ enviados: 0, erros: [] });
+    try {
+      await queueService.processarFila(db, { id: r2.id });
+    } finally {
+      alertService.enviarEmail = original;
+    }
+    const row2 = await dbGet(db, 'SELECT status, tentativas, ultimo_erro FROM fila_notificacoes_almoxarifado WHERE id = ?', [r2.id]);
+    assert.notStrictEqual(row2.status, 'ENVIADO', JSON.stringify(row2));
+    assert.strictEqual(row2.tentativas, 1, JSON.stringify(row2));
+    assert.strictEqual(row2.ultimo_erro, 'Falha no envio', JSON.stringify(row2));
+  });
+
+  await test('RN-03: FALHA_NOTIFICACAO tem max proprio 1 mesmo com config 5', async () => {
+    // Revisao da Task 1 (Important iii-B): o teste 5 provava o max-1 com config JA em 1 —
+    // sabotar `evento === 'FALHA_NOTIFICACAO' ? 1 : maxConfig` para `maxConfig` passava verde.
+    // Aqui a config fica no default 5: so a regra do max proprio explica o FALHA na 1a tentativa.
+    const cfg = await dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'notificacoes_max_tentativas'`);
+    assert.strictEqual(cfg.valor, '5', 'pre-condicao: config no default 5');
+    await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = '["admin@gmp.com"]' WHERE chave = 'alertas_estoque_emails'`);
+
+    const antes = await dbGet(db, `SELECT COUNT(*) AS n FROM fila_notificacoes_almoxarifado WHERE evento = 'FALHA_NOTIFICACAO'`);
+    const hash = hashDedupe('FALHA_NOTIFICACAO', 'aviso-max-proprio');
+    const ins = await dbRun(db, `INSERT INTO fila_notificacoes_almoxarifado
+      (evento, hash_dedupe, destinatarios, assunto) VALUES ('FALHA_NOTIFICACAO', ?, '["a@b.com"]', '[Almoxarifado] aviso teste')`, [hash]);
+
+    await queueService.processarFila(db, { id: ins.lastID });
+    const row = await dbGet(db, 'SELECT status, tentativas FROM fila_notificacoes_almoxarifado WHERE id = ?', [ins.lastID]);
+    assert.strictEqual(row.status, 'FALHA', JSON.stringify(row));
+    assert.strictEqual(row.tentativas, 1, JSON.stringify(row));
+
+    // E nao gerou aviso de si mesma: o COUNT do evento inteiro subiu SO pela linha inserida.
+    const depois = await dbGet(db, `SELECT COUNT(*) AS n FROM fila_notificacoes_almoxarifado WHERE evento = 'FALHA_NOTIFICACAO'`);
+    assert.strictEqual(depois.n, antes.n + 1, JSON.stringify({ antes, depois }));
+    await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = '[]' WHERE chave = 'alertas_estoque_emails'`);
+  });
+
+  await test('RN-08: resumo ignora filtro; ?evento= filtra; itens seguem o contrato congelado', async () => {
+    setUser(ADMIN);
+    const cheio = (await request(app).get('/api/almoxarifado/notificacoes')).body;
+    const filtrado = (await request(app).get('/api/almoxarifado/notificacoes?status=FALHA')).body;
+    // Revisao da Task 1 (Important iv): resumo e do CONJUNTO INTEIRO — igual com e sem filtro.
+    assert.deepStrictEqual(filtrado.resumo, cheio.resumo, JSON.stringify({ cheio: cheio.resumo, filtrado: filtrado.resumo }));
+
+    const porEvento = (await request(app).get('/api/almoxarifado/notificacoes?evento=TESTE_CLAIM')).body;
+    assert.ok(porEvento.itens.length >= 1, JSON.stringify(porEvento.itens));
+    assert.ok(porEvento.itens.every((i) => i.evento === 'TESTE_CLAIM'), JSON.stringify(porEvento.itens));
+
+    // Contrato congelado (Important v): exatamente os 10 campos — SELECT * vazava hash_dedupe
+    // e os corpos inteiros para a listagem.
+    assert.deepStrictEqual(Object.keys(cheio.itens[0]).sort(), [
+      'assunto', 'created_at', 'destinatarios', 'enviado_em', 'evento',
+      'id', 'payload', 'status', 'tentativas', 'ultimo_erro',
+    ], JSON.stringify(cheio.itens[0]));
+  });
+
+  await test('RN-08: reenviar linha ENVIADA limpa enviado_em (reemissao deliberada)', async () => {
+    // Revisao da Task 1 (Important ii): decidido PERMITIR reenvio de ENVIADO (unico caminho de
+    // reemissao — o dedupe barra re-enfileirar). O reset tem de limpar enviado_em, senao a
+    // linha que falhar no reprocesso fica com carimbo de enviada e o painel mente.
+    const r = await enfileirarDireto(db, { evento: 'TESTE_REENVIO_OK', dedupe_chave: 'reenvio-ok-1' });
+    const original = alertService.enviarEmail;
+    alertService.enviarEmail = async () => ({ enviados: 1, erros: [] });
+    try {
+      await queueService.processarFila(db, { id: r.id });
+    } finally {
+      alertService.enviarEmail = original;
+    }
+    const antes = await dbGet(db, 'SELECT status, enviado_em FROM fila_notificacoes_almoxarifado WHERE id = ?', [r.id]);
+    assert.strictEqual(antes.status, 'ENVIADO', JSON.stringify(antes));
+    assert.ok(antes.enviado_em, 'pre-condicao: enviado_em preenchido');
+
+    setUser(ADMIN);
+    const res = await request(app).post(`/api/almoxarifado/notificacoes/${r.id}/reenviar`).send({});
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+
+    // SMTP ausente de novo -> o reprocesso falha; a linha NAO pode continuar carimbada.
+    const depois = await dbGet(db, 'SELECT status, enviado_em FROM fila_notificacoes_almoxarifado WHERE id = ?', [r.id]);
+    assert.notStrictEqual(depois.status, 'ENVIADO', JSON.stringify(depois));
+    assert.strictEqual(depois.enviado_em, null, JSON.stringify(depois));
+  });
+
+  await test('RN-09: notificar_movimentacoes so aceita 0 ou 1', async () => {
+    setUser(ADMIN);
+    let res = await request(app).put('/api/almoxarifado/configuracoes').send({ notificar_movimentacoes: 'banana' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Configuração "notificar_movimentacoes" deve ser 0 ou 1');
+    const row = await dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'notificar_movimentacoes'`);
+    assert.strictEqual(row.valor, '0', JSON.stringify(row)); // nada gravado
+
+    res = await request(app).put('/api/almoxarifado/configuracoes').send({ notificar_movimentacoes: '0' });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

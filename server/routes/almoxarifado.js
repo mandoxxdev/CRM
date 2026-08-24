@@ -1892,7 +1892,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // que esta regra nao serve.
       const PREFIXOS_DIAS = ['reposicao_', 'alerta_lote_'];
       const PREFIXOS_INTEIRO = ['notificacoes_worker_', 'notificacoes_max_'];
+      // Revisao da Task 1 (Minor i): a RN-09 promete "0 ou 1" para o liga/desliga — sem esta
+      // guarda, 'banana' gravava com 200 e o gancho da Task 2 trataria como desligado em
+      // silencio (getConfig compara com '1').
+      const CHAVES_BOOL = ['notificar_movimentacoes'];
       for (const [chave, valor] of entradas) {
+        if (CHAVES_BOOL.includes(chave) && !['0', '1'].includes(String(valor))) {
+          return res.status(400).json({ error: `Configuração "${chave}" deve ser 0 ou 1` });
+        }
         const ehDias = PREFIXOS_DIAS.some((p) => chave.startsWith(p));
         const ehInteiro = PREFIXOS_INTEIRO.some((p) => chave.startsWith(p));
         if (!ehDias && !ehInteiro) continue;

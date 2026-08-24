@@ -79,6 +79,17 @@ existe no SQLite e em JS é XOR; (d) sucesso de envio = `enviados > 0`, nunca `e
 (lista vazia devolve `{enviados: 0, erros: []}`). Sucesso: status `ENVIADO`, `enviado_em`
 preenchido. `processarFila(db, { id })` restringe a um item — é o que o reenvio usa.
 
+**Emenda da revisão da Task 1 (Critical):** dois drenos concorrentes (duplo clique em
+`/processar`, reenviar durante um dreno, worker sobrepondo dreno lento) liam a mesma linha
+PENDENTE e enviavam o mesmo e-mail duas vezes — o UPDATE para ENVIADO só acontece depois do
+await do SMTP. **Decisão: claim em memória de processo** (Set de ids em voo, has+add síncrono)
++ re-checagem de elegibilidade no banco após o claim. O app é um processo Node único (rotas,
+reenvio e worker vivem todos nele), então o Set cobre toda a concorrência real. **Descartado:**
+status `'ENVIANDO'` persistido — alargaria o domínio congelado do painel/400 e exigiria
+recuperação de linhas órfãs após crash. Se um dia houver um segundo processo, é esta decisão
+que se revisita. Linha sem destinatário útil nem chama o transporte: falha com
+`ultimo_erro = 'Sem destinatário válido'`.
+
 ### RN-04 — Movimentação confirmada enfileira DEPOIS do commit; erro não enfileira
 
 Gancho no fim de `stockService.registrarMovimentacao`, **depois** de todas as escritas
@@ -152,6 +163,14 @@ processa na hora; 404 se não existe; auditado), e
 `POST /api/almoxarifado/notificacoes/processar` (dispara o worker manualmente — para o painel
 e para testes; mesma ação). 403 padrão do `requirePermission` para PRODUCAO/ALMOXARIFE/COMPRAS.
 
+**Emenda da revisão da Task 1:** reenviar linha já **ENVIADA é permitido de propósito** — é o
+único caminho de reemissão de um e-mail perdido depois do aceite do SMTP (o dedupe da RN-02
+barra re-enfileirar o mesmo evento). O reset limpa **também `enviado_em`** (a versão original
+não citava; sem isso a linha reprocessada que falhasse ficava PENDENTE/FALHA com carimbo de
+enviada). **Descartado:** 400 para ENVIADO — tiraria do admin a única reemissão possível. A
+listagem do GET devolve **exatamente** os 10 campos do contrato (colunas nomeadas —
+`hash_dedupe`/corpos/`proxima_tentativa_em` não vazam).
+
 ### RN-09 — Configs semeadas, editáveis e validadas (precedente da Etapa 11)
 
 | Chave | Default | Validação |
@@ -167,7 +186,10 @@ Fase 2 — a versão original mandava reusar a mensagem da 11 para tudo, e ela *
 tentativas e minutos): prefixos de dias (`reposicao_`, `alerta_lote_`) mantêm o literal da 11
 `Configuração "<chave>" deve ser um número de dias maior que zero`; prefixos inteiros
 (`notificacoes_worker_`, `notificacoes_max_`) ganham
-`Configuração "<chave>" deve ser um número inteiro maior que zero`. Tudo no array `CAMPOS`
+`Configuração "<chave>" deve ser um número inteiro maior que zero`. **Emenda da revisão da
+Task 1:** o "0 ou 1" de `notificar_movimentacoes` também é validado de verdade — fora do
+domínio → 400 `Configuração "notificar_movimentacoes" deve ser 0 ou 1` (sem a guarda,
+'banana' gravava com 200 e o gancho trataria como desligado em silêncio). Tudo no array `CAMPOS`
 da tela (com o guard espelho do client acompanhando as duas famílias). **Lote com vencimento
 liberado sai da varredura de lote-vencendo** (a liberação é decisão humana registrada —
 alertar de novo é ruído; letra D).
@@ -181,7 +203,10 @@ CREATE TABLE IF NOT EXISTS fila_notificacoes_almoxarifado (
                                         -- DEVOLUCAO_PARCIAL | ESTOQUE_ZERADO | LOTE_VENCENDO |
                                         -- REMESSA_VENCIDA | FALHA_NOTIFICACAO
   hash_dedupe TEXT NOT NULL UNIQUE,
-  destinatarios TEXT NOT NULL,          -- lista separada por virgula
+  destinatarios TEXT NOT NULL,          -- JSON array (gravado por enfileirar, lido com parseList)
+                                        -- (a versao original dizia "lista separada por virgula";
+                                        -- ESTAVA ERRADA: split por virgula geraria o destinatario
+                                        -- fantasma "[]" — achado da revisao da Task 1)
   assunto TEXT NOT NULL,
   corpo_html TEXT,
   corpo_texto TEXT,
