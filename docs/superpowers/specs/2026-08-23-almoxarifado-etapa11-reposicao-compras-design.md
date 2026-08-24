@@ -57,8 +57,17 @@ Por material, nesta ordem (`origem_ponto` no payload diz qual valeu):
 |---|---|---|
 | `ponto_reposicao > 0` no cadastro | o cadastrado | `CADASTRADO` |
 | senão, `consumo_medio_diario > 0` **e** `prazo_reposicao_dias > 0` | `consumo_medio_diario × prazo_reposicao_dias` | `CALCULADO` |
-| senão, `quantidade_minima > 0` | a mínima | `MINIMO` |
-| senão | 0 — material **sem régua**, nunca é sugerido | — |
+| **em qualquer caso**, se `quantidade_minima` for **maior** que o resultado acima | a mínima | `MINIMO` |
+| nada disso | 0 — material **sem régua**, nunca é sugerido | — |
+
+**Emendada pela revisão da Task 1 (Critical, medido): a MÍNIMA é o CHÃO de todas as réguas.**
+A versão original era uma precedência seca (cadastrado > calculado > mínima) — **estava
+errada**: giro baixo (1 un. em 90 dias) × prazo 10 dava ponto CALCULADO de 0,111 que *vencia*
+a mínima de 100, e o material **desaparecia da sugestão** enquanto o alerta de mínimo e o
+`verificar-minimos` legado gritavam por ele (que abria solicitação de 195). Preencher o prazo
+— que a própria etapa incentiva — piorava o resultado. Com o chão: se o alerta de mínimo
+dispara, a sugestão existe, sempre; `origem_ponto` diz quem venceu de fato (o chão vale
+também para um `ponto_reposicao` cadastrado abaixo da mínima).
 
 O `CALCULADO` é a spec 22 ("consumo médio + prazo de fornecedor") em fórmula: o ponto é o
 consumo esperado **durante o prazo de reposição** — pedir quando o estoque só cobre o tempo de

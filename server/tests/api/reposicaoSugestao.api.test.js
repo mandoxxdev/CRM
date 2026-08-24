@@ -108,6 +108,60 @@ function itemDe(res, materialId) {
     assert.strictEqual(itSemRegua, undefined, 'material sem regua nunca deveria ser sugerido');
   });
 
+  await test('RN-02 (emenda da revisao): a MINIMA e o chao — prazo preenchido nao esconde material do alerta', async () => {
+    // Critical da revisao da Task 1 (medido): giro baixo (1 un em 90 dias) x prazo 10 dava
+    // ponto CALCULADO 0.111 que vencia a minima 100 — o material sumia da sugestao enquanto
+    // o verificar-minimos legado abria solicitacao de 195. A minima e o chao de toda regua.
+    const matPrazoBaixoGiro = await novoMaterial(db, { qtd: 5, minima: 100, maxima: 200, prazo: 10 });
+    await saidaNoLivro(db, matPrazoBaixoGiro.id, 1, { diasAtras: 30 });
+
+    // E o chao vale tambem para o ponto CADASTRADO abaixo da minima.
+    const matCadastradoBaixo = await novoMaterial(db, { qtd: 5, minima: 100, ponto: 2 });
+
+    // Controle: CALCULADO ACIMA da minima continua CALCULADO (o chao so age quando maior).
+    const matCalculadoAlto = await novoMaterial(db, { qtd: 0, minima: 5, prazo: 30 });
+    await saidaNoLivro(db, matCalculadoAlto.id, 90, { diasAtras: 1 }); // 1/dia x 30 = 30 > 5
+
+    const res = await sugestoes(app);
+    const itPrazo = itemDe(res, matPrazoBaixoGiro.id);
+    assert.ok(itPrazo, 'material abaixo da minima TEM de ser sugerido mesmo com prazo preenchido');
+    assert.strictEqual(itPrazo.origem_ponto, 'MINIMO', JSON.stringify(itPrazo));
+    assert.strictEqual(itPrazo.ponto_efetivo, 100, JSON.stringify(itPrazo));
+    assert.strictEqual(itPrazo.quantidade_sugerida, 195, JSON.stringify(itPrazo)); // alvo 200 - posicao 5
+
+    const itCadBaixo = itemDe(res, matCadastradoBaixo.id);
+    assert.ok(itCadBaixo, 'cadastrado abaixo da minima nao esconde o material');
+    assert.strictEqual(itCadBaixo.origem_ponto, 'MINIMO', JSON.stringify(itCadBaixo));
+    assert.strictEqual(itCadBaixo.ponto_efetivo, 100, JSON.stringify(itCadBaixo));
+
+    const itCalcAlto = itemDe(res, matCalculadoAlto.id);
+    assert.strictEqual(itCalcAlto.origem_ponto, 'CALCULADO', JSON.stringify(itCalcAlto));
+    assert.strictEqual(itCalcAlto.ponto_efetivo, 30, JSON.stringify(itCalcAlto));
+  });
+
+  await test('RN-01: TODO tipo de TIPOS_SAIDA conta como consumo (fonte unica presa por teste)', async () => {
+    // Buraco apontado pela revisao: trocar a fonte unica por ['SAIDA'] passava 10/10 — so o
+    // tipo generico aparecia nas fixtures. Um material por tipo, cada um TEM de virar consumo
+    // (mesmo precedente de clientePosicaoTipos.api.test.js, citado no movementTypes.js).
+    const { TIPOS_SAIDA } = require('../../services/almoxarifado/movementTypes');
+    for (const tipo of TIPOS_SAIDA) {
+      const mat = await novoMaterial(db, { qtd: 0, prazo: 90 });
+      await saidaNoLivro(db, mat.id, 90, { diasAtras: 1, tipo });
+      const res = await sugestoes(app);
+      const item = itemDe(res, mat.id);
+      assert.ok(item, `tipo ${tipo} deveria gerar consumo e sugestao`);
+      assert.strictEqual(item.consumo_medio_diario, 1, `tipo ${tipo}: ${JSON.stringify(item)}`);
+      assert.strictEqual(item.origem_ponto, 'CALCULADO', `tipo ${tipo}`);
+    }
+  });
+
+  await test('RN-01: material INATIVO fica fora (preso por teste)', async () => {
+    const mat = await novoMaterial(db, { qtd: 0, minima: 50 });
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET ativo = 0 WHERE id = ?', [mat.id]);
+    const res = await sugestoes(app);
+    assert.strictEqual(itemDe(res, mat.id), undefined, 'material inativo nao pode virar sugestao de compra');
+  });
+
   await test('RN-03: solicitacao aberta entra na posicao e tira o material da sugestao (com horizonte)', async () => {
     const mat = await novoMaterial(db, { minima: 5, qtd: 0 });
 
@@ -209,6 +263,69 @@ function itemDe(res, materialId) {
     assert.strictEqual(itemDe(res, matCriticoComSaldo.id).risco_parada, false, JSON.stringify(itemDe(res, matCriticoComSaldo.id)));
     assert.strictEqual(itemDe(res, matNaoCriticoZerado.id).risco_parada, false, JSON.stringify(itemDe(res, matNaoCriticoZerado.id)));
     assert.ok(res.body.resumo.riscos_parada >= 1, JSON.stringify(res.body.resumo));
+
+    // O caso que separa DISPONIVEL de POSICAO (buraco apontado pela revisao: com a_caminho 0
+    // as duas formulas sao indistinguiveis e a sabotagem posicao<=0 passava 10/10). Critico
+    // zerado COM solicitacao a caminho: a posicao e 5, mas solicitacao nao segura producao —
+    // risco continua true.
+    const matCriticoACaminho = await novoMaterial(db, { minima: 20, qtd: 0 });
+    await dbRun(db, `UPDATE materiais_almoxarifado SET material_critico = 1 WHERE id = ?`, [matCriticoACaminho.id]);
+    await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, status) VALUES (?, 5, 'PENDENTE')`,
+      [matCriticoACaminho.id]);
+    const res2 = await sugestoes(app);
+    const itACaminho = itemDe(res2, matCriticoACaminho.id);
+    assert.strictEqual(itACaminho.a_caminho, 5, JSON.stringify(itACaminho));
+    assert.strictEqual(itACaminho.posicao, 5, JSON.stringify(itACaminho));
+    assert.strictEqual(itACaminho.risco_parada, true, 'a_caminho nao tira o risco: ' + JSON.stringify(itACaminho));
+  });
+
+  await test('contrato: resumo, janela_dias e totais do grupo em cenario controlado (strictEqual)', async () => {
+    // Buraco apontado pela revisao: janela_dias, resumo inteiro e totais de grupo passavam
+    // com valores hardcoded (assert.ok >= nao prende nada). Cenario com DELTA: mede o resumo
+    // antes, cria 2 materiais controlados, mede depois — o banco e compartilhado no arquivo.
+    const antes = await sugestoes(app);
+    const resumoAntes = antes.body.resumo;
+    assert.strictEqual(antes.body.janela_dias, 90, JSON.stringify(antes.body.janela_dias));
+
+    const fornR = await dbRun(db, `INSERT INTO fornecedores (razao_social) VALUES ('Fornecedor Contrato')`);
+    const matA = await novoMaterial(db, { qtd: 0, minima: 10, maxima: 10, custo: 3, fornecedor_id: fornR.lastID });
+    const matB = await novoMaterial(db, { qtd: 0, minima: 4, maxima: 4, custo: 5, fornecedor_id: fornR.lastID });
+
+    const res = await sugestoes(app);
+    assert.strictEqual(res.body.resumo.materiais_sugeridos, resumoAntes.materiais_sugeridos + 2, JSON.stringify(res.body.resumo));
+    assert.strictEqual(Number((res.body.resumo.valor_total - resumoAntes.valor_total).toFixed(2)), 50, // 10x3 + 4x5
+      JSON.stringify(res.body.resumo));
+    assert.strictEqual(res.body.resumo.riscos_parada, resumoAntes.riscos_parada, JSON.stringify(res.body.resumo));
+
+    const grupo = res.body.fornecedores.find((g) => g.fornecedor_id === fornR.lastID);
+    assert.strictEqual(grupo.fornecedor_nome, 'Fornecedor Contrato');
+    assert.strictEqual(grupo.total_itens, 2, JSON.stringify(grupo));
+    assert.strictEqual(grupo.valor_total, 50, JSON.stringify(grupo));
+    assert.strictEqual(itemDe(res, matA.id).valor_estimado, 30, JSON.stringify(itemDe(res, matA.id)));
+    assert.strictEqual(itemDe(res, matB.id).valor_estimado, 20, JSON.stringify(itemDe(res, matB.id)));
+  });
+
+  await test('config alterada muda a janela DE VERDADE (a leitura da config presa por teste)', async () => {
+    // Buraco apontado pela revisao: nenhum teste escrevia config — as sabotagens de numero
+    // hardcoded so pegavam porque mudavam o valor, nao porque provavam a leitura.
+    await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = '30' WHERE chave = 'reposicao_janela_consumo_dias'`);
+    const mat = await novoMaterial(db, { qtd: 0, prazo: 30 });
+    await saidaNoLivro(db, mat.id, 30, { diasAtras: 1 }); // 30 em 30 dias = 1/dia
+    const res = await sugestoes(app);
+    assert.strictEqual(res.body.janela_dias, 30, JSON.stringify(res.body.janela_dias));
+    assert.strictEqual(itemDe(res, mat.id).consumo_medio_diario, 1, JSON.stringify(itemDe(res, mat.id)));
+    await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = '90' WHERE chave = 'reposicao_janela_consumo_dias'`);
+  });
+
+  await test('fornecedor orfao (id sem cadastro) ganha rotulo, nunca cabecalho nulo', async () => {
+    // Minor da revisao: fornecedor_id e INTEGER solto sem FK — apagado, o LEFT JOIN devolvia
+    // nome null (cabecalho vazio na tela) e String(null) ordenava como a palavra "null".
+    const mat = await novoMaterial(db, { qtd: 0, minima: 5, fornecedor_id: 424242 });
+    const res = await sugestoes(app);
+    const grupo = res.body.fornecedores.find((g) => g.fornecedor_id === 424242);
+    assert.ok(grupo, 'grupo do fornecedor orfao deveria existir');
+    assert.strictEqual(grupo.fornecedor_nome, 'Fornecedor #424242 (não cadastrado)', JSON.stringify(grupo));
+    assert.ok(itemDe(res, mat.id), JSON.stringify(grupo));
   });
 
   await test('RN-01: material de cliente fica fora', async () => {

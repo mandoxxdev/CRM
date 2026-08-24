@@ -68,11 +68,20 @@ async function calcularSugestoes(db) {
   const itens = [];
   for (const r of rows) {
     const consumoDiario = r.consumo_janela / janela;
+    // RN-02 (emendada pela revisao da Task 1, Critical): a MINIMA e o CHAO de todas as
+    // reguas — se o alerta de minimo grita, a sugestao TEM de existir. Sem o chao, preencher
+    // o prazo (que a propria etapa incentiva) fazia o material DESAPARECER: giro baixo x
+    // prazo dava ponto microscopico (0.11) que vencia a minima (100), e o material ficava
+    // invisivel na sugestao enquanto o verificar-minimos legado abria solicitacao de 195.
+    // origem_ponto diz quem venceu DE FATO.
     let pontoEfetivo = 0; let origemPonto = null;
     if (r.ponto_reposicao > 0) { pontoEfetivo = r.ponto_reposicao; origemPonto = 'CADASTRADO'; }
     else if (consumoDiario > 0 && r.prazo_reposicao_dias > 0) {
       pontoEfetivo = consumoDiario * r.prazo_reposicao_dias; origemPonto = 'CALCULADO';
-    } else if (r.quantidade_minima > 0) { pontoEfetivo = r.quantidade_minima; origemPonto = 'MINIMO'; }
+    }
+    if ((r.quantidade_minima || 0) > pontoEfetivo) {
+      pontoEfetivo = r.quantidade_minima; origemPonto = 'MINIMO';
+    }
     if (pontoEfetivo <= 0) continue;                     // RN-02: sem regua, nunca sugere
 
     const posicao = r.disponivel + r.a_caminho;          // RN-03
@@ -86,7 +95,8 @@ async function calcularSugestoes(db) {
     itens.push({
       material_id: r.material_id, codigo: r.codigo, nome: r.nome, unidade: r.unidade,
       fornecedor_id: r.fornecedor_id, fornecedor_nome: r.fornecedor_nome,
-      disponivel: r.disponivel, a_caminho: r.a_caminho, posicao,
+      disponivel: Number(r.disponivel.toFixed(4)), a_caminho: Number(r.a_caminho.toFixed(4)),
+      posicao: Number(posicao.toFixed(4)),
       consumo_medio_diario: Number(consumoDiario.toFixed(4)),
       prazo_reposicao_dias: r.prazo_reposicao_dias || 0,
       ponto_efetivo: Number(pontoEfetivo.toFixed(4)), origem_ponto: origemPonto,
@@ -105,7 +115,12 @@ async function calcularSugestoes(db) {
     if (!porFornecedor.has(chave)) {
       porFornecedor.set(chave, {
         fornecedor_id: item.fornecedor_id,
-        fornecedor_nome: item.fornecedor_id == null ? 'Sem fornecedor definido' : item.fornecedor_nome,
+        // Fornecedor apagado/orfao (a coluna e INTEGER solto, sem FK): nome nulo viraria
+        // cabecalho vazio na tela e String(null) ordenava como a palavra "null" — o rotulo
+        // aponta o dado a consertar em vez de esconde-lo (revisao da Task 1).
+        fornecedor_nome: item.fornecedor_id == null
+          ? 'Sem fornecedor definido'
+          : (item.fornecedor_nome || `Fornecedor #${item.fornecedor_id} (não cadastrado)`),
         itens: [], total_itens: 0, valor_total: 0,
       });
     }
