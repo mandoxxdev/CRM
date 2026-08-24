@@ -398,6 +398,9 @@ async function suprimirNotificacaoMovimentacao(db, movimentacaoId) {
  */
 async function varrerLembretesFerramenta(db) {
   const alertService = require('./alertService');
+  // Revisao da Task 3 (I1): o destino e alertas_estoque_emails — o toggle "Notificar por
+  // e-mail" da tela de Alertas governa (ver alertService.alertasEmailLigado).
+  if (!(await alertService.alertasEmailLigado(db))) return { total: 0, enfileiradas: 0, motivo: 'email desligado' };
   const emprestimos = await toolReminderService.listarEmprestimosVencidos(db);
   const hoje = new Date().toISOString().slice(0, 10);
   const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
@@ -439,8 +442,15 @@ async function varrerLembretesFerramenta(db) {
  */
 async function varrerLotesVencendo(db) {
   const alertService = require('./alertService');
+  if (!(await alertService.alertasEmailLigado(db))) return { total: 0, enfileiradas: 0, motivo: 'email desligado' };
   const dias = await lerConfigNumero(db, 'alerta_lote_vencendo_dias', 30);
 
+  // Revisao da Task 3 (I4): SEM piso na janela — a versao com BETWEEN date('now') excluia o
+  // lote JA VENCIDO com saldo na prateleira, que e o caso de maior valor operacional (lote
+  // recebido vencido/curto, ou cuja janela passou com o processo fora do ar), e ele nunca mais
+  // alertava. Incluir vencidos nao spamma: o dedupe por <lote_id>-<data_validade> garante UM
+  // aviso por validade, nao um por dia. 'ATIVO' e o literal de lotService.STATUS_LOTE (fonte
+  // dos status; so ATIVO participa — M8).
   const lotes = await dbAll(db, `
     SELECT l.*, m.codigo AS material_codigo, m.nome AS material_nome, m.unidade AS material_unidade,
       COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id), 0) AS saldo
@@ -448,7 +458,7 @@ async function varrerLotesVencendo(db) {
     JOIN materiais_almoxarifado m ON m.id = l.material_id
     WHERE l.status = 'ATIVO'
       AND l.data_validade IS NOT NULL
-      AND date(l.data_validade) BETWEEN date('now') AND date('now', '+' || ? || ' days')
+      AND date(l.data_validade) <= date('now', '+' || ? || ' days')
       AND l.vencimento_liberado_em IS NULL`, [dias]);
 
   const lotesComSaldo = lotes.filter((l) => Number(l.saldo) > 0);
@@ -488,6 +498,7 @@ async function varrerRemessasVencidas(db) {
   // Lazy — ver a nota no topo do arquivo sobre o ciclo thirdPartyService -> stockService -> este
   // servico.
   const thirdPartyService = require('./thirdPartyService');
+  if (!(await alertService.alertasEmailLigado(db))) return { total: 0, enfileiradas: 0, motivo: 'email desligado' };
   const remessas = await thirdPartyService.listarRemessas(db, { vencidas: '1' });
   const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
 

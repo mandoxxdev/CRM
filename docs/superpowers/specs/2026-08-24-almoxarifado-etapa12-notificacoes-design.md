@@ -153,6 +153,13 @@ cliente é a matriz-tabela que ficou de fora.
 
 ### RN-07 — Alertas novos (fatia da spec 26, com máquina/duplicidade)
 
+**Emenda da revisão da Task 3 (I1):** o checkbox **"Notificar por e-mail"**
+(`alertas_estoque_notificar_email`) governa **todo aviso destinado à lista
+`alertas_estoque_emails`** — zerado, lote vencendo, remessa vencida, lembrete de ferramenta e
+devolução parcial. Quem desligou o e-mail de alerta de estoque não volta a receber e-mail nos
+mesmos endereços por um canal novo. Solicitações de compra ficam fora (canal próprio).
+Decisão reversível, letra B.
+
 - **Estoque zerado**: **emendado pela Fase 2 — a versão original dizia "dentro da máquina
   existente" e "disponível ≤ 0"; as duas partes estavam erradas.** A tabela de estado tem UMA
   coluna (`estado_estoque` ACIMA/ABAIXO) — um terceiro valor quebraria o alerta de mínimo nos
@@ -160,11 +167,29 @@ cliente é a matriz-tabela que ficou de fora.
   mínimo, onde o zerado mais vale; e "disponível ≤ 0" marcaria como zerado material 100%
   reservado que está na prateleira. O certo: **função separada** (`avaliarZerado`), duas
   colunas novas de estado (`estado_zerado`/`ultimo_alerta_zerado`, safeAlter), régua
-  **`quantidade_atual ≤ 0`**, sem guarda de mínimo, cliente fora, mesmo padrão de
-  transição+debounce, disparando pela FILA. Zerar → alerta; repor → rearma.
-- **Lote próximo do vencimento**: job diário — lotes ativos com `data_validade` entre hoje e
+  **`quantidade_atual ≤ 0`**, cliente fora, disparando pela FILA. Zerar → alerta; repor →
+  rearma. **Emendas da revisão da Task 3 (a primeira entrega estava errada em quatro
+  pontos, todos medidos):** (a) *Critical* — o dedupe era um nonce (`Date.now()`) e a marcação
+  de estado vinha depois do enfileirar: duas chamadas concorrentes (o
+  `PUT /configuracoes/estoques-minimos` faz `Promise.all` pelos ids do payload) enfileiravam
+  dois e-mails idênticos. Agora **a transição de estado é o claim** (UPDATE atômico condicionado
+  a `COM_SALDO`; só `changes === 1` alerta), com anti-flap fixo de 60s lendo
+  `ultimo_alerta_zerado`. Custo aceito: estado marca antes do envio. (b) material **inativo**
+  fica fora (catálogo desativado é justamente o que está zerado). (c) "sem guarda de mínimo"
+  **estava errado como regra de disparo**: material COM mínimo configurado fica no canal do
+  mínimo (zerado ⊂ abaixo-do-mínimo — dois canais mandavam dois e-mails do mesmo fato); o
+  zerado dispara **só para material sem mínimo**, que é o racional escrito deste design.
+  (d) material visto pela primeira vez **já zerado** é semeado como ZERADO **sem alertar** — a
+  máquina alerta transições observadas; sem isso a primeira gravação em lote da tela de
+  estoques-mínimos despejava um aviso por material zerado do catálogo.
+- **Lote próximo do vencimento**: job diário — lotes ativos com `data_validade` **até**
   `+N dias` (config `alerta_lote_vencendo_dias`, default `30`), com saldo > 0;
   `dedupe: lote-vencendo-<lote_id>-<data_validade>` (um aviso por lote/validade, não por dia).
+  **Emenda da revisão da Task 3 — "entre hoje e +N" estava errado:** o piso excluía para
+  sempre o lote **já vencido** com saldo na prateleira (recebido vencido, ou cuja janela passou
+  com o processo parado), que é o caso de maior valor. Sem piso; o dedupe por validade impede
+  repetição diária. Lote de material **de cliente** alerta normalmente — validade é qualidade
+  do que o galpão guarda, não reposição (decisão registrada; contraste com o zerado).
 - **Remessa a terceiro vencida**: job diário — **emenda da Fase 2: a rota `/vencidas` só
   DELEGA; a fonte única já é `thirdPartyService.listarRemessas(db, { vencidas: '1' })`**
   (nada a extrair, nada a refatorar). A coluna é **`prazo_previsto`** (a versão original

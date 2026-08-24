@@ -31,11 +31,11 @@ let seq = 0;
 async function novoMaterial(db, over = {}) {
   seq += 1;
   const m = { codigo: `ALN-${seq}`, nome: `Material Alerta ${seq}`, unidade: 'UN', qtd: 10,
-    cliente_id: null, ...over };
+    cliente_id: null, ativo: 1, minima: 0, reservada: 0, ...over };
   const r = await dbRun(db, `INSERT INTO materiais_almoxarifado
-      (codigo, nome, unidade, quantidade_atual, ativo, proprietario_cliente_id)
-     VALUES (?,?,?,?,1,?)`,
-    [m.codigo, m.nome, m.unidade, m.qtd, m.cliente_id]);
+      (codigo, nome, unidade, quantidade_atual, quantidade_minima, quantidade_reservada, ativo, proprietario_cliente_id)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [m.codigo, m.nome, m.unidade, m.qtd, m.minima, m.reservada, m.ativo, m.cliente_id]);
   return { id: r.lastID, codigo: m.codigo, nome: m.nome };
 }
 
@@ -116,7 +116,17 @@ async function criarRemessa(db, over = {}) {
     const estadoComSaldo = await dbGet(db, `SELECT estado_zerado FROM alertas_estoque_material_almoxarifado WHERE material_id = ?`, [mat.id]);
     assert.strictEqual(estadoComSaldo.estado_zerado, 'COM_SALDO', JSON.stringify(estadoComSaldo));
 
-    // Zera de NOVO: rearmado, dispara a SEGUNDA vez (par completo de transicoes).
+    // Zera de NOVO dentro do anti-flap de 60s (revisao C1/M4): NAO dispara — material
+    // oscilando 0<->1 em rajada de movimentacoes nao pode spammar.
+    await setQuantidade(db, mat.id, 0);
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    assert.strictEqual((await filaZeradoDoMaterial(db, mat.id)).length, 1, 'anti-flap de 60s deveria segurar o 2o episodio imediato');
+
+    // Recuo o carimbo (como a maquina do minimo faz nos testes de debounce) e repito o par:
+    // rearmado E fora do anti-flap, dispara a SEGUNDA vez (par completo de transicoes).
+    await setQuantidade(db, mat.id, 15);
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    await dbRun(db, `UPDATE alertas_estoque_material_almoxarifado SET ultimo_alerta_zerado = datetime('now', '-120 seconds') WHERE material_id = ?`, [mat.id]);
     await setQuantidade(db, mat.id, 0);
     await alertService.verificarAlertaPorMaterialId(db, mat.id);
     const segundaLeva = await filaZeradoDoMaterial(db, mat.id);
@@ -133,14 +143,101 @@ async function criarRemessa(db, over = {}) {
   });
 
   await test('RN-01: falha ao enfileirar zerado NAO derruba verificarAlertaPorMaterialId', async () => {
-    const mat = await novoMaterial(db, { qtd: 0 });
+    // Revisao da Task 3: com a semeadura (I2), material criado ja zerado nem chama enfileirar —
+    // para provar o try/catch, o material precisa ZERAR sob observacao da maquina.
+    const mat = await novoMaterial(db, { qtd: 8 });
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    await setQuantidade(db, mat.id, 0);
     const original = queueService.enfileirar;
-    queueService.enfileirar = async () => { throw new Error('SABOTAGEM: enfileirar explodiu'); };
+    let chamado = false;
+    queueService.enfileirar = async () => { chamado = true; throw new Error('SABOTAGEM: enfileirar explodiu'); };
     try {
       const r = await alertService.verificarAlertaPorMaterialId(db, mat.id);
       assert.ok(r, 'a chamada nao pode ter lancado nem devolvido algo falsy por causa da fila');
+      assert.ok(chamado, 'o enfileirar sabotado TEM de ter sido alcancado (senao o teste nao prova nada)');
     } finally {
       queueService.enfileirar = original;
+    }
+  });
+
+  await test('RN-02: dois disparos CONCORRENTES do zerado enfileiram UMA vez (claim atomico — revisao C1)', async () => {
+    // Cenario real: PUT /configuracoes/estoques-minimos faz Promise.all pelos ids do payload
+    // (ids repetidos = duas chamadas simultaneas no mesmo material), e duas movimentacoes
+    // simultaneas no mesmo material fazem o mesmo pelo gancho do motor.
+    // Nota do controle positivo: sabotar SO a checagem `claim.changes === 0` pode passar verde
+    // AQUI (duas chamadas no mesmo tick geram o mesmo Date.now() e o dedupe colide por
+    // acidente) — quem pega essa mutacao deterministicamente e o assert "nao pode ter
+    // disparado 2x seguidas" do teste do par completo. Os dois juntos cobrem o claim.
+    const mat = await novoMaterial(db, { qtd: 5 });
+    await alertService.verificarAlertaPorMaterialId(db, mat.id); // semeia COM_SALDO
+    await setQuantidade(db, mat.id, 0);
+    await Promise.all([
+      alertService.verificarAlertaPorMaterialId(db, mat.id),
+      alertService.verificarAlertaPorMaterialId(db, mat.id),
+    ]);
+    const linhas = await filaZeradoDoMaterial(db, mat.id);
+    assert.strictEqual(linhas.length, 1, JSON.stringify(linhas.map((l) => l.id)));
+  });
+
+  await test('RN-07: material INATIVO zerado nao alerta (revisao I2)', async () => {
+    const mat = await novoMaterial(db, { qtd: 7, ativo: 0 });
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    await setQuantidade(db, mat.id, 0);
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    assert.strictEqual((await filaZeradoDoMaterial(db, mat.id)).length, 0, 'inativo nao pode alertar zerado');
+  });
+
+  await test('RN-07: primeiro contato JA zerado semeia sem alertar; so a transicao observada alerta (revisao I2)', async () => {
+    // Sem a semeadura, a primeira gravacao em lote da tela de estoques-minimos em producao
+    // despejava um aviso por material zerado do catalogo.
+    const mat = await novoMaterial(db, { qtd: 0 });
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    assert.strictEqual((await filaZeradoDoMaterial(db, mat.id)).length, 0, 'primeiro contato ja zerado nao pode alertar');
+    const estado = await dbGet(db, `SELECT estado_zerado FROM alertas_estoque_material_almoxarifado WHERE material_id = ?`, [mat.id]);
+    assert.strictEqual(estado.estado_zerado, 'ZERADO', 'estado tem de ter sido semeado como ZERADO');
+
+    // Repoe e zera de novo: agora a transicao foi OBSERVADA -> alerta.
+    await setQuantidade(db, mat.id, 3);
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    await setQuantidade(db, mat.id, 0);
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    assert.strictEqual((await filaZeradoDoMaterial(db, mat.id)).length, 1, 'transicao observada deveria alertar');
+  });
+
+  await test('RN-07: material COM minimo configurado fica no canal do minimo — zerado nao dispara (revisao I3)', async () => {
+    // Zerado <= abaixo-do-minimo: os dois canais mandavam dois e-mails do mesmo fato para a
+    // mesma lista. O zerado existe para o material SEM minimo, que nada cobria.
+    const mat = await novoMaterial(db, { qtd: 10, minima: 5 });
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    await setQuantidade(db, mat.id, 0);
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    assert.strictEqual((await filaZeradoDoMaterial(db, mat.id)).length, 0, 'material com minimo nao pode alertar zerado');
+  });
+
+  await test('RN-07: regua e quantidade_atual DE VERDADE — 100% reservado (disponivel 0) nao e zerado (revisao I5)', async () => {
+    // A emenda da Fase 2 por escrito: "100% reservado ainda esta na prateleira". A mutacao
+    // sancionada (disponivelSql() AS quantidade_atual) daria disponivel 0 aqui e alertaria.
+    const mat = await novoMaterial(db, { qtd: 5, reservada: 5 });
+    await alertService.verificarAlertaPorMaterialId(db, mat.id);
+    assert.strictEqual((await filaZeradoDoMaterial(db, mat.id)).length, 0, '100% reservado NAO e zerado (regua e quantidade_atual)');
+    const estado = await dbGet(db, `SELECT estado_zerado FROM alertas_estoque_material_almoxarifado WHERE material_id = ?`, [mat.id]);
+    assert.strictEqual(estado.estado_zerado, 'COM_SALDO', JSON.stringify(estado));
+  });
+
+  await test('RN-07: toggle "Notificar por e-mail" desligado silencia zerado e varreduras (revisao I1)', async () => {
+    await setConfig(db, 'alertas_estoque_notificar_email', '0');
+    try {
+      const mat = await novoMaterial(db, { qtd: 4 });
+      await alertService.verificarAlertaPorMaterialId(db, mat.id);
+      await setQuantidade(db, mat.id, 0);
+      await alertService.verificarAlertaPorMaterialId(db, mat.id);
+      assert.strictEqual((await filaZeradoDoMaterial(db, mat.id)).length, 0, 'toggle OFF nao pode enfileirar zerado');
+
+      const r = await queueService.varrerRemessasVencidas(db);
+      assert.strictEqual(r.enfileiradas, 0, JSON.stringify(r));
+      assert.strictEqual(r.motivo, 'email desligado', JSON.stringify(r));
+    } finally {
+      await setConfig(db, 'alertas_estoque_notificar_email', '1');
     }
   });
 
@@ -174,6 +271,24 @@ async function criarRemessa(db, over = {}) {
     await queueService.varrerLotesVencendo(db);
     const linhas = await dbAll(db, `SELECT * FROM fila_notificacoes_almoxarifado WHERE evento = 'LOTE_VENCENDO' AND payload LIKE ?`, [`%"lote_id":${loteId}%`]);
     assert.strictEqual(linhas.length, 0, 'lote fora da janela de alerta_lote_vencendo_dias nao pode entrar');
+  });
+
+  await test('RN-07: lote JA VENCIDO com saldo ENTRA (sem piso na janela — revisao I4)', async () => {
+    // O caso de maior valor operacional: lote vencido com material na prateleira. A versao com
+    // BETWEEN date('now') o excluia para sempre (lote recebido vencido, ou janela que passou
+    // com o processo fora do ar). O dedupe por validade impede repeticao diaria.
+    const mat = await novoMaterial(db, { qtd: 50 });
+    const validadeOntem = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const loteId = await criarLote(db, mat.id, { data_validade: validadeOntem });
+    await darSaldoAoLote(db, mat.id, loteId, 15);
+
+    await queueService.varrerLotesVencendo(db);
+    const linhas = await dbAll(db, `SELECT * FROM fila_notificacoes_almoxarifado WHERE evento = 'LOTE_VENCENDO' AND payload LIKE ?`, [`%"lote_id":${loteId}%`]);
+    assert.strictEqual(linhas.length, 1, 'lote vencido com saldo TEM de alertar');
+
+    await queueService.varrerLotesVencendo(db);
+    const linhas2 = await dbAll(db, `SELECT * FROM fila_notificacoes_almoxarifado WHERE evento = 'LOTE_VENCENDO' AND payload LIKE ?`, [`%"lote_id":${loteId}%`]);
+    assert.strictEqual(linhas2.length, 1, 'vencido nao pode virar spam diario (dedupe por validade)');
   });
 
   await test('RN-07: lote sem saldo nao entra', async () => {

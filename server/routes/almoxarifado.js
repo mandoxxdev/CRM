@@ -2793,26 +2793,30 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // (mesmo padrao do job de lembretes acima).
 
   // Job A — worker da fila de notificacoes. O intervalo (`notificacoes_worker_intervalo_min`,
-  // config, default 5) e lido UMA VEZ no boot — mesmo padrao simples do REMINDER_INTERVAL_MS
-  // acima, que tambem e fixo. Alternativa descartada: reler a config a cada disparo, que
-  // reagiria a uma mudanca em Configuracoes sem reiniciar o processo, mas custaria um SELECT
-  // extra por tick so pra decidir o proprio intervalo do proximo tick — complexidade que o
-  // design nao pediu ("escolha o mais simples e documente"). Mudar o intervalo via
-  // Configuracoes exige reiniciar o processo para valer; documentado aqui de proposito.
-  dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'notificacoes_worker_intervalo_min'`, [])
-    .catch(() => null)
-    .then((row) => {
-      const n = parseFloat(row?.valor);
-      const workerIntervalMin = Number.isFinite(n) && n > 0 ? n : 5;
-      const WORKER_INTERVAL_MS = workerIntervalMin * 60 * 1000;
-      const runNotificationWorker = () => {
-        notificationQueueService.processarFila(db).catch((err) => {
-          console.warn('[almoxarifado-notificacoes] Erro no worker da fila:', err.message);
-        });
-      };
-      setTimeout(runNotificationWorker, 30 * 1000).unref();
-      setInterval(runNotificationWorker, WORKER_INTERVAL_MS).unref();
-    });
+  // config, default 5) e lido UMA vez, DENTRO do primeiro timer (30s pos-boot) — revisao da
+  // Task 3 (M5): a versao anterior lia a config na mesma volta do event loop em que
+  // `initSchema(db)` (nao-awaited, ~:101) ainda estava criando a tabela; em banco novo o
+  // `.catch` engolia o erro e o worker ficava no default 5 sem aviso ate o 2o boot. Aos 30s o
+  // schema ja assentou. Alternativa descartada: reler a cada disparo (SELECT por tick so para
+  // decidir o proprio proximo tick). Assimetria documentada (M6): o BACKOFF do processarFila
+  // rele a config a cada execucao — mudar em Configuracoes muda o backoff na hora e o
+  // intervalo do tick so apos reiniciar o processo.
+  setTimeout(() => {
+    dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'notificacoes_worker_intervalo_min'`, [])
+      .catch(() => null)
+      .then((row) => {
+        const n = parseFloat(row?.valor);
+        const workerIntervalMin = Number.isFinite(n) && n > 0 ? n : 5;
+        const WORKER_INTERVAL_MS = workerIntervalMin * 60 * 1000;
+        const runNotificationWorker = () => {
+          notificationQueueService.processarFila(db).catch((err) => {
+            console.warn('[almoxarifado-notificacoes] Erro no worker da fila:', err.message);
+          });
+        };
+        runNotificationWorker();
+        setInterval(runNotificationWorker, WORKER_INTERVAL_MS).unref();
+      });
+  }, 30 * 1000).unref();
 
   // Job B — varreduras diarias (lembrete de ferramenta vencida, lote proximo do vencimento,
   // remessa a terceiro vencida). Uma vez por dia basta: o dedupe de cada varredura ja e por

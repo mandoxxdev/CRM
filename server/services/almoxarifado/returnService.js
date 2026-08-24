@@ -258,7 +258,12 @@ async function registrarDevolucao(db, user, data) {
       // RN-06/RN-01: aviso da devolucao parcial na fila, ANTES do `throw e` abaixo, em try/catch
       // PROPRIO — o aviso nao pode nem engolir nem substituir o erro original que o operador
       // precisa ler (a mensagem do motor e o que diz o que corrigir).
+      // Revisao da Task 3 (I1): destino e alertas_estoque_emails -> o toggle "Notificar por
+      // e-mail" governa (mesma regra do zerado e das varreduras). O parseBool com default
+      // ligado vive em alertService.alertasEmailLigado; se o toggle falhar na leitura, o
+      // catch abaixo engole como qualquer falha de aviso (RN-01).
       try {
+        if (await alertService.alertasEmailLigado(db)) {
         const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
         const linhas = [
           `Devolução: #${r.lastID}`,
@@ -277,6 +282,7 @@ async function registrarDevolucao(db, user, data) {
           corpo_html: `<div>${linhas.map((l) => `<p>${alertService.escapeHtml(l)}</p>`).join('\n')}</div>`,
           payload: { devolucao_id: r.lastID },
         });
+        }
       } catch (avisoErr) {
         console.warn('[almoxarifado-notificacoes] Falha ao enfileirar aviso de devolucao parcial:', avisoErr.message);
       }
