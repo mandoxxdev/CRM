@@ -162,16 +162,21 @@ A classificação é **manual**: o sistema não calcula a curva ABC sozinho nem 
 | Campo | O que faz de fato |
 |---|---|
 | **Estoque Mínimo** | é o parâmetro que **dispara** a condição de crítico, o alerta e a sugestão de compra |
-| **Estoque Máximo** | entra na **conta da quantidade sugerida de compra** (ver abaixo); não bloqueia entrada acima dele nem gera alerta de excesso |
-| **Ponto de Reposição** | referência de gestão, registrada na ficha |
-| **Lote Econômico** | quantidade de compra recomendada, registrada na ficha |
+| **Estoque Máximo** | entra na **conta da quantidade sugerida de compra** (21b) e marca **Excesso** no Estoque Parado; não bloqueia entrada acima dele |
+| **Ponto de Reposição** | quando preenchido (> 0), é a régua que dispara a sugestão de compra (21b) |
+| **Lote Econômico** | piso da quantidade sugerida de compra — a sugestão nunca vem menor que ele (21b) |
 
 **A regra do estoque mínimo, exatamente como o sistema decide:**
 
 - Um material entra na condição "crítico" quando **Estoque Mínimo é maior que zero** *e* **Saldo Atual é menor ou igual ao Estoque Mínimo**. Material com mínimo zerado nunca é crítico — zero significa "não controlado por mínimo", não "mínimo é zero".
 - É essa mesma condição que alimenta o KPI **Estoque Crítico** do Dashboard, a lista dos dez itens mais críticos (ordenados pela razão saldo ÷ mínimo, do menor para o maior) e o filtro de estoque baixo na lista de Materiais.
 - O **alerta por e-mail** não é enviado a cada movimentação: ele dispara na **travessia da fronteira**, quando o material estava acima do mínimo e passa a estar no mínimo ou abaixo. Enquanto continuar abaixo, não repete. Quando a reposição levar o saldo de volta para acima do mínimo, o estado é reiniciado e um novo alerta poderá ser enviado na próxima queda. O destinatário é configurado em **Configurações → Configurações Gerais**, campo "E-mail para Alertas de Estoque".
-- A mesma condição alimenta a **sugestão de compra**: o material que cruza o mínimo entra na lista de solicitações com o motivo "estoque mínimo", e a **quantidade sugerida** é calculada assim — **o que falta para chegar ao Estoque Máximo** (máximo menos saldo atual); se essa conta der menos que o Estoque Mínimo, sugere-se o próprio Estoque Mínimo. É por isso que vale preencher o máximo mesmo ele não bloqueando nada: sem ele, a sugestão fica limitada ao mínimo.
+- A **sugestão de compra** mora na tela **Reposição e Compras** (21b), com régua própria — o
+  mínimo é o **chão** dela: material abaixo do mínimo sempre aparece sugerido. Existe também
+  uma verificação automática mais antiga (restrita ao Administrador, em rota de configuração)
+  que cria solicitações com o motivo "estoque mínimo" pela conta simples máximo − saldo; a
+  tela de Reposição é o caminho recomendado, porque considera também o que já foi pedido e o
+  consumo real.
 - Material de cliente **não** entra em nenhuma dessas contas: o KPI de crítico, o alerta e a sugestão de compra olham apenas o estoque próprio.
 
 Mínimo, máximo, ponto de pedido e prazo de reposição também podem ser revisados em massa, sem abrir material por material, em **Configurações → aba "Estoques Mínimos"** — uma tabela com Saldo Atual, Estoque mín., Estoque máx., Ponto Pedido, Prazo Repos. (dias) e um indicador de status por linha.
@@ -2317,6 +2322,99 @@ qualquer usuário autenticado, como todo GET do módulo.
 Toda ação de escrita fica registrada na auditoria do módulo, com o usuário responsável.
 
 ---
+
+## 21b. Reposição e compras
+
+A tela é **Almoxarifado → Reposição e Compras**, com três abas: **Sugestões de Compra**,
+**Estoque Parado** e **Solicitações**. Toda a tela exige a permissão de **gerenciar reposição**
+(Administrador, Gestor e Compras — o Almoxarife **não** tem, de propósito: ele conta e
+movimenta, mas decidir compra é gestão). Quem não tem a permissão vê um painel de "sem
+permissão" com o motivo — nunca uma lista vazia. Material de cliente não entra em nenhuma
+conta desta tela.
+
+### 21b.1 Quando um material é sugerido — as três réguas e o chão
+
+O sistema calcula, por material, um **ponto de reposição efetivo** (a coluna "Ponto (origem)"
+diz qual régua valeu):
+
+| Régua | Quando vale | `origem` |
+|---|---|---|
+| **Ponto de Reposição** da ficha, quando > 0 | vence as outras | Cadastrado |
+| senão, **consumo médio diário × Prazo de Reposição (dias)** — quando há consumo na janela e prazo preenchido | "pedir quando o estoque só cobre o tempo de entrega"; a célula mostra a conta (`x/dia × Nd`) | Calculado |
+| **Estoque Mínimo é o CHÃO de qualquer régua** | se a régua vencedora der menos que o mínimo, vale o mínimo | Mínimo |
+
+Material sem nenhuma régua (tudo zerado) nunca é sugerido. O **consumo médio diário** é a soma
+de todas as saídas do livro (qualquer tipo que baixa patrimônio, inclusive sucata e perda —
+devolução **não** é descontada) nos últimos N dias, dividida por N — N é a configuração
+**Janela do Consumo Médio (dias)**, padrão 90, e a legenda da aba mostra o valor em uso.
+
+A **posição** do material é `disponível + a caminho`, onde "a caminho" soma as solicitações de
+compra abertas (pendentes ou vinculadas a pedido) criadas nos últimos **Horizonte da
+Solicitação (dias)** — padrão 60. O material é sugerido quando `posição < ponto efetivo`.
+Consequências práticas:
+
+- **O que já foi pedido não é pedido de novo** — gerar a solicitação tira o material da lista.
+- **Pendência insuficiente sugere só o complemento** — se falta 100 e há 10 pedidos, a
+  sugestão é 90.
+- **Solicitação velha (além do horizonte) deixa de contar** — o material volta à lista, e a
+  linha mostra o aviso de que **há solicitação antiga aberta** (título do ícone na coluna
+  "A caminho").
+
+### 21b.2 Quanto o sistema sugere
+
+> **alvo = o maior entre Estoque Máximo e o ponto efetivo** · **sugerida = alvo − posição**,
+> nunca menor que o **Lote Econômico** (quando preenchido)
+
+O valor estimado é `sugerida × custo unitário` (mesma fonte de custo do resto do sistema:
+custo médio, ou o do cadastro quando não há médio). As sugestões saem **agrupadas por
+fornecedor** (o do cadastro do material), em ordem alfabética, com total de itens e valor por
+grupo; materiais sem fornecedor ficam no grupo **"Sem fornecedor definido"**, sempre por
+último. Um detalhe honesto: comprar o **lote econômico** pode levar o saldo acima da máxima —
+e aí o material aparecerá como Excesso no Estoque Parado; não é erro, é o lote mínimo do
+fornecedor.
+
+**Risco de parada:** material **crítico** com disponível **zero** ganha o badge vermelho, e o
+contador do resumo conta **todos** os críticos zerados — inclusive os que já têm solicitação a
+caminho, porque papel não segura produção; o risco só sai quando material chega.
+
+### 21b.3 Gerar solicitações
+
+Cada linha tem um checkbox (todos marcados ao abrir; há o "selecionar todos" por grupo). O
+botão **Gerar solicitações** pergunta antes:
+
+> `Gerar <N> solicitação(ões) de compra no valor estimado de <R$ X>?`
+
+As **quantidades são sempre as calculadas pelo servidor no momento do clique** — a tela
+escolhe *quais* materiais, nunca *quanto* — e o painel de resultado lista cada solicitação
+criada com a quantidade real gravada. Cada criação fica registrada na auditoria. As
+solicitações aparecem na aba **Solicitações** (pendentes e vinculadas a pedido, com o motivo).
+**Não existe cancelamento de solicitação** — confira antes de confirmar; uma solicitação
+vinculada a pedido segue o fluxo do módulo Compras.
+
+### 21b.4 Estoque Parado
+
+Três selos **independentes** (um material pode carregar mais de um):
+
+| Selo | Regra |
+|---|---|
+| **Excesso** | saldo atual acima do Estoque Máximo (quando máximo > 0) |
+| **Sem consumo** | nenhuma saída no livro nos últimos N dias (ou nunca) — N é **Dias Sem Consumo**, padrão 180 |
+| **Obsoleto** | sem consumo **e** sem nenhuma entrada no mesmo período — não entra, não sai, só ocupa |
+
+Cada linha mostra o **valor parado** (`saldo × custo unitário`) e as datas da última entrada e
+saída (`—` quando nunca houve). Os **cartões do topo são o retrato do estoque parado
+inteiro** — o filtro por tipo muda a lista, não os cartões (a legenda da aba diz isso). A
+lista mostra os 500 itens de maior valor parado. Só entram materiais ativos, próprios e com
+saldo.
+
+### 21b.5 As três configurações — e a validação
+
+Em **Configurações → Configurações Gerais**: **Janela do Consumo Médio (dias)**, **Dias Sem
+Consumo (estoque parado)** e **Horizonte da Solicitação (dias)**. As três exigem **número
+inteiro maior que zero** — valor inválido é recusado na tela antes de salvar e também pela
+API:
+
+> `Configuração "<chave>" deve ser um número de dias maior que zero`
 
 ## 22. Como o sistema calcula
 

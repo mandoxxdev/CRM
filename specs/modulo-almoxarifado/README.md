@@ -1,12 +1,35 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-23 (**Etapa 10b fechada — inventário avançado parte 2,
+> **Última atualização:** 2026-08-24 (**Etapa 11 fechada — reposição e compras,
+> `54e1278..1ea6ab2`. A feature 18 vira 🟢 no que é do almoxarifado.**
+> **Onde o desenvolvimento parou: a Etapa 11 está fechada. A próxima da ordem é a Etapa 12 —
+> notificações completas** (features 19 + 20: e-mail em entrada/saída confirmada, fila com
+> retry/dedupe/histórico, alertas restantes — é a fila que várias etapas alimentaram com
+> cortes "fica para a 19/20").
+> **O que a Etapa 11 entregou:** motor de **sugestão de reposição** no `purchaseService`
+> (consumo médio pela fonte única `TIPOS_SAIDA` em janela configurável; ponto efetivo com **a
+> mínima como chão de todas as réguas** — emenda Critical da revisão da Task 1; posição =
+> `disponivelSql` + solicitações abertas dentro do **horizonte** configurável de 60 dias, com
+> `a_caminho_vencido` exposto; alvo `max(máxima, ponto)` com lote econômico como piso);
+> sugestão consolidada por **fornecedor** e valorada pela fonte única de custo; **gerar
+> solicitações** com quantidades sempre do servidor (sem dedupe — a matemática da posição é o
+> dedupe; pendência insuficiente gera o complemento; auditado; confirm no front); **estoque
+> parado** (excesso/sem consumo/obsoleto, flags independentes, valor em reais, resumo do
+> estoque inteiro); ação nova **`gerenciar_reposicao`** [ADMIN, GESTOR, COMPRAS — ALMOXARIFE
+> fora de propósito, primeiro uso real do perfil COMPRAS]; relatório de solicitações com
+> VINCULADO e **gateado** (mesmo remédio da 10b); o **mesmo horizonte** aplicado à máquina de
+> estados de requisição; 3 configs semeadas e editáveis com validação ≥ 1 **nos dois lados**;
+> índice novo no livro; e a **tela** `/almoxarifado/reposicao` (3 abas, com painel de
+> erro/permissão por aba — o Critical da revisão final era um 403 renderizado como "não há
+> nada a comprar"). Motor de estoque **não tocado**. **Revisão final** (2 revisores medindo
+> com probes): 1 Critical + 7 Important + ~11 Minor, 0 ruído — todos os Critical/Important
+> corrigidos em `95fb25b` (backend) e `1ea6ab2` (front).
+> **Números (medidos no fechamento, 2026-08-24):** `test:api` **111/111 arquivos OK**,
+> `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
+> `test:sqlite` **3/0**; client **408 testes em 30 suítes**, build `CI=true` exit 0.)
+> Antes: 2026-08-23 (**Etapa 10b fechada — inventário avançado parte 2,
 > `14f4458..7290481`. A feature 17 vira 🟢 no que as duas rodadas se propuseram.**
-> **Onde o desenvolvimento parou: a Etapa 10b está fechada. A próxima da ordem é a Etapa 11 —
-> reposição e compras** (feature 18). A escolha "10b antes da 11" foi ruling da sessão de
-> 2026-08-23, pelo precedente das sub-etapas (6b/6c, 8b/8c, 9b) — registrado na letra B do doc
-> de novidades.
 > **O que a Etapa 10b entregou:** escopos de contagem **combináveis** (família raiz, classe ABC,
 > somente críticos, materiais de clientes, com saldo em terceiros — filtros sobre colunas que o
 > material já tinha, gravados como `escopo_descricao`-snapshot); **dupla contagem por duas
@@ -289,7 +312,7 @@
 | 15 | [Retalhos, sobras e sucatas](15-retalhos-sucatas/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 9 entregue (2026-08-16, `b727c0a..4ba94e2`)** — retalho é material normal no motor (`ENTRADA_RETALHO` dedicado, sem custo) + anexo dimensional na tabela de sobras reformada (auditada, Zod, `POST /sobras` avulso aposentado); `gerarRetalho` é evento composto com guarda de dono e compensação; `SUCATA` saiu do formulário genérico e virou processo com **dupla aprovação segregada** (duas ações novas de perfil, baixa pelo motor na segunda assinatura, claim anti-corrida), destino VENDIDA/DESCARTADA com comprovante e relatório `sucata-financeiro` lendo o livro; tela `/almoxarifado/sobras` (Retalhos + Sucateamentos), etiqueta de retalho com QR e hint de retalho na SAÍDA. Os 4 testes nomeados da spec existem e passam. **Fora do escopo declarado:** e-mail (→ 19). Pendências nomeadas na spec: guarda geral de tipo novo nas fontes únicas, coluna `foto` sem escritor, lote do material-retalho, `valor_venda` em DESCARTADA |
 | 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | 🟡 | ✅ | 🟢 **Etapa 9b entregue (2026-08-22, `d644827..b8e6f60`)** — ferramenta virou patrimônio emprestável completo: máquina de estados explícita (`toolStateMachine.js`) com toda transição por **claim** (`UPDATE ... WHERE status IN (...)`, sem a janela de corrida SELECT-depois-UPDATE que existia antes), calibração com vencimento **lida da última calibração** (sem coluna-cache) barrando o empréstimo, avaria/perda com foto encerrando o empréstimo aberto no mesmo ato (RN-05), bloqueio/manutenção/reencontro com justificativa auditada, ação de perfil própria `gerenciar_ferramentas` (parou de usar o gate genérico `movimentar`), Zod em todas as rotas (nenhuma tinha antes), auditoria em toda escrita (emprestar/devolver não auditavam antes), e tela `/almoxarifado/ferramentas` com três visões (Ferramentas, Empréstimos, Calibrações). Revisão final de branch achou 4 Important cross-task que os gates por-task não pegam (busca/filtro do contrato ignorados pelo backend; corrida devolver↔ocorrência podendo corromper o status; PUT/409 sem teste; badge de vencimento do front discordando do servidor) — todos corrigidos e re-revisados limpos. **Fora do escopo declarado, com pendência aberta:** job de lembrete de devolução sem canal de notificação (função pura pronta, aguarda feature 20), UI de edição de ferramenta (backend testado, só falta o formulário — achado da revisão final), integração com inspeção (feature 09) |
 | 17 | [Inventário e contagem cíclica](17-inventario-contagem/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapas 10 + 10b entregues (2026-08-22/23, `d644827..8db2671` e `14f4458..7290481`)** — a 10 resolveu o risco crítico (tipo dedicado `AJUSTE_INVENTARIO` pelo motor, guarda de retenção decidindo a pendência B1/B2/B3, contagem cega, tolerância+recontagem, tudo-ou-nada); a 10b entregou **escopos de contagem combináveis** (família raiz, ABC, críticos, de clientes, em terceiros), **dupla contagem por duas pessoas** (recontagem de outra pessoa, número do colega escondido com ou sem modo cego, correção própria pré-recontagem, autoria por item), **relatório de acuracidade** (ponderado, contados/total + recontados, impacto persistido sem backfill) e o **epsilon de divergência como fonte única** (alcançando o relatório antigo, que ganhou gate + só CONCLUIDO). **Fora, declarado com porquê na spec:** contagem por endereço (+ guarda de retenção com localização), cíclica automática, congelamento (ruling mantido), dupla aprovação formal (aguarda B11), e-mail, tela de conciliação lado a lado |
-| 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟡 | 🟡 | 🟡 | 🟡 alertas ok |
+| 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapa 11 entregue (2026-08-24, `54e1278..1ea6ab2`)** — motor de sugestão no `purchaseService` (consumo médio por `TIPOS_SAIDA` em janela configurável; ponto efetivo com **a mínima como chão** de todas as réguas; posição = `disponivelSql` + solicitações abertas dentro do **horizonte** configurável, com `a_caminho_vencido` exposto; alvo `max(máxima, ponto)` com lote econômico como piso), `GET /reposicao/sugestoes` consolidado por fornecedor e valorado, `POST /gerar-solicitacoes` (quantidades do servidor, sem dedupe — a posição É o dedupe, complemento em pendência insuficiente, auditado), `GET /estoque-parado` (excesso/sem consumo/obsoleto com valor parado), ação nova `gerenciar_reposicao` [ADMIN, GESTOR, COMPRAS — ALMOXARIFE fora de propósito], relatório de solicitações com VINCULADO e gateado, horizonte compartilhado com a máquina de estados de requisição, 3 configs semeadas+editáveis com validação nos dois lados, índice novo no livro, tela `/almoxarifado/reposicao` (3 abas, painel de erro/permissão por aba). **Fica de fora, declarado:** fechar/cancelar solicitação no recebimento e itens por material (integração Compras, features 22/24 — é o que falta para o ciclo fechar), alerta ativo de máximo, e-mail (19) |
 | 19 | [E-mails e notificações](19-emails-notificacoes/README.md) | 🟡 | 🟡 | 🟡 | 🟡 sem fila/cobertura total |
 | 20 | [Alertas operacionais](20-alertas/README.md) | 🟡 | ❌ | 🟡 | 🟡 2 de ~20 |
 | 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟡 | 🟡 | ❌ | 🟡 16 no back (entrou `materiais-sem-endereco` na Etapa 2) + `sucata-financeiro` (Etapa 9, **só API** — sem tela de relatórios), 2 no front |
@@ -576,8 +599,23 @@ e o [plano](../../docs/superpowers/plans/2026-08-23-almoxarifado-etapa10b-invent
 **Fora, declarado (sem etapa marcada):** contagem por endereço, cíclica automática,
 congelamento, dupla aprovação formal (aguarda B11), e-mail, conciliação lado a lado.
 
-### Etapa 11 — Reposição e compras → `18-reposicao-estoque-minimo`
-Ponto de reposição calculado; sugestão de compra consolidada.
+### Etapa 11 — ✅ ENTREGUE em 2026-08-24 → `18-reposicao-estoque-minimo`
+
+**Etapa 11 = feature 18 (`54e1278..1ea6ab2`)** — sugestão de reposição calculada e
+consolidada, geração de solicitações, estoque parado e a tela para quem decide compra.
+Detalhes, decisões e correções declaradas: [spec 18](18-reposicao-estoque-minimo/README.md),
+o [design](../../docs/superpowers/specs/2026-08-23-almoxarifado-etapa11-reposicao-compras-design.md)
+e o [plano](../../docs/superpowers/plans/2026-08-23-almoxarifado-etapa11-reposicao-compras.md).
+
+| Task | O quê | Hash |
+|---|---|---|
+| — | design e plano (Fase 2: 15 achados acatados, 1 ruído) | `54e1278` · `5564d4d` · `b2a5a46` |
+| 1 | motor de sugestão + GET /sugestoes (RN-01..06, 08) | `7f04e42` · fix `cd83b1e` |
+| 2 | gerar solicitações + estoque parado (RN-07, 09) | `21dde5e` · fix `eec45b8` |
+| 3 | tela 3 abas + configs (galho paralelo, worktree) | `a65e501` · fix `8a7208c` · merge `5b861ec` |
+| 4 | teste-jornada de composição (10 passos) | `4574963` |
+| — | revisão final de branch (2 revisores): 1 Critical + 7 Important, 0 ruído | fixes `95fb25b` (backend) · `1ea6ab2` (front) |
+| 5 | documentação e verificação final | commits de fechamento |
 
 ### Etapa 12 — Notificações completas → `19-emails-notificacoes` + `20-alertas`
 E-mail em toda entrada/saída confirmada; fila com retry/dedupe/histórico; alertas restantes.

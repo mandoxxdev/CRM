@@ -734,6 +734,62 @@ Suíte completa antes do commit; `git add` só o arquivo novo.
 
 ---
 
+## Execução — estado final (2026-08-24, etapa FECHADA)
+
+| Task | Estado | Hash | Divergências do plano |
+|---|---|---|---|
+| 1 | ✅ | `7f04e42` + fix `cd83b1e` | 0 desvios do implementer (caiu no limite de sessão e foi retomado do zero com árvore verificada). Revisão: 17 sabotagens, 9 passavam; 1 **Critical de regra** — a RN-02 como desenhada fazia prazo preenchido ESCONDER material do alerta; a mínima virou o chão de todas as réguas (design corrigido dizendo que estava errado) |
+| 2 | ✅ | `21dde5e` + fix `eec45b8` | 0 desvios; revisão achou 2 Important de escrita medidos (fantasma de quantidade 0 por resíduo de float; ids repetidos multiplicando) + resumo congelado sem teste |
+| 3 | ✅ | `a65e501` + fix `8a7208c`, merge `5b861ec` | Revisão: 5 Important (4 sabotagens de célula verdes — G4 de novo; POST default sem teste; geração em massa sem confirm; 403 mudo; resumo sem rótulo) — todos re-provados vermelhos |
+| 4 | ✅ | `4574963` | 0 desvios; sem revisor dedicado (test-only + controle positivo real, precedente das etapas anteriores); sabotagem derrubou o passo 6 + 2 testes unitários |
+| Final | ✅ | `95fb25b` (backend) + `1ea6ab2` (front) | Revisão final com 2 revisores MEDINDO: B (costura) 1 Critical (403 virava "não há nada a comprar") + 4 Important; A (backend) 0 Critical + 3 Important (duplicação em dobro legado×novo com o design afirmando o contrário; riscos_parada zerando no clique; horizonte ausente na máquina de requisição). O agente do front caiu por conexão e foi retomado do disco |
+| 5 | ✅ | commits de fechamento | — |
+
+## Próxima tarefa detalhada — Etapa 12 (notificações completas, features 19 + 20)
+
+- **Specs:** `specs/modulo-almoxarifado/19-emails-notificacoes/README.md` e
+  `specs/modulo-almoxarifado/20-alertas/README.md` — ler as duas ANTES de desenhar; o mapa diz
+  "sem fila/cobertura total" e "2 de ~20 alertas".
+- **A fila de dívidas que as etapas alimentaram** (grep "feature 19" e "feature 20" no
+  novidades): e-mail de sucateamento (9), lembrete de devolução de ferramenta com função
+  pronta sem canal (9b, item B7), e-mail do resultado de inventário (10/10b), e-mail de
+  sugestão/solicitação de compra (11), alerta de risco de parada com canal (11, D8), estado
+  parcial da devolução-sucata sem notificação (7).
+- **O que já existe e NÃO reabrir:** `alertService` (máquina ACIMA/ABAIXO com debounce,
+  e-mail+WhatsApp, histórico) — é o modelo de canal; `requisitionPurchaseNotifyService`
+  (e-mail a Compras por requisição sem estoque); SMTP hardcoded é **decisão do dev** (não
+  mexer sem confirmação — CLAUDE.md).
+- **Pontos de atenção:** fila com retry/dedupe/histórico é infra nova — decidir tabela própria
+  vs reuso do histórico de alertas; B11/B14 continuam abertas (não construir aprovação nem
+  cancelamento sobre elas); horizonte/configs da 11 são o precedente de config validada nos
+  dois lados.
+
+## Retro (fechamento)
+
+Quarta etapa completa sob a skill (9b, 10, 10b, 11). Base da 10b: 5 rodadas de fix, 42 achados
+reais/0 ruído, 1 par paralelo sem retrabalho.
+
+**1. Rodadas de correção até verde.** 5: uma por task (T1–T3) e uma onda final em duas partes
+(backend + front). Nenhuma bateu o limite de 3 rodadas na mesma falha.
+
+**2. Achados reais vs. ruído.** Fase 2: 15 reais / 1 ruído (a "árvore suja" era snapshot velho
+— primeiro ruído em quatro etapas). Revisões de task: T1 1 Critical de regra + 4 buracos; T2
+2 Important + 1 semântica; T3 5 Important; T4 sem revisor. Revisão final: 1 Critical + 7
+Important + ~11 Minor, 0 ruído. **Total ≈ 47 achados reais / 1 ruído.** Padrão consolidado: os
+três achados mais graves da etapa (regra do chão da mínima, duplicação em dobro, 403-vira-vazio)
+vieram de revisores **instruídos a medir com probe** — quarta etapa seguida em que rodar vale
+mais que argumentar.
+
+**3. Paralelismo de fato.** Um par real (T3 worktree × T4 árvore principal), zero conflito,
+merge limpo. **Resiliência nova medida:** dois agentes morreram no meio (limite de sessão na
+T1, queda de conexão no fix do front) e os dois foram **retomados do disco sem perda** — o
+estado em ledger/plano/commits pagou o custo que ele existe para pagar.
+
+**4. Defeito que escapou.** Nenhum descoberto após o fechamento (preencher na próxima etapa).
+Para vigiar: a dupla contagem de caminhos de compra (item C9 do novidades) até o Compras
+ganhar o elo; e o quinto leitor privado de config (`lerConfigNumero`) — se aparecer um sexto,
+unificar.
+
 ## Self-review do plano (feito na escrita)
 
 - **Cobertura do design:** RN-01..06+08 → Task 1; RN-07+09 → Task 2; tela → Task 3; composição

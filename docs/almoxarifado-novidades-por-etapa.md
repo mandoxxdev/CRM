@@ -1,13 +1,13 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 10b (02/08/2026 a 23/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 11 (02/08/2026 a 24/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em 2026-08-23 (Etapa 10b).
+> `docs/superpowers/plans/`. Atualizado em 2026-08-24 (Etapa 11).
 
 ## Visão geral
 
@@ -30,6 +30,7 @@
 | 9b | Ferramentas e Calibração | 2026-08-22 | Ferramenta virou patrimônio controlado: empréstimo à prova de corrida, calibração vencida bloqueia o uso, avaria/perda com foto fecha o empréstimo sozinha, bloqueio e manutenção com histórico — tudo numa tela própria |
 | 10 | Inventário Avançado | 2026-08-22 | O ajuste da conferência de inventário deixou de gravar saldo por fora do sistema — agora é auditado e recusa deixar material bloqueado/reservado/em terceiro com número que não fecha; contagem cega e recontagem obrigatória para divergência grande |
 | 10b | Inventário Avançado, parte 2 | 2026-08-23 | Contagem por escopo (classe A, críticos, de clientes, em terceiros), dupla contagem por duas pessoas com o número do colega escondido, autoria por item e relatório de acuracidade com impacto em reais |
+| 11 | Reposição e Compras | 2026-08-24 | Sugestão de compra calculada (consumo médio × prazo, mínima como chão), consolidada por fornecedor e valorada; gerar solicitações auditadas; estoque parado (excesso/sem consumo/obsoleto) com valor em reais; tela nova para quem decide compra |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -208,6 +209,27 @@ transformava um typo em parada operacional sem ganhar nada em controle: os quatr
 exigidos, porque a recontagem continua tendo de vir de outra pessoa. Reversível — se preferirem o
 comportamento rígido, é remover uma condição.
 
+**B13 (NOVO, da Etapa 11) — quem decide compra: a ação nova `gerenciar_reposicao` ficou com
+Administrador, Gestor e Compras — o ALMOXARIFE ficou fora DE PROPÓSITO. Esta você já decidiu
+por mim; reconheça.** É a primeira ação do módulo que o Almoxarife não tem: ele conta e
+movimenta, mas decidir *o que comprar e quanto* é gestão/compras (e é também o primeiro uso
+real do perfil COMPRAS). A tela mostra um painel de "sem permissão" para quem não tem a ação.
+Reversível em uma linha se preferirem incluir o Almoxarife. Junto vieram réguas menores
+implementadas no seu nome, todas registradas na seção da etapa: a mínima como **chão** de
+todas as réguas do ponto (inclusive de um ponto cadastrado abaixo dela); risco de parada =
+**crítico com disponível zero** (a versão "consumo × prazo" foi descartada porque mentiria
+por omissão de cadastro), contando **mesmo depois de pedido** (papel não segura produção); e
+o caminho novo de gerar solicitação **não deduplica** — a matemática da posição é o dedupe, e
+pendência insuficiente gera o **complemento** (o dedupe antigo por material pendente ficou só
+no verificar-mínimos legado).
+
+**B14 (NOVO, da Etapa 11) — não existe CANCELAR solicitação de compra no sistema.** Os únicos
+caminhos são criar e vincular a pedido. Um clique errado em "Gerar" cria solicitações que só
+saem por edição direta no banco — a confirmação com quantidade e valor antes de gerar mitiga,
+e o horizonte de 60 dias faz a solicitação velha parar de segurar a sugestão, mas **o caminho
+de cancelamento precisa existir** (provavelmente junto com o fechamento no recebimento —
+letra E). Decida se isso entra na fila.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -287,7 +309,20 @@ comportamento rígido, é remover uma condição.
    conferência SEM a flag, re-salvar o mesmo valor pela mesma pessoa ainda marca recontagem —
    mecânica da Etapa 10; a tela não faz mais isso por acidente, porque tabular sem digitar não
    salva.)
-9. **(10b) O escopo gravado é fotografia do momento da criação.** Renomear uma família ou mudar
+9. **(11) Os dois caminhos de gerar solicitação podem pedir EM DOBRO — nos dois sentidos.**
+   Medido na revisão final: (a) gerar pela tela nova → vincular a pedido → rodar o
+   **verificar-mínimos legado** duplica, porque o dedupe legado só enxerga PENDENTE e a
+   vinculada fica invisível para ele; (b) solicitação que **envelhece além do horizonte**
+   (60 dias) deixa de contar na posição e a tela volta a sugerir — segundo pedido. Na prática
+   é cenário de administrador (o verificar-mínimos tem gate restrito), a linha avisa quando há
+   **solicitação antiga aberta**, e o conserto de verdade é fechar a solicitação no
+   recebimento (letra E) — mas quem operar os dois caminhos precisa saber que eles não se
+   enxergam completamente.
+10. **(11) Comprar o lote econômico pode estourar a máxima — e a outra aba vai chamar de
+    excesso.** Material com máxima 200 e lote econômico 500: a sugestão respeita o lote (500),
+    o material chega, e o Estoque Parado o marca como Excesso. Comprar o lote mínimo do
+    fornecedor não é erro; só saiba que as duas abas vão "discordar" de propósito.
+11. **(10b) O escopo gravado é fotografia do momento da criação.** Renomear uma família ou mudar
    a classe ABC de um material **depois** não altera o texto `Classe A + ...` gravado na
    conferência — nem os itens que entraram. É a semântica certa (o registro histórico diz o que
    foi contado), mas quem estranhar "o escopo diz X e o material hoje é Y" precisa saber que o
@@ -354,6 +389,18 @@ comportamento rígido, é remover uma condição.
 - **(10) A guarda de retenção não cobre ajuste por localização/endereço específico** — só o
   ajuste do material inteiro (o caminho que a conferência usa) tem a checagem nova; um ajuste
   manual escopado a uma prateleira específica não passa por ela ainda.
+
+- **(11) A solicitação de compra não fecha sozinha — o "a caminho" usa um horizonte de 60
+  dias.** Nada no sistema fecha solicitação (receber a NF não a toca — isso é a integração com
+  Compras, feature 22/24). A régua honesta possível: solicitação aberta conta na posição por
+  60 dias (configurável); depois disso deixa de contar e a linha avisa que há solicitação
+  antiga aberta. A mesma régua vale para a requisição que espera compra (o status "aguardando
+  compra" também ignora solicitação velha).
+- **(11) Devolução não abate o consumo médio.** Material que saiu 90 e voltou 90 no mesmo
+  período conta consumo cheio — a régua é "o que baixou do patrimônio", e o retorno não é
+  descontado. Infla o ponto calculado de quem devolve muito; declarado, não consertado.
+- **(11) A nota "Mostrando os 500 itens de maior valor parado" aparece também quando há
+  exatamente 500** (o servidor não diz o total). Cosmético, declarado.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -429,6 +476,14 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    nos nulos; e o fluxo de dupla contagem com **dois logins de verdade** (o segundo usuário
    vendo o campo vazio, o Tab não salvando nada, a correção do primeiro contador funcionando).
    O roteiro completo está no guia, seção da Etapa 10b.
+
+8. **(11) A tela Reposição e Compras inteira.** **Nenhum navegador foi aberto na entrega da
+   Etapa 11** — mesma ressalva. Falta conferir: as três abas cabendo no layout; os grupos por
+   fornecedor com cabeçalho de total; o badge vermelho "Risco de parada"; o aviso de
+   solicitação antiga; o `window.confirm` do Gerar com o valor formatado; o painel de
+   resultado listando as quantidades; o painel de **sem permissão** logando com um usuário
+   Almoxarife; os três campos novos em Configurações Gerais recusando `0`. O roteiro completo
+   está no guia, seção da Etapa 11.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -1923,21 +1978,91 @@ impacto em reais gravado no dia em que foi medido.
   construir antes da resposta seria construir sobre decisão pendente.
 - **E-mail do resultado** — feature 19, mesmo corte de todas as etapas.
 
+## Etapa 11 — Reposição e Compras (2026-08-24)
+
+O módulo sabia **avisar** que um material cruzou o mínimo; agora ele sabe **responder às
+perguntas de compra**: quanto pedir, quando pedir (antes de faltar, considerando o prazo do
+fornecedor), de quem pedir (consolidado por fornecedor, com o valor), e o que está **parado**
+ocupando prateleira e dinheiro. É a tela nova **Almoxarifado → Reposição e Compras** — a
+primeira do módulo pensada para quem decide compra (Gestor, Compras, Administrador), não para
+o balcão.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Alerta de mínimo avisava, e só | Sugestão de compra calculada: quanto pedir, para chegar a quanto, valendo quanto |
+| "Quando pedir" era olhômetro | Ponto de reposição: cadastrado, ou **consumo médio × prazo do fornecedor**, com a **mínima como chão** de qualquer régua |
+| Pedido aberto era invisível para a conta | O que já foi solicitado entra na posição — material pedido some da sugestão (e volta se a solicitação envelhecer sem chegar) |
+| Sugestão nenhuma virava pedido | Botão **Gerar solicitações** (com confirmação dizendo quantas e por quanto) cria as solicitações auditadas, com a quantidade calculada pelo servidor |
+| Excesso/obsoleto não existiam | Aba **Estoque Parado**: excesso (acima da máxima), sem consumo, obsoleto — com o valor parado em reais |
+| Solicitações de compra sem tela | Aba **Solicitações** com pendentes e vinculadas a pedido |
+| Configurações da reposição não existiam | Três configuráveis pela tela: janela do consumo (90d), régua de parado (180d), horizonte da solicitação (60d) — e o sistema **recusa** valor inválido |
+
+### As regras, com o cenário exato
+
+1. **A sugestão nasce das três réguas — e a mínima é o chão de todas.** Material com mínima
+   100, máxima 200 e 5 na prateleira aparece na aba Sugestões com **195 sugeridas** (completa
+   até a máxima), origem do ponto = "Mínimo". Se o material tem **prazo de reposição** e
+   consumo no histórico, o ponto vira "Calculado" (consumo/dia × prazo — a linha da célula
+   mostra a conta); um **ponto cadastrado** no material vence os dois — mas **nenhuma régua
+   fica abaixo da mínima**: se o alerta de mínimo grita, a sugestão existe, sempre.
+2. **O que já foi pedido não é pedido de novo.** Gere a solicitação de um material e recarregue:
+   ele **some** da sugestão (a solicitação aberta conta na posição). Se a pendência for
+   **menor** que o necessário, o material continua na lista sugerindo só o **complemento**.
+   Solicitação com mais de 60 dias (configurável) deixa de segurar a posição — e a linha
+   ganha o aviso de **solicitação antiga aberta** em vez de fingir que ela não existe.
+3. **Quem decide a quantidade é o servidor.** O botão Gerar pergunta antes:
+   `Gerar N solicitação(ões) de compra no valor estimado de R$ X?` — e o painel de resultado
+   lista **cada solicitação criada com a quantidade real** gravada (recalculada na hora do
+   clique, não a da tela).
+4. **Crítico zerado é risco de parada — e pedir não resolve.** Material crítico com disponível
+   zero ganha o badge vermelho **Risco de parada**, e o contador do resumo **continua contando
+   ele mesmo depois de gerar a solicitação** — papel não segura produção; o risco só sai
+   quando material chega.
+5. **Estoque parado com as três lentes.** Aba Estoque Parado: **Excesso** (acima da máxima
+   cadastrada), **Sem consumo** (nenhuma saída há 180 dias — configurável) e **Obsoleto**
+   (sem consumo E sem entrada no período) — um material pode carregar mais de um selo, e a
+   linha mostra o **valor parado** em reais. Os cartões do topo são o retrato do estoque
+   **inteiro** (a legenda diz isso) — o filtro muda a lista, não os cartões.
+6. **Quem não decide compra não vê pipeline de compra.** Almoxarife e chão de fábrica tomam
+   `403` nas três rotas — e a tela mostra um **painel de sem permissão com o motivo e botão
+   de tentar de novo**, nunca uma lista vazia fingindo que "não há nada a comprar". A aba
+   Solicitações (e o relatório por trás dela) exige a mesma permissão.
+7. **Configuração inválida é recusada na hora, dos dois lados.** Digitar `0` na janela do
+   consumo: a tela recusa antes de salvar; por API, a resposta é
+   `Configuração "reposicao_janela_consumo_dias" deve ser um número de dias maior que zero`.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Criar pedido de compra real no módulo Compras** — a solicitação é o elo; o vínculo a
+  pedido continua pela rota que já existia. Integração de itens por material com o Compras é
+  a feature 22/24.
+- **Fechar solicitação no recebimento** — nada no sistema fecha uma solicitação (só vincular
+  existe); o **horizonte de 60 dias** é a aproximação honesta até o Compras ganhar o elo
+  (letra E).
+- **Cancelar solicitação de compra** — não existe caminho no sistema (item **B** — a
+  confirmação antes de gerar mitiga o clique errado).
+- **"Projetos futuros" no cálculo** — exigiria BOM/OP (features 22/23), que não existem.
+- **Alerta de máximo na entrada** — o excesso é **identificado** no Estoque Parado; alerta
+  ativo com canal seria máquina de estados nova sem pedido concreto.
+- **E-mail de sugestão/solicitação** — feature 19, mesmo corte de todas as etapas. (O e-mail
+  que já existia — requisição sem estoque avisando Compras — continua igual, é outro fluxo.)
+
 ## Onde estamos e o que vem a seguir
 
-- **Concluído até aqui:** Etapas 0 a 10b — fundação, motor de estoque, cadastros, requisições,
+- **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
   reservas, quarentena, lotes, séries, etiquetas, transferências, devoluções, materiais de clientes,
   remessas a terceiros, transformação no terceiro, **retalhos/sucatas**, **ferramentas e
-  calibração** e o **inventário avançado em duas rodadas** (a 10 consertou o motor; a 10b entregou
-  escopos de contagem, dupla contagem por duas pessoas e o relatório de acuracidade). As features
-  10 (lotes/séries/etiquetas), 11 (transferências), 12 (devoluções), 13 (materiais de clientes),
-  **14 (materiais em terceiros)**, **15 (retalhos, sobras e sucatas)** e **16 (ferramentas e
-  calibração)** estão completas no que cada etapa se propôs. A **17 (inventário avançado) fica
-  quase completa** — o que resta fora está declarado na seção da 10b (endereço, cíclica
-  automática, dupla aprovação formal aguardando **B11**, e-mail) e não tem etapa própria marcada.
-- **Próxima etapa:** **Etapa 11 — reposição e compras** (feature 18). A escolha "10b antes da 11"
-  foi ruling desta sessão, pelo precedente das sub-etapas (6b/6c, 8b/8c, 9b) — reversível e já
-  consumado.
+  calibração**, o **inventário avançado em duas rodadas** e a **reposição e compras** (motor de
+  sugestão, estoque parado e a tela para quem decide compra). As features 10, 11, 12, 13, 14,
+  15 e 16 estão completas no que cada etapa se propôs; a **17 fica quase completa** (restos
+  declarados na seção da 10b) e a **18 (reposição) fica entregue no que é do almoxarifado** —
+  o que falta dela é integração com o módulo Compras (fechar/cancelar solicitação no
+  recebimento, itens por material — letras **B14** e **D**).
+- **Próxima etapa:** **Etapa 12 — notificações completas** (features 19 + 20: e-mail em
+  entrada/saída confirmada, fila com retry, alertas restantes — é a fila que várias etapas
+  vêm alimentando com cortes "fica para a 19/20").
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
@@ -1945,8 +2070,9 @@ impacto em reais gravado no dia em que foi medido.
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
   3. ~~saber que a conferência de inventário ajusta saldo fora da permissão de material de
      cliente~~ — **resolvido na Etapa 10**, item **C1**;
-  4. **nem a 8b, nem a 8c, nem a 9, nem a 9b, nem a 10, nem a 10b acrescentam consulta a esta
-     lista** — todas só criam colunas e tabelas novas, sem tocar em dado existente;
+  4. **nem a 8b, nem a 8c, nem a 9, nem a 9b, nem a 10, nem a 10b, nem a 11 acrescentam
+     consulta a esta lista** — todas só criam colunas, índices e tabelas novas, sem tocar em
+     dado existente;
   5. **avisar quem compara relatórios com o mês passado** de que dois números mudam de leitura
      (itens **C3** e **C4**) — nenhum dado foi alterado, mas o número na tela vai ser outro;
   6. **avisar quem opera que o tipo Sucata sumiu do formulário de Movimentações** (item **C5**) —
@@ -1965,9 +2091,11 @@ impacto em reais gravado no dia em que foi medido.
   reconhecer a **regra de retenção do ajuste de inventário** implementada no seu nome (item
   **B10**) e decidir se o inventário precisa do **fluxo formal de duas assinaturas** (item
   **B11**); reconhecer a **correção do primeiro contador** implementada no seu nome (item
-  **B12**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação, a tela
-  de Sobras e Retalhos, a tela de Ferramentas e a tela de Conferência de Estoque com os campos
-  da 10b (escopo, dupla contagem, Acuracidade — item **F**).
+  **B12**); reconhecer o **gate de compra sem o Almoxarife** e as réguas da reposição (item
+  **B13**) e decidir se o **cancelamento de solicitação de compra** entra na fila (item
+  **B14**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação, a
+  tela de Sobras e Retalhos, a tela de Ferramentas, a Conferência de Estoque com os campos da
+  10b e a tela nova de **Reposição e Compras** (item **F**).
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas
   pelo usuário (roteiros no guia); tela de subfamílias; telas para localizações
   vazias/materiais sem endereço; pendências declaradas (a)–(j) da 6b e (a)–(g) da 6c na

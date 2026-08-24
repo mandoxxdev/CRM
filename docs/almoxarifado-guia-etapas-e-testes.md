@@ -1,17 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-23 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-24 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 10b) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 11) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-23 (Etapa 10b ENTREGUE)
+> ## Onde o desenvolvimento parou — 2026-08-24 (Etapa 11 ENTREGUE)
+>
+> **Etapas 1 a 11 completas.** A **Etapa 11 (Reposição e Compras) fechou em 2026-08-24**
+> (`54e1278..1ea6ab2`), e com ela a **feature 18 fica completa no que é do almoxarifado**:
+> sugestão de compra calculada (quanto pedir, para chegar a quanto, valendo quanto),
+> consolidada por fornecedor; geração de solicitações auditadas; estoque parado
+> (excesso/sem consumo/obsoleto) com valor em reais; e a tela nova **Reposição e Compras**
+> para quem decide compra. O que falta da feature é integração com o módulo Compras
+> (fechar/cancelar solicitação no recebimento). Ver a seção "Etapa 11", mais abaixo, com o
+> roteiro completo. **Próxima etapa: Etapa 12 — Notificações Completas** (features 19 + 20).
+>
+> **Antes: 2026-08-23 (Etapa 10b ENTREGUE).**
 >
 > **Etapas 1 a 10b completas.** A **Etapa 10b (Inventário Avançado, parte 2) fechou em
 > 2026-08-23** (`14f4458..7290481`), e com ela a **feature 17 fica completa no que as duas
 > rodadas se propuseram**: contagem por escopo (classe A, críticos, de clientes, em terceiros,
 > família), dupla contagem por duas pessoas com o número do colega escondido, autoria por item
 > e o relatório de Acuracidade com impacto em reais. Ver a seção "Etapa 10b", mais abaixo, com
-> o roteiro completo. **Próxima etapa: Etapa 11 — Reposição e Compras** (feature 18).
+> o roteiro completo.
 >
 > **Antes: 2026-08-22 (Etapa 10 ENTREGUE).**
 >
@@ -2492,6 +2503,68 @@ divergentes, recontados, % e impacto em reais — gravado no dia da conclusão).
   si não corre risco).
 - **Fluxo formal de duas assinaturas** — aguarda a decisão B11 do doc de novidades.
 - **E-mail do resultado** e **tela de conciliação lado a lado das duas contagens**.
+
+---
+
+## Etapa 11 — Reposição e Compras (ENTREGUE — 2026-08-24)
+
+O módulo sabia avisar que um material cruzou o mínimo; agora responde às perguntas de compra:
+**quanto** pedir, **quando** (antes de faltar, considerando o prazo do fornecedor), **de quem**
+(consolidado por fornecedor, com valor) e **o que está parado** ocupando prateleira e dinheiro.
+Tela nova: **Almoxarifado → Reposição e Compras** — para Gestor, Compras e Administrador
+(Almoxarife não decide compra, de propósito).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Alerta de mínimo avisava, e só | Sugestão calculada: quanto pedir, valendo quanto, de qual fornecedor |
+| "Quando pedir" era olhômetro | Ponto de reposição (cadastrado, ou consumo médio × prazo) com a **mínima como chão** |
+| Pedido aberto era invisível | Solicitação aberta entra na conta — material pedido some da sugestão |
+| Excesso/obsoleto não existiam | Aba Estoque Parado com valor parado em reais |
+| Configuração de reposição não existia | 3 campos em Configurações Gerais, com valor inválido **recusado** |
+
+### Roteiro de teste manual (10 passos)
+
+1. **Login** (Gestor ou Administrador) → **Almoxarifado → Reposição e Compras**. A aba
+   **Sugestões de Compra** abre com a legenda "Consumo médio calculado sobre os últimos 90
+   dias".
+2. Criar (em Materiais) um material com **mínima 100, máxima 200, custo 10**, saldo 5 →
+   voltar à Reposição → ele aparece sugerindo **195** (origem do ponto: "Mínimo"), valor
+   estimado **R$ 1.950,00**, no grupo do fornecedor (ou "Sem fornecedor definido").
+3. Marcar o material como **crítico** no cadastro → a linha ganha o badge vermelho
+   **Risco de parada** quando o disponível é zero — e o contador do resumo continua contando
+   **mesmo depois** de gerar a solicitação (papel não segura produção).
+4. Clicar **Gerar solicitações** → confirmar o aviso
+   `Gerar 1 solicitação(ões) de compra no valor estimado de R$ 1.950,00?` → o painel de
+   resultado lista a solicitação criada **com a quantidade real**.
+5. Recarregar a aba → o material **sumiu** da sugestão (a solicitação aberta conta na
+   posição). Na aba **Solicitações**, a linha está lá como **Pendente**, motivo "Ponto de
+   reposição".
+6. Desmarcar todos os checkboxes → o botão Gerar fica **desabilitado** (e nada é enviado).
+7. Aba **Estoque Parado**: material com saldo acima da máxima ganha o selo **Excesso**;
+   material sem saída há mais de 180 dias, **Sem consumo**; sem saída E sem entrada,
+   **Obsoleto** — os cartões do topo são do estoque **inteiro** (a legenda diz), o filtro
+   muda só a lista.
+8. **Configurações → Configurações Gerais**: os três campos novos (janela do consumo, dias
+   sem consumo, horizonte da solicitação). Digitar **0** em qualquer um → a tela recusa
+   antes de salvar com a mensagem
+   `Configuração "<chave>" deve ser um número de dias maior que zero`.
+9. Logar com um usuário **Almoxarife** → o menu mostra a tela, mas cada aba exibe o
+   **painel de sem permissão** (com o motivo e botão "Tentar novamente") — nunca uma lista
+   vazia fingindo que não há nada a comprar.
+10. (API) Vincular a solicitação a um pedido pela rota de vincular → ela vira **Vinculada**
+    na aba Solicitações e o material **continua fora** da sugestão.
+
+### O que a Etapa 11 **não** cobre (é decisão declarada, não esquecimento)
+
+- **Fechar ou cancelar solicitação** — não existe caminho no sistema (só vincular); depois de
+  60 dias (configurável) a solicitação velha deixa de segurar a sugestão e a linha avisa
+  "solicitação antiga aberta". O fechamento de verdade vem com a integração Compras.
+- **Criar pedido de compra real / itens por material no Compras** — features 22/24.
+- **Alerta ativo de máximo na entrada** (o excesso é identificado na aba, sem alerta).
+- **E-mail de sugestão/solicitação** — feature 19 (o e-mail de requisição sem estoque que já
+  existia continua igual; é outro fluxo).
 
 ---
 
