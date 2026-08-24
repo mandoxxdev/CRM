@@ -63,7 +63,7 @@ está detalhado na seção da etapa correspondente e no
 | **A1** | **O bug da Sucata pode ter deixado saldo a menos.** Devolver material para o destino Sucata baixava o estoque **duas vezes**. A correção **não conserta o passado**. No banco de desenvolvimento a checagem já foi feita: **0 devoluções, nenhum efeito lá**. | Ver a consulta exata no guia, seção "Etapa 7 → O bug da Sucata". Ela lista **só as devoluções anteriores à correção** (as que não têm a entrada correspondente no livro) — cada linha é um material cujo saldo está **a menos** pela quantidade devolvida. Uma consulta que filtrasse só `destino = 'SUCATA'` traria também as devoluções corretas feitas depois do deploy, e faria você caçar problema que não existe. |
 | **A2** | **A lista antiga de materiais de cliente foi aposentada** com base no banco de desenvolvimento (0 linhas). **Nada foi apagado** — a tabela foi preservada exatamente para este caso. | `SELECT COUNT(*) AS total, SUM(CASE WHEN ativo = 1 THEN 1 ELSE 0 END) AS ativos FROM materiais_cliente_almoxarifado;` — se vier `0`, só anotar e fechar. Se vier `> 0`, **não reverte nada**: entra uma migração assistida antes de qualquer exclusão. |
 
-**Continuam sendo duas — a 8b, a 8c, a 9 e a 9b não acrescentam nenhuma.** As etapas de
+**Continuam sendo duas — da 8b até a 12, nenhuma etapa acrescentou consulta.** As etapas de
 terceiros, a de retalhos/sucatas e a de ferramentas só **criam** colunas e tabelas novas, que
 nascem vazias; **nenhum dado existente é tocado ou reinterpretado** por elas — a Etapa 9b em
 particular nem toca o motor de estoque, ferramenta é patrimônio separado. Está dito
@@ -2245,9 +2245,11 @@ saiu, o que falhou e por quê, e reenviam com um clique.
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
   3. ~~saber que a conferência de inventário ajusta saldo fora da permissão de material de
      cliente~~ — **resolvido na Etapa 10**, item **C1**;
-  4. **nem a 8b, nem a 8c, nem a 9, nem a 9b, nem a 10, nem a 10b, nem a 11 acrescentam
-     consulta a esta lista** — todas só criam colunas, índices e tabelas novas, sem tocar em
-     dado existente;
+  4. **nenhuma etapa da 8b até a 12 acrescenta consulta a esta lista** — todas só criam
+     colunas, índices e tabelas novas, sem tocar em dado existente. A 12 em particular: a
+     máquina do alerta de zerado se **semeia sozinha em silêncio** no primeiro contato com
+     cada material (nada a rodar antes do deploy), e o e-mail de movimentação nasce
+     **desligado** — ligar é o item B15;
   5. **avisar quem compara relatórios com o mês passado** de que dois números mudam de leitura
      (itens **C3** e **C4**) — nenhum dado foi alterado, mas o número na tela vai ser outro;
   6. **avisar quem opera que o tipo Sucata sumiu do formulário de Movimentações** (item **C5**) —
