@@ -47,12 +47,12 @@ const SUGESTOES_DUAS_FORNECEDORES = {
   janela_dias: 90,
   fornecedores: [
     {
-      fornecedor_id: 3, fornecedor_nome: 'Alfa Parafusos', total_itens: 1, valor_total: 800,
+      fornecedor_id: 3, fornecedor_nome: 'Alfa Parafusos', total_itens: 1, valor_total: 940,
       itens: [
         { material_id: 10, codigo: 'ALM-0010', nome: 'Chapa 3mm', unidade: 'PC',
           disponivel: 4, a_caminho: 0, posicao: 4, consumo_medio_diario: 0.5,
           prazo_reposicao_dias: 10, ponto_efetivo: 5, origem_ponto: 'CALCULADO',
-          quantidade_sugerida: 16, valor_estimado: 800, risco_parada: false },
+          quantidade_sugerida: 17, valor_estimado: 940, risco_parada: false },
       ],
     },
     {
@@ -74,18 +74,29 @@ const SUGESTOES_DUAS_FORNECEDORES = {
       ],
     },
   ],
-  resumo: { materiais_sugeridos: 3, valor_total: 1250, riscos_parada: 1 },
+  // materiais_sugeridos DELIBERADAMENTE diferente da contagem de itens (3) — pega card
+  // hardcoded (o resumo do backend pode contar universo maior que o exibido na tela).
+  resumo: { materiais_sugeridos: 11, valor_total: 1390, riscos_parada: 1 },
 };
 
+// item 40: todas as 3 flags true + duas datas validas e DISTINTAS (pega troca de coluna de
+// data). item 41: so excesso, ambas as datas nulas (pega o traço quando nao ha data).
 const ESTOQUE_PARADO_FIXTURE = {
   dias_sem_consumo: 180,
   itens: [
     { material_id: 40, codigo: 'ALM-0040', nome: 'Tinta Epóxi', unidade: 'LT',
       quantidade_atual: 50, quantidade_maxima: 20, valor_parado: 500,
-      ultima_entrada: '2026-01-10 10:00:00', ultima_saida: null,
+      ultima_entrada: '2026-01-10 10:00:00', ultima_saida: '2026-03-05 08:00:00',
       excesso: true, sem_consumo: true, obsoleto: true },
+    { material_id: 41, codigo: 'ALM-0041', nome: 'Verniz Marítimo', unidade: 'LT',
+      quantidade_atual: 8, quantidade_maxima: 3, valor_parado: 60,
+      ultima_entrada: null, ultima_saida: null,
+      excesso: true, sem_consumo: false, obsoleto: false },
   ],
-  resumo: { excesso: 1, sem_consumo: 1, obsoleto: 1, valor_parado_total: 500 },
+  // Resumo é retrato do estoque parado INTEIRO (server-side, sem filtro) — por design não
+  // precisa bater com os flags das linhas exibidas. Números deliberadamente diferentes dos
+  // flags/contagens dos itens acima, para pegar card com valor hardcoded.
+  resumo: { excesso: 6, sem_consumo: 4, obsoleto: 9, valor_parado_total: 12345 },
 };
 
 const SOLICITACOES_FIXTURE = [
@@ -117,6 +128,8 @@ beforeEach(() => {
   mockPode = () => true;
   mockarApi();
   api.post.mockResolvedValue({ data: { criadas: [{ material_id: 10, solicitacao_id: 99, quantidade: 16 }], puladas: [] } });
+  // handleGerar agora confirma antes do POST — default true, testes de cancelamento sobrescrevem.
+  window.confirm = jest.fn(() => true);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -160,7 +173,7 @@ describe('ReposicaoAlmoxarifado — aba Sugestões de Compra', () => {
     await renderizar();
 
     // Cabecalhos com nome e valor (R$ pt-BR) dos DOIS grupos com fornecedor + o sem-fornecedor.
-    const valorAlfa = Number(800).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const valorAlfa = Number(940).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const valorZeta = Number(400).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     expect(texto()).toContain('Alfa Parafusos');
     expect(texto()).toContain(valorAlfa);
@@ -168,17 +181,24 @@ describe('ReposicaoAlmoxarifado — aba Sugestões de Compra', () => {
     expect(texto()).toContain(valorZeta);
     expect(texto()).toContain('Sem fornecedor definido');
 
-    // Linha com posicao/ponto/origem/sugerida.
+    // Linha com posicao/ponto/origem/sugerida — asserts POR CELULA (indice), nao substring
+    // solta, para pegar uma troca de coluna sugerida<->valor.
     const linha = linhaMaterial('ALM-0010');
     expect(linha).toBeTruthy();
-    expect(linha.textContent).toContain('4'); // disponivel/posicao
-    expect(linha.textContent).toContain('5'); // ponto efetivo
-    expect(linha.textContent).toContain('Calculado');
-    expect(linha.textContent).toContain('16'); // sugerida
+    const tds = linha.querySelectorAll('td');
+    // colunas: 0 checkbox, 1 material, 2 disponivel, 3 a_caminho, 4 posicao, 5 ponto(origem),
+    // 6 sugerida, 7 valor, 8 risco.
+    expect(tds[2].textContent).toBe('4'); // disponivel
+    expect(tds[4].textContent).toBe('4'); // posicao
+    expect(tds[5].textContent).toContain('5'); // ponto efetivo
+    expect(tds[5].textContent).toContain('Calculado');
+    expect(tds[6].textContent).toBe('17'); // quantidade_sugerida
+    expect(tds[7].textContent).toBe('R$ 940,00'); // valor_estimado
 
-    // Resumo geral: materiais_sugeridos e riscos_parada.
-    expect(texto()).toContain('3'); // materiais_sugeridos
-    expect(texto()).toContain('1'); // riscos_parada
+    // Resumo geral (cards com data-testid — exato, nao substring do container inteiro).
+    expect(container.querySelector('[data-testid="kpi-materiais-sugeridos"]').textContent).toBe('11');
+    expect(container.querySelector('[data-testid="kpi-valor-total-sugerido"]').textContent).toBe('R$ 1.390,00');
+    expect(container.querySelector('[data-testid="kpi-riscos-parada"]').textContent).toBe('1');
 
     // Badge "Risco de parada" so na linha com a flag.
     const linhaRisco = linhaMaterial('ALM-0020');
@@ -207,8 +227,36 @@ describe('ReposicaoAlmoxarifado — aba Sugestões de Compra', () => {
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/reposicao/gerar-solicitacoes', {
       material_ids: [10, 30],
     });
-    // Resposta com puladas mostra os motivos.
-    expect(texto()).toContain('SEM_SUGESTAO');
+    // Resposta com puladas mostra codigo + nome (snapshot tirado no momento do POST) e o motivo.
+    expect(texto()).toContain('ALM-0030 — Parafuso M8 (SEM_SUGESTAO)');
+  });
+
+  test('confirma antes de gerar, com quantidade e valor estimado no texto', async () => {
+    await renderizar();
+    await clicar(botao('Gerar solicitações'));
+
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    const msg = window.confirm.mock.calls[0][0];
+    expect(msg).toContain('3 solicitação(ões)');
+    expect(msg).toContain('R$ 1.390,00');
+  });
+
+  test('clique direto em Gerar (sem tocar em nada) manda todos os ids da fixture, em ordem', async () => {
+    await renderizar();
+    await clicar(botao('Gerar solicitações'));
+
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/reposicao/gerar-solicitacoes', {
+      material_ids: [10, 20, 30],
+    });
+  });
+
+  test('cancelar o confirm nao dispara o POST', async () => {
+    window.confirm = jest.fn(() => false);
+    await renderizar();
+    await clicar(botao('Gerar solicitações'));
+
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(api.post).not.toHaveBeenCalled();
   });
 
   test('botao Gerar fica desabilitado quando nenhum material esta marcado', async () => {
@@ -228,19 +276,46 @@ describe('ReposicaoAlmoxarifado — aba Sugestões de Compra', () => {
 });
 
 describe('ReposicaoAlmoxarifado — aba Estoque Parado', () => {
-  test('aba Estoque Parado renderiza flags e traço em datas nulas', async () => {
+  test('aba Estoque Parado renderiza os 3 badges e as datas nas colunas certas', async () => {
     await renderizar();
     await clicar(botao('Estoque Parado'));
 
     const linha = linhaMaterial('ALM-0040');
     expect(linha).toBeTruthy();
-    // Dois badges na mesma linha (excesso + obsoleto — sem_consumo tambem true, mas obsoleto
-    // ja implica sem_consumo; a tela mostra as flags independentes que vierem true).
+    // As TRES flags juntas na mesma linha (pega badge apagado, ex.: sem_consumo removido).
     expect(linha.textContent).toContain('Excesso');
+    expect(linha.textContent).toContain('Sem consumo');
     expect(linha.textContent).toContain('Obsoleto');
-    // ultima_saida: null -> traço.
-    const celulas = linha.querySelectorAll('td');
-    expect(linha.textContent).toContain('—');
+
+    // Datas por INDICE de coluna — duas datas validas e DISTINTAS, pega troca de coluna.
+    const tds = linha.querySelectorAll('td');
+    // colunas: 0 material, 1 qtd atual, 2 qtd maxima, 3 valor parado, 4 ultima entrada,
+    // 5 ultima saida, 6 flags.
+    expect(tds[4].textContent).toBe('10/01/26'); // ultima_entrada
+    expect(tds[5].textContent).toBe('05/03/26'); // ultima_saida
+  });
+
+  test('traço nas colunas de data quando ambas vem nulas', async () => {
+    await renderizar();
+    await clicar(botao('Estoque Parado'));
+
+    const linha = linhaMaterial('ALM-0041');
+    expect(linha).toBeTruthy();
+    const tds = linha.querySelectorAll('td');
+    expect(tds[4].textContent).toBe('—');
+    expect(tds[5].textContent).toBe('—');
+  });
+
+  test('resumo do estoque parado exato nos cards, com qualificador de que o filtro nao muda os numeros', async () => {
+    await renderizar();
+    await clicar(botao('Estoque Parado'));
+
+    const valorParadoFmt = Number(12345).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    expect(container.querySelector('[data-testid="kpi-excesso"]').textContent).toBe('6');
+    expect(container.querySelector('[data-testid="kpi-sem-consumo"]').textContent).toBe('4');
+    expect(container.querySelector('[data-testid="kpi-obsoleto"]').textContent).toBe('9');
+    expect(container.querySelector('[data-testid="kpi-valor-parado-total"]').textContent).toBe(valorParadoFmt);
+    expect(texto()).toContain('Retrato do estoque parado inteiro — o filtro abaixo não muda estes números.');
   });
 
   test('filtro por tipo refaz a chamada', async () => {
@@ -254,10 +329,23 @@ describe('ReposicaoAlmoxarifado — aba Estoque Parado', () => {
 
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/reposicao/estoque-parado', { params: { tipo: 'EXCESSO' } });
   });
+
+  test('nota de corte quando vem exatamente 500 itens', async () => {
+    const itens500 = Array.from({ length: 500 }, (_, i) => ({
+      material_id: 100 + i, codigo: `ALM-${1000 + i}`, nome: `Material ${i}`, unidade: 'UN',
+      quantidade_atual: 1, quantidade_maxima: 1, valor_parado: 1,
+      ultima_entrada: null, ultima_saida: null, excesso: false, sem_consumo: true, obsoleto: false,
+    }));
+    mockarApi({ estoqueParado: { dias_sem_consumo: 180, itens: itens500, resumo: { excesso: 0, sem_consumo: 500, obsoleto: 0, valor_parado_total: 500 } } });
+    await renderizar();
+    await clicar(botao('Estoque Parado'));
+
+    expect(texto()).toContain('Mostrando os 500 itens de maior valor parado.');
+  });
 });
 
 describe('ReposicaoAlmoxarifado — aba Solicitações', () => {
-  test('aba Solicitacoes lista pendentes', async () => {
+  test('aba Solicitacoes lista pendentes com motivo traduzido', async () => {
     await renderizar();
     await clicar(botao('Solicitações'));
 
@@ -265,6 +353,54 @@ describe('ReposicaoAlmoxarifado — aba Solicitações', () => {
     expect(linhaMaterial('ALM-0020')).toBeTruthy();
     expect(texto()).toContain('PENDENTE');
     expect(texto()).toContain('VINCULADO');
+    // MOTIVO_LABEL traduz o codigo cru vindo do backend.
+    expect(texto()).toContain('Ponto de reposição');
+    expect(texto()).toContain('Estoque mínimo');
+    expect(texto()).not.toContain('PONTO_REPOSICAO');
+    expect(texto()).not.toContain('ESTOQUE_MINIMO');
+  });
+});
+
+describe('ReposicaoAlmoxarifado — 403 legivel do backend', () => {
+  test('sugestoes: mensagem do requirePermission aparece verbatim no toast', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/reposicao/sugestoes') {
+        return Promise.reject({ response: { status: 403, data: { error: 'Sem permissão para reposicao.sugestoes' } } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    expect(toast.error).toHaveBeenCalledWith('Sem permissão para reposicao.sugestoes');
+  });
+
+  test('estoque-parado: mensagem do requirePermission aparece verbatim no toast', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/reposicao/sugestoes') {
+        return Promise.resolve({ data: SUGESTOES_DUAS_FORNECEDORES });
+      }
+      if (url === '/almoxarifado/reposicao/estoque-parado') {
+        return Promise.reject({ response: { status: 403, data: { error: 'Sem permissão para reposicao.estoque-parado' } } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Estoque Parado'));
+    expect(toast.error).toHaveBeenCalledWith('Sem permissão para reposicao.estoque-parado');
+  });
+
+  test('solicitacoes: mensagem do requirePermission aparece verbatim no toast', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/reposicao/sugestoes') {
+        return Promise.resolve({ data: SUGESTOES_DUAS_FORNECEDORES });
+      }
+      if (url === '/almoxarifado/relatorios/solicitacoes-compra') {
+        return Promise.reject({ response: { status: 403, data: { error: 'Sem permissão para relatorios.solicitacoes-compra' } } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Solicitações'));
+    expect(toast.error).toHaveBeenCalledWith('Sem permissão para relatorios.solicitacoes-compra');
   });
 });
 

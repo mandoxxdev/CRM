@@ -33,7 +33,9 @@ const TIPOS_PARADO = [
 const formatMoeda = (v) => (v === null || v === undefined
   ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 
-const formatNum = (v) => (v === null || v === undefined ? '—' : v);
+const formatNum = (v) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 4 }));
+
+const MOTIVO_LABEL = { PONTO_REPOSICAO: 'Ponto de reposição', ESTOQUE_MINIMO: 'Estoque mínimo' };
 
 // Timestamps do SQLite vem em UTC sem sufixo ("YYYY-MM-DD HH:MM:SS") — mesmo ajuste de
 // ConferenciaEstoque.js (sem o 'Z', o V8 leria como hora local).
@@ -71,6 +73,13 @@ const ReposicaoAlmoxarifado = () => {
     () => fornecedores.flatMap((g) => g.itens.map((i) => i.material_id)),
     [fornecedores],
   );
+  // Soma o valor_estimado só dos itens marcados — usado no texto do confirm() antes do POST.
+  const valorSelecionado = useMemo(
+    () => fornecedores.reduce((acc, g) => acc + g.itens.reduce(
+      (soma, i) => (selecionados.has(i.material_id) ? soma + (Number(i.valor_estimado) || 0) : soma), 0,
+    ), 0),
+    [fornecedores, selecionados],
+  );
 
   const carregarSugestoes = useCallback(() => {
     let cancelado = false;
@@ -86,10 +95,10 @@ const ReposicaoAlmoxarifado = () => {
         (dados.fornecedores || []).forEach((g) => g.itens.forEach((i) => ids.add(i.material_id)));
         setSelecionados(ids);
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelado) return;
         setSugestoes({ fornecedores: [], resumo: {} });
-        toast.error('Não foi possível carregar as sugestões de compra');
+        toast.error(err.response?.data?.error || 'Não foi possível carregar as sugestões de compra');
       })
       .finally(() => { if (!cancelado) setLoadingSugestoes(false); });
     return () => { cancelado = true; };
@@ -105,10 +114,10 @@ const ReposicaoAlmoxarifado = () => {
     if (filtroTipo) params.tipo = filtroTipo;
     api.get('/almoxarifado/reposicao/estoque-parado', { params })
       .then((r) => { if (!cancelado) setEstoqueParado(r.data || { itens: [], resumo: {} }); })
-      .catch(() => {
+      .catch((err) => {
         if (cancelado) return;
         setEstoqueParado({ itens: [], resumo: {} });
-        toast.error('Não foi possível carregar o estoque parado');
+        toast.error(err.response?.data?.error || 'Não foi possível carregar o estoque parado');
       })
       .finally(() => { if (!cancelado) setLoadingParado(false); });
     return () => { cancelado = true; };
@@ -120,10 +129,10 @@ const ReposicaoAlmoxarifado = () => {
     setLoadingSolic(true);
     api.get('/almoxarifado/relatorios/solicitacoes-compra')
       .then((r) => { if (!cancelado) setSolicitacoes(Array.isArray(r.data) ? r.data : []); })
-      .catch(() => {
+      .catch((err) => {
         if (cancelado) return;
         setSolicitacoes([]);
-        toast.error('Não foi possível carregar as solicitações');
+        toast.error(err.response?.data?.error || 'Não foi possível carregar as solicitações');
       })
       .finally(() => { if (!cancelado) setLoadingSolic(false); });
     return () => { cancelado = true; };
@@ -140,8 +149,18 @@ const ReposicaoAlmoxarifado = () => {
   const handleGerar = async (evento) => {
     if (!bloquearSeNaoPode('gerenciar_reposicao', evento)) return;
     if (selecionados.size === 0) return; // defesa em profundidade — o botão já vem desabilitado
+    // Sem confirmação, o clique default gerava 1 solicitação + 1 auditoria por material
+    // sugerido, sem caminho de cancelamento no sistema, e os materiais sumiam da tela por
+    // 60 dias via a_caminho — window.confirm é o padrão do módulo para esse tipo de cancelo.
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Gerar ${selecionados.size} solicitação(ões) de compra no valor estimado de ${formatMoeda(valorSelecionado)}?`)) return;
     setGerando(true);
     setResultadoGeracao(null);
+    // Snapshot código/nome por id no momento do POST — a lista recarrega logo depois
+    // (reloadSugestoes) e o material some da tela via a_caminho, então o resultado exibido
+    // não pode depender de `fornecedores` já atualizado.
+    const infoPorId = new Map();
+    fornecedores.forEach((g) => g.itens.forEach((i) => infoPorId.set(i.material_id, `${i.codigo} — ${i.nome}`)));
     try {
       // SÓ os marcados, sempre EXPLICITO — nunca omitir material_ids (ausente = "todas as
       // sugestões do momento" no servidor, RN-09).
@@ -149,7 +168,7 @@ const ReposicaoAlmoxarifado = () => {
         material_ids: [...selecionados],
       });
       const { criadas = [], puladas = [] } = res.data || {};
-      setResultadoGeracao({ criadas, puladas });
+      setResultadoGeracao({ criadas, puladas, infoPorId });
       if (criadas.length === 0 && puladas.length === 0) {
         toast.info('Nenhuma sugestão para gerar');
       } else {
@@ -196,21 +215,21 @@ const ReposicaoAlmoxarifado = () => {
               <div className="almox-kpi-card">
                 <div className="almox-kpi-icon primary"><FiShoppingCart /></div>
                 <div className="almox-kpi-info">
-                  <div className="almox-kpi-value">{sugestoes.resumo?.materiais_sugeridos ?? 0}</div>
+                  <div className="almox-kpi-value" data-testid="kpi-materiais-sugeridos">{sugestoes.resumo?.materiais_sugeridos ?? 0}</div>
                   <div className="almox-kpi-label">Materiais sugeridos</div>
                 </div>
               </div>
               <div className="almox-kpi-card">
                 <div className="almox-kpi-icon success"><FiShoppingCart /></div>
                 <div className="almox-kpi-info">
-                  <div className="almox-kpi-value" style={{ fontSize: '1.2rem' }}>{formatMoeda(sugestoes.resumo?.valor_total)}</div>
+                  <div className="almox-kpi-value" data-testid="kpi-valor-total-sugerido" style={{ fontSize: '1.2rem' }}>{formatMoeda(sugestoes.resumo?.valor_total)}</div>
                   <div className="almox-kpi-label">Valor total sugerido</div>
                 </div>
               </div>
               <div className="almox-kpi-card">
                 <div className="almox-kpi-icon danger"><FiAlertTriangle /></div>
                 <div className="almox-kpi-info">
-                  <div className="almox-kpi-value">{sugestoes.resumo?.riscos_parada ?? 0}</div>
+                  <div className="almox-kpi-value" data-testid="kpi-riscos-parada">{sugestoes.resumo?.riscos_parada ?? 0}</div>
                   <div className="almox-kpi-label">Riscos de parada</div>
                 </div>
               </div>
@@ -235,7 +254,7 @@ const ReposicaoAlmoxarifado = () => {
               )}
               {resultadoGeracao.puladas.length > 0 && (
                 <div>
-                  Puladas: {resultadoGeracao.puladas.map((p) => `#${p.material_id} (${p.motivo})`).join(', ')}
+                  Puladas: {resultadoGeracao.puladas.map((p) => `${resultadoGeracao.infoPorId?.get(p.material_id) || `#${p.material_id}`} (${p.motivo})`).join(', ')}
                 </div>
               )}
             </div>
@@ -270,6 +289,7 @@ const ReposicaoAlmoxarifado = () => {
                           <td>
                             <input
                               type="checkbox"
+                              aria-label={`Selecionar ${item.codigo}`}
                               checked={selecionados.has(item.material_id)}
                               onChange={(e) => alternarSelecao(item.material_id, e.target.checked)}
                             />
@@ -310,43 +330,55 @@ const ReposicaoAlmoxarifado = () => {
       {aba === 'PARADO' && (
         <>
           {estoqueParado && (
-            <div className="almox-kpis">
-              <div className="almox-kpi-card">
-                <div className="almox-kpi-icon warning"><FiAlertTriangle /></div>
-                <div className="almox-kpi-info">
-                  <div className="almox-kpi-value">{estoqueParado.resumo?.excesso ?? 0}</div>
-                  <div className="almox-kpi-label">Excesso</div>
+            <>
+              <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', margin: '0 0 8px' }}>
+                Retrato do estoque parado inteiro — o filtro abaixo não muda estes números.
+              </p>
+              <div className="almox-kpis">
+                <div className="almox-kpi-card">
+                  <div className="almox-kpi-icon warning"><FiAlertTriangle /></div>
+                  <div className="almox-kpi-info">
+                    <div className="almox-kpi-value" data-testid="kpi-excesso">{estoqueParado.resumo?.excesso ?? 0}</div>
+                    <div className="almox-kpi-label">Excesso</div>
+                  </div>
+                </div>
+                <div className="almox-kpi-card">
+                  <div className="almox-kpi-icon warning"><FiAlertTriangle /></div>
+                  <div className="almox-kpi-info">
+                    <div className="almox-kpi-value" data-testid="kpi-sem-consumo">{estoqueParado.resumo?.sem_consumo ?? 0}</div>
+                    <div className="almox-kpi-label">Sem consumo</div>
+                  </div>
+                </div>
+                <div className="almox-kpi-card">
+                  <div className="almox-kpi-icon danger"><FiAlertTriangle /></div>
+                  <div className="almox-kpi-info">
+                    <div className="almox-kpi-value" data-testid="kpi-obsoleto">{estoqueParado.resumo?.obsoleto ?? 0}</div>
+                    <div className="almox-kpi-label">Obsoleto</div>
+                  </div>
+                </div>
+                <div className="almox-kpi-card">
+                  <div className="almox-kpi-icon primary"><FiShoppingCart /></div>
+                  <div className="almox-kpi-info">
+                    <div className="almox-kpi-value" data-testid="kpi-valor-parado-total" style={{ fontSize: '1.2rem' }}>{formatMoeda(estoqueParado.resumo?.valor_parado_total)}</div>
+                    <div className="almox-kpi-label">Valor parado total</div>
+                  </div>
                 </div>
               </div>
-              <div className="almox-kpi-card">
-                <div className="almox-kpi-icon warning"><FiAlertTriangle /></div>
-                <div className="almox-kpi-info">
-                  <div className="almox-kpi-value">{estoqueParado.resumo?.sem_consumo ?? 0}</div>
-                  <div className="almox-kpi-label">Sem consumo</div>
-                </div>
-              </div>
-              <div className="almox-kpi-card">
-                <div className="almox-kpi-icon danger"><FiAlertTriangle /></div>
-                <div className="almox-kpi-info">
-                  <div className="almox-kpi-value">{estoqueParado.resumo?.obsoleto ?? 0}</div>
-                  <div className="almox-kpi-label">Obsoleto</div>
-                </div>
-              </div>
-              <div className="almox-kpi-card">
-                <div className="almox-kpi-icon primary"><FiShoppingCart /></div>
-                <div className="almox-kpi-info">
-                  <div className="almox-kpi-value" style={{ fontSize: '1.2rem' }}>{formatMoeda(estoqueParado.resumo?.valor_parado_total)}</div>
-                  <div className="almox-kpi-label">Valor parado total</div>
-                </div>
-              </div>
-            </div>
+            </>
           )}
 
           <div className="almox-filters">
-            <select className="almox-select" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+            <label htmlFor="reposicao-filtro-tipo" style={{ fontSize: '0.8rem', marginRight: 6 }}>Tipo</label>
+            <select id="reposicao-filtro-tipo" className="almox-select" aria-label="Tipo de estoque parado" value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
               {TIPOS_PARADO.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
+
+          {estoqueParado?.itens?.length === 500 && (
+            <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', margin: '8px 0' }}>
+              Mostrando os 500 itens de maior valor parado.
+            </p>
+          )}
 
           <div className="almox-table-container">
             {loadingParado ? <SkeletonTable rows={6} columns={7} />
@@ -395,7 +427,7 @@ const ReposicaoAlmoxarifado = () => {
 
       {aba === 'SOLICITACOES' && (
         <div className="almox-table-container">
-          {loadingSolic ? <SkeletonTable rows={6} columns={6} />
+          {loadingSolic ? <SkeletonTable rows={6} columns={5} />
             : solicitacoes.length === 0 ? (
               <div className="almox-empty"><p>Nenhuma solicitação de compra pendente</p></div>
             ) : (
@@ -414,7 +446,7 @@ const ReposicaoAlmoxarifado = () => {
                     <tr key={s.id}>
                       <td>{s.material_codigo} — {s.material_nome}</td>
                       <td>{formatNum(s.quantidade)}</td>
-                      <td>{s.motivo || '—'}</td>
+                      <td>{s.motivo ? (MOTIVO_LABEL[s.motivo] || s.motivo) : '—'}</td>
                       <td>
                         <span className={`almox-badge almox-badge-${s.status === 'VINCULADO' ? 'ok' : 'ajuste'}`}>
                           {s.status}
