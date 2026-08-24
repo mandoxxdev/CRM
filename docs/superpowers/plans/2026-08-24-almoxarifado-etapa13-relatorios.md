@@ -249,37 +249,61 @@ Modify `lazyModules.js`, `App.js`, `Layout.js` (menu, ícone ≠ dos usados).
   >    realista e menor (`janela_dias` escalar, `giro` objeto aninhado, `rupturas.materiais`
   >    array aninhado) para provar que a renderização é GENÉRICA (recursiva por shape, nunca
   >    por nome de chave) e vai funcionar com o shape real da Task 2 sem precisar de ajuste.
-- [x] Testes: 16 (acima do mínimo 9), fixtures com números distintos, asserts por célula: menu
-  só com o listado (2 testes, incluindo lista reduzida por gate); params obrigatórios bloqueiam
-  consulta sem chamada; nomes de parâmetro do registro (sucata-financeiro usa `de`/`ate`);
-  consulta manda querystring certa (vazios omitidos); tabela por célula + data UTC-safe
-  cruzando meia-noite; payload objeto com escalar+objeto aninhado+array aninhado; aviso de
-  limite aparece com 10 linhas e NÃO aparece com 9 (par positivo+negativo); export usa a MESMA
-  querystring e só existe para payload array, e não antes da 1ª consulta; 403 na lista →
+  >
+  > **ISTO FOI CORRIGIDO — os itens 1 e 2 acima ESTAVAM CERTOS no momento em que foram escritos
+  > (contrato medido de verdade), mas deixaram de valer.** O fix-round da revisão da Task 1
+  > (commit `cfdbbe5`, "varredura do registro + lista alargada") ALARGOU
+  > `GET /api/almoxarifado/relatorios` para devolver também `exportavel`, `limite` e `nota` por
+  > relatório — exatamente os três campos cuja ausência forçou os contornos 1/2 acima. Depois de
+  > `git rebase cfdbbe5` nesta worktree:
+  > - **Botão Exportar XLSX** passou a ler `entradaSelecionada.exportavel` da lista (fonte),
+  >   não mais `Array.isArray(payload)` como proxy — o `Array.isArray` continua como guarda
+  >   extra (defesa em profundidade), mas não decide mais sozinho. Prova: fixture nova
+  >   `diagnostico-consistencia` (`exportavel:false`) devolvendo payload ARRAY não mostra mais
+  >   o botão — o caso exato que o proxy antigo acertava por acidente e que passaria a errar se
+  >   o registro algum dia tivesse `exportavel:false` com payload tabular.
+  > - **Tabela local `LIMITE_CONHECIDO` (500/500/10) foi APAGADA** — `atingiuLimite` lê
+  >   `entradaSelecionada.limite` direto. Prova: a mesma fixture `diagnostico-consistencia` usa
+  >   `limite:3`, valor que nunca existiu em nenhuma tabela hardcoded desta tela; o aviso só
+  >   aparece com exatamente 3 linhas se o campo estiver sendo lido de verdade.
+  > - **Nota/régua deixou de ser corte** — `entradaSelecionada.nota` (quando não-nula) renderiza
+  >   logo abaixo do título do relatório, com o texto EXATO que vem da lista.
+  > - O ponto 3 (download via `api.get`+blob, não `window.open`/anchor) e o ponto 4
+  >   (`indicadores` genérico) continuam válidos — não eram sobre o shape da lista.
+- [x] Testes: 20 (16 da primeira rodada + 4 do realinhamento pós-`cfdbbe5`), fixtures com
+  números distintos, asserts por célula: menu só com o listado (2 testes, incluindo lista
+  reduzida por gate); params obrigatórios bloqueiam consulta sem chamada; nomes de parâmetro do
+  registro (sucata-financeiro usa `de`/`ate`); consulta manda querystring certa (vazios
+  omitidos); tabela por célula + data UTC-safe cruzando meia-noite; payload objeto com
+  escalar+objeto aninhado+array aninhado; aviso de limite aparece com 10 linhas (materiais-
+  mais-consumidos) e NÃO aparece com 9 (par positivo+negativo), MAIS o par com limite atípico
+  (3, `diagnostico-consistencia`) provando que é o campo, não uma tabela local; nota aparece
+  com o texto exato da lista (e some quando `nota:null`); export usa a MESMA querystring
+  quando `exportavel:true`, NÃO existe antes da 1ª consulta, NÃO existe para payload objeto, e
+  NÃO existe para payload array quando `exportavel:false` (o caso do proxy); 403 na lista →
   painel com retry; rede na consulta → painel mantendo menu; botão desabilitado em voo (sem
   segunda chamada no duplo clique).
 - [x] Sabotagens mínimas confirmadas vermelhas e restauradas por edição reversa (NUNCA
   `git checkout`), md5 antes/depois/depois-de-restaurar batendo: export apontando para o
   dispatcher (sem `/export`) → caiu o teste de export; menu com item hardcoded fora da lista
   (`abaixo-minimo` sempre injetado em "Estoque") → caiu o teste de menu; aviso de limite
-  forçado a não renderizar (`{false && atingiuLimite && (...)}`) → caiu o teste de limite com
-  10 linhas.
+  forçado a não renderizar (`{false && atingiuLimite && (...)}`) → caiu os DOIS testes de
+  limite (10 linhas E o limite atípico 3) — reconfirmado após o realinhamento pós-`cfdbbe5`.
 - Rodapé por relatório: a régua/nota declarada no registro (Fase 2, C4 — consumo-os diz 10
   onde indicadores diz 18; os dois números na mesma página precisam da régua escrita) e o
-  aviso "mostrando os primeiros N" quando `linhas === limite` (I5) — implementado pela decisão
-  2 acima (tabela local espelhando o registro, já que a lista não traz `limite`). A "régua/
-  nota" textual por relatório (ex.: "consumo-os conta só SAIDA*") **não foi implementada**: a
-  lista também não traz nenhum campo de nota/régua (não existe em `reportRegistry.js` nem no
-  RN-05), então não há dado para exibir sem inventar texto estático por tipo — decisão: deixar
-  de fora, sem gambiarra por nome de tipo, e registrar aqui como corte.
-- [x] Full client suite (452/452 = 436 base + 16 novos) + build limpo (`Compiled successfully`)
-  + `npm run test:api` NA WORKTREE (117/117 — nada de servidor muda nesta task, mas a regra da
-  base manda rodar). Commit na worktree `59fb871` (branch
-  `worktree-agent-aabb04d3e82023d0d`, em cima de `39a684c`, HEAD da Task 1 no momento em que
-  esta worktree foi aberta). Reconferir a suíte de client DEPOIS do merge (a Task 4 muda o
-  client na árvore principal em paralelo — o número da worktree fica defasado; Fase 2, M7) —
-  **ainda não feito, é o merge desta worktree para a árvore principal, que não é parte desta
-  task** (a task pediu caminho da worktree + branch + hash, sem merge).
+  aviso "mostrando os primeiros N" quando `linhas === limite` (I5) — **ambos implementados
+  lendo `exportavel`/`limite`/`nota` direto da lista** (não mais tabela local nem corte; ver
+  bloco "ISTO FOI CORRIGIDO" acima).
+- [x] Full client suite (456/456 = 452 anterior + 4 novos) + build limpo
+  (`Compiled successfully`) + `npm run test:api` NA WORKTREE (117/117 — o fix-round `cfdbbe5`
+  já está no HEAD após o rebase). Commits na worktree (`git rebase cfdbbe5` trocou os hashes
+  originais `59fb871`/`c6a3dca` pelos equivalentes reaplicados `a69a40a`/`8ec85a9`), mais
+  `3e13632` ("Task 3: realinha com a lista alargada (cfdbbe5)", o realinhamento dos 3
+  contornos) por cima. Branch `worktree-agent-aabb04d3e82023d0d`. Reconferir a
+  suíte de client DEPOIS do merge (a Task 4 muda o client na árvore principal em paralelo — o
+  número da worktree fica defasado; Fase 2, M7) — **ainda não feito, é o merge desta worktree
+  para a árvore principal, que não é parte desta task** (a task pediu caminho da worktree +
+  branch + hash, sem merge).
 
 ### Task 4: Dashboard + teste-jornada (galho, árvore principal — SÓ após Tasks 1-2)
 
