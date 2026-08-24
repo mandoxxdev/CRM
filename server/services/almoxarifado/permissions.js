@@ -35,6 +35,11 @@ const ACAO_PERFIS = {
   // de cliente para fora). Exposta em GET /almoxarifado/minhas-permissoes automaticamente — a
   // rota itera Object.keys(ACAO_PERFIS).
   remessar_terceiro: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
+  // Etapa 11 (D9 do design): decidir COMPRA e gestao/compras, nao operacao de balcao — o
+  // ALMOXARIFE conta e movimenta, nao decide pedido; fica fora DE PROPOSITO (primeira acao do
+  // modulo sem ele — reversivel, uma linha, registrado na letra B do doc de novidades).
+  // Primeiro uso real do perfil COMPRAS.
+  gerenciar_reposicao: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR, PERFIS.COMPRAS],
   // Etapa 9, decisao 9: sucatear APAGA material do patrimonio, e apagar nao tem estorno operacional
   // — a chapa ja foi para a cacamba. Mesmo criterio da Etapa 8 (ajustar_material_cliente) e da 8b
   // (remessar_terceiro), escrito la e reusado aqui: quando a operacao muda a NATUREZA DO RISCO, ela

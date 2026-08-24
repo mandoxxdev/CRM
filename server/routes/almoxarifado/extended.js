@@ -1080,6 +1080,13 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // ── Reposição (Etapa 11) — RN-01..RN-08 do design. Gate proprio: decidir compra e
+  // gestao/compras (ALMOXARIFE fora de proposito, D9).
+  app.get('/api/almoxarifado/reposicao/sugestoes', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
+    try { res.json(await purchaseService.calcularSugestoes(db)); }
+    catch (e) { handleError(res, e); }
+  });
+
   // ── Auditoria ──
   app.get('/api/almoxarifado/auditoria', auth, async (req, res) => {
     try {

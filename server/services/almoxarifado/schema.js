@@ -1775,6 +1775,13 @@ async function initSchema(db) {
     // toleranciaEfetiva() caía no fallback fixo 2, silenciosamente, mesmo que um admin tentasse
     // configurar outro valor pela tela.
     ['tolerancia_inventario_percentual', '2', 'Tolerância padrão (%) de divergência no inventário antes de exigir recontagem'],
+    // Etapa 11: janela do consumo medio, regua de material parado e horizonte da solicitacao
+    // (RN-01/RN-03/RN-07). Semeadas porque PUT /configuracoes so escreve chave que ja existe
+    // (licao da Etapa 10) — e as tres tambem entram no array CAMPOS da tela (Task 3), senao
+    // continuam ineditaveis pela UI (Fase 2).
+    ['reposicao_janela_consumo_dias', '90', 'Janela (dias) do consumo médio para reposição'],
+    ['reposicao_dias_sem_consumo', '180', 'Dias sem saída para material contar como parado/obsoleto'],
+    ['reposicao_horizonte_solicitacao_dias', '60', 'Dias em que uma solicitação aberta ainda conta como "a caminho"'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
@@ -1797,6 +1804,11 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN centro_custo_id INTEGER');
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN emergencial INTEGER DEFAULT 0');
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN regularizacao_pendente INTEGER DEFAULT 0');
+
+  // Etapa 11: primeiro shape de consulta do modulo com subselect correlacionado por material
+  // sobre o livro inteiro (consumo medio, ultima entrada/saida) — sem indice e N x full scan.
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_mov_almox_material_tipo
+    ON movimentacoes_almoxarifado (material_id, cancelado, tipo)`);
 
   console.log('✅ Schema almoxarifado v3 inicializado');
 }
