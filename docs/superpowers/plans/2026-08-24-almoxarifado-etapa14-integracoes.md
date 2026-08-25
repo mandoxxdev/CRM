@@ -223,6 +223,67 @@ Sugestões (RN-04; painel de erro localizado; números por célula com fixtures 
 Mínimo 8 testes; sabotagens: POST de cancelar sem justificativa passa → cai; painel de
 contexto com URL errada → cai. Client inteiro + build + test:api NA worktree.
 
+- [x] Feito (worktree `.claude/worktrees/agent-a4474bfc544b3da0b`, branch
+  `worktree-agent-a4474bfc544b3da0b`, resetada para 58d45cf antes de começar — o HEAD da
+  worktree estava em outro trabalho não relacionado). Botão **Cancelar** por linha na aba
+  Solicitações: `window.confirm` com o literal congelado do design, depois
+  `window.prompt` para a justificativa (vazia ou só espaço não chama a API — pré-checagem
+  local do mesmo contrato que o servidor recusaria, sem viagem de rede); sucesso recarrega a
+  lista (`reloadSolic`); erros do servidor (400 terminal, 404 inexistente) aparecem em toast
+  com o literal exato; gate `gerenciar_reposicao` via `bloquearSeNaoPode`; botão fica
+  "Cancelando..." e desabilitado durante o POST (defesa contra duplo clique). Badges
+  PENDENTE/VINCULADO já existiam prontas da Etapa 11 (o relatório `solicitacoes-compra`
+  só lista o pipeline aberto — RECEBIDA/CANCELADA somem sozinhas, nenhuma listagem nova
+  necessária). Painel expansível **Contexto do material** na aba Sugestões: botão "Ver
+  contexto"/"Ocultar contexto" por linha, UM painel aberto por vez, cache por
+  `material_id`; células disponível/reservado/em terceiros/consumo médio (com a janela na
+  legenda)/último custo (valor+data ou '—')/solicitações abertas/proprietário do cliente
+  quando presente; erro → painel localizado reaproveitando `PainelErroCarga` com retry,
+  nunca silêncio.
+  **Desvio registrado:** no início da task a worktree estava em `5dadd59` (branch de outro
+  agente, não descendente de `58d45cf`) — resetada com `git reset --hard 58d45cf` conforme
+  a instrução da task, e `node_modules` (raiz/client/server) recriados como symlink para a
+  árvore principal por estarem ausentes na worktree.
+  **Contrato do galho confirmado:** o endpoint `GET /compras/contexto-material/:id`
+  continuava inexistente no servidor no momento desta task (Task 2 do tronco ainda não
+  aterrissada) — os testes mockam a fronteira HTTP com o shape RN-04 congelado; nenhum
+  ajuste de shape foi necessário na tela em si, só o realinhamento pendente é confirmar
+  contra o endpoint real quando a Task 2 aterrissar.
+  12 testes novos (36 no arquivo, mínimo pedido era 8): badges de estado, cancelar
+  (sucesso+recarrega, confirm recusado, justificativa vazia, justificativa nula, erro 400,
+  erro 404, gate, duplo clique desabilitado), contexto (URL exata + células exatas com
+  toggle, último custo null + proprietário do cliente, erro com retry). As três sabotagens
+  mínimas pedidas foram executadas manualmente (edição reversa, nunca `git checkout`, com
+  md5 antes/durante/depois): justificativa vazia sem o guard → cai (teste de justificativa
+  vazia vermelho); URL do contexto errada → cai (as 3 assertivas de contexto vermelhas,
+  inclusive a de URL exata); literal do confirm alterado → cai (teste de "confirma com o
+  literal" vermelho). Client 483/483 (33 suítes, era 471/471 — os 12 testes a mais batem
+  com os 12 adicionados líquidos, a suíte da tela foi de 24 para 36); build limpo
+  (`CI=true`); `test:api` do servidor 120/120 (nenhuma rota tocada por esta task).
+- [x] Fix-round (revisão adversarial devolveu Needs-fix-round: shape correto contra o
+  servidor real, mas 1 bug vivo + 3 mutações de uma linha sobreviviam 36/36). **Bug vivo
+  corrigido:** o cache `contextoPorMaterial` nunca invalidava — depois de "Gerar
+  solicitações" ou do botão "Atualizar" (os dois incrementam `reloadSugestoes`), reabrir o
+  painel de um material já visto mostrava números de ANTES da ação que acabou de mudá-los
+  (disponível, solicitações abertas). Fix: `useEffect` novo com dep `[reloadSugestoes]`
+  zera o cache inteiro e, se havia um painel aberto no momento, refaz a chamada dele na
+  hora (painel continua aberto, só os números mudam); `contextoAbertoId` é lido do closure
+  do próprio render que disparou o efeito, dispensando `ref`. **3 mutações agora cobertas:**
+  (1) tirar o `+Z` de `formatData` — as fixtures anteriores só usavam horário seguro
+  (≥09:00 UTC); fixture nova com `02:18:00 UTC` (madrugada, vira dia anterior em
+  America/Sao_Paulo, timezone da máquina de teste) morde. (2) `Object.values(cache)[0]` no
+  lugar de `cache[material_id]` — com cache de UMA entrada os dois são a mesma coisa por
+  acidente; teste novo abre o material 10, fecha, abre o 20 (cache com DUAS entradas) e
+  prova que o painel mostra o material certo, cobrindo também o cache-hit declarado
+  (reabrir sem nova chamada). (3) asserts de `solicitacoes_abertas` trocados de substring
+  (`toContain`) para exato por `<li>` (quantidade e data). Comentário de uma linha
+  acrescentado no painel explicando que `d.material` do contrato é deliberadamente não lido
+  (a linha da tabela já mostra código/nome). 3 testes novos (39 no arquivo). As 3 mutações
+  do revisor reproduzidas manualmente (edição reversa, nunca `git checkout`, md5
+  antes/durante/depois) caem cada uma no teste certo e nenhuma outra; revertidas com o md5
+  original confirmado. Client 486/486 (era 483/483); build limpo; `test:api` não roda de
+  novo nesta rodada (nenhuma rota tocada, já confirmado 120/120 na entrega anterior).
+
 ### Task 5: Jornada (galho, principal — SÓ após 1-3)
 
 `server/tests/api/integracaoComprasJornada.api.test.js`: sugestão → gerar solicitações (rota

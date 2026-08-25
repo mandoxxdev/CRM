@@ -81,6 +81,86 @@ const formatData = (d) => {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
+// Etapa 14, Task 4 (RN-04, RN-06): painel expansível de contexto do material na aba
+// Sugestões, contra o shape CONGELADO do design (`docs/superpowers/specs/
+// 2026-08-24-almoxarifado-etapa14-integracoes-design.md`, RN-04) — o endpoint
+// (`GET /compras/contexto-material/:id`) ainda não existe no servidor no momento desta task
+// (Task 2 do tronco, em andamento); esta tela mocka a fronteira HTTP com o shape combinado e
+// trata erro (404/perfil) com painel localizado, nunca silêncio. `estado` é
+// `{ loading, erro, dados } | undefined` — undefined só no instante antes do primeiro clique
+// abrir e disparar a carga (não deve aparecer de fato, os dois setStates do clique são
+// batched no mesmo render).
+const PainelContextoMaterial = ({ estado, onTentarNovamente }) => {
+  if (!estado || estado.loading) {
+    return (
+      <p style={{ margin: 0, padding: '10px 4px', fontSize: '0.85rem', color: 'var(--gmp-text-light)' }}>
+        Carregando contexto...
+      </p>
+    );
+  }
+  if (estado.erro) {
+    return (
+      <div style={{ padding: '4px 0' }}>
+        <PainelErroCarga mensagem={estado.erro} onTentarNovamente={onTentarNovamente} />
+      </div>
+    );
+  }
+  const d = estado.dados;
+  if (!d) return null;
+  // `d.material` ({ id, codigo, nome, unidade }) do contrato não é lido aqui de propósito —
+  // a linha da tabela que abre este painel já mostra código/nome/unidade do mesmo material.
+  const solicitacoesAbertas = d.solicitacoes_abertas || [];
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, padding: '10px 6px', fontSize: '0.85rem' }}>
+      <div>
+        <div style={{ color: 'var(--gmp-text-light)' }}>Disponível</div>
+        <div data-testid="contexto-disponivel" style={{ fontWeight: 600 }}>{formatNum(d.disponivel)}</div>
+      </div>
+      <div>
+        <div style={{ color: 'var(--gmp-text-light)' }}>Reservado</div>
+        <div data-testid="contexto-reservado" style={{ fontWeight: 600 }}>{formatNum(d.reservado)}</div>
+      </div>
+      <div>
+        <div style={{ color: 'var(--gmp-text-light)' }}>Em terceiros</div>
+        <div data-testid="contexto-em-terceiros" style={{ fontWeight: 600 }}>{formatNum(d.em_terceiros)}</div>
+      </div>
+      <div>
+        <div style={{ color: 'var(--gmp-text-light)' }}>Consumo médio</div>
+        <div data-testid="contexto-consumo" style={{ fontWeight: 600 }}>{formatNum(d.consumo_medio_diario)}/dia</div>
+        <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)' }}>Média dos últimos {d.janela_dias ?? '—'} dias</div>
+      </div>
+      <div>
+        <div style={{ color: 'var(--gmp-text-light)' }}>Último custo de entrada</div>
+        <div data-testid="contexto-ultimo-custo" style={{ fontWeight: 600 }}>
+          {d.ultimo_custo_entrada
+            ? `${formatMoeda(d.ultimo_custo_entrada.valor)} em ${formatData(d.ultimo_custo_entrada.data)}`
+            : '—'}
+        </div>
+      </div>
+      {d.proprietario_cliente && (
+        <div>
+          <div style={{ color: 'var(--gmp-text-light)' }}>Material do cliente</div>
+          <div data-testid="contexto-proprietario-cliente" style={{ fontWeight: 600 }}>{d.proprietario_cliente.razao_social}</div>
+        </div>
+      )}
+      <div style={{ flexBasis: '100%' }}>
+        <div style={{ color: 'var(--gmp-text-light)' }}>Solicitações abertas</div>
+        {solicitacoesAbertas.length === 0 ? (
+          <div data-testid="contexto-solicitacoes-abertas">Nenhuma</div>
+        ) : (
+          <ul data-testid="contexto-solicitacoes-abertas" style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+            {solicitacoesAbertas.map((sa) => (
+              <li key={sa.id}>
+                #{sa.id} — {sa.status} — {formatNum(sa.quantidade)}{sa.pedido_compra_id ? ` (pedido #${sa.pedido_compra_id})` : ''} — {formatData(sa.created_at)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ReposicaoAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
   const [aba, setAba] = useState('SUGESTOES');
@@ -106,6 +186,15 @@ const ReposicaoAlmoxarifado = () => {
   const [loadingSolic, setLoadingSolic] = useState(true);
   const [erroSolic, setErroSolic] = useState(null);
   const [reloadSolic, setReloadSolic] = useState(0);
+  // Etapa 14, Task 4 (RN-02): trava o botão da linha em voo — defesa contra duplo clique
+  // disparando dois POSTs de cancelamento para a mesma solicitação.
+  const [cancelandoId, setCancelandoId] = useState(null);
+
+  // Etapa 14, Task 4 (RN-04): contexto do comprador na aba Sugestões — painel expansível, UM
+  // material aberto por vez. Cache por material_id evita reconsultar ao reabrir o mesmo
+  // painel durante a mesma sessão da tela.
+  const [contextoAbertoId, setContextoAbertoId] = useState(null);
+  const [contextoPorMaterial, setContextoPorMaterial] = useState({});
 
   // resultadoGeracao pertence SO a aba Sugestoes — trocar de aba e voltar sem isto deixava o
   // painel de "N solicitacao(oes) criada(s)" da geracao anterior grudado na tela mesmo depois
@@ -241,6 +330,75 @@ const ReposicaoAlmoxarifado = () => {
     } finally { setGerando(false); }
   };
 
+  // Etapa 14, Task 4 (RN-02, contrato congelado do design): cancelamento manual de uma
+  // solicitação de compra. confirm() com o literal do design primeiro (decisão reversível de
+  // baixo custo, padrão desta tela); só então pede a justificativa — vazia (ou só espaço) nem
+  // chama a API, o servidor recusaria com o mesmo literal (RN-02) mas o comprador não precisa
+  // de uma viagem ao servidor pra descobrir isso.
+  const handleCancelarSolicitacao = async (s, evento) => {
+    if (!bloquearSeNaoPode('gerenciar_reposicao', evento)) return;
+    if (cancelandoId) return; // uma cancelação em voo por vez
+    // eslint-disable-next-line no-alert
+    if (!window.confirm('Cancelar esta solicitação de compra? A justificativa ficará registrada.')) return;
+    // eslint-disable-next-line no-alert
+    const motivo = window.prompt('Justificativa do cancelamento:');
+    if (!motivo || !motivo.trim()) {
+      toast.error('Justificativa obrigatória para cancelar a solicitação');
+      return;
+    }
+    setCancelandoId(s.id);
+    try {
+      await api.post(`/almoxarifado/compras/solicitacoes/${s.id}/cancelar`, { motivo: motivo.trim() });
+      toast.success('Solicitação cancelada');
+      setReloadSolic((t) => t + 1);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao cancelar solicitação');
+    } finally {
+      setCancelandoId(null);
+    }
+  };
+
+  // Etapa 14, Task 4 (RN-04): busca o contexto do comprador para UM material — chamada pelo
+  // toggle do painel e pelo "Tentar novamente" do erro localizado.
+  const carregarContexto = useCallback((materialId) => {
+    setContextoPorMaterial((c) => ({ ...c, [materialId]: { ...(c[materialId] || {}), loading: true, erro: null } }));
+    api.get(`/almoxarifado/compras/contexto-material/${materialId}`)
+      .then((r) => {
+        setContextoPorMaterial((c) => ({ ...c, [materialId]: { loading: false, erro: null, dados: r.data } }));
+      })
+      .catch((err) => {
+        const mensagem = err.response?.data?.error || 'Não foi possível carregar o contexto do material';
+        setContextoPorMaterial((c) => ({ ...c, [materialId]: { loading: false, erro: mensagem, dados: null } }));
+        toast.error(mensagem);
+      });
+  }, []);
+
+  const alternarContexto = (materialId) => {
+    if (contextoAbertoId === materialId) { setContextoAbertoId(null); return; }
+    setContextoAbertoId(materialId);
+    // Sem cache (nunca carregado) ou cache com erro (dados null) — busca de novo. Reabrir um
+    // painel que já carregou com sucesso não refaz a chamada.
+    if (!contextoPorMaterial[materialId]?.dados) carregarContexto(materialId);
+  };
+
+  // Etapa 14, Task 4 (fix-round, Important 1 — bug vivo medido na revisão): o cache de
+  // contexto nunca invalidava sozinho. "Gerar solicitações" e o botão "Atualizar" (os dois
+  // incrementam `reloadSugestoes`) mudam disponível/a_caminho/solicitações_abertas do
+  // material na sugestão, mas o painel de contexto, se já tinha sido aberto uma vez antes,
+  // continuava mostrando os números de ANTES — o comprador confiaria num número que a
+  // própria ação dele acabou de invalidar. Zera o cache inteiro a cada reload da lista; se
+  // havia um painel aberto no momento, refaz a chamada dele na hora — o painel continua
+  // aberto (o comprador não perde o foco no material que estava olhando), só os números são
+  // atualizados. `contextoAbertoId` é lido do valor corrente do render em que
+  // `reloadSugestoes` mudou (não é stale — React usa o closure do render que disparou o
+  // efeito), então dispensa ref; a omissão de `contextoAbertoId`/`carregarContexto` das deps
+  // é deliberada — não deve rodar de novo só porque o usuário abriu/fechou um painel.
+  useEffect(() => {
+    setContextoPorMaterial({});
+    if (contextoAbertoId != null) carregarContexto(contextoAbertoId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadSugestoes]);
+
   return (
     <div className="almox-page">
       <div className="almox-header">
@@ -344,7 +502,7 @@ const ReposicaoAlmoxarifado = () => {
                 </div>
               )}
 
-              {loadingSugestoes ? <SkeletonTable rows={6} columns={9} /> : todosMaterialIds.length === 0 ? (
+              {loadingSugestoes ? <SkeletonTable rows={6} columns={10} /> : todosMaterialIds.length === 0 ? (
                 <div className="almox-empty"><p>Nenhuma sugestão para gerar</p></div>
               ) : (
                 fornecedores.map((g) => {
@@ -384,11 +542,13 @@ const ReposicaoAlmoxarifado = () => {
                               <th>Sugerida</th>
                               <th>Valor</th>
                               <th>Risco</th>
+                              <th>Contexto</th>
                             </tr>
                           </thead>
                           <tbody>
                             {g.itens.map((item) => (
-                              <tr key={item.material_id}>
+                              <React.Fragment key={item.material_id}>
+                              <tr>
                                 <td>
                                   <input
                                     type="checkbox"
@@ -441,7 +601,27 @@ const ReposicaoAlmoxarifado = () => {
                                     <span className="almox-badge almox-badge-critico">Risco de parada</span>
                                   )}
                                 </td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="btn-almox-secondary"
+                                    onClick={() => alternarContexto(item.material_id)}
+                                  >
+                                    {contextoAbertoId === item.material_id ? 'Ocultar contexto' : 'Ver contexto'}
+                                  </button>
+                                </td>
                               </tr>
+                              {contextoAbertoId === item.material_id && (
+                                <tr>
+                                  <td colSpan={10} style={{ background: 'var(--gmp-bg)' }}>
+                                    <PainelContextoMaterial
+                                      estado={contextoPorMaterial[item.material_id]}
+                                      onTentarNovamente={() => carregarContexto(item.material_id)}
+                                    />
+                                  </td>
+                                </tr>
+                              )}
+                              </React.Fragment>
                             ))}
                           </tbody>
                         </table>
@@ -570,7 +750,7 @@ const ReposicaoAlmoxarifado = () => {
             <PainelErroCarga mensagem={erroSolic.mensagem} onTentarNovamente={() => setReloadSolic((t) => t + 1)} />
           ) : (
             <div className="almox-table-container">
-              {loadingSolic ? <SkeletonTable rows={6} columns={5} />
+              {loadingSolic ? <SkeletonTable rows={6} columns={6} />
                 : (solicitacoes || []).length === 0 ? (
                   <div className="almox-empty"><p>Nenhuma solicitação de compra pendente</p></div>
                 ) : (
@@ -582,6 +762,7 @@ const ReposicaoAlmoxarifado = () => {
                         <th>Motivo</th>
                         <th>Status</th>
                         <th>Criada em</th>
+                        <th>Ações</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -591,11 +772,26 @@ const ReposicaoAlmoxarifado = () => {
                           <td>{formatNum(s.quantidade)}</td>
                           <td>{s.motivo ? (MOTIVO_LABEL[s.motivo] || s.motivo) : '—'}</td>
                           <td>
+                            {/* RN-06: só PENDENTE/VINCULADO aparecem aqui — o relatório
+                                (E11, `solicitacoes-compra`) já lista SÓ o pipeline aberto;
+                                RECEBIDA/CANCELADA somem da lista por conta própria. */}
                             <span className={`almox-badge almox-badge-${s.status === 'VINCULADO' ? 'ok' : 'ajuste'}`}>
                               {s.status}
                             </span>
                           </td>
                           <td>{formatData(s.created_at)}</td>
+                          <td>
+                            <div className="almox-actions">
+                              <button
+                                type="button"
+                                className="btn-almox-danger"
+                                disabled={cancelandoId === s.id}
+                                onClick={(e) => handleCancelarSolicitacao(s, e)}
+                              >
+                                {cancelandoId === s.id ? 'Cancelando...' : 'Cancelar'}
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
