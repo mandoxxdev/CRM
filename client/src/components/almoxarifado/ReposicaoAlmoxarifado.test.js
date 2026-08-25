@@ -861,6 +861,24 @@ describe('ReposicaoAlmoxarifado — aba Sugestões — contexto do material', ()
     expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('12');
   });
 
+  test('reabrir o painel APOS um erro reconsulta sozinho (nao mostra o erro cacheado) — revisao final S4', async () => {
+    // Mutacao sobrevivente da lente B: trocar `!cache[id]?.dados` por `!cache[id]` deixava o
+    // erro cacheado para sempre — fechar e reabrir mostrava o erro velho SEM nova requisicao,
+    // e so o botao de retry saia do estado. O codigo estava certo; faltava quem o segurasse.
+    mockarContexto({ 10: { erro: { response: { status: 500, data: { error: 'Erro interno' } } } } });
+    await renderizar();
+    const linha = () => linhaMaterial('ALM-0010');
+    await clicar(botao('Ver contexto', linha()));
+    expect(texto()).toContain('Dados indisponíveis no momento');
+
+    await clicar(botao('Ocultar contexto', linha())); // fecha (o rotulo alterna)
+    mockarContexto({ 10: { dados: CONTEXTO_MATERIAL_10 } });
+    api.get.mockClear();
+    await clicar(botao('Ver contexto', linha())); // reabre: TEM de reconsultar
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/compras/contexto-material/10');
+    expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('12');
+  });
+
   // Fix-round (Important 2, achado do revisor): madrugada UTC vira o dia ANTERIOR no fuso
   // local (America/Sao_Paulo, UTC-3) — a mutação que tira o "+Z" do `formatData` ficava
   // verde contra as fixtures anteriores (todas em horário seguro). Ver fixture acima.

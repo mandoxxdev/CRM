@@ -54,10 +54,11 @@ function itemDe(res, materialId) {
   // `pedidos_compra` (antes gravava pedido fantasma sem checar). O Passo 8 abaixo vincula a
   // `pedido_compra_id: 1` — precisa da tabela E da linha.
   await dbRun(db, `CREATE TABLE IF NOT EXISTS pedidos_compra (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER,
-    valor_total REAL DEFAULT 0, status TEXT, data_pedido DATE,
+    id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER NOT NULL,
+    valor_total REAL DEFAULT 0, status TEXT DEFAULT 'pendente', data_pedido DATE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
-  await dbRun(db, `INSERT INTO pedidos_compra (id, numero, status, data_pedido) VALUES (1, 'PC-JOR-1', 'ABERTO', '2026-08-01')`);
+  await dbRun(db, `INSERT INTO fornecedores (razao_social, nome_fantasia, cnpj) VALUES ('Fornecedor Stub', 'Fornecedor Stub', '11111111111111')`);
+  await dbRun(db, `INSERT INTO pedidos_compra (id, numero, fornecedor_id, status, data_pedido) VALUES (1, 'PC-JOR-1', 1, 'ABERTO', '2026-08-01')`);
 
   await test('jornada: motor real -> sugestao -> risco -> gerar -> some -> vincula -> estoque parado -> gate', async () => {
     // ── Passo 1: seed — fornecedor + M1 (minima 5, maxima 20, custo 10, critico) via CADASTRO, ──

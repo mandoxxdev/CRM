@@ -144,7 +144,8 @@ MESMO material no recebimento = produto cartesiano; a última linha da NF vence
 deterministicamente — no degenerado com estorno parcial, o custo é o da última linha enquanto
 houver movimentação viva; limitação declarada, sem vínculo item↔movimentação; a tela bloqueia
 duplicado, a API aceita); `disponivel` com COALESCE (quantidade_atual nullable — senão 500 de
-toFixed); material INATIVO responde 200 (declarado). 404 `Material não encontrado` fica SÓ
+toFixed; efeito colateral medido e declarado: o campo `disponivel` das sugestões passa de
+null para 0 nesse material, números todos idênticos); material INATIVO responde 200 (declarado). 404 `Material não encontrado` fica SÓ
 para id inexistente. 404
 `Material não encontrado` para id inexistente.
 
@@ -178,7 +179,13 @@ saía do encargo do projeto e não entrava no de ninguém). MUDANÇA DE COMPORTA
 devolução-sucata de material de CLIENTE com saída citada vinculada a PROJETO agora completa
 201 (antes: 400 + estado parcial — o ramo com OS já completava pela herança e o de projeto
 divergia por acidente; a guarda do dono aceita porque o projeto herdado é do mesmo cliente).
-O estado parcial pré-existente desse fluxo morre. Arredondamento: `liquido` exibido é a
+Morre o estado parcial do ramo de projeto HERDADO — **e a revisão final (lente A, m-3)
+mediu um residual só-por-API**: `origem_projeto_id` EXPLÍCITO de outro cliente + OS do dono
+faz a perna SUCATA bater na guarda do dono depois da ENTRADA_DEVOLUCAO gravada (400 +
+parcial; a tela nunca envia origem_projeto_id — inalcançável por ela; o 400 é mais correto
+que o 201 antigo, declarado). E (m-4) estornar SÓ a perna ENTRADA_DEVOLUCAO de uma
+devolução-sucata deixa a perna SUCATA viva inflando o consumido do projeto — limitação
+declarada na nota do relatório. Arredondamento: `liquido` exibido é a
 diferença dos dois valores JÁ arredondados (a planilha fecha). (continua: o relatório é
 por projeto — o total geral é o valor consumido do indicador de giro, régua distinta e
 declarada na nota).

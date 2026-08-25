@@ -322,6 +322,57 @@ function getBinary(req) {
     assert.strictEqual(dev.projeto_id, projManual, 'o origem_projeto_id explicito TEM de ganhar da heranca');
   });
 
+  await test('(revisao final, lente B I-3) entrada NAO-devolucao com projeto nao soma devolvido', async () => {
+    // Sabotagem sobrevivente: TIPOS_DEVOLUCAO alargado para TIPOS_ENTRADA subestimava o custo
+    // do projeto em 60% com a suite verde — o espelho positivo da regua nunca foi testado.
+    const proj = await novoProjeto(db, 'Projeto Espelho I3');
+    const mat = await novoMaterial(db, { custo_medio: 10, custo_unitario: 0 });
+    await movimento(db, mat, 'SAIDA', 10, proj);            // consumido 100
+    await movimento(db, mat, 'AJUSTE_POSITIVO', 4, proj);   // entrada NAO-devolucao com projeto
+    await movimento(db, mat, 'ENTRADA_COMPRA', 2, proj);    // idem
+
+    const linha = (await relatorio(app)).body.find((r) => r.projeto_id === proj);
+    assert.strictEqual(linha.consumido, 100, JSON.stringify(linha));
+    assert.strictEqual(linha.devolvido, 0, 'entrada nao-devolucao NAO pode somar devolvido');
+  });
+
+  await test('(revisao final, lente B I-4) a LINHA de devolucoes tambem grava a heranca (nao so o livro)', async () => {
+    // Sabotagem sobrevivente: herdar so no livro deixava a tabela de devolucoes (a que a tela
+    // mostra) divergente sem nenhum teste piscar.
+    const proj = await novoProjeto(db, 'Projeto Linha I4');
+    const mat = await novoMaterial(db, { custo_medio: 3, custo_unitario: 0, quantidade_atual: 20 });
+    const saidaId = await movimento(db, mat, 'SAIDA', 5, proj);
+    const devRes = await request(app).post('/api/almoxarifado/devolucoes').send({
+      material_id: mat, quantidade: 2, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE',
+      movimentacao_saida_id: saidaId,
+    });
+    assert.strictEqual(devRes.status, 201, JSON.stringify(devRes.body));
+    const linhaDev = await dbGet(db, `SELECT origem_projeto_id FROM devolucoes_material_almoxarifado
+      WHERE material_id = ? ORDER BY id DESC LIMIT 1`, [mat]);
+    assert.strictEqual(linhaDev.origem_projeto_id, proj, JSON.stringify(linhaDev));
+  });
+
+  await test('(revisao final, lente A m-1) liquido exibido = diferenca dos DOIS arredondados', async () => {
+    const proj = await novoProjeto(db, 'Projeto Round m1');
+    const mat = await novoMaterial(db, { custo_medio: 10.006, custo_unitario: 0, quantidade_atual: 10 });
+    const saidaId = await movimento(db, mat, 'SAIDA', 1, proj);       // consumido bruto 10.006
+    const devRes = await request(app).post('/api/almoxarifado/devolucoes').send({
+      material_id: mat, quantidade: 1, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE',
+      movimentacao_saida_id: saidaId,
+    });
+    assert.strictEqual(devRes.status, 201, JSON.stringify(devRes.body));
+    // devolvido bruto 10.006 tambem — caso trivial; forca a divergencia com uma SAIDA extra
+    // de meio centavo: consumido 2x10.006=20.012 -> 20.01; devolvido 10.006 -> 10.01;
+    // liquido exibido TEM de ser 20.01-10.01=10.00 (o cru daria 10.01 via 10.006->10.01? nao:
+    // 20.012-10.006=10.006 -> 10.01 — diverge do exibido coerente 10.00).
+    await movimento(db, mat, 'SAIDA', 1, proj);
+    const linha = (await relatorio(app)).body.find((r) => r.projeto_id === proj);
+    assert.strictEqual(linha.consumido, 20.01, JSON.stringify(linha));
+    assert.strictEqual(linha.devolvido, 10.01, JSON.stringify(linha));
+    assert.strictEqual(linha.liquido, Number((linha.consumido - linha.devolvido).toFixed(2)),
+      `liquido tem de fechar com as colunas exibidas: ${JSON.stringify(linha)}`);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

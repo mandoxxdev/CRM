@@ -1080,7 +1080,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // seguinte do proprio comprador. ABERTURA de gate deliberada: GESTOR e COMPRAS passam a
   // poder (letra B do doc de novidades da Etapa 14).
   app.post('/api/almoxarifado/compras/verificar-minimos', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
-    try { res.json({ criadas: await purchaseService.verificarEstoqueMinimo(db) }); }
+    try { res.json({ criadas: await purchaseService.verificarEstoqueMinimo(db, req.user) }); }
     catch (e) { handleError(res, e); }
   });
 

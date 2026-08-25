@@ -429,7 +429,7 @@ const RELATORIOS = {
       + 'nova. Materiais de clientes ficam fora (patrimônio alheio) e movimentação sem projeto '
       + 'também (o relatório é por projeto — o total geral do valor consumido é o indicador de '
       + 'giro, régua distinta, em Indicadores gerenciais). Projeto não cadastrado aparece como '
-      + '"Projeto #<id>". Débitos contam TODOS os tipos de saída — incluindo perdas, sucatas e ajustes negativos com projeto (correção de inventário vinculada a projeto entra como consumo; via tela só perda/sucata carregam projeto). As datas comparam o DIA em UTC (padrão dos relatórios de consumo).',
+      + '"Projeto #<id>". Débitos contam TODOS os tipos de saída — incluindo perdas, sucatas e ajustes negativos com projeto (correção de inventário vinculada a projeto entra como consumo; via tela só perda/sucata carregam projeto). As datas comparam o DIA em UTC (padrão dos relatórios de consumo). Estornar só a perna de entrada de uma devolução-sucata deixa a perna SUCATA viva no consumido (limitação declarada).',
     limite: null,
     params: [
       { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },

@@ -39,7 +39,7 @@ async function novoMaterial(db, over = {}) {
 
 async function novoPedido(db, over = {}) {
   seq += 1;
-  const p = { numero: `PC-SCV-${seq}`, fornecedor_id: null, valor_total: 0, status: 'ABERTO',
+  const p = { numero: `PC-SCV-${seq}`, fornecedor_id: 1, valor_total: 0, status: 'ABERTO',
     data_pedido: '2026-08-01', ...over };
   const r = await dbRun(db, `INSERT INTO pedidos_compra
       (numero, fornecedor_id, valor_total, status, data_pedido) VALUES (?,?,?,?,?)`,
@@ -103,12 +103,13 @@ const LITERAL_TERMINAL_VINCULAR = 'Solicitação já finalizada (RECEBIDA ou CAN
   await dbRun(db, `CREATE TABLE IF NOT EXISTS pedidos_compra (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     numero TEXT UNIQUE,
-    fornecedor_id INTEGER,
+    fornecedor_id INTEGER NOT NULL,
     valor_total REAL DEFAULT 0,
-    status TEXT,
+    status TEXT DEFAULT 'pendente',
     data_pedido DATE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  await dbRun(db, `INSERT OR IGNORE INTO fornecedores (id, razao_social, nome_fantasia, cnpj) VALUES (1, 'Fornecedor SCV', 'Fornecedor SCV', '22222222222222')`);
 
   // ── (1) cancelar PENDENTE ──
   await test('(1) cancelar PENDENTE: 200, status CANCELADA, colunas preenchidas, auditoria objeto', async () => {
@@ -500,6 +501,63 @@ const LITERAL_TERMINAL_VINCULAR = 'Solicitação já finalizada (RECEBIDA ou CAN
       .send({ motivo: '   ' });
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     assert.strictEqual(res.body.error, 'Justificativa obrigatória para cancelar a solicitação');
+    const row = await dbGet(db, 'SELECT status FROM solicitacoes_compra_almoxarifado WHERE id = ?', [solId]);
+    assert.strictEqual(row.status, 'PENDENTE', JSON.stringify(row));
+  });
+
+  await test('(revisao final, CONVERGENTE A+B) CANCELADA nao ressuscita quando o pedido chega', async () => {
+    // As DUAS lentes provaram por sabotagem que a suite inteira passava com a garantia
+    // "terminais sao FINAIS" quebrada: cancelar um VINCULADO preserva pedido_compra_id, e o
+    // recebimento desse pedido chegando depois nao pode reabrir a linha (estado impossivel:
+    // cancelada_em + recebida_em juntos, gravado em silencio).
+    setUser(ADMIN);
+    const mat = await novoMaterial(db);
+    const ped = await novoPedido(db);
+    const solId = await novaSolicitacao(db, mat, { status: 'VINCULADO', pedido_compra_id: ped });
+
+    setUser(COMPRAS);
+    const resCancel = await request(app).post(`/api/almoxarifado/compras/solicitacoes/${solId}/cancelar`)
+      .send({ motivo: 'nao precisa mais' });
+    assert.strictEqual(resCancel.status, 200, JSON.stringify(resCancel.body));
+
+    setUser(ADMIN);
+    await purchaseService.fecharSolicitacoesDoPedido(db, ADMIN, ped); // o pedido chega DEPOIS
+
+    const row = await dbGet(db,
+      'SELECT status, recebida_em, cancelada_em FROM solicitacoes_compra_almoxarifado WHERE id = ?', [solId]);
+    assert.strictEqual(row.status, 'CANCELADA', JSON.stringify(row));
+    assert.strictEqual(row.recebida_em, null, 'CANCELADA nao pode ganhar recebida_em');
+    const aud = await dbAll(db,
+      `SELECT id FROM auditoria_log_almoxarifado WHERE entidade = 'solicitacao_compra' AND entidade_id = ? AND acao = 'RECEBIDA'`,
+      [solId]);
+    assert.strictEqual(aud.length, 0, 'nenhuma auditoria RECEBIDA para linha cancelada');
+  });
+
+  await test('(revisao final, lente B I-1) verificar-minimos audita a criacao com o autor', async () => {
+    setUser(COMPRAS);
+    const mat = await novoMaterial(db, { minima: 10, qtd: 0, maxima: 30 });
+    const res = await request(app).post('/api/almoxarifado/compras/verificar-minimos').send({});
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const criada = (res.body.criadas || res.body).find?.((c) => c.material_id === mat)
+      || (res.body.criadas || []).find((c) => c.material_id === mat);
+    assert.ok(criada, JSON.stringify(res.body));
+    const aud = await dbGet(db,
+      `SELECT usuario_nome, dados_novos FROM auditoria_log_almoxarifado WHERE entidade = 'solicitacao_compra' AND entidade_id = ? AND acao = 'CRIAR'`,
+      [criada.solicitacao_id]);
+    assert.ok(aud, 'criacao via verificar-minimos TEM de ser auditada (a rota deixou de ser ADMIN-only no D9)');
+    assert.ok(aud.usuario_nome, JSON.stringify(aud));
+    assert.strictEqual(JSON.parse(aud.dados_novos).origem, 'verificar-minimos', aud.dados_novos);
+  });
+
+  await test('(revisao final, lente B Minor-2) motivo nao-string e recusado com o mesmo literal', async () => {
+    setUser(COMPRAS);
+    const mat = await novoMaterial(db);
+    const solId = await novaSolicitacao(db, mat);
+    for (const motivo of [{ a: 1 }, 12345, true]) {
+      const res = await request(app).post(`/api/almoxarifado/compras/solicitacoes/${solId}/cancelar`).send({ motivo });
+      assert.strictEqual(res.status, 400, `${JSON.stringify(motivo)}: ${JSON.stringify(res.body)}`);
+      assert.strictEqual(res.body.error, 'Justificativa obrigatória para cancelar a solicitação');
+    }
     const row = await dbGet(db, 'SELECT status FROM solicitacoes_compra_almoxarifado WHERE id = ?', [solId]);
     assert.strictEqual(row.status, 'PENDENTE', JSON.stringify(row));
   });

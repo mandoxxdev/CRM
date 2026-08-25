@@ -9,7 +9,11 @@ const { registrarAuditoria } = require('./audit');
 const alertService = require('./alertService');
 const notificationQueueService = require('./notificationQueueService');
 
-async function verificarEstoqueMinimo(db) {
+// Revisao final da E14 (lente B, Important-1): esta funcao criava solicitacao SEM auditoria e
+// a rota nem passava req.user — invisivel enquanto era ADMIN-only; o D9 abriu a rota para
+// COMPRAS/GESTOR e criar solicitacao sem autor virou lacuna de rastro. `user` e opcional para
+// nao quebrar chamadores legados (o job de minimo, se houver) — sem user, audita sem autor.
+async function verificarEstoqueMinimo(db, user = null) {
   const criticos = await dbAll(db, `SELECT * FROM materiais_almoxarifado
     WHERE ativo = 1 AND quantidade_atual <= quantidade_minima AND quantidade_minima > 0
       -- Etapa 8, Task 1 (classe A): sem este filtro o sistema abriria solicitacao de COMPRA
@@ -25,6 +29,11 @@ async function verificarEstoqueMinimo(db) {
       const qtd = Math.max(m.quantidade_maxima - m.quantidade_atual, m.quantidade_minima);
       const r = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, motivo) VALUES (?,?,?)`,
         [m.id, qtd, 'ESTOQUE_MINIMO']);
+      await registrarAuditoria(db, {
+        entidade: 'solicitacao_compra', entidade_id: r.lastID, acao: 'CRIAR',
+        usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+        dados_novos: { material_id: m.id, quantidade: qtd, motivo: 'ESTOQUE_MINIMO', origem: 'verificar-minimos' },
+      });
       criadas.push({ material_id: m.id, solicitacao_id: r.lastID, quantidade: qtd });
     }
   }
@@ -63,7 +72,11 @@ async function vincularPedidoCompra(db, solicitacaoId, pedidoCompraId) {
 // RN-02 (Etapa 14, D3): cancelamento manual. Permitido em PENDENTE/VINCULADO (o vinculo e
 // informativo — cancelar NAO mexe no pedido do core, declarado). Exige justificativa.
 async function cancelarSolicitacao(db, user, solicitacaoId, motivo) {
-  if (!motivo || !String(motivo).trim()) {
+  // Revisao final (lente B, Minor-2): motivo tem de ser STRING — objeto virava
+  // "[object Object]" na coluna com o objeto cru na auditoria (divergiam), numero/boolean
+  // eram coagidos em silencio. Mesmo literal do vazio: para o chamador, "nao veio
+  // justificativa valida" e um fato so.
+  if (typeof motivo !== 'string' || !motivo.trim()) {
     throw Object.assign(new Error('Justificativa obrigatória para cancelar a solicitação'), { status: 400 });
   }
   const sol = await dbGet(db, 'SELECT * FROM solicitacoes_compra_almoxarifado WHERE id = ?', [solicitacaoId]);
@@ -414,14 +427,9 @@ async function gerarSolicitacoesDaSugestao(db, usuario, materialIds) {
 async function estoqueParado(db, tipo) {
   const dias = await lerConfigNumero(db, 'reposicao_dias_sem_consumo', 180);
   const phSaida = TIPOS_SAIDA.map(() => '?').join(',');
-  // Revisao da Task 2 (A1, medido): recebimento com DUAS linhas do MESMO material gera N mov x
-  // N itens (produto cartesiano — nao ha vinculo item<->movimentacao no schema). O `ri.id DESC`
-  // fixa a regra "a ULTIMA linha da NF vence" de forma deterministica (antes era a ordem do
-  // planner, estabilidade acidental). LIMITACAO DECLARADA: no caso degenerado de linhas
-  // duplicadas com estorno PARCIAL de uma delas, o custo reportado e o da ultima linha da NF
-  // enquanto houver QUALQUER movimentacao viva daquele material naquele recebimento — sem
-  // vinculo item<->movimentacao nao ha como saber qual linha foi estornada. A tela de
-  // recebimento bloqueia material duplicado ('Material já incluído'); a API aceita (declarado).
+  // Revisao final da E14 (lente A, I-2): aqui havia uma COPIA ACIDENTAL do comentario do
+  // cartesiano de contextoMaterial — esta query nao tem JOIN com itens de recebimento nem
+  // desempate ri.id; o comentario mentia sobre uma protecao inexistente e foi removido.
   const phEntrada = TIPOS_ENTRADA.map(() => '?').join(',');
 
   const rows = await dbAll(db, `

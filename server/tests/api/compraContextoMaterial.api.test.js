@@ -352,6 +352,15 @@ function contexto(app, materialId) {
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.ok(res.body.proprietario_cliente, JSON.stringify(res.body));
     assert.deepStrictEqual(res.body.solicitacoes_abertas, [], JSON.stringify(res.body.solicitacoes_abertas));
+
+    // Revisao final (lente B, Minor-1): o contexto E a primeira superficie do modulo a expor
+    // valor monetario de material de CLIENTE (ultimo custo de NF). DECISAO DECLARADA: o gate
+    // e estreito (gerenciar_reposicao — ADMIN/GESTOR/COMPRAS) e o comprador precisa do dado;
+    // este assert DOCUMENTA que a exposicao e intencional (letra B do fechamento) — se a
+    // decisao mudar, e filtrar aqui e este teste que cai.
+    await entradaCrua(db, mat, { recebimentoId: 9105, valorUnitario: 1234.56, createdAt: '2026-08-24 09:00:00' });
+    const res2 = await contexto(app, mat);
+    assert.strictEqual(res2.body.ultimo_custo_entrada.valor, 1234.56, JSON.stringify(res2.body.ultimo_custo_entrada));
   });
 
   await test('(A3, revisao) quantidade_atual NULL nao derruba o endpoint (500 de toFixed)', async () => {
