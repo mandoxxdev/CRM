@@ -76,9 +76,9 @@ BOM não existe; MES sem uso).
 `server/routes/almoxarifado/extended.js` (rota cancelar).
 **Test:** `server/tests/api/solicitacaoCicloVida.api.test.js` (novo).
 
-- [ ] Step 1: teste vermelho — (1) cancelar PENDENTE: 200, status CANCELADA, colunas
-  preenchidas, auditoria com objeto; sem motivo → 400 literal; id inexistente → 404 literal;
-  (2) cancelar VINCULADO: 200 (o vínculo é informativo — o pedido do core NÃO muda,
+- [x] Step 1/2: teste + implementação (110d8ce) — (1) cancelar PENDENTE: 200, status CANCELADA,
+  colunas preenchidas, auditoria com objeto; sem motivo → 400 literal; id inexistente → 404
+  literal; (2) cancelar VINCULADO: 200 (o vínculo é informativo — o pedido do core NÃO muda,
   declarado); (3) cancelar CANCELADA/RECEBIDA → 400 literal; vincular valida as DUAS pontas
   (RN-01b, Fase 2 C3 — hoje solicitação E pedido inexistentes respondem 200): inexistente →
   404 `Solicitação não encontrada`; terminal → 400 (literal nasce aqui); pedido inexistente →
@@ -92,16 +92,32 @@ BOM não existe; MES sem uso).
   (I1 — o AND status='VINCULADO' é o dedupe); (6) gancho não derruba: monkeypatch de
   `fecharSolicitacoesDoPedido` lançando → processarNota conclui PROCESSADO E aprovar conclui
   APROVADO; (7) posição: após RECEBIDA o material com falta volta à sugestão
-  (`calcularSugestoes`) — idem após CANCELADA.
-- [ ] Step 2: implementação.
-- [ ] Step 3: verde + regressão (reposicao*, recebimento*, comprasMinimos) + suíte (119→120).
-- [ ] Step 4: controles positivos — (i) gancho movido para ANTES do PROCESSADO → teste 5/6
-  cai; (ii) WHERE sem `status='VINCULADO'` → teste 5 cai; (iii) try/catch removido → teste 6
-  cai; (iv) guarda de terminal do cancelar removida → teste 3 cai; (v) checagem de existência
-  do pedido removida → pedido fantasma cai (C3); (vi) gancho removido de `aprovarRecebimento`
-  → teste 5b cai (C4); (vii) gancho TAMBÉM no ramo delegante de aprovar → auditoria única
-  cai (I6).
-- [ ] Step 5: suíte + commit.
+  (`calcularSugestoes`) — idem após CANCELADA. Dois casos ALÉM do previsto, achados na
+  execução dos controles (não hipotetizados no plano): (i-controle) falha em
+  `darEntradaEstoque` não pode fechar a solicitação antes da hora — medido: o (i) do Step 4
+  como descrito ("gancho movido para ANTES do PROCESSADO") NÃO derrubava teste nenhum do
+  conjunto original (o try/catch mascara a ordem, e nada mais lia `rec.pedido_compra_id`
+  depois); caso novo adicionado e comprovado vermelho sob a sabotagem; (I6-espião) o dedupe
+  `AND status='VINCULADO'` esconde uma chamada REDUNDANTE do número de auditorias — o teste
+  do ramo delegante teve de virar espião de CHAMADAS (contagem de invocações), não de efeito,
+  para provar (vii) de verdade.
+- [x] Step 3: verde + regressão (reposicao*, recebimento*, comprasMinimos) + suíte (119→120,
+  110d8ce). Regressão adicional achada e corrigida: `reposicaoGerarSolicitacoes` e
+  `reposicaoJornada` vinculavam a `pedido_compra_id: 1` sem tabela `pedidos_compra` no
+  harness — a checagem nova de RN-01b (pedido tem de existir) quebrava as duas com
+  "no such table: pedidos_compra"; corrigido com o mesmo stub desta task nos dois arquivos.
+- [x] Step 4: controles positivos (110d8ce, todos sabotados e revertidos manualmente — nunca
+  `git checkout` — com vermelho provado antes de restaurar) — (i) gancho movido para ANTES de
+  `darEntradaEstoque`/UPDATE PROCESSADO → NÃO derrubava o conjunto original (medido); teste
+  novo adicionado prova a ordem (falha em `darEntradaEstoque` não pode fechar a solicitação);
+  (ii) WHERE sem `status='VINCULADO'` → teste 5b cai (não o 5 — o 5 não repete recebimento);
+  (iii) try/catch removido → teste 6 cai; (iv) guarda de terminal do cancelar removida →
+  teste 3 cai; (v) checagem de existência do pedido removida → pedido fantasma cai (C3);
+  (vi) gancho removido de `aprovarRecebimento` → teste 5b cai (C4); (vii) gancho TAMBÉM no
+  ramo delegante de aprovar → contagem de auditorias NÃO cai (dedupe esconde o efeito);
+  espião de chamadas adicionado e prova vermelho de verdade.
+- [x] Step 5: suíte completa (120/120 arquivos) + test:almoxarifado (42/42) + test:validation
+  (4/4) + test:safealter (3/3) + test:sqlite (3/3) + commit 110d8ce.
 
 ### Task 2: Contexto do comprador (RN-04)
 
