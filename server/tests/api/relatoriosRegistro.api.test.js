@@ -59,9 +59,9 @@ function getBinary(req) {
   const cliente = await dbRun(db, 'INSERT INTO clientes (razao_social) VALUES (?)', ['Cliente Teste LTDA']);
   const clienteId = cliente.lastID;
 
-  await test('[1] registro: 18 chaves, TODA entrada declara acao (nem que seja null), categorias validas', async () => {
+  await test('[1] registro: 19 chaves, TODA entrada declara acao (nem que seja null), categorias validas', async () => {
     const chaves = Object.keys(RELATORIOS);
-    assert.strictEqual(chaves.length, 18, JSON.stringify(chaves));
+    assert.strictEqual(chaves.length, 19, JSON.stringify(chaves));
     for (const tipo of chaves) {
       const entrada = RELATORIOS[tipo];
       assert.ok('acao' in entrada, `${tipo}: entrada sem campo 'acao' declarado`);
@@ -88,7 +88,7 @@ function getBinary(req) {
 
   await test('[3] PAR INVERSO: toda chave do mapa `reports` (extended.js) existe no registro', async () => {
     const reportKeys = registerExtendedRoutes.__reportKeys;
-    assert.ok(Array.isArray(reportKeys) && reportKeys.length === 18, JSON.stringify(reportKeys));
+    assert.ok(Array.isArray(reportKeys) && reportKeys.length === 19, JSON.stringify(reportKeys));
     for (const tipo of reportKeys) {
       assert.ok(RELATORIOS[tipo], `chave '${tipo}' do dispatcher nao existe no registro`);
     }
@@ -98,12 +98,12 @@ function getBinary(req) {
     }
   });
 
-  await test('[2] lista: ADMIN traz as 18 chaves, sem o campo acao', async () => {
+  await test('[2] lista: ADMIN traz as 19 chaves, sem o campo acao', async () => {
     setUser(ADMIN);
     const res = await request(app).get('/api/almoxarifado/relatorios');
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.ok(Array.isArray(res.body.relatorios), JSON.stringify(res.body));
-    assert.strictEqual(res.body.relatorios.length, 18, JSON.stringify(res.body.relatorios.map((r) => r.tipo)));
+    assert.strictEqual(res.body.relatorios.length, 19, JSON.stringify(res.body.relatorios.map((r) => r.tipo)));
     for (const item of res.body.relatorios) {
       assert.ok(!('acao' in item), `item '${item.tipo}' vazou o campo acao: ${JSON.stringify(item)}`);
       assert.ok(item.tipo && item.titulo && item.categoria, JSON.stringify(item));
@@ -129,7 +129,7 @@ function getBinary(req) {
   await test('[3] paridade dispatcher x lista: todo tipo listado responde 200 ou 400 (nunca 404, nunca >=500)', async () => {
     setUser(ADMIN);
     const lista = (await request(app).get('/api/almoxarifado/relatorios')).body.relatorios;
-    assert.strictEqual(lista.length, 18, JSON.stringify(lista.map((r) => r.tipo)));
+    assert.strictEqual(lista.length, 19, JSON.stringify(lista.map((r) => r.tipo)));
     for (const { tipo } of lista) {
       const qs = tipo === 'materiais-cliente' ? `?cliente_id=${clienteId}` : '';
       const res = await request(app).get(`/api/almoxarifado/relatorios/${tipo}${qs}`);

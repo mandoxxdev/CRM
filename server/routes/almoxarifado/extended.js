@@ -1272,6 +1272,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     // Etapa 13, Task 2 (RN-04): indicadores gerenciais — giro, cobertura, rupturas, valor por
     // grupo, atendimento de requisicoes. Devolve OBJETO (exportavel:false no registro).
     'indicadores': (db, q) => reportService.relatorioIndicadores(db, q),
+    // Etapa 14, Task 3 (RN-05): custo por projeto, lido do livro. Mesma assinatura posicional de
+    // consumo-periodo/consumo-os (data_inicio/data_fim extraidos da querystring aqui, nao dentro
+    // do service — convencao do arquivo).
+    'custo-por-projeto': (db, q) => reportService.relatorioCustoProjeto(db, q.data_inicio, q.data_fim),
     'materiais-sem-endereco': async (db) => {
       // Etapa 8, Task 1, classe C da auditoria: NAO filtra o dono de proposito. Enderecar
       // material do cliente e tao necessario quanto enderecar o nosso — a chapa dele precisa

@@ -56,4 +56,14 @@ const TIPOS_ENTRADA = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_D
 const TIPOS_SAIDA = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA',
   'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
 
-module.exports = { TIPOS_ENTRADA, TIPOS_SAIDA };
+/**
+ * Tipos de DEVOLUCAO — Etapa 14, Task 3 (RN-05, emenda I3 da Fase 2). Subconjunto de
+ * TIPOS_ENTRADA: `ENTRADA_DEVOLUCAO` (Etapa 7, returnService) e `DEVOLUCAO` (legado de banco
+ * antigo, o livro e imutavel). NAO confundir com `DEVOLUCAO_CLIENTE` (TIPOS_SAIDA acima) — apesar
+ * do nome parecido, `DEVOLUCAO_CLIENTE` e SAIDA de verdade (material volta para o dono) e NAO
+ * entra aqui. Existe para o relatorio de custo por projeto (`devolvido`) nao replicar mais uma
+ * lista literal — seria a 4a copia dos tipos do motor (ver o cabecalho deste arquivo).
+ */
+const TIPOS_DEVOLUCAO = ['ENTRADA_DEVOLUCAO', 'DEVOLUCAO'];
+
+module.exports = { TIPOS_ENTRADA, TIPOS_SAIDA, TIPOS_DEVOLUCAO };

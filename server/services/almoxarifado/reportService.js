@@ -3,7 +3,7 @@ const { disponivelSql } = require('./availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
 const { divergenciaRealSql } = require('./divergencia');
 const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
-const { TIPOS_SAIDA } = require('./movementTypes');
+const { TIPOS_SAIDA, TIPOS_DEVOLUCAO } = require('./movementTypes');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -390,10 +390,79 @@ async function relatorioIndicadores(db, query = {}) {
   };
 }
 
+/**
+ * RN-05 (Etapa 14, Task 3): custo por projeto, lido do LIVRO — nada materializado, sempre atual.
+ * Fontes UNICAS: `custoUnitarioSql` (custo), `TIPOS_SAIDA`/`TIPOS_DEVOLUCAO` (movementTypes.js).
+ *
+ * `consumido` = Σ(saidas com projeto_id, TIPOS_SAIDA, nao canceladas x custo). `devolvido` =
+ * Σ(entradas de devolucao com projeto_id, TIPOS_DEVOLUCAO, nao canceladas x custo) — SO existe em
+ * producao porque returnService.registrarDevolucao passou a HERDAR projeto_id/os_id da saida
+ * citada (Etapa 14, Task 3, I2); sem a heranca esta coluna seria estruturalmente zero, porque a
+ * tela de devolucao nunca envia origem_projeto_id. `liquido = consumido - devolvido`.
+ *
+ * `liquido` e recalculado NA MESMA expressao (duas SUMs repetidas) em vez de reaproveitar os
+ * aliases `consumido`/`devolvido` do SELECT: SQL nao permite referenciar um alias de coluna
+ * dentro de outra expressao da MESMA lista de SELECT. A varredura de relatoriosRegistro.api.test.js
+ * confere que toda `chave` declarada em `colunas` existe literalmente no SQL — se `liquido` fosse
+ * so um calculo em JS depois do dbAll, a varredura acusaria a coluna como inexistente.
+ *
+ * `custo ATUAL retroativo` (I4, medido): o livro nao guarda custo por movimento — o valor
+ * aplicado e sempre o custo de HOJE do material, entao um periodo fechado MUDA quando chega NF
+ * nova. Dito na `nota` do registro (reportRegistry.js), nao so em comentario.
+ *
+ * Materiais de cliente (`m.proprietario_cliente_id IS NOT NULL`) FICAM FORA — patrimonio alheio.
+ * Movimentacao SEM projeto_id fica fora — o relatorio E por projeto; o total geral do consumo
+ * (indicador de giro) e regua distinta (`relatorioIndicadores`), declarada na nota.
+ */
+async function relatorioCustoProjeto(db, dataInicio, dataFim) {
+  const custo = custoUnitarioSql('m');
+  const phSaida = TIPOS_SAIDA.map(() => '?').join(',');
+  const phDevolucao = TIPOS_DEVOLUCAO.map(() => '?').join(',');
+  const phTodos = [...TIPOS_SAIDA, ...TIPOS_DEVOLUCAO].map(() => '?').join(',');
+
+  const consumidoExpr = `SUM(CASE WHEN mv.tipo IN (${phSaida}) THEN mv.quantidade * ${custo} ELSE 0 END)`;
+  const devolvidoExpr = `SUM(CASE WHEN mv.tipo IN (${phDevolucao}) THEN mv.quantidade * ${custo} ELSE 0 END)`;
+
+  let sql = `SELECT mv.projeto_id AS projeto_id, p.nome AS projeto_nome,
+      ${consumidoExpr} AS consumido,
+      ${devolvidoExpr} AS devolvido,
+      (${consumidoExpr} - ${devolvidoExpr}) AS liquido,
+      COUNT(*) AS movimentacoes
+    FROM movimentacoes_almoxarifado mv
+    JOIN materiais_almoxarifado m ON m.id = mv.material_id
+    LEFT JOIN projetos p ON p.id = mv.projeto_id
+    WHERE mv.cancelado = 0 AND mv.projeto_id IS NOT NULL AND m.proprietario_cliente_id IS NULL
+      AND mv.tipo IN (${phTodos})`;
+  // A ordem dos binds tem de bater com a ordem dos `?` NO TEXTO: o bloco (TIPOS_SAIDA seguido de
+  // TIPOS_DEVOLUCAO) aparece TRES vezes na string SQL acima — 1a vez nas colunas
+  // consumido/devolvido (SAIDA do consumidoExpr, DEVOLUCAO do devolvidoExpr, nesta ordem), 2a vez
+  // dentro de `liquido` (que REPETE o texto de consumidoExpr/devolvidoExpr — SQL nao permite
+  // referenciar um alias de outra coluna do mesmo SELECT), 3a vez no WHERE (`phTodos`). NUNCA 4
+  // blocos: `consumido`/`devolvido` sao UM bloco so (SAIDA+DEVOLUCAO consecutivos), nao dois.
+  const blocoSaidaDevolucao = [...TIPOS_SAIDA, ...TIPOS_DEVOLUCAO];
+  const params = [...blocoSaidaDevolucao, ...blocoSaidaDevolucao, ...blocoSaidaDevolucao];
+  if (dataInicio) { sql += ' AND DATE(mv.created_at) >= ?'; params.push(dataInicio); }
+  if (dataFim) { sql += ' AND DATE(mv.created_at) <= ?'; params.push(dataFim); }
+  sql += ' GROUP BY mv.projeto_id, p.nome ORDER BY mv.projeto_id';
+
+  const rows = await dbAll(db, sql, params);
+  return rows.map((r) => ({
+    projeto_id: r.projeto_id,
+    // Projeto nao cadastrado na tabela do core (0 registros em producao hoje, medido na Fase 0
+    // do design) -> rotulo Projeto #<id>, nunca null nem string vazia.
+    projeto_nome: r.projeto_nome || `Projeto #${r.projeto_id}`,
+    consumido: Number((Number(r.consumido) || 0).toFixed(2)),
+    devolvido: Number((Number(r.devolvido) || 0).toFixed(2)),
+    liquido: Number((Number(r.liquido) || 0).toFixed(2)),
+    movimentacoes: Number(r.movimentacoes) || 0,
+  }));
+}
+
 module.exports = {
   relatorioEstoqueAtual, relatorioAbaixoMinimo, relatorioReservadoPorOS,
   relatorioConsumoPorOS, relatorioMateriaisMaisConsumidos, relatorioRecebimentosPendentes,
   relatorioMateriaisBloqueados, relatorioHistoricoMovimentacoes, relatorioInventarioDivergencias,
   relatorioConsumoPeriodo, relatorioFerramentasEmprestadas, relatorioEPIPorColaborador,
   relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro, relatorioIndicadores,
+  relatorioCustoProjeto,
 };

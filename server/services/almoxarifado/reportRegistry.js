@@ -413,6 +413,38 @@ const RELATORIOS = {
     colunas: null,
     fn: null,
   },
+  'custo-por-projeto': {
+    titulo: 'Custo por projeto',
+    categoria: 'Gestão',
+    // D6 (Etapa 14): gate gerenciar_reposicao — dado de custo/pipeline de compra, mesmo racional
+    // de solicitacoes-compra. NASCE fechado (reversivel em uma linha; contraste deliberado com a
+    // licao B18 da E13 — "abrir expoe mais do que parece").
+    acao: 'gerenciar_reposicao',
+    exportavel: true,
+    // A NOTA e o UNICO canal desta informacao ate a tela existir (mesmo padrao de `indicadores`).
+    nota: 'Consumido soma as saídas (TIPOS_SAIDA) com projeto associado; devolvido soma as '
+      + 'devoluções (ENTRADA_DEVOLUCAO/DEVOLUCAO — DEVOLUCAO_CLIENTE é saída e não entra, apesar '
+      + 'do nome). O custo aplicado é o ATUAL do material (custoUnitarioSql), retroativo: o livro '
+      + 'não guarda custo por movimento, então um período fechado muda de valor quando chega NF '
+      + 'nova. Materiais de clientes ficam fora (patrimônio alheio) e movimentação sem projeto '
+      + 'também (o relatório é por projeto — o total geral do valor consumido é o indicador de '
+      + 'giro, régua distinta, em Indicadores gerenciais). Projeto não cadastrado aparece como '
+      + '"Projeto #<id>".',
+    limite: null,
+    params: [
+      { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
+      { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
+    ],
+    colunas: [
+      { chave: 'projeto_id', rotulo: 'Projeto (id)' },
+      { chave: 'projeto_nome', rotulo: 'Projeto' },
+      { chave: 'consumido', rotulo: 'Consumido' },
+      { chave: 'devolvido', rotulo: 'Devolvido' },
+      { chave: 'liquido', rotulo: 'Líquido' },
+      { chave: 'movimentacoes', rotulo: 'Movimentações' },
+    ],
+    fn: null,
+  },
 };
 
 module.exports = { RELATORIOS };

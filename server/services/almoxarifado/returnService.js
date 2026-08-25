@@ -79,6 +79,15 @@ async function registrarDevolucao(db, user, data) {
   // lote sem que ninguem tenha pedido isso.
   const loteFinalId = lote_id || (material.controle_lote && saidaOriginal ? saidaOriginal.lote_id : null) || null;
 
+  // Heranca de projeto_id/os_id (Etapa 14, Task 3 — RN-05, emenda I2, MESMO MOLDE da heranca de
+  // lote acima): o valor informado a mao pelo chamador GANHA; sem informar, herda da saida
+  // CITADA (quando ha vinculo). Devolucao AVULSA (sem movimentacao_saida_id) continua sem
+  // projeto/os — declarado, nao ha de onde herdar. SEM esta heranca o relatorio de custo por
+  // projeto tem `devolvido` ESTRUTURALMENTE ZERO em producao: a tela (DevolucoesAlmoxarifado.js)
+  // nunca envia origem_projeto_id/origem_os_id no payload — medido.
+  const origemProjetoFinal = origem_projeto_id || (saidaOriginal ? saidaOriginal.projeto_id : null) || null;
+  const origemOsFinal = origem_os_id || (saidaOriginal ? saidaOriginal.os_id : null) || null;
+
   // ── Serie na devolucao (Etapa 7, Task 5 — decisao 10 do design) ──────────────────────────────
   // Coberta so nos destinos ESTOQUE e QUARENTENA, onde o motor sabe reativar a serie ENTREGUE de
   // volta a EM_ESTOQUE por um caminho unico (seriesService.entradaSeries, com guarda no WHERE).
@@ -131,7 +140,7 @@ async function registrarDevolucao(db, user, data) {
      responsavel_id, responsavel_nome, observacoes, movimentacao_saida_id, lote_id)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [
     material_id, quantidade, motivo, condicao || null, destinoFinal,
-    origem_os_id || null, origem_projeto_id || null,
+    origemOsFinal, origemProjetoFinal,
     user.id, user.nome || user.email, observacoes || null,
     movimentacao_saida_id || null, loteFinalId,
   ]);
@@ -180,7 +189,7 @@ async function registrarDevolucao(db, user, data) {
     if (destinoFinal === 'ESTOQUE' || destinoFinal === 'QUARENTENA') {
       await registrarMovimentacao(db, user, {
         material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
-        motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
+        motivo, os_id: origemOsFinal, projeto_id: origemProjetoFinal,
         localizacao_destino_id: localizacao_id, lote_id: loteFinalId,
         series: seriesInformadas,
         justificativa: observacoes, referencia,
@@ -201,19 +210,19 @@ async function registrarDevolucao(db, user, data) {
       // feature 15 (retalhos e sucatas) vai precisar dela la.
       await registrarMovimentacao(db, user, {
         material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
-        motivo, os_id: origem_os_id, projeto_id: origem_projeto_id,
+        motivo, os_id: origemOsFinal, projeto_id: origemProjetoFinal,
         localizacao_destino_id: localizacao_id, lote_id: loteFinalId,
         series: seriesInformadas,
         justificativa: observacoes, referencia,
       }, opcoesEntrada);
       await registrarMovimentacao(db, user, {
-        material_id, tipo: 'SUCATA', quantidade, motivo, os_id: origem_os_id,
+        material_id, tipo: 'SUCATA', quantidade, motivo, os_id: origemOsFinal,
         localizacao_origem_id: localizacao_id, lote_id: loteFinalId,
         justificativa: observacoes || motivo, referencia,
       }, opcoes);
     } else if (destinoFinal === 'RETRABALHO') {
       await registrarMovimentacao(db, user, {
-        material_id, tipo: 'RETRABALHO', quantidade, motivo, os_id: origem_os_id,
+        material_id, tipo: 'RETRABALHO', quantidade, motivo, os_id: origemOsFinal,
         lote_id: loteFinalId, referencia,
       });
     }
