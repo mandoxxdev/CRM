@@ -157,8 +157,10 @@ inexistente na tabela → rótulo `Projeto #<id>`): `consumido` = Σ(saídas com
 com `projeto_id` × custo) — **EMENDAS DA FASE 2:** (I3) os tipos de devolução exigem export
 NOVO `TIPOS_DEVOLUCAO = ['ENTRADA_DEVOLUCAO', 'DEVOLUCAO']` em `movementTypes.js` (não existe
 hoje; lista literal no reportService seria a 4ª cópia; `DEVOLUCAO` legado entra — o livro é
-imutável; **`DEVOLUCAO_CLIENTE` NÃO entra — apesar do nome é SAÍDA**, e sai pelo filtro de
-cliente por construção, dito na nota); (I2, medido) a devolução NÃO grava `projeto_id` em
+imutável; **`DEVOLUCAO_CLIENTE` NÃO entra — apesar do nome é SAÍDA** — e a versão desta frase dizia
+que ele "sai pelo filtro de cliente por construção"; IMPRECISA (revisão da Task 3): material
+NOSSO com tipo DEVOLUCAO_CLIENTE soma em `consumido` pela régua TIPOS_SAIDA, e o teste prova
+isso de propósito — o que o filtro de cliente corta é o MATERIAL de cliente, não o tipo); (I2, medido) a devolução NÃO grava `projeto_id` em
 produção (o payload do client não envia `origem_projeto_id` e o serviço não deriva) —
 **decisão: a devolução passa a HERDAR projeto_id/os_id da saída citada** quando o chamador
 não os informa (mesmo molde da herança de lote em returnService:80); sem isso `devolvido` é
@@ -170,6 +172,14 @@ precisa de DOIS MATERIAIS por vias diferentes (M1 custo_medio=8/custo_unitario=9
 M2 custo_medio=0/custo_unitario=5 → vale 5) — duas saídas do MESMO material têm sempre o
 mesmo custo e não provam nada; `liquido = consumido - devolvido`; `movimentacoes` (contagem).
 Materiais de clientes FORA (patrimônio alheio). Movimentação sem projeto FORA (o relatório é
+por projeto). **Emenda da revisão da Task 3 (I-1, medida):** a herança de projeto vale nas
+DUAS pernas da devolução-sucata (a primeira versão herdava só na ENTRADA_DEVOLUCAO — a sucata
+saía do encargo do projeto e não entrava no de ninguém). MUDANÇA DE COMPORTAMENTO DECLARADA:
+devolução-sucata de material de CLIENTE com saída citada vinculada a PROJETO agora completa
+201 (antes: 400 + estado parcial — o ramo com OS já completava pela herança e o de projeto
+divergia por acidente; a guarda do dono aceita porque o projeto herdado é do mesmo cliente).
+O estado parcial pré-existente desse fluxo morre. Arredondamento: `liquido` exibido é a
+diferença dos dois valores JÁ arredondados (a planilha fecha). (continua: o relatório é
 por projeto — o total geral é o valor consumido do indicador de giro, régua distinta e
 declarada na nota).
 

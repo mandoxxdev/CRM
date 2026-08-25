@@ -111,12 +111,15 @@ function getBinary(req) {
     }
   });
 
-  await test('[2] lista: PRODUCAO (sem perfil) nao traz os 2 gated e traz os 16 sem gate', async () => {
+  await test('[2] lista: PRODUCAO (sem perfil) nao traz os gated e traz todos os sem-gate (contagem derivada do registro)', async () => {
     setUser(PRODUCAO);
     const res = await request(app).get('/api/almoxarifado/relatorios');
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     const tipos = res.body.relatorios.map((r) => r.tipo);
-    assert.strictEqual(tipos.length, 16, JSON.stringify(tipos));
+    // Revisao E14-T3 (M-3): contagem DERIVADA do registro, nao hardcode — o 16 sobreviveu a
+    // 18-2 e 19-3 por coincidencia aritmetica; o deepStrictEqual abaixo e quem segura.
+    const esperados = Object.values(RELATORIOS).filter((e) => e.acao === null).length;
+    assert.strictEqual(tipos.length, esperados, JSON.stringify(tipos));
     assert.ok(!tipos.includes('inventario-divergencias'), JSON.stringify(tipos));
     assert.ok(!tipos.includes('solicitacoes-compra'), JSON.stringify(tipos));
     const semGate = Object.keys(RELATORIOS).filter((t) => RELATORIOS[t].acao === null);

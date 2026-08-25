@@ -453,7 +453,11 @@ async function relatorioCustoProjeto(db, dataInicio, dataFim) {
     projeto_nome: r.projeto_nome || `Projeto #${r.projeto_id}`,
     consumido: Number((Number(r.consumido) || 0).toFixed(2)),
     devolvido: Number((Number(r.devolvido) || 0).toFixed(2)),
-    liquido: Number((Number(r.liquido) || 0).toFixed(2)),
+    // Revisao da Task 3 (M-1): o liquido arredondado INDEPENDENTE nao fechava com as outras
+    // duas colunas na planilha (10.01 - 5.00 saia 5.00) — o exibido e a diferenca dos DOIS
+    // valores ja arredondados; a coluna `liquido` do SQL continua existindo (a varredura da
+    // E13 exige a chave no SQL executado), so o valor final e coerente com o que o leitor ve.
+    liquido: Number((Number((Number(r.consumido) || 0).toFixed(2)) - Number((Number(r.devolvido) || 0).toFixed(2))).toFixed(2)),
     movimentacoes: Number(r.movimentacoes) || 0,
   }));
 }

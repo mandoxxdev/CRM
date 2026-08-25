@@ -216,7 +216,17 @@ async function registrarDevolucao(db, user, data) {
         justificativa: observacoes, referencia,
       }, opcoesEntrada);
       await registrarMovimentacao(db, user, {
+        // Revisao da Task 3 (I-1): o ramo SUCATA herdava os_id mas NAO projeto_id — uma linha
+        // assimetrica com duas consequencias medidas: (a) a sucata saia do encargo do projeto
+        // e nao entrava no de ninguem (ENTRADA_DEVOLUCAO creditava `devolvido` e o SUCATA —
+        // que ESTA em TIPOS_SAIDA e conta como consumido — nascia sem projeto: buraco
+        // contabil no custo-por-projeto); (b) na devolucao-sucata de material de CLIENTE, o
+        // ramo com OS ja completava 201 pela heranca e o ramo com PROJETO dava 400 + estado
+        // parcial — divergencia por acidente. Com o projeto herdado, a guarda do dono aceita
+        // (mesmo cliente da saida citada) e os DOIS ramos completam; o estado parcial
+        // pre-existente desse fluxo morre. Declarado no design.
         material_id, tipo: 'SUCATA', quantidade, motivo, os_id: origemOsFinal,
+        projeto_id: origemProjetoFinal,
         localizacao_origem_id: localizacao_id, lote_id: loteFinalId,
         justificativa: observacoes || motivo, referencia,
       }, opcoes);

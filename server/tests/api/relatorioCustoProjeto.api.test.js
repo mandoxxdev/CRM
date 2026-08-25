@@ -24,7 +24,7 @@ const assert = require('assert');
 const request = require('supertest');
 const XLSX = require('xlsx');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun } = require('../../services/almoxarifado/db');
+const { dbRun, dbGet } = require('../../services/almoxarifado/db');
 const { RELATORIOS } = require('../../services/almoxarifado/reportRegistry');
 
 let passed = 0; let failed = 0;
@@ -261,6 +261,65 @@ function getBinary(req) {
     assert.ok(item, JSON.stringify(lista.body.relatorios.map((r) => r.tipo)));
     assert.ok(!('acao' in item), 'acao nao pode vazar na lista');
     assert.deepStrictEqual(item.params, entrada.params, JSON.stringify(item));
+  });
+
+  await test('(I-1, revisao) devolucao-SUCATA herda projeto nas DUAS pernas — nada sai do encargo em silencio', async () => {
+    // Uma linha assimetrica (SUCATA herdava os_id mas nao projeto_id) fazia a sucata sair do
+    // projeto e nao entrar no de ninguem: ENTRADA_DEVOLUCAO creditava devolvido e o SUCATA
+    // (que ESTA em TIPOS_SAIDA) nascia sem projeto. Liquido do projeto tem de FECHAR: a
+    // devolucao-sucata credita E debita o MESMO projeto (efeito liquido zero no encargo).
+    const proj = await novoProjeto(db, 'Projeto Sucata I1');
+    const mat = await novoMaterial(db, { custo_medio: 10, custo_unitario: 99, quantidade_atual: 50 });
+    const saidaId = await movimento(db, mat, 'SAIDA', 10, proj);
+
+    const devRes = await request(app).post('/api/almoxarifado/devolucoes').send({
+      material_id: mat, quantidade: 4, motivo: 'SUCATA', destino: 'SUCATA',
+      movimentacao_saida_id: saidaId,
+    });
+    assert.strictEqual(devRes.status, 201, JSON.stringify(devRes.body));
+
+    const sucata = await dbGet(db, `SELECT projeto_id FROM movimentacoes_almoxarifado
+      WHERE material_id = ? AND tipo = 'SUCATA' ORDER BY id DESC LIMIT 1`, [mat]);
+    assert.strictEqual(sucata.projeto_id, proj, 'SUCATA tem de herdar o projeto da saida citada');
+
+    const linha = (await relatorio(app)).body.find((r) => r.projeto_id === proj);
+    // consumido = SAIDA 10*10 + SUCATA 4*10 = 140; devolvido = ENTRADA_DEVOLUCAO 4*10 = 40.
+    assert.strictEqual(linha.consumido, 140, JSON.stringify(linha));
+    assert.strictEqual(linha.devolvido, 40, JSON.stringify(linha));
+    assert.strictEqual(linha.liquido, 100, JSON.stringify(linha)); // = o que a saida consumiu
+  });
+
+  await test('(I-2a, revisao) bordas de data INCLUSIVAS: saida exatamente em data_inicio e em data_fim entram', async () => {
+    const proj = await novoProjeto(db, 'Projeto Bordas');
+    const mat = await novoMaterial(db, { custo_medio: 1, custo_unitario: 9 });
+    await movimento(db, mat, 'SAIDA', 3, proj, { createdAt: '2026-03-01 00:00:00' }); // = data_inicio
+    await movimento(db, mat, 'SAIDA', 5, proj, { createdAt: '2026-03-10 23:59:59' }); // = data_fim
+    await movimento(db, mat, 'SAIDA', 70, proj, { createdAt: '2026-02-28 23:59:59' }); // vespera: fora
+    await movimento(db, mat, 'SAIDA', 90, proj, { createdAt: '2026-03-11 00:00:00' }); // dia seguinte: fora
+
+    const linha = (await relatorio(app, '?data_inicio=2026-03-01&data_fim=2026-03-10')).body
+      .find((r) => r.projeto_id === proj);
+    // Um off-by-one em QUALQUER borda (>= virando > ou <= virando <) muda o 8.
+    assert.strictEqual(linha.consumido, 8, JSON.stringify(linha));
+  });
+
+  await test('(I-2b, revisao) heranca: o valor informado A MAO ganha do herdado', async () => {
+    // Mutacao sobrevivente da revisao: inverter a precedencia (herdado ganhando do manual)
+    // ficava verde — nenhum teste passava origem_projeto_id explicito.
+    const projSaida = await novoProjeto(db, 'Projeto da Saida');
+    const projManual = await novoProjeto(db, 'Projeto Manual');
+    const mat = await novoMaterial(db, { custo_medio: 2, custo_unitario: 0, quantidade_atual: 30 });
+    const saidaId = await movimento(db, mat, 'SAIDA', 6, projSaida);
+
+    const devRes = await request(app).post('/api/almoxarifado/devolucoes').send({
+      material_id: mat, quantidade: 2, motivo: 'SOBRA_PROJETO', destino: 'ESTOQUE',
+      movimentacao_saida_id: saidaId, origem_projeto_id: projManual,
+    });
+    assert.strictEqual(devRes.status, 201, JSON.stringify(devRes.body));
+
+    const dev = await dbGet(db, `SELECT projeto_id FROM movimentacoes_almoxarifado
+      WHERE material_id = ? AND tipo = 'ENTRADA_DEVOLUCAO' ORDER BY id DESC LIMIT 1`, [mat]);
+    assert.strictEqual(dev.projeto_id, projManual, 'o origem_projeto_id explicito TEM de ganhar da heranca');
   });
 
   await close();
