@@ -31,10 +31,85 @@ async function verificarEstoqueMinimo(db) {
   return criadas;
 }
 
+// Estados terminais do ciclo de vida da solicitacao (RN-01, Etapa 14): RECEBIDA (automatica,
+// D2) e CANCELADA (manual, D3). Um so lugar para a lista — cancelar e vincular checam a MESMA
+// coisa (RN-01b).
+const STATUS_TERMINAIS = ['RECEBIDA', 'CANCELADA'];
+
+// RN-01b (EMENDA da Fase 2, C3 — medido: solicitacao inexistente E pedido inexistente
+// respondiam 200 antes desta guarda, gravando pedido fantasma que o gancho da RN-03 nunca
+// fecharia). Valida as DUAS pontas, nesta ordem: (1) solicitacao existe; (2) nao esta em
+// estado terminal; (3) pedido existe em pedidos_compra (tabela do core).
 async function vincularPedidoCompra(db, solicitacaoId, pedidoCompraId) {
+  const sol = await dbGet(db, 'SELECT * FROM solicitacoes_compra_almoxarifado WHERE id = ?', [solicitacaoId]);
+  if (!sol) throw Object.assign(new Error('Solicitação não encontrada'), { status: 404 });
+  if (STATUS_TERMINAIS.includes(sol.status)) {
+    // Literal nasce aqui (familia do de cancelar, Global Constraints da Etapa 14): mesma
+    // semantica ("ja finalizada, nao aceita mais transicao"), verbo trocado para o contexto.
+    throw Object.assign(
+      new Error('Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser vinculada a um pedido'),
+      { status: 400 });
+  }
+  const pedido = await dbGet(db, 'SELECT id FROM pedidos_compra WHERE id = ?', [pedidoCompraId]);
+  // Literal REUSADO de receiptService.criarRecebimento:76 (RN-01b) — um literal so para "pedido
+  // de compra nao existe", nao inventar um segundo.
+  if (!pedido) throw Object.assign(new Error('Pedido de compra não encontrado'), { status: 400 });
+
   await dbRun(db, "UPDATE solicitacoes_compra_almoxarifado SET pedido_compra_id = ?, status = 'VINCULADO' WHERE id = ?",
     [pedidoCompraId, solicitacaoId]);
   return { success: true };
+}
+
+// RN-02 (Etapa 14, D3): cancelamento manual. Permitido em PENDENTE/VINCULADO (o vinculo e
+// informativo — cancelar NAO mexe no pedido do core, declarado). Exige justificativa.
+async function cancelarSolicitacao(db, user, solicitacaoId, motivo) {
+  if (!motivo || !String(motivo).trim()) {
+    throw Object.assign(new Error('Justificativa obrigatória para cancelar a solicitação'), { status: 400 });
+  }
+  const sol = await dbGet(db, 'SELECT * FROM solicitacoes_compra_almoxarifado WHERE id = ?', [solicitacaoId]);
+  if (!sol) throw Object.assign(new Error('Solicitação não encontrada'), { status: 404 });
+  if (STATUS_TERMINAIS.includes(sol.status)) {
+    throw Object.assign(
+      new Error('Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser cancelada'),
+      { status: 400 });
+  }
+
+  await dbRun(db, `UPDATE solicitacoes_compra_almoxarifado
+      SET status = 'CANCELADA', cancelada_em = CURRENT_TIMESTAMP, cancelada_por = ?, cancelamento_motivo = ?
+      WHERE id = ?`,
+    [user.nome || user.email, motivo, solicitacaoId]);
+
+  // dados_novos OBJETO (licao E11/Fase 2) — audit.js serializa.
+  await registrarAuditoria(db, {
+    entidade: 'solicitacao_compra', entidade_id: solicitacaoId, acao: 'CANCELAMENTO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { motivo, status_anterior: sol.status },
+  });
+
+  return { success: true, status: 'CANCELADA' };
+}
+
+// RN-03 (EMENDA da Fase 2, C4 — medido): helper UNICO chamado nos DOIS pontos onde um
+// recebimento chega a estoque dado com pedido_compra_id (fim de processarNota E fim de
+// aprovarRecebimento no ramo que grava APROVADO direto, receiptService:672) — cada chamador com
+// o seu try/catch, NUNCA derruba o caminho principal (padrao RN-01 da E12). Recebimento sem
+// pedido: no-op (pedidoCompraId undefined/null). O `AND status = 'VINCULADO'` no UPDATE E o
+// dedupe do segundo recebimento do mesmo pedido (I1) — a auditoria fica DENTRO do laco das
+// linhas EFETIVAMENTE fechadas por ESTA chamada, entao um segundo recebimento do mesmo pedido
+// nao encontra nenhuma linha VINCULADO e nao audita nada de novo.
+async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId) {
+  if (!pedidoCompraId) return;
+  const fechadas = await dbAll(db, `UPDATE solicitacoes_compra_almoxarifado
+      SET status = 'RECEBIDA', recebida_em = CURRENT_TIMESTAMP
+      WHERE pedido_compra_id = ? AND status = 'VINCULADO'
+      RETURNING id`, [pedidoCompraId]);
+  for (const linha of fechadas) {
+    await registrarAuditoria(db, {
+      entidade: 'solicitacao_compra', entidade_id: linha.id, acao: 'RECEBIDA',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_novos: { pedido_compra_id: pedidoCompraId },
+    });
+  }
 }
 
 async function lerConfigNumero(db, chave, fallback) {
@@ -322,4 +397,5 @@ async function estoqueParado(db, tipo) {
 module.exports = {
   verificarEstoqueMinimo, vincularPedidoCompra, calcularSugestoes,
   gerarSolicitacoesDaSugestao, estoqueParado,
+  cancelarSolicitacao, fecharSolicitacoesDoPedido,
 };

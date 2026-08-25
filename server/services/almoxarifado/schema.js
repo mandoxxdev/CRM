@@ -1618,6 +1618,15 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
 
+  // Etapa 14, Task 1 (RN-01): ciclo de vida da solicitacao — RECEBIDA (automatica, D2) e
+  // CANCELADA (manual, D3) sao os dois terminais que faltavam desde a Etapa 11. safeAlter, nao
+  // recriacao de tabela: linhas ja gravadas na E11 nascem com NULL nas quatro colunas, que e o
+  // estado correto para uma solicitacao PENDENTE/VINCULADO antiga.
+  await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN recebida_em DATETIME');
+  await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelada_em DATETIME');
+  await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelada_por TEXT');
+  await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelamento_motivo TEXT');
+
   // ── Alertas de estoque mínimo ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (
     material_id INTEGER PRIMARY KEY,

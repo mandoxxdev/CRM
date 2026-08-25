@@ -1,7 +1,8 @@
 /**
  * Etapa 11, Task 4 — teste-jornada de integracao cruzando Task 1 (motor de sugestao,
  * RN-01..RN-06/RN-08), Task 2 (POST /gerar-solicitacoes RN-09, GET /estoque-parado RN-07) e a
- * rota legada de vinculo de pedido (D10, gate `configurar`, intocada).
+ * rota legada de vinculo de pedido (D10; gate atualizado para `gerenciar_reposicao` na Etapa 14,
+ * Task 1, D9 — antes era `configurar`/ADMIN-only).
  *
  * Task 1 e Task 2 ja tem cobertura unitaria/isolada propria (reposicaoSugestao/
  * reposicaoGerarSolicitacoes/reposicaoEstoqueParado .api.test.js) — este arquivo NAO repete
@@ -48,6 +49,15 @@ function itemDe(res, materialId) {
 
 (async () => {
   const { app, db, setUser, close } = await createTestApp({ user: ADMIN });
+
+  // Etapa 14, Task 1 (RN-01b): vincular-pedido passou a validar que o pedido existe em
+  // `pedidos_compra` (antes gravava pedido fantasma sem checar). O Passo 8 abaixo vincula a
+  // `pedido_compra_id: 1` — precisa da tabela E da linha.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS pedidos_compra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER,
+    valor_total REAL DEFAULT 0, status TEXT, data_pedido DATE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+  await dbRun(db, `INSERT INTO pedidos_compra (id, numero, status, data_pedido) VALUES (1, 'PC-JOR-1', 'ABERTO', '2026-08-01')`);
 
   await test('jornada: motor real -> sugestao -> risco -> gerar -> some -> vincula -> estoque parado -> gate', async () => {
     // ── Passo 1: seed — fornecedor + M1 (minima 5, maxima 20, custo 10, critico) via CADASTRO, ──
@@ -146,7 +156,8 @@ function itemDe(res, materialId) {
       'SELECT COUNT(*) as c FROM solicitacoes_compra_almoxarifado WHERE material_id = ?', [m1Id]);
     assert.strictEqual(contagemSolicitacoes.c, 1, 'nenhum dos dois POSTs do passo 7 deveria ter criado linha nova');
 
-    // ── Passo 8: vincular pela rota LEGADA (ADMIN, gate `configurar`, D10 — intocada) — status ──
+    // ── Passo 8: vincular pela rota LEGADA (D10; gate `gerenciar_reposicao` desde a Etapa 14,
+    // Task 1/D9 — ADMIN continua permitido) — status ──
     // VINCULADO; a sugestao continua sem M1 (VINCULADO tambem conta em a_caminho, RN-03); o
     // relatorio de solicitacoes-compra mostra a linha VINCULADA (Fase 2: era so PENDENTE).
     setUser(ADMIN);

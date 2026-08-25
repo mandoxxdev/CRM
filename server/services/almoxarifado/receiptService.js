@@ -4,6 +4,11 @@ const {
   registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento,
 } = require('./stockService');
 const lotService = require('./lotService');
+// Etapa 14, Task 1 (RN-03): sem ciclo — purchaseService NAO requer receiptService. Chamado pelo
+// OBJETO do modulo (nao desestruturado) de proposito: o teste de sabotagem monkeypatcha
+// `purchaseService.fecharSolicitacoesDoPedido` em tempo de execucao, e uma desestruturacao no
+// require capturaria a funcao original antes do monkeypatch.
+const purchaseService = require('./purchaseService');
 
 const STATUS = {
   RECEBIDO: 'RECEBIDO',
@@ -654,6 +659,21 @@ async function processarNota(db, user, recebimentoId, { localizacao_id } = {}) {
     usuario_id: user.id, usuario_nome: user.nome || user.email,
   });
 
+  // RN-03 (D2, Etapa 14): a nota PROCESSADA fecha as solicitacoes VINCULADO do pedido que a
+  // originou. Roda DEPOIS do UPDATE que marca PROCESSADO e da auditoria acima, de proposito
+  // (padrao RN-01 da E12): falha do gancho NUNCA pode impedir o proprio processamento, que ja
+  // aconteceu quando chegamos aqui. Igualmente importante (Fase 2, controle i, medido): rodar
+  // DEPOIS de darEntradaEstoque garante que uma falha na entrada de estoque (nota recusada por
+  // item invalido, por exemplo) faz processarNota REJEITAR antes de chegar aqui — a solicitacao
+  // fica VINCULADO, nao RECEBIDA, porque o recebimento nunca chegou a PROCESSADO de verdade.
+  if (rec.pedido_compra_id) {
+    try {
+      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id);
+    } catch (e) {
+      console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos processar nota:', e.message);
+    }
+  }
+
   return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId };
 }
 
@@ -672,6 +692,21 @@ async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado
     SET status = 'APROVADO', etapa_atual = 'CONCLUIDO', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
     [recebimentoId]);
+
+  // RN-03 EMENDADA (Fase 2, C4 — medido): este ramo da entrada no estoque direto para APROVADO
+  // SEM passar por processarNota (ex.: recebimento de PEDIDO_COMPRA aprovado por
+  // POST /recebimentos/:id/aprovar) — o gancho tem de rodar AQUI TAMBEM, senao a solicitacao
+  // nunca fecha por este caminho. O ramo ACIMA que DELEGA para processarNota (linha ~668) NAO
+  // chama de novo: o gancho ja rodou la (I6) — chamar aqui tambem duplicaria a tentativa, e so
+  // nao duplicaria auditoria porque o `AND status='VINCULADO'` already fechou na 1a chamada.
+  if (rec.pedido_compra_id) {
+    try {
+      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id);
+    } catch (e) {
+      console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos aprovar recebimento:', e.message);
+    }
+  }
+
   return { success: true };
 }
 

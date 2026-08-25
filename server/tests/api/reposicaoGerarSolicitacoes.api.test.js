@@ -66,6 +66,15 @@ async function somarSolicitacoes(db, materialId) {
 (async () => {
   const { app, db, setUser, close } = await createTestApp({ user: ADMIN });
 
+  // Etapa 14, Task 1 (RN-01b): vincular-pedido passou a validar que o pedido existe em
+  // `pedidos_compra` (antes gravava pedido fantasma sem checar). O teste "relatorio
+  // solicitacoes-compra" abaixo vincula a `pedido_compra_id: 1` — precisa da tabela E da linha.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS pedidos_compra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER,
+    valor_total REAL DEFAULT 0, status TEXT, data_pedido DATE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+  await dbRun(db, `INSERT INTO pedidos_compra (id, numero, status, data_pedido) VALUES (1, 'PC-RGS-1', 'ABERTO', '2026-08-01')`);
+
   await test('RN-09: gera com a quantidade DO SERVIDOR e audita como OBJETO', async () => {
     const mat = await novoMaterial(db, { minima: 5, maxima: 20, qtd: 0, custo: 10 });
 

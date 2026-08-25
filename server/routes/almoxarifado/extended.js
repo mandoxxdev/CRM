@@ -1074,14 +1074,28 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   });
 
   // ── Compras (integração preparada) ──
-  app.post('/api/almoxarifado/compras/verificar-minimos', auth, requirePermission('configurar'), async (req, res) => {
+  // Etapa 14, Task 1 (D9, EMENDA da Fase 2 C2 — medido com a rota real): as duas rotas abaixo
+  // estavam em `requirePermission('configurar')` (SO ADMINISTRADOR) — COMPRAS gera a
+  // solicitacao (gerenciar_reposicao, Etapa 11) e nao conseguia vincula-la ao pedido, o passo
+  // seguinte do proprio comprador. ABERTURA de gate deliberada: GESTOR e COMPRAS passam a
+  // poder (letra B do doc de novidades da Etapa 14).
+  app.post('/api/almoxarifado/compras/verificar-minimos', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
     try { res.json({ criadas: await purchaseService.verificarEstoqueMinimo(db) }); }
     catch (e) { handleError(res, e); }
   });
 
-  app.post('/api/almoxarifado/compras/solicitacoes/:id/vincular-pedido', auth, requirePermission('configurar'), async (req, res) => {
+  app.post('/api/almoxarifado/compras/solicitacoes/:id/vincular-pedido', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
     try {
       res.json(await purchaseService.vincularPedidoCompra(db, req.params.id, req.body.pedido_compra_id));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 14, Task 1 (RN-02, D3): cancelamento manual — mesmo gate de quem gera a solicitacao
+  // (gerenciar_reposicao): quem pode criar pode desfazer. Justificativa obrigatoria, validada
+  // no servico (o literal exato e o contrato congelado do design).
+  app.post('/api/almoxarifado/compras/solicitacoes/:id/cancelar', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
+    try {
+      res.json(await purchaseService.cancelarSolicitacao(db, req.user, req.params.id, req.body?.motivo));
     } catch (e) { handleError(res, e); }
   });
 
