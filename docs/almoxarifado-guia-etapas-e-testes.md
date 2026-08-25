@@ -1,10 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-24 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-25 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 13) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 14) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-24 (Etapa 13 ENTREGUE)
+> ## Onde o desenvolvimento parou — 2026-08-25 (Etapa 14 ENTREGUE · ⏸️ DESENVOLVIMENTO PAUSADO)
+>
+> **Etapas 1 a 14 completas — e o desenvolvimento está PAUSADO aqui, por instrução do usuário
+> ("termina essa e pode dar uma parada"). A Etapa 15 (Mobilidade) NÃO foi iniciada.** O handoff
+> para retomar está no plano `docs/superpowers/plans/2026-08-24-almoxarifado-etapa14-integracoes.md`,
+> seção "Próxima tarefa detalhada".
+>
+> A **Etapa 14 (Integrações — o ciclo da compra fecha) fechou em 2026-08-25**
+> (`b276dca..2de7944`): a chegada da **nota fiscal do pedido vinculado fecha a solicitação de
+> compra sozinha** (RECEBIDA, com auditoria), **cancelar existe** (justificativa obrigatória,
+> gravada), vincular valida as duas pontas, quem decide compra ganhou o painel **Ver contexto**
+> por material (saldos, consumo médio, último custo pago, solicitações abertas) e nasceu o
+> relatório **Custo por projeto** (com devolução herdando o projeto da saída e abatendo).
+> BOM/OP ficaram **bloqueados por dependência com a medição escrita** (BOM inexistente, MES sem
+> uso) — não são promessa. Ver a seção "Etapa 14", mais abaixo, com o roteiro completo.
+> **Atenção à decisão B21 das novidades: vincular e "verificar mínimos" abriram de
+> Administrador-only para Gestor/Compras — já em vigor.**
+>
+> **Antes: 2026-08-24 (Etapa 13 ENTREGUE).**
 >
 > **Etapas 1 a 13 completas.** A **Etapa 13 (Relatórios e Indicadores) fechou em 2026-08-24**
 > (`4fdda54..8bb5e52`), e com ela a **feature 21 fica entregue no grosso**: a tela nova
@@ -12,8 +30,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > régua de cada relatório no rodapé), **exportação para Excel** com colunas curadas, os
 > **indicadores gerenciais** (giro, cobertura, rupturas, valor por grupo, tempo de
 > atendimento) e 3 cartões novos no painel inicial. Ver a seção "Etapa 13", mais abaixo, com o
-> roteiro completo. **Próxima etapa: Etapa 14 — Integrações** (feature 22) — a Fase 0 dela
-> começa medindo se BOM/OP/Compras existem de verdade nos módulos vizinhos.
+> roteiro completo.
 >
 > **Antes: 2026-08-24 (Etapa 12 ENTREGUE).**
 >
@@ -2679,6 +2696,63 @@ O módulo tinha 17 relatórios prontos no servidor e nenhuma tela; agora existe
 
 PDF (imprima pelo navegador); unificação das réguas antigas de consumo (letra B); giro com
 estoque médio histórico (não há snapshot); tetos configuráveis; auditoria de exportação.
+
+---
+
+## Etapa 14 — Integrações: o ciclo da compra fecha (ENTREGUE — 2026-08-25)
+
+A solicitação de compra nascia e nunca morria: não dava para cancelar, e quando o material
+chegava ela continuava "a caminho". Agora a **nota fiscal do pedido vinculado fecha a
+solicitação sozinha**, cancelar existe (com justificativa gravada), quem compra tem um painel
+de contexto por material, e nasceu o relatório **Custo por projeto**.
+
+### Roteiro de teste manual
+
+Você vai precisar de um usuário **Gestor, Compras ou Admin** (perfil de reposição) e de um
+material próprio com mínimo cadastrado e saldo abaixo do mínimo (o mesmo cenário do roteiro da
+Etapa 11 serve).
+
+1. **Ver contexto.** Em **Almoxarifado → Reposição e Compras**, aba de sugestões, clique
+   **Ver contexto** numa linha: o painel expande na própria linha com Disponível, Reservado,
+   Em terceiros, Consumo médio diário (com a janela em dias), **Último custo de entrada**
+   (valor e data — se o material já recebeu nota com valor) e as solicitações abertas do
+   material. Clique de novo (**Ocultar contexto**) para fechar.
+2. **Cancelar com justificativa.** Gere uma solicitação (botão Gerar, como no roteiro da 11).
+   Na aba de solicitações, clique **Cancelar**: aparece
+   `Cancelar esta solicitação de compra? A justificativa ficará registrada.` e depois o campo
+   `Justificativa do cancelamento:`. Deixe vazio e confirme: **nada acontece** (o servidor nem
+   é chamado). Repita com uma justificativa: a solicitação sai da lista de pendentes.
+3. **O contexto não mostra número velho.** Abra o **Ver contexto** de um material e, com o
+   painel aberto, clique **Gerar** (ou Atualizar): o painel **reconsulta sozinho** — a lista
+   de solicitações abertas dele muda na sua frente, sem fechar e reabrir.
+4. **Vincular valida o pedido.** Na aba de solicitações, vincule uma solicitação a um número
+   de pedido de compra **inexistente**: `Pedido de compra não encontrado`. Com um pedido real
+   do módulo Compras, o vínculo grava e a solicitação vira VINCULADO.
+5. **A nota fecha a solicitação.** No módulo **Compras**, processe a nota fiscal do pedido
+   vinculado (recebimento → dados fiscais → processar). Volte à aba de solicitações do
+   almoxarifado: a solicitação **sumiu das pendentes** (virou RECEBIDA — confira no relatório
+   Solicitações de Compra, que mostra o status). Vale também para entrega **parcial**: a
+   primeira nota fecha.
+6. **Cancelada não ressuscita.** Vincule outra solicitação a um pedido, **cancele-a** (com
+   justificativa) e só depois processe a nota do pedido: a solicitação **continua CANCELADA**.
+   Tentar cancelar de novo:
+   `Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser cancelada`.
+7. **Custo por projeto.** Em **Almoxarifado → Relatórios → Gestão → Custo por projeto**
+   (aparece só para o perfil de reposição): lance uma **Saída** com projeto preenchido e
+   depois uma **Devolução** dessa saída — a linha do projeto mostra Consumido, Devolvido e
+   Líquido (a devolução herda o projeto sozinha). O rodapé traz a régua completa, incluindo o
+   aviso de que o custo é o atual do material, retroativo.
+8. **Quem não pode, não vê.** Logue como Almoxarife: o menu de Relatórios **não** lista Custo
+   por projeto; forçar a URL responde `Sem permissão para este relatório`. Os botões
+   Cancelar/Ver contexto da Reposição também não aparecem (a tela inteira já era gateada).
+
+### O que esta etapa NÃO cobre
+
+Integração com BOM/Engenharia e OP/Produção (**bloqueadas por dependência, medida**: BOM não
+existe no sistema; MES existe sem uso); fechamento por quantidade conferida (a primeira nota
+do pedido fecha, mesmo parcial); cancelar a solicitação não mexe no pedido do módulo Compras;
+nenhum e-mail novo (RECEBIDA/CANCELADA aparecem no painel e na auditoria); custo histórico por
+movimento no relatório (usa o custo atual, declarado no rodapé).
 
 ---
 

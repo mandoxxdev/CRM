@@ -1,13 +1,34 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-24 (**Etapa 13 fechada — relatórios e indicadores,
+> **Última atualização:** 2026-08-25 (**Etapa 14 fechada — integrações, a fatia real,
+> `b276dca..2de7944`. A feature 22 vira 🟡: Compras + custo por projeto entregues;
+> BOM/OP/centro-de-custo bloqueados por dependência com a medição escrita na spec.**
+> **⏸️ Onde o desenvolvimento parou: a Etapa 14 está fechada e o desenvolvimento foi PAUSADO
+> por instrução do usuário (2026-08-25) — a Etapa 15 (mobilidade) NÃO foi iniciada.** O handoff
+> para retomar está na seção "Próxima tarefa detalhada" do plano
+> `docs/superpowers/plans/2026-08-24-almoxarifado-etapa14-integracoes.md`.
+> **O que a Etapa 14 entregou:** a medição da Fase 0 provou Compras maduro e BOM/MES sem chão —
+> o escopo virou a fatia integrável real: **ciclo de vida da solicitação de compra** (RECEBIDA
+> automática quando a nota do pedido vinculado é processada, gancho nos DOIS caminhos do
+> recebimento; CANCELADA manual com justificativa obrigatória auditada — **fecha a pendência
+> B14** aberta desde a 11; finalizada é terminal, não ressuscita nem re-vincula), **vincular
+> validando as duas pontas** (pedido fantasma impossível), **D9** (vincular/verificar-mínimos
+> abertos de ADMIN-only para `gerenciar_reposicao` — abertura de gate, letra B21 das
+> novidades), verificar-mínimos **auditando o autor** por linha criada, **contexto do
+> comprador** (`GET /compras/contexto-material/:id` + painel na tela de Reposição: saldos,
+> consumo médio, último custo por NF pelo par movimentação×item, solicitações abertas),
+> **relatório custo-por-projeto** (consumido/devolvido/líquido pelo livro, custo atual
+> retroativo declarado, gate nasce fechado — D6/B24) com **herança de projeto/OS na devolução**
+> nas duas pernas (sucata incluída), e o teste-jornada da integração com **compra parcial**.
+> **Revisão final** (2 lentes): ambas Needs-fix-round leve, 0 ruído — convergiram no mesmo
+> buraco de rede (CANCELADA não ressuscita não tinha teste) — tudo acatado em `2de7944`;
+> matriz de 8 perfis limpa (D9 contido: as 7 rotas `configurar` seguem intactas).
+> **Números (medidos no fechamento, 2026-08-25):** `test:api` **123/123 arquivos OK**,
+> `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
+> `test:sqlite` **3/0**; client **487 testes em 33 suítes**, build `CI=true` exit 0.
+> Antes: 2026-08-24 (**Etapa 13 fechada — relatórios e indicadores,
 > `4fdda54..8bb5e52`. A feature 21 fica 🟡-forte (grosso entregue; restos declarados).**
-> **Onde o desenvolvimento parou: a Etapa 13 está fechada. A próxima da ordem é a Etapa 14 —
-> integrações** (feature 22) — e a Fase 0 dela COMEÇA medindo a maturidade dos módulos
-> vizinhos (BOM/OP/Compras): a spec sempre disse que a 14 depende deles; sem maturidade, a
-> etapa vira a fatia integrável de verdade (ex.: fechar solicitação no recebimento — ponta
-> declarada da 11) com o resto escrito como bloqueado.
 > **O que a Etapa 12 entregou:** fila de notificações com retry/backoff/dedupe/claim e
 > histórico (a fila é o histórico), gancho pós-commit de movimentação por classes (default
 > desligado — decisão B15), três dívidas antigas pagas (lembrete de ferramenta 9b/B7, resumo
@@ -318,11 +339,11 @@
 | 15 | [Retalhos, sobras e sucatas](15-retalhos-sucatas/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 9 entregue (2026-08-16, `b727c0a..4ba94e2`)** — retalho é material normal no motor (`ENTRADA_RETALHO` dedicado, sem custo) + anexo dimensional na tabela de sobras reformada (auditada, Zod, `POST /sobras` avulso aposentado); `gerarRetalho` é evento composto com guarda de dono e compensação; `SUCATA` saiu do formulário genérico e virou processo com **dupla aprovação segregada** (duas ações novas de perfil, baixa pelo motor na segunda assinatura, claim anti-corrida), destino VENDIDA/DESCARTADA com comprovante e relatório `sucata-financeiro` lendo o livro; tela `/almoxarifado/sobras` (Retalhos + Sucateamentos), etiqueta de retalho com QR e hint de retalho na SAÍDA. Os 4 testes nomeados da spec existem e passam. **Fora do escopo declarado:** e-mail (→ 19). Pendências nomeadas na spec: guarda geral de tipo novo nas fontes únicas, coluna `foto` sem escritor, lote do material-retalho, `valor_venda` em DESCARTADA |
 | 16 | [Ferramentas e calibração](16-ferramentas-calibracao/README.md) | 🟡 | 🟡 | ✅ | 🟢 **Etapa 9b entregue (2026-08-22, `d644827..b8e6f60`)** — ferramenta virou patrimônio emprestável completo: máquina de estados explícita (`toolStateMachine.js`) com toda transição por **claim** (`UPDATE ... WHERE status IN (...)`, sem a janela de corrida SELECT-depois-UPDATE que existia antes), calibração com vencimento **lida da última calibração** (sem coluna-cache) barrando o empréstimo, avaria/perda com foto encerrando o empréstimo aberto no mesmo ato (RN-05), bloqueio/manutenção/reencontro com justificativa auditada, ação de perfil própria `gerenciar_ferramentas` (parou de usar o gate genérico `movimentar`), Zod em todas as rotas (nenhuma tinha antes), auditoria em toda escrita (emprestar/devolver não auditavam antes), e tela `/almoxarifado/ferramentas` com três visões (Ferramentas, Empréstimos, Calibrações). Revisão final de branch achou 4 Important cross-task que os gates por-task não pegam (busca/filtro do contrato ignorados pelo backend; corrida devolver↔ocorrência podendo corromper o status; PUT/409 sem teste; badge de vencimento do front discordando do servidor) — todos corrigidos e re-revisados limpos. **Fora do escopo declarado, com pendência aberta:** job de lembrete de devolução sem canal de notificação (função pura pronta, aguarda feature 20), UI de edição de ferramenta (backend testado, só falta o formulário — achado da revisão final), integração com inspeção (feature 09) |
 | 17 | [Inventário e contagem cíclica](17-inventario-contagem/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapas 10 + 10b entregues (2026-08-22/23, `d644827..8db2671` e `14f4458..7290481`)** — a 10 resolveu o risco crítico (tipo dedicado `AJUSTE_INVENTARIO` pelo motor, guarda de retenção decidindo a pendência B1/B2/B3, contagem cega, tolerância+recontagem, tudo-ou-nada); a 10b entregou **escopos de contagem combináveis** (família raiz, ABC, críticos, de clientes, em terceiros), **dupla contagem por duas pessoas** (recontagem de outra pessoa, número do colega escondido com ou sem modo cego, correção própria pré-recontagem, autoria por item), **relatório de acuracidade** (ponderado, contados/total + recontados, impacto persistido sem backfill) e o **epsilon de divergência como fonte única** (alcançando o relatório antigo, que ganhou gate + só CONCLUIDO). **Fora, declarado com porquê na spec:** contagem por endereço (+ guarda de retenção com localização), cíclica automática, congelamento (ruling mantido), dupla aprovação formal (aguarda B11), e-mail, tela de conciliação lado a lado |
-| 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapa 11 entregue (2026-08-24, `54e1278..1ea6ab2`)** — motor de sugestão no `purchaseService` (consumo médio por `TIPOS_SAIDA` em janela configurável; ponto efetivo com **a mínima como chão** de todas as réguas; posição = `disponivelSql` + solicitações abertas dentro do **horizonte** configurável, com `a_caminho_vencido` exposto; alvo `max(máxima, ponto)` com lote econômico como piso), `GET /reposicao/sugestoes` consolidado por fornecedor e valorado, `POST /gerar-solicitacoes` (quantidades do servidor, sem dedupe — a posição É o dedupe, complemento em pendência insuficiente, auditado), `GET /estoque-parado` (excesso/sem consumo/obsoleto com valor parado), ação nova `gerenciar_reposicao` [ADMIN, GESTOR, COMPRAS — ALMOXARIFE fora de propósito], relatório de solicitações com VINCULADO e gateado, horizonte compartilhado com a máquina de estados de requisição, 3 configs semeadas+editáveis com validação nos dois lados, índice novo no livro, tela `/almoxarifado/reposicao` (3 abas, painel de erro/permissão por aba). **Fica de fora, declarado:** fechar/cancelar solicitação no recebimento e itens por material (integração Compras, features 22/24 — é o que falta para o ciclo fechar), alerta ativo de máximo, e-mail (19) |
+| 18 | [Reposição e estoque mínimo](18-reposicao-estoque-minimo/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapa 11 entregue (2026-08-24, `54e1278..1ea6ab2`)** — motor de sugestão no `purchaseService` (consumo médio por `TIPOS_SAIDA` em janela configurável; ponto efetivo com **a mínima como chão** de todas as réguas; posição = `disponivelSql` + solicitações abertas dentro do **horizonte** configurável, com `a_caminho_vencido` exposto; alvo `max(máxima, ponto)` com lote econômico como piso), `GET /reposicao/sugestoes` consolidado por fornecedor e valorado, `POST /gerar-solicitacoes` (quantidades do servidor, sem dedupe — a posição É o dedupe, complemento em pendência insuficiente, auditado), `GET /estoque-parado` (excesso/sem consumo/obsoleto com valor parado), ação nova `gerenciar_reposicao` [ADMIN, GESTOR, COMPRAS — ALMOXARIFE fora de propósito], relatório de solicitações com VINCULADO e gateado, horizonte compartilhado com a máquina de estados de requisição, 3 configs semeadas+editáveis com validação nos dois lados, índice novo no livro, tela `/almoxarifado/reposicao` (3 abas, painel de erro/permissão por aba). **Fica de fora, declarado:** ~~fechar/cancelar solicitação no recebimento~~ (**entregue na Etapa 14** — RECEBIDA automática + CANCELADA com justificativa, ver feature 22), itens por material (feature 24), alerta ativo de máximo, e-mail (19) |
 | 19 | [E-mails e notificações](19-emails-notificacoes/README.md) | 🟢 | 🟢 | ✅ | 🟢 **Etapa 12 entregue (2026-08-24, `c1613c2..d7fee6c`)** — fila `fila_notificacoes_almoxarifado` (dedupe UNIQUE por hash, retry/backoff em JS, claim de envio contra drenos concorrentes, FALHA + aviso ao admin máx. 1), gancho pós-commit no motor por CLASSES (default `'0'`; RESERVA/remessa/retorno/AJUSTE_INVENTARIO fora de propósito; cancelamento suprime a pendente e recusa reenvio), 3 dívidas pagas (lembrete ferramenta 9b/B7, resumo de solicitações 11, devolução parcial 7), painel `/almoxarifado/notificacoes` gateado (`gerenciar_notificacoes` ADMIN/GESTOR; reenvio de ENVIADO com confirm), jobs (worker + varreduras diárias), 10 configs nos dois lados. **Cortes declarados:** matriz evento×destino, templates, digest, PDF, grupos (letra D/B15) |
 | 20 | [Alertas operacionais](20-alertas/README.md) | 🟡 | ❌ | 🟡 | 🟡 **6 de 22 (Etapa 12 somou 4)** — estoque zerado (máquina própria, claim atômico, só material sem mínimo — B17), lote vencendo (sem piso: vencido com saldo entra), remessa vencida, ferramenta não devolvida; pela fila da 19. Falta: central no front, motor único de regras, e os ~16 restantes com a feature dona de cada um |
 | 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟢 | 🟢 | ✅ | 🟡 **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)** — `reportRegistry` com 18 chaves e gate DECLARADO por chave (mata a classe "relatório novo esquece o gate", 2 precedentes 10b/11; o processo nem sobe com chave órfã), lista fail-closed servindo exportavel/limite/nota/colunas, export XLSX genérico com projeção (paridade linha+cabeçalho medida; payload objeto → 400 literal), `consumoSql.js` fonte única (4 réguas divergentes DOCUMENTADAS — 10 vs 18 medido, unificar é letra B19), indicadores (giro aproximado declarado, cobertura mediana, rupturas físico+tipo, valor por grupo, atendimento sem janela), tela `/almoxarifado/relatorios` dirigida pelo registro, 3 cartões no dashboard. **Falta para 🟢 pleno:** PDF (corte D), previsto×realizado (depende da 22), % no prazo/fornecedor (features donas), valorização por cliente (letra B) |
-| 22 | [Integrações](22-integracoes/README.md) | ❌ | ❌ | ❌ | ❌ módulos vizinhos vazios |
+| 22 | [Integrações](22-integracoes/README.md) | 🟡 | 🟡 | ✅ | 🟡 **Etapa 14 entregue (2026-08-25, `b276dca..2de7944`)** — a fatia integrável REAL, medida antes de prometida: **Compras** (ciclo de vida da solicitação: RECEBIDA automática no recebimento da nota do pedido vinculado, nos dois caminhos; CANCELADA manual com justificativa auditada — **fecha a B14 da feature 18**; vincular valida as duas pontas; D9 abre vincular/verificar-mínimos para `gerenciar_reposicao`; verificar-mínimos audita o autor; contexto do comprador com último custo por NF) e **custo por projeto** (relatório `custo-por-projeto` computado do livro, consumido/devolvido/líquido, custo atual retroativo declarado, gate nasce fechado; herança de projeto/OS na devolução nas duas pernas). **Falta para 🟢, tudo bloqueado por dependência com a medição escrita na spec:** BOM/Engenharia (inexistente no sistema), OP/Produção (MES sem uso), centro de custo (sem entidade), previsto×realizado, acompanhamento de prazo de pedido, aviso de rejeição da Qualidade ao comprador |
 | 23 | [Perfis, segurança e auditoria](23-perfis-seguranca-auditoria/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Correção 2026-08-11: a spec dizia "auditoria com 0 linhas em produção" — **superado desde as Etapas 3-6** (materiais, requisições, motor, reservas, lotes, recebimento e inspeção auditam, todos com tela). Buraco real restante: conferência de inventário não audita. **A pendência das sobras foi paga na Etapa 9, Task 1 (`bedce46`)** — `scrapService` audita atualizar e gerar retalho, e o sucateamento audita solicitar/aprovar/rejeitar/cancelar/destino/compensação |
 
 ## Ordem de desenvolvimento sugerida (etapas pequenas)
@@ -629,11 +650,11 @@ Fila com retry/dedupe/histórico; e-mail de movimentação por classes (default 
 ### Etapa 13 — Relatórios e indicadores → `21-relatorios-dashboards` — ✅ ENTREGUE (2026-08-24, `4fdda54..8bb5e52`)
 Registro único com gate por chave; tela dirigida pelo registro; export XLSX; indicadores; cartões no dashboard. Restos declarados (PDF, previsto×realizado) com as features donas.
 
-### Etapa 14 — Integrações → `22-integracoes`
-Engenharia (BOM), Produção (OP), Compras, Projetos/custos — depende da maturidade dos outros módulos.
+### Etapa 14 — Integrações → `22-integracoes` — ✅ ENTREGUE (2026-08-25, `b276dca..2de7944`)
+A Fase 0 mediu a maturidade antes de prometer: Compras maduro (integrado de verdade — ciclo da solicitação fecha no recebimento, cancelar com justificativa, contexto do comprador) + custo por projeto pelo livro com herança de projeto na devolução. BOM/OP/centro-de-custo BLOQUEADOS por dependência, com a medição escrita na spec 22 — não são promessa.
 
-### Etapa 15 — Mobilidade (spec Fase 4)
-Código de barras, coletores, app móvel, assinatura digital — planejar quando as etapas 1–7 estiverem estáveis.
+### Etapa 15 — Mobilidade (spec Fase 4) — ⏸️ NÃO INICIADA (desenvolvimento pausado por instrução do usuário, 2026-08-25)
+Código de barras, coletores, app móvel, assinatura digital. O handoff para retomar está no plano da Etapa 14 (seção "Próxima tarefa detalhada").
 
 ## Critérios de aceite do módulo (spec seção 34)
 
@@ -664,7 +685,12 @@ O módulo só é considerado operacional quando TODOS estes itens forem verdade 
 - [ ] E-mail automático de todas as entradas e saídas (19)
 - [ ] Inventários e ajustes aprovados (17, 06)
 - [ ] Histórico completo de qualquer material (03, 21)
-- [ ] Custo e consumo por projeto (22)
+- [~] **Custo e consumo por projeto (22) — parcialmente atendido (Etapa 14, 2026-08-25).**
+  O relatório `custo-por-projeto` entrega consumido/devolvido/líquido por projeto computado do
+  livro, com a devolução herdando o projeto da saída. **Ressalva que impede o [x] pleno:** o
+  custo aplicado é o **atual** do material, retroativo (o livro não guarda custo por
+  movimento) — custo histórico exato por movimento exigiria coluna nova no livro, decisão
+  registrada na spec 22
 - [~] **Bloquear materiais reprovados ou indisponíveis (09, 10) — parcialmente atendido.** Por **material**: sim, desde a Etapa 5 (bloqueio/quarentena/decisão de inspeção). Por **lote**: o status `REPROVADO`/`BLOQUEADO` existe e o motor recusa a saída (Etapa 6), mas `inspectionService.decidirInspecao` ainda bloqueia o material inteiro e não marca o lote — ligar os dois é mudança na feature 09
 - [ ] Relatórios gerenciais e de auditoria (21, 23)
 

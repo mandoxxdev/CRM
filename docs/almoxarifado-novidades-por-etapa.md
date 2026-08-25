@@ -1,13 +1,14 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 11 (02/08/2026 a 24/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a Etapa 14 (02/08/2026 a 25/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em 2026-08-24 (Etapa 11).
+> `docs/superpowers/plans/`. Atualizado em 2026-08-25 (Etapa 14 — **desenvolvimento pausado
+> aqui por instrução do usuário**; a Etapa 15 não foi iniciada).
 
 ## Visão geral
 
@@ -31,6 +32,9 @@
 | 10 | Inventário Avançado | 2026-08-22 | O ajuste da conferência de inventário deixou de gravar saldo por fora do sistema — agora é auditado e recusa deixar material bloqueado/reservado/em terceiro com número que não fecha; contagem cega e recontagem obrigatória para divergência grande |
 | 10b | Inventário Avançado, parte 2 | 2026-08-23 | Contagem por escopo (classe A, críticos, de clientes, em terceiros), dupla contagem por duas pessoas com o número do colega escondido, autoria por item e relatório de acuracidade com impacto em reais |
 | 11 | Reposição e Compras | 2026-08-24 | Sugestão de compra calculada (consumo médio × prazo, mínima como chão), consolidada por fornecedor e valorada; gerar solicitações auditadas; estoque parado (excesso/sem consumo/obsoleto) com valor em reais; tela nova para quem decide compra |
+| 12 | Notificações Completas | 2026-08-24 | Fila de e-mails com retentativa, dedupe e histórico; e-mail de movimentação por classes (nasce desligado); três dívidas antigas pagas e três alertas novos; tela Notificações para Gestor/Admin |
+| 13 | Relatórios e Indicadores | 2026-08-24 | Tela Relatórios com menu por perfil dirigido pelo servidor, exportação XLSX com colunas curadas, e indicadores gerenciais (giro, cobertura, rupturas, valor por grupo, atendimento) com as réguas escritas |
+| 14 | Integrações — o ciclo da compra fecha | 2026-08-25 | A nota fiscal do pedido vinculado fecha a solicitação de compra sozinha; cancelar com justificativa existe (B14 resolvida); painel de contexto por material para quem compra; relatório Custo por projeto com devolução abatendo |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -46,7 +50,12 @@ tela — ver letra B).
 **Com a 10, a feature 17 (inventário avançado) fica parcialmente completa** — o risco crítico
 nomeado desde a Etapa 7 (ajuste fora do motor) está resolvido; tipos de contagem avançados,
 dupla contagem por duas pessoas e relatório de acuracidade formal ficam declarados fora do
-escopo (letra D). Não há próxima etapa numerada ainda — ver "Onde estamos e o que vem a seguir".
+escopo (letra D) — **a 10b entregou boa parte disso** (ver a seção dela).
+**Com a 14, a feature 18 (reposição) fecha o ciclo** (solicitação nasce, vincula, fecha no
+recebimento ou cancela com justificativa) e a **feature 22 (integrações) fica entregue na fatia
+integrável hoje** — Compras de verdade; BOM/OP bloqueados por dependência, com a medição
+escrita. **O desenvolvimento está pausado após a Etapa 14 por instrução do usuário** — ver
+"Onde estamos e o que vem a seguir".
 
 ---
 
@@ -70,16 +79,18 @@ particular nem toca o motor de estoque, ferramenta é patrimônio separado. Est�
 explicitamente porque as Etapas 7 e 8 deixaram consultas pendentes e você vai procurar a das
 etapas novas.
 
-### B. Decisões de negócio — B1 a B17; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B24; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 Guia rápido do estado: **em aberto** — B5 (taxonomia de sucata), B6 (categorias), B8 (tela de
 editar ferramenta), B9 (campo do filtro de calibração), B11 (dupla aprovação formal do ajuste),
-B12 (recontagem pelo mesmo contador), B13 (quem decide compra), B14 (cancelar solicitação),
+B12 (recontagem pelo mesmo contador), B13 (quem decide compra),
 B15-B17 (as três da Etapa 12: ligar o e-mail de movimentação e validar os destinos/toggle),
 B18-B20 (as três da Etapa 13: proteção dos Indicadores, unificar as réguas de consumo, tetos/
-auditoria de export/gates antigos).
+auditoria de export/gates antigos), B21-B24 (as quatro da Etapa 14 — **a B21 é uma abertura de
+acesso já em vigor, leia primeiro**).
 **Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
-ferramenta, pago na Etapa 12), B10 (ajuste recusado contra retenção).
+ferramenta, pago na Etapa 12), B10 (ajuste recusado contra retenção), B14 (cancelar solicitação
+de compra, **entregue na Etapa 14**).
 
 **B1 a B3 — o que muda o saldo total não olha para o material que está retido.** É sempre o mesmo
 defeito, e a Etapa 8b foi a **terceira** vez que ele apareceu — por isso está aqui, e não escondido
@@ -235,12 +246,12 @@ o caminho novo de gerar solicitação **não deduplica** — a matemática da po
 pendência insuficiente gera o **complemento** (o dedupe antigo por material pendente ficou só
 no verificar-mínimos legado).
 
-**B14 (NOVO, da Etapa 11) — não existe CANCELAR solicitação de compra no sistema.** Os únicos
-caminhos são criar e vincular a pedido. Um clique errado em "Gerar" cria solicitações que só
-saem por edição direta no banco — a confirmação com quantidade e valor antes de gerar mitiga,
-e o horizonte de 60 dias faz a solicitação velha parar de segurar a sugestão, mas **o caminho
-de cancelamento precisa existir** (provavelmente junto com o fechamento no recebimento —
-letra E). Decida se isso entra na fila.
+**B14 (da Etapa 11) — ✅ RESOLVIDA NA ETAPA 14.** Este item dizia que não existia cancelar
+solicitação de compra e que o caminho "precisa existir (provavelmente junto com o fechamento no
+recebimento)". Foi exatamente o que a Etapa 14 entregou: **Cancelar** na tela de Reposição com
+justificativa obrigatória gravada na auditoria, e o **fechamento automático no recebimento**
+(RECEBIDA quando a nota do pedido vinculado é processada). As aproximações escolhidas nesse
+desenho estão na **B22**; deixado aqui riscado em vez de apagado, como sempre.
 
 **B15 (NOVO, da Etapa 12) — o e-mail de movimentação nasce DESLIGADO, e os destinos são por
 família, não por matriz.** A spec pedia "e-mail em toda entrada e saída"; ligar isso por default
@@ -295,6 +306,48 @@ avisados na tela — aumentar/remover é uma linha por relatório; (b) exportar 
 registro de auditoria (nenhuma consulta do módulo gera) — se quiser log de egresso, é uma
 linha; (c) proteger relatórios hoje abertos (Estoque Atual expõe valor do estoque a todo o
 módulo desde sempre) — a etapa PRESERVOU os acessos como estavam de propósito.
+
+**B21 (NOVO, da Etapa 14) — 🚨 ABERTURA DE ACESSO JÁ EM VIGOR: vincular a pedido e "verificar
+mínimos" saíram de Administrador-only para o perfil de reposição (Gestor e Compras).** Antes,
+só o Administrador vinculava solicitação a pedido e disparava a varredura de mínimos; agora
+**qualquer Gestor ou Compras** faz os dois (decisão D9). **Escolhido** porque era incoerência
+medida, não regra: quem pode GERAR solicitações (ação mais grave — cria compromisso de compra)
+não podia vinculá-las nem rodar a varredura que só cria as mesmas solicitações; e o gate antigo
+nem era declarado em spec — era resto histórico. **Descartado** manter Admin-only (forçaria o
+Administrador a ser gargalo de operação rotineira de compras). Mitigação incluída: a varredura
+agora **audita quem a disparou**, linha a linha. Se discordar, voltar é uma linha por rota —
+mas decida sabendo que Gestor/Compras já operam assim desde este deploy.
+
+**B22 (NOVO, da Etapa 14) — o fechamento automático é POR PEDIDO, na primeira nota — e cancelar
+não mexe no pedido.** Três aproximações do mesmo desenho, todas deliberadas: **(a)** a
+solicitação fecha (RECEBIDA) quando chega a **primeira** nota do pedido vinculado, mesmo
+parcial — 5 de 20 entregues já fecham; o que faltar reaparece na sugestão de reposição pela
+régua normal de mínimo. **Descartado** fechar por quantidade conferida: exigiria amarrar item
+de nota a solicitação (vínculo que o schema não tem) e travaria solicitação aberta para sempre
+em pedidos que nunca completam. **(b)** cancelar uma solicitação VINCULADA **não cancela nem
+avisa o pedido de compra** no módulo Compras — o pedido é documento de outro módulo com dono
+próprio. **Descartado** cancelamento em cascata (o almoxarifado mandaria em documento de
+Compras). **(c)** re-vincular a outro pedido **sobrescreve** o vínculo anterior sem histórico —
+e a chegada do pedido antigo então não fecha mais nada (é o furo C15). Se qualquer uma das três
+apertar na prática, o desenho comporta evolução — mas hoje é assim.
+
+**B23 (NOVO, da Etapa 14) — o contexto do material mostra o último custo pago TAMBÉM para
+material de cliente.** O painel de contexto responde para material de propriedade de cliente
+com os saldos e o **último custo de entrada por NF** (quando houve recebimento com valor).
+**Escolhido** porque o dado já está no gate certo (`gerenciar_reposicao` — quem decide compra)
+e esconder o custo de quem negocia beneficiamento seria mutilar a tela para o único público
+dela; a exposição está **documentada por teste** (um assert existe só para marcar esta
+decisão). **Descartado** responder 404 (mentiria — o material existe) e omitir o campo só para
+cliente (inconsistência silenciosa). As **solicitações abertas** de material de cliente, essas
+sim, vêm sempre vazias — material dos outros não se compra.
+
+**B24 (NOVO, da Etapa 14) — o relatório Custo por projeto NASCE protegido (perfil de
+reposição), invertendo o padrão histórico.** Todo relatório novo até aqui nascia aberto e
+alguém depois notava a exposição (foi a lição da B18, na Etapa 13). Este nasceu **fechado**
+(`gerenciar_reposicao` — mesmo gate do de Solicitações de Compra), porque expõe custo aplicado
+por projeto, dado de gestão. **Descartado** nascer aberto "como os outros" — a B18 mostrou o
+custo de decidir exposição por inércia. Abrir para mais perfis é mudança de uma linha no
+registro de relatórios; decida se Gestor basta ou se PCP/Qualidade também deveriam ver.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -410,6 +463,25 @@ módulo desde sempre) — a etapa PRESERVOU os acessos como estavam de propósit
    config `notificacoes_worker_intervalo_min` é lida uma vez no boot (30 s depois de subir).
    O espaçamento das retentativas (backoff) muda na hora; o tique do robô, não.
 
+15. **(14) Re-vincular sobrescreve o vínculo — e a chegada do pedido ANTIGO não fecha mais a
+   solicitação.** Vincular a solicitação ao pedido 100 e depois ao pedido 200 apaga o vínculo
+   com o 100 sem histórico; se a nota do pedido 100 chegar, **nada fecha** (o fechamento olha o
+   vínculo atual). Quem re-vincula precisa saber que "desfez" o fechamento automático do pedido
+   anterior. É consequência declarada do desenho da B22(c).
+
+16. **(14) Estornar SÓ a perna de entrada de uma devolução-sucata infla o Consumido do
+   relatório Custo por projeto.** A devolução para sucata lança duas movimentações (entrada +
+   sucata). Cancelar apenas a entrada deixa a perna SUCATA viva — que conta como consumo do
+   projeto sem a devolução abatendo. O rodapé do relatório declara isso; a correção é cancelar
+   as duas pernas. (É o mesmo estado parcial do item 2 desta lista, agora com efeito no número
+   do relatório.)
+
+17. **(14) A devolução agora CARREGA o projeto da saída — e um relatório muda de leitura.**
+   Devolução de saída com projeto passa a nascer com o mesmo projeto/OS (antes nascia sem).
+   Efeito visível: devoluções novas aparecem no Custo por projeto abatendo o consumo — números
+   de "Devolvido" que antes ficavam em zero passam a aparecer. Nenhum dado antigo foi alterado:
+   devoluções lançadas **antes** desta etapa continuam sem projeto e não abatem nada.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -506,6 +578,19 @@ módulo desde sempre) — a etapa PRESERVOU os acessos como estavam de propósit
   reservado ainda está na prateleira, não está zerado. Escrito aqui porque é fácil "corrigir"
   para o disponível achando que é bug.
 
+- **(14) BOM/Engenharia, OP/Produção e centro de custo ficaram FORA — por medição, não por
+  pressa.** A Fase 0 da etapa mediu os vizinhos antes de prometer: **BOM não existe** em lugar
+  nenhum do sistema, e o módulo **MES existe sem uso real**. Integrar com isso seria construir
+  stub fingindo integração. A spec 22 registra cada item bloqueado **com a medição que o
+  bloqueou** — quando os módulos amadurecerem, a integração vira etapa própria.
+
+- **(14) RECEBIDA e CANCELADA não geram e-mail** — aparecem no painel de solicitações e na
+  auditoria. A fila de notificações da Etapa 12 está pronta para receber esses avisos (seria
+  uma classe nova de mensagem), mas ligar canal novo de e-mail é decisão sua, não default.
+
+- **(14) O fechamento automático não confere quantidade** — a primeira nota do pedido fecha a
+  solicitação (o desenho completo e o descartado estão na B22).
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -588,6 +673,15 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    resultado listando as quantidades; o painel de **sem permissão** logando com um usuário
    Almoxarife; os três campos novos em Configurações Gerais recusando `0`. O roteiro completo
    está no guia, seção da Etapa 11.
+
+9. **(14) Os acréscimos da Etapa 14 na mesma tela de Reposição.** **Nenhum navegador foi aberto
+   na entrega da Etapa 14** — mesma ressalva (os testes de tela são de comportamento). Falta
+   conferir: o botão **Cancelar** na aba de solicitações com o par confirmação → justificativa
+   funcionando de verdade (e o botão sumindo/trocando para "Cancelando..." durante a chamada);
+   o painel **Ver contexto** expandindo dentro da linha sem estourar a largura da tabela, com
+   os números formatados e o "Último custo de entrada" com data legível; e o painel
+   **reconsultando sozinho** depois de Gerar/Atualizar (o número tem de mudar na frente de
+   você, sem fechar e reabrir). O roteiro completo está no guia, seção da Etapa 14.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -695,6 +789,22 @@ commitado **apaga o trabalho** (o md5 pegou de novo) — restauração é sempre
 vezes nesta etapa o mutante precisou ser trocado por um mais forte antes de provar algo
 (o fallback do restore produzia o mesmo resultado; o par de checkboxes marcado simetricamente
 tornava a transposição invisível).
+
+**Fragilidades estruturais declaradas da Etapa 14 (medidas):** (1) **a subida do servidor tem
+uma corrida conhecida** — a preparação do banco no boot não é aguardada por quem depende dela;
+em produção o intervalo de 30 s esconde isso, mas os testes a enxergam como ruído raro de
+encerramento (uma leitura 120/121 em nove execuções, nunca reproduzida). Fica como **ticket**:
+a correção é estrutural (aguardar a preparação), não desta etapa. (2) **o custo do relatório
+Custo por projeto é o ATUAL, retroativo** — o livro de movimentações não guarda custo por
+movimento, então um período já fechado **muda de valor** quando chega nota nova; está escrito
+no rodapé do relatório, mas quem compara o número de meses fechados precisa saber. (3) **o
+"último custo de entrada" do contexto só enxerga recebimento por NF com valor** — entrada
+manual valorada por outro caminho não aparece na régua (o campo fica vazio ou desatualizado, e
+isso é a régua, não falha). (4) **as datas dos relatórios de consumo comparam o DIA em UTC** —
+padrão herdado de todos os relatórios; movimentação das 21h às 0h (Brasília) cai no dia
+seguinte do filtro. (5) **o teste-jornada da integração cobre o caminho feliz composto; os elos
+finos (cada recusa, cada borda) estão nas suítes unitárias** — declarado para ninguém achar que
+a jornada sozinha prova tudo.
 
 **Fragilidades estruturais declaradas da Etapa 13 (medidas):** (1) a varredura de fonte única
 de custo NÃO pega leitura de `custo_unitario` puro (só as duas famílias históricas) — quem
@@ -2325,6 +2435,85 @@ no painel inicial.
 - **Auditar exportações** — nenhuma consulta do módulo audita; se o cliente quiser log de
   egresso de planilha, é uma linha (letra B).
 
+## Etapa 14 — Integrações: o ciclo da compra fecha (2026-08-25)
+
+A Etapa 11 criou a solicitação de compra, mas ela nascia e **nunca morria**: não havia como
+cancelar um clique errado, e quando o material chegava pela nota fiscal a solicitação continuava
+"a caminho" até um prazo de 60 dias expirar sozinho. Agora o ciclo fecha de verdade: **a chegada
+da nota fiscal do pedido vinculado fecha a solicitação sozinha** (status RECEBIDA, com registro
+de auditoria), e **cancelar existe** — com justificativa obrigatória, que fica gravada. De
+brinde, quem decide compra ganhou um **painel de contexto por material** (disponível, reservado,
+consumo médio, último custo pago e as solicitações abertas daquele item, tudo num clique), e
+nasceu o relatório **Custo por projeto** (quanto cada projeto consumiu do estoque, com devoluções
+abatidas).
+
+A spec desta etapa sempre disse "depende da maturidade dos outros módulos" — e a etapa **começou
+medindo** em vez de presumindo: o módulo Compras está maduro (pedidos, itens, recebimento por NF)
+e foi integrado de verdade; **BOM/Engenharia não existe e Produção/MES existe sem uso** — essas
+integrações ficaram **bloqueadas por dependência, escritas como bloqueadas**, não como promessa.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Solicitação de compra não fechava nunca — só o horizonte de 60 dias a fazia parar de segurar a sugestão | **A nota fiscal do pedido vinculado fecha a solicitação sozinha** (RECEBIDA, com auditoria); a primeira nota fecha, mesmo entrega parcial |
+| Não existia cancelar (B14, aberta desde a Etapa 11) | **Botão Cancelar** na tela de Reposição, com justificativa obrigatória gravada na auditoria — **B14 resolvida** |
+| Vincular a pedido aceitava número de pedido inexistente (ficava "a caminho" de um fantasma) | Vincular **valida as duas pontas**: `Pedido de compra não encontrado` e solicitação finalizada recusada |
+| Vincular e "verificar mínimos" eram só do Administrador | Abertos para quem tem o perfil de reposição (Gestor/Compras) — **decisão D9, veja a letra B** |
+| "Verificar mínimos" criava solicitações sem dizer quem mandou | Cada solicitação criada por ele agora **audita o autor** |
+| Decidir compra sem contexto: a tela mostrava só a sugestão | **Ver contexto** abre painel com disponível/reservado/em terceiros, consumo médio, **último custo de entrada com data**, e as solicitações abertas do material |
+| Custo por projeto não existia | Relatório **Custo por projeto**: consumido, devolvido e líquido por projeto, com exportação XLSX |
+| Devolução de saída com projeto perdia o projeto | A devolução **herda o projeto/OS da saída original** (nas duas pernas, sucata incluída) — o "devolvido" do relatório fecha a conta |
+
+### As regras, com o cenário exato
+
+1. **A chegada da nota fecha a solicitação.** Vincule uma solicitação a um pedido de compra e
+   processe a nota fiscal desse pedido no recebimento: a solicitação vira **RECEBIDA** sozinha,
+   sai da lista de pendentes, e a auditoria registra o fechamento. Vale nos **dois** caminhos do
+   recebimento (com e sem aprovação prévia). A **primeira** nota fecha — entrega parcial de 5
+   num pedido de 20 já fecha a solicitação (o material que ainda falta volta a aparecer na
+   sugestão de reposição pela régua normal; veja a letra B).
+2. **Cancelar exige justificativa e ela fica gravada.** Na aba de solicitações, clique
+   **Cancelar**: a tela pergunta `Cancelar esta solicitação de compra? A justificativa ficará
+   registrada.` e depois pede `Justificativa do cancelamento:`. Justificativa vazia **não chama
+   o servidor**. Por API, sem justificativa a recusa é
+   `Justificativa obrigatória para cancelar a solicitação`.
+3. **Solicitação morta não ressuscita.** Cancele uma solicitação vinculada a um pedido e depois
+   processe a nota desse pedido: a solicitação **continua CANCELADA** (o fechamento automático
+   só toca as vinculadas vivas). Cancelar de novo responde
+   `Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser cancelada`; vincular de
+   novo, `Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser vinculada a um pedido`.
+4. **Vincular valida as duas pontas.** Vincular com número de pedido inexistente responde
+   `Pedido de compra não encontrado`; com id de solicitação inexistente,
+   `Solicitação não encontrada`.
+5. **O contexto abre num clique e não mente número.** Na aba de sugestões, **Ver contexto**
+   expande o painel do material: disponível, reservado, em terceiros, consumo médio diário na
+   janela configurada, **Último custo de entrada** (valor pago e a data da nota) e as
+   solicitações abertas. O painel usa cache — mas **Gerar solicitações e Atualizar invalidam o
+   cache na hora** (o painel aberto reconsulta sozinho, sem número velho).
+6. **Custo por projeto, com devolução abatendo.** Em Relatórios → Gestão → **Custo por projeto**:
+   uma linha por projeto com Consumido, Devolvido, Líquido e Movimentações, filtrável por
+   período. Saída de 20 com devolução de 8 no mesmo projeto = líquido 12. Perfil sem o gate de
+   reposição recebe `Sem permissão para este relatório` (o relatório **nasce protegido** —
+   letra B). A régua completa está escrita no rodapé do próprio relatório.
+7. **A devolução herda o projeto da saída.** Devolva uma saída que tinha projeto: a devolução
+   nasce com o mesmo projeto/OS (informar manualmente na devolução **ganha** da herança), nas
+   duas pernas — devolução para estoque e devolução para sucata.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **BOM/Engenharia e OP/Produção** — **medido**: BOM não existe no sistema e o módulo MES
+  existe sem uso real. Integrar com o que não existe seria stub fingindo feature; ficou
+  **bloqueado por dependência**, escrito assim na spec 22.
+- **Fechamento por quantidade** — a solicitação fecha na primeira nota do pedido, sem conferir
+  se a quantidade chegou inteira (aproximação declarada — letra B).
+- **Cancelar a solicitação não mexe no pedido de compra** — cancelar uma solicitação VINCULADA
+  não cancela nem avisa o pedido no módulo Compras (letra B).
+- **Sem e-mail novo** — RECEBIDA e CANCELADA aparecem no painel e na auditoria; nenhum aviso
+  novo entrou na fila de notificações (a fila está pronta, ligar é uma decisão à parte).
+- **Custo histórico por movimento** — o livro não guarda custo na movimentação; o relatório usa
+  o custo **atual** retroativamente (letra G, com a consequência escrita).
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -2334,8 +2523,8 @@ no painel inicial.
   sugestão, estoque parado e a tela para quem decide compra). As features 10, 11, 12, 13, 14,
   15 e 16 estão completas no que cada etapa se propôs; a **17 fica quase completa** (restos
   declarados na seção da 10b) e a **18 (reposição) fica entregue no que é do almoxarifado** —
-  o que falta dela é integração com o módulo Compras (fechar/cancelar solicitação no
-  recebimento, itens por material — letras **B14** e **D**).
+  a integração com o módulo Compras que faltava dela (fechar/cancelar solicitação no
+  recebimento) **foi entregue na Etapa 14**; dela, resta só "itens por material" (letra **D**).
 - **Etapa 13 entregue:** **relatórios e indicadores** (feature 21 no grosso) — tela de
   Relatórios dirigida por um registro único com proteção declarada por relatório, exportação
   XLSX com colunas curadas, indicadores gerenciais com réguas escritas e 3 cartões novos no
@@ -2346,12 +2535,16 @@ no painel inicial.
   default, ligar é decisão sua — B15), três dívidas antigas pagas (lembrete de ferramenta
   da 9b/B7, resumo de solicitações da 11, devolução parcial da 7) e três alertas novos
   (zerado, lote vencendo, remessa vencida), com a tela **Notificações** para Gestor/Admin.
-- **Próxima etapa:** **Etapa 14 — integrações** (feature 22: Engenharia/BOM, Produção/OP,
-  Compras, custos por projeto). ATENÇÃO: a spec dela sempre disse "depende da maturidade dos
-  outros módulos" — a Fase 0 da 14 começa MEDINDO se BOM/OP/Compras existem de verdade nos
-  módulos vizinhos; se não existirem, a 14 vira a fatia que der para integrar de verdade (ex.:
-  fechar solicitação de compra no recebimento — a ponta que a 11 deixou declarada) e o resto
-  fica escrito como bloqueado por dependência, não como promessa.
+- **Etapa 14 entregue:** **integrações — a fatia real** (feature 22 no que é integrável hoje) —
+  ciclo de vida da solicitação de compra fechado (RECEBIDA automática no recebimento da nota +
+  CANCELADA manual com justificativa, **resolvendo a B14**), vincular validando as duas pontas,
+  contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
+  de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
+  medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **⏸️ DESENVOLVIMENTO PARADO AQUI POR INSTRUÇÃO DO USUÁRIO** (2026-08-25, "termina essa e
+  pode dar uma parada"). A **Etapa 15 não foi iniciada** — o handoff para retomá-la está na
+  seção "Próxima tarefa detalhada" do plano da Etapa 14
+  (`docs/superpowers/plans/2026-08-24-almoxarifado-etapa14-integracoes.md`).
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;
@@ -2359,8 +2552,10 @@ no painel inicial.
      (seção da Etapa 8 no guia) — nada foi apagado, a tabela foi preservada de propósito;
   3. ~~saber que a conferência de inventário ajusta saldo fora da permissão de material de
      cliente~~ — **resolvido na Etapa 10**, item **C1**;
-  4. **nenhuma etapa da 8b até a 12 acrescenta consulta a esta lista** — todas só criam
-     colunas, índices e tabelas novas, sem tocar em dado existente. A 12 em particular: a
+  4. **nenhuma etapa da 8b até a 14 acrescenta consulta a esta lista** — todas só criam
+     colunas, índices e tabelas novas, sem tocar em dado existente (a 13 é só código; a 14
+     cria 4 colunas novas na tabela de solicitações, sem migrar dado — solicitação antiga
+     continua PENDENTE até alguém vinculá-la ou cancelá-la). A 12 em particular: a
      máquina do alerta de zerado se **semeia sozinha em silêncio** no primeiro contato com
      cada material (nada a rodar antes do deploy), e o e-mail de movimentação nasce
      **desligado** — ligar é o item B15;
@@ -2383,8 +2578,9 @@ no painel inicial.
   **B10**) e decidir se o inventário precisa do **fluxo formal de duas assinaturas** (item
   **B11**); reconhecer a **correção do primeiro contador** implementada no seu nome (item
   **B12**); reconhecer o **gate de compra sem o Almoxarife** e as réguas da reposição (item
-  **B13**) e decidir se o **cancelamento de solicitação de compra** entra na fila (item
-  **B14**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação, a
+  **B13**) e reconhecer o **cancelamento de solicitação de compra entregue** no seu nome (item
+  **B14**, resolvida na Etapa 14) e as **quatro decisões da Etapa 14** (itens **B21-B24** — a
+  mais importante é a **abertura de acesso B21**); e fazer as **verificações no navegador** — selos, PDF, modal de transformação, a
   tela de Sobras e Retalhos, a tela de Ferramentas, a Conferência de Estoque com os campos da
   10b e a tela nova de **Reposição e Compras** (item **F**).
 - **Pendências conhecidas (documentadas, não urgentes):** click-through manual das etapas

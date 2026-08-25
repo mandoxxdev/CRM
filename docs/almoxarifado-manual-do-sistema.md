@@ -566,6 +566,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Reservar | ● | ● | – | ● | ● | – | – |
 | Reservar para outra OS | ● | – | – | – | – | ● | – |
 | Inventariar | ● | ● | – | – | – | ● | – |
+| Gerenciar reposição e compras (sugestões, gerar/vincular/cancelar solicitação, verificar mínimos, contexto do material) | ● | – | ● | – | – | ● | – |
 | Configurar o módulo | ● | – | – | – | – | – | – |
 
 Cinco leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
@@ -1209,7 +1210,7 @@ Uma entrega **já devolvida por inteiro continua aparecendo na lista**, com sald
 
 > Uma devolução **recusada não deixa registro**. Isso não é detalhe: uma linha fantasma contaria no "já devolvido" e encolheria **permanentemente** o devolvível daquela entrega.
 
-### 12.4 Herança de lote
+### 12.4 Herança de lote — e de projeto/OS
 
 Em material com "Controle por lote":
 
@@ -1217,6 +1218,12 @@ Em material com "Controle por lote":
 - **Sem entrega citada** (avulsa), o lote é escolhido no seletor. Sem escolher, a tela barra: *"Material com controle por lote: informe de qual lote é a devolução"*.
 - Um lote informado à mão **ganha** do herdado.
 - Em material **sem** controle de lote, nada é herdado — herdar criaria linhas de saldo quebradas por lote que ninguém pediu.
+
+O **projeto e a OS** seguem a mesma lógica: com entrega citada, a devolução **herda o projeto
+e a OS da saída original** — é o que faz o relatório de custo por projeto (seção 21d) abater a
+devolução do projeto certo. Um projeto/OS informado à mão **ganha** da herança; devolução
+avulsa sem projeto informado fica sem projeto. A herança vale para **todos os destinos** da
+devolução, inclusive Sucata (nas duas movimentações que ela gera).
 
 ### 12.5 Reativação de série
 
@@ -2391,8 +2398,59 @@ As **quantidades são sempre as calculadas pelo servidor no momento do clique** 
 escolhe *quais* materiais, nunca *quanto* — e o painel de resultado lista cada solicitação
 criada com a quantidade real gravada. Cada criação fica registrada na auditoria. As
 solicitações aparecem na aba **Solicitações** (pendentes e vinculadas a pedido, com o motivo).
-**Não existe cancelamento de solicitação** — confira antes de confirmar; uma solicitação
-vinculada a pedido segue o fluxo do módulo Compras.
+
+Também existe a varredura **verificar mínimos**, que percorre os materiais próprios abaixo do
+mínimo e cria as solicitações que faltam — cada solicitação criada por ela registra na
+auditoria **quem disparou a varredura**.
+
+### 21b.3b O ciclo da solicitação — vincular, receber, cancelar
+
+Uma solicitação de compra passa por, no máximo, três estados:
+
+- **Pendente** — recém-criada. Enquanto pendente (ou vinculada), ela conta como "a caminho" na
+  matemática da sugestão, dentro do horizonte configurado.
+- **Vinculada** — alguém a amarrou a um **pedido de compra** do módulo Compras. O vínculo é
+  validado nas duas pontas: pedido inexistente é recusado com "Pedido de compra não
+  encontrado", e solicitação já finalizada, com "Solicitação já finalizada (RECEBIDA ou
+  CANCELADA) — não pode ser vinculada a um pedido". Vincular de novo a **outro** pedido
+  substitui o vínculo anterior — e a chegada do pedido antigo deixa de fechar esta
+  solicitação (só o vínculo atual fecha).
+- **Recebida** ou **Cancelada** — os dois estados finais. Uma solicitação finalizada não muda
+  mais de estado: não pode ser cancelada de novo, re-vinculada, nem "reaberta" pela chegada
+  de uma nota.
+
+**Recebida (automático).** Quando a **nota fiscal do pedido vinculado é processada** no
+recebimento, todas as solicitações vinculadas àquele pedido viram **Recebida**, com registro
+na auditoria. Isso acontece na **primeira** nota do pedido, mesmo que a entrega seja parcial —
+o sistema não confere quantidade nesse fechamento. Se a entrega parcial deixar o material
+ainda abaixo do ponto de reposição, ele simplesmente **volta a ser sugerido** pela régua
+normal.
+
+**Cancelada (manual).** Na aba **Solicitações**, o botão **Cancelar** pede confirmação —
+"Cancelar esta solicitação de compra? A justificativa ficará registrada." — e em seguida a
+**justificativa**, que é obrigatória: vazia, a tela nem chama o servidor; pela API, a recusa é
+"Justificativa obrigatória para cancelar a solicitação". A justificativa fica gravada na
+auditoria. Cancelar uma solicitação **vinculada** é permitido e **não altera o pedido de
+compra** — o pedido é documento do módulo Compras e continua o fluxo dele normalmente.
+
+### 21b.3c O contexto do material — decidir a compra sem sair da tela
+
+Na aba de sugestões, o botão **Ver contexto** expande, dentro da própria linha, um painel com
+o retrato do material:
+
+- **Disponível, Reservado e Em terceiros** — os mesmos números do motor de estoque;
+- **Consumo médio diário**, com a janela em dias usada no cálculo;
+- **Último custo de entrada** — o valor unitário da última linha de nota fiscal recebida com
+  valor para aquele material, com a data. Entradas lançadas por outros caminhos (ajuste,
+  devolução, entrada manual sem nota) **não** entram nessa régua — se o material nunca
+  recebeu nota com valor, o campo fica vazio;
+- **as solicitações de compra abertas** do material (pendentes e vinculadas), com quantidade
+  e data.
+
+O painel guarda o resultado em memória para não reconsultar a cada clique — mas **Gerar
+solicitações** e **Atualizar** descartam essa memória na hora: um painel aberto reconsulta
+sozinho e mostra os números novos. O botão vira **Ocultar contexto** enquanto o painel está
+aberto.
 
 ### 21b.4 Estoque Parado
 
@@ -2532,6 +2590,31 @@ permissão de um relatório simplesmente não o vê no menu; forçar o endereço
   de consumo (por OS, por período, mais consumidos) contam apenas as saídas diretas de
   produção; o indicador de giro conta tudo que debita o patrimônio (incluindo sucata e
   perda). Cada rodapé diz qual régua usa.
+
+### Custo por projeto
+
+No grupo **Gestão**, o relatório **Custo por projeto** (visível para quem tem a permissão de
+gerenciar reposição) mostra, por projeto e com filtro opcional de período: **Consumido**,
+**Devolvido**, **Líquido** (consumido menos devolvido) e o número de **Movimentações**. As
+regras, que o rodapé do próprio relatório também declara:
+
+- **Consumido** soma todas as saídas com projeto associado — incluindo perdas, sucatas e
+  ajustes negativos vinculados a projeto. **Devolvido** soma as devoluções; a devolução ao
+  cliente, apesar do nome, é uma **saída** e conta no consumido.
+- **A devolução herda o projeto da saída original.** Ao devolver citando a entrega, o projeto
+  e a OS da saída vêm junto automaticamente (informar outro projeto no formulário da
+  devolução prevalece sobre a herança). Vale também na devolução para sucata, nas duas
+  movimentações que ela gera.
+- **O custo aplicado é o custo atual do material, retroativo.** O extrato de movimentações não
+  guarda o custo de cada movimento; quando chega uma nota nova que muda o custo médio, o
+  valor de períodos já consultados **muda junto**. Quem fecha número de mês com este
+  relatório precisa saber disso.
+- Materiais de clientes ficam fora (o patrimônio é deles), e movimentação sem projeto também —
+  o total geral de consumo do estoque é o indicador de **giro**, que usa a mesma régua mas
+  sem o recorte por projeto.
+- As datas do filtro comparam o **dia em horário universal (UTC)** — padrão de todos os
+  relatórios de consumo; um lançamento feito entre 21h e meia-noite (horário de Brasília) cai
+  no dia seguinte do filtro.
 
 ### Indicadores gerenciais
 

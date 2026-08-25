@@ -293,11 +293,77 @@ solicitação → volta também → relatório custo-por-projeto reflete as saí
 contexto-material mostra o último custo da entrada da NF. Sabotagem: gancho do recebimento
 neutralizado → elo da RECEBIDA cai. Suíte completa (122/122).
 
+- [x] Feita (`806b7bd`) — jornada 1/1 contínua, com uma **divergência deliberada do previsto**:
+  a compra é **PARCIAL** (pedido entrega 5 de 20) para provar de uma vez a aproximação D2 — a
+  solicitação fecha RECEBIDA na primeira nota e o material **volta à sugestão pela falta
+  residual**; o custo lido no relatório é o `custo_medio` que a PRÓPRIA NF da jornada gravou
+  (nada semeado à mão). Suíte 123/123 (não 122 — a Task 3 já tinha somado um arquivo a mais
+  que o previsto). Sabotagem do gancho: só o elo da RECEBIDA + a unidade da T1 caíram
+  (121/123, cirúrgico). RULING registrado no ledger: test-only sem revisor dedicado
+  (precedente E12/E13); a revisão final da Fase 5 recebeu a ênfase.
+
 ### Task 6: Fechar a etapa
-- [ ] `fechar-etapa` completa; spec 22 marcada item a item com os BLOQUEADOS dizendo a
-  medição (BOM inexistente; MES sem uso); B14 marcada RESOLVIDA nas novidades; letra B nova
-  (gate do custo-por-projeto nasce fechado; cancelar VINCULADO não mexe no pedido do core);
-  retro de 4 números.
+- [x] Feita (2026-08-25) — `fechar-etapa` completa: novidades (seção da etapa + visão geral
+  atualizada até a 14, que estava parada na 11; B14 marcada RESOLVIDA; B21-B24 novas com o
+  descartado — B21 é o destaque D9; C15-C17; letra D com os bloqueados medidos; F9; bloco G
+  da etapa com o ticket do initSchema); spec 22 reescrita com hash por item, bloqueados
+  dizendo a medição e a correção declarada do "atualizado a cada saída" → computado do livro;
+  mapa de specs (linha da 22 → 🟡, header com pausa, critério de aceite "custo por projeto"
+  → [~]); guia (header com a pausa + roteiro da Etapa 14); manual do sistema (seções de
+  reposição e relatórios); retro de 4 números abaixo. Verificação medida em 2026-08-25:
+  `test:api` 123/123, `test:almoxarifado` 42/0, `test:validation` 4/0, `test:safealter` 3/0,
+  `test:sqlite` 3/0, client 487/487 (33 suítes), build `CI=true` limpo.
+
+## Retro da etapa (4 números, medidos)
+
+1. **Rodadas de correção até verde:** 5 fix-rounds no total (1 por task revisada — T1
+   `7afa90e`, T2 `14feaf8`, T3 `6e8c36c`, T4 `fac3f11` — + 1 da revisão final `2de7944`).
+   Nenhum teste falhou 3 rodadas seguidas; nenhuma task precisou de segunda rodada.
+2. **Achados de revisão — reais vs. ruído:** Fase 2: 5 Critical + 6 Important, **0 ruído**
+   (destaque: RN-04 era inimplementável como escrita — o livro não tem custo — e o gate real
+   era outro). Revisões de task: todos os achados reproduzidos antes de corrigir (o pior: o
+   cache do contexto que nunca invalidava, bug vivo na T4). Fase 5: 2 lentes, ambas
+   Needs-fix-round leve, **0 ruído**, e as duas **convergiram independentes** no mesmo buraco
+   (CANCELADA-não-ressuscita sem teste) — sinal de achado real.
+3. **Paralelismo:** 1 galho real em worktree (T4, front) em paralelo com o tronco T2/T3 — sem
+   retrabalho de merge (shape do mock conferido campo a campo contra o servidor no fechamento
+   da T2). A jornada (T5) rodou na árvore principal por ser test-only. O tronco 1-2-3 foi
+   sequencial de propósito (os três tocam `extended.js`).
+4. **Defeito que escapou do fechamento anterior (E13), descoberto nesta etapa:** o título de
+   um teste da E13 mentia o cenário (M-3 da revisão da T3, corrigido dizendo) e os counts de
+   registro 18→19/-2→-3 precisaram de emenda — ambos custo baixo. Desta etapa, preencher na
+   próxima: nada descoberto até o fechamento.
+   **Incidentes de harness (para a média histórica):** 0 âncoras de sed não-únicas nesta
+   etapa (a disciplina do `grep -cF == 1` antes de aplicar segurou), md5 limpo em todas as
+   sabotagens; 1 intermitência de teardown observada uma vez (120/121) e não reproduzida em
+   8 execuções — virou o ticket do initSchema (letra E do ledger / bloco G das novidades).
+
+## Próxima tarefa detalhada — Etapa 15 (Mobilidade) ⏸️ NÃO INICIADA
+
+**O desenvolvimento foi PAUSADO aqui por instrução explícita do usuário (2026-08-25, "termina
+essa e pode dar uma parada").** Nada da Etapa 15 foi começado; este bloco é o handoff para a
+sessão que retomar.
+
+- **Escopo da spec:** Fase 4 do planejamento mestre — código de barras, coletores, app móvel,
+  assinatura digital (`specs/modulo-almoxarifado/README.md`, seção "Etapa 15").
+- **Fase 0 obrigatória (lição das etapas 13/14 — medir antes de prometer):** o QR das
+  etiquetas (6c) já aponta para telas do sistema; medir o que "mobilidade" significa aqui de
+  verdade (a tela responsiva já resolve? existe coletor físico no galpão? qual hardware?)
+  antes de desenhar. Não há NENHUMA infraestrutura de app móvel no repo — provável que a
+  etapa vire "fluxos de balcão otimizados para celular + leitura de QR pela câmera" em vez de
+  app nativo. Validar com o usuário ANTES de abrir o design (não é decisão reversível de
+  madrugada: é escopo).
+- **O que está pronto e a 15 não reabre:** etiquetas QR (6c) com URLs que abrem a tela certa
+  filtrada; autorização em duas camadas estável; `reportRegistry` para qualquer relatório
+  novo; fila de notificações (12) para qualquer aviso novo; fontes únicas
+  (`disponivelSql`/`custoUnitarioSql`/`consumoSql`/`movementTypes` com
+  TIPOS_SAIDA/TIPOS_ENTRADA/TIPOS_DEVOLUCAO).
+- **Tickets abertos que a próxima sessão herda (letra E do ledger da E14):** initSchema de
+  `extended.js` sem await (corrida pré-existente, ruído raro de teardown nos testes);
+  estado parcial só-por-API da devolução-sucata; meia-sucata estornada inflando o consumido
+  do custo-por-projeto (declarado no rodapé do relatório).
+- **Decisões B em aberto esperando o usuário:** B5, B6, B8, B9, B11, B12, B13, B15-B17,
+  B18-B20, **B21-B24** (as da E14 — B21 é abertura de gate já em vigor).
 
 ## Self-review do plano (feito na escrita)
 
