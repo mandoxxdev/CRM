@@ -133,6 +133,41 @@ const SUGESTOES_FORNECEDOR_DOIS_ITENS = {
   resumo: { materiais_sugeridos: 2, valor_total: 300, riscos_parada: 0 },
 };
 
+// Etapa 14, Task 4 (RN-04) — fixture do contexto do comprador contra o shape CONGELADO do
+// design: material/disponivel/reservado/em_terceiros/consumo_medio_diario/janela_dias/
+// ultimo_custo_entrada{valor,data}|null/solicitacoes_abertas[]/proprietario_cliente|null.
+// Numeros TODOS distintos entre si (pega troca de celula) e da fixture de sugestoes (pega
+// celula errada lendo o item da tabela em vez do payload do contexto).
+const CONTEXTO_MATERIAL_10 = {
+  material: { id: 10, codigo: 'ALM-0010', nome: 'Chapa 3mm', unidade: 'PC' },
+  disponivel: 12,
+  reservado: 3,
+  em_terceiros: 7,
+  consumo_medio_diario: 0.75,
+  janela_dias: 60,
+  ultimo_custo_entrada: { valor: 15.5, data: '2026-08-10 10:00:00' },
+  solicitacoes_abertas: [
+    { id: 501, status: 'PENDENTE', quantidade: 8, pedido_compra_id: null, created_at: '2026-08-19 09:00:00' },
+    { id: 502, status: 'VINCULADO', quantidade: 22, pedido_compra_id: 900, created_at: '2026-08-15 11:30:00' },
+  ],
+  proprietario_cliente: null,
+};
+
+// item 20: ultimo_custo_entrada null (entrada MANUAL sem NF nunca aconteceu ou nao ha
+// nenhuma) → '—'; material de cliente (proprietario_cliente presente, decisao I5 da Fase 2:
+// 200 com os dados, nunca 404); solicitacoes_abertas vazia por construcao.
+const CONTEXTO_MATERIAL_20 = {
+  material: { id: 20, codigo: 'ALM-0020', nome: 'Perfil L', unidade: 'PC' },
+  disponivel: 0,
+  reservado: 1,
+  em_terceiros: 4,
+  consumo_medio_diario: 1.25,
+  janela_dias: 60,
+  ultimo_custo_entrada: null,
+  solicitacoes_abertas: [],
+  proprietario_cliente: { id: 88, razao_social: 'Cliente Teste Almoxarifado LTDA' },
+};
+
 let container; let root;
 
 const mockarApi = (overrides = {}) => {
@@ -157,6 +192,9 @@ beforeEach(() => {
   api.post.mockResolvedValue({ data: { criadas: [{ material_id: 10, solicitacao_id: 99, quantidade: 16 }], puladas: [] } });
   // handleGerar agora confirma antes do POST — default true, testes de cancelamento sobrescrevem.
   window.confirm = jest.fn(() => true);
+  // Etapa 14, Task 4 (RN-02) — justificativa default valida; testes de cancelamento de
+  // solicitacao sobrescrevem para o caso vazio.
+  window.prompt = jest.fn(() => 'Pedido duplicado, fornecedor errado');
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -578,5 +616,229 @@ describe('ReposicaoAlmoxarifado — estados vazios', () => {
 
     await clicar(botao('Solicitações'));
     expect(texto()).not.toMatch(/undefined|NaN/);
+  });
+});
+
+// Etapa 14, Task 4 (RN-02, RN-06) — botao Cancelar por linha na aba Solicitacoes, contra o
+// contrato CONGELADO do design: POST /compras/solicitacoes/:id/cancelar { motivo } → 200
+// { success, status: 'CANCELADA' }; 400 sem motivo; 404 id inexistente; 400 terminal. O
+// endpoint E REAL (Task 1 ja aterrissou, commit 110d8ce) — server/routes/almoxarifado/
+// extended.js:1096.
+describe('ReposicaoAlmoxarifado — aba Solicitações — cancelar', () => {
+  test('badges: PENDENTE usa almox-badge-ajuste, VINCULADO usa almox-badge-ok', async () => {
+    await renderizar();
+    await clicar(botao('Solicitações'));
+
+    const linhaPendente = linhaMaterial('ALM-0010'); // status PENDENTE na fixture
+    const linhaVinculado = linhaMaterial('ALM-0020'); // status VINCULADO na fixture
+    expect(linhaPendente.querySelector('.almox-badge-ajuste')).toBeTruthy();
+    expect(linhaPendente.querySelector('.almox-badge-ok')).toBeNull();
+    expect(linhaVinculado.querySelector('.almox-badge-ok')).toBeTruthy();
+    expect(linhaVinculado.querySelector('.almox-badge-ajuste')).toBeNull();
+  });
+
+  test('cancelar: confirma com o literal do design, chama o POST certo com o motivo e recarrega', async () => {
+    await renderizar();
+    await clicar(botao('Solicitações'));
+    api.get.mockClear();
+    api.post.mockResolvedValueOnce({ data: { success: true, status: 'CANCELADA' } });
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Cancelar', linha));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Cancelar esta solicitação de compra? A justificativa ficará registrada.',
+    );
+    expect(window.prompt).toHaveBeenCalledTimes(1);
+    expect(api.post).toHaveBeenCalledWith(
+      '/almoxarifado/compras/solicitacoes/1/cancelar',
+      { motivo: 'Pedido duplicado, fornecedor errado' },
+    );
+    expect(toast.success).toHaveBeenCalledWith('Solicitação cancelada');
+    // Recarrega a lista (reloadSolic incrementa e a rota e chamada de novo).
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/relatorios/solicitacoes-compra');
+  });
+
+  test('cancelar: confirm recusado nao chama prompt nem a API', async () => {
+    window.confirm = jest.fn(() => false);
+    await renderizar();
+    await clicar(botao('Solicitações'));
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Cancelar', linha));
+
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(window.prompt).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('cancelar: justificativa vazia (so espaco) nao chama a API', async () => {
+    window.prompt = jest.fn(() => '   ');
+    await renderizar();
+    await clicar(botao('Solicitações'));
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Cancelar', linha));
+
+    expect(window.confirm).toHaveBeenCalledTimes(1);
+    expect(window.prompt).toHaveBeenCalledTimes(1);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Justificativa obrigatória para cancelar a solicitação');
+  });
+
+  test('cancelar: justificativa nula (prompt cancelado) nao chama a API', async () => {
+    window.prompt = jest.fn(() => null);
+    await renderizar();
+    await clicar(botao('Solicitações'));
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Cancelar', linha));
+
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('cancelar: erro 400 do servidor (terminal) mostra o literal exato no toast', async () => {
+    await renderizar();
+    await clicar(botao('Solicitações'));
+    api.post.mockRejectedValueOnce({
+      response: { status: 400, data: { error: 'Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser cancelada' } },
+    });
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Cancelar', linha));
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser cancelada',
+    );
+  });
+
+  test('cancelar: erro 404 do servidor mostra o literal exato no toast', async () => {
+    await renderizar();
+    await clicar(botao('Solicitações'));
+    api.post.mockRejectedValueOnce({
+      response: { status: 404, data: { error: 'Solicitação não encontrada' } },
+    });
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Cancelar', linha));
+
+    expect(toast.error).toHaveBeenCalledWith('Solicitação não encontrada');
+  });
+
+  test('cancelar: gateado por gerenciar_reposicao — sem a permissao nao confirma nem chama a API', async () => {
+    mockPode = () => false;
+    await renderizar();
+    await clicar(botao('Solicitações'));
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Cancelar', linha));
+
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('cancelar: botao da linha fica desabilitado durante a chamada (defesa contra duplo clique)', async () => {
+    await renderizar();
+    await clicar(botao('Solicitações'));
+    let liberar;
+    api.post.mockImplementation(() => new Promise((resolve) => { liberar = resolve; }));
+
+    const linha = linhaMaterial('ALM-0010');
+    const btn = linha.querySelector('.btn-almox-danger');
+    expect(btn.disabled).toBe(false);
+    await act(async () => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+
+    // O texto vira "Cancelando..." em voo — a busca por texto "Cancelar" nao acha mais este
+    // botao de proposito (prova de que o rotulo mudou); pega pela classe.
+    const btnEmVoo = linhaMaterial('ALM-0010').querySelector('.btn-almox-danger');
+    expect(btnEmVoo.disabled).toBe(true);
+    expect(btnEmVoo.textContent).toContain('Cancelando');
+
+    await act(async () => { liberar({ data: { success: true, status: 'CANCELADA' } }); await Promise.resolve(); });
+  });
+});
+
+// Etapa 14, Task 4 (RN-04, RN-06) — painel expansivel "Contexto do material" na aba
+// Sugestoes. ATENCAO (contrato do galho): o endpoint GET /compras/contexto-material/:id
+// AINDA NAO EXISTE no servidor no momento desta task (Task 2 do tronco, em andamento) — os
+// testes abaixo mockam a fronteira HTTP com o shape CONGELADO do design (RN-04); quando a
+// Task 2 aterrissar, o realinhamento e so se o shape divergir do combinado.
+describe('ReposicaoAlmoxarifado — aba Sugestões — contexto do material', () => {
+  const mockarContexto = (respostas) => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/reposicao/sugestoes') {
+        return Promise.resolve({ data: SUGESTOES_DUAS_FORNECEDORES });
+      }
+      const m = url.match(/^\/almoxarifado\/compras\/contexto-material\/(\d+)$/);
+      if (m) {
+        const resp = respostas[Number(m[1])];
+        if (!resp) return Promise.resolve({ data: [] });
+        if (resp.erro) return Promise.reject(resp.erro);
+        return Promise.resolve({ data: resp.dados });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  };
+
+  test('abre o painel na URL exata do contrato e renderiza as celulas exatas do contexto', async () => {
+    mockarContexto({ 10: { dados: CONTEXTO_MATERIAL_10 } });
+    await renderizar();
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Ver contexto', linha));
+
+    // URL EXATA do contrato congelado (RN-04) — sabotagem: trocar o id ou o caminho cai aqui.
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/compras/contexto-material/10');
+
+    expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('12');
+    expect(container.querySelector('[data-testid="contexto-reservado"]').textContent).toBe('3');
+    expect(container.querySelector('[data-testid="contexto-em-terceiros"]').textContent).toBe('7');
+    expect(container.querySelector('[data-testid="contexto-consumo"]').textContent).toBe('0,75/dia');
+    expect(texto()).toContain('Média dos últimos 60 dias');
+    const custoFmt = Number(15.5).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    expect(container.querySelector('[data-testid="contexto-ultimo-custo"]').textContent).toBe(`${custoFmt} em 10/08/26`);
+    const listaAbertas = container.querySelector('[data-testid="contexto-solicitacoes-abertas"]');
+    expect(listaAbertas.textContent).toContain('#501');
+    expect(listaAbertas.textContent).toContain('PENDENTE');
+    expect(listaAbertas.textContent).toContain('#502');
+    expect(listaAbertas.textContent).toContain('pedido #900');
+    expect(container.querySelector('[data-testid="contexto-proprietario-cliente"]')).toBeNull();
+
+    // Clicar de novo fecha o painel (toggle).
+    await clicar(botao('Ocultar contexto', linhaMaterial('ALM-0010')));
+    expect(container.querySelector('[data-testid="contexto-disponivel"]')).toBeNull();
+  });
+
+  test('ultimo_custo_entrada null mostra traço; proprietario_cliente presente e exibido (decisao I5: 200, nunca 404)', async () => {
+    mockarContexto({ 20: { dados: CONTEXTO_MATERIAL_20 } });
+    await renderizar();
+
+    const linha = linhaMaterial('ALM-0020');
+    await clicar(botao('Ver contexto', linha));
+
+    expect(container.querySelector('[data-testid="contexto-ultimo-custo"]').textContent).toBe('—');
+    expect(container.querySelector('[data-testid="contexto-proprietario-cliente"]').textContent).toBe(
+      'Cliente Teste Almoxarifado LTDA',
+    );
+    // solicitacoes_abertas vazia por construcao quando ha proprietario_cliente (I5).
+    expect(container.querySelector('[data-testid="contexto-solicitacoes-abertas"]').textContent).toBe('Nenhuma');
+  });
+
+  test('erro ao carregar o contexto mostra painel localizado (nunca silencio) com retry', async () => {
+    mockarContexto({ 10: { erro: { response: { status: 404, data: { error: 'Material não encontrado' } } } } });
+    await renderizar();
+
+    const linha = linhaMaterial('ALM-0010');
+    await clicar(botao('Ver contexto', linha));
+
+    expect(toast.error).toHaveBeenCalledWith('Material não encontrado');
+    expect(texto()).toContain('Dados indisponíveis no momento');
+    expect(texto()).toContain('Material não encontrado');
+    expect(container.querySelector('[data-testid="contexto-disponivel"]')).toBeNull();
+
+    // Retry: refaz a chamada e desta vez sucede.
+    mockarContexto({ 10: { dados: CONTEXTO_MATERIAL_10 } });
+    await clicar(botao('Tentar novamente', linhaMaterial('ALM-0010').nextElementSibling));
+    expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('12');
   });
 });
