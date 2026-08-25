@@ -14,11 +14,31 @@ BOM não existe; MES sem uso).
 
 ## Global Constraints
 
-- Literais congelados (RN-02/04): 400 `Justificativa obrigatória para cancelar a solicitação`;
-  404 `Solicitação não encontrada`; 400
-  `Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser cancelada`; 404
-  `Material não encontrado`. Confirmar na Fase 2 os literais REAIS de vincular (a guarda de
-  terminal nova em `vincularPedidoCompra` precisa de literal próprio, congelar na revisão).
+- Literais congelados (RN-02/04 + Fase 2): 400 `Justificativa obrigatória para cancelar a
+  solicitação`; 404 `Solicitação não encontrada` (serve cancelar E vincular — um literal só);
+  400 `Solicitação já finalizada (RECEBIDA ou CANCELADA) — não pode ser cancelada`; 404
+  `Material não encontrado`; 400 do vincular com pedido inexistente:
+  `Pedido de compra não encontrado` (REUSADO de receiptService.criarRecebimento:76); literal
+  do vincular-em-terminal congelado na Task 1 (família do de cancelar).
+- **GATE (Fase 2, C2 — medido):** `/vincular-pedido` e `/verificar-minimos` estão em
+  `requirePermission('configurar')` (ADMIN-only) — a Task 1 MUDA os dois para
+  `gerenciar_reposicao` (D9; abertura de gate, letra B). Regressão explícita: COMPRAS passava
+  403 no vincular, passa 200.
+- **MOLDE DO HARNESS (Fase 2, C5 — o grep que o plano original mandava fazer volta VAZIO):**
+  `pedidos_compra` NÃO existe no testApp e NENHUM teste de tests/api/ a cria; stub
+  obrigatório: `CREATE TABLE IF NOT EXISTS pedidos_compra (id INTEGER PRIMARY KEY
+  AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER, valor_total REAL DEFAULT 0,
+  status TEXT, data_pedido DATE, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`.
+  `itens_pedido_compra` JÁ vem do initSchema — não recriar. `projetos`: stub molde
+  clientePosicaoTipos:99 (o JOIN só precisa de id/nome). `contas_pagar`: sem stub
+  (gerarContaPagar checa sqlite_master e devolve null — medido). Caminho MÍNIMO real até
+  PROCESSADO (medido): criarRecebimento({tipo_recebimento:'PEDIDO_COMPRA', pedido_compra_id})
+  → avancarWorkflow('encaminhar_compras') → avancarWorkflow('finalizar_compras') →
+  salvarDadosFiscal({nota_fiscal, data_emissao_nf, data_entrada_nf, valor_total_nota}) →
+  processarNota. Recusas medidas: cedo → 400 `Processe a nota somente após entrada no
+  faturamento`; sem dados fiscais → 400 `Preencha antes de processar: número da nota fiscal,
+  data de emissão da nota, data de entrada da nota, valor total da nota`. Pedido sem
+  fornecedor exige fornecedor_cnpj/nome no salvarDadosFiscal.
 - Fontes únicas SEMPRE: `disponivelSql`, `consumoSql`, `custoUnitarioSql`/`valorEstoqueSql`,
   `movementTypes`. A varredura de custo NÃO pega `custo_unitario` puro (lição E13) — fixture
   numérica de custo duplo OBRIGATÓRIA no relatório e no contexto.
@@ -59,24 +79,28 @@ BOM não existe; MES sem uso).
 - [ ] Step 1: teste vermelho — (1) cancelar PENDENTE: 200, status CANCELADA, colunas
   preenchidas, auditoria com objeto; sem motivo → 400 literal; id inexistente → 404 literal;
   (2) cancelar VINCULADO: 200 (o vínculo é informativo — o pedido do core NÃO muda,
-  declarado); (3) cancelar CANCELADA/RECEBIDA → 400 literal; vincular em terminal → 400 (o
-  literal nasce aqui — congelar no teste); (4) gates par positivo+negativo (ALMOXARIFE 403,
-  COMPRAS 200 — `gerenciar_reposicao` tem COMPRAS); (5) RECEBIDA automática: criar
-  solicitação → vincular a um pedido de compra REAL (INSERT em `pedidos_compra` no harness,
-  molde dos testes de recebimento existentes — descobrir com grep `pedidos_compra`
-  tests/api/) → criar recebimento com `pedido_compra_id` → conduzir o workflow REAL até
-  `processarNota` (usar o caminho dos testes de recebimento existentes) → solicitação
-  RECEBIDA com `recebida_em`, auditada; solicitação PENDENTE (não vinculada) do MESMO
-  material NÃO fecha; (6) gancho não derruba: monkeypatch de `fecharSolicitacoesDoPedido`
-  lançando → `processarNota` ainda conclui PROCESSADO (padrão do teste RN-01 da E12);
-  (7) posição: após RECEBIDA, o material com falta volta à sugestão (chamar
-  `calcularSugestoes` e ver o material) — o mesmo após CANCELADA.
+  declarado); (3) cancelar CANCELADA/RECEBIDA → 400 literal; vincular valida as DUAS pontas
+  (RN-01b, Fase 2 C3 — hoje solicitação E pedido inexistentes respondem 200): inexistente →
+  404 `Solicitação não encontrada`; terminal → 400 (literal nasce aqui); pedido inexistente →
+  400 `Pedido de compra não encontrado`; (4) gates par positivo+negativo nas TRÊS rotas do
+  pipeline (cancelar, vincular-pedido, verificar-minimos): ALMOXARIFE 403, COMPRAS 200 — e a
+  regressão explícita de que vincular deixou de ser ADMIN-only (D9); (5) RECEBIDA automática
+  pelo caminho MÍNIMO real do Global Constraints (stub de pedidos_compra dali) → solicitação
+  RECEBIDA com `recebida_em`, auditada; PENDENTE não vinculada do MESMO material NÃO fecha;
+  (5b) recebimento de pedido aprovado por `POST /recebimentos/:id/aprovar` (SEM processarNota
+  — Fase 2 C4, medido) TAMBÉM fecha; segundo recebimento do mesmo pedido: 0 novas auditorias
+  (I1 — o AND status='VINCULADO' é o dedupe); (6) gancho não derruba: monkeypatch de
+  `fecharSolicitacoesDoPedido` lançando → processarNota conclui PROCESSADO E aprovar conclui
+  APROVADO; (7) posição: após RECEBIDA o material com falta volta à sugestão
+  (`calcularSugestoes`) — idem após CANCELADA.
 - [ ] Step 2: implementação.
 - [ ] Step 3: verde + regressão (reposicao*, recebimento*, comprasMinimos) + suíte (119→120).
-- [ ] Step 4: controles positivos — (i) gancho movido para ANTES do PROCESSADO (falha de
-  processamento fecharia solicitação) → teste 5/6 cai; (ii) WHERE do fechar sem
-  `status='VINCULADO'` (fecharia PENDENTE alheia) → teste 5 cai; (iii) try/catch do gancho
-  removido → teste 6 cai; (iv) guarda de terminal do cancelar removida → teste 3 cai.
+- [ ] Step 4: controles positivos — (i) gancho movido para ANTES do PROCESSADO → teste 5/6
+  cai; (ii) WHERE sem `status='VINCULADO'` → teste 5 cai; (iii) try/catch removido → teste 6
+  cai; (iv) guarda de terminal do cancelar removida → teste 3 cai; (v) checagem de existência
+  do pedido removida → pedido fantasma cai (C3); (vi) gancho removido de `aprovarRecebimento`
+  → teste 5b cai (C4); (vii) gancho TAMBÉM no ramo delegante de aprovar → auditoria única
+  cai (I6).
 - [ ] Step 5: suíte + commit.
 
 ### Task 2: Contexto do comprador (RN-04)
@@ -85,15 +109,16 @@ BOM não existe; MES sem uso).
 `server/routes/almoxarifado/extended.js` (rota). **Test:**
 `server/tests/api/compraContextoMaterial.api.test.js` (novo).
 
-- [ ] Step 1: teste vermelho — shape completo com números EXATOS pelo motor real (entradas
-  com custo distinto do cadastro → `ultimo_custo_entrada` é o do LIVRO, não o `custo_medio`
-  nem o `custo_unitario` do cadastro — fixture de custo duplo); consumo pela janela da config
-  (mudar a config muda `janela_dias` e o consumo); solicitações abertas SÓ
-  PENDENTE/VINCULADO (uma CANCELADA na fixture fica fora); entrada CANCELADA não é o último
-  custo; material de cliente responde normalmente? — DECIDIR: contexto de material de
-  cliente é 404 ou dados? (comprador não compra material de cliente → material com dono
-  responde 404 `Material não encontrado`? NÃO — o material existe; decidir 200 com os dados
-  e SEM sugestão implícita; registrar). Gates par positivo+negativo; 404 literal.
+- [ ] Step 1: teste vermelho — shape completo com números EXATOS pelo motor real. O
+  `ultimo_custo_entrada` usa a régua EMENDADA da RN-04 (Fase 2, C1 — o livro NÃO TEM coluna
+  de custo; o par movimentação×item-de-recebimento é a fonte, com `mv.id DESC` no desempate
+  senão o teste é intermitente); NUNCA `custo_medio` nem `materiais.custo_unitario` (não
+  reverte no cancelamento — medido); consumo pela janela da config (mudar a config muda
+  `janela_dias` e o consumo); solicitações abertas SÓ PENDENTE/VINCULADO (CANCELADA na
+  fixture fica fora); entrada CANCELADA não é o último custo (mv.cancelado=0 no par);
+  material de cliente → 200 com `proprietario_cliente: {id, razao_social}` e
+  `solicitacoes_abertas: []` (DECISÃO da Fase 2, I5 — 404 mentiria); id inexistente → 404
+  literal; gates par positivo+negativo.
 - [ ] Step 2-5: implementação, verde+regressão, controles ((i) último custo lendo
   `custo_medio` → fixture cai; (ii) solicitações incluindo terminais → cai), suíte (120→121),
   commit.
@@ -102,15 +127,23 @@ BOM não existe; MES sem uso).
 
 **Files:** Modify `server/services/almoxarifado/reportService.js`,
 `server/services/almoxarifado/reportRegistry.js`, `server/routes/almoxarifado/extended.js`
-(fn no mapa). **Test:** `server/tests/api/relatorioCustoProjeto.api.test.js` (novo).
+(fn no mapa), `server/services/almoxarifado/movementTypes.js` (**TIPOS_DEVOLUCAO novo — I3:
+['ENTRADA_DEVOLUCAO','DEVOLUCAO']; DEVOLUCAO_CLIENTE é SAÍDA e NÃO entra**),
+`server/services/almoxarifado/returnService.js` (**herança de projeto_id/os_id da saída
+citada quando o chamador não informa — I2, molde da herança de lote em :80; sem isso
+`devolvido` é estruturalmente zero em produção, medido**).
+**Test:** `server/tests/api/relatorioCustoProjeto.api.test.js` (novo). Regressão
+obrigatória: devolucao*/requisicaoDevolucao* (a herança só preenche colunas antes nulas).
 
-- [ ] Step 1: teste vermelho — cenário pelo motor real com DOIS projetos (INSERT em
-  `projetos` do core — stub no harness, molde clientePosicaoTipos): saídas com projeto_id e
-  custos distintos (fixture de custo duplo), devolução reduzindo o líquido, movimentação SEM
-  projeto fora, material de CLIENTE fora, movimentação CANCELADA fora, saída de OUTRO
-  projeto não vaza (asserts exatos por projeto); filtro data_inicio corta; projeto não
-  cadastrado → rótulo `Projeto #<id>`; gate 403 par +/-; export XLSX com cabeçalho por
-  deepStrictEqual; a varredura do registro (E13) passa com a entrada nova.
+- [ ] Step 1: teste vermelho — cenário pelo motor real com DOIS projetos (stub `projetos`):
+  fixture de custo por VIAS DIFERENTES (Fase 2, I4 — duas saídas do MESMO material têm sempre
+  o mesmo custo e não provam nada): M1 custo_medio=8/custo_unitario=99 → vale 8; M2
+  custo_medio=0/custo_unitario=5 → vale 5, asserts exatos; devolução reduzindo o líquido PELA
+  ROTA REAL com o payload do cliente (I2 — fixture SQL fingiria que funciona); tipos via
+  TIPOS_DEVOLUCAO novo; movimentação SEM projeto fora, CLIENTE fora, CANCELADA fora, outro
+  projeto não vaza; data_inicio corta; projeto não cadastrado → `Projeto #<id>`; gate 403 par
+  +/-; export com cabeçalho deepStrictEqual; a varredura do registro (E13) passa; a NOTA usa
+  o texto pronto da Fase 2 (custo ATUAL retroativo — período fechado muda com NF nova).
 - [ ] Step 2-5: implementação, verde, controles ((i) incluir sem-projeto → cai; (ii) régua de
   devolução errada (não reduz) → cai; (iii) cliente incluído → cai), suíte (121→122), commit.
 
