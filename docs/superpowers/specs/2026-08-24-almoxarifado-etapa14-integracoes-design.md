@@ -135,7 +135,17 @@ recebimento não aparece (não deixa item de recebimento) — o comprador quer o
 NF; `null` quando não há nenhuma. **Emenda I5 (decisão da Fase 2):** material com
 `proprietario_cliente_id` responde **200 com os dados** (404 mentiria) — o payload ganha
 `proprietario_cliente: { id, razao_social } | null`, e quando não-nulo `solicitacoes_abertas`
-vem `[]` por construção; 404 `Material não encontrado` fica SÓ para id inexistente. 404
+vem `[]` — **a versão desta frase dizia "por construção"; ESTAVA ERRADA (revisão da Task 2,
+A2, medido): `verificarEstoqueMinimo` só ganhou o filtro de cliente na Etapa 8, banco antigo
+pode ter PENDENTE legada viva de material de cliente, e nada as fecha; o `[]` é garantido por
+FILTRO explícito no serviço, com teste que insere a linha legada e prova que não vaza.**
+**Emendas A1/A3 (medidas):** o desempate do último custo ganha `ri.id DESC` (duas linhas do
+MESMO material no recebimento = produto cartesiano; a última linha da NF vence
+deterministicamente — no degenerado com estorno parcial, o custo é o da última linha enquanto
+houver movimentação viva; limitação declarada, sem vínculo item↔movimentação; a tela bloqueia
+duplicado, a API aceita); `disponivel` com COALESCE (quantidade_atual nullable — senão 500 de
+toFixed); material INATIVO responde 200 (declarado). 404 `Material não encontrado` fica SÓ
+para id inexistente. 404
 `Material não encontrado` para id inexistente.
 
 ### RN-05 — Relatório custo por projeto

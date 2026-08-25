@@ -299,6 +299,71 @@ function contexto(app, materialId) {
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
   });
 
+  await test('(A1, revisao) recebimento com DUAS linhas do MESMO material: ultima linha da NF vence, deterministico', async () => {
+    // O JOIN mov x itens e produto cartesiano em linhas duplicadas (sem vinculo item<->mov no
+    // schema) — antes do ri.id DESC a escolha era do planner (estabilidade acidental, medido).
+    const mat = await novoMaterial(db);
+    await entradaCrua(db, mat, { recebimentoId: 9101, valorUnitario: 90, createdAt: '2026-08-20 10:00:00' });
+    // MESMO recebimento, segunda linha do MESMO material (ri.id maior = ultima linha da NF):
+    await entradaCrua(db, mat, { recebimentoId: 9101, valorUnitario: 10, createdAt: '2026-08-20 10:00:00' });
+
+    setUser(COMPRAS);
+    const res = await contexto(app, mat);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.ultimo_custo_entrada.valor, 10,
+      `ultima linha da NF (ri.id maior) deveria vencer, veio ${JSON.stringify(res.body.ultimo_custo_entrada)}`);
+  });
+
+  await test('(M3, revisao) dois MATERIAIS no mesmo recebimento nao cruzam custo', async () => {
+    // Sabotagem sobrevivente da revisao: tirar o AND ri.material_id = mv.material_id ficava
+    // 9/9 verde — a guarda contra vazamento de custo entre materiais nao tinha teste.
+    const matA = await novoMaterial(db);
+    const matB = await novoMaterial(db);
+    await entradaCrua(db, matA, { recebimentoId: 9102, valorUnitario: 7.77, createdAt: '2026-08-21 09:00:00' });
+    await entradaCrua(db, matB, { recebimentoId: 9102, valorUnitario: 123.45, createdAt: '2026-08-21 09:00:01' });
+
+    setUser(COMPRAS);
+    const resA = await contexto(app, matA);
+    const resB = await contexto(app, matB);
+    assert.strictEqual(resA.body.ultimo_custo_entrada.valor, 7.77, JSON.stringify(resA.body.ultimo_custo_entrada));
+    assert.strictEqual(resB.body.ultimo_custo_entrada.valor, 123.45, JSON.stringify(resB.body.ultimo_custo_entrada));
+  });
+
+  await test('(M4, revisao) entrada com valor_unitario 0 e PULADA (nao zera o ultimo custo)', async () => {
+    const mat = await novoMaterial(db);
+    await entradaCrua(db, mat, { recebimentoId: 9103, valorUnitario: 55, createdAt: '2026-08-22 08:00:00' });
+    await entradaCrua(db, mat, { recebimentoId: 9104, valorUnitario: 0, createdAt: '2026-08-23 08:00:00' });
+
+    setUser(COMPRAS);
+    const res = await contexto(app, mat);
+    assert.strictEqual(res.body.ultimo_custo_entrada.valor, 55, JSON.stringify(res.body.ultimo_custo_entrada));
+  });
+
+  await test('(A2, revisao) solicitacao LEGADA de material de cliente NAO vaza (filtro real, nao fe no dado)', async () => {
+    // A promessa "[] por construcao" era FALSA: verificarEstoqueMinimo so ganhou o filtro de
+    // cliente na Etapa 8 — banco antigo pode ter PENDENTE legada viva. O contrato agora e
+    // garantido por filtro explicito.
+    const cli = await dbRun(db, `INSERT INTO clientes (razao_social) VALUES ('Cliente Legado CCM')`);
+    const mat = await novoMaterial(db, { cliente_id: cli.lastID });
+    await novaSolicitacao(db, mat); // a linha legada que o modulo de hoje nao geraria
+
+    setUser(COMPRAS);
+    const res = await contexto(app, mat);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.ok(res.body.proprietario_cliente, JSON.stringify(res.body));
+    assert.deepStrictEqual(res.body.solicitacoes_abertas, [], JSON.stringify(res.body.solicitacoes_abertas));
+  });
+
+  await test('(A3, revisao) quantidade_atual NULL nao derruba o endpoint (500 de toFixed)', async () => {
+    const mat = await novoMaterial(db);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = NULL WHERE id = ?', [mat]);
+
+    setUser(COMPRAS);
+    const res = await contexto(app, mat);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.disponivel, 0, JSON.stringify(res.body));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

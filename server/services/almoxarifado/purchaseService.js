@@ -139,23 +139,33 @@ async function contextoMaterial(db, materialId) {
   const m = await dbGet(db, `SELECT m.id, m.codigo, m.nome, m.unidade, m.proprietario_cliente_id,
       COALESCE(m.quantidade_reservada,0) AS reservado,
       COALESCE(m.quantidade_em_terceiros,0) AS em_terceiros,
-      ${disponivelSql('m')} AS disponivel,
+      COALESCE(${disponivelSql('m')}, 0) AS disponivel,
       ${consumoJanelaSql('m')} AS consumo_janela
     FROM materiais_almoxarifado m WHERE m.id = ?`,
     [...consumoJanelaParams(janela), materialId]);
   if (!m) throw Object.assign(new Error('Material não encontrado'), { status: 404 });
 
   // Emenda I5 (decisao da Fase 2 — medido): material de cliente responde 200 com os dados (404
-  // mentiria, o material EXISTE). solicitacoes_abertas vem [] POR CONSTRUCAO: nada neste modulo
-  // gera solicitacao de compra para material de cliente (verificarEstoqueMinimo e
-  // calcularSugestoes ja filtram proprietario_cliente_id IS NULL) — nao ha ramo especial aqui,
-  // so a mesma query de sempre, que naturalmente nao encontra nada.
+  // mentiria, o material EXISTE). Revisao da Task 2 (A2): a versao anterior deste comentario
+  // dizia "[] por construcao — a query naturalmente nao encontra nada"; ESTAVA ERRADA:
+  // verificarEstoqueMinimo so ganhou o filtro de cliente na Etapa 8 — banco que rodou antes
+  // pode ter solicitacao PENDENTE legada de material de cliente, e nada as fecha. O []
+  // prometido pelo contrato agora e GARANTIDO por filtro explicito (o ramo abaixo pula a
+  // query), nao por fe na higiene do dado.
   let proprietario_cliente = null;
   if (m.proprietario_cliente_id) {
     const cliente = await dbGet(db, 'SELECT id, razao_social FROM clientes WHERE id = ?', [m.proprietario_cliente_id]);
     proprietario_cliente = cliente ? { id: cliente.id, razao_social: cliente.razao_social } : null;
   }
 
+  // Revisao da Task 2 (A1, medido): recebimento com DUAS linhas do MESMO material gera N mov x
+  // N itens (produto cartesiano — nao ha vinculo item<->movimentacao no schema). O `ri.id DESC`
+  // fixa a regra "a ULTIMA linha da NF vence" de forma deterministica (antes era a ordem do
+  // planner, estabilidade acidental). LIMITACAO DECLARADA: no caso degenerado de linhas
+  // duplicadas com estorno PARCIAL de uma delas, o custo reportado e o da ultima linha da NF
+  // enquanto houver QUALQUER movimentacao viva daquele material naquele recebimento — sem
+  // vinculo item<->movimentacao nao ha como saber qual linha foi estornada. A tela de
+  // recebimento bloqueia material duplicado ('Material já incluído'); a API aceita (declarado).
   const phEntrada = TIPOS_ENTRADA.map(() => '?').join(',');
   const custoRow = await dbGet(db, `
     SELECT ri.valor_unitario AS valor, mv.created_at AS data
@@ -163,10 +173,11 @@ async function contextoMaterial(db, materialId) {
     JOIN recebimentos_material_itens_almoxarifado ri
       ON ri.recebimento_id = mv.recebimento_id AND ri.material_id = mv.material_id
     WHERE mv.material_id = ? AND mv.cancelado = 0 AND mv.tipo IN (${phEntrada}) AND ri.valor_unitario > 0
-    ORDER BY mv.created_at DESC, mv.id DESC LIMIT 1`,
+    ORDER BY mv.created_at DESC, mv.id DESC, ri.id DESC LIMIT 1`,
     [materialId, ...TIPOS_ENTRADA]);
 
-  const solicitacoes_abertas = await dbAll(db, `SELECT id, status, quantidade, pedido_compra_id, created_at
+  const solicitacoes_abertas = m.proprietario_cliente_id ? [] : await dbAll(db,
+    `SELECT id, status, quantidade, pedido_compra_id, created_at
     FROM solicitacoes_compra_almoxarifado
     WHERE material_id = ? AND status IN ('PENDENTE','VINCULADO')
     ORDER BY created_at DESC, id DESC`, [materialId]);
@@ -200,7 +211,7 @@ async function calcularSugestoes(db) {
            m.quantidade_minima, m.quantidade_maxima, m.ponto_reposicao, m.lote_economico,
            m.prazo_reposicao_dias, m.material_critico, m.fornecedor_id,
            f.razao_social AS fornecedor_nome,
-           ${disponivelSql('m')} AS disponivel,
+           COALESCE(${disponivelSql('m')}, 0) AS disponivel,
            ${custoUnitarioSql('m')} AS custo_unitario,
            ${consumoJanelaSql('m')} AS consumo_janela,
            COALESCE((SELECT SUM(sc.quantidade) FROM solicitacoes_compra_almoxarifado sc
@@ -403,6 +414,14 @@ async function gerarSolicitacoesDaSugestao(db, usuario, materialIds) {
 async function estoqueParado(db, tipo) {
   const dias = await lerConfigNumero(db, 'reposicao_dias_sem_consumo', 180);
   const phSaida = TIPOS_SAIDA.map(() => '?').join(',');
+  // Revisao da Task 2 (A1, medido): recebimento com DUAS linhas do MESMO material gera N mov x
+  // N itens (produto cartesiano — nao ha vinculo item<->movimentacao no schema). O `ri.id DESC`
+  // fixa a regra "a ULTIMA linha da NF vence" de forma deterministica (antes era a ordem do
+  // planner, estabilidade acidental). LIMITACAO DECLARADA: no caso degenerado de linhas
+  // duplicadas com estorno PARCIAL de uma delas, o custo reportado e o da ultima linha da NF
+  // enquanto houver QUALQUER movimentacao viva daquele material naquele recebimento — sem
+  // vinculo item<->movimentacao nao ha como saber qual linha foi estornada. A tela de
+  // recebimento bloqueia material duplicado ('Material já incluído'); a API aceita (declarado).
   const phEntrada = TIPOS_ENTRADA.map(() => '?').join(',');
 
   const rows = await dbAll(db, `
