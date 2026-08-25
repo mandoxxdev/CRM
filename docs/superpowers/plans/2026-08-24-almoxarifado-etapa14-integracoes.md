@@ -125,19 +125,33 @@ BOM não existe; MES sem uso).
 `server/routes/almoxarifado/extended.js` (rota). **Test:**
 `server/tests/api/compraContextoMaterial.api.test.js` (novo).
 
-- [ ] Step 1: teste vermelho — shape completo com números EXATOS pelo motor real. O
-  `ultimo_custo_entrada` usa a régua EMENDADA da RN-04 (Fase 2, C1 — o livro NÃO TEM coluna
-  de custo; o par movimentação×item-de-recebimento é a fonte, com `mv.id DESC` no desempate
-  senão o teste é intermitente); NUNCA `custo_medio` nem `materiais.custo_unitario` (não
-  reverte no cancelamento — medido); consumo pela janela da config (mudar a config muda
-  `janela_dias` e o consumo); solicitações abertas SÓ PENDENTE/VINCULADO (CANCELADA na
-  fixture fica fora); entrada CANCELADA não é o último custo (mv.cancelado=0 no par);
-  material de cliente → 200 com `proprietario_cliente: {id, razao_social}` e
-  `solicitacoes_abertas: []` (DECISÃO da Fase 2, I5 — 404 mentiria); id inexistente → 404
-  literal; gates par positivo+negativo.
-- [ ] Step 2-5: implementação, verde+regressão, controles ((i) último custo lendo
-  `custo_medio` → fixture cai; (ii) solicitações incluindo terminais → cai), suíte (120→121),
-  commit.
+- [x] Step 1/2: teste + implementação (e78bc09) — `contextoMaterial` em purchaseService.js +
+  `GET /compras/contexto-material/:id` (gate `gerenciar_reposicao`) em extended.js. 9 testes:
+  (1) shape completo com números EXATOS (disponível/reservado/em_terceiros/consumo/
+  solicitações abertas) pelo motor real; (2) `ultimo_custo_entrada` da NF real, DISTINTO de
+  `custo_medio` (fixture com DUAS entradas reais — 10@10 depois 10@25 — custo_medio pondera
+  para 17.5, ≠ 25 do último e ≠ 999 do decoy de cadastro); (3) duas entradas no MESMO
+  `created_at` (fixture crua, backdate) → `mv.id DESC` decide; (4) entrada CANCELADA não é o
+  último custo — cancela a movimentação da 2ª NF real via `stockService.cancelarMovimentacao`
+  e o custo da 1ª volta; (5) consumo/`janela_dias` mudam com a config
+  (`reposicao_janela_consumo_dias`); (6) `solicitacoes_abertas` só PENDENTE/VINCULADO
+  (CANCELADA/RECEBIDA fora); (7) material de cliente → 200 com `proprietario_cliente:
+  {id, razao_social}` e `solicitacoes_abertas: []` (por construção — nenhum código
+  especial-caseado, a mesma query de sempre não encontra nada porque nada no módulo gera
+  solicitação para material de cliente); (8) id inexistente → 404 `Material não encontrado`;
+  (9) gates par ALMOXARIFE 403 / COMPRAS 200. Stub de `pedidos_compra` ENDURECIDO (N-2 da
+  revisão da Task 1): `fornecedor_id INTEGER NOT NULL`, `status TEXT DEFAULT 'pendente'`.
+- [x] Step 3: verde + regressão — suíte completa 121/121 arquivos (120→121), test:almoxarifado
+  42/42, test:validation 4/4, test:safealter 3/3, test:sqlite 3/3.
+- [x] Step 4: controles positivos (e78bc09, todos sabotados e revertidos manualmente — nunca
+  `git checkout` —, md5 idêntico ao original antes/depois de cada um) — (i) régua lendo
+  `custo_medio` do cadastro → testes (1) e (2) caem; (ii) régua lendo
+  `materiais.custo_unitario` → especificamente o teste (4) do cancelamento cai (custo_unitario
+  não reverte); (iii) `ORDER BY` sem `mv.id DESC` → teste (3) do empate no mesmo segundo cai
+  (e (2)/(4) também, por tabela); (iv) `solicitacoes_abertas` sem o filtro de status → testes
+  (1) e (6) caem (terminais vazam).
+- [x] Step 5: commit único e78bc09 (server/services/almoxarifado/purchaseService.js,
+  server/routes/almoxarifado/extended.js, server/tests/api/compraContextoMaterial.api.test.js).
 
 ### Task 3: Relatório custo-por-projeto (RN-05)
 
