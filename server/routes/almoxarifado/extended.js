@@ -1099,6 +1099,15 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 14, Task 2 (RN-04, D5): contexto do comprador para UM material — disponivel/reservado/
+  // em terceiros/consumo/ultimo custo de entrada/solicitacoes abertas. Mesmo gate do pipeline de
+  // compra (D9). Shape e o CONTRATO CONGELADO do design — a tela (Task 4) ja consome este shape.
+  app.get('/api/almoxarifado/compras/contexto-material/:id', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {
+    try {
+      res.json(await purchaseService.contextoMaterial(db, req.params.id));
+    } catch (e) { handleError(res, e); }
+  });
+
   // ── Reposição (Etapa 11) — RN-01..RN-08 do design. Gate proprio: decidir compra e
   // gestao/compras (ALMOXARIFE fora de proposito, D9).
   app.get('/api/almoxarifado/reposicao/sugestoes', auth, requirePermission('gerenciar_reposicao'), async (req, res) => {

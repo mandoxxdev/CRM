@@ -118,6 +118,75 @@ async function lerConfigNumero(db, chave, fallback) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+// RN-04 (Etapa 14, Task 2): contexto do comprador para UM material. D5 — mesmo gate de quem
+// gera/vincula/cancela solicitacao (gerenciar_reposicao, dado de pipeline de compra).
+//
+// EMENDA DA FASE 2 (C1, medido): a regua original ("custo gravado no livro") e INIMPLEMENTAVEL —
+// movimentacoes_almoxarifado NAO TEM coluna de custo (receiptService.js:515-521, schema.js
+// 205-219). A regua real e o PAR (movimentacao de entrada nao-cancelada x item de recebimento):
+// so um item de recebimento tem valor_unitario, e so uma movimentacao tem created_at/cancelado.
+// `mv.id DESC` no desempate e OBRIGATORIO — created_at do SQLite tem resolucao de SEGUNDO, entao
+// duas entradas no mesmo teste (ou no mesmo segundo em producao) empatam por created_at e o
+// resultado seria intermitente sem o desempate por id.
+//
+// NUNCA usar custo_medio nem materiais.custo_unitario: sao o custo do CADASTRO, nao da ENTRADA —
+// custo_medio e media ponderada (nunca bate com o valor de uma NF especifica) e custo_unitario e
+// reescrito a cada entrada mas NAO REVERTE quando a movimentacao e cancelada (medido) — o
+// comprador quer o preco da ULTIMA NF de verdade, com data.
+async function contextoMaterial(db, materialId) {
+  const janela = await lerConfigNumero(db, 'reposicao_janela_consumo_dias', 90);
+
+  const m = await dbGet(db, `SELECT m.id, m.codigo, m.nome, m.unidade, m.proprietario_cliente_id,
+      COALESCE(m.quantidade_reservada,0) AS reservado,
+      COALESCE(m.quantidade_em_terceiros,0) AS em_terceiros,
+      ${disponivelSql('m')} AS disponivel,
+      ${consumoJanelaSql('m')} AS consumo_janela
+    FROM materiais_almoxarifado m WHERE m.id = ?`,
+    [...consumoJanelaParams(janela), materialId]);
+  if (!m) throw Object.assign(new Error('Material não encontrado'), { status: 404 });
+
+  // Emenda I5 (decisao da Fase 2 — medido): material de cliente responde 200 com os dados (404
+  // mentiria, o material EXISTE). solicitacoes_abertas vem [] POR CONSTRUCAO: nada neste modulo
+  // gera solicitacao de compra para material de cliente (verificarEstoqueMinimo e
+  // calcularSugestoes ja filtram proprietario_cliente_id IS NULL) — nao ha ramo especial aqui,
+  // so a mesma query de sempre, que naturalmente nao encontra nada.
+  let proprietario_cliente = null;
+  if (m.proprietario_cliente_id) {
+    const cliente = await dbGet(db, 'SELECT id, razao_social FROM clientes WHERE id = ?', [m.proprietario_cliente_id]);
+    proprietario_cliente = cliente ? { id: cliente.id, razao_social: cliente.razao_social } : null;
+  }
+
+  const phEntrada = TIPOS_ENTRADA.map(() => '?').join(',');
+  const custoRow = await dbGet(db, `
+    SELECT ri.valor_unitario AS valor, mv.created_at AS data
+    FROM movimentacoes_almoxarifado mv
+    JOIN recebimentos_material_itens_almoxarifado ri
+      ON ri.recebimento_id = mv.recebimento_id AND ri.material_id = mv.material_id
+    WHERE mv.material_id = ? AND mv.cancelado = 0 AND mv.tipo IN (${phEntrada}) AND ri.valor_unitario > 0
+    ORDER BY mv.created_at DESC, mv.id DESC LIMIT 1`,
+    [materialId, ...TIPOS_ENTRADA]);
+
+  const solicitacoes_abertas = await dbAll(db, `SELECT id, status, quantidade, pedido_compra_id, created_at
+    FROM solicitacoes_compra_almoxarifado
+    WHERE material_id = ? AND status IN ('PENDENTE','VINCULADO')
+    ORDER BY created_at DESC, id DESC`, [materialId]);
+
+  return {
+    material: { id: m.id, codigo: m.codigo, nome: m.nome, unidade: m.unidade },
+    disponivel: Number(m.disponivel.toFixed(4)),
+    reservado: Number(m.reservado.toFixed(4)),
+    em_terceiros: Number(m.em_terceiros.toFixed(4)),
+    consumo_medio_diario: Number((m.consumo_janela / janela).toFixed(4)),
+    janela_dias: janela,
+    ultimo_custo_entrada: custoRow ? { valor: custoRow.valor, data: custoRow.data } : null,
+    solicitacoes_abertas: solicitacoes_abertas.map((s) => ({
+      id: s.id, status: s.status, quantidade: s.quantidade,
+      pedido_compra_id: s.pedido_compra_id, created_at: s.created_at,
+    })),
+    proprietario_cliente,
+  };
+}
+
 // Etapa 11 (RN-01..RN-06): a sugestao de reposicao. Fontes unicas: disponivelSql (disponivel
 // JA desconta reservado/bloqueado/inspecao/terceiros — NAO descontar reserva de novo, RN-03),
 // custoUnitarioSql (valor), TIPOS_SAIDA (consumo = tudo que debita patrimonio, D6).
@@ -397,5 +466,5 @@ async function estoqueParado(db, tipo) {
 module.exports = {
   verificarEstoqueMinimo, vincularPedidoCompra, calcularSugestoes,
   gerarSolicitacoesDaSugestao, estoqueParado,
-  cancelarSolicitacao, fecharSolicitacoesDoPedido,
+  cancelarSolicitacao, fecharSolicitacoesDoPedido, contextoMaterial,
 };
