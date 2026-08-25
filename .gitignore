@@ -63,8 +63,12 @@ pm2-*.log
 .DS_Store
 Thumbs.db
 
-# Uploads (opcional - mantenha se quiser versionar)
-# server/uploads/
+# Uploads gerados em runtime pelo proprio app (foto de material, foto de
+# proposta). O padrao antigo apontava para "server/uploads/", que nao e o
+# caminho que o codigo usa — o multer grava em server/data/uploads/. Resultado:
+# arquivo enviado por usuario aparecia untracked-mas-nao-ignorado, pronto para
+# entrar num add por acidente. Mesma armadilha dos backups logo acima.
+server/data/uploads/
 
 # Deploy
 deploy/
