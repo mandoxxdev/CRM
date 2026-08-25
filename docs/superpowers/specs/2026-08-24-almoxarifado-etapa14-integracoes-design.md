@@ -79,7 +79,11 @@ RN-03 NUNCA fechará)
 `Solicitação não encontrada` (MESMO literal da RN-02 — um literal só); (2) terminal → 400
 (literal congelado na Task 1, família do da RN-02); (3) pedido inexistente em
 `pedidos_compra` → 400 `Pedido de compra não encontrado` (literal REUSADO de
-receiptService.criarRecebimento:76 — não inventar outro).
+receiptService.criarRecebimento:76 — não inventar outro). **Declarado (revisão da Task 1,
+N-3):** re-vincular uma solicitação VINCULADO a OUTRO pedido responde 200 e SOBRESCREVE o
+vínculo (herança da E11, coerente com RN-01b que só proíbe terminais) — consequência: a
+chegada do pedido antigo deixa de fechá-la; o novo fecha. Intencional; mudar é decisão de
+negócio.
 
 ### RN-02 — Cancelamento manual
 `POST /api/almoxarifado/compras/solicitacoes/:id/cancelar` (gate `gerenciar_reposicao`).

@@ -468,6 +468,42 @@ const LITERAL_TERMINAL_VINCULAR = 'Solicitação já finalizada (RECEBIDA ou CAN
     assert.ok(itemB, 'material deveria voltar a sugestao apos CANCELADA');
   });
 
+  await test('(I-1, revisao) DUAS solicitacoes VINCULADO no mesmo pedido: as duas fecham, DUAS auditorias', async () => {
+    // Sabotagem sobrevivente da revisao: mover a auditoria para FORA do laco (uma por chamada
+    // em vez de uma por linha) ficava 13/13 verde — e "o pedido agrupa N solicitacoes" e o
+    // caso PRINCIPAL do design (D2). Este teste porta o probe P3 do revisor.
+    setUser(ADMIN);
+    const mat1 = await novoMaterial(db);
+    const mat2 = await novoMaterial(db);
+    const ped = await novoPedido(db);
+    const solA = await novaSolicitacao(db, mat1, { status: 'VINCULADO', pedido_compra_id: ped });
+    const solB = await novaSolicitacao(db, mat2, { status: 'VINCULADO', pedido_compra_id: ped });
+
+    await purchaseService.fecharSolicitacoesDoPedido(db, ADMIN, ped);
+
+    for (const solId of [solA, solB]) {
+      const row = await dbGet(db, 'SELECT status, recebida_em FROM solicitacoes_compra_almoxarifado WHERE id = ?', [solId]);
+      assert.strictEqual(row.status, 'RECEBIDA', JSON.stringify(row));
+      assert.ok(row.recebida_em, `sol ${solId}: recebida_em ausente`);
+      const aud = await dbAll(db,
+        `SELECT id FROM auditoria_log_almoxarifado WHERE entidade = 'solicitacao_compra' AND entidade_id = ? AND acao = 'RECEBIDA'`,
+        [solId]);
+      assert.strictEqual(aud.length, 1, `sol ${solId}: esperava exatamente 1 auditoria, veio ${aud.length}`);
+    }
+  });
+
+  await test('(N-1, revisao) motivo so-espacos NAO cancela', async () => {
+    setUser(COMPRAS);
+    const mat = await novoMaterial(db);
+    const solId = await novaSolicitacao(db, mat);
+    const res = await request(app).post(`/api/almoxarifado/compras/solicitacoes/${solId}/cancelar`)
+      .send({ motivo: '   ' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Justificativa obrigatória para cancelar a solicitação');
+    const row = await dbGet(db, 'SELECT status FROM solicitacoes_compra_almoxarifado WHERE id = ?', [solId]);
+    assert.strictEqual(row.status, 'PENDENTE', JSON.stringify(row));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

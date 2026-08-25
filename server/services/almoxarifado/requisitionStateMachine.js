@@ -108,10 +108,13 @@ function validarTransicao(statusAtual, novoStatus) {
  *
  * Etapa 11 (revisão final, achado 3): a contagem de `PENDENTE` respeita o MESMO horizonte
  * (`reposicao_horizonte_solicitacao_dias`) que `purchaseService.calcularSugestoes` usa para
- * decidir se uma solicitação ainda está "a caminho" (RN-03) — nada no sistema fecha uma
- * solicitação (só criação e vínculo escrevem status), então sem o corte de data uma
- * solicitação antiga que a própria tela de reposição já ignora continuaria empurrando
- * requisições novas para AGUARDANDO_COMPRA indefinidamente.
+ * decidir se uma solicitação ainda está "a caminho" (RN-03).
+ * ATUALIZAÇÃO (Etapa 14, revisão da Task 1): a frase original dizia "nada no sistema fecha
+ * uma solicitação" — DEIXOU DE SER VERDADE: a Etapa 14 fecha por RECEBIDA (recebimento do
+ * pedido processado/aprovado) e por CANCELADA (manual). O corte de horizonte CONTINUA
+ * necessário — ele cobre o pedido que NUNCA chega (nem fecha, nem cancela): sem ele, uma
+ * solicitação órfã antiga continuaria empurrando requisições novas para AGUARDANDO_COMPRA
+ * indefinidamente.
  *
  * @returns {Promise<'APROVADO'|'AGUARDANDO_ESTOQUE'|'AGUARDANDO_COMPRA'>}
  */
