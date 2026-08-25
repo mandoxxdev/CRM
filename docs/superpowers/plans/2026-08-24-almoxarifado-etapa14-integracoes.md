@@ -209,6 +209,29 @@ contexto com URL errada → cai. Client inteiro + build + test:api NA worktree.
   literal" vermelho). Client 483/483 (33 suítes, era 471/471 — os 12 testes a mais batem
   com os 12 adicionados líquidos, a suíte da tela foi de 24 para 36); build limpo
   (`CI=true`); `test:api` do servidor 120/120 (nenhuma rota tocada por esta task).
+- [x] Fix-round (revisão adversarial devolveu Needs-fix-round: shape correto contra o
+  servidor real, mas 1 bug vivo + 3 mutações de uma linha sobreviviam 36/36). **Bug vivo
+  corrigido:** o cache `contextoPorMaterial` nunca invalidava — depois de "Gerar
+  solicitações" ou do botão "Atualizar" (os dois incrementam `reloadSugestoes`), reabrir o
+  painel de um material já visto mostrava números de ANTES da ação que acabou de mudá-los
+  (disponível, solicitações abertas). Fix: `useEffect` novo com dep `[reloadSugestoes]`
+  zera o cache inteiro e, se havia um painel aberto no momento, refaz a chamada dele na
+  hora (painel continua aberto, só os números mudam); `contextoAbertoId` é lido do closure
+  do próprio render que disparou o efeito, dispensando `ref`. **3 mutações agora cobertas:**
+  (1) tirar o `+Z` de `formatData` — as fixtures anteriores só usavam horário seguro
+  (≥09:00 UTC); fixture nova com `02:18:00 UTC` (madrugada, vira dia anterior em
+  America/Sao_Paulo, timezone da máquina de teste) morde. (2) `Object.values(cache)[0]` no
+  lugar de `cache[material_id]` — com cache de UMA entrada os dois são a mesma coisa por
+  acidente; teste novo abre o material 10, fecha, abre o 20 (cache com DUAS entradas) e
+  prova que o painel mostra o material certo, cobrindo também o cache-hit declarado
+  (reabrir sem nova chamada). (3) asserts de `solicitacoes_abertas` trocados de substring
+  (`toContain`) para exato por `<li>` (quantidade e data). Comentário de uma linha
+  acrescentado no painel explicando que `d.material` do contrato é deliberadamente não lido
+  (a linha da tabela já mostra código/nome). 3 testes novos (39 no arquivo). As 3 mutações
+  do revisor reproduzidas manualmente (edição reversa, nunca `git checkout`, md5
+  antes/durante/depois) caem cada uma no teste certo e nenhuma outra; revertidas com o md5
+  original confirmado. Client 486/486 (era 483/483); build limpo; `test:api` não roda de
+  novo nesta rodada (nenhuma rota tocada, já confirmado 120/120 na entrega anterior).
 
 ### Task 5: Jornada (galho, principal — SÓ após 1-3)
 

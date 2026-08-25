@@ -168,6 +168,22 @@ const CONTEXTO_MATERIAL_20 = {
   proprietario_cliente: { id: 88, razao_social: 'Cliente Teste Almoxarifado LTDA' },
 };
 
+// Fix-round (Important 2, achado do revisor): a mutacao que tira o "+Z" do `formatData`
+// ficava verde porque as fixtures anteriores so usavam horario seguro (>= 09:00 UTC, que
+// ainda cai no mesmo dia em qualquer fuso negativo razoavel). Madrugada UTC vira dia
+// ANTERIOR em America/Sao_Paulo (UTC-3, a maquina de teste) — esta fixture morde a mutacao.
+const CONTEXTO_MATERIAL_30_MADRUGADA_UTC = {
+  material: { id: 30, codigo: 'ALM-0030', nome: 'Parafuso M8', unidade: 'UN' },
+  disponivel: 2,
+  reservado: 0,
+  em_terceiros: 0,
+  consumo_medio_diario: 0.2,
+  janela_dias: 60,
+  ultimo_custo_entrada: { valor: 9.9, data: '2026-08-10 02:18:00' },
+  solicitacoes_abertas: [],
+  proprietario_cliente: null,
+};
+
 let container; let root;
 
 const mockarApi = (overrides = {}) => {
@@ -797,11 +813,14 @@ describe('ReposicaoAlmoxarifado — aba Sugestões — contexto do material', ()
     expect(texto()).toContain('Média dos últimos 60 dias');
     const custoFmt = Number(15.5).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     expect(container.querySelector('[data-testid="contexto-ultimo-custo"]').textContent).toBe(`${custoFmt} em 10/08/26`);
+    // Minor 4 (achado do revisor): asserts EXATOS por <li>, não substring solta — a
+    // convenção "asserts por célula, não substring" já vale pra esta lista também (pega
+    // troca de coluna dentro do próprio item, ex.: quantidade 8↔22, ou data errada).
     const listaAbertas = container.querySelector('[data-testid="contexto-solicitacoes-abertas"]');
-    expect(listaAbertas.textContent).toContain('#501');
-    expect(listaAbertas.textContent).toContain('PENDENTE');
-    expect(listaAbertas.textContent).toContain('#502');
-    expect(listaAbertas.textContent).toContain('pedido #900');
+    const itensAbertos = listaAbertas.querySelectorAll('li');
+    expect(itensAbertos).toHaveLength(2);
+    expect(itensAbertos[0].textContent).toBe('#501 — PENDENTE — 8 — 19/08/26');
+    expect(itensAbertos[1].textContent).toBe('#502 — VINCULADO — 22 (pedido #900) — 15/08/26');
     expect(container.querySelector('[data-testid="contexto-proprietario-cliente"]')).toBeNull();
 
     // Clicar de novo fecha o painel (toggle).
@@ -840,5 +859,89 @@ describe('ReposicaoAlmoxarifado — aba Sugestões — contexto do material', ()
     mockarContexto({ 10: { dados: CONTEXTO_MATERIAL_10 } });
     await clicar(botao('Tentar novamente', linhaMaterial('ALM-0010').nextElementSibling));
     expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('12');
+  });
+
+  // Fix-round (Important 2, achado do revisor): madrugada UTC vira o dia ANTERIOR no fuso
+  // local (America/Sao_Paulo, UTC-3) — a mutação que tira o "+Z" do `formatData` ficava
+  // verde contra as fixtures anteriores (todas em horário seguro). Ver fixture acima.
+  test('ultimo_custo_entrada com horario de madrugada UTC mostra o dia ANTERIOR no fuso local', async () => {
+    mockarContexto({ 30: { dados: CONTEXTO_MATERIAL_30_MADRUGADA_UTC } });
+    await renderizar();
+
+    const linha = linhaMaterial('ALM-0030');
+    await clicar(botao('Ver contexto', linha));
+
+    const custoFmt = Number(9.9).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    // 2026-08-10 02:18:00 UTC = 2026-08-09 23:18:00 em America/Sao_Paulo — dia 09, não 10.
+    expect(container.querySelector('[data-testid="contexto-ultimo-custo"]').textContent).toBe(`${custoFmt} em 09/08/26`);
+  });
+
+  // Fix-round (Important 3, achado do revisor): a mutação `Object.values(contextoPorMaterial)[0]`
+  // no lugar de `contextoPorMaterial[item.material_id]` ficava verde porque cada teste
+  // anterior só abria UM material — com cache de UMA entrada, "o primeiro do objeto" e "a
+  // entrada certa" são a mesma coisa por acidente. Este teste tem DUAS entradas no cache
+  // (10 é aberto e fechado antes de abrir o 20) e prova que o painel mostra o material CERTO,
+  // não o primeiro que entrou no cache; a segunda metade prova o cache hit declarado
+  // (reabrir um material já carregado com sucesso não refaz a chamada).
+  test('trocar de material no painel mostra os numeros do material aberto (nao o primeiro do cache); reabrir usa o cache', async () => {
+    mockarContexto({ 10: { dados: CONTEXTO_MATERIAL_10 }, 20: { dados: CONTEXTO_MATERIAL_20 } });
+    await renderizar();
+
+    await clicar(botao('Ver contexto', linhaMaterial('ALM-0010')));
+    expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('12');
+
+    // Painel expansível é UM por vez — fecha o do 10 antes de abrir o do 20. O cache do 10
+    // permanece (fechar não limpa o cache, só o `contextoAbertoId`).
+    await clicar(botao('Ocultar contexto', linhaMaterial('ALM-0010')));
+
+    api.get.mockClear();
+    await clicar(botao('Ver contexto', linhaMaterial('ALM-0020')));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/compras/contexto-material/20');
+    // A mutação (Object.values(...)[0]) mostraria aqui o disponivel do material 10 (12),
+    // porque foi o primeiro a entrar no cache — o correto é o do 20 (0).
+    expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('0');
+
+    // Reabrir o 10: já carregou com sucesso antes (cache hit) — não refaz a chamada.
+    await clicar(botao('Ocultar contexto', linhaMaterial('ALM-0020')));
+    api.get.mockClear();
+    await clicar(botao('Ver contexto', linhaMaterial('ALM-0010')));
+    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/compras/contexto-material/10');
+    expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('12');
+  });
+
+  // Fix-round (Important 1, BUG VIVO medido pelo revisor): o cache de contexto nunca
+  // invalidava. "Atualizar" (e, pelo mesmo gatilho, "Gerar solicitações" com sucesso)
+  // incrementam `reloadSugestoes` porque a sugestão mudou — mas o painel de contexto, se já
+  // tinha sido aberto antes, continuava mostrando os números de ANTES da atualização. Este
+  // teste prova que a MESMA chamada HTTP acontece de novo (não fica em cache) e que o
+  // painel, que continua aberto no mesmo material, passa a mostrar o número NOVO.
+  test('Atualizar com o painel de contexto aberto refaz a chamada e mostra o numero novo (bug vivo corrigido)', async () => {
+    let chamadasContexto10 = 0;
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/reposicao/sugestoes') {
+        return Promise.resolve({ data: SUGESTOES_DUAS_FORNECEDORES });
+      }
+      if (url === '/almoxarifado/compras/contexto-material/10') {
+        chamadasContexto10 += 1;
+        // Primeira chamada: disponivel 12 (fixture original). Segunda em diante (pós-reload):
+        // disponivel 999 — o valor "novo" que a tela tem de mostrar depois do reload.
+        const dados = chamadasContexto10 === 1 ? CONTEXTO_MATERIAL_10 : { ...CONTEXTO_MATERIAL_10, disponivel: 999 };
+        return Promise.resolve({ data: dados });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+
+    await clicar(botao('Ver contexto', linhaMaterial('ALM-0010')));
+    expect(chamadasContexto10).toBe(1);
+    expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('12');
+
+    // Botão "Atualizar" do cabeçalho (aba Sugestões ativa) — mesmo gatilho de "Gerar
+    // solicitações" com sucesso (os dois incrementam reloadSugestoes).
+    await clicar(botao('Atualizar'));
+
+    expect(chamadasContexto10).toBe(2); // a chamada foi REFEITA, não serviu do cache velho
+    // O painel continua aberto no MESMO material (não fechou) e mostra o número novo.
+    expect(container.querySelector('[data-testid="contexto-disponivel"]').textContent).toBe('999');
   });
 });

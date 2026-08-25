@@ -107,6 +107,8 @@ const PainelContextoMaterial = ({ estado, onTentarNovamente }) => {
   }
   const d = estado.dados;
   if (!d) return null;
+  // `d.material` ({ id, codigo, nome, unidade }) do contrato não é lido aqui de propósito —
+  // a linha da tabela que abre este painel já mostra código/nome/unidade do mesmo material.
   const solicitacoesAbertas = d.solicitacoes_abertas || [];
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, padding: '10px 6px', fontSize: '0.85rem' }}>
@@ -378,6 +380,24 @@ const ReposicaoAlmoxarifado = () => {
     // painel que já carregou com sucesso não refaz a chamada.
     if (!contextoPorMaterial[materialId]?.dados) carregarContexto(materialId);
   };
+
+  // Etapa 14, Task 4 (fix-round, Important 1 — bug vivo medido na revisão): o cache de
+  // contexto nunca invalidava sozinho. "Gerar solicitações" e o botão "Atualizar" (os dois
+  // incrementam `reloadSugestoes`) mudam disponível/a_caminho/solicitações_abertas do
+  // material na sugestão, mas o painel de contexto, se já tinha sido aberto uma vez antes,
+  // continuava mostrando os números de ANTES — o comprador confiaria num número que a
+  // própria ação dele acabou de invalidar. Zera o cache inteiro a cada reload da lista; se
+  // havia um painel aberto no momento, refaz a chamada dele na hora — o painel continua
+  // aberto (o comprador não perde o foco no material que estava olhando), só os números são
+  // atualizados. `contextoAbertoId` é lido do valor corrente do render em que
+  // `reloadSugestoes` mudou (não é stale — React usa o closure do render que disparou o
+  // efeito), então dispensa ref; a omissão de `contextoAbertoId`/`carregarContexto` das deps
+  // é deliberada — não deve rodar de novo só porque o usuário abriu/fechou um painel.
+  useEffect(() => {
+    setContextoPorMaterial({});
+    if (contextoAbertoId != null) carregarContexto(contextoAbertoId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadSugestoes]);
 
   return (
     <div className="almox-page">
