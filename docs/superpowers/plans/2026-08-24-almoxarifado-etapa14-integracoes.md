@@ -165,17 +165,54 @@ citada quando o chamador não informa — I2, molde da herança de lote em :80; 
 **Test:** `server/tests/api/relatorioCustoProjeto.api.test.js` (novo). Regressão
 obrigatória: devolucao*/requisicaoDevolucao* (a herança só preenche colunas antes nulas).
 
-- [ ] Step 1: teste vermelho — cenário pelo motor real com DOIS projetos (stub `projetos`):
-  fixture de custo por VIAS DIFERENTES (Fase 2, I4 — duas saídas do MESMO material têm sempre
-  o mesmo custo e não provam nada): M1 custo_medio=8/custo_unitario=99 → vale 8; M2
-  custo_medio=0/custo_unitario=5 → vale 5, asserts exatos; devolução reduzindo o líquido PELA
-  ROTA REAL com o payload do cliente (I2 — fixture SQL fingiria que funciona); tipos via
-  TIPOS_DEVOLUCAO novo; movimentação SEM projeto fora, CLIENTE fora, CANCELADA fora, outro
-  projeto não vaza; data_inicio corta; projeto não cadastrado → `Projeto #<id>`; gate 403 par
-  +/-; export com cabeçalho deepStrictEqual; a varredura do registro (E13) passa; a NOTA usa
-  o texto pronto da Fase 2 (custo ATUAL retroativo — período fechado muda com NF nova).
-- [ ] Step 2-5: implementação, verde, controles ((i) incluir sem-projeto → cai; (ii) régua de
-  devolução errada (não reduz) → cai; (iii) cliente incluído → cai), suíte (121→122), commit.
+- [x] Step 1/2: teste + implementação (8bc58ec) — `relatorioCustoProjeto` em reportService.js
+  le o livro por fontes UNICAS (`custoUnitarioSql`, `TIPOS_SAIDA`/`TIPOS_DEVOLUCAO` novo em
+  movementTypes.js). `TIPOS_DEVOLUCAO = ['ENTRADA_DEVOLUCAO','DEVOLUCAO']` — DEVOLUCAO_CLIENTE
+  fica fora (e SAIDA, ja em TIPOS_SAIDA, soma em `consumido` nao em `devolvido`). Registro novo
+  `custo-por-projeto` em reportRegistry.js (gate `gerenciar_reposicao`, D6, nasce fechado) + fn
+  ligada em extended.js. `liquido` e recalculado por SQL repetindo as expressoes de
+  consumido/devolvido (SQL nao deixa referenciar alias de outra coluna na mesma SELECT) — sem
+  isso a varredura de relatoriosRegistro.api.test.js acusaria `liquido` como coluna inexistente
+  no SQL real. 7 testes em relatorioCustoProjeto.api.test.js: (1) DOIS projetos, fixture de
+  custo por VIAS DIFERENTES (M1 custo_medio=8/custo_unitario=99 → vale 8; M2
+  custo_medio=0/custo_unitario=5 → vale 5), devolucao PELA ROTA REAL (payload identico ao de
+  DevolucoesAlmoxarifado.js:160-170, sem origem_projeto_id/origem_os_id) reduz o liquido do
+  projeto certo, movimentacao sem projeto/de cliente/cancelada nao vazam, outro projeto isolado;
+  (2) DEVOLUCAO legado soma devolvido, DEVOLUCAO_CLIENTE soma consumido e NAO devolvido; (3)
+  projeto nao cadastrado → `Projeto #<id>`; (4) data_inicio corta (a linha do projeto some por
+  inteiro quando a unica movimentacao fica de fora); (5) gate ALMOXARIFE 403/COMPRAS 200/GESTOR
+  200; (6) export com cabecalho deepStrictEqual; (7) nota com o texto ATUAL/retroativo/
+  DEVOLUCAO_CLIENTE e gate fechado por padrao.
+  **Achado real da task (I2, confirmado por execucao):** a devolucao NUNCA gravava projeto_id em
+  producao — o payload da tela nao envia origem_projeto_id/origem_os_id — entao `devolvido`
+  seria estruturalmente zero sem correcao. `returnService.registrarDevolucao` passa a HERDAR
+  projeto_id/os_id da saida CITADA quando o chamador nao informa (mesmo molde da heranca de lote
+  ja existente ali, returnService.js:80); devolucao avulsa (sem saida citada) continua sem
+  projeto, declarado. Provado pela ROTA REAL (POST /devolucoes), nao por fixture SQL.
+- [x] Step 3: verde + regressao — suite completa 121→122 arquivos, todos verdes;
+  test:almoxarifado 42/42, test:validation 4/4, test:safealter 3/3, test:sqlite 3/3. Regressao
+  de devolucao rodada a parte (devolucaoDestinos, devolucaoVinculo, materialClienteDevolucao,
+  sucataDedicada, sucateamentoRotas, notificacaoDividas, bloqueioGuardas,
+  loteControleObrigatorio, materialClienteIlhaAposentada, materialClientePosicao) — nenhuma
+  cita origem_projeto_id/origem_os_id nem seta projeto_id/os_id na saida testada, entao a
+  heranca nova nao move nenhum assert existente. Regressao adicional achada e corrigida: a nova
+  entrada gated no registro (3o gate, alem de inventario-divergencias/solicitacoes-compra)
+  quebrava contagens hardcoded em relatoriosRegistro.api.test.js (18→19 chaves) e
+  relatoriosJornada.api.test.js (PRODUCAO via `RELATORIOS.length - 2`, agora `- 3`) — as duas
+  atualizadas.
+- [x] Step 4: controles positivos (8bc58ec, todos sabotados e revertidos manualmente — nunca
+  `git checkout` —, md5 identico antes/depois de cada um) — (i) tirar
+  `mv.projeto_id IS NOT NULL` do WHERE → movimentacao sem projeto vaza, teste (1) cai; (ii)
+  trocar a subtracao por soma no `liquido` → cai em dois projetos diferentes (teste 1 e 2: 42
+  em vez de 26 e de 18); (iii) tirar o filtro de `m.proprietario_cliente_id IS NULL` → material
+  de cliente vaza (1000034 em vez de 34), teste (1) cai; (iv) remover a heranca de
+  projeto_id/os_id do returnService (`origemProjetoFinal = origem_projeto_id || null`, sem
+  fallback para `saidaOriginal`) → `devolvido` cai de 8 para 0 na devolucao pela rota real,
+  teste (1) cai (prova que a heranca do Step 1/2 e load-bearing, nao decorativa).
+- [x] Step 5: commit unico 8bc58ec (server/services/almoxarifado/movementTypes.js,
+  reportRegistry.js, reportService.js, returnService.js;
+  server/routes/almoxarifado/extended.js; server/tests/api/relatorioCustoProjeto.api.test.js
+  novo; relatoriosJornada.api.test.js e relatoriosRegistro.api.test.js corrigidos).
 
 ### Task 4: Tela (RN-06) — galho, worktree, SÓ após Tasks 1-2
 
