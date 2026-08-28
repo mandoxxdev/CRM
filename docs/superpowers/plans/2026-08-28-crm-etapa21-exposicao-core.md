@@ -30,12 +30,14 @@ fica declarada sem teste, com o motivo escrito.
 
 | ID | Resumo |
 |---|---|
-| RN-01 | O zip não inclui `.runtime-secrets.json` nem `backups/`; **inclui** `database.sqlite` e `uploads/` |
-| RN-02 | Token do backup só por header, `timingSafeEqual`, mínimo 32 caracteres; query string recusada |
-| RN-03 | Todo download (aceito ou negado) é registrado com horário e IP |
-| RN-04 | `getEmailConfig`: banco (conjunto completo) → env → hardcoded; `from` cai para `user` |
+| RN-01 | O zip não inclui `.runtime-secrets.json` nem o diretório `backups/`; **inclui** `database.sqlite`, `uploads/` e a cópia de backup mais recente |
+| RN-02 | `timingSafeEqual` no token; **query string ainda aceita** com aviso de depreciação no log; token curto **avisa**, não recusa |
+| RN-03 | Todo download (aceito ou negado) é registrado com horário, `req.ip` **e `x-forwarded-for`** |
+| RN-04 | `getEmailConfig`: **env → hardcoded** (banco FORA); `from` cai para `user` |
 | RN-05 | Nenhum GET de configuração do core devolve `email_smtp_pass` em claro (plural E singular) |
-| RN-06 | `PUT /configuracoes/:chave` não grava máscara nem vazio como senha |
+| RN-06 | `PUT /configuracoes/:chave` recusa com **400** valor vazio ou que **contenha** a máscara |
+| RN-07 | A tela nunca envia a máscara: campo nasce vazio, com placeholder; vazio não dispara PUT |
+| RN-08 | O zip mantém o fallback de recuperação (a cópia de backup mais recente entra) |
 
 ## Contratos congelados
 
@@ -157,11 +159,11 @@ Test `server/tests/api/configSecretsCore.api.test.js`.
 motivo: a função lê o banco de produção real via `db` do módulo e o único consumidor é uma
 rota que não tem harness. A prova é manual (Step 2).
 
-- [ ] **Step 1: implementar** a precedência do C4 ponto 2, com o comentário sobre a
-  credencial comprometida.
-- [ ] **Step 2: prova manual** (não versionada): script que carrega a função com banco
-  preenchido → usa o banco; com `host` vazio → cai para env; com env vazia → cai para o
-  hardcoded; e `from` de duas caixas → cai para `user`. Registrar a saída no relato.
+- [ ] **Step 1: implementar** a precedência do C4 ponto 2 (**env → hardcoded, banco FORA**),
+  com o comentário sobre a credencial comprometida e sobre por que o banco não entra.
+- [ ] **Step 2: prova manual** (não versionada): script que carrega a função com `SMTP_*`
+  definidas → usa env; sem elas → cai para o hardcoded; `SMTP_FROM` com duas caixas → cai
+  para `SMTP_USER`. Registrar a saída no relato.
 - [ ] **Step 3: commit.**
 
 ### Task 4 (limpeza de documentação)
