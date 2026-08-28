@@ -150,7 +150,7 @@ seed+leitor no servidor; adicionar os 3 campos no client antes dos seeds da T1 d
 - Produces: C2 (`ALERT_REGISTRY`, `resolverDias(db, entrada)`), C3,
   `varrerAlertasRegistrados(db)` → `[{chave, enfileiradas, duplicadas, sem_destinatario}]`.
 
-- [ ] **Step 1: teste que falha primeiro** — cenários (molde de setup: inserts diretos como
+- [x] **Step 1: teste que falha primeiro** — cenários (molde de setup: inserts diretos como
   nos testes de `requisicaoEntregaMotor`/`toolOcorrencia`; configurar
   `alertas_estoque_emails=["a@b.c"]` e o toggle antes):
   1. calibração vencida (ferramenta `exige_calibracao=1` + calibração `data_validade`
@@ -181,14 +181,19 @@ seed+leitor no servidor; adicionar os 3 campos no client antes dos seeds da T1 d
   8. C4: `PUT /configuracoes` com `alerta_calibracao_dias=0` → 400
      `Configuração "alerta_calibracao_dias" deve ser um número de dias maior que zero`;
      `=45` → 200 e a varredura passa a usar 45.
-- [ ] **Step 2: rodar e ver falhar** (`node tests/api/alertaRegistro.api.test.js`).
-- [ ] **Step 3: implementar** — `alertRegistry.js` com as 7 entradas C3 (SQL de
+- [x] **Step 2: rodar e ver falhar** (`node tests/api/alertaRegistro.api.test.js`) — vermelho
+  real: `MODULE_NOT_FOUND` (alertRegistry inexistente).
+- [x] **Step 3: implementar** — `alertRegistry.js` com as 7 entradas C3 (SQL de
   requisição/reserva/sem-endereço escrito no registro; os demais delegando às funções
   existentes); `varrerAlertasRegistrados` com o toggle e destinatários no molde de
-  `varrerLotesVencendo`; configs no schema; PREFIXOS_DIAS; Job B.
-- [ ] **Step 4: verde + controle positivo** — sabotar o dedupe de `RESERVA_PARADA` para
-  incluir `Date.now()` e ver RN-02 falhar; reverter. `npm run test:api` inteiro.
-- [ ] **Step 5: commit** — `Almoxarifado Etapa 16 Task 1: registro de alertas e varredura pela fila`.
+  `varrerLotesVencendo`; configs no schema; PREFIXOS_DIAS; Job B. Nota de implementação:
+  requires LAZY no registro e na varredura (purchaseService/inspectionService requerem a fila
+  no topo — require de topo fecharia o ciclo, mesmo padrão documentado na fila).
+- [x] **Step 4: verde + controle positivo** — sabotagem do dedupe de `RESERVA_PARADA` com
+  `Date.now()` derrubou os cenários 3 e 7 (7/9); revertida, 9/9 de novo. `npm run test:api`
+  inteiro: 126/126 arquivos OK (paridade `configuracoesGerais` 15/15 e relatório
+  sem-endereço `enderecamento` 3/3 continuam verdes).
+- [x] **Step 5: commit** — `6bed5e2` `Almoxarifado Etapa 16 Task 1: registro de alertas e varredura pela fila`.
 
 ### Task 2 (tronco): ação `ver_alertas` + GET central
 
@@ -283,7 +288,16 @@ Reposição (`ReposicaoAlmoxarifado.js` — o Critical da E11: 403 nunca vira te
   paridade das configs, `erro:true` versionado via registro injetável, asserções sempre por
   evento (materiais de teste caem em sem_consumo automaticamente). A revisão foi
   interrompida pelo limite de sessão no meio e retomada com contexto intacto.
-- [ ] Task 1 (tronco)
+- [x] Task 1 (tronco) — `6bed5e2` (2026-08-28). `alertaRegistro.api.test.js` 9/9 (TDD:
+  vermelho `MODULE_NOT_FOUND` antes de implementar; sabotagem do dedupe de RESERVA_PARADA
+  com `Date.now()` caçada pelos cenários 3 e 7, revertida). Suíte `npm run test:api`
+  completa: **126/126 arquivos OK** (`configuracoesGerais` 15/15 e `enderecamento` 3/3
+  verdes). Entregue: `alertRegistry.js` (7 entradas C3 + `resolverDias` +
+  `listarMateriaisSemEndereco` extraída do relatório sem mudar comportamento +
+  `STATUS_REQUISICAO_ATRASAVEL` derivado de `TRANSICOES`), `varrerAlertasRegistrados`
+  (fila, molde `varrerLotesVencendo`), 3 configs semeadas (C4), `PREFIXOS_DIAS` →
+  `'alerta_'`, varredura nova no Job B. A Task 2 consome `ALERT_REGISTRY`/`resolverDias`
+  exportados de `services/almoxarifado/alertRegistry.js`.
 - [ ] Task 2 (tronco)
 - [ ] Task 3 (galho)
 - [ ] Task 4 (integração)
