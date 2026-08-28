@@ -247,7 +247,9 @@ async function materialAtual(db, materialId) {
     const confAberta = await abrirConferencia(app, { categoria: categoriaAberta, tolerancia_percentual: 100000 });
     const confCancelada = await abrirConferencia(app, { categoria: categoriaCancelada, tolerancia_percentual: 100000 });
 
-    const resCancelar = await request(app).put(`/api/almoxarifado/conferencias/${confCancelada.id}/cancelar`);
+    // Etapa 18 (RN-03): cancelar passou a exigir `motivo` (>= 5 caracteres).
+    const resCancelar = await request(app).put(`/api/almoxarifado/conferencias/${confCancelada.id}/cancelar`)
+      .send({ motivo: 'Cancelada para nao entrar no relatorio' });
     assert.strictEqual(resCancelar.status, 200, JSON.stringify(resCancelar.body));
 
     const rel = await relatorio(app);

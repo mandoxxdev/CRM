@@ -36,6 +36,13 @@ const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
 const { validate } = require('../services/almoxarifado/validation');
 const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../services/almoxarifado/audit');
+// Etapa 18 (C0): o binding desestruturado acima e resolvido no require e cacheado — um teste
+// nao consegue substituir `registrarAuditoria` por um stub que lanca, e a RN-02 ("auditoria
+// nunca derruba o ato") viraria um teste VAZIO: passaria verde sem jamais ter derrubado
+// auditoria nenhuma. As chamadas NOVAS usam `audit.registrarAuditoria(...)`, resolvido na hora
+// da chamada, e por isso sao alcancaveis pelo stub. As antigas ficam como estao de proposito —
+// esta etapa acrescenta, nao reescreve o que ja funciona.
+const audit = require('../services/almoxarifado/audit');
 
 function denyUnlessAlmoxAdmin(req, res) {
   if (!canConfigureAlmox(req.user)) {
@@ -922,6 +929,35 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
       const materiais = await dbAll(db, sql, params);
 
+      if (materiais.length > 0) {
+        await Promise.all(materiais.map((m) => dbRun(db,
+          `INSERT INTO itens_conferencia_almoxarifado (conferencia_id, material_id, quantidade_sistema)
+           VALUES (?, ?, ?)`, [confId, m.id, m.quantidade_sistema])));
+      }
+
+      // Etapa 18 (RN-01): auditoria da CRIACAO num ponto unico que os DOIS ramos alcancam. O
+      // ramo "zero materiais" responde 201 antes do laco de itens — pendurar a auditoria depois
+      // do laco (como o design original propunha) deixaria a conferencia sem item nenhum FORA do
+      // rastro, furando a propria RN-01. Pos-escrita e best-effort: a conferencia ja existe,
+      // derrubar a resposta por causa do log seria devolver erro para uma escrita que deu certo.
+      // `tipo` NAO entra: e a 3a coluna morta da tabela (DEFAULT 'GERAL', nunca escrita).
+      try {
+        await audit.registrarAuditoria(db, {
+          entidade: 'conferencia', entidade_id: confId, acao: 'CRIACAO',
+          usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+          dados_novos: {
+            numero,
+            escopo_descricao: escopoDescricao,
+            modo_cego: modoCegoValor,
+            dupla_contagem: duplaContagemValor,
+            tolerancia_percentual: toleranciaValor,
+            total_itens: materiais.length,
+          },
+        });
+      } catch (errAudit) {
+        console.error('[almoxarifado] Falha ao registrar auditoria de criação de conferência:', errAudit.message);
+      }
+
       if (materiais.length === 0) {
         // Achado da revisao final de branch: faltava totalItens aqui — o contrato promete o
         // campo em toda resposta 201, e o front (ConferenciaEstoque.js) le
@@ -932,10 +968,6 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           dupla_contagem: duplaContagemValor, escopo_descricao: escopoDescricao,
         });
       }
-
-      await Promise.all(materiais.map((m) => dbRun(db,
-        `INSERT INTO itens_conferencia_almoxarifado (conferencia_id, material_id, quantidade_sistema)
-         VALUES (?, ?, ?)`, [confId, m.id, m.quantidade_sistema])));
 
       res.status(201).json({
         id: confId, numero, status: 'ABERTO',
@@ -968,13 +1000,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // CONCLUIDO/CANCELADO aceitava edicao, contradizendo o proprio teste que a spec 17 sempre
       // pediu ("conferencia concluida nao pode ser editada"). Nao e mudanca de comportamento
       // pedida por ninguem: e o comportamento que a spec sempre presumiu e o codigo nunca teve.
-      const conf = await dbGet(db, `SELECT status, dupla_contagem FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
+      // Etapa 18: `numero` entrou no SELECT (nao estava em escopo) — o log da contagem carrega
+      // `conferencia_numero` para o rastro ser legivel sem um segundo JOIN na leitura.
+      const conf = await dbGet(db, `SELECT status, dupla_contagem, numero FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
       if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
       if (conf.status !== 'ABERTO') {
         return res.status(400).json({ error: `Conferência não está aberta (status atual: ${conf.status})` });
       }
 
-      const item = await dbGet(db, `SELECT ic.*, ma.quantidade_atual
+      // Etapa 18: `ma.codigo` entrou no SELECT (nao estava em escopo) — o log da contagem grava
+      // o CODIGO do material, nao so o id: quem le a auditoria meses depois nao tem como
+      // resolver um material_id que pode ter sido desativado.
+      const item = await dbGet(db, `SELECT ic.*, ma.quantidade_atual, ma.codigo AS material_codigo
               FROM itens_conferencia_almoxarifado ic
               JOIN materiais_almoxarifado ma ON ic.material_id = ma.id
               WHERE ic.id = ? AND ic.conferencia_id = ?`, [req.params.itemId, req.params.id]);
@@ -1023,6 +1060,38 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               SET quantidade_contada = ?, divergencia = ?, observacoes = COALESCE(?, observacoes)${marcaRecontagem ? ', recontado = 1' : ''}${camposAutoria}
               WHERE id = ?`,
         [quantidadeNum, divergencia, observacoes || null, req.user.id, autorNome, req.params.itemId]);
+
+      // Etapa 18 (RN-01/RN-04): pos-escrita, best-effort. `dados_anteriores` so existe quando
+      // JA havia contagem — e a unica memoria do valor que este UPDATE acabou de sobrescrever
+      // (nao ha historico de contagem em lugar nenhum). `item` foi lido ANTES do UPDATE, entao
+      // carrega o valor antigo; o codigo ja dependia disso na linha do `ehRecontagem`.
+      //
+      // CONTAGEM vs RECONTAGEM segue EXATAMENTE o `marcaRecontagem` que governou o UPDATE, para
+      // o log nunca contar uma historia diferente da que o banco guardou. Atencao: sem
+      // `dupla_contagem`, a segunda contagem do MESMO usuario cai em RECONTAGEM — o log nao
+      // afirma "outra pessoa", so registra quem recontou.
+      try {
+        const dadosNovosLog = {
+          conferencia_numero: conf.numero,
+          item_id: Number(req.params.itemId),
+          material_codigo: item.material_codigo,
+          quantidade_sistema: item.quantidade_sistema,
+          quantidade_contada: quantidadeNum,
+          divergencia,
+        };
+        if (marcaRecontagem) dadosNovosLog.recontado_por_nome = autorNome;
+        await audit.registrarAuditoria(db, {
+          entidade: 'conferencia', entidade_id: Number(req.params.id),
+          acao: marcaRecontagem ? 'RECONTAGEM' : 'CONTAGEM',
+          usuario_id: req.user.id, usuario_nome: autorNome,
+          dados_anteriores: item.quantidade_contada !== null
+            ? { quantidade_contada: item.quantidade_contada, contado_por_nome: item.contado_por_nome }
+            : null,
+          dados_novos: dadosNovosLog,
+        });
+      } catch (errAudit) {
+        console.error('[almoxarifado] Falha ao registrar auditoria de contagem de conferência:', errAudit.message);
+      }
 
       res.json({ success: true, divergencia, recontagem: marcaRecontagem });
     } catch (e) {
@@ -1208,6 +1277,33 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP, justificativa_ajuste = ?, impacto_financeiro = ?
               WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, impactoFinanceiro, req.params.id]);
 
+      // Etapa 18 (RN-01): a conclusao SEM ajustes nao deixava vestigio NENHUM — nenhuma
+      // movimentacao e criada e `data_fim` nao tem autor, entao "quem fechou este inventario?"
+      // simplesmente nao tinha resposta. Vem ANTES dos ganchos de alerta/notificacao: aqueles
+      // podem demorar (e-mail) e o rastro do ato nao pode ficar atras deles na fila.
+      // `tolerancia_percentual` e a variavel `tolerancia` (a EFETIVA, que governou a decisao de
+      // RN-05), nao a coluna crua — o log tem de dizer o limite que de fato valeu.
+      try {
+        await audit.registrarAuditoria(db, {
+          entidade: 'conferencia', entidade_id: Number(req.params.id), acao: 'CONCLUSAO',
+          usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+          dados_novos: {
+            numero: conf.numero,
+            aplicar_ajustes: !!aplicar_ajustes,
+            ajustesAplicados,
+            impactoFinanceiro,
+            itens_contados: todosItens.length,
+            itens_divergentes: ajustes.length,
+            tolerancia_percentual: tolerancia,
+            modo_cego: conf.modo_cego,
+            dupla_contagem: conf.dupla_contagem,
+          },
+          justificativa: justificativa_ajuste || null,
+        });
+      } catch (errAudit) {
+        console.error('[almoxarifado] Falha ao registrar auditoria de conclusão de conferência:', errAudit.message);
+      }
+
       await Promise.all([...materiaisAjustados].map((mid) => alertService.verificarAlertaPorMaterialId(db, mid).catch(() => null)));
 
       // Etapa 17 (RN-05, gancho C4.3): aviso pos-commit, ao lado do gancho de alerta acima — a
@@ -1231,14 +1327,68 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   });
 
-  // DELETE /api/almoxarifado/conferencias/:id — cancelar conferência
-  app.put('/api/almoxarifado/conferencias/:id/cancelar', requirePermission('inventario'), (req, res) => {
-    db.run(`UPDATE conferencias_almoxarifado SET status = 'CANCELADO' WHERE id = ? AND status = 'ABERTO'`,
-      [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(400).json({ error: 'Só é possível cancelar conferências abertas' });
-        res.json({ success: true });
-      });
+  // PUT /api/almoxarifado/conferencias/:id/cancelar — cancelar conferência
+  //
+  // Etapa 18 (RN-03). Era um `db.run` de uma linha, em callback, com `status='ABERTO'` embutido
+  // no WHERE: uma conferencia com 300 contagens sumia do fluxo sem autor, sem data e sem motivo,
+  // e o unico 400 cobria "nao existe" e "nao esta aberta" indistintamente. Virou `async` porque
+  // o gate de status e os campos do log EXIGEM ler a conferencia antes — nao e refatoracao
+  // gratuita do bloco inline (que esta etapa nao reorganiza), e a exigencia do proprio contrato.
+  //
+  // Ordem das guardas: 404 antes da regua do motivo, para que id inexistente responda "nao
+  // encontrada" mesmo quando o chamador tambem esqueceu o motivo.
+  //
+  // O 400 de status usa o MESMO literal das duas rotas irmas (PUT /item e PUT /concluir).
+  // Descartado o 409 que o design propunha primeiro: no modulo, 409 e reservado a
+  // unicidade/corrida, e um texto novo seria a terceira redacao para a mesma semantica.
+  //
+  // A resposta de sucesso fica inalterada (`{ success: true }`) — o front da Etapa 17 depende.
+  app.put('/api/almoxarifado/conferencias/:id/cancelar', requirePermission('inventario'), async (req, res) => {
+    try {
+      const { motivo } = req.body || {};
+
+      const conf = await dbGet(db, `SELECT id, numero, status FROM conferencias_almoxarifado WHERE id = ?`,
+        [req.params.id]);
+      if (!conf) return res.status(404).json({ error: 'Conferência não encontrada' });
+
+      // Mesma regua (>= 5) e mesmo molde de mensagem da justificativa de ajuste da conclusao:
+      // cancelar um inventario e tao destrutivo quanto aplicar o ajuste dele.
+      const motivoValido = motivo !== undefined && motivo !== null && String(motivo).trim().length >= 5;
+      if (!motivoValido) {
+        return res.status(400).json({ error: 'Motivo do cancelamento deve ter pelo menos 5 caracteres' });
+      }
+
+      if (conf.status !== 'ABERTO') {
+        return res.status(400).json({ error: `Conferência não está aberta (status atual: ${conf.status})` });
+      }
+
+      const motivoLimpo = String(motivo).trim();
+      await dbRun(db, `UPDATE conferencias_almoxarifado
+              SET status = 'CANCELADO', cancelado_por_id = ?, cancelado_por_nome = ?,
+                  cancelado_em = CURRENT_TIMESTAMP, motivo_cancelamento = ?
+              WHERE id = ?`,
+        [req.user.id, req.user.nome || req.user.email, motivoLimpo, req.params.id]);
+
+      // Quantas contagens foram jogadas fora — o numero que faz o cancelamento doer no log.
+      const contados = await dbGet(db, `SELECT COUNT(*) AS total FROM itens_conferencia_almoxarifado
+              WHERE conferencia_id = ? AND quantidade_contada IS NOT NULL`, [req.params.id]);
+
+      try {
+        await audit.registrarAuditoria(db, {
+          entidade: 'conferencia', entidade_id: conf.id, acao: 'CANCELAMENTO',
+          usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+          dados_anteriores: { status: 'ABERTO' },
+          dados_novos: { numero: conf.numero, itens_contados: contados?.total || 0 },
+          justificativa: motivoLimpo,
+        });
+      } catch (errAudit) {
+        console.error('[almoxarifado] Falha ao registrar auditoria de cancelamento de conferência:', errAudit.message);
+      }
+
+      res.json({ success: true });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
 

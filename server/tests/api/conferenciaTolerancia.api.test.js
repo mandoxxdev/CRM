@@ -128,7 +128,9 @@ async function itemDoMaterial(db, confId, materialId) {
     const matCancelada = await novoMaterial(db, { qtd: 100 });
     const confCancelada = await abrirConferencia(app);
     const itemCancelada = await itemDoMaterial(db, confCancelada.id, matCancelada.id);
-    const resCancelar = await request(app).put(`/api/almoxarifado/conferencias/${confCancelada.id}/cancelar`).send({});
+    // Etapa 18 (RN-03): cancelar passou a exigir `motivo` (>= 5 caracteres).
+    const resCancelar = await request(app).put(`/api/almoxarifado/conferencias/${confCancelada.id}/cancelar`)
+      .send({ motivo: 'Cancelada para o teste de status' });
     assert.strictEqual(resCancelar.status, 200, JSON.stringify(resCancelar.body));
 
     const tentativaCancelada = await request(app)

@@ -1762,6 +1762,16 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE itens_conferencia_almoxarifado ADD COLUMN recontado_por_id INTEGER');
   await safeAlter(db, 'ALTER TABLE itens_conferencia_almoxarifado ADD COLUMN recontado_por_nome TEXT');
 
+  // Etapa 18 (RN-03): cancelar conferencia era `UPDATE ... SET status='CANCELADO'` e mais nada —
+  // uma conferencia com 300 contagens sumia do fluxo sem autor, sem data e sem motivo. As quatro
+  // colunas abaixo dao ao cancelamento a mesma prestacao de contas que os outros cancelamentos do
+  // modulo ja tinham. `motivo_cancelamento` e obrigatorio na rota (>= 5 caracteres), mas a coluna
+  // fica nullable: as conferencias canceladas ANTES desta etapa nao tem motivo para inventar.
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN cancelado_por_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN cancelado_por_nome TEXT');
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN cancelado_em DATETIME');
+  await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN motivo_cancelamento TEXT');
+
   // ── Config defaults ──
   const configs = [
     // Migrado de routes/almoxarifado.js (diff de segurança — Task 3): chaves base que só

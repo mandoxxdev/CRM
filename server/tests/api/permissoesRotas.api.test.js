@@ -182,7 +182,11 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
     const { id: confId } = await criarConferencia(db, { materialId: matId });
 
     setUser(GESTOR);
-    const res = await request(app).put(`/api/almoxarifado/conferencias/${confId}/cancelar`).send({});
+    // Etapa 18 (RN-03): cancelar passou a exigir `motivo` (>= 5 caracteres). O caso PRODUCAO ->
+    // 403 acima continua mandando `{}` de proposito: o gate de perfil roda ANTES do handler, e
+    // e exatamente isso que aquele teste afere.
+    const res = await request(app).put(`/api/almoxarifado/conferencias/${confId}/cancelar`)
+      .send({ motivo: 'Cancelada pelo gestor no teste de perfil' });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
   });
 
