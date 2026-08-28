@@ -1114,7 +1114,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           acao: marcaRecontagem ? 'RECONTAGEM' : 'CONTAGEM',
           usuario_id: req.user.id, usuario_nome: autorNome,
           dados_anteriores: item.quantidade_contada !== null
-            ? { quantidade_contada: item.quantidade_contada, contado_por_nome: item.contado_por_nome }
+            // O autor do valor que esta sendo SOBRESCRITO e o ultimo recontador quando ja
+            // houve recontagem — `contado_por_nome` guarda para sempre o PRIMEIRO contador
+            // (achado A2 da revisao adversarial, reproduzido: da 3a contagem em diante o log
+            // atribuia a Ana um valor que era do Bruno). Este de/para e a unica memoria do
+            // numero que evapora; nomear a pessoa errada e o pior jeito de falhar.
+            ? { quantidade_contada: item.quantidade_contada,
+                contado_por_nome: item.recontado_por_nome || item.contado_por_nome }
             : null,
           dados_novos: dadosNovosLog,
         });
@@ -1309,8 +1315,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // confundiria "fechou a contagem" com "homologou ajuste", e gravar NULL apagaria uma
       // homologacao anterior. Fragmento condicional no mesmo truque do `camposAutoria` da rota de
       // contagem — a template string ja e montada assim neste arquivo.
-      const camposAprovador = aplicar_ajustes ? ', aprovador_id = ?, aprovador_nome = ?' : '';
-      const paramsAprovador = aplicar_ajustes ? [req.user.id, req.user.nome || req.user.email] : [];
+      // RN-05 pelo FATO, nao pela flag (achado A4 da revisao adversarial): concluir com
+      // `aplicar_ajustes: true` numa conferencia SEM divergencia nenhuma carimbava um
+      // "homologador" de um ajuste que nao existiu. A coluna foi ressuscitada nesta etapa
+      // com a semantica "quem homologou o ajuste" — sem ajuste aplicado, nao ha o que
+      // homologar.
+      const homologou = aplicar_ajustes && ajustes.length > 0;
+      const camposAprovador = homologou ? ', aprovador_id = ?, aprovador_nome = ?' : '';
+      const paramsAprovador = homologou ? [req.user.id, req.user.nome || req.user.email] : [];
       await dbRun(db, `UPDATE conferencias_almoxarifado
               SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP, justificativa_ajuste = ?, impacto_financeiro = ?${camposAprovador}
               WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, impactoFinanceiro, ...paramsAprovador, req.params.id]);
@@ -1401,11 +1413,25 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
 
       const motivoLimpo = String(motivo).trim();
-      await dbRun(db, `UPDATE conferencias_almoxarifado
+      // CLAIM ATOMICO no WHERE (achado A1 da revisao adversarial, ALTO — reproduzido): a
+      // primeira versao desta reescrita fazia dbGet-e-depois-UPDATE sem `status` no WHERE,
+      // trocando pelo caminho de leitura o claim que a rota ANTIGA tinha. Medido com
+      // Promise.all: dois cancelamentos simultaneos respondiam 200 os DOIS e gravavam DUAS
+      // linhas de CANCELAMENTO; e cancelar concorrente com concluir deixava a conferencia
+      // CONCLUIDO com as 4 colunas de cancelamento preenchidas e o log dizendo "cancelada e
+      // depois concluida". A trilha desta etapa existe para nao mentir — entao so audita
+      // quem REIVINDICOU o cancelamento (changes === 1).
+      const claim = await dbRun(db, `UPDATE conferencias_almoxarifado
               SET status = 'CANCELADO', cancelado_por_id = ?, cancelado_por_nome = ?,
                   cancelado_em = CURRENT_TIMESTAMP, motivo_cancelamento = ?
-              WHERE id = ?`,
+              WHERE id = ? AND status = 'ABERTO'`,
         [req.user.id, req.user.nome || req.user.email, motivoLimpo, req.params.id]);
+      if (claim.changes === 0) {
+        // Perdeu a corrida entre o dbGet e este UPDATE. Mesma resposta do caminho sequencial
+        // (o status ja mudou), sem auditar um cancelamento que nao vigorou.
+        const atual = await dbGet(db, `SELECT status FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id]);
+        return res.status(400).json({ error: `Conferência não está aberta (status atual: ${atual?.status || 'DESCONHECIDO'})` });
+      }
 
       // Quantas contagens foram jogadas fora — o numero que faz o cancelamento doer no log.
       const contados = await dbGet(db, `SELECT COUNT(*) AS total FROM itens_conferencia_almoxarifado

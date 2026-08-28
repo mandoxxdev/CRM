@@ -1279,8 +1279,20 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // entao as auditorias de um mesmo ato (criar + contar, contar + concluir) empatam e a ordem
       // dentro do empate fica indefinida. Sem o desempate, ler a historia de uma conferencia pelo
       // log devolve os atos fora de ordem de vez em quando.
-      sql += ' ORDER BY created_at DESC, id DESC LIMIT 200';
-      res.json(await dbAll(db, sql, params));
+      // Paginacao explicita com total (achado A3 da revisao adversarial da Etapa 18,
+      // reproduzido): o `LIMIT 200` cru truncava EM SILENCIO e engolia os atos mais VELHOS —
+      // numa conferencia de 210 itens contados, a propria CRIACAO sumia da resposta e nada
+      // no corpo dizia que faltava algo. Numa trilha de auditoria, truncar sem avisar e pior
+      // que nao truncar. A resposta deixa de ser array puro e passa a declarar o corte;
+      // nenhuma tela consome esta rota hoje (verificado), entao a mudanca de forma nao
+      // quebra consumidor nenhum.
+      const totalRow = await dbGet(db, sql.replace('SELECT *', 'SELECT COUNT(*) AS total'), params);
+      const total = totalRow?.total || 0;
+      const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 200, 1), 1000);
+      const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+      sql += ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?';
+      const itens = await dbAll(db, sql, [...params, limite, offset]);
+      res.json({ total, limite, offset, truncado: total > offset + itens.length, itens });
     } catch (e) { handleError(res, e); }
   });
 

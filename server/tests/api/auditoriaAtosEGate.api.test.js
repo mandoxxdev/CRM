@@ -186,7 +186,11 @@ async function criarRequisicao(db, { status = 'PENDENTE', itens = [], solicitant
         assert.strictEqual(res.body.error, 'Sem permissão para esta operação');
         assert.strictEqual(res.body.acao, 'configurar', 'o 403 tem de nomear a acao `configurar`');
       } else {
-        assert.ok(Array.isArray(res.body), 'ADMINISTRADOR le o log');
+        // A resposta declara o corte (achado A3 da revisao adversarial: o LIMIT 200 cru
+        // truncava em silencio e engolia os atos MAIS VELHOS de um inventario grande).
+        assert.ok(Array.isArray(res.body.itens), 'ADMINISTRADOR le o log (res.body.itens)');
+        assert.strictEqual(typeof res.body.total, 'number', 'a resposta declara o total');
+        assert.strictEqual(typeof res.body.truncado, 'boolean', 'a resposta declara se truncou');
       }
     });
   }
@@ -334,7 +338,7 @@ async function criarRequisicao(db, { status = 'PENDENTE', itens = [], solicitant
 
     const res = await request(app).get(`/api/almoxarifado/auditoria?entidade=conferencia&entidade_id=${conf.id}`);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-    const acoes = res.body.map((r) => r.acao);
+    const acoes = res.body.itens.map((r) => r.acao);
     assert.deepStrictEqual(acoes, ['CONTAGEM', 'CRIACAO'],
       `ordem instavel sem o desempate por id: veio ${JSON.stringify(acoes)}`);
   });

@@ -778,4 +778,30 @@ describe('ConferenciaEstoque — RN-03: cancelar conferência exige motivo (>= 5
     // O modal fica de pé: quem tomou a recusa continua vendo o que escreveu.
     expect(container.querySelector('.almox-modal')).toBeTruthy();
   });
+
+  test('conferencia CANCELADA mostra o motivo, e a coluna de encerramento usa cancelado_em', async () => {
+    // Achado A1 da revisao de costura: a etapa passou a EXIGIR um motivo do usuario e a
+    // gravar autor/data — e nada disso aparecia em lugar nenhum. Alem disso a coluna
+    // "Data Fim" ficava "—" para sempre, porque o cancelamento grava `cancelado_em`.
+    const cancelada = {
+      id: 9, numero: 'CONF-0009', status: 'CANCELADO', responsavel_nome: 'Ana Souza',
+      data_inicio: '2026-08-20T10:00:00Z', data_fim: null,
+      cancelado_por_nome: 'Gestor Teste', cancelado_em: '2026-08-27 14:30:00',
+      motivo_cancelamento: 'Duplicidade com o inventario geral',
+    };
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/conferencias') return Promise.resolve({ data: [cancelada] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+
+    const texto = container.textContent;
+    expect(texto).toContain('Duplicidade com o inventario geral');
+    // A data de encerramento sai do cancelado_em (nao fica "—").
+    expect(texto).toMatch(/27\/08/);
+    // Quem cancelou e quando ficam no title, para nao poluir a linha.
+    const dica = container.querySelector('[title*="Cancelada por"]');
+    expect(dica).toBeTruthy();
+    expect(dica.getAttribute('title')).toContain('Gestor Teste');
+  });
 });

@@ -146,9 +146,14 @@ function parse(linha) {
     const res = await request(app)
       .get(`/api/almoxarifado/auditoria?entidade=conferencia&entidade_id=${estado.conf.id}`);
     assert.strictEqual(res.status, 200, `esperava 200 para ADMINISTRADOR: ${JSON.stringify(res.body).slice(0, 200)}`);
-    assert.ok(Array.isArray(res.body), 'a rota devolve um array');
+    // A rota devolve { total, limite, offset, truncado, itens } — a forma passou a declarar
+    // o corte no fix-round da Fase 5 (achado A3: truncagem silenciosa engolia a CRIACAO de
+    // inventarios grandes, justamente o ato mais velho).
+    assert.ok(Array.isArray(res.body.itens), 'a rota devolve { itens: [...] }');
+    assert.strictEqual(res.body.truncado, false, 'esta jornada e pequena: nada truncado');
+    assert.strictEqual(res.body.total, res.body.itens.length, 'total bate com o que veio');
 
-    const emDesc = res.body.map(parse);
+    const emDesc = res.body.itens.map(parse);
     // A rota ordena `created_at DESC, id DESC` — a MAIS NOVA vem primeiro. A historia na ordem em
     // que aconteceu e, portanto, este array INVERTIDO. O `.reverse()` esta aqui explicito de
     // proposito: e a unica traducao entre "o que a API devolve" e "a ordem dos fatos".

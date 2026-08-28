@@ -416,6 +416,96 @@ async function auditorias(db, confId, acao) {
     assert.strictEqual((await auditorias(db, conf.id, 'CRIACAO')).length, 1, 'o stub tem de ter sido restaurado');
   });
 
+  // ── Achados da revisao adversarial da Fase 5 ────────────────────────────────────────────────
+  await test('A1: dois cancelamentos simultaneos -> so UM vigora e so UM e auditado (claim atomico)', async () => {
+    setUser(ADMIN);
+    const mat = await novoMaterial(db);
+    const conf = await abrirConferencia(app, { observacoes: 'corrida de cancelamento' });
+    await itemDoMaterial(db, conf.id, mat.id);
+
+    // A primeira versao da rota reescrita fazia dbGet-e-depois-UPDATE sem status no WHERE:
+    // os DOIS respondiam 200 e o log ganhava DUAS linhas de CANCELAMENTO — a trilha desta
+    // etapa fabricando um cancelamento que nao vigorou.
+    const [r1, r2] = await Promise.all([
+      request(app).put(`/api/almoxarifado/conferencias/${conf.id}/cancelar`).send({ motivo: 'Cancelamento numero UM' }),
+      request(app).put(`/api/almoxarifado/conferencias/${conf.id}/cancelar`).send({ motivo: 'Cancelamento numero DOIS' }),
+    ]);
+
+    const status = [r1.status, r2.status].sort();
+    assert.deepStrictEqual(status, [200, 400], `um 200 e um 400: veio ${JSON.stringify(status)}`);
+
+    const logs = await auditorias(db, conf.id, 'CANCELAMENTO');
+    assert.strictEqual(logs.length, 1, `so o vencedor da corrida audita; veio ${logs.length}`);
+
+    // O motivo gravado na conferencia e o do MESMO cancelamento que foi auditado.
+    const linha = await dbGet(db, 'SELECT motivo_cancelamento, status FROM conferencias_almoxarifado WHERE id = ?', [conf.id]);
+    assert.strictEqual(linha.status, 'CANCELADO');
+    assert.strictEqual(linha.motivo_cancelamento, logs[0].justificativa,
+      'o motivo gravado tem de ser o do cancelamento auditado, nao o do perdedor');
+  });
+
+  await test('A2: da 3a contagem em diante, o de/para nomeia QUEM gravou o valor sobrescrito', async () => {
+    const ANA = { id: 71, nome: 'Ana', role: 'usuario', perfil_almoxarifado: 'ALMOXARIFE', email: 'ana@test.com' };
+    const BRUNO = { id: 72, nome: 'Bruno', role: 'usuario', perfil_almoxarifado: 'ALMOXARIFE', email: 'bruno@test.com' };
+    const CARLA = { id: 73, nome: 'Carla', role: 'usuario', perfil_almoxarifado: 'ALMOXARIFE', email: 'carla@test.com' };
+
+    setUser(ANA);
+    const mat = await novoMaterial(db);
+    const conf = await abrirConferencia(app, { dupla_contagem: true, observacoes: 'tres contagens' });
+    const item = await itemDoMaterial(db, conf.id, mat.id);
+    const contar = (qtd) => request(app)
+      .put(`/api/almoxarifado/conferencias/${conf.id}/item/${item.id}`).send({ quantidade_contada: qtd });
+
+    await contar(80);                    // Ana
+    setUser(BRUNO); await contar(85);    // Bruno reconta: anterior 80, de Ana
+    setUser(CARLA); await contar(88);    // Carla reconta: anterior 85, de BRUNO
+
+    const recontagens = await auditorias(db, conf.id, 'RECONTAGEM');
+    assert.strictEqual(recontagens.length, 2, JSON.stringify(recontagens.map((r) => r.usuario_nome)));
+    assert.strictEqual(recontagens[0].dados_anteriores.contado_por_nome, 'Ana');
+    assert.strictEqual(recontagens[0].dados_anteriores.quantidade_contada, 80);
+    // O 85 e do Bruno. `contado_por_nome` do item guarda para sempre o PRIMEIRO contador —
+    // usar esse campo aqui atribuia o valor do Bruno a Ana (achado A2, reproduzido).
+    assert.strictEqual(recontagens[1].dados_anteriores.quantidade_contada, 85);
+    assert.strictEqual(recontagens[1].dados_anteriores.contado_por_nome, 'Bruno',
+      'o autor do valor sobrescrito e o ultimo recontador, nao o primeiro contador');
+  });
+
+  await test('A4: aplicar_ajustes numa conferencia SEM divergencia nao carimba aprovador', async () => {
+    setUser(ADMIN);
+    const mat = await novoMaterial(db, { qtd: 40 });
+    const conf = await abrirConferencia(app, { observacoes: 'sem divergencia' });
+    const item = await itemDoMaterial(db, conf.id, mat.id);
+    await request(app).put(`/api/almoxarifado/conferencias/${conf.id}/item/${item.id}`)
+      .send({ quantidade_contada: 40 }); // contagem IGUAL ao sistema: zero divergencia
+
+    setUser(GESTOR);
+    const res = await request(app).put(`/api/almoxarifado/conferencias/${conf.id}/concluir`)
+      .send({ aplicar_ajustes: true, justificativa_ajuste: 'Fechamento sem divergencia' });
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.ajustesAplicados, 0, 'pre-condicao: nenhum ajuste aplicado');
+
+    const linha = await dbGet(db, 'SELECT aprovador_id, aprovador_nome FROM conferencias_almoxarifado WHERE id = ?', [conf.id]);
+    assert.strictEqual(linha.aprovador_id, null, 'sem ajuste aplicado nao ha o que homologar (RN-05 pelo FATO)');
+    assert.strictEqual(linha.aprovador_nome, null);
+
+    // Controle: com divergencia de verdade, o aprovador E gravado.
+    // 1% de divergencia: abaixo da tolerancia padrao (2%), senao a rota exige recontagem e
+    // o ato nem acontece — a conclusao seria 400 e o controle provaria nada.
+    const mat2 = await novoMaterial(db, { qtd: 100 });
+    const conf2 = await abrirConferencia(app, { observacoes: 'com divergencia' });
+    setUser(ADMIN);
+    const item2 = await itemDoMaterial(db, conf2.id, mat2.id);
+    await request(app).put(`/api/almoxarifado/conferencias/${conf2.id}/item/${item2.id}`).send({ quantidade_contada: 99 });
+    setUser(GESTOR);
+    const resCtrl = await request(app).put(`/api/almoxarifado/conferencias/${conf2.id}/concluir`)
+      .send({ aplicar_ajustes: true, justificativa_ajuste: 'Ajuste real de contagem' });
+    assert.strictEqual(resCtrl.status, 200, JSON.stringify(resCtrl.body));
+    assert.strictEqual(resCtrl.body.ajustesAplicados, 1, 'pre-condicao do controle: ajuste aplicado');
+    const linha2 = await dbGet(db, 'SELECT aprovador_nome FROM conferencias_almoxarifado WHERE id = ?', [conf2.id]);
+    assert.strictEqual(linha2.aprovador_nome, 'Gestor', 'com ajuste aplicado o homologador E gravado');
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed > 0 ? 1 : 0);

@@ -409,7 +409,30 @@ versão do plano mandava seguir o `confirm`+`prompt` da tela de Reposição, que
   `test:api` **134/134**, `test:almoxarifado` **42/0**, `test:validation` **4/0**,
   `test:safealter` **3/0**, `test:sqlite` **3/0**; client **530 testes em 36 suítes**,
   build `CI=true` exit 0.
-- [ ] Fase 5 — revisão adversarial (2 lentes)
+- [x] Fase 5 — revisão adversarial (2 lentes, 2026-08-28). **Backend: Needs-fix-round com um
+  ALTO** — A1: a reescrita do `cancelar` (Task 1) trocou o claim atômico da rota antiga por
+  read-then-write, e sob concorrência **a trilha nova fabricava um cancelamento que não
+  vigorou** (dois 200 simultâneos, duas linhas de CANCELAMENTO, e conferência ficando
+  CONCLUIDO com as 4 colunas de cancelamento preenchidas). Regressão introduzida por esta
+  etapa, no exato ponto que ela existe para tornar confiável → claim de volta no WHERE, com
+  teste de `Promise.all`. A2: o de/para da RN-04 nomeava o **primeiro** contador como autor
+  do valor sobrescrito — da 3ª contagem em diante atribuía a Ana um número do Bruno → passa a
+  usar `recontado_por_nome || contado_por_nome`. A3: o único leitor da trilha truncava em 200
+  **em silêncio** e engolia os atos mais velhos (a CRIACAO some num inventário de 210 itens —
+  o próprio caso que o design usa de exemplo) → resposta passa a declarar
+  `{ total, limite, offset, truncado, itens }`. A4: `aprovador_*` seguia a FLAG e não o FATO
+  (carimbava homologador de ajuste inexistente) → `ajustes.length > 0`. A5 (informativo):
+  conclusão dupla concorrente é não-atomicidade **pré-existente** — declarada.
+  **Costura: Needs-fix-round leve, mas de VALOR** — A1: o motivo/autor/data do cancelamento
+  eram gravados e **invisíveis** (e a coluna de encerramento ficava "—" para sempre numa
+  conferência cancelada) → agora aparecem na lista, com teste. A2: a trilha não tem leitor
+  prático (gate `configurar` + nenhuma tela) → **declarado na letra B do fechamento**, porque
+  abrir o log inteiro para o Gestor é decisão de exposição do usuário, não default meu.
+  Refutados com sabotagem medida: contrato do motivo (régua, nome do campo, gate de status),
+  RN-02 nos 3 atos vizinhos, o desempate `id DESC` (o plano dizia que seria no-op — **estava
+  errado**, sem ele caem 1 teste da matriz e 3 da jornada), e os "6 cenários que passavam
+  vazios" (sabotados de verdade, falham). Revalidação: server **134/134**, client
+  **531/531**, build exit 0.
 - [ ] Fase 6 — fechar-etapa + retro (**incluindo a correção das specs 03 e 23**)
 
 ## Retro (4 números — preencher no fechamento)

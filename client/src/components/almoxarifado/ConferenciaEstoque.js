@@ -569,12 +569,27 @@ const ConferenciaEstoque = () => {
                   <td style={{ fontWeight: 700, fontFamily: 'monospace' }}>{c.numero}</td>
                   <td>
                     <span className={`almox-badge almox-badge-${c.status.toLowerCase()}`}>{c.status}</span>
+                    {/* Etapa 18: o cancelamento passou a exigir motivo e a gravar autor/data —
+                        sem mostrar aqui, o usuário digita a justificativa e ela some da tela no
+                        instante seguinte (achado A1 da revisão de costura: dado escrito e
+                        invisível). O título carrega quem cancelou e quando. */}
+                    {c.status === 'CANCELADO' && c.motivo_cancelamento && (
+                      <div
+                        style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 4, maxWidth: 220 }}
+                        title={`Cancelada por ${c.cancelado_por_nome || '—'}${c.cancelado_em ? ` em ${formatDate(c.cancelado_em)}` : ''}`}
+                      >
+                        {c.motivo_cancelamento}
+                      </div>
+                    )}
                   </td>
                   {/* RN-01: escopo_descricao é nulo em conferências criadas antes da etapa. */}
                   <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{c.escopo_descricao || '—'}</td>
                   <td style={{ fontSize: '0.875rem' }}>{c.responsavel_nome}</td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(c.data_inicio)}</td>
-                  <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(c.data_fim)}</td>
+                  {/* Conferência cancelada grava `cancelado_em`, não `data_fim` — sem este
+                      fallback a linha cancelada ficava com "—" para sempre na coluna de
+                      encerramento (achado A1 da revisão de costura). */}
+                  <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{formatDate(c.data_fim || c.cancelado_em)}</td>
                   <td>
                     <div className="almox-actions">
                       <button className="almox-btn-icon primary" title="Abrir" onClick={() => abrirConferencia(c.id)}>
