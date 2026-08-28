@@ -13,6 +13,39 @@ const { getClausulasHelices } = require('./clausulasHelices');
 
 // Cria os dois modelos de contrato na primeira subida. Idempotente: se o modelo ja existe,
 // nao mexe nele — para nao desfazer edicoes que o usuario tenha feito depois.
+/**
+ * Converte para 'aprovada' as propostas que ficaram gravadas com o status 'aceita'.
+ *
+ * O botao ACEITAR gravava 'aceita', um status que NENHUMA consulta de relatorio olhava -
+ * essas propostas ficavam fora da taxa de conversao, do valor aprovado e do ranking de
+ * vendedores. A rota ja foi corrigida; isto aqui acerta o que ficou para tras, autorizado
+ * pelo usuario.
+ *
+ * Idempotente: depois da primeira execucao nao existe mais linha para converter, entao as
+ * proximas subidas nao fazem nada. Registra no historico de status de cada proposta, para
+ * a mudanca nao aparecer do nada para quem for conferir, e loga o que converteu.
+ */
+function migrarAceitaParaAprovada() {
+  db.all("SELECT id, numero_proposta FROM propostas WHERE status = 'aceita'", [], (err, linhas) => {
+    if (err) return console.error('❌ Erro ao migrar propostas aceitas:', err.message);
+    if (!linhas || !linhas.length) return;
+    const hoje = new Date().toISOString().split('T')[0];
+    db.run(
+      `UPDATE propostas SET status = 'aprovada', data_fechamento = COALESCE(data_fechamento, ?),
+         updated_at = CURRENT_TIMESTAMP WHERE status = 'aceita'`,
+      [hoje],
+      (errUp) => {
+        if (errUp) return console.error('❌ Erro ao migrar propostas aceitas:', errUp.message);
+        linhas.forEach((p) => {
+          registrarStatusProposta(p.id, 'aceita', 'aprovada', null,
+            'Migracao: aceita passou a contar como aprovada nos relatorios', () => {});
+        });
+        const numeros = linhas.map((p) => p.numero_proposta || ('#' + p.id)).join(', ');
+        console.log('✅ ' + linhas.length + " proposta(s) migrada(s) de 'aceita' para 'aprovada': " + numeros);
+      }
+    );
+  });
+}
 function semearModelosClausulas() {
   const semear = (nome, descricao, isPadrao, clausulas) => {
     db.get('SELECT id FROM clausulas_modelo WHERE nome = ?', [nome], (err, row) => {
@@ -320,6 +353,40 @@ const JWT_SECRET = resolveJwtSecret(PERSISTENT_DATA_DIR);
 // Soft-delete de propostas: registros legados sem coluna ativo continuam visíveis
 const SQL_PROPOSTA_ATIVA = '(ativo IS NULL OR ativo = 1)';
 const sqlPropostaAtivaAlias = (alias) => `(${alias}.ativo IS NULL OR ${alias}.ativo = 1)`;
+
+/**
+ * Filtros do dashboard (botao "Filtros"): PERIODO e USUARIO.
+ *
+ * Periodo recorta pelas propostas CRIADAS no intervalo - created_at, nao data_fechamento.
+ * Uma regra so, valendo em todos os numeros, para o usuario nao ter que adivinhar qual
+ * cartao usa qual data.
+ *
+ * Usuario recorta por responsavel_id, que e o vinculo que o resto do sistema ja usa para
+ * dizer de quem e a proposta (o ranking de vendedores e as telas de detalhe fazem
+ * LEFT JOIN usuarios u ON p.responsavel_id = u.id). created_by diria quem digitou, que nao
+ * e a mesma pergunta.
+ *
+ * Os valores entram INLINE no SQL em vez de virarem parametro: estas consultas sao montadas
+ * por template literal e todas passam [] fixo, entao costurar parametros em uma duzia de
+ * chamadas seria mais arriscado do que validar a entrada. A validacao e estrita - data so
+ * passa como YYYY-MM-DD e usuario so como inteiro; qualquer outra coisa vira null e aquele
+ * filtro simplesmente some. Nada que venha do cliente chega cru ao banco.
+ */
+function filtroDashboardSql(req, alias) {
+  const q = (req && req.query) || {};
+  const soData = (v) => (/^d{4}-d{2}-d{2}$/.test(String(v || '')) ? String(v) : null);
+  const soInteiro = (v) => (/^d{1,10}$/.test(String(v || '')) ? String(parseInt(v, 10)) : null);
+  const prefixo = alias ? alias + '.' : '';
+  const inicio = soData(q.inicio);
+  const fim = soData(q.fim);
+  const usuario = soInteiro(q.usuario);
+  let sql = '';
+  if (inicio) sql += ` AND date(${prefixo}created_at) >= '${inicio}'`;
+  if (fim) sql += ` AND date(${prefixo}created_at) <= '${fim}'`;
+  if (usuario) sql += ` AND ${prefixo}responsavel_id = ${usuario}`;
+  return sql;
+}
+
 
 function isAdminUser(user) {
   return String(user?.role || '').toLowerCase() === 'admin';
@@ -16950,12 +17017,12 @@ app.get('/api/dashboard', authenticateToken, (req, res) => {
             stats.projetosPorStatus = rows || [];
 
             // Propostas por status
-            db.all(`SELECT status, COUNT(*) as total FROM propostas WHERE ${SQL_PROPOSTA_ATIVA} GROUP BY status`, [], (err, rows) => {
+            db.all(`SELECT status, COUNT(*) as total FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)} GROUP BY status`, [], (err, rows) => {
               if (err) return res.status(500).json({ error: err.message });
               stats.propostasPorStatus = rows || [];
 
               // Valor total de propostas aprovadas
-              db.get(`SELECT SUM(valor_total) as total FROM propostas WHERE status = ? AND ${SQL_PROPOSTA_ATIVA}`, ['aprovada'], (err, row) => {
+              db.get(`SELECT SUM(valor_total) as total FROM propostas WHERE status = ? AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}`, ['aprovada'], (err, row) => {
                 if (err) return res.status(500).json({ error: err.message });
                 stats.valorTotalPropostasAprovadas = row.total || 0;
 
@@ -17043,7 +17110,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT c.estado as uf, COUNT(*) as total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
-    WHERE c.estado IS NOT NULL AND ${sqlPropostaAtivaAlias('p')}
+    WHERE c.estado IS NOT NULL AND ${sqlPropostaAtivaAlias('p')}${filtroDashboardSql(req, 'p')}
     GROUP BY c.estado
     ORDER BY total DESC
   `, [], (err, rows) => {
@@ -17068,7 +17135,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT c.razao_social, COUNT(*) as total_compras, SUM(p.valor_total) as valor_total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
-    WHERE p.status = 'aprovada' AND ${sqlPropostaAtivaAlias('p')}
+    WHERE p.status = 'aprovada' AND ${sqlPropostaAtivaAlias('p')}${filtroDashboardSql(req, 'p')}
     GROUP BY c.id
     ORDER BY total_compras DESC
     LIMIT 10
@@ -17082,7 +17149,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT c.razao_social, COUNT(*) as total_propostas
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
-    WHERE ${sqlPropostaAtivaAlias('p')}
+    WHERE ${sqlPropostaAtivaAlias('p')}${filtroDashboardSql(req, 'p')}
     GROUP BY c.id
     ORDER BY total_propostas DESC
     LIMIT 10
@@ -17098,7 +17165,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
            SUM(COALESCE(p.valor_total, 0)) as valor_total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
-    WHERE ${sqlPropostaAtivaAlias('p')}
+    WHERE ${sqlPropostaAtivaAlias('p')}${filtroDashboardSql(req, 'p')}
     GROUP BY c.id
     HAVING valor_total > 0
     ORDER BY valor_total DESC
@@ -17113,7 +17180,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT c.estado as regiao, COUNT(*) as total_compras, SUM(p.valor_total) as valor_total
     FROM propostas p
     JOIN clientes c ON p.cliente_id = c.id
-    WHERE p.status = 'aprovada' AND c.estado IS NOT NULL AND ${sqlPropostaAtivaAlias('p')}
+    WHERE p.status = 'aprovada' AND c.estado IS NOT NULL AND ${sqlPropostaAtivaAlias('p')}${filtroDashboardSql(req, 'p')}
     GROUP BY c.estado
     ORDER BY total_compras DESC
     LIMIT 10
@@ -17127,7 +17194,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
     SELECT origem_busca, COUNT(*) as total
     FROM propostas
     WHERE origem_busca IS NOT NULL
-      AND ${SQL_PROPOSTA_ATIVA}
+      AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
     GROUP BY origem_busca
     ORDER BY total DESC
   `, [], (err, rows) => {
@@ -17143,7 +17210,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
            ROUND(SUM(CASE WHEN status = 'aprovada' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) as taxa_conversao
     FROM propostas
     WHERE familia_produto IS NOT NULL
-      AND ${SQL_PROPOSTA_ATIVA}
+      AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
     GROUP BY familia_produto
     ORDER BY taxa_conversao DESC
   `, [], (err, rows) => {
@@ -17168,7 +17235,7 @@ app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
   db.all(`
     SELECT motivo_nao_venda, COUNT(*) as total
     FROM propostas
-    WHERE motivo_nao_venda IS NOT NULL AND ${SQL_PROPOSTA_ATIVA}
+    WHERE motivo_nao_venda IS NOT NULL AND ${SQL_PROPOSTA_ATIVA}${filtroDashboardSql(req)}
     GROUP BY motivo_nao_venda
     ORDER BY total DESC
   `, [], (err, rows) => {
@@ -23109,6 +23176,7 @@ httpServer.on('error', (err) => {
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor CRM GMP INDUSTRIAIS rodando na porta ${PORT}`);
   otimizarImagensExistentes();
+  migrarAceitaParaAprovada();
   console.log(`📊 API disponível em http://localhost:${PORT}/api`);
   console.log(`💬 Chat Socket.io em http://localhost:${PORT}/socket.io`);
   if (process.env.NODE_ENV === 'production') {

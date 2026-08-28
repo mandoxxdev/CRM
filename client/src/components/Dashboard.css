@@ -1160,3 +1160,130 @@
   color: var(--gmp-text-light);
   font-style: italic;
 }
+
+/* ===== Painel de Filtros do dashboard =====
+   O botao "Filtros" existia na tela desde sempre, mas sem onClick: nao havia estado, painel
+   nem parametro chegando na API. Aqui esta a casca visual do que passou a funcionar.
+
+   Ancorado por position: relative no wrapper, para o painel abrir colado no botao em vez de
+   empurrar o cabecalho. z-index acima dos cartoes de KPI, que tem sombra propria. */
+
+.dashboard-filtros {
+  position: relative;
+}
+
+/* Contador de filtros ativos: o usuario precisa saber que os numeros estao recortados
+   mesmo com o painel fechado, senao vai achar que o dashboard esta errado. */
+.btn-filter.com-filtro {
+  border-color: var(--gmp-primary);
+  color: var(--gmp-primary);
+}
+
+.btn-filter-contador {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--gmp-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dashboard-filtros-painel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 280px;
+  padding: 16px;
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 40px -12px rgba(15, 23, 42, 0.28);
+}
+
+.dashboard-filtros-atalhos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dashboard-filtros-atalhos button {
+  padding: 6px 10px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gmp-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.dashboard-filtros-atalhos button:hover {
+  border-color: var(--gmp-primary);
+  color: var(--gmp-primary);
+}
+
+.dashboard-filtros-painel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gmp-text-light);
+}
+
+.dashboard-filtros-painel input,
+.dashboard-filtros-painel select {
+  padding: 8px 10px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.dashboard-filtros-painel input:focus,
+.dashboard-filtros-painel select:focus {
+  outline: 2px solid var(--gmp-primary);
+  outline-offset: -1px;
+}
+
+/* Qual data o periodo usa nao e obvio, e a resposta muda o numero. Melhor dizer do que
+   deixar o usuario conferir na mao para descobrir. */
+.dashboard-filtros-nota {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--gmp-text-light);
+}
+
+.dashboard-filtros-limpar {
+  padding: 9px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gmp-text);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.dashboard-filtros-limpar:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dashboard-filtros-limpar:not(:disabled):hover {
+  border-color: var(--gmp-primary);
+  color: var(--gmp-primary);
+}
