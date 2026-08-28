@@ -383,6 +383,13 @@ const Layout = () => {
     { path: '/almoxarifado/reservas', icon: FiLock, label: 'Reservas' },
     { path: '/almoxarifado/conferencias', icon: FiClipboard, label: 'Conferência' },
     { path: '/almoxarifado/mapa', icon: FiMap, label: 'Mapa de Áreas' },
+    // Etapa 22: trilha de auditoria (quem mexeu em que, quando, e o que mudou). COM adminOnly,
+    // ao contrario de alertas/notificacoes/relatorios: la o gate do backend e um perfil
+    // operacional (ver_alertas, gerenciar_notificacoes) e o chao de fabrica tem o que ver aqui
+    // dentro; aqui o gate e `configurar`, que e admin de fato, entao deixar o item visivel para
+    // os demais perfis so produziria 403. Vizinho de "Configuracoes" de proposito — os dois
+    // itens do menu que exigem `configurar` ficam juntos.
+    { path: '/almoxarifado/auditoria', icon: FiShield, label: 'Auditoria', adminOnly: true },
     { path: '/almoxarifado/configuracoes', icon: FiSettings, label: 'Configurações', adminOnly: true },
   ];
 

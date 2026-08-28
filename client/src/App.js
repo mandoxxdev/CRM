@@ -115,6 +115,7 @@ import {
   AlertasAlmoxarifado,
   NotificacoesAlmoxarifado,
   RelatoriosAlmoxarifado,
+  AuditoriaAlmoxarifado,
   ChatPage,
   MinhaConta,
   TodolistBoard,
@@ -504,6 +505,10 @@ function AppRoutes() {
         <Route path="alertas" element={<AlertasAlmoxarifado />} />
         <Route path="notificacoes" element={<NotificacoesAlmoxarifado />} />
         <Route path="relatorios" element={<RelatoriosAlmoxarifado />} />
+        {/* Etapa 22: trilha de auditoria. Gate REAL e o requirePermission('configurar') do
+            backend (RN-01) — a tela ja barra visualmente pelo useAlmoxPermissoes, e o item de
+            menu e adminOnly. */}
+        <Route path="auditoria" element={<AuditoriaAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />
         <Route path="configuracoes" element={<ProtectedAlmoxConfigRoute><ConfiguracoesAlmoxarifado /></ProtectedAlmoxConfigRoute>} />
       </Route>
