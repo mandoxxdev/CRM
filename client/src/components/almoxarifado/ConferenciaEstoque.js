@@ -56,6 +56,11 @@ const ConferenciaEstoque = () => {
   const [aplicarAjustes, setAplicarAjustes] = useState(true);
   const [showConcluirModal, setShowConcluirModal] = useState(false);
   const [justificativaAjuste, setJustificativaAjuste] = useState('');
+  // Etapa 18 (RN-03): cancelar deixou de ser um window.confirm e virou modal com motivo —
+  // guarda a conferência inteira (id + numero) porque o cabeçalho do modal mostra o número.
+  const [confParaCancelar, setConfParaCancelar] = useState(null);
+  const [motivoCancelamento, setMotivoCancelamento] = useState('');
+  const [cancelando, setCancelando] = useState(false);
 
   useEffect(() => {
     loadConferencias();
@@ -243,14 +248,34 @@ const ConferenciaEstoque = () => {
     }
   };
 
-  const handleCancelar = async (id, numero) => {
-    if (!window.confirm(`Cancelar conferência ${numero}?`)) return;
+  // Etapa 18 (RN-03). Era `window.confirm` + PUT sem corpo: o servidor agora exige `motivo` com
+  // 5+ caracteres (routes/almoxarifado.js, C2), entao o fluxo antigo virou 400 garantido — e,
+  // antes disso, um inventario com centenas de contagens sumia do fluxo sem autor nem motivo no
+  // log. Molde deliberado: o modal de justificativa do ajuste deste mesmo arquivo, que ja tem a
+  // regua >= 5 — nao o `confirm`+`prompt` da tela de Reposicao, que so barra vazio e deixaria um
+  // motivo de 3 caracteres tomar o 400 do servidor.
+  const abrirModalCancelar = (conf) => {
+    setConfParaCancelar(conf);
+    setMotivoCancelamento('');
+  };
+
+  const handleCancelar = async () => {
+    if (!confParaCancelar) return;
+    setCancelando(true);
     try {
-      await api.put(`/almoxarifado/conferencias/${id}/cancelar`);
+      await api.put(`/almoxarifado/conferencias/${confParaCancelar.id}/cancelar`, {
+        motivo: motivoCancelamento.trim(),
+      });
       toast.success('Conferência cancelada');
+      setConfParaCancelar(null);
+      setMotivoCancelamento('');
       loadConferencias();
     } catch (err) {
+      // O modal fica ABERTO de proposito na recusa: quem tomou o 400 (status ja mudou, motivo
+      // curto) continua vendo o que escreveu em vez de ter de redigitar tudo.
       toast.error(err.response?.data?.error || 'Erro ao cancelar conferência');
+    } finally {
+      setCancelando(false);
     }
   };
 
@@ -557,7 +582,7 @@ const ConferenciaEstoque = () => {
                       </button>
                       {c.status === 'ABERTO' && (
                         <button className="almox-btn-icon danger" title="Cancela esta contagem sem alterar saldo nenhum"
-                          onClick={(e) => { if (!bloquearSeNaoPode('inventario', e)) return; handleCancelar(c.id, c.numero); }}>
+                          onClick={(e) => { if (!bloquearSeNaoPode('inventario', e)) return; abrirModalCancelar(c); }}>
                           <FiXCircle />
                         </button>
                       )}
@@ -569,6 +594,46 @@ const ConferenciaEstoque = () => {
           </table>
         )}
       </div>
+
+      {/* Modal cancelar (Etapa 18, RN-03): mesmo molde do modal de concluir — textarea de
+          motivo e botão travado até 5 caracteres, a mesma régua que o servidor aplica. */}
+      {confParaCancelar && (
+        <div className="almox-modal-overlay" onClick={() => setConfParaCancelar(null)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Cancelar Conferência {confParaCancelar.numero}</h2>
+              <button className="almox-modal-close" onClick={() => setConfParaCancelar(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p>
+                A contagem será encerrada como CANCELADO sem alterar saldo nenhum. As contagens
+                já registradas são descartadas, e o motivo fica no log de auditoria com o seu nome.
+              </p>
+              <div className="almox-field" style={{ marginTop: 16 }}>
+                <label className="almox-label">Motivo do cancelamento *</label>
+                <textarea
+                  className="almox-textarea"
+                  rows={3}
+                  value={motivoCancelamento}
+                  onChange={e => setMotivoCancelamento(e.target.value)}
+                  placeholder="Por que esta contagem está sendo cancelada (mínimo 5 caracteres)"
+                />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button type="button" className="btn-almox-secondary" onClick={() => setConfParaCancelar(null)}>Voltar</button>
+              <button
+                type="button"
+                className="btn-almox-danger"
+                disabled={cancelando || motivoCancelamento.trim().length < 5}
+                onClick={handleCancelar}
+              >
+                {cancelando ? 'Cancelando...' : 'Confirmar cancelamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal criar */}
       {showCreateModal && (
