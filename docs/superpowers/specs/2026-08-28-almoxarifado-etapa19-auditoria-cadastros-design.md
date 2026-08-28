@@ -20,7 +20,9 @@ A medição cobriu os 23 endpoints e achou seis coisas que impedem "sair auditan
 4. **Quatro rotas não checam existência** (`PUT`/`DELETE` de tipo-material, `DELETE` de
    localização e de família): id inexistente responde 200 hoje. Auditar sem isso registraria
    um ato que não aconteceu — o mesmo defeito que a Etapa 18 corrigiu no `DELETE /materiais`.
-   `this.changes` está disponível nos callbacks e nunca é consultado.
+   `this.changes` está disponível **nessas quatro** e nunca é consultado. *(Correção da
+   revisão do plano: a generalização "está disponível nos callbacks" era falsa — o callback
+   do cascata do rename de setor e os dos quatro POSTs são **arrow**, sem `this`.)*
 5. **`PUT /setores/:id` renomeia N localizações em cascata, fire-and-forget** (callback
    vazio, erro ignorado, `changes` nunca lido). O efeito colateral mais amplo do escopo não
    deixa rastro e a rota **nem sabe quantas linhas mexeu**.
@@ -63,8 +65,12 @@ as três correções de comportamento que a auditoria exige para não mentir.
   candidata a remoção; apagar rota sem confirmar quem a chama (integração? script?) é
   irreversível de graça.
 - **Normalizar as ações antigas** (`CRIAR` vs `CRIACAO`, `ATUALIZAR` vs `EDICAO`): o módulo
-  já é inconsistente; esta etapa **congela os majoritários** (`CRIACAO`/`EDICAO`/`EXCLUSAO`)
-  para as ações NOVAS e registra a dívida — reescrever as antigas mexeria em log histórico.
+  já é inconsistente (medido: `EDICAO` 1 ocorrência no módulo inteiro, `ATUALIZACAO` 1,
+  `ATUALIZAR` 1 — não há majoritário a congelar). Esta etapa usa `CRIACAO`/`EDICAO`/`EXCLUSAO`
+  para as **entidades novas** e respeita o verbo já existente **dentro** de cada entidade
+  antiga (`material` continua com `ATUALIZACAO`/`DESATIVACAO`) — consistência dentro da
+  entidade ganha da consistência entre entidades. A dívida fica registrada; reescrever as
+  antigas mexeria em log histórico.
 
 ## Regras de negócio (RN)
 
@@ -97,8 +103,11 @@ Nada de serviço novo. Auditoria pós-escrita nos handlers, no molde já estabel
   `extended.js` isso é mudança nova (hoje é desestruturado).
 
 **Diff de configuração** — função pura nova em `services/almoxarifado/configDiff.js`:
-`calcularDiff(anteriores, novos, chavesSecretas)` → `{ anteriores, novos }` só com as chaves
-que mudaram, com segredo mascarado. Testável sem HTTP e reusada pelas rotas 13/14/15.
+`calcularDiff(anteriores, novos)` → `{ anteriores, novos }` só com as chaves que mudaram,
+com segredo **sempre** mascarado (a lista é interna, não um 3º argumento opcional — correção
+da revisão: `alertas_smtp_pass` é chave semeada e pode ser gravada pela rota genérica também,
+então mascaramento opt-in deixaria um buraco). Itera `Object.keys(novos)`, nunca a união.
+Testável sem HTTP e reusada pelas rotas 13/14/15.
 
 **Entidades novas:** `tipo_material`, `localizacao`, `setor`, `familia`, `configuracao`,
 `centro_custo`, `almoxarifado`, `setor_permissao` (snake_case singular, convenção do módulo).
