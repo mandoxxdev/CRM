@@ -225,16 +225,27 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
 - Modify: `server/routes/almoxarifado.js` (rotas 1-12)
 - Test: `server/tests/api/auditoriaCadastros.api.test.js`
 
-- [ ] **Step 1: teste que falha** — por recurso: criar/editar/excluir auditando com de/para
-  (RN-01); **RN-03**: id inexistente nas 4 rotas → 404 e **zero linhas**; **REATIVACAO**:
-  criar localização, excluir, criar de novo com o mesmo código → a 2ª vez audita
-  `REATIVACAO` com `dados_anteriores` (não `CRIACAO`); **RN-08**: renomear setor que tem 2
-  localizações → o log traz `localizacoes_renomeadas: 2`; RN-02 por stub.
-- [ ] **Step 2: rodar e ver falhar; implementar; verde.**
-- [ ] **Step 3: controle positivo** — sabotar o ramo de reativação (auditar sempre
-  `CRIACAO`) e ver o cenário falhar; reverter. `npm run test:api` inteiro — conferir
-  `restricoesEndereco` e `subfamilias` (cobrem DELETEs que passam a ter 404).
-- [ ] **Step 4: commit** — `Almoxarifado Etapa 19 Task 2: os cadastros passam a deixar rastro`.
+- [x] **Step 1: teste que falha** (`9e407e7`) — por recurso: criar/editar/excluir auditando
+  com de/para (RN-01); **RN-03**: id inexistente nas 4 rotas → 404 e **zero linhas**;
+  **REATIVACAO**: criar localização, excluir, criar de novo com o mesmo código → a 2ª vez
+  audita `REATIVACAO` com `dados_anteriores` (não `CRIACAO`); **RN-08**: renomear setor que
+  tem 2 localizações → o log traz `localizacoes_renomeadas: 2`, e o 2º caminho (edição que
+  **não** troca o nome) com `0`; RN-02 por stub, nos dois estilos de handler.
+  **24 cenários** em `server/tests/api/auditoriaCadastros.api.test.js` — dois a mais que o
+  plano pedia: a limitação declarada do `EXCLUSAO` em linha já inativa virou cenário (fixa o
+  comportamento por escrito) e o RN-02 ganhou um segundo caso no `PUT /setores` (o handler com
+  o cascata, estilo diferente do POST).
+- [x] **Step 2: rodar e ver falhar; implementar; verde** (`9e407e7`) — vermelho **3 passed,
+  21 failed**; verde **24/0**. Os 3 verdes iniciais são a guarda de 403 e os dois cenários
+  "rota recusou (400) e por isso NÃO audita", que passam trivialmente enquanto nada audita —
+  cada um está pareado com um cenário positivo no mesmo arquivo.
+- [x] **Step 3: controle positivo** (`9e407e7`) — ramo de reativação sabotado para auditar
+  sempre `CRIACAO` → **23/1**, com o cenário da REATIVACAO vermelho na mensagem certa (`a 2a
+  vez foi auditada como CRIACAO (2 linhas)`); revertido e verde de novo. `restricoesEndereco`
+  **12/0** e `subfamilias` **23/0**, medidos ANTES e DEPOIS (são os que cobrem os DELETEs que
+  passaram a ter 404) — inalterados. `npm run test:api` **137/137 arquivos OK**;
+  `test:almoxarifado` 42/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0.
+- [x] **Step 4: commit** (`9e407e7`) — `Almoxarifado Etapa 19 Task 2: os cadastros passam a deixar rastro`.
 
 ### Task 3 (galho): `extended.js` — C0, centros de custo, almoxarifados, permissões
 
@@ -342,7 +353,33 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
   numa rota que hoje grava;
   (d) `calcularDiff` ignora o par null→null (chave que não existia e continua sem valor) para
   não inventar uma "mudança" de nada — não estava escrito no C1, é consequência dele.
-- [ ] Task 2 (tronco)
+- [x] Task 2 (tronco) — `9e407e7`. Vermelho inicial **3/21** → verde **24/0**
+  (`auditoriaCadastros.api.test.js`, 24 cenários). Controle positivo: ramo de reativação
+  sabotado para auditar sempre `CRIACAO` → **23/1**, revertido. Os dois testes que o plano
+  mandava conferir por causa da RN-03 (200 → 404): `restricoesEndereco` **12/0** e
+  `subfamilias` **23/0**, iguais antes e depois. Suíte: `test:api` **137/137 arquivos OK**
+  (a contagem já inclui o arquivo da Task 3, que rodava em paralelo), `test:almoxarifado`
+  42/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0.
+  **Divergências e decisões, para as Tasks 4/5 saberem:**
+  (a) **a limitação do C3 foi CONFIRMADA na prática, não só prevista**: `DELETE` numa linha
+  já inativa responde 200 e grava um 2º `EXCLUSAO` que não excluiu nada (em SQLite `changes`
+  conta a linha **atingida**, não a que mudou de valor). Está fixada por cenário de teste
+  (`[limitacao declarada] ...`) para que a próxima sessão a encontre como decisão, não como
+  bug novo — o cenário quebra de propósito se alguém "consertar" sem atualizar a declaração;
+  (b) o de/para dos cadastros é a **linha inteira** (`SELECT *` antes e depois), não o diff
+  das configurações — cadastro tem poucos campos e o "de" completo é o que responde "como
+  estava antes?"; a única filtragem é `qtd_localizacoes` no setor (contagem derivada: no log
+  faria o cadastro parecer mudar sozinho quando alguém cria uma localização);
+  (c) o helper novo `auditarCadastro` (perto de `resolveAlmoxarifadoId`) devolve promessa que
+  **nunca rejeita** — os 12 handlers são callback aninhado e encadeiam
+  `.finally(() => res.json(...))`; converter para `async` seria a refatoração de estilo que as
+  Global Constraints proíbem;
+  (d) o cascata do rename loga `localizacoes_renomeadas: null` (não `0`) se o próprio UPDATE
+  do cascata falhar — o erro passa a aparecer no `console.error` em vez de ser engolido, e o
+  log não finge um número que não foi medido;
+  (e) `PUT /setores/:id` audita `EDICAO` **antes** de responder nos dois caminhos, inclusive
+  quando a resposta é a linha com `qtd_localizacoes` — a Task 4 pode contar com uma linha por
+  PUT de setor bem-sucedido.
 - [x] Task 3 (galho) — `3729afa`. Vermelho inicial **5/10** → verde **15/0**
   (`auditoriaExtended.api.test.js`). Controle positivo do C0: helper `auditar` de volta ao
   binding desestruturado → **13/2** (os dois cenários de RN-02), revertido. `test:api`
