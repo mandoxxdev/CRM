@@ -2,16 +2,25 @@
 
 > Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 15) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 16) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 15 ENTREGUE · roteiro de etapas COMPLETO)
+> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 16 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 15 completas — o roteiro de etapas do planejamento mestre acabou.** O
-> desenvolvimento foi retomado em 2026-08-28 em modo contínuo; a próxima frente sai do mapa
-> de status (`specs/modulo-almoxarifado/README.md`), não de roteiro — a maior lacuna é a
-> feature 20 (alertas operacionais: central no front e ~16 alertas restantes). O handoff está
-> no plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa15-mobilidade.md`, seção
-> "Próxima tarefa detalhada".
+> **Etapas 1 a 16 completas.** O roteiro do planejamento mestre acabou na 15; a 16 (alertas)
+> foi escolhida pelo mapa de status, e a próxima frente também será — candidatas nomeadas no
+> handoff do plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa16-alertas.md`
+> (seção "Próxima tarefa detalhada"): a fatia 2 da feature 20 (4 alertas de evento) ou o
+> buraco de auditoria da conferência de inventário (feature 23).
+>
+> A **Etapa 16 (Alertas operacionais) fechou em 2026-08-28** (`d9750ce..ed5f032`): o módulo
+> passa a **avisar sozinho** — 7 alertas novos varridos todo dia e enviados por e-mail pela
+> fila existente (calibração vencendo, estoque sem consumo, estoque excessivo, quarentena
+> parada, materiais sem endereço, requisição atrasada, reserva parada), e a tela nova
+> **Alertas** mostra tudo **ao vivo** (some da tela quando a condição é resolvida). Três
+> janelas novas em Configurações Gerais; a central é dos perfis Administrador/Almoxarife/
+> Gestor/Compras (decisão B28). Ver a seção "Etapa 16" abaixo com o roteiro.
+>
+> **Antes: 2026-08-28 (Etapa 15 ENTREGUE — mobilidade).**
 >
 > A **Etapa 15 (Mobilidade) fechou em 2026-08-28** (`7f74b6c..a82ad43`): a tela nova
 > **Scanner** lê o QR das etiquetas pela câmera do celular e abre o item já filtrado (QR
@@ -2834,6 +2843,42 @@ e o módulo ficou usável no celular (nenhuma coluna de tabela some mais).
   declarados (letra B25/D das novidades).
 - **Assinatura obrigatória por tipo de material** — os campos "requer assinatura/termo" do
   cadastro de tipos continuam sem efeito (decisão B26, esperando resposta).
+
+## Etapa 16 — Alertas operacionais: o sistema avisa sozinho (ENTREGUE — 2026-08-28)
+
+**O que mudou, em uma frase:** 7 alertas novos varridos todo dia (e-mail pela fila de
+notificações) e a tela **Alertas**, que mostra as condições **ao vivo**.
+
+### Roteiro de teste manual — a central
+
+1. Logado como Administrador (ou Almoxarife/Gestor/Compras), menu **Almoxarifado → Alertas**.
+   A tela lista um cartão por alerta (13 no total da central: os 7 novos + os já existentes
+   que têm condição consultável), cada um com o total e, quando há janela, o badge de dias.
+2. Crie uma condição: em **Ferramentas**, cadastre uma ferramenta que exige calibração e
+   registre uma calibração com validade de ontem. Volte em **Alertas** → **Atualizar**: o
+   cartão **Calibração vencendo** mostra 1; **Detalhes** expande a linha (ferramenta,
+   patrimônio, validade, dias restantes).
+3. Resolva a condição (registre calibração nova com validade futura) → **Atualizar** → o
+   total volta a 0 **na hora**. O e-mail já enfileirado NÃO some: confira em
+   **Notificações** (a central é ao vivo; a fila é o histórico).
+4. Repita com uma requisição: crie e aprove uma requisição com data de necessidade de ontem
+   → cartão **Requisição atrasada** conta 1; entregue-a por completo → some da central.
+5. **Permissão:** logado como usuário de perfil Produção, a tela mostra o painel `Dados
+   indisponíveis no momento` — nunca uma central vazia. O item de menu aparece (padrão do
+   módulo), mas nada carrega.
+6. **Configurações:** em Configurações Gerais, os campos `Alerta de Calibração (dias)`,
+   `Alerta de Quarentena Parada (dias)` e `Alerta de Reserva Parada (dias)` recusam 0 antes
+   de salvar; por API a recusa é `Configuração "alerta_calibracao_dias" deve ser um número
+   de dias maior que zero`.
+
+### O que a Etapa 16 NÃO cobre
+
+- 4 alertas de evento (material reprovado, divergências de recebimento/inventário, sem
+  certificado) e 3 com lacuna de dado — nomeados na spec 20.
+- Destinatário/canal por alerta (todos usam a lista única dos alertas de estoque) e digest.
+- **Atenção operacional (letra C18 das novidades):** o relógio da "quarentena parada" é a
+  data do RECEBIMENTO — NF que demorou a ser processada gera o alerta no primeiro dia real
+  de quarentena. Leia como "recebimento velho com item retido".
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

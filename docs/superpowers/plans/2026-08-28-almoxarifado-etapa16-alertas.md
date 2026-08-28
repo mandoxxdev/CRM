@@ -355,11 +355,42 @@ Reposição (`ReposicaoAlmoxarifado.js` — o Critical da E11: 403 nunca vira te
   das novidades):** `git checkout` para restaurar a sabotagem apagou o fix não commitado —
   refeito e revalidado. Revalidação final: server 128/128 (registro 10/10), client
   **522/522 em 36 suítes**, build exit 0.
-- [ ] Fase 6 — fechar-etapa + retro
+- [x] Fase 6 — fechar-etapa (2026-08-28): 7 artefatos (novidades com B28/B29, C18/C19 e
+  F10b; spec 20 reescrita com hashes, 2 itens FORA do checklist dizendo por quê e as
+  pendências nomeadas; mapa com linha da 20 e seção da Etapa 16; guia com roteiro; este
+  plano; manual do sistema). Verificação final medida no commit de fechamento.
 
 ## Retro (4 números — preencher no fechamento)
 
-- Rodadas de correção até verde: —
-- Achados da revisão: reais — / ruído —
-- Paralelismo real: —
+- Rodadas de correção até verde: **1** (fix round único `ed5f032`; nenhum teste falhou 2×)
+- Achados da revisão: **reais 4** (A1 varredura silenciosa + Major das datas DATE,
+  corrigidos; A2/A3 declarados — todos reproduzidos com sonda) / **ruído 0**
+- Paralelismo real: **T2 ∥ T3 e T4 em paralelo com T3 (3 execuções simultâneas no pico);
+  zero retrabalho entre elas.** A worktree da T3 nasceu DE NOVO na base errada (main) — a
+  checagem obrigatória de base (mitigação criada na E15) pegou antes de qualquer código.
+  Mais uma ocorrência do adendo (2) do harness: `git checkout` para restaurar sabotagem
+  apagou fix não commitado (refeito na hora; commitar antes de sabotar é a regra que fica)
 - Defeito que escapou (preencher na etapa seguinte): —
+- (Da retro da Etapa 15, "defeito que escapou": **nenhum descoberto durante a Etapa 16** —
+  as suítes da 15 seguiram verdes em todas as rodadas desta etapa.)
+
+## Próxima tarefa detalhada — a próxima frente sai do mapa
+
+Modo contínuo segue (instrução do usuário, 2026-08-28). Candidatas, na ordem recomendada:
+
+1. **Fatia 2 da feature 20 — os 4 alertas de EVENTO** (material reprovado, divergência de
+   recebimento, divergência de inventário, material sem certificado). O que consome desta
+   etapa: o `alertRegistry` aceita entrada nova sem tocar em mais nada, MAS estes quatro
+   disparam no ATO (gancho em `inspectionService.decidirInspecao`, conclusão de conferência,
+   processamento de nota), não na varredura — o registro precisa ganhar um segundo modo
+   ("evento") ou os ganchos enfileiram direto reaproveitando só dedupe/textos. Decidir isso
+   é a primeira tarefa do design. Pontos de atenção: divergência de inventário DEVE usar
+   `divergencia.divergenciaRealSql` (fonte única, comparação exata é bug documentado);
+   reprovação já grava `encaminhamento` que a spec 09 diz não ter consumidor.
+2. **Feature 23 — a conferência de inventário não audita** (buraco real nomeado no mapa
+   desde 2026-08-11; toca `PUT /conferencias/:id/concluir`, que também é o caminho que
+   escreve saldo — cuidado: há uma pendência antiga de motor ali).
+3. **Pendências herdadas:** `z.regex` na `data_necessidade` (C19), coluna da transição de
+   inspeção para matar o falso positivo C18, G7 (multer 500 nas 5 rotas de upload, da E15).
+
+Decisões B em aberto esperando o usuário: B5-B24 antigas + B25-B29 novas.

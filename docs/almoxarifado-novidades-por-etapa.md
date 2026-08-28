@@ -373,6 +373,20 @@ teste funciona em produção e vice-versa. **Descartado:** recusar domínio alhe
 reimprimir todas as etiquetas a cada mudança de endereço do sistema. A segurança não afrouxa:
 só caminhos do módulo navegam, qualquer outro conteúdo é exibido e nunca aberto.
 
+**B28 (NOVO, da Etapa 16) — quem vê a central de alertas: Administrador, Almoxarife, Gestor
+e Compras.** A ação nova `ver_alertas` deixa Produção/Engenharia/Consulta FORA porque a
+central expõe quantidade exata de estoque e valor parado em reais (a mesma lição G1 do
+requisitante que só vê tem/não-tem). **Descartado** abrir para todo o módulo. Se o chão de
+fábrica precisar ver "requisição atrasada" (só as dele), é recorte novo, não abertura do
+gate.
+
+**B29 (NOVO, da Etapa 16) — no alerta de materiais sem endereço, material de CLIENTE conta.**
+O relatório homônimo já incluía material de cliente de propósito (classe C da auditoria da
+Etapa 8: endereçar material de cliente é trabalho real do almoxarife), e o alerta usa a
+MESMA régua por função compartilhada — duas réguas com o mesmo nome era exatamente o defeito
+que a revisão do plano pegou. **Descartado** filtrar o dono só no alerta. Nos alertas de
+consumo/excesso o material de cliente fica fora (lá a régua é de compra/valor nosso).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -505,6 +519,19 @@ só caminhos do módulo navegam, qualquer outro conteúdo é exibido e nunca abe
    Efeito visível: devoluções novas aparecem no Custo por projeto abatendo o consumo — números
    de "Devolvido" que antes ficavam em zero passam a aparecer. Nenhum dado antigo foi alterado:
    devoluções lançadas **antes** desta etapa continuam sem projeto e não abatem nada.
+
+18. **(16) O relógio da "quarentena parada" é a data do RECEBIMENTO, não a da inspeção.**
+   Não existe coluna com a data em que o item entrou em inspeção; a régua usa a data de
+   criação do recebimento. Consequência real (medida na revisão): nota que demorou 15 dias
+   entre chegar e ser processada gera alerta de "quarentena parada" no **primeiro dia** de
+   quarentena de verdade. Quem opera deve ler o alerta como "este recebimento está velho e
+   ainda tem item retido", não como "a Qualidade está lenta". Corrigir de verdade exige a
+   coluna da transição — lacuna de dado da mesma família das três declaradas.
+
+19. **(16) Requisição com data de necessidade ilegível NUNCA alerta atraso — em silêncio.**
+   O campo aceita texto livre por API (`01/01/2020` grava e a régua de data não o enxerga
+   nunca). Pelas telas o formato é sempre correto (campo de data); o risco é só integração/
+   API direta. A validação de formato no servidor ficou como pendência nomeada na spec 20.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -722,6 +749,13 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    teclado aberto. Atenção: **a câmera só funciona em HTTPS** (ou localhost) — se o sistema
    estiver servido em HTTP puro na rede interna, o scanner cairá sempre no estado "Câmera
    indisponível" com a colagem manual como saída.
+
+10b. **(16) A central de Alertas nunca foi aberta num navegador de verdade.** A prova é a
+   suíte (522 testes no client, 128 arquivos de API) — falta o olho: os cartões com os 13
+   totais carregando, o Detalhes expandindo sem estourar a largura, o aviso de erro por
+   cartão, o painel de sem-permissão logando como Produção, e os 3 campos novos em
+   Configurações Gerais recusando zero. Cinco minutos de navegador; roteiro no guia,
+   seção da Etapa 16.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -2644,6 +2678,73 @@ nenhuma coluna some.
   negócio (foto de quê, obrigatória quando?). Foto já existe onde a dor foi real: avaria de
   ferramenta e comprovante de sucata.
 
+## Etapa 16 — Alertas operacionais: o sistema passa a avisar (2026-08-28)
+
+O módulo sempre soube muita coisa que ninguém ficava sabendo: ferramenta com calibração
+vencida parada no armário, requisição aprovada com a data de necessidade estourada, reserva
+esquecida segurando saldo há um mês, material recebido aguardando inspeção há semanas,
+material com saldo e sem prateleira definida. Cada um desses fatos estava no banco — e só
+aparecia se alguém abrisse a tela certa na hora certa. Esta etapa cria o **registro de
+alertas**: uma lista única de condições que o sistema **varre todos os dias e manda por
+e-mail** (pela mesma fila de notificações que já existia) e que a tela nova **Alertas**
+mostra **ao vivo**, a qualquer momento. São **7 alertas novos** de uma vez, somando aos 6
+que já existiam.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| 6 alertas existiam (mínimo, zerado, lote vencendo, remessa vencida, ferramenta não devolvida, requisição parada na aprovação) | **13**: entram calibração vencendo, estoque sem consumo, estoque excessivo, quarentena parada, materiais sem endereço, requisição atrasada e reserva parada |
+| Cada alerta novo era código novo espalhado | **Registro único**: a varredura diária, o e-mail e a tela leem a MESMA lista — alerta novo é uma entrada no registro |
+| Nenhuma tela juntava os avisos | Tela **Alertas** no menu: um cartão por alerta com o total ao vivo, a janela de dias e o detalhe linha a linha |
+| Janelas de dias fixas no código | **3 configurações novas** em Configurações Gerais (calibração, quarentena, reserva parada), validadas nos dois lados |
+| Quem via era quem tinha tela de gestão | A central é dos perfis **Administrador, Almoxarife, Gestor e Compras** (Produção/Engenharia/Consulta ficam fora — a tela expõe números de estoque e valor parado) |
+
+### As regras, com o cenário exato
+
+1. **A central é ao vivo, o e-mail é o rastro.** Menu → **Alertas**: cada cartão mostra o
+   total da condição NAQUELE momento (`Central de alertas operacionais — avaliação ao vivo
+   das condições que a varredura diária notifica`). Resolva a condição (calibre a
+   ferramenta, entregue a requisição) e a linha some da central na hora — o e-mail já
+   enviado continua no painel de Notificações, como histórico.
+2. **A varredura não repete aviso.** A varredura roda todo dia, mas cada situação gera
+   **um** e-mail: a calibração vencida avisa uma vez por validade; a requisição atrasada,
+   uma vez por requisição; sem consumo/excessivo re-lembram no máximo **uma vez por mês**
+   enquanto persistirem; materiais sem endereço é **um resumo por semana** (avisar material
+   a material seria ruído em massa).
+3. **O desligado geral continua valendo.** A chave "Notificar por e-mail" dos alertas de
+   estoque desliga TODA a varredura nova também — desligou, nenhum e-mail novo sai (a
+   central continua funcionando, porque ela é leitura ao vivo, não e-mail).
+4. **Quem pode ver.** Perfil sem a permissão nova vê o aviso de acesso (`Dados
+   indisponíveis no momento`) — **nunca** uma central vazia fingindo "não há alertas"
+   (essa mentira foi um Critical da Etapa 11 e a tela nova nasce vacinada). Por API, o 403
+   é o padrão do módulo.
+5. **Janelas configuráveis, com validação honesta.** Em Configurações Gerais: `Alerta de
+   Calibração (dias)` (30), `Alerta de Quarentena Parada (dias)` (7), `Alerta de Reserva
+   Parada (dias)` (30). Zero ou negativo é recusado nos dois lados — por API:
+   `Configuração "alerta_calibracao_dias" deve ser um número de dias maior que zero`.
+6. **Um alerta quebrado não cala os outros.** Se a condição de um alerta falhar ao ser
+   avaliada, o cartão dele mostra o erro e os demais seguem funcionando — na tela E na
+   varredura (isso tem teste, nos dois lados; foi achado da revisão desta etapa).
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **3 alertas com lacuna de dado nas features donas:** "separado aguardando retirada" (não
+  existe a data da transição), "pedido recebido parcialmente" (não existe saldo de pedido) e
+  "consumo acima do previsto" (projeto não tem orçamento). Entram quando a feature dona
+  ganhar o dado.
+- **4 alertas de evento** (material reprovado, divergência de recebimento, divergência de
+  inventário, material sem certificado) — viáveis, mas o gancho certo é dentro do ato, não
+  varredura; são a fatia seguinte natural.
+- **"Transferência não recebida" SAIU do checklist** — estava lá desde o início, mas foi
+  **cortado por decisão do cliente em 2026-08-12** (não existe trânsito entre áreas); a
+  spec agora diz isso em vez de fingir pendência.
+- **Matriz de destinatário por alerta / digest / canais** — os 7 novos usam a lista única
+  de e-mails dos alertas de estoque, como os 4 da Etapa 12 (corte declarado da 12 que
+  continua — B15).
+- **Unificar a máquina do mínimo/zerado no registro** — funciona e é testada; reescrever
+  agora seria risco sem valor novo.
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -2671,6 +2772,16 @@ nenhuma coluna some.
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **Etapa 16 entregue (2026-08-28):** **alertas operacionais — a fatia real** (feature 20
+  sai de 6 para 13 alertas) — registro único de alertas (varredura diária, e-mail pela fila
+  existente e a tela nova **Alertas** leem a MESMA lista), 7 alertas novos (calibração,
+  sem consumo, excessivo, quarentena parada, sem endereço, requisição atrasada, reserva
+  parada), 3 janelas configuráveis nos dois lados e a ação de perfil `ver_alertas`
+  (B28). O que ficou fora está declarado com o porquê: 3 alertas com lacuna de dado,
+  4 de evento (fatia seguinte), e "transferência não recebida" **saiu do checklist**
+  dizendo que foi cortado pelo cliente. Revisão adversarial: 4 achados reais (2 corrigidos
+  em código — varredura que silenciava os demais alertas e datas DATE com um dia a menos;
+  2 declarados — letras C18/C19), 0 ruído.
 - **Etapa 15 entregue (2026-08-28):** **mobilidade — a fatia real** (feature 24, nova) —
   scanner de QR pela câmera fechando o ciclo das etiquetas, assinatura do recebedor na
   entrega de requisição (opcional por design), e o balcão usável no celular (tabelas sem
@@ -2680,8 +2791,9 @@ nenhuma coluna some.
   em 2026-08-28 por instrução do usuário, em **modo contínuo** (fechou etapa, emenda na
   próxima).
 - **A seguir:** o roteiro de etapas do planejamento mestre está completo — o que resta no
-  mapa são as features 🟡 (alertas operacionais/20 é a maior lacuna: central no front e
-  ~16 alertas), os restos declarados da 21/22/23 e as decisões da letra B esperando
+  mapa são as features 🟡: da 20 restam os 4 alertas de evento e os 3 com lacuna de dado
+  (fatia seguinte natural), os restos declarados da 21/22/23 (o maior buraco real nomeado:
+  a conferência de inventário não audita — feature 23), e as decisões da letra B esperando
   resposta. A próxima frente será escolhida pelo mapa de status, não por roteiro.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no

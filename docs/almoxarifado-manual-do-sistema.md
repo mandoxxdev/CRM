@@ -34,6 +34,7 @@ explicada logo abaixo dela.
 21. [Ferramentas e calibração](#21-ferramentas-e-calibração)
 21b. [Reposição e compras](#21b-reposição-e-compras)
 21c. [Notificações por e-mail](#21c-notificações-por-e-mail)
+21c-bis. [A central de Alertas](#21c-bis-a-central-de-alertas)
 21d. [Relatórios e indicadores](#21d-relatórios-e-indicadores)
 22. [Como o sistema calcula](#22-como-o-sistema-calcula)
 23. [Cuidados na operação](#23-cuidados-na-operação)
@@ -65,6 +66,7 @@ As telas do módulo ficam em **Almoxarifado**, no menu lateral:
 | Sobras e Retalhos | retalhos com ficha dimensional e etiqueta, e o processo de sucateamento com dupla aprovação |
 | Reservas | saldo separado para uma OS ou projeto |
 | Conferências de Estoque | inventário e homologação de divergência |
+| Alertas | central ao vivo das condições que o sistema vigia e avisa por e-mail |
 | Mapa de Áreas | o desenho do galpão, posição por posição |
 | Configurações | famílias, setores, localizações, perfis, parâmetros do módulo |
 
@@ -582,6 +584,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Reservar para outra OS | ● | – | – | – | – | ● | – |
 | Inventariar | ● | ● | – | – | – | ● | – |
 | Gerenciar reposição e compras (sugestões, gerar/vincular/cancelar solicitação, verificar mínimos, contexto do material) | ● | – | ● | – | – | ● | – |
+| Ver a central de alertas | ● | ● | ● | – | – | ● | – |
 | Configurar o módulo | ● | – | – | – | – | – | – |
 
 Cinco leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
@@ -2587,10 +2590,33 @@ não há e-mail de correção — o livro de movimentações é a fonte da verda
 Em **Configurações → Configurações Gerais**: a chave liga/desliga (**só aceita 0 ou 1** — outro
 valor é recusado com `Configuração "notificar_movimentacoes" deve ser 0 ou 1`), o intervalo do
 processador da fila em minutos e o máximo de tentativas (**número inteiro maior que zero** —
-`Configuração "<chave>" deve ser um número inteiro maior que zero`), a janela do lote vencendo
-em dias (`Configuração "<chave>" deve ser um número de dias maior que zero`) e as cinco listas
+`Configuração "<chave>" deve ser um número inteiro maior que zero`), as janelas em dias — lote
+vencendo, alerta de calibração, quarentena parada e reserva parada — (`Configuração "<chave>"
+deve ser um número de dias maior que zero`) e as cinco listas
 de destinatários (texto livre). Mudar o **intervalo do processador** só passa a valer depois de
 reiniciar o sistema; o espaçamento das retentativas muda imediatamente.
+
+## 21c-bis. A central de Alertas
+
+A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o sistema vigia — e ela é **ao vivo**: cada cartão mostra o total da condição naquele momento (`Central de alertas operacionais — avaliação ao vivo das condições que a varredura diária notifica`). Resolvida a condição (a ferramenta foi calibrada, a requisição foi entregue), a linha some da central na hora; o e-mail que já tiver sido enviado permanece na tela de Notificações, como histórico.
+
+**O que a central vigia** (um cartão por alerta, com **Detalhes** expandindo linha a linha):
+
+| Alerta | A condição, com precisão |
+|---|---|
+| Calibração vencendo | ferramenta ativa que exige calibração com a última validade vencida ou vencendo dentro da janela configurada; ferramenta que **nunca** foi calibrada conta como vencida |
+| Estoque sem consumo | material próprio, ativo e com saldo, sem nenhuma saída dentro da janela de dias sem consumo (a mesma da Reposição) |
+| Estoque excessivo | material próprio com quantidade atual acima da quantidade máxima cadastrada (quando há máxima) |
+| Quarentena parada | item de recebimento com quantidade retida em inspeção cujo recebimento é mais velho que a janela configurada. **Atenção:** o relógio é a data do recebimento — uma nota que demorou a ser processada dispara o alerta logo no início da quarentena real |
+| Materiais sem endereço | material ativo sem localização padrão e sem nenhum saldo endereçado — **material de cliente conta**, porque endereçá-lo é trabalho do almoxarife (mesma régua do relatório de mesmo nome) |
+| Requisição atrasada | requisição ativa, em qualquer status em que ainda possa ser atendida, com a data de necessidade no passado — só entra quem **preencheu** a data de necessidade |
+| Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração vencida |
+
+**E-mail: um aviso por situação, não um por dia.** A varredura roda diariamente, mas cada situação gera um único e-mail: calibração avisa uma vez por validade; requisição atrasada e reserva parada, uma vez cada; sem consumo e excessivo re-lembram no máximo uma vez por mês enquanto persistirem; materiais sem endereço é um resumo semanal com a contagem. Os avisos saem para a mesma lista de e-mails dos alertas de estoque, e o interruptor geral de e-mail dos alertas desliga todos — a central, por ser leitura ao vivo, continua funcionando mesmo com o e-mail desligado.
+
+**Quem vê.** A central é dos perfis Administrador, Almoxarife, Gestor e Compras (ela expõe quantidades exatas e valor parado em reais). Perfil sem a permissão vê o painel *"Dados indisponíveis no momento"* — nunca uma central vazia.
+
+**Se um alerta falhar ao ser avaliado**, o cartão dele mostra o erro e os demais continuam funcionando — na tela e na varredura diária.
 
 ## 21d. Relatórios e indicadores
 
