@@ -33,6 +33,11 @@ const { can, requirePermission } = require('../services/almoxarifado/permissions
 const reservationService = require('../services/almoxarifado/reservationService');
 const lotService = require('../services/almoxarifado/lotService');
 const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
+// Etapa 20 (C1): a limpeza do upload orfao que a extended usava desde a Etapa 9 estava presa no
+// closure daquele arquivo (`function` local, nunca exportada) — este arquivo nao a alcancava e a
+// rota de foto de material vinha deixando orfao em toda saida != 200. Aqui o nome pode ser o
+// direto: nao ha funcao local homonima (diferente da extended, que importa com alias).
+const { limparUploadOrfao } = require('../services/almoxarifado/uploadCleanup');
 const { validate } = require('../services/almoxarifado/validation');
 const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../services/almoxarifado/audit');
@@ -642,28 +647,84 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // POST /api/almoxarifado/materiais/:id/foto — upload de foto
   // ORDEM IMPORTA: requirePermission ANTES do multer. Invertido, o multer já teria
   // gravado o arquivo em disco quando o 403 fosse emitido — upload não autorizado + lixo
-  // órfão em uploads/almoxarifado (coberto em permissoesRotas.api.test.js).
-  app.post('/api/almoxarifado/materiais/:id/foto', requirePermission('editar_material'), uploadAlmox.single('foto'), (req, res) => {
+  // órfão em uploads/almoxarifado (coberto em permissoesRotas.api.test.js:535-549). Como o gate
+  // roda antes do multer, o 403 é a ÚNICA saída ≠ 200 que não precisa limpar nada: não há
+  // arquivo ainda.
+  //
+  // Etapa 20 (C2) — esta rota era a única das 6 multipart do módulo com os três defeitos juntos:
+  //
+  //  1) RESPONDIA 200 PARA MATERIAL INEXISTENTE. O `db.run` era `function` (tem `this`), mas
+  //     ninguém lia `this.changes` — um UPDATE que casou zero linhas devolvia o nome do arquivo
+  //     e a tela dizia "foto salva". Não era bug de arrow function; era omissão. O conserto aqui
+  //     não é ler `changes`: é o SELECT ANTES (404), que também é o que dá o `dados_anteriores`
+  //     da auditoria e o nome da foto a apagar — três necessidades, uma leitura.
+  //  2) NÃO LIMPAVA O ÓRFÃO em nenhuma saída ≠ 200 (o multer já gravou quando o handler roda).
+  //  3) APAGAVA A FOTO ANTERIOR num `db.get` FIRE-AND-FORGET, sem await, correndo em paralelo
+  //     com o UPDATE — e com `fs.unlinkSync` SEM try/catch. Uma falha ali (arquivo virou
+  //     diretório, permissão, FS cheio) subia de dentro de um callback do sqlite3, onde não há
+  //     catch nenhum acima: derrubava o PROCESSO. Agora o unlink é DEPOIS do UPDATE e em
+  //     try/catch — molde da rota irmã de certificado, abaixo (:691-698): perder a foto NOVA por
+  //     causa de uma falha ao apagar a VELHA seria pior do que deixar um órfão, e a coluna que
+  //     acabamos de gravar é a referência que manda.
+  //
+  // Ordem final: SELECT → 404 (+ limpa órfão) → UPDATE → unlink da anterior → auditoria →
+  // resposta. A resposta é a MESMA de antes (`{ foto, foto_url }`) — a tela não muda.
+  app.post('/api/almoxarifado/materiais/:id/foto', requirePermission('editar_material'), uploadAlmox.single('foto'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Nenhuma foto enviada' });
 
     const filename = req.file.filename;
 
-    // Remover foto antiga
-    db.get(`SELECT foto FROM materiais_almoxarifado WHERE id = ?`, [req.params.id], (err, row) => {
-      if (row && row.foto) {
-        const oldFilename = materialPhotoFilename(row.foto);
-        if (oldFilename) {
-          const oldPath = path.join(uploadsAlmoxDir, oldFilename);
-          if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-        }
-      }
-    });
+    let material;
+    try {
+      material = await dbGet(db, `SELECT id, codigo, nome, foto FROM materiais_almoxarifado WHERE id = ?`,
+        [req.params.id]);
+    } catch (err) {
+      limparUploadOrfao(req, uploadsAlmoxDir);
+      return res.status(500).json({ error: err.message });
+    }
+    if (!material) {
+      limparUploadOrfao(req, uploadsAlmoxDir);
+      return res.status(404).json({ error: 'Material não encontrado' });
+    }
 
-    db.run(`UPDATE materiais_almoxarifado SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [filename, req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ foto: filename, foto_url: materialPhotoUrl(filename) });
+    try {
+      await dbRun(db, `UPDATE materiais_almoxarifado SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [filename, material.id]);
+    } catch (err) {
+      limparUploadOrfao(req, uploadsAlmoxDir);
+      return res.status(500).json({ error: err.message });
+    }
+
+    // DEPOIS do UPDATE e em try/catch (ver o item 3 acima). `materialPhotoFilename` porque a
+    // coluna pode guardar caminho ou URL de dados antigos — ele reduz a basename.
+    const anterior = materialPhotoFilename(material.foto);
+    if (anterior && anterior !== filename) {
+      try {
+        const oldPath = path.join(uploadsAlmoxDir, anterior);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      } catch (unlinkErr) {
+        console.warn('[almoxarifado] Falha ao remover foto anterior do material:', unlinkErr.message);
+      }
+    }
+
+    // Etapa 20 (RN-04): a Etapa 19 instrumentou os 12 cadastros e esta rota ficou de fora —
+    // trocar a foto de um material não deixava rastro nenhum. Pós-escrita e best-effort, com o
+    // molde de try/catch + console.error das outras rotas deste arquivo (:574-582, :624-633): o
+    // UPDATE já foi commitado, derrubar a request por causa do log devolveria erro para uma
+    // escrita que deu certo. `audit.registrarAuditoria` (namespace, não o binding
+    // desestruturado) para que o teste consiga substituí-lo por um stub que lança.
+    try {
+      await audit.registrarAuditoria(db, {
+        entidade: 'material', entidade_id: material.id, acao: 'ATUALIZACAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_anteriores: { foto: material.foto ?? null },
+        dados_novos: { foto: filename, codigo: material.codigo, nome: material.nome },
       });
+    } catch (errAudit) {
+      console.error('[almoxarifado] Falha ao registrar auditoria de foto de material:', errAudit.message);
+    }
+
+    res.json({ foto: filename, foto_url: materialPhotoUrl(filename) });
   });
 
   // POST /api/almoxarifado/lotes/:id/certificado — anexa o certificado e libera o lote se ele

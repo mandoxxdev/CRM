@@ -12,6 +12,14 @@ const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
 const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema } = require('../../services/almoxarifado/schemas');
+// Etapa 20 (C1): a limpeza do upload orfao SAIU deste arquivo para um modulo compartilhado —
+// era uma `function` local do closure de `registerExtendedRoutes` e `routes/almoxarifado.js`
+// (rota de foto de material) nao a alcancava. Importada com ALIAS de proposito: o nome
+// `limparUploadOrfao` era o da funcao local, e a versao compartilhada tem assinatura
+// DIFERENTE — recebe o diretorio como 2o argumento, porque ele nao e constante de modulo (vem
+// do 4o parametro de registerExtendedRoutes, abaixo). O alias `...Em` obriga a ler a chamada e
+// ver o `uploadsAlmoxDir`, em vez de deixar uma chamada de 1 argumento silenciosamente errada.
+const { limparUploadOrfao: limparUploadOrfaoEm } = require('../../services/almoxarifado/uploadCleanup');
 const { registrarAuditoria } = require('../../services/almoxarifado/audit');
 // Etapa 19 (C0): o binding desestruturado acima e resolvido no require e cacheado — um teste
 // nao consegue substitui-lo por um stub que lanca, e a RN-02 ("auditoria nunca derruba o ato")
@@ -882,17 +890,17 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // arquivo em disco antes de sabermos se o pedido vai ser aceito, porque quem decide isso e o
   // SERVICO. Toda saida que nao for 200 (400 do Zod, 403/404/409 do servico) tem de limpar o
   // arquivo — senao ele fica orfao em uploads/almoxarifado, sem nada no banco apontando pra ele.
-  // Mesmo ESPIRITO do unlink em routes/almoxarifado.js:536-548 (apagar o certificado anterior ao
+  // Mesmo ESPIRITO do unlink em routes/almoxarifado.js (apagar o certificado/foto anterior ao
   // substituir); aqui nao ha "anterior" para apagar — `registrarDestino` e transicao de UMA VIA SO
   // (a maquina de estados nao volta de VENDIDA/DESCARTADA para APROVADO, entao nao existe re-anexar
   // um comprovante ja aceito) — o arquivo que sobra e sempre de uma tentativa que FALHOU.
-  function limparUploadOrfao(req) {
-    if (!req.file) return;
-    try { fs.unlinkSync(path.join(uploadsAlmoxDir, req.file.filename)); }
-    catch (unlinkErr) {
-      console.warn('[almoxarifado] Falha ao limpar comprovante de sucata orfao:', unlinkErr.message);
-    }
-  }
+  //
+  // Etapa 20 (C1): a implementacao mora em services/almoxarifado/uploadCleanup.js —
+  // `limparUploadOrfaoEm(req, dir)`, importada no topo. O corpo foi extraido daqui SEM mudanca
+  // de comportamento (mesmo `req.file?`, mesmo unlinkSync, mesmo console.warn); so a mensagem
+  // do warn ficou generica, porque ela dizia "comprovante de sucata orfao" para as QUATRO rotas
+  // deste arquivo que usam a funcao (destino, calibracao, ocorrencia e assinatura de entrega) —
+  // ja mentia em tres delas.
 
   // POST /:id/destino — SO `auth`, DE PROPOSITO (ajuste do review da Task 6, contrato final do
   // plano). `registrarDestino` e gateado no SERVICO por `assertAprovaAlgumaPerna` — a uniao das
@@ -912,7 +920,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     uploadComprovanteSucata.single('comprovante'), async (req, res) => {
       const parsed = SucateamentoDestinoFormSchema.safeParse(req.body);
       if (!parsed.success) {
-        limparUploadOrfao(req);
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
         return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
       }
       try {
@@ -920,7 +928,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         if (req.file) payload.comprovante_arquivo = req.file.filename;
         res.json(await scrapDisposalService.registrarDestino(db, req.user, req.params.id, payload));
       } catch (e) {
-        limparUploadOrfao(req);
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
         handleError(res, e);
       }
     });
@@ -995,19 +1003,19 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // pernas", nao exprimivel em requirePermission). Aqui o gate E uma acao so, entao vai na PORTA —
   // precedente provado por permissoesRotas.api.test.js:515-534 (POST /materiais/:id/foto): o 403
   // sai ANTES do multer gravar nada em disco. Do sucateamento aproveita-se so o
-  // `limparUploadOrfao` (linha ~823) para o 400 pos-upload (validacao ou regra de negocio).
+  // `limparUploadOrfaoEm` (uploadCleanup.js) para o 400 pos-upload (validacao ou regra de negocio).
   app.post('/api/almoxarifado/ferramentas/:id/calibracoes', auth, requirePermission('gerenciar_ferramentas'),
     uploadCertificadoCalibracao.single('certificado'), async (req, res) => {
       const parsed = CalibracaoSchema.safeParse(req.body);
       if (!parsed.success) {
-        limparUploadOrfao(req);
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
         return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
       }
       try {
         const certificadoPath = req.file ? req.file.filename : null;
         res.status(201).json(await toolService.registrarCalibracao(db, req.user, req.params.id, parsed.data, certificadoPath));
       } catch (e) {
-        limparUploadOrfao(req);
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
         handleError(res, e);
       }
     });
@@ -1087,14 +1095,14 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     uploadFotoOcorrencia.single('foto'), async (req, res) => {
       const parsed = OcorrenciaSchema.safeParse(req.body);
       if (!parsed.success) {
-        limparUploadOrfao(req);
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
         return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
       }
       try {
         const fotoPath = req.file ? req.file.filename : null;
         res.status(201).json(await toolService.registrarOcorrencia(db, req.user, req.params.id, parsed.data, fotoPath));
       } catch (e) {
-        limparUploadOrfao(req);
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
         handleError(res, e);
       }
     });
@@ -1128,7 +1136,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // Ordem canonica: auth -> requirePermission -> multer -> safeParse manual (mesmo desenho de
   // /calibracoes e /ocorrencias acima — o gate e uma acao so, vai na PORTA, antes do multer
   // gravar em disco; RN-05). NAO usa o middleware validate(): ele responderia o 400 do Zod
-  // ANTES do handler e o arquivo ja gravado ficaria orfao — `limparUploadOrfao` em TODA saida
+  // ANTES do handler e o arquivo ja gravado ficaria orfao — `limparUploadOrfaoEm` em TODA saida
   // que nao for 201. RN-03 (status da requisicao) mora no SERVICO, com a mensagem literal do
   // contrato, e cai no catch. Gate `separar_emitir`: quem entrega e quem colhe a assinatura —
   // o recebedor e um nome digitado + traco na tela, nao um usuario do sistema.
@@ -1136,7 +1144,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     uploadAssinatura.single('assinatura'), async (req, res) => {
       const parsed = AssinaturaEntregaFormSchema.safeParse(req.body);
       if (!parsed.success) {
-        limparUploadOrfao(req);
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
         return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
       }
       if (!req.file) {
@@ -1149,7 +1157,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         );
         res.status(201).json({ success: true, assinatura });
       } catch (e) {
-        limparUploadOrfao(req);
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
         handleError(res, e);
       }
     });
