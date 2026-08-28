@@ -231,15 +231,25 @@ conferência/data/itens divergentes; sem certificado lote/material/saldo/status)
 
 **Files:** Test: `server/tests/api/alertaEventoJornada.api.test.js`
 
-- [ ] **Step 1: jornada** — recebimento real com item que exige inspeção → processar →
-  inspecionar reprovando 3 de 10 (rota real) → fila tem `MATERIAL_REPROVADO` E
-  `GET /alertas/central` mostra o cartão com total≥1 → `varrerAlertasRegistrados` →
-  duplicada (RN-01) → recuar `data_inspecao` para fora da janela (UPDATE direto) → central
-  mostra 0 (ao vivo), fila intacta. De quebra: o material ganhou `quantidade_bloqueada=3`
-  (o motor real rodou).
-- [ ] **Step 2: rodar; controle positivo se verde de primeira** (sabotar a janela do listar
-  para ignorar `dias` e ver o passo final falhar; reverter). `npm run test:api`; commit —
-  `Almoxarifado Etapa 17 Task 4: jornada do alerta de evento`.
+- [x] **Step 1: jornada** (e1f65c8) — `alertaEventoJornada.api.test.js`, 5 passos, **tudo por
+  rota real**: `POST /recebimentos` de material crítico → workflow inteiro
+  (`iniciar_conferencia` → `PUT /fiscal` → `finalizar_conferencia` → `encaminhar_compras` →
+  `finalizar_compras` → `iniciar_faturamento`) → `POST /recebimentos/:id/processar` (entra
+  RETIDO em quarentena) → `POST /recebimentos/itens/:itemId/inspecionar` reprovando 3 de 10 →
+  fila tem `MATERIAL_REPROVADO` pelo hash E `GET /alertas/central` mostra o cartão (total≥1,
+  `dias`=7, linha com a inspeção) → `varrerAlertasRegistrados` → `duplicadas>=1,
+  enfileiradas=0` (RN-01) → `UPDATE data_inspecao` para -30 dias → central zera o cartão (ao
+  vivo) e a fila **mantém** a linha (RN-05 da Etapa 16). Âncoras anti-falso-verde: o material
+  sai com `quantidade_bloqueada=3` e `quantidade_em_inspecao=0` (o motor rodou; não houve
+  INSERT na mão) e o recebimento **sem** divergência atravessa os 2 pontos de gancho sem
+  enfileirar `DIVERGENCIA_RECEBIMENTO` (a jornada não gera aviso falso no caminho).
+- [x] **Step 2: verde + controle positivo + commit** (e1f65c8) — **5/5 de primeira**, então
+  controle positivo obrigatório: sabotar a janela do `listarReprovados` trocando
+  `AND i.data_inspecao >= datetime('now','-'||?||' days')` por um predicado que ignora o
+  parâmetro (`AND (? IS NOT NULL)`) → **4 passed, 1 failed**, exatamente o passo 5
+  (`1 !== 0` no total do cartão) e nada mais — a sabotagem derrubou de verdade, ao contrário
+  da prescrita na Task 2. Revertido, `git diff` de `alertRegistry.js` vazio.
+  `npm run test:api` → **131/131 arquivos OK**.
 
 ---
 
@@ -293,7 +303,17 @@ conferência/data/itens divergentes; sem certificado lote/material/saldo/status)
   (**5/6**, `1 !== 0` em "aprovacao total NAO pode enfileirar"). Revertido, `alertRegistry.js`
   intocado. `divergencia.js` e o motor de estoque seguem intocados nesta task.
 - [ ] Task 3 (galho)
-- [ ] Task 4 (integração)
+- [x] Task 4 (integração) — e1f65c8. `alertaEventoJornada.api.test.js` **5/5 de primeira**;
+  `npm run test:api` **131/131 arquivos OK**. Entregue: a jornada ato→fila→central→varredura
+  ponta a ponta, **toda por rota real** (workflow fiscal completo até
+  `POST /recebimentos/:id/processar`, depois `inspecionar` reprovando 3 de 10). Prova a
+  COMPOSIÇÃO, não as peças: o mesmo hash de dedupe serve o ato e a varredura (RN-01:
+  `duplicadas>=1, enfileiradas=0`), a central é **ao vivo** (a inspeção envelhecida para -30
+  dias zera o cartão) e a fila é **histórico** (a linha fica — RN-05 da Etapa 16). Âncoras
+  contra teste vazio: `quantidade_bloqueada=3` + `quantidade_em_inspecao=0` no material (motor
+  real) e zero `DIVERGENCIA_RECEBIMENTO` no recebimento sem divergência. Controle positivo
+  (verde de primeira): ignorar o parâmetro `dias` no `listarReprovados` derruba **só** o passo
+  final (**4/5**, `1 !== 0`); revertido. Nenhum arquivo de produção mudou nesta task.
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
