@@ -215,6 +215,7 @@ const {
   ehChaveSecretaCore,
   MENSAGEM_SEGREDO_INVALIDO,
 } = require('./services/configSecrets');
+const { resolverEmailConfig } = require('./services/emailConfig');
 const {
   PERSISTENT_DATA_DIR,
   uploadsDir,
@@ -2933,15 +2934,32 @@ function checkAnyModulePermission(requiredModules) {
   };
 }
 
+// Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
+// A regua mora em `services/emailConfig.js` (funcao pura, testada em
+// `tests/api/emailConfigCore.api.test.js`); aqui fica so a fiacao.
+//
+// POR QUE O BANCO FICA FORA da precedencia: as chaves `email_smtp_host`/`email_smtp_pass` da
+// tabela `configuracoes` ESTAO preenchidas hoje, e o host gravado la (`smtplw.com.br`) e outro
+// produto da Locaweb, com outro esquema de credencial, diferente do `smtp.locaweb.com.br` que
+// esta funcionando. Uma regra "usa o banco quando estiver completo" nao seria salvaguarda —
+// seria um interruptor que trocaria o host de PRODUCAO sem ninguem pedir, e ainda poria no
+// `from` a lista de dois enderecos gravada la (que o servidor SMTP recusa). Adotar o banco exige
+// envio real verificado contra aquele host, impossivel de verificar daqui: esta na letra B.
+//
+// ATENCAO — os valores abaixo sao CREDENCIAL COMPROMETIDA A ESPERA DE ROTACAO. Estao no git
+// desde 2026-03-17: trocar ou apagar este arquivo NAO os remove de clone nenhum, so a rotacao na
+// Locaweb resolve. Ficam como ULTIMO RECURSO de proposito — sem eles, e sem `SMTP_PASS` no
+// ambiente, o envio de e-mail cai, inclusive na VPS de producao, que pode nao ter `.env`.
+// Definir `SMTP_USER`/`SMTP_PASS` no ambiente ja faz com que a senha daqui nunca seja usada.
+const SMTP_PADRAO = {
+  host: 'smtp.locaweb.com.br',
+  user: 'solicitacoes@gmp.ind.br',
+  pass: 'Solicitacoes123@',
+  from: 'solicitacoes@gmp.ind.br',
+};
+
 async function getEmailConfig() {
-  // HARD CODED (solicitado pelo usuário): SMTP Locaweb fixo no código
-  // Observação: isso grava credenciais no repositório/imagem. Mantido por solicitação explícita.
-  return {
-    host: 'smtp.locaweb.com.br',
-    user: 'solicitacoes@gmp.ind.br',
-    pass: 'Solicitacoes123@',
-    from: 'solicitacoes@gmp.ind.br',
-  };
+  return resolverEmailConfig(process.env, SMTP_PADRAO);
 }
 
 async function sendEmail({ to, cc, subject, html, text }) {

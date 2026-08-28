@@ -201,16 +201,35 @@ Test `server/tests/api/configSecretsCore.api.test.js`.
 
 ### Task 3 (galho): `getEmailConfig`
 
-**Files:** Modify `server/index.js`; Test — **declarado sem teste automatizado**, com o
-motivo: a função lê o banco de produção real via `db` do módulo e o único consumidor é uma
-rota que não tem harness. A prova é manual (Step 2).
+**Files:** New `server/services/emailConfig.js`; Modify `server/index.js`; Test
+`server/tests/api/emailConfigCore.api.test.js`.
 
-- [ ] **Step 1: implementar** a precedência do C4 ponto 2 (**env → hardcoded, banco FORA**),
+> **ESTE BLOCO ESTAVA ERRADO e foi corrigido na execução (2026-08-28).** Ele dizia
+> "**declarado sem teste automatizado**, com o motivo: a função lê o banco de produção real via
+> `db` do módulo". **Falso, e verificado no código:** `getEmailConfig` (então em `:2936`) não
+> tocava no banco — devolvia os quatro campos hardcoded, sem `db` e sem `process.env`. Não
+> havia nada que impedisse o teste. Seguindo o motivo errado, a etapa teria deixado a RN-04
+> como a **única** RN sem prova, justamente a que o achado A1 já tinha corrigido uma vez.
+> A régua foi extraída para função pura e testada, como em `backupPackage.js` (Task 1) e
+> `configSecrets.js` (Task 2).
+>
+> Registro do segundo erro: o `getEmailConfig` real **não tinha `process.env`**. A precedência
+> `env → hardcoded` não é só mudança de forma — a leitura de env é **nova**. O comportamento em
+> produção continua idêntico (sem `SMTP_*` no ambiente, cai no hardcoded de sempre), que é o que
+> o design promete; mas quem ler "só muda a forma" vai procurar um `process.env` que não existia.
+
+- [x] **Step 1: implementar** a precedência do C4 ponto 2 (**env → hardcoded, banco FORA**),
   com o comentário sobre a credencial comprometida e sobre por que o banco não entra.
-- [ ] **Step 2: prova manual** (não versionada): script que carrega a função com `SMTP_*`
+  Régua pura em `services/emailConfig.js` (`resolverEmailConfig(env, padroes)`), fiação em
+  `index.js` (`SMTP_PADRAO` + a chamada).
+- [x] **Step 2: prova manual** (não versionada): script que carrega a função com `SMTP_*`
   definidas → usa env; sem elas → cai para o hardcoded; `SMTP_FROM` com duas caixas → cai
-  para `SMTP_USER`. Registrar a saída no relato.
-- [ ] **Step 3: commit.**
+  para `SMTP_USER`. **Rodada**, com um 4º caso: `process.env` real desta máquina → hardcoded
+  nos quatro campos, provando que produção não muda.
+- [x] **Step 2b (novo): teste automatizado** — `tests/api/emailConfigCore.api.test.js`, 9
+  cenários. Inclui a **assinatura travada em 2 parâmetros** como cenário explícito: se alguém
+  acrescentar leitura de banco, a assinatura muda e o arquivo cai (RN-04 congelada).
+- [x] **Step 3: commit.**
 
 ### Task 4 (limpeza de documentação)
 
@@ -238,7 +257,18 @@ rota que não tem harness. A prova é manual (Step 2).
   `npm run test:api` 142/142, controle positivo 23/25 com a sabotagem. Três divergências do
   contrato assumidas e documentadas acima (avisos em lista, `motivo` sem `CURTO`,
   acompanhantes do backup no zip).
-- [ ] Task 2 · [ ] Task 3 · [ ] Task 4
+- [x] **Task 2 (galho): máscara e guarda nas configurações do core** — `025a700` (2026-08-28).
+  (Linha marcada na execução da Task 3: o commit existe no histórico com o título
+  "Etapa 21 Task 2: senha do SMTP para de sair em claro no core e a mascara deixa de ser
+  regravavel", mas a Task 2 não marcou a própria linha aqui. Placar não conferido por esta
+  task — quem fechar a etapa confira.)
+- [x] **Task 3 (galho): `getEmailConfig`** — `1766a64` (2026-08-28). 9/9 no arquivo novo,
+  `npm run test:api` **144/144** (era 143 antes). Vermelho prévio por asserção contra stub
+  permissivo (8 falhas), controle positivo com dupla sabotagem. **Duas divergências do plano,
+  documentadas no bloco da Task 3:** o "sem teste automatizado" tinha motivo FALSO (a função
+  não lia banco nenhum) e virou teste de verdade; e o `getEmailConfig` real não tinha
+  `process.env`, então a leitura de env é nova (sem mudar produção).
+- [ ] Task 4
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
