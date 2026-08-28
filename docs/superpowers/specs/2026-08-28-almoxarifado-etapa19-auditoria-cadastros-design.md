@@ -123,4 +123,4 @@ que mudaram, com segredo mascarado. Testável sem HTTP e reusada pelas rotas 13/
 | `services/almoxarifado/configDiff.js` | novo (função pura do diff + máscara de segredo) |
 | `routes/almoxarifado.js` | import por objeto já existe; 12 cadastros + 5 configurações auditando; 404 nas 4 rotas; cascata do setor contado |
 | `routes/almoxarifado/extended.js` | import `audit` por objeto; centros de custo, almoxarifados e permissões de setor auditando |
-| `specs/23` | checklist do item `:44` marcado; dívida das ações antigas e a rota órfã nomeadas |
+| `specs/23` | o parágrafo de "Buracos que restam" reescrito no padrão `~~riscado~~ — PAGO na Etapa 19` (a linha 44 é prosa, não item de checklist — correção da revisão); dívida das ações antigas, a rota órfã e o `EXCLUSAO` de linha já inativa nomeados |
