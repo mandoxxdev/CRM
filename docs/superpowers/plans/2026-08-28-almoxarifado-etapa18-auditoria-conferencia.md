@@ -197,7 +197,7 @@ client puro e pode rodar junto com T2.
 conferência (`conferenciaTolerancia`, `conferenciaDuplaContagem`); molde de try/catch de
 auditoria em `routes/almoxarifado.js:481-483`. Produces: C0, C1, C2, C3.
 
-- [ ] **Step 1: escrever o teste que falha** — cenários:
+- [x] **Step 1: escrever o teste que falha** (`3893444`) — cenários:
   1. **RN-01 criar:** `POST /conferencias` → linha `conferencia`/`CRIACAO` com `entidade_id`,
      autor e `total_itens`. **E o ramo de ZERO itens** (escopo que não casa material nenhum)
      → também audita (achado 4).
@@ -217,13 +217,28 @@ auditoria em `routes/almoxarifado.js:481-483`. Produces: C0, C1, C2, C3.
      `finally`) e conferir que criar/contar/concluir/cancelar **respondem normal e gravam
      tudo**. *(Só funciona por causa do C0 — se o executor pular o C0, este teste passa sem
      provar nada: é o teste vazio que a revisão pegou.)*
-- [ ] **Step 2: rodar e ver falhar** (`cd server && node tests/api/conferenciaAuditoria.api.test.js`).
-- [ ] **Step 3: implementar** — nesta ordem: C0 (import) → C3 (colunas) → ampliar os 2
-  SELECTs → 5 auditorias → cancelar reescrito → **atualizar os 3 chamadores do C2**.
-- [ ] **Step 4: verde + controle positivo** — sabotar a guarda de status do cancelar
-  (aceitar qualquer status) e ver o cenário 5 falhar; reverter, `git diff` limpo. Rodar
-  `npm run test:api` inteiro (os 3 testes tocados TÊM de continuar verdes).
-- [ ] **Step 5: commit** — `Almoxarifado Etapa 18 Task 1: a conferencia passa a deixar rastro`.
+- [x] **Step 2: rodar e ver falhar** (`3893444`) — **0 passaram, 14 falharam**. O vermelho foi
+  o esperado em toda a linha: as auditorias não existiam (`esperava 1 CRIACAO, veio 0`), o
+  cancelar respondia `{"success":true}` para `.send({})`, `no such column: cancelado_por_id`
+  nas colunas do C3, e o literal antigo `Só é possível cancelar conferências abertas`
+  aparecendo tanto para conferência CONCLUIDA quanto para id inexistente (o 400 genérico que
+  o C2 desfaz).
+- [x] **Step 3: implementar** (`3893444`) — na ordem: C0 (import `audit` ao lado do
+  desestruturado, com o porquê no comentário) → C3 (4 colunas por `safeAlter`) → os 2 SELECTs
+  (`numero` na 971, `ma.codigo AS material_codigo` na 977) → 5 auditorias → cancelar reescrito
+  como `async` → os 3 chamadores do C2. **Divergência de implementação (menor, deliberada):**
+  o ponto único da CRIACAO saiu invertendo a guarda (`if (materiais.length > 0) { INSERT }`),
+  auditando em seguida e só então escolhendo entre os dois `res.status(201)` — os DOIS corpos
+  de resposta ficam byte a byte iguais (o ramo zero continua mandando `itens: []`), o que uma
+  unificação dos returns teria mudado.
+- [x] **Step 4: verde + controle positivo** (`3893444`) — **14/14**. Sabotagem: `if (false &&
+  conf.status !== 'ABERTO')` no cancelar → **13/14**, com o cenário 5 vermelho exatamente onde
+  devia (`RN-03 cancelar: CONCLUIDA -> 400 ... esperava 400, veio 200: {"success":true}`);
+  revertido, `grep "false &&"` vazio e 14/14 de novo. `npm run test:api` inteiro:
+  **132/132 arquivos**. Os 3 tocados individualmente: `conferenciaTolerancia` 6/6,
+  `conferenciaAcuracidade` 13/13, `permissoesRotas` 46/46. Extras pelas colunas novas:
+  `test:safealter` 3/3, `test:almoxarifado` 42/42.
+- [x] **Step 5: commit** (`3893444`) — `Almoxarifado Etapa 18 Task 1: a conferencia passa a deixar rastro`.
 
 ### Task 2 (tronco): `aprovador_*`, gate+ordem do log e os 3 atos vizinhos
 
@@ -309,7 +324,16 @@ versão do plano mandava seguir o `confirm`+`prompt` da tela de Reposição, que
   falhar; (14) o teste da tela **já existe** e o padrão de justificativa está no próprio
   arquivo, não na tela de Reposição. O revisor confirmou que **todas as afirmações medidas do
   design da Fase 0 são verdadeiras**.
-- [ ] Task 1 (tronco)
+- [x] Task 1 (tronco) — `3893444` (2026-08-28). Vermelho inicial **0/14**, verde **14/14**;
+  controle positivo (guarda de status do cancelar aceitando qualquer status) derrubou o
+  cenário 5 → **13/14**, revertido e limpo. Suíte: **132/132 arquivos** em `npm run test:api`;
+  os 3 chamadores atualizados do C2 continuam verdes (6/6, 13/13, 46/46) e as colunas novas
+  não abalaram `test:safealter` (3/3) nem `test:almoxarifado` (42/42). Os contratos C0-C3
+  fecharam **sem divergência de literal ou de linha** — todos os pontos que a revisão da Fase 2
+  citou (971, 977, 1022, 1207-1209, 1235-1242, e os 3 testes com arquivo:linha) estavam onde o
+  plano dizia. Única diferença de forma, registrada no Step 3: o ponto único da CRIACAO nasceu
+  de inverter a guarda `materiais.length === 0` em vez de unificar os dois `res.status(201)`,
+  para preservar os dois corpos de resposta exatamente como estavam.
 - [ ] Task 2 (tronco)
 - [ ] Task 3 (galho)
 - [ ] Task 4 (integração)
