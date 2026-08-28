@@ -398,7 +398,17 @@ versão do plano mandava seguir o `confirm`+`prompt` da tela de Reposição, que
   - **Dois testes sobreviveram à sabotagem, e isso é resultado, não falha**: o da jornada só
     afere respostas HTTP (é a RN-02 em ação — auditoria quebrada não derruba o ato) e o do
     motor afere saldo/ledger. Registrado aqui para que ninguém leia `2/5` como cobertura frouxa.
-- [ ] Fase 4 — suíte completa serial
+- [x] Task 3 (galho) — commit `daf67fd`, merge `5bd36ac`. Base da worktree nasceu errada pela
+  **quarta vez** nesta sessão e a checagem obrigatória pegou antes do código. Seguiu o padrão
+  do PRÓPRIO arquivo (modal com gate de 5 caracteres), não o `prompt` de outra tela; controle
+  positivo afrouxou a régua para o modo de falha que o plano nomeava (barrar só vazio) e o
+  caso de 3 caracteres caiu. Client 530/530; build limpo. Decisões registradas pelo executor:
+  o modal fica aberto na recusa do servidor (quem toma 400 não redigita), botão secundário
+  "Voltar" (em modal de cancelamento, "Cancelar" é ambíguo).
+- [x] Fase 4 — merge do galho (`5bd36ac`) + suíte completa serial na branch (2026-08-28):
+  `test:api` **134/134**, `test:almoxarifado` **42/0**, `test:validation` **4/0**,
+  `test:safealter` **3/0**, `test:sqlite` **3/0**; client **530 testes em 36 suítes**,
+  build `CI=true` exit 0.
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro (**incluindo a correção das specs 03 e 23**)
 
