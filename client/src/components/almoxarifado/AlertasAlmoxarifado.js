@@ -61,8 +61,17 @@ const PainelErroCarga = ({ mensagem, onTentarNovamente }) => (
 
 // Timestamps do SQLite vem em UTC sem sufixo ("YYYY-MM-DD HH:MM:SS") — mesmo ajuste de
 // ConferenciaEstoque.js/ReposicaoAlmoxarifado.js (sem o 'Z', o V8 leria como hora local).
+// Data PURA ("YYYY-MM-DD" — data_validade, data_necessidade, expira_em) precisa de
+// timeZone:'UTC' explicito: sem isso, meia-noite UTC vira o dia ANTERIOR no fuso do Brasil
+// (achado Major da revisao da etapa; mesmo antidoto de RelatoriosAlmoxarifado.formatCelula).
+const RE_DATA_SO = /^\d{4}-\d{2}-\d{2}$/;
 const formatData = (d) => {
   if (!d) return '—';
+  if (typeof d === 'string' && RE_DATA_SO.test(d)) {
+    return new Date(`${d}T00:00:00Z`).toLocaleDateString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC',
+    });
+  }
   const iso = typeof d === 'string' && d.includes(' ') && !d.includes('T') ? `${d.replace(' ', 'T')}Z` : d;
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };

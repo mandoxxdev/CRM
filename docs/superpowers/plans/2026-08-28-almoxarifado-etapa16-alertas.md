@@ -338,7 +338,23 @@ Reposição (`ReposicaoAlmoxarifado.js` — o Critical da E11: 403 nunca vira te
   `test:api` **128/128**, `test:almoxarifado` **42/0**, `test:validation` **4/0**,
   `test:safealter` **3/0**, `test:sqlite` **3/0**; client **521 testes em 36 suítes**,
   build `CI=true` exit 0.
-- [ ] Fase 5 — revisão adversarial (2 lentes)
+- [x] Fase 5 — revisão adversarial (2 lentes, 2026-08-28). **Backend: Needs-fix-round
+  pequeno** — A1 Média reproduzida (um `listar` que lança silenciava os outros 6 alertas da
+  varredura diária; corrigido com try/catch por entrada + registro injetável + teste
+  versionado "A1 do review"); A2/A3 Baixas viram declaração no fechamento
+  (`data_necessidade` ilegível nunca alerta em silêncio — pendência de `z.regex` nomeada;
+  relógio da quarentena é o `created_at` do RECEBIMENTO — falso positivo quando a NF demora
+  a processar). Refutados com sonda: réguas de data SQLite, semana ISO, fuso das chaves
+  mensais, conjunto derivado da máquina de estados, autorização em duas camadas, sabotagens
+  do plano reproduzidas de verdade. **Front: Needs-fix-round** — Major reproduzido: datas
+  DATE puras exibidas com um dia a menos no fuso do Brasil (meia-noite UTC); corrigido no
+  `formatData` com o antídoto de RelatoriosAlmoxarifado (timeZone UTC) + teste com controle
+  positivo medido (sabotagem → ✕, restaurado → ✓). Refutados: costura C1 campo a campo,
+  badge por `total` (sabotado de verdade), espelho de PREFIXOS_DIAS (sabotado de verdade),
+  403 nunca vira "nenhum alerta". **Incidente de harness (mais uma ocorrência do adendo 2
+  das novidades):** `git checkout` para restaurar a sabotagem apagou o fix não commitado —
+  refeito e revalidado. Revalidação final: server 128/128 (registro 10/10), client
+  **522/522 em 36 suítes**, build exit 0.
 - [ ] Fase 6 — fechar-etapa + retro
 
 ## Retro (4 números — preencher no fechamento)

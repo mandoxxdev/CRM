@@ -168,6 +168,17 @@ test('expandir o cartao mostra as linhas cruas da condicao', async () => {
   expect(texto()).toContain('REQ-2026-042');
 });
 
+test('data DATE pura formata em UTC — nunca o dia anterior no fuso do Brasil', async () => {
+  // Achado Major da revisao da etapa: '2026-08-10' lido como meia-noite UTC e exibido no
+  // fuso local (UTC-3) virava 09/08/26. O formatData deve fixar timeZone:'UTC' para DATE puro.
+  await renderizar();
+  const botao = [...card('CALIBRACAO_VENCENDO').querySelectorAll('button')]
+    .find((b) => /Detalhes|Ver linhas/i.test(b.textContent));
+  await clicar(botao);
+  expect(texto()).toContain('10/08/26');
+  expect(texto()).not.toContain('09/08/26');
+});
+
 test('entrada com erro:true mostra aviso no cartao — nao some da central', async () => {
   await renderizar();
 

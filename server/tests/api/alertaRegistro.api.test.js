@@ -302,6 +302,35 @@ function resultadoDe(resultados, chave) {
     }
   });
 
+  await test('A1 do review: listar que lanca NAO silencia os alertas seguintes da varredura', async () => {
+    // Reproducao do achado da revisao adversarial: sem try/catch por entrada, o throw da
+    // primeira entrada abortava o for e os demais alertas nunca enfileiravam (em silencio).
+    // Usa o app/db compartilhados do arquivo (destinatarios e toggle ja configurados no topo).
+    const registroSabotado = [
+      {
+        chave: 'ALERTA_QUEBRADO', titulo: 'Quebrado', descricao: 'sempre lanca',
+        configDias: null,
+        listar: async () => { throw new Error('boom do listar'); },
+        dedupeChave: () => 'nunca', assunto: () => 'x', corpo: () => 'x',
+      },
+      {
+        chave: 'ALERTA_SAUDAVEL', titulo: 'Saudavel', descricao: 'uma linha fixa',
+        configDias: null,
+        listar: async () => [{ id: 1 }],
+        dedupeChave: (l) => `saudavel-${l.id}`, assunto: () => 'ok', corpo: () => 'ok',
+      },
+    ];
+    const r = await queueService.varrerAlertasRegistrados(db, registroSabotado);
+    assert.strictEqual(r.length, 2, 'as DUAS entradas tem de aparecer no resultado');
+    assert.strictEqual(r[0].chave, 'ALERTA_QUEBRADO');
+    assert.strictEqual(r[0].erro, true, 'entrada quebrada marca erro:true');
+    assert.ok(/boom do listar/.test(r[0].erro_mensagem));
+    assert.strictEqual(r[1].chave, 'ALERTA_SAUDAVEL');
+    assert.strictEqual(r[1].enfileiradas, 1, 'o alerta seguinte TEM de enfileirar mesmo com o anterior quebrado');
+    const linhas = await filaPorEvento(db, 'ALERTA_SAUDAVEL');
+    assert.strictEqual(linhas.length, 1);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
