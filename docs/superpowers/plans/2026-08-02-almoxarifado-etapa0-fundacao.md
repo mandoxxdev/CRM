@@ -844,7 +844,7 @@ async function getEmailConfig() {
   return {
     host: process.env.SMTP_HOST || 'smtp.locaweb.com.br',
     user: process.env.SMTP_USER || 'solicitacoes@gmp.ind.br',
-    pass: process.env.SMTP_PASS || 'Solicitacoes123@',
+    pass: process.env.SMTP_PASS || '<senha removida desta documentacao — ver server/index.js>',
     from: process.env.SMTP_FROM || 'solicitacoes@gmp.ind.br',
   };
 }
