@@ -133,13 +133,25 @@ const CENTRAL_FIXTURE = {
       chave: 'LOTE_SEM_CERTIFICADO', titulo: 'Lote sem certificado',
       descricao: 'Lotes com saldo de material que exige certificado e sem arquivo anexado.',
       dias: null, total: 1,
-      // status BLOQUEADO é o caso PRINCIPAL (o lote sem certificado nasce bloqueado) — a
-      // coluna de status existe para o almoxarife entender por que o lote está travado.
+      // Linha AGREGADA { total, lotes } — o servidor passou a resumir (revisão adversarial:
+      // 1 e-mail por lote dava 1000 e-mails/mês). status BLOQUEADO é o caso PRINCIPAL (o lote
+      // sem certificado nasce bloqueado) e aparece no resumo para o almoxarife entender por
+      // que o lote está travado.
       linhas: [
         {
-          id: 70, lote_id: 70, codigo: 'LOTE-70', status: 'BLOQUEADO', material_id: 3,
-          material_codigo: 'ALM-0044', material_nome: 'Barra Inox', material_unidade: 'KG',
-          saldo: 25,
+          total: 2,
+          lotes: [
+            {
+              id: 70, codigo: 'LOTE-70', status: 'BLOQUEADO', material_id: 3,
+              material_codigo: 'ALM-0044', material_nome: 'Barra Inox', material_unidade: 'KG',
+              saldo: 25,
+            },
+            {
+              id: 71, codigo: 'LOTE-71', status: 'ATIVO', material_id: 3,
+              material_codigo: 'ALM-0044', material_nome: 'Barra Inox', material_unidade: 'KG',
+              saldo: 4,
+            },
+          ],
         },
       ],
     },
@@ -328,17 +340,18 @@ test('DIVERGENCIA_INVENTARIO: linha agregada por conferencia, sem impacto financ
   expect(t).not.toMatch(/conferencia id/i);
 });
 
-test('LOTE_SEM_CERTIFICADO: lote, saldo e o status BLOQUEADO que e o caso principal', async () => {
+test('LOTE_SEM_CERTIFICADO: resumo agregado com o total e os lotes, com o status BLOQUEADO', async () => {
   await renderizar();
   await expandir('LOTE_SEM_CERTIFICADO');
 
   expect(cabecalhos('LOTE_SEM_CERTIFICADO')).toEqual([
-    'Lote', 'Material', 'Saldo', 'Status',
+    'Lotes sem certificado', 'Primeiros lotes',
   ]);
   const t = card('LOTE_SEM_CERTIFICADO').textContent;
   expect(t).toContain('LOTE-70');
-  expect(t).toContain('ALM-0044 — Barra Inox');
-  expect(t).toContain('25 KG');
+  expect(t).toContain('LOTE-71');
+  expect(t).toContain('ALM-0044');
+  expect(t).toContain('25');
   // O lote sem certificado NASCE bloqueado — esconder o status faria o alerta parecer sobre
   // um lote disponível.
   expect(t).toContain('BLOQUEADO');

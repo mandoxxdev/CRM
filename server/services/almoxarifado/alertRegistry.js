@@ -379,7 +379,12 @@ const ALERT_REGISTRY = Object.freeze([
     configDias: { chave: 'alerta_eventos_janela_dias', default: 7 },
     listar: (db, { dias }) => listarDivergenciasRecebimento(db, { dias }),
     // 1x por item; correcao posterior da quantidade nao re-alerta (declarado no design).
-    dedupeChave: (linha) => `receb-diverg-${linha.item_id}`,
+    // A quantidade ENTRA no dedupe (achado A1 da revisao adversarial, reproduzido): com
+    // `receb-diverg-<item_id>` puro, salvar 8 de 10, corrigir para 10 e depois errar 2 de 10
+    // deixava a central dizendo "faltam 8" (o unico e-mail que existia) enquanto o estado real
+    // era outro — errar de novo, PIOR, ficava calado. Com a quantidade na chave, cada valor
+    // divergente novo avisa uma vez; re-salvar o MESMO valor continua sendo DUPLICADA.
+    dedupeChave: (linha) => `receb-diverg-${linha.item_id}-${linha.quantidade_recebida}`,
     payload: (linha) => ({ item_id: linha.item_id, recebimento_id: linha.recebimento_id }),
     assunto: (linha) => `[Almoxarifado] Divergência de recebimento — ${linha.material_codigo}`,
     corpo: (linha) => [
@@ -429,19 +434,28 @@ const ALERT_REGISTRY = Object.freeze([
         JOIN materiais_almoxarifado m ON m.id = l.material_id
         WHERE m.ativo = 1
           AND m.controle_certificado = 1
-          AND l.certificado_arquivo IS NULL
+          -- TRIM/COALESCE em vez de IS NULL puro (achado A4 da revisao): hoje o unico
+          -- escritor e o upload, mas string vazia/espacos escapariam do IS NULL e o lote
+          -- sumiria do alerta em silencio no dia em que existir um "remover anexo".
+          AND COALESCE(TRIM(l.certificado_arquivo), '') = ''
         ORDER BY m.codigo, l.codigo`);
-      return lotes.filter((l) => Number(l.saldo) > 0);
+      const comSaldo = lotes.filter((l) => Number(l.saldo) > 0);
+      if (!comSaldo.length) return [];
+      // UMA linha AGREGADA, no mesmo padrao de MATERIAL_SEM_ENDERECO (achado A2 da revisao
+      // adversarial, MEDIDO: 1000 lotes aguardando certificado geravam 1000 e-mails, e o
+      // dedupe mensal os repetia todo mes). A populacao deste alerta e "todo lote com saldo
+      // esperando certificado" — exatamente o caso de ruido em massa que a Etapa 16 ja tinha
+      // resolvido por agregacao no sem-endereco. A central mostra o total e os 20 primeiros.
+      return [{ total: comSaldo.length, lotes: comSaldo.slice(0, 20) }];
     },
-    // RN-06: re-lembra 1x/mes enquanto o lote seguir sem certificado e com saldo.
-    dedupeChave: (linha) => `sem-certificado-${linha.id}-${mesAtual()}`,
-    payload: (linha) => ({ lote_id: linha.id }),
-    assunto: (linha) => `[Almoxarifado] Lote sem certificado — ${linha.codigo}`,
+    // RN-06: 1 resumo por mes enquanto houver lote sem certificado com saldo.
+    dedupeChave: () => `sem-certificado-${mesAtual()}`,
+    payload: (linha) => ({ total: linha.total, lotes: linha.lotes.map((l) => l.id) }),
+    assunto: (linha) => `[Almoxarifado] Lotes sem certificado — ${linha.total} lote(s)`,
     corpo: (linha) => [
-      `Lote: ${linha.codigo}`,
-      `Material: ${linha.material_codigo} — ${linha.material_nome}`,
-      `Saldo: ${linha.saldo} ${linha.material_unidade || ''}`.trim(),
-      `Status: ${linha.status}`,
+      `Total de lotes sem certificado (com saldo): ${linha.total}`,
+      `Primeiros ${linha.lotes.length}:`,
+      ...linha.lotes.map((l) => `- ${l.codigo} · ${l.material_codigo} — ${l.material_nome} · saldo ${l.saldo} ${l.material_unidade || ''} · ${l.status}`.trim()),
     ].join('\n'),
   },
 ]);

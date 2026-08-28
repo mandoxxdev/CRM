@@ -37,7 +37,7 @@ console.warn; aviso NUNCA derruba o ato).
 | RN-03 | Reprovado dispara só com `quantidade_reprovada > 0` |
 | RN-04 | Divergência de recebimento nasce do REGISTRO da quantidade recebida (conferência OU fiscal) com `divergenciaRealSql` nos 2 caminhos; flags da inspeção FORA (declarado) |
 | RN-05 | Inventário: 1 aviso AGREGADO por conferência, corpo SEM impacto_financeiro (B30) |
-| RN-06 | Sem certificado: varredura pura, régua `certificado_arquivo IS NULL` + saldo>0, re-lembrete mensal |
+| RN-06 | Sem certificado: varredura pura AGREGADA (1 resumo/mês), régua `COALESCE(TRIM(certificado_arquivo),'')=''` + saldo>0 |
 | RN-07 | Toggle mestre governa os DOIS caminhos (gancho e varredura); a central segue ao vivo |
 
 ## Contratos congelados
@@ -57,9 +57,9 @@ motivo:'DUPLICADA'|'SEM_DESTINATARIO'}`).
 | Chave | `listar` (ao vivo) | configDias | dedupeChave |
 |---|---|---|---|
 | `MATERIAL_REPROVADO` | `listarReprovados(db, { dias | inspecaoId })` — **dual-mode exportado** (a MESMA query com JOIN item→material→recebimento; `{dias}` = janela por `data_inspecao` p/ central/varredura, `{inspecaoId}` = a linha do fato p/ o gancho). Campos: `inspecao_id, material_codigo, material_nome, quantidade_reprovada, encaminhamento, recebimento_numero, nota_fiscal, data_inspecao, responsavel_nome`. payload `{inspecao_id}` | `{ chave: 'alerta_eventos_janela_dias', default: 7 }` | `` (l) => `reprovado-${l.inspecao_id}` `` |
-| `DIVERGENCIA_RECEBIMENTO` | `listarDivergenciasRecebimento(db, { dias | recebimentoId })` — **dual-mode exportado**: itens `quantidade_recebida IS NOT NULL` AND `divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')`; `{dias}` = janela por **`COALESCE(r.updated_at, r.created_at)`** (achado Crítico da revisão: `created_at` puro deixaria recebimento antigo conferido HOJE fora da central E da rede de segurança; o item não tem timestamp — limitação declarada), `{recebimentoId}` = os itens divergentes daquele recebimento p/ os ganchos. Campos: `item_id, material_codigo, material_nome, quantidade_esperada, quantidade_recebida, divergencia, recebimento_numero, nota_fiscal`. payload `{item_id, recebimento_id}` | idem (mesma chave) | `` (l) => `receb-diverg-${l.item_id}` `` |
+| `DIVERGENCIA_RECEBIMENTO` | `listarDivergenciasRecebimento(db, { dias | recebimentoId })` — **dual-mode exportado**: itens `quantidade_recebida IS NOT NULL` AND `divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')`; `{dias}` = janela por **`COALESCE(r.updated_at, r.created_at)`** (achado Crítico da revisão: `created_at` puro deixaria recebimento antigo conferido HOJE fora da central E da rede de segurança; o item não tem timestamp — limitação declarada), `{recebimentoId}` = os itens divergentes daquele recebimento p/ os ganchos. Campos: `item_id, material_codigo, material_nome, quantidade_esperada, quantidade_recebida, divergencia, recebimento_numero, nota_fiscal`. payload `{item_id, recebimento_id}` | idem (mesma chave) | `` (l) => `receb-diverg-${l.item_id}-${l.quantidade_recebida}` `` **(a quantidade entrou na chave no fix-round da Fase 5 — achado A1: sem ela, errar de novo e PIOR ficava calado)** |
 | `DIVERGENCIA_INVENTARIO` | `listarDivergenciaConferencia(db, { dias | conferenciaId })` — dual-mode: conferências `status='CONCLUIDO'` com item `divergenciaRealSql('ic.divergencia')`, `data_fim` na janela, AGREGADO (campos: `conferencia_id, numero, data_fim, itens_divergentes`; SEM impacto_financeiro). payload `{conferencia_id}` | idem (mesma chave) | `` (l) => `inv-diverg-${l.conferencia_id}` `` |
-| `LOTE_SEM_CERTIFICADO` | lotes de material `ativo=1` com `controle_certificado=1`, `certificado_arquivo IS NULL`, saldo>0 (subquery de `estoque_saldo_almoxarifado` — molde `varrerLotesVencendo`, notificationQueueService.js:492-502; filtro de saldo em JS como lá) (campos: `lote_id (l.id), codigo (do lote), material_codigo, material_nome, saldo, status`). payload `{lote_id}`. **NÃO copiar o filtro `l.status='ATIVO'` do molde** — o lote sem certificado NASCE `BLOQUEADO` (receiptService.js:471 + lotService.js:113-136); copiar o filtro cegaria o alerta para o caso principal (achado da revisão) | `null` | `` (l) => `sem-certificado-${l.id}-${mesAtual()}` `` |
+| `LOTE_SEM_CERTIFICADO` | lotes de material `ativo=1` com `controle_certificado=1`, `certificado_arquivo IS NULL`, saldo>0 (subquery de `estoque_saldo_almoxarifado` — molde `varrerLotesVencendo`, notificationQueueService.js:492-502; filtro de saldo em JS como lá) (campos: `lote_id (l.id), codigo (do lote), material_codigo, material_nome, saldo, status`). payload `{lote_id}`. **NÃO copiar o filtro `l.status='ATIVO'` do molde** — o lote sem certificado NASCE `BLOQUEADO` (receiptService.js:471 + lotService.js:113-136); copiar o filtro cegaria o alerta para o caso principal (achado da revisão). **Fix-round da Fase 5 (achado A2, medido em 1000 e-mails): virou UMA linha AGREGADA `{ total, lotes: até 20 }`, no padrão do sem-endereço, e a régua usa `COALESCE(TRIM(certificado_arquivo),'')=''`** | `null` | `` () => `sem-certificado-${mesAtual()}` `` (1 resumo por mês) |
 
 `listarDivergenciaConferencia(db, { dias, conferenciaId })` é exportada pelo registro: com
 `dias` filtra janela (uso do `listar`); com `conferenciaId` devolve só aquela conferência
@@ -327,7 +327,22 @@ conferência/data/itens divergentes; sem certificado lote/material/saldo/status)
   `test:api` **131/131**, `test:almoxarifado` **42/0**, `test:validation` **4/0**,
   `test:safealter` **3/0**, `test:sqlite` **3/0**; client **527 testes em 36 suítes**,
   build `CI=true` exit 0.
-- [ ] Fase 5 — revisão adversarial (2 lentes)
+- [x] Fase 5 — revisão adversarial (2 lentes, 2026-08-28). **Backend: Needs-fix-round leve**
+  — A1 (divergência NOVA e pior no mesmo item nunca re-alertava: a central dizia "faltam 8" e
+  o único e-mail dizia outra coisa → a quantidade ENTROU no dedupe), A2 (volume MEDIDO: 1000
+  lotes = 1000 e-mails/mês → alerta de lote virou resumo mensal agregado, no precedente do
+  sem-endereço da E16; o volume por item da divergência de recebimento fica declarado), A3
+  (**a spec afirmava "o dedupe segura o e-mail" e ele reproduziu que é FALSO** — transição de
+  workflow bumpa `updated_at` e ressuscita divergência antiga nunca avisada: frase corrigida
+  dizendo que estava errada), A4 (`TRIM/COALESCE` na régua do certificado), A5 (terceiro
+  escritor declarado), A6 (RN-01/RN-02 versionados para os outros dois ganchos).
+  **Front/costura: Needs-fix-round pequeno** — a asserção de escape do
+  `dispararAlertaRegistrado` **não sabia falhar** (fixture sem caractere especial e o `<p>`
+  vinha do wrapper): fixture hostil + asserts de `&lt;script&gt;`, com controle positivo
+  medido (sabotei o `escapeHtml` do helper → vermelho; md5 restaurado). Refutado com
+  sabotagem real por eles: dual-mode é a mesma query byte a byte, dedupe idêntico nos dois
+  caminhos, os 3 ganchos têm rede, costura campo a campo, B30 respeitado.
+  Revalidação: server **131/131** (evento 6/6, ganchos 8/8), client **527/527**, build exit 0.
 - [ ] Fase 6 — fechar-etapa + retro
 
 ## Retro (4 números — preencher no fechamento)

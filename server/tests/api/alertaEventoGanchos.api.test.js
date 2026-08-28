@@ -139,7 +139,7 @@ async function conferenciaContada(app, db, { qtdSistema, contada }) {
       .send({ itens: [{ id: itemId, quantidade_recebida: 8, conferencia_quantidade: 1 }] });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
 
-    const fila = await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}`));
+    const fila = await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}-8`));
     assert.strictEqual(fila.length, 1, 'conferir 8 de 10 TINHA de enfileirar DIVERGENCIA_RECEBIMENTO');
     const payload = JSON.parse(fila[0].payload);
     assert.strictEqual(payload.item_id, itemId);
@@ -152,7 +152,7 @@ async function conferenciaContada(app, db, { qtdSistema, contada }) {
       .send({ itens: [{ id: semDiv.itemId, quantidade_recebida: 10, conferencia_quantidade: 1 }] });
     assert.strictEqual(res2.status, 200, JSON.stringify(res2.body));
     assert.strictEqual(
-      (await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${semDiv.itemId}`))).length, 0,
+      (await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${semDiv.itemId}-10`))).length, 0,
       'recebida igual a esperada NAO pode enfileirar');
   });
 
@@ -169,7 +169,7 @@ async function conferenciaContada(app, db, { qtdSistema, contada }) {
       .send({ nota_fiscal: 'NF-FISCAL-GAN', itens: [{ id: itemId, quantidade_recebida: 7 }] });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
 
-    const fila = await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}`));
+    const fila = await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}-7`));
     assert.strictEqual(fila.length, 1, 'registrar 7 de 10 pela rota fiscal TINHA de enfileirar');
     assert.strictEqual(JSON.parse(fila[0].payload).item_id, itemId);
 
@@ -181,7 +181,7 @@ async function conferenciaContada(app, db, { qtdSistema, contada }) {
       .send({ nota_fiscal: 'NF-FISCAL-GAN-2', itens: [{ id: semDiv.itemId, quantidade_recebida: 10 }] });
     assert.strictEqual(res2.status, 200, JSON.stringify(res2.body));
     assert.strictEqual(
-      (await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${semDiv.itemId}`))).length, 0,
+      (await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${semDiv.itemId}-10`))).length, 0,
       'rota fiscal sem divergencia NAO pode enfileirar');
   });
 
@@ -283,6 +283,94 @@ async function conferenciaContada(app, db, { qtdSistema, contada }) {
     assert.strictEqual(
       (await filaPorHash(db, hashDedupe('MATERIAL_REPROVADO', `reprovado-${desligada}`))).length, 1,
       'a varredura e a rede de seguranca do que o toggle off perdeu');
+  });
+
+  // ── Achados da revisao adversarial (A1 e A6) ────────────────────────────────────────────────
+  await test('6. A1: errar de novo, PIOR, no mesmo item avisa de novo (a quantidade entra no dedupe)', async () => {
+    const mat = await novoMaterial(db);
+    const { recId, itemId } = await novoRecebimento(db, mat.id, 10);
+    await request(app).post(`/api/almoxarifado/recebimentos/${recId}/workflow`).send({ acao: 'iniciar_conferencia' });
+
+    // 8 de 10 -> avisa
+    await request(app).put(`/api/almoxarifado/recebimentos/${recId}/fiscal`)
+      .send({ nota_fiscal: 'NF-A1-1', itens: [{ id: itemId, quantidade_recebida: 8 }] });
+    assert.strictEqual((await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}-8`))).length, 1);
+
+    // corrige para 10 -> condicao morre, nada novo
+    await request(app).put(`/api/almoxarifado/recebimentos/${recId}/fiscal`)
+      .send({ nota_fiscal: 'NF-A1-2', itens: [{ id: itemId, quantidade_recebida: 10 }] });
+    assert.strictEqual((await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}-10`))).length, 0,
+      'quantidade correta NAO pode enfileirar');
+
+    // erra de novo, PIOR (2 de 10): com o dedupe antigo (so por item) isto ficava CALADO e o
+    // unico e-mail existente dizia "8" — a central e a caixa de entrada contavam historias
+    // diferentes. Achado A1 da revisao adversarial.
+    await request(app).put(`/api/almoxarifado/recebimentos/${recId}/fiscal`)
+      .send({ nota_fiscal: 'NF-A1-3', itens: [{ id: itemId, quantidade_recebida: 2 }] });
+    const novaFila = await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}-2`));
+    assert.strictEqual(novaFila.length, 1, 'divergencia NOVA e pior TEM de avisar de novo');
+    assert.ok(/2/.test(novaFila[0].corpo_texto), 'o corpo novo fala da quantidade ATUAL');
+
+    // re-salvar o MESMO valor continua sendo duplicata (o dedupe nao virou "avisa sempre").
+    await request(app).put(`/api/almoxarifado/recebimentos/${recId}/fiscal`)
+      .send({ nota_fiscal: 'NF-A1-4', itens: [{ id: itemId, quantidade_recebida: 2 }] });
+    assert.strictEqual((await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}-2`))).length, 1,
+      're-salvar o mesmo valor NAO pode duplicar o aviso');
+  });
+
+  await test('7. A6: RN-01 (dedupe identico ato x varredura) e RN-02 (ato sobrevive) para os OUTROS dois ganchos', async () => {
+    // RN-01 para DIVERGENCIA_RECEBIMENTO: apaga a linha que o gancho criou e deixa a varredura
+    // gerar a dela — hash e corpo tem de bater byte a byte (senao gancho e rede de seguranca
+    // contam historias diferentes).
+    const mat = await novoMaterial(db);
+    const { recId, itemId } = await novoRecebimento(db, mat.id, 10);
+    await request(app).post(`/api/almoxarifado/recebimentos/${recId}/workflow`).send({ acao: 'iniciar_conferencia' });
+    await request(app).put(`/api/almoxarifado/recebimentos/${recId}/fiscal`)
+      .send({ nota_fiscal: 'NF-A6', itens: [{ id: itemId, quantidade_recebida: 6 }] });
+    const hashReceb = hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${itemId}-6`);
+    const doGancho = (await filaPorHash(db, hashReceb))[0];
+    assert.ok(doGancho, 'setup: o gancho enfileirou');
+    await dbRun(db, 'DELETE FROM fila_notificacoes_almoxarifado WHERE id = ?', [doGancho.id]);
+    await queueService.varrerAlertasRegistrados(db);
+    const daVarredura = (await filaPorHash(db, hashReceb))[0];
+    assert.ok(daVarredura, 'a varredura tem de gerar o MESMO hash do gancho (RN-01)');
+    assert.strictEqual(daVarredura.corpo_texto, doGancho.corpo_texto, 'corpo identico nos dois caminhos');
+    assert.strictEqual(daVarredura.assunto, doGancho.assunto, 'assunto identico nos dois caminhos');
+
+    // RN-02 para os dois atos: com o disparo lancando, /fiscal e /concluir respondem 200 e
+    // gravam o que tinham de gravar.
+    const original = queueService.dispararAlertaRegistrado;
+    try {
+      queueService.dispararAlertaRegistrado = async () => { throw new Error('boom do disparo'); };
+
+      const r2 = await novoRecebimento(db, mat.id, 10);
+      await request(app).post(`/api/almoxarifado/recebimentos/${r2.recId}/workflow`).send({ acao: 'iniciar_conferencia' });
+      const resFiscal = await request(app).put(`/api/almoxarifado/recebimentos/${r2.recId}/fiscal`)
+        .send({ nota_fiscal: 'NF-RN02', itens: [{ id: r2.itemId, quantidade_recebida: 5 }] });
+      assert.strictEqual(resFiscal.status, 200, `RN-02: /fiscal tem de responder 200 mesmo com o aviso quebrado: ${JSON.stringify(resFiscal.body)}`);
+      const itemGravado = await dbGet(db, 'SELECT quantidade_recebida FROM recebimentos_material_itens_almoxarifado WHERE id = ?', [r2.itemId]);
+      assert.strictEqual(itemGravado.quantidade_recebida, 5, 'RN-02: o ato gravou de verdade');
+      assert.strictEqual((await filaPorHash(db, hashDedupe('DIVERGENCIA_RECEBIMENTO', `receb-diverg-${r2.itemId}-5`))).length, 0,
+        'com o disparo quebrado nao ha aviso — so o ato');
+
+      const conf = await conferenciaContada(app, db, { qtdSistema: 100, contada: 99 });
+      const resConcluir = await request(app).put(`/api/almoxarifado/conferencias/${conf.confId}/concluir`).send({});
+      assert.strictEqual(resConcluir.status, 200, `RN-02: /concluir tem de responder 200: ${JSON.stringify(resConcluir.body)}`);
+      const confGravada = await dbGet(db, 'SELECT status, data_fim FROM conferencias_almoxarifado WHERE id = ?', [conf.confId]);
+      assert.strictEqual(confGravada.status, 'CONCLUIDO', 'RN-02: a conferencia concluiu de verdade');
+      assert.ok(confGravada.data_fim, 'RN-02: data_fim gravada');
+    } finally {
+      queueService.dispararAlertaRegistrado = original;
+    }
+
+    // Controle positivo: restaurado, o mesmo ato volta a avisar.
+    // 1% de divergencia: abaixo da tolerancia padrao (2%), entao conclui sem exigir recontagem
+    // — o mesmo molde do cenario 3. Com 3% a rota pede recontagem e o ato nem acontece.
+    const conf2 = await conferenciaContada(app, db, { qtdSistema: 100, contada: 99 });
+    const resCtrl = await request(app).put(`/api/almoxarifado/conferencias/${conf2.confId}/concluir`).send({});
+    assert.strictEqual(resCtrl.status, 200, JSON.stringify(resCtrl.body));
+    assert.strictEqual((await filaPorHash(db, hashDedupe('DIVERGENCIA_INVENTARIO', `inv-diverg-${conf2.confId}`))).length, 1,
+      'com o disparo restaurado o aviso volta (controle positivo do stub)');
   });
 
   await close();

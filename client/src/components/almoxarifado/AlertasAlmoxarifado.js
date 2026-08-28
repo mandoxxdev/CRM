@@ -163,11 +163,17 @@ const COLUNAS_POR_CHAVE = {
   ],
   // O status entra porque o lote sem certificado NASCE `BLOQUEADO` (receiptService/lotService)
   // — sem a coluna, o alerta pareceria falar de um lote disponível para consumo.
+  // Linha AGREGADA (como MATERIAL_SEM_ENDERECO): { total, lotes: até 20 }. O alerta por lote
+  // gerava 1 e-mail por lote, re-lembrado todo mês — medido em 1000 e-mails na revisão
+  // adversarial da etapa, e a população é "todo lote com saldo esperando certificado".
   LOTE_SEM_CERTIFICADO: [
-    { titulo: 'Lote', render: (l) => l.codigo || `#${l.id}` },
-    { titulo: 'Material', render: (l) => `${l.material_codigo} — ${l.material_nome}` },
-    { titulo: 'Saldo', render: (l) => `${formatNum(l.saldo)} ${l.material_unidade || ''}`.trim() },
-    { titulo: 'Status', render: (l) => l.status || '—' },
+    { titulo: 'Lotes sem certificado', render: (l) => formatNum(l.total) },
+    {
+      titulo: 'Primeiros lotes',
+      render: (l) => (l.lotes || [])
+        .map((x) => `${x.codigo} (${x.material_codigo}, saldo ${formatNum(x.saldo)} ${x.material_unidade || ''}${x.status ? `, ${x.status}` : ''})`.replace(/\s+\)/, ')'))
+        .join('; ') || '—',
+    },
   ],
 };
 

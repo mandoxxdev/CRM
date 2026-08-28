@@ -93,9 +93,9 @@ colunas das 4 chaves na central. Zero mudança de rota nova, zero permissão nov
 | Chave | Condição (`listar`, ao vivo) | Gancho | Dedupe (idêntico nos 2 caminhos) |
 |---|---|---|---|
 | `MATERIAL_REPROVADO` | inspeções com `quantidade_reprovada>0` e `data_inspecao` dentro da janela | decidirInspecao | `reprovado-<inspecao_id>` (decisão é imutável — 1× para sempre) |
-| `DIVERGENCIA_RECEBIMENTO` | itens com `quantidade_recebida IS NOT NULL` e `divergenciaRealSql(recebida−esperada)`, janela por `COALESCE(r.updated_at, r.created_at)` — **correção da revisão: `created_at` puro deixaria recebimento antigo conferido HOJE fora da central e da rede de segurança**; o item não tem timestamp próprio (limitação declarada: qualquer toque posterior no recebimento renova a presença na central; o dedupe segura o e-mail) | conferirRecebimento E salvarDadosFiscal | `receb-diverg-<item_id>` (1× por item; correção posterior da quantidade não re-alerta — declarado) |
+| `DIVERGENCIA_RECEBIMENTO` | itens com `quantidade_recebida IS NOT NULL` e `divergenciaRealSql(recebida−esperada)`, janela por `COALESCE(r.updated_at, r.created_at)` — `created_at` puro deixaria recebimento antigo conferido HOJE fora da central e da rede de segurança; o item não tem timestamp próprio. **Limitação declarada (corrigida na revisão adversarial — a versão anterior dizia "o dedupe segura o e-mail" e isso é FALSO, reproduzido com sonda):** toda transição de workflow escreve `updated_at`, então mexer num recebimento antigo com divergência histórica **nunca avisada** faz o alerta nascer ali — e-mail novo, não duplicado. É a rede de segurança funcionando (a divergência é real e nunca foi comunicada), mas quem sobe a etapa deve esperar avisos de recebimentos legados conforme forem tocados | conferirRecebimento E salvarDadosFiscal | `receb-diverg-<item_id>-<quantidade_recebida>` (a quantidade ENTRA na chave — achado A1 da revisão: com a chave por item só, errar 8, corrigir para 10 e errar 2 de novo deixava a central e o único e-mail contando histórias diferentes) |
 | `DIVERGENCIA_INVENTARIO` | conferências `status='CONCLUIDO'` com item `divergenciaRealSql('ic.divergencia')`, agregado por conferência (`itens_divergentes`, `data_fim` na janela) | rota concluir | `inv-diverg-<conferencia_id>` (conferência conclui 1×) |
-| `LOTE_SEM_CERTIFICADO` | lote de material ativo `controle_certificado=1` com `certificado_arquivo IS NULL` e saldo>0 (subquery de `estoque_saldo_almoxarifado`, molde de `varrerLotesVencendo`) | — (varredura pura) | `sem-certificado-<lote_id>-<AAAA-MM>` (re-lembra 1×/mês enquanto persistir) |
+| `LOTE_SEM_CERTIFICADO` | lote de material ativo `controle_certificado=1` com `certificado_arquivo` vazio/nulo e saldo>0 (subquery de `estoque_saldo_almoxarifado`, molde de `varrerLotesVencendo`), **AGREGADO numa linha** `{ total, lotes: até 20 }` | — (varredura pura) | `sem-certificado-<AAAA-MM>` (1 resumo por mês). **Correção da revisão adversarial (A2, medido):** a versão anterior era 1 e-mail POR LOTE, re-lembrado mensalmente — 1000 lotes aguardando certificado = 1000 e-mails/mês. A população deste alerta é "todo lote com saldo esperando certificado", exatamente o caso de ruído em massa que a Etapa 16 já resolvera por agregação no sem-endereço |
 
 Notas: a régua do sem-certificado é `certificado_arquivo IS NULL` (não `status='BLOQUEADO'` —
 lote destravado na mão sem anexo continua sem certificado, e essa é a régua honesta);
@@ -133,6 +133,21 @@ história certa). Config nova aparece em Configurações Gerais (padrão da 16, 
   anexado sai da condição na hora (central) — o e-mail antigo fica.
 - **RN-07 — O toggle mestre governa os dois caminhos.** `alertas_estoque_notificar_email='0'`
   → nem gancho nem varredura enfileiram (a central continua ao vivo).
+
+## Limitações declaradas (medidas na revisão adversarial)
+
+- **Volume da divergência de recebimento:** o alerta é por ITEM, sem agregação — uma nota
+  com N itens divergentes gera N avisos (medido: 300 itens = 300 e-mails de um clique).
+  Aceito porque uma nota fiscal real tem poucos itens; se virar problema, a saída é o mesmo
+  padrão do inventário (agregar por recebimento). Decisão registrada, não descuido.
+- **Terceiro escritor de `quantidade_recebida`:** além dos dois com gancho
+  (`conferirRecebimento` e `salvarDadosFiscal`), `criarRecebimento` também grava a
+  quantidade. Criar recebimento já divergente pela API **não dispara no ato** — a central
+  mostra na hora e a varredura pega no dia seguinte. A UI nunca cai nisso (sempre manda
+  recebida = esperada na criação).
+- **Data no e-mail é UTC crua; a central converte para o fuso local.** Um fato às 22:30 de
+  Brasília aparece como o dia seguinte no corpo do e-mail e como o dia certo na central.
+  Padrão pré-existente das entradas da Etapa 16, não regressão desta.
 
 ## Testes
 

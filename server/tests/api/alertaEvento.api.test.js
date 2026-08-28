@@ -144,21 +144,31 @@ function resultadoDe(resultados, chave) {
     const matCliente = await novoMaterial(db, { controle_certificado: 1, cliente_id: cli.lastID });
     const loteCliente = await novoLote(db, matCliente.id, { saldo: 3 });
 
+    // Lote com certificado em BRANCO (nao NULL): achado A4 da revisao — `IS NULL` puro o
+    // deixava escapar em silencio. Tem de contar como sem certificado.
+    const loteCertVazio = await novoLote(db, mat.id, { certificado: '   ', saldo: 4 });
+
     const r = await queueService.varrerAlertasRegistrados(db);
     const res = resultadoDe(r, 'LOTE_SEM_CERTIFICADO');
-    assert.ok(res.enfileiradas >= 2, JSON.stringify(res));
+    // AGREGADO (achado A2 da revisao, medido: 1 e-mail por lote dava 1000 e-mails/mes) — UMA
+    // notificacao por mes com o total e os primeiros lotes, no padrao do sem-endereco.
+    assert.strictEqual(res.enfileiradas, 1, `agregado: 1 aviso por mes, nao 1 por lote — ${JSON.stringify(res)}`);
 
     // RN-06: o dedupe carrega o mes (re-lembrete mensal enquanto persistir).
-    const hashBloq = hashDedupe('LOTE_SEM_CERTIFICADO', `sem-certificado-${loteBloqueado}-${mesAtual()}`);
-    const linhas = await filaPorHash(db, hashBloq);
-    assert.strictEqual(linhas.length, 1, 'lote BLOQUEADO sem certificado com saldo TINHA de enfileirar');
-    assert.ok(linhas[0].assunto.startsWith('[Almoxarifado] '), linhas[0].assunto);
-    assert.strictEqual(JSON.parse(linhas[0].payload).lote_id, loteBloqueado);
-
-    assert.strictEqual((await filaPorHash(db, hashDedupe('LOTE_SEM_CERTIFICADO', `sem-certificado-${loteComCert}-${mesAtual()}`))).length, 0, 'lote com certificado anexado NAO pode enfileirar');
-    assert.strictEqual((await filaPorHash(db, hashDedupe('LOTE_SEM_CERTIFICADO', `sem-certificado-${loteSemSaldo}-${mesAtual()}`))).length, 0, 'lote sem saldo NAO pode enfileirar');
-    assert.strictEqual((await filaPorHash(db, hashDedupe('LOTE_SEM_CERTIFICADO', `sem-certificado-${loteForaControle}-${mesAtual()}`))).length, 0, 'material sem controle_certificado NAO pode enfileirar');
-    assert.strictEqual((await filaPorHash(db, hashDedupe('LOTE_SEM_CERTIFICADO', `sem-certificado-${loteCliente}-${mesAtual()}`))).length, 1, 'material de CLIENTE com controle de certificado TEM de entrar (decisao do plano)');
+    const linhas = await filaPorHash(db, hashDedupe('LOTE_SEM_CERTIFICADO', `sem-certificado-${mesAtual()}`));
+    assert.strictEqual(linhas.length, 1, 'resumo mensal TINHA de enfileirar');
+    const payload = JSON.parse(linhas[0].payload);
+    // Entram: o BLOQUEADO (caso principal), o do CLIENTE (decisao do plano) e o de
+    // certificado em branco. Ficam fora: com certificado, sem saldo, sem controle.
+    assert.strictEqual(payload.total, 3, `esperava 3 lotes pendentes, veio ${JSON.stringify(payload)}`);
+    for (const dentro of [loteBloqueado, loteCliente, loteCertVazio]) {
+      assert.ok(payload.lotes.includes(dentro), `lote ${dentro} TINHA de estar no resumo: ${JSON.stringify(payload.lotes)}`);
+    }
+    for (const fora of [loteComCert, loteSemSaldo, loteForaControle]) {
+      assert.ok(!payload.lotes.includes(fora), `lote ${fora} NAO podia estar no resumo`);
+    }
+    assert.ok(/3 lote\(s\)/.test(linhas[0].assunto), linhas[0].assunto);
+    assert.ok(/Total de lotes sem certificado/.test(linhas[0].corpo_texto), linhas[0].corpo_texto);
   });
 
   // ── Cenario 2: MATERIAL_REPROVADO via listar (RN-03 lado listar + janela configuravel) ──────
@@ -292,7 +302,11 @@ function resultadoDe(resultados, chave) {
 
   // ── Cenario 5: C1 — dispararAlertaRegistrado ────────────────────────────────────────────────
   await test('5. C1: dispara enfileira; repetir = DUPLICADA; chave inexistente lanca; toggle off = DESLIGADO com fila intacta', async () => {
-    const mat = await novoMaterial(db);
+    // Nome HOSTIL de proposito (achado A1 da lente de costura): a asserção antiga era
+    // `corpo_html.includes('<p>')` sobre um material sem caractere especial — o `<p>` vem do
+    // WRAPPER, entao dava para apagar o escapeHtml do dispararAlertaRegistrado e a suite
+    // seguia verde. Mesma armadilha ja documentada em alertasNovos.api.test.js.
+    const mat = await novoMaterial(db, { nome: 'Chapa <script>alert(1)</script> & Cia' });
     const rec = await novoRecebimento(db);
     const item = await novoItemRecebimento(db, rec.id, mat.id, 10, 10);
     const insp = await novaInspecao(db, item, { reprovada: 4, aprovada: 6 });
@@ -306,7 +320,11 @@ function resultadoDe(resultados, chave) {
     assert.strictEqual(fila.length, 1, 'o disparo no ato TEM de estar na fila');
     assert.strictEqual(fila[0].evento, 'MATERIAL_REPROVADO');
     assert.strictEqual(JSON.parse(fila[0].payload).inspecao_id, insp);
-    assert.ok(fila[0].corpo_html.includes('<p>'), 'corpo_html escapado linha a linha, como a varredura');
+    // Escape de verdade: o nome hostil TEM de sair escapado e o HTML cru NAO pode aparecer.
+    assert.ok(fila[0].corpo_html.includes('&lt;script&gt;'), `corpo_html tinha de escapar o nome: ${fila[0].corpo_html}`);
+    assert.ok(!fila[0].corpo_html.includes('<script>'), `corpo_html NAO pode conter script cru: ${fila[0].corpo_html}`);
+    assert.ok(fila[0].corpo_html.includes('&amp;'), 'o & do nome tambem tem de sair escapado');
+    assert.ok(fila[0].corpo_texto.includes('<script>'), 'o corpo TEXTO fica cru de proposito (nao e HTML)');
 
     const r2 = await queueService.dispararAlertaRegistrado(db, 'MATERIAL_REPROVADO', linha);
     assert.strictEqual(r2.enfileirada, false, JSON.stringify(r2));
