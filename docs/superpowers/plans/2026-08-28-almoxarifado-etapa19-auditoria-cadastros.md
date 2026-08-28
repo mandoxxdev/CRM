@@ -284,15 +284,27 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
 
 **Files:** Test: `server/tests/api/auditoriaConfiguracaoJornada.api.test.js`
 
-- [ ] **Step 1: jornada** — administrador muda a **tolerância de inventário** pela rota real
-  de configurações (o valor que governa a recontagem obrigatória) → o log registra o de/para
-  daquela chave, e só dela → uma conferência conclui usando a tolerância nova (o efeito da
-  mudança é observável) → `GET /auditoria?entidade=configuracao` (como ADMIN) devolve a
+- [x] **Step 1: jornada** (`0f9f800`) — administrador muda a **tolerância de inventário** pela
+  rota real de configurações (o valor que governa a recontagem obrigatória) → o log registra o
+  de/para daquela chave, e só dela → uma conferência conclui usando a tolerância nova (o efeito
+  da mudança é observável) → `GET /auditoria?entidade=configuracao` (como ADMIN) devolve a
   linha, com o `total`/`truncado` do formato da Etapa 18. Prova que "quem mudou a regra do
   jogo" ficou registrado — que é o motivo desta etapa existir.
-- [ ] **Step 2: rodar; controle positivo** (remover a auditoria da rota 13 e ver a jornada
-  falhar); reverter; `npm run test:api`; commit —
-  `Almoxarifado Etapa 19 Task 4: jornada da mudanca de regra auditada`.
+  **8 cenários** em `server/tests/api/auditoriaConfiguracaoJornada.api.test.js`; três a mais do
+  que o plano pedia, e cada um fecha um jeito de a jornada passar sem provar nada: a guarda de
+  que um `role:'admin'` puro toma **403** ao mudar a regra (senão o 200 seria um 200 que
+  qualquer um consegue), a **não-retroatividade** (a conferência aberta antes segue barrada em
+  2% — é o que prova que o 200 veio da regra nova e não de frouxidão da rota de conclusão) e a
+  paginação com `limite=1&offset=1` declarando o corte.
+- [x] **Step 2: rodar; controle positivo; reverter; `npm run test:api`; commit** (`0f9f800`) —
+  passou **8/0 de primeira**, então **duas** sabotagens. (1) A do plano, auditoria da rota 13
+  desligada: **6/2**, os dois cenários do LOG vermelhos e os do EFEITO verdes — exatamente o
+  modo de falha que a jornada existe para pegar (a regra muda e o rastro some). (2) Segunda
+  ordem, para a outra metade não passar por vacuidade: `POST /conferencias` ignorando a config
+  global (tolerância fixa em 2): **6/2**, os dois cenários do EFEITO vermelhos e os do log
+  verdes. Revertidas, `git diff` limpo, verde de novo. `npm run test:api` **138/138 arquivos
+  OK**; `test:almoxarifado` **42/0**.
+  Commit: `Almoxarifado Etapa 19 Task 4: jornada da mudanca de regra auditada`.
 
 ---
 
@@ -406,7 +418,29 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
   (f) o teste usa `INSERT` direto para criar a localização do cenário "não inativa
   almoxarifado com localização ativa" em vez de `POST /localizacoes` — aquela rota estava
   sendo mexida pela Task 2 em paralelo e o cenário não é sobre ela.
-- [ ] Task 4 (integração)
+- [x] Task 4 (integração) — `0f9f800`. **8/0 de primeira** (`auditoriaConfiguracaoJornada.api.test.js`),
+  por isso **duas** sabotagens em vez de uma: (1) auditoria da rota 13 desligada → **6/2**, só os
+  dois cenários do LOG vermelhos; (2) `POST /conferencias` ignorando a config global (tolerância
+  fixa em 2) → **6/2**, só os dois cenários do EFEITO vermelhos. As duas metades da jornada são
+  carga; nenhuma passa por vacuidade. Ambas revertidas, `git diff` limpo. Suíte: `test:api`
+  **138/138 arquivos OK**, `test:almoxarifado` **42/0**.
+  **O que o fechamento precisa saber:**
+  (a) **`tolerancia_inventario_percentual` NÃO está no array `CAMPOS` da tela** de Configurações
+  Gerais (`client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js`) — é chave semeada e
+  editável pela API, mas a tela só oferece a tolerância **por conferência** (campo
+  `tolerancia_percentual` do `POST /conferencias`). A jornada é honesta porque é medida pela
+  API; **o guia de usuário não pode dizer que o administrador muda o padrão global clicando**.
+  O teste tem uma asserção que quebra se a chave entrar no `CAMPOS`, para o guia ser corrigido
+  junto;
+  (b) a tolerância é **congelada na criação** da conferência (coluna `tolerancia_percentual`):
+  mudar a config global no meio de um inventário em andamento não muda o critério dele. Está
+  fixado por cenário — é também o que prova que o 200 da conclusão veio da regra nova;
+  (c) as duas camadas de autorização aparecem na mesma jornada e com usuários diferentes:
+  `canConfigureAlmox` para MUDAR a regra (um `role:'admin'` puro toma 403, medido) e
+  `requirePermission('configurar')` para LER o log (o mesmo `role:'admin'` passa);
+  (d) nenhuma asserção usa contagem global da tabela de auditoria — as conferências da própria
+  jornada geram `CRIACAO`/`CONTAGEM`/`CONCLUSAO` e a contagem viraria refém delas. O `total: 1`
+  do cenário do `GET` é do filtro `entidade=configuracao`, não da tabela.
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
