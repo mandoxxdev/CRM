@@ -374,8 +374,8 @@ const sqlPropostaAtivaAlias = (alias) => `(${alias}.ativo IS NULL OR ${alias}.at
  */
 function filtroDashboardSql(req, alias) {
   const q = (req && req.query) || {};
-  const soData = (v) => (/^d{4}-d{2}-d{2}$/.test(String(v || '')) ? String(v) : null);
-  const soInteiro = (v) => (/^d{1,10}$/.test(String(v || '')) ? String(parseInt(v, 10)) : null);
+  const soData = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+  const soInteiro = (v) => (/^\d{1,10}$/.test(String(v || '')) ? String(parseInt(v, 10)) : null);
   const prefixo = alias ? alias + '.' : '';
   const inicio = soData(q.inicio);
   const fim = soData(q.fim);

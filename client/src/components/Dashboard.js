@@ -128,8 +128,13 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    api.get('/usuarios')
-      .then((res) => setUsuarios(Array.isArray(res.data) ? res.data : ((res.data && res.data.usuarios) || [])))
+    // por-modulo/comercial, nao /usuarios: o endpoint generico traz TODO usuario ativo,
+    // inclusive quem nao tem acesso ao comercial e portanto nunca sera responsavel por
+    // uma proposta. Este endpoint existe exatamente para filtro de responsavel por modulo
+    // - so devolve quem tem permissao ao modulo (direta ou via grupo) e, para quem nao e
+    // admin, so do proprio setor.
+    api.get('/usuarios/por-modulo/comercial')
+      .then((res) => setUsuarios(Array.isArray(res.data) ? res.data : []))
       .catch(() => setUsuarios([]));
   }, []);
 

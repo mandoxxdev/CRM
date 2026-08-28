@@ -27,21 +27,29 @@ const t = (nome, fn) => {
   catch (e) { console.error('  FALHA ' + nome + ': ' + e.message); }
 };
 
-// Copia fiel de filtroDashboardSql (server/index.js).
-function filtroDashboardSql(req, alias) {
-  const q = (req && req.query) || {};
-  const soData = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
-  const soInteiro = (v) => (/^\d{1,10}$/.test(String(v || '')) ? String(parseInt(v, 10)) : null);
-  const prefixo = alias ? alias + '.' : '';
-  const inicio = soData(q.inicio);
-  const fim = soData(q.fim);
-  const usuario = soInteiro(q.usuario);
-  let sql = '';
-  if (inicio) sql += ` AND date(${prefixo}created_at) >= '${inicio}'`;
-  if (fim) sql += ` AND date(${prefixo}created_at) <= '${fim}'`;
-  if (usuario) sql += ` AND ${prefixo}responsavel_id = ${usuario}`;
-  return sql;
+/**
+ * A FUNCAO DE VERDADE, extraida do index.js - nao uma copia.
+ *
+ * A primeira versao deste teste trazia uma copia da funcao, escrita a mao. A copia estava
+ * certa e passou em 26 checagens; o codigo que rodava estava QUEBRADO. As contrabarras dos
+ * regex tinham sido comidas na geracao do arquivo (/^\d{4}/ virou /^d{4}/, que casa a letra
+ * "d"), entao nenhum valor passava na validacao e o filtro saia sempre vazio. O teste verde
+ * escondeu isso ate o usuario reclamar que o filtro nao funcionava.
+ *
+ * Nao da para require('../index.js'): o modulo sobe o servidor inteiro. Entao recortamos o
+ * texto da funcao e avaliamos - assim qualquer estrago no arquivo real reprova aqui.
+ */
+function carregarFuncaoReal() {
+  const fonte = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+  const inicio = fonte.indexOf('function filtroDashboardSql(req, alias) {');
+  if (inicio < 0) throw new Error('filtroDashboardSql nao encontrada no index.js');
+  const fim = fonte.indexOf('\n}\n', inicio);
+  if (fim < 0) throw new Error('fim da funcao nao encontrado');
+  const corpo = fonte.slice(inicio, fim + 2);
+  // eslint-disable-next-line no-new-func
+  return new Function(corpo + '\nreturn filtroDashboardSql;')();
 }
+const filtroDashboardSql = carregarFuncaoReal();
 const req = (query) => ({ query });
 
 console.log('\n[o filtro se monta]');
