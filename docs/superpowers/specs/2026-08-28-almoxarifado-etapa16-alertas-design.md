@@ -88,15 +88,28 @@ nova no registro = alerta novo completo (varredura + central + config), sem toca
 | `ESTOQUE_SEM_CONSUMO` | `purchaseService.estoqueParado`, flag `sem_consumo` | `reposicao_dias_sem_consumo` (já existe, 180) | material+mês: `sem-consumo-<material_id>-<AAAA-MM>` (re-lembra 1×/mês enquanto persistir) |
 | `ESTOQUE_EXCESSIVO` | idem, flag `excesso` | — (régua da 11: acima da máxima) | material+mês: `excessivo-<material_id>-<AAAA-MM>` |
 | `QUARENTENA_PARADA` | `inspectionService.listarInspecoesPendentes` filtrado por idade da `data_entrada` | `alerta_quarentena_dias` (novo, 7) | item de recebimento: `quarentena-<item_id>` (1× por item, para sempre) |
-| `MATERIAL_SEM_ENDERECO` | consulta do relatório `materiais-sem-endereco` (saldo>0 sem `localizacao_id`) | — | **agregado**: 1 resumo por semana `sem-endereco-<AAAA-WSS>` com a contagem e os primeiros 20 — alerta por material seria ruído em massa |
-| `REQUISICAO_ATRASADA` | `requisicoes_almoxarifado.data_necessidade < hoje` e status não-terminal (PENDENTE/APROVADA/EM_SEPARACAO/PRONTA_PARA_RETIRADA/PARCIALMENTE_ATENDIDA) | — | requisição: `req-atrasada-<requisicao_id>` (1× por requisição) |
+| `MATERIAL_SEM_ENDERECO` | **a MESMA régua do relatório `materiais-sem-endereco`**, extraída para função compartilhada: material ativo com `localizacao_padrao_id IS NULL` e sem NENHUM saldo endereçado — **inclui material de cliente de propósito** (classe C da auditoria da Etapa 8: endereçar material de cliente é trabalho real do almoxarife; esconder aqui esconderia trabalho) | — | **agregado**: 1 resumo por semana `sem-endereco-<AAAA-WSS>` com a contagem e os primeiros 20 — alerta por material seria ruído em massa |
+| `REQUISICAO_ATRASADA` | `requisicoes_almoxarifado.data_necessidade < hoje` e status **derivado da máquina de estados** (`requisitionStateMachine.TRANSICOES` menos RASCUNHO e os terminais ENTREGUE/ENCERRADA/CANCELADO/REJEITADO) | — | requisição: `req-atrasada-<requisicao_id>` (1× por requisição) |
 | `RESERVA_PARADA` | reserva `ATIVA` com `julianday('now') - julianday(created_at) > dias` OU `expira_em` vencida | `alerta_reserva_parada_dias` (novo, 30) | reserva: `reserva-parada-<reserva_id>` (1× por reserva) |
+
+> **Correção (revisão do plano, 2026-08-28) — duas afirmações desta seção estavam ERRADAS:**
+> (1) a régua de `REQUISICAO_ATRASADA` listava status com literais que **não existem** no
+> banco (`APROVADA` — o real é `APROVADO`) e deixava de fora os estados onde a requisição
+> mais tipicamente atrasa (`AGUARDANDO_COMPRA`, `AGUARDANDO_ESTOQUE`,
+> `AGUARDANDO_APROVACAO_VALOR`, `PARCIALMENTE/TOTALMENTE_RESERVADA`) — teste e SQL errariam
+> **juntos** e o alerta nasceria morto em produção; o certo é derivar da máquina de estados.
+> (2) `MATERIAL_SEM_ENDERECO` dizia "consulta do relatório" mas descrevia OUTRA régua
+> (saldo>0 sem localização) — o relatório real olha `localizacao_padrao_id` do material e
+> **inclui material de cliente de propósito**; adotamos a régua real por função
+> compartilhada, senão alerta e relatório de mesmo nome mostrariam conjuntos diferentes.
 
 Decisões transversais (registradas):
 
-- **Material de cliente fica FORA** dos alertas de estoque (sem consumo, excessivo, sem
-  endereço) — segregação da feature 13; conferir no plano se `estoqueParado` já filtra
-  `proprietario_cliente_id IS NULL` (se não filtrar, o `listar` do registro filtra).
+- **Material de cliente fica FORA** dos alertas de **consumo/excesso** (sem consumo,
+  excessivo) — `estoqueParado` já filtra `proprietario_cliente_id IS NULL` (medido:
+  purchaseService.js:444). **No sem-endereço, material de cliente ENTRA de propósito** —
+  segue a classe C da auditoria da Etapa 8 (o relatório homônimo já inclui, com o porquê
+  em comentário); decisão registrada na letra B do fechamento.
 - **Destinatários**: `alertas_estoque_emails` (lista única existente), como os 4 da Etapa 12.
 - **Toggle mestre**: `alertas_estoque_notificar_email` governa a varredura inteira (RN-03).
 - Requisição atrasada só alerta quem **preencheu** `data_necessidade` (coluna opcional) —
@@ -146,9 +159,12 @@ agendador novo. Sem destinatário configurado → no-op por alerta (comportament
   central 0.
 - **RN-06 — Configs de dias validam ≥ 1 nos dois lados.** `0`/negativo/não-número → 400 no
   backend com mensagem literal do padrão existente das configs; o front barra antes.
-- **RN-07 — Material de cliente fora dos alertas de estoque.** Sem consumo/excessivo/sem
-  endereço nunca listam material com `proprietario_cliente_id` preenchido. Cenário: material
-  de cliente parado há 400 dias → não aparece nem na central nem na fila.
+- **RN-07 — Material de cliente fora dos alertas de consumo/excesso; DENTRO do
+  sem-endereço.** Sem consumo/excessivo nunca listam material com `proprietario_cliente_id`
+  preenchido (cenário: material de cliente parado há 400 dias → fora da central e da fila).
+  Sem-endereço lista material de cliente de propósito (mesma régua e mesmo porquê do
+  relatório homônimo — corrigido pela revisão do plano; a versão original desta RN dizia
+  "fora" para os três e **estava errada** quanto ao sem-endereço).
 
 ## Testes
 

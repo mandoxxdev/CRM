@@ -40,7 +40,7 @@ tocada.
 | RN-04 | Central gateada por `ver_alertas` [ADMINISTRADOR, ALMOXARIFE, GESTOR, COMPRAS] |
 | RN-05 | Central é ao vivo (condição resolvida some da central; a fila não encolhe) |
 | RN-06 | Configs de dias validam inteiro ≥ 1 nos dois lados, mensagem literal C4 |
-| RN-07 | Material de cliente fora dos alertas de estoque (sem consumo/excessivo/sem endereço) |
+| RN-07 | Material de cliente fora de sem-consumo/excessivo; DENTRO do sem-endereço (régua e porquê do relatório homônimo — correção da revisão) |
 
 ## Contratos congelados
 
@@ -77,8 +77,8 @@ Gate: `requirePermission('ver_alertas')`. Resposta 200:
 | `ESTOQUE_SEM_CONSUMO` | `purchaseService.estoqueParado(db,'SEM_CONSUMO').itens` | `reposicao_dias_sem_consumo` (existente; NÃO semear de novo) | `sem-consumo-<material_id>-<AAAA-MM>` |
 | `ESTOQUE_EXCESSIVO` | `purchaseService.estoqueParado(db,'EXCESSO').itens` | — | `excessivo-<material_id>-<AAAA-MM>` |
 | `QUARENTENA_PARADA` | `inspectionService.listarInspecoesPendentes(db)` filtrado por `data_entrada` mais velha que `dias` | `alerta_quarentena_dias` (novo, 7) | `quarentena-<item_id>` |
-| `MATERIAL_SEM_ENDERECO` | SQL do relatório `materiais-sem-endereco` (saldo>0, `localizacao_id` NULL, `proprietario_cliente_id IS NULL`) — **1 linha AGREGADA** `{ total, materiais: [até 20] }` | — | `sem-endereco-<AAAA>-W<semana ISO>` |
-| `REQUISICAO_ATRASADA` | SQL: `date(data_necessidade) < date('now')` AND `status IN ('PENDENTE','APROVADA','EM_SEPARACAO','PRONTA_PARA_RETIRADA','PARCIALMENTE_ATENDIDA')` AND `COALESCE(ativo,1)=1` | — | `req-atrasada-<requisicao_id>` |
+| `MATERIAL_SEM_ENDERECO` | **a régua REAL do relatório** (`extended.js:1330-1343`): material `ativo=1` com `localizacao_padrao_id IS NULL` e `NOT EXISTS` saldo endereçado — **extrair a query para função compartilhada** usada pelo relatório E pelo registro (fonte única). **Inclui material de cliente de propósito** (comentário classe C no próprio relatório). **1 linha AGREGADA** `{ total, materiais: [até 20] }` | — | `sem-endereco-<AAAA>-W<semana ISO>` |
+| `REQUISICAO_ATRASADA` | SQL: `date(data_necessidade) < date('now')` AND `COALESCE(ativo,1)=1` AND status no conjunto **DERIVADO** de `requisitionStateMachine.TRANSICOES`: `Object.keys(TRANSICOES)` menos `['RASCUNHO','ENTREGUE','ENCERRADA','CANCELADO','REJEITADO']` — literais do banco são masculinos (`APROVADO`), e os `AGUARDANDO_*`/`*_RESERVADA` são exatamente onde requisição atrasa. NUNCA hardcodar a lista (achado Crítico da revisão: `'APROVADA'` não existe e teste+SQL errariam juntos) | — | `req-atrasada-<requisicao_id>` |
 | `RESERVA_PARADA` | SQL: reservas `status='ATIVA'` com `julianday('now')-julianday(created_at) > dias` OR `date(expira_em) < date('now')` | `alerta_reserva_parada_dias` (novo, 30) | `reserva-parada-<reserva_id>` |
 
 Notas amarradas: `estoqueParado` já filtra `proprietario_cliente_id IS NULL` e `ativo=1`
@@ -94,11 +94,15 @@ Semear em `schema.js` (junto das configs, `INSERT OR IGNORE` — chave não seme
 ineditável): `alerta_calibracao_dias`='30', `alerta_quarentena_dias`='7',
 `alerta_reserva_parada_dias`='30'.
 
-**Armadilha medida:** `PREFIXOS_DIAS` em `routes/almoxarifado.js` (PUT /configuracoes,
-~linha 1897) é `['reposicao_', 'alerta_lote_']` — as chaves novas NÃO cairiam na validação; e
-ampliar para `'alerta_'` pegaria `alertas_estoque_emails` por engano (startsWith). Adicionar
-os três prefixos exatos: `'alerta_calibracao_'`, `'alerta_quarentena_'`,
-`'alerta_reserva_'`. Mensagem literal (existente):
+**Armadilha (corrigida pela revisão do plano):** `PREFIXOS_DIAS` em `routes/almoxarifado.js`
+(PUT /configuracoes, linha ~1895) é `['reposicao_', 'alerta_lote_']` — as chaves novas NÃO
+cairiam na validação. A primeira versão deste plano afirmava que ampliar para `'alerta_'`
+pegaria `alertas_estoque_emails` por engano — **estava errada**: `'alertas_'` NÃO começa com
+`'alerta_'` (o `_` na 7ª posição não casa com o `s`). Correção: **trocar `'alerta_lote_'`
+pelo prefixo único `'alerta_'`** (cobre `alerta_lote_vencendo_dias` e as 3 chaves novas;
+nenhuma chave `alertas_*` é atingida). O mesmo racional vale para o espelho do client
+(Task 3). Mensagem literal (existente, conferida caractere a caractere em
+`routes/almoxarifado.js:1911`):
 `Configuração "<chave>" deve ser um número de dias maior que zero`.
 
 ### C5 — ação de perfil nova
@@ -113,10 +117,14 @@ fora, lição G1). Entra automaticamente em `GET /minhas-permissoes`.
 |---|---|---|
 | 1. Registro + varredura + configs (backend) | **tronco** | — |
 | 2. Central: ação `ver_alertas` + GET (backend) | **tronco** | Task 1 (consome o registro) |
-| 3. Tela da central + configs no front | **galho** | contratos C1/C4 (mock de fronteira HTTP) |
+| 3. Tela da central + configs no front | **galho** | contratos C1/C4 **+ Task 1** (ver nota) |
 | 4. Integração: jornada condição→varredura→fila→central | integração | Tasks 1+2 |
 
 Task 3 pode rodar em paralelo com a Task 2 (contrato C1 congelado); backend é sequencial.
+**Nota (achado da revisão):** a T3 tem dependência REAL da T1 além do contrato — o teste de
+paridade `configuracoesGerais.api.test.js` lê o arquivo da tela e reprova campo novo sem
+seed+leitor no servidor; adicionar os 3 campos no client antes dos seeds da T1 deixa o
+`test:api` vermelho. Ordem: T1 → (T2 ∥ T3) → T4.
 
 ---
 
@@ -126,8 +134,11 @@ Task 3 pode rodar em paralelo com a Task 2 (contrato C1 congelado); backend é s
 - Create: `server/services/almoxarifado/alertRegistry.js`
 - Modify: `server/services/almoxarifado/notificationQueueService.js` (função
   `varrerAlertasRegistrados` + export), `server/services/almoxarifado/schema.js` (3 configs),
-  `server/routes/almoxarifado.js` (PREFIXOS_DIAS ~1897; Job B ~2836-2848 inclui a varredura
-  nova no `Promise.all`)
+  `server/routes/almoxarifado.js` (PREFIXOS_DIAS ~1895 → prefixo `'alerta_'`; Job B
+  ~2838-2848 inclui a varredura nova no `Promise.all`),
+  `server/routes/almoxarifado/extended.js` (SÓ a extração da query do relatório
+  `materiais-sem-endereco` (~1330-1343) para a função compartilhada — o GET da central é da
+  Task 2)
 - Test: `server/tests/api/alertaRegistro.api.test.js`
 
 **Interfaces:**
@@ -145,13 +156,22 @@ Task 3 pode rodar em paralelo com a Task 2 (contrato C1 congelado); backend é s
   1. calibração vencida (ferramenta `exige_calibracao=1` + calibração `data_validade`
      ontem) → varredura enfileira `CALIBRACAO_VENCENDO`; RN-02: 2ª varredura → duplicadas=1,
      enfileiradas=0.
-  2. requisição com `data_necessidade` ontem em status APROVADA → `REQUISICAO_ATRASADA`
-     enfileirada; a MESMA requisição ENTREGUE → não enfileira (negativo).
+  2. requisição com `data_necessidade` ontem em status `APROVADO` (literal masculino do
+     banco!) → `REQUISICAO_ATRASADA` enfileirada; outra em `AGUARDANDO_COMPRA` atrasada →
+     também enfileirada; e uma **SEGUNDA requisição, distinta,** já `ENTREGUE` e atrasada →
+     NÃO enfileira. (Achado da revisão: usar a MESMA requisição no negativo seria
+     falso-verde — o dedupe `req-atrasada-<id>` mascararia o filtro de status. A prova do
+     negativo é por requisição nova, e a Task 4 reprova pelo lado da central, sem dedupe.)
   3. reserva ATIVA com `created_at` 40 dias atrás (config 30) → `RESERVA_PARADA`; reserva
      de 10 dias → não.
-  4. material sem endereço com saldo (linha em `estoque_saldo_almoxarifado` com
-     `localizacao_id` NULL) → 1 notificação AGREGADA com `total` no corpo; RN-07: material
-     de cliente na mesma condição não conta.
+  4. material sem endereço (material `ativo=1` com `localizacao_padrao_id IS NULL` e sem
+     saldo endereçado — a régua REAL do relatório) → 1 notificação AGREGADA com `total` no
+     corpo; material de cliente na mesma condição **CONTA** (RN-07 corrigida — mesma régua
+     do relatório); material de cliente parado há 400 dias NÃO aparece em
+     `ESTOQUE_SEM_CONSUMO` (RN-07, lado consumo).
+     **Nota (achado da revisão):** materiais semeados sem movimentação caem AUTOMATICAMENTE
+     em `sem_consumo`/`obsoleto` (`antigaOuNunca(null) === true`) — TODAS as asserções da
+     suíte devem filtrar por `evento`/chave, NUNCA por total global da fila.
   5. material `quantidade_maxima=5, quantidade_atual=10` → `ESTOQUE_EXCESSIVO` (evento e
      dedupe do C3).
   6. quarentena: item com `quantidade_em_inspecao>0` e recebimento `created_at` 10 dias
@@ -185,14 +205,14 @@ Produces: C1.
   registro, `dias` certo por alerta, `total` vs `linhas` com >50 linhas de requisição
   atrasada — total cheio, linhas 50); RN-05 (condição criada aparece; resolvida some;
   a fila NÃO encolhe); RN-01 (o `total` da central bate com `enfileiradas+duplicadas` da
-  varredura no mesmo estado); erro individual → entrada com `erro:true` e central 200
-  (sabotar um `listar` via material com dado quebrado é difícil — teste com stub? NÃO:
-  provar por sabotagem manual no Step 3 e documentar; o teste versionado cobre o resto).
+  varredura no mesmo estado); **`erro:true` VERSIONADO** (achado da revisão): a lógica da
+  central vive em `montarCentral(db, registro = ALERT_REGISTRY)` exportada com o registro
+  **injetável** — o teste passa um registro com um `listar` que lança e prova central 200,
+  entrada `{chave, titulo, erro:true, total:0, linhas:[]}` e as demais entradas respondendo.
 - [ ] **Step 2: rodar e ver falhar.**
 - [ ] **Step 3: implementar; verde; controle positivo** — sabotar `ver_alertas` incluindo
-  PRODUCAO e ver a matriz falhar; reverter. Sabotagem manual do erro individual: fazer um
-  `listar` lançar e conferir que a central responde 200 com `erro:true` naquela entrada
-  (registrar o resultado no relato; não versionar).
+  PRODUCAO e ver a matriz falhar; reverter. (O `erro:true` já tem teste versionado via
+  registro injetável — Step 1; nenhuma sabotagem manual necessária aqui.)
 - [ ] **Step 4: `npm run test:api`; commit** — `Almoxarifado Etapa 16 Task 2: central de alertas gateada por ver_alertas`.
 
 ### Task 3 (galho): tela da central + configs no front
@@ -203,7 +223,10 @@ Produces: C1.
   `client/src/components/Layout.js` (item `{ path: '/almoxarifado/alertas',
   icon: FiAlertTriangle, label: 'Alertas' }` antes de Notificações),
   `client/src/components/almoxarifado/ConfiguracoesAlmoxarifado.js` (3 campos novos de dias
-  com validação ≥1 no padrão dos campos `reposicao_*` existentes)
+  no padrão dos campos `reposicao_*` existentes (~linha 2701) **E o espelho client de
+  `PREFIXOS_DIAS` em `handleSalvar` (~linhas 2756-2757): trocar `'alerta_lote_'` por
+  `'alerta_'`, a MESMA decisão do C4** — sem isso o front não barra `0` e a RN-06 "nos dois
+  lados" falha (achado da revisão))
 
 **Interfaces:** Consumes: C1 (mock de fronteira HTTP), C4,
 `useAlmoxPermissoes().pode('ver_alertas')`, padrão de painel-de-permissão-por-aba da tela de
@@ -248,7 +271,18 @@ Reposição (`ReposicaoAlmoxarifado.js` — o Critical da E11: 403 nunca vira te
 
 ## Execução (estado)
 
-- [ ] Fase 2 — revisão do plano por agente fresco
+- [x] Fase 2 — revisão do plano por agente fresco (2026-08-28): 8 achados + 1 bloco de
+  confirmações. **2 Críticos acatados:** status de requisição com literais inexistentes
+  (`APROVADA` → derivar de `requisitionStateMachine`, incluindo os `AGUARDANDO_*` — teste e
+  SQL errariam juntos, falso-verde de produção) e régua do sem-endereço divergente do
+  relatório homônimo (adotada a régua REAL por função compartilhada; material de cliente
+  ENTRA de propósito — RN-07 corrigida no design dizendo que estava errada). Demais:
+  negativo de requisição atrasada por SEGUNDA requisição (dedupe mascarava o filtro),
+  justificativa falsa do prefixo corrigida (prefixo único `'alerta_'` é seguro — `alertas_`
+  não casa), espelho client de PREFIXOS_DIAS na T3, dependência T3→T1 pelo teste de
+  paridade das configs, `erro:true` versionado via registro injetável, asserções sempre por
+  evento (materiais de teste caem em sem_consumo automaticamente). A revisão foi
+  interrompida pelo limite de sessão no meio e retomada com contexto intacto.
 - [ ] Task 1 (tronco)
 - [ ] Task 2 (tronco)
 - [ ] Task 3 (galho)
