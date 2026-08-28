@@ -2,11 +2,18 @@
 
 > Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 16) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 17) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 16 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 17 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 16 completas.** O roteiro do planejamento mestre acabou na 15; a 16 (alertas)
+> **Etapas 1 a 17 completas.** A **Etapa 17 (Alertas de evento)** fechou em 2026-08-28
+> (`d65d81b..e51ca79`): reprovar material numa inspeção, registrar quantidade diferente da
+> esperada e concluir conferência com divergência passam a avisar **no instante do ato** (e a
+> varredura diária vira rede de segurança, sem duplicar); mais o **resumo mensal de lotes sem
+> certificado**. Com ela a feature 20 fica 🟢 no que é viável: 17 de 20 alertas, faltando só
+> os 3 que dependem de dado inexistente nas features donas. Ver a seção "Etapa 17" abaixo.
+>
+> **Antes: Etapas 1 a 16 completas.** O roteiro do planejamento mestre acabou na 15; a 16 (alertas)
 > foi escolhida pelo mapa de status, e a próxima frente também será — candidatas nomeadas no
 > handoff do plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa16-alertas.md`
 > (seção "Próxima tarefa detalhada"): a fatia 2 da feature 20 (4 alertas de evento) ou o
@@ -2879,6 +2886,47 @@ notificações) e a tela **Alertas**, que mostra as condições **ao vivo**.
 - **Atenção operacional (letra C18 das novidades):** o relógio da "quarentena parada" é a
   data do RECEBIMENTO — NF que demorou a ser processada gera o alerta no primeiro dia real
   de quarentena. Leia como "recebimento velho com item retido".
+
+## Etapa 17 — Avisos que nascem no ato (ENTREGUE — 2026-08-28)
+
+**O que mudou, em uma frase:** três atos do dia a dia passam a mandar e-mail na hora
+(reprovação de material, quantidade divergente na nota, conferência concluída com
+divergência), e os lotes parados sem certificado viram um resumo mensal.
+
+### Roteiro de teste manual
+
+1. **Material reprovado.** Crie um recebimento de material que exige inspeção, processe a
+   nota e, em **Inspeções**, reprove 3 de 10. Vá em **Notificações**: existe uma linha
+   `[Almoxarifado] Material reprovado — <código>`. Em **Alertas**, o cartão **Material
+   reprovado** mostra 1 e o Detalhes traz material, quantidade, encaminhamento, nota e quem
+   inspecionou. Aprove tudo em outra inspeção: **nada** é gerado.
+2. **Divergência de recebimento.** Num recebimento em conferência, informe na aba fiscal uma
+   quantidade menor que a esperada (ex.: 8 de 10) e salve. Em Notificações, aparece
+   `[Almoxarifado] Divergência de recebimento — <código>`. Corrija para 10 e salve: o cartão
+   **Divergência de recebimento** zera na central. Informe 2 de 10: **avisa de novo**, agora
+   com o número novo (é o comportamento certo — errar diferente é fato novo).
+3. **Divergência de inventário.** Conclua uma conferência com pequena divergência (dentro da
+   tolerância, para não pedir recontagem): sai **um** e-mail
+   `[Almoxarifado] Divergência de inventário — <número>` dizendo quantos itens divergiram —
+   nunca um e-mail por item, e **sem** valor em reais.
+4. **Lotes sem certificado.** Com pelo menos um material marcado como "controla certificado"
+   e lote com saldo sem arquivo anexado, rode a varredura (ou espere o job diário): sai **um**
+   e-mail `[Almoxarifado] Lotes sem certificado — N lote(s)` com o total e os primeiros. Na
+   central, o cartão mostra o total e a lista.
+5. **Configuração.** Em Configurações Gerais, `Alerta de Eventos (dias)` controla por quanto
+   tempo o fato fica visível na central. Zero é recusado antes de salvar.
+6. **O aviso não atrapalha a operação:** mesmo que o e-mail falhe, a inspeção, a nota e a
+   conferência são gravadas normalmente — por desenho.
+
+### O que a Etapa 17 NÃO cobre
+
+- Marcar o lote como reprovado automaticamente e dar destino ao material reprovado
+  (pendências antigas da feature 09).
+- As marcações de divergência da inspeção (dimensional, dano físico) não geram alerta
+  próprio — o alerta olha a quantidade.
+- Os 3 alertas que faltam da lista original seguem sem dado nas features donas.
+- **Atenção operacional (letra C20 das novidades):** mexer num recebimento antigo com
+  divergência que nunca foi comunicada gera aviso agora — é a rede de segurança, não erro.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

@@ -387,6 +387,24 @@ MESMA régua por função compartilhada — duas réguas com o mesmo nome era ex
 que a revisão do plano pegou. **Descartado** filtrar o dono só no alerta. Nos alertas de
 consumo/excesso o material de cliente fica fora (lá a régua é de compra/valor nosso).
 
+**B30 (NOVO, da Etapa 17) — o e-mail de divergência de inventário NÃO diz o valor em reais.**
+O impacto financeiro é calculado e guardado na conferência, mas só sai pela tela de relatório,
+que tem permissão própria. **Escolhido** mandar só a contagem de itens divergentes;
+**descartado** pôr o valor no corpo — e-mail vaza para caixa de entrada, encaminhamento e
+celular, e esse número é dado de gestão. Se quiser o valor no aviso, é decisão sua.
+
+**B31 (NOVO, da Etapa 17) — lote sem certificado virou UM resumo por mês, não um aviso por
+lote.** Medido na revisão: com 1000 lotes aguardando certificado, a versão original geraria
+1000 e-mails **todo mês**. **Escolhido** o resumo (total + os 20 primeiros), no mesmo padrão
+que "materiais sem endereço" já usava; **descartado** o aviso por lote e também um teto
+silencioso (cortar sem dizer). A lista completa continua na tela **Alertas**.
+
+**B32 (NOVO, da Etapa 17) — a divergência de recebimento avisa POR ITEM, sem agregar.** Uma
+nota com N itens divergentes gera N avisos (medido: 300 itens = 300 e-mails de um clique).
+**Escolhido** manter por item porque uma nota real tem poucos itens e o aviso precisa nomear
+o material; **descartado** agregar por nota. Se aparecer nota gigante na prática, a saída é
+o mesmo resumo do inventário.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -527,6 +545,15 @@ consumo/excesso o material de cliente fica fora (lá a régua é de compra/valor
    quarentena de verdade. Quem opera deve ler o alerta como "este recebimento está velho e
    ainda tem item retido", não como "a Qualidade está lenta". Corrigir de verdade exige a
    coluna da transição — lacuna de dado da mesma família das três declaradas.
+
+20. **(17) Mexer num recebimento ANTIGO pode gerar aviso de divergência que nunca saiu.**
+   A janela do alerta de divergência olha a última atualização do recebimento — e toda
+   transição de workflow atualiza essa data. Consequência real (medida): um recebimento de
+   meses atrás, com divergência que nunca foi comunicada, ao ser aberto e movido vira e-mail
+   novo. **Isto é a rede de segurança funcionando** (a divergência é real e ninguém foi
+   avisado), mas nos primeiros dias depois de subir esta etapa espere avisos de recebimentos
+   legados conforme a equipe for tocando neles. *(A primeira versão da documentação dizia que
+   "o dedupe segura o e-mail" nesse caso — **estava errado**, e a revisão provou com sonda.)*
 
 19. **(16) Requisição com data de necessidade ilegível NUNCA alerta atraso — em silêncio.**
    O campo aceita texto livre por API (`01/01/2020` grava e a régua de data não o enxerga
@@ -749,6 +776,12 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    teclado aberto. Atenção: **a câmera só funciona em HTTPS** (ou localhost) — se o sistema
    estiver servido em HTTP puro na rede interna, o scanner cairá sempre no estado "Câmera
    indisponível" com a colagem manual como saída.
+
+10c. **(17) Os 4 cartões novos da central e os e-mails de ato não foram vistos no navegador
+   nem numa caixa de entrada real.** A prova é a suíte (131 arquivos de API, 527 testes de
+   tela). Falta conferir: os cartões **Material reprovado**, **Divergência de recebimento**,
+   **Divergência de inventário** e **Lote sem certificado** com Detalhes expandindo; e um
+   e-mail de verdade chegando com acento e nome de material com "&" saindo legível.
 
 10b. **(16) A central de Alertas nunca foi aberta num navegador de verdade.** A prova é a
    suíte (522 testes no client, 128 arquivos de API) — falta o olho: os cartões com os 13
@@ -2745,6 +2778,62 @@ que já existiam.
 - **Unificar a máquina do mínimo/zerado no registro** — funciona e é testada; reescrever
   agora seria risco sem valor novo.
 
+## Etapa 17 — Os avisos que nascem no ato (2026-08-28)
+
+A Etapa 16 fez o sistema varrer o estoque todo dia e avisar. Esta fecha o outro lado: quando
+**algo acontece**, o aviso sai **na hora**. Reprovar material numa inspeção, registrar
+quantidade diferente da esperada numa nota, concluir uma conferência com divergência — os
+três passam a mandar e-mail no mesmo instante do ato, e não no dia seguinte. Antes, reprovar
+material não gerava aviso nenhum: o número entrava em "bloqueado" e quem precisava saber
+descobria por acaso. Entra também um quarto alerta, esse de vigília: **lotes que exigem
+certificado do fornecedor e estão parados sem o documento**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Reprovar material na inspeção não avisava ninguém | E-mail **no ato** com material, quantidade reprovada, encaminhamento, nota e quem inspecionou |
+| Nota registrada com quantidade diferente da esperada passava batido | E-mail **no ato**, tanto pela conferência quanto pela entrada fiscal (os dois caminhos que gravam a quantidade) |
+| Conferência concluída com divergência: só quem abrisse o relatório via | **Um** e-mail por conferência (nunca um por item), com o número de itens divergentes |
+| Lote travado esperando certificado ficava esquecido no armário | **Resumo mensal** com o total de lotes sem certificado e os primeiros da lista |
+| 13 alertas | **17** — e os 4 novos aparecem na tela **Alertas** junto com os demais |
+
+### As regras, com o cenário exato
+
+1. **O aviso sai no ato, e a varredura é a rede.** Reprove 3 de 10 numa inspeção: o e-mail
+   `[Almoxarifado] Material reprovado — <código>` entra na fila na hora, e o cartão
+   **Material reprovado** aparece na central. A varredura diária continua olhando os últimos
+   dias (janela configurável) — se o sistema estiver fora do ar na hora do ato, ela pega
+   depois. Rodar as duas coisas **não duplica** o aviso.
+2. **O aviso nunca atrapalha a operação.** Se o envio falhar, a inspeção é gravada do mesmo
+   jeito, o estoque se move e a tela responde normal — o erro fica só no log do servidor.
+   Isso vale para os três atos.
+3. **Errar de novo, pior, avisa de novo.** Registre 8 de 10 (avisa), corrija para 10 (some
+   da central) e registre 2 de 10: **avisa outra vez**, com o número novo. Re-salvar a mesma
+   quantidade não duplica.
+4. **Divergência de inventário é um aviso por conferência, sem valor em reais.** O corpo diz
+   quantos itens divergiram — nunca o impacto financeiro (esse dado é da tela de relatório,
+   com permissão própria).
+5. **Lotes sem certificado viram um resumo, não uma enxurrada.** Um e-mail por mês
+   (`[Almoxarifado] Lotes sem certificado — N lote(s)`) com o total e os primeiros 20. Vale
+   também para lote **bloqueado** — que é o caso mais comum, porque o lote que exige
+   certificado nasce travado —, para material **de cliente** e para lote cujo arquivo foi
+   anexado em branco.
+6. **A janela dos avisos de ato é configurável.** Em Configurações Gerais, `Alerta de
+   Eventos (dias)` (padrão 7) define por quanto tempo o fato continua aparecendo na central.
+   Zero é recusado nos dois lados.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Ligar a reprovação ao lote** (marcar o lote como REPROVADO automaticamente) — pendência
+  antiga da feature 09, mexe no motor de estoque.
+- **Dar destino ao material reprovado** — o campo "encaminhamento" continua sendo intenção
+  registrada, sem fluxo que a cobre.
+- **As marcações de divergência da inspeção** (dimensional, dano físico, material
+  incorreto) não geram alerta próprio; o alerta de divergência olha a quantidade.
+- **Os 3 alertas que faltam da lista original** seguem bloqueados por falta de dado nas
+  features donas (data da transição para retirada, saldo de pedido, orçamento de projeto).
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -2772,6 +2861,12 @@ que já existiam.
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **Etapa 17 entregue (2026-08-28):** **alertas de evento** (feature 20 sai de 13 para 17
+  alertas) — reprovação de material, divergência de recebimento e divergência de inventário
+  avisam **no ato** (com a varredura diária como rede de segurança e sem duplicar), mais o
+  resumo mensal de lotes sem certificado. Revisão adversarial: 5 achados reais, 0 ruído —
+  dedupe que calava a divergência nova e pior, volume de 1000 e-mails/mês no alerta de lote,
+  uma afirmação FALSA na spec (corrigida em voz alta) e dois testes que não sabiam falhar.
 - **Etapa 16 entregue (2026-08-28):** **alertas operacionais — a fatia real** (feature 20
   sai de 6 para 13 alertas) — registro único de alertas (varredura diária, e-mail pela fila
   existente e a tela nova **Alertas** leem a MESMA lista), 7 alertas novos (calibração,

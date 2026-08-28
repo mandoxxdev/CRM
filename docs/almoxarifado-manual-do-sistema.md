@@ -2591,7 +2591,7 @@ Em **Configurações → Configurações Gerais**: a chave liga/desliga (**só a
 valor é recusado com `Configuração "notificar_movimentacoes" deve ser 0 ou 1`), o intervalo do
 processador da fila em minutos e o máximo de tentativas (**número inteiro maior que zero** —
 `Configuração "<chave>" deve ser um número inteiro maior que zero`), as janelas em dias — lote
-vencendo, alerta de calibração, quarentena parada e reserva parada — (`Configuração "<chave>"
+vencendo, calibração, quarentena parada, reserva parada e eventos — (`Configuração "<chave>"
 deve ser um número de dias maior que zero`) e as cinco listas
 de destinatários (texto livre). Mudar o **intervalo do processador** só passa a valer depois de
 reiniciar o sistema; o espaçamento das retentativas muda imediatamente.
@@ -2611,8 +2611,16 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 | Materiais sem endereço | material ativo sem localização padrão e sem nenhum saldo endereçado — **material de cliente conta**, porque endereçá-lo é trabalho do almoxarife (mesma régua do relatório de mesmo nome) |
 | Requisição atrasada | requisição ativa, em qualquer status em que ainda possa ser atendida, com a data de necessidade no passado — só entra quem **preencheu** a data de necessidade |
 | Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração vencida |
+| Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos |
+| Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos |
+| Divergência de inventário | conferência concluída com pelo menos um item divergente, dentro da janela de eventos — **uma linha por conferência**, com a contagem de itens (nunca o valor em reais) |
+| Lotes sem certificado | resumo dos lotes com saldo cujo material exige certificado do fornecedor e que estão sem o arquivo — inclui lote bloqueado (o caso mais comum, porque o lote que exige certificado nasce travado) e material de cliente |
 
-**E-mail: um aviso por situação, não um por dia.** A varredura roda diariamente, mas cada situação gera um único e-mail: calibração avisa uma vez por validade; requisição atrasada e reserva parada, uma vez cada; sem consumo e excessivo re-lembram no máximo uma vez por mês enquanto persistirem; materiais sem endereço é um resumo semanal com a contagem. Os avisos saem para a mesma lista de e-mails dos alertas de estoque, e o interruptor geral de e-mail dos alertas desliga todos — a central, por ser leitura ao vivo, continua funcionando mesmo com o e-mail desligado.
+**Quatro desses avisos nascem no ATO, não na varredura.** Reprovar material numa inspeção, registrar quantidade diferente da esperada (tanto na conferência quanto na entrada fiscal) e concluir uma conferência com divergência disparam o e-mail no mesmo instante do fato; a varredura diária continua olhando a janela de eventos como rede de segurança, e o mesmo fato **não** é avisado duas vezes. Se o envio falhar, o ato acontece do mesmo jeito — a inspeção é gravada, o estoque se move, a conferência conclui: o aviso nunca segura a operação.
+
+Um detalhe que o operador precisa entender: a janela de eventos olha a **última atualização** do documento. Mexer num recebimento antigo que tem divergência nunca comunicada faz o aviso nascer ali — é a rede de segurança, não repetição.
+
+**E-mail: um aviso por situação, não um por dia.** A varredura roda diariamente, mas cada situação gera um único e-mail: calibração avisa uma vez por validade; requisição atrasada e reserva parada, uma vez cada; sem consumo e excessivo re-lembram no máximo uma vez por mês enquanto persistirem; materiais sem endereço é um resumo semanal com a contagem, e lotes sem certificado um resumo mensal. Nos avisos de ato, cada fato avisa uma vez: uma inspeção reprovada, uma conferência concluída, e — no caso da quantidade recebida — cada valor divergente diferente. Corrigir a quantidade e errar de novo com outro número é fato novo e avisa outra vez; salvar o mesmo número duas vezes, não. Os avisos saem para a mesma lista de e-mails dos alertas de estoque, e o interruptor geral de e-mail dos alertas desliga todos — a central, por ser leitura ao vivo, continua funcionando mesmo com o e-mail desligado.
 
 **Quem vê.** A central é dos perfis Administrador, Almoxarife, Gestor e Compras (ela expõe quantidades exatas e valor parado em reais). Perfil sem a permissão vê o painel *"Dados indisponíveis no momento"* — nunca uma central vazia.
 

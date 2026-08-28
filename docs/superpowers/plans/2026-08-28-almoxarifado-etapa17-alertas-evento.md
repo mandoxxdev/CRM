@@ -343,11 +343,45 @@ conferência/data/itens divergentes; sem certificado lote/material/saldo/status)
   sabotagem real por eles: dual-mode é a mesma query byte a byte, dedupe idêntico nos dois
   caminhos, os 3 ganchos têm rede, costura campo a campo, B30 respeitado.
   Revalidação: server **131/131** (evento 6/6, ganchos 8/8), client **527/527**, build exit 0.
-- [ ] Fase 6 — fechar-etapa + retro
+- [x] Fase 6 — fechar-etapa (2026-08-28): 7 artefatos (novidades com a seção da etapa,
+  B30-B32, C20 e F10c; spec 20 com os 4 itens marcados por hash e o modo evento declarado —
+  a feature vira 🟢 no viável, restando só os 3 sem dado; mapa com cabeçalho, linha da 20 e
+  seção da etapa; guia com roteiro clicável dos 4 alertas; este plano; manual com os 4
+  alertas na tabela da central, o parágrafo do disparo no ato e a janela nova nas configs).
 
-## Retro (4 números — preencher no fechamento)
+## Retro (4 números — medida no fechamento)
 
-- Rodadas de correção até verde: —
-- Achados da revisão: reais — / ruído —
-- Paralelismo real: —
+- Rodadas de correção até verde: **1** (fix round único `e51ca79`; nenhum teste falhou 2×).
+  Fora do ciclo: 1 interrupção por limite de sessão no meio da Task 1, retomada pelo mesmo
+  executor com inventário do que faltava — sem retrabalho.
+- Achados da revisão: **reais 7 / ruído 0** — 2 na revisão do PLANO (gancho na rota que a UI
+  nunca chama; janela por `created_at` cegando recebimento antigo — os dois teriam virado
+  defeito de produção) e 5 na ADVERSARIAL (dedupe que calava a divergência nova e pior;
+  1000 e-mails/mês no alerta de lote; afirmação falsa na spec; asserção de escape que não
+  sabia falhar; RN-01/RN-02 sem versão para 2 dos 3 ganchos). Todos reproduzidos com sonda.
+- Paralelismo real: **T2 ∥ T3 e depois T4 ∥ T3 (2 execuções simultâneas), zero retrabalho
+  entre elas.** A worktree do galho nasceu na base errada pela 3ª vez e a checagem
+  obrigatória pegou antes do código; o executor da T3 também pegou sozinho que seu controle
+  positivo rodara contra o repo principal — e refez.
 - Defeito que escapou (preencher na etapa seguinte): —
+- (Da retro da Etapa 16: **nenhum defeito escapado descoberto durante a 17** — as suítes da
+  16 seguiram verdes, e o alerta de lote da 16 nem foi tocado.)
+
+## Próxima tarefa detalhada — a próxima frente sai do mapa
+
+Modo contínuo segue. Candidatas, na ordem recomendada:
+
+1. **Feature 23 — a conferência de inventário não audita** (buraco real nomeado no mapa
+   desde 2026-08-11). Ponto de atenção: `PUT /conferencias/:id/concluir` é a MESMA rota que
+   escreve saldo por fora do motor em `aplicar_ajustes` (pendência antiga da spec 03/13) e
+   agora também tem 2 ganchos pós-commit (alerta de mínimo e `DIVERGENCIA_INVENTARIO`) — é
+   a rota mais carregada do módulo, mexer nela pede revisão de plano caprichada.
+2. **Pendências herdadas, todas nomeadas:** `z.regex` na `data_necessidade` (C19), coluna da
+   transição de inspeção para matar o falso positivo da quarentena (C18), G7 (multer 500 nas
+   5 rotas de upload, da E15), e os 3 alertas sem dado (cada um exige mudança na feature
+   dona: data da transição p/ retirada, saldo de pedido, orçamento de projeto).
+3. **Restos declarados da 21/22** (PDF de relatório; BOM/OP bloqueados por dependência).
+
+O que a próxima sessão NÃO precisa reabrir: o registro de alertas e seus dois modos, a fila
+da 12, a central, e as fontes únicas (`divergencia.js`, `disponivelSql`, `custoUnitarioSql`,
+`consumoSql`, `movementTypes`). Decisões B em aberto: B5-B24 antigas + B25-B32.
