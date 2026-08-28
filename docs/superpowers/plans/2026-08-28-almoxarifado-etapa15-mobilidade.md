@@ -60,7 +60,7 @@ Campos: `recebedor_nome` (string 1..120, obrigatório), `assinatura` (arquivo im
 | sem arquivo | 400 | `{ error: "Assinatura é obrigatória — envie a imagem no campo 'assinatura'." }` |
 | Zod inválido | 400 | `{ error: "Dados inválidos — <formatZodError>" }` |
 | status errado | 409 | `{ error: "Só é possível registrar assinatura de entrega em requisição entregue (total ou parcialmente). Status atual: <STATUS>." }` |
-| id inexistente | 404 | `{ error: "Requisição não encontrada." }` |
+| id inexistente | 404 | `{ error: "Requisição não encontrada" }` (sem ponto — padrão da casa) |
 | sem perfil | 403 | padrão do `requirePermission` |
 
 `arquivo_url` = `/api/uploads/almoxarifado/<filename>`; filename com prefixo `assinatura-`.
@@ -77,7 +77,9 @@ criado_por_nome }]` (array vazio quando não há; ordenado por `criado_em` ASC, 
 `client/src/utils/scannerDestino.js`. Devolve `path + search` relativo quando o texto é URL
 válida cujo `pathname` começa com `/almoxarifado` (QUALQUER host — o identificador útil está
 no path; etiqueta impressa em outro ambiente continua útil). Qualquer outra coisa → `null`.
-`javascript:`, `data:` etc. nunca navegam (o parse por `new URL` só aceita http/https).
+**Atenção (achado da revisão):** `new URL('javascript:alert(1)')` faz parse SEM lançar — o
+parse NÃO filtra protocolo. A função DEVE verificar explicitamente
+`['http:','https:'].includes(url.protocol)`; o teste com `javascript:` é o controle disso.
 
 ### C4 — `<AssinaturaCanvas onConfirm={(blob) => ...} height={180} />`
 
@@ -137,10 +139,15 @@ const PNG_1PX = Buffer.from(
 // 3. RN-03: PARCIALMENTE_ATENDIDA e ENCERRADA → 201 (os dois aceitos)
 // 4. sem arquivo → 400 mensagem literal C1
 // 5. recebedor_nome vazio → 400 "Dados inválidos — ..." e órfão apagado
-// 6. id inexistente → 404 "Requisição não encontrada."
+// 6. id inexistente → 404 "Requisição não encontrada" (SEM ponto — padrão da casa,
+//    almoxarifado.js:2147)
 // 7. RN-05 matriz: para cada um dos 8 perfis (ADMINISTRADOR, ALMOXARIFE ok; COMPRAS,
-//    PRODUCAO, ENGENHARIA, GESTOR, CONSULTA, sem-perfil→fallback 403) — usar
-//    harness.setUser({...,perfil_almoxarifado:P}) e conferir 201/403; nos 403, zero órfão
+//    PRODUCAO, ENGENHARIA, GESTOR, CONSULTA, sem-perfil→fallback 403).
+//    ARMADILHA (achado da revisão): os usuários da matriz NÃO podem carregar
+//    role:'admin' — getPerfilFromUser resolve role admin ANTES de perfil_almoxarifado
+//    (permissions.js:87) e a matriz passaria vazia (falso verde). Molde:
+//    permissoesRotas.api.test.js — setUser({ id: 60+i, nome, role: 'usuario',
+//    email, perfil_almoxarifado: P }); conferir 201/403; nos 403, zero órfão
 // 8. RN-04: segunda assinatura na mesma requisição → 201, detalhe traz as DUAS em ordem
 // 9. C2: GET /requisicoes/:id → assinaturas_entrega presente ([] quando não há)
 ```
@@ -167,7 +174,7 @@ CREATE INDEX IF NOT EXISTS idx_assinaturas_entrega_req
 ```js
 const STATUS_ASSINAVEIS = ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'];
 // registrarAssinatura: dbGet da requisição (COALESCE(ativo,1)=1; ausente → erro 404
-// { status: 404, message: 'Requisição não encontrada.' } no padrão handleError da casa);
+// { status: 404, message: 'Requisição não encontrada' } no padrão handleError da casa);
 // status fora da lista → { status: 409, message: `Só é possível registrar assinatura de
 // entrega em requisição entregue (total ou parcialmente). Status atual: ${row.status}.` };
 // INSERT; registrarAuditoria(...ASSINATURA_ENTREGA...); devolve o objeto C1 com
@@ -185,6 +192,10 @@ const STATUS_ASSINAVEIS = ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'];
   e `limparUploadOrfao` em TODA saída ≠ 201; `!req.file` → 400 literal C1.
 - [ ] **Step 6: detalhe C2** — em `almoxarifado.js:2177`, antes do `res.json`, buscar
   `listarAssinaturas` e incluir `assinaturas_entrega` na resposta.
+  **Atenção (achado da revisão):** o ponto de inserção fica dentro de callback aninhado
+  `db.all(..., (err2, itens) => {...})` que NÃO é async — `await` colado ali é SyntaxError.
+  Tornar o callback interno `async (err2, itens) =>` (ou encadear `.then/.catch` com 500 no
+  catch), no estilo já misto do arquivo; erro da busca de assinaturas → 500, não engolir.
 - [ ] **Step 7: rodar o teste até verde; controle positivo** — sabotar `STATUS_ASSINAVEIS`
   (incluir `'APROVADA'`) e ver o cenário 2 falhar; reverter. Rodar `npm run test:api` inteiro.
 - [ ] **Step 8: commit** — `Almoxarifado Etapa 15 Task 1: assinatura digital de entrega no backend` (por que: spec secao 5/13.2 pedia; RN-02 justifica opcional).
@@ -316,10 +327,19 @@ e `GET /requisicoes/:id` (Task 1) — motor e serviço REAIS, zero mock.
   é a T5, como manda a regra do módulo.
 - Risco declarado: a T3 mexe em `RequisicoesList.js` (arquivo grande, modal em inline
   style) — o executor deve seguir o estilo local, não refatorar.
+- A spec da feature (`specs/modulo-almoxarifado/24-mobilidade/README.md`) já nasceu
+  (commit `52170f2`); o checklist dela é marcado com hashes na Fase 6 (fechar-etapa) — não
+  é task de executor.
 
 ## Execução (estado)
 
-- [ ] Fase 2 — revisão do plano por agente fresco
+- [x] Fase 2 — revisão do plano por agente fresco (2026-08-28): 8 achados, 0 bloqueante de
+  estrutura. Acatados: spec dizia 200 no POST (corrigida para 201, precedente da casa);
+  spec mandava wrapper `.almox-table-wrap` por tela (corrigida para `display:block` na
+  própria classe); C3 afirmava que `new URL` filtra protocolo (falso — filtro explícito
+  exigido); aviso de callback não-async no Step 6 da T1; matriz RN-05 sem `role:'admin'`
+  (senão falso verde); 404 sem ponto final; posição do menu alinhada; nota sobre a spec da
+  feature. Independência dos galhos confirmada no código (arquivos disjuntos).
 - [ ] Task 1 (tronco)
 - [ ] Task 2 (galho)
 - [ ] Task 3 (galho)

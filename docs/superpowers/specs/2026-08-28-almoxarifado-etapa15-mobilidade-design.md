@@ -112,15 +112,20 @@ apaga (é evidência); erro se corrige colhendo outra.
 POST /api/almoxarifado/requisicoes/:id/assinatura-entrega   (multipart)
   ordem canônica: auth → requirePermission('separar_emitir') → multer → safeParse
   campos: recebedor_nome (obrigatório, 1..120), assinatura (arquivo PNG/JPEG/WebP, máx 2MB)
-  200 → { success: true, assinatura: { id, recebedor_nome, arquivo_url, criado_em, criado_por_nome } }
+  201 → { success: true, assinatura: { id, recebedor_nome, arquivo_url, criado_em, criado_por_nome } }
   400 sem arquivo → "Assinatura é obrigatória — envie a imagem no campo 'assinatura'."
   400 Zod → "Dados inválidos — <formatZodError>"
   409 status → "Só é possível registrar assinatura de entrega em requisição entregue (total ou parcialmente). Status atual: <STATUS>."
-  404 → "Requisição não encontrada."
+  404 → "Requisição não encontrada"
 ```
 
+> **Correção (revisão do plano, 2026-08-28):** a primeira versão deste design dizia `200` no
+> sucesso — **estava errada**: o precedente da casa para criação via multipart é `201`
+> (`extended.js:878/897/947`). E o 404 tinha ponto final que as mensagens existentes do
+> módulo não têm (`almoxarifado.js:2147`).
+
 - Multer novo `uploadAssinatura` com prefixo `assinatura-`, mesmo diretório flat
-  `uploadsAlmoxDir`, filtro imagem, limite 2MB. `limparUploadOrfao` em toda saída ≠ 200.
+  `uploadsAlmoxDir`, filtro imagem, limite 2MB. `limparUploadOrfao` em toda saída ≠ 201.
 - Serviço `deliverySignatureService.js` (`registrarAssinatura`, `listarAssinaturas`), com
   auditoria no padrão da casa e status da requisição validado em
   `('ENTREGUE','PARCIALMENTE_ATENDIDA','ENCERRADA')` — ENCERRADA entra porque o encerramento
@@ -149,16 +154,22 @@ POST /api/almoxarifado/requisicoes/:id/assinatura-entrega   (multipart)
 ### 3. Balcão no celular (CSS + estrutura mínima)
 
 - **Matar a regra que esconde colunas** (`Almoxarifado.css:1025`
-  `th:nth-child(n+4){display:none}`) e substituir por scroll horizontal: as telas embrulham
-  a tabela em `.almox-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch }`.
-  Regra global na folha + wrapper aplicado nas telas operacionais (a folha já é única).
+  `th:nth-child(n+4){display:none}`) e substituir por scroll horizontal **na própria classe**:
+  `.almox-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch }` no
+  bloco mobile — `display:block` numa `<table>` a torna o próprio contêiner de scroll, então
+  **nenhuma tela precisa de wrapper novo**.
+  > **Correção (revisão do plano, 2026-08-28):** a primeira versão deste design mandava
+  > embrulhar a tabela em `.almox-table-wrap` tela por tela — **abordagem descartada**: era
+  > mudança estrutural em N telas para o mesmo efeito que uma regra na folha única alcança.
   Racional: esconder coluna perde dado e ação; card layout por tela seria o ideal mas custa
   uma reescrita por tela — scroll preserva 100% do dado hoje e não fecha a porta para cards
   depois.
 - **Modais em tela pequena**: `@media (max-width: 768px)` para `.almox-modal`
   (`width: 100vw; height: 100dvh; max-height: none; border-radius: 0`) — o modal de entrega +
   assinatura tem de ser utilizável em pé, num celular, com teclado aberto.
-- **Menu**: item "Scanner" no menu do almoxarifado (ícone de QR), primeiro da lista mobile.
+- **Menu**: item "Scanner" no menu do almoxarifado (`Layout.js`, `almoxarifadoMenuItems`),
+  logo após o Dashboard. (Correção da revisão: a primeira versão falava em "lista mobile",
+  que não existe — o menu é um só.)
 
 ## Regras de negócio (RN)
 
@@ -225,5 +236,5 @@ POST /api/almoxarifado/requisicoes/:id/assinatura-entrega   (multipart)
 | `client/src/utils/` | `scannerDestino.js` |
 | `client/src/components/almoxarifado/` | `ScannerAlmoxarifado.js`, `AssinaturaCanvas.js`, mudanças em `RequisicoesList.js` |
 | `App.js` / `lazyModules.js` / menu | rota + prefetch + item Scanner |
-| `Almoxarifado.css` | fim do esconde-coluna, `.almox-table-wrap`, modal mobile |
+| `Almoxarifado.css` | fim do esconde-coluna, `.almox-table` com scroll próprio, modal mobile |
 | `specs/modulo-almoxarifado/24-mobilidade/` | spec nova da feature (nasce nesta etapa) |
