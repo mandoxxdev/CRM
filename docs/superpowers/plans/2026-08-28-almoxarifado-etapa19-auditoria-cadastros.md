@@ -197,22 +197,27 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
 - Modify: `server/routes/almoxarifado.js` (rotas 13-17)
 - Test: `server/tests/api/auditoriaConfiguracoes.api.test.js`
 
-- [ ] **Step 1: teste que falha** — RN-04 (18 chaves com 1 alterada → 1 linha com 1 chave no
-  de/para; **zero alterações → zero linhas**); RN-05 (mudar `alertas_smtp_pass` → o log diz
-  `'(alterado)'` e **não** contém o valor — asserção negativa explícita); RN-06 (estoques
-  mínimos de 3 materiais, 2 alterados → 2 linhas `material`, com de/para dos campos);
-  liberacao-valor auditando; e o teste da função pura `calcularDiff` (casos: chave nova,
-  chave removida do payload, valor numérico vs string, segredo).
-  **E RN-02 nesta task também** (o design diz "nos dois arquivos"; a versão anterior só
-  mencionava nas Tasks 2 e 3): stub de `audit.registrarAuditoria` com as três asserções do
-  Step 1 da Task 3 — o PUT de configuração responde normal e grava, e nenhuma linha nasce.
-- [ ] **Step 2: rodar e ver falhar.**
-- [ ] **Step 3: implementar** (`configDiff.js` primeiro; depois as rotas, trocando o
-  `SELECT chave` por `SELECT chave, valor` na 13).
-- [ ] **Step 4: verde + controle positivo** — sabotar a máscara de segredo (deixar passar o
-  valor) e ver o cenário RN-05 falhar; reverter. `npm run test:api` inteiro — atenção
-  especial a `configuracoesGerais.api.test.js` (**15** casos — o revisor rodou; é o que mais pode quebrar).
-- [ ] **Step 5: commit** — `Almoxarifado Etapa 19 Task 1: configuracao passa a registrar o diff`.
+- [x] **Step 1: teste que falha** (`a02125d`) — RN-04 (18 chaves com 1 alterada → 1 linha com 1
+  chave no de/para; **zero alterações → zero linhas**); RN-05 (mudar `alertas_smtp_pass` → o log
+  diz `'(alterado)'` e **não** contém o valor — asserção negativa sobre o texto CRU de todas as
+  linhas, não sobre o objeto parseado); RN-06 (estoques mínimos de 3 materiais, 2 alterados → 2
+  linhas `material`, com de/para dos campos); liberacao-valor auditando; e o teste da função pura
+  `calcularDiff` (casos: chave nova, chave removida do payload, valor numérico vs string,
+  segredo). **E RN-02 nesta task também**: stub de `audit.registrarAuditoria` com as três
+  asserções (flag `chamado` + o PUT responde 200 e gravou + zero linhas).
+  20 cenários em `server/tests/api/auditoriaConfiguracoes.api.test.js`.
+- [x] **Step 2: rodar e ver falhar** (`a02125d`) — **5 passed, 15 failed**. Os 5 verdes são a
+  guarda de 403/18-chaves e os cenários "zero linhas", que passam trivialmente enquanto nada
+  audita — por isso cada um está pareado com um cenário positivo no mesmo arquivo.
+- [x] **Step 3: implementar** (`a02125d`) — `configDiff.js` primeiro; depois as rotas 13-17,
+  com o `SELECT chave` → `SELECT chave, valor` na 13.
+- [x] **Step 4: verde + controle positivo** (`a02125d`) — **20/0**. Sabotagem: a máscara de
+  segredo deixando o valor passar → **18/2**, os DOIS cenários de RN-05 vermelhos (o da função
+  pura e o de API), com a senha aparecendo na própria mensagem de falha; revertido e `git diff`
+  limpo. `configuracoesGerais.api.test.js` rodado explicitamente: **15/0**, inalterado.
+  `npm run test:api` inteiro: **135/135 arquivos OK**. Também `test:almoxarifado` 42/0,
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0.
+- [x] **Step 5: commit** (`a02125d`) — `Almoxarifado Etapa 19 Task 1: configuracao passa a registrar o diff`.
 
 ### Task 2 (tronco): os 12 cadastros + 404 + cascata contado
 
@@ -311,7 +316,24 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
   um 24º endpoint fora de contrato por omissão, e um literal de 404 inventado. O revisor
   confirmou que as 23 linhas citadas batem e que o `SELECT *` proposto é seguro (nenhum
   handler desestrutura a row).
-- [ ] Task 1 (tronco)
+- [x] Task 1 (tronco) — `a02125d`. Vermelho inicial **5/15** → verde **20/0**
+  (`auditoriaConfiguracoes.api.test.js`). Controle positivo: máscara de segredo sabotada →
+  **18/2** (os dois cenários de RN-05), revertido. `configuracoesGerais.api.test.js` **15/0**
+  (o risco declarado do plano — não quebrou). Suíte: `test:api` **135/135 arquivos OK**,
+  `test:almoxarifado` 42/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 3/0.
+  **Divergências do contrato, para a Task 2 saber:**
+  (a) `Number(null) === 0`, então a regra "coluna NULL vs payload 0 É mudança" do C4 #16 não
+  sai de graça de uma comparação por `Number()` — está no helper `mudouNumero`, que trata o
+  `null` ANTES de comparar (e `tipo_material_id`, que grava `|| null`, usa o ramo `nulavel`,
+  onde null→null NÃO é mudança);
+  (b) as rotas 16/17 ganharam um `.then` a mais para encaixar o SELECT em lote antes do
+  `Promise.all` — o handler continua **não-async** e em cadeia de promessas, como era
+  (nenhuma refatoração de estilo);
+  (c) o SELECT do "antes" nas rotas 14/16/17 é `.catch(() => [])`: falha na leitura custa o
+  log, nunca a escrita — se ela caísse na cadeia principal, um erro de leitura viraria 500
+  numa rota que hoje grava;
+  (d) `calcularDiff` ignora o par null→null (chave que não existia e continua sem valor) para
+  não inventar uma "mudança" de nada — não estava escrito no C1, é consequência dele.
 - [ ] Task 2 (tronco)
 - [ ] Task 3 (galho)
 - [ ] Task 4 (integração)
