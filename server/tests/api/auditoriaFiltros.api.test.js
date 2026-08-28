@@ -106,16 +106,27 @@ function idsDe(res) {
 
   console.log('\n── auditFiltros (funcao pura) ──');
 
-  await test('validarData recusa lixo, mes/dia fora de faixa e data que NAO EXISTE', () => {
-    for (const v of ['ontem', '2026-13-45', '28/08/2026', '2026-8-28', '', '  ', null, undefined, 20260828]) {
+  // DOIS cenarios, nao um: o controle positivo do Step 4 mostrou que, num `test()` unico, a
+  // primeira assercao a cair engole a mensagem das outras — com `validarData` reduzida ao
+  // `Date.parse`, o vermelho nomeava '2026-8-28' (formato) e o 30 de FEVEREIRO, que e o achado
+  // que a RN-03 guarda, nunca aparecia no relatorio. Separados, cada defeito se nomeia.
+  await test('validarData recusa o que nao esta no formato AAAA-MM-DD', () => {
+    for (const v of ['ontem', '28/08/2026', '2026-8-28', '2026-08-28T10:00:00Z', '', '  ', null, undefined, 20260828]) {
       assert.strictEqual(filtros.validarData(v).ok, false, `deveria recusar ${JSON.stringify(v)}`);
     }
-    // O coracao da RN-03: as duas datas abaixo passam no `Date.parse` e o SQLite rola as duas.
+    // Array e o que o Express entrega quando alguem manda `data_inicio=a&data_inicio=b`.
+    assert.strictEqual(filtros.validarData(['2026-08-28']).ok, false, 'array deveria ser recusado');
+  });
+
+  await test('validarData recusa data no formato certo que NAO EXISTE no calendario', () => {
+    // O coracao da RN-03: `2026-02-30` passa no `Date.parse` (rola para 02/03) e o SQLite rola
+    // igual, entao aceitar nao daria lista vazia — daria a janela ALARGADA em silencio.
     assert.strictEqual(filtros.validarData('2026-02-30').ok, false,
       '30 de fevereiro passou — o Date.parse sozinho aceita e o SQLite rola para 03/03');
     assert.strictEqual(filtros.validarData('2026-04-31').ok, false, '31 de abril passou');
-    // Array e o que o Express entrega quando alguem manda `data_inicio=a&data_inicio=b`.
-    assert.strictEqual(filtros.validarData(['2026-08-28']).ok, false, 'array deveria ser recusado');
+    assert.strictEqual(filtros.validarData('2026-13-45').ok, false, 'mes 13 / dia 45 passou');
+    assert.strictEqual(filtros.validarData('2026-00-10').ok, false, 'mes 00 passou');
+    assert.strictEqual(filtros.validarData('2026-08-00').ok, false, 'dia 00 passou');
   });
 
   await test('validarData aceita data real, inclusive 29/02 de ano bissexto', () => {
