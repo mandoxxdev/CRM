@@ -132,19 +132,29 @@ compõem um fluxo — a integração já é coberta pelas suítes existentes.
 **Files:** Modify `server/routes/almoxarifado/extended.js`; Test
 `server/tests/api/permissoesSetorLeitura.api.test.js`.
 
-- [ ] **Step 1: teste que falha** — matriz de perfis no GET (o endpoint **não tem nenhum teste
-  hoje**): superadmin → 200, admin de módulo → 200, `role:'admin'` → 200 (o gate aceita),
-  ALMOXARIFE/GESTOR/COMPRAS/PRODUCAO/CONSULTA e sem-perfil → **403** com a mensagem do PUT
-  irmão; e que o 200 devolve a mesma forma de antes.
-- [ ] **Step 2: implementar; verde; controle positivo** (remover o gate → matriz falha;
-  reverter, **commitar antes**). `npm run test:api`; commit.
+- [x] **Step 1: teste que falha** (`8c0feff`) — `permissoesSetorLeitura.api.test.js`, matriz de
+  perfis no GET (o endpoint **não tinha nenhum teste**): superadmin, admin de módulo,
+  `role:'admin'` e perfil `ADMINISTRADOR` → 200; ALMOXARIFE/GESTOR/COMPRAS/PRODUCAO/CONSULTA e
+  sem-perfil → **403** com a mensagem do PUT irmão. Acrescentado ao previsto: a forma do 200
+  congelada nas **13 chaves** de `getPermissoesSetor` (o gate não pode "passar" mudando o
+  corpo), um caso que assere `deepStrictEqual` entre o corpo do 403 do GET e o do PUT (a cópia
+  literal não pode divergir depois) e a asserção de que o 403 não vaza nome de material/família.
+  **Vermelho: 6 passed, 7 failed** — os 6 perfis que hoje recebem 200 + a paridade de mensagem;
+  o caso de forma já passava (prova que a asserção de shape estava certa ANTES da mudança).
+- [x] **Step 2: implementar; verde; controle positivo** (`8c0feff`) — gate copiado literalmente
+  do PUT irmão. **13 passed, 0 failed**. Controle positivo: gate removido por script com
+  `assert` → **6 passed, 7 failed** (mesmo vermelho do Step 1); revertido com `git checkout`
+  **depois** do commit. `npm run test:api`: **139/139 arquivos OK**; `permissoesSetores` 4/0 e
+  `auditoriaExtended` 15/0 rodados explicitamente.
+  **Sem impacto de UI:** o único consumidor do GET é `ConfiguracoesAlmoxarifado.js:2884`, já
+  atrás de `ProtectedAlmoxConfigRoute` (`client/src/App.js:508`).
 
 ---
 
 ## Execução (estado)
 
 - [ ] Fase 2 — revisão do plano por agente fresco
-- [ ] Task 1 · [ ] Task 2 · [ ] Task 3
+- [ ] Task 1 · [ ] Task 2 · [x] Task 3 (`8c0feff`)
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
