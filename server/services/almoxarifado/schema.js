@@ -1603,6 +1603,23 @@ async function initSchema(db) {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // Etapa 22, Task 1: a tabela de auditoria nasceu SEM índice nenhum e só era lida por
+  // `entidade + entidade_id` de uma linha específica. A Etapa 22 abre a trilha para consulta
+  // livre (período, usuário, ação), e aí um full scan por filtro vira o custo dominante numa
+  // tabela que só cresce — nada a expurga. Um índice por eixo de filtro, `IF NOT EXISTS` como
+  // o resto deste arquivo (idempotente, sem ledger de migração).
+  //
+  // `(created_at)` sozinho, não `(created_at, id)`: o ORDER BY é `created_at DESC, id DESC`,
+  // mas `id` é o rowid e o SQLite já o carrega na folha do índice — o par não acrescentaria
+  // nada além de bytes. `(entidade, entidade_id)` composto porque toda leitura por entidade
+  // passa os dois juntos; `entidade` sozinho tem baixíssima cardinalidade (25 valores).
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_auditoria_almox_created
+    ON auditoria_log_almoxarifado(created_at)`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_auditoria_almox_entidade
+    ON auditoria_log_almoxarifado(entidade, entidade_id)`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_auditoria_almox_usuario
+    ON auditoria_log_almoxarifado(usuario_id)`);
+
   // ── Solicitações de compra (integração futura) ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS solicitacoes_compra_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
