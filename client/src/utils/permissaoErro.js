@@ -39,6 +39,9 @@ const ACOES = {
   // o botao "Reenviar"/"Processar fila agora" da tela de notificacoes cairia no fallback de
   // labelAcao e mostraria "gerenciar notificacoes" cru em vez da frase natural.
   gerenciar_notificacoes: 'gerenciar notificações',
+  // Etapa 16, Task 3: sem a entrada, o gate visual da central de alertas cairia no fallback
+  // de labelAcao e mostraria "ver alertas" cru (mesmo buraco do achado 7 da Etapa 11).
+  ver_alertas: 'ver a central de alertas',
 
   aprovar_sucateamento: 'aprovar sucateamento (almoxarifado)',
   aprovar_sucateamento_gestao: 'aprovar sucateamento (gestão)',

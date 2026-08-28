@@ -73,6 +73,12 @@ const RESPOSTA_DO_SERVIDOR = {
   notificacoes_dest_ajustes: { valor: '', descricao: 'Destinatários — ajustes', id: 13 },
   notificacoes_dest_terceiros: { valor: '', descricao: 'Destinatários — terceiros', id: 14 },
   notificacoes_dest_compras: { valor: '', descricao: 'Destinatários — compras', id: 15 },
+  // Etapa 16 (C4): as 3 chaves de dias dos alertas novos — mesma obrigacao das reposicao_*:
+  // sem fixture valida aqui, o guard client-side veria undefined como NaN e derrubaria os
+  // testes de Salvar que nem tocam nelas.
+  alerta_calibracao_dias: { valor: '30', descricao: 'Alerta de calibração (dias)', id: 16 },
+  alerta_quarentena_dias: { valor: '7', descricao: 'Alerta de quarentena parada (dias)', id: 17 },
+  alerta_reserva_parada_dias: { valor: '30', descricao: 'Alerta de reserva parada (dias)', id: 18 },
 };
 
 let container;
@@ -349,4 +355,74 @@ test('config inteira nova (notificacoes_max_tentativas) invalida usa a mensagem 
   expect(toast.error).not.toHaveBeenCalledWith(
     expect.stringContaining('notificacoes_max_tentativas" deve ser um número de dias')
   );
+});
+
+/**
+ * Etapa 16, Task 3 (C4/RN-06) — as 3 chaves de dias dos alertas novos (alerta_calibracao_dias,
+ * alerta_quarentena_dias, alerta_reserva_parada_dias). Semeadas em schema.js com leitor real
+ * (alertRegistry.resolverDias, Task 1), mas a tela renderiza a LISTA FIXA `CAMPOS` — fora dela
+ * a chave e ineditavel pela UI. O guard do handleSalvar valida por PREFIXO, e o espelho client
+ * era `'alerta_lote_'` — as chaves novas NAO cairiam nele (achado da revisao do plano): o front
+ * deixaria o "0" ir ao servidor e a RN-06 "nos dois lados" falharia. A correcao e o prefixo
+ * unico `'alerta_'` (mesma decisao do C4 no servidor; `alertas_*` nao casa com `alerta_`, o
+ * `_` na 7ª posicao nao e `s`). Este teste prova, campo a campo, que o 0 recusa ANTES do
+ * submit com o literal do 400 — e no fim que os tres valores validos entram no payload.
+ */
+test('as 3 chaves de alerta (Etapa 16) aparecem e cada uma recusa 0 antes do submit', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Alerta de Calibração (dias)');
+  expect(container.textContent).toContain('Alerta de Quarentena Parada (dias)');
+  expect(container.textContent).toContain('Alerta de Reserva Parada (dias)');
+
+  const inputCalibracao = inputDoCampo('Alerta de Calibração (dias)');
+  const inputQuarentena = inputDoCampo('Alerta de Quarentena Parada (dias)');
+  const inputReserva = inputDoCampo('Alerta de Reserva Parada (dias)');
+  expect(inputCalibracao).not.toBeNull();
+  expect(inputQuarentena).not.toBeNull();
+  expect(inputReserva).not.toBeNull();
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+
+  // Os tres em 0: o guard acha o primeiro invalido na ordem de CAMPOS e NEM chama o PUT.
+  await act(async () => {
+    preencher(inputCalibracao, '0');
+    preencher(inputQuarentena, '0');
+    preencher(inputReserva, '0');
+  });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_calibracao_dias" deve ser um número de dias maior que zero'
+  );
+
+  // Corrige o primeiro — o proximo invalido e a quarentena.
+  await act(async () => { preencher(inputCalibracao, '15'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_quarentena_dias" deve ser um número de dias maior que zero'
+  );
+
+  // Corrige a quarentena — sobra a reserva.
+  await act(async () => { preencher(inputQuarentena, '10'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_reserva_parada_dias" deve ser um número de dias maior que zero'
+  );
+
+  // Tudo valido: o PUT sai com as tres chaves no corpo achatado.
+  await act(async () => { preencher(inputReserva, '60'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  const corpo = api.put.mock.calls[0][1];
+  expect(corpo.alerta_calibracao_dias).toBe('15');
+  expect(corpo.alerta_quarentena_dias).toBe('10');
+  expect(corpo.alerta_reserva_parada_dias).toBe('60');
 });

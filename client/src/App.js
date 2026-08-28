@@ -112,6 +112,7 @@ import {
   SobrasAlmoxarifado,
   FerramentasAlmoxarifado,
   ReposicaoAlmoxarifado,
+  AlertasAlmoxarifado,
   NotificacoesAlmoxarifado,
   RelatoriosAlmoxarifado,
   ChatPage,
@@ -500,6 +501,7 @@ function AppRoutes() {
         <Route path="sobras" element={<SobrasAlmoxarifado />} />
         <Route path="ferramentas" element={<FerramentasAlmoxarifado />} />
         <Route path="reposicao" element={<ReposicaoAlmoxarifado />} />
+        <Route path="alertas" element={<AlertasAlmoxarifado />} />
         <Route path="notificacoes" element={<NotificacoesAlmoxarifado />} />
         <Route path="relatorios" element={<RelatoriosAlmoxarifado />} />
         <Route path="mapa" element={<MapaLocalizacoesAlmoxarifado />} />

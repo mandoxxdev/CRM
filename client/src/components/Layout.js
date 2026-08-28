@@ -363,6 +363,13 @@ const Layout = () => {
     // alertas novos) — gate proprio (gerenciar_notificacoes) resolvido pelo backend, sem
     // adminOnly aqui (o painel de erro por 403 e quem barra o restante do perfil, mesmo
     // criterio de reposicao acima).
+    // Etapa 16: central de alertas AO VIVO (calibracao, quarentena, requisicao atrasada...) —
+    // gate proprio (ver_alertas) resolvido pelo backend, sem adminOnly aqui (mesmo criterio de
+    // reposicao/notificacoes: o painel de sem-permissao e quem barra o restante do perfil).
+    // FiAlertTriangle, nao um segundo sino — decisao da Etapa 12 mantida (dois sinos para
+    // coisas diferentes confundem); "Notificações" logo abaixo e a FILA de e-mails, esta tela
+    // e a CONDICAO atual.
+    { path: '/almoxarifado/alertas', icon: FiAlertTriangle, label: 'Alertas' },
     // Icone de e-mail, nao FiBell — o sino ja e o do painel global de notificacoes no header
     // (nit da revisao da Task 4: dois sinos para coisas diferentes confundem).
     { path: '/almoxarifado/notificacoes', icon: FiMail, label: 'Notificações' },
