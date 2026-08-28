@@ -441,7 +441,12 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
   (d) nenhuma asserção usa contagem global da tabela de auditoria — as conferências da própria
   jornada geram `CRIACAO`/`CONTAGEM`/`CONCLUSAO` e a contagem viraria refém delas. O `total: 1`
   do cenário do `GET` é do filtro `entidade=configuracao`, não da tabela.
-- [ ] Fase 4 — suíte completa serial
+- [x] Fase 4 — suíte completa serial na branch (2026-08-28): `test:api` **138/138**,
+  `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
+  `test:sqlite` **3/0**; client **531 testes em 36 suítes**, build `CI=true` exit 0.
+  Sem merge de worktree nesta etapa: T2 e T3 rodaram **em paralelo na mesma árvore**,
+  cada uma restrita a um arquivo de rotas diferente — zero conflito, e o executor da T3
+  rodou a suíte com as mudanças não commitadas da T2 na árvore sem nenhuma falha.
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
 
