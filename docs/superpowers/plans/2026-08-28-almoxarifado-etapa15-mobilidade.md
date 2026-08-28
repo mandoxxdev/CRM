@@ -305,15 +305,15 @@ manuais no guia do usuário).
 **Interfaces:** Consumes: rotas reais `PUT /entregar` (existente), `POST /assinatura-entrega`
 e `GET /requisicoes/:id` (Task 1) — motor e serviço REAIS, zero mock.
 
-- [ ] **Step 1: escrever a jornada** — molde de `requisicaoEntregaMotor.api.test.js`:
+- [x] **Step 1: escrever a jornada** — molde de `requisicaoEntregaMotor.api.test.js`:
   requisição EM_SEPARACAO com 1 item separado 10 → entregar 4 (PARCIALMENTE_ATENDIDA) →
   assinar ("Maria Recebedora") → entregar 6 (ENTREGUE) → assinar de novo ("João Turno 2") →
   `GET /requisicoes/:id` traz 2 assinaturas em ordem → `PUT /encerrar` → terceira assinatura
   ainda aceita (ENCERRADA, RN-03) → total 3 no detalhe. Conferir também que o saldo do
   material terminou 40 (as entregas passaram pelo motor de verdade).
-- [ ] **Step 2: rodar; controle positivo** (sabotar a ordem do `listarAssinaturas` para DESC
+- [x] **Step 2: rodar; controle positivo** (sabotar a ordem do `listarAssinaturas` para DESC
   e ver o teste da ordem falhar; reverter).
-- [ ] **Step 3: `npm run test:api` inteiro; commit** — `Almoxarifado Etapa 15 Task 5: jornada de integracao entregar-assinar`.
+- [x] **Step 3: `npm run test:api` inteiro; commit** — `Almoxarifado Etapa 15 Task 5: jornada de integracao entregar-assinar`.
 
 ---
 
@@ -350,7 +350,10 @@ e `GET /requisicoes/:id` (Task 1) — motor e serviço REAIS, zero mock.
 - [ ] Task 2 (galho)
 - [ ] Task 3 (galho)
 - [ ] Task 4 (galho)
-- [ ] Task 5 (integração)
+- [x] Task 5 (integração) — commit `0cf94e1` (2026-08-28). Jornada verde de primeira (9/9);
+  controle positivo obrigatório: `listarAssinaturas` sabotado para DESC derrubou os dois
+  passos de ordem (7/9), revertido, verde 9/9 de novo. `npm run test:api` completo:
+  125/125 arquivos OK (124 anteriores + a jornada nova).
 - [ ] Fase 4 — merge + suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
