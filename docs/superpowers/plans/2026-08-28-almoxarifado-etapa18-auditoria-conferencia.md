@@ -246,16 +246,31 @@ auditoria em `routes/almoxarifado.js:481-483`. Produces: C0, C1, C2, C3.
 - Modify: `server/routes/almoxarifado.js` (C4 + C6), `server/routes/almoxarifado/extended.js` (C5)
 - Test: `server/tests/api/auditoriaAtosEGate.api.test.js`
 
-- [ ] **Step 1: teste que falha** — RN-05 (`aprovador_*` só com ajuste; sem ajuste, nulos);
-  RN-06 (matriz de 8 perfis no `GET /auditoria`, usuários com `role:'usuario'` e
-  `perfil_almoxarifado` — **NUNCA `role:'admin'`**, senão a matriz passa vazia:
-  `permissions.js:93`); RN-07 (os três atos do C6, cada um com o de/para certo, incluindo
-  **id inexistente no DELETE de material não auditando**); ordem estável do log (C5) com duas
-  auditorias no mesmo segundo.
-- [ ] **Step 2: rodar e ver falhar; implementar; verde.**
-- [ ] **Step 3: controle positivo** — remover `requirePermission('configurar')` do
-  `GET /auditoria` e ver a matriz falhar; reverter. `npm run test:api` inteiro.
-- [ ] **Step 4: commit** — `Almoxarifado Etapa 18 Task 2: aprovador gravado, log gateado e tres atos vizinhos auditados`.
+- [x] **Step 1: teste que falha** (`395caf3`) — 19 casos em
+  `server/tests/api/auditoriaAtosEGate.api.test.js`: RN-05 (com ajuste grava; sem ajuste fica
+  nulo; **e sem ajuste não TOCA um `aprovador_*` já preenchido** — o terceiro caso é o que
+  separa "não gravar" de "gravar null", que apagaria uma homologação anterior); RN-06 (matriz
+  de 8 perfis — os 7 do `PERFIS` mais o usuário **sem perfil**, que cai no fallback PRODUCAO —
+  todos com `role:'usuario'`); RN-07 (os três atos, mais "id inexistente não audita" no DELETE
+  de material, "material já inativo registra `ativo: 0` real", "cancelamento recusado pela
+  máquina de estados não audita" e "DELETE de requisição inexistente → 404 sem auditoria");
+  ordem estável do C5 com **empate forçado** (`UPDATE ... SET created_at = '<literal>'` nas
+  duas linhas) — sem forçar, o teste dependeria da sorte de os dois atos caírem no mesmo
+  segundo.
+- [x] **Step 2: rodar e ver falhar; implementar; verde** (`395caf3`) — vermelho inicial
+  **6 passaram, 13 falharam**. Os 6 que já passavam passavam **vazios**: são as asserções de
+  *"não audita"* (id inexistente, transição recusada, 404) e as de `aprovador_*` nulo — todas
+  verdadeiras num mundo onde nada auditava e nada escrevia a coluna. É por isso que o controle
+  positivo do Step 3 mira a matriz, que é o bloco que não passa de graça. Implementado C4
+  (fragmento condicional no UPDATE final, molde do `camposAutoria`), C5 (gate + desempate) e
+  C6 (os três atos). Verde **19/19**.
+- [x] **Step 3: controle positivo** (`395caf3`) — removido o `requirePermission('configurar')`
+  do `GET /auditoria` → **12/19**, com os 7 perfis não-ADMINISTRADOR da matriz vermelhos
+  (`esperava 403, veio 200` trazendo o log inteiro no corpo — a própria exposição que o gate
+  fecha). Revertido; `git diff` do `extended.js` mostra só as mudanças pretendidas e **19/19**
+  de novo. `npm run test:api` inteiro: **133/133 arquivos** (132 + o arquivo novo).
+  `test:almoxarifado` 42/42.
+- [x] **Step 4: commit** (`395caf3`) — `Almoxarifado Etapa 18 Task 2: aprovador gravado, log gateado e tres atos vizinhos auditados`.
 
 ### Task 3 (galho): cancelar conferência pede motivo
 
@@ -334,7 +349,23 @@ versão do plano mandava seguir o `confirm`+`prompt` da tela de Reposição, que
   plano dizia. Única diferença de forma, registrada no Step 3: o ponto único da CRIACAO nasceu
   de inverter a guarda `materiais.length === 0` em vez de unificar os dois `res.status(201)`,
   para preservar os dois corpos de resposta exatamente como estavam.
-- [ ] Task 2 (tronco)
+- [x] Task 2 (tronco) — `395caf3` (2026-08-28). Vermelho inicial **6/19**, verde **19/19**;
+  controle positivo (gate removido do `GET /auditoria`) derrubou os 7 perfis não-ADMINISTRADOR
+  da matriz → **12/19**, revertido e limpo. Suíte: **133/133 arquivos** em `npm run test:api`;
+  `test:almoxarifado` 42/42. Os contratos C4, C5 e C6 fecharam **sem divergência de literal**
+  — as quatro correções que a revisão da Fase 2 tinha feito estavam todas certas contra o
+  código (`'CANCELADO'` e não `'CANCELADA'`; `result.estornos` é array; o cancelar de
+  requisição responde dentro de um `.finally()`; o DELETE de material responde `success` para
+  id inexistente). Duas notas de execução:
+  - **`DELETE /requisicoes/:id` virou `async`** (o C6 pedia só "`dbGet` antes do serviço"). A
+    rota era `.then()/.catch()` de uma linha; o `dbGet` prévio dentro dela produziria uma
+    terceira cadeia aninhada. O contrato externo é idêntico: mesmo 403, mesmo `res.json(result)`
+    e o mesmo `e.status || 500`. O cancelar de requisição, esse sim, **não** foi convertido —
+    ali a auditoria entrou encadeada na promessa existente, como o C6 manda.
+  - **O vermelho inicial foi 6/19, não 0/19, e os 6 passavam vazios**: as asserções de "não
+    audita" e de `aprovador_*` nulo são verdadeiras enquanto nada audita e nada escreve a
+    coluna. Registrado aqui porque é exatamente a armadilha de teste vazio do CLAUDE.md — quem
+    ler só o placar poderia achar que 6 cenários já estavam cobertos.
 - [ ] Task 3 (galho)
 - [ ] Task 4 (integração)
 - [ ] Fase 4 — suíte completa serial
