@@ -210,6 +210,12 @@ const {
 const { deveIncluirNoBackup, backupMaisRecente } = require('./services/backupPackage');
 const { validarTokenBackup } = require('./services/backupAuth');
 const {
+  mascararValorConfig,
+  podeGravarSegredo,
+  ehChaveSecretaCore,
+  MENSAGEM_SEGREDO_INVALIDO,
+} = require('./services/configSecrets');
+const {
   PERSISTENT_DATA_DIR,
   uploadsDir,
   uploadsComprovantesDir,
@@ -17973,6 +17979,13 @@ app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
 
 // ========== ROTAS DE CONFIGURAÇÕES ==========
 // Obter todas as configurações
+//
+// Etapa 21 (RN-05): esta rota devolvia `email_smtp_pass` EM CLARO. O gate
+// (`requireAdministrativoConfig`) libera admin de administrativo OU comercial — grupo bem maior
+// que quem precisa da senha do SMTP. A mascara e a MESMA do almoxarifado
+// (`services/configSecrets.js` reusa `alertService.PASSWORD_MASK`): '********' quando ha valor,
+// '' quando nao ha. O '' importa: '********' para senha inexistente MENTIRIA "ja configurado".
+// Descartado omitir a chave — a tela itera as chaves da categoria e o campo sumiria.
 app.get('/api/configuracoes', authenticateToken, requireAdministrativoConfig, (req, res) => {
   db.all('SELECT * FROM configuracoes ORDER BY categoria, chave', [], (err, rows) => {
     if (err) {
@@ -17996,7 +18009,7 @@ app.get('/api/configuracoes', authenticateToken, requireAdministrativoConfig, (r
           valor = row.valor;
         }
       }
-      configs[row.categoria][row.chave] = valor;
+      configs[row.categoria][row.chave] = mascararValorConfig(row.chave, valor);
     });
     res.json(configs);
   });
@@ -18416,6 +18429,11 @@ app.post('/api/compras/solicitacoes-compra/:id/decisao', authenticateToken, chec
 });
 
 // Obter configuração específica
+//
+// Etapa 21 (RN-05): a MESMA mascara do GET plural. Mascarar so o plural deixaria duas portas
+// para o mesmo dado, uma trancada e outra nao — bastaria pedir `/api/configuracoes/email_smtp_pass`
+// para ter a senha em claro sob o mesmo gate. O `...row` abaixo espalha a coluna crua, entao o
+// `valor` mascarado precisa vir DEPOIS dele (e vem).
 app.get('/api/configuracoes/:chave', authenticateToken, requireAdministrativoConfig, (req, res) => {
   const { chave } = req.params;
   db.get('SELECT * FROM configuracoes WHERE chave = ?', [chave], (err, row) => {
@@ -18437,14 +18455,32 @@ app.get('/api/configuracoes/:chave', authenticateToken, requireAdministrativoCon
         valor = row.valor;
       }
     }
-    res.json({ ...row, valor });
+    res.json({ ...row, valor: mascararValorConfig(row.chave, valor) });
   });
 });
 
 // Atualizar configuração
+//
+// Etapa 21 (RN-06): chave secreta com valor vazio ou que CONTENHA a mascara vira 400, sem tocar
+// na coluna. O `contem` (nao `===`) e o ponto: a tela salva a cada tecla, entao clicar no campo
+// com '********' e digitar manda '********N' — que passa em guarda de igualdade e sobrescreve a
+// senha real com lixo, e o GET remascara, deixando o estrago invisivel ate o e-mail nao sair.
+// 400 e nao 200 silencioso (decisao A3): o analogo real e o PUT generico do almoxarifado
+// (`routes/almoxarifado.js`, congelado em `tests/api/configuracoesSegredo.api.test.js:200-231`).
+// Com 200 a tela diria "salvo com sucesso" para gravacao que nao aconteceu.
 app.put('/api/configuracoes/:chave', authenticateToken, requireAdministrativoConfig, (req, res) => {
   const { chave } = req.params;
   const { valor, tipo, categoria, descricao } = req.body;
+
+  if (ehChaveSecretaCore(chave)) {
+    const guarda = podeGravarSegredo(valor);
+    if (!guarda.ok) {
+      return res.status(400).json({
+        error: MENSAGEM_SEGREDO_INVALIDO,
+        motivo: guarda.motivo,
+      });
+    }
+  }
 
   let valorFinal = valor;
   if (tipo === 'json') {
