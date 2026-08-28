@@ -327,7 +327,17 @@ Reposição (`ReposicaoAlmoxarifado.js` — o Critical da E11: 403 nunca vira te
   positivo: sabotagem do status-set (`ENTREGUE` fora da exclusão) caçada pelos passos 4 e 5
   (3/5), revertida, 5/5 e diff limpo. Suíte `npm run test:api` completa: **128/128 arquivos
   OK**. Nota: rodou antes da Task 3 (galho de client, independente — contrato C1 congelado).
-- [ ] Fase 4 — suíte completa serial
+- [x] Task 3 (galho) — commit `3eb2c42`, merge `8576504`. Worktree nasceu DE NOVO na base
+  errada (`5dadd59`) e a checagem obrigatória pegou antes de qualquer código — reset para
+  `0b1f4c9` e execução limpa. TDD com vermelhos anotados; badge usa `total` (provado com
+  fixture 60×2), 403 → `PainelErroCarga`, espelho client de `PREFIXOS_DIAS` → `'alerta_'`.
+  Extras legítimos relatados: fixture de `ConfiguracoesGerais.test.js` (paridade) e entrada
+  `ver_alertas` em `permissaoErro.js` (403 legível — lição do achado 7 da E11). Suíte
+  client 521/521 em 36 suítes na worktree; build zero warning.
+- [x] Fase 4 — merge do galho (`8576504`) + suíte completa serial na branch (2026-08-28):
+  `test:api` **128/128**, `test:almoxarifado` **42/0**, `test:validation` **4/0**,
+  `test:safealter` **3/0**, `test:sqlite` **3/0**; client **521 testes em 36 suítes**,
+  build `CI=true` exit 0.
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
 
