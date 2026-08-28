@@ -149,6 +149,17 @@ registrados" — há call sites que gravam nenhum dos dois, `receiptService.js:2
 e a chave some) e **fabrica alterações** a partir de campos de contexto. É o achado A1, o mais
 grave da revisão, e está detalhado na RN-07 do design.
 
+**ENTREGUE em `8f708b0`.** Três detalhes que a Task 2 e a Task 3 precisam saber e que o
+contrato não dizia:
+1. **`de`/`para` saem CRUS, sem `String()`.** Número continua número, `false` continua `false`,
+   array continua array. Quem renderiza é a tela — coagir aqui apagaria a diferença entre `0` e
+   `'0'` numa trilha de auditoria. `0` e `false` **não** viram `null`.
+2. **Campo de contexto APARECE, com `de: null`.** Não há filtro de igualdade, de propósito: é
+   ele que faria a troca de senha mascarada sumir (RN-07, defeito 1). Consequência aceita e já
+   antecipada pela Task 4: a foto de material sai com `codigo` e `nome` como `null → valor`.
+3. **Lado malformado conta como vazio.** JSON quebrado, array ou escalar em `dados_*` viram
+   `{}` — uma linha estragada não pode derrubar a listagem inteira.
+
 **Congelamento em PROFUNDIDADE** (achado A8): `Object.freeze` é raso, então
 `GRUPOS_ACAO[0].verbos.push('X')` funcionaria e o cenário do teste passaria verde com o array
 mutável — justamente o que a Task 2 consome. Congele cada `verbos` e cada entrada, não só o
@@ -156,7 +167,14 @@ array externo.
 
 ---
 
-### Task 1 (tronco): rótulos, régua de leitura e índices
+### Task 1 (tronco): rótulos, régua de leitura e índices — **FEITA** (`8f708b0`)
+
+> **Placar real:** `auditLabels.api.test.js` **14 passed, 0 failed**; `npm run test:api`
+> **144/144 arquivos** (143 do baseline + o novo); `test:almoxarifado` 42/0, `test:validation`
+> 4/0, `test:safealter` 3/0, `test:sqlite` 3/0.
+> **Medição fechada:** a união das três fontes dá **68 verbos**, todos com rótulo — 45 da
+> varredura com guarda (91 ocorrências, menor token com **5** caracteres), 18 de
+> `movementTypes`, 5 de `transicoes` e `CONTAGEM`/`RECONTAGEM`.
 
 **Files:** Create `server/services/almoxarifado/auditLabels.js`; Modify
 `server/services/almoxarifado/schema.js`; Test `server/tests/api/auditLabels.api.test.js`.
@@ -164,7 +182,7 @@ array externo.
 **Interfaces:** Produces C3 — a Task 2 consome `GRUPOS_ACAO`, `rotularEntidade`, `rotularAcao`
 e `alteracoesDaLinha`.
 
-- [ ] **Step 1: teste que falha.** Cenários: (a) `rotularAcao('CRIACAO')` e `rotularAcao('CRIAR')`
+- [x] **Step 1: teste que falha.** Cenários: (a) `rotularAcao('CRIACAO')` e `rotularAcao('CRIAR')`
   devolvem **a mesma** string; (b) `verbosDoGrupo('Criação')` traz os dois; (c) verbo
   desconhecido volta ele mesmo, **não** `undefined` nem `''`; (d) congelamento **profundo** —
   `GRUPOS_ACAO[0].verbos.push('X')` tem de lançar em strict mode (ou não alterar o array);
@@ -176,7 +194,7 @@ e `alteracoesDaLinha`.
   - `nov=null` → `[]`; os dois vazios → `[]`.
   - entrada com string JSON crua (é como vem do banco) funciona igual à com objeto.
   - **nenhum valor é remascarado** — o que estiver gravado sai como está.
-- [ ] **Step 2: cobertura do vocabulário — a parte que a Fase 2 reescreveu.**
+- [x] **Step 2: cobertura do vocabulário — a parte que a Fase 2 reescreveu.**
   A varredura ingênua **não serve** e o executor não deve "consertá-la" afrouxando: ela é ao
   mesmo tempo **ruidosa e cega** (achado A2, reproduzido).
   - Ruído: `grep -rhoP "acao: '\K[A-Z_]+"` casa o final de outros identificadores —
@@ -185,9 +203,18 @@ e `alteracoesDaLinha`.
     → **45 verbos, 91 ocorrências, nenhum token com menos de 4 caracteres**.
   - Cegueira: **~25 verbos não são literais** e a varredura nunca os vê —
     `stockService.js:1368` audita `acao: tipo` (os **18** de `movementTypes.js`, a maior
-    produtora de linhas do módulo), `receiptService.js:238` faz `acao.toUpperCase()` (as **5**
-    chaves de `transicoes`, `receiptService.js:204-213`), e `routes/almoxarifado.js:1286` dá
+    produtora de linhas do módulo), `receiptService.js:238` faz `acao.toUpperCase()` (as chaves
+    de `transicoes`, `receiptService.js:205-216`), e `routes/almoxarifado.js:1286` dá
     `CONTAGEM`/`RECONTAGEM`.
+    **Correção da execução: `transicoes` tem 6 chaves, não 5 — o plano dizia "as 5 chaves de
+    `transicoes`" e isso estava errado.** O número 5 é o certo, mas por outro motivo: a sexta
+    chave, `processar`, **nunca chega** ao `acao.toUpperCase()` — ela cai no
+    `handler: 'processar'` e faz `return processarNota(...)` **antes** do `registrarAuditoria`,
+    e a linha dela é gravada lá com o literal `'PROCESSAR_NOTA'`
+    (`receiptService.js:691`), que a varredura já enxerga. Quem lesse "as 5 chaves" iria
+    procurar cinco chaves no fonte, achar seis, e não saber qual sobra. Por isso o teste
+    **extrai as chaves do fonte e afirma que são exatamente 6**, descartando `processar` com o
+    motivo escrito: assim, uma transição nova derruba o teste em vez de virar verbo sem rótulo.
   - Portanto o cenário de cobertura une **três fontes**: (1) a varredura com guarda, exigindo
     `>= 45` e com canário `nenhum token com length < 4`; (2) `require('./movementTypes')` +
     as chaves de `transicoes` em maiúscula + `['CONTAGEM','RECONTAGEM']`, com comentário
@@ -195,7 +222,7 @@ e `alteracoesDaLinha`.
     rótulo. A guarda antiga (">= 20 verbos") **passava nos dois defeitos ao mesmo tempo** —
     45 > 20 com ruído dentro e um terço faltando.
   - `entidade: '<nome>'` está limpo: 25 distintos, **nenhum dinâmico** (verificado).
-- [ ] **Step 3: implementar.** Grupos que a medição exige: `CRIACAO`+`CRIAR` → "Criação";
+- [x] **Step 3: implementar.** Grupos que a medição exige: `CRIACAO`+`CRIAR` → "Criação";
   `EDICAO`+`ATUALIZACAO`+`ATUALIZAR` → "Edição"; **`EXCLUSAO`+`DESATIVACAO` → "Exclusão"**.
   **A justificativa anterior deste passo ESTAVA ERRADA** (achado A7): ela dizia para **não**
   agrupar porque "desativar é `ativo = 0` e é reversível por `REATIVACAO`". Medido: **os dois
@@ -205,18 +232,28 @@ e `alteracoesDaLinha`.
   recebem **`EXCLUSAO`**, e **não** existe para `material`, o único que recebe `DESATIVACAO`.
   São o mesmo ato com nome diferente por entidade: é exatamente o caso de sinônimo que a RN-06
   trata. (A inconsistência do vocabulário continua visível na legenda secundária da linha.)
-- [ ] **Step 4: índices** em `schema.js`, ao lado dos 12 existentes, padrão
+- [x] **Step 4: índices** em `schema.js`, ao lado dos 12 existentes, padrão
   `CREATE INDEX IF NOT EXISTS`: `idx_auditoria_almox_created (created_at)`,
   `idx_auditoria_almox_entidade (entidade, entidade_id)`,
   `idx_auditoria_almox_usuario (usuario_id)`. Prove com
   `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='auditoria_log_almoxarifado'`
   — asserção de **exatamente 3** (verificado que não há `sqlite_autoindex_*` inflando a
   contagem: a tabela não tem `UNIQUE` e o PK é o rowid).
-- [ ] **Step 5: controle positivo** (commitar antes): apague `'CRIAR'` do grupo → caem os
-  cenários (a), (b) **e** o de cobertura (`'CRIAR'` é literal em `purchaseService.js:33,381`).
-  Segunda sabotagem: faça `alteracoesDaLinha` iterar só `Object.keys(nov)` → o cenário do
-  `status` perdido tem de cair. Reverter, verde de novo.
-- [ ] **Step 6: `npm run test:api`; commit.**
+- [x] **Step 5: controle positivo** (commitado antes, `8f708b0`): apagar `'CRIAR'` do grupo →
+  caíram exatamente os três previstos, (a), (b) e o de cobertura, este nomeando `["CRIAR"]`
+  (11 passed / 3 failed). Segunda sabotagem, `alteracoesDaLinha` iterando só
+  `Object.keys(nov)` → caiu o cenário do `status` perdido, **e também** o `(e3)` de `nov=null`
+  (12 passed / 2 failed). `md5sum` conferido antes / depois / restaurado nas duas, e
+  `git diff --stat` vazio no fim.
+  **Terceira sabotagem, acrescentada pela execução e não prevista no plano — e ela é
+  necessária.** As duas do plano deixam o cenário do **segredo** `(e2)` verde: iterar só
+  `Object.keys(nov)` **não** reproduz o defeito 1 da RN-07, porque quando a senha muda a chave
+  está nos **dois** lados. O que apaga o segredo é a **outra** metade do `calcularDiff`, o
+  `if (String(bruto) === String(novo)) continue`. Sem um controle para ele, a asserção que
+  guarda o achado mais grave da revisão ficaria **não provada**. Sabotagem: acrescentar
+  `.filter((c) => String(ant[c]) !== String(nov[c]))` → `(e2)` cai com a mensagem "a troca de
+  senha sumiu da leitura", sobrando só `alertas_dias` (e `(e4)` cai junto). Restaurado.
+- [x] **Step 6: `npm run test:api` (144/144); commit `8f708b0`.**
 
 ---
 
