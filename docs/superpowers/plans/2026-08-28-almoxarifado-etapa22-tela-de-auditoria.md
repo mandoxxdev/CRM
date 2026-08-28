@@ -346,7 +346,11 @@ e `alteracoesDaLinha`.
 
 ---
 
-### Task 3 (galho): a tela
+### Task 3 (galho): a tela — **FEITA** (`b746e72`)
+
+> **Placar real:** `AuditoriaAlmoxarifado.test.js` **15 passed, 0 failed**; suíte inteira do
+> client **546/546 em 37 arquivos** (531/36 do baseline + os 15 novos); `CI=true
+> npx react-scripts build` **limpo** (nenhum warning, e `CI=true` faz warning virar erro).
 
 **Files:** Create `client/src/components/almoxarifado/AuditoriaAlmoxarifado.js` e
 `AuditoriaAlmoxarifado.test.js`; Modify `client/src/routes/lazyModules.js`,
@@ -356,12 +360,24 @@ e `alteracoesDaLinha`.
 mock é legítimo nesta base). A tela **não calcula de/para nem traduz rótulo**: os dois vêm
 prontos do servidor.
 
-- [ ] **Step 1: teste que falha:** filtro de período dispara nova busca com os params certos
+- [x] **Step 1: teste que falha:** filtro de período dispara nova busca com os params certos
   (**`acao` como string com vírgulas, nunca array** — ver C1/A5); `truncado: true` mostra o
   aviso de corte; expandir mostra as `alteracoes`; `alteracoes: []` mostra "sem detalhes
   registrados" (não uma área em branco); lista vazia mostra "nenhum registro **para os filtros
   aplicados**" (nunca "não há registros" — a diferença importa numa auditoria).
-- [ ] **Step 2: implementar.** Molde: `AlertasAlmoxarifado.js` (Etapa 16).
+  **Executado com stub permissivo primeiro** (componente que renderiza uma `div` vazia): 14
+  vermelhos por **asserção**, nenhum `MODULE_NOT_FOUND`. O 15º passava **vazio** com o stub —
+  era o "truncado: false não mostra aviso de corte", que uma tela que não renderiza nada também
+  satisfaz. Corrigido no mesmo passo com a metade positiva do par (`linha(101)` tem de existir),
+  senão o cenário seria exatamente o "teste vazio" que o CLAUDE.md manda desconfiar.
+  Cenários acrescentados além dos cinco do plano, cada um por um modo de falha próprio da tela:
+  RN-06 (o verbo cru continua visível como legenda secundária — o grupo "Criação" não pode
+  **esconder** que a linha foi gravada com `CRIAR`); RN-08 (segredo `'(alterado)'` dos dois
+  lados aparece e não desmascara); `de: null` vira travessão e não a string `"null"`; **400** de
+  data inválida cai no painel de erro e **não** no estado vazio (senão a RN-03 do servidor
+  chegaria ao usuário como "nada aconteceu", que é o defeito que ela existe para matar); 403 de
+  perfil idem; e o gate visual sem `configurar` não chega a chamar a rota.
+- [x] **Step 2: implementar.** Molde: `AlertasAlmoxarifado.js` (Etapa 16).
   **Data — o passo anterior deste plano mandava o ERRADO** (achado A3): dizia
   "`toLocaleString('pt-BR')`, não repita o bug de DATE-only da Etapa 16", quando o molde que ele
   manda copiar faz o oposto e está certo (`AlertasAlmoxarifado.js:62-64`): o timestamp do SQLite
@@ -369,13 +385,55 @@ prontos do servidor.
   `'2026-08-29 01:30:00'` sai como **29/08 01:30** (dia errado) em vez de 28/08 22:30. Use
   `replace(' ', 'T') + 'Z'` antes de formatar — numa tela cuja pergunta é "quem mexeu nisto
   **ontem**", errar o dia é defeito de correção, não de formatação.
-- [ ] **Step 3:** rota lazy + `<Route path="auditoria">` + item de menu com **`adminOnly`**
+  **Detalhe que a execução teve de resolver e o plano não previa: o cenário da data só sabe
+  falhar num fuso ≠ UTC.** Em UTC as duas leituras (com e sem `'Z'`) coincidem e o teste passaria
+  provando nada. O arquivo fixa `process.env.TZ = 'America/Sao_Paulo'` **antes de qualquer
+  `Date`** (Node reconfigura o V8 ao setar a variável em runtime) e o cenário abre com uma
+  guarda — `getTimezoneOffset() !== 0` — para que uma máquina em UTC **derrube** o teste em vez
+  de deixá-lo verde e vazio.
+- [x] **Step 3:** rota lazy + `<Route path="auditoria">` + item de menu com **`adminOnly`**
   (verificado que `canConfigureModule` espelha o `getPerfilFromUser` do backend, então admin de
-  módulo com `role='usuario'` vê o item **e** passa no gate).
-- [ ] **Step 4: controle positivo com alvo definido** (achado A10 — "controle positivo" sem
+  módulo com `role='usuario'` vê o item **e** passa no gate). O item ficou **vizinho de
+  "Configurações"**, os dois únicos do menu do almoxarifado que exigem `configurar`.
+  Acrescentado também em `ROUTE_PREFETCH` (`/almoxarifado/auditoria`), como as demais telas.
+- [x] **Step 4: controle positivo com alvo definido** (achado A10 — "controle positivo" sem
   alvo vira `md5sum` cerimonial): troque o `params` do fetch por objeto vazio → o cenário
   "filtro de período dispara nova busca com os params certos" tem de ficar vermelho.
-- [ ] **Step 5:** `CI=true` test e build; commit.
+  **Resultado: cinco sabotagens, todas commitadas depois de `b746e72`, todas com `md5sum`
+  antes / depois / restaurado e `git diff --stat` vazio no fim** (baseline
+  `97ffb10549eecdc35f064933589c1dd4`):
+  1. `{ params }` → `{ params: {} }` (a do plano) → **2 vermelhos**, o previsto e mais o
+     "limpar filtros volta a buscar sem nenhum deles" — que também lê os params, então cair
+     junto está certo (13/2).
+  2. tirar o `'Z'` do `formatDataHora` → cai **só** o cenário da data, e pela asserção do dia
+     (14/1). É o achado A3 provado, não declarado.
+  3. **acrescentada pela execução, e ela é a que guarda o achado A5.** As duas primeiras deixam
+     o `Array.isArray` verde: trocar os params por `{}` derruba o cenário por `data_inicio`
+     antes de chegar no `acao`. Sabotagem: `verbos.join(',')` → `verbos` (o array cru) → o
+     cenário cai **na linha do `Array.isArray`** (`Expected: false, Received: true`), que é
+     exatamente o defeito que produziria `acao[]=A&acao[]=B` e 500 na rota. Sem ela, a asserção
+     mais específica desta task ficaria **não provada** (14/1).
+  4. trocar a frase do estado vazio por "Nao ha registros" → cai o cenário do vocabulário,
+     pelas duas metades (a frase certa ausente e a proibida presente) (14/1).
+  5. `Sem detalhes registrados` → `XXX` **e** `{dados.truncado && (` → `{false && (` numa só
+     rodada → caem os dois cenários correspondentes e **nenhum outro** (13/2), o que também
+     mostra que eles não estão se cobrindo por acidente.
+- [x] **Step 5:** `CI=true` test (546/546) e build (limpo); commit `b746e72`.
+
+**Divergências do plano, e o motivo de cada uma:**
+- **Paginação por `offset` não estava no plano e foi acrescentada.** Sem ela o aviso de corte é
+  um beco sem saída: a tela diria "encontrei 4820 e mostro 200" sem oferecer como ver o resto,
+  e o C1 já expõe `limite`/`offset`. Trocar filtro ou limpar reseta o offset para 0 — manter a
+  página 4 de um resultado novo daria lista vazia sem motivo aparente, que nesta tela é
+  justamente a resposta que não pode aparecer por engano.
+- **A tela mostra o de/para, e não o JSON cru de `dados_anteriores`/`dados_novos`** (RN-07: "o
+  de/para mostra o que mudou, não o JSON"). Considerado e descartado exibir os dois lados crus
+  num toggle: reintroduziria na tela o material que a régua do servidor já leu, e é por ali que
+  um "vamos só melhorar a exibição" volta a virar diff no cliente.
+- **`<Route path="auditoria">` ficou sem o `ProtectedAlmoxConfigRoute`** que envolve
+  `configuracoes`, como o plano especifica. O gate real é o `requirePermission('configurar')` da
+  rota do C1, e a tela já barra visualmente pelo `useAlmoxPermissoes` — quem chegar pela URL vê
+  o painel de sem-permissão, não uma tela vazia (RN-01).
 
 ---
 
