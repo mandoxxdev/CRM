@@ -2,11 +2,27 @@
 
 > Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, no fim, porque nasceu de um corte de escopo da Etapa 20.
 
-> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 20 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 21 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 20 completas.** A **Etapa 20 (exposição e rastro)** fechou em 2026-08-28
+> **Etapas 1 a 20 completas no módulo, e a Etapa 21 entregue no NÚCLEO do CRM.** A **Etapa 21
+> (exposição no núcleo)** fechou em 2026-08-28 (`d5c8d3a..07a4b1c`) e é a **primeira etapa fora
+> do módulo Almoxarifado**: ela mexe no arquivo de backup do sistema, na senha do e-mail e na
+> tela **Configurações do Sistema** (a do CRM inteiro, não a do módulo). O motivo dela existir:
+> o arquivo `.zip` baixado pelo endereço de backup levava junto o arquivo em que o servidor
+> guarda a chave com que assina os crachás de login — **quem baixasse o backup conseguia entrar
+> como super administrador**. Agora o zip não leva mais esse arquivo, nem as 188 MB de cópias
+> antigas, e **todo download fica registrado** (horário, IP, aceito/negado e o motivo). Junto:
+> a senha do e-mail passou a vir preferencialmente do ambiente do servidor, e o campo **Senha
+> SMTP** parou de devolver a senha em claro e de gravar a máscara por cima dela.
+> **Atenção operacional: nenhuma tela do Almoxarifado muda.** O que muda é o campo Senha SMTP em
+> Configurações do Sistema → Email, que agora **nasce vazio** — deixar em branco é o jeito de
+> manter a senha atual. **E há uma ação que só você pode fazer: rotacionar a senha do e-mail na
+> Locaweb** (item A3 das novidades) — ela está no histórico do repositório desde 17/03/2026 e
+> nenhum código a remove de lá. Ver a seção "Etapa 21" no fim deste guia.
+>
+> **Antes: Etapas 1 a 20 completas.** A **Etapa 20 (exposição e rastro)** fechou em 2026-08-28
 > (`1b0f0e9..a3f5135`): ela não tem tela nova — fecha três lugares em que o sistema mentia ou
 > falava demais. Mandar a foto de um material **que não existe** respondia sucesso e deixava a
 > imagem no servidor para sempre; **agora responde `Material não encontrado` e apaga o arquivo**.
@@ -3084,6 +3100,81 @@ setor pararam de ser entregues a quem não deveria lê-los.
   aprovadores** a qualquer usuário do módulo (letra **D**).
 - **As imagens órfãs que as tentativas antigas deixaram no servidor continuam lá** — nada foi
   apagado retroativamente.
+
+## Etapa 21 — O backup do sistema parava de guardar segredo (ENTREGUE — 2026-08-28)
+
+> **Esta etapa é do NÚCLEO do CRM, não do módulo Almoxarifado.** Está neste guia porque nasceu de
+> um item que a Etapa 20 declarou fora do escopo dizendo "é do núcleo" — e separá-la deixaria o
+> laço aberto em dois documentos que ninguém cruza.
+
+**O que mudou, em uma frase:** o arquivo de backup parou de levar dentro dele a chave com que o
+servidor assina os crachás de login (quem baixasse o backup **entrava como super administrador**),
+e a senha do e-mail parou de ser devolvida em texto puro pela tela de Configurações do Sistema.
+
+### Roteiro de teste manual
+
+> Os passos 1 a 4 são **clicáveis** e valem para qualquer administrador; os passos 5 a 8 são para
+> **quem tem acesso técnico ao servidor** — é lá que morava o buraco grave, porque o backup é um
+> endereço chamado por fora do sistema.
+
+1. **A tela de Configurações continua funcionando.** Menu → **Configurações do Sistema** → aba
+   **Email**. Os campos Servidor SMTP, Porta, Usuário e Email Remetente continuam preenchidos e
+   editáveis como sempre.
+2. **O campo Senha SMTP agora nasce vazio.** Na mesma aba, olhe o campo **Senha SMTP**: ele vem
+   **em branco**, e dentro dele aparece o aviso
+   `Senha configurada — deixe em branco para manter` (se nunca houve senha gravada, o aviso é
+   `Senha do e-mail ou app password`). Antes o campo vinha preenchido com a senha real.
+3. **Deixar em branco não faz nada — e é assim que se mantém a senha.** Clique no campo, não
+   digite nada, clique fora. **Nenhuma mensagem aparece** e nada é salvo.
+4. **Digitar uma senha nova salva uma vez só, ao sair do campo.** Digite qualquer valor e clique
+   fora: aparece `Configuração salva com sucesso!`, o campo volta a ficar vazio e o aviso passa a
+   ser o de "senha configurada". Antes esta tela salvava **a cada tecla** — digitar uma senha de 8
+   caracteres gravava 8 senhas parciais.
+   > **Cuidado ao demonstrar:** este passo **troca de verdade** a senha gravada na tabela de
+   > configurações. Ela hoje não é usada pelo envio de e-mail (o envio usa o valor do ambiente ou
+   > o do código — item **B42** das novidades), então não quebra nada; mas se um dia o banco
+   > entrar na precedência, o valor que você digitar aqui passa a valer.
+5. **(Técnico) A máscara nas duas leituras.** Com senha gravada:
+   - `GET /api/configuracoes` → dentro da categoria `email`, `email_smtp_pass` tem de vir como
+     `********` (e **vazio** se nunca foi gravada);
+   - `GET /api/configuracoes/email_smtp_pass` → **a mesma** máscara. Mascarar só a primeira
+     deixaria a segunda porta destrancada — as duas foram fechadas juntas de propósito.
+6. **(Técnico) A recusa da máscara.** `PUT /api/configuracoes/email_smtp_pass` com
+   `{"valor": "********"}` ou `{"valor": "********N"}` → **400** com
+   `Valor inválido para senha: deixe o campo em branco para manter a senha atual`. Valor vazio
+   dá a mesma mensagem. Uma chave **não secreta** (ex.: `email_smtp_host`) continua salvando
+   normalmente — é o controle de que a guarda não pegou geral.
+7. **(Técnico) O backup nega e registra.** Chame `GET /api/backup` **sem** token → **401**
+   `Token de backup inválido ou não configurado`, e no log do servidor aparece
+   `[Backup] NEGADO ip=… xff=… motivo=AUSENTE`. Com um token errado do mesmo tamanho, o motivo
+   vira `INVALIDO`. O motivo **nunca** aparece na resposta, só no log.
+8. **(Técnico) O backup aceita e o zip está limpo.** Chame `GET /api/backup` com o token correto
+   e **abra o arquivo baixado**. Confirme, na lista de arquivos do zip:
+   - **não existe** `.runtime-secrets.json` (era ele que permitia forjar o crachá de super
+     administrador);
+   - existe `database.sqlite`, existe a pasta `uploads/` e existem os arquivos de configuração;
+   - dentro de `backups/` existe **uma** cópia — a mais recente — e, se houver, os arquivos
+     `-wal`/`-shm` dela. **Não** existem as cópias antigas.
+   No log: `[Backup] ACEITO ip=… xff=… fallback=database-….sqlite`. Se você chamar com o token na
+   URL (`?token=…`), funciona igual — e o log ganha `avisos=QUERY_DEPRECIADA`.
+
+### O que a Etapa 21 NÃO cobre
+
+- **A rotação da senha do SMTP na Locaweb não foi feita — e é a única coisa que nenhum código
+  resolve** (letra **A3** das novidades). A senha está no histórico do repositório desde
+  **17/03/2026**; trocar o arquivo **não** a apaga de nenhuma cópia já feita. A ordem certa é:
+  rotacionar na Locaweb → definir `SMTP_USER`/`SMTP_PASS` no ambiente da VPS → só então o valor
+  que ficou no código deixa de abrir qualquer coisa.
+- **O backup continua liberado por uma senha fixa**, sem login de usuário e sem tela que liste os
+  downloads — o registro é o log do servidor (letra **C26**). A senha na URL continua aceita, com
+  aviso (**B43**), e senha curta avisa em vez de recusar (**B44**).
+- **Não existe rota para restaurar backup** e **não foi criada** (letra **D**) — restaurar
+  continua sendo operação de servidor.
+- **O histórico do repositório não foi reescrito** (letra **D**).
+- **A aba "Backup" da tela de Configurações do Sistema não faz nada** (letra **D**): os três
+  campos são gravados e **nenhuma parte do servidor os lê**. Não confie neles.
+- **As configurações de e-mail gravadas no banco continuam sem efeito sobre o envio** (**B42**) —
+  o envio usa o ambiente do servidor e, na falta dele, o valor do código.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

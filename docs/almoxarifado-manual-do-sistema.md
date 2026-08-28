@@ -2921,6 +2921,6 @@ Com as retenções resolvidas, o ajuste por localização também fica seguro e 
 
 **Este documento não cobre:**
 
-- **instalação, atualização e configuração de servidor** do sistema — nada aqui trata de ambiente, acesso à rede, cópias de segurança ou implantação;
+- **instalação, atualização e configuração de servidor** do sistema — nada aqui trata de ambiente, acesso à rede, cópias de segurança ou implantação. Isso inclui a tela **Configurações do Sistema** do CRM (empresa, servidor de e-mail, backup), que é do sistema inteiro e não do Almoxarifado: as configurações **do módulo** ficam em Almoxarifado → Configurações, e são essas que este manual descreve;
 - **o funcionamento interno dos outros módulos** com os quais o Almoxarifado conversa (Compras, Contas a Pagar, Ordens de Serviço, Projetos, Clientes). Este manual descreve apenas o que o Almoxarifado faz com essa informação: o pedido de compra que alimenta um recebimento, a conta a pagar gerada ao processar a nota, a OS ou o projeto que dá destino a uma saída;
 - **o que ainda não existe no sistema.** O manual descreve o comportamento de hoje. Se uma função que você espera não está descrita aqui, o mais provável é que ela ainda não exista — e não que exista escondida numa tela. Quando uma decisão de escopo é deliberada, o texto diz isso explicitamente ("não é modelado", "não bloqueia", "é registro de cadastro").

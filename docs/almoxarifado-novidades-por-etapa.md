@@ -1,13 +1,19 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a **Etapa 20** (02/08/2026 a 28/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a **Etapa 21** (02/08/2026 a 28/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
+> **A Etapa 21 é a primeira que NÃO é do módulo almoxarifado** — ela mexe no **núcleo do CRM**
+> (backup do sistema, senha do e-mail e a tela de Configurações do Sistema). Ela está aqui, e não
+> num documento novo, porque nasceu de um item que a Etapa 20 declarou fora do escopo dizendo "é
+> do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
+> deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
+>
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em **2026-08-28 (Etapa 20)**.
+> `docs/superpowers/plans/`. Atualizado em **2026-08-28 (Etapa 21)**.
 >
 > *(Este cabeçalho e a tabela abaixo diziam "até a Etapa 14" e "desenvolvimento pausado aqui" —
 > **estava desatualizado**: a pausa foi levantada em 28/08 e as Etapas 15 a 20 foram entregues,
@@ -45,6 +51,7 @@
 | 18 | A trilha do inventário | 2026-08-28 | Abrir, contar, recontar, concluir e cancelar conferência deixam registro; cancelar passa a exigir motivo escrito |
 | 19 | Cadastros e configurações deixam rastro | 2026-08-28 | 23 operações que mudavam o comportamento do sistema sem deixar quem/quando passam a registrar, com o de/para e sem nunca gravar segredo |
 | 20 | Exposição e rastro | 2026-08-28 | Foto de material para de mentir sucesso e de deixar arquivo órfão (e passa a auditar a troca); senha e chave de API somem da leitura de configurações; ler o mapa de permissões por setor passa a exigir administrador |
+| 21 | **Núcleo do CRM:** o backup para de guardar segredo | 2026-08-28 | O zip do backup deixa de levar a chave com que o servidor assina os crachás de login (quem baixasse **virava super administrador**) e as 188 MB de cópias antigas; todo download fica registrado; a senha do e-mail passa a vir do ambiente do servidor; e o campo de Senha SMTP para de devolver a senha em claro e de gravar a máscara por cima dela |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -68,6 +75,9 @@ escrita. **Com a 20, a feature 23 (perfis, segurança e auditoria) paga os três
 exposição que ela mesma tinha nomeado** — resta dela a tela de auditoria (B33) e os itens
 declarados nas letras B/C/D. O desenvolvimento **não está mais pausado** (a pausa valeu entre a
 14 e a 15); a próxima frente sai do mapa de status — ver "Onde estamos e o que vem a seguir".
+**A Etapa 21 não mexe em feature nenhuma do mapa**: ela é do **núcleo do CRM** e fecha o quarto
+item que a Etapa 20 tinha declarado fora do escopo por ser "do núcleo, não do módulo" — o backup
+que entregava a chave de assinatura dos logins e a credencial de e-mail escrita no código.
 
 ---
 
@@ -77,7 +87,7 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Duas consultas para rodar em produção ANTES do deploy
+### A. Duas consultas para rodar em produção ANTES do deploy — e uma ação no provedor de e-mail
 
 | # | Por quê | Consulta |
 |---|---|---|
@@ -89,9 +99,35 @@ terceiros, a de retalhos/sucatas e a de ferramentas só **criam** colunas e tabe
 nascem vazias; **nenhum dado existente é tocado ou reinterpretado** por elas — a Etapa 9b em
 particular nem toca o motor de estoque, ferramenta é patrimônio separado. Está dito
 explicitamente porque as Etapas 7 e 8 deixaram consultas pendentes e você vai procurar a das
-etapas novas.
+etapas novas. **A Etapa 21 também não acrescenta consulta** — mas acrescenta uma **ação de
+operação**, abaixo, que é a única coisa deste conjunto todo que nenhum código resolve.
 
-### B. Decisões de negócio — B1 a B41; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A3 (NOVO, da Etapa 21 — NÃO é consulta, é ação no provedor; e é a mais importante desta lista).
+Rotacione a senha do SMTP na Locaweb.** A senha da caixa `solicitacoes@gmp.ind.br` está escrita
+dentro do código do sistema e **está no histórico do repositório desde 17/03/2026**. A Etapa 21
+tirou a cópia que estava replicada na documentação e fez o sistema preferir o ambiente do
+servidor — mas **trocar ou apagar o arquivo não remove a senha de nenhuma cópia do repositório já
+feita**. Enquanto a senha não for trocada no provedor, quem tiver qualquer clone antigo continua
+com uma credencial válida de e-mail da GMP. **A ordem importa, e é esta:**
+
+1. **Rotacione a senha na Locaweb** (painel do provedor, caixa `solicitacoes@gmp.ind.br`). A partir
+   deste instante a senha que está no código deixa de funcionar — e o e-mail de **Solicitação de
+   material de escritório** para de sair até o passo 2 (é o único envio do CRM que usa essa
+   caixa; os alertas do Almoxarifado usam a configuração própria deles, em Configurações →
+   Alertas de Estoque).
+2. **Defina a senha nova no ambiente da VPS**, nas variáveis `SMTP_USER` e `SMTP_PASS` (e
+   `SMTP_HOST`/`SMTP_FROM` se quiser fixá-los também), e reinicie o servidor. A partir daí o
+   sistema usa a senha do ambiente e **nunca** a do código.
+3. **Só então** a senha que ficou no código e no histórico vira irrelevante: ela não abre mais
+   nada. Não é preciso reescrever o histórico do repositório (e não se deve — letra **D**).
+
+Se você fizer só o passo 2 sem o passo 1, a senha antiga continua **válida** na Locaweb e o
+problema segue de pé. Se fizer só o passo 1, o e-mail de solicitação de material de escritório
+para de sair.
+
+### B. Decisões de negócio
+
+### B. Decisões de negócio — B1 a B46; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
 Etapa 20. Corrigido aqui em vez de reescrito em silêncio, porque a contagem errada fazia parecer
@@ -105,7 +141,9 @@ B18-B20 (as três da Etapa 13: proteção dos Indicadores, unificar as réguas d
 auditoria de export/gates antigos), B21-B24 (as quatro da Etapa 14 — **a B21 é uma abertura de
 acesso já em vigor, leia primeiro**), B33 (quem lê a trilha de auditoria) e **B41 (o único item
 em aberto da Etapa 20: a contagem de permissões por setor que qualquer usuário do módulo lê)**.
-As quatro decisões da Etapa 20 que **eu já tomei** e você pode reverter estão em B37-B40.
+As quatro decisões da Etapa 20 que **eu já tomei** e você pode reverter estão em B37-B40, e as
+**cinco da Etapa 21** (a primeira etapa do núcleo do CRM) estão em **B42-B46** — todas tomadas por
+mim, nenhuma esperando resposta, todas reversíveis.
 **Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
 ferramenta, pago na Etapa 12), B10 (ajuste recusado contra retenção), B14 (cancelar solicitação
 de compra, **entregue na Etapa 14**).
@@ -508,6 +546,52 @@ some para quem não é administrador (a tela de requisição perde a coluna); (3
 campo próprio pedido só pela tela administrativa. A (3) é a resposta completa e é trabalho de uma
 tarefa, não de uma linha.
 
+**B42 (NOVO, da Etapa 21) — o envio de e-mail do CRM continua NÃO olhando para as configurações de
+e-mail gravadas no banco.** A precedência nova é **ambiente do servidor → valor do código**, e o
+**banco ficou de fora de propósito**. **Descartado** o desenho original desta própria etapa, que
+mandava "usar o banco quando host e senha estiverem preenchidos" — e a medição mostrou que aquilo
+não era salvaguarda, era um **interruptor que dispararia no primeiro deploy**. Medido direto no
+banco em 28/08, duas vezes (a segunda porque a primeira tinha sido herdada sem revalidar, e é o
+motivo inteiro da decisão): o host gravado é `smtplw.com.br`, **outro produto** da Locaweb, com
+outro esquema de credencial, e não o `smtp.locaweb.com.br` que está funcionando; e o remetente
+gravado é `compras@gmp.ind.br, sheila@gmp.ind.br` — **dois** endereços, que o servidor de e-mail
+recusa num remetente. Adotar o banco trocaria o host de **produção** sem ninguém pedir. Para adotá-lo
+seria preciso um envio real testado contra aquele host, o que não dá para fazer daqui. **Consequência
+aceita:** a aba Email da tela de Configurações continua editável e continua sem efeito sobre o
+envio. Se você quiser que ela passe a valer, é uma tarefa própria, com teste de envio real.
+
+**B43 (NOVO, da Etapa 21) — a senha do backup continua podendo vir na própria URL, com aviso de
+depreciação no log.** **Escolhido** manter o caminho antigo funcionando. **Descartado** recusá-lo,
+que era o desenho inicial: o comentário da própria rota documenta esse uso desde sempre, e **pode
+existir uma rotina automática na VPS que eu não enxergo daqui**. Quebrar o backup de produção para
+fechar um risco menor (a senha aparecer no log de acesso do servidor) seria trocar um problema por
+um pior. O que a etapa faz é **avisar**: cada chamada por esse caminho grava `QUERY_DEPRECIADA` no
+log. Quando você confirmar que ninguém mais usa a URL com a senha dentro, recusar vira uma linha.
+
+**B44 (NOVO, da Etapa 21) — senha de backup curta demais AVISA, não recusa.** **Descartado** exigir
+32 caracteres (também do desenho inicial): não há arquivo de configuração no repositório, então o
+tamanho da senha real de produção é **desconhecido daqui** — e recusar uma senha curta **porém
+correta** deixaria o backup de produção sem funcionar no dia do deploy, sem ninguém entender por
+quê. **Escolhido** registrar `CURTO` no log a cada uso. Se aparecer no log, troque a senha por uma
+longa; aí sim recusar passa a ser seguro.
+
+**B45 (NOVO, da Etapa 21) — tentar gravar a máscara por cima da senha do SMTP recebe erro 400, não
+um "salvo com sucesso" mentiroso.** **Descartado** o 200 silencioso (que é o que a tela de Alertas
+do Almoxarifado faz), porque lá a tela **nunca** reenvia a máscara e aqui ela reenviava a cada
+tecla: aceitar em silêncio faria a tela dizer "salvo com sucesso" para uma gravação que não
+aconteceu. **Escolhido** o mesmo comportamento do salvamento genérico do Almoxarifado — recusar com
+uma mensagem que diz o que fazer (`deixe o campo em branco para manter a senha atual`). Valor vazio
+também é recusado: apagar a senha passa a exigir um ato deliberado no banco, não um `Backspace`
+distraído num formulário que salva sozinho.
+
+**B46 (NOVO, da Etapa 21) — a senha do e-mail continua escrita no código, como último recurso.**
+**Descartado** apagá-la nesta etapa. Sem ela, e sem `SMTP_PASS` definida no ambiente, o envio de
+e-mail **cai em qualquer máquina** — incluindo, possivelmente, a VPS de produção, que pode não ter
+arquivo de configuração. Como ela já está no histórico do repositório desde março, apagá-la agora
+seria **risco imediato em troca de zero ganho**: o que resolve é a rotação no provedor (item **A3**),
+e depois dela o valor do código deixa de abrir qualquer coisa. Fica no código com um comentário
+dizendo, em voz alta, que é credencial comprometida à espera de rotação.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -701,6 +785,22 @@ tarefa, não de uma linha.
    Pelas telas do sistema isso não aparece (elas só enviam o tipo certo); morde quem integrar por
    API ou quem arrastar um PDF para o campo de foto.
 
+26. **(21) O backup do sistema é liberado por uma SENHA FIXA, e o único registro de quem baixou é
+   o log do servidor.** Quem tiver essa senha baixa o banco inteiro e os anexos, de qualquer lugar,
+   sem login de usuário e sem perfil. A Etapa 21 fechou o pior — o zip **não** carrega mais o
+   arquivo que permitia forjar um crachá de super administrador — e passou a registrar **toda**
+   tentativa (horário, IP, o IP real por trás do proxy, aceito/negado e o motivo). Mas o registro
+   fica no **log do servidor**: não há tela que liste downloads de backup, e não há como saber
+   *qual pessoa* usou a senha, porque a senha é uma só, compartilhada. Na prática: trate essa
+   senha como credencial de administrador, guarde-a com quem cuida do servidor, e se alguém dessa
+   lista sair da empresa, troque-a.
+
+27. **(21) A senha do e-mail do sistema continua no histórico do repositório — e continua válida
+   até você rotacioná-la.** Está lá desde **17/03/2026**. A Etapa 21 removeu a cópia que estava
+   replicada na documentação e fez o sistema preferir a senha do ambiente do servidor, mas isso
+   **não apaga** a senha de nenhuma cópia do repositório já feita: quem tiver um clone antigo tem
+   a senha. É o item **A3**, e é a única coisa deste documento inteiro que **nenhum código** resolve.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -830,11 +930,35 @@ tarefa, não de uma linha.
   **credencial** ou **controle de acesso**. Fechar a matriz inteira é etapa própria e a régua a
   decidir é de negócio: dado de estoque não é credencial, e o chão de fábrica precisa consultar.
 
-- **(20) `GET /api/backup` e a credencial de e-mail escrita dentro do código do sistema ficaram
-  FORA — são do núcleo do CRM, não do módulo.** Foram medidas durante esta etapa e entregues à
-  Etapa 21, que trata do núcleo; a senha, além disso, exige rotação junto ao provedor (é operação,
-  não código) e **está no histórico do repositório desde março** — trocar o arquivo não a apaga de
-  cópias já feitas.
+- ~~**(20) `GET /api/backup` e a credencial de e-mail escrita dentro do código do sistema ficaram
+  FORA — são do núcleo do CRM, não do módulo.**~~ — **ENTREGUE na Etapa 21** (2026-08-28,
+  `d5c8d3a..07a4b1c`). Mantido riscado, e não apagado, para quem lembrar do corte confirmar que ele
+  fechou e com qual commit: o zip do backup parou de levar o arquivo de segredos do servidor e as
+  188 MB de cópias históricas (`d5c8d3a`), a senha do e-mail deixou de ser a fonte primária
+  (`aad2331`) e a cópia dela replicada na documentação saiu (`b2dee3b`). **O que a Etapa 20
+  previu e continua verdade:** a rotação junto ao provedor **não** foi feita — é operação, não
+  código — e a senha **continua no histórico do repositório desde 17/03/2026**. Isso virou o item
+  **A3** (com a ordem dos passos) e o furo **C27**.
+
+- **(21) O histórico do repositório NÃO foi reescrito.** Apagar a senha do passado exigiria
+  reescrever o histórico, o que quebra todas as cópias já feitas por terceiros — é decisão de
+  infraestrutura, com custo real, e não se toma dentro de uma etapa de código. O caminho escolhido
+  é o que funciona sem quebrar ninguém: rotacionar a senha no provedor (**A3**), e aí o valor
+  antigo deixa de abrir qualquer coisa.
+
+- **(21) Não foi criada rota para RESTAURAR backup — de propósito.** A medição confirmou que ela
+  não existe hoje, e é bom que não exista: um endereço que restaura banco a partir de um arquivo
+  enviado é um buraco maior do que o que a etapa fechou. Restaurar continua sendo operação de
+  servidor, feita por quem tem acesso à máquina. Está escrito aqui para ninguém "consertar a falta"
+  inventando uma.
+
+- **(21) A aba "Backup" da tela de Configurações do Sistema é FEATURE MORTA — nomeada, não
+  consertada.** Os três campos que ela edita (backup automático, frequência e "manter backups por N
+  dias") são gravados no banco e **nenhuma parte do servidor os lê**: a rotina real de cópia roda na
+  inicialização do sistema e guarda um número fixo de cópias, ignorando os três. Mudar qualquer um
+  deles hoje **não muda nada**. Não foi consertado nesta etapa porque consertar é decidir como a
+  rotina deve se comportar (com que frequência, quantas cópias, quem dispara) — é etapa própria, não
+  uma linha. Enquanto isso: não confie nesses campos.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -3255,6 +3379,149 @@ que já era só de administrador.
   continuam lá; ninguém as apaga. Como nunca houve tela que as listasse, elas só ocupam espaço —
   se um dia incomodar, é uma limpeza pontual, não uma migração.
 
+## Etapa 21 — O backup do sistema parava de guardar segredo (2026-08-28)
+
+**Esta é a primeira etapa fora do módulo Almoxarifado.** Ela não mexe em nada do galpão: mexe no
+**núcleo do CRM** — no arquivo de backup do sistema, na senha do e-mail e na tela **Configurações
+do Sistema**, que é do CRM inteiro. Ela nasceu do último item que a Etapa 20 declarou fora do
+escopo dizendo "isto é do núcleo, não do módulo"; a Etapa 21 foi medir, e o que achou é **pior**
+do que aquele registro dizia.
+
+O sistema tem um endereço que baixa um arquivo `.zip` com os dados todos, protegido por uma senha
+fixa de servidor. Esse zip era a pasta de dados **inteira** — e dentro dela mora o arquivo em que o
+servidor guarda a chave com que ele assina os crachás de login. **Quem baixasse o backup conseguia
+fabricar um crachá de super administrador** e entrar no sistema como dono, sem precisar da senha de
+ninguém. Não era vazamento de dados: era escalada de privilégio. De quebra, o mesmo zip arrastava
+**188 MB** de cópias históricas do banco a cada download — e ninguém ficava sabendo quem baixou.
+
+O resto da etapa é da mesma família. A senha do e-mail do sistema estava escrita **dentro do
+código** (e está no histórico do repositório desde **17/03/2026**). E a tela **Configurações do
+Sistema → Email** devolvia essa senha **em texto puro** para quem abrisse — e salvava **a cada
+tecla**, então clicar no campo que mostrava `********` e digitar uma letra gravava `********N` por
+cima da senha de verdade, sem ninguém perceber, porque a leitura seguinte mascarava de novo.
+
+> **Uma coisa só o senhor pode fazer, e nenhum código faz por você: rotacionar a senha do SMTP na
+> Locaweb.** Trocar o arquivo **não** apaga a senha de nenhuma cópia do repositório já feita. O
+> passo a passo está na **letra A, item A3**, no topo deste documento.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O zip do backup levava junto o arquivo de segredos do servidor — quem tivesse o zip **entrava como super administrador** | O zip **não leva** esse arquivo, por regra escrita e testada |
+| O zip levava **todas** as cópias históricas do banco (188 MB) | Leva o banco atual, os anexos e **uma** cópia de backup: a mais recente, com os arquivos que a acompanham (sem eles a cópia abriria sem as últimas transações) |
+| Ninguém sabia quem tinha baixado backup | **Toda** tentativa fica registrada no log do servidor: horário, IP, o IP real de quem está atrás do proxy, se foi aceito ou negado e por quê |
+| A senha do backup era conferida com uma comparação comum, que para no primeiro caractere errado — o **tempo de resposta** dá pistas de quanto do palpite estava certo | Comparação em **tempo constante**: a resposta demora o mesmo, acertando muito ou nada |
+| A senha do e-mail do sistema **só** existia escrita no código | O sistema procura primeiro no **ambiente do servidor** (`SMTP_USER`/`SMTP_PASS`); o valor do código é o último recurso, para o e-mail não cair numa máquina sem configuração |
+| Um remetente com dois endereços derrubaria o envio **em silêncio** (o servidor de e-mail recusa) | Remetente que não é um endereço único é substituído automaticamente pela caixa autenticada |
+| Abrir **Configurações do Sistema → Email** devolvia a **senha do SMTP em texto puro** | Devolve `********` quando há senha gravada e **vazio** quando não há |
+| O mesmo valia para a leitura de uma configuração isolada | Vale a **mesma** máscara nas duas leituras — fechar só uma deixaria a outra porta destrancada |
+| O campo **Senha SMTP** vinha preenchido com o que o servidor mandou e **salvava a cada tecla** | O campo **nasce vazio**, com o aviso de que já existe senha, e só salva quando você sai do campo |
+| Gravar `********` (ou qualquer coisa começada por ele) por cima da senha era aceito e a tela dizia "salvo com sucesso" | O servidor **recusa** com uma mensagem que diz o que fazer, e a tela mostra essa mensagem |
+
+### As regras, com o cenário exato
+
+Todas as mensagens abaixo foram **copiadas do código** durante o fechamento. Os cenários do backup
+não têm caminho de tela (o backup é um endereço chamado por fora, por quem administra o servidor) —
+estão marcados como técnicos, e é ali mesmo que o buraco morava.
+
+**1. O backup sem senha continua sendo recusado — e agora o servidor registra quem tentou.**
+*Cenário (técnico):* chamar `GET /api/backup` sem token:
+> `Token de backup inválido ou não configurado`
+
+E no log do servidor aparece a linha `[Backup] NEGADO ip=… xff=- motivo=AUSENTE`. O motivo vai
+**só para o log**, nunca para a resposta: dizer ao desconhecido *por que* o token dele não serviu
+seria entregar dica de graça. Token errado do mesmo tamanho dá `motivo=INVALIDO`, e o servidor
+continua recusando **também** quando ninguém configurou token nenhum — não existe backup "aberto
+porque esqueceram de configurar".
+
+**2. O backup com a senha certa baixa o zip — e o zip não tem mais a chave da casa.**
+*Cenário (técnico):* chamar `GET /api/backup` com o token correto e abrir o arquivo baixado. Dentro
+dele: o banco de dados atual, os anexos enviados pelo sistema, os arquivos de configuração e **uma
+única** cópia de backup, a mais recente. **Não há** arquivo de segredos do servidor, e **não há** as
+cópias antigas. No log: `[Backup] ACEITO ip=… xff=… fallback=database-….sqlite` — a linha diz
+inclusive **qual** cópia foi junto.
+
+**3. Quem já usa o backup pelo endereço antigo não quebra — mas fica avisado.**
+*Cenário (técnico):* chamar `GET /api/backup?token=…` (a senha na própria URL, que é como o
+comentário da rota sempre documentou). **Continua funcionando**, de propósito: pode existir uma
+rotina automática na VPS que ninguém enxerga daqui, e quebrar o backup de produção para fechar um
+risco menor seria trocar um problema por outro pior. O que muda é o aviso no log:
+`avisos=QUERY_DEPRECIADA`. O mesmo vale para senha curta demais: **avisa**, não recusa.
+
+**4. A senha do e-mail some da tela de Configurações.**
+*Cenário (clicável):* **Configurações do Sistema → aba Email**. Antes o campo **Senha SMTP** vinha
+preenchido com a senha real — e quem chega a essa tela é **administrador do módulo Administrativo
+ou do Comercial, ou super administrador**, grupo bem maior do que quem precisa da senha do e-mail.
+Agora o campo vem **vazio**, com o aviso escrito dentro dele:
+> `Senha configurada — deixe em branco para manter`
+
+Se nunca houve senha gravada, o aviso é outro — `Senha do e-mail ou app password` —, porque mostrar
+`********` para senha inexistente **mentiria** "já está configurado".
+
+**5. Deixar o campo em branco é o jeito de manter a senha atual.**
+*Cenário (clicável):* na mesma aba, clique no campo **Senha SMTP**, não digite nada e clique fora.
+**Nada acontece**: nenhuma mensagem, nenhuma gravação. Antes, um `Backspace` acidental num campo
+que salvava a cada tecla gravava `*******` e matava a configuração em silêncio.
+
+**6. Digitar uma senha nova continua funcionando — e agora só grava uma vez.**
+*Cenário (clicável):* digite a senha nova e clique fora do campo:
+> `Configuração salva com sucesso!`
+
+O campo volta a ficar vazio e o aviso passa a ser o de "senha configurada". A senha **não** fica
+guardada na memória da tela depois de salva.
+
+**7. Gravar a máscara por cima da senha é recusado, com a mensagem dizendo o que fazer.**
+*Cenário (técnico — é o que acontece com uma aba antiga aberta ou com quem chama a API por fora):*
+mandar `PUT /api/configuracoes/email_smtp_pass` com o valor `********` ou `********N`:
+> `Valor inválido para senha: deixe o campo em branco para manter a senha atual`
+
+É um **400**, e a tela mostra essa frase (ela passou a exibir o motivo que o servidor manda, em vez
+do genérico "Erro ao salvar configuração"). Valor **vazio** é recusado com a mesma mensagem — não
+existe "apagar a senha por atalho". E a recusa vale para qualquer valor que **contenha** a máscara,
+não só para a máscara exata: `********N` é justamente o que a tela antiga produzia.
+
+**8. O e-mail do núcleo continua saindo igual — a mudança é de onde vem a senha.**
+*Cenário (clicável):* o único lugar do CRM que usa essa configuração é a **Solicitação de material
+de escritório**, que manda o pedido para a lista de e-mails de Compras. Crie uma solicitação: o
+e-mail sai como sempre saiu. A régua nova é de **precedência** — se a VPS definir `SMTP_USER` e
+`SMTP_PASS` no ambiente, o sistema usa aqueles; sem isso, cai no valor de sempre. **Enquanto
+ninguém definir essas variáveis na VPS, nada muda no envio** — foi conferido com o ambiente real
+desta máquina de desenvolvimento, onde os quatro campos caem no valor de sempre. *(A VPS de
+produção não foi inspecionada daqui; se ela já tiver `SMTP_*` definidas por algum motivo, passam a
+valer — é exatamente o que a etapa quer.)* É assim de propósito: uma etapa de segurança não pode
+trocar o servidor de e-mail em produção de lambuja.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **A senha do SMTP continua no histórico do repositório** e **continua válida na Locaweb**. O
+  código parou de depender dela como fonte primária, mas isso é **cosmético** enquanto ninguém
+  rotacionar a senha no provedor. É o item **A3** e o furo **C27** — a única coisa desta etapa que
+  depende de você.
+- **O backup continua protegido por uma senha fixa**, não por login de usuário. Não virou sessão
+  de propósito (item **B43**): pode haver rotina automática dependendo do endereço atual. Quem
+  tiver o token baixa o backup, e o registro de quem baixou é o **log do servidor** — não há tela
+  que liste os downloads (furo **C26**).
+- **Não existe rota para restaurar** um backup pelo sistema, e **não foi criada** (letra **D**).
+  Restaurar continua sendo operação de servidor. Inventar um endereço de restauração seria abrir
+  um buraco maior do que o que a etapa fechou.
+- **O histórico do repositório não foi reescrito** (letra **D**) — reescrever histórico de
+  repositório compartilhado quebra as cópias de terceiros; é decisão de infraestrutura, não de
+  código.
+- **A aba "Backup" da tela de Configurações continua sem efeito nenhum** (letra **D**). Os três
+  campos dela — backup automático, frequência e dias de retenção — são gravados e **nenhuma parte
+  do servidor os lê**: a rotina real de cópia roda na inicialização, guardando um número fixo de
+  cópias. É feature morta; esta etapa a **nomeia** e não a conserta, porque consertá-la é decidir
+  como a rotina deve se comportar, e isso é etapa própria.
+- **A senha do e-mail continua no código como último recurso** (item **B46**), com o comentário
+  dizendo que é credencial à espera de rotação. Apagá-la agora derrubaria o envio em qualquer
+  máquina que não tenha as variáveis de ambiente configuradas — inclusive, possivelmente, a de
+  produção.
+- **As configurações de e-mail gravadas no banco continuam sem ser usadas pelo envio** (item
+  **B42**). Elas aparecem na tela, são editáveis, e o envio **não** olha para elas — porque o
+  host gravado ali é de outro produto e o remetente gravado ali tem dois endereços. Está medido e
+  escrito no item B42.
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -3282,8 +3549,26 @@ que já era só de administrador.
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **Etapa 21 entregue (2026-08-28):** **exposição no núcleo do CRM** (`d5c8d3a..07a4b1c`) — a
+  **primeira etapa fora do módulo almoxarifado**, e a única até aqui que fechou uma **escalada de
+  privilégio**: o zip de `GET /api/backup` levava o arquivo de segredos do servidor, e quem
+  baixasse forjava crachá de super administrador (mais 188 MB de cópias históricas por download).
+  Agora o zip exclui o segredo e leva **uma** cópia de backup — a mais recente, com os arquivos que
+  a acompanham, senão a restauração perderia as últimas transações. Junto: senha do backup
+  comparada em tempo constante e todo download registrado com IP real; a senha do SMTP saiu de
+  fonte primária (ambiente → código) e o remetente com dois endereços deixou de derrubar o envio em
+  silêncio; a senha parou de sair em claro nas **duas** leituras de configuração e o salvamento
+  passou a recusar a máscara com 400, com a tela corrigida junto (o campo salvava a cada tecla e
+  gravava `********N` por cima da senha real). Revisão do plano: **11 achados, 2 bloqueantes** — o
+  mais caro impediu que a etapa trocasse o **host de e-mail de produção** achando que era
+  salvaguarda. Revisão adversarial: **11 achados, 4 bloqueantes e 10 refutações reproduzidas**, com
+  um fix-round para os dois piores, que eram **testes que não sabiam falhar** (apagar o filtro do
+  backup deixava a suíte 25/25 verde com o segredo de volta no zip; e a checagem da máscara passava
+  mascarando a chave errada, com a senha extraída pelos dois GETs). **O que continua aberto e é
+  seu:** a rotação da senha na Locaweb (**A3**) — nenhum código faz isso.
 - **Etapa 20 entregue (2026-08-28):** **exposição e rastro** (feature 23, os três "fora de
-  escopo, nomeados" que a Etapa 19 deixou escritos na spec) — a rota de foto de material parou de
+  escopo, nomeados" que a Etapa 19 deixou escritos na spec; o **quarto**, que era do núcleo, virou a
+  Etapa 21) — a rota de foto de material parou de
   responder sucesso para material inexistente, parou de deixar arquivo órfão em toda saída que não
   é sucesso, parou de apagar a foto anterior em corrida com a gravação e passou a auditar a troca;
   a leitura das configurações parou de devolver senha de SMTP e chave de API em claro e o
@@ -3362,7 +3647,15 @@ que já era só de administrador.
      baixo), mas vale que o almoxarifado saiba onde ficou;
   8. **avisar quem opera que a conferência de inventário ganhou campos novos** (contagem cega,
      tolerância, justificativa do ajuste) — quem já usa a tela vai ver os campos na próxima
-     conferência que criar; nada quebra no fluxo antigo, só fica mais completo.
+     conferência que criar; nada quebra no fluxo antigo, só fica mais completo;
+  9. **(21) rotacionar a senha do SMTP na Locaweb e definir `SMTP_USER`/`SMTP_PASS` no ambiente da
+     VPS, nessa ordem** (item **A3**) — é a única ação desta lista que **nenhum código** resolve, e
+     sem ela a Etapa 21 fica cosmética nesse ponto. Enquanto não for feita, quem tiver qualquer
+     clone antigo do repositório tem uma senha de e-mail válida da GMP;
+  10. **(21) trocar a senha do backup (`BACKUP_TOKEN`) se ela for curta** — o servidor passa a
+     escrever `avisos=CURTO` no log a cada download quando ela for menor que 32 caracteres
+     (item **B44**); e conferir no log se ainda aparece `avisos=QUERY_DEPRECIADA`, que indica
+     alguém chamando o backup com a senha dentro da URL (item **B43**).
 - **O que depende de você, não do código:** confirmar se **remessa mista de donos** deve mesmo ser
   recusada (item **E**); reconhecer a **regra de rateio de custo** implementada no seu nome (item
   **B4**); dizer **quais classificações de sucata a GMP usa de verdade** (item **B5**) e **qual

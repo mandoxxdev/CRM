@@ -190,14 +190,26 @@ abortaram, não asserções que falharam; as três execuções seguintes vieram 
 **Files:** Create `server/services/configSecrets.js`; Modify `server/index.js` (3 rotas);
 Test `server/tests/api/configSecretsCore.api.test.js`.
 
-- [ ] **Step 1: teste que falha** — RN-05: `mascararValorConfig('email_smtp_pass', 'x')` →
+**Feito em `025a700`** (2026-08-28), com o fix-round em `1ec8fd0`/`07a4b1c`.
+
+- [x] **Step 1: teste que falha** — RN-05: `mascararValorConfig('email_smtp_pass', 'x')` →
   `PASSWORD_MASK`; com `''` → `''`; chave não-secreta → valor intacto; e **asserção de fonte
   única**: a constante usada é a mesma exportada por `alertService` (importar as duas e
   comparar). RN-06: `podeGravarSegredo` recusa `''`, `'   '` e `PASSWORD_MASK`; aceita valor
-  real.
-- [ ] **Step 2: rodar e ver falhar; implementar; verde; controle positivo** (commitar antes):
-  fazer a máscara devolver o valor e ver o cenário falhar; reverter.
-- [ ] **Step 3: `npm run test:api`; commit.**
+  real. Vermelho prévio contra stub permissivo: **8 passed, 13 failed**.
+- [x] **Step 2: rodar e ver falhar; implementar; verde; controle positivo** (commitado antes):
+  máscara devolvendo o valor real → **19/4**; `includes` virando `===` → **20/3**, e o cenário
+  que cai é o do `********N`. Revertidos com `git checkout`, verde de novo.
+- [x] **Step 3: `npm run test:api`; commit.** 23/23 no arquivo novo, `test:api` 143/143 à época,
+  client 531/36, build limpo. Commit `025a700`.
+- [x] **Step 4 (fix-round, NÃO estava no plano):** `1ec8fd0` + `07a4b1c`. A revisão adversarial
+  provou que a checagem estática da fiação **contava ocorrências do identificador** em vez de
+  travar a chamada literal — mascarar a **chave errada** passava com a suíte verde, e o revisor
+  extraiu a senha pelos dois GETs. Junto vieram a guarda de tipo (`{"valor":{"a":"x"}}` gravava
+  `[object Object]` na coluna do segredo, motivo `TIPO`), a normalização da chave secreta
+  (`EMAIL_SMTP_PASS` e `email_smtp_pass ` criavam **linhas novas** fora da lista de secretas) e
+  o `onBlur` da tela com a limitação declarada (o blur reduz N gravações parciais para uma; não
+  elimina a parcial).
 
 ### Task 3 (galho): `getEmailConfig`
 
@@ -299,12 +311,124 @@ Test `server/tests/api/configSecretsCore.api.test.js`.
   a RN-08 aguenta `backups/` ausente, vazio e `-wal` órfão sem derrubar a rota, a query string
   segue aceita com o aviso só no log, a senha não sobrou em nada versionado, e não há segunda
   porta para o segredo no core.
-- [ ] Fix-round da Fase 5
-- [ ] Fase 6 — fechar-etapa + retro
+- [x] **Fix-round da Fase 5** — `1ec8fd0` (o grosso) + `07a4b1c` (a rede que faltava) +
+  `90fb6da` (remedição no banco). Os quatro bloqueantes fechados:
+  - **A1** — `backupExposicao` era a única das três suítes **sem** cenário de fiação; apagar o
+    3º argumento de `archive.directory` em `index.js` deixava a suíte **25/25 verde** com o
+    `jwtSecret` de volta no zip. Cenário novo trava o **texto literal** da chamada (os dois
+    `require`, `archive.directory(backupDir, false, `, `deveIncluirNoBackup(entry.name)`,
+    `backupMaisRecente(`, `validarTokenBackup(`).
+  - **A2** — a checagem do `configSecretsCore` **contava ocorrências** de `mascararValorConfig`;
+    trocar a chave mascarada por `'empresa_nome'` nos dois GETs mantinha a contagem ≥ 3, a suíte
+    passava 23/23 e o revisor **extraiu a senha pelos dois GETs**. A asserção passou a ser sobre
+    a chamada literal `mascararValorConfig(row.chave, valor)`. *(É exatamente a armadilha
+    "contar identificador em vez de travar a chamada" que a skill `fechar-etapa` registra.)*
+  - **A3** — a aridade (`resolverEmailConfig.length === 2`) **registra** a decisão, não a
+    impede: o revisor reintroduziu a leitura de banco **dentro** da função, 9/9 verde, host de
+    produção trocado. Acrescentada asserção sobre o **fonte** do módulo (sem `require`, sem
+    `SELECT`, sem `db`).
+  - **A8/A9** (não bloqueantes, mas de código) — guarda de tipo no PUT (`{"valor":{"a":"x"}}`
+    gravava `[object Object]` na coluna do segredo; motivo `TIPO`) e normalização da chave
+    secreta (`EMAIL_SMTP_PASS` / `email_smtp_pass ` criavam **linha nova**, fora da lista de
+    secretas, devolvida **em claro** pelos dois GETs). **Entraram no `1ec8fd0` sem cenário que
+    as guardasse — o mesmo defeito que a revisão acabara de apontar, cometido de novo enquanto
+    era consertado**; `07a4b1c` é a correção disso, com controle positivo em cada um.
+  - **A4/A5/A6** (documentos que mentiam) — hash órfão de worktree citado no plano (`95f73f3`,
+    reescrito pelo cherry-pick; o certo é `aad2331`), Task 4 marcada pendente estando feita,
+    Task 2 marcada com os steps em branco e placar não conferido, e a seção "Testes" do design
+    nomeando arquivos inexistentes e descrevendo o **oposto** da RN-02.
+  - **A7/A10/A11** — o comentário da tela atribuía ao `onBlur` uma garantia que ele não dá
+    (reduz N gravações parciais para **uma**, não elimina a parcial); três comentários diziam
+    que sobrescrever a senha ficaria invisível "até o e-mail não sair", **falso** (ninguém em
+    `server/` lê `email_smtp_*` da tabela); e `.claude/worktrees/` (361 MB, cada cópia com a
+    credencial em claro) entrou no `.gitignore`.
+- [x] **Fase 6 — fechar-etapa + retro** (2026-08-28). **Verificação final medida no fechamento,
+  depois do fix-round:** `test:api` **144/144 arquivos OK**, `test:almoxarifado` **42 passou, 0
+  falhou**, `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **3/0**; client
+  **531 testes em 36 suítes** (36/36 passed), `CI=true react-scripts build` **exit 0**. O 144 é
+  o número esperado (era 143 antes da Task 3, que acrescentou `emailConfigCore`) — conferido
+  porque outra worktree estava mexendo em testes de auditoria da Etapa 22 em paralelo.
 
-## Retro (preencher no fechamento)
+## Como esta etapa foi documentada (a skill `fechar-etapa` não previa etapa fora do módulo)
 
-- Rodadas de correção até verde: —
-- Achados da revisão: reais — / ruído —
-- Paralelismo real: —
-- Defeito que escapou: —
+Registro para a próxima etapa de core não ter de decidir de novo:
+
+- **Artefatos 2 e 3 (spec da feature + mapa de status) são do almoxarifado, e o core não tem
+  spec de feature.** **Não** foi criada uma spec nova: a etapa foi registrada onde o laço estava
+  aberto — no bloco novo "Etapa 21 — o que era do núcleo" da
+  `specs/modulo-almoxarifado/23-perfis-seguranca-auditoria/README.md` (foi o design da Etapa 20,
+  `…etapa20-exposicao-e-rastro-design.md:46-51`, que declarou estes itens fora dizendo "são do
+  core") e no cabeçalho + lista de etapas de `specs/modulo-almoxarifado/README.md`, com a linha
+  da feature 23 dizendo **explicitamente que ela não mudou**. Inventar uma feature nova no mapa
+  do almoxarifado para hospedar trabalho de core teria sujado o mapa.
+- **Artefato 7 (manual do sistema) NÃO recebeu esta etapa.** O manual é do módulo Almoxarifado, e
+  a seção 24 dele já declara que não cobre "instalação, atualização e configuração de servidor
+  … cópias de segurança ou implantação" — backup e credencial de SMTP caem exatamente ali. O
+  campo Senha SMTP fica na tela **Configurações do Sistema**, que é do CRM e não do módulo.
+  Enfiar isso no manual do almoxarifado contradiria a própria seção 24 e confundiria o leitor
+  que o usa para operar o galpão. **Quando o core ganhar manual próprio, é lá que isto entra.**
+- **Duas correções ditas em voz alta durante o fechamento:** (1) o design da Etapa 20 mandou
+  estes itens "para a letra B" das novidades e eles acabaram na **letra D** — a discrepância
+  existiu e não estava anotada; (2) o cabeçalho de `specs/modulo-almoxarifado/README.md` ainda
+  dizia "Etapa 19 fechada" depois de a Etapa 20 ter sido entregue (a linha da feature e a lista
+  de etapas tinham sido atualizadas, o cabeçalho não).
+
+## Próxima tarefa detalhada
+
+**Não há Task seguinte nesta etapa — a Etapa 21 está fechada.** O que segue é o handoff.
+
+**Frente já em execução:** a **Etapa 22 (tela de auditoria do almoxarifado, B33)**, plano em
+`docs/superpowers/plans/` (design e plano em `c6c35a8`, revisão do plano em `c06fa2d`). A Task 2
+dela estava rodando **em worktree** durante este fechamento, tocando
+`server/routes/almoxarifado/extended.js`, `server/services/almoxarifado/auditFiltros.js` e os
+testes de auditoria — **por isso este fechamento não editou nada em `server/`**.
+
+**Se a próxima frente for continuar no core**, o que já está pronto e não precisa ser reaberto:
+
+- **Réguas puras existentes** — `services/backupPackage.js` (`deveIncluirNoBackup`,
+  `backupMaisRecente`, `EXCLUIDOS`), `services/backupAuth.js` (`validarTokenBackup` →
+  `{ ok, motivo, avisos, aviso }`), `services/configSecrets.js` (`mascararValorConfig`,
+  `podeGravarSegredo` → `{ ok, motivo }` com `VAZIO|MASCARA|TIPO`, `ehChaveSecretaCore`,
+  `MENSAGEM_SEGREDO_INVALIDO`, `PASSWORD_MASK` **reusado** do `alertService`) e
+  `services/emailConfig.js` (`resolverEmailConfig(env, padroes)` — **assinatura travada em 2
+  parâmetros por teste**, e há asserção sobre o fonte do módulo: pôr banco ali derruba a suíte).
+- **Candidatas nomeadas, com a medição já feita:**
+  1. **Retenção de backup de verdade** — as 3 chaves da aba "Backup" (`backup_automatico`,
+     `backup_frequencia`, `backup_manter_dias`) **não têm leitor**; a rotina roda no startup com
+     `keep` fixo em 10. Consertar = decidir a política (letra D das novidades).
+  2. **Recusar a query string do token** (B43) e **exigir token longo** (B44) — as duas viraram
+     aviso no log de propósito; depende de confirmar com o usuário que nenhum cron externo usa
+     `?token=` e de saber o tamanho do `BACKUP_TOKEN` real.
+  3. **Ligar o banco na precedência do SMTP** (B42) — exige envio real testado contra
+     `smtplw.com.br` e resolver o `email_from` com dois endereços. **Não** faça isso sem envio
+     verificado: é o achado A1 da revisão do plano.
+  4. **Harness de core** — extrair as rotas de `server/index.js` (23 mil linhas, abre banco e faz
+     `listen` no import). É o que tiraria as três suítes desta etapa da checagem de **texto** e
+     as levaria para comportamento de verdade.
+
+## Retro
+
+- **Rodadas de correção até verde:** **1 fix-round**, em 2 commits (`1ec8fd0` + `07a4b1c`) mais
+  `90fb6da` (remedição). O `07a4b1c` existe porque o próprio fix-round repetiu o defeito que
+  estava consertando — entregou duas correções de código **sem cenário que as guardasse**.
+- **Achados da revisão: reais vs. ruído.** Revisão adversarial (Fase 5): **11 achados, 4
+  bloqueantes, 0 ruído** — e **10 refutações reproduzidas** (o zip não carrega o segredo por
+  caminho nenhum, três canários; a RN-08 aguenta `backups/` ausente, vazio e `-wal` órfão; a
+  query segue aceita com o aviso só no log; a senha não sobrou em nada versionado; não há segunda
+  porta para o segredo no core). Revisão do plano (Fase 2): **11 achados, 2 bloqueantes, todos
+  acatados** — o mais caro (A1) impediu a etapa de trocar o **host de e-mail de produção**
+  achando que era salvaguarda. **Os dois piores achados das duas revisões foram sobre a mesma
+  coisa: teste que não sabe falhar onde o defeito é pior.**
+- **Paralelismo real:** **zero nesta etapa, por decisão** — as três tasks tocam
+  `server/index.js` (23 mil linhas) e foram serializadas T1 → T2 → T3; o ganho não compensaria o
+  conflito. Mesmo assim as tasks rodaram **em worktree** e vieram por `cherry-pick`, o que
+  **reescreve o hash** — e isso gerou retrabalho de verdade: um hash órfão (`95f73f3`) ficou
+  citado no plano até a revisão adversarial pegá-lo (achado A4), e outro (`d88af7b`) foi um
+  commit só para corrigir hash errado. **Defeito de processo recorrente desta sessão: 3
+  worktrees nasceram de `main` em vez de `desenvolvimento-almoxarifado` e tiveram de ser
+  corrigidas.** Regra que fica: worktree sai da branch de trabalho, e hash de task em worktree se
+  lê **depois** do cherry-pick, com `git log` na branch.
+- **Defeito que escapou:** a preencher na etapa seguinte. Candidatos conhecidos e **declarados**
+  (não são "escapes"): a fiação HTTP das quatro rotas só tem checagem de **texto**, não de
+  comportamento — uma reescrita que preserve o texto e mude o efeito passa; e o `onBlur` da tela
+  ainda grava senha parcial se o admin digitar metade e clicar em outro campo.

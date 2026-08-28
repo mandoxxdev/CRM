@@ -1,7 +1,7 @@
 # 23 — Perfis, Segurança e Auditoria
 
-> **Status:** 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
-> **Última atualização:** 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
+> **Status:** 🟡-forte (inalterado pela Etapa 21, que é do **núcleo do CRM** e não desta feature — ver o bloco "Etapa 21" no fim; a feature continua com a TELA de auditoria como o que falta para 🟢) · antes 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
+> **Última atualização:** 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 
 ## Objetivo
 
@@ -111,6 +111,16 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
 - [ ] Justificativa obrigatória em operações excepcionais (emergencial, desvio, ajuste)
 - [ ] Dupla conferência em materiais críticos (feature 05)
 - [ ] Backup/retenção de documentos (rotina `dbRecovery.js` existe — validar cobertura de uploads)
+      — **medido na Etapa 21** (`d5c8d3a`), e o resultado **não fecha o item**: o zip de
+      `GET /api/backup` **inclui** `uploads/` (regra congelada em
+      `tests/api/backupExposicao.api.test.js` com o caso positivo `uploads/almoxarifado/x.png`), e
+      **passou a incluir também a cópia de backup mais recente com `-wal`/`-shm`**, que é o
+      fallback que `dbRecovery.js:86` manda usar. O que continua aberto e é o motivo de o item
+      seguir desmarcado: **a retenção não é configurável** — a rotina roda na inicialização com
+      `keep` fixo em 10, e as 3 chaves da aba "Backup" da tela de Configurações do core
+      (`backup_automatico`, `backup_frequencia`, `backup_manter_dias`) **não têm leitor nenhum no
+      servidor**. É feature morta, nomeada no design da Etapa 21 e na letra D das novidades, e
+      consertá-la é decidir a política de retenção — decisão de negócio, não linha de código.
 
 ### Auditoria visível
 - [ ] Tela de auditoria no front (a rota existe; falta UI) — **segue verdade em 2026-08-11**: não há tela de auditoria do almoxarifado; `Logs.js` consome a rota de auditoria global, não a do módulo
@@ -170,6 +180,44 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
 - [ ] **Erro de multer continua virando 500 opaco nas 5 rotas de upload** — a rota de foto saiu
       do conjunto quanto a órfão/404/auditoria, mas **continua** neste item; o conserto é um
       error-handler uniforme nas cinco. Segue nomeado na spec 24 (G7 / C25).
+
+### Etapa 21 — o que era do núcleo (fora desta feature, registrado aqui para fechar o laço)
+
+**Esta feature não mudou na Etapa 21** (`d5c8d3a..07a4b1c`, 2026-08-28) e o status dela continua o
+mesmo. O bloco existe porque foi **desta spec** que os itens saíram: o design da Etapa 20 os
+declarou fora dizendo *"são do core, não do módulo"*
+(`docs/superpowers/specs/2026-08-28-almoxarifado-etapa20-exposicao-e-rastro-design.md:46-51`), e
+sem um registro aqui a próxima sessão leria a lista de "o que continua aberto" e concluiria que
+ninguém tocou neles.
+
+**Correção do que a Etapa 20 escreveu:** aquele design mandou os dois itens **"para a letra B"**
+(decisões esperando o usuário) das novidades, e eles acabaram na **letra D** (limitações
+declaradas) — o que estava certo enquanto eram corte de escopo, mas a discrepância entre o design
+e o documento existiu e não foi anotada em lugar nenhum. Fica dita aqui em vez de corrigida em
+silêncio.
+
+| Item declarado fora na Etapa 20 | Estado depois da Etapa 21 |
+|---|---|
+| `GET /api/backup` empacotava o diretório de dados inteiro | **PAGO** — `d5c8d3a`. O zip exclui `.runtime-secrets.json` (era **escalada de privilégio**: `server/index.js:318` assina o JWT com esse `jwtSecret`, então quem baixasse forjava token de superadmin) e as ~188 MB de `backups/`, mas **soma de volta a cópia mais recente com `-wal`/`-shm`** (RN-08 — `dbRecovery.js:86` restaura dali, e `.sqlite` sem o `-wal` perde as transações do WAL). Régua pura em `services/backupPackage.js`, congelada em `tests/api/backupExposicao.api.test.js` |
+| O token do backup era comparado com `!==`, sem registro de quem baixou | **PAGO** — `d5c8d3a`. `crypto.timingSafeEqual` em `services/backupAuth.js`; log de `req.ip` **e** `x-forwarded-for` (não há `trust proxy`: atrás do nginx o `req.ip` seria `127.0.0.1`) com aceito/negado e motivo. **Query string continua aceita** com `QUERY_DEPRECIADA` no log e **token curto avisa em vez de recusar** — decisões B43/B44, tomadas para não quebrar cron externo invisível daqui |
+| Credencial SMTP hardcoded em `server/index.js` | **PAGO como o código consegue** — `aad2331` (precedência `env → hardcoded`, régua em `services/emailConfig.js`) e `b2dee3b` (a cópia replicada em `docs/superpowers/plans/2026-08-02-almoxarifado-etapa0-fundacao.md:847` saiu). **O banco ficou FORA da precedência de propósito** (B42): medido duas vezes no banco em 28/08 — `email_smtp_host = 'smtplw.com.br'` (outro produto, diferente do `smtp.locaweb.com.br` que funciona) e `email_from` com **dois** endereços |
+| A rotação da senha na Locaweb | **CONTINUA ABERTO, e nenhum commit fecha isso.** É operação, não código. A senha está no histórico do git desde **2026-03-17**: trocar ou apagar o arquivo **não a remove de clone nenhum**. Virou o item **A3** das novidades (com a ordem: rotacionar na Locaweb → definir `SMTP_PASS` no ambiente da VPS → só então o valor do código fica irrelevante) e o furo **C27** |
+
+**O que a Etapa 21 acrescentou fora daquela lista** (também do core, não desta feature): os **dois**
+GETs de configuração do core (`/api/configuracoes` e `/api/configuracoes/:chave`) pararam de
+devolver `email_smtp_pass` em claro e o `PUT /:chave` passa a recusar com **400** valor vazio ou
+que **contenha** a máscara (`025a700`, régua em `services/configSecrets.js`, que **reusa** o
+`PASSWORD_MASK` de `alertService` em vez de criar uma segunda constante); e a tela
+`client/src/components/Configuracoes.js` foi corrigida junto, porque ela salvava **a cada tecla**
+com a máscara amarrada ao input — digitar uma letra mandava `********N`, que passa em guarda de
+igualdade e sobrescreve a senha real. É o mesmo par de defeitos que a Etapa 20 fechou no módulo,
+na versão do core.
+
+**Fica declarado, do lado do core** (letras C26/C27 e D das novidades): o backup segue protegido
+por **token estático** sem identificação de quem baixou além do log; o histórico do git **não** foi
+reescrito; **não** foi criada rota de restore (a medição confirmou que não existe, e inventá-la
+seria abrir um buraco maior); e a aba "Backup" da tela de Configurações edita 3 chaves que
+**nenhum leitor do servidor consome**.
 
 ## Regras essenciais + testes de API exigidos
 
