@@ -205,7 +205,7 @@ seed+leitor no servidor; adicionar os 3 campos no client antes dos seeds da T1 d
 **Interfaces:** Consumes: `ALERT_REGISTRY`/`resolverDias` (Task 1), `requirePermission`.
 Produces: C1.
 
-- [ ] **Step 1: teste que falha** — matriz de 8 perfis (RN-04; usuários com `role:'usuario'`,
+- [x] **Step 1: teste que falha** — matriz de 8 perfis (RN-04; usuários com `role:'usuario'`,
   NUNCA `role:'admin'` — getPerfilFromUser resolve admin antes do perfil); shape C1 (ordem =
   registro, `dias` certo por alerta, `total` vs `linhas` com >50 linhas de requisição
   atrasada — total cheio, linhas 50); RN-05 (condição criada aparece; resolvida some;
@@ -214,11 +214,17 @@ Produces: C1.
   central vive em `montarCentral(db, registro = ALERT_REGISTRY)` exportada com o registro
   **injetável** — o teste passa um registro com um `listar` que lança e prova central 200,
   entrada `{chave, titulo, erro:true, total:0, linhas:[]}` e as demais entradas respondendo.
-- [ ] **Step 2: rodar e ver falhar.**
-- [ ] **Step 3: implementar; verde; controle positivo** — sabotar `ver_alertas` incluindo
-  PRODUCAO e ver a matriz falhar; reverter. (O `erro:true` já tem teste versionado via
-  registro injetável — Step 1; nenhuma sabotagem manual necessária aqui.)
-- [ ] **Step 4: `npm run test:api`; commit** — `Almoxarifado Etapa 16 Task 2: central de alertas gateada por ver_alertas`.
+  (`alertaCentral.api.test.js`, 5 cenários — inclui o bônus C5 de `ver_alertas` refletida em
+  `GET /minhas-permissoes`.)
+- [x] **Step 2: rodar e ver falhar** — vermelho real 0/5: rota 404 em todos os GETs e
+  `alertRegistry.montarCentral is not a function`.
+- [x] **Step 3: implementar; verde; controle positivo** — 5/5. `montarCentral` mora no
+  `alertRegistry.js` (não na rota): a rota da extended vive num closure nunca exportado e a
+  lógica ali seria intestável — padrão da casa de rota fina delegando a service; o GET só
+  chama `alertRegistry.montarCentral(db)`. Sabotagem: `ver_alertas` com PRODUCAO incluída →
+  matriz caiu (4/5); revertida → 5/5.
+- [x] **Step 4: `npm run test:api`; commit** — suíte completa **127/127 arquivos OK**;
+  `3f053f5` `Almoxarifado Etapa 16 Task 2: central de alertas gateada por ver_alertas`.
 
 ### Task 3 (galho): tela da central + configs no front
 
@@ -298,7 +304,16 @@ Reposição (`ReposicaoAlmoxarifado.js` — o Critical da E11: 403 nunca vira te
   (fila, molde `varrerLotesVencendo`), 3 configs semeadas (C4), `PREFIXOS_DIAS` →
   `'alerta_'`, varredura nova no Job B. A Task 2 consome `ALERT_REGISTRY`/`resolverDias`
   exportados de `services/almoxarifado/alertRegistry.js`.
-- [ ] Task 2 (tronco)
+- [x] Task 2 (tronco) — `3f053f5` (2026-08-28). `alertaCentral.api.test.js` 5/5 (TDD:
+  vermelho 0/5 — rota 404 + `montarCentral is not a function`; sabotagem de `ver_alertas`
+  incluindo PRODUCAO caçada pela matriz de 8 perfis, 4/5, revertida). Suíte `npm run
+  test:api` completa: **127/127 arquivos OK**. Entregue: `ver_alertas` [ADMINISTRADOR,
+  ALMOXARIFE, GESTOR, COMPRAS] em `permissions.js` (comentário G1),
+  `montarCentral(db, registro = ALERT_REGISTRY)` exportada de `alertRegistry.js` (registro
+  injetável — decisão de morar no service e não na rota: closure da extended nunca é
+  exportado, padrão da casa de rota fina) e GET `/api/almoxarifado/alertas/central` na
+  `extended.js` gateado por `requirePermission('ver_alertas')`. A Task 3 consome o C1 como
+  está; a Task 4 consome a rota + `varrerAlertasRegistrados`.
 - [ ] Task 3 (galho)
 - [ ] Task 4 (integração)
 - [ ] Fase 4 — suíte completa serial
