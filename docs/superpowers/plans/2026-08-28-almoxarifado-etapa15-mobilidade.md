@@ -347,14 +347,31 @@ e `GET /requisicoes/:id` (Task 1) — motor e serviço REAIS, zero mock.
   revertido; `npm run test:api` completo: 124/124 arquivos OK. Nenhuma divergência
   plano × código — os três avisos da revisão (callback async no detalhe, matriz sem
   `role:'admin'`, 404 sem ponto) foram seguidos como escritos.
-- [ ] Task 2 (galho)
-- [ ] Task 3 (galho)
-- [ ] Task 4 (galho)
+- [x] Task 2 (galho) — commit `866d740`, merge `d92d0ae`. TDD com vermelho medido
+  (`Cannot find module './scannerDestino'`); `parseQrDestino` com filtro explícito de
+  protocolo (achado C3 da revisão); tela com estados pedindo/lendo/lido/erro + fallback de
+  colagem manual; 8/8 na função, suíte client 495/495 na worktree, build zero warning.
+  Divergência registrada: `client/package-lock.json` está no `.gitignore` do repo — não foi
+  versionado como o Step 7 pedia.
+- [x] Task 3 (galho) — commit `afff10f`, merge `2c03959`. Vermelhos medidos (canvas e 10/12
+  cenários do fluxo); C1/C2/C4 fiéis (FormData no molde da casa, RN-02: falha do POST não
+  desfaz entrega); suíte client 504/504 na worktree, build zero warning. Achado de harness
+  documentado nos testes: CRA roda jest com `resetMocks: true` — mock de protótipo
+  (`getContext`/`toBlob`) tem de nascer em `beforeEach`, não `beforeAll`.
+- [x] Task 4 (galho) — commit original `3ac777d` (base errada), aplicado na etapa por
+  cherry-pick `ad4165d`; regra `nth-child(n+4)` removida e scroll na própria `.almox-table`
+  conferidos no arquivo evoluído (linha ~1030); revalidado pela suíte da Fase 4 abaixo.
 - [x] Task 5 (integração) — commit `0cf94e1` (2026-08-28). Jornada verde de primeira (9/9);
   controle positivo obrigatório: `listarAssinaturas` sabotado para DESC derrubou os dois
   passos de ordem (7/9), revertido, verde 9/9 de novo. `npm run test:api` completo:
   125/125 arquivos OK (124 anteriores + a jornada nova).
-- [ ] Fase 4 — merge + suíte completa serial
+- [x] Fase 4 — merge serial (`d92d0ae` T2, `2c03959` T3, `ad4165d` T4) + suíte completa
+  serial na branch (2026-08-28): `test:api` **125/125**, `test:almoxarifado` **42/0**,
+  `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **3/0**; client
+  **512 testes em 35 suítes**, build `CI=true` exit 0. Incidente de infraestrutura
+  registrado: as worktrees dos galhos nasceram da `main` (5dadd59) em vez do HEAD da etapa —
+  T2/T3 resetaram para a base certa ANTES de implementar; T4 tinha commitado na base velha e
+  entrou por cherry-pick com revalidação. Zero retrabalho de código entre galhos.
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
 
