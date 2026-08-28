@@ -467,11 +467,53 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
   **Incidente de processo (3ª ocorrência no módulo):** o controle positivo rodou com a árvore
   suja e o `git checkout` do restauro **apagou as três correções**; refeitas e commitadas
   ANTES de sabotar de novo. A regra que fica: commitar, depois sabotar.
-- [ ] Fase 6 — fechar-etapa + retro
+- [x] Fase 6 — fechar-etapa (2026-08-28): 7 artefatos — novidades com a seção da etapa,
+  B35/B36, C22/C23, F10e e G8; **spec 23 com o buraco riscado como PAGO** e os 7 itens que
+  restam nomeados um a um; mapa com cabeçalho, linha da 23 e seção; guia com roteiro (e o
+  aviso de que a etapa não tem tela); manual com os cadastros/configurações na lista de
+  auditados e as duas notas novas (diff e segredo); este plano.
 
-## Retro (4 números — preencher no fechamento)
+## Retro (4 números — medida no fechamento)
 
-- Rodadas de correção até verde: —
-- Achados da revisão: reais — / ruído —
-- Paralelismo real: —
+- Rodadas de correção até verde: **1** (fix round único `7a6c4f4`; nenhum teste falhou 2×).
+- Achados da revisão: **reais 21 / ruído 0** — 15 na revisão do PLANO (4 bloqueantes: duas
+  armadilhas de `this` em arrow function, o diff que percorreria a união, e um controle
+  positivo com o resultado invertido) e 6 na ADVERSARIAL em duas lentes (3 viraram código,
+  3 viraram declaração). **Nenhum descartado como ruído nas três revisões.**
+- Paralelismo real: **T2 ∥ T3 na MESMA árvore**, cada uma restrita a um arquivo de rotas —
+  zero conflito, e o executor da T3 rodou a suíte com as mudanças não commitadas da T2 sem
+  falha. Primeira etapa da sessão sem worktree; funcionou melhor que as worktrees (que
+  nasceram na base errada 4×).
 - Defeito que escapou (preencher na etapa seguinte): —
+- (Da retro da Etapa 18: **nenhum defeito escapado descoberto durante a 19**.)
+
+## Lições de processo desta etapa (para as próximas)
+
+1. **Commitar antes de sabotar.** O controle positivo rodou com a árvore suja e o
+   `git checkout` do restauro apagou as 3 correções — 3ª ocorrência no módulo.
+2. **Script de edição de documento sem `assert` é no-op silencioso.** Três substituições no
+   design não aplicaram e o script imprimiu "ok"; só a conferência da saída pegou. Mesma
+   classe de teste vazio que o CLAUDE.md manda caçar, desta vez em documentação.
+3. **A flag `chamado` no stub salvou um teste vazio de verdade:** a tentativa de stubar
+   `dbAll` não alcançava o call site (o arquivo desestrutura no import — a mesma armadilha do
+   `audit`), e a flag se recusou a passar. Sem ela, o teste teria "passado".
+
+## Próxima tarefa detalhada — a próxima frente sai do mapa
+
+Modo contínuo segue. Candidatas, na ordem recomendada:
+
+1. **A tela de auditoria (B33)** — é a dívida que as Etapas 18 e 19 acumularam: a trilha ficou
+   rica e não tem leitor. **Depende de decisão do usuário** sobre o recorte de permissão
+   (filtrada por entidade para o Gestor × log inteiro só para Administrador) e precisa
+   resolver o **volume do `setor_permissao`** (G8, ~46 KB/save) antes.
+2. **Os 3 fora-de-escopo nomeados na spec 23:** `POST /materiais/:id/foto` (não audita,
+   responde sucesso para id inexistente, deixa arquivo órfão), `GET /configuracoes` devolvendo
+   `alertas_smtp_pass` em claro, e `GET /setores-requisicao/:id/permissoes` com `auth` apenas.
+   Os três são pequenos e da mesma família (exposição/rastro).
+3. **Pendências herdadas:** `z.regex` na `data_necessidade` (C19), coluna da transição de
+   inspeção (C18), G7 (multer 500 nas 5 rotas de upload), os 3 alertas sem dado (E16/E17), a
+   não-atomicidade da conclusão de conferência e do `PUT /configuracoes`.
+
+O que a próxima sessão NÃO precisa reabrir: o padrão de auditoria (pós-escrita, best-effort,
+import por objeto), o `configDiff`, o registro de alertas e a fila. Decisões B em aberto:
+B5-B24 antigas + B25-B36.

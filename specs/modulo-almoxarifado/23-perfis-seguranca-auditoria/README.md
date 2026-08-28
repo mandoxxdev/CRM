@@ -1,7 +1,7 @@
 # 23 — Perfis, Segurança e Auditoria
 
-> **Status:** 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (restam dois buracos nomeados abaixo) · **Spec original:** seções 28, 29
-> **Última atualização:** 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
+> **Status:** 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
+> **Última atualização:** 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 
 ## Objetivo
 
@@ -39,12 +39,41 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
      colunas mortas.
   2. ~~`scrapService` (sobras)~~ — **PAGO na Etapa 9** (`bedce46`).
 
-  **Buracos que restam, nomeados (medição da Etapa 18):** os ~20 endpoints de cadastro e
-  configuração (tipos, localizações, setores, famílias, **configurações** — que mudam regra de
-  negócio —, centros de custo, almoxarifados e permissões de setor por material) seguem sem
-  trilha; e a rota `GET /almoxarifado/auditoria`, agora gateada por `configurar`, **não é
-  consumida por nenhuma tela** — a trilha existe e não tem leitor prático (letra B do
-  fechamento da Etapa 18).
+  ~~**Buracos que restam:** os ~20 endpoints de cadastro e configuração seguem sem trilha~~ —
+  **PAGO na Etapa 19** (2026-08-28, `a574b3a..55e4144`): os **23** endpoints auditam, cada
+  classe com o tratamento honesto — cadastros com de/para completo (`tipo_material`,
+  `localizacao`, `setor`, `familia`, `centro_custo`, `almoxarifado`), configurações com
+  **diff** (uma linha por PUT, só o que mudou — a tela manda 18 chaves a cada save),
+  **segredo mascarado** e a URL do webhook sem a query string, edição em lote como
+  `material`/`ATUALIZACAO` por material alterado, e `setor_permissao` com o de/para completo
+  do mapa de acesso. Três correções de comportamento vieram junto, exigidas para o log não
+  mentir: 404 nas 4 rotas que respondiam sucesso para id inexistente, o cascata do rename de
+  setor contado (era fire-and-forget), e o import de `audit` por objeto no `extended.js`
+  (sem ele o teste de "auditoria quebrada não derruba o ato" era vazio naquele arquivo).
+
+  **O que continua aberto:**
+  - **A rota `GET /almoxarifado/auditoria` não é consumida por nenhuma tela** — a trilha, agora
+    muito mais rica, segue sem leitor prático (letra B33). O gate é `configurar`, que aceita
+    administrador do sistema — grupo ligeiramente mais amplo do que o que a tela de
+    configurações exige (`canConfigureAlmox`); nota, não risco.
+  - **Volume:** o histórico de `setor_permissao` grava a lista inteira duas vezes por save
+    (~46 KB medidos com 200 famílias) — dívida a resolver antes da tela (letra G8).
+  - **Rastro do ato parcial:** `PUT /configuracoes` grava chave a chave sem transação; se
+    falhar no meio, parte fica gravada **sem** linha de histórico.
+  - **`EXCLUSAO` de linha já inativa** é registrada mesmo sem excluir nada (SQLite conta a
+    linha atingida); só id inexistente vira 404.
+  - **Verbos do log:** o módulo já era inconsistente (`CRIACAO`/`CRIAR`,
+    `EDICAO`/`ATUALIZACAO`/`ATUALIZAR`). A Etapa 19 fixou a regra — **consistência dentro da
+    entidade** (`material` seguiu com `ATUALIZACAO`) e `EDICAO` só para as entidades novas —
+    e introduziu `REATIVACAO` e `INCLUSAO_EM_LOTE`. Normalizar as antigas mexeria em log
+    histórico; fica declarado.
+  - **Rota órfã:** `PUT /configuracoes/tipos-material` não tem nenhum chamador no client;
+    auditada mesmo assim, **candidata a remoção** (apagar sem confirmar quem chama seria
+    irreversível de graça).
+  - **Fora do escopo, nomeados:** `POST /materiais/:id/foto` não audita e responde sucesso
+    para material inexistente (deixando arquivo órfão); `GET /configuracoes` devolve
+    `alertas_smtp_pass` em claro (a rota irmã de alertas já mascara); e
+    `GET /setores-requisicao/:id/permissoes` expõe o mapa de acesso com `auth` apenas.
 - `logs_auditoria` global (tentativas de acesso negado) + `POST /api/auditoria/tentativa-acesso`.
 - Front: `systemPermissions.js`, `permissionsCache.js`, guards de rota, telas de admin.
 - Teste: `permissionsCacheAdmin.test.js` (⚠️ replica lógica em vez de importar — corrigir junto do harness).

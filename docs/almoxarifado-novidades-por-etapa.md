@@ -423,6 +423,22 @@ com ajuste já usava — cancelar uma contagem inteira é tão destrutivo quanto
 dela. **Descartado** deixar opcional. Se sua equipe achar o atrito demais em cancelamentos de
 rotina (ex.: conferência aberta por engano), diga — a régua está num lugar só.
 
+**B35 (NOVO, da Etapa 19) — a URL do webhook de WhatsApp é tratada como portadora de
+credencial. Confirme se está certo.** O histórico passa a guardar o endereço do webhook sem os
+parâmetros (`https://api.exemplo/send?(credenciais omitidas)`). **Escolhido** assim porque o
+token costuma viajar ali — a própria configuração descreve a chave de API separada como
+"opcional", ou seja, o desenho já prevê o token dentro da URL. **Descartado** mascarar a URL
+inteira (o histórico perderia a informação de *para qual serviço* apontava) e descartado
+deixar em claro (a configuração guarda só o valor atual, mas o histórico é permanente: um
+token rotacionado sumiria de um lado e ficaria para sempre do outro). Se no seu caso o webhook
+nunca leva token, isso é só cosmético.
+
+**B36 (NOVO, da Etapa 19) — mudar uma regra e receber erro na tela ainda registra a mudança.**
+Numa das rotas, a regra é gravada antes de a tela montar a resposta; se o segundo passo falha,
+você vê erro mas **a regra mudou**. **Escolhido** registrar assim mesmo — o histórico descreve
+o que ficou no banco, não o que a tela mostrou. **Descartado** registrar só no caminho de
+sucesso, que era o comportamento anterior e deixava exatamente esse caso sem rastro.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -572,6 +588,15 @@ rotina (ex.: conferência aberta por engano), diga — a régua está num lugar 
    avisado), mas nos primeiros dias depois de subir esta etapa espere avisos de recebimentos
    legados conforme a equipe for tocando neles. *(A primeira versão da documentação dizia que
    "o dedupe segura o e-mail" nesse caso — **estava errado**, e a revisão provou com sonda.)*
+
+22. **(19) Excluir um cadastro que não existe agora responde ERRO, onde antes respondia
+   sucesso.** Vale para tipo de material, localização e família. Na prática isso só acontece
+   quando a tela está desatualizada (alguém já excluiu aquele item) — antes o sistema fingia
+   ter excluído; agora diz que não achou. Se a equipe estranhar, é isso.
+
+23. **(19) Excluir algo que JÁ estava excluído continua respondendo sucesso** — e agora
+   registra uma exclusão no histórico, mesmo sem ter excluído nada. É limitação conhecida e
+   está declarada; só o identificador inexistente vira erro.
 
 21. **(18) A partir de agora, cancelar uma conferência de estoque pede um motivo escrito.**
    Quem estiver acostumado a cancelar com um clique vai encontrar um modal pedindo pelo menos
@@ -806,6 +831,11 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    **Divergência de inventário** e **Lote sem certificado** com Detalhes expandindo; e um
    e-mail de verdade chegando com acento e nome de material com "&" saindo legível.
 
+10e. **(19) Nada da Etapa 19 tem tela** — o histórico de cadastros e configurações é gravado
+   e só pode ser lido por consulta técnica. Não há o que conferir no navegador além de que as
+   telas de Configurações e de cadastros **continuam funcionando igual** (a etapa não muda
+   nenhum fluxo visível, exceto o erro do item C22).
+
 10d. **(18) O modal de cancelar conferência e a linha cancelada nunca foram vistos no
    navegador.** A prova é a suíte (531 testes de tela). Falta olhar: o modal abrindo com o
    botão travado até 5 caracteres, a recusa do servidor mantendo o texto digitado, e a linha
@@ -962,6 +992,13 @@ e testado, o *controle* é que é condicional ao fuso. E a Etapa 12 somou **mais
 do adendo (1) acima — âncora de restauração não-única espalhando mudança (o md5 pegou as duas) —
 e **uma** do adendo (2) — `git checkout` para restaurar com árvore suja apagou edições não
 commitadas de novo (md5 pegou, retrabalho de meia hora). O harness segue pagando o próprio custo.
+
+**G8 (NOVO, medido na revisão da Etapa 19). O histórico das permissões por setor é grande e
+cresce a cada salvamento.** Cada salvamento da lista de materiais permitidos de um setor grava
+a lista **inteira** duas vezes (antes e depois). Medido com 200 famílias: ~46 KB por
+salvamento. Como não há tela lendo o histórico, hoje não incomoda ninguém — mas é dívida a
+resolver **antes** de construir a tela de auditoria (B33): uma consulta filtrando essas linhas
+pode montar uma resposta de dezenas de MB.
 
 **G7 (NOVO, medido na revisão da Etapa 15). As CINCO rotas de upload do módulo respondem erro
 genérico 500 quando o arquivo em si é rejeitado** — tipo errado (um PDF onde se espera imagem),
@@ -2924,6 +2961,75 @@ registrar: **desativar um material**, **cancelar** e **excluir uma requisição*
 - **Histórico completo das contagens como entidade própria** — o log guarda o de/para; uma
   tabela de versões de contagem é outra coisa.
 
+## Etapa 19 — Mudar cadastro e mudar regra passam a deixar rastro (2026-08-28)
+
+A Etapa 18 fez o inventário deixar trilha. Esta faz o resto do módulo: **criar, editar e
+excluir** tipos de material, localizações, setores, famílias, centros de custo e
+almoxarifados; **mudar as configurações** (que é onde moram as regras do jogo — tolerância de
+inventário, alertas, alçada de liberação por valor); e **mexer na lista de materiais que cada
+setor pode requisitar**, que é controle de acesso. Vinte e três operações que até ontem
+mudavam o comportamento do sistema sem deixar quem, quando nem de-quanto-para-quanto.
+
+O caso que melhor explica a etapa: alguém baixa a tolerância de divergência do inventário de
+6% para 2%. A partir dali, contagens que passavam sozinhas passam a exigir recontagem — e
+antes desta etapa não havia como saber quem mudou nem quando.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Cadastros (tipos, localizações, setores, famílias, centros de custo, almoxarifados): sem trilha | Criar, editar e excluir registram **quem, quando e o de/para completo** |
+| Mudar configuração: sem registro nenhum | **Uma linha por salvamento, só com o que mudou de fato** — a tela manda 18 campos toda vez; se você alterou um, o registro mostra um |
+| Salvar sem mudar nada gerava nada visível e nada registrado | Continua sem registrar (é o mesmo salvamento) — o registro só nasce quando algo muda de verdade |
+| Senha de SMTP e chave de API poderiam entrar no histórico | **Nunca**: o registro diz que o segredo mudou, jamais o valor. A URL do webhook aparece **sem a parte que carrega o token** |
+| Permissões de material por setor: mudavam sem rastro | Registram a lista anterior e a nova, inteiras |
+| Excluir um cadastro que não existe respondia "sucesso" | Responde **404** — e não registra um ato que não aconteceu |
+| Renomear um setor renomeava as localizações em silêncio | O registro diz **quantas localizações** foram renomeadas junto |
+
+### As regras, com o cenário exato
+
+1. **A configuração registra só o que mudou.** Em Configurações Gerais, altere um único campo
+   e salve: o histórico ganha **uma** linha, com aquele campo e o valor anterior. Os outros 17
+   não aparecem. Salve de novo sem mexer em nada: **nenhuma** linha nova.
+2. **Segredo nunca vai para o histórico.** Troque a senha de SMTP: o registro diz
+   `(alterado)` dos dois lados. O valor não aparece em lugar nenhum do histórico. A URL do
+   webhook de WhatsApp aparece com o endereço, mas com `(credenciais omitidas)` no lugar dos
+   parâmetros — porque é ali que o token costuma ficar.
+3. **Excluir o que não existe agora falha.** Excluir um tipo de material com identificador
+   inválido responde `Tipo de material não encontrado` (antes respondia sucesso). O mesmo
+   vale para localização e família.
+4. **Renomear setor conta o efeito colateral.** Renomeie um setor que tem 3 localizações: o
+   registro guarda `localizacoes_renomeadas: 3`. Renomeie para o mesmo nome: registra a
+   edição com zero.
+5. **Localização excluída que volta não é "criação".** Exclua uma localização e crie outra com
+   o mesmo código: o sistema **reativa** a antiga, e o histórico chama isso de reativação, com
+   o estado anterior — não de criação.
+6. **Edição em lote registra por material.** Ajuste estoques mínimos de 3 materiais mudando 1:
+   uma linha, para aquele material.
+7. **O registro nunca atrapalha a operação.** Se a gravação do histórico falhar, o cadastro é
+   salvo, a configuração é aplicada e a tela responde normalmente.
+8. **Mudança de regra que dá erro na tela ainda fica registrada.** Se a alçada de liberação
+   por valor for gravada e a tela mostrar erro em seguida, o histórico registra a mudança
+   assim mesmo — porque a regra mudou de verdade.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Continua não havendo tela para ler o histórico** (é a mesma pendência da etapa anterior —
+  letra B33). Com esta etapa, o histórico ficou bem mais rico, e o custo de não ter tela subiu.
+- **Quem lê o histórico é um grupo ligeiramente mais amplo do que quem edita a configuração**:
+  a leitura aceita administrador do sistema; a tela de configurações exige administrador do
+  módulo. Nota, não risco — quem tem o primeiro consegue se tornar o segundo.
+- **Salvar configuração sem mudar nada continua tocando o registro de "última alteração" no
+  banco**, mesmo sem gerar histórico. O banco sabe que alguém salvou; o histórico não.
+- **Se um salvamento de configuração falhar no meio**, parte das chaves pode ficar gravada
+  sem histórico (não há transação — limitação anterior a esta etapa).
+- **Excluir algo que já estava excluído** ainda responde sucesso e registra uma exclusão que
+  não excluiu nada. Só o identificador inexistente vira 404.
+- **Uma rota de configuração sem uso** (aplicar tipo de material em lote) foi auditada mesmo
+  assim e está nomeada na spec como candidata a remoção.
+- **A troca de foto de material** continua sem registro e responde sucesso para material
+  inexistente — fora do escopo desta etapa, nomeado.
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -2951,6 +3057,14 @@ registrar: **desativar um material**, **cancelar** e **excluir uma requisição*
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **Etapa 19 entregue (2026-08-28):** **cadastros e configurações auditados** (feature 23,
+  fatia 2) — 23 operações passam a deixar rastro, com o tratamento honesto de cada classe:
+  diff nas configurações (só o que mudou), segredo mascarado, criação separada de reativação,
+  404 onde antes se respondia sucesso, e o efeito colateral do rename de setor contado.
+  Revisão do plano: 15 achados (4 bloqueantes, incluindo duas armadilhas de `this` em arrow
+  function). Revisão adversarial em duas lentes: 3 correções de código, todas de log que
+  mentia — mudança de regra persistida sem rastro, diff fabricando 18 mudanças inexistentes,
+  e a URL do webhook indo em claro com o token dentro.
 - **Etapa 18 entregue (2026-08-28):** **a trilha do inventário** (feature 23) — abrir,
   contar, recontar, concluir e cancelar passam a deixar registro com autor e de/para;
   cancelar exige motivo e grava quem/quando (e o motivo aparece na tela); as colunas de

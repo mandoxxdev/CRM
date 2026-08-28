@@ -2,11 +2,18 @@
 
 > Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 18) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 19) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 18 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 19 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 18 completas.** A **Etapa 18 (trilha do inventário)** fechou em 2026-08-28
+> **Etapas 1 a 19 completas.** A **Etapa 19 (cadastros e configurações auditados)** fechou em
+> 2026-08-28 (`a574b3a..55e4144`): 23 operações que mudavam o comportamento do sistema sem
+> deixar rastro — criar/editar/excluir cadastros, mudar configurações (onde moram as regras) e
+> alterar a lista de materiais por setor — passam a registrar quem, quando e o de/para.
+> **Atenção operacional: excluir um cadastro que não existe agora responde erro, onde antes
+> respondia sucesso** (letra C22 das novidades). Ver a seção "Etapa 19" abaixo.
+>
+> **Antes: Etapas 1 a 18 completas.** A **Etapa 18 (trilha do inventário)** fechou em 2026-08-28
 > (`adf7233..aee9c9e`): abrir, contar, recontar, concluir e **cancelar** uma conferência
 > passam a deixar registro de quem fez o quê; **cancelar exige um motivo escrito** e o motivo
 > aparece na lista; três operações vizinhas (desativar material, cancelar e excluir
@@ -2971,6 +2978,41 @@ registro com autor e de/para, e cancelar exige justificativa escrita.
   centros de custo, almoxarifados, permissões por setor e as configurações do módulo).
 - Conclusões simultâneas da mesma conferência ainda podem se sobrepor — limitação anterior a
   esta etapa.
+
+## Etapa 19 — Cadastros e configurações deixam rastro (ENTREGUE — 2026-08-28)
+
+**O que mudou, em uma frase:** mexer em cadastro, em configuração ou na lista de materiais de
+um setor passa a ficar registrado, com o valor de antes e o de depois.
+
+### Roteiro de teste manual
+
+> A etapa **não tem tela nova** e não muda nenhum fluxo visível (exceto o item 4). O roteiro
+> abaixo serve para confirmar que nada quebrou — e, para quem tiver acesso técnico, que o
+> registro está lá.
+
+1. **Nada quebrou nos cadastros.** Em Configurações do Almoxarifado, crie um tipo de material,
+   edite-o e exclua-o. Faça o mesmo com uma localização, um setor e uma família. Tudo deve
+   funcionar exatamente como antes.
+2. **Configurações continuam salvando.** Em Configurações Gerais, mude um campo e salve
+   (aparece o aviso de sucesso). Salve de novo sem mudar nada: também funciona.
+3. **Permissões por setor continuam funcionando** (tela de setores de requisição).
+4. **A diferença visível:** com duas abas abertas, exclua um tipo de material numa e tente
+   excluir o mesmo na outra. A segunda agora mostra `Tipo de material não encontrado` — antes
+   dizia que tinha excluído. Depois do erro, atualize a lista.
+5. **Para quem tem acesso técnico** (perfil de administrador), o registro está em
+   `/api/almoxarifado/auditoria?entidade=configuracao` — a resposta traz `total` e a lista
+   `itens`, e cada linha mostra só os campos que mudaram. Repare que a senha de SMTP aparece
+   como `(alterado)` e a URL do webhook sem os parâmetros.
+
+### O que a Etapa 19 NÃO cobre
+
+- **Não há tela de auditoria** — o registro só é legível por consulta técnica (é a mesma
+  pendência da etapa anterior, letra B33, agora mais cara porque o registro ficou mais rico).
+- **Excluir algo já excluído** ainda responde sucesso e registra uma exclusão vazia.
+- **Salvar configuração sem mudar nada** não gera registro, mas ainda marca "última alteração"
+  no banco.
+- A troca de foto de material, o `GET` de configurações que devolve a senha em claro e a
+  leitura das permissões por setor seguem fora do escopo — nomeados na spec 23.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 
