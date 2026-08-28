@@ -349,6 +349,30 @@ por projeto, dado de gestão. **Descartado** nascer aberto "como os outros" — 
 custo de decidir exposição por inércia. Abrir para mais perfis é mudança de uma linha no
 registro de relatórios; decida se Gestor basta ou se PCP/Qualidade também deveriam ver.
 
+**B25 (NOVO, da Etapa 15) — o escopo inteiro da etapa foi decidido por mim, com sua
+autorização genérica ("respostas recomendadas").** A spec original pedia "código de barras,
+coletores, app móvel, assinatura digital"; a medição mostrou que nada no sistema gera código
+1D, nenhum coletor foi confirmado e não há infraestrutura de app. **Escolhido:** scanner de QR
+pela câmera (fecha o ciclo das etiquetas), assinatura do recebedor na entrega, e o módulo
+usável no celular. **Descartado:** leitor 1D (leria o que não existe), coletor dedicado
+(hardware não confirmado — se aparecer, emula teclado e já funciona), app nativo/PWA/offline
+(sem demanda medida). Se algum descartado era o que você queria, é etapa nova, não conserto.
+
+**B26 (NOVO, da Etapa 15) — a assinatura é opcional SEMPRE, e requisição encerrada ainda
+aceita assinatura.** **Escolhido:** a entrega nunca depende da assinatura (o material já saiu
+fisicamente; a assinatura documenta), "Pular" existe e é honesto, e ENCERRADA aceita
+assinatura atrasada — o papel chega depois. **Descartado:** obrigar assinatura (bloquearia o
+balcão com as mãos ocupadas) e ligar as flags "requer assinatura/termo" por tipo de material,
+que existem no cadastro desde o início e continuam **mortas** — ligá-las exige você decidir
+quais tipos e se bloqueia. Diga se quer obrigatoriedade e para quê.
+
+**B27 (NOVO, da Etapa 15) — etiqueta impressa em OUTRO ambiente continua funcionando no
+scanner.** O QR carrega o endereço completo (com o domínio de onde foi impresso). **Escolhido:**
+o scanner aproveita o caminho interno e ignora o domínio — etiqueta impressa no ambiente de
+teste funciona em produção e vice-versa. **Descartado:** recusar domínio alheio, que obrigaria
+reimprimir todas as etiquetas a cada mudança de endereço do sistema. A segurança não afrouxa:
+só caminhos do módulo navegam, qualquer outro conteúdo é exibido e nunca aberto.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -591,6 +615,12 @@ registro de relatórios; decida se Gestor basta ou se PCP/Qualidade também deve
 - **(14) O fechamento automático não confere quantidade** — a primeira nota do pedido fecha a
   solicitação (o desenho completo e o descartado estão na B22).
 
+- **(15) Código de barras 1D, coletor físico, app nativo/offline e fotografia na saída
+  ficaram FORA da mobilidade — por medição.** Nada no sistema gera código 1D (ler o que não
+  existe é feature morta); nenhum coletor foi confirmado no galpão (se aparecer um USB/
+  Bluetooth, ele emula teclado e funciona nos campos de busca sem código novo); e não há
+  demanda medida de offline. O detalhe e o descartado estão na B25.
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -682,6 +712,16 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    os números formatados e o "Último custo de entrada" com data legível; e o painel
    **reconsultando sozinho** depois de Gerar/Atualizar (o número tem de mudar na frente de
    você, sem fechar e reabrir). O roteiro completo está no guia, seção da Etapa 14.
+
+10. **(15) O scanner e a assinatura NUNCA foram testados num celular de verdade.** O ambiente
+   de desenvolvimento não tem câmera nem touchscreen — a prova da etapa é a suíte de testes
+   (513 no client) e a lógica pura validada. Falta, num celular real: a câmera abrir e ler um
+   QR de etiqueta impressa (vibração + navegação); a recusa de um QR estranho; o traço da
+   assinatura **com o dedo** saindo suave no quadro; a tabela deslizando de lado numa tela
+   de 375px com os botões de Ações alcançáveis; e o modal de entrega em tela cheia com o
+   teclado aberto. Atenção: **a câmera só funciona em HTTPS** (ou localhost) — se o sistema
+   estiver servido em HTTP puro na rede interna, o scanner cairá sempre no estado "Câmera
+   indisponível" com a colagem manual como saída.
 
 *Por que isto está escrito aqui em vez de "está tudo certo": esta mesma lacuna já mordeu a Etapa 7 —
 uma classe de estilo inventada sai sem cor nenhuma e nenhum teste de comportamento percebe.*
@@ -827,6 +867,17 @@ e testado, o *controle* é que é condicional ao fuso. E a Etapa 12 somou **mais
 do adendo (1) acima — âncora de restauração não-única espalhando mudança (o md5 pegou as duas) —
 e **uma** do adendo (2) — `git checkout` para restaurar com árvore suja apagou edições não
 commitadas de novo (md5 pegou, retrabalho de meia hora). O harness segue pagando o próprio custo.
+
+**G7 (NOVO, medido na revisão da Etapa 15). As CINCO rotas de upload do módulo respondem erro
+genérico 500 quando o arquivo em si é rejeitado** — tipo errado (um PDF onde se espera imagem),
+tamanho acima do limite (10MB nas antigas, 2MB na assinatura) ou campo de arquivo inesperado. A
+validação **funciona** (nada é gravado, nenhum arquivo órfão fica — isso foi medido com sonda na
+revisão), mas o erro escapa do tratador da rota e vira `Erro interno do servidor` em vez de um
+400 dizendo o motivo. Nenhum fluxo normal do sistema dispara isso (as telas só enviam o tipo
+certo); morde quem integrar por API. É o padrão herdado das 4 rotas antigas (foto de material,
+certificado, comprovante de sucata, calibração) — a rota nova de assinatura **seguiu o padrão
+de propósito** em vez de divergir sozinha; o conserto certo é uniforme, nas cinco de uma vez
+(pendência nomeada na spec 24).
 
 ---
 
@@ -2514,6 +2565,85 @@ integrações ficaram **bloqueadas por dependência, escritas como bloqueadas**,
 - **Custo histórico por movimento** — o livro não guarda custo na movimentação; o relatório usa
   o custo **atual** retroativamente (letra G, com a consequência escrita).
 
+## Etapa 15 — Mobilidade: scanner, assinatura e o balcão no celular (2026-08-28)
+
+Desde a etapa das etiquetas, todo lote, série, material e retalho pode sair impresso com um QR
+que aponta para a tela certa do sistema — mas a volta não existia: **nada no sistema lia um
+QR**. Quem estava no galpão com uma etiqueta na mão dependia do aplicativo de câmera do
+celular. E a entrega de material tinha outro buraco antigo, pedido desde a primeira lista de
+requisitos: **ninguém registrava quem retirou o material**, nem havia assinatura. Esta etapa
+fecha os dois: nasce a tela **Scanner** (aponta a câmera para a etiqueta e o sistema abre o
+item já filtrado) e a entrega de requisição ganha **assinatura do recebedor na tela** — nome +
+assinatura a dedo, opcional, colada à requisição para sempre. De quebra, o módulo ficou usável
+no celular de verdade: as tabelas **paravam de mostrar tudo a partir da 4ª coluna** no mobile
+(inclusive os botões de ação — quem operava por celular simplesmente não conseguia agir); agora
+nenhuma coluna some.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| QR da etiqueta só era lido pelo app de câmera do celular, fora do sistema | Tela **Scanner** no menu (logo abaixo do Dashboard): aponta a câmera e o sistema **abre a tela do item já filtrada** — lote, série, material ou retalho |
+| QR de origem estranha abriria qualquer coisa | O scanner **só navega para telas do almoxarifado**; qualquer outro conteúdo é exibido com aviso, nunca aberto |
+| Sem câmera (ou permissão negada), nada a fazer | Estado de erro com instrução e **campo para colar o conteúdo do QR** — passa pela mesma validação |
+| Entrega de requisição não registrava quem retirou | Após confirmar a entrega, o sistema oferece **colher a assinatura do recebedor** (nome + traço na tela, funciona com dedo e mouse) |
+| Não havia registro de assinatura em lugar nenhum | O detalhe da requisição lista **todas** as assinaturas colhidas: nome, data, quem colheu e a imagem (miniatura clicável) |
+| No celular, as tabelas escondiam da 4ª coluna em diante — **inclusive Ações** | **Nenhuma coluna some**: a tabela desliza para o lado; os modais abrem em tela cheia no celular |
+
+### As regras, com o cenário exato
+
+1. **Ler etiqueta abre a tela certa.** Menu → **Scanner**, autorize a câmera (`Autorize o uso
+   da câmera para começar a ler.`), aponte para o QR de uma etiqueta impressa pelo sistema: o
+   aparelho vibra e a tela do item abre já filtrada e destacada — o mesmo destino que o QR
+   carrega. Enquanto lê, a tela diz `Lendo… centralize o QR na moldura.`
+2. **QR estranho não navega.** Leia um QR qualquer (um boleto, um cartão de visita): aparece
+   `Este QR não é uma etiqueta do almoxarifado — por segurança, o conteúdo é só exibido,
+   nunca aberto.` com o conteúdo em texto e os botões **Copiar** e **Ler outro**. Isso vale
+   até para endereço parecido: um QR apontando para `/almoxarifado-admin/...` é recusado —
+   só caminhos do módulo de verdade navegam.
+3. **Sem câmera, o fluxo não morre.** Negue a permissão: a tela mostra **Câmera indisponível**
+   (`O acesso à câmera foi negado ou este aparelho/navegador não oferece câmera. Libere a
+   permissão nas configurações do navegador e tente de novo, ou cole abaixo o conteúdo do
+   QR.`) com o campo `Cole aqui o conteúdo do QR (ex.: link da etiqueta)` — o texto colado
+   passa pela MESMA validação do item 2.
+4. **A assinatura é oferecida, nunca exigida.** Entregue uma requisição (total ou parcial):
+   depois do aviso de sucesso abre o modal **✍ Colher assinatura do recebedor**, com o campo
+   `Nome de quem recebeu` e o quadro de assinatura (botões **Limpar** e **Confirmar
+   assinatura**, que só habilita depois de existir traço). **Pular** fecha sem gravar nada e
+   a entrega fica valendo — a entrega NUNCA depende da assinatura. Se o envio da assinatura
+   falhar, a entrega também não é desfeita.
+5. **Nome do recebedor é obrigatório para assinar.** Confirme a assinatura sem nome:
+   `Informe o nome de quem recebeu o material`. Sucesso responde
+   `Assinatura do recebedor registrada!` e a lista de assinaturas do detalhe atualiza na hora.
+6. **Só requisição entregue aceita assinatura.** Por API, uma requisição que ainda não foi
+   entregue recusa com `Só é possível registrar assinatura de entrega em requisição entregue
+   (total ou parcialmente). Status atual: APROVADA.` (o status atual real aparece na
+   mensagem). Requisição **encerrada** ainda aceita — a assinatura documenta o passado.
+7. **Assinatura não se apaga nem se edita.** Duas entregas parciais em dias diferentes geram
+   duas assinaturas; as duas ficam no detalhe, em ordem, cada uma com quem colheu e quando.
+   Errou? Colhe-se outra — a anterior permanece (é evidência, com registro de auditoria).
+8. **Quem entrega é quem colhe.** O botão **＋ Assinatura de entrega** (no detalhe de
+   requisição entregue/encerrada) aparece só para quem tem o perfil de separação e entrega
+   (Administrador e Almoxarife); os demais perfis recebem a recusa padrão de permissão do
+   módulo se tentarem por API.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Código de barras 1D (EAN, Code128)** — nada no sistema **gera** 1D; leitor de código que
+  não existe seria feature morta. Quando houver etiqueta de fornecedor para ler, o
+  decodificador do scanner é trocável.
+- **Coletor físico dedicado** — hardware não confirmado com a GMP; a câmera do celular é o
+  hardware assumido. Se um coletor USB/Bluetooth aparecer, ele emula teclado e já funciona
+  nos campos de busca existentes, sem código novo.
+- **App nativo / instalação / modo offline** — sem demanda medida; o sistema responsivo no
+  navegador do celular cobre o balcão.
+- **Assinatura obrigatória por tipo de material** — o cadastro de tipos tem os campos
+  "requer assinatura"/"requer termo" desde o início, e eles continuam **sem efeito**. Ligar
+  isso é decisão de negócio (quais tipos? bloqueia a entrega?) — está na letra B.
+- **Fotografia na saída** — a spec original lista; ficou de fora por falta de definição de
+  negócio (foto de quê, obrigatória quando?). Foto já existe onde a dor foi real: avaria de
+  ferramenta e comprovante de sucata.
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -2541,10 +2671,18 @@ integrações ficaram **bloqueadas por dependência, escritas como bloqueadas**,
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
-- **⏸️ DESENVOLVIMENTO PARADO AQUI POR INSTRUÇÃO DO USUÁRIO** (2026-08-25, "termina essa e
-  pode dar uma parada"). A **Etapa 15 não foi iniciada** — o handoff para retomá-la está na
-  seção "Próxima tarefa detalhada" do plano da Etapa 14
-  (`docs/superpowers/plans/2026-08-24-almoxarifado-etapa14-integracoes.md`).
+- **Etapa 15 entregue (2026-08-28):** **mobilidade — a fatia real** (feature 24, nova) —
+  scanner de QR pela câmera fechando o ciclo das etiquetas, assinatura do recebedor na
+  entrega de requisição (opcional por design), e o balcão usável no celular (tabelas sem
+  coluna escondida, modais em tela cheia). Código de barras 1D, coletor físico e app
+  nativo ficaram **fora por medição** (nada gera 1D; hardware não confirmado; sem demanda
+  de offline) — está tudo na seção da etapa e na letra D. O desenvolvimento foi retomado
+  em 2026-08-28 por instrução do usuário, em **modo contínuo** (fechou etapa, emenda na
+  próxima).
+- **A seguir:** o roteiro de etapas do planejamento mestre está completo — o que resta no
+  mapa são as features 🟡 (alertas operacionais/20 é a maior lacuna: central no front e
+  ~16 alertas), os restos declarados da 21/22/23 e as decisões da letra B esperando
+  resposta. A próxima frente será escolhida pelo mapa de status, não por roteiro.
 - **Ações pendentes antes do deploy:**
   1. rodar em produção a consulta do **bug da Sucata** (seção da Etapa 7 no guia) — no
      desenvolvimento deu 0 devoluções, produção precisa da mesma checagem;

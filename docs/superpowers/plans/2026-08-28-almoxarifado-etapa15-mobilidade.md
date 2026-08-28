@@ -388,7 +388,12 @@ e `GET /requisicoes/:id` (Task 1) — motor e serviço REAIS, zero mock.
   CSS desktop intacto). **Fix round aplicado nesta rodada:** prefixo com barra obrigatória +
   3 cenários de teste novos, `toHaveBeenCalledWith(..., 'image/png')`, ✕ guardado.
   Revalidação: client **513/513 em 35 suítes**, build `CI=true` exit 0.
-- [ ] Fase 6 — fechar-etapa + retro
+- [x] Fase 6 — fechar-etapa (2026-08-28): 7 artefatos atualizados (novidades com B25-B27,
+  D, F10 e G7; spec 24 com checklist por hash e 3 pendências nomeadas; mapa com a linha 24
+  e o cabeçalho; guia com 3 roteiros manuais; este plano; manual do sistema). Verificação
+  final medida: `test:api` 125/125, `test:almoxarifado` 42/0, `test:validation` 4/0,
+  `test:safealter` 3/0, `test:sqlite` 3/0; client 513/513 em 35 suítes, build `CI=true`
+  exit 0.
 
 ## Retro (4 números — preencher no fechamento)
 
@@ -401,3 +406,29 @@ e `GET /requisicoes/:id` (Task 1) — motor e serviço REAIS, zero mock.
   previsto); o retrabalho que houve foi da infraestrutura (worktrees nascidas da `main` —
   T2/T3 resetaram a base antes de codar, T4 refez a validação via cherry-pick)
 - Defeito que escapou (preencher na etapa seguinte): —
+
+## Próxima tarefa detalhada — o roteiro de etapas ACABOU; a próxima frente sai do mapa
+
+O planejamento mestre ia da Etapa 0 à 15 e **todas estão entregues**. O usuário pediu modo
+contínuo (2026-08-28: "não precisa parar nunca — terminou uma etapa, vai para a próxima").
+Sem roteiro, a escolha é por lacuna no mapa (`specs/modulo-almoxarifado/README.md`):
+
+1. **Candidata principal — feature 20 (alertas operacionais), a maior lacuna do mapa:**
+   6 de ~22 alertas existem; falta a **central de alertas no front** e o motor único de
+   regras. O que já está pronto e ela NÃO reabre: a fila de notificações da Etapa 12
+   (retry/backoff/dedupe/claim — todo alerta novo entra por ela), `alertService`,
+   `reportRegistry` (se virar relatório), `useAlmoxPermissoes` no front. Ponto de atenção:
+   a spec 20 lista os ~16 restantes "com a feature dona de cada um" — medir quais features
+   donas existem antes de prometer (lição das Etapas 13/14/15: Fase 0 mede primeiro).
+2. **Alternativas concorrentes por dívida:** os restos declarados da 21 (PDF, tetos), da 22
+   (bloqueados por dependência — só se BOM/MES amadureceram) e da 23 (conferência de
+   inventário sem auditoria — buraco real nomeado no mapa); e as decisões B em aberto
+   (B5-B24 + B25-B27 novas), que são do usuário, não de código.
+3. **Pendências herdadas desta etapa:** G7 (500 opaco de multer nas 5 rotas de upload —
+   conserto uniforme + testes de MIME/limite), teste do scanner/assinatura em aparelho real
+   (F10), e os tickets antigos da letra E do ledger da E14 (initSchema sem await; estado
+   parcial só-por-API da devolução-sucata; meia-sucata estornada no custo-por-projeto).
+
+Contratos que a próxima sessão consome desta etapa: C1/C2 (assinatura, congelados e
+testados), C3 (`parseQrDestino` — prefixo com barra obrigatória), C4 (`AssinaturaCanvas`
+reutilizável para qualquer outra captura de assinatura).

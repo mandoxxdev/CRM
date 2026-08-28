@@ -1,8 +1,13 @@
 # Feature 24 — Mobilidade (scanner QR, assinatura de entrega, balcão no celular)
 
-> **Status: 🚧 EM DESENVOLVIMENTO (Etapa 15, iniciada em 2026-08-28).**
+> **Status: 🟢 ENTREGUE (Etapa 15, 2026-08-28, commits `7f74b6c..a82ad43`) — no escopo medido
+> que a etapa se propôs (a Fase 4 completa da spec original NÃO é isto; ver "O que esta
+> feature NÃO é").**
 > Design: `docs/superpowers/specs/2026-08-28-almoxarifado-etapa15-mobilidade-design.md`
 > Plano: `docs/superpowers/plans/2026-08-28-almoxarifado-etapa15-mobilidade.md`
+> Revisão adversarial (2 lentes): backend Aprovado (1 Minor → pendência 1 abaixo); front
+> Needs-fix-round leve — 1 Important (RN-01, prefixo sem barra) + 2 Minor, todos
+> reproduzidos e corrigidos em `a82ad43`.
 
 ## O que esta feature é
 
@@ -38,15 +43,35 @@ A fatia real da "Fase 4 — Mobilidade e automação" da spec original (seções
 
 ## Checklist (marcar com hash ao concluir)
 
-- [ ] Backend: tabela `assinaturas_entrega_almoxarifado` + `deliverySignatureService` +
+- [x] Backend: tabela `assinaturas_entrega_almoxarifado` + `deliverySignatureService` +
       `POST /requisicoes/:id/assinatura-entrega` (multipart) + detalhe com
-      `assinaturas_entrega` — testes `requisicaoAssinaturaEntrega.api.test.js`
-- [ ] Scanner: `parseQrDestino` + tela `/almoxarifado/scanner` + item de menu — testes
-      `scannerDestino.test.js`
-- [ ] Front da assinatura: `AssinaturaCanvas` + etapa pós-entrega + botão avulso + exibição
-      no detalhe — testes em `RequisicoesList.test.js`
-- [ ] CSS mobile: fim do esconde-colunas, `.almox-table` com scroll, modal fullscreen
-- [ ] Integração: jornada entregar→assinar (`requisicaoAssinaturaJornada.api.test.js`)
+      `assinaturas_entrega` — testes `requisicaoAssinaturaEntrega.api.test.js` (9 cenários,
+      matriz de 8 perfis, órfãos) — `fa119c8`
+- [x] Scanner: `parseQrDestino` + tela `/almoxarifado/scanner` + item de menu — testes
+      `scannerDestino.test.js` — `866d740` (merge `d92d0ae`); prefixo com barra obrigatória
+      corrigido no fix round `a82ad43` (achado Important da revisão)
+- [x] Front da assinatura: `AssinaturaCanvas` + etapa pós-entrega + botão avulso + exibição
+      no detalhe — testes em `RequisicoesList.test.js` — `afff10f` (merge `2c03959`);
+      asserts endurecidos e ✕ guardado em `a82ad43`
+- [x] CSS mobile: fim do esconde-colunas, `.almox-table` com scroll, modal fullscreen —
+      `ad4165d` (cherry-pick; o commit original `3ac777d` nasceu numa worktree com base
+      errada e foi revalidado na branch da etapa)
+- [x] Integração: jornada entregar→assinar (`requisicaoAssinaturaJornada.api.test.js`,
+      motor real, saldo conferido) — `0cf94e1`
+
+## Pendências nomeadas (abertas ao fechar a etapa)
+
+1. **Erro de nível multer vira 500 opaco nas 5 rotas de upload do módulo** (foto de material,
+   certificado, comprovante de sucata, calibração e a assinatura nova): arquivo de tipo
+   errado, >limite ou campo inesperado não chega ao `limparUploadOrfao` da rota — o multer
+   barra antes (nada é gravado, **medido por sonda na revisão**: zero órfão, zero linha),
+   mas o erro escapa para o handler global como 500 genérico em vez de 400 com motivo. A
+   rota nova seguiu o padrão da casa DE PROPÓSITO; o conserto certo é um error-handler de
+   multer uniforme nas cinco rotas + teste de MIME/limite em cada uma.
+2. **Scanner e assinatura sem teste em aparelho real** (câmera, toque, HTTPS) — letra F10
+   das novidades; roteiro manual no guia.
+3. **Flags `requer_assinatura`/`requer_termo` de `tipos_material_almoxarifado` continuam
+   mortas** — ligar é decisão de negócio (B26 das novidades).
 
 ## Dependências
 

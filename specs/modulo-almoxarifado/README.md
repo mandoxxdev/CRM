@@ -1,13 +1,29 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-25 (**Etapa 14 fechada — integrações, a fatia real,
+> **Última atualização:** 2026-08-28 (**Etapa 15 fechada — mobilidade, a fatia real,
+> `7f74b6c..a82ad43`. Nasce a feature 24 (🟢 no escopo medido): scanner de QR pela câmera
+> fechando o ciclo das etiquetas 6c (client-only, RN-01 com filtro de protocolo E de prefixo),
+> assinatura digital + responsável pela retirada na entrega de requisição (tabela append-only
+> auditada, rota multipart no padrão canônico, opcional por design — RN-02), e o balcão usável
+> no celular (a regra CSS que escondia colunas ≥4 morreu; scroll na própria tabela; modais em
+> tela cheia). 1D/coletores/app nativo ficaram FORA por medição (nada gera 1D; hardware não
+> confirmado; sem demanda offline) — B25-B27 das novidades. Revisão adversarial (2 lentes):
+> backend Aprovado com 1 Minor (500 opaco de multer nas 5 rotas de upload — pendência nomeada
+> na spec 24); front Needs-fix-round com 1 Important reproduzido (prefixo `/almoxarifado` sem
+> exigir barra navegava para tela branca) + 2 Minor — tudo corrigido em `a82ad43`.
+> Retomado o desenvolvimento em modo contínuo por instrução do usuário (2026-08-28).**
+> **Onde o desenvolvimento está: o roteiro de etapas 0-15 do planejamento mestre está
+> completo. A próxima frente sai do mapa abaixo (maior lacuna: feature 20, alertas — central
+> no front e ~16 alertas restantes; depois os restos declarados de 21/22/23 e as decisões B
+> em aberto).** O handoff está na seção "Próxima tarefa detalhada" do plano
+> `docs/superpowers/plans/2026-08-28-almoxarifado-etapa15-mobilidade.md`.
+> **Números (medidos no fechamento, 2026-08-28):** `test:api` **125/125 arquivos OK**,
+> `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
+> `test:sqlite` **3/0**; client **513 testes em 35 suítes**, build `CI=true` exit 0.
+> Antes: 2026-08-25 (**Etapa 14 fechada — integrações, a fatia real,
 > `b276dca..2de7944`. A feature 22 vira 🟡: Compras + custo por projeto entregues;
 > BOM/OP/centro-de-custo bloqueados por dependência com a medição escrita na spec.**
-> **⏸️ Onde o desenvolvimento parou: a Etapa 14 está fechada e o desenvolvimento foi PAUSADO
-> por instrução do usuário (2026-08-25) — a Etapa 15 (mobilidade) NÃO foi iniciada.** O handoff
-> para retomar está na seção "Próxima tarefa detalhada" do plano
-> `docs/superpowers/plans/2026-08-24-almoxarifado-etapa14-integracoes.md`.
 > **O que a Etapa 14 entregou:** a medição da Fase 0 provou Compras maduro e BOM/MES sem chão —
 > o escopo virou a fatia integrável real: **ciclo de vida da solicitação de compra** (RECEBIDA
 > automática quando a nota do pedido vinculado é processada, gancho nos DOIS caminhos do
@@ -26,7 +42,7 @@
 > matriz de 8 perfis limpa (D9 contido: as 7 rotas `configurar` seguem intactas).
 > **Números (medidos no fechamento, 2026-08-25):** `test:api` **123/123 arquivos OK**,
 > `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
-> `test:sqlite` **3/0**; client **487 testes em 33 suítes**, build `CI=true` exit 0.
+> `test:sqlite` **3/0**; client **487 testes em 33 suítes**, build `CI=true` exit 0.)
 > Antes: 2026-08-24 (**Etapa 13 fechada — relatórios e indicadores,
 > `4fdda54..8bb5e52`. A feature 21 fica 🟡-forte (grosso entregue; restos declarados).**
 > **O que a Etapa 12 entregou:** fila de notificações com retry/backoff/dedupe/claim e
@@ -345,6 +361,7 @@
 | 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟢 | 🟢 | ✅ | 🟡 **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)** — `reportRegistry` com 18 chaves e gate DECLARADO por chave (mata a classe "relatório novo esquece o gate", 2 precedentes 10b/11; o processo nem sobe com chave órfã), lista fail-closed servindo exportavel/limite/nota/colunas, export XLSX genérico com projeção (paridade linha+cabeçalho medida; payload objeto → 400 literal), `consumoSql.js` fonte única (4 réguas divergentes DOCUMENTADAS — 10 vs 18 medido, unificar é letra B19), indicadores (giro aproximado declarado, cobertura mediana, rupturas físico+tipo, valor por grupo, atendimento sem janela), tela `/almoxarifado/relatorios` dirigida pelo registro, 3 cartões no dashboard. **Falta para 🟢 pleno:** PDF (corte D), previsto×realizado (depende da 22), % no prazo/fornecedor (features donas), valorização por cliente (letra B) |
 | 22 | [Integrações](22-integracoes/README.md) | 🟡 | 🟡 | ✅ | 🟡 **Etapa 14 entregue (2026-08-25, `b276dca..2de7944`)** — a fatia integrável REAL, medida antes de prometida: **Compras** (ciclo de vida da solicitação: RECEBIDA automática no recebimento da nota do pedido vinculado, nos dois caminhos; CANCELADA manual com justificativa auditada — **fecha a B14 da feature 18**; vincular valida as duas pontas; D9 abre vincular/verificar-mínimos para `gerenciar_reposicao`; verificar-mínimos audita o autor; contexto do comprador com último custo por NF) e **custo por projeto** (relatório `custo-por-projeto` computado do livro, consumido/devolvido/líquido, custo atual retroativo declarado, gate nasce fechado; herança de projeto/OS na devolução nas duas pernas). **Falta para 🟢, tudo bloqueado por dependência com a medição escrita na spec:** BOM/Engenharia (inexistente no sistema), OP/Produção (MES sem uso), centro de custo (sem entidade), previsto×realizado, acompanhamento de prazo de pedido, aviso de rejeição da Qualidade ao comprador |
 | 23 | [Perfis, segurança e auditoria](23-perfis-seguranca-auditoria/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Correção 2026-08-11: a spec dizia "auditoria com 0 linhas em produção" — **superado desde as Etapas 3-6** (materiais, requisições, motor, reservas, lotes, recebimento e inspeção auditam, todos com tela). Buraco real restante: conferência de inventário não audita. **A pendência das sobras foi paga na Etapa 9, Task 1 (`bedce46`)** — `scrapService` audita atualizar e gerar retalho, e o sucateamento audita solicitar/aprovar/rejeitar/cancelar/destino/compensação |
+| 24 | [Mobilidade](24-mobilidade/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 15 entregue (2026-08-28, `7f74b6c..a82ad43`) — no escopo MEDIDO, que não é a Fase 4 inteira da spec original.** Scanner de QR pela câmera (`/almoxarifado/scanner`, client-only: os QRs da 6c carregam URLs do próprio sistema; `parseQrDestino` só navega para `/almoxarifado/...` com filtro explícito de protocolo E de prefixo-com-barra — o Important da revisão final); assinatura digital + recebedor na entrega de requisição (tabela append-only `assinaturas_entrega_almoxarifado` auditada, `POST /requisicoes/:id/assinatura-entrega` multipart gateado por `separar_emitir`, detalhe expõe `assinaturas_entrega`; **opcional por design** — a entrega nunca depende dela); balcão mobile (a regra CSS que escondia colunas ≥4 — inclusive Ações — morreu; scroll na própria `.almox-table`; modais fullscreen). **Fora por medição, declarado:** 1D (nada gera), coletor (hardware não confirmado), app nativo/PWA/offline, fotografia na saída, flags `requer_assinatura`/`requer_termo` seguem mortas (B26). Pendências nomeadas na spec: 500 opaco de multer nas 5 rotas de upload, teste em aparelho real, flags por tipo |
 
 ## Ordem de desenvolvimento sugerida (etapas pequenas)
 
@@ -653,8 +670,8 @@ Registro único com gate por chave; tela dirigida pelo registro; export XLSX; in
 ### Etapa 14 — Integrações → `22-integracoes` — ✅ ENTREGUE (2026-08-25, `b276dca..2de7944`)
 A Fase 0 mediu a maturidade antes de prometer: Compras maduro (integrado de verdade — ciclo da solicitação fecha no recebimento, cancelar com justificativa, contexto do comprador) + custo por projeto pelo livro com herança de projeto na devolução. BOM/OP/centro-de-custo BLOQUEADOS por dependência, com a medição escrita na spec 22 — não são promessa.
 
-### Etapa 15 — Mobilidade (spec Fase 4) — ⏸️ NÃO INICIADA (desenvolvimento pausado por instrução do usuário, 2026-08-25)
-Código de barras, coletores, app móvel, assinatura digital. O handoff para retomar está no plano da Etapa 14 (seção "Próxima tarefa detalhada").
+### Etapa 15 — ✅ ENTREGUE em 2026-08-28 → `24-mobilidade` (`7f74b6c..a82ad43`)
+A Fase 4 da spec original dizia "código de barras, coletores, app móvel, assinatura digital" — a Fase 0 da etapa **mediu** e entregou a fatia real: scanner de QR pela câmera (fecha o ciclo das etiquetas 6c), assinatura do recebedor na entrega de requisição e o balcão usável no celular. O que ficou fora está declarado com o porquê na spec 24 e nas letras B25-B27/D das novidades. Próxima frente: pelo mapa de status (não há mais roteiro de etapas — ver o cabeçalho).
 
 ## Critérios de aceite do módulo (spec seção 34)
 

@@ -1,15 +1,30 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-25 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 14) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 15) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento parou — 2026-08-25 (Etapa 14 ENTREGUE · ⏸️ DESENVOLVIMENTO PAUSADO)
+> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 15 ENTREGUE · roteiro de etapas COMPLETO)
 >
-> **Etapas 1 a 14 completas — e o desenvolvimento está PAUSADO aqui, por instrução do usuário
-> ("termina essa e pode dar uma parada"). A Etapa 15 (Mobilidade) NÃO foi iniciada.** O handoff
-> para retomar está no plano `docs/superpowers/plans/2026-08-24-almoxarifado-etapa14-integracoes.md`,
-> seção "Próxima tarefa detalhada".
+> **Etapas 1 a 15 completas — o roteiro de etapas do planejamento mestre acabou.** O
+> desenvolvimento foi retomado em 2026-08-28 em modo contínuo; a próxima frente sai do mapa
+> de status (`specs/modulo-almoxarifado/README.md`), não de roteiro — a maior lacuna é a
+> feature 20 (alertas operacionais: central no front e ~16 alertas restantes). O handoff está
+> no plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa15-mobilidade.md`, seção
+> "Próxima tarefa detalhada".
+>
+> A **Etapa 15 (Mobilidade) fechou em 2026-08-28** (`7f74b6c..a82ad43`): a tela nova
+> **Scanner** lê o QR das etiquetas pela câmera do celular e abre o item já filtrado (QR
+> estranho é exibido e nunca aberto); a **entrega de requisição** ganhou assinatura do
+> recebedor na tela (nome + traço a dedo, opcional — a entrega nunca depende dela; as
+> assinaturas ficam no detalhe da requisição, para sempre); e o módulo ficou usável no
+> celular (as tabelas paravam de mostrar tudo da 4ª coluna em diante — agora nada some, a
+> tabela desliza). Código de barras 1D, coletor físico e app nativo ficaram **fora por
+> medição** — ver a seção "Etapa 15" abaixo e as letras B25-B27 das novidades.
+> **Atenção: o scanner exige HTTPS (ou localhost) para a câmera funcionar — teste num
+> celular real antes de apresentar (letra F10 das novidades).**
+>
+> **Antes: 2026-08-25 (Etapa 14 ENTREGUE · desenvolvimento esteve pausado até 2026-08-28).**
 >
 > A **Etapa 14 (Integrações — o ciclo da compra fecha) fechou em 2026-08-25**
 > (`b276dca..2de7944`): a chegada da **nota fiscal do pedido vinculado fecha a solicitação de
@@ -2755,6 +2770,70 @@ nenhum e-mail novo (RECEBIDA/CANCELADA aparecem no painel e na auditoria); custo
 movimento no relatório (usa o custo atual, declarado no rodapé).
 
 ---
+
+## Etapa 15 — Mobilidade: scanner, assinatura e o celular (ENTREGUE — 2026-08-28)
+
+**O que mudou, em uma frase:** as etiquetas com QR agora têm a volta (a tela **Scanner** lê
+pela câmera e abre o item), a entrega de requisição colhe **assinatura do recebedor** na tela,
+e o módulo ficou usável no celular (nenhuma coluna de tabela some mais).
+
+### Roteiro de teste manual — Scanner
+
+> **Pré-requisito:** a câmera só funciona em **HTTPS ou localhost**. No celular na rede
+> interna via HTTP puro, o scanner cai no estado "Câmera indisponível" — use a colagem
+> manual (passo 5) ou teste no desktop com webcam.
+
+1. Antes de tudo, imprima uma etiqueta: **Almoxarifado → Materiais** → linha de qualquer
+   material → botão de etiqueta → **Gerar PDF** (A4 ou térmica). O QR dela é o alvo.
+2. Menu **Almoxarifado → Scanner** (logo abaixo do Dashboard). A tela pede a câmera:
+   `Autorize o uso da câmera para começar a ler.` Autorize; o vídeo aparece com uma moldura
+   e o texto `Lendo… centralize o QR na moldura.`
+3. Aponte para o QR impresso (pode ser na tela de outro monitor): o aparelho vibra (se
+   suportar) e a tela do material abre **já filtrada** naquele item. Repita com etiqueta de
+   **lote** e de **série** — abre "Lotes e Séries" na aba certa com a linha destacada.
+4. Leia um QR qualquer que não seja do sistema (boleto, cartão): aparece
+   `Este QR não é uma etiqueta do almoxarifado — por segurança, o conteúdo é só exibido,
+   nunca aberto.`, com o texto lido, e os botões **Copiar** e **Ler outro**. Nada navega.
+5. **Sem câmera:** negue a permissão e recarregue — a tela mostra **Câmera indisponível**
+   com o campo `Cole aqui o conteúdo do QR (ex.: link da etiqueta)`. Cole o link de uma
+   etiqueta (o QR carrega um endereço; dá para copiá-lo do PDF lendo com o celular) e
+   confirme que abre a mesma tela. Cole um endereço qualquer e confirme que só exibe.
+
+### Roteiro de teste manual — Assinatura do recebedor
+
+1. Crie e aprove uma requisição, separe, e clique **Entregar** (fluxo normal da Etapa 3).
+   Confirme a entrega no modal.
+2. Depois do aviso de sucesso, abre **✍ Colher assinatura do recebedor — [número da
+   requisição]**: campo `Nome de quem recebeu` + quadro de assinatura. Assine com o mouse
+   (ou o dedo, no celular) — o botão **Confirmar assinatura** só habilita depois do traço;
+   **Limpar** apaga e desabilita de novo.
+3. Confirme **sem nome**: `Informe o nome de quem recebeu o material`. Preencha e confirme:
+   `Assinatura do recebedor registrada!` — e no detalhe da requisição aparece a seção de
+   assinaturas com nome, data, quem colheu e a miniatura (clique para ampliar).
+4. Clique **Pular** numa segunda entrega: nada é gravado e a entrega fica valendo — esse é
+   o comportamento certo (a assinatura é opcional por decisão, B26 das novidades).
+5. No detalhe de uma requisição **entregue**, use **＋ Assinatura de entrega** para colher
+   uma assinatura avulsa (entrega que já aconteceu). Colha duas assinaturas na mesma
+   requisição: as duas ficam listadas — assinatura não se apaga nem se edita.
+6. **Permissão:** logado como usuário de perfil Produção, o botão **＋ Assinatura de
+   entrega** não aparece (e a API recusa com o 403 padrão do módulo).
+
+### Roteiro de teste manual — celular
+
+1. No celular (ou DevTools em 375px), abra **Almoxarifado → Requisições**: a tabela mostra
+   TODAS as colunas — deslize para o lado para alcançar **Ações**. Antes, tudo da 4ª coluna
+   em diante simplesmente sumia.
+2. Abra qualquer modal (ex.: o detalhe de uma requisição): ocupa a tela inteira, com o
+   conteúdo rolando por dentro.
+
+### O que a Etapa 15 NÃO cobre
+
+- **Código de barras 1D** (nada no sistema gera 1D), **coletor físico** (hardware não
+  confirmado; um coletor USB/Bluetooth emularia teclado e já funcionaria nos campos de
+  busca), **app instalável/offline** e **fotografia na saída** — cortes medidos e
+  declarados (letra B25/D das novidades).
+- **Assinatura obrigatória por tipo de material** — os campos "requer assinatura/termo" do
+  cadastro de tipos continuam sem efeito (decisão B26, esperando resposta).
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

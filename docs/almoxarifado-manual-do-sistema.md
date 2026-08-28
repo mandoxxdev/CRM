@@ -52,6 +52,7 @@ As telas do módulo ficam em **Almoxarifado**, no menu lateral:
 | Tela | Para que serve |
 |---|---|
 | Dashboard | indicadores de estoque crítico, valor e movimento |
+| Scanner | leitura das etiquetas com QR pela câmera — aponte e a tela do item abre |
 | Materiais | cadastro, consulta, extrato e etiquetas |
 | Requisições | pedido, aprovação, separação e entrega |
 | Recebimentos | chegada de material e entrada por nota fiscal |
@@ -66,6 +67,8 @@ As telas do módulo ficam em **Almoxarifado**, no menu lateral:
 | Conferências de Estoque | inventário e homologação de divergência |
 | Mapa de Áreas | o desenho do galpão, posição por posição |
 | Configurações | famílias, setores, localizações, perfis, parâmetros do módulo |
+
+**No celular**, o módulo funciona no próprio navegador, sem aplicativo: o menu vira o botão de três linhas no topo, as tabelas mostram **todas** as colunas (deslize para o lado para alcançar as ações) e as janelas de confirmação abrem em tela cheia. A leitura de etiquetas pela câmera está na tela **Scanner** (seção 4.9) — atenção ao requisito de HTTPS descrito lá.
 
 ---
 
@@ -475,7 +478,7 @@ O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arq
 | Série | a tela **Lotes e Séries**, no material certo, na aba **Séries**, com a linha daquela série **destacada** |
 | Retalho | a tela **Sobras e Retalhos**, com a linha daquele retalho **destacada** |
 
-Ler o QR com a câmera do celular abre o navegador nesse endereço. Como dado de estoque exige sessão, quem não estiver logado cai na tela de login — faça o login e escaneie de novo. Não é preciso aplicativo nem coletor: o leitor é a câmera do próprio celular.
+Há dois jeitos de ler o QR. Pelo aplicativo de câmera do celular, ele abre o navegador nesse endereço — como dado de estoque exige sessão, quem não estiver logado cai na tela de login; faça o login e escaneie de novo. Ou, já dentro do sistema, pela tela **Scanner** (seção 4.9), que lê a etiqueta e abre o item sem sair do módulo. Não é preciso aplicativo nem coletor: o leitor é a câmera do próprio celular.
 
 **Onde ficam os botões de etiqueta** (ícone de etiqueta):
 
@@ -488,6 +491,18 @@ Ler o QR com a câmera do celular abre o navegador nesse endereço. Como dado de
 | **Sobras e Retalhos** | botão **Etiqueta** em cada linha de retalho; além disso, ao **gerar um retalho** o modal de impressão abre sozinho com a etiqueta daquele retalho — imprimir é opcional |
 
 O modal de impressão se chama **Imprimir etiquetas** e mostra, antes de gerar, quantas etiquetas e quantas páginas o PDF terá. O campo **Cópias** só aparece quando há uma única etiqueta selecionada. Quando não há nada a etiquetar, o botão fica desabilitado com a explicação na tela.
+
+### 4.9 O Scanner — ler etiquetas pela câmera, dentro do sistema
+
+A tela **Scanner** (menu do Almoxarifado, logo abaixo do Dashboard) transforma o celular — ou qualquer aparelho com câmera — no leitor das etiquetas do sistema.
+
+**Como funciona.** Ao abrir, a tela pede acesso à câmera (*"Autorize o uso da câmera para começar a ler."*). Autorizado, o vídeo aparece com uma moldura de mira e o texto *"Lendo… centralize o QR na moldura."* Ao reconhecer o QR de uma etiqueta, o aparelho vibra (quando o navegador suporta) e a tela do item abre **já filtrada e destacada** — o mesmo destino da tabela da seção 4.8.
+
+**Segurança: o Scanner só abre telas do próprio Almoxarifado.** Qualquer QR que não seja uma etiqueta do sistema — um boleto, um link de site, um cartão de visita — **não é aberto**: a tela mostra o aviso *"Este QR não é uma etiqueta do almoxarifado — por segurança, o conteúdo é só exibido, nunca aberto."* com o conteúdo em texto e os botões **Copiar** e **Ler outro**. Vale também para endereços parecidos: só caminhos do módulo de verdade navegam. Uma etiqueta impressa quando o sistema morava em outro endereço continua funcionando — o Scanner aproveita o caminho interno e ignora o domínio de origem.
+
+**Sem câmera, o fluxo não morre.** Se a permissão for negada, ou o aparelho/navegador não oferecer câmera, a tela mostra **Câmera indisponível**, com instrução para liberar a permissão e um campo de reserva: *"Cole aqui o conteúdo do QR (ex.: link da etiqueta)"*. O texto colado passa pela **mesma** validação da leitura por câmera.
+
+**Requisito técnico:** o acesso à câmera só funciona quando o sistema é acessado por **HTTPS** (ou em `localhost`). Por HTTP puro, a tela cai direto em "Câmera indisponível" — a colagem manual continua disponível.
 
 ---
 
@@ -881,6 +896,14 @@ Regras:
 - Se todos os itens foram atendidos por completo, o status vira **Entregue**; senão, **Parcialmente Atendida**.
 
 **O disponível usado aqui soma de volta a reserva da própria requisição** — o que a aprovação reservou é daquela requisição e não pode barrá-la (9.4).
+
+**Assinatura do recebedor.** Logo depois de uma entrega bem-sucedida, o sistema abre **✍ Colher assinatura do recebedor**: o nome de quem retirou o material e um quadro para assinar na tela (funciona com o dedo e com o mouse; **Confirmar assinatura** só habilita depois de existir traço, e **Limpar** recomeça). As regras:
+
+- **A assinatura é opcional e nunca segura a entrega.** O botão **Pular** fecha sem gravar nada e a entrega fica valendo. Se o envio da assinatura falhar, a entrega também não é desfeita — o material já saiu fisicamente; a assinatura é a documentação disso.
+- **O nome é obrigatório para assinar** → *"Informe o nome de quem recebeu o material"*. No sucesso: *"Assinatura do recebedor registrada!"*. O recebedor é um **nome digitado**, não um usuário do sistema — quem retira material no balcão não precisa ter login.
+- **Só requisição já entregue aceita assinatura** (Entregue, Parcialmente Atendida ou Encerrada — encerrada aceita porque a assinatura pode chegar depois do fechamento). Fora desses status a recusa é *"Só é possível registrar assinatura de entrega em requisição entregue (total ou parcialmente). Status atual: APROVADA."* — com o status real na mensagem.
+- **Assinatura não se edita nem se apaga.** Cada entrega pode gerar a sua; todas ficam no detalhe da requisição, em ordem, com o nome do recebedor, a data, quem colheu e a imagem (miniatura que amplia ao clicar). Errou? Colhe-se outra — a anterior permanece, com registro de auditoria.
+- **Quem entrega é quem colhe**: o botão **＋ Assinatura de entrega** (no detalhe de requisição entregue ou encerrada) aparece para os perfis Administrador e Almoxarife — os mesmos da entrega. O solicitante tem o próprio registro, separado: a **confirmação de recebimento** (7.6).
 
 ### 7.6 Confirmação de recebimento, encerramento e cancelamento
 
