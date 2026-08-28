@@ -367,25 +367,22 @@ porque somem da memória e não do código.
   qual dos dois é o certo é pergunta de negócio, não técnica ("100 sem endereço + 40 na prateleira A"
   é um material com 140 espalhado, ou um material com 40 que acabou de ser inventariado?), e a Task 3
   já foi refeita uma vez por responder isso sozinha. Levar ao cliente antes de mexer.
-- **Pendência nomeada — a conclusão de inventário escreve `quantidade_atual` por fora do motor.**
-  `PUT /api/almoxarifado/conferencias/:id/concluir` com `aplicar_ajustes` faz
-  `UPDATE materiais_almoxarifado SET quantidade_atual = ?` direto (handler dessa rota em
-  `server/routes/almoxarifado.js`; há um comentário no próprio arquivo dizendo que é "o caminho
-  mais destrutivo do arquivo") e insere a linha `AJUSTE` no livro à mão.
+- **~~Pendência: a conclusão de inventário escreve `quantidade_atual` por fora do motor.~~
+  RESOLVIDA na Etapa 10 (2026-08-22) — e esta spec continuou afirmando o contrário por seis
+  etapas.** Esta seção dizia, com detalhe e consequência ("o número homologado no inventário
+  evapora"), que `PUT /conferencias/:id/concluir` fazia `UPDATE materiais_almoxarifado SET
+  quantidade_atual` cru e inseria a linha do livro à mão. **Isso deixou de ser verdade na
+  Etapa 10:** a conclusão passou a aplicar cada ajuste por
+  `stockService.registrarMovimentacao` com o tipo dedicado `AJUSTE_INVENTARIO`, com
+  pré-validação tudo-ou-nada e guarda de retenção. Medição de 2026-08-28 (Fase 0 da Etapa 18):
+  `grep "SET quantidade_atual"` em `routes/almoxarifado.js` e `routes/almoxarifado/extended.js`
+  devolve **zero**; o teste `inventarioIntegracao.api.test.js` trava o comportamento novo.
+  A spec 17 registrou a correção na época; **esta aqui e a 23 ficaram para trás** — quem leu
+  esta seção entre a Etapa 10 e a 18 foi ativamente enganado sobre o maior risco do módulo.
+  A exceção que sobra à invariante "quem mexe no total mexe na linha" **não é mais o
+  inventário**; o que continua aberto é a não-atomicidade da conclusão (pré-validação e
+  aplicação sem transação envolvente), declarada em comentário na própria rota.
 
-  > **Sem número de linha, de propósito.** Esta spec já citou "~linha 868" e depois "894/917"; o
-  > `UPDATE` andou de novo no review final. Número de linha em spec envelhece entre dois commits —
-  > procure pela rota e pelo `UPDATE materiais_almoxarifado SET quantidade_atual`. **Nunca toca em `estoque_saldo_almoxarifado`.** Com a
-  reconciliação por soma, a consequência é concreta: num material que já tem linhas de saldo, a
-  homologação do inventário muda o total e deixa as linhas com o valor antigo; a próxima contagem
-  por localização (ou o estorno de um AJUSTE) chama `syncMaterialTotals`, que reconcilia a partir
-  dessas linhas desatualizadas — o número homologado no inventário evapora. **Não é regressão da
-  Etapa 6:** esse `UPDATE` cru é anterior a ela, e a evaporação já existia (o motor sempre teve
-  ramos que somam as linhas). Consertar = rotear a rota pelo `stockService.registrarMovimentacao`
-  (AJUSTE por material, com localização quando o item da conferência tiver), o que muda o
-  comportamento de uma rota com permissão própria e precisa de teste de API próprio — **task
-  separada**, não foi feita na Task 3 da Etapa 6 de propósito. Enquanto não for feita, esta é a
-  única exceção conhecida à invariante "quem mexe no total mexe na linha".
 - **`TIPOS_MOVIMENTO_ROTA` falha aberto.** A whitelist da rota `/movimentacoes/v2` é derivada por
   subtração (`TIPOS_MOVIMENTO` − `ESTORNO` − `TIPOS_RETENCAO`). Um tipo novo acrescentado a
   `TIPOS_MOVIMENTO` entra na rota **automaticamente**: o default é certo para tipo operacional e

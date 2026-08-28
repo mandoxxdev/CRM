@@ -21,9 +21,30 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
   - motor de estoque: movimentação e estorno — a tela usa `POST /movimentacoes/v2` e o cancelamento, que auditam;
   - serviços de cauda: `reservationService`, `lotService`, `receiptService`, `inspectionService` e `returnService`.
 
-  **Os dois buracos reais que restam (auditoria de 2026-08-11):**
-  1. Conclusão de conferência/inventário — `PUT /conferencias/:id/concluir` faz UPDATE cru de `quantidade_atual` + INSERT manual de movimentação, sem `registrarAuditoria` (detalhado na feature 17);
-  2. `scrapService` (sobras) — único serviço de cauda sem nenhuma chamada de auditoria (detalhado na feature 15).
+  **⚠️ Correção (2026-08-28, Etapa 18) — DUAS afirmações desta spec estavam erradas:**
+  1. Ela dizia que a conclusão de conferência "faz UPDATE cru de `quantidade_atual` + INSERT
+     manual de movimentação". **A primeira metade está errada desde a Etapa 10** (2026-08-22):
+     o ajuste passa pelo motor como `AJUSTE_INVENTARIO`; `grep "SET quantidade_atual"` nas
+     rotas devolve zero. Só a segunda metade — "sem `registrarAuditoria`" — era verdade, **e
+     foi paga nesta etapa**.
+  2. Ela lista "excluir" entre as requisições que auditam. **Falso:** `requisitionService.js`
+     não tinha nenhuma chamada de `registrarAuditoria` (só os estornos apareciam, como
+     `movimentacao`). Corrigido na Etapa 18 (`requisicao`/`EXCLUSAO`).
+
+  **Buracos daquela auditoria (2026-08-11), estado em 2026-08-28:**
+  1. ~~Conclusão de conferência/inventário sem auditoria~~ — **PAGO na Etapa 18**
+     (`3893444`, `395caf3`): `entidade: 'conferencia'` com 5 ações (CRIACAO, CONTAGEM,
+     RECONTAGEM, CONCLUSAO, CANCELAMENTO), todas pós-escrita e best-effort; cancelar passou a
+     exigir motivo e a gravar autor/data; `aprovador_id`/`aprovador_nome` deixaram de ser
+     colunas mortas.
+  2. ~~`scrapService` (sobras)~~ — **PAGO na Etapa 9** (`bedce46`).
+
+  **Buracos que restam, nomeados (medição da Etapa 18):** os ~20 endpoints de cadastro e
+  configuração (tipos, localizações, setores, famílias, **configurações** — que mudam regra de
+  negócio —, centros de custo, almoxarifados e permissões de setor por material) seguem sem
+  trilha; e a rota `GET /almoxarifado/auditoria`, agora gateada por `configurar`, **não é
+  consumida por nenhuma tela** — a trilha existe e não tem leitor prático (letra B do
+  fechamento da Etapa 18).
 - `logs_auditoria` global (tentativas de acesso negado) + `POST /api/auditoria/tentativa-acesso`.
 - Front: `systemPermissions.js`, `permissionsCache.js`, guards de rota, telas de admin.
 - Teste: `permissionsCacheAdmin.test.js` (⚠️ replica lógica em vez de importar — corrigir junto do harness).

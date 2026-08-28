@@ -2,11 +2,19 @@
 
 > Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 17) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 18) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 17 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 18 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 17 completas.** A **Etapa 17 (Alertas de evento)** fechou em 2026-08-28
+> **Etapas 1 a 18 completas.** A **Etapa 18 (trilha do inventário)** fechou em 2026-08-28
+> (`adf7233..aee9c9e`): abrir, contar, recontar, concluir e **cancelar** uma conferência
+> passam a deixar registro de quem fez o quê; **cancelar exige um motivo escrito** e o motivo
+> aparece na lista; três operações vizinhas (desativar material, cancelar e excluir
+> requisição) também passaram a registrar. **Atenção operacional: quem cancela conferência vai
+> encontrar um modal pedindo justificativa — avise a equipe** (letra C21/B34 das novidades).
+> Ver a seção "Etapa 18" abaixo.
+>
+> **Antes: Etapas 1 a 17 completas.** A **Etapa 17 (Alertas de evento)** fechou em 2026-08-28
 > (`d65d81b..e51ca79`): reprovar material numa inspeção, registrar quantidade diferente da
 > esperada e concluir conferência com divergência passam a avisar **no instante do ato** (e a
 > varredura diária vira rede de segurança, sem duplicar); mais o **resumo mensal de lotes sem
@@ -2927,6 +2935,42 @@ divergência), e os lotes parados sem certificado viram um resumo mensal.
 - Os 3 alertas que faltam da lista original seguem sem dado nas features donas.
 - **Atenção operacional (letra C20 das novidades):** mexer num recebimento antigo com
   divergência que nunca foi comunicada gera aviso agora — é a rede de segurança, não erro.
+
+## Etapa 18 — A trilha do inventário (ENTREGUE — 2026-08-28)
+
+**O que mudou, em uma frase:** os cinco atos de uma conferência de estoque passam a deixar
+registro com autor e de/para, e cancelar exige justificativa escrita.
+
+### Roteiro de teste manual
+
+1. **Cancelar agora pede motivo.** Em **Conferências de Estoque**, abra uma conferência nova e
+   clique no botão de cancelar: o modal pede "Motivo do cancelamento" e o botão de confirmar
+   fica **travado** até 5 caracteres. Digite "Aberta por engano" e confirme.
+2. **O motivo fica à vista.** Na lista, a linha CANCELADA mostra o motivo logo abaixo do
+   status; passe o mouse por cima e aparece quem cancelou e quando. A coluna de encerramento
+   mostra a data do cancelamento (antes ficava vazia para sempre).
+3. **Só cancela o que está em andamento.** Tente cancelar uma conferência já concluída: a
+   recusa é `Conferência não está aberta (status atual: CONCLUIDO)`.
+4. **A trilha existe** (mas ainda não tem tela — letra B33): quem tiver perfil de
+   Administrador pode conferir por API em
+   `/api/almoxarifado/auditoria?entidade=conferencia&entidade_id=<id>` — a resposta traz
+   `total`, `truncado` e a lista `itens` com CRIACAO, cada CONTAGEM, as RECONTAGENS e a
+   CONCLUSAO, cada uma com o autor. Numa correção de contagem, o registro guarda o **valor
+   anterior e quem o havia gravado** — a única memória desse número.
+5. **Homologação registrada.** Conclua uma conferência **aplicando ajuste**: a conferência
+   passa a guardar quem homologou. Conclua outra sem nenhuma divergência: nenhum homologador
+   é inventado.
+6. **Os três atos vizinhos:** desative um material, cancele uma requisição e exclua outra —
+   os três passam a gerar registro de auditoria com o de/para.
+
+### O que a Etapa 18 NÃO cobre
+
+- **Não há tela de auditoria** — a trilha é gravada e consultável só por API, com perfil de
+  Administrador (letra B33: você decide se abre para o Gestor ou se vale construir a tela).
+- **Cadastros e configurações continuam sem trilha** (tipos, localizações, setores, famílias,
+  centros de custo, almoxarifados, permissões por setor e as configurações do módulo).
+- Conclusões simultâneas da mesma conferência ainda podem se sobrepor — limitação anterior a
+  esta etapa.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

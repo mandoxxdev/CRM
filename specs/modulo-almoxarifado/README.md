@@ -1,7 +1,27 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
-> **Última atualização:** 2026-08-28 (**Etapa 17 fechada — alertas de evento,
+> **Última atualização:** 2026-08-28 (**Etapa 18 fechada — a trilha do inventário,
+> `adf7233..aee9c9e`. A feature 23 sai de 🟡 para 🟡-forte: o maior buraco de auditoria do
+> módulo foi pago.** Abrir, contar, recontar, concluir e cancelar uma conferência passam a
+> gravar `entidade='conferencia'` com autor e de/para (5 ações, pós-escrita e best-effort);
+> **cancelar exige motivo** (≥5), grava autor/data e só vale em ABERTO, com claim atômico;
+> `aprovador_id`/`aprovador_nome` deixaram de ser colunas mortas (preenchidas pelo FATO —
+> só com ajuste aplicado); `DELETE /materiais/:id`, cancelar e excluir requisição passam a
+> auditar; `GET /auditoria` ganhou gate `configurar` e paginação que **declara o corte**.
+> **DUAS SPECS CORRIGIDAS EM VOZ ALTA:** a 03 e a 23 afirmavam que a conclusão de inventário
+> escreve `quantidade_atual` fora do motor — isso morreu na Etapa 10 e as specs enganaram por
+> seis etapas; e a 23 dizia que "excluir requisição" audita, o que era falso. Revisão
+> adversarial (2 lentes): 6 achados reais, 0 ruído — inclusive **regressão da própria etapa**
+> (a reescrita do cancelar perdeu o claim atômico e a trilha chegou a fabricar cancelamento
+> que não vigorou, medido com `Promise.all`), o de/para nomeando o contador errado da 3ª
+> contagem em diante, e a truncagem silenciosa do log em 200 linhas engolindo os atos mais
+> velhos. **Fica declarado (B33): a trilha ainda não tem leitor prático** — nenhuma tela a
+> consome e o gate é ADMIN-only.
+> **Números (medidos no fechamento da Etapa 18, 2026-08-28):** `test:api` **134/134**,
+> `test:almoxarifado` **42/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
+> `test:sqlite` **3/0**; client **531 testes em 36 suítes**, build `CI=true` exit 0.
+> Antes: 2026-08-28 (**Etapa 17 fechada — alertas de evento,
 > `d65d81b..e51ca79`. A feature 20 vira 🟢 no que é viável hoje: 17 de 20 alertas. Os 3
 > alertas de ATO (material reprovado, divergência de recebimento, divergência de inventário)
 > avisam no instante do fato por `dispararAlertaRegistrado`, reusando dedupe/textos da mesma
@@ -396,7 +416,7 @@
 | 20 | [Alertas operacionais](20-alertas/README.md) | 🟢 | 🟢 | ✅ | 🟢 **17 de 20 (Etapa 16 somou 7 por varredura, `6bed5e2..ed5f032`; Etapa 17 somou 4 no ato/vigília, `d65d81b..e51ca79`)** — registro único `alertRegistry` com DOIS modos: varredura diária pela fila da 19 e **disparo no ato** (`dispararAlertaRegistrado`) para reprovação de material, divergência de recebimento (nos dois escritores reais da quantidade) e divergência de inventário (agregada por conferência, sem valor em reais — B30); `listar` dual-mode dá a régua única para gancho e central. Central `/almoxarifado/alertas` ao vivo gateada por `ver_alertas` (B28); 4 janelas configuráveis nos dois lados. Dois itens SAÍRAM do checklist dizendo por quê (transferência: CORTADA pelo cliente; negativo: regra do motor). **Falta só o que não tem dado:** separado-aguardando-retirada, pedido-parcial e consumo-acima-do-previsto — cada um preso a uma coluna/entidade que a feature dona não tem |
 | 21 | [Relatórios e dashboards](21-relatorios-dashboards/README.md) | 🟢 | 🟢 | ✅ | 🟡 **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)** — `reportRegistry` com 18 chaves e gate DECLARADO por chave (mata a classe "relatório novo esquece o gate", 2 precedentes 10b/11; o processo nem sobe com chave órfã), lista fail-closed servindo exportavel/limite/nota/colunas, export XLSX genérico com projeção (paridade linha+cabeçalho medida; payload objeto → 400 literal), `consumoSql.js` fonte única (4 réguas divergentes DOCUMENTADAS — 10 vs 18 medido, unificar é letra B19), indicadores (giro aproximado declarado, cobertura mediana, rupturas físico+tipo, valor por grupo, atendimento sem janela), tela `/almoxarifado/relatorios` dirigida pelo registro, 3 cartões no dashboard. **Falta para 🟢 pleno:** PDF (corte D), previsto×realizado (depende da 22), % no prazo/fornecedor (features donas), valorização por cliente (letra B) |
 | 22 | [Integrações](22-integracoes/README.md) | 🟡 | 🟡 | ✅ | 🟡 **Etapa 14 entregue (2026-08-25, `b276dca..2de7944`)** — a fatia integrável REAL, medida antes de prometida: **Compras** (ciclo de vida da solicitação: RECEBIDA automática no recebimento da nota do pedido vinculado, nos dois caminhos; CANCELADA manual com justificativa auditada — **fecha a B14 da feature 18**; vincular valida as duas pontas; D9 abre vincular/verificar-mínimos para `gerenciar_reposicao`; verificar-mínimos audita o autor; contexto do comprador com último custo por NF) e **custo por projeto** (relatório `custo-por-projeto` computado do livro, consumido/devolvido/líquido, custo atual retroativo declarado, gate nasce fechado; herança de projeto/OS na devolução nas duas pernas). **Falta para 🟢, tudo bloqueado por dependência com a medição escrita na spec:** BOM/Engenharia (inexistente no sistema), OP/Produção (MES sem uso), centro de custo (sem entidade), previsto×realizado, acompanhamento de prazo de pedido, aviso de rejeição da Qualidade ao comprador |
-| 23 | [Perfis, segurança e auditoria](23-perfis-seguranca-auditoria/README.md) | 🟡 | 🟡 | 🟡 | 🟡 Correção 2026-08-11: a spec dizia "auditoria com 0 linhas em produção" — **superado desde as Etapas 3-6** (materiais, requisições, motor, reservas, lotes, recebimento e inspeção auditam, todos com tela). Buraco real restante: conferência de inventário não audita. **A pendência das sobras foi paga na Etapa 9, Task 1 (`bedce46`)** — `scrapService` audita atualizar e gerar retalho, e o sucateamento audita solicitar/aprovar/rejeitar/cancelar/destino/compensação |
+| 23 | [Perfis, segurança e auditoria](23-perfis-seguranca-auditoria/README.md) | 🟡 | 🟡 | ✅ | 🟡-forte **Etapa 18 pagou o maior buraco (2026-08-28, `adf7233..aee9c9e`)** — a conferência de inventário passa a auditar os 5 atos (criar/contar/recontar/concluir/cancelar) com autor e de/para; cancelar exige motivo e grava quem/quando com claim atômico; `aprovador_*` ressuscitadas; `DELETE /materiais`, cancelar e excluir requisição auditam; `GET /auditoria` gateado por `configurar` e com corte declarado. **Duas afirmações desta spec e da 03 estavam ERRADAS e foram corrigidas em voz alta** (UPDATE cru do inventário morreu na Etapa 10; "excluir requisição audita" era falso). **Falta:** os ~20 endpoints de cadastro/configuração sem trilha (o mais sensível: mudar configuração do módulo), a tela de auditoria (a trilha não tem leitor — B33), user-agent/IP e lançamento retroativo |
 | 24 | [Mobilidade](24-mobilidade/README.md) | ✅ | ✅ | ✅ | 🟢 **Etapa 15 entregue (2026-08-28, `7f74b6c..a82ad43`) — no escopo MEDIDO, que não é a Fase 4 inteira da spec original.** Scanner de QR pela câmera (`/almoxarifado/scanner`, client-only: os QRs da 6c carregam URLs do próprio sistema; `parseQrDestino` só navega para `/almoxarifado/...` com filtro explícito de protocolo E de prefixo-com-barra — o Important da revisão final); assinatura digital + recebedor na entrega de requisição (tabela append-only `assinaturas_entrega_almoxarifado` auditada, `POST /requisicoes/:id/assinatura-entrega` multipart gateado por `separar_emitir`, detalhe expõe `assinaturas_entrega`; **opcional por design** — a entrega nunca depende dela); balcão mobile (a regra CSS que escondia colunas ≥4 — inclusive Ações — morreu; scroll na própria `.almox-table`; modais fullscreen). **Fora por medição, declarado:** 1D (nada gera), coletor (hardware não confirmado), app nativo/PWA/offline, fotografia na saída, flags `requer_assinatura`/`requer_termo` seguem mortas (B26). Pendências nomeadas na spec: 500 opaco de multer nas 5 rotas de upload, teste em aparelho real, flags por tipo |
 
 ## Ordem de desenvolvimento sugerida (etapas pequenas)
@@ -708,6 +728,9 @@ A Fase 0 mediu a maturidade antes de prometer: Compras maduro (integrado de verd
 
 ### Etapa 15 — ✅ ENTREGUE em 2026-08-28 → `24-mobilidade` (`7f74b6c..a82ad43`)
 A Fase 4 da spec original dizia "código de barras, coletores, app móvel, assinatura digital" — a Fase 0 da etapa **mediu** e entregou a fatia real: scanner de QR pela câmera (fecha o ciclo das etiquetas 6c), assinatura do recebedor na entrega de requisição e o balcão usável no celular. O que ficou fora está declarado com o porquê na spec 24 e nas letras B25-B27/D das novidades. Próxima frente: pelo mapa de status (não há mais roteiro de etapas — ver o cabeçalho).
+
+### Etapa 18 — ✅ ENTREGUE em 2026-08-28 → `23-perfis-seguranca-auditoria` (`adf7233..aee9c9e`)
+Escolhida pelo handoff da 17: o buraco de auditoria mais antigo do mapa. Entregou a trilha do inventário, o cancelamento com motivo e autor, as colunas de aprovador ressuscitadas, três atos vizinhos auditados e o gate do log — mais a correção de duas specs que descreviam um bug morto desde a Etapa 10.
 
 ### Etapa 17 — ✅ ENTREGUE em 2026-08-28 → `20-alertas` (`d65d81b..e51ca79`)
 Fatia 2 da feature 20, escolhida pelo handoff da 16: os alertas que nascem no ATO (reprovação, divergência de recebimento, divergência de inventário) mais o resumo de lotes sem certificado. O modo evento é aditivo — a mesma entrada do registro serve à central, à varredura e ao gancho.

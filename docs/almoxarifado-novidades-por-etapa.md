@@ -405,6 +405,24 @@ nota com N itens divergentes gera N avisos (medido: 300 itens = 300 e-mails de u
 o material; **descartado** agregar por nota. Se aparecer nota gigante na prática, a saída é
 o mesmo resumo do inventário.
 
+**B33 (NOVO, da Etapa 18) — a trilha do inventário existe e ainda não tem leitor prático.
+Preciso da sua decisão.** A etapa passou a gravar cinco atos por conferência (e a exigir um
+motivo de quem cancela), mas: (a) **nenhuma tela mostra o log**, e (b) a consulta exige perfil
+de **Administrador** — então o Gestor que conduziu o inventário não consegue ver nem o próprio
+registro. **Escolhido** fechar o gate agora, porque antes dele QUALQUER usuário do módulo lia
+o log inteiro do almoxarifado (incluindo de/para de custo e de requisição) — isso era
+exposição real. **Descartado** abrir para Gestor por conta própria: seria decisão de exposição
+tomada no seu lugar. As opções: (1) fica só com Administrador e a leitura é sob demanda
+técnica; (2) abre para Gestor também; (3) constrói-se uma tela de auditoria filtrada por
+conferência (aí o Gestor vê o log do inventário dele sem ver o resto). A (3) é a resposta
+completa e é uma etapa própria.
+
+**B34 (NOVO, da Etapa 18) — cancelar inventário agora exige justificativa escrita.** Antes era
+um clique. **Escolhido** exigir motivo (mínimo 5 caracteres), pela mesma régua que a conclusão
+com ajuste já usava — cancelar uma contagem inteira é tão destrutivo quanto homologar o ajuste
+dela. **Descartado** deixar opcional. Se sua equipe achar o atrito demais em cancelamentos de
+rotina (ex.: conferência aberta por engano), diga — a régua está num lugar só.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -554,6 +572,11 @@ o mesmo resumo do inventário.
    avisado), mas nos primeiros dias depois de subir esta etapa espere avisos de recebimentos
    legados conforme a equipe for tocando neles. *(A primeira versão da documentação dizia que
    "o dedupe segura o e-mail" nesse caso — **estava errado**, e a revisão provou com sonda.)*
+
+21. **(18) A partir de agora, cancelar uma conferência de estoque pede um motivo escrito.**
+   Quem estiver acostumado a cancelar com um clique vai encontrar um modal pedindo pelo menos
+   5 caracteres. É de propósito (letra B34) — mas avise a equipe antes, para não parecer
+   travamento.
 
 19. **(16) Requisição com data de necessidade ilegível NUNCA alerta atraso — em silêncio.**
    O campo aceita texto livre por API (`01/01/2020` grava e a régua de data não o enxerga
@@ -782,6 +805,11 @@ se um PDF abre legível ou se um modal coube na largura. Ficaram, portanto, **se
    tela). Falta conferir: os cartões **Material reprovado**, **Divergência de recebimento**,
    **Divergência de inventário** e **Lote sem certificado** com Detalhes expandindo; e um
    e-mail de verdade chegando com acento e nome de material com "&" saindo legível.
+
+10d. **(18) O modal de cancelar conferência e a linha cancelada nunca foram vistos no
+   navegador.** A prova é a suíte (531 testes de tela). Falta olhar: o modal abrindo com o
+   botão travado até 5 caracteres, a recusa do servidor mantendo o texto digitado, e a linha
+   CANCELADA mostrando o motivo com a dica de quem/quando ao passar o mouse.
 
 10b. **(16) A central de Alertas nunca foi aberta num navegador de verdade.** A prova é a
    suíte (522 testes no client, 128 arquivos de API) — falta o olho: os cartões com os 13
@@ -2834,6 +2862,68 @@ certificado do fornecedor e estão parados sem o documento**.
 - **Os 3 alertas que faltam da lista original** seguem bloqueados por falta de dado nas
   features donas (data da transição para retirada, saldo de pedido, orçamento de projeto).
 
+## Etapa 18 — O inventário passa a deixar rastro (2026-08-28)
+
+Até aqui, abrir uma conferência de estoque, contar item por item, recontar, fechar ou
+**cancelar** não deixavam registro nenhum de quem fez o quê. O cancelamento era o pior caso:
+uma conferência com trezentas contagens podia sumir do fluxo com um clique — sem autor, sem
+data e sem motivo. E quando alguém corrigia a própria contagem, o número anterior
+simplesmente evaporava. Agora cada um desses cinco atos grava uma linha de auditoria com
+autor, horário e o de/para do que mudou; cancelar exige um motivo escrito; e a pessoa que
+homologa um ajuste de inventário fica registrada na própria conferência.
+
+De quebra, três operações vizinhas que também apagavam coisas sem trilha passaram a
+registrar: **desativar um material**, **cancelar** e **excluir uma requisição**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Abrir conferência: sem registro do ato | Linha de auditoria com escopo, tolerância, se era cega/dupla e quantos itens entraram |
+| Contar e recontar: só o último nome ficava na linha do item | Cada contagem vira registro, com o **valor anterior e quem o havia gravado** |
+| Corrigir a própria contagem apagava o número antigo para sempre | O de/para fica no log — é a única memória dele |
+| Fechar o inventário: nem quem fechou ficava gravado | Registro com ajustes aplicados, impacto e a justificativa |
+| **Cancelar: um clique, sem autor, sem data, sem motivo** | **Motivo obrigatório** (mínimo 5 caracteres), autor e data gravados — e o motivo **aparece na lista** |
+| Cancelar valia em qualquer situação | Só conferência **em andamento** pode ser cancelada |
+| Colunas de aprovador existiam no banco e nunca eram preenchidas | Quem homologa um ajuste de verdade fica registrado |
+| Desativar material / cancelar / excluir requisição: sem trilha | Os três auditam, com o de/para |
+| Log do módulo: qualquer usuário podia ler tudo | Leitura exige perfil de Administrador |
+
+### As regras, com o cenário exato
+
+1. **Cancelar exige motivo.** Na tela de Conferências, o botão de cancelar abre um modal com
+   "Motivo do cancelamento"; o botão de confirmar só habilita a partir de 5 caracteres. Por
+   API, a recusa é `Motivo do cancelamento deve ter pelo menos 5 caracteres`.
+2. **Só cancela o que está em andamento.** Tentar cancelar uma conferência já concluída
+   responde `Conferência não está aberta (status atual: CONCLUIDO)`.
+3. **O motivo não some.** Depois de cancelada, a linha mostra o motivo, e passando o mouse
+   aparece quem cancelou e quando. A coluna de encerramento passa a mostrar a data do
+   cancelamento (antes ficava vazia para sempre).
+4. **O aviso nunca atrapalha a operação.** Se o registro de auditoria falhar, a conferência é
+   criada, contada, concluída ou cancelada do mesmo jeito — o erro fica no log do servidor.
+5. **Duas pessoas cancelando ao mesmo tempo: só uma vale.** A segunda recebe a recusa de
+   status e **não** gera registro — a trilha nunca conta um cancelamento que não aconteceu.
+6. **Quem homologa fica gravado — só quando há o que homologar.** Concluir aplicando ajuste
+   registra o responsável; concluir uma contagem sem nenhuma divergência não inventa um
+   homologador.
+7. **O log declara quando tem mais coisa.** A consulta devolve o total e avisa se houve corte
+   — num inventário de 200+ contagens, ninguém mais lê uma lista truncada achando que é tudo.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **Não existe tela para ler a trilha.** O registro é gravado e consultável pela API, mas
+  nenhuma tela do sistema o mostra — e a leitura exige perfil de Administrador. Ou seja: por
+  enquanto a trilha serve para investigar um caso pontual com ajuda técnica, não para o
+  Gestor conferir sozinho. Ver a letra B.
+- **Os cadastros e as configurações continuam sem trilha** — mudar tipos, localizações,
+  setores, famílias, centros de custo, almoxarifados, permissões por setor e, o mais
+  sensível, **as configurações do módulo** (tolerância de inventário, alertas, alçadas)
+  segue sem registro. É o bloco seguinte, coerente e maior.
+- **Conclusões simultâneas da mesma conferência** ainda podem se sobrepor (limitação
+  anterior a esta etapa, declarada em comentário na rota).
+- **Histórico completo das contagens como entidade própria** — o log guarda o de/para; uma
+  tabela de versões de contagem é outra coisa.
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -2861,6 +2951,14 @@ certificado do fornecedor e estão parados sem o documento**.
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **Etapa 18 entregue (2026-08-28):** **a trilha do inventário** (feature 23) — abrir,
+  contar, recontar, concluir e cancelar passam a deixar registro com autor e de/para;
+  cancelar exige motivo e grava quem/quando (e o motivo aparece na tela); as colunas de
+  aprovador deixaram de ser mortas; três atos vizinhos auditam; o log ganhou gate. Revisão
+  adversarial: 6 achados reais, 0 ruído — inclusive uma **regressão da própria etapa** (a
+  reescrita do cancelar tinha perdido o travamento contra concorrência e a trilha chegou a
+  fabricar um cancelamento que não vigorou) e a truncagem silenciosa do log. **Correção de
+  duas specs que enganavam desde 2026-08-22.**
 - **Etapa 17 entregue (2026-08-28):** **alertas de evento** (feature 20 sai de 13 para 17
   alertas) — reprovação de material, divergência de recebimento e divergência de inventário
   avisam **no ato** (com a varredura diária como rede de segurança e sem duplicar), mais o

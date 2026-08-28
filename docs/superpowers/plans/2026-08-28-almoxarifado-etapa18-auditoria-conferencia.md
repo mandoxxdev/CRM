@@ -433,11 +433,46 @@ versão do plano mandava seguir o `confirm`+`prompt` da tela de Reposição, que
   errado**, sem ele caem 1 teste da matriz e 3 da jornada), e os "6 cenários que passavam
   vazios" (sabotados de verdade, falham). Revalidação: server **134/134**, client
   **531/531**, build exit 0.
-- [ ] Fase 6 — fechar-etapa + retro (**incluindo a correção das specs 03 e 23**)
+- [x] Fase 6 — fechar-etapa (2026-08-28): 7 artefatos + **a correção das specs 03 e 23**, que
+  era o item mais importante — as duas afirmavam que a conclusão de inventário escreve
+  `quantidade_atual` fora do motor (morto desde a Etapa 10) e a 23 dizia que "excluir
+  requisição audita" (falso). As duas foram corrigidas **dizendo que estavam erradas**, com
+  a medição que provou. Novidades com a seção da etapa, B33/B34, C21 e F10d; mapa com
+  cabeçalho, linha da 23 e seção; guia com roteiro; manual com a trilha na 5.7 e o
+  cancelamento na 13.6.
 
-## Retro (4 números — preencher no fechamento)
+## Retro (4 números — medida no fechamento)
 
-- Rodadas de correção até verde: —
-- Achados da revisão: reais — / ruído —
-- Paralelismo real: —
+- Rodadas de correção até verde: **1** (fix round único `aee9c9e`; nenhum teste falhou 2×).
+- Achados da revisão: **reais 23 / ruído 0** — 17 na revisão do PLANO (6 bloqueantes, com um
+  teste de RN-02 que era **impossível de falhar** por causa do import desestruturado) e 6 na
+  ADVERSARIAL (1 ALTO que era **regressão da própria etapa**: a reescrita do cancelar perdeu
+  o claim atômico e a trilha chegou a fabricar cancelamento que não vigorou, reproduzido com
+  `Promise.all`). Nenhum achado foi descartado como ruído em nenhuma das duas.
+- Paralelismo real: **T2 ∥ T3 (2 execuções simultâneas), zero retrabalho.** A worktree do
+  galho nasceu na base errada pela **quarta vez** e a checagem obrigatória pegou antes do
+  código.
 - Defeito que escapou (preencher na etapa seguinte): —
+- (Da retro da Etapa 17: **nenhum defeito escapado descoberto durante a 18** — as suítes da
+  17 seguiram verdes.)
+
+## Próxima tarefa detalhada — a próxima frente sai do mapa
+
+Modo contínuo segue. Candidatas, na ordem recomendada:
+
+1. **Fatia 2 da feature 23 — auditoria de cadastros e configurações** (~20 endpoints
+   nomeados na medição desta etapa: tipos, localizações, setores, famílias, centros de custo,
+   almoxarifados, permissões de setor por material e — o mais sensível — `PUT /configuracoes`,
+   que muda regra de negócio sem trilha). É um bloco coerente, repetitivo e de risco baixo;
+   o padrão já está estabelecido por esta etapa (pós-escrita, best-effort, `de/para`).
+2. **A tela de auditoria** — resolve a B33 (a trilha existe e não tem leitor). Precisa
+   decidir o recorte de permissão junto: filtrada por conferência para o Gestor, ou log
+   inteiro só para Administrador. **Depende de resposta do usuário.**
+3. **Pendências herdadas, todas nomeadas:** `z.regex` na `data_necessidade` (C19), coluna da
+   transição de inspeção (C18), G7 (multer 500 nas 5 rotas de upload, da E15), os 3 alertas
+   sem dado (E16/E17), e a não-atomicidade da conclusão de conferência (pré-existente,
+   declarada em comentário na rota).
+
+O que a próxima sessão NÃO precisa reabrir: o padrão de auditoria desta etapa, o registro de
+alertas e seus dois modos, a fila da 12, e as fontes únicas. Decisões B em aberto: B5-B24
+antigas + B25-B34.

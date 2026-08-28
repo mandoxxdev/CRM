@@ -613,12 +613,13 @@ A mudança vale para as próximas ações da pessoa — pode levar alguns instan
 
 Toda operação relevante do módulo grava uma trilha com **quem** (nome do usuário), **quando**, **o que** (a entidade e a ação), os **valores anteriores e novos** quando houve alteração, e a **justificativa** quando a operação exige uma.
 
-São auditados: criação e edição de material; aprovação, rejeição, confirmação, encerramento e exclusão de requisição; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e a própria troca de perfil de um usuário.
+São auditados: criação e **desativação** de material, e a edição; aprovação, rejeição, confirmação, encerramento, **cancelamento e exclusão** de requisição; **todo o ciclo da conferência de inventário — abertura, cada contagem, cada recontagem, a conclusão e o cancelamento**; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e a própria troca de perfil de um usuário.
 
 Duas notas de comportamento que evitam mal-entendido:
 
 - **A auditoria nunca derruba a operação.** Se o registro do histórico falhar por algum motivo, a operação que o usuário pediu é concluída assim mesmo — perder o registro é ruim, recusar um recebimento válido por causa do registro seria pior.
 - **Movimentação confirmada não se apaga.** Não existe "excluir lançamento". O único caminho para desfazer é o **estorno**, que exige motivo e cria um lançamento próprio — o engano fica visível no livro, junto com a correção.
+- **Quem lê a trilha.** A consulta ao histórico do módulo é restrita ao **Administrador**, e hoje ela existe apenas como consulta técnica: nenhuma tela do sistema exibe a trilha. Na prática, isso significa que o histórico serve para investigar um caso específico com apoio de quem administra o sistema, não para consulta do dia a dia. A consulta informa quantos registros existem no total e avisa quando a resposta foi cortada, de modo que ninguém leia uma lista parcial achando que é tudo.
 
 ---
 
@@ -1473,7 +1474,11 @@ automaticamente.
 
 ### 13.6 Cancelar
 
-Uma conferência **Aberta** pode ser cancelada, e cancelar **não altera saldo nenhum**. Conferência já concluída não volta atrás: *"Só é possível cancelar conferências abertas"*.
+Uma conferência **Aberta** pode ser cancelada, e cancelar **não altera saldo nenhum**. Cancelar **exige um motivo escrito de pelo menos 5 caracteres** — a mesma régua da justificativa de ajuste, porque descartar uma contagem inteira é tão sério quanto homologar a diferença dela. O botão de confirmar fica bloqueado até o motivo atingir esse tamanho; por integração, a recusa é *"Motivo do cancelamento deve ter pelo menos 5 caracteres"*.
+
+Ficam gravados **quem cancelou, quando e por quê**, e o motivo passa a aparecer na própria lista de conferências, com a autoria e a data disponíveis ao passar o mouse. A coluna de encerramento da lista mostra a data do cancelamento.
+
+Conferência já concluída não volta atrás: *"Conferência não está aberta (status atual: CONCLUIDO)"*. E se duas pessoas cancelarem a mesma conferência ao mesmo tempo, **apenas uma vale** — a segunda recebe a mesma recusa de situação, e o histórico não registra um cancelamento que não vigorou.
 
 Uma movimentação de ajuste de inventário, uma vez aplicada, **não pode ser estornada** pelo botão
 de estorno do livro de Movimentações — ela representa uma contagem física já homologada, e
