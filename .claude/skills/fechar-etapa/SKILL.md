@@ -169,6 +169,22 @@ aprendidas por falha silenciosa aqui:
 - `md5sum` **antes**, **depois da sabotagem** e **depois de restaurar**; `git diff --stat` tem de
   voltar vazio. Só o md5 pegou uma sabotagem que não fez nada.
 - **Sabotagem que não derruba nenhum teste é um achado**, não um detalhe: diga qual asserção falta.
+- **Leia QUAL asserção caiu, não só o placar.** Uma sabotagem que derruba o cenário certo pela
+  asserção *errada* deixa a asserção que interessa sem prova nenhuma — e o placar vermelho faz
+  parecer que está tudo coberto. Aconteceu **três vezes seguidas** nesta base, sempre com o
+  controle positivo prescrito no plano: (1) as duas sabotagens do de/para de auditoria não
+  tocavam o cenário do segredo, porque quem apaga o segredo é a comparação de igualdade e não a
+  iteração; (2) trocar os `params` do fetch por `{}` derrubava o cenário pela primeira asserção
+  (`data_inicio`), então a linha do `Array.isArray` — o ponto do achado — nunca rodava; (3) uma
+  sabotagem de fiação passava porque o teste contava ocorrências do identificador em vez de
+  travar a chamada literal. **Se a asserção que guarda o achado não caiu, o controle não valeu**:
+  acrescente a sabotagem que a atinge, não troque por outra que funcione.
+- **Teste que depende de fuso, relógio ou locale precisa declarar isso e falhar fora do
+  ambiente esperado.** Um cenário de UTC-vs-local passa vazio numa máquina em UTC. Fixe
+  `process.env.TZ` antes do primeiro `Date` e abra o cenário com uma guarda que **derrube** o
+  teste no ambiente errado, em vez de deixá-lo verde provando nada.
+- **Cenário que afirma ausência ("não mostra o aviso") passa com a tela vazia.** Todo cenário
+  negativo precisa da metade positiva no mesmo teste — alguma coisa que **tem** de estar lá.
 
 ---
 
