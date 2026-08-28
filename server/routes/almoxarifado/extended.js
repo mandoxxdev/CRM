@@ -1549,7 +1549,17 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // C5 (RN-07): LER o mapa exige o mesmo que ESCREVE-lo. Ate a Etapa 20 este GET tinha so
+  // `auth`: qualquer usuario com acesso ao modulo — inclusive o fallback PRODUCAO, que e "sem
+  // perfil" — lia o mapa de controle de acesso de QUALQUER setor, enquanto o PUT e o
+  // POST /bulk-tipo logo abaixo ja exigiam admin. Ler quem pode requisitar o que e
+  // reconhecimento: mostra qual setor tem brecha para pedir material fora da sua alcada.
+  // Gate e mensagem COPIADOS do PUT irmao de proposito — duas mensagens diferentes para a
+  // mesma negativa confundem a tela. Coberto por tests/api/permissoesSetorLeitura.api.test.js.
   app.get('/api/almoxarifado/setores-requisicao/:id/permissoes', auth, async (req, res) => {
+    if (!isSystemAdmin(req.user) && !canConfigureAlmox(req.user)) {
+      return res.status(403).json({ error: 'Acesso restrito — administrador do Almoxarifado ou Super Administrador' });
+    }
     try {
       res.json(await sectorMaterialService.getPermissoesSetor(db, req.params.id));
     } catch (e) { handleError(res, e); }
