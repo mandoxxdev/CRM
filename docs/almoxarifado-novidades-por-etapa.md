@@ -1,14 +1,18 @@
 # Almoxarifado — O que há de novo, etapa por etapa
 
 > **Documento de melhorias do módulo almoxarifado** — consolida tudo que foi entregue da
-> Etapa 0 até a Etapa 14 (02/08/2026 a 25/08/2026), na branch `desenvolvimento-almoxarifado`.
+> Etapa 0 até a **Etapa 20** (02/08/2026 a 28/08/2026), na branch `desenvolvimento-almoxarifado`.
 > Cada seção diz o que o usuário vê de novo, o que melhorou por baixo do capô e o
 > "antes → agora" da etapa.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
-> `docs/superpowers/plans/`. Atualizado em 2026-08-25 (Etapa 14 — **desenvolvimento pausado
-> aqui por instrução do usuário**; a Etapa 15 não foi iniciada).
+> `docs/superpowers/plans/`. Atualizado em **2026-08-28 (Etapa 20)**.
+>
+> *(Este cabeçalho e a tabela abaixo diziam "até a Etapa 14" e "desenvolvimento pausado aqui" —
+> **estava desatualizado**: a pausa foi levantada em 28/08 e as Etapas 15 a 20 foram entregues,
+> cada uma com seção própria mais abaixo. Corrigido aqui e dito que estava errado, porque quem
+> lesse só o topo concluiria que metade do que existe no sistema não existe.)*
 
 ## Visão geral
 
@@ -35,6 +39,12 @@
 | 12 | Notificações Completas | 2026-08-24 | Fila de e-mails com retentativa, dedupe e histórico; e-mail de movimentação por classes (nasce desligado); três dívidas antigas pagas e três alertas novos; tela Notificações para Gestor/Admin |
 | 13 | Relatórios e Indicadores | 2026-08-24 | Tela Relatórios com menu por perfil dirigido pelo servidor, exportação XLSX com colunas curadas, e indicadores gerenciais (giro, cobertura, rupturas, valor por grupo, atendimento) com as réguas escritas |
 | 14 | Integrações — o ciclo da compra fecha | 2026-08-25 | A nota fiscal do pedido vinculado fecha a solicitação de compra sozinha; cancelar com justificativa existe (B14 resolvida); painel de contexto por material para quem compra; relatório Custo por projeto com devolução abatendo |
+| 15 | Mobilidade | 2026-08-28 | Scanner de QR pela câmera abre o item já filtrado; assinatura do recebedor na entrega de requisição; o módulo passa a caber no celular (nenhuma coluna some mais) |
+| 16 | Alertas operacionais | 2026-08-28 | O sistema passa a avisar sozinho: 7 alertas varridos todo dia por e-mail e a tela **Alertas**, que mostra as condições ao vivo |
+| 17 | Avisos que nascem no ato | 2026-08-28 | Reprovar inspeção, receber quantidade diferente e concluir contagem com divergência avisam **na hora**; mais o resumo mensal de lotes sem certificado |
+| 18 | A trilha do inventário | 2026-08-28 | Abrir, contar, recontar, concluir e cancelar conferência deixam registro; cancelar passa a exigir motivo escrito |
+| 19 | Cadastros e configurações deixam rastro | 2026-08-28 | 23 operações que mudavam o comportamento do sistema sem deixar quem/quando passam a registrar, com o de/para e sem nunca gravar segredo |
+| 20 | Exposição e rastro | 2026-08-28 | Foto de material para de mentir sucesso e de deixar arquivo órfão (e passa a auditar a troca); senha e chave de API somem da leitura de configurações; ler o mapa de permissões por setor passa a exigir administrador |
 
 Com a 6c, a feature 10 (lotes, séries e etiquetas) ficou **completa por inteiro**; com a 7, as
 features 11 (transferências) e 12 (devoluções) também; com a 8, a feature 13 (materiais de
@@ -54,8 +64,10 @@ escopo (letra D) — **a 10b entregou boa parte disso** (ver a seção dela).
 **Com a 14, a feature 18 (reposição) fecha o ciclo** (solicitação nasce, vincula, fecha no
 recebimento ou cancela com justificativa) e a **feature 22 (integrações) fica entregue na fatia
 integrável hoje** — Compras de verdade; BOM/OP bloqueados por dependência, com a medição
-escrita. **O desenvolvimento está pausado após a Etapa 14 por instrução do usuário** — ver
-"Onde estamos e o que vem a seguir".
+escrita. **Com a 20, a feature 23 (perfis, segurança e auditoria) paga os três buracos de
+exposição que ela mesma tinha nomeado** — resta dela a tela de auditoria (B33) e os itens
+declarados nas letras B/C/D. O desenvolvimento **não está mais pausado** (a pausa valeu entre a
+14 e a 15); a próxima frente sai do mapa de status — ver "Onde estamos e o que vem a seguir".
 
 ---
 
@@ -79,7 +91,11 @@ particular nem toca o motor de estoque, ferramenta é patrimônio separado. Est�
 explicitamente porque as Etapas 7 e 8 deixaram consultas pendentes e você vai procurar a das
 etapas novas.
 
-### B. Decisões de negócio — B1 a B24; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B41; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(O título desta seção dizia "B1 a B24" — **estava defasado**: os itens já iam até B36 antes da
+Etapa 20. Corrigido aqui em vez de reescrito em silêncio, porque a contagem errada fazia parecer
+que as decisões novas não tinham sido registradas.)*
 
 Guia rápido do estado: **em aberto** — B5 (taxonomia de sucata), B6 (categorias), B8 (tela de
 editar ferramenta), B9 (campo do filtro de calibração), B11 (dupla aprovação formal do ajuste),
@@ -87,7 +103,9 @@ B12 (recontagem pelo mesmo contador), B13 (quem decide compra),
 B15-B17 (as três da Etapa 12: ligar o e-mail de movimentação e validar os destinos/toggle),
 B18-B20 (as três da Etapa 13: proteção dos Indicadores, unificar as réguas de consumo, tetos/
 auditoria de export/gates antigos), B21-B24 (as quatro da Etapa 14 — **a B21 é uma abertura de
-acesso já em vigor, leia primeiro**).
+acesso já em vigor, leia primeiro**), B33 (quem lê a trilha de auditoria) e **B41 (o único item
+em aberto da Etapa 20: a contagem de permissões por setor que qualquer usuário do módulo lê)**.
+As quatro decisões da Etapa 20 que **eu já tomei** e você pode reverter estão em B37-B40.
 **Resolvidas ou já decididas** — B1-B3 (Etapa 10), B4 (custo da transformação), B7 (lembrete de
 ferramenta, pago na Etapa 12), B10 (ajuste recusado contra retenção), B14 (cancelar solicitação
 de compra, **entregue na Etapa 14**).
@@ -439,6 +457,57 @@ você vê erro mas **a regra mudou**. **Escolhido** registrar assim mesmo — o 
 o que ficou no banco, não o que a tela mostrou. **Descartado** registrar só no caminho de
 sucesso, que era o comportamento anterior e deixava exatamente esse caso sem rastro.
 
+**B37 (NOVO, da Etapa 20) — a senha de e-mail e a chave de API voltam para a tela como
+`********`, não somem da resposta.** **Escolhido** reusar exatamente a máscara que a tela de
+Alertas de Estoque já mostrava, para que as duas telas falem a mesma língua — e, quando não há
+senha gravada, o campo volta **vazio**, nunca mascarado (dizer `********` para senha inexistente
+mentiria "já está configurado" e a tela usa isso para decidir o texto do campo). **Descartado**
+omitir a chave da resposta (mudaria a forma do payload e a tela percorre as chaves uma a uma) e
+**descartado** um campo novo do tipo "configurado: sim/não" (formato inventado só para este caso,
+que ninguém mais no sistema usa). Reversível: é uma linha.
+
+**B38 (NOVO, da Etapa 20) — o salvamento genérico de configurações passa a RECUSAR a senha de
+SMTP e a chave de API.** Antes ele aceitava (as duas chaves são semeadas como qualquer outra) e
+**sem** a proteção que a tela de Alertas usa — a que ignora o reenvio da máscara. Com a máscara do
+B37, deixar assim seria o pior dos mundos: alguém lê `********`, salva, e **a máscara vira a
+senha**, derrubando o envio de e-mail em silêncio. **Escolhido** recusar com uma mensagem que
+aponta o caminho certo (`Configuração "alertas_smtp_pass" só pode ser alterada em Configurações →
+Alertas de Estoque`), **antes** de qualquer gravação — se a recusa viesse no meio, metade do
+formulário ficaria aplicada, porque essa gravação não tem transação. **Descartado** aceitar e
+ignorar em silêncio (o usuário acharia que salvou) e **descartado** replicar ali a proteção da
+outra tela (duas réguas com o mesmo nome é exatamente o defeito que já apareceu nesta base).
+
+**B39 (NOVO, da Etapa 20) — ler o mapa de "quais materiais cada setor pode requisitar" passa a
+exigir o MESMO que mudá-lo: administrador do Almoxarifado ou super administrador.** **Descartado**
+o gate mais estreito que as telas de configuração usam — leitura e escrita da mesma coisa devem
+exigir o mesmo, e o gate escolhido é literalmente o da rota irmã de escrita, mensagem inclusive.
+**Nenhum efeito para quem usa o sistema:** a única tela que lê esse mapa é a aba administrativa de
+Configurações do Almoxarifado, que já era só de administrador. Se um dia o Gestor precisar
+consultar o mapa do setor dele, é abertura de acesso e a decisão é sua.
+
+**B40 (NOVO, da Etapa 20) — a URL do webhook de WhatsApp continua saindo EM CLARO na leitura das
+configurações, de propósito.** Ela é o campo que o administrador edita na tela: devolvê-la
+mascarada faria a tela regravar a máscara **como se fosse a URL** no primeiro Salvar, matando as
+notificações em silêncio — o mesmo acidente que o B38 evita do outro lado. Some a isso que a rota
+irmã de Alertas já devolve o webhook em claro **sob o mesmo gate**, então mascarar num dos dois
+lugares não reduziria exposição nenhuma. **Descartado** mascarar e **descartado** reusar a máscara
+do histórico (ela devolve `(credenciais omitidas)`, que é vocabulário de log, não de formulário).
+A proteção de fundo continua valendo onde importa: o **histórico** de auditoria, que é permanente,
+guarda o endereço sem os parâmetros desde a Etapa 19 (B35). A consequência aceita está na letra
+**C24**. O conserto definitivo é tirar o token de dentro da URL, em etapa própria — decisão sua.
+
+**B41 (NOVO, da Etapa 20, EM ABERTO — preciso da sua resposta) — a lista de setores de requisição
+continua dizendo, para qualquer usuário do módulo, QUANTOS materiais cada setor tem liberados.**
+Achado pela revisão adversarial desta etapa e **declarado em vez de consertado**. Não é o mapa (não
+diz *quais* materiais nem *quais* perfis), mas é a mesma tabela e o mesmo tipo de reconhecimento
+que motivou o B39: dá para saber quais setores têm lista explícita e quais estão abertos. Não foi
+fechado porque **quem consome essa lista é a tela de requisição**, usada por gente que não é
+administrador — fechar exige decidir o que ela passa a receber, o que é mudança de contrato e não
+uma linha de gate. As opções: (1) fica como está (o número é reconhecimento fraco); (2) o número
+some para quem não é administrador (a tela de requisição perde a coluna); (3) o número vira um
+campo próprio pedido só pela tela administrativa. A (3) é a resposta completa e é trabalho de uma
+tarefa, não de uma linha.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -608,6 +677,30 @@ sucesso, que era o comportamento anterior e deixava exatamente esse caso sem ras
    nunca). Pelas telas o formato é sempre correto (campo de data); o risco é só integração/
    API direta. A validação de formato no servidor ficou como pendência nomeada na spec 20.
 
+24. **(20) Quem administra o Almoxarifado LÊ o token que estiver embutido na URL do webhook de
+   WhatsApp.** A Etapa 20 passou a mascarar a senha de SMTP e a chave de API na leitura das
+   configurações, mas a URL do webhook continua saindo inteira — **de propósito**, porque é o
+   campo que o administrador edita (o porquê inteiro está na B40). Se o seu webhook leva o token
+   na própria URL (é o arranjo comum, e a configuração já descreve a chave separada como
+   "opcional"), então **qualquer administrador do módulo consegue ler esse token**, hoje, abrindo
+   a tela de Alertas de Estoque. Não é aberto ao módulo inteiro: as duas leituras de configuração
+   exigem administrador do Almoxarifado ou super administrador — **isto foi medido no código
+   durante o fechamento, porque o desenho da etapa dizia "quem tem acesso ao módulo", que é mais
+   amplo do que a verdade.** O que fazer na prática: tratar o webhook como credencial ao decidir
+   quem vira administrador do módulo, e rotacionar o token se essa lista mudar.
+
+25. **(20 / relembrando G7) Mandar um arquivo do tipo errado ou grande demais em qualquer upload
+   do módulo responde `Erro interno do servidor`, sem dizer o motivo.** Vale para as cinco rotas
+   que recebem arquivo (foto de material, certificado de lote, comprovante de sucata, calibração
+   e assinatura de entrega). A validação **funciona** — nada é gravado e nenhum arquivo órfão fica
+   — mas a resposta é um 500 genérico (`{ "error": "Erro interno do servidor" }`; o motivo real só
+   aparece quando o servidor roda em modo de desenvolvimento) em vez de um erro dizendo "tipo não
+   aceito" ou "arquivo grande demais". **A Etapa 20 arrumou a rota de foto no que era dela** (ela
+   deixou de responder sucesso para material inexistente e passou a limpar o arquivo), **mas o 500
+   opaco do multer continua nas cinco** — o conserto certo é uniforme, e está nomeado na spec 24.
+   Pelas telas do sistema isso não aparece (elas só enviam o tipo certo); morde quem integrar por
+   API ou quem arrastar um PDF para o campo de foto.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -722,6 +815,26 @@ sucesso, que era o comportamento anterior e deixava exatamente esse caso sem ras
   existe é feature morta); nenhum coletor foi confirmado no galpão (se aparecer um USB/
   Bluetooth, ele emula teclado e funciona nos campos de busca sem código novo); e não há
   demanda medida de offline. O detalhe e o descartado estão na B25.
+
+- **(20) A tela de aprovação por valor continua entregando NOME e E-MAIL dos aprovadores a
+  qualquer usuário do módulo.** A configuração de alçada é lida por uma rota sem restrição de
+  perfil, e ela devolve a lista de aprovadores com nome e e-mail. **Não foi fechada de propósito:**
+  a lista de requisições depende dessa mesma leitura para saber se *você* é aprovador — fechar sem
+  mais exige decidir o que o não-administrador passa a receber (provavelmente só um "sou
+  aprovador: sim/não" e a alçada), o que é mudança de contrato de tela, não uma linha de gate.
+  Fica declarado como o irmão do B41: o mesmo tipo de decisão, esperando a mesma resposta.
+
+- **(20) A "matriz de leitura" do módulo ficou FORA — e continua grande.** Dezenas de consultas
+  operacionais (saldo, materiais, movimentações, requisições) exigem só estar logado no módulo,
+  sem olhar perfil. A Etapa 20 fechou apenas as três exposições nomeadas — as que entregavam
+  **credencial** ou **controle de acesso**. Fechar a matriz inteira é etapa própria e a régua a
+  decidir é de negócio: dado de estoque não é credencial, e o chão de fábrica precisa consultar.
+
+- **(20) `GET /api/backup` e a credencial de e-mail escrita dentro do código do sistema ficaram
+  FORA — são do núcleo do CRM, não do módulo.** Foram medidas durante esta etapa e entregues à
+  Etapa 21, que trata do núcleo; a senha, além disso, exige rotação junto ao provedor (é operação,
+  não código) e **está no histórico do repositório desde março** — trocar o arquivo não a apaga de
+  cópias já feitas.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -3030,6 +3143,118 @@ antes desta etapa não havia como saber quem mudou nem quando.
 - **A troca de foto de material** continua sem registro e responde sucesso para material
   inexistente — fora do escopo desta etapa, nomeado.
 
+## Etapa 20 — O sistema para de mentir sucesso e de falar demais (2026-08-28)
+
+Esta etapa não tem tela nova nem botão novo. Ela fecha três lugares em que o sistema **mentia** ou
+**falava demais**, e os três eram do tipo que ninguém percebe até o dia em que percebe.
+
+O primeiro: trocar a foto de um material. Se você mandasse a foto de um material que **não existe**,
+o sistema respondia **sucesso** — e guardava a imagem no servidor para sempre, sem nada apontando
+para ela. Se você trocasse a foto de um material que já tinha uma, a imagem antiga era apagada
+**ao mesmo tempo** em que a nova era gravada, numa corrida em que dava para perder as duas; e
+nenhuma dessas trocas deixava registro de quem trocou. O segundo: quem abria as configurações do
+módulo recebia de volta a **senha do e-mail** e a **chave de API do WhatsApp em texto puro** — e
+podia, sem querer, gravar por cima delas pela tela errada. O terceiro: o mapa de **quais materiais
+cada setor pode requisitar** — que é controle de acesso, não dado de estoque — podia ser **lido**
+por qualquer usuário do módulo, embora só administrador pudesse **mudá-lo**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Mandar foto para um material inexistente respondia **sucesso** | Responde **`Material não encontrado`** — e o arquivo enviado **não fica** no servidor |
+| Cada tentativa dessas deixava uma imagem órfã no servidor, para sempre | Nenhuma saída que não seja sucesso deixa arquivo: erro de banco, material inexistente e material apagado no meio do caminho **apagam o arquivo enviado** |
+| A foto anterior era apagada **em paralelo** com a gravação da nova — e uma falha ao apagar derrubava o processo | A anterior só é apagada **depois** de a nova estar gravada, e falhar ao apagar **não derruba nada** |
+| Trocar a foto de um material não deixava rastro nenhum | Deixa uma linha no histórico: quem, quando, e **de qual arquivo para qual** |
+| A leitura das configurações devolvia a **senha de SMTP** e a **chave de API** em texto puro | Devolve `********` quando há valor gravado, e **vazio** quando não há |
+| O salvamento genérico de configurações **aceitava** essas duas chaves — e gravava a máscara como se fosse a senha | **Recusa**, apontando a tela certa, e **sem tocar** em nenhuma outra chave do mesmo salvamento |
+| Ler o mapa de materiais permitidos de um setor bastava estar logado no módulo | Exige **administrador do Almoxarifado ou super administrador** — o mesmo que já era exigido para mudá-lo |
+
+### As regras, com o cenário exato
+
+Todas as mensagens abaixo foram **copiadas do código** durante o fechamento. Três destes cenários
+não têm caminho de tela — estão marcados, e o motivo é honesto: eles descrevem o que o sistema
+responde a **quem chama a API por fora** (integração, aba desatualizada, teste técnico), que é
+exatamente onde os três buracos moravam.
+
+**1. Foto de material que não existe agora falha — e não deixa lixo no servidor.**
+*Cenário (técnico):* enviar uma imagem para `POST /api/almoxarifado/materiais/999999/foto`:
+> `Material não encontrado`
+
+Antes: **200 com sucesso**, e a imagem ficava no servidor sem dono. Vale também para o caso raro
+em que o material some do banco **entre** a leitura e a gravação: o sistema percebe que não gravou
+nada e responde o mesmo 404, em vez de um sucesso sobre uma escrita que não aconteceu.
+
+**2. Trocar a foto continua funcionando exatamente como antes — e agora fica registrado.**
+*Cenário (clicável):* Almoxarifado → Materiais → abra um material que **já tem foto**, escolha
+outra imagem e salve. A ficha passa a mostrar a nova. O que mudou por baixo: a imagem antiga é
+removida do servidor **depois** de a nova estar gravada, e o histórico ganha uma linha da entidade
+`material`, ação `ATUALIZACAO`, com o nome do arquivo de antes e o de depois. Se por qualquer
+motivo a remoção da imagem antiga falhar, **a troca continua valendo** — sobra um arquivo velho,
+que é infinitamente melhor do que perder o novo.
+
+**3. Salvar sem escolher arquivo continua recusando, com a mesma mensagem de sempre.**
+*Cenário (técnico):* enviar a requisição de foto sem arquivo nenhum:
+> `Nenhuma foto enviada`
+
+Está aqui porque é o controle: nada do comportamento antigo que estava **certo** foi mexido.
+
+**4. A senha de e-mail e a chave de API não voltam mais para quem lê as configurações.**
+*Cenário (clicável até a metade):* vá em **Almoxarifado → Configurações → Alertas de Estoque** e
+grave uma senha de SMTP. A tela já mostrava `********` ali e continua mostrando. A diferença é na
+leitura completa das configurações (`/api/almoxarifado/configuracoes`, que é o que a tela de
+**Configurações Gerais** consome): antes ela devolvia a senha **em texto puro**; agora devolve
+`********`. E quando **não há** senha gravada, ela devolve **vazio** — nunca `********`, porque
+isso faria a tela dizer "já configurado" para uma senha que não existe.
+
+**5. Não dá mais para gravar a senha pela porta dos fundos.**
+*Cenário (técnico):* mandar `alertas_smtp_pass` (ou `alertas_whatsapp_api_key`) no salvamento
+genérico de configurações:
+> `Configuração "alertas_smtp_pass" só pode ser alterada em Configurações → Alertas de Estoque`
+
+Três detalhes que valem a demonstração: **(a)** a recusa vem **antes de qualquer gravação** — se o
+mesmo salvamento trouxer dez chaves válidas junto, **nenhuma** é gravada, porque aplicar metade do
+formulário seria pior; **(b)** mandar a chave secreta com valor **vazio** também é recusado (não
+existe "apagar a senha por atalho"); **(c)** a URL do webhook de WhatsApp **continua sendo aceita
+inteira** por esse mesmo salvamento, e continua saindo em claro na leitura — é decisão, está na
+**B40**, e a consequência está na **C24**.
+
+**6. Ler o mapa de acesso de um setor passou a exigir o mesmo que mudá-lo.**
+*Cenário (técnico):* com um usuário de perfil Almoxarife, Gestor, Compras, Produção ou Consulta —
+ou sem perfil nenhum —, chamar
+`GET /api/almoxarifado/setores-requisicao/<id>/permissoes`:
+> `Acesso restrito — administrador do Almoxarifado ou Super Administrador`
+
+É **a mesma mensagem, palavra por palavra**, que a rota de escrita já devolvia; há teste travando
+essa igualdade, para que as duas não se separem numa mudança futura. **Nada muda para quem usa o
+sistema:** a única tela que lê esse mapa é a aba administrativa de Configurações do Almoxarifado,
+que já era só de administrador.
+
+### O que esta etapa NÃO cobre (é decisão declarada, não esquecimento)
+
+- **A URL do webhook de WhatsApp continua saindo em claro** na leitura das configurações — de
+  propósito (**B40**), com a consequência declarada na **C24**: quem administra o módulo lê o
+  token que estiver embutido nela. O conserto de verdade é tirar o token de dentro da URL, e isso
+  é etapa própria.
+- **Mandar arquivo do tipo errado ou grande demais em qualquer upload continua respondendo
+  `Erro interno do servidor`** em vez de dizer o motivo (**C25 / G7**). A rota de foto foi
+  arrumada no que era dela, mas esse pedaço é comum às cinco rotas de upload e o conserto tem de
+  ser uniforme.
+- **A lista de setores de requisição continua dizendo quantos materiais cada setor tem
+  liberados**, para qualquer usuário do módulo (**B41, em aberto**) — o irmão menor do buraco que
+  esta etapa fechou, achado pela revisão adversarial e **declarado em vez de consertado**, porque
+  fechá-lo muda o que a tela de requisição recebe.
+- **A leitura da alçada de aprovação por valor continua entregando nome e e-mail dos aprovadores**
+  a qualquer usuário do módulo (letra **D**) — mesma família de decisão que a B41.
+- **A "matriz de leitura" do módulo continua aberta** (letra **D**): dezenas de consultas
+  operacionais pedem só estar logado. A etapa fechou o que entregava credencial ou controle de
+  acesso, não o que entrega dado de estoque.
+- **O backup do sistema e a credencial de e-mail escrita no código ficaram fora** — são do núcleo
+  do CRM, não do módulo (letra **D**).
+- **Nada foi feito para o passado.** Imagens órfãs que as tentativas antigas deixaram no servidor
+  continuam lá; ninguém as apaga. Como nunca houve tela que as listasse, elas só ocupam espaço —
+  se um dia incomodar, é uma limpeza pontual, não uma migração.
+
 ## Onde estamos e o que vem a seguir
 
 - **Concluído até aqui:** Etapas 0 a 11 — fundação, motor de estoque, cadastros, requisições,
@@ -3057,6 +3282,18 @@ antes desta etapa não havia como saber quem mudou nem quando.
   contexto do material para quem decide compra, e o relatório **Custo por projeto** com herança
   de projeto na devolução. BOM/OP/centro-de-custo ficaram **bloqueados por dependência com a
   medição escrita** (BOM inexistente; MES sem uso) — não são promessa.
+- **Etapa 20 entregue (2026-08-28):** **exposição e rastro** (feature 23, os três "fora de
+  escopo, nomeados" que a Etapa 19 deixou escritos na spec) — a rota de foto de material parou de
+  responder sucesso para material inexistente, parou de deixar arquivo órfão em toda saída que não
+  é sucesso, parou de apagar a foto anterior em corrida com a gravação e passou a auditar a troca;
+  a leitura das configurações parou de devolver senha de SMTP e chave de API em claro e o
+  salvamento genérico passou a recusá-las; e ler o mapa de permissões por setor passou a exigir o
+  mesmo que escrevê-lo. Revisão do plano: 16 achados, 4 bloqueantes — o mais caro deles evitou um
+  erro que derrubaria a **primeira** chamada das três rotas de configuração. Revisão adversarial:
+  **5 achados reais e 11 refutações reproduzidas**, com um fix-round que fechou a janela entre a
+  leitura e a gravação da foto, transformou um teste que se declarava impossível em três cenários
+  reais, corrigiu o desenho da etapa onde ele **contradizia** a entrega e declarou o buraco irmão
+  (B41). Nada disto tem tela: o roteiro de teste é o do guia.
 - **Etapa 19 entregue (2026-08-28):** **cadastros e configurações auditados** (feature 23,
   fatia 2) — 23 operações passam a deixar rastro, com o tratamento honesto de cada classe:
   diff nas configurações (só o que mudou), segredo mascarado, criação separada de reativação,

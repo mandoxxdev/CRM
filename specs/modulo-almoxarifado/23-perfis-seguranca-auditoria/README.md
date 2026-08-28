@@ -1,7 +1,7 @@
 # 23 — Perfis, Segurança e Auditoria
 
-> **Status:** 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
-> **Última atualização:** 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
+> **Status:** 🟡-forte (Etapa 20: os **três** buracos de exposição que esta spec nomeava estão pagos; resta a TELA de auditoria e os itens nomeados abaixo) · antes 🟡-forte (Etapa 19: os 23 endpoints de cadastro/configuração auditam) · antes 🟡 — sistema de permissões robusto; auditoria em uso pelos fluxos principais desde as Etapas 3–6 (os dois buracos daquela auditoria foram PAGOS — Etapa 9 e Etapas 18/19) · **Spec original:** seções 28, 29
+> **Última atualização:** 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 
 ## Objetivo
 
@@ -70,10 +70,25 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
   - **Rota órfã:** `PUT /configuracoes/tipos-material` não tem nenhum chamador no client;
     auditada mesmo assim, **candidata a remoção** (apagar sem confirmar quem chama seria
     irreversível de graça).
-  - **Fora do escopo, nomeados:** `POST /materiais/:id/foto` não audita e responde sucesso
+  - ~~**Fora do escopo, nomeados:** `POST /materiais/:id/foto` não audita e responde sucesso
     para material inexistente (deixando arquivo órfão); `GET /configuracoes` devolve
     `alertas_smtp_pass` em claro (a rota irmã de alertas já mascara); e
-    `GET /setores-requisicao/:id/permissoes` expõe o mapa de acesso com `auth` apenas.
+    `GET /setores-requisicao/:id/permissoes` expõe o mapa de acesso com `auth` apenas.~~ —
+    **OS TRÊS PAGOS na Etapa 20** (2026-08-28, `1b0f0e9..a3f5135`). Mantidos riscados, não
+    apagados, para que quem lembrar dos buracos confirme que fecharam e com qual commit:
+    - foto de material — `6cb594e` (+ `05a5c81`): 404 `Material não encontrado`, limpeza do
+      órfão em **toda** saída ≠ 200, `unlink` da foto anterior **depois** do UPDATE e em
+      try/catch, auditoria `material`/`ATUALIZACAO` com o de/para do arquivo. O `05a5c81`
+      fechou ainda a janela entre o SELECT e o UPDATE (`changes === 0` → 404): o SELECT
+      resolve o caso comum mas não impede um 200 sobre escrita que não aconteceu;
+    - `GET`/`PUT` de configurações — `a0b19c9`: as duas chaves de segredo
+      (`alertas_smtp_pass`, `alertas_whatsapp_api_key`) saem como `PASSWORD_MASK` quando há
+      valor e `''` quando não há, e o PUT genérico passou a **recusá-las** com 400 antes de
+      qualquer UPDATE. **`alertas_whatsapp_webhook_url` ficou de fora da máscara de propósito**
+      (a URL é o campo que o admin edita; mascarar faria a tela regravar a máscara como URL) —
+      decisão B40, consequência declarada em C24;
+    - `GET /setores-requisicao/:id/permissoes` — `8c0feff`: `isSystemAdmin || canConfigureAlmox`,
+      cópia literal do PUT irmão, mensagem inclusive.
 - `logs_auditoria` global (tentativas de acesso negado) + `POST /api/auditoria/tentativa-acesso`.
 - Front: `systemPermissions.js`, `permissionsCache.js`, guards de rota, telas de admin.
 - Teste: `permissionsCacheAdmin.test.js` (⚠️ replica lógica em vez de importar — corrigir junto do harness).
@@ -100,6 +115,61 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
 ### Auditoria visível
 - [ ] Tela de auditoria no front (a rota existe; falta UI) — **segue verdade em 2026-08-11**: não há tela de auditoria do almoxarifado; `Logs.js` consome a rota de auditoria global, não a do módulo
 - [ ] Filtros por entidade/usuário/período; exportação
+
+### Exposição e rastro (Etapa 20 — `1b0f0e9..a3f5135`)
+
+- [x] **Foto de material inexistente responde 404, sem deixar arquivo no disco** — `6cb594e`.
+      `SELECT` antes do UPDATE; `Material não encontrado`; `limparUploadOrfao` extraída do
+      closure de `extended.js` para `services/almoxarifado/uploadCleanup.js` (8 call sites / 4
+      rotas trocados por script com assert de contagem) e chamada também aqui.
+- [x] **Nenhuma saída ≠ 200 da rota de foto deixa órfão** — `6cb594e` (+ `05a5c81`). Cobre erro
+      no SELECT, erro no UPDATE, 404 por material inexistente e 404 por `changes === 0`. O ramo
+      403 não precisa de limpeza: `requirePermission` roda **antes** do multer, então nada foi
+      gravado — provado por `permissoesRotas.api.test.js:535-549`. *(A RN-02 do design da etapa
+      afirmava que o 403 apagava arquivo; **estava errada**, e o certo é que não há arquivo para
+      apagar.)*
+- [x] **A foto anterior só é apagada DEPOIS do UPDATE, em try/catch** — `6cb594e`. Antes era um
+      `db.get` fire-and-forget correndo em paralelo com o UPDATE, com `unlinkSync` sem catch: no
+      vermelho do TDD isso **derrubou o processo** (`EISDIR` subindo de dentro de um callback do
+      sqlite3), não só a resposta.
+- [x] **Trocar foto audita** (`material`/`ATUALIZACAO`, de/para do arquivo) — `6cb594e`.
+      Pós-escrita e best-effort, em try/catch com `console.error`: o UPDATE já foi commitado.
+- [x] **A janela entre o SELECT e o UPDATE está fechada** — `05a5c81` (fix-round). `dbRun`
+      devolve `{ changes }`; `changes === 0` → 404 + limpeza. Alcance real é baixo (o DELETE de
+      material é soft), mas responder 200 a uma escrita que não aconteceu é o mesmo defeito que
+      a etapa foi consertar.
+- [x] **`GET /configuracoes` mascara as duas chaves de segredo** — `a0b19c9`. `PASSWORD_MASK`
+      quando há valor, `''` quando não há — idêntico ao que a rota de alertas já devolvia.
+      Pré-requisito bloqueante resolvido junto: `configDiff` estava **desestruturado** no
+      `require`, e usá-lo como namespace sem trocar o import daria `ReferenceError` na primeira
+      request das TRÊS rotas de configuração (comprovado por sabotagem).
+- [x] **`PUT /configuracoes` recusa as duas chaves de segredo** — `a0b19c9`. 400
+      `Configuração "<chave>" só pode ser alterada em Configurações → Alertas de Estoque`, no
+      laço de **validação** (que roda inteiro antes do de UPDATE) — sem transação, recusar no
+      meio deixaria metade do formulário aplicada. Chave secreta com valor `''` também é
+      recusada.
+- [x] **`GET /setores-requisicao/:id/permissoes` exige `isSystemAdmin || canConfigureAlmox`** —
+      `8c0feff`. Cópia literal do PUT irmão, com teste que assere `deepStrictEqual` entre os
+      corpos dos dois 403 para que não se separem depois.
+- [ ] **`alertas_whatsapp_webhook_url` NÃO é mascarado no GET** — **de propósito, não pendência**
+      (decisão B40 das novidades, congelada em `configuracoesSegredo.api.test.js:188-196`): a URL
+      é o campo que o admin edita, e devolvê-la mascarada faria a tela regravar a máscara como
+      URL no primeiro Salvar. A proteção continua onde o registro é permanente — o log de
+      auditoria (`configDiff.mascararUrl`, Etapa 19). Consequência aceita e declarada (C24):
+      **quem administra o módulo lê o token embutido na query string**. Conserto de verdade =
+      tirar o token da URL, etapa própria.
+- [ ] **`GET /setores-requisicao` continua devolvendo `qtd_permissoes` por setor sem gate**
+      (`sectorMaterialService.listSetores:328-334`) — buraco irmão do gate acima, achado pela
+      revisão adversarial da Etapa 20 e **declarado em vez de consertado**: a consumidora é a
+      tela de requisição (não-admin), então fechar é mudança de contrato, não uma linha. Letra
+      B41, **em aberto e esperando decisão do usuário**.
+- [ ] **`GET /configuracoes/liberacao-valor` continua expondo nome e e-mail dos aprovadores** a
+      qualquer usuário do módulo (`requisitionValueApprovalService.getAprovadoresDetalhes`) — a
+      lista de requisições depende dessa leitura para saber se o usuário é aprovador; reduzir o
+      payload para não-admin é mudança de contrato. Letra D das novidades.
+- [ ] **Erro de multer continua virando 500 opaco nas 5 rotas de upload** — a rota de foto saiu
+      do conjunto quanto a órfão/404/auditoria, mas **continua** neste item; o conserto é um
+      error-handler uniforme nas cinco. Segue nomeado na spec 24 (G7 / C25).
 
 ## Regras essenciais + testes de API exigidos
 

@@ -269,11 +269,79 @@ T3 (feita) → T1 → T2. Sem task de jornada: as três não compõem um fluxo.
 
 ### Task 4 (fechamento de spec — não é código)
 
-- [ ] Riscar `specs/modulo-almoxarifado/23-perfis-seguranca-auditoria/README.md:73-76` (os 3
+- [x] Riscar `specs/modulo-almoxarifado/23-perfis-seguranca-auditoria/README.md:73-76` (os 3
   "fora de escopo, nomeados" que esta etapa paga) e renomear o que sobra em
   `specs/modulo-almoxarifado/24-mobilidade/README.md:64-70` (G7 continua aberto). Step próprio
   porque o histórico desta base registra "código entregue e as specs continuaram dizendo que a
   feature não existia".
+
+  **Feito no fechamento** (commit de documentação da Fase 6). Os três itens da spec 23 foram
+  **riscados com `~~`, não apagados**, cada um com o hash que o pagou (`6cb594e`+`05a5c81`,
+  `a0b19c9`, `8c0feff`), e a spec ganhou um bloco de checklist próprio da Etapa 20 — com os
+  `[ ]` do que ficou fora **e o porquê** (webhook em claro, `qtd_permissoes` sem gate,
+  `liberacao-valor`, o 500 do multer). Na spec 24 a pendência 1 foi **renomeada**: a rota de foto
+  saiu do conjunto de rotas defeituosas no que era dela e continua no item **só** pelo 500 opaco
+  do multer, que é comum às cinco — a redação anterior fazia o próximo leitor reabrir trabalho
+  pronto. A dependência "`limparUploadOrfao` de `extended.js`" também foi corrigida na spec 24:
+  a função mudou de casa em `6cb594e`.
+
+  **Divergência: os números de linha do plano estavam certos, o resto do texto não.** A spec 24
+  falava das cinco rotas em bloco ("rotas de upload defeituosas"); renomear só o título teria
+  deixado o corpo mentindo. Foi reescrito o parágrafo inteiro, com a mudança declarada dentro
+  dele. Acrescentado ao previsto: o mapa de status (`specs/modulo-almoxarifado/README.md`)
+  também citava os 3 fora-de-escopo na linha da feature 23 e chamava a rota de foto de
+  defeituosa na linha da 24 — os dois foram corrigidos, senão a spec ficaria certa e o mapa
+  errado.
+
+---
+
+## Fix-round (revisão adversarial → `05a5c81` + `a3f5135`)
+
+A etapa passou por revisão adversarial depois das três tasks. **5 achados reais (A1-A5) e 11
+refutações reproduzidas** (o revisor tentou derrubar 11 afirmações do plano/entrega e mediu que
+elas se sustentavam). Dois achados viraram código, três viraram documentação:
+
+- **A4 (código, `05a5c81`) — a rota de foto AINDA respondia 200 para material inexistente.**
+  O comentário escrito na Task 1 dizia, com todas as letras, "o conserto aqui não é ler
+  `changes`: é o SELECT antes". O SELECT resolve o caso comum e continua sendo a leitura que dá
+  `dados_anteriores` e o nome do arquivo a apagar — **mas não fecha a janela entre ele e o
+  UPDATE**: com a linha sumindo no meio, o UPDATE casava zero linhas e a rota devolvia
+  `{ foto }` com o arquivo em disco para um material que não existe. `dbRun` já devolve
+  `{ changes }` (`services/almoxarifado/db.js:5-12`), então custou uma linha. Alcance real
+  baixo (o DELETE de material é soft), mas **responder 200 a uma escrita que não aconteceu é o
+  próprio defeito que a etapa foi consertar**.
+- **A2 (código+teste, `05a5c81`) — o teste declarava intestável um ramo que era testável.**
+  O cabeçalho de `fotoMaterialRastro.api.test.js` afirmava que o ramo "erro de banco" da RN-02
+  não tinha como ser exercitado porque `routes/almoxarifado.js:35` desestrutura `dbRun`/`dbGet`
+  no `require` e o binding cacheado não alcança um stub no módulo. **A premissa é verdadeira; a
+  conclusão estava errada** — o alvo não precisa ser o módulo: `dbGet(db, ...)`/`dbRun(db, ...)`
+  recebem a **instância** como 1º argumento e o harness entrega essa mesma instância ao teste,
+  então patchar `db.get`/`db.run` na instância (restaurando no `finally`) exercita os dois ramos
+  sem tocar produção. **Descartado** manter a declaração: teste que se declara impossível sem
+  que seja verdade deixa de ser decisão e vira ponto cego permanente. **10 → 13 cenários.**
+- **A1 (doc, `a3f5135`) — o design contradizia a entrega.** A RN-05 afirmava que o webhook sairia
+  do GET com a query string mascarada; o código faz o **oposto**, de propósito, e há teste
+  travando o oposto. A decisão existia só no plano e no cabeçalho do teste — quem lesse o design
+  era **ativamente enganado**. Reescrita dizendo que estava errada, com o motivo e a consequência
+  aceita.
+- **A3 (doc, `a3f5135`) — o buraco irmão declarado.** `GET /setores-requisicao` devolve
+  `qtd_permissoes` por setor sem gate nenhum: o mesmo usuário que o C5 agora barra continua
+  sabendo quais setores têm lista explícita. Declarado em "Fica FORA" (e, no fechamento, na letra
+  B41 como **decisão em aberto**) em vez de consertado, porque a consumidora é a tela de
+  requisição, não-admin — fechar exige decidir o que ela passa a receber.
+- **A5 (doc, `a3f5135`) — o plano contradizia a si mesmo.** O Step 3 da Task 2 narrava **uma**
+  queda de sabotagem e dizia "os demais seguiram verdes" na mesma linha em que registrava
+  `2 failed`. Corrigido com os dois nomes.
+
+**Correção de mais uma afirmação, medida no fechamento (Fase 6):** a RN-05 corrigida por
+`a3f5135` diz que "**quem tem acesso ao módulo** lê o token embutido na query string do webhook".
+**Isso é mais amplo do que a verdade.** As duas rotas que devolvem o webhook —
+`GET /configuracoes` (`almoxarifado.js:2406-2407`) e `GET /configuracoes/alertas-estoque`
+(`:2542-2543`) — passam por `denyUnlessAlmoxAdmin`, ou seja, `canConfigureAlmox`. Quem lê o token
+é **administrador do Almoxarifado ou super administrador**, não qualquer usuário do módulo. A
+letra C24 das novidades já foi escrita com a versão medida, e o design foi corrigido junto.
+*(A rota que de fato expõe dado a qualquer usuário do módulo é outra:
+`GET /configuracoes/liberacao-valor`, `:2695`, sem gate — nome e e-mail dos aprovadores.)*
 
 ## Execução (estado)
 
@@ -290,14 +358,85 @@ T3 (feita) → T1 → T2. Sem task de jornada: as três não compõem um fluxo.
   (A11-A13). O revisor rodou 10 arquivos de teste: **todos verdes**, e mediu que o escopo
   escrito não quebra nenhum — com uma quebra latente que a decisão do A5 justamente evita
   (`auditoriaConfiguracoes.api.test.js:426-453` exige 200 no PUT do webhook).
-- [x] Task 1 (`6cb594e`) · [x] Task 2 (`a0b19c9`) · [x] Task 3 (`8c0feff`)
-- [ ] Fase 4 — suíte completa serial
-- [ ] Fase 5 — revisão adversarial (2 lentes)
-- [ ] Fase 6 — fechar-etapa + retro
+- [x] Task 1 (`6cb594e`) · [x] Task 2 (`a0b19c9`) · [x] Task 3 (`8c0feff`) · [x] Task 4 (fechamento)
+- [x] Fase 4 — suíte completa serial (`npm run test:api`: **142/142 arquivos OK**)
+- [x] Fase 5 — revisão adversarial: **5 achados reais (A1-A5), 11 refutações reproduzidas**;
+  fix-round commitado em `05a5c81` (código+teste) e `a3f5135` (documentação)
+- [x] Fase 6 — fechar-etapa + retro (este documento, mais os 6 artefatos da skill)
 
-## Retro (preencher no fechamento)
+## Verificação final da Fase 6 (medida em 2026-08-28, não presumida)
 
-- Rodadas de correção até verde: —
-- Achados da revisão: reais — / ruído —
-- Paralelismo real: —
-- Defeito que escapou: —
+| Comando | Resultado lido |
+|---|---|
+| `cd server && npm run test:api` | **142/142 arquivos de teste OK** (exit 0) |
+| `cd server && npm run test:almoxarifado` | **42 passou, 0 falhou** |
+| `cd server && npm run test:validation` | **4 passed, 0 failed** |
+| `cd server && npm run test:safealter` | **3 passed, 0 failed** |
+| `cd server && npm run test:sqlite` | **3 passed, 0 failed** |
+| `cd client && CI=true npx react-scripts test --watchAll=false` | **36 suites / 531 testes, 0 falhas** |
+| `cd client && CI=true npx react-scripts build` | **compilou** (exit 0), sem warning virando erro |
+
+O 142 confere com o esperado: a Task 3 fechou com 139 arquivos, a Task 1 com 140 (mais
+`fotoMaterialRastro`), a Task 2 com 141 (mais `configuracoesSegredo`) — e o 142º é da Etapa 21,
+que rodava em paralelo em outra worktree (`d5c8d3a`). Nenhum arquivo desta etapa foi perdido.
+
+## Próxima tarefa detalhada (para quem retomar sem reler o código)
+
+**A frente natural é a TELA de auditoria do almoxarifado** — é o item que mantém a feature 23 em
+🟡-forte, e as Etapas 18/19/20 só aumentaram o custo de não tê-la (a trilha ficou rica e não tem
+leitor). Antes de começar, três coisas já estão medidas e **não precisam ser reabertas**:
+
+- **O contrato de API já existe e já tem gate:** `GET /api/almoxarifado/auditoria`
+  (`routes/almoxarifado/extended.js`) aceita filtro por `entidade` e devolve `{ total, itens }`,
+  avisando quando a resposta foi cortada. O gate é a ação `configurar` — que aceita
+  **administrador do sistema**, grupo ligeiramente mais amplo do que o `canConfigureAlmox` da
+  tela de configurações. Essa assimetria está declarada na spec 23 como nota, não como bug.
+- **Duas dívidas têm de ser resolvidas ANTES da tela, não depois:** (1) o volume do histórico de
+  `setor_permissao`, que grava a lista inteira duas vezes por salvamento (**~46 KB medidos com
+  200 famílias**, letra G8) — uma consulta sem filtro montaria resposta de dezenas de MB; (2) a
+  decisão **B33**, que é do usuário: a leitura fica só com Administrador, abre para Gestor, ou a
+  tela nasce filtrada por conferência/entidade para o Gestor ver o que é dele sem ver o resto.
+- **O vocabulário do log é inconsistente de propósito** (`CRIACAO`/`CRIAR`,
+  `EDICAO`/`ATUALIZACAO`/`ATUALIZAR`, mais `REATIVACAO` e `INCLUSAO_EM_LOTE`): a Etapa 19 fixou a
+  regra como "consistência dentro da entidade" e **não** normalizou as antigas, porque isso
+  mexeria em log histórico. A tela tem de exibir os verbos como estão, não presumir um conjunto
+  fechado.
+
+**Alternativa menor, se o objetivo for fechar dívida barata:** o **G7** — error-handler de multer
+uniforme nas 5 rotas de upload (`foto`, `certificado`, `comprovante de sucata`, `calibração`,
+`assinatura`), transformando o 500 genérico de `index.js:22971` em 400 com motivo, mais teste de
+MIME/limite em cada uma. Ponto de atenção: o handler global fica em `server/index.js`, que é
+arquivo do núcleo — o conserto mais seguro é um middleware de erro **por rota** (ou montado no
+router do almoxarifado), não mexer no handler global.
+
+**O que NÃO é próxima tarefa:** o B41 e o `liberacao-valor` só voltam à mesa **depois** de o
+usuário responder — os dois são mudança de contrato de tela, não linha de gate.
+
+## Retro (preenchida no fechamento — 2026-08-28)
+
+- **Rodadas de correção até verde: 1 por task, mais 1 fix-round da etapa inteira.** Cada uma das
+  3 tasks foi vermelho→verde em uma passada (T1: 4 passed/5 failed **+ processo abortado** → 10
+  passed, e 13 depois do fix-round; T2: 7/6 → 13 passed; T3: 6/7 → 13 passed) e não houve segunda
+  rodada dentro da task.
+  A rodada extra veio depois, da revisão adversarial: **A4 e A2, os dois sobre afirmações minhas
+  que estavam erradas** — um comentário que descartava explicitamente a checagem que faltava, e
+  um cabeçalho de teste que declarava intestável o que era testável.
+- **Achados da revisão: 5 reais / 0 ruído — com 11 refutações reproduzidas.** Nenhum dos 5 foi
+  descartado. O revisor ainda tentou derrubar 11 afirmações do plano e da entrega e **mediu que
+  se sustentavam** — o que é o resultado mais barato possível: 16 verificações, 5 mudanças. Some
+  a isso os 16 achados da revisão do plano (4 bloqueantes, todos acatados), dos quais o A1 era
+  bloqueante de verdade: sem a troca do `require` de `configDiff`, a **primeira** request das três
+  rotas de configuração morria com `ReferenceError` — provado por sabotagem, não deduzido.
+- **Paralelismo real: 1 galho em paralelo, zero retrabalho.** A ordem executada foi T3 → T1 → T2,
+  e não T1‖T3 como o sort original previa: o achado A4 da revisão do plano mostrou que a T1
+  **também** toca `extended.js`, então a única combinação segura era T2‖T3. Como a T3 já estava
+  commitada quando o plano foi revisado, o paralelismo efetivo foi zero e **isso foi barato** —
+  três tasks pequenas, duas delas no mesmo arquivo. Custo de serializar: minutos. Custo de ter
+  paralelizado T1‖T3 sem o A4: conflito em `extended.js` no meio da extração de
+  `limparUploadOrfao`, com 8 call sites em jogo.
+- **Defeito que escapou: a preencher na etapa seguinte.** Nada foi reportado até o fechamento; o
+  campo fica aberto de propósito — quem fizer a Etapa 21+ escreve aqui o que a Etapa 20 deixou
+  passar, ou "nenhum" se a etapa sobreviver intacta. O candidato mais provável, dito na frente:
+  o ramo `changes === 0` da rota de foto é praticamente inalcançável na operação real (o DELETE
+  de material é soft), então ele é cinto — se algum dia aparecer um `DELETE FROM
+  materiais_almoxarifado` no código, é aqui que a hipótese muda.

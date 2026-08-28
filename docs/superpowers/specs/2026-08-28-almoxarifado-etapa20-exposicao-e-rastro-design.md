@@ -85,9 +85,17 @@ na letra B do fechamento):
   URL na primeira gravação, trocando o webhook por lixo. O que a máscara protege ali é o
   **log** (`configDiff.mascararUrl` continua valendo na auditoria, onde ninguém reedita o
   valor). O teste `configuracoesSegredo.api.test.js:188-196` trava esse comportamento. A
-  consequência aceita está declarada: **quem tem acesso ao módulo lê o token embutido na query
-  string do webhook** — registrado na letra C do documento de apresentação, e o conserto de
-  verdade é mover o token para uma chave própria, fora da URL, em etapa futura.
+  consequência aceita está declarada: **quem administra o Almoxarifado (ou é super administrador)
+  lê o token embutido na query string do webhook** — registrado na letra C24 do documento de
+  apresentação, e o conserto de verdade é mover o token para uma chave própria, fora da URL, em
+  etapa futura.
+  **CORREÇÃO 2 (fechamento, 2026-08-28) — a frase acima dizia "quem tem acesso ao módulo".
+  ESTAVA ERRADA, e para mais**: as duas rotas que devolvem o webhook — `GET /configuracoes`
+  (`almoxarifado.js:2406-2407`) e `GET /configuracoes/alertas-estoque` (`:2542-2543`) — passam
+  por `denyUnlessAlmoxAdmin`, isto é, `canConfigureAlmox`. Errar para o lado do exagero também
+  engana: faria a próxima sessão tratar como buraco aberto uma exposição que já é
+  admin-only, e priorizar errado. A rota que de fato entrega dado a **qualquer** usuário do
+  módulo é a de liberação por valor (`:2695`), declarada logo abaixo.
 - **RN-06 — O PUT genérico recusa as chaves secretas.** 400 com mensagem que aponta a rota
   própria; a coluna não é tocada.
 - **RN-07 — Ler o mapa de acesso exige o mesmo que escrevê-lo.** Perfis sem

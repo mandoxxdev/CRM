@@ -2,11 +2,25 @@
 
 > Atualizado em 2026-08-28 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 19) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa.
 
-> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 19 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-08-28 (Etapa 20 ENTREGUE · modo contínuo pelo mapa)
 >
-> **Etapas 1 a 19 completas.** A **Etapa 19 (cadastros e configurações auditados)** fechou em
+> **Etapas 1 a 20 completas.** A **Etapa 20 (exposição e rastro)** fechou em 2026-08-28
+> (`1b0f0e9..a3f5135`): ela não tem tela nova — fecha três lugares em que o sistema mentia ou
+> falava demais. Mandar a foto de um material **que não existe** respondia sucesso e deixava a
+> imagem no servidor para sempre; **agora responde `Material não encontrado` e apaga o arquivo**.
+> Trocar a foto de um material passou a **deixar registro** (quem, quando, de qual arquivo para
+> qual) e a antiga só é apagada depois de a nova estar gravada. A **senha de e-mail** e a **chave
+> de API do WhatsApp** deixaram de voltar em texto puro na leitura das configurações, e o
+> salvamento genérico passou a **recusá-las** apontando a tela certa. E ler o **mapa de materiais
+> permitidos por setor** passou a exigir administrador — o mesmo que já era exigido para mudá-lo.
+> **Atenção operacional: nenhuma tela muda para quem usa o sistema.** O que muda é para quem
+> integra por API. Duas coisas continuam abertas de propósito e estão nas novidades: a **URL do
+> webhook de WhatsApp continua em claro** (B40/C24 — quem administra o módulo lê o token que
+> estiver dentro dela) e a **decisão B41, que espera sua resposta**. Ver a seção "Etapa 20" abaixo.
+>
+> **Antes: Etapas 1 a 19 completas.** A **Etapa 19 (cadastros e configurações auditados)** fechou em
 > 2026-08-28 (`a574b3a..55e4144`): 23 operações que mudavam o comportamento do sistema sem
 > deixar rastro — criar/editar/excluir cadastros, mudar configurações (onde moram as regras) e
 > alterar a lista de materiais por setor — passam a registrar quem, quando e o de/para.
@@ -3013,6 +3027,63 @@ um setor passa a ficar registrado, com o valor de antes e o de depois.
   no banco.
 - A troca de foto de material, o `GET` de configurações que devolve a senha em claro e a
   leitura das permissões por setor seguem fora do escopo — nomeados na spec 23.
+
+## Etapa 20 — O sistema para de mentir sucesso e de falar demais (ENTREGUE — 2026-08-28)
+
+**O que mudou, em uma frase:** a foto de material parou de responder "deu certo" quando não deu
+(e passou a deixar registro), e a senha do e-mail, a chave de API e o mapa de permissões por
+setor pararam de ser entregues a quem não deveria lê-los.
+
+### Roteiro de teste manual
+
+> **Esta etapa não tem tela nova e não muda nenhum fluxo clicável.** Os passos 1 a 3 confirmam
+> que nada quebrou no que você usa; os passos 4 a 6 são para **quem tem acesso técnico** — é lá
+> que os três buracos moravam, porque eles só apareciam para quem chama o sistema por fora.
+
+1. **Trocar a foto de um material continua funcionando.** Almoxarifado → Materiais → abra um
+   material que **já tem foto** → escolha outra imagem → salve. A ficha passa a mostrar a nova.
+   Recarregue a página para confirmar que ela ficou.
+2. **Pôr foto num material que ainda não tem também continua funcionando.** Mesmo caminho, num
+   material sem foto.
+3. **As configurações continuam salvando.** Configurações Gerais: mude um campo e salve.
+   Configurações → Alertas de Estoque: grave uma senha de SMTP (o campo continua mostrando
+   `********`) e salve. Depois abra Configurações Gerais de novo: **nada some, nada quebra**.
+4. **(Técnico) O 404 da foto.** Envie uma imagem para
+   `POST /api/almoxarifado/materiais/999999/foto`. A resposta tem de ser **404** com
+   `Material não encontrado` — antes era 200 com sucesso. Confirme, no diretório de uploads do
+   almoxarifado no servidor, que **nenhum arquivo novo** apareceu.
+5. **(Técnico) A máscara e a recusa nas configurações.** Com a senha de SMTP gravada no passo 3:
+   - `GET /api/almoxarifado/configuracoes` → `alertas_smtp_pass` e `alertas_whatsapp_api_key`
+     têm de vir como `********` (e como **vazio** se você nunca gravou nenhuma);
+   - `PUT /api/almoxarifado/configuracoes` com `{"alertas_smtp_pass": "qualquer"}` → **400**
+     com `Configuração "alertas_smtp_pass" só pode ser alterada em Configurações → Alertas de
+     Estoque`. Mande junto uma chave válida (ex.: `alertas_dias_lote_vencendo`) e confirme, no
+     GET seguinte, que **ela também não foi gravada** — a recusa vem antes de tudo;
+   - de volta na tela de **Alertas de Estoque**, salve sem mexer na senha: o e-mail continua
+     funcionando (a senha **não** foi trocada pela máscara).
+6. **(Técnico) O gate do mapa de permissões.** Entre com um usuário de perfil Almoxarife (ou
+   Gestor, Compras, Produção, Consulta) e chame
+   `GET /api/almoxarifado/setores-requisicao/<id>/permissoes` → **403** com
+   `Acesso restrito — administrador do Almoxarifado ou Super Administrador`. Com um
+   administrador do Almoxarifado, a mesma chamada responde 200 normalmente — e a aba de setores
+   de requisição em Configurações do Almoxarifado continua carregando como sempre.
+
+### O que a Etapa 20 NÃO cobre
+
+- **A URL do webhook de WhatsApp continua saindo em claro** na leitura das configurações — é
+  decisão (letra **B40** das novidades), porque é o campo que o administrador edita: mascarar
+  faria a tela regravar a máscara como se fosse a URL. A consequência está declarada na letra
+  **C24**: quem administra o módulo lê o token que estiver embutido nessa URL.
+- **Arquivo de tipo errado ou grande demais em qualquer upload continua respondendo `Erro
+  interno do servidor`** sem dizer o motivo (letra **C25 / G7**) — vale para as cinco rotas que
+  recebem arquivo, e o conserto tem de ser feito nas cinco de uma vez.
+- **A lista de setores de requisição continua dizendo quantos materiais cada setor tem
+  liberados** para qualquer usuário do módulo (letra **B41**) — está **em aberto e esperando sua
+  decisão**, porque fechar muda o que a tela de requisição recebe.
+- **A leitura da alçada de aprovação por valor continua entregando nome e e-mail dos
+  aprovadores** a qualquer usuário do módulo (letra **D**).
+- **As imagens órfãs que as tentativas antigas deixaram no servidor continuam lá** — nada foi
+  apagado retroativamente.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

@@ -61,13 +61,24 @@ A fatia real da "Fase 4 — Mobilidade e automação" da spec original (seções
 
 ## Pendências nomeadas (abertas ao fechar a etapa)
 
-1. **Erro de nível multer vira 500 opaco nas 5 rotas de upload do módulo** (foto de material,
-   certificado, comprovante de sucata, calibração e a assinatura nova): arquivo de tipo
-   errado, >limite ou campo inesperado não chega ao `limparUploadOrfao` da rota — o multer
-   barra antes (nada é gravado, **medido por sonda na revisão**: zero órfão, zero linha),
-   mas o erro escapa para o handler global como 500 genérico em vez de 400 com motivo. A
-   rota nova seguiu o padrão da casa DE PROPÓSITO; o conserto certo é um error-handler de
-   multer uniforme nas cinco rotas + teste de MIME/limite em cada uma.
+1. **Erro de nível multer vira 500 opaco nas 5 rotas de upload do módulo — e SÓ isso**
+   (foto de material, certificado, comprovante de sucata, calibração e a assinatura nova):
+   arquivo de tipo errado, >limite ou campo inesperado não chega ao `limparUploadOrfao` da
+   rota — o multer barra antes (nada é gravado, **medido por sonda na revisão**: zero órfão,
+   zero linha), mas o erro escapa para o handler global de `index.js:22971` e vira
+   `{ error: 'Erro interno do servidor' }` com 500 (o `message` real só aparece com
+   `NODE_ENV=development`), em vez de 400 com motivo. A rota nova seguiu o padrão da casa DE
+   PROPÓSITO; o conserto certo é um error-handler de multer uniforme nas cinco rotas + teste
+   de MIME/limite em cada uma.
+
+   **RENOMEADA em 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`) — a redação anterior chamava as
+   cinco de "rotas de upload defeituosas" em bloco, e isso deixou de ser verdade para uma
+   delas.** `POST /materiais/:id/foto` **saiu** do conjunto no que era próprio dela: hoje
+   responde 404 `Material não encontrado` para material inexistente (antes: 200 mentiroso),
+   limpa o arquivo órfão em **toda** saída ≠ 200, apaga a foto anterior só depois do UPDATE e
+   em try/catch, e audita a troca. O que a mantém **nesta** pendência é exclusivamente o 500
+   opaco do multer, que é comum às cinco e não é da rota — quem ler "a rota de foto está
+   quebrada" a partir daqui vai reabrir trabalho já feito.
 2. **Scanner e assinatura sem teste em aparelho real** (câmera, toque, HTTPS) — letra F10
    das novidades; roteiro manual no guia.
 3. **Flags `requer_assinatura`/`requer_termo` de `tipos_material_almoxarifado` continuam
@@ -77,4 +88,8 @@ A fatia real da "Fase 4 — Mobilidade e automação" da spec original (seções
 
 - Etiquetas QR da 6c (URLs que o scanner lê) — entregue.
 - Fluxo de entrega de requisição da Etapa 3 (`PUT /entregar` intocado) — entregue.
-- Padrão multipart + `limparUploadOrfao` de `extended.js` (Etapas 9/9b) — entregue.
+- Padrão multipart + `limparUploadOrfao` (Etapas 9/9b) — entregue. **Mudou de lugar na Etapa 20
+  (`6cb594e`):** a função saiu do closure de `extended.js` para
+  `services/almoxarifado/uploadCleanup.js` e agora recebe o diretório como 2º argumento
+  (`limparUploadOrfao(req, dir)`); `extended.js` a importa com o alias `limparUploadOrfaoEm`.
+  Quem for mexer nas rotas de upload procura ali, não mais no closure.

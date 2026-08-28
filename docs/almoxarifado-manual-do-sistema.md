@@ -90,7 +90,7 @@ O formulário é dividido em sete blocos, sempre nesta ordem:
 | Controles | as sete opções descritas em 2.7 |
 | Unidades e Custos | Classe ABC, Custo Unitário (R$), Unidade de Compra, Fator de Conversão (Compra), Unidade de Consumo, Fator de Conversão (Consumo), Fornecedor Principal, Código no Fornecedor |
 
-Ao lado do formulário há ainda o campo **Foto do Produto** (JPG, PNG ou WEBP, até 10 MB).
+Ao lado do formulário há ainda o campo **Foto do Produto** (JPG, PNG ou WEBP, até 10 MB). Cada material guarda **uma** foto: enviar outra substitui a anterior, e a imagem substituída é removida do servidor logo depois que a nova está gravada — nunca antes, de modo que uma falha ao remover a velha jamais custe a nova. A troca fica registrada no histórico do cadastro (ver 2.9). Se a foto for enviada para um material que não existe, o sistema responde `Material não encontrado` e **descarta o arquivo** — não fica imagem sem dono no servidor.
 
 **Obrigatórios são apenas três:** Código, Nome do Material e Família. Todo o resto pode ficar em branco e ser completado depois.
 
@@ -219,7 +219,7 @@ Não existe cadastro separado de "material de cliente": ele é material normal, 
 
 ### 2.9 Histórico do cadastro
 
-Toda criação e toda edição de material ficam registradas com **quem fez, quando, e o de/para de cada campo alterado** — apenas os campos que realmente mudaram, não a ficha inteira. Excluir um material é uma **inativação**: ele sai das listas, mas o histórico de movimentações continua íntegro.
+Toda criação e toda edição de material ficam registradas com **quem fez, quando, e o de/para de cada campo alterado** — apenas os campos que realmente mudaram, não a ficha inteira. **Trocar a foto também conta como edição**, e o registro guarda o nome do arquivo anterior e o do novo. Excluir um material é uma **inativação**: ele sai das listas, mas o histórico de movimentações continua íntegro.
 
 ---
 
@@ -533,6 +533,14 @@ Este ponto é importante para quem apresenta o sistema: **a autorização é dec
 
 Consequência prática, e deliberada: se essa consulta de conveniência falhar (queda de rede, por exemplo), a tela **libera** os botões em vez de escondê-los — falhar fechado esconderia ações de quem tem direito a elas por causa de um problema de rede. O bloqueio real continua acontecendo no servidor, e a operação é recusada com a mensagem acima. Pelo mesmo motivo, na maior parte das telas **o botão continua visível** e a recusa acontece no clique, com a explicação: assim quem não tem permissão descobre *que a função existe* e a quem pedir.
 
+### 5.2b Ler uma regra de acesso exige o mesmo que mudá-la
+
+Há um caso em que "consultar" e "alterar" são a mesma coisa do ponto de vista de segurança: a **lista de materiais que cada setor pode requisitar** (é ela que monta o **catálogo por setor** da tela de requisição, ver 7.4). Ela não é dado de estoque — é controle de acesso, e saber o que ela contém é meio caminho para contorná-la. Por isso **tanto consultar quanto alterar essa lista exigem administrador do Almoxarifado ou super administrador**; qualquer outro perfil, inclusive Almoxarife e Gestor, recebe:
+
+> *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*
+
+É exatamente a mesma exigência e a mesma mensagem nos dois casos. Na prática isso não muda nada para quem opera: a única tela que mostra essa lista é a aba administrativa de **Configurações do Almoxarifado**, que já é restrita a administradores.
+
 ### 5.3 Usuário sem perfil definido é tratado como chão de fábrica
 
 O perfil de uma pessoa é resolvido nesta ordem:
@@ -613,7 +621,7 @@ A mudança vale para as próximas ações da pessoa — pode levar alguns instan
 
 Toda operação relevante do módulo grava uma trilha com **quem** (nome do usuário), **quando**, **o que** (a entidade e a ação), os **valores anteriores e novos** quando houve alteração, e a **justificativa** quando a operação exige uma.
 
-São auditados: criação e **desativação** de material, e a edição; **os cadastros do módulo — tipos de material, localizações, setores, famílias, centros de custo e almoxarifados — em criação, edição e exclusão**; **as configurações do módulo**, inclusive as que mudam regra de negócio (tolerância de inventário, parâmetros de alerta, alçada de liberação por valor); **a lista de materiais permitidos por setor**; aprovação, rejeição, confirmação, encerramento, **cancelamento e exclusão** de requisição; **todo o ciclo da conferência de inventário — abertura, cada contagem, cada recontagem, a conclusão e o cancelamento**; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e a própria troca de perfil de um usuário.
+São auditados: criação e **desativação** de material, e a edição — **inclusive a troca da foto**; **os cadastros do módulo — tipos de material, localizações, setores, famílias, centros de custo e almoxarifados — em criação, edição e exclusão**; **as configurações do módulo**, inclusive as que mudam regra de negócio (tolerância de inventário, parâmetros de alerta, alçada de liberação por valor); **a lista de materiais permitidos por setor**; aprovação, rejeição, confirmação, encerramento, **cancelamento e exclusão** de requisição; **todo o ciclo da conferência de inventário — abertura, cada contagem, cada recontagem, a conclusão e o cancelamento**; movimentação de estoque e estorno; reservas; lotes (mudança de situação, liberação de vencimento, certificado); séries (entrada, saída, bloqueio, estorno); recebimentos; inspeções; devoluções; materiais de clientes; remessas a terceiros; sobras e retalhos (geração e edição); sucateamentos (solicitação, cada aprovação, rejeição, cancelamento, destino e a compensação automática quando uma aprovação é desfeita); e a própria troca de perfil de um usuário.
 
 Duas notas de comportamento que evitam mal-entendido:
 
@@ -2602,6 +2610,29 @@ vencendo, calibração, quarentena parada, reserva parada e eventos — (`Config
 deve ser um número de dias maior que zero`) e as cinco listas
 de destinatários (texto livre). Mudar o **intervalo do processador** só passa a valer depois de
 reiniciar o sistema; o espaçamento das retentativas muda imediatamente.
+
+**As credenciais têm uma tela só, e é de propósito.** A **senha do servidor de e-mail (SMTP)** e a
+**chave de API do WhatsApp** só se alteram em **Configurações → Alertas de Estoque**. Tentar
+gravá-las por qualquer outro caminho de configuração é recusado, apontando o lugar certo:
+
+> `Configuração "alertas_smtp_pass" só pode ser alterada em Configurações → Alertas de Estoque`
+
+A recusa acontece **antes de qualquer gravação**: se o mesmo salvamento trouxer outras
+configurações válidas junto, **nenhuma delas é aplicada** — não existe salvamento pela metade. Uma
+chave secreta enviada em branco também é recusada; apagar uma credencial é feito na tela dela.
+
+**E as credenciais não voltam.** Quando o sistema devolve as configurações para a tela, senha de
+SMTP e chave de API saem sempre como `********` se houver valor gravado, e **em branco** se não
+houver — nunca o valor real, e nunca `********` para uma credencial que não existe (isso faria a
+tela dizer "já configurado" sobre algo em branco). Reenviar `********` pela tela de Alertas de
+Estoque **não** troca a credencial: o sistema entende que ela não foi alterada.
+
+**Uma exceção consciente:** o **endereço do webhook do WhatsApp** volta inteiro para a tela,
+porque é um campo que o administrador edita e corrige — devolvê-lo mascarado faria o próximo
+Salvar gravar a máscara no lugar do endereço. Quem administra o módulo, portanto, enxerga o
+endereço completo, inclusive os parâmetros. Se o seu webhook levar o token dentro da própria URL,
+trate o acesso de administrador do Almoxarifado como acesso a essa credencial. No **histórico**,
+onde o registro é permanente, o endereço continua sendo guardado sem os parâmetros.
 
 ## 21c-bis. A central de Alertas
 
