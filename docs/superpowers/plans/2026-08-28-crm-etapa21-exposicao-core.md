@@ -46,13 +46,18 @@ fica declarada sem teste, com o motivo escrito.
 const EXCLUIDOS = [
   '.runtime-secrets.json', // jwtSecret + credencial do admin semeado: quem baixa FORJA token
                            // de superadmin (server/index.js:318 assina com esse segredo).
-  'backups',               // ~188 MB de copias historicas do banco; o dump atual ja vai no zip.
+  'backups',               // ~188 MB de copias historicas. NAO some do zip: entra so a MAIS
+                           // RECENTE, por backupMaisRecente() — dbRecovery.js:86 manda
+                           // restaurar dali, e o cenario do diretorio e justamente
+                           // "database.sqlite corrompido", que e o arquivo que vai no zip.
 ];
 // deveIncluirNoBackup(nomeRelativo) -> boolean. Compara o PRIMEIRO segmento do caminho
-// (para 'backups/x.sqlite' cair na regra) e o nome do arquivo.
+// (obrigatorio: a revisao verificou que o glob do archiver DESCE dentro de 'backups/' mesmo
+// com a entrada do diretorio recusada) e o nome do arquivo.
+// backupMaisRecente(dir) -> nome do arquivo mais novo em <dir>/backups, ou null.
 ```
 
-Exportar `deveIncluirNoBackup` e `EXCLUIDOS`.
+Exportar `deveIncluirNoBackup`, `backupMaisRecente` e `EXCLUIDOS`.
 
 ### C2 — `server/services/backupAuth.js` (novo)
 
@@ -61,9 +66,11 @@ Exportar `deveIncluirNoBackup` e `EXCLUIDOS`.
 // motivo: 'SEM_TOKEN_CONFIGURADO' | 'AUSENTE' | 'CURTO' | 'INVALIDO' | null
 // - tokenEsperado ausente/vazio -> { ok:false, motivo:'SEM_TOKEN_CONFIGURADO' } (fail-closed,
 //   comportamento que a rota JA tem hoje e que deve ser preservado)
-// - tokenEsperado com menos de 32 chars -> 'CURTO' (recusa mesmo se o enviado casar: token
-//   curto e adivinhavel e a rota nao tem rate limit proprio)
-// - so header Authorization: Bearer <t>; query string NAO e lida (RN-02)
+// - tokenEsperado com menos de 32 chars -> { ok:true, aviso:'CURTO' } — AVISA, nao recusa
+//   (achado A4: nao ha .env no repositorio, o comprimento do token real e desconhecido daqui,
+//   e recusar um token curto porem CORRETO quebraria o backup de producao)
+// - aceita header Authorization: Bearer <t> E query string, esta com { aviso:'QUERY_DEPRECIADA'
+//   } — o comentario da propria rota documenta ?token= como o uso (index.js:3468)
 // - comparacao com crypto.timingSafeEqual sobre Buffers de MESMO tamanho (comparar tamanho
 //   antes, senao timingSafeEqual lanca)
 ```
@@ -76,18 +83,21 @@ Exportar `deveIncluirNoBackup` e `EXCLUIDOS`.
 const CHAVES_SECRETAS_CORE = ['email_smtp_pass'];
 // mascararValorConfig(chave, valor) -> valor mascarado ('' quando vazio, PASSWORD_MASK quando
 //   houver conteudo) ou o valor original quando a chave nao e secreta.
-// podeGravarSegredo(valor) -> boolean: false para vazio/espacos e para o proprio PASSWORD_MASK
-//   (mesma regua de alertService.shouldUpdateSecret:169-173).
+// podeGravarSegredo(valor) -> boolean: false para vazio/espacos e para qualquer valor que
+//   CONTENHA o PASSWORD_MASK (nao so o exatamente igual — achado A2: '********N' vindo do
+//   onChange da tela passaria numa comparacao de igualdade). Regua irma:
+//   alertService.shouldUpdateSecret:168-172.
 ```
 
 ### C4 — os 4 pontos em `server/index.js`
 
 | # | Ponto | Mudança |
 |---|---|---|
-| 1 | `GET /api/backup` :3469-3489 | gate por `backupAuth.validarTokenBackup` (401 com o mesmo corpo de hoje); `console.warn`/`console.log` do IP + resultado (RN-03); trocar `archive.directory(PERSISTENT_DATA_DIR, false)` por caminhada que respeite `deveIncluirNoBackup` — **conferir a API do `archiver` disponível** antes (há `entries`/`ignore`; se `archive.glob` com `ignore` for o caminho, usar) |
-| 2 | `getEmailConfig` :2928-2937 | banco (só se `host` **e** `pass` preenchidos) → env (`SMTP_*`) → hardcoded; `from = from válido ?? user`; comentário dizendo que o hardcoded é **credencial comprometida à espera de rotação** |
+| 1 | `GET /api/backup` :3469-3489 | gate por `backupAuth.validarTokenBackup` (401 com o mesmo corpo de hoje; **avisos vão para o log, não para a resposta**); log de `req.ip` **e `x-forwarded-for`** + resultado + motivo (RN-03/A6 — sem `trust proxy`, atrás do nginx o `req.ip` é `127.0.0.1`); filtro **verificado** pela revisão: `archive.directory(dir, false, (entry) => deveIncluirNoBackup(entry.name) ? entry : false)` — é o 3º argumento de `Archiver.prototype.directory` (`archiver@7.0.1`, `lib/core.js:605,624-626,658-672`); `entries` **não** é API de filtro. Somar `archive.file()` do `backupMaisRecente()` (RN-08) |
+| 2 | `getEmailConfig` :2928-2937 | **env (`SMTP_*`) → hardcoded. Banco FORA** (achado A1: os dois campos da condição estão preenchidos hoje, então o banco venceria e trocaria o host de produção de `smtp.locaweb.com.br` para `smtplw.com.br`, e o `from` viraria lista de 2 destinatários). `from = from válido ?? user`; comentário dizendo que o hardcoded é **credencial comprometida à espera de rotação** |
 | 3 | `GET /api/configuracoes` :17941 e `GET /:chave` :18384 | aplicar `mascararValorConfig` na montagem (os **dois**) |
-| 4 | `PUT /api/configuracoes/:chave` :18410 | se a chave é secreta e `!podeGravarSegredo(valor)` → **200 sem gravar** (idempotente, como `shouldUpdateSecret` faz no almoxarifado) — a tela salva no `onChange` e um 400 ali viraria erro visível ao digitar |
+| 4 | `PUT /api/configuracoes/:chave` :18410 | chave secreta com `!podeGravarSegredo(valor)` → **400** (achado A3: o análogo real é o PUT genérico do almoxarifado, que devolve 400 com decisão congelada em teste — `configuracoesSegredo.api.test.js:200-231`; o 200 silencioso é da rota dedicada e só funciona porque a tela dela nunca reenvia a máscara). Com a tela corrigida no ponto 5, 400 é o coerente — e evita a tela dizer "salvo com sucesso" para gravação que não houve |
+| 5 | `client/src/components/Configuracoes.js` (:54-80, :82-92, :325-329) | **NOVO no escopo** (achado A2): campo de senha com `value=''` + placeholder condicional (molde `ConfiguracoesAlmoxarifado.js:2193-2195`); `updateConfig` não dispara PUT para chave secreta vazia. Sem isso, o admin que digitar partindo da máscara manda `********N` — que passa em guarda de igualdade e **sobrescreve a senha real** |
 
 ## Sort topológico
 
@@ -163,7 +173,19 @@ rota que não tem harness. A prova é manual (Step 2).
 
 ## Execução (estado)
 
-- [ ] Fase 2 — revisão do plano por agente fresco
+- [x] Fase 2 — revisão do plano por agente fresco (2026-08-28): **11 achados, 2 bloqueantes,
+  todos acatados.** (A1) a precedência do SMTP trocaria o **host de produção** — os dois
+  campos da condição estão preenchidos hoje, então "usar o banco se estiver completo" não era
+  salvaguarda, era interruptor; banco saiu da precedência. (A2) a spec afirmava que a guarda
+  cobria o admin editando a partir da máscara — **falso e reproduzido**: a tela salva a cada
+  tecla, `********N` passa em guarda de igualdade e sobrescreve a senha real, com o estrago
+  invisível porque o GET mascara de novo; a tela entrou no escopo. Mais: 400 em vez de 200 no
+  PUT (A3, o precedente citado era o da rota errada); a RN-02 quebrava o backup de produção
+  por dois caminhos, contradizendo o próprio design (A4); a API de filtro do `archiver` que o
+  plano citava **não existe** — a real foi verificada e congelada (A5); o IP do log seria o do
+  proxy (A6); tirar `backups/` inteiro removeria o fallback que `dbRecovery` manda usar (A7);
+  a data da senha no git era 2026-03-17, não 02-05 (A8). O revisor confirmou os três fatos
+  centrais, inclusive que o zip entrega o `jwtSecret`.
 - [ ] Task 1 · [ ] Task 2 · [ ] Task 3 · [ ] Task 4
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
