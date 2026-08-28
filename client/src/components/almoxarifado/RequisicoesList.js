@@ -11,6 +11,7 @@ import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './Almo
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import AssinaturaCanvas from './AssinaturaCanvas';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
@@ -72,7 +73,7 @@ const URGENCIA_INFO = {
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const RequisicoesList = () => {
-  const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
   const { user } = useAuth();
   const navigate = useNavigate();
   const ctx = useRequisicoesMaterialContext();
@@ -121,6 +122,11 @@ const RequisicoesList = () => {
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Etapa 15: etapa opcional de assinatura do recebedor. Guarda reqId + numero (e não o
+  // detalhe) porque a entrega total fecha o painel de detalhe antes de a assinatura abrir.
+  const [assinaturaPos, setAssinaturaPos] = useState(null); // { reqId, numero } | null
+  const [assinaturaNome, setAssinaturaNome] = useState('');
+  const [enviandoAssinatura, setEnviandoAssinatura] = useState(false);
 
   const buildSearchParams = useCallback((id) => {
     const params = {};
@@ -405,6 +411,7 @@ const RequisicoesList = () => {
     try {
       const res = await api.put(`/almoxarifado/requisicoes/${reqId}/entregar`, { itens_atendidos });
       setShowEntregar(false);
+      const numeroEntregue = detalhe?.numero || '';
       if (res.data?.parcial) {
         toast.success('Entrega parcial registrada. Saldo pendente permanece em aberto.');
         await abrirDetalhe(reqId, { force: true });
@@ -412,6 +419,10 @@ const RequisicoesList = () => {
         toast.success('Requisição entregue por completo! Estoque baixado.');
         fecharDetalhe();
       }
+      // Etapa 15 (RN-02): a entrega já está registrada — a assinatura é etapa POSTERIOR e
+      // opcional ("Pular" fecha sem POST). Nunca condiciona o sucesso da entrega.
+      setAssinaturaNome('');
+      setAssinaturaPos({ reqId, numero: numeroEntregue });
       await loadRequisicoes();
     } catch (err) {
       console.error('[RequisicoesList] Erro ao entregar requisição', err?.response?.data || err);
@@ -419,6 +430,42 @@ const RequisicoesList = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Etapa 15 — POST multipart do contrato C1 (recebedor_nome + arquivo `assinatura`).
+  // RN-02: falha aqui NÃO desfaz a entrega — a entrega é fato físico já registrado; a
+  // assinatura é documentação dele. Erro vira toast e a etapa continua aberta para tentar
+  // de novo (ou Pular).
+  const enviarAssinatura = async (blob) => {
+    if (!assinaturaPos || enviandoAssinatura) return;
+    const nome = assinaturaNome.trim();
+    if (!nome) {
+      toast.error('Informe o nome de quem recebeu o material');
+      return;
+    }
+    setEnviandoAssinatura(true);
+    try {
+      const fd = new FormData();
+      fd.append('recebedor_nome', nome);
+      fd.append('assinatura', blob, 'assinatura.png');
+      await api.post(`/almoxarifado/requisicoes/${assinaturaPos.reqId}/assinatura-entrega`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Assinatura do recebedor registrada!');
+      const reqId = assinaturaPos.reqId;
+      setAssinaturaPos(null);
+      setAssinaturaNome('');
+      if (selectedIdRef.current === reqId) await abrirDetalhe(reqId, { force: true });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao registrar assinatura');
+    } finally {
+      setEnviandoAssinatura(false);
+    }
+  };
+
+  const abrirColherAssinatura = (fonte) => {
+    setAssinaturaNome('');
+    setAssinaturaPos({ reqId: fonte.id, numero: fonte.numero });
   };
 
   const abrirModalEntrega = (fonte = detalhe) => {
@@ -899,6 +946,33 @@ const RequisicoesList = () => {
                   </div>
                 ))}
 
+                {/* Assinaturas de entrega (Etapa 15, C2) — leitura junto da requisição,
+                    sem gate novo: quem vê a requisição vê as assinaturas dela. */}
+                {(detalhe.assinaturas_entrega || []).length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Assinaturas de Entrega ({detalhe.assinaturas_entrega.length})
+                    </div>
+                    {detalhe.assinaturas_entrega.map((a) => (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--gmp-border)' }}>
+                        <a href={resolveMaterialPhotoUrl(a.arquivo_url)} target="_blank" rel="noreferrer" title="Abrir assinatura em tamanho real">
+                          <img
+                            src={resolveMaterialPhotoUrl(a.arquivo_url)}
+                            alt={`Assinatura de ${a.recebedor_nome}`}
+                            style={{ width: 72, height: 36, objectFit: 'contain', background: '#fff', border: '1px solid var(--gmp-border)', borderRadius: 6, display: 'block' }}
+                          />
+                        </a>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{a.recebedor_nome}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)' }}>
+                            {formatDate(a.criado_em)}{a.criado_por_nome ? ` · colhida por ${a.criado_por_nome}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Ações — aprovação de valor */}
                 {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
@@ -1065,6 +1139,18 @@ const RequisicoesList = () => {
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
                     onClick={() => { setMotivoEncerramento(''); setShowEncerrar(true); }} disabled={saving}>
                     <FiArchive size={14} /> Encerrar Requisição
+                  </button>
+                )}
+
+                {/* Assinatura avulsa (Etapa 15) — a entrega pode já ter acontecido sem
+                    assinatura (RN-02); só nos status entregues (RN-03) e para quem entrega
+                    (separar_emitir, RN-05 — mesmo perfil que colhe no fluxo da entrega). */}
+                {warehouseMode
+                  && ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'].includes(detalhe.status)
+                  && pode('separar_emitir') && (
+                  <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => abrirColherAssinatura(detalhe)} disabled={saving}>
+                    ＋ Assinatura de entrega
                   </button>
                 )}
 
@@ -1323,6 +1409,41 @@ const RequisicoesList = () => {
               <button className="btn-almox-secondary" onClick={() => setShowEntregar(false)}>Cancelar</button>
               <button className="btn-almox-primary" onClick={handleEntregar} disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0)}>
                 {saving ? 'Confirmando...' : '✅ Confirmar Entrega'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal assinatura do recebedor (Etapa 15) — etapa opcional depois da entrega e
+          também pelo botão avulso do detalhe. "Pular" fecha SEM POST (RN-02). */}
+      {assinaturaPos && (
+        <div className="almox-modal-overlay" onClick={() => !enviandoAssinatura && setAssinaturaPos(null)}>
+          <div className="almox-modal almox-modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>✍ Colher assinatura do recebedor{assinaturaPos.numero ? ` — ${assinaturaPos.numero}` : ''}</h2>
+              <button className="almox-modal-close" onClick={() => setAssinaturaPos(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ color: 'var(--gmp-text-light)', marginBottom: 12, fontSize: '0.85rem' }}>
+                Etapa opcional — a entrega já está registrada. Se o recebedor não puder assinar
+                agora, use <strong>Pular</strong>; dá para colher a assinatura depois pelo
+                detalhe da requisição.
+              </p>
+              <div className="almox-field">
+                <label className="almox-label">Nome do recebedor<span className="required">*</span></label>
+                <input className="almox-input" type="text" maxLength={120} value={assinaturaNome}
+                  onChange={e => setAssinaturaNome(e.target.value)}
+                  placeholder="Nome de quem recebeu o material..." />
+              </div>
+              <div className="almox-field">
+                <label className="almox-label">Assinatura</label>
+                <AssinaturaCanvas onConfirm={enviarAssinatura} height={180} />
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setAssinaturaPos(null)} disabled={enviandoAssinatura}>
+                Pular
               </button>
             </div>
           </div>
