@@ -124,7 +124,7 @@ T3 (feita) → T1 → T2. Sem task de jornada: as três não compõem um fluxo.
 `server/routes/almoxarifado/extended.js` (passa a importar), `server/routes/almoxarifado.js`
 (rota de foto); Test `server/tests/api/fotoMaterialRastro.api.test.js`.
 
-- [ ] **Step 1: teste que falha** — RN-01 (404 + **zero** arquivos novos no diretório; o
+- [x] **Step 1: teste que falha** (`6cb594e`) — RN-01 (404 + **zero** arquivos novos no diretório; o
   helper `contarArquivosUpload` está em `permissoesRotas.api.test.js:108` e depende do
   `uploadsAlmoxDir` que o harness devolve, `tests/helpers/testApp.js:80` — o cenário-molde é
   `:535-549`); RN-03 (trocar a foto de um material que já tem: a antiga some do disco, a nova
@@ -143,11 +143,41 @@ T3 (feita) → T1 → T2. Sem task de jornada: as três não compõem um fluxo.
   multer, então nada foi gravado. O teste existente (`permissoesRotas.api.test.js:535-549`)
   já prova isso e serve de controle; a RN-02 do design está errada ao incluir o 403 e será
   corrigida no fechamento (achado A9).
-- [ ] **Step 2: rodar e ver falhar.**
-- [ ] **Step 3: implementar** (C1 primeiro, depois C2).
-- [ ] **Step 4: verde + controle positivo** — remover a limpeza do caminho de 404 e ver o
-  cenário de contagem de arquivos falhar; reverter (**commitar antes**). `npm run test:api`.
-- [ ] **Step 5: commit.**
+- [x] **Step 2: rodar e ver falhar** (`6cb594e`) — **vermelho: 4 passed, 5 failed + o processo
+  ABORTADO** no último cenário: `EISDIR: illegal operation on a directory, unlink` subindo de
+  `almoxarifado.js:657` dentro de um callback do sqlite3, sem catch nenhum acima. O defeito 3
+  do design (`unlinkSync` sem try/catch em fire-and-forget) não é só "não derruba a resposta":
+  derruba o **processo**. Os 4 que passavam no vermelho passavam por motivo honesto — a troca de
+  foto já apagava a anterior, o 400 sem arquivo já existia, e o "404 não audita" passava vazio
+  (não havia auditoria nenhuma), que é justamente por que o cenário de auditoria tem asserção de
+  `chamado`.
+- [x] **Step 3: implementar** (`6cb594e`) — C1: `services/almoxarifado/uploadCleanup.js`,
+  `limparUploadOrfao(req, dir)` com o `console.warn` preservado e mensagem genérica; `extended.js`
+  importa com alias `limparUploadOrfaoEm` e os **8 call sites / 4 rotas** trocados por script com
+  `assert` de contagem (8 antes, 8 depois, zero chamadas da forma antiga). C2: SELECT antes → 404
+  + limpeza → UPDATE → unlink da anterior em try/catch → auditoria em try/catch com
+  `console.error` → resposta inalterada.
+- [x] **Step 4: verde + controle positivo** (`6cb594e`) — **10 passed, 0 failed**. Controle
+  positivo: limpeza removida do caminho de 404 por script com `assert` → **9 passed, 1 failed**,
+  e o que caiu foi exatamente `[RN-01/RN-02] o 404 nao deixa arquivo no disco` (só ele — os
+  outros 9 continuaram verdes, então a asserção de disco é a que mede a limpeza e não pega
+  carona em nada). Revertido com `git checkout` **depois** do commit. `npm run test:api`:
+  **140/140 arquivos OK**. Regressão das 4 rotas que já usavam a limpeza, rodadas
+  explicitamente: `sucateamentoRotas` 15/0, `toolCalibracao` 10/0, `toolOcorrencia` 9/0,
+  `requisicaoAssinaturaEntrega` 9/0, e `permissoesRotas` 46/0 (o controle do ramo 403).
+- [x] **Step 5: commit** (`6cb594e`).
+
+  **Divergência do contrato, declarada:** o C1 dizia "importar com alias **ou como módulo**" e
+  enumerava os 8 call sites. Escolhida a extração COMPLETA (função local apagada, call sites
+  passando `uploadsAlmoxDir` explícito) em vez de deixar um wrapper local de 1 argumento: com o
+  wrapper, os 8 call sites não mudariam e enumerá-los no achado A13 não teria sentido. O comentário
+  longo que explicava a função continua em `extended.js`, apontando para o módulo novo.
+
+  **Acrescentado ao previsto:** um cenário para o try/catch do unlink da anterior (foto anterior =
+  **diretório** → `fs.existsSync` true, `unlinkSync` EISDIR) e um para "auditoria que lança não
+  derruba o ato" (stub em `audit.registrarAuditoria` com flag `chamado`, senão uma rota que não
+  auditasse passaria verde). O cenário do diretório é o **último do arquivo de propósito**: no
+  vermelho ele leva o runner junto, e os demais já reportaram.
 
 ### Task 2 (tronco): segredo no GET e no PUT de configurações
 
@@ -220,7 +250,7 @@ T3 (feita) → T1 → T2. Sem task de jornada: as três não compõem um fluxo.
   (A11-A13). O revisor rodou 10 arquivos de teste: **todos verdes**, e mediu que o escopo
   escrito não quebra nenhum — com uma quebra latente que a decisão do A5 justamente evita
   (`auditoriaConfiguracoes.api.test.js:426-453` exige 200 no PUT do webhook).
-- [ ] Task 1 · [ ] Task 2 · [x] Task 3 (`8c0feff`)
+- [x] Task 1 (`6cb594e`) · [ ] Task 2 · [x] Task 3 (`8c0feff`)
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
 - [ ] Fase 6 — fechar-etapa + retro
