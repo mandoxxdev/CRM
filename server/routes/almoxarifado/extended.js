@@ -1261,13 +1261,25 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   });
 
   // ── Auditoria ──
-  app.get('/api/almoxarifado/auditoria', auth, async (req, res) => {
+  //
+  // Etapa 18 (RN-06, C5): a rota tinha SO `auth` — qualquer usuario com acesso ao modulo lia o
+  // log inteiro, inclusive `dados_anteriores/novos` de material, custo e requisicao. Isso e
+  // exposicao ATUAL, nao feature nova, e por isso o gate entrou nesta etapa mesmo com a tela de
+  // auditoria fora de escopo. `configurar` = so ADMINISTRADOR, o mesmo gate das telas de
+  // administracao; se um dia o Gestor precisar ler auditoria, abre-se o gate para ele — nao se
+  // deixa aberto para todos. Verificado antes de fechar: nenhuma tela do client e nenhuma rota
+  // interna consomem esta rota.
+  app.get('/api/almoxarifado/auditoria', auth, requirePermission('configurar'), async (req, res) => {
     try {
       let sql = 'SELECT * FROM auditoria_log_almoxarifado WHERE 1=1';
       const params = [];
       if (req.query.entidade) { sql += ' AND entidade = ?'; params.push(req.query.entidade); }
       if (req.query.entidade_id) { sql += ' AND entidade_id = ?'; params.push(req.query.entidade_id); }
-      sql += ' ORDER BY created_at DESC LIMIT 200';
+      // Desempate por `id DESC` (Etapa 18, C5): `created_at` e DATETIME com resolucao de SEGUNDO,
+      // entao as auditorias de um mesmo ato (criar + contar, contar + concluir) empatam e a ordem
+      // dentro do empate fica indefinida. Sem o desempate, ler a historia de uma conferencia pelo
+      // log devolve os atos fora de ordem de vez em quando.
+      sql += ' ORDER BY created_at DESC, id DESC LIMIT 200';
       res.json(await dbAll(db, sql, params));
     } catch (e) { handleError(res, e); }
   });

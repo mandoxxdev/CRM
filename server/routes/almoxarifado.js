@@ -508,10 +508,39 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // DELETE /api/almoxarifado/materiais/:id — inativar (soft delete: é uma edição do
   // cadastro, daí `editar_material` e não uma ação própria).
+  //
+  // Etapa 18 (RN-07): assimetria gritante ate aqui — `PUT /materiais/:id` audita e o DELETE, que
+  // tira o material do cadastro inteiro, nao deixava rastro nenhum.
+  //
+  // O SELECT vem ANTES do UPDATE por DOIS motivos, nao um:
+  //  1) o UPDATE nao distingue "id inexistente" de "desativei" (a rota responde `success: true`
+  //     nos dois casos, e este comportamento fica inalterado) — auditar cegamente criaria uma
+  //     linha de auditoria para um material que nunca existiu;
+  //  2) `dados_anteriores.ativo` tem de ser o valor REAL. Um `1` chumbado mentiria toda vez que o
+  //     material ja estivesse inativo, que e justamente o caso em que o log importa (quem tentou
+  //     desativar de novo, e quando).
   app.delete('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), async (req, res) => {
     try {
+      const antes = await dbGet(db, `SELECT id, codigo, nome, ativo FROM materiais_almoxarifado WHERE id = ?`,
+        [req.params.id]);
       await dbRun(db, `UPDATE materiais_almoxarifado SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [req.params.id]);
+
+      // Pos-escrita e best-effort: o material JA esta inativo neste ponto: derrubar a resposta por
+      // causa do log desfaria nada e devolveria erro para um ato que aconteceu.
+      if (antes) {
+        try {
+          await audit.registrarAuditoria(db, {
+            entidade: 'material', entidade_id: antes.id, acao: 'DESATIVACAO',
+            usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+            dados_anteriores: { ativo: antes.ativo },
+            dados_novos: { ativo: 0, codigo: antes.codigo, nome: antes.nome },
+          });
+        } catch (errAudit) {
+          console.error('[almoxarifado] Falha ao registrar auditoria de desativação de material:', errAudit.message);
+        }
+      }
+
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1273,9 +1302,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         }
       }
 
+      // Etapa 18 (RN-05, C4): `aprovador_id`/`aprovador_nome` existem no schema desde a Etapa 10 e
+      // NUNCA foram escritas por ninguem — duas colunas mortas. Quem conclui APLICANDO ajuste e
+      // quem homologa a diferenca (e o mesmo que exerceu `ajustar_estoque`), entao e ele que a
+      // coluna sempre quis guardar. Sem ajustes as colunas nao sao TOCADAS: gravar sempre
+      // confundiria "fechou a contagem" com "homologou ajuste", e gravar NULL apagaria uma
+      // homologacao anterior. Fragmento condicional no mesmo truque do `camposAutoria` da rota de
+      // contagem — a template string ja e montada assim neste arquivo.
+      const camposAprovador = aplicar_ajustes ? ', aprovador_id = ?, aprovador_nome = ?' : '';
+      const paramsAprovador = aplicar_ajustes ? [req.user.id, req.user.nome || req.user.email] : [];
       await dbRun(db, `UPDATE conferencias_almoxarifado
-              SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP, justificativa_ajuste = ?, impacto_financeiro = ?
-              WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, impactoFinanceiro, req.params.id]);
+              SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP, justificativa_ajuste = ?, impacto_financeiro = ?${camposAprovador}
+              WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, impactoFinanceiro, ...paramsAprovador, req.params.id]);
 
       // Etapa 18 (RN-01): a conclusao SEM ajustes nao deixava vestigio NENHUM — nenhuma
       // movimentacao e criada e `data_fim` nao tem autor, entao "quem fechou este inventario?"
@@ -2890,22 +2928,73 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           // por config, na prática ficaria preso para sempre — a mesma armadilha de saldo
           // reservado inutilizável que a Etapa 4 fecha no consumo. Best-effort: falha aqui não
           // desfaz o cancelamento, que é a ação que o usuário pediu.
+          // Etapa 18 (RN-07): a requisicao cancelada nao deixava rastro — `rejeicao_motivo` guarda
+          // o motivo, mas nao QUEM cancelou nem de QUAL status. `r` foi lido antes do UPDATE, entao
+          // `r.status` ainda e o status anterior (o gravado ja e 'CANCELADO' — o literal do modulo
+          // e CANCELADO, nao CANCELADA).
+          //
+          // A auditoria e encadeada na MESMA promessa, antes do `.finally` que responde: a rota e
+          // callback aninhado e converte-la para `async` seria reescrever um handler que funciona
+          // so para pendurar um log. Como o primeiro `.catch` ja absorveu a falha da liberacao de
+          // reservas, o `.catch` de baixo so ve erro de auditoria — e nenhum dos dois impede o
+          // `res.json`, porque o cancelamento ja esta efetivado.
           reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, motivo || 'Requisição cancelada')
             .catch((e) => console.warn('Liberação de reservas no cancelamento:', e.message))
+            .then(() => audit.registrarAuditoria(db, {
+              entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'CANCELAMENTO',
+              usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+              dados_anteriores: { status: r.status },
+              dados_novos: { status: 'CANCELADO', numero: r.numero },
+              justificativa: motivo || null,
+            }))
+            .catch((errAudit) => console.error('[almoxarifado] Falha ao registrar auditoria de cancelamento de requisição:', errAudit.message))
             .finally(() => res.json({ success: true }));
         });
     });
   });
 
   // DELETE /api/almoxarifado/requisicoes/:id — exclusão administrativa (soft delete + estorno)
-  app.delete('/api/almoxarifado/requisicoes/:id', (req, res) => {
+  //
+  // Etapa 18 (RN-07): a spec 23 AFIRMAVA que excluir requisicao auditava — era falso
+  // (`requisitionService` tem zero chamadas de `registrarAuditoria`; so os estornos apareciam, e
+  // como `movimentacao`). O ato que mais apaga coisa do fluxo era o unico sem linha propria.
+  //
+  // O `dbGet` tem de vir ANTES do servico: `excluirRequisicao` nao devolve `status` nem `numero`,
+  // e depois dele o status JA e 'CANCELADO' — ler no fim registraria "de CANCELADO para
+  // CANCELADO", que nao conta historia nenhuma. Mesmo filtro do servico (`COALESCE(ativo,1)=1`)
+  // para as duas leituras concordarem sobre o que e "requisicao viva".
+  app.delete('/api/almoxarifado/requisicoes/:id', async (req, res) => {
     if (!canDeleteAlmoxRequisicao(req.user)) {
       return res.status(403).json({ error: 'Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições' });
     }
     const justificativa = req.body?.justificativa || req.query?.justificativa;
-    requisitionService.excluirRequisicao(db, req.params.id, req.user, justificativa, alertService)
-      .then((result) => res.json(result))
-      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+    try {
+      const antes = await dbGet(db,
+        'SELECT id, numero, status FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1',
+        [req.params.id]);
+      const result = await requisitionService.excluirRequisicao(db, req.params.id, req.user, justificativa, alertService);
+
+      // Pos-escrita e best-effort: a exclusao (e os estornos de estoque) ja aconteceram.
+      if (antes) {
+        try {
+          await audit.registrarAuditoria(db, {
+            entidade: 'requisicao', entidade_id: antes.id, acao: 'EXCLUSAO',
+            usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+            dados_anteriores: { status: antes.status },
+            // `estornos` e um ARRAY de { material_id, quantidade } — o log guarda quantos
+            // materiais voltaram para o estoque, nao o array inteiro.
+            dados_novos: { numero: antes.numero, estornos: (result.estornos || []).length },
+            justificativa: justificativa || null,
+          });
+        } catch (errAudit) {
+          console.error('[almoxarifado] Falha ao registrar auditoria de exclusão de requisição:', errAudit.message);
+        }
+      }
+
+      res.json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
   });
 
   // POST /api/almoxarifado/requisicoes/processar-lembretes — processar lembretes pendentes (cron/admin)
