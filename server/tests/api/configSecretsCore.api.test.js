@@ -37,7 +37,9 @@ const assert = require('assert');
 
 const alertService = require('../../services/almoxarifado/alertService');
 const configSecrets = require('../../services/configSecrets');
-const { mascararValorConfig, podeGravarSegredo, CHAVES_SECRETAS_CORE } = configSecrets;
+const {
+  mascararValorConfig, podeGravarSegredo, CHAVES_SECRETAS_CORE, ehChaveSecretaCore,
+} = configSecrets;
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -155,6 +157,31 @@ test('[RN-06] recusa mascara PARCIAL apos backspace, se ainda contiver a mascara
 
 test('[RN-06] recusa numero/objeto que virem mascara depois de String()', () => {
   assert.strictEqual(podeGravarSegredo({ toString: () => MASK }).ok, false);
+});
+
+// Achado A8 da revisao adversarial, REPRODUZIDO na rota real: `{"valor":{"a":"x"},"tipo":"json"}`
+// devolvia 200 e gravava `[object Object]` na coluna do segredo — `String({})` nao e vazio e nao
+// contem a mascara, entao a guarda deixava passar. O cenario acima (`toString` devolvendo a
+// mascara) nao pegava este caso: um objeto COMUM tem `toString` comum.
+test('[RN-06/A8] recusa objeto, array e numero — senha e TEXTO', () => {
+  for (const lixo of [{ a: 'x' }, ['abc'], 12345, true]) {
+    const r = podeGravarSegredo(lixo);
+    assert.strictEqual(r.ok, false, `${JSON.stringify(lixo)} passou na guarda do segredo`);
+    assert.strictEqual(r.motivo, 'TIPO', `motivo errado para ${JSON.stringify(lixo)}: ${r.motivo}`);
+  }
+});
+
+// Achado A9, REPRODUZIDO: `PUT /api/configuracoes/EMAIL_SMTP_PASS` e a variante com espaco no fim
+// criavam LINHA NOVA fora da lista de secretas, gravada e devolvida EM CLARO pelos dois GETs.
+test('[RN-05/A9] a chave secreta e reconhecida com outra caixa e com espaco em volta', () => {
+  for (const variante of ['EMAIL_SMTP_PASS', 'email_smtp_pass ', ' Email_Smtp_Pass']) {
+    assert.strictEqual(ehChaveSecretaCore(variante), true,
+      `"${variante}" nao foi reconhecida como secreta — grafia alternativa grava senha em claro`);
+    assert.strictEqual(mascararValorConfig(variante, 'senha-real'), MASK,
+      `"${variante}" saiu do GET sem mascara`);
+  }
+  assert.strictEqual(ehChaveSecretaCore('empresa_nome'), false,
+    'a normalizacao passou a marcar chave que NAO e secreta');
 });
 
 test('[RN-06] ACEITA senha real (a guarda nao pode travar a troca legitima)', () => {
