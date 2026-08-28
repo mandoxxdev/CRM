@@ -244,7 +244,7 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
   custo, almoxarifados e permissões de setor — o nome anterior, `auditoriaPermissoesSetor`,
   escondia 2/3 do conteúdo)
 
-- [ ] **Step 1: teste que falha** — centros de custo e almoxarifados (criação/edição com
+- [x] **Step 1: teste que falha** (`3729afa`) — centros de custo e almoxarifados (criação/edição com
   de/para, aproveitando o `SELECT *` que já existe); RN-07 (permissões: de/para completo, e o
   bulk com `incluidas` derivado); **RN-02 no `extended.js`** por stub. O stub precisa de
   **TRÊS** asserções juntas (achado A4 — sem a primeira, uma rota que simplesmente NÃO audita
@@ -253,13 +253,21 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
      alcançado')` — molde real na base: `tests/api/alertasNovos.api.test.js:151-159`;
   2. o ato responde 200/201 e gravou;
   3. nenhuma linha de auditoria foi criada.
-- [ ] **Step 2: implementar (C0 primeiro); verde; controle positivo** — voltar o import ao
-  desestruturado e conferir que o teste de RN-02 **FICA VERMELHO** na asserção "nenhuma linha
-  de auditoria" (sem o C0 o `registrarAuditoria` real roda e cria a linha). *(Correção do
-  achado A4: a versão anterior deste plano dizia que o teste "passaria a mentir, ficando
-  verde" — está errado, e um executor seguindo aquilo concluiria que o teste está quebrado e
-  apagaria justamente a asserção que o torna não-vazio.)* Reverter.
-- [ ] **Step 3: `npm run test:api`; commit** — `Almoxarifado Etapa 19 Task 3: extended audita cadastros e permissoes de setor`.
+  15 cenários em `server/tests/api/auditoriaExtended.api.test.js`. Vermelho: **5 passed, 10
+  failed**.
+- [x] **Step 2: implementar (C0 primeiro); verde; controle positivo** (`3729afa`) — verde
+  **15/0**. Controle positivo: o helper `auditar` voltando ao binding desestruturado →
+  **13/2**, os DOIS cenários de RN-02 vermelhos; revertido. **Precisão sobre a previsão do
+  plano:** com as três asserções na ordem do contrato, o vermelho sai na asserção **(1)**, a
+  flag `chamado` — ela vem antes. Rodada uma checagem de 2ª ordem (desligar só a flag e
+  repetir a mesma sabotagem) para provar que a (3) também é carga: aí sim falha em
+  `'a auditoria sabotada gravou linha assim mesmo'`, exatamente como o plano corrigido previu.
+  As duas asserções são load-bearing e nenhuma passa por vacuidade; o texto do plano só não
+  dizia qual das duas dispara primeiro. Reverter.
+- [x] **Step 3: `npm run test:api`; commit** (`3729afa`) — **137/137 arquivos OK**
+  (a contagem inclui os arquivos ainda não commitados da Task 2, que rodava em paralelo);
+  `permissoesSetores.api.test.js` **4/0** inalterado; `test:almoxarifado` **42/0**.
+  Commit: `Almoxarifado Etapa 19 Task 3: extended audita cadastros e permissoes de setor`.
 
 ### Task 4 (integração): a jornada de uma mudança de regra
 
@@ -335,7 +343,32 @@ T1 e T2 tocam `routes/almoxarifado.js` — sequenciais. T3 é `extended.js`, par
   (d) `calcularDiff` ignora o par null→null (chave que não existia e continua sem valor) para
   não inventar uma "mudança" de nada — não estava escrito no C1, é consequência dele.
 - [ ] Task 2 (tronco)
-- [ ] Task 3 (galho)
+- [x] Task 3 (galho) — `3729afa`. Vermelho inicial **5/10** → verde **15/0**
+  (`auditoriaExtended.api.test.js`). Controle positivo do C0: helper `auditar` de volta ao
+  binding desestruturado → **13/2** (os dois cenários de RN-02), revertido. `test:api`
+  **137/137 arquivos OK**, `test:almoxarifado` **42/0**, `permissoesSetores` **4/0**.
+  **Divergências/decisões, para a Task 4 e o fechamento saberem:**
+  (a) o vermelho do controle positivo sai na asserção **(1)** (a flag `chamado`), não na (3)
+  — as duas são carga, e uma checagem de 2ª ordem (desligar a flag e repetir a sabotagem)
+  confirmou que aí a (3) pega, como o plano previa;
+  (b) as chamadas ficaram atrás de um helper `auditar(db, payload, contexto)` no topo do
+  arquivo (try/catch → `console.error`), em vez de seis try/catch inline: o C0 só funciona se
+  TODA chamada nova passar por `audit.registrarAuditoria`, e um ponto único é o que impede a
+  próxima chamada de voltar ao binding desestruturado por descuido;
+  (c) o de/para dos dois PUTs é **simétrico nos campos que a rota escreve**, não o `SELECT *`
+  inteiro da var `atual` — `id`/`created_at` apareceriam dos dois lados como ruído;
+  (d) o bulk-tipo **audita mesmo com `incluidas: 0`**. Não é a regra do PUT /configuracoes
+  (RN-04, "zero mudanças → zero linhas"): lá a tela dispara 18 chaves a cada Salvar, aqui é
+  um clique deliberado em controle de acesso e "mandou incluir e não entrou nada" é
+  informação. O C5 não decidia isto — decidido aqui, com teste;
+  (e) o de/para das permissões é a **lista completa** (`{ total, permissoes: [...] }` com
+  `familia_id`/`categoria_id`/`material_id` + o nome resolvido), lida de `getPermissoesSetor`
+  nos dois lados: `salvarPermissoesSetor` é DELETE-all + N INSERTs, não existe "campo
+  alterado" a reportar, e o nome vai junto porque o log é lido meses depois, quando a família
+  pode ter sido renomeada;
+  (f) o teste usa `INSERT` direto para criar a localização do cenário "não inativa
+  almoxarifado com localização ativa" em vez de `POST /localizacoes` — aquela rota estava
+  sendo mexida pela Task 2 em paralelo e o cenário não é sobre ela.
 - [ ] Task 4 (integração)
 - [ ] Fase 4 — suíte completa serial
 - [ ] Fase 5 — revisão adversarial (2 lentes)
