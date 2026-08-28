@@ -9,6 +9,35 @@ const lotService = require('./lotService');
 // `purchaseService.fecharSolicitacoesDoPedido` em tempo de execucao, e uma desestruturacao no
 // require capturaria a funcao original antes do monkeypatch.
 const purchaseService = require('./purchaseService');
+// Etapa 17, Task 2 (gancho C4.2) — pelo OBJETO do modulo pelo MESMO motivo do purchaseService
+// acima: o teste de RN-02 monkeypatcha `dispararAlertaRegistrado` e uma desestruturacao
+// capturaria a funcao original. Sem ciclo (purchaseService/stockService ja carregam a fila).
+const notificationQueueService = require('./notificationQueueService');
+const alertRegistry = require('./alertRegistry');
+
+/**
+ * Etapa 17 (RN-04, gancho C4.2) — aviso pos-escrita da quantidade recebida, nos DOIS escritores
+ * reais (`conferirRecebimento` e `salvarDadosFiscal`; a UI de producao passa pelo fiscal, entao
+ * um gancho so na conferencia nunca dispararia de verdade — achado Critico da revisao do plano).
+ *
+ * A regua e a query compartilhada do registro (`listarDivergenciasRecebimento({ recebimentoId })`,
+ * float-safe por `divergenciaRealSql`): refazer a comparacao em JS aqui seria a segunda definicao
+ * de "item divergente" — a classe de bug que divergencia.js existe para matar.
+ *
+ * Roda mesmo quando a chamada nao trouxe itens: o dedupe por item (`receb-diverg-<item_id>`)
+ * torna o disparo repetido inofensivo e o gancho vira rede de seguranca a mais. Nunca derruba o
+ * ato (padrao pos-commit, stockService.js:1374-1405).
+ */
+async function avisarDivergenciasDoRecebimento(db, recebimentoId) {
+  try {
+    const itens = await alertRegistry.listarDivergenciasRecebimento(db, { recebimentoId });
+    for (const linha of itens) {
+      await notificationQueueService.dispararAlertaRegistrado(db, 'DIVERGENCIA_RECEBIMENTO', linha);
+    }
+  } catch (e) {
+    console.warn('[almoxarifado-alertas] Falha ao avisar divergencia de recebimento:', e.message);
+  }
+}
 
 const STATUS = {
   RECEBIDO: 'RECEBIDO',
@@ -164,6 +193,8 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
     }
   }
 
+  await avisarDivergenciasDoRecebimento(db, recebimentoId);
+
   return { success: true };
 }
 
@@ -306,6 +337,8 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
       ]);
     }
   }
+
+  await avisarDivergenciasDoRecebimento(db, recebimentoId);
 
   return { success: true };
 }

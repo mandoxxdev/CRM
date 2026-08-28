@@ -9,6 +9,9 @@ const multer = require('multer');
 const { z } = require('zod');
 const alertService = require('../services/almoxarifado/alertService');
 const notificationQueueService = require('../services/almoxarifado/notificationQueueService');
+// Etapa 17, Task 2 (gancho C4.3): o `listar` dual-mode do registro e a regua unica da
+// "conferencia divergente" — a rota de concluir consome o modo por id.
+const alertRegistry = require('../services/almoxarifado/alertRegistry');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
 const deliverySignatureService = require('../services/almoxarifado/deliverySignatureService');
@@ -1206,6 +1209,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, impactoFinanceiro, req.params.id]);
 
       await Promise.all([...materiaisAjustados].map((mid) => alertService.verificarAlertaPorMaterialId(db, mid).catch(() => null)));
+
+      // Etapa 17 (RN-05, gancho C4.3): aviso pos-commit, ao lado do gancho de alerta acima — a
+      // conferencia ja esta CONCLUIDO e os ajustes ja foram aplicados, entao o try/catch so pode
+      // custar o e-mail. A linha vem da MESMA funcao que alimenta a central/varredura
+      // (`listarDivergenciaConferencia`, dual-mode por id): a conclusao e logica inline nesta
+      // rota, e montar a condicao aqui criaria uma segunda definicao de "conferencia divergente".
+      // Vazio = conferencia sem divergencia real -> nenhum aviso. Agregado: UM aviso por
+      // conferencia, nunca por item (mesmo motivo pelo qual AJUSTE_INVENTARIO fica fora da
+      // notificacao de movimentacao).
+      try {
+        const [linhaInv] = await alertRegistry.listarDivergenciaConferencia(db, { conferenciaId: req.params.id });
+        if (linhaInv) await notificationQueueService.dispararAlertaRegistrado(db, 'DIVERGENCIA_INVENTARIO', linhaInv);
+      } catch (e) {
+        console.warn('[almoxarifado-alertas] Falha ao avisar divergencia de inventario pos-conclusao:', e.message);
+      }
 
       res.json({ success: true, ajustesAplicados, impactoFinanceiro });
     } catch (e) {

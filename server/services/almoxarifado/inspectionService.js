@@ -13,6 +13,14 @@
  */
 const { dbGet, dbRun, dbAll } = require('./db');
 const { registrarMovimentacao } = require('./stockService');
+// Etapa 17, Task 2 (gancho C4.1). Chamado pelo OBJETO do modulo, NAO desestruturado — de
+// proposito, contra o estilo local: o teste de RN-02 monkeypatcha
+// `notificationQueueService.dispararAlertaRegistrado` em tempo de execucao para provar que o
+// aviso nao derruba o ato, e uma desestruturacao no require capturaria a funcao original antes
+// do patch (mesmo precedente de `purchaseService` em receiptService.js:11). Sem ciclo: o require
+// de `stockService` acima ja carrega `notificationQueueService` por inteiro.
+const notificationQueueService = require('./notificationQueueService');
+const alertRegistry = require('./alertRegistry');
 
 const ENCAMINHAMENTOS = ['DEVOLVER', 'ANALISE_ENGENHARIA', 'SUBSTITUICAO'];
 
@@ -129,6 +137,26 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     data.acao || null, user.id, user.nome || user.email, data.observacoes || null,
     aprovada, reprovada, data.encaminhamento || null,
   ]);
+  // Etapa 17 (RN-02/RN-03, gancho C4.1): aviso pos-commit — os dois claims e o INSERT ja
+  // aconteceram quando chegamos aqui, entao o try/catch abaixo so pode custar o e-mail, nunca a
+  // decisao (molde de stockService.js:1374-1405). A linha vem do dual-mode do registro
+  // (`listarReprovados({ inspecaoId })`), NUNCA montada dos dados locais: `material_codigo`,
+  // numero do recebimento e `data_inspecao` nao existem carregados neste escopo, e refazer a
+  // consulta aqui criaria uma segunda definicao de "inspecao reprovada".
+  // RN-03: so ha aviso quando houve reprovacao de verdade. A guarda e REDUNDANTE de proposito
+  // com o `WHERE i.quantidade_reprovada > 0` do `listarReprovados` — medido no controle positivo
+  // da Task 2: derrubar so a guarda OU so o filtro deixa RN-03 verde; a assercao so cai com as
+  // DUAS fora. Fica porque evita a consulta no caso comum (aprovacao total) e declara a intencao
+  // no ponto de leitura; a regua de verdade continua sendo a query compartilhada.
+  if (reprovada > 0) {
+    try {
+      const [linha] = await alertRegistry.listarReprovados(db, { inspecaoId: ins.lastID });
+      if (linha) await notificationQueueService.dispararAlertaRegistrado(db, 'MATERIAL_REPROVADO', linha);
+    } catch (e) {
+      console.warn('[almoxarifado-alertas] Falha ao avisar material reprovado pos-inspecao:', e.message);
+    }
+  }
+
   return { id: ins.lastID, quantidade_aprovada: aprovada, quantidade_reprovada: reprovada };
 }
 
